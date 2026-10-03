@@ -15,12 +15,3 @@
 11. Run the smallest relevant verification.
 
 A plan already in `active/` is not moved again; record or correct `worktree` in place.
-
-## Under `plan-start`
-
-When `plan-start` drives the start, Plan Docs still owns steps 6-9 — the frontmatter value and the
-lifecycle move — and `plan-start` owns everything around them: resolving the worktree first,
-committing only the canonical plan paths on the base branch, and holding implementation outside the
-worktree until its start validator approves. Perform steps 6-9 in the primary checkout, then return
-to `plan-start`'s transition for the commit and validation; do not begin step 10 until it approves.
-See `plan-start`'s `references/start-validation.md`.

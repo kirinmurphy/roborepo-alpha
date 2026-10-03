@@ -1,12 +1,13 @@
 ---
 id: 7m4q9dx
 priority: high
-next_action: Replace Home's checkout-owned plan grouping with a hybrid plan-first list that preserves unmatched worktree rows and the checkout row's existing right-side process controls.
+next_action: Implement Phase 1 — replace checkout.plan and plans.additionalActive with plans.active plus a checkoutRootId reference in repository-overview-projections.mjs, covered by repository-overview-check.mjs.
 blocked_by: []
 depends_on: []
 related:
   - wk7p4n2
-reviewed_commit: e8a6563
+  - a7bslb00
+reviewed_commit: 56ab25a
 worktree:
 ---
 
@@ -14,235 +15,361 @@ worktree:
 
 ## Summary
 
-Change each repository card on Home from a checkout-owned plan hierarchy to a hybrid flat list. Keep the repository row and main checkout row unchanged. Beneath main, render every active plan first. When a plan has one safe linked-worktree match, render that plan using the existing checkout-row structure: the plan becomes the primary left-side identity, worktree/branch details move into a compact dropdown, and the row keeps the checkout's existing right-side process controls unchanged.
+On Home today, a repository card is organized around checkouts. A plan with a matching worktree
+appears as a footer under that worktree's row. Every other active plan goes into a separate
+**Additional Plans** section. This plan makes active plans the main way the card is organized,
+while every checkout stays visible.
 
-After the active plans, render every linked worktree that was not consumed by a plan association exactly as Home renders it today. This keeps Home useful for repositories that do not use Plans at all while still making plans the preferred organizing layer when they exist.
+The repository row and the main checkout row stay the same. Below main, Home lists every active
+plan first, then every linked worktree that no plan claimed. A plan with a safe worktree match
+renders as that worktree's checkout row. The plan title, completion indicator, and a
+worktree-details dropdown replace the branch label on the left. The port/origin link and Links
+dropdown on the right stay exactly as they are. A plan with no match shows a badge explaining why.
+The **Additional Plans** section is removed. The plan counts move to one unlabeled summary line
+after the plan rows.
 
-A plan title opens the existing plan popup dialog. A matched plan gets a worktree-details dropdown. An unmatched plan gets a **not started** badge. Remove the **Additional Plans** section; plans no longer move between separate plan and checkout presentation buckets.
+Repositories without plans see no change: with no active plans, every linked worktree renders as
+it does today.
 
-The server-side join remains exact and conservative, but its output becomes a reference from each matched active plan to an existing Runtime checkout. Runtime keeps the complete checkout list. Home uses those references to render matched checkouts as plan rows and then renders the remaining worktrees normally.
+On the server, the matching rules don't change. What changes is the output: the projection keeps
+both lists complete and adds a reference from each matched plan to its Runtime checkout. It no
+longer splits plans between checkouts and a leftover list.
 
 ## Goals
 
 - Keep the repository row and main checkout row visually and behaviorally unchanged.
 - Render every active plan exactly once, before unmatched linked-worktree rows.
-- Preserve every linked worktree on Home: matched worktrees appear through their plan row; unmatched worktrees remain normal checkout rows.
-- Make Home remain fully useful when a repository has no Plans data or no active plans.
-- Make the plan title the primary left-side identity and open the existing plan popup dialog.
-- Move matched worktree and branch identity into a compact worktree dropdown rather than a separate checkout row.
-- Preserve the matched checkout row's existing right side exactly: primary port/origin link, Links dropdown, and their current show/hide behavior come from the same checkout rendering path used today.
-- Show **not started** when an active plan has no current safe checkout association on Home. This is presentation language for association state, not a plan lifecycle state.
-- Let the worktree dropdown expose the full branch name and Git administrative worktree name, each with its own copy action.
-- Reuse the existing shared copied behavior and confirmation rather than introducing a second clipboard or timer implementation.
-- Include a small high-level Git/worktree summary in the dropdown without reproducing the full Runtime tooltip.
-- Preserve the existing exact-name association rules and repository-wide plan counts.
+- Keep every linked worktree that Runtime lists on Home. A matched worktree appears as its plan's
+  row. An unmatched worktree stays a normal checkout row.
+- Keep Home fully useful when a repository has no Plans data or no active plans.
+- Make the plan title the main left-side label, and have it open the existing plan drawer.
+- Keep the existing completion indicator (ring and percent, or **done**) beside every plan title.
+- Move a matched worktree's branch and worktree identity into a worktree-details dropdown,
+  instead of giving the worktree its own row.
+- Keep the matched checkout row's right side exactly as it is. The port/origin link and the Links
+  dropdown, and the rules for when they show, come from the same checkout rendering path as today.
+- Keep the inline Git warning (behind remote, base-branch drift) on matched plan rows and on
+  unmatched worktree rows. On a plan row it may wrap to a second line.
+- Label unmatched plans truthfully. Show **not started** only for a plan that names no worktree.
+  Show **worktree not running** for a plan that names a worktree Home cannot match.
+- Let the dropdown copy the full branch name, Git's administrative worktree name, and the
+  worktree path, each with its own copy action.
+- Reuse the shared copy behavior and **Copied** confirmation. Don't add a second clipboard or timer
+  implementation.
+- Show a short Git summary in the dropdown without repeating the full checkout tooltip.
+- Keep the repository-wide plan counts, the **all plans** link, and the partial-coverage note
+  visible on Home, with no section heading.
+- Keep the existing exact-name matching rules.
 
 ## Non-goals
 
 - Changing the repository row, repository menu, or main checkout row.
 - Changing plan frontmatter or the meaning of `worktree`.
-- Inferring associations from branch names, filesystem paths, plan titles, or prose.
-- Adding a replacement **Additional Plans** section or an **Active Plans** heading.
-- Hiding linked worktrees merely because they have no plan.
-- Reimplementing checkout process controls for plan rows. Port/origin and Links behavior must continue to come from the current checkout-row path.
-- Changing the plan popup dialog or Plans page.
-- Showing the full worktree tooltip inside the new dropdown.
-- Changing plan lifecycle semantics. The **not started** badge does not mean `backlog`; it means Home has no current safe Runtime checkout match for that active plan.
+- Matching plans to worktrees by branch name, filesystem path, plan title, or prose.
+- Adding an **Active Plans** heading or any replacement for the **Additional Plans** section.
+- Hiding linked worktrees just because no plan claims them.
+- Listing stopped worktrees on Home. That is the job of the worktree lifecycle plan
+  ([[a7bslb00]]).
+- Reimplementing checkout process controls for plan rows.
+- Changing the plan drawer or the Plans page.
+- Showing the full checkout tooltip inside the new dropdown.
+- Changing plan lifecycle semantics. The match badges describe whether Home found the plan's
+  worktree. They are not lifecycle states.
 
 ## Current State
 
-The completed work in [[wk7p4n2]] made worktrees the presentation hierarchy on Home.
+The work in [[wk7p4n2]] (completed) made checkouts the main structure of a Home repository card.
+Verified on `main` at `56ab25a`.
 
-- `scripts/cli/repository-overview-projections.mjs#associatePlans()` consumes the full active-plan list. A unique exact match becomes `checkout.plan`; every other active plan becomes `plans.additionalActive`.
-- `portal/home/templates.js` renders every Runtime checkout through `buildRootSection()`. A matched worktree receives the plan as a Home-owned footer beneath that checkout row.
-- `portal/home/domains.js` renders `plans.additionalActive` inside a separate **Additional Plans** domain row.
-- `portal/home/index.html#tpl-plan-item` renders the current plan title plus completion state, and `tpl-checkout-plan` provides the subordinate worktree-plan row.
-- `portal/developer-runtime/repository-root-row.js#buildRootSection()` already owns the checkout-row structure, including branch/worktree identity on the left and the primary origin/port plus Links control on the right.
-- The checkout tooltip includes full branch identity, directory/path, checkout state, members, and detailed Git facts.
-- `portal/shared/copy-menu.js` owns generic copy-dropdown behavior. `portal/shared/copy-button.js` owns clipboard writes and the shared in-place copied confirmation.
+### Server projection
 
-The current API sends each active plan to the browser only once by partitioning plans around checkouts. The hybrid design instead keeps Plans and Runtime as complete lists and records only the safe association between them.
+- `scripts/cli/repository-overview-projections.mjs#associatePlans()` takes the full active-plan
+  list. Each plan that has a unique exact match becomes `checkout.plan`. Every other active plan
+  goes into `plans.additionalActive`. `plans.active` is removed from the payload, so each plan
+  reaches the browser only once.
+- A plan matches only when its `worktree` name is claimed by exactly one active plan and exactly
+  one Runtime checkout has that `worktreeName`. Main checkouts never carry a `worktreeName`.
+- `scripts/cli/repository-overview-sources.mjs#planSummary()` orders `active` by most recent
+  change, then by title. `projectWorkspace()` maps each Runtime root to a checkout whose `rootId`
+  can be `null`.
+- `portal/repositories/templates.js#plansBody()` (the repository detail page) reads
+  `plans.counts` and `plans.recent`. It doesn't read `additionalActive` or `checkout.plan`.
+
+### Which checkouts Runtime lists
+
+For a running repository, Runtime lists the main checkout plus every checkout that has a running
+member. Stopped worktrees are left out (`modules/developer-runtime/snapshot.mjs`, the
+`idleMainCheckouts` handling). For an idle repository, Runtime lists the checkouts persisted in the
+registry. Either way, the main checkout comes first, then worktrees sorted alphabetically by
+branch.
+
+So when a plan's worktree exists on disk but has nothing running, the plan has no match today.
+[[a7bslb00]] proposes listing every worktree, running or not.
+
+### Home rendering
+
+- `portal/home/templates.js` renders every Runtime checkout through `buildRootSection()`. A matched
+  worktree gets its plan as a `footer` node, built from `tpl-checkout-plan`. Home is the only
+  caller that passes `footer`.
+- `portal/home/domains.js#additionalPlansRow()` renders the **Additional Plans** domain row. It
+  shows the `N Active · M Backlog` counts, the **all plans** link, the partial-coverage note, and
+  the unclaimed plans. `planItem()` renders a plan title button and its completion indicator.
+- `portal/home/app.js` opens the plan drawer (`portal/plans/plan-drawer.js`, a `<dialog>`) when a
+  plan title is clicked. Its polling refresh skips re-rendering while
+  `.menu-button-panel` or `dialog[open]` is present.
+
+### Shared row and copy components
+
+- `portal/developer-runtime/repository-root-row.js#buildRootSection()` (392 lines) owns the
+  checkout row. Left side: glyph, branch label with the checkout tooltip, copy control, inline
+  drift warning. Right side: primary origin/port link and the Links slot. In `home` mode it mounts
+  Links through `onMountLinks` only when `primaryEntrypoint.opaqueKey` is present.
+- The row's copy control (`mountCopyDropdown`) copies the branch name (not on default branches) and
+  the worktree's filesystem path. It doesn't copy Git's administrative worktree name.
+- `portal/shared/menu-button.js` (`<portal-menu-button>`) provides a trigger with a caret that
+  opens a positioned panel with caller-supplied content. It handles outside-click and Escape.
+- `portal/shared/copy-button.js` (`<portal-copy-button>`) owns clipboard writes and the in-place
+  **Copied** confirmation. The timer is `COPIED_DURATION_MS` (5 s). Nothing outside the button can
+  currently see the copied state.
 
 ## Proposed Design
 
 ### 1. Keep Plans and Runtime as complete parallel lists
 
-Replace the current checkout-owned partition with a non-destructive association. The join rules remain the same:
-
-- only active plans participate;
-- only linked worktrees with a nonempty `worktreeName` participate;
-- exactly one active plan and exactly one linked worktree with the same name produce a match;
-- duplicate plan claims, duplicate Runtime names, stale names, missing worktrees, and empty names produce no match;
-- main checkouts never match;
-- unavailable Plans or Runtime data never invents a relationship.
-
-Keep the complete active plan list as `plans.active`. Keep the complete Runtime checkout list as `runtime.checkouts`. For a safe match, add only a checkout reference to the plan, preferably the existing opaque `rootId`:
-
-```text
-plan.checkoutRootId = matchedCheckout.rootId
-```
-
-Do not copy branch, path, process, Links, or Git status fields into the plan projection. Home can resolve the referenced checkout from the Runtime list it already has. This keeps one authoritative checkout object and guarantees that plan-associated rows use the same current checkout data as ordinary worktree rows.
-
-Remove the Home-specific `checkout.plan` and `plans.additionalActive` fields.
+The projection stops splitting the data and records only the safe match between the two lists:
 
 ```mermaid
-flowchart TD
-    Repo[Repository row] --> Main[Main checkout row]
-    Main --> PlanA[Active plan + matched checkout]
-    PlanA --> PlanB[Active plan without checkout]
-    PlanB --> Worktree[Unmatched linked worktree]
+flowchart LR
+    Plans[plans.active: every active plan] -- "safe match adds checkoutRootId" --> Ref[plan.checkoutRootId]
+    Ref -- "points at" --> Checkout[runtime.checkouts entry with that rootId]
 ```
+
+The matching rules stay the same, plus one rule for null ids:
+
+- Only active plans participate.
+- Only linked worktrees with a non-empty `worktreeName` **and a non-null `rootId`** participate.
+- A match needs exactly one active plan and exactly one linked worktree with the same name.
+- Duplicate plan claims, duplicate Runtime names, stale names, missing worktrees, and empty names
+  produce no match.
+- Main checkouts never match.
+- If Plans or Runtime data is unavailable, no match is ever invented.
+
+`plans.active` carries the complete active list in its existing order. `runtime.checkouts` carries
+the complete checkout list. A matched plan gets one extra field, `checkoutRootId`. The projection
+copies no branch, path, process, Links, or Git fields onto the plan, so the checkout object stays
+the only source for those fields.
+
+Remove `checkout.plan` and `plans.additionalActive`. `counts` and `recent` stay unchanged for the
+repository detail page.
 
 ### 2. Build one hybrid display list on Home
 
-Home derives display rows from the two complete inputs:
+Home builds the rows below the repository row in this order:
 
-1. Render the main checkout first, unchanged.
-2. Render all active plans in their existing plan order.
-3. For each plan with `checkoutRootId`, resolve the matching Runtime checkout and mark that checkout as consumed.
-4. After the plans, render every remaining linked worktree in the existing Runtime order using the current checkout-row renderer.
-
-The result is flat rather than nested:
+1. Non-worktree checkouts, in Runtime order, unchanged. If there are no checkouts at all, the
+   existing **No known checkout** row.
+2. Every entry in `plans.active`, in its existing order. A plan whose `checkoutRootId` points at a
+   checkout in the list uses that checkout, and the checkout is marked as consumed.
+3. Every linked worktree that wasn't consumed, in Runtime order, through the existing checkout-row
+   path.
+4. The plan summary line (§5), when the repository has at least one active plan.
 
 ```text
 repository
-main branch
-plan A        [worktree ▾]                      [port] [Links ▾]
-plan B        [not started]
-plan C        [worktree ▾]
-unmatched worktree / branch                     [port] [Links ▾]
-unmatched worktree / branch
+main branch                                                [port] [Links ▾]
+plan A  42%   [worktree ▾]                                 [port] [Links ▾]
+plan B  done  [not started]
+plan C  10%   [worktree not running]
+unmatched worktree / branch                                [port] [Links ▾]
+2 active · 5 backlog · all plans
 ```
 
-There is no **Active Plans** or **Additional Plans** header.
-
-This fallback is intentional. With zero active plans, every linked worktree remains visible exactly as it is today. If Plans data is unavailable, Home still renders the complete checkout activity from Runtime rather than becoming mostly empty.
-
-### 3. A matched plan row is still a checkout row
-
-Do not build a separate row system for plan-associated worktrees. Start from the existing `buildRootSection()` checkout row so the operational behavior remains identical.
-
-For a matched plan:
-
-- use the matched Runtime checkout as the row's `root`;
-- keep the existing right-side rendering untouched;
-- replace the left-side primary identity with the plan icon and underlined plan title;
-- move the checkout's branch/worktree identity into the new worktree-details dropdown;
-- keep process availability behavior unchanged: if the checkout has a current `primaryEntrypoint`, its origin/port remains visible; if it does not, no replacement placeholder is added;
-- mount the existing Links dropdown through the same `onMountLinks` path and only when the checkout currently qualifies for it.
-
-The plan title opens the existing plan popup dialog.
-
-Keep shared Runtime components plan-agnostic. Prefer a generic identity/leading-content hook on `buildRootSection()` only if Home cannot safely decorate the returned row. Do not add Plan-specific imports or logic to `portal/developer-runtime/repository-root-row.js`.
-
-For an active plan with no matched checkout, render the same plan-row visual rail without checkout process controls and show **not started** on the right side of the identity area.
-
-### 4. Preserve unmatched worktrees exactly as they are today
-
-A linked worktree is rendered as a normal Home checkout row when no active plan safely claims it.
-
-Do not alter its:
-
-- branch/worktree identity;
-- tooltip;
-- copy affordance;
-- primary origin/port link;
-- Links dropdown;
-- current row ordering relative to other unmatched worktrees.
-
-The only filtering is de-duplication: a worktree referenced by a rendered plan row is not rendered a second time below the plans.
-
-This makes the hybrid behavior degrade cleanly:
+There is no section heading.
 
 | Repository state | Home below main |
 | --- | --- |
-| Active plans with matched worktrees | Plan rows with checkout controls, then unmatched worktrees |
-| Active plans without worktrees | Plan rows with **not started**, then all worktrees |
-| No active plans | All linked worktrees exactly as today |
-| Plans unavailable | All linked worktrees exactly as today |
-| Runtime unavailable | Active plans remain visible, but none receive checkout controls |
+| Active plans with matched worktrees | Plan rows with checkout controls, unmatched worktrees, summary line |
+| Active plans without matches | Plan rows with a match badge, all worktrees, summary line |
+| No active plans | All linked worktrees exactly as today; no summary line |
+| Plans unavailable | All linked worktrees exactly as today; no summary line |
+| Runtime unavailable | **No known checkout**, every plan row with a match badge, summary line |
 
-### 5. Add the matched-plan worktree dropdown
+### 3. A matched plan row is still a checkout row
 
-Add a Home-owned worktree-details control for matched plan rows. The closed trigger is the tree/worktree icon plus a dropdown caret. Its accessible name should identify the plan context, for example `Worktree details for <plan title>`.
+A matched plan row is built by `buildRootSection()` from the matched checkout, so its controls work
+exactly like an ordinary worktree row.
 
-Author the dropdown structure as real `<template>` markup in `portal/home/index.html`; do not construct the nested panel structure with runtime `createElement()` chains or HTML strings.
+Add a generic `identity` option to `buildRootSection()`, and remove the `footer` option, which only
+Home uses. When the caller passes `identity`:
 
-The open panel follows the visual language of the current worktree tooltip but uses smaller text and less data. The first two rows are copyable identities:
+- the row uses the caller's glyph name and accessible label;
+- it skips the branch label and checkout tooltip (`fillIdentity`) and the copy control;
+- it mounts the caller's node at the start of the identity line, before the `git-drift` slot;
+- it still runs `applyGitDrift()`, so the row's Git warning (`N behind remote`, or base-branch
+  drift) follows the plan identity. The identity line already wraps, so when the plan title and
+  trigger fill the line, the warning drops to the next line as a unit, just as it does after a
+  long branch name today;
+- the right side is unchanged: the port/origin link appears only when `primaryEntrypoint.origin` is
+  present, and Links mounts through `onMountLinks` only when `primaryEntrypoint.opaqueKey` is
+  present. No placeholder is added.
+
+The option is generic: `repository-root-row.js` gets no Plans imports or Plans logic. A generic
+option is preferred over having Home remove the shared row's internal slots after the fact. That
+would make Home depend on `repository-row-template.js` markup it doesn't own.
+
+For a matched plan, Home passes the plans glyph and an identity node. The node holds the plan title
+button, the completion indicator, and the worktree-details trigger (§6). The title opens the plan
+drawer. A matched plan row with drift reads:
+
+```text
+plan A  42%   [worktree ▾]   ⚠ 3 days behind main (4 commits)      [port] [Links ▾]
+```
+
+or, when the line is too narrow:
+
+```text
+plan A with a long title  42%   [worktree ▾]                       [port] [Links ▾]
+⚠ 3 days behind main (4 commits)
+```
+
+Unmatched worktree rows keep their Git warning unchanged, because they don't use `identity`.
+
+### 4. Unmatched plan rows say why there is no checkout
+
+An unmatched plan renders as a Home-owned row on the same glyph rail, with the plan glyph, title,
+and completion indicator. It has no checkout process controls. The badge depends on whether the
+plan names a worktree:
+
+| Plan `worktree` | Badge | Hover title |
+| --- | --- | --- |
+| empty | **not started** | `No worktree is associated with this plan` |
+| set, but no safe match | **worktree not running** | `Home has no running checkout for worktree "<name>"` |
+
+The second case covers a stopped worktree, a missing worktree, a stale name, and an ambiguous
+claim. While Runtime only lists running worktrees, a stopped worktree is the common cause.
+
+### 5. Plan summary line
+
+After the unmatched worktree rows, render one unlabeled line:
+
+```text
+2 active · 5 backlog · all plans
+```
+
+**all plans** links to `/plans`. When the plans envelope reports partial coverage, the line adds
+the envelope's message (`Plans coverage is incomplete`). The counts are repository-wide, as they
+are today. The line appears only when the plans domain is available and `counts.active > 0`, which
+is the same condition that shows the **Additional Plans** row today.
+
+### 6. The matched-plan worktree dropdown
+
+The trigger is a `<portal-menu-button>` with the `tree` icon and its caret. Its accessible name is
+`Worktree details for <plan title>`. Positioning, outside-click, and Escape come from the shared
+element. Because its panel uses `.menu-button-panel`, the existing guard in `app.js` already pauses
+polling re-renders while the dropdown is open.
+
+The panel content comes from a `<template>` in `portal/home/index.html`, filled with
+`portalFillSlots`. Don't build it with `createElement` chains or HTML strings. It starts with
+three copyable identity rows that show full values without truncation:
 
 ```text
 [BRANCH_ICON]   feature/example                         [COPY]
-[WORKTREE_ICON] example                                [COPY]
+[TREE_ICON]     example                                 [COPY]
+[FOLDER_ICON]   <worktree path>                         [COPY]
 ```
 
-Use the full, untruncated values inside the panel. The branch line uses the current branch identity, including detached-HEAD handling. The worktree line uses the exact Git administrative `worktreeName`, not the directory basename or filesystem path.
+- **Branch**: the current branch name, or the detached-HEAD identity (`detached at <sha>`). The
+  copy action copies the branch name or short SHA.
+- **Worktree**: the exact Git administrative `worktreeName`.
+- **Path**: `projectRoot`, which keeps today's **Copy worktree path** behavior. Omitted when the
+  path didn't resolve.
 
-Below those rows, render only useful high-level facts already present on the Runtime checkout:
+Below the identity rows, show only the useful summary facts that are already on the checkout. Omit
+a fact when it is empty or at its default value:
 
-- checkout state/reason when it is not normal;
-- clean vs. dirty working tree;
-- upstream ahead/behind when nonzero;
-- base-branch drift when nonzero.
+- checkout state when it isn't `present` (`checkout missing`, or the unreadable reason);
+- **dirty** when the working tree has uncommitted changes;
+- upstream ahead/behind when either is non-zero;
+- base-branch drift when `baseBehind` is non-zero.
 
-Omit empty/default facts. Do not duplicate the port/origin or Links dropdown in this panel; those remain in the row's existing right-side controls.
+The port/origin link and Links stay outside the panel, in the row's right side.
 
-### 6. Reuse shared copied feedback with a row presentation
+### 7. Reuse the shared copied feedback with a row presentation
 
-The identifier rows should not create their own clipboard implementation or copied-state timer. Reuse the behavior currently owned by `portal/shared/copy-button.js`.
+Each identity row uses an icon-only `<portal-copy-button>`. When copied, the button already
+switches in place to a check plus **Copied**. Add one backwards-compatible hook: the element sets a
+`copied` attribute on itself while the confirmation is showing, and removes it when the existing
+timer resets.
 
-Add the smallest shared presentation hook/config needed for the worktree panel so a successful copy can use this row-level face:
+The panel's CSS uses `:has(portal-copy-button[copied])` on the identity row to hide the value text.
+While the confirmation shows, the row reads `[BRANCH_ICON] ✓ Copied`, and the leading icon tells
+the user which value was copied. The clipboard path, duration, disabled state, and `aria-label`
+stay inside the button. Existing callers see no change, because nothing currently styles the new
+attribute.
 
-```text
-[BRANCH_ICON]   Copied
-```
+## Code Touchpoints
 
-During confirmation, hide the identifier value and its copy control and render the shared **Copied** confirmation in their place. Keep the leading branch/worktree icon so the user still knows which value was copied. After the existing copied duration, restore the original value and copy control.
+| Area | Files | Change |
+| --- | --- | --- |
+| Projection | `scripts/cli/repository-overview-projections.mjs` | Non-destructive match; `plans.active` plus `checkoutRootId` |
+| Projection check | `scripts/test/repository-overview-check.mjs` | Replace every `additionalActive` and `checkout.plan` assertion |
+| Shared row | `portal/developer-runtime/repository-root-row.js` | Add `identity`, remove `footer` |
+| Copy button | `portal/shared/copy-button.js` | Set and clear the `copied` attribute |
+| Home ordering | `portal/home/templates.js` | Main rows, then plan rows, then unmatched worktrees, then summary line |
+| Home plan rows | `portal/home/plan-rows.js` (new) | Matched and unmatched plan rows, badges, summary line |
+| Worktree dropdown | `portal/home/worktree-details.js` (new) | Fills the panel template and mounts copy buttons |
+| Home domains | `portal/home/domains.js` | Remove `additionalPlansRow`; move `planItem` to `plan-rows.js` |
+| Home markup/style | `portal/home/index.html`, `portal/home/styles.css` | Plan-row, badge, summary, and panel templates; remove `tpl-checkout-plan` |
+| UI tests | `scripts/test/portal-ui/portal-ui.spec.mjs` | Replace Additional Plans and footer cases; move drawer fixtures to `plans.active` |
+| Unchanged consumer | `portal/repositories/templates.js` | Still reads `counts` and `recent`; no edit expected |
 
-Keep the default `<portal-copy-button>` behavior unchanged for current callers. The new configuration must reuse the same clipboard path, success state, duration, and accessibility semantics instead of duplicating them in the Home worktree control.
+The new Home files keep `templates.js` (96 lines) and `domains.js` (112 lines) under the ~150-line
+soft limit. `repository-root-row.js` is already over the limit, so the `identity` option should be
+a small branch in `buildRootSection()`, not a new subsystem.
 
 ## Implementation Sequence
 
 ### Phase 1 — Change association output without losing either source list
 
-- [ ] Update `scripts/cli/repository-overview-projections.mjs` so active plans remain in `plans.active` and Runtime checkouts remain complete.
-- [ ] Replace `checkout.plan` / `plans.additionalActive` with a plan-side reference such as `checkoutRootId` for unique exact matches.
-- [ ] Keep the existing exact/unique worktree matching rules and leave main checkouts unmatchable.
-- [ ] Do not duplicate checkout details into the plan projection.
-- [ ] Update `scripts/test/repository-overview-check.mjs` for matched, unmatched, stale, duplicate-claim, duplicate-worktree, main-checkout, partial, and unavailable cases.
+- [ ] In `associatePlans()`, keep `plans.active` complete and leave Runtime checkouts unmodified.
+- [ ] Add `checkoutRootId` to plans with a unique exact match; require a non-null `rootId`.
+- [ ] Remove `checkout.plan` and `plans.additionalActive`; keep `counts` and `recent`.
+- [ ] Update `scripts/test/repository-overview-check.mjs` for matched, unmatched, stale,
+      duplicate-claim, duplicate-worktree, null-`rootId`, main-checkout, partial, Plans-unavailable,
+      and Runtime-unavailable cases.
 
-### Phase 2 — Build the hybrid Home row list
+### Phase 2 — Shared row and copy hooks
 
-- [ ] Update `portal/home/templates.js` to render the main checkout first, then all active plans, then unmatched linked worktrees.
-- [ ] Resolve each matched plan's checkout from the existing Runtime list and suppress only that checkout's duplicate normal row.
-- [ ] Keep unmatched worktrees on the existing `buildRootSection()` path unchanged.
-- [ ] Remove the associated-plan footer path from Home checkout construction.
-- [ ] Remove **Additional Plans** rendering from `portal/home/domains.js` while preserving other domain rows and partial-coverage messaging where applicable.
-- [ ] Add a focused Home plan-row renderer, splitting it into `portal/home/plans.js` if that keeps plan ownership clearer than growing `templates.js` or `domains.js`.
+- [ ] Add the generic `identity` option to `buildRootSection()` and remove `footer`; keep
+      `applyGitDrift()` running for rows that pass `identity`.
+- [ ] Set and clear the `copied` attribute in `<portal-copy-button>` alongside its existing state.
+- [ ] Confirm that the Runtime page and existing copy buttons render as before (Runtime page
+      Portal UI cases).
 
-### Phase 3 — Reuse checkout rows for matched plans
+### Phase 3 — Hybrid Home list and plan rows
 
-- [ ] Render a matched plan from the same checkout/root data used by `buildRootSection()` today.
-- [ ] Preserve the row's current primary origin/port and Links controls without duplicating their logic.
-- [ ] Replace only the left-side identity with plan icon/title plus the worktree-details trigger.
-- [ ] Keep `portal/developer-runtime/repository-root-row.js` free of Plan-specific knowledge; add only a generic presentation hook if Home cannot decorate the row cleanly.
-- [ ] Render unmatched active plans without checkout controls and with the **not started** badge.
-- [ ] Update `portal/home/index.html` and `portal/home/styles.css` for the plan identity treatment while preserving current checkout-row alignment.
+- [ ] Move `planItem()` into `portal/home/plan-rows.js` and add matched and unmatched plan rows.
+- [ ] In `templates.js`, order the rows as in §2, using a set of consumed `rootId`s so no worktree
+      renders twice.
+- [ ] Add the summary line and remove `additionalPlansRow()`, `tpl-checkout-plan`, and its styles.
+- [ ] Add `index.html` templates and `styles.css` rules for plan rows, badges, and the summary
+      line, keeping the alignment of today's checkout rows.
 
-### Phase 4 — Add the worktree-details dropdown and shared copy presentation
+### Phase 4 — Worktree-details dropdown
 
-- [ ] Add Home-owned dropdown markup/behavior with tree-icon/caret trigger, popover positioning, outside-click handling, and Escape handling.
-- [ ] Render branch name and administrative worktree name as separate copyable rows.
-- [ ] Extend the existing shared copy-button behavior with the minimum backwards-compatible configuration needed for row-level copied feedback; do not duplicate clipboard/timer logic.
-- [ ] Render only non-default high-level checkout/Git facts below the identity rows.
-- [ ] Keep port/origin and Links outside the dropdown in their existing right-side row positions.
+- [ ] Add the panel `<template>` and `portal/home/worktree-details.js`, mounted through
+      `<portal-menu-button>`.
+- [ ] Render the branch, worktree, and path rows with icon-only copy buttons and the `:has()`
+      copied presentation.
+- [ ] Render only the non-default summary facts listed in §6.
 
 ### Phase 5 — Regression coverage and cleanup
 
-- [ ] Update `scripts/test/portal-ui/portal-ui.spec.mjs` around user-visible hybrid Home behavior.
-- [ ] Remove tests and helpers that assert the old **Additional Plans** / worktree-footer hierarchy.
-- [ ] Remove dead Home templates/styles/functions from the old layout.
-- [ ] Confirm the no-Plans case still exposes every linked worktree and its current process actions.
+- [ ] Update `portal-ui.spec.mjs` for the behavior listed under Validation; delete the Additional
+      Plans and **Plan in this worktree** cases.
+- [ ] Move the plan-drawer cases (which currently seed `additionalActive`) to `plans.active`
+      fixtures, so drawer coverage is kept.
+- [ ] Remove dead Home helpers, templates, and styles left from the old layout.
 
 ## Validation
 
@@ -250,35 +377,53 @@ Keep the default `<portal-copy-button>` behavior unchanged for current callers. 
 
 `node scripts/test/repository-overview-check.mjs` must prove:
 
-- every active plan remains present exactly once in `plans.active`;
-- every Runtime checkout remains present in `runtime.checkouts`;
-- a unique exact `worktree`/`worktreeName` match adds only the expected checkout reference to the plan;
-- unmatched and ambiguous plans receive no checkout reference;
-- repository plan counts remain unchanged;
-- `checkout.plan` and `plans.additionalActive` are absent from the new Home contract.
+- every active plan appears exactly once in `plans.active`, in the existing order;
+- every Runtime checkout appears in `runtime.checkouts`, with no `plan` field;
+- a unique exact `worktree`/`worktreeName` match adds only `checkoutRootId` to the plan;
+- unmatched, ambiguous, and null-`rootId` cases add no `checkoutRootId`;
+- `counts` and `recent` are unchanged;
+- `plans.additionalActive` is absent.
 
 ### Home behavior
 
-`npm run test:portal-ui` must cover the behavior through semantic roles/names:
+`npm run test:portal-ui` must cover the following, selecting by role and accessible name:
 
-- the repository row remains unchanged;
-- the main branch row remains visible and keeps its existing actions;
-- every active plan title appears once and opens the existing plan popup dialog;
+- the repository row and the main checkout row, with its actions, are unchanged;
+- every active plan title appears once and opens the plan drawer;
+- each plan row shows its completion indicator, or **done** at 100%;
 - no **Active Plans** or **Additional Plans** heading is rendered;
-- matched plan rows appear before unmatched worktree rows;
-- a matched plan exposes the worktree-details trigger;
-- the matched plan row keeps the same primary origin/port link and Links dropdown that its checkout row would have shown before association;
-- an inactive matched checkout does not gain fake process controls or placeholders;
-- an unmatched plan shows **not started** and no checkout process controls;
-- the dropdown shows the branch and worktree names with separate copy actions;
-- copying either value replaces that value/copy control with **Copied** and restores it after the shared confirmation interval;
-- compact dirty/drift/state facts appear only when applicable;
-- a worktree with no associated active plan still renders as the same checkout row used today, including its port/origin and Links controls;
-- a matched worktree is not rendered a second time below the plans;
-- with zero active plans, linked-worktree presentation is unchanged from the current Home page;
-- with Plans unavailable, Runtime checkout activity still renders normally;
-- partial plan coverage can still be communicated without adding a section heading.
+- plan rows appear before unmatched worktree rows;
+- a matched plan row has the same port/origin link and Links dropdown its checkout row would show;
+- a matched checkout with no `primaryEntrypoint` gets no process controls or placeholders;
+- a matched plan row whose checkout is behind its remote or has drifted from its base shows the
+  same Git warning text its checkout row would show, and an unmatched worktree row still shows its
+  own;
+- an unmatched plan with no `worktree` shows **not started**; one with a `worktree` shows
+  **worktree not running**; neither has process controls;
+- the worktree-details dropdown shows branch, worktree, and path with separate copy actions;
+- copying a value shows **Copied** in place of that value, and the value comes back after the
+  shared interval;
+- dirty, ahead/behind, drift, and checkout-state facts appear only when applicable;
+- an unmatched worktree renders the same checkout row as today, including its tooltip, copy
+  control, port/origin link, and Links;
+- a matched worktree doesn't also render below the plans;
+- with zero active plans, or with Plans unavailable, linked worktrees render as today and there is
+  no summary line;
+- the summary line shows the counts and **all plans**, and adds the partial-coverage note only
+  when coverage is partial;
+- the Runtime page's checkout rows still show their branch label, tooltip, and copy control.
 
 ### Final checks
 
-Run `npm run check` after the focused projection and Portal UI tests. If a command is blocked by the environment, record the exact command and reason rather than treating it as passed.
+Run `npm run check` (`scripts/test/ci.sh`) after the focused projection and Portal UI tests. If a
+command is blocked by the environment, record the exact command and reason, and don't count it as
+passed.
+
+## Risks
+
+| Risk | Mitigation |
+| --- | --- |
+| Runtime lists only running worktrees, so an active plan whose worktree is stopped shows **worktree not running** instead of a full checkout row | The badge describes this accurately. Once [[a7bslb00]] lists every worktree, the same match turns these plans into checkout rows with no change to this plan's code |
+| [[a7bslb00]] Phase 3 also edits the shared row template and expects an idle worktree "listed with its plan beneath it" | Whichever plan lands second updates its Home assertions. If this plan lands first, [[a7bslb00]]'s Phase 3 test should assert the plan row instead of a footer |
+| `repository-root-row.js` grows further past the file-size limit | Keep `identity` to a branch around the existing identity steps; splitting the file is out of scope |
+| A matched row loses the checkout tooltip's full detail (members, fetch time, commit) | The dropdown keeps the facts used most; the full tooltip stays on the Runtime page and on unmatched rows |

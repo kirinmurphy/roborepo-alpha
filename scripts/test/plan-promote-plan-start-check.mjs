@@ -127,10 +127,29 @@ for (const [id, { boundaryPhrases }] of Object.entries(SKILLS)) {
     assert.ok(reference.includes(phrase), `plan-start: start-validation.md missing "${phrase}"`);
   }
 
-  // Plan Docs owns the lifecycle half of the same transition; its start workflow must agree.
-  const planDocsStart = normalize(fs.readFileSync(path.join(repoRoot, "globals/packages/plan-docs/skills/plan-docs/references/workflow-start.md"), "utf8"));
-  for (const phrase of ["Git administrative name in `worktree`", "references/start-validation.md", "do not begin step 10 until it approves"]) {
-    assert.ok(planDocsStart.includes(phrase), `plan-docs: workflow-start.md missing "${phrase}"`);
+  assert.ok(skill.includes("move it from `backlog/` to `active/` with `git mv`"), "plan-start: SKILL.md must own the backlog-to-active move");
+}
+
+// --- plan-start's run mode: no check-ins, strict autonomy bar, queued questions batched at the end ---
+// Prose-presence coverage: these phrases carry the run-to-completion contract, which has no code path.
+{
+  const skill = fs.readFileSync(path.join(repoRoot, "globals/packages/plan-start/skills/plan-start/SKILL.md"), "utf8").replace(/\s+/g, " ");
+  for (const phrase of [
+    "Do not stop for milestone, phase, or slice check-ins",
+    "Do not ask the user anything during implementation",
+    "Decide autonomously only when **all** of these hold",
+    "Reversibility alone is not enough",
+    "Always block, never decide",
+    "## Decision Log",
+    "## Open Questions",
+    "every task that depends on it",
+    "present every open entry to the user in one batch",
+    "the run resumes in this same mode",
+    "`model: sonnet`",
+    "Never pass `isolation: \"worktree\"`",
+    "reports it back instead of choosing",
+  ]) {
+    assert.ok(skill.includes(phrase), `plan-start: SKILL.md missing run-mode phrase "${phrase}"`);
   }
 }
 

@@ -1,6 +1,6 @@
 ---
 name: plan-start
-description: Use when beginning implementation from an existing prepared repository plan. Inspect the current plan and repository, create or safely reuse an isolated worktree, record it in the canonical plan through a validated plan-only start commit, implement every in-scope unblocked objective, make clear or reversible decisions autonomously, continue around blockers, verify the work, synchronize the plan, and report the result. Do not use for initial plan preparation, lifecycle orchestration, portal actions, integration-branch closeout, or implementation without an existing plan.
+description: Use when beginning implementation from an existing prepared repository plan. Inspect the current plan and repository, create or safely reuse an isolated worktree, record it in the canonical plan through a validated plan-only start commit, implement every in-scope unblocked objective without milestone check-ins, decide only clear low-consequence questions autonomously and log them, queue the rest as blockers while continuing all unblocked work, verify the work, synchronize the plan, and report the result with every open question batched at the end. Do not use for initial plan preparation, lifecycle orchestration, portal actions, integration-branch closeout, or implementation without an existing plan.
 ---
 
 # Plan Start
@@ -19,9 +19,25 @@ Resolve:
 - relevant installed code-style and language skills;
 - current Git state;
 - existing branches and worktrees;
-- Plan Docs worktree configuration when available.
+- `docs/plans/plans-config.json` when present.
 
 The existing plan is the implementation contract. Verify it against the current repository before relying on it.
+
+## Run Mode
+
+Work until the plan runs out of unblocked tasks. A run ends only when every in-scope task is either
+done or blocked by an open question or external blocker.
+
+- Do not stop for milestone, phase, or slice check-ins. Finishing a phase is a reason to start the
+  next one, not to report.
+- Do not ask the user anything during implementation. Questions go into the Open Questions queue
+  (see Blocker Policy) and are asked together, once, at the end.
+- The exceptions are the gates that come before implementation can start at all: the first-run
+  `worktreeRoot` confirmation in Preflight and the dirty-checkout check in Start Transition. With no
+  worktree, no task is unblocked, so these stop and ask immediately.
+- When the user answers the batched questions, each answer unblocks its tasks and the run resumes in
+  this same mode: record the answer in the Decision Log, continue until no unblocked tasks remain,
+  and batch any new questions again.
 
 ## Preflight
 
@@ -76,8 +92,10 @@ implementation:
    configuration-only commit, then re-check that the checkout is clean.
 2. Resolve the target's Git administrative worktree name — not the checkout directory's basename,
    and never a branch name or absolute path.
-3. Write `worktree: <name>` into the canonical plan, and move the plan from `backlog/` to `active/`
-   through the Plan Docs start workflow when it is not already active.
+3. Write `worktree: <name>` into the canonical plan's frontmatter. If the plan is still in
+   `backlog/`, move it from `backlog/` to `active/` with `git mv`, keeping its filename and `id`,
+   and update repository links that point at the old path. A plan already in `active/` is edited in
+   place, never moved again.
 4. Re-read Git status, stage only the old and new canonical plan paths by name, and commit the
    plan-only start transition on the base branch. Do not push.
 5. Run the start validator against fresh disk and Git state.
@@ -85,8 +103,7 @@ implementation:
    gets at most three correction passes; a final refusal blocks this plan and is reported, never
    worked around.
 
-This is the one lifecycle change `plan-start` makes. Plan Docs owns the move itself; `plan-start`
-owns the order, the plan-only commit, and the validator gate.
+This is the one lifecycle change `plan-start` makes.
 
 ## Implementation Workflow
 
@@ -95,9 +112,10 @@ owns the order, the plan-only commit, and the validator gate.
 3. Build a working task sequence from the existing plan.
 4. Implement one coherent slice at a time.
 5. Run the smallest useful verification after each slice.
-6. Continue until every in-scope, unblocked objective has been addressed.
+6. Continue until every in-scope, unblocked objective has been addressed, without pausing between
+   phases or milestones.
 7. Keep the plan synchronized with:
-   - material decisions;
+   - the Decision Log and Open Questions sections;
    - scope corrections;
    - blockers;
    - completed work;
@@ -117,9 +135,10 @@ owns the order, the plan-only commit, and the validator gate.
 
 ## Decision Policy
 
-When ambiguity appears:
+Minor implementation details need no analysis; make them and move on. For any decision that is not
+trivial:
 
-1. Identify realistic options.
+1. Identify realistic options and write down each one's pros and cons.
 2. Evaluate:
    - correctness;
    - explicit plan requirements;
@@ -136,36 +155,73 @@ When ambiguity appears:
    - then repository conventions;
    - then installed skill guidance;
    - then general industry convention.
-4. Proceed autonomously when:
-   - one option is clearly preferable;
-   - one option has a strong practical advantage;
-   - the decision is inexpensive to reverse;
-   - the decision does not materially change the user-facing contract.
-5. Record material decisions and reasoning.
-6. Ask the user only when:
-   - the decision is destructive or difficult to reverse;
-   - it materially changes product scope or behavior;
-   - it changes a public API or persistent schema;
-   - it affects security, privacy, permissions, migration, or compatibility;
-   - it pushes, merges, publishes, spends money, or affects an external system;
-   - no responsible option has a clear advantage.
+4. Decide autonomously only when **all** of these hold:
+   - one option is clearly the best;
+   - choosing it has only trivial consequences;
+   - its effects stay inside this feature.
 
-Do not stop for minor implementation details.
+   Reversibility alone is not enough: a cheap-to-reverse choice with no clear winner is still
+   blocked.
+5. Otherwise, block the decision. Any of these is enough:
+   - no option is clearly best;
+   - the tradeoffs between options are considerable;
+   - the tradeoffs reach beyond this feature;
+   - the best option still carries consequences that are not trivial.
+6. Always block, never decide, when the decision:
+   - is destructive or difficult to reverse;
+   - materially changes product scope or behavior;
+   - changes a public API or persistent schema;
+   - affects security, privacy, permissions, migration, or compatibility;
+   - pushes, merges, publishes, spends money, or affects an external system.
+7. A blocked decision becomes an Open Questions entry; see Blocker Policy.
+
+### Decision Log
+
+Log every non-trivial decision made autonomously in a `## Decision Log` section of the canonical
+plan, so the user can review it later. Each entry states:
+
+- the decision;
+- the alternatives considered;
+- why the chosen option won.
+
+Answers the user gives to queued questions go in the same log, marked as user decisions.
 
 ## Blocker Policy
 
-A blocker should stop only the work it actually blocks.
+A blocker should stop only the work it actually blocks. Blockers are either decisions the Decision
+Policy refused to make or external obstacles such as a failing dependency or a missing credential.
 
 When blocked:
 
-1. Record the affected objective and evidence.
-2. Identify dependent and independent tasks.
-3. Mark the affected work blocked in the plan when appropriate.
-4. Continue independent implementation and verification.
-5. Re-evaluate the blocker after related changes.
-6. Report it clearly at the end.
+1. Add an entry to the `## Open Questions` section of the canonical plan:
+   - the question or obstacle, with evidence;
+   - for a decision: the options, their pros and cons, and a recommendation when there is one;
+   - why it was blocked rather than decided;
+   - the tasks it blocks.
+2. Mark the task that needs the answer blocked, along with every task that depends on it.
+3. Continue all independent implementation and verification.
+4. Re-evaluate open entries after related changes; resolve any that later work makes clear, and
+   move them to the Decision Log.
+5. When no unblocked tasks remain, present every open entry to the user in one batch, as part of the
+   final report.
 
 Do not declare the entire feature complete while a required objective remains blocked.
+
+## Subagents
+
+Claude only; other harnesses skip this section.
+
+Delegate procedural slices of the plan to subagents when that clearly helps, for example
+mechanical edits across many files, bulk renames, or long test runs. Rules:
+
+- Launch them with `model: sonnet`.
+- Run them in the target worktree. Never pass `isolation: "worktree"` or let one create a branch or
+  worktree.
+- Give each subagent a slice with no unmade decisions. A subagent that hits a decision reports it
+  back instead of choosing.
+- The main agent keeps ownership of decisions, the Decision Log, the Open Questions queue, plan
+  synchronization, commits, and verification of subagent output.
+- Do not run parallel subagents that edit the same files.
 
 ## Completion Conditions
 
@@ -175,7 +231,9 @@ Implementation is complete when:
 - acceptance criteria have been evaluated;
 - targeted verification has passed or failures are explained;
 - required broader verification has been run when practical;
-- material decisions are recorded;
+- autonomous decisions are in the Decision Log;
+- every blocked decision and external blocker is in Open Questions, with the tasks it blocks;
+- no unblocked task remains;
 - blockers and deferred scope are explicit;
 - the plan reflects implementation reality.
 
@@ -204,6 +262,7 @@ Implementation result
 - Objectives completed: <count>
 - Objectives blocked: <count>
 - Material decisions: <count>
+- Open questions: <count>
 - Verification passed: yes/no/partial
 - Implementation complete: yes/no
 ```
@@ -211,10 +270,11 @@ Implementation result
 Also include:
 
 - files changed;
-- meaningful implementation decisions and reasoning;
+- the Decision Log: each autonomous decision, alternatives, and reasoning;
 - tests and checks run;
 - manual verification;
-- unresolved blockers;
+- Open Questions, asked together as the run's only question batch: each with its options, pros and
+  cons, recommendation, and the tasks it blocks;
 - deferred scope;
 - current Git status;
 - whether anything was committed, pushed, merged, or published.

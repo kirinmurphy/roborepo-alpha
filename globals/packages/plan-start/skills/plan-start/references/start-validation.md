@@ -6,8 +6,7 @@ moves into the worktree. Home joins plans to Runtime checkouts by this field, so
 the wrong worktree, or names it only in an uncommitted file, attaches to nothing or to the wrong
 row.
 
-Plan Docs owns the lifecycle move (`workflow-start.md`). `plan-start` orchestrates the order and
-runs the validator. This transition is the one lifecycle change `plan-start` performs.
+This transition is the one lifecycle change `plan-start` performs.
 
 ## Terms
 
@@ -37,8 +36,8 @@ the target worktree until step 7 approves.
 3. Resolve the worktree name from the target. A main checkout has none and cannot be associated;
    stop if the target is not a linked worktree.
 4. Write `worktree: <name>` into the canonical plan's frontmatter. If the plan is in `backlog/`, move
-   it to `active/` with `git mv` per Plan Docs `workflow-start.md`; if it is already in `active/`,
-   edit it in place. If the file already carries exactly this value in `active/` at the base
+   it to `active/` with `git mv` as SKILL.md's Start Transition describes; if it is already in
+   `active/`, edit it in place. If the file already carries exactly this value in `active/` at the base
    branch's `HEAD`, there is nothing to commit; skip to step 6.
 5. Re-run `git status --porcelain`, stage only the old and new plan paths by name, and commit on the
    base branch with a message naming the plan and worktree. Never use `git add -A` or `.`. Do not

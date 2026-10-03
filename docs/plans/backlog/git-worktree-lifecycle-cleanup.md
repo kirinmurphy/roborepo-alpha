@@ -5,8 +5,8 @@ next_action: Implement Phase 1 — the worktree inventory and the landed test in
 blocked_by: []
 depends_on: []
 related:
-  - q4vn2xk8
   - wk7p4n2
+  - age4cm7r
 reviewed_commit: 14b1ed6
 ---
 
@@ -56,7 +56,7 @@ all works on plain Git; the GitHub CLI is not required.
 - Collapsing idle and stale worktrees behind a count on Home. The user decided on 2026-10-02 that
   Home lists every worktree; hiding is a per-worktree user action instead (§7).
 - Installing a global `core.hooksPath`. That would disable every repository's own hooks.
-- Plan closeout. Completing a plan stays with `plan-docs`; see §9.
+- Plan closeout. Closing a plan belongs to `/plan-close` ([[age4cm7r]]); see §9.
 - Requiring the `gh` CLI, or treating its presence as changing which worktrees are eligible.
 
 ## Current State
@@ -90,8 +90,7 @@ for projects Runtime sees running, so a worktree used only for editing is never 
 ### Nothing removes a worktree, and nothing hooks Git
 
 No skill, command, or script runs `git worktree remove` or deletes a merged branch outside test
-fixtures. `integration-check` refuses cleanup during its checks and only lists the evidence a
-user-requested deletion needs afterward. The repository installs no Git hooks and never sets
+fixtures. The repository installs no Git hooks and never sets
 `core.hooksPath`.
 
 ### Ancestry cannot see squash merges
@@ -149,12 +148,6 @@ these under `git status --ignored --porcelain`:
 
 A worktree holding a local `.env`, a SQLite file, or `.claude/settings.local.json` would lose it
 silently. §6's ignored-files guard exists for exactly this.
-
-### Overlap with `q4vn2xk8`
-
-`plan-lifecycle-closeout-and-repo-sweep` (`q4vn2xk8`) proposes a user-invoked `/tear-down` sweep
-whose eligibility is "branch merged into the default branch" and whose rule is that every removal
-is confirmed. §9 records how the two divide the work.
 
 ## Proposed Design
 
@@ -384,20 +377,15 @@ The hook calls absolute paths to `node` and the roborepo CLI entry, recorded at 
 Git clients run hooks with their own `PATH`, and GUI clients often omit the npm prefix where
 `roborepo` lives.
 
-### 9. Relationship to `q4vn2xk8`
+### 9. Relationship to `/plan-close`
 
 This plan owns worktree and branch lifecycle end to end: the inventory, the landed test, the
 guards, automatic removal of landed work, and the hide and confirmed-remove actions for work that
-never lands. `q4vn2xk8` keeps plan closeout (the `Not tested` section and the `complete` mode).
+never lands.
 
-With both classes covered here, `/tear-down` needs no worktree or branch eligibility of its own.
-`q4vn2xk8`'s §4, which defines `/tear-down`, still lists "Worktree" and "Local branch" candidates
-with a "merged into the default branch" rule. That plan needs a matching edit: drop those rows, or
-make `/tear-down` call this plan's cleanup command for them.
-
-On 2026-10-02 the user chose automatic removal for landed, clean worktrees. That supersedes
-`q4vn2xk8`'s "every removal is confirmed" rule for that one class only; removal of anything that
-has not landed stays confirmed.
+`/plan-close` ([[age4cm7r]]) closes a plan only after its work reached `main`, and answers that
+question with §3's landed test. Phase 1 exposes the test as a function other modules can call, so
+the two never disagree about what "landed" means.
 
 ## Affected Repository Files
 
