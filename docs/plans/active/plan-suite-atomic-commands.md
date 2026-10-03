@@ -9,7 +9,7 @@ related:
   - plan-lifecycle-suite-workflow-navigation
   - skills-vs-commands-invocation-policy
 reviewed_commit: 40438eda32e957b61e0c99adfcc7a7664d623b95
-worktree:
+worktree: plan-suite-atomic-commands
 ---
 
 # One Command per Plan Lifecycle Step
