@@ -8,7 +8,7 @@ related:
   - wk7p4n2
   - a7bslb00
 reviewed_commit: 56ab25a
-worktree:
+worktree: portal-home-plan-first-hierarchy
 ---
 
 # Make Plans Primary Without Hiding Checkout Activity
