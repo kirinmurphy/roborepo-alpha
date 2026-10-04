@@ -1,0 +1,13 @@
+{
+  "path": ["plans", "validate"],
+  "kind": "internal",
+  "title": "Validate plans",
+  "description": "Report deterministic findings for one plan or every plan in this repository",
+  "usage": "roborepo plans validate [<plan>] [--json]",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/plans.mjs",
+    "export": "plansCommand",
+    "prependArgs": ["validate"]
+  }
+}

@@ -106,7 +106,7 @@ Three levels, and each rule belongs to exactly one:
 | --- | --- | --- |
 | Entry-point gate in `SKILL.md` | The conditions that make completion invalid | "Do not deliver a durable document until the Validator loop passes." |
 | Reference | The full procedure, examples, and edge cases | `references/review-loop.md` |
-| Deterministic validator in code | Machine-checkable invariants | `modules/plan-docs/naming.mjs` |
+| Deterministic validator in code | Machine-checkable invariants | `modules/plan-suite/naming.mjs` |
 
 Rules for writing them:
 
@@ -158,7 +158,7 @@ Rules:
   something the paired skill forbids, the document is wrong on the merits — so whatever was paired
   in also joins the review scope (see `technical-writing`'s `references/review-loop.md`).
 
-`plan-docs` and `technical-writing` both carry a `## Paired Skills` table in this shape; copy it
+`plan-write` and `technical-writing` both carry a `## Paired Skills` table in this shape; copy it
 rather than inventing a second format. Coverage lives in
 `scripts/test/skill-reference-matrix-characterization-check.mjs`.
 

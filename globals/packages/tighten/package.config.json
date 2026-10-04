@@ -5,8 +5,8 @@
   "description": "Clean up code against this project's own patterns with specific, anchored callouts.",
   "lifecycle": "optional",
   "presentation": {
-    "category": "skills-dev-lifecycle",
-    "order": 50
+    "category": "skills-code-quality",
+    "order": 10
   },
   "resources": [
     {

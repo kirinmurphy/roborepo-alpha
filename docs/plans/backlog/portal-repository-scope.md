@@ -117,7 +117,7 @@ Verified against `85390e9`.
 **Gaps this story fills:**
 
 - There is no global repository-source settings model; sources cannot be user-configured.
-- Plans still owns `discoveryRoots` and `ignoredDirectories` in `~/.roborepo/plan-docs/settings.json` (`modules/plan-docs/index.mjs`), recursively searching those roots and reading `ROBOREPO_PLAN_ROOTS`.
+- Plans still owns `discoveryRoots` and `ignoredDirectories` in `~/.roborepo/plan-suite/settings.json` (`modules/plan-suite/index.mjs`), recursively searching those roots and reading `ROBOREPO_PLAN_ROOTS`.
 - `scripts/cli/repositories.mjs` still exposes `enrollRepositoryInPlans()`, and `scripts/cli/portal-routes-repositories.mjs` still serves `POST /api/repositories/:id/plans-enrollment`, which add an exact path to Plans discovery roots.
 - Plans has a page-local repository filter. Tokens has no repository control: the legacy dashboard that owned a `repo` cohort selector was removed, though `/api/data` still accepts both a canonical `repository` id and the legacy `repo` label.
 - Shared portal navigation does not preserve repository scope between pages.
@@ -142,7 +142,7 @@ Sources need stable opaque IDs so provenance/removal do not depend on the path s
 
 ### 2. Bounded folder traversal (reuse, don't reinvent)
 
-Parent-folder discovery must stay bounded. Preserve the existing safety constraints from Plans source traversal (`modules/plan-docs/index.mjs` currently honors `ignoredDirectories` and bounded walking):
+Parent-folder discovery must stay bounded. Preserve the existing safety constraints from Plans source traversal (`modules/plan-suite/index.mjs` currently honors `ignoredDirectories` and bounded walking):
 
 - stop descending once an eligible repository root is found;
 - ignore configured heavy/generated directories;
@@ -329,7 +329,7 @@ Current repository routes key on encoded `repositoryId` (`/api/repositories/:id`
 
 ### Plans
 
-- `modules/plan-docs/index.mjs` — stop treating `discoveryRoots` as the universe; consume visible repositories + resolved local roots; preserve parsing, lifecycle, and canonical `repositoryId`.
+- `modules/plan-suite/index.mjs` — stop treating `discoveryRoots` as the universe; consume visible repositories + resolved local roots; preserve parsing, lifecycle, and canonical `repositoryId`.
 - `scripts/cli/plans.mjs`, `scripts/cli/portal-routes-plans.mjs` — build all/scoped snapshots from canonical repositories.
 - `portal/plans/state.js` — remove page-local repository filter ownership.
 - `portal/plans/app.js` — consume shared scope; preserve lifecycle/history.

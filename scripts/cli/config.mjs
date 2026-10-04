@@ -453,7 +453,7 @@ function sectionContextCost(items) {
   return totals;
 }
 
-// True when a package's prose label is just its command spelled as words ("Wrap Up" / `wrap-up`),
+// True when a package's prose label is just its command spelled as words ("Session Close" / `session-close`),
 // meaning the label adds nothing the command already says. Punctuation and case are stripped so
 // "Case study skill" still reads as a restatement of `case-study`; a label carrying extra words the
 // command lacks ("Token Telemetry" vs `telemetry-marker`) does not.
@@ -469,7 +469,7 @@ function labelRestatesCommand(label, command) {
 
 function packagePresentationItem(item, tool, contextCost = null) {
   const command = tool?.command || null;
-  // Label a command-backed package by the command it exposes (`/wrap-up`) rather than its prose
+  // Label a command-backed package by the command it exposes (`/session-close`) rather than its prose
   // label. Keyed on the package actually having a command, NOT on a category id: this previously
   // compared the category against a now-deleted id, and when that category was removed the
   // condition silently became unreachable, so every such package quietly lost its `/command` label.
@@ -479,7 +479,7 @@ function packagePresentationItem(item, tool, contextCost = null) {
   // the command does not is a product that happens to ship a command, not a command: `telemetry`
   // is "Token Telemetry" and exposes `/telemetry-marker`, and showing the command as its name hides
   // what the package actually is. Command-first packages all label themselves after their command
-  // ("Wrap Up" for `/wrap-up`), so comparing the two normalized forms separates the cases without a
+  // ("Session Close" for `/session-close`), so comparing the two normalized forms separates the cases without a
   // hand-maintained list -- a new command-first package needs no entry anywhere.
   const showCommandLabel = Boolean(command) && labelRestatesCommand(item.label, command);
   const resources = item.resources || item.components || [];

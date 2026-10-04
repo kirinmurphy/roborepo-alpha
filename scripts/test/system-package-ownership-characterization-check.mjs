@@ -240,16 +240,16 @@ const cli = path.join(repoRoot, "scripts/cli/main.mjs");
   fs.writeFileSync(path.join(tmp, ".codex", "config.toml"), "");
   fs.writeFileSync(path.join(tmp, ".claude", "commands", "user-owned.md"), "user command\n");
 
-  spawnSync(process.execPath, [cli, "package", "enable", "plan-docs"], { env, stdio: "ignore" });
+  spawnSync(process.execPath, [cli, "package", "enable", "plan-write"], { env, stdio: "ignore" });
   spawnSync(process.execPath, [cli, "package", "enable", "tighten"], { env, stdio: "ignore" });
-  assert.ok(fs.existsSync(path.join(tmp, ".claude", "commands", "plan-docs.md")), "enabled plan-docs installs its Claude command wrapper");
-  assert.ok(fs.existsSync(path.join(tmp, ".codex", "commands", "plan-docs.md")), "enabled plan-docs installs its Codex command wrapper");
+  assert.ok(fs.existsSync(path.join(tmp, ".claude", "commands", "plan-write.md")), "enabled plan-write installs its Claude command wrapper");
+  assert.ok(fs.existsSync(path.join(tmp, ".codex", "commands", "plan-write.md")), "enabled plan-write installs its Codex command wrapper");
 
-  spawnSync(process.execPath, [cli, "package", "disable", "plan-docs"], { env, stdio: "ignore" });
-  assert.ok(!fs.existsSync(path.join(tmp, ".claude", "commands", "plan-docs.md")), "disabled plan-docs removes its Claude command wrapper");
-  assert.ok(!fs.existsSync(path.join(tmp, ".codex", "commands", "plan-docs.md")), "disabled plan-docs removes its Codex command wrapper");
-  assert.ok(fs.existsSync(path.join(tmp, ".claude", "commands", "tighten.md")), "disabling plan-docs leaves tighten's command untouched");
-  assert.ok(fs.existsSync(path.join(tmp, ".claude", "commands", "user-owned.md")), "disabling plan-docs leaves the user's own command untouched");
+  spawnSync(process.execPath, [cli, "package", "disable", "plan-write"], { env, stdio: "ignore" });
+  assert.ok(!fs.existsSync(path.join(tmp, ".claude", "commands", "plan-write.md")), "disabled plan-write removes its Claude command wrapper");
+  assert.ok(!fs.existsSync(path.join(tmp, ".codex", "commands", "plan-write.md")), "disabled plan-write removes its Codex command wrapper");
+  assert.ok(fs.existsSync(path.join(tmp, ".claude", "commands", "tighten.md")), "disabling plan-write leaves tighten's command untouched");
+  assert.ok(fs.existsSync(path.join(tmp, ".claude", "commands", "user-owned.md")), "disabling plan-write leaves the user's own command untouched");
 
   fs.rmSync(tmp, { recursive: true, force: true });
 }

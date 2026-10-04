@@ -285,10 +285,10 @@ test.describe("shared plan drawer", () => {
   test.afterEach(async ({ page }) => setPlanRoots(page, []));
 
   test("a Plans card opens the plan drawer", async ({ page }) => {
-    // The board only shows once plan-docs is enabled; the hermetic machine has no packages.
+    // The board only shows once plan-write is enabled; the hermetic machine has no packages.
     await page.route("**/api/plans", async (route) => {
       const data = await (await route.fetch()).json();
-      data.planDocsPackage = { ...data.planDocsPackage, available: true, enabled: true };
+      data.planWritePackage = { ...data.planWritePackage, available: true, enabled: true };
       await route.fulfill({ json: data });
     });
     await page.goto("/plans");
@@ -338,6 +338,91 @@ test.describe("shared plan drawer", () => {
     await expect(page).toHaveURL(/\/$/);
     await expect(drawer.locator("#drawer-title")).toHaveText("Drawer fixture plan");
     await expect(drawer.locator("plan-status option-dropdown")).toHaveCount(0);
+  });
+});
+
+test.describe("Plans card commands", () => {
+  test.use({ permissions: ["clipboard-read", "clipboard-write"] });
+  let planRoot;
+  const plan = (id, title, tasks) => [
+    "---", `id: ${id}`, "priority: high", "next_action: Do the next thing", "---", "",
+    `# ${title}`, "", "## Summary", "", "Body.", "", "## Tasks", "", tasks, "",
+  ].join("\n");
+  test.beforeAll(() => {
+    planRoot = fs.mkdtempSync(path.join(os.tmpdir(), "portal-ui-commands-"));
+    fs.mkdirSync(path.join(planRoot, ".git"));
+    for (const lifecycle of ["backlog", "active"]) fs.mkdirSync(path.join(planRoot, "docs", "plans", lifecycle), { recursive: true });
+    fs.writeFileSync(path.join(planRoot, "docs", "plans", "backlog", "card-backlog.md"), plan("cardbk01", "Backlog card plan", "- [ ] Todo"));
+    fs.writeFileSync(path.join(planRoot, "docs", "plans", "active", "card-done.md"), plan("cardac01", "Finished card plan", "- [x] Done"));
+  });
+  test.afterAll(() => fs.rmSync(planRoot, { recursive: true, force: true }));
+  test.beforeEach(async ({ page }) => {
+    await setPlanRoots(page, [planRoot]);
+    await page.route("**/api/plans", async (route) => {
+      const data = await (await route.fetch()).json();
+      data.planWritePackage = { ...data.planWritePackage, available: true, enabled: true };
+      await route.fulfill({ json: data });
+    });
+  });
+  test.afterEach(async ({ page }) => setPlanRoots(page, []));
+
+  // The portal copies suite commands; it never moves a plan on their behalf, since /plan-start and
+  // /plan-close make and commit those moves themselves.
+  for (const [tab, title, label, command, folder] of [
+    ["Backlog", "Backlog card plan", "Start", "plan-start", "backlog/card-backlog.md"],
+    ["Active", "Finished card plan", "Close", "plan-close", "active/card-done.md"],
+  ]) {
+    test(`a ${tab.toLowerCase()} card's ${label} copies the /${command} prompt and moves nothing`, async ({ page }) => {
+      await page.goto("/plans");
+      await page.getByText(new RegExp(`^${tab} \\(`)).first().click();
+      const card = page.locator("plan-card", { hasText: title });
+      const prompt = page.waitForRequest((request) => request.url().endsWith("/api/plans/prompt"));
+      await card.getByRole("button", { name: label, exact: true }).click();
+      expect((await prompt).postDataJSON().action).toBe(command);
+      await expect(page.locator("#toast")).toContainText(`Copied the /${command} prompt`);
+      expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(new RegExp(`^/${command}\\n`));
+      await expect(card.getByRole("button", { name: "Archive" })).toHaveCount(0);
+      expect(fs.existsSync(path.join(planRoot, "docs", "plans", folder)), `${folder} stays where it was`).toBe(true);
+    });
+  }
+});
+
+test.describe("Plans onboarding", () => {
+  const SUITE = ["plan-write", "plan-promote", "plan-start", "plan-close", "session-close"];
+
+  test("each suite command's details button opens that command's skill", async ({ page }) => {
+    await page.goto("/plans");
+    const banner = page.locator(".package-onboarding");
+    await expect(banner.getByRole("heading", { name: /plan suite/ })).toBeVisible();
+    const modal = page.locator("dialog#skill-modal");
+    for (const skill of SUITE) {
+      await expect(banner.locator("code", { hasText: `/${skill}` })).toBeVisible();
+      await banner.getByRole("button", { name: `View /${skill} details` }).click();
+      await expect(modal).toBeVisible();
+      await expect(modal.locator("[data-slot=path]")).toContainText(`${skill}/SKILL.md`);
+      await modal.locator("[data-slot=close]").click();
+      await expect(modal).not.toBeVisible();
+    }
+  });
+
+  test("the enable button turns on all five suite packages in one request", async ({ page }) => {
+    await page.goto("/plans");
+    const token = await page.locator("meta[name=cli-portal-token]").getAttribute("content");
+    const bulk = page.waitForRequest((request) => request.url().endsWith("/api/config/packages/bulk") && request.method() === "POST");
+    await page.locator(".package-onboarding").getByRole("button", { name: "Enable the Plan Suite" }).click();
+    expect((await bulk).postDataJSON()).toEqual({ ids: SUITE, enabled: true });
+    await expect(page.locator(".package-onboarding")).toBeHidden();
+    const config = await (await page.request.get("/api/config")).json();
+    const section = config.behaviorView.find((item) => item.categoryId === "skills-dev-lifecycle");
+    for (const skill of SUITE) {
+      expect(section.items.find((item) => item.id === skill)?.active, `${skill} enabled`).toBe(true);
+    }
+    // Leave the hermetic machine as the other specs expect it: no suite packages enabled.
+    const reset = await page.request.post("/api/config/packages/bulk", {
+      headers: { "X-Cli-Portal-Token": token },
+      data: { ids: SUITE, enabled: false },
+    });
+    expect(reset.ok()).toBe(true);
   });
 });
 

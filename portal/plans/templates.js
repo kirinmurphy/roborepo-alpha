@@ -80,11 +80,14 @@ export function spinner() {
 }
 
 export function packageBanner(pkg, onEnable, skillModal) {
-  // The explanatory copy lives statically in the tpl-package-banner template (data-slot="text");
-  // slots not passed to fill() are left untouched, so there's nothing to fill here.
+  // The explanatory copy and the command list live statically in the tpl-package-banner template;
+  // each command's details button carries its skill id, so only the wiring happens here.
   const node = tpl("tpl-package-banner");
-  const details = node.querySelector("[data-slot=details]");
-  details.addEventListener("click", () => skillModal.open("plan-docs", "plan-docs"));
+  for (const details of node.querySelectorAll("[data-slot=details]")) {
+    const skill = details.dataset.skill;
+    details.setAttribute("aria-label", `View /${skill} details`);
+    details.addEventListener("click", () => skillModal.open(skill, skill));
+  }
   const action = node.querySelector("[data-slot=action]");
   action.disabled = !pkg.available;
   action.addEventListener("click", onEnable);
@@ -101,8 +104,8 @@ export function lifecycleTab(lifecycle, count, isSelected, onSelect) {
   return btn;
 }
 
-// cardActions: { onOpen, onCopyPath, onCopyContext, onCopyPortableContext, onPlanDocsAction,
-//                 onStart, onArchive, planDocsEnabled, planDocsPackage, skillModal,
+// cardActions: { onOpen, onCopyPath, onCopyContext, onCopyPortableContext, onPlanAction,
+//                 planWriteEnabled, planWritePackage, skillModal,
 //                 onEnablePackage, onError }
 export function cardGrid(plans, cardActions) {
   const grid = document.createElement("div");
@@ -118,61 +121,43 @@ function planCardElement(record, cardActions) {
   return node;
 }
 
-// The /plan-docs lifecycle actions. Label is the plain, in-context verb (we're already in the
-// plan-docs universe, so no "/plan-docs" prefix); mode is the skill action; description is the
-// one-line effect. Every one of these produces a clipboard prompt — the agent runs the skill after
-// you paste. Wording tracks docs/user/guides/plan/lifecycle/plan-docs.md's "Common modes".
-const PLAN_DOCS_ACTIONS = [
-  ["start", "Start", "Move this plan into active and begin."],
-  ["sync", "Sync", "Update the plan from completed session work."],
-  ["validate", "Validate", "Check schema, lifecycle, and repo consistency."],
-  ["review", "Review", "Decide complete / incomplete / blocked / superseded."],
-  ["handoff", "Handoff", "Prepare a next-chat handoff."],
+// The plan-suite actions offered for each lifecycle. Each is one atomic command and produces a
+// clipboard prompt — the portal never runs a command or moves a file for it; the agent does both
+// after you paste. Label is the plain, in-context verb; description is the one-line effect.
+// `/plan-start` appears twice because it both begins a backlog plan and resumes an active one.
+// Wording tracks docs/user/guides/plan/lifecycle/plan-suite.md.
+const PLAN_ACTIONS = [
+  ["plan-promote", "Promote", "Review and prepare this plan for development.", "backlog"],
+  ["plan-start", "Start", "Implement this plan in an isolated worktree.", "backlog"],
+  ["plan-start", "Continue", "Resume implementation in this plan's worktree.", "active"],
+  ["plan-write", "Update", "Revise this plan or sync it with the repository.", "active"],
+  ["plan-close", "Close", "Verify the work and move the plan to completed or archived.", "active"],
 ];
-const ACTION_LABEL = Object.fromEntries(PLAN_DOCS_ACTIONS.map(([mode, label]) => [mode, label]));
-
-// Which lifecycles each action is valid in — only valid actions are SHOWN in the menu now (not
-// disabled), so the menu is scoped to what makes sense for this plan's state. Grounded in the
-// plan-docs workflow references: start moves backlog/unclassified work into active (workflow-start:
-// "not completed or archived", "backlog → active"); sync/review act on an active plan
-// (workflow-sync keeps it active; workflow-review decides an active plan's outcome); handoff hands
-// off in-progress work (backlog/active); validate is a safe consistency check in any lifecycle.
-const ACTION_LIFECYCLES = {
-  start: new Set(["backlog", "unclassified"]),
-  sync: new Set(["active"]),
-  validate: null, // null = every lifecycle
-  review: new Set(["active"]),
-  handoff: new Set(["backlog", "active"]),
-};
-
-function actionAppliesToLifecycle(mode, lifecycle) {
-  const set = ACTION_LIFECYCLES[mode];
-  return set === null || set === undefined ? true : set.has(lifecycle);
-}
 
 function actionsForLifecycle(lifecycle) {
-  return PLAN_DOCS_ACTIONS.filter(([mode]) => actionAppliesToLifecycle(mode, lifecycle));
+  return PLAN_ACTIONS.filter(([, , , actionLifecycle]) => actionLifecycle === lifecycle);
 }
 
-// Best-effort single recommended next mode, derived from plan state. Returns null when no rule
-// clearly applies (e.g. blocked, or already mid-progress with no strong signal) rather than guessing.
-export function recommendedPlanDocsMode(plan) {
+// Best-effort single recommended next command, derived from plan state. Returns null when no rule
+// clearly applies (e.g. blocked, or mid-progress with no strong signal) rather than guessing.
+export function recommendedPlanCommand(plan) {
   if (plan.blockers.length > 0) return null;
-  if (plan.lifecycle === "backlog") return "start";
+  if (plan.lifecycle === "backlog") return "plan-start";
   if (plan.lifecycle !== "active") return null;
   const { complete, total } = plan.taskCounts;
-  if (total > 0 && complete === total) return "review";
-  if (plan.reviewState === "possibly-stale") return "sync";
-  if (plan.reviewState === "never-reviewed") return "validate";
+  if (total > 0 && complete === total) return "plan-close";
+  if (plan.reviewState === "possibly-stale" || plan.reviewState === "never-reviewed") return "plan-write";
   return null;
 }
 
-// The recommended-next CTA descriptor, or null. Only surfaces a mode that is both recommended AND
-// valid for the current lifecycle. Label reads e.g. "Review prompt".
-function recommendedCta(plan) {
-  const mode = recommendedPlanDocsMode(plan);
-  if (!mode || !actionAppliesToLifecycle(mode, plan.lifecycle)) return null;
-  return { mode, label: `${ACTION_LABEL[mode]} prompt` };
+// The one command a card or drawer leads with: the recommendation when there is one, otherwise the
+// lifecycle's default way forward (Start a backlog plan, Continue an active one). Completed and
+// archived plans have none. Returns { command, label } or null.
+export function primaryPlanAction(plan) {
+  const actions = actionsForLifecycle(plan.lifecycle);
+  const command = recommendedPlanCommand(plan) || (actions.some(([item]) => item === "plan-start") ? "plan-start" : null);
+  const action = actions.find(([item]) => item === command);
+  return action ? { command, label: action[1] } : null;
 }
 
 // One clickable menu item (icon + label + optional description) that runs copyFn on click. `run`
@@ -192,17 +177,16 @@ function menuItem({ icon = "copy", label, description, run }) {
   return item;
 }
 
-// The unified ⋯ menu body, shared by the drawer and the card. When plan-docs is installed it shows
-// the lifecycle-valid actions (each copies its prompt), with Review carrying a "portable" variant
-// (a self-contained summary for a chat without repo access — the one place portable is meaningful,
-// since the other actions edit repo files). Copy path is always last. The recommended action gets
-// its own dedicated CTA button outside this menu (see recommendedCta/cardRecommendedCta) — it is
+// The unified ⋯ menu body, shared by the drawer and the card. When plan-write is installed it shows
+// the lifecycle's suite commands (each copies its prompt), then a portable prompt — a
+// self-contained summary for a chat without repo access. Copy path is always last. The recommended action gets
+// its own dedicated CTA button outside this menu (see primaryPlanAction/cardPrimaryAction) — it is
 // deliberately not called out again inside the menu, to avoid a second, redundant highlight.
-// When plan-docs is NOT installed there are no lifecycle actions, so it falls back to the generic
+// When plan-write is NOT installed there are no lifecycle actions, so it falls back to the generic
 // repo-aware / portable prompts plus the enable-skill banner.
 //
-// api: { installed, lifecycle, planDocsPackage, skillModal, onError,
-//        copyPath, copyPrompt(mode, {portable}), copyRepoPrompt, copyPortablePrompt, onEnablePackage }
+// api: { installed, lifecycle, planWritePackage, skillModal, onError,
+//        copyPath, copyPrompt(command), copyRepoPrompt, copyPortablePrompt, onEnablePackage }
 function planMenuBody(api) {
   const wrap = tpl("tpl-plan-menu");
   const run = (fn) => async () => {
@@ -220,24 +204,17 @@ function planMenuBody(api) {
   if (api.installed) {
     note.textContent = "Copies a prompt to run in an agent chat.";
     group.hidden = false;
-    for (const [mode, label, description] of actionsForLifecycle(api.lifecycle)) {
-      const row = tpl("tpl-plan-menu-action");
-      row.querySelector("[data-slot=item]").append(
-        menuItem({ icon: "agent-prompt", label, description, run: run(() => api.copyPrompt(mode, { portable: false })) }),
+    for (const [command, label, description] of actionsForLifecycle(api.lifecycle)) {
+      group.append(
+        menuItem({ icon: "agent-prompt", label, description, run: run(() => api.copyPrompt(command)) }),
       );
-      // Review is a read/decide action, so a portable (repo-less) variant is useful; the file-
-      // editing actions need repo access, so they get no portable variant.
-      if (mode === "review") {
-        const portable = row.querySelector("[data-slot=portable]");
-        portable.hidden = false;
-        portable.title = "Self-contained prompt — works in a chat without repo access";
-        portable.addEventListener("click", (event) => { event.stopPropagation(); run(() => api.copyPrompt(mode, { portable: true }))(); });
-      }
-      group.append(row);
     }
+    group.append(
+      menuItem({ icon: "agent-prompt", label: "Portable prompt", description: "Self-contained — works without repo access", run: run(() => api.copyPortablePrompt()) }),
+    );
   } else {
     // No lifecycle actions available — offer the generic prompts the actions would otherwise cover.
-    note.textContent = "Enable Plan Docs for lifecycle actions. For now:";
+    note.textContent = "Enable the plan suite for lifecycle actions. For now:";
     fallbackActions.hidden = false;
     fallbackActions.append(
       menuItem({ icon: "agent-prompt", label: "Repo-aware prompt", description: "For an agent that already has this repo open", run: run(() => api.copyRepoPrompt()) }),
@@ -249,29 +226,29 @@ function planMenuBody(api) {
     menuItem({ icon: "copy", label: "Copy path", run: run(() => api.copyPath()) }),
   );
 
-  if (api.installed === false && api.planDocsPackage) {
+  if (api.installed === false && api.planWritePackage) {
     const banner = wrap.querySelector("[data-slot=package-banner]");
     banner.hidden = false;
-    banner.append(packageBanner(api.planDocsPackage, api.onEnablePackage, api.skillModal));
+    banner.append(packageBanner(api.planWritePackage, api.onEnablePackage, api.skillModal));
   }
   return wrap;
 }
 
-// drawerActions: { onCopyPath, onCopyRepoContext, onCopyPortableContext, onPlanDocsAction,
-//                   onEnablePackage, planDocsPackage, skillModal, onError }
+// drawerActions: { onCopyPath, onCopyRepoContext, onCopyPortableContext, onPlanAction,
+//                   onEnablePackage, planWritePackage, skillModal, onError }
 export function drawerContent(doc, drawerActions) {
   const plan = doc.plan.plan;
-  const pkg = drawerActions.planDocsPackage || {};
+  const pkg = drawerActions.planWritePackage || {};
   const key = doc.plan.key;
   const menu = planMenuBody({
     installed: Boolean(pkg.enabled),
     lifecycle: plan.lifecycle,
-    planDocsPackage: pkg,
+    planWritePackage: pkg,
     skillModal: drawerActions.skillModal,
     onError: drawerActions.onError,
     onEnablePackage: drawerActions.onEnablePackage,
     copyPath: () => drawerActions.onCopyPath(plan.relativePath),
-    copyPrompt: (mode, { portable }) => drawerActions.onPlanDocsAction(key, mode, { portable }),
+    copyPrompt: (command) => drawerActions.onPlanAction(key, command),
     copyRepoPrompt: () => drawerActions.onCopyRepoContext(doc.plan),
     copyPortablePrompt: () => drawerActions.onCopyPortableContext(key),
   });
@@ -287,7 +264,7 @@ export function drawerContent(doc, drawerActions) {
     ],
     warnings: plan.validation.warnings,
     tasks: doc.parsed?.tasks || [],
-    cta: recommendedCta(plan),
+    cta: primaryPlanAction(plan),
     menu,
   };
 }
@@ -300,61 +277,37 @@ export function cardActionMenu(record, cardActions) {
   menu.setAttribute("icon", "copy");
   menu.setAttribute("aria-label", "Plan actions");
   menu.panelContent = planMenuBody({
-    installed: Boolean(cardActions.planDocsEnabled),
+    installed: Boolean(cardActions.planWriteEnabled),
     lifecycle: plan.lifecycle,
-    planDocsPackage: cardActions.planDocsPackage,
+    planWritePackage: cardActions.planWritePackage,
     skillModal: cardActions.skillModal,
     onError: cardActions.onError,
     onEnablePackage: cardActions.onEnablePackage,
     copyPath: () => cardActions.onCopyPath(plan.relativePath),
-    copyPrompt: (mode, { portable }) => cardActions.onPlanDocsAction(record.key, mode, { portable }),
+    copyPrompt: (command) => cardActions.onPlanAction(record.key, command),
     copyRepoPrompt: () => cardActions.onCopyContext(record),
     copyPortablePrompt: () => cardActions.onCopyPortableContext(record.key),
   });
   return menu;
 }
 
-// Recommended-next CTA button for the card, or null when there's no clear recommendation. Copies the
-// recommended action's prompt on click.
-export function cardRecommendedCta(record, cardActions) {
-  const cta = recommendedCta(record.plan);
-  if (!cta) return null;
-  const btn = fill(tpl("tpl-recommended-cta"), { label: cta.label });
+// The card's primary command button (see primaryPlanAction), or null. It copies that command's
+// prompt; nothing on the card moves a plan between lifecycle folders, since `/plan-start` and
+// `/plan-close` own those moves and commit them.
+export function cardPrimaryAction(record, cardActions) {
+  const action = primaryPlanAction(record.plan);
+  if (!action) return null;
+  const btn = fill(tpl("tpl-recommended-cta"), { label: action.label });
+  btn.title = `Copy the /${action.command} prompt`;
   btn.addEventListener("click", async (event) => {
     event.stopPropagation();
     try {
-      await cardActions.onPlanDocsAction(record.key, cta.mode, { portable: false });
+      await cardActions.onPlanAction(record.key, action.command);
     } catch (err) {
       cardActions.onError?.(err);
     }
   });
   return btn;
-}
-
-// Start/Archive lifecycle-mutation shortcuts (see docs/plans/active/plan-lifecycle-toggle-control.md
-// "Actions by current state"). These call the shared lifecycle mutation directly rather than
-// copying a prompt — Start moves Backlog into Active (opening the Active lifecycle-event dialog)
-// or, when already Active, opens the same dialog without mutating. Archive moves Active into
-// Archived with default (non-CTA) button styling since it doesn't open an event dialog.
-export function cardLifecycleActions(record, cardActions) {
-  const lifecycle = record.plan.lifecycle;
-  if (lifecycle !== "backlog" && lifecycle !== "active") return [];
-  const buttons = [];
-  const startBtn = fill(tpl("tpl-recommended-cta"), { label: "Start" });
-  startBtn.addEventListener("click", (event) => {
-    event.stopPropagation();
-    cardActions.onStart(record);
-  });
-  buttons.push(startBtn);
-  if (lifecycle === "active") {
-    const archiveBtn = fill(tpl("tpl-secondary-action"), { label: "Archive" });
-    archiveBtn.addEventListener("click", (event) => {
-      event.stopPropagation();
-      cardActions.onArchive(record);
-    });
-    buttons.push(archiveBtn);
-  }
-  return buttons;
 }
 
 export function drawerTaskItems(tasks) {

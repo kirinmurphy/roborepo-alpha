@@ -99,7 +99,7 @@ export function canonicalRepositoryId(resolved) {
 }
 
 // Opaque, stable, path-free id for a repository that has no usable git remote. Shares the
-// sha256-hex-16 shape that plan-docs' stableKey uses so a `local:` id and a plan-docs repo id
+// sha256-hex-16 shape that plan-suite's stableKey uses so a `local:` id and a plan-suite repo id
 // derived from the same realpath agree on the underlying hash.
 //
 // IMPORTANT: the input MUST already be a realpath. The `local:` id is only stable across domains if

@@ -1,7 +1,7 @@
 ---
 id: age4cm7r
 priority: medium
-next_action: Phase 1 — rename the `plan-docs` package to `plan-write`, `modules/plan-docs/` to `modules/plan-suite/`, and `wrap-up` to `session-close` across code, portal, docs, and tests, then gate on `rg -l 'plan-docs|wrap-up' -g '!docs/plans/**' .` returning nothing.
+next_action: Merge the branch into main, run one full plan cycle with the suite to confirm the Not tested entries, then run /plan-close.
 blocked_by: []
 depends_on:
   - a7bslb00
@@ -62,17 +62,17 @@ behind CLI commands that every skill runs, not in one skill's references that th
 
 ## Goals
 
-- [ ] Every user-facing plan lifecycle behavior is a top-level command; no suite skill takes a mode
+- [x] Every user-facing plan lifecycle behavior is a top-level command; no suite skill takes a mode
       argument.
-- [ ] `plan-docs` no longer exists as a name in code, packages, portal, or user docs.
-- [ ] Deterministic plan rules (schema, lifecycle, naming, the start transition) are CLI commands
+- [x] `plan-docs` no longer exists as a name in code, packages, portal, or user docs.
+- [x] Deterministic plan rules (schema, lifecycle, naming, the start transition) are CLI commands
       that suite skills run, not prose one skill reads from another.
-- [ ] Plans record work that was built but never tested, and `/plan-close` refuses to close a plan
+- [x] Plans record work that was built but never tested, and `/plan-close` refuses to close a plan
       with unconfirmed entries.
-- [ ] A suite skill never fails silently when an ancillary skill it pairs with is not enabled.
-- [ ] The `integration-check` package is removed, with the parts worth keeping carried into
+- [x] A suite skill never fails silently when an ancillary skill it pairs with is not enabled.
+- [x] The `integration-check` package is removed, with the parts worth keeping carried into
       `/plan-close` or [[a7bslb00]].
-- [ ] The Plans portal's onboarding, actions, and prompts use the new commands, and one action
+- [x] The Plans portal's onboarding, actions, and prompts use the new commands, and one action
       enables the whole suite.
 
 ## Non-goals
@@ -266,6 +266,25 @@ it to `completed/` or `archived/`. [[plan-lifecycle-suite-workflow-navigation]] 
 Review state and changes the eligible source lifecycle to `review/`; `/plan-close` must read the
 domain lifecycle policy rather than embedding `active` as an enduring assumption.
 
+### Stopping the worktree's servers
+
+A closed plan's worktree often still runs the dev servers started while the work happened, and
+[[a7bslb00]] refuses to remove a worktree while Runtime reports one. Once `/plan-close` has moved a
+landed plan, it runs `roborepo plans stop-servers <plan>` and reports what stopped.
+
+| Rule | Why |
+| --- | --- |
+| A server belongs to the worktree when it listens on a TCP port and its working directory's Git top level is the worktree | The attribution Runtime already uses; the Git top level keeps subdirectories in and nested worktrees out |
+| Processes that do not listen (agent sessions, shells, editors, watchers) are never touched | Their working directory can be the worktree too, including the session running `/plan-close` |
+| Each process's working directory is read again immediately before it is signalled | A PID can be reused between discovery and the signal |
+| `SIGTERM` only, then a short wait and a fresh check; survivors are reported, never killed | A server that ignores `SIGTERM` is the user's call |
+| A plan without a `worktree`, or whose worktree no longer resolves, stops nothing | Never fall back to the primary checkout's servers |
+| Runs only after a complete, landed close | A refused or archived close leaves the user's servers alone |
+
+The process logic lives in `modules/developer-runtime/stop.mjs`, next to the discovery it reuses.
+The command sits under `plans` rather than `runtime` because `roborepo runtime` is in the allow
+bucket, and Codex renders no `ask` rules, so a `runtime stop` subcommand would run unprompted there.
+
 ### Ancillary skills: ask, never assume
 
 Each suite skill keeps a Paired Skills table. Before loading a row's skill:
@@ -321,6 +340,7 @@ on one named plan.
 | Portal | Update Plans snapshot/package state, action/recommendation templates, lifecycle dialog, onboarding banner, and Plans API; reuse the existing config bulk-package endpoint |
 | Inventory and generated audit | Update `manifests/inventory/package-categories.json`, `manifests/inventory/skill-trigger-tests.json`, and the generated skill invocation audit |
 | Tests | Rename plan-domain tests and update package catalog, bulk-toggle, prompt/state, portal browser, CLI catalog/surface, command-render, and full-suite orchestration coverage |
+| Runtime | Add `modules/developer-runtime/stop.mjs`, reusing listener discovery from `listeners.mjs`; `roborepo plans stop-servers` composes it with plan and worktree resolution |
 | Documentation | Replace the plan-docs lifecycle guide and update setup, CLI, Plans portal, skills/commands, internal Plans architecture, docs map, and README references |
 
 ## Implementation plan
@@ -329,96 +349,126 @@ Each phase leaves the suite usable end to end.
 
 ### Phase 1 — Rename
 
-- [ ] Rename package `plan-docs` to `plan-write` and its skill directory, slash command, and
+- [x] Rename package `plan-docs` to `plan-write` and its skill directory, slash command, and
       trigger fixtures (`manifests/inventory/skill-trigger-tests.json`).
-- [ ] Rename `modules/plan-docs/` to `modules/plan-suite/` and update its importers in
+- [x] Rename `modules/plan-docs/` to `modules/plan-suite/` and update its importers in
       `scripts/cli/`, `portal/plans/`, `modules/repositories/`, and `scripts/test/`.
-- [ ] Rename portal identifiers such as `planDocsPackage`, `PLAN_DOCS_ACTIONS`, and
+- [x] Rename portal identifiers such as `planDocsPackage`, `PLAN_DOCS_ACTIONS`, and
       `recommendedPlanDocsMode`.
-- [ ] Point generated prompts at the renamed command (`buildPrompt`, `repair-prompt.mjs`, the
+- [x] Point generated prompts at the renamed command (`buildPrompt`, `repair-prompt.mjs`, the
       lifecycle dialog) and rename the commands the onboarding banner lists, so the portal keeps
       working while `plan-write` still has its modes.
-- [ ] Rename package `wrap-up` to `session-close`, keeping its trigger phrases ("wrap this up").
-- [ ] Rename plan-docs test files (`plan-docs-check.mjs` and siblings) and update
-      `scripts/test/test-cli.sh` and `scripts/test/check-groups.json`.
-- [ ] Update `docs/plans/plans-config.json`'s `plan` namespace description.
-- [ ] Rename the on-disk settings directory from `plan-docs` to `plan-suite`; do not add a migration, and
+- [x] Rename package `wrap-up` to `session-close`, keeping its trigger phrases ("wrap this up").
+- [x] Rename plan-docs test files (`plan-docs-check.mjs` and siblings) and update
+      `scripts/test/test-cli.sh` and `scripts/test/check-groups.json`. `check-groups.json` named none
+      of them, so only `test-cli.sh` changed.
+- [x] Update `docs/plans/plans-config.json`'s `plan` namespace description.
+- [x] Rename the on-disk settings directory from `plan-docs` to `plan-suite`; do not add a migration, and
       document that discovery roots must be configured again.
-- [ ] Update references in backlog and active plans.
-- [ ] Regenerate `generated/packages/` with `roborepo skill render-commands`.
+- [x] Update references in backlog and active plans. Plan ids, historical notes of the rename itself, and the `roborepo_lifecycle_epic/` design notes keep the old names.
+- [x] Regenerate `generated/packages/` with `roborepo skill render-commands`.
 
 ### Phase 2 — Deterministic commands
 
-- [ ] Add catalog entries and implementations for `roborepo plans validate`, reusing
+- [x] Add catalog entries and implementations for `roborepo plans validate`, reusing
       `validateForLifecycle`, `validatePlanNaming`, and relationship resolution; cover plan-path,
       plan-ID, whole-repository, text, and JSON output.
-- [ ] Add `roborepo plans start`, with fixtures for a backlog plan, an already-active plan, a dirty
+- [x] Add `roborepo plans start`, with fixtures for a backlog plan, an already-active plan, a dirty
       primary checkout, and a reused worktree.
-- [ ] Add a catalog entry and implementation for `roborepo package status`, backed by
+- [x] Add a catalog entry and implementation for `roborepo package status`, backed by
       `buildPackageLiveState`, with enabled, configured, partial, disabled, external, and unavailable
       fixtures.
-- [ ] Make plan Markdown parsing ignore fenced code blocks before adding section-specific findings;
+- [x] Make plan Markdown parsing ignore fenced code blocks before adding section-specific findings;
       prove sample headings and checkboxes do not affect readiness or task counts.
-- [ ] Point `plan-start`'s Start Transition at `roborepo plans start` and remove the procedure it
+- [x] Point `plan-start`'s Start Transition at `roborepo plans start` and remove the procedure it
       replaces from `references/start-validation.md`.
 
 ### Phase 3 — Split the skills
 
-- [ ] Reduce `plan-write` to create, revise, and sync. Delete `workflow-next.md`,
+- [x] Reduce `plan-write` to create, revise, and sync. Delete `workflow-next.md`,
       `workflow-start.md`, and `workflow-handoff.md`; move `workflow-review.md` into `plan-close`.
-- [ ] Add `## Not tested` to `plan-write`'s schema reference and the check to
+- [x] Add `## Not tested` to `plan-write`'s schema reference and the check to
       `roborepo plans validate`.
-- [ ] Have `plan-start` write `## Not tested` entries during its run and list them in its report.
-- [ ] Add the `plan-close` package and skill (category, order, slash command, trigger fixtures).
-- [ ] Fold `workflow-handoff.md`'s required fields into `session-close`'s handoff note.
-- [ ] Add the ancillary-skill check to every suite skill's Paired Skills table.
-- [ ] In the same change, replace the portal action menu, recommended action, dialog copy, and
+- [x] Have `plan-start` write `## Not tested` entries during its run and list them in its report.
+- [x] Add the `plan-close` package and skill (category, order, slash command, trigger fixtures).
+- [x] Fold `workflow-handoff.md`'s required fields into `session-close`'s handoff note.
+- [x] Add the ancillary-skill check to every suite skill's Paired Skills table.
+- [x] In the same change, replace the portal action menu, recommended action, dialog copy, and
       repair prompt, and remove the next prompt, since they name the modes this phase deletes.
 
 ### Phase 4 — Retire `integration-check`
 
-- [ ] Delete `globals/packages/integration-check/` and its generated commands.
-- [ ] Delete `docs/user/guides/plan/lifecycle/integration-check.md` and update
+- [x] Delete `globals/packages/integration-check/` and its generated commands.
+- [x] Delete `docs/user/guides/plan/lifecycle/integration-check.md` and update
       `docs/user/README.md` and `docs/internal/docs-map.md`.
-- [ ] Re-render `docs/internal/skill-invocation-audit.md`.
+- [x] Re-render `docs/internal/skill-invocation-audit.md`.
 
 ### Phase 5 — Portal
 
-- [ ] Relabel the config section and set its members.
-- [ ] Add the `skills-code-quality` category to `manifests/inventory/package-categories.json`,
+- [x] Relabel the config section and set its members.
+- [x] Add the `skills-code-quality` category to `manifests/inventory/package-categories.json`,
       ordered after `skills-writing`, and move `tighten` into it.
-- [ ] Rebuild the onboarding banner with per-command details links and an enable-all button that
+- [x] Rebuild the onboarding banner with per-command details links and an enable-all button that
       reuses `/api/config/packages/bulk` for the five suite package IDs.
 
 ### Phase 6 — Docs
 
-- [ ] Replace `docs/user/guides/plan/lifecycle/plan-docs.md` with one plan-suite guide that walks
+- [x] Replace `docs/user/guides/plan/lifecycle/plan-docs.md` with one plan-suite guide that walks
       the commands in lifecycle order, one section per command.
-- [ ] Update `README.md`, `docs/user/guides/setup-and-daily-use.md`, and
+- [x] Update `README.md`, `docs/user/guides/setup-and-daily-use.md`, and
       `docs/user/reference/plans-portal.md`.
-- [ ] Update `docs/user/reference/roborepo-cli.md`, `docs/internal/plans-portal-internals.md`,
+- [x] Update `docs/user/reference/roborepo-cli.md`, `docs/internal/plans-portal-internals.md`,
       `docs/internal/skills-and-commands.md`, and every affected docs-map/reference entry.
+
+### Phase 7 — Stop the worktree's servers on close
+
+- [x] Add `modules/developer-runtime/stop.mjs`: select listeners whose working directory's Git top
+      level is the checkout, re-read each working directory before signalling, send `SIGTERM`, and
+      report `stopped`, `still-running`, `gone`, `changed`, or `failed`. Support `--dry-run`.
+- [x] Add `roborepo plans stop-servers <plan> [--dry-run] [--json]`: resolve the plan's `worktree`
+      to its linked worktree path, stop nothing when there is none, and exit 1 when a server
+      survives or cannot be signalled.
+- [x] Add the catalog entry under the internal `plans` namespace; leave it out of the allow bucket
+      so it prompts in every harness.
+- [x] Add a step to `/plan-close` after a complete, landed move: run the command and list what it
+      stopped in the report.
+- [x] Cover selection, nesting, PID reuse, survivors, and unsupported platforms with injected
+      commands, and the real command against live listeners on macOS.
+- [x] Document the command in `docs/user/reference/plans-portal.md` and the `/plan-close` section
+      of the plan-suite guide.
+
+### Phase 8 — Retired package ids on update
+
+- [x] `roborepo package reconcile`, which `roborepo update` runs, drops IDs the catalog no longer
+      has from both registry lists instead of moving them to `disabled`.
+- [x] `scripts/test/package-retired-ids-check.mjs` seeds a pre-rename install (retired IDs enabled
+      and disabled, their skills and commands projected) and runs update's package steps.
 
 ## Validation
 
-- [ ] `rg -l 'plan-docs|wrap-up|(^|[^-])integration-check' -g '!docs/plans/**' .` returns nothing.
+- [x] `rg -l 'plan-docs|wrap-up|(^|[^-])integration-check' -g '!docs/plans/**' .` returns nothing.
       The `[^-]` excludes unrelated test files such as `cli-surface-integration-check.mjs`; plans are
       excluded because some record the old names as history.
-- [ ] `roborepo plans validate` reports the same findings as the portal for this repository's plans.
-- [ ] Fenced Markdown examples containing headings and checkboxes do not create plan sections,
+- [x] `roborepo plans validate` reports the same findings as the portal for this repository's plans.
+- [x] Fenced Markdown examples containing headings and checkboxes do not create plan sections,
       tasks, or `## Not tested` findings.
-- [ ] `roborepo plans start` fixtures pass, including refusal on a dirty primary checkout.
-- [ ] `roborepo package status --json` distinguishes enabled, configured, partial, disabled,
+- [x] `roborepo plans start` fixtures pass, including refusal on a dirty primary checkout.
+- [x] `roborepo package status --json` distinguishes enabled, configured, partial, disabled,
       external, and unavailable package state.
-- [ ] The portal onboarding button enables all five suite packages, and each details link opens
+- [x] The portal onboarding button enables all five suite packages, and each details link opens
       that command's skill (`scripts/test/portal-ui/`).
-- [ ] `roborepo package validate` passes for every renamed or added package, and enabling then
+- [x] `roborepo package validate` passes for every renamed or added package, and enabling then
       disabling each package leaves no stale skill or command projection.
-- [ ] CLI command-catalog and surface integration checks cover the new commands and help/usage.
-- [ ] `roborepo skill render-commands --check`, `roborepo skill audit`, and
+- [x] CLI command-catalog and surface integration checks cover the new commands and help/usage.
+- [x] `roborepo skill render-commands --check`, `roborepo skill audit`, and
       `roborepo skill triggers --check` pass.
-- [ ] `bash scripts/doctor.sh --quiet` and `git diff --check` pass.
-- [ ] `npm run check` passes. This change touches package definitions, generated outputs, CLI
+- [x] `roborepo plans stop-servers` stops a listener started in the worktree or one of its
+      subdirectories, and leaves listeners in the primary checkout and in a worktree nested inside
+      it running.
+- [x] Updating an install that still names `plan-docs`, `wrap-up`, or `integration-check` removes
+      those IDs from the registry and their skills and commands from the harness homes.
+- [x] `bash scripts/doctor.sh --quiet` and `git diff --check` pass.
+- [x] `npm run check` passes. This change touches package definitions, generated outputs, CLI
       catalog entries, and test orchestration, so the full local CI-parity gate is required.
 
 Manual scenarios, since they exercise agent behavior no test can assert:
@@ -439,3 +489,48 @@ Manual scenarios, since they exercise agent behavior no test can assert:
 | `## Not tested` entries are never written, so `/plan-close`'s refusal never fires | `plan-start` writes them during its run and lists them in its report, where the user sees an empty list next to manual checks |
 | `/plan-close` cannot confirm a merge until [[a7bslb00]] Phase 1 lands | Phase 3 builds `/plan-close` after that test exists, or reports "landed: unconfirmed" and refuses |
 | The related lifecycle plan later inserts Review between Active and Complete | Read the eligible source lifecycle from domain policy; this plan initially closes Active, and the lifecycle plan changes policy rather than forking `/plan-close` |
+
+## Decision Log
+
+Decisions `/plan-start` made on its own during implementation. Each had one clearly best option with
+consequences contained to this feature.
+
+| Decision | Alternatives | Why |
+| --- | --- | --- |
+| The Plans page still gates on `plan-write` (`planWritePackage`), and its banner enables all five suite packages through `/api/config/packages/bulk` | Gate on all five being enabled | `plan-write` is the package the page's actions need; requiring all five would hide the board after disabling an unrelated step |
+| `roborepo plans validate` exits 1 only when a `blocking` finding remains | Exit 1 on any finding | `LEGACY_SLUG_ID` and other advisory findings are permanent on valid plans; failing on them makes the exit code useless to a skill |
+| `UNCONFIRMED_NOT_TESTED` is `advisory` and is emitted for active and completed plans | `blocking`; every lifecycle | Severity only orders findings; `plan-start` writes entries mid-run, so blocking would fail validation during normal work. `/plan-close` refuses on the code itself. Backlog and archived plans make no claim about built work |
+| Only a literal level-2 `## Not tested` heading opens the section | Match by normalized heading text | Normalized matching treated this plan's own ``### `## Not tested` `` design heading as the section |
+| `plans start` fast-forwards the target branch when it has no commits of its own and no uncommitted edits | Fast-forward only a worktree "created in this run" | A CLI cannot know when a worktree was created; "no commits of its own" is the property that makes the fast-forward safe |
+| `plans start` reports `staleLinks` instead of editing them; `plan-start` fixes them in the worktree | Edit links in the transition commit | Validator check 4 requires the transition commit to touch only the plan |
+| Cross-plan relationship findings are appended to a copy of each cached record's validation | Leave as is | They were pushed onto the cached record, so every rescan in a running portal added another copy (verified: 1, 2, 3 after three scans) |
+| `package status` probes a package together with everything it `requires`, reports `missing` and `unavailable` as statuses, and exits 1 only for an unknown id | Probe the package alone | Probing alone reports every dependency missing and the package `partial` |
+| `/plan-close` uses Git ancestry as an interim landed test and refuses everything else as `landed: unconfirmed` | Block `/plan-close` until a7bslb00 lands | Matches this plan's own risk mitigation; ancestry can prove a merge, and a7bslb00's content tier replaces the refusal later |
+| `/plan-close` stages the closing move but does not commit | Commit on the base branch | Matches `plan-promote` and the suite's commit-only-when-asked convention; the only automatic base-branch commit stays `plans start` |
+| The per-action "portable" variant became one **Portable prompt** menu item; `buildPrompt` takes a suite command or none | Keep a portable variant on Close | The variant belonged to Review, which no longer exists; a context-only prompt has no command to name |
+| `plan-write` routes references by situation (`create`, `update`); `workflow-sync.md` became `workflow-update.md` (revise and sync); `workflow-validate.md` now runs the CLI first. The matrix test and `skill audit` parse the situation list | Keep a mode-shaped list | The skill takes no mode; an unparsed list would have silently dropped `plan-write` from the reachability audit |
+| Order: `plan-close` 40, `session-close` 50; `skills-code-quality` category order 27 with `tighten` at 10 | Other numbers | Lifecycle order within the section; "after `skills-writing`" (25) and before `code-conventions` (30) |
+| The next-prompt button, its dialog, `createPromptModal`, and `actionablePlans` were deleted | Keep unused | Nothing else used them |
+| **User decision:** `roborepo plans start` prompts for approval. The allow rule narrowed from `roborepo plans` to `roborepo plans validate` and `roborepo plans repair` | Keep it promptless | Answer to Open Question 1 |
+| **User decision:** the portal's card buttons copy suite-command prompts and never move a plan. Start (backlog) and Continue, Update, or Close (active) replace the Start and Archive shortcuts; the post-move event dialog is removed; the menu gains Continue (`/plan-start`) for active plans | Make `plans start` accept an uncommitted portal move | Answer to Open Question 2. `/plan-start` and `/plan-close` make and commit their own moves, so a portal move only creates an uncommitted rename the transition then refuses. The lifecycle dropdown stays as a manual override |
+| **User request:** `plan-start` enters the worktree after `APPROVED` — one folder grant, then the worktree becomes the session's working directory — and mirrors the plan to the primary checkout once at the end | Widen the Claude write-scope hook to sibling worktrees | The hook deliberately bounds writes to the checkout in use; per-file prompts came from the session staying rooted in the primary checkout. Observed in this run: before the folder grant every `cd` into the worktree was reset, after it the directory change persisted and edits stopped prompting |
+| **User decision:** `roborepo package` splits by subcommand. `list`, `inspect`, `status`, and `validate` are allowed; `enable`, `disable`, `reconcile`, `adopt-live`, `manage`, and `dev` ask | Leave `roborepo package` in `ask`, one prompt per paired-skill check | Answer to Open Question 2. In Claude an `ask` match beats a more specific `allow`, so suite skills' `package status` checks prompted every time. There is no top-level `package create`; scaffolding is `package dev create`, covered by `dev` |
+| **User request:** `/plan-close` stops the closed worktree's dev servers automatically after a complete, landed move, and lists them | Ask before stopping; leave it to [[a7bslb00]] | The work has landed, so the servers run stale code and restart cheaply. a7bslb00 only refuses removal while a server runs; it never stops one |
+| The command is `roborepo plans stop-servers <plan>`, not `roborepo runtime stop <path>` | `runtime stop`, with an `ask` rule under the `runtime` allow | Codex renders no `ask` rules (`permissions-render.mjs`), so the `roborepo runtime` allow prefix would run it unprompted; Gemini gives both rules priority 500 with unverified tie-breaking. Taking a plan also keeps the primary checkout out of reach |
+| Ownership is the Git top level of the listener's working directory, not a path prefix | Path prefix; matching the worktree path in the command line | A prefix also claims `.claude/worktrees/*` nested inside the primary checkout; command-line matching would claim editors and `tail -f`. Runtime attributes by working directory, so Home and the command agree |
+| **User request:** reconcile drops retired package IDs from both registry lists | Keep moving them to `disabled` | The maintainer's install showed `plan-docs`, `wrap-up`, and `integration-check` parked in `disabled` after an update; an explicit disable of a package that no longer exists protects nothing and never leaves. The catalog loads with unavailable packages, so only truly removed IDs qualify |
+| An unreaped child (`ps` state `Z`) counts as stopped | Signal 0 alone decides liveness | Observed in the live fixture: listeners exited on `SIGTERM` but their blocked parent had not reaped them, so signal 0 still succeeded and the command reported them `still-running` |
+
+## Open Questions
+
+1. **`plan-lifecycle-suite-blockers-dependencies` proposes `/plan-write block` and `unblock`
+   modes**, which contradicts this plan's no-mode rule. Deferred by the user: that plan needs its own
+   revision to make them CLI commands or separate commands.
+
+## Not tested
+
+- [ ] `/plan-close` refuses on a red suite, an incomplete plan, an unchecked `## Not tested` entry, and an unlanded branch. Agent behavior; needs live sessions.
+- [ ] With `technical-writing` disabled, `/plan-write` asks to enable or skip and names a skip in its report. Agent behavior; needs a live session.
+- [ ] `/plan-start` writes a `## Not tested` entry when it skips a check, and runs `roborepo plans start` for its transition. This run used the manual transition because the command did not exist yet.
+- [ ] `/plan-close` runs `roborepo plans stop-servers` after a complete, landed close and lists what it stopped. Agent behavior; needs a live session.
+- [ ] In the Claude Code CLI, `/add-dir <worktree>` followed by `cd <worktree>` makes the write-scope hook treat the worktree as the checkout in use. Observed only in the Claude desktop app, through its directory-access tool.

@@ -60,14 +60,14 @@ export function createRootsPanel({ onSnapshot, onError, onExpand }) {
     if (expanded) onExpand?.();
   }
 
-  // Single-visible-step onboarding: while the plan-docs package is disabled the banner is the one
+  // Single-visible-step onboarding: while the plan-write package is disabled the banner is the one
   // setup prompt (the empty-state settings block stays hidden), so a new user sees one call to
   // action at a time — enable the skill first, then add Project Folders.
-  function render(roots, planDocsEnabled) {
+  function render(roots, planWriteEnabled) {
     currentRoots = roots;
     if (!roots.length) {
-      // True-empty state: the form stays hidden behind the banner while plan-docs is disabled.
-      settingsEl.hidden = !planDocsEnabled;
+      // True-empty state: the form stays hidden behind the banner while plan-write is disabled.
+      settingsEl.hidden = !planWriteEnabled;
       if (!settingsEl.hidden) settingsEl.append(settingsBodyEl);
       settingsLabelEl.textContent = "Add your first Project Folder";
       rootFormLabelEmptyEl.hidden = false;
@@ -92,51 +92,6 @@ export function createRootsPanel({ onSnapshot, onError, onExpand }) {
   }
 
   return { render, setExpanded };
-}
-
-// Popup for a bulk agent-prompt action (currently just "Work next plans"): explains the
-// objective, states how many plans it's scoped to under the current filters, then copies the
-// generated prompt on demand. Caller passes scopeCount (computed cheaply up front, before the
-// prompt itself is generated) and onCopy (does the actual generate+clipboard work on click).
-export function createPromptModal(dialogEl) {
-  const titleEl = dialogEl.querySelector('[data-slot="title"]');
-  const objectiveEl = dialogEl.querySelector('[data-slot="objective"]');
-  const scopeEl = dialogEl.querySelector('[data-slot="scope"]');
-  const copyEl = dialogEl.querySelector('[data-slot="copy"]');
-
-  dialogEl.querySelector('[data-slot="close"]').addEventListener("click", close);
-  portalWireBackdropClose(dialogEl, close);
-
-  function open({ title, objective, scopeCount, onCopy, onError }) {
-    titleEl.textContent = title;
-    objectiveEl.textContent = objective;
-    scopeEl.textContent =
-      scopeCount === 0
-        ? "No plans currently match your filters."
-        : `Scoped to the ${scopeCount} plan${scopeCount === 1 ? "" : "s"} currently visible under your active filters.`;
-    copyEl.disabled = scopeCount === 0;
-    copyEl.textContent = "Copy prompt";
-    copyEl.onclick = async () => {
-      copyEl.disabled = true;
-      copyEl.textContent = "Copying…";
-      try {
-        await onCopy();
-        copyEl.textContent = "Copied!";
-      } catch (err) {
-        copyEl.textContent = "Copy prompt";
-        onError?.(err);
-      } finally {
-        copyEl.disabled = scopeCount === 0;
-      }
-    };
-    dialogEl.showModal();
-  }
-
-  function close() {
-    dialogEl.close();
-  }
-
-  return { open, close };
 }
 
 export function createInfoModal() {

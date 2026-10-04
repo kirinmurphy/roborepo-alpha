@@ -62,14 +62,14 @@ a new general-purpose YAML parser as an incidental dependency.
 
 | Area | Current behavior | Primary touchpoints |
 |---|---|---|
-| Schema | `blocked_by` is a simple array and blocking is derived from it | `globals/packages/plan-docs/skills/plan-docs/references/plan-schema.md`, `references/lifecycle.md` |
-| Parsing | Only `blocked_by`, `depends_on`, and `related` are normalized as arrays | `modules/plan-docs/index.mjs` |
-| Domain record | `blocked_by` is exposed as `plan.blockers` | `modules/plan-docs/index.mjs` |
-| Mutations | Scalar priority and lifecycle moves are supported; list fields are not editable | `modules/plan-docs/index.mjs`, `scripts/cli/plans.mjs`, `scripts/cli/portal-routes-plans.mjs` |
+| Schema | `blocked_by` is a simple array and blocking is derived from it | `globals/packages/plan-write/skills/plan-write/references/plan-schema.md`, `references/lifecycle.md` |
+| Parsing | Only `blocked_by`, `depends_on`, and `related` are normalized as arrays | `modules/plan-suite/index.mjs` |
+| Domain record | `blocked_by` is exposed as `plan.blockers` | `modules/plan-suite/index.mjs` |
+| Mutations | Scalar priority and lifecycle moves are supported; list fields are not editable | `modules/plan-suite/index.mjs`, `scripts/cli/plans.mjs`, `scripts/cli/portal-routes-plans.mjs` |
 | Filtering | The portal treats `plan.blockers.length > 0` as blocked | `portal/plans/state.js` |
 | Display | A blocked badge opens a read-only popover of referenced plan IDs | `portal/plans/elements/plan-status.js`, `portal/plans/blockers-popover.js` |
 | Action recommendation | Recommended Plan Docs actions are suppressed when `plan.blockers` is non-empty | `portal/plans/templates.js` |
-| Tests | Blocker resolution and reverse references are covered only for plan IDs | `scripts/test/plan-docs-check.mjs`, `scripts/test/plans-portal-state-check.mjs` |
+| Tests | Blocker resolution and reverse references are covered only for plan IDs | `scripts/test/plan-suite-check.mjs`, `scripts/test/plans-portal-state-check.mjs` |
 
 ## Goals
 
@@ -309,8 +309,8 @@ roborepo plans unblock <plan-id> --all
 And:
 
 ```text
-/plan-docs block
-/plan-docs unblock
+/plan-write block
+/plan-write unblock
 ```
 
 ## Implementation Plan
@@ -356,13 +356,13 @@ And:
 ### Phase 6: CLI, skills, and documentation
 
 - [ ] Add block/unblock CLI commands.
-- [ ] Add `/plan-docs block` and `/plan-docs unblock`.
+- [ ] Add `/plan-write block` and `/plan-write unblock`.
 - [ ] Update prompt contracts and guide examples.
 - [ ] Add the blocked overlay to the lifecycle infographic.
 
 ### Phase 7: Verification
 
-- [ ] Extend plan-docs domain tests.
+- [ ] Extend plan-suite domain tests.
 - [ ] Extend portal-state tests.
 - [ ] Add route tests.
 - [ ] Add browser smoke tests.

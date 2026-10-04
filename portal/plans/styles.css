@@ -205,7 +205,7 @@ main {
 }
 /* Button chrome (default/secondary, cta, text) is defined globally in portal/shared/base.css via
  * data-btn — no page-local button {} override here. */
-/* The "Add your first Project Folder" title is .intro-banner-title. Only shown once plan-docs is
+/* The "Add your first Project Folder" title is .intro-banner-title. Only shown once plan-write is
  * enabled — while it's disabled the banner is the single visible setup step. Once roots exist, the
  * row-1 "N Repos" control item takes over and this whole block relocates into the control bar
  * (unlabeled). */
@@ -368,21 +368,6 @@ dialog#info-modal::backdrop {
   font-size: var(--text-2xs);
   color: var(--dim);
 }
-#prompt-modal {
-  width: min(480px, 100%);
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  box-shadow: 0 12px 40px var(--modal-shadow);
-  padding: 18px;
-}
-#prompt-modal::backdrop {
-  background: var(--backdrop);
-}
-#prompt-modal .modalactions {
-  margin-top: 12px;
-}
-#lifecycle-event-modal,
 #lifecycle-error-modal {
   width: min(560px, 100%);
   max-height: 85vh;
@@ -393,27 +378,11 @@ dialog#info-modal::backdrop {
   box-shadow: 0 12px 40px var(--modal-shadow);
   padding: 26px;
 }
-#lifecycle-event-modal::backdrop,
 #lifecycle-error-modal::backdrop {
   background: var(--backdrop);
 }
-#lifecycle-event-modal .modalactions,
 #lifecycle-error-modal .modalactions {
   margin-top: 16px;
-}
-.revert-action {
-  display: block;
-  margin-top: 14px;
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--dim);
-  font-size: var(--text-xs);
-  text-decoration: underline;
-  cursor: pointer;
-}
-.revert-action:hover {
-  color: var(--ink);
 }
 /* Onboarding empty-page mount: full-width, fills the space between the shared chrome (sticky
  * header above, footer below) so the hero sits in the true visual middle of the page. A display

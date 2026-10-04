@@ -32,7 +32,8 @@ export async function discoverListenerRecords({
   return { warnings, records };
 }
 
-async function resolvePidCwd(pid, runCommand, timeoutMs, warnings) {
+// Exported for stop.mjs, which re-reads a PID's working directory immediately before signalling it.
+export async function resolvePidCwd(pid, runCommand, timeoutMs, warnings) {
   try {
     const result = await runCommand("lsof", ["-a", "-p", String(pid), "-d", "cwd", "-F", "n"], { timeoutMs });
     return parseCwdFieldOutput(result.stdout ?? result);

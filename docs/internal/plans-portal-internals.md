@@ -10,8 +10,10 @@ How the `/plans` page is built, for people changing it. User-facing behavior is 
 
 The page uses:
 
-- `modules/plan-docs/index.mjs` for discovery, parsing, validation, Git metadata, rendering, and prompt generation
-- `scripts/cli/plans.mjs` for portal-facing snapshots and package-state integration
+- `modules/plan-suite/index.mjs` for discovery, parsing, validation, Git metadata, rendering, and prompt generation
+- `modules/plan-suite/start-transition.mjs` for `roborepo plans start`, the one plan mutation that commits
+- `modules/plan-suite/stop-servers.mjs` for `roborepo plans stop-servers`, which resolves a plan's linked worktree and hands it to `modules/developer-runtime/stop.mjs`
+- `scripts/cli/plans.mjs` for portal-facing snapshots, package-state integration, and the `roborepo plans` CLI
 - `portal/plans/` for static HTML/CSS/JS
 - `portal/shared/base.css` and `portal/shared/theme.js` for the uniform portal
   header, navigation, active-page state, updated-at text, theme toggle, and shared hidden-element
@@ -30,7 +32,7 @@ files are seen immediately; only the expensive per-file work is skipped for unch
 
 ## Readiness Findings
 
-Section synonyms live in `modules/plan-docs/section-synonyms.mjs`, the single place to extend when a
+Section synonyms live in `modules/plan-suite/section-synonyms.mjs`, the single place to extend when a
 document uses a reasonable heading the scanner does not yet recognize.
 
 Each problem is reported as a finding with a stable code, a plain-language message, a resolution
@@ -38,6 +40,15 @@ describing the fix, and optional structured metadata (an unchecked-task count, t
 names for a missing section). `plan.validation` carries both `findings` and `warnings`, the latter
 being the message strings, so display and search keep working while the dialog, the API, and prompt
 generation read the structured form.
+
+Structural parsing skips fenced code blocks, so a sample heading or checkbox inside a fence never
+becomes a section, a task, or a `## Not tested` entry. Cross-plan relationship findings are appended
+to a copy of each cached record's validation, never to the cached record itself, so a rescan reports
+each one once.
+
+`roborepo plans validate` builds the same records for the one repository containing the current
+directory (a linked worktree included) through `buildRepositoryPlanSnapshot`, so the CLI and the
+page report identical findings.
 
 Moving a plan into a lifecycle whose requirements it does not meet returns `422
 LIFECYCLE_REQUIREMENTS` with every finding at once, and the file is not moved. Validation runs
@@ -77,7 +88,7 @@ Mutation failures return a structured error:
         "resolution": "Complete or remove the remaining required tasks.",
         "count": 3, "meta": { "remaining": 3, "total": 7 } }
     ],
-    "repair": { "prompt": "/plan-docs validate\n…", "planKey": "…", "planId": "…" } } }
+    "repair": { "prompt": "/plan-write\n…", "planKey": "…", "planId": "…" } } }
 ```
 
 `details` is always the message projection of `findings`, so the two cannot describe different
@@ -90,24 +101,27 @@ current snapshot and rechecks repository boundaries before reading document cont
 
 ## Key Files
 
-- `modules/plan-docs/index.mjs`
+- `modules/plan-suite/index.mjs`
+- `modules/plan-suite/start-transition.mjs`
 - `scripts/cli/plans.mjs`
+- `scripts/cli/package-status.mjs`
 - `scripts/cli/portal-server.mjs`
 - `portal/shared/base.css`
 - `portal/shared/theme.js`
 - `portal/plans/index.html`
 - `portal/plans/app.js`
 - `portal/plans/styles.css`
-- `globals/packages/plan-docs/package.config.json`
-- `globals/packages/plan-docs/skills/plan-docs/`
-- `scripts/test/plan-docs-check.mjs`
+- `globals/packages/plan-write/`, `plan-promote/`, `plan-start/`, `plan-close/`, `session-close/`
+- `scripts/test/plan-suite-check.mjs`, `plan-suite-findings-check.mjs`, `plan-suite-commands-check.mjs`
 
 ## Checks To Run
 
 Targeted checks:
 
 ```sh
-npm run test:plans
+node scripts/test/plan-suite-check.mjs
+node scripts/test/plan-suite-findings-check.mjs
+node scripts/test/plan-suite-commands-check.mjs
 npm run test:packages
 node scripts/cli/main.mjs skill render-commands --check
 node scripts/cli/main.mjs skill triggers --check

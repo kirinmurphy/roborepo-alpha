@@ -23,6 +23,32 @@ Resolve:
 
 The existing plan is the implementation contract. Verify it against the current repository before relying on it.
 
+## Paired Skills
+
+Load these by subject matter while implementing; do not wait to be asked for them by name.
+
+| Skill | Load when | Contributes |
+| --- | --- | --- |
+| `code-style` | The work places code: module boundaries, orchestration vs. execution, reuse | Ownership and layering constraints |
+| `javascript-typescript` | The work touches JS/TS — ESM, exports, types, framework-less DOM | Language and markup conventions |
+| `test-harness` | The work adds or changes tests, verification commands, or fixtures | Test selection and observable-behavior assertions |
+
+Each row is its own optional package, so check it before loading it. Run this check in Preflight,
+for every row the plan's subject matter calls for, before the start transition: it is a pre-run gate
+like the `worktreeRoot` confirmation, so the no-questions run mode is unaffected.
+
+1. Run `roborepo package status <skill> --json`.
+2. If `available` is true, `enabled` is true, and `status` is `enabled` or `configured`, load it.
+3. If it is disabled, ask: "`<skill>` is not enabled. Enable it, or skip it for this run?"
+   - **Enable:** run `roborepo package enable <skill>` with the user's permission, then load it.
+   - **Skip:** continue without it, and name it as skipped in the final report.
+4. If `enabled` and `status` disagree (`partial`, `external`), report the status, offer
+   `roborepo package reconcile` or skip, and never describe a drifted package as loaded.
+5. If it is `missing` or `unavailable`, skip it and say so in the final report.
+
+State which paired skills applied and which did not — a skipped skill and a forgotten one look
+identical otherwise.
+
 ## Run Mode
 
 Work until the plan runs out of unblocked tasks. A run ends only when every in-scope task is either
@@ -43,8 +69,11 @@ done or blocked by an open question or external blocker.
 
 1. Read the entire selected plan.
 2. Inspect the current repository state and material plan claims.
-3. Detect whether the plan has become stale or materially incomplete.
-4. Read `docs/plans/plans-config.json` when present. If it declares a `worktreeRoot` (an absolute
+3. Detect whether the plan has become stale or materially incomplete. Run
+   `roborepo plans validate <plan>` for the deterministic document findings; it does not check the
+   plan's claims against code, so step 2 still applies.
+4. Run the paired-skill check in Paired Skills for every row the plan's subject matter calls for.
+5. Read `docs/plans/plans-config.json` when present. If it declares a `worktreeRoot` (an absolute
    path, a `~`-relative path, or a path relative to the repository root), that is the configured
    worktree policy; resolve new worktrees under `<worktreeRoot>/<repo-name>/<branch>` without asking.
    If the key is absent, this is a first-time-per-repository decision, not routine implementation
@@ -54,21 +83,21 @@ done or blocked by an open question or external blocker.
    resulting path (confirmed default or override) into `plans-config.json` as `worktreeRoot` so every
    later run on this repository resolves silently from then on — this is a one-time gate per
    repository, not a prompt on every `plan-start` invocation.
-5. Resolve the worktree policy.
-6. Inspect existing worktrees before creating another one.
-7. Reuse a worktree only when it clearly matches the repository and intended branch and is safe to continue.
-8. Refuse to reuse a dirty, ambiguous, unrelated, or conflicting worktree.
-9. Create an isolated feature worktree when a safe matching workspace does not exist.
-10. Use platform path APIs for `~` expansion and path joining so the same default resolves correctly
+6. Resolve the worktree policy.
+7. Inspect existing worktrees before creating another one.
+8. Reuse a worktree only when it clearly matches the repository and intended branch and is safe to continue.
+9. Refuse to reuse a dirty, ambiguous, unrelated, or conflicting worktree.
+10. Create an isolated feature worktree when a safe matching workspace does not exist.
+11. Use platform path APIs for `~` expansion and path joining so the same default resolves correctly
     on macOS, Linux, and Windows.
-11. Keep absolute worktree paths out of repository plan documents.
-12. Record:
+12. Keep absolute worktree paths out of repository plan documents.
+13. Record:
     - worktree path;
     - Git administrative worktree name;
     - branch;
     - base branch;
     - starting commit.
-13. Resolve the primary checkout with `git worktree list --porcelain`. The first `worktree` entry
+14. Resolve the primary checkout with `git worktree list --porcelain`. The first `worktree` entry
     is the main checkout for the shared `.git` directory. When implementation runs from a linked
     worktree, keep plan-status updates synchronized in the matching plan document under the primary
     checkout, not only in the linked worktree copy. Use the same repository-relative
@@ -80,30 +109,47 @@ When deterministic RoboRepo commands exist for an operation, use them instead of
 
 ## Start Transition
 
-Read `references/start-validation.md` before any step below. It holds the exact commands, the
-validator checks, and the failure behavior.
+Read `references/start-validation.md` before running the transition. It describes what
+`roborepo plans start` does, the validator checks it runs, and how to act on a refusal.
 
 Run the transition from the primary checkout, after the target worktree is resolved and before any
 implementation:
 
-1. Require the primary checkout to be on the base branch with no uncommitted changes. Otherwise stop
-   and ask the user. The one exception is the `worktreeRoot` that Preflight just wrote to
-   `docs/plans/plans-config.json` on a repository's first run: commit that file alone first, as a
-   configuration-only commit, then re-check that the checkout is clean.
+1. The primary checkout must be on the base branch with no uncommitted changes; the command refuses
+   otherwise, and that refusal is a reason to stop and ask the user. The one exception is the
+   `worktreeRoot` that Preflight just wrote to `docs/plans/plans-config.json` on a repository's first
+   run: commit that file alone first, as a configuration-only commit, then continue.
 2. Resolve the target's Git administrative worktree name — not the checkout directory's basename,
    and never a branch name or absolute path.
-3. Write `worktree: <name>` into the canonical plan's frontmatter. If the plan is still in
-   `backlog/`, move it from `backlog/` to `active/` with `git mv`, keeping its filename and `id`,
-   and update repository links that point at the old path. A plan already in `active/` is edited in
-   place, never moved again.
-4. Re-read Git status, stage only the old and new canonical plan paths by name, and commit the
-   plan-only start transition on the base branch. Do not push.
-5. Run the start validator against fresh disk and Git state.
-6. Enter the implementation worktree only after the validator returns `APPROVED`. The validator
-   gets at most three correction passes; a final refusal blocks this plan and is reported, never
-   worked around.
+3. Run `roborepo plans start <plan> --worktree <name> --json`. It writes `worktree: <name>` into the
+   canonical plan's frontmatter, moves a plan still in `backlog/` from `backlog/` to `active/` with
+   `git mv` (keeping its filename and `id`; a plan already in `active/` is edited in place), stages
+   only the old and new canonical plan paths, and commits the plan-only start transition on the base
+   branch. Do not push.
+4. The same command then runs the start validator against fresh disk and Git state.
+5. Enter the implementation worktree only after the validator returns `APPROVED`. Apply each failed
+   check's `fix` and rerun; the validator gets at most three correction passes, and a final refusal
+   blocks this plan and is reported, never worked around.
+6. Repository links the result lists under `staleLinks` still name the old `backlog/` path. Fix them
+   in the implementation worktree, never on the base branch.
 
 This is the one lifecycle change `plan-start` makes.
+
+## Enter the Worktree
+
+After `APPROVED`, make the worktree the session's working directory before the first edit. Writes
+are allowed without a prompt only inside the checkout the session is working in, so a session still
+rooted in the primary checkout asks for permission on every file it edits in the worktree.
+
+- **Claude:** request access to the whole worktree folder once — in the Claude desktop app, with its
+  directory-access tool and the worktree's path; in the Claude Code CLI, ask the user to run
+  `/add-dir <worktree>`. Then `cd <worktree>` in the shell. Once the folder belongs to the session the
+  directory change persists, and the repository write-scope hook treats the worktree as the
+  checkout in use. Never ask for access file by file.
+- **Codex:** no step is needed; its workspace roots already include `<worktreeRoot>/<repo-name>`.
+
+This is part of the pre-implementation gate, like the `worktreeRoot` confirmation: one approval,
+then the run proceeds without questions.
 
 ## Implementation Workflow
 
@@ -116,13 +162,15 @@ This is the one lifecycle change `plan-start` makes.
    phases or milestones.
 7. Keep the plan synchronized with:
    - the Decision Log and Open Questions sections;
+   - the `## Not tested` section;
    - scope corrections;
    - blockers;
    - completed work;
    - verification results.
 8. When the implementation worktree is linked, mirror those plan-document updates to the primary
    checkout's copy so `/plans` reflects the active status after linked worktrees are ignored by
-   discovery.
+   discovery. The primary checkout is outside the worktree's write scope, so copy the plan there in
+   one write at the end of the run rather than after every slice.
 9. Do not silently omit objectives.
 10. Do not expand into unrelated cleanup.
 11. Perform a final comparison between:
@@ -132,6 +180,22 @@ This is the one lifecycle change `plan-start` makes.
     - acceptance criteria.
 12. Run completion-level verification.
 13. Report the final state.
+
+## Not Tested
+
+Built work that no test covers goes in the canonical plan's `## Not tested` section the moment the
+gap is known: a check that was skipped, an assumption never exercised, a claim resting on indirect
+evidence. Each entry is an unchecked checkbox stating what to check and why a test cannot:
+
+```markdown
+## Not tested
+
+- [ ] The portal button enables all five packages. Needs a browser session against a live install.
+```
+
+Never check an entry off yourself; the user confirms it by hand. `roborepo plans validate` reports
+unchecked entries, and `/plan-close` refuses to close a plan while any remain. List every entry in
+the final report, and say so explicitly when there are none.
 
 ## Decision Policy
 
@@ -232,6 +296,7 @@ Implementation is complete when:
 - targeted verification has passed or failures are explained;
 - required broader verification has been run when practical;
 - autonomous decisions are in the Decision Log;
+- every known untested gap is a `## Not tested` entry;
 - every blocked decision and external blocker is in Open Questions, with the tasks it blocks;
 - no unblocked task remains;
 - blockers and deferred scope are explicit;
@@ -263,6 +328,7 @@ Implementation result
 - Objectives blocked: <count>
 - Material decisions: <count>
 - Open questions: <count>
+- Not tested entries: <count>
 - Verification passed: yes/no/partial
 - Implementation complete: yes/no
 ```
@@ -273,9 +339,12 @@ Also include:
 - the Decision Log: each autonomous decision, alternatives, and reasoning;
 - tests and checks run;
 - manual verification;
+- the `## Not tested` entries, each with what to check and why no test covers it;
+- paired skills loaded, and any skipped with the reason;
 - Open Questions, asked together as the run's only question batch: each with its options, pros and
   cons, recommendation, and the tasks it blocks;
 - deferred scope;
+- `roborepo plans validate <plan>` output for the canonical plan;
 - current Git status;
 - whether anything was committed, pushed, merged, or published.
 

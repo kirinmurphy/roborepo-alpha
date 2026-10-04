@@ -99,3 +99,8 @@ export {
   findCurrentInstanceByOpaqueKey,
   sortRepositoriesForDisplay,
 } from "./snapshot.mjs";
+export {
+  findCheckoutServers,
+  STOP_WAIT_MS,
+  stopCheckoutServers,
+} from "./stop.mjs";

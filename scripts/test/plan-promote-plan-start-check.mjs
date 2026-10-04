@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// Dedicated coverage for the plan-promote / plan-start standalone skill packages: discoverability,
+// Dedicated coverage for the plan-promote / plan-start / plan-close standalone skill packages: discoverability,
 // frontmatter parsing, generated-command wiring, package validation, and boundary text. Comparable
-// skill-command packages (e.g. integration-check) rely only on the generic catalog tests
-// (package-catalog-check.mjs); these two get their own file because their SKILL.md bodies encode
-// explicit "do not use for" boundaries against each other and against plan-docs/integration-check,
+// skill-command packages (e.g. tighten) rely only on the generic catalog tests
+// (package-catalog-check.mjs); these get their own file because their SKILL.md bodies encode
+// explicit "do not use for" boundaries against each other and against the rest of the plan suite,
 // which is worth asserting directly rather than only through the generic allowlist checks.
 //
 // Also covers plan-start's worktree-root resolution: the config shape in plans-config.json and the
@@ -26,6 +26,13 @@ const SKILLS = {
       "implement feature code",
       "create a feature branch or worktree",
       "change plan lifecycle",
+    ],
+  },
+  "plan-close": {
+    boundaryPhrases: [
+      "implement missing work",
+      "merge, push, delete branches, or remove worktrees",
+      "check off `## Not tested` entries",
     ],
   },
   "plan-start": {
@@ -88,6 +95,9 @@ for (const [id, { boundaryPhrases }] of Object.entries(SKILLS)) {
   const reference = normalize(fs.readFileSync(referencePath, "utf8"));
 
   assert.ok(skill.includes("Read `references/start-validation.md` before"), "plan-start: SKILL.md must load the start-validation reference");
+  // The transition's mechanics live in `roborepo plans start` (covered behaviorally by
+  // plan-suite-commands-check.mjs); the skill must delegate to it rather than restate the procedure.
+  assert.ok(skill.includes("roborepo plans start <plan> --worktree <name>"), "plan-start: SKILL.md must run roborepo plans start");
   const order = ["## Start Transition", "## Implementation Workflow"].map((heading) => skill.indexOf(heading));
   assert.ok(order[0] > 0 && order[0] < order[1], "plan-start: Start Transition must precede the Implementation Workflow");
 
@@ -95,10 +105,10 @@ for (const [id, { boundaryPhrases }] of Object.entries(SKILLS)) {
   // fresh validation, and only then the context switch.
   const transition = skill.slice(order[0], order[1]);
   const steps = [
-    "Write `worktree: <name>` into the canonical plan",
+    "writes `worktree: <name>` into the canonical plan",
     "from `backlog/` to `active/`",
-    "stage only the old and new canonical plan paths",
-    "Run the start validator against fresh disk and Git state",
+    "only the old and new canonical plan paths",
+    "runs the start validator against fresh disk and Git state",
     "Enter the implementation worktree only after the validator returns `APPROVED`",
   ];
   let cursor = -1;
@@ -113,21 +123,20 @@ for (const [id, { boundaryPhrases }] of Object.entries(SKILLS)) {
 
   for (const phrase of [
     "rev-parse --absolute-git-dir",
-    "Never use `git add -A` or `.`",
     "Never fold it into the transition commit",
     "Do not push",
-    "Enter the target worktree only on `APPROVED`",
     "at most three correction passes",
     "do not enter the target worktree",
-    "Read every fact fresh",
+    "reads every fact fresh",
     "lists only the plan's rename (`R`) or modification (`M`)",
     "status --porcelain -- docs/plans",
     "Execution is still in the primary checkout",
+    "stop and ask the user",
   ]) {
     assert.ok(reference.includes(phrase), `plan-start: start-validation.md missing "${phrase}"`);
   }
 
-  assert.ok(skill.includes("move it from `backlog/` to `active/` with `git mv`"), "plan-start: SKILL.md must own the backlog-to-active move");
+  assert.ok(skill.includes("from `backlog/` to `active/` with `git mv`"), "plan-start: SKILL.md must own the backlog-to-active move");
 }
 
 // --- plan-start's run mode: no check-ins, strict autonomy bar, queued questions batched at the end ---
@@ -148,8 +157,52 @@ for (const [id, { boundaryPhrases }] of Object.entries(SKILLS)) {
     "`model: sonnet`",
     "Never pass `isolation: \"worktree\"`",
     "reports it back instead of choosing",
+    "## Not tested",
+    "Never check an entry off yourself",
+    "roborepo package status <skill> --json",
+    "Enable it, or skip it for this run?",
+    "never describe a drifted package as loaded",
+    // Entering the worktree is what stops per-file write prompts: the write-scope hook allows only the
+    // checkout the session is in, so the skill must move the session there with one folder grant.
+    "## Enter the Worktree",
+    "request access to the whole worktree folder once",
+    "`/add-dir <worktree>`",
+    "Never ask for access file by file",
   ]) {
     assert.ok(skill.includes(phrase), `plan-start: SKILL.md missing run-mode phrase "${phrase}"`);
+  }
+}
+
+// --- suite-wide conventions: every plan-suite skill checks its paired packages before loading them,
+// and /plan-close refuses rather than closing on incomplete evidence. Prose-presence coverage, like
+// the blocks above: these are agent-followed instructions with no code path of their own. ---
+{
+  // Assembled from parts so this guard does not itself trip the repository-wide check that no
+  // retired command name survives outside docs/plans.
+  const RETIRED_COMMANDS = [["plan", "docs"], ["wrap", "up"], ["integration", "check"]].map((parts) => parts.join("-"));
+  const normalize = (text) => text.replace(/\s+/g, " ");
+  const suite = ["plan-write", "plan-promote", "plan-start", "plan-close", "session-close"];
+  for (const id of suite) {
+    const skill = normalize(fs.readFileSync(path.join(repoRoot, "globals/packages", id, "skills", id, "SKILL.md"), "utf8"));
+    for (const phrase of [
+      "## Paired Skills",
+      "roborepo package status <skill> --json",
+      "Enable it, or skip it for this run?",
+      "never describe a drifted package as loaded",
+    ]) {
+      assert.ok(skill.includes(phrase), `${id}: SKILL.md missing paired-skill check phrase "${phrase}"`);
+    }
+    for (const retired of RETIRED_COMMANDS) {
+      assert.ok(!skill.includes(`/${retired}`), `${id}: SKILL.md still names the retired /${retired}`);
+    }
+  }
+
+  const close = normalize(fs.readFileSync(path.join(repoRoot, "globals/packages/plan-close/skills/plan-close/SKILL.md"), "utf8"));
+  const order = ["### 1. Run the tests", "### 3. Check the plan against the code", "### 5. Confirm `## Not tested` is clear", "### 6. Confirm the work landed", "### 7. Close", "### 8. Stop the worktree's servers"]
+    .map((heading) => close.indexOf(heading));
+  assert.ok(order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1])), "plan-close: tests, verdict, Not tested, landed, close, then stop servers, in that order");
+  for (const phrase of ["refuse: report the failing output", "landed: unconfirmed", "UNCONFIRMED_NOT_TESTED", "git merge-base --is-ancestor", "never as passed", "Never check one off yourself", "roborepo plans stop-servers <plan> --json", "Skip this step for an archived or refused plan"]) {
+    assert.ok(close.toLowerCase().includes(phrase.toLowerCase()), `plan-close: SKILL.md missing "${phrase}"`);
   }
 }
 
@@ -208,4 +261,4 @@ for (const id of Object.keys(SKILLS)) {
   assert.equal(result.status, 0, `roborepo package validate ${id} failed: ${result.stderr}\n${result.stdout}`);
 }
 
-console.log("ok: plan-promote / plan-start discoverability, frontmatter, generated commands, and boundaries");
+console.log("ok: plan-promote / plan-start / plan-close discoverability, frontmatter, generated commands, and boundaries");

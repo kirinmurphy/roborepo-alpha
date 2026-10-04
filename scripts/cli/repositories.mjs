@@ -19,7 +19,7 @@ import {
   repositoryDetailPayload,
   repositoryIdForUrlKey,
 } from "../../modules/repositories/index.mjs";
-import { readPlanSettings } from "../../modules/plan-docs/index.mjs";
+import { readPlanSettings } from "../../modules/plan-suite/index.mjs";
 import { updatePlanSettings as updatePlanSettingsDefault, refreshPlans as refreshPlansDefault } from "./plans.mjs";
 
 // Register (or refresh) a repository discovered by a domain. Idempotent; batches every mutation for

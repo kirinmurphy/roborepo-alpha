@@ -8,7 +8,7 @@ buckets over a rigid global taxonomy. Common buckets include:
 - guides for setup, daily use, and operational choices
 - reference for exact behavior, APIs, implementation details, and capability docs
 - internal or maintainer docs for repo-specific machinery that ordinary users do not need
-- plans or todos for unresolved future work only (see `plan-docs` for the lifecycle/frontmatter
+- plans or todos for unresolved future work only (see `plan-write` for the lifecycle/frontmatter
   mechanics that govern this bucket specifically)
 
 Make one doc own each explanation depth:

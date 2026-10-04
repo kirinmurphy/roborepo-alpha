@@ -1,0 +1,13 @@
+{
+  "path": ["plans", "stop-servers"],
+  "kind": "internal",
+  "title": "Stop plan worktree servers",
+  "description": "Stop the dev servers running in the linked worktree that implemented a plan",
+  "usage": "roborepo plans stop-servers <plan> [--dry-run] [--json]",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/plans.mjs",
+    "export": "plansCommand",
+    "prependArgs": ["stop-servers"]
+  }
+}

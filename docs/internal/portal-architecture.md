@@ -100,7 +100,7 @@ it:
 The plan detail popup is one component on every page that shows it (Plans and Home). Its dialog,
 templates, and stylesheet link live in `portal/plans/plan-drawer-partial.html`, injected wherever a
 page places `{{PLAN_DRAWER}}`; `portal/plans/plan-drawer.js` (`createPlanDrawer`) fills and opens it.
-The page supplies the plan list blockers resolve against and the plan-docs package state. Plans
+The page supplies the plan list blockers resolve against and the plan-write package state. Plans
 handles the drawer's `plan-change` events with its mutation orchestrator; Home passes `readonly`,
 so `<plan-status>` renders lifecycle and priority as chips.
 

@@ -99,7 +99,7 @@ written continuously at runtime. roborepo does not manage, sync, or carry memory
 ## Slash commands
 
 **What they do:** named workflows the user starts on purpose (`/case-study`, `/frontend-design`,
-`/plan-docs`, `/tighten`).
+`/plan-write`, `/tighten`).
 
 **Parity model:** authored once as package `slash-command` resources, stamped into per-package
 generated dirs (`generated/packages/<package>/claude/commands/` and

@@ -15,7 +15,7 @@ export function enrollmentSourceId(record, domain) {
 
 // Does an existing Plans discovery root cover `repoRoot`? A source covers a repo when the repo root
 // is the source itself or a descendant of it. Returns the covering source path or null.
-// `discoveryRoots` are absolute, already-normalized source paths (plan-docs settings.discoveryRoots).
+// `discoveryRoots` are absolute, already-normalized source paths (plan-suite settings.discoveryRoots).
 export function plansSourceCoverage(repoRoot, discoveryRoots) {
   if (typeof repoRoot !== "string" || !repoRoot) return null;
   // Realpath both sides so a source and repo that are the same directory reached via different

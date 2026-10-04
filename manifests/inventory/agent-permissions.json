@@ -247,7 +247,7 @@
     {
       "id": "inspect-install",
       "label": "Inspect roborepo state",
-      "description": "Read-only roborepo namespaces (doctor, telemetry, git, index, config show). Safe to run unattended; none of them mutate config.",
+      "description": "Read-only roborepo namespaces (doctor, telemetry, git, index, config show, plans validate/repair, package list/inspect/status/validate). Safe to run unattended; none of them mutate config.",
       "kind": "commands",
       "commands": [
         [
@@ -276,7 +276,33 @@
         ],
         [
           "roborepo",
-          "plans"
+          "plans",
+          "validate"
+        ],
+        [
+          "roborepo",
+          "plans",
+          "repair"
+        ],
+        [
+          "roborepo",
+          "package",
+          "list"
+        ],
+        [
+          "roborepo",
+          "package",
+          "inspect"
+        ],
+        [
+          "roborepo",
+          "package",
+          "status"
+        ],
+        [
+          "roborepo",
+          "package",
+          "validate"
         ]
       ],
       "bucket": "allow",
@@ -285,7 +311,7 @@
     {
       "id": "mutate-harness-config",
       "label": "Change harness configuration",
-      "description": "roborepo namespaces that rewrite generated config or installed state (update, maintenance, mcp, package, skill, config set). Prompts. Anything NOT listed here — including namespaces added later — falls through to a prompt by default, so new subcommands never silently gain access.",
+      "description": "roborepo namespaces that rewrite generated config or installed state (update, maintenance, mcp, package enable/disable/reconcile/adopt-live/manage/dev, skill, config set). Prompts. Anything NOT listed here — including namespaces added later — falls through to a prompt by default, so new subcommands never silently gain access.",
       "kind": "commands",
       "commands": [
         [
@@ -302,7 +328,33 @@
         ],
         [
           "roborepo",
-          "package"
+          "package",
+          "enable"
+        ],
+        [
+          "roborepo",
+          "package",
+          "disable"
+        ],
+        [
+          "roborepo",
+          "package",
+          "reconcile"
+        ],
+        [
+          "roborepo",
+          "package",
+          "adopt-live"
+        ],
+        [
+          "roborepo",
+          "package",
+          "manage"
+        ],
+        [
+          "roborepo",
+          "package",
+          "dev"
         ],
         [
           "roborepo",

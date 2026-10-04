@@ -3,13 +3,14 @@
 ## Purpose
 
 The Plans portal is a built-in RoboRepo portal page for local Markdown planning documents. It is
-paired with an optional `plan-docs` package that installs the agent-facing `/plan-docs` workflow.
+paired with the optional plan suite: five packages that each install one agent-facing command,
+`/plan-write`, `/plan-promote`, `/plan-start`, `/plan-close`, and `/session-close`.
 
 ## Concept Model
 
 | Noun | Meaning | Source of truth |
 | --- | --- | --- |
-| Discovery root | Local directory configured by the user | `path.join(stateRoot, "plan-docs", "settings.json")` or `ROBOREPO_PLAN_ROOTS` |
+| Discovery root | Local directory configured by the user | `path.join(stateRoot, "plan-suite", "settings.json")` or `ROBOREPO_PLAN_ROOTS` |
 | Repository | The first directory found while walking a discovery root that contains `.git` or `docs/plans` | filesystem |
 | Plan | Markdown file under `docs/plans/**/*.md` | repository file |
 | Lifecycle | Folder under `docs/plans` | path, not frontmatter |
@@ -38,7 +39,8 @@ state, not to any repository.
 
 Resolution order:
 
-1. Saved settings at `path.join(stateRoot, "plan-docs", "settings.json")`.
+1. Saved settings at `path.join(stateRoot, "plan-suite", "settings.json")`. Earlier installs saved
+   roots under a different folder that is no longer read; add them again.
 2. `ROBOREPO_PLAN_ROOTS`, split by the platform path delimiter.
 3. Empty roots.
 
@@ -188,19 +190,43 @@ Repositories without Git remain browsable.
 
 ## Package Integration
 
-The optional package is `plan-docs`.
+The plan suite is five optional packages: `plan-write`, `plan-promote`, `plan-start`, `plan-close`,
+and `session-close`. The Plans page gates its workflow actions on `plan-write`, and its onboarding
+banner enables all five in one request through the config section's bulk endpoint.
 
-When disabled:
+When `plan-write` is disabled:
 
-- `/plans` remains available
-- copy path/context/Markdown actions remain available
+- `/plans` remains available, behind the onboarding banner
+- copy path and repository-aware or portable prompts remain available
 - workflow prompt actions stay hidden
 
 When enabled:
 
-- `plan-docs` installs a manual skill
-- generated `/plan-docs` wrappers are available for Claude and Codex
-- `/plans` shows workflow prompt buttons
+- each package installs one manual skill and its generated slash-command wrappers for Claude,
+  Codex, and Gemini
+- `/plans` shows each lifecycle's actions: Promote and Start for backlog plans; Continue, Update,
+  and Close for active plans
+- each card leads with one command button: Start for backlog plans, and Close, Update, or Continue
+  for active plans
+- every action copies a prompt; the page never runs a command or moves a plan for one
+
+## CLI
+
+Suite skills run these commands rather than re-deriving the rules they implement:
+
+| Command | What it does |
+| --- | --- |
+| `roborepo plans validate [<plan>] [--json]` | Reports the deterministic findings the Plans page shows, for one plan (by id or path) or every plan in the current repository. Exits 1 when a blocking finding remains. |
+| `roborepo plans start <plan> --worktree <name> [--base <branch>] [--json]` | Records the worktree in the plan, moves a backlog plan to `active/`, makes one plan-only commit on the base branch, and validates the transition. Run from the primary checkout. |
+| `roborepo plans stop-servers <plan> [--dry-run] [--json]` | Sends `SIGTERM` to the processes listening on a port from inside the plan's linked worktree, then reports each as `stopped`, `still-running`, `gone`, `changed` (PID reused), or `failed`. A plan without a worktree stops nothing. Exits 1 when a server survives or cannot be signalled. macOS only, like Runtime discovery. |
+| `roborepo package status <id> [--json]` | Prints one package's `available`, `enabled`, and live `status`, so a suite skill can tell a disabled helper skill from a drifted one. |
+
+## Not Tested Entries
+
+A plan's `## Not tested` section lists built work that no test covers, one checkbox per entry.
+Unchecked entries on an active or completed plan produce the `UNCONFIRMED_NOT_TESTED` finding, and
+`/plan-close` refuses to close a plan while any remain. Headings and checkboxes inside fenced code
+blocks never count as plan structure.
 
 The Plans page uses the normalized package catalog state. It does not inspect skill symlinks directly.
 

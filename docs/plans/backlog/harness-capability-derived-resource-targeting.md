@@ -70,8 +70,8 @@ const HARNESS_SKILL_DIRS = listHarnessProviders()
 ### Defect 1 — slash commands enumerate a closed pair
 
 Seven packages carry `"harnesses": ["claude", "codex"]` on a skill entrypoint:
-`case-study-pack`, `frontend-design`, `plan-docs`, `technical-writing`, `telemetry`, `tighten`,
-`wrap-up`.
+`case-study-pack`, `frontend-design`, `plan-write`, `technical-writing`, `telemetry`, `tighten`,
+`session-close`.
 
 All seven mean "everywhere this works." None expresses a deliberate restriction. The format cannot
 distinguish the two, so the intent is unrecoverable by inspection.
@@ -127,7 +127,7 @@ The harness is the variable name, not a parameter. `plugin` behaves the same way
    `validateHarness` calls; reuse that mapping rather than introducing a second one.
 
 ```json
-{ "type": "slash-command", "name": "wrap-up", "excludeHarnesses": ["gemini"] }
+{ "type": "slash-command", "name": "session-close", "excludeHarnesses": ["gemini"] }
 ```
 
 ### Backward compatibility
@@ -231,11 +231,11 @@ edit is the workaround this plan removes, not a decision to preserve.
 | `case-study-pack` | `package.config.json:23` |
 | `frontend-design` | `package.config.json:23` |
 | `integration-check` | `package.config.json:23` |
-| `plan-docs` | `package.config.json:33` |
+| `plan-write` | `package.config.json:33` |
 | `technical-writing` | `package.config.json:23` (multi-line array form) |
 | `telemetry` | `package.config.json:37` |
 | `tighten` | `package.config.json:23` |
-| `wrap-up` | `package.config.json:23` |
+| `session-close` | `package.config.json:23` |
 
 **`"harness": "both"` sentinel — 5 sites**, retired in Phase 3: `impact-awareness`,
 `convention-capture`, `caveman`, `skill-visibility`, `jcodemunch`.

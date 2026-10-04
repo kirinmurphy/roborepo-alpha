@@ -14,7 +14,7 @@ system, plan, migration, or operational workflow.
 
 | Skill | Load when | Contributes |
 | --- | --- | --- |
-| `plan-docs` | The document lives under `docs/plans` | Frontmatter, lifecycle folders, naming, and the required-section schema. Don't duplicate its section list here (see `doc-shapes.md`'s note on this) |
+| `plan-write` | The document lives under `docs/plans` | Frontmatter, lifecycle folders, naming, and the required-section schema. Don't duplicate its section list here (see `doc-shapes.md`'s note on this) |
 | `code-style` | The document specifies where code goes: module boundaries, orchestration vs. execution, reuse | Ownership and layering constraints the guidance must respect |
 | `javascript-typescript` | The document covers JS/TS — ESM, exports, types, framework-less DOM structure | Language and markup conventions the guidance must not contradict |
 | `test-harness` | The document proposes tests, verification commands, or a regression strategy | Test selection and observable-behavior assertions |

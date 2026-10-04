@@ -3,7 +3,7 @@
 The `skill-visibility` package renders one line at the end of a response:
 
 ```text
-> 🧩 **Skills loaded:** plan-docs, technical-writing
+> 🧩 **Skills loaded:** plan-write, technical-writing
 ```
 
 A `PostToolUse` hook tells the agent which skill references it actually read, so the line reports
@@ -59,7 +59,7 @@ both are simply not there.
 Each injection therefore carries a per-session sequence number:
 
 ```text
-[skill-visibility] observed reference read: plan-docs/references/plan-schema.md (observation 3 this session)
+[skill-visibility] observed reference read: plan-write/references/plan-schema.md (observation 3 this session)
 ```
 
 An agent that sees observation 7 without having seen 1–6 knows its earlier observations were
@@ -67,7 +67,7 @@ dropped, and reports observation as unavailable rather than computing a tally th
 real reads:
 
 ```text
-> 🧩 **Skills loaded:** plan-docs, technical-writing — reference observation unavailable (context compacted)
+> 🧩 **Skills loaded:** plan-write, technical-writing — reference observation unavailable (context compacted)
 ```
 
 A gap is positive evidence. Absence alone is not.
@@ -107,7 +107,7 @@ Re-run this after a harness upgrade that touches hook handling or context manage
    ```
 
 2. In a Claude Code session, read any installed skill reference, for example
-   `~/.claude/skills/plan-docs/references/plan-schema.md`. Confirm the injection appears.
+   `~/.claude/skills/plan-write/references/plan-schema.md`. Confirm the injection appears.
 
 3. Run at least ten unrelated tool calls with substantial output. Real work is fine and preferable.
 

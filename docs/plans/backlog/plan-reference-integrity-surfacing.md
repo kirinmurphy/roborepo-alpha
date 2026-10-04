@@ -36,7 +36,7 @@ cross-repository id graph — is already shipped and correct.
 The obvious framing is "add a CI step." That framing is wrong here, and naming why prevents the
 work from being rebuilt in the wrong place.
 
-`plan-docs` is a package this repository *ships to other repositories*. A CI job in roborepo would
+`plan-write` is a package this repository *ships to other repositories*. A CI job in roborepo would
 validate roborepo's own plans and do nothing for any repository that installs the package — the
 value would be built in the one location where it does not generalize. The validation engine is
 already a runtime capability with a portal UI and a multi-repository snapshot; the gap is not a
@@ -54,14 +54,14 @@ Verified against `6ad2b67`.
 
 ### Already built — do not rebuild
 
-- `buildPlanSnapshot()` (`modules/plan-docs/index.mjs:164`) discovers every repository under the
+- `buildPlanSnapshot()` (`modules/plan-suite/index.mjs:164`) discovers every repository under the
   configured roots and returns all plans with validation attached. Multi-repository is not a future
   feature; it is the existing default.
-- `relationshipFindings()` (`modules/plan-docs/index.mjs:769`) resolves `depends_on`, `related`, and
+- `relationshipFindings()` (`modules/plan-suite/index.mjs:769`) resolves `depends_on`, `related`, and
   `blocked_by` against a `${repositoryRoot}:${id}` map, so ids are correctly scoped per repository
   rather than globally. It emits `DUPLICATE_PLAN_ID`, `SELF_DEPENDENCY`, `DEPENDENCY_NOT_FOUND`,
   `RELATED_NOT_FOUND`, and `BLOCKER_NOT_FOUND`, and it already exempts external blockers.
-- `modules/plan-docs/findings.mjs` holds a 34-code catalog with `kind`, `severity`, `message`, and
+- `modules/plan-suite/findings.mjs` holds a 34-code catalog with `kind`, `severity`, `message`, and
   `resolution`. Its header documents the extension contract: add a `DEFS` entry, then emit it from a
   validator. Findings flow unchanged into `plan.validation.findings`, the `LIFECYCLE_REQUIREMENTS`
   422 body, and the generated repair prompt.
@@ -78,7 +78,7 @@ Verified against `6ad2b67`.
 | --- | --- |
 | No finding code for a referenced file path | All 34 codes in `findings.mjs` concern frontmatter, sections, lifecycle, parse errors, or plan-to-plan ids. None resolve a path. |
 | No on-demand validate command | `plansCommand()` accepts only `repair`; anything else exits 2. |
-| Repository's own plans never validated | `scripts/test/plan-docs-check.mjs` contains no reference to the repository root; every case builds fixtures under `mkdtemp`. |
+| Repository's own plans never validated | `scripts/test/plan-suite-check.mjs` contains no reference to the repository root; every case builds fixtures under `mkdtemp`. |
 | Mutations do not check inbound references | `movePlanLifecycle()` validates the destination lifecycle, not what still points at the plan. |
 
 ### Known-broken links today
@@ -117,7 +117,7 @@ mode an automated check exists to prevent.
 ## Goals
 
 - Detect a cited document path that does not resolve, at the moment it breaks.
-- Let a user validate plans on demand in any repository that installs `plan-docs`.
+- Let a user validate plans on demand in any repository that installs `plan-write`.
 - Keep this repository's own plan tree verified without pretending fixture tests already do it.
 - Add no scheduled background scanning.
 
@@ -215,7 +215,7 @@ This makes the false-positive cases the primary test material. Each one becomes 
 the validator stays silent, so the scoping rules cannot regress unnoticed.
 
 Prefer a repo-native scoped command over expanding `npm test`. The suite is
-`scripts/test/plan-docs-check.mjs`, run via `npm run test:plans`.
+`scripts/test/plan-suite-check.mjs`, run via `npm run test:plans`.
 
 ## Open decisions
 
@@ -242,13 +242,13 @@ Prefer a repo-native scoped command over expanding `npm test`. The suite is
 
 ## Implementation plan
 
-- [ ] Add `DOC_LINK_NOT_FOUND` to `modules/plan-docs/findings.mjs` with `kind: "reference"`.
+- [ ] Add `DOC_LINK_NOT_FOUND` to `modules/plan-suite/findings.mjs` with `kind: "reference"`.
 - [ ] Write path extraction as a named, independently testable function: takes markdown plus the
       plan's directory, returns resolved candidate targets, excludes fenced blocks and URLs.
 - [ ] Emit the finding from the validator for `backlog/` and `active/` plans only.
 - [ ] Add fixture cases: repository-root-relative hit, document-relative hit, fenced-block
       exclusion, unchecked-task exclusion, URL exclusion, `completed/` exemption.
-- [ ] Add the real-repository relationship assertion to `scripts/test/plan-docs-check.mjs`, plus an
+- [ ] Add the real-repository relationship assertion to `scripts/test/plan-suite-check.mjs`, plus an
       assertion that the live tree reports zero `DOC_LINK_NOT_FOUND`.
 - [ ] Add `validate` to `plansCommand()` with grouped output and a non-zero exit on findings.
 - [ ] Report inbound references in the lifecycle-move path.

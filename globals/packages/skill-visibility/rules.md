@@ -23,8 +23,8 @@ Those injections are evidence. Use them to annotate the line, and follow these r
 Rendered forms, in increasing order of what can be shown:
 
 ```text
-> 🧩 **Skills loaded:** plan-docs, technical-writing
-> 🧩 **Skills loaded:** plan-docs (5 refs), technical-writing (5 refs)
+> 🧩 **Skills loaded:** plan-write, technical-writing
+> 🧩 **Skills loaded:** plan-write (5 refs), technical-writing (5 refs)
 > 🧩 **Skills loaded:** technical-writing — 4 of 5 refs read, review-loop.md not seen
 ```
 
@@ -34,6 +34,6 @@ Each injection carries a sequence number for the session. A gap in that sequence
 
 If you see observation N without having seen every observation before it, do not report a tally. Report the skills and state that observation is unavailable:
 
-`> 🧩 **Skills loaded:** plan-docs, technical-writing — reference observation unavailable (context compacted)`
+`> 🧩 **Skills loaded:** plan-write, technical-writing — reference observation unavailable (context compacted)`
 
 A tally computed from surviving injections alone would undercount reads that actually happened, which is the one failure this line exists to prevent. An honest "unavailable" is worth more than a confident wrong number.

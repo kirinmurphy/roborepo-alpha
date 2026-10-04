@@ -2,10 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { repoRoot, rootConfigActive, harnessHome, workspacePackagesDir, packageMode, initializeWorkspace } from "./paths.mjs";
-import { setPackageEnabled, renderHomeRules, effectiveEnabledIds, knownHarnessIds, harnessIdsWithCapability } from "./rules-render.mjs";
+import { forgetPackageIds, readEnabledPackagesRegistry, setPackageEnabled, renderHomeRules, effectiveEnabledIds, knownHarnessIds, harnessIdsWithCapability } from "./rules-render.mjs";
 import { loadPackageCatalog, unavailablePackageMessage, validatePackageCatalog, BUILT_IN_PACKAGES_DIR, readPackageCategories } from "./package-catalog.mjs";
 import { packageCommandNames, validatePackageCommandOwnership } from "./package-commands.mjs";
 import { buildPackageLiveState } from "./package-probes.mjs";
+import { packageStatusSummary } from "./package-status.mjs";
 import { ensureClaudeMcpPermission } from "./mcp-claude.mjs";
 import { configFileMcpProviders, ensureConfigFileMcp, removeConfigFileMcp } from "./mcp-config-file.mjs";
 import { loadMcpPresets } from "./mcp-presets.mjs";
@@ -41,6 +42,8 @@ export function packageCommand(args = []) {
       return listPackages(rest);
     case "inspect":
       return inspectPackage(rest);
+    case "status":
+      return printPackageStatus(rest);
     case "create":
       return createPackage(rest);
     case "enable":
@@ -54,7 +57,7 @@ export function packageCommand(args = []) {
     case "adopt-live":
       return adoptLivePackages({ dryRun: rest.includes("--dry-run") });
     default:
-      console.error("usage: roborepo package list|inspect|create|enable|disable|validate|reconcile|adopt-live");
+      console.error("usage: roborepo package list|inspect|status|create|enable|disable|validate|reconcile|adopt-live");
       process.exit(2);
   }
 }
@@ -191,6 +194,21 @@ function packageListLabel(pkg) {
   return pkg.label.toLowerCase() === titleize(pkg.id).toLowerCase()
     ? pkg.id
     : `${pkg.id} - ${pkg.label}`;
+}
+
+// Exits 0 for any known package whatever its state, so a caller branches on the printed status;
+// exits 1 only when the id names no package at all.
+function printPackageStatus(rest) {
+  const json = rest.includes("--json");
+  const [pkgId] = rest.filter((arg) => !arg.startsWith("--"));
+  if (!pkgId) {
+    console.error("usage: roborepo package status <package-id> [--json]");
+    process.exit(2);
+  }
+  const summary = packageStatusSummary(pkgId);
+  if (json) console.log(JSON.stringify(summary, null, 2));
+  else console.log(`${summary.id}: ${summary.status}${summary.available ? "" : " (not available)"}`);
+  if (summary.status === "missing") process.exit(1);
 }
 
 function inspectPackage(rest) {
@@ -480,22 +498,22 @@ export async function reconcileEnabledPackages(rest = []) {
   const catalog = loadPackageCatalog({ includeUnavailable: true });
   const enabledIds = effectiveEnabledIds(catalog);
   const known = new Set(catalog.map((pkg) => pkg.id));
-  const stale = [];
+  // A retired or renamed package can sit in either registry list. Both are dropped, not moved to
+  // `disabled`: the catalog no longer has the package, so there is nothing left to disable.
+  const registry = readEnabledPackagesRegistry();
+  const stale = [...new Set([...registry.packages, ...registry.disabled])].filter((id) => !known.has(id));
+  for (const id of stale) {
+    console.warn(`${dryRun ? "  [dry-run] would remove" : "  remove"} stale package not in catalog: ${id}`);
+  }
   let reconciled = 0;
   for (const id of enabledIds) {
-    if (!known.has(id)) {
-      stale.push(id);
-      console.warn(`${dryRun ? "  [dry-run] would remove" : "  remove"} stale enabled package not in catalog: ${id}`);
-      continue;
-    }
+    if (!known.has(id)) continue;
     await enablePackage([id, "--reconcile", ...(dryRun ? ["--dry-run"] : [])]);
     reconciled++;
   }
   if (reconciled === 0) console.log("reconcile: no enabled packages");
   cleanupPackageProjections({ dryRun });
-  if (!dryRun) {
-    for (const id of stale) setPackageEnabled(id, false);
-  }
+  if (!dryRun) forgetPackageIds(stale);
 }
 
 export function adoptLivePackages({ dryRun = false } = {}) {
