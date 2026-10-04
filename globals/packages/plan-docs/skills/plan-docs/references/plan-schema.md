@@ -48,10 +48,11 @@ Rules:
 New plans and repaired frontmatter carry an empty `worktree:` line. Historical plans without the
 line remain valid and are not bulk-migrated.
 
-The field is an exact join key, not a hint. Home attaches an active plan beneath a Runtime checkout
+The field is an exact join key, not a hint. Home shows an active plan as its Runtime checkout's row
 only when exactly one active plan and exactly one linked worktree in the same repository share the
 name. A stale name (the worktree was removed), a duplicate claim, or an empty value leaves the plan
-listed under **Additional Plans**; nothing is inferred from branch names or plan prose.
+as its own row with a **not started** or **worktree not running** badge; nothing is inferred from
+branch names or plan prose.
 
 Write a value only when live Git state proves the relationship — the worktree exists now and this
 plan's implementation runs there. A value left behind after the worktree is removed is harmless: it

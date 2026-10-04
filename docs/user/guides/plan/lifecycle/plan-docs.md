@@ -106,7 +106,7 @@ worktree:
 ```
 
 Leave `worktree:` empty. `plan-start` fills it with the linked worktree's Git administrative name
-when implementation begins, which lets Home show the plan beneath that worktree. See
+when implementation begins, which lets Home show the plan as that worktree's row. See
 [Worktree association](../../../reference/plans-portal.md#worktree-association).
 
 Use Markdown checkboxes for executable work:

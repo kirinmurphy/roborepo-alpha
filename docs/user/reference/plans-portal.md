@@ -120,9 +120,10 @@ the branch. It never holds a path. New and repaired plans get an empty `worktree
 without the line stay valid. `plan-start` records the value, commits it to the plan on the base
 branch, and validates it before implementation moves into the worktree.
 
-Home uses the value to show an active plan beneath its worktree. Anything short of one exact match
-— an empty value, a worktree that no longer exists, two plans claiming one name — leaves the plan
-under **Additional Plans**. See [Repositories](repositories.md#repository-cards).
+Home uses the value to show an active plan as its worktree's checkout row. Anything short of one
+exact match leaves the plan as its own row with a badge: **not started** for an empty value, and
+**worktree not running** for a worktree that is stopped, no longer exists, or is claimed by two
+plans. See [Repositories](repositories.md#repository-cards).
 
 ## Validation
 

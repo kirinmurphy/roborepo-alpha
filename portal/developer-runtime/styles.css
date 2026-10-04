@@ -298,21 +298,6 @@ main {
   row-gap: 6px;
   padding: 8px 16px;
 }
-/* Content a page hangs beneath the head (buildRootSection's `footer`). It repeats the head's glyph
- * column and side padding here, beside the head itself, so a caller's content lands on the glyph rail
- * by spanning the footer as a subgrid instead of copying the head's box. It tucks into the head's
- * bottom padding so it reads as part of the same row. */
-.repository-root-footer {
-  display: grid;
-  grid-template-columns: var(--checkout-glyph-width) minmax(0, 1fr);
-  column-gap: var(--checkout-glyph-gap);
-  align-items: center;
-  padding: 0 16px 8px;
-  margin-top: -4px;
-}
-.repository-root-footer[hidden] {
-  display: none;
-}
 .repository-root-glyph {
   grid-column: 1;
   grid-row: 1;

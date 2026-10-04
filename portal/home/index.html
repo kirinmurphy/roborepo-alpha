@@ -71,11 +71,46 @@
     <template id="tpl-domain-note">
       <p class="domain-note" data-slot="message"></p>
     </template>
-    <template id="tpl-checkout-plan">
-      <div class="checkout-plan" role="group" aria-label="Plan in this worktree">
-        <portal-icon class="domain-glyph" name="plans" aria-hidden="true"></portal-icon>
-        <div data-slot="plan"></div>
+    <!-- plan-rows.js: a matched plan's identity inside the shared checkout row (title, completion,
+         worktree-details trigger), and a Home-owned row on the same glyph rail for an unmatched plan. -->
+    <template id="tpl-plan-identity">
+      <span class="plan-identity"></span>
+    </template>
+    <template id="tpl-plan-row">
+      <div class="repository-root home-plan-row">
+        <div class="repository-root-head">
+          <portal-icon class="repository-root-glyph" name="plans" role="img" aria-label="Plan"></portal-icon>
+          <div class="repository-root-identity-line" data-slot="identity"></div>
+        </div>
       </div>
+    </template>
+    <template id="tpl-plan-match-badge">
+      <span class="plan-match-badge" data-slot="badge"></span>
+    </template>
+    <template id="tpl-plan-summary">
+      <div class="home-plan-summary">
+        <span data-slot="counts"></span>
+        <span aria-hidden="true">·</span>
+        <a class="domain-link" href="/plans">all plans</a>
+        <span class="domain-note" data-slot="note" hidden></span>
+      </div>
+    </template>
+    <!-- worktree-details.js: the matched plan's worktree dropdown panel. -->
+    <template id="tpl-worktree-details">
+      <div class="worktree-details">
+        <div class="worktree-details-identity" data-slot="identity"></div>
+        <ul class="worktree-details-facts" data-slot="facts" aria-label="Worktree status" hidden></ul>
+      </div>
+    </template>
+    <template id="tpl-worktree-detail-row">
+      <div class="worktree-detail-row">
+        <portal-icon data-slot="icon" size="sm" aria-hidden="true"></portal-icon>
+        <span class="worktree-detail-value" data-slot="value"></span>
+        <portal-copy-button icon="copy"></portal-copy-button>
+      </div>
+    </template>
+    <template id="tpl-worktree-detail-fact">
+      <li data-slot="text"></li>
     </template>
     <template id="tpl-token-warnings">
       <ul class="token-warnings" aria-label="Token warnings"></ul>

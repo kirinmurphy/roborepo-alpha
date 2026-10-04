@@ -4,7 +4,11 @@
 // Usage: set `.copySource` right after creation to a string, or a function returning a string
 // (sync or async) — resolved lazily at click time so callers can build the text on demand instead
 // of computing it up front for every row. Attributes: `label` (button text; omit for an icon-only
-// button), `icon` (portal-icon name, defaults to "copy").
+// button), `icon` (portal-icon name, defaults to "copy"), `aria-label` (the inner button's idle
+// accessible name, for an icon-only button whose label would otherwise be the generic "Copy").
+//
+// While the confirmation shows, the element carries a `copied` attribute, so a caller can restyle its
+// surroundings (e.g. `:has(portal-copy-button[copied])`) without reaching into the button's markup.
 //
 // Copied state = IN-PLACE swap, not an overlay: the icon changes to a check and the label text to
 // "Copied" inside the same button box. The wrapper never moves or resizes (the confirmation is a
@@ -17,7 +21,7 @@ import { portalCopyText, portalTpl as tpl, portalFillSlots as fill } from "./api
 const COPIED_DURATION_MS = 5000;
 
 class PortalCopyButton extends HTMLElement {
-  static observedAttributes = ["label", "icon", "icon-size", "disabled"];
+  static observedAttributes = ["label", "icon", "icon-size", "disabled", "aria-label"];
 
   connectedCallback() {
     if (this.button) {
@@ -46,8 +50,11 @@ class PortalCopyButton extends HTMLElement {
     }));
   }
 
+  // A button removed mid-confirmation (a closed popover panel, say) resets now: its timer dies with
+  // it, so a later reconnect would otherwise show "Copied" — disabled — for good.
   disconnectedCallback() {
     clearTimeout(this._resetTimer);
+    if (this._copied) this.#resetCopied();
   }
 
   attributeChangedCallback() {
@@ -57,7 +64,7 @@ class PortalCopyButton extends HTMLElement {
   syncAttributes() {
     if (!this.button) return;
     const label = this.getAttribute("label");
-    this.button.setAttribute("aria-label", this._copied ? "Copied" : label || "Copy");
+    this.button.setAttribute("aria-label", this._copied ? "Copied" : this.getAttribute("aria-label") || label || "Copy");
     this.button.disabled = this.hasAttribute("disabled") || this._copied;
     // Idle icon/label text live in slots; when copied, #showCopied swaps their content in place
     // and this method only refreshes the aria-label + disabled state.
@@ -85,6 +92,7 @@ class PortalCopyButton extends HTMLElement {
   // inside the SAME button box. Nothing is overlaid, so alignment is correct by construction.
   #showCopied() {
     this._copied = true;
+    this.setAttribute("copied", "");
     this.button.classList.add("copy-button-copied");
     const icon = this.button.querySelector('[data-slot="icon"]');
     if (icon) icon.setAttribute("name", "check");
@@ -93,11 +101,14 @@ class PortalCopyButton extends HTMLElement {
     this.button.setAttribute("aria-label", "Copied");
     this.button.disabled = true;
     clearTimeout(this._resetTimer);
-    this._resetTimer = setTimeout(() => {
-      this._copied = false;
-      this.button.classList.remove("copy-button-copied");
-      this.syncAttributes(); // restores idle icon + label + aria-label
-    }, COPIED_DURATION_MS);
+    this._resetTimer = setTimeout(() => this.#resetCopied(), COPIED_DURATION_MS);
+  }
+
+  #resetCopied() {
+    this._copied = false;
+    this.removeAttribute("copied");
+    this.button.classList.remove("copy-button-copied");
+    this.syncAttributes(); // restores idle icon + label + aria-label
   }
 }
 

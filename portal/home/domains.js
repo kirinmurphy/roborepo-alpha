@@ -1,8 +1,8 @@
 import { portalFillSlots as fill, portalTpl as tpl } from "/portal/shared/api.js";
 
-export function appendRepositoryDomains(host, domains, { onOpenPlan } = {}) {
-  const plans = additionalPlansRow(domains.plans, onOpenPlan);
-  if (plans) host.append(plans);
+// Repository facts below the checkout and plan rows. Plans live in those rows now (plan-rows.js), so
+// only Token Warnings remains here.
+export function appendRepositoryDomains(host, domains) {
   const tokens = domains.tokens.data;
   if (tokens?.warningCount > 0) {
     const warnings = tokens.warnings || tokens.recent || [];
@@ -24,41 +24,6 @@ function domainRow(label, summary, { glyph, href, linkLabel, warning = false, de
   const slot = node.querySelector("[data-slot=details]");
   slot.hidden = !details.length;
   slot.append(...details);
-  return node;
-}
-
-// Rendered only while the repository has active plans: with none, or with no Plans scan to count
-// them, there is nothing to list and the row is omitted. Lists only the active plans no worktree row
-// claimed (an associated plan renders beneath its checkout instead, never twice), while the counts
-// stay repository-wide. When every active plan is attached to a worktree the heading, counts and
-// link remain and nothing stands in for the empty list.
-function additionalPlansRow(envelope, onOpenPlan) {
-  const counts = envelope.data?.counts;
-  if (!counts?.active) return null;
-  const summary = `${counts.active} Active · ${counts.backlog} Backlog`;
-  const details = (envelope.data?.additionalActive || []).map((plan) => planItem(plan, onOpenPlan));
-  if (envelope.message) details.unshift(fill(tpl("tpl-domain-note"), { message: envelope.message }));
-  return domainRow("Additional Plans", summary, { glyph: "plans", href: "/plans", linkLabel: "all plans", details });
-}
-
-// One active plan with its completion ring, shared by Additional Plans and the plan row Home mounts
-// beneath an associated worktree. Its title opens the read-only plan drawer.
-export function planItem(plan, onOpenPlan) {
-  const total = plan.taskCounts?.total || 0;
-  const percent = total > 0 ? Math.round((plan.taskCounts.complete / total) * 100) : null;
-  const done = percent === 100;
-  const node = fill(tpl("tpl-plan-item"), { title: plan.title, percent: percent === null ? "—" : `${percent}%` });
-  node.querySelector("[data-slot=title]").addEventListener("click", () => onOpenPlan?.(plan));
-  node.title = percent === null ? "No checklist tasks" : `${plan.taskCounts.complete} of ${total} tasks complete`;
-  const progress = node.querySelector("[data-slot=progress]");
-  progress.hidden = percent === null || done;
-  node.querySelector("[data-slot=percent]").hidden = done;
-  node.querySelector("[data-slot=complete]").hidden = !done;
-  if (percent !== null && !done) {
-    progress.setAttribute("aria-label", `${plan.title} completion`);
-    progress.setAttribute("aria-valuenow", String(percent));
-    progress.style.setProperty("--percent", String(percent));
-  }
   return node;
 }
 
