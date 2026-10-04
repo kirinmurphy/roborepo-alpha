@@ -199,6 +199,22 @@
 [hidden] {
   display: none !important;
 }
+/* Inline links come in two styles, never the browser's blue / visited purple:
+ *   default — a plain <a>: body ink and an underline, accent on hover.
+ *   CTA     — .link-cta: accent-colored, for links whose job is to take you to the running thing
+ *             (entrypoint port URLs).
+ * :where() keeps the default at zero specificity, so any classed link styling still wins over it. */
+:where(a) {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+:where(a):hover {
+  color: var(--accent);
+}
+.link-cta {
+  color: var(--accent);
+}
 input,
 select,
 button {

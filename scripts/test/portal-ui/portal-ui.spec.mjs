@@ -30,7 +30,7 @@ test.describe("repository-first portal Home", () => {
     await page.goto("/");
     const card = roboRepoCard(page);
     await expect(cardRows(card)).toHaveText([
-      /main branch/, /Plan A/, /Plan B/, /Plan C/, /Plan D/, /feature\/loose/, /4 active · 5 backlog/,
+      /main branch/, /Plan A/, /Plan B/, /Plan C/, /Plan D/, /feature\/loose/,
     ], { useInnerText: true });
     await expect(card.getByRole("heading", { name: /Active Plans|Additional Plans/ })).toHaveCount(0);
     for (const title of ["Plan A", "Plan B", "Plan C", "Plan D"]) {
@@ -75,9 +75,8 @@ test.describe("repository-first portal Home", () => {
     await expect(loose.getByRole("link", { name: ":5174" })).toBeVisible();
     await expect(loose.getByRole("button", { name: "Links" })).toBeVisible();
 
-    const summary = card.locator(".home-plan-summary");
-    await expect(summary).toHaveText(/4 active\s*·\s*5 backlog\s*·\s*all plans$/, { useInnerText: true });
-    await expect(summary.getByRole("link", { name: "all plans", exact: true })).toHaveAttribute("href", "/plans");
+    // No repository-wide plan counts row: backlog counts were noise on Home.
+    await expect(card).not.toContainText("backlog");
     await expect(card.getByRole("heading", { name: "Token Warnings" })).toBeVisible();
     await expect(card).toContainText(/8 warnings from \d{2}\/\d{2} to \d{2}\/\d{2}/);
     await expect(card.getByRole("list", { name: "Token warnings" }).getByRole("listitem")).toHaveText([
@@ -96,22 +95,24 @@ test.describe("repository-first portal Home", () => {
     const card = roboRepoCard(page);
     await card.getByRole("button", { name: "Worktree details for Plan A" }).click();
     const panel = card.locator(".worktree-details");
-    await expect(panel.locator(".worktree-detail-value")).toHaveText(["feature/a", "feature-a", "/private/wt/feature-a"]);
+    // The worktree is identified by its path alone; its name was the path's last segment repeated.
+    await expect(panel.locator(".worktree-detail-value")).toHaveText(["feature/a", "/private/wt/feature-a"]);
     await expect(panel.getByRole("list", { name: "Worktree status" }).getByRole("listitem")).toHaveText([
       "dirty", "0 ahead, 3 behind origin/feature/a", "4 commits behind main",
     ]);
-    for (const name of ["Copy branch name", "Copy worktree name", "Copy worktree path"]) {
+    for (const name of ["Copy branch name", "Copy worktree path"]) {
       await expect(panel.getByRole("button", { name })).toHaveCount(1);
     }
+    await expect(panel.getByRole("button", { name: "Copy worktree name" })).toHaveCount(0);
 
-    await panel.getByRole("button", { name: "Copy worktree name" }).click();
+    await panel.getByRole("button", { name: "Copy worktree path" }).click();
     const row = panel.locator(".worktree-detail-row").nth(1);
     await expect(panel).toBeVisible();
     await expect(row).toHaveText("Copied", { useInnerText: true });
-    await expect(row.getByText("feature-a", { exact: true })).toBeHidden();
-    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("feature-a");
+    await expect(row.getByText("/private/wt/feature-a", { exact: true })).toBeHidden();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("/private/wt/feature-a");
     // The shared confirmation interval (5 s), then the value returns.
-    await expect(row.getByText("feature-a", { exact: true })).toBeVisible({ timeout: 8_000 });
+    await expect(row.getByText("/private/wt/feature-a", { exact: true })).toBeVisible({ timeout: 8_000 });
     await expect(row).not.toContainText("Copied");
 
     // Closing the panel mid-confirmation resets the button, so reopening shows the value, not a stuck
@@ -130,7 +131,23 @@ test.describe("repository-first portal Home", () => {
     await expect(card.locator(".worktree-details").getByRole("list", { name: "Worktree status" })).toBeHidden();
   });
 
-  test("without active plans, or without Plans data, linked worktrees render as before and no summary shows", async ({ page }) => {
+  test("a long worktree path is middle-truncated to 50 characters, and copies and titles in full", async ({ page }) => {
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    const longPath = "/Users/someone/.worktrees/roborepo/claude/a-very-long-feature-branch-worktree-name";
+    await planFixture(page, (repository) => {
+      repository.domains.runtime.data.checkouts.find((checkout) => checkout.rootId === "matched").projectRoot = longPath;
+    });
+    await page.goto("/");
+    const card = roboRepoCard(page);
+    await card.getByRole("button", { name: "Worktree details for Plan A" }).click();
+    const value = card.locator(".worktree-details .worktree-detail-value").nth(1);
+    await expect(value).toHaveText("/Users/someone/.worktrees…ure-branch-worktree-name");
+    await expect(value).toHaveAttribute("title", longPath);
+    await card.getByRole("button", { name: "Copy worktree path" }).click();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(longPath);
+  });
+
+  test("without active plans, or without Plans data, linked worktrees render as before", async ({ page }) => {
     let plansEnvelope;
     await planFixture(page, (repository) => { repository.domains.plans = plansEnvelope; });
     for (const envelope of [
@@ -141,26 +158,18 @@ test.describe("repository-first portal Home", () => {
       await page.goto("/");
       const card = roboRepoCard(page);
       await expect(cardRows(card)).toHaveText([/main branch/, /feature\/a/, /feature\/b/, /feature\/loose/], { useInnerText: true });
-      await expect(card.locator(".home-plan-summary")).toHaveCount(0);
       await expect(checkoutRow(card, "feature/a").locator("[data-slot=root-copy] portal-copy-menu")).toHaveCount(1);
       await expect(card).not.toContainText("Plans has not scanned this repository");
     }
   });
 
-  test("partial Plans coverage is noted on the summary; without Runtime every plan is badged", async ({ page }) => {
-    let runtimeEnvelope = null;
+  test("without Runtime every plan is badged", async ({ page }) => {
     await planFixture(page, (repository) => {
-      repository.domains.plans.status = "partial";
-      repository.domains.plans.message = "Plans coverage is incomplete";
-      if (runtimeEnvelope) repository.domains.runtime = runtimeEnvelope;
+      repository.domains.runtime = { status: "unavailable", updatedAt: null, data: null, message: "Runtime data is unavailable" };
     });
     await page.goto("/");
-    await expect(roboRepoCard(page).locator(".home-plan-summary")).toHaveText(/4 active\s*·\s*5 backlog\s*·\s*all plans\s*·?\s*Plans coverage is incomplete$/, { useInnerText: true });
-
-    runtimeEnvelope = { status: "unavailable", updatedAt: null, data: null, message: "Runtime data is unavailable" };
-    await page.reload();
     const card = roboRepoCard(page);
-    await expect(cardRows(card)).toHaveText([/No known checkout/, /Plan A/, /Plan B/, /Plan C/, /Plan D/, /4 active/], { useInnerText: true });
+    await expect(cardRows(card)).toHaveText([/No known checkout/, /Plan A/, /Plan B/, /Plan C/, /Plan D/], { useInnerText: true });
     await expect(card.locator(".plan-match-badge")).toHaveText(["worktree not running", "worktree not running", "not started", "worktree not running"]);
   });
 

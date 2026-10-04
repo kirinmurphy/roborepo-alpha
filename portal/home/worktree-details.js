@@ -1,10 +1,14 @@
-import { portalFillSlots as fill, portalTpl as tpl } from "/portal/shared/api.js";
+import { portalFillSlots as fill, portalMiddleEllipsis, portalTpl as tpl } from "/portal/shared/api.js";
 import { checkoutStateText } from "/portal/developer-runtime/repository-root-row.js";
 import { baseName } from "/portal/developer-runtime/templates.js";
 
+// Worktree paths are long; the dropdown middle-truncates them like the checkout rows do, and copies
+// (and titles) the full path.
+const WORKTREE_PATH_MAX_LENGTH = 50;
+
 // The worktree behind a matched plan row: the identity its branch label and copy control used to
-// show, each value in full with its own copy action, plus the Git facts worth a glance. The full
-// checkout tooltip stays on Runtime and on unmatched worktree rows.
+// show, each value with its own copy action, plus the Git facts worth a glance. The full checkout
+// tooltip stays on Runtime and on unmatched worktree rows.
 export function worktreeDetailsButton(plan, checkout) {
   const button = document.createElement("portal-menu-button");
   button.setAttribute("icon", "tree");
@@ -34,14 +38,19 @@ function identityRows(checkout) {
   } else if (git?.branch) {
     rows.push({ icon: "git-branch", value: git.branch, copy: git.branch, label: "Copy branch name" });
   }
-  rows.push({ icon: "tree", value: checkout.worktreeName, copy: checkout.worktreeName, label: "Copy worktree name" });
-  // Only when the path resolved: a copy that writes nothing would still report success.
-  if (checkout.projectRoot) rows.push({ icon: "folder", value: checkout.projectRoot, copy: checkout.projectRoot, label: "Copy worktree path" });
+  // Git's worktree name is almost always the path's last segment, so the path alone identifies it;
+  // the name stands in only when the path did not resolve. Copy only when
+  // the path resolved: a copy that writes nothing would still report success.
+  const path = checkout.projectRoot;
+  rows.push(path
+    ? { icon: "tree", value: portalMiddleEllipsis(path, WORKTREE_PATH_MAX_LENGTH), title: path, copy: path, label: "Copy worktree path" }
+    : { icon: "tree", value: checkout.worktreeName });
   return rows;
 }
 
-function detailRow({ icon, value, copy, label }) {
+function detailRow({ icon, value, title, copy, label }) {
   const row = fill(tpl("tpl-worktree-detail-row"), { icon: { name: icon }, value });
+  if (title && title !== value) row.querySelector("[data-slot=value]").title = title;
   const button = row.querySelector("portal-copy-button");
   if (!copy) {
     button.remove();

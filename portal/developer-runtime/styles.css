@@ -1247,13 +1247,9 @@ dialog::backdrop {
   color: var(--desc-dim);
 }
 /* The canonical entrypoint(s). Sits at heading level because reaching the running app is the
- * card's primary job. Explicit blue, both link states: with no color rule at all this fell back to
- * the browser's default visited-link purple once you'd actually opened the URL once, which most of
- * these have been. */
-.repository-entrypoint,
-.repository-entrypoint:visited {
+ * card's primary job; its color is the shared .link-cta style (base.css). */
+.repository-entrypoint {
   font-size: var(--text-xs);
-  color: var(--accent);
 }
 .repository-entrypoint + .repository-entrypoint {
   margin-left: 8px;

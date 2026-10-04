@@ -1,7 +1,7 @@
 import { portalFillSlots as fill, portalTpl as tpl } from "/portal/shared/api.js";
 import { mountRepositoryRow, repositoryPageUrl } from "/portal/shared/repository-components.js";
 import { appendRepositoryDomains } from "./domains.js";
-import { matchedPlanIdentity, planSummaryLine, unmatchedPlanRow } from "./plan-rows.js";
+import { matchedPlanIdentity, unmatchedPlanRow } from "./plan-rows.js";
 import { buildRootSection } from "/portal/developer-runtime/repository-root-row.js";
 
 export function emptyState() {
@@ -68,8 +68,6 @@ function cardRows(domains, actions) {
     rows.push(checkoutRow(checkout, actions, matchedPlanIdentity(plan, checkout, actions.onOpenPlan)));
   }
   rows.push(...checkouts.filter((checkout) => checkout.isWorktree && !consumed.has(checkout)).map((checkout) => checkoutRow(checkout, actions)));
-  const summary = planSummaryLine(domains.plans);
-  if (summary) rows.push(summary);
   return rows;
 }
 

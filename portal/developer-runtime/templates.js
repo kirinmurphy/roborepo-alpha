@@ -566,7 +566,7 @@ function layOutMemberCard(node) {
   title.querySelector(".title-separator")?.remove();
 
   const origin = node.querySelector("[data-slot=origin]");
-  origin.classList.add("repository-entrypoint");
+  origin.classList.add("repository-entrypoint", "link-cta");
   const linksCell = document.createElement("span");
   linksCell.className = "checkout-links-cell";
   linksCell.append(node.querySelector("[data-slot=routes-trigger]"));

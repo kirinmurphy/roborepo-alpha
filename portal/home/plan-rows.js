@@ -24,20 +24,6 @@ export function unmatchedPlanRow(plan, onOpenPlan) {
   return row;
 }
 
-// Repository-wide counts and the way to every plan, unlabeled, after the plan and worktree rows.
-// Shown on the same condition the old Additional Plans section used: Plans data with active plans.
-export function planSummaryLine(envelope) {
-  const counts = envelope.data?.counts;
-  if (!counts?.active) return null;
-  const line = fill(tpl("tpl-plan-summary"), { counts: `${counts.active} active · ${counts.backlog} backlog` });
-  if (envelope.message) {
-    const note = line.querySelector("[data-slot=note]");
-    note.textContent = envelope.message;
-    note.hidden = false;
-  }
-  return line;
-}
-
 // One active plan with its completion ring. Its title opens the read-only plan drawer.
 export function planItem(plan, onOpenPlan) {
   const total = plan.taskCounts?.total || 0;

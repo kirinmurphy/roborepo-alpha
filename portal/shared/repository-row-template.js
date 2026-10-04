@@ -31,7 +31,7 @@ checkoutTemplate.innerHTML = `
       <div class="repository-root-actions checkout-actions">
         <span class="port-health-badge" data-slot="root-health" hidden></span>
         <span class="resource-concern-badge" data-slot="resource-concern" hidden></span>
-        <a class="repository-entrypoint" data-slot="root-entrypoint" target="_blank" rel="noreferrer" hidden></a>
+        <a class="repository-entrypoint link-cta" data-slot="root-entrypoint" target="_blank" rel="noreferrer" hidden></a>
         <span class="checkout-links-cell"><span data-slot="root-links" hidden></span></span>
         <span class="repository-root-control checkout-control-cell">
           <span class="repository-root-menu" data-slot="root-menu" hidden></span>
