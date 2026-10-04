@@ -783,7 +783,7 @@ function baseDriftAge(git, now) {
   return age > BASE_DRIFT_THRESHOLD_MS ? age : null;
 }
 
-function baseName(git) {
+export function baseName(git) {
   return String(git.baseBranch || "").replace(/^origin\//, "");
 }
 

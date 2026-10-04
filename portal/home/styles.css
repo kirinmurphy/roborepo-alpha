@@ -57,12 +57,47 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 .domain-details { display: grid; gap: 2px; }
 .domain-details[hidden], .plan-progress[hidden], .plan-percent[hidden], .plan-complete-badge[hidden] { display: none; }
 .domain-note { margin: 0; color: var(--dim); font-size: var(--text-xs); }
-/* The plan a worktree implements, mounted in the shared checkout row's footer. It sits in the
- * footer's text column, so its glyph lines up with the worktree's branch text and the plan reads as
- * nested under that checkout rather than as a peer on the glyph rail. */
-.checkout-plan { grid-column: 2; display: flex; align-items: center; gap: var(--checkout-glyph-gap); min-width: 0; }
-.checkout-plan .plan-item { padding: 0; }
 .plan-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: var(--text-xs); }
+/* A plan row's title takes the place of the branch label, so it reads at the row's size, not as a
+ * footnote. Matched rows mount it in the shared checkout row; unmatched rows reuse that row's head. */
+.repository-root .plan-item { padding: 0; font-size: inherit; }
+.plan-identity { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.plan-match-badge {
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--dim);
+  font-size: var(--text-2xs);
+  white-space: nowrap;
+}
+/* Repository-wide plan counts after the plan and worktree rows, starting at the text column. */
+.home-plan-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px 8px calc(16px + var(--checkout-glyph-width) + var(--checkout-glyph-gap));
+  color: var(--dim);
+  font-size: var(--text-xs);
+}
+.home-plan-summary .domain-link { margin-left: 0; }
+.home-plan-summary .domain-note[hidden] { display: none; }
+.home-plan-summary .domain-note::before { content: "· "; }
+/* The matched plan's worktree dropdown: full identity values with their own copy actions. */
+/* Wider than the shared panel's cap: worktree paths are long and are shown whole. */
+.menu-button-panel:has(> .worktree-details) { max-width: min(560px, 90vw); }
+.worktree-details { display: grid; gap: 6px; min-width: min(440px, 80vw); padding: 4px; font-size: var(--text-xs); }
+.worktree-details-identity { display: grid; gap: 2px; }
+.worktree-detail-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; color: var(--dim); }
+.worktree-detail-value { color: var(--ink); font-family: var(--mono); overflow-wrap: anywhere; }
+/* While a value's copy button confirms, the value steps aside: the row reads "[glyph] ✓ Copied", and
+ * the glyph says which value went to the clipboard. */
+.worktree-detail-row:has(portal-copy-button[copied]) .worktree-detail-value { display: none; }
+.worktree-detail-row .copy-button { border: 0; background: none; padding: 2px; border-radius: 5px; color: var(--dim); }
+.worktree-detail-row .copy-button:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.worktree-detail-row .copy-button.copy-button-copied { color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); }
+.worktree-details-facts { display: grid; gap: 2px; margin: 0; padding: 6px 0 0; border-top: 1px solid var(--line); list-style: none; color: var(--dim); }
+.worktree-details-facts[hidden] { display: none; }
 /* The title opens the shared plan drawer in place; it keeps the link look because that is what
  * it behaves like, it just doesn't navigate. */
 .plan-title {

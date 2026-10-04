@@ -1,6 +1,7 @@
 import { portalFillSlots as fill, portalTpl as tpl } from "/portal/shared/api.js";
 import { mountRepositoryRow, repositoryPageUrl } from "/portal/shared/repository-components.js";
-import { appendRepositoryDomains, planItem } from "./domains.js";
+import { appendRepositoryDomains } from "./domains.js";
+import { matchedPlanIdentity, planSummaryLine, unmatchedPlanRow } from "./plan-rows.js";
 import { buildRootSection } from "/portal/developer-runtime/repository-root-row.js";
 
 export function emptyState() {
@@ -41,15 +42,38 @@ function repositoryCard(repository, actions) {
     badge.classList.add(`is-${lifecycleState}`);
     if (repository.lifecycle?.reason) badge.title = repository.lifecycle.reason;
   }
-  const checkouts = repository.domains.runtime.data?.checkouts || [];
-  const checkoutList = node.querySelector("[data-slot=checkouts]");
-  if (checkouts.length === 0) checkoutList.append(noCheckoutRow());
-  else checkoutList.append(...checkouts.map((checkout) => checkoutRow(checkout, actions)));
-  appendRepositoryDomains(node.querySelector("[data-slot=domains]"), repository.domains, { onOpenPlan: actions.onOpenPlan });
+  node.querySelector("[data-slot=checkouts]").append(...cardRows(repository.domains, actions));
+  appendRepositoryDomains(node.querySelector("[data-slot=domains]"), repository.domains);
   return node;
 }
 
-function checkoutRow(checkout, actions) {
+// Below the repository row: the main checkout(s), then every active plan — a matched plan AS its
+// worktree's checkout row — then every worktree no plan claimed, then the plan summary. Matching is
+// the server's (`checkoutRootId`); Home only consumes each referenced checkout so none renders twice.
+// With no active plans this is exactly the checkout list, in Runtime order.
+function cardRows(domains, actions) {
+  const checkouts = domains.runtime.data?.checkouts || [];
+  const byRootId = new Map(checkouts.filter((checkout) => checkout.isWorktree && checkout.rootId).map((checkout) => [checkout.rootId, checkout]));
+  const consumed = new Set();
+  const rows = checkouts.length
+    ? checkouts.filter((checkout) => !checkout.isWorktree).map((checkout) => checkoutRow(checkout, actions))
+    : [noCheckoutRow()];
+  for (const plan of domains.plans.data?.active || []) {
+    const checkout = byRootId.get(plan.checkoutRootId);
+    if (!checkout) {
+      rows.push(unmatchedPlanRow(plan, actions.onOpenPlan));
+      continue;
+    }
+    consumed.add(checkout);
+    rows.push(checkoutRow(checkout, actions, matchedPlanIdentity(plan, checkout, actions.onOpenPlan)));
+  }
+  rows.push(...checkouts.filter((checkout) => checkout.isWorktree && !consumed.has(checkout)).map((checkout) => checkoutRow(checkout, actions)));
+  const summary = planSummaryLine(domains.plans);
+  if (summary) rows.push(summary);
+  return rows;
+}
+
+function checkoutRow(checkout, actions, identity = null) {
   return buildRootSection({
     root: {
       rootId: checkout.rootId,
@@ -65,16 +89,8 @@ function checkoutRow(checkout, actions) {
     repository: { name: "Repository" },
     mode: "home",
     onMountLinks: actions.onMountLinks,
-    footer: checkout.plan ? checkoutPlan(checkout.plan, actions.onOpenPlan) : null,
+    identity,
   });
-}
-
-// The plan this worktree implements, matched server-side by exact worktree name. Home builds it and
-// hands it to the shared row's generic footer, so the Runtime component stays free of Plans knowledge.
-function checkoutPlan(plan, onOpenPlan) {
-  const row = tpl("tpl-checkout-plan");
-  row.querySelector("[data-slot=plan]").append(planItem(plan, onOpenPlan));
-  return row;
 }
 
 function noCheckoutRow() {
