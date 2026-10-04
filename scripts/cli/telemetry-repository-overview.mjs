@@ -1,4 +1,24 @@
+import { isFixtureRepository } from "../../modules/developer-runtime/snapshot.mjs";
+import { analyzeTelemetry } from "./telemetry-analyze.mjs";
 import { repositoryRefForEvent } from "./telemetry-repository.mjs";
+
+// Home's Tokens projection. With capture switched off it reads as unavailable even when an older
+// spool is still on disk, matching the Tokens page, which shows its setup banner instead of that
+// spool. Dev fixture repositories carry their fixture spool's warnings (`fixtureRepositories`) either
+// way, so their cards show the domain without anyone enabling capture.
+export function homeTelemetryProjection({ enabled, projection, fixtureRepositories = {} }) {
+  if (!enabled) return { status: "unavailable", updatedAt: null, message: "Token tracking is off", repositories: {}, fixtureRepositories };
+  return { ...projection, fixtureRepositories };
+}
+
+// Per-repository summaries for the dev fixtures, from spool-format rows run through the same
+// analysis as captured telemetry. Rows naming any other repository are dropped, so fixture data can
+// never put warnings on a real repository's card.
+export function fixtureTelemetryRepositories(events) {
+  const fixtureEvents = events.filter((event) => isFixtureRepository(event.repo?.repository_id));
+  if (!fixtureEvents.length) return {};
+  return buildTelemetryRepositoryProjection(fixtureEvents, analyzeTelemetry(fixtureEvents, {}), null).repositories;
+}
 
 export function buildTelemetryRepositoryProjection(events, report, repositoryHashIndex) {
   const repositoryBySession = new Map();

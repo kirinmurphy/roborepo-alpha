@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import {
   defaultRegistry,
   hideRepository,
@@ -11,6 +12,8 @@ import {
   validateRegistry,
 } from "../../modules/repositories/index.mjs";
 import { createRepositoryOverviewService } from "../cli/repository-overview.mjs";
+import { fixtureTelemetryRepositories, homeTelemetryProjection } from "../cli/telemetry-repository-overview.mjs";
+import { validateCaptureV3 } from "../cli/telemetry-schemas/capture-schema-v3.mjs";
 
 const NOW = new Date("2026-09-30T12:00:00.000Z");
 const ACTIVE = "git:github.com/example/active";
@@ -294,6 +297,56 @@ const runtimeOffline = loadAssociation({ runtime: null });
 assert.equal(runtimeOffline.domains.runtime.status, "unavailable");
 assert.equal(runtimeOffline.domains.plans.data.active.length, 9, "without Runtime every active plan is still listed");
 assert.equal(runtimeOffline.domains.plans.data.active.some((plan) => "checkoutRootId" in plan), false, "without Runtime no match is invented");
+
+// Tokens follow the capture switch: with capture off, a real repository's Tokens domain is
+// unavailable even though an older spool still projects warnings for it. Dev fixture repositories
+// get their warnings from the committed fixture spool either way.
+const SHARED_FIXTURE = "git:github.com/example/shared-stack-fixture";
+const MULTI_FIXTURE = "git:github.com/example/multi-member-fixture";
+const IDLE_FIXTURE = "git:github.com/example/idle-checkout-fixture";
+const TOKENS_REAL = "git:github.com/acme/tokens-real";
+const fixtureSpool = fs.readFileSync(new URL("../../local/dev-fixtures/token-warnings-spool.jsonl", import.meta.url), "utf8")
+  .split("\n").filter(Boolean).map((line) => JSON.parse(line));
+for (const row of fixtureSpool) {
+  assert.equal(row.schema, 3, "the fixture spool uses the schema real captures write");
+  validateCaptureV3(row);
+}
+const fixtureRepositories = fixtureTelemetryRepositories(fixtureSpool);
+assert.deepEqual(
+  Object.fromEntries(Object.entries(fixtureRepositories).map(([id, summary]) => [id, summary.warningCount])),
+  { [SHARED_FIXTURE]: 2, [MULTI_FIXTURE]: 6, [IDLE_FIXTURE]: 0 },
+  "the fixture spool runs through the real analysis and lands on the three dev fixtures",
+);
+const relabeled = fixtureSpool.map((row) => ({ ...row, repo: { ...row.repo, repository_id: TOKENS_REAL } }));
+assert.deepEqual(fixtureTelemetryRepositories(relabeled), {}, "fixture rows naming a real repository are dropped");
+
+const tokensRegistry = defaultRegistry();
+for (const [id, name] of [[TOKENS_REAL, "Tokens Real"], [SHARED_FIXTURE, "shared-stack-fixture"]]) {
+  upsertRepository(tokensRegistry, { id, kind: "git", displayName: name, now: NOW.toISOString() });
+  recordDiscovery(tokensRegistry, id, { source: "developer-runtime", evidence: "git-remote", confidence: "high", now: NOW.toISOString() });
+}
+const spoolProjection = {
+  status: "available",
+  updatedAt: "2026-09-30T11:58:00.000Z",
+  repositories: { [TOKENS_REAL]: { sessionCount: 3, warningCount: 2, highestSeverity: "high", recent: [] } },
+};
+const loadTokens = (enabled) => {
+  const repositories = createRepositoryOverviewService({
+    loadRegistry: () => structuredClone(tokensRegistry),
+    loadRuntime: () => null,
+    loadPlans: () => null,
+    loadTelemetry: () => homeTelemetryProjection({ enabled, projection: structuredClone(spoolProjection), fixtureRepositories }),
+    now: () => NOW,
+  }).loadHome().repositories;
+  return (id) => repositories.find((repository) => repository.repositoryId === id).domains.tokens;
+};
+const captureOff = loadTokens(false);
+assert.deepEqual(captureOff(TOKENS_REAL), { status: "unavailable", updatedAt: null, data: null, message: "Token tracking is off" }, "capture off hides an older spool's warnings");
+assert.equal(captureOff(SHARED_FIXTURE).status, "available");
+assert.equal(captureOff(SHARED_FIXTURE).data.warningCount, 2, "a dev fixture shows its fixture warnings with capture off");
+const captureOn = loadTokens(true);
+assert.equal(captureOn(TOKENS_REAL).data.warningCount, 2, "capture on shows the spool's warnings");
+assert.equal(captureOn(SHARED_FIXTURE).data.warningCount, 2, "a dev fixture keeps its fixture warnings with capture on");
 
 console.log("repository-overview-check passed");
 

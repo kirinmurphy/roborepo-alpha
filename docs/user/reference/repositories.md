@@ -55,8 +55,9 @@ Each card combines a compact view of several domains:
     **all plans** link, and says so when Plans coverage is partial. A repository with no active
     plans, or one Plans has not scanned, lists its worktrees as plain checkout rows with no plan
     rows or counts. Completed plans never appear.
-- **Tokens** — recent repository-associated session warnings appear when a cached Tokens analysis is
-  available.
+- **Tokens** — recent repository-associated session warnings appear while token tracking is on and a
+  cached Tokens analysis is available. With tracking off, Home shows no warnings, even if earlier
+  captures are still on disk, which matches the Tokens page.
 - **Agents** — repository-scoped agent configuration is currently unavailable and is labeled that
   way.
 

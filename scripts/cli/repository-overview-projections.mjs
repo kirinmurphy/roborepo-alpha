@@ -17,6 +17,7 @@ export function composeHomeOverview({ registry, runtimeState, plansState, teleme
   const runtimeById = runtimeByRepository(runtimeState.data, registry);
   const planCoverage = plansByRepository(plansState.data, now, registry);
   const telemetryById = telemetryByRepository(telemetryState.data, registry);
+  const fixtureTelemetryById = telemetryByRepository({ repositories: telemetryState.data?.fixtureRepositories }, registry);
   const repositories = Object.values(registry.repositories || {})
     .filter((record) => record.visibility !== "hidden" && resolveRegistryAlias(registry, record.id) === record.id)
     .map((record) => repositoryOverview(record, {
@@ -26,6 +27,7 @@ export function composeHomeOverview({ registry, runtimeState, plansState, teleme
       plans: planCoverage.get(record.id) || null,
       telemetryState,
       telemetry: telemetryById[record.id] || null,
+      fixtureTelemetry: fixtureTelemetryById[record.id] || null,
     }));
 
   return {
@@ -65,7 +67,12 @@ export function plansDomainState(snapshot) {
 
 export function telemetryDomainState(projection) {
   if (!projection) return unavailableState("Tokens data is unavailable");
-  return { status: projection.status || "available", updatedAt: projection.updatedAt || null, data: projection };
+  return {
+    status: projection.status || "available",
+    updatedAt: projection.updatedAt || null,
+    data: projection,
+    ...(projection.message ? { message: projection.message } : {}),
+  };
 }
 
 export function unavailableState(message) {
@@ -80,7 +87,11 @@ function repositoryOverview(record, context) {
   const plans = context.plans
     ? perRepositoryEnvelope(context.plansState, associatePlans(workspace, context.plans))
     : unavailableEnvelope("Plans has not scanned this repository");
-  const tokens = perRepositoryEnvelope(context.telemetryState, context.telemetry || { sessionCount: 0, warningCount: 0, highestSeverity: null, recent: [] });
+  // A dev fixture's warnings come from its fixture spool, so they show whatever the capture state;
+  // every other repository follows the Tokens envelope, which is unavailable while capture is off.
+  const tokens = context.fixtureTelemetry
+    ? { status: "available", updatedAt: null, data: context.fixtureTelemetry }
+    : perRepositoryEnvelope(context.telemetryState, context.telemetry || { sessionCount: 0, warningCount: 0, highestSeverity: null, recent: [] });
   return {
     ...repositorySummary(record),
     fixture: isFixtureRepository(record.id),

@@ -1,18 +1,27 @@
 ---
 id: 7m4q9dx
 priority: high
-next_action: Review and merge branch claude/portal-home-plan-first-hierarchy, resolving the plan-schema and lifecycle-guide renames from age4cm7r if it lands first, then run the completion review.
+next_action:
 blocked_by: []
 depends_on: []
 related:
   - wk7p4n2
   - a7bslb00
   - age4cm7r
-reviewed_commit: a125c9a
+reviewed_commit: 2a0f513
 worktree: portal-home-plan-first-hierarchy
 ---
 
 # Make Plans Primary Without Hiding Checkout Activity
+
+## Completion
+
+Completed 2026-10-03. Home's repository cards now list the main checkout, then every active plan,
+then the worktrees no plan claims, then one unlabeled line of plan counts. A plan matched to a
+running worktree is that worktree's checkout row, with a worktree-details dropdown in place of the
+branch label. Any other plan is its own row with a **not started** or **worktree not running**
+badge. The **Additional Plans** section is gone. The work landed on `main` as squash merge `bff0bf4`
+(PR #24). Verification below records the evidence.
 
 ## Summary
 
@@ -450,6 +459,27 @@ Run in worktree `portal-home-plan-first-hierarchy` on 2026-10-03:
 - `npm run check` (`scripts/test/ci.sh`) — passed: doctor, CLI tests (422 passed), install
   collisions, unit, package install, all four clean-machine Docker suites, and Portal UI. Windows
   installer parity was skipped because `pwsh` is not installed on this machine.
+
+Completion review on `main` at `2a0f513`, 2026-10-03:
+
+- Landed: `git merge-base --is-ancestor` reports the branch as unmerged, because it landed as squash
+  merge `bff0bf4`. Every file the branch changed is byte-identical between the branch head
+  `0c7731e` and `main`, so all of the branch's work is on `main`.
+- `npm run check` on `main` — passed: CLI tests 422 passed, 0 failed; all nine check suites; all
+  four clean-machine Docker suites; Portal UI 35 passed, 2 skipped. Windows installer parity was
+  skipped because `pwsh` is not installed.
+- Plans validation (the Plans API on `main`'s code) — valid, no findings, 18 of 18 tasks complete.
+  `roborepo plans validate` does not exist on `main` yet; it arrives with [[age4cm7r]].
+- Code review against the plan: every goal, non-goal, and Validation bullet maps to the diff or to a
+  Portal UI case. Matching never invents a match for duplicate claims, duplicate names, null
+  `rootId`s, main checkouts, or missing Runtime or Plans data. No leftover `footer`,
+  `tpl-checkout-plan`, `additionalPlansRow`, `.checkout-plan`, or `additionalActive` references
+  remain.
+- `roborepo dev start` from the worktree showed the new layout against live data, with both active
+  plans matched to their running worktrees.
+- Not verified: a screen reader's announcement of the forwarded copy-button `aria-label`s; Windows
+  installer parity. No test covers the poll-refresh pause while the worktree dropdown is open, or
+  closing the dropdown by clicking outside it. Both were confirmed by reading the code only.
 
 ## Decision Log
 
