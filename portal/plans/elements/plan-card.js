@@ -1,12 +1,12 @@
 // <plan-card> — set .record (plan record) and .actions (cardActions bag: onOpen, onCopyPath,
-// onCopyContext, onCopyPortableContext, onPlanDocsAction, planDocsEnabled, planDocsPackage,
+// onCopyContext, onCopyPortableContext, onPlanAction, planWriteEnabled, planWritePackage,
 // skillModal, onEnablePackage, onError) as properties right after creation, then append to the
 // DOM. The whole card triggers onOpen on click, except interactive widgets (the mounted
 // <plan-status>, the recommended-next CTA, and the ⋯ actions menu) inside it. Lifecycle/priority
 // controls, readiness/review chips, progress, and next-action live in the mounted <plan-status>
 // element (shared with the detail drawer) rather than being rendered here.
 import { portalTpl as tpl, portalFillSlots as fill } from "/portal/shared/api.js";
-import { cardActionMenu, cardRecommendedCta, cardLifecycleActions } from "/portal/plans/templates.js";
+import { cardActionMenu, cardPrimaryAction } from "/portal/plans/templates.js";
 
 // Card shows a shortened preview; full text (up to 500 chars) still lives in plan.excerpt
 // for copy-context/drawer use — only the on-card display is truncated further here.
@@ -64,17 +64,11 @@ class PlanCardElement extends HTMLElement {
       warnings ? chip(`${warnings} warnings`, "warn") : chip("valid", "ok"),
     );
     node.querySelector("[data-slot=title-link]").textContent = plan.title;
-    // Backlog/Active get the Start(/Archive) lifecycle shortcuts instead of the generic
-    // recommended-prompt CTA — everywhere else keeps the recommended-prompt CTA, when there's a
-    // clear next step. Either way, the unified ⋯ menu (shared with the drawer) always follows.
-    const lifecycleActions = cardLifecycleActions(record, cardActions);
-    const cta = lifecycleActions.length ? [] : (() => {
-      const recommended = cardRecommendedCta(record, cardActions);
-      return recommended ? [recommended] : [];
-    })();
+    // One primary command (Start, Continue, Update, or Close) when the plan has a way forward,
+    // then the unified ⋯ menu shared with the drawer.
+    const primary = cardPrimaryAction(record, cardActions);
     node.querySelector("[data-slot=actions]").append(
-      ...lifecycleActions,
-      ...cta,
+      ...(primary ? [primary] : []),
       cardActionMenu(record, cardActions),
     );
     // doc-details (title/description/footer) is the click surface — status-section (progress/

@@ -15,9 +15,10 @@ import { startHermeticPortal } from "./lib/portal-cleanup.mjs";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const cli = path.join(repoRoot, "scripts/cli/main.mjs");
 
-// Dev-lifecycle section members (the manifest's bulkToggle: true section). Cheap skill-only
-// packages — fast to enable/disable, no MCP/service side effects on a bare fixture HOME.
-const SECTION_IDS = ["plan-docs", "plan-promote", "plan-start", "wrap-up"];
+// Plan Suite section members (the manifest's bulkToggle: true section), which is also the list the
+// Plans onboarding banner enables in one request. Cheap skill-only packages — fast to
+// enable/disable, no MCP/service side effects on a bare fixture HOME.
+const SECTION_IDS = ["plan-write", "plan-promote", "plan-start", "plan-close", "session-close"];
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-config-bulk-"));
 const home = tmp;
@@ -79,6 +80,8 @@ async function snapshotSection() {
   const section = (snap.behaviorView || []).find((s) => s.categoryId === "skills-dev-lifecycle");
   assert.ok(section, "skills-dev-lifecycle section should be in behaviorView");
   assert.equal(section.bulkToggle, true, "section should ship bulkToggle: true");
+  assert.deepEqual(section.items.map((item) => item.id).sort(), [...SECTION_IDS].sort(),
+    "the Plan Suite section holds exactly the five suite packages");
   const byId = new Map(section.items.map((item) => [item.id, item.active]));
   return { section, byId };
 }
@@ -104,10 +107,10 @@ try {
   for (const id of SECTION_IDS) assert.equal(byId.get(id), true, `${id} still on after no-op batch`);
 
   // ── mixed -> enable-all: pre-disable one row individually, then batch-enable ──
-  runNode([cli, "package", "disable", "plan-docs"], "individual disable of one member");
+  runNode([cli, "package", "disable", "plan-write"], "individual disable of one member");
   ({ byId } = await snapshotSection());
-  assert.equal(byId.get("plan-docs"), false, "plan-docs off after individual toggle");
-  assert.equal(byId.get("wrap-up"), true, "wrap-up untouched");
+  assert.equal(byId.get("plan-write"), false, "plan-write off after individual toggle");
+  assert.equal(byId.get("session-close"), true, "session-close untouched");
 
   res = await postBulk(SECTION_IDS, true);
   assert.equal(res.status, 200);
@@ -126,14 +129,14 @@ try {
   const bad = await fetch(`${base}/api/config/packages/bulk`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-Cli-Portal-Token": token },
-    body: JSON.stringify({ ids: "plan-docs", enabled: true }),
+    body: JSON.stringify({ ids: "plan-write", enabled: true }),
   });
   assert.equal(bad.status, 400, "malformed body rejected");
 
   // ── individual endpoint still works beside the batch one ──
-  runNode([cli, "package", "enable", "plan-docs"], "individual enable still works");
+  runNode([cli, "package", "enable", "plan-write"], "individual enable still works");
   ({ byId } = await snapshotSection());
-  assert.equal(byId.get("plan-docs"), true, "individual toggle path unaffected by bulk endpoint");
+  assert.equal(byId.get("plan-write"), true, "individual toggle path unaffected by bulk endpoint");
 
   // ── in-flight lock, deterministic: two same-tick invocations in-process. The first sets the
   // module flag synchronously before its first await, so the second must get 409. Runs under the

@@ -106,7 +106,7 @@ function pairedSkillShape(skill, knownSkillNames = []) {
     // cross-skill relationship is not missing a table.
     //
     // "pair with" was the only phrasing caught originally, which let the same instruction slip
-    // through as "Use `code-style`" or "load `plan-docs`". The verb list is broader now, but the
+    // through as "Use `code-style`" or "load `plan-write`". The verb list is broader now, but the
     // target must be a *known skill name*: backticks around an ordinary value ("Use `data-testid`",
     // "Use `blocked`") is not a pairing, and matching any backticked token flagged both of those.
     const others = knownSkillNames.filter((name) => name !== skill.name);
@@ -154,7 +154,9 @@ const ARTIFACT_MODES = ["write", "create"];
 // This stays structural on purpose. Whether a reference *should* be required is a judgment about
 // the skill's content; whether a mode can reach one it declares elsewhere is not.
 function referenceReachability(skill) {
-  const section = /For a named mode, read only the needed references:\n([\s\S]*?)\n\n/.exec(skill.body);
+  // A mode-taking skill lists references per named mode; a mode-free skill such as plan-write lists
+  // them per situation. Both lists share one bullet shape and the same reachability rule.
+  const section = /(?:For a named mode, read only the needed references|Read the references for the situation):\n([\s\S]*?)\n\n/.exec(skill.body);
   if (!section) {
     // Only skills that declare modes are expected to carry a matrix; a single-purpose skill with
     // no mode list is not missing anything.
@@ -182,7 +184,7 @@ function referenceReachability(skill) {
     : [];
 }
 
-// Not every reference belongs to every mode — `workflow-next.md` is `next`'s business alone, and
+// Not every reference belongs to every mode — `workflow-update.md` is `update`'s business alone, and
 // requiring it from `create` would be noise. The finding targets references that define how work is
 // finished or graded, which is the class that must be reachable from the mode producing the
 // artifact.

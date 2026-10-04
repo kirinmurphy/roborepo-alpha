@@ -14,8 +14,8 @@
     },
     {
       "id": "skills-dev-lifecycle",
-      "label": "Skills - Development Life Cycle",
-      "description": "Named slash-command workflows you start intentionally, in the order you use them.",
+      "label": "Plan Suite",
+      "description": "One command for each step of a plan's life: write, promote, start, close, and close out the session. Listed in the order you use them.",
       "bulkToggle": true,
       "order": 20
     },
@@ -24,6 +24,12 @@
       "label": "Skills - Writing Assistants",
       "description": "Long-form writing workflows — case studies and structured documentation.",
       "order": 25
+    },
+    {
+      "id": "skills-code-quality",
+      "label": "Skills - Code Quality",
+      "description": "Commands that clean up code against this project's own patterns.",
+      "order": 27
     },
     {
       "id": "code-conventions",

@@ -33,9 +33,13 @@ export function generatePrompt(action, keys, mode = "repository-aware") {
   );
 }
 
-export function enablePlanDocsPackage() {
-  return portalPostJson("/api/config/packages", {
-    id: "plan-docs",
+// The plan suite's packages, in lifecycle order. The onboarding banner enables them as one unit
+// through the config section's bulk endpoint: one preflight, one reconcile pass.
+export const PLAN_SUITE_PACKAGES = ["plan-write", "plan-promote", "plan-start", "plan-close", "session-close"];
+
+export function enablePlanSuitePackages() {
+  return portalPostJson("/api/config/packages/bulk", {
+    ids: PLAN_SUITE_PACKAGES,
     enabled: true,
   });
 }

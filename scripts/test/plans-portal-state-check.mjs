@@ -272,7 +272,7 @@ function testEveryDisplayedFindingAppearsInTheRepairPrompt() {
     ],
     repair: {
       prompt: [
-        "/plan-docs validate",
+        "/plan-write",
         "1. 3 required tasks remain unchecked.",
         "2. Missing Verification section.",
       ].join("\n"),
@@ -286,7 +286,7 @@ function testEveryDisplayedFindingAppearsInTheRepairPrompt() {
 }
 
 function testCanRepairRequiresANonEmptyPrompt() {
-  assert.equal(canRepairLifecycleError({ repair: { prompt: "/plan-docs validate" } }), true,
+  assert.equal(canRepairLifecycleError({ repair: { prompt: "/plan-write" } }), true,
     "a usable prompt enables the copy button");
   assert.equal(canRepairLifecycleError({ repair: { prompt: "" } }), false,
     "an empty prompt must not offer a copy button that yields nothing");

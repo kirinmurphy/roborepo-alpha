@@ -98,6 +98,25 @@ assert.deepEqual(resolveCommand(catalog, ["package", "dev", "help"]), {
   tokens: ["package", "dev"],
 });
 
+// --- The plan-suite commands: `package status` is public; `plans validate`, `plans start`, and
+// `plans stop-servers` stay internal (callable by suite skills, never browsable), and each forwards its trailing args. ---
+assert.match(packageHelp, /package status/);
+const packageStatus = resolveCommand(catalog, ["package", "status", "plan-write", "--json"]);
+assert.equal(packageStatus.kind, "command");
+assert.deepEqual(packageStatus.tokens, ["package", "status"]);
+assert.deepEqual(packageStatus.args, ["plan-write", "--json"]);
+assert.deepEqual(catalog.nodes.package.children.status.execution.prependArgs, ["status"]);
+for (const [name, args] of [["validate", ["age4cm7r", "--json"]], ["start", ["age4cm7r", "--worktree", "w"]], ["stop-servers", ["age4cm7r", "--dry-run"]]]) {
+  const node = catalog.nodes.plans.children[name];
+  assert.equal(node.kind, "internal", `plans ${name} is internal`);
+  assert.match(node.usage, new RegExp(`^roborepo plans ${name} `));
+  const resolved = resolveCommand(catalog, ["plans", name, ...args]);
+  assert.equal(resolved.kind, "command", `plans ${name} resolves`);
+  assert.deepEqual(resolved.args, args, `plans ${name} forwards its arguments`);
+  assert.deepEqual(node.execution.prependArgs, [name]);
+}
+assert.doesNotMatch(rootHelp, /plans validate|plans start|plans stop-servers/, "internal plans commands stay out of root help");
+
 const removed = resolveCommand(catalog, ["watch", "code", "."]);
 assert.equal(removed.kind, "removed");
 assert.deepEqual(removed.replacement.replacement, ["index", "code", "--watch"]);
@@ -266,7 +285,7 @@ const activeDocPaths = [
   "docs/user/reference/architecture.md",
   "docs/internal/harness-anatomy.md",
   "docs/architecture/documentation-map-and-audit.md",
-  "docs/user/guides/plan/lifecycle/plan-docs.md",
+  "docs/user/guides/plan/lifecycle/plan-suite.md",
   "local/skills/builtin-development/SKILL.md",
   "local/skills/builtin-development/references/package-development.md",
   "globals/system/skills/builtin-support/SKILL.md",

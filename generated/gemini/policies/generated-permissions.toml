@@ -138,7 +138,37 @@ priority = 500
 
 [[rule]]
 toolName = "run_shell_command"
-commandPrefix = "roborepo plans"
+commandPrefix = "roborepo plans validate"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "roborepo plans repair"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "roborepo package list"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "roborepo package inspect"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "roborepo package status"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "roborepo package validate"
 decision = "allow"
 priority = 500
 
@@ -162,7 +192,37 @@ priority = 500
 
 [[rule]]
 toolName = "run_shell_command"
-commandPrefix = "roborepo package"
+commandPrefix = "roborepo package enable"
+decision = "ask_user"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "roborepo package disable"
+decision = "ask_user"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "roborepo package reconcile"
+decision = "ask_user"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "roborepo package adopt-live"
+decision = "ask_user"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "roborepo package manage"
+decision = "ask_user"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "roborepo package dev"
 decision = "ask_user"
 priority = 500
 

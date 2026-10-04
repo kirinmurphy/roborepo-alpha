@@ -13,13 +13,13 @@ reviewed_commit:
 > Status: proposed
 >
 > Scope: correct the unsupported Codex command installation model, then extend the
-> `wrap-up` skill with an optional post-commit CodeRabbit review and fix loop.
+> `session-close` skill with an optional post-commit CodeRabbit review and fix loop.
 
 ## Outcomes
 
-1. Claude continues to expose `/wrap-up`.
+1. Claude continues to expose `/session-close`.
 2. Codex exposes the same workflow through its native explicit skill invocation,
-   `$wrap-up`, and no longer installs an inert `~/.codex/commands/wrap-up.md` file.
+   `$session-close`, and no longer installs an inert `~/.codex/commands/session-close.md` file.
 3. After the session commit, Wrap Up can review exactly that committed change with
    CodeRabbit.
 4. CodeRabbit's maintained plugin or skills own review execution and finding parsing.
@@ -29,21 +29,21 @@ reviewed_commit:
 
 ## Current-State Findings
 
-### Why `/wrap-up` appears in Claude but not Codex
+### Why `/session-close` appears in Claude but not Codex
 
 The package declaration is present and the renderer works as currently designed:
 
-- `globals/packages/wrap-up/package.config.json` declares a `slash-command`
+- `globals/packages/session-close/package.config.json` declares a `slash-command`
   entrypoint for both `claude` and `codex`.
 - `scripts/cli/slash-commands.mjs` generates both wrappers.
 - `scripts/cli/skill-command-config.mjs` maps the Codex wrapper to
   `generated/packages/<package>/codex/commands` and installs it into
   `~/.codex/commands`.
-- `generated/packages/wrap-up/codex/commands/wrap-up.md` exists.
+- `generated/packages/session-close/codex/commands/session-close.md` exists.
 
 The failure is the assumed Codex runtime contract. Current Codex does not scan
 `~/.codex/commands` for user-defined slash commands. Its supported reusable workflow
-is a skill, invoked explicitly as `$wrap-up` or selected through `/skills`.
+is a skill, invoked explicitly as `$session-close` or selected through `/skills`.
 
 Codex still documents legacy custom prompts under `~/.codex/prompts`, but they are:
 
@@ -52,7 +52,7 @@ Codex still documents legacy custom prompts under `~/.codex/prompts`, but they a
 - loaded only from top-level Markdown files after a restart or new session.
 
 Therefore, moving the generated file from `commands/` to `prompts/` would change the
-visible command to `/prompts:wrap-up` and build new behavior on a deprecated surface.
+visible command to `/prompts:session-close` and build new behavior on a deprecated surface.
 It is not the recommended fix.
 
 ### Broader impact
@@ -69,8 +69,8 @@ Use the same shared skill with harness-native explicit entrypoints:
 
 | Harness | Explicit invocation | Installed resource |
 | --- | --- | --- |
-| Claude | `/wrap-up` | Claude command wrapper plus shared skill |
-| Codex | `$wrap-up` or `/skills` | Shared skill only |
+| Claude | `/session-close` | Claude command wrapper plus shared skill |
+| Codex | `$session-close` or `/skills` | Shared skill only |
 
 Do not create a Codex custom-prompt compatibility layer by default. If RoboRepo later
 supports legacy prompts, model that separately as a deprecated `codex-prompt` resource
@@ -80,13 +80,13 @@ whose visible name is `/prompts:<name>`; never call it a bare slash command.
 
 ### 1. Change Wrap Up's declared entrypoint
 
-In `globals/packages/wrap-up/package.config.json`:
+In `globals/packages/session-close/package.config.json`:
 
 - retain the skill's `invocation: "manual"`;
 - restrict its slash-command entrypoint to `harnesses: ["claude"]`;
-- rely on Codex's installed skill for `$wrap-up`.
+- rely on Codex's installed skill for `$session-close`.
 
-Confirm `globals/packages/wrap-up/skills/wrap-up/agents/openai.yaml` contains:
+Confirm `globals/packages/session-close/skills/session-close/agents/openai.yaml` contains:
 
 ```yaml
 policy:
@@ -147,7 +147,7 @@ Update all surfaces that currently imply Claude/Codex command parity:
 - `docs/user/guides/setup-and-daily-use.md`
 - portal configuration/resource labels and help text
 
-Show both invocations where applicable: `/wrap-up` for Claude and `$wrap-up` for Codex.
+Show both invocations where applicable: `/session-close` for Claude and `$session-close` for Codex.
 
 ### 5. Tests
 
@@ -155,9 +155,9 @@ Replace filesystem-only Codex command assertions with contract assertions:
 
 - Wrap Up generates a Claude wrapper.
 - Wrap Up does not generate or install a Codex command wrapper.
-- Enabling Wrap Up installs `~/.codex/skills/wrap-up`.
+- Enabling Session Close installs `~/.codex/skills/session-close`.
 - `agents/openai.yaml` prevents implicit invocation.
-- The package catalog exposes Claude `/wrap-up` and Codex `$wrap-up` in user-facing data.
+- The package catalog exposes Claude `/session-close` and Codex `$session-close` in user-facing data.
 - Update/repair removes only RoboRepo-owned stale Codex wrappers.
 - Scaffolded shared manual workflows use the same harness-native split.
 
@@ -169,7 +169,7 @@ runtime contract.
 
 ### Design boundary
 
-Do not reproduce CodeRabbit's maintained review logic inside `wrap-up`.
+Do not reproduce CodeRabbit's maintained review logic inside `session-close`.
 
 CodeRabbit currently provides:
 
@@ -191,11 +191,11 @@ not push or require an open PR.
 
 Keep the core sequence in:
 
-`globals/packages/wrap-up/skills/wrap-up/SKILL.md`
+`globals/packages/session-close/skills/session-close/SKILL.md`
 
 Add one conditionally loaded reference:
 
-`globals/packages/wrap-up/skills/wrap-up/references/coderabbit.md`
+`globals/packages/session-close/skills/session-close/references/coderabbit.md`
 
 The core skill should contain only:
 
@@ -347,14 +347,14 @@ Wrap Up rules.
 
 ## Package and Configuration Changes
 
-### `globals/packages/wrap-up/package.config.json`
+### `globals/packages/session-close/package.config.json`
 
 - Restrict the slash-command entrypoint to Claude.
 - Keep Wrap Up optional and manual-only.
 - Do not make CodeRabbit a hard RoboRepo package dependency; Wrap Up remains useful for docs-only
   sessions and users without CodeRabbit.
 
-### `globals/packages/wrap-up/skills/wrap-up/SKILL.md`
+### `globals/packages/session-close/skills/session-close/SKILL.md`
 
 - Move CodeRabbit after the initial session commit and before final status/handoff.
 - Add deterministic pre-commit boundary capture.
@@ -362,7 +362,7 @@ Wrap Up rules.
 - Link directly to `references/coderabbit.md` for missing/incomplete integrations.
 - Preserve all existing staging, no-push, and stray-file safeguards.
 
-### `globals/packages/wrap-up/skills/wrap-up/references/coderabbit.md`
+### `globals/packages/session-close/skills/session-close/references/coderabbit.md`
 
 - Encode only current vendor integration details and setup fallback.
 - Cite the official CodeRabbit CLI overview, command reference, skills guide, Codex integration,
@@ -436,14 +436,14 @@ RoboRepo. Test only the orchestration contract and pass representative vendor re
 6. Add fake-CLI integration coverage.
 7. Validate package catalog, command rendering, skill audit, installer/update/repair behavior, and
    the full RoboRepo test suite.
-8. Manually smoke-test `/wrap-up` in Claude and `$wrap-up` in a fresh Codex session.
+8. Manually smoke-test `/session-close` in Claude and `$session-close` in a fresh Codex session.
 9. Manually smoke-test CodeRabbit with report-only mode before enabling guided fixes.
 
 ## Acceptance Criteria
 
 - No documentation or UI claims that Codex supports RoboRepo files in `~/.codex/commands`.
-- Claude `/wrap-up` remains available.
-- Codex `$wrap-up` is discoverable and cannot trigger implicitly.
+- Claude `/session-close` remains available.
+- Codex `$session-close` is discoverable and cannot trigger implicitly.
 - RoboRepo-owned stale Codex command wrappers are cleaned without touching user-owned files.
 - CodeRabbit runs only after the initial session commit and reviews the exact session range.
 - The maintained CodeRabbit plugin/skill is preferred over duplicated RoboRepo logic.

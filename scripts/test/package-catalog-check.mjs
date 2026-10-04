@@ -33,7 +33,7 @@ for (const name of ["index code", "index docs", "watch code"]) {
 }
 
 const slashNames = loadSlashCommandPlan().commands.map((command) => command.name).sort();
-for (const name of ["case-study", "plan-docs", "tighten", "wrap-up", "plan-promote", "plan-start"]) {
+for (const name of ["case-study", "plan-write", "tighten", "session-close", "plan-promote", "plan-start", "plan-close"]) {
   assert(slashNames.includes(name), `missing slash command: ${name}`);
 }
 
@@ -71,7 +71,9 @@ for (const label of ["Permissions", "Local Stores"]) {
 }
 
 assert(sections.get("Token Optimization").items.some((item) => item.id === "jcodemunch"), "jcodemunch not visible in Token Optimization");
-assert(sections.get("Skills - Development Life Cycle").items.some((item) => item.id === "tighten"), "tighten not visible in Skills - Development Life Cycle");
+assert(sections.get("Skills - Code Quality").items.some((item) => item.id === "tighten"), "tighten not visible in Skills - Code Quality");
+assert(sections.get("Plan Suite").items.map((item) => item.id).join(",") === "plan-write,plan-promote,plan-start,plan-close,session-close",
+  "the Plan Suite section lists the five suite commands in lifecycle order");
 
 const libraryStepTitles = new Set(buildOnboardSteps().map((step) => step.title));
 for (const section of snapshot.behaviorView) {

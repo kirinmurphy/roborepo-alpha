@@ -144,12 +144,6 @@ export function filteredPlans(plans, filters) {
     .sort(planSort);
 }
 
-export function actionablePlans(plans) {
-  return plans.filter(
-    (record) => !["completed", "archived"].includes(record.plan.lifecycle),
-  );
-}
-
 // Facet-style counts: for `id`, how many plans would match each candidate value in `values` if
 // every OTHER active filter stayed as-is. Excludes `id` itself so picking an option doesn't
 // shrink its own count relative to the other options.
@@ -325,7 +319,7 @@ export function filteredListActionFor(change, state) {
 // Resolved live from the current snapshot on every call (not cached on the record) so a mutation
 // that only rebuilds one record (see updatePlanPriority/movePlanLifecycle) never leaves stale
 // blocker/blocking data behind — the next render always recomputes from state.snapshot.plans.
-// Plan ids are only unique within one repository (see modules/plan-docs/index.mjs's
+// Plan ids are only unique within one repository (see modules/plan-suite/index.mjs's
 // relationshipWarnings), so matches are scoped to the same repository.id as the referencing plan.
 
 // Every blocked_by id, resolved to its plan record when one exists in the same repository.

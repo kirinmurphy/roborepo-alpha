@@ -21,6 +21,28 @@ Resolve:
 
 Use the existing plan document as the source of truth. Do not create a second meta-plan unless the scope genuinely requires splitting and the user explicitly approves that split.
 
+## Paired Skills
+
+Load these as part of the review; do not wait to be asked for them by name.
+
+| Skill | Load when | Contributes |
+| --- | --- | --- |
+| `technical-writing` | **Always**: promotion rewrites plan prose | Section content, representation, and reader clarity |
+| `code-style` | The plan specifies where code goes: module boundaries, orchestration vs. execution, reuse | Ownership and layering constraints |
+| `javascript-typescript` | The plan touches JS/TS — ESM, exports, types, framework-less DOM | Language and markup conventions |
+| `test-harness` | The plan proposes tests, verification commands, or a regression strategy | Test selection and observable-behavior assertions |
+
+Each row is its own optional package, so check it before loading it:
+
+1. Run `roborepo package status <skill> --json`.
+2. If `available` is true, `enabled` is true, and `status` is `enabled` or `configured`, load it.
+3. If it is disabled, ask: "`<skill>` is not enabled. Enable it, or skip it for this run?"
+   - **Enable:** run `roborepo package enable <skill>` with the user's permission, then load it.
+   - **Skip:** continue without it, and name it as skipped in the final report.
+4. If `enabled` and `status` disagree (`partial`, `external`), report the status, offer
+   `roborepo package reconcile` or skip, and never describe a drifted package as loaded.
+5. If it is `missing` or `unavailable`, skip it and say so in the final report.
+
 ## Workflow
 
 1. Read the entire selected plan.
@@ -45,7 +67,9 @@ Use the existing plan document as the source of truth. Do not create a second me
 8. Preserve the plan ID, filename conventions, frontmatter conventions, lifecycle folder, and repository-relative paths.
 9. Convert vague implementation phases into an executable sequence without prescribing incidental details that can safely be decided during development.
 10. Ensure validation and acceptance criteria are concrete and testable.
-11. Validate the finished document using the repository's Plan Docs conventions.
+11. Validate the finished document: run `roborepo plans validate <plan>` and resolve its findings,
+    then confirm the repository consistency checks no command makes — referenced paths, commands,
+    and tests exist, and current-state claims match the code.
 12. Present the resulting plan and any remaining questions to the user.
 13. Stop before implementation.
 
@@ -106,7 +130,8 @@ Also report:
 
 - files changed;
 - repository areas reviewed;
-- validation performed;
+- validation performed, including `roborepo plans validate` output;
+- paired skills loaded, and any skipped with the reason;
 - any claims that could not be verified.
 
 ## Boundaries

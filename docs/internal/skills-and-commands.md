@@ -39,7 +39,7 @@ and commands are loaded only for the current turn or current task.
 Reusable means the same workflow body is useful from multiple entry points:
 
 - the user says a natural phrase such as "capture this"
-- the user invokes a slash command such as `/plan-docs`
+- the user invokes a slash command such as `/plan-write`
 - the user explicitly names a skill
 - a future command or harness wrapper should reuse the same instructions
 
@@ -63,10 +63,13 @@ Examples:
 - `code-style`: implicit helper skill; no slash command needed.
 - `javascript-typescript`: implicit helper skill; no slash command needed.
 - `react`: implicit helper skill; no slash command needed.
-- `plan-docs`: managed plan-document workflow behind `/plan-docs`.
+- `plan-write`, `plan-promote`, `plan-start`, `plan-close`: the plan suite, one
+  atomic lifecycle step each, behind the matching slash command. None takes a mode
+  argument; deterministic plan rules live in `roborepo plans validate` and
+  `roborepo plans start`, which every suite skill runs.
 - `tighten`: explicit-only review/fix workflow behind `/tighten`.
-- `wrap-up`: explicit-only session close-out workflow (review, docs, commit, handoff
-  note) behind `/wrap-up`.
+- `session-close`: explicit-only session close-out workflow (review, docs, commit,
+  handoff note) behind `/session-close`.
 
 ## Skill-Backed Slash Commands
 
@@ -88,9 +91,12 @@ Current generated examples:
 
 - `/case-study` -> `case-study`
 - `/frontend-design` -> `frontend-design`
-- `/plan-docs` -> `plan-docs`
+- `/plan-write` -> `plan-write`
+- `/plan-promote` -> `plan-promote`
+- `/plan-start` -> `plan-start`
+- `/plan-close` -> `plan-close`
 - `/tighten` -> `tighten`
-- `/wrap-up` -> `wrap-up`
+- `/session-close` -> `session-close`
 
 ## Standalone Slash Commands
 
@@ -123,7 +129,7 @@ Convention capture has three parts:
 Capture does not currently need a slash command. The useful product behavior is
 the observer: the agent flags likely capture candidates. Once the user sees that
 flag, they can make an ordinary chat request such as "update CLAUDE.md with
-this" or "add this to the plan-docs skill."
+this" or "add this to the plan-write skill."
 
 If capture later grows a stricter multi-step workflow that users should invoke
 by name, make it a skill-backed command. Until then, keep it as a default-on

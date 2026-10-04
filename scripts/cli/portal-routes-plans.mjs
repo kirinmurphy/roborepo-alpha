@@ -4,10 +4,10 @@
 import { send, readJsonBody } from "./portal-routes-http.mjs";
 import { defineRoutes } from "./portal-router.mjs";
 
-// Serializes a domain error (see modules/plan-docs/index.mjs's domainError helper) into the
+// Serializes a domain error (see modules/plan-suite/index.mjs's domainError helper) into the
 // structured { error: { code, message, resolution, details } } shape the client's portalPostJson
 // preserves. Falls back to a plain 400 for any error that isn't domain-shaped (shouldn't happen
-// once every plan-docs throw site uses domainError, but keeps the route defensive).
+// once every plan-suite throw site uses domainError, but keeps the route defensive).
 function sendDomainError(res, error) {
   const status = Number.isInteger(error?.status) ? error.status : 400;
   const body = {

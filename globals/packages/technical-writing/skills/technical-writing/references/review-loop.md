@@ -21,7 +21,7 @@ exact failure this loop exists to catch.
 | `section-guidance.md` | Always |
 | `representation.md` | Always — the draft was authored under it, so it is checked against it |
 | `doc-shapes.md` | Non-plan documents: the chosen shape |
-| `plan-docs` `references/plan-schema.md` | Documents under `docs/plans`, in place of `doc-shapes.md` |
+| `plan-write` `references/plan-schema.md` | Documents under `docs/plans`, in place of `doc-shapes.md` |
 | `doc-organization.md` | Only when revising a documentation set rather than a single document |
 | Applicable paired skills | Whenever they materially constrain the guidance the document gives — an explicit request is one trigger, not the only one |
 

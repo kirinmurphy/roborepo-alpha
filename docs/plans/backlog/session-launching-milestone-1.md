@@ -119,7 +119,7 @@ mutation token alone must not turn the launcher into a remote command-execution 
 
 | Existing behavior | Relevant code | Extension |
 | --- | --- | --- |
-| Discover repositories and plans | `modules/plan-docs/index.mjs` | Resolve a launch from an opaque plan key |
+| Discover repositories and plans | `modules/plan-suite/index.mjs` | Resolve a launch from an opaque plan key |
 | Remove absolute paths from public snapshots | `scripts/cli/plans.mjs` | Keep absolute repository path server-side |
 | Read a selected plan safely | `findPlanByKey()` / `readPlanDocument()` | Build an immutable launch snapshot |
 | Generate repository-aware prompts | `buildPrompt()` | Use prompt text as launch input |
@@ -165,7 +165,7 @@ portal/plans/
 ```
 
 Plans may call the session service, but session persistence and process control must not be added to
-`modules/plan-docs/`. Markdown plans remain the Plans source of truth; machine-local JSON records
+`modules/plan-suite/`. Markdown plans remain the Plans source of truth; machine-local JSON records
 remain the Sessions source of truth.
 
 ### Core records

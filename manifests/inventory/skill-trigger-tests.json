@@ -14,19 +14,20 @@
       "skipPhrases": ["PR descriptions", "implementation notes"]
     },
     {
-      "skill": "plan-docs",
+      "skill": "plan-write",
       "match": [
         "create an implementation plan for package reconciliation",
         "sync this plan with what we just changed",
-        "/plan-docs validate docs/plans/backlog/example.md"
+        "/plan-write docs/plans/backlog/example.md"
       ],
       "nearMiss": [
         "write a quick PR summary",
         "give me a brief answer about this function",
-        "implement this ordinary code change"
+        "implement this ordinary code change",
+        "close this plan, the work is merged"
       ],
-      "triggerPhrases": ["/plan-docs", "implementation plan", "sync this plan", "review whether a plan is complete"],
-      "skipPhrases": ["brief answers", "PR descriptions", "ordinary implementation"]
+      "triggerPhrases": ["/plan-write", "implementation plan", "sync this plan", "revise a plan"],
+      "skipPhrases": ["brief answers", "PR descriptions", "ordinary implementation", "closing a finished plan"]
     },
     {
       "skill": "plan-promote",
@@ -37,7 +38,7 @@
       "nearMiss": [
         "create an implementation plan for package reconciliation",
         "start implementing this plan",
-        "run the integration check on integration/foo"
+        "close this plan now that it has merged"
       ],
       "triggerPhrases": ["reviewing and preparing an existing repository implementation plan", "reconcile stale assumptions", "validate readiness"],
       "skipPhrases": ["creating a new plan from scratch", "writing feature code", "creating worktrees", "resuming active implementation"]
@@ -51,10 +52,25 @@
       "nearMiss": [
         "prepare this plan before we start building",
         "sync this plan with what we just changed",
-        "run the integration check on integration/foo"
+        "close this plan now that it has merged"
       ],
       "triggerPhrases": ["beginning implementation from an existing prepared repository plan", "create or safely reuse an isolated worktree"],
       "skipPhrases": ["initial plan preparation", "lifecycle orchestration", "portal actions", "integration-branch closeout"]
+    },
+    {
+      "skill": "plan-close",
+      "match": [
+        "/plan-close docs/plans/active/example.md",
+        "the work merged, so close this plan and move it to completed",
+        "review whether a plan is complete"
+      ],
+      "nearMiss": [
+        "sync this plan with what we just changed",
+        "wrap up this chat",
+        "review this diff for bugs"
+      ],
+      "triggerPhrases": ["/plan-close", "close this plan", "review whether a plan is complete"],
+      "skipPhrases": ["creating or revising plans", "ending a session", "reviewing a working diff", "merging branches"]
     },
     {
       "skill": "tighten",

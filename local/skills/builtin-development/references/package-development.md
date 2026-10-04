@@ -33,7 +33,7 @@ Enforced by `normalizePackage`/`normalizeResource` in `scripts/cli/package-catal
 | `presentation.order` | no (defaults `0`) | numeric, controls sort within category |
 | `requires` | no | array of package IDs; cycle-checked, missing-dep-checked |
 | `resources` | yes | array — see Resource types |
-| `urls` | no | optional array shown in portal (see e.g. `caveman`, `jcodemunch`, `plan-docs`) |
+| `urls` | no | optional array shown in portal (see e.g. `caveman`, `jcodemunch`, `plan-write`) |
 
 There is no `.schema.json` file — validation is hand-rolled JS, not JSON Schema. Do not add one
 speculatively; the current approach is deliberate (see `validatePackageCatalog`).

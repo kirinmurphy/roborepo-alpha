@@ -1,7 +1,7 @@
 <!-- The plan detail drawer: the popup a plan title opens on Plans and on Home. Injected at
      {{PLAN_DRAWER}} (scripts/cli/portal-server.mjs) and driven by portal/plans/plan-drawer.js, so
      both pages render one component. Carries everything the drawer renders — <plan-status>, the
-     ⋯ action menu, blocker links, the copy toast, the plan-docs skill modal — and its stylesheet. -->
+     ⋯ action menu, blocker links, the copy toast, the plan-suite skill modal — and its stylesheet. -->
 <link rel="stylesheet" href="/portal/plans/plan-drawer.css" />
     <div id="toast" class="toast" hidden>
       <p class="toast-message" data-slot="message"></p>
@@ -102,13 +102,15 @@
       </div>
     </dialog>
     <!-- First-run onboarding: an empty-page state (centered content, no banner chrome). Shown only
-         while the plan-docs package is disabled — once enabled, the Project Folders form takes
-         over as the single visible setup step (the two are never shown together). -->
+         while the plan-write package is disabled — once enabled, the Project Folders form takes
+         over as the single visible setup step (the two are never shown together). Each command
+         row's details button names its skill in data-skill; packageBanner() wires them. -->
     <template id="tpl-package-banner">
       <div class="package-onboarding">
-        <h2 class="onboarding-title">Plan and track development with plan-docs</h2>
+        <h2 class="onboarding-title">Plan and track development with the plan suite</h2>
         <p class="onboarding-lead">
-          Enable the plan-docs skill to turn next-step ideas into tracked, agent-ready plans.
+          Enable the plan suite to turn next-step ideas into tracked, agent-ready plans, with one
+          command for each step of the development lifecycle.
         </p>
         <ul class="onboarding-list">
           <li>
@@ -127,18 +129,33 @@
           </li>
           <li>
             <portal-icon name="pencil" size="md"></portal-icon>
-            <span>A suite of skills drives the development lifecycle:</span>
+            <span>Each step of the lifecycle is its own command:</span>
             <ul class="onboarding-sublist">
-              <li><code>/plan-docs</code> — create and manage plans</li>
-              <li><code>/plan-promote</code> — prepare a plan for development</li>
-              <li><code>/plan-start</code> — implement it in an isolated worktree</li>
-              <li><code>/wrap-up</code> — commit and hand off the session</li>
+              <li>
+                <code>/plan-write</code> — create a plan, or revise and sync one
+                <button type="button" data-btn="text" data-slot="details" data-skill="plan-write">Details</button>
+              </li>
+              <li>
+                <code>/plan-promote</code> — prepare a plan for development
+                <button type="button" data-btn="text" data-slot="details" data-skill="plan-promote">Details</button>
+              </li>
+              <li>
+                <code>/plan-start</code> — implement it in an isolated worktree
+                <button type="button" data-btn="text" data-slot="details" data-skill="plan-start">Details</button>
+              </li>
+              <li>
+                <code>/plan-close</code> — verify the work and close the plan
+                <button type="button" data-btn="text" data-slot="details" data-skill="plan-close">Details</button>
+              </li>
+              <li>
+                <code>/session-close</code> — commit and hand off the session
+                <button type="button" data-btn="text" data-slot="details" data-skill="session-close">Details</button>
+              </li>
             </ul>
           </li>
         </ul>
         <div class="banner-links">
-          <button type="button" data-btn="cta" data-slot="action">Enable Plan Docs</button>
-          <button type="button" data-btn="text" data-slot="details">View Skill Details</button>
+          <button type="button" data-btn="cta" data-slot="action">Enable the Plan Suite</button>
         </div>
       </div>
     </template>
@@ -177,19 +194,6 @@
         <div data-slot="fallback-actions" hidden></div>
         <div data-slot="copy-path"></div>
         <div data-slot="package-banner" hidden></div>
-      </div>
-    </template>
-    <template id="tpl-plan-menu-action">
-      <div class="plan-menu-action">
-        <div data-slot="item"></div>
-        <button
-          type="button"
-          class="plan-menu-variant"
-          data-slot="portable"
-          hidden
-        >
-          portable
-        </button>
       </div>
     </template>
     <template id="tpl-plan-status">

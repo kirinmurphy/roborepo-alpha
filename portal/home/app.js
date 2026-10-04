@@ -19,7 +19,7 @@ let plansSnapshot = null;
 // go through the Plans page's mutation flow, which Home does not carry.
 const planDrawer = createPlanDrawer({
   getPlans: () => plansSnapshot?.plans || [],
-  getPlanDocsPackage: () => plansSnapshot?.planDocsPackage || {},
+  getPlanWritePackage: () => plansSnapshot?.planWritePackage || {},
   onEnablePackage: () => { location.href = "/plans"; },
   onError: showWarning,
   readonly: true,
@@ -32,7 +32,7 @@ const menuActions = {
   onOpenPlan: openPlan,
 };
 
-// The plans snapshot supplies what the drawer resolves against (blockers, plan-docs state); it is
+// The plans snapshot supplies what the drawer resolves against (blockers, plan-write package state); it is
 // fetched on open rather than polled, since Home only needs it while a drawer is showing.
 async function openPlan(plan) {
   try {

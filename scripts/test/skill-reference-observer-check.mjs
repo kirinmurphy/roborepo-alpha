@@ -56,19 +56,19 @@ function writeReference(root, skill, reference) {
   return filePath;
 }
 
-const claudePlanSchema = writeReference(claudeSkills, "plan-docs", "plan-schema.md");
-const claudeLifecycle = writeReference(claudeSkills, "plan-docs", "lifecycle.md");
-const claudeWorkflowCreate = writeReference(claudeSkills, "plan-docs", "workflow-create.md");
-const claudeNested = writeReference(claudeSkills, "plan-docs", path.join("nested", "deep.md"));
+const claudePlanSchema = writeReference(claudeSkills, "plan-write", "plan-schema.md");
+const claudeLifecycle = writeReference(claudeSkills, "plan-write", "lifecycle.md");
+const claudeWorkflowCreate = writeReference(claudeSkills, "plan-write", "workflow-create.md");
+const claudeNested = writeReference(claudeSkills, "plan-write", path.join("nested", "deep.md"));
 const codexReviewLoop = writeReference(codexSkills, "technical-writing", "review-loop.md");
-const cachePlanSchema = writeReference(cacheSkills, "plan-docs", "plan-schema.md");
+const cachePlanSchema = writeReference(cacheSkills, "plan-write", "plan-schema.md");
 
 // --- a reference read under either harness root is observed --------------------------------
 {
   const context = observedReference(runHook(claudeHook, {
     tool_input: { file_path: claudePlanSchema },
   }));
-  assert.match(context, /^\[skill-visibility\] observed reference read: plan-docs\/references\/plan-schema\.md/,
+  assert.match(context, /^\[skill-visibility\] observed reference read: plan-write\/references\/plan-schema\.md/,
     "a Claude skill reference read is reported as <skill>/<reference> under the [skill-visibility] tag");
 }
 {
@@ -85,7 +85,7 @@ const cachePlanSchema = writeReference(cacheSkills, "plan-docs", "plan-schema.md
     tool_name: "exec_command",
     tool_input: { cmd: `sed -n '1,220p' ${cachePlanSchema}` },
   }));
-  assert.match(context, /observed reference read: plan-docs\/references\/plan-schema\.md/,
+  assert.match(context, /observed reference read: plan-write\/references\/plan-schema\.md/,
     "Codex sed payloads against the roborepo cache root are observed");
 }
 
@@ -94,7 +94,7 @@ const cachePlanSchema = writeReference(cacheSkills, "plan-docs", "plan-schema.md
   const context = observedReference(runHook(claudeHook, {
     tool_input: { file_path: claudeNested },
   }));
-  assert.match(context, /plan-docs\/references\/nested\/deep\.md/,
+  assert.match(context, /plan-write\/references\/nested\/deep\.md/,
     "a reference in a subdirectory reports its path relative to the skill, not just its basename");
 }
 
@@ -103,9 +103,9 @@ for (const [label, payload] of [
   ["a read outside any skill root", { tool_input: { file_path: "/etc/hosts" } }],
   ["a source file in the repo", { tool_input: { file_path: path.join(repoRoot, "scripts/cli/main.mjs") } }],
   // SKILL.md is the skill loading normally; only references/ answers "was the deep guidance opened".
-  ["a skill entry point", { tool_input: { file_path: path.join(claudeSkills, "plan-docs", "SKILL.md") } }],
-  ["a skill file outside references/", { tool_input: { file_path: path.join(claudeSkills, "plan-docs", "agents", "openai.yaml") } }],
-  ["a missing reference path", { tool_input: { file_path: path.join(claudeSkills, "plan-docs", "references", "missing.md") } }],
+  ["a skill entry point", { tool_input: { file_path: path.join(claudeSkills, "plan-write", "SKILL.md") } }],
+  ["a skill file outside references/", { tool_input: { file_path: path.join(claudeSkills, "plan-write", "agents", "openai.yaml") } }],
+  ["a missing reference path", { tool_input: { file_path: path.join(claudeSkills, "plan-write", "references", "missing.md") } }],
   ["a payload with no file_path", { tool_input: { command: "ls" } }],
   ["a payload with no tool_input", {}],
 ]) {
@@ -114,8 +114,8 @@ for (const [label, payload] of [
 
 for (const [label, payload] of [
   ["Codex source file shell read", { tool_name: "exec_command", tool_input: { cmd: `sed -n '1,20p' ${path.join(repoRoot, "scripts/cli/main.mjs")}` } }],
-  ["Codex SKILL.md shell read", { tool_name: "exec_command", tool_input: { cmd: `sed -n '1,20p' ${path.join(cacheSkills, "plan-docs", "SKILL.md")}` } }],
-  ["Codex missing shell path", { tool_name: "exec_command", tool_input: { cmd: `sed -n '1,20p' ${path.join(cacheSkills, "plan-docs", "references", "missing.md")}` } }],
+  ["Codex SKILL.md shell read", { tool_name: "exec_command", tool_input: { cmd: `sed -n '1,20p' ${path.join(cacheSkills, "plan-write", "SKILL.md")}` } }],
+  ["Codex missing shell path", { tool_name: "exec_command", tool_input: { cmd: `sed -n '1,20p' ${path.join(cacheSkills, "plan-write", "references", "missing.md")}` } }],
   ["Codex unsupported cat syntax", { tool_name: "exec_command", tool_input: { cmd: `cat ${cachePlanSchema}` } }],
   ["Codex unsupported sed pipe", { tool_name: "exec_command", tool_input: { cmd: `sed -n '1,20p' ${cachePlanSchema} | head` } }],
 ]) {
@@ -141,7 +141,7 @@ for (const [label, payload] of [
   assert.equal(runHook(claudeHook, { tool_input: { file_path: cachePlanSchema } }), "",
     "Claude does not treat the roborepo cache root as one of its direct read roots");
   const context = observedReference(runHook(codexHook, { tool_input: { file_path: cachePlanSchema } }));
-  assert.match(context, /observed reference read: plan-docs\/references\/plan-schema\.md/,
+  assert.match(context, /observed reference read: plan-write\/references\/plan-schema\.md/,
     "Codex treats the roborepo cache root as a declared root");
 }
 
@@ -168,9 +168,9 @@ for (const [label, payload] of [
 
 // --- relative and traversal paths normalize without resolving symlinks -------------------------
 {
-  const traversal = path.join(claudeSkills, "plan-docs", "workflows", "..", "references", "plan-schema.md");
+  const traversal = path.join(claudeSkills, "plan-write", "workflows", "..", "references", "plan-schema.md");
   const context = observedReference(runHook(claudeHook, { tool_input: { file_path: traversal } }));
-  assert.match(context, /observed reference read: plan-docs\/references\/plan-schema\.md/,
+  assert.match(context, /observed reference read: plan-write\/references\/plan-schema\.md/,
     "`..` segments normalize away, since path.resolve normalizes without touching symlinks");
 }
 
@@ -206,7 +206,7 @@ for (const [label, payload] of [
   for (const entry of fs.readdirSync(dir)) {
     const contents = fs.readFileSync(path.join(dir, entry), "utf8");
     assert.match(contents, /^\d+$/, `${entry} holds only a count`);
-    assert.doesNotMatch(contents, /plan-docs|references|\.md/,
+    assert.doesNotMatch(contents, /plan-write|references|\.md/,
       "no reference path or name is ever written to disk — the observation lives only in the injected text");
   }
 }
@@ -229,7 +229,7 @@ for (const [label, payload] of [
   });
   assert.equal(result.status, 0, "an unwritable state root still exits 0");
   const context = observedReference(result.stdout.trim());
-  assert.match(context, /observed reference read: plan-docs\/references\/plan-schema\.md$/,
+  assert.match(context, /observed reference read: plan-write\/references\/plan-schema\.md$/,
     "the observation is still injected, without a sequence number");
 }
 

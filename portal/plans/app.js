@@ -9,8 +9,7 @@ import {
 } from "/portal/shared/api.js";
 import * as api from "./api.js";
 import * as tmpl from "./templates.js";
-import { createRootsPanel, createInfoModal, createPromptModal } from "./panels.js";
-import { createLifecycleEventDialog, lifecycleEvents } from "./lifecycle-event-dialog.js";
+import { createRootsPanel, createInfoModal } from "./panels.js";
 import { createLifecycleErrorDialog } from "./lifecycle-error-dialog.js";
 import { createPlanDrawer } from "./plan-drawer.js";
 import { createBlockersPopover } from "./blockers-popover.js";
@@ -20,7 +19,6 @@ import {
   FILTER_OPTION_DEFS,
   LIFECYCLE_LABELS,
   filteredPlans,
-  actionablePlans,
   sortForLifecycle,
   isNotStarted,
   completionRatio,
@@ -47,7 +45,6 @@ const state = {
 const groupsEl = document.getElementById("groups");
 const warningsEl = document.getElementById("warnings");
 const bannerEl = document.getElementById("package-banner");
-const nextPrompt = document.getElementById("next-prompt");
 const plansHeaderEl = document.getElementById("plans-header");
 const filtersToggleEl = document.getElementById("filters-toggle");
 const filtersBodyEl = document.getElementById("filters-body");
@@ -67,23 +64,17 @@ const rootsPanel = createRootsPanel({
 });
 createInfoModal();
 // The shared plan detail drawer (plan-drawer.js) — the same popup Home opens. It owns the copy
-// toast and the plan-docs skill modal, so the page reuses those rather than creating its own.
+// toast and the plan-write skill modal, so the page reuses those rather than creating its own.
 const planDrawer = createPlanDrawer({
   getPlans: () => state.snapshot.plans,
-  getPlanDocsPackage: () => state.snapshot.planDocsPackage,
+  getPlanWritePackage: () => state.snapshot.planWritePackage,
   onEnablePackage: enablePackage,
   onError: showError,
 });
 const skillModal = planDrawer.skillModal;
-const promptModal = createPromptModal(document.getElementById("prompt-modal"));
 const outcomeToast = planDrawer.toast;
 const blockersPopover = createBlockersPopover(document.getElementById("blockers-popover"), {
   onOpenPlan: (key) => openPlan(key),
-});
-const lifecycleEventDialog = createLifecycleEventDialog(document.getElementById("lifecycle-event-modal"), {
-  onCopyPrompt: (record) => copyPrompt("start", [record.key], "repository-aware"),
-  onViewPlan: (record) => openPlan(record.key),
-  onRevert: (record, previousValue) => handlePlanChange({ property: "lifecycle", value: previousValue, record }),
 });
 const lifecycleErrorDialog = createLifecycleErrorDialog(document.getElementById("lifecycle-error-modal"), {
   onViewPlan: (key) => openPlan(key),
@@ -108,7 +99,6 @@ function bindStaticControls() {
       refreshSpinnerEl.hidden = true;
     });
   });
-  nextPrompt.addEventListener("click", openNextPrompt);
   document.getElementById("open-all-tasks").addEventListener("click", openAllTasks);
   document.getElementById("all-tasks-close").addEventListener("click", () => allTasksModal.close());
   for (const id of FILTER_IDS) {
@@ -161,11 +151,11 @@ async function load() {
 function applySnapshot(snapshot) {
   state.snapshot = snapshot;
   portalSetUpdatedAt();
-  // Onboarding is single-step: the enable banner shows whenever plan-docs is disabled, and the
+  // Onboarding is single-step: the enable banner shows whenever plan-write is disabled, and the
   // "Add your first Project Folder" form appears only after it's enabled (one prompt at a time).
-  rootsPanel.render(snapshot.settings.discoveryRoots, snapshot.planDocsPackage.enabled);
+  rootsPanel.render(snapshot.settings.discoveryRoots, snapshot.planWritePackage.enabled);
   plansHeaderEl.hidden =
-    !snapshot.planDocsPackage.enabled || snapshot.settings.discoveryRoots.length === 0;
+    !snapshot.planWritePackage.enabled || snapshot.settings.discoveryRoots.length === 0;
   setPluralCount(plansCountTextEl, snapshot.plans.length, "Plan");
   setPluralCount(reposCountTextEl, snapshot.repositories.length, "Repo");
   populateFilters(snapshot);
@@ -206,7 +196,7 @@ function render() {
   const snapshot = state.snapshot;
   if (!snapshot) return;
   renderPackageBanner(snapshot);
-  if (!snapshot.planDocsPackage.enabled) {
+  if (!snapshot.planWritePackage.enabled) {
     warningsEl.hidden = true;
     activeTasksBarEl.hidden = true;
     groupsEl.replaceChildren();
@@ -217,11 +207,9 @@ function render() {
   refreshFilterCounts(snapshot);
   const allMatchingCurrentFilters = filteredPlans(snapshot.plans, state.filters);
   renderLifecycleTabs(allMatchingCurrentFilters);
-  nextPrompt.hidden = false;
-  // Sorted here rather than inside filteredPlans: that result spans every lifecycle (the tabs read
-  // it for counts, and visibleNextPromptKeys takes the top 20 across all of them in priority
-  // order). Completion ordering is Active-only, so it applies to the visible slice, after the tab
-  // filter has narrowed it to one lifecycle.
+  // Sorted here rather than inside filteredPlans: that result spans every lifecycle, and the tabs
+  // read it for counts. Completion ordering is Active-only, so it applies to the visible slice,
+  // after the tab filter has narrowed it to one lifecycle.
   const visiblePlans = allMatchingCurrentFilters
     .filter((record) => record.plan.lifecycle === state.selectedLifecycle)
     .sort(sortForLifecycle(state.selectedLifecycle));
@@ -237,13 +225,10 @@ function render() {
     onOpen: openPlan,
     onCopyPath: copyText,
     onCopyContext: (record) => copyText(repositoryContext(record)),
-    onCopyPortableContext: (key) => copyPrompt("review", [key], "portable"),
-    onPlanDocsAction: (key, mode, { portable } = {}) =>
-      copyPrompt(mode, [key], portable ? "portable" : "repository-aware"),
-    onStart: startPlan,
-    onArchive: (record) => handlePlanChange({ property: "lifecycle", value: "archived", record }),
-    planDocsEnabled: snapshot.planDocsPackage.enabled,
-    planDocsPackage: snapshot.planDocsPackage,
+    onCopyPortableContext: (key) => copyPrompt(null, [key], "portable"),
+    onPlanAction: (key, command) => copyPrompt(command, [key], "repository-aware"),
+    planWriteEnabled: snapshot.planWritePackage.enabled,
+    planWritePackage: snapshot.planWritePackage,
     skillModal,
     onEnablePackage: enablePackage,
     onError: showError,
@@ -408,21 +393,16 @@ async function recoverFromStaleConflict(record) {
   }
 }
 
-// Decides which outcome surface (if any) to show after a successful mutation. Lifecycle moves
-// into a configured lifecycleEvents destination (Active, Completed) always get the event dialog,
-// regardless of current visibility. Everything else gets the passive toast, but only when the
-// mutation actually removed the record from view — an unrelated field change that keeps the
-// record visible needs no notification.
+// Decides whether to show the outcome toast after a successful mutation: only when the mutation
+// actually removed the record from view — an unrelated field change that keeps the record visible
+// needs no notification. Lifecycle moves here are the manual dropdown override; the suite commands
+// (`/plan-start`, `/plan-close`) make and commit their own moves, so none gets a follow-up prompt.
 function presentChangeOutcome({ result, wasVisible, nowVisible, previousKey, view }) {
   const { change, record } = result;
   // A lifecycle move invalidates the open drawer's key/path/actions — close it before showing
   // either outcome surface rather than leaving a stale detail view open behind the dialog/toast.
   if (change.property === "lifecycle" && planDrawer.isOpen && planDrawer.openKey === previousKey) {
     planDrawer.close();
-  }
-  if (change.property === "lifecycle" && lifecycleEvents[change.newValue]) {
-    lifecycleEventDialog.open({ change, record, isTransition: true });
-    return;
   }
   if (!(wasVisible && !nowVisible)) return;
   // Use the tab/filters captured when the mutation started, not whatever is current now — the
@@ -449,48 +429,11 @@ function applyFilteredListAction(action) {
   }
 }
 
-// Backlog Start: move the plan into Active through the shared mutation, then the Active dialog
-// opens automatically via presentChangeOutcome (Active is a configured lifecycleEvents
-// destination). Active Start: no mutation — open the same dialog content directly, since the plan
-// is already where it needs to be.
-async function startPlan(record) {
-  if (record.plan.lifecycle === "active") {
-    lifecycleEventDialog.open({ change: null, record, isTransition: false });
-    return;
-  }
-  await handlePlanChange({ property: "lifecycle", value: "active", record });
-}
-
 function renderFilterChips(snapshot) {
   const descriptors = tmpl.filterChipDescriptors(state.filters, FILTER_DEFAULTS, (id, value) =>
     optionLabel(snapshot, id, value),
   );
   filterChipsEl.replaceChildren(...descriptors.map(tmpl.filterChip));
-}
-
-function visibleNextPromptKeys() {
-  return actionablePlans(filteredPlans(state.snapshot.plans, state.filters))
-    .map((record) => record.key)
-    .slice(0, 20);
-}
-
-// The popup shows the scope count up front, so it needs the (cheap) key list before the user
-// commits to copying — copyPrompt's own key list is recomputed at click-time in case filters
-// changed while the popup was open.
-function openNextPrompt() {
-  const keys = visibleNextPromptKeys();
-  promptModal.open({
-    title: "/plan-docs next",
-    objective:
-      "Copies a prompt that asks an agent to work through the next actionable step across these plans, one at a time.",
-    scopeCount: keys.length,
-    onCopy: async () => {
-      const freshKeys = visibleNextPromptKeys();
-      if (freshKeys.length === 0) throw new Error("no active or backlog plans in the current view");
-      await copyPrompt("next", freshKeys, "portable");
-    },
-    onError: showError,
-  });
 }
 
 function renderWarnings(snapshot) {
@@ -503,7 +446,7 @@ function renderWarnings(snapshot) {
 }
 
 function renderPackageBanner(snapshot) {
-  const pkg = snapshot.planDocsPackage || {};
+  const pkg = snapshot.planWritePackage || {};
   // Banner is the step-1 onboarding prompt: visible whenever the package is disabled (even with
   // roots already configured — a mid-life disable needs its re-enable path back). Once enabled,
   // the Project Folders form is the only visible setup surface.
@@ -517,7 +460,7 @@ function renderPackageBanner(snapshot) {
 
 async function enablePackage() {
   try {
-    await api.enablePlanDocsPackage();
+    await api.enablePlanSuitePackages();
     applySnapshot(await api.fetchSnapshot());
   } catch (err) {
     showError(err);
@@ -532,7 +475,7 @@ function openPlan(key) {
 // dialog and the board never disagree about what is furthest along.
 //
 // Reads the plans already in the snapshot rather than fetching: `openTasks` ships with the list
-// payload for active plans (see modules/plan-docs/index.mjs), so this needs no round trip and
+// payload for active plans (see modules/plan-suite/index.mjs), so this needs no round trip and
 // cannot show something staler than the cards behind it. Respects the current filters for the same
 // reason — a dialog opened from a filtered board that ignored the filter would be a different
 // answer to the question the user is looking at.

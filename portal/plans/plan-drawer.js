@@ -2,7 +2,7 @@
 // templates, and stylesheet come from plan-drawer-partial.html ({{PLAN_DRAWER}}); this controller
 // owns filling and opening it, so the two pages cannot drift.
 //
-// The page supplies what only it knows: the plan list blockers resolve against, the plan-docs
+// The page supplies what only it knows: the plan list blockers resolve against, the plan-write
 // package state, and how to surface copies/errors. Lifecycle and priority edits are the page's
 // call too — on Plans the drawer's <plan-status> dispatches `plan-change` into the page's mutation
 // orchestrator; a page without one passes `readonly` and the status renders as plain chips.
@@ -16,7 +16,7 @@ import { createOutcomeToast } from "./toast-controller.js";
 import { repositoryContext, resolveBlockers, resolveBlocking } from "./state.js";
 import "./elements/index.js";
 
-// deps: { getPlans, getPlanDocsPackage, onEnablePackage, onError, readonly }
+// deps: { getPlans, getPlanWritePackage, onEnablePackage, onError, readonly }
 export function createPlanDrawer(deps) {
   const dialog = document.getElementById("drawer");
   const statusMount = document.getElementById("drawer-status-mount");
@@ -37,8 +37,12 @@ export function createPlanDrawer(deps) {
     await portalCopyText(text, () => toast.show({ message: "copied" }));
   }
 
-  async function copyPrompt(actionName, keys, mode = "repository-aware") {
-    await copyText(await api.generatePrompt(actionName, keys, mode));
+  // A command prompt says which command it carries and where it goes, since the portal never runs
+  // the command itself; a context-only prompt (no command) keeps the plain confirmation.
+  async function copyPrompt(command, keys, mode = "repository-aware") {
+    const text = await api.generatePrompt(command, keys, mode);
+    const message = command ? `Copied the /${command} prompt. Paste it into an agent chat in this repository.` : "copied";
+    await portalCopyText(text, () => toast.show({ message }));
   }
 
   async function open(key) {
@@ -56,11 +60,10 @@ export function createPlanDrawer(deps) {
     const content = tmpl.drawerContent(doc, {
       onCopyPath: copyText,
       onCopyRepoContext: (record) => copyText(repositoryContext(record)),
-      onCopyPortableContext: (key) => copyPrompt("review", [key], "portable"),
-      onPlanDocsAction: (key, mode, { portable } = {}) =>
-        copyPrompt(mode, [key], portable ? "portable" : "repository-aware"),
+      onCopyPortableContext: (key) => copyPrompt(null, [key], "portable"),
+      onPlanAction: (key, command) => copyPrompt(command, [key], "repository-aware"),
       onEnablePackage: deps.onEnablePackage,
-      planDocsPackage: deps.getPlanDocsPackage(),
+      planWritePackage: deps.getPlanWritePackage(),
       skillModal,
       onError: deps.onError,
     });
@@ -85,7 +88,7 @@ export function createPlanDrawer(deps) {
     if (content.cta) {
       ctaEl.textContent = content.cta.label;
       ctaEl.hidden = false;
-      ctaEl.onclick = () => copyPrompt(content.cta.mode, [doc.plan.key], "repository-aware");
+      ctaEl.onclick = () => copyPrompt(content.cta.command, [doc.plan.key], "repository-aware");
     } else {
       ctaEl.hidden = true;
       ctaEl.onclick = null;

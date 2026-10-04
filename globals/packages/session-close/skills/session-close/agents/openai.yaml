@@ -1,0 +1,3 @@
+interface:
+  display_name: "Session close"
+  short_description: "Review, commit, and hand off the current session"

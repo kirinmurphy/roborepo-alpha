@@ -52,19 +52,6 @@
                 <portal-icon name="filter" size="lg"></portal-icon>
                 Filters
               </button>
-              <button
-                type="button"
-                data-btn="secondary"
-                class="control-item-action"
-                id="next-prompt"
-                hidden
-                aria-label="Agent prompts"
-                title="Agent prompts"
-              >
-                <portal-icon size="lg"
-                  name="agent-prompt"
-                ></portal-icon>
-              </button>
             </div>
           </div>
           <div id="roots-panel-mount" hidden></div>
@@ -221,52 +208,6 @@
         <div id="all-tasks-body" class="all-tasks-body"></div>
       </div>
     </dialog>
-    <dialog id="prompt-modal" aria-labelledby="prompt-modal-title">
-      <div class="modal-head">
-        <span
-          class="modal-title"
-          id="prompt-modal-title"
-          data-slot="title"
-        ></span>
-        <portal-close-button
-          data-slot="close"
-          aria-label="Close"
-        ></portal-close-button>
-      </div>
-      <div class="modal-body">
-        <p class="modal-note" data-slot="objective"></p>
-        <p class="modal-note" data-slot="scope"></p>
-        <div class="modalactions">
-          <button type="button" data-btn="cta" data-slot="copy">
-            Copy prompt
-          </button>
-        </div>
-      </div>
-    </dialog>
-    <dialog id="lifecycle-event-modal" aria-labelledby="lifecycle-event-modal-title">
-      <div class="modal-head">
-        <span
-          class="modal-title"
-          id="lifecycle-event-modal-title"
-          data-slot="title"
-        ></span>
-        <portal-close-button
-          data-slot="close"
-          aria-label="Close"
-        ></portal-close-button>
-      </div>
-      <div class="modal-body">
-        <p class="modal-note" data-slot="transition-note" hidden></p>
-        <p class="modal-note" data-slot="explanation"></p>
-        <div class="modalactions">
-          <button type="button" data-btn="cta" data-slot="copy-prompt">
-            Copy Start Prompt
-          </button>
-          <button type="button" data-slot="view-plan">View Plan</button>
-        </div>
-        <button type="button" class="revert-action" data-slot="revert" hidden></button>
-      </div>
-    </dialog>
     <dialog id="lifecycle-error-modal" aria-labelledby="lifecycle-error-modal-title">
       <div class="modal-head">
         <span class="modal-title lifecycle-error-title" id="lifecycle-error-modal-title">
@@ -342,13 +283,6 @@
         type="button"
         class="recommended-cta"
         data-btn="cta"
-        data-slot="label"
-      ></button>
-    </template>
-    <template id="tpl-secondary-action">
-      <button
-        type="button"
-        class="secondary-action"
         data-slot="label"
       ></button>
     </template>

@@ -89,6 +89,16 @@ export function setPackageEnabled(id, enabled) {
   return next;
 }
 
+// Drop package IDs from both registry lists. Used for IDs the catalog no longer contains (a
+// retired or renamed package): an explicit disable of a package that does not exist protects
+// nothing, and parking the ID in `disabled` would keep it in the registry forever.
+export function forgetPackageIds(ids) {
+  const drop = new Set(ids);
+  if (drop.size === 0) return;
+  const { packages, disabled } = readEnabledPackagesRegistry();
+  writeRegistry(packages.filter((id) => !drop.has(id)), disabled.filter((id) => !drop.has(id)));
+}
+
 // Effective enabled-ID set for a catalog: explicit-enable OR (default-enabled AND NOT explicit-
 // disable). This is the "should this package's behavior be live" answer — use it anywhere that
 // needs to know what's actually active (rendering, probing, ownership/conflict checks,

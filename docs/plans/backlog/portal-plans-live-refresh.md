@@ -14,7 +14,7 @@ reviewed_commit: b8684ef
 
 Ancillary follow-up carved out of
 [`completed/plan-docs-and-plans-portal-plan.md`](../completed/plan-docs-and-plans-portal-plan.md).
-The core Plans portal, the portable `plan-docs` domain module, the `plan-docs`
+The core Plans portal, the portable `plan-suite` domain module, the `plan-write`
 package + skill, and portal-driven lifecycle/priority mutation all shipped. Two
 optional enhancements from the original plan were never built and are tracked
 here so the parent can move to `completed/`.
@@ -26,7 +26,7 @@ slash-command preflight) were both explicitly optional and staged after the
 initial release. Neither blocks any shipped behavior:
 
 - The portal already updates via manual **Refresh** and after mutations.
-- `/plan-docs` with no argument already returns compact help through the agent
+- `/plan-write` with no argument already returns compact help through the agent
   runtime; the preflight would only remove the small model-context cost of that
   help path.
 
@@ -42,12 +42,12 @@ initial release. Neither blocks any shipped behavior:
 Shipped in `main` (from the parent plan):
 
 - `/plans` portal — `portal/plans/`.
-- Portable domain module — `modules/plan-docs/` (`index.mjs`, `repair.mjs`).
+- Portable domain module — `modules/plan-suite/` (`index.mjs`, `repair.mjs`).
 - CLI adapter — `scripts/cli/plans.mjs`.
-- `plan-docs` package + skill — `globals/packages/plan-docs/`.
+- `plan-write` package + skill — `globals/packages/plan-write/`.
 - Lifecycle/priority mutation — `POST /api/plans/lifecycle`,
   `POST /api/plans/priority` (`portal/plans/api.js`,
-  `modules/plan-docs/index.mjs::movePlanLifecycle` / `updatePlanPriority`).
+  `modules/plan-suite/index.mjs::movePlanLifecycle` / `updatePlanPriority`).
 
 Not built:
 
@@ -82,13 +82,13 @@ Not built:
       reconnection.
 - [ ] Decide: build shared static command preflight, or document deferral.
 - [ ] If building: shared preflight layer + static no-arg help + agent routing
-      for arguments + tests for `plan-docs` plus one other command family.
+      for arguments + tests for `plan-write` plus one other command family.
 
 ## Validation
 
 - Live refresh: a plan file change reflects in an open Plans page without manual
   refresh; watcher failure falls back to manual refresh cleanly.
-- Preflight: no-argument `/plan-docs` returns static help without agent-runtime
+- Preflight: no-argument `/plan-write` returns static help without agent-runtime
   cost on supported harnesses; argument invocations still route to the skill.
 - `roborepo doctor` and `roborepo verify` remain green.
 

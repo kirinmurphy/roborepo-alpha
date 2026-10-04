@@ -3,7 +3,7 @@
   "worktreeRoot": "~/.worktrees",
   "worktreeRepoName": "roborepo",
   "namespaces": {
-    "plan": "The plan-docs system itself: schema, validation, repair, authoring workflow.",
+    "plan": "The plan-suite system itself: schema, validation, repair, authoring workflow.",
     "plan-lifecycle": "Plan lifecycle states, transitions, and the workflow between them.",
     "agent-config": "Harness configuration: rules, hooks, settings, skills, slash commands, MCP registration, cross-harness parity.",
     "harness": "Harness provider architecture: registry, adapters, per-provider capability model.",

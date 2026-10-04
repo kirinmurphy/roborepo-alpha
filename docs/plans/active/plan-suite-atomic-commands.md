@@ -1,7 +1,7 @@
 ---
 id: age4cm7r
 priority: medium
-next_action: Answer the Open Questions, confirm the Not tested entries in live sessions, then run /plan-close once the branch lands.
+next_action: Merge the branch into main, run one full plan cycle with the suite to confirm the Not tested entries, then run /plan-close.
 blocked_by: []
 depends_on:
   - a7bslb00
@@ -266,6 +266,25 @@ it to `completed/` or `archived/`. [[plan-lifecycle-suite-workflow-navigation]] 
 Review state and changes the eligible source lifecycle to `review/`; `/plan-close` must read the
 domain lifecycle policy rather than embedding `active` as an enduring assumption.
 
+### Stopping the worktree's servers
+
+A closed plan's worktree often still runs the dev servers started while the work happened, and
+[[a7bslb00]] refuses to remove a worktree while Runtime reports one. Once `/plan-close` has moved a
+landed plan, it runs `roborepo plans stop-servers <plan>` and reports what stopped.
+
+| Rule | Why |
+| --- | --- |
+| A server belongs to the worktree when it listens on a TCP port and its working directory's Git top level is the worktree | The attribution Runtime already uses; the Git top level keeps subdirectories in and nested worktrees out |
+| Processes that do not listen (agent sessions, shells, editors, watchers) are never touched | Their working directory can be the worktree too, including the session running `/plan-close` |
+| Each process's working directory is read again immediately before it is signalled | A PID can be reused between discovery and the signal |
+| `SIGTERM` only, then a short wait and a fresh check; survivors are reported, never killed | A server that ignores `SIGTERM` is the user's call |
+| A plan without a `worktree`, or whose worktree no longer resolves, stops nothing | Never fall back to the primary checkout's servers |
+| Runs only after a complete, landed close | A refused or archived close leaves the user's servers alone |
+
+The process logic lives in `modules/developer-runtime/stop.mjs`, next to the discovery it reuses.
+The command sits under `plans` rather than `runtime` because `roborepo runtime` is in the allow
+bucket, and Codex renders no `ask` rules, so a `runtime stop` subcommand would run unprompted there.
+
 ### Ancillary skills: ask, never assume
 
 Each suite skill keeps a Paired Skills table. Before loading a row's skill:
@@ -321,6 +340,7 @@ on one named plan.
 | Portal | Update Plans snapshot/package state, action/recommendation templates, lifecycle dialog, onboarding banner, and Plans API; reuse the existing config bulk-package endpoint |
 | Inventory and generated audit | Update `manifests/inventory/package-categories.json`, `manifests/inventory/skill-trigger-tests.json`, and the generated skill invocation audit |
 | Tests | Rename plan-domain tests and update package catalog, bulk-toggle, prompt/state, portal browser, CLI catalog/surface, command-render, and full-suite orchestration coverage |
+| Runtime | Add `modules/developer-runtime/stop.mjs`, reusing listener discovery from `listeners.mjs`; `roborepo plans stop-servers` composes it with plan and worktree resolution |
 | Documentation | Replace the plan-docs lifecycle guide and update setup, CLI, Plans portal, skills/commands, internal Plans architecture, docs map, and README references |
 
 ## Implementation plan
@@ -400,6 +420,30 @@ Each phase leaves the suite usable end to end.
 - [x] Update `docs/user/reference/roborepo-cli.md`, `docs/internal/plans-portal-internals.md`,
       `docs/internal/skills-and-commands.md`, and every affected docs-map/reference entry.
 
+### Phase 7 — Stop the worktree's servers on close
+
+- [x] Add `modules/developer-runtime/stop.mjs`: select listeners whose working directory's Git top
+      level is the checkout, re-read each working directory before signalling, send `SIGTERM`, and
+      report `stopped`, `still-running`, `gone`, `changed`, or `failed`. Support `--dry-run`.
+- [x] Add `roborepo plans stop-servers <plan> [--dry-run] [--json]`: resolve the plan's `worktree`
+      to its linked worktree path, stop nothing when there is none, and exit 1 when a server
+      survives or cannot be signalled.
+- [x] Add the catalog entry under the internal `plans` namespace; leave it out of the allow bucket
+      so it prompts in every harness.
+- [x] Add a step to `/plan-close` after a complete, landed move: run the command and list what it
+      stopped in the report.
+- [x] Cover selection, nesting, PID reuse, survivors, and unsupported platforms with injected
+      commands, and the real command against live listeners on macOS.
+- [x] Document the command in `docs/user/reference/plans-portal.md` and the `/plan-close` section
+      of the plan-suite guide.
+
+### Phase 8 — Retired package ids on update
+
+- [x] `roborepo package reconcile`, which `roborepo update` runs, drops IDs the catalog no longer
+      has from both registry lists instead of moving them to `disabled`.
+- [x] `scripts/test/package-retired-ids-check.mjs` seeds a pre-rename install (retired IDs enabled
+      and disabled, their skills and commands projected) and runs update's package steps.
+
 ## Validation
 
 - [x] `rg -l 'plan-docs|wrap-up|(^|[^-])integration-check' -g '!docs/plans/**' .` returns nothing.
@@ -418,6 +462,11 @@ Each phase leaves the suite usable end to end.
 - [x] CLI command-catalog and surface integration checks cover the new commands and help/usage.
 - [x] `roborepo skill render-commands --check`, `roborepo skill audit`, and
       `roborepo skill triggers --check` pass.
+- [x] `roborepo plans stop-servers` stops a listener started in the worktree or one of its
+      subdirectories, and leaves listeners in the primary checkout and in a worktree nested inside
+      it running.
+- [x] Updating an install that still names `plan-docs`, `wrap-up`, or `integration-check` removes
+      those IDs from the registry and their skills and commands from the harness homes.
 - [x] `bash scripts/doctor.sh --quiet` and `git diff --check` pass.
 - [x] `npm run check` passes. This change touches package definitions, generated outputs, CLI
       catalog entries, and test orchestration, so the full local CI-parity gate is required.
@@ -465,26 +514,23 @@ consequences contained to this feature.
 | **User decision:** `roborepo plans start` prompts for approval. The allow rule narrowed from `roborepo plans` to `roborepo plans validate` and `roborepo plans repair` | Keep it promptless | Answer to Open Question 1 |
 | **User decision:** the portal's card buttons copy suite-command prompts and never move a plan. Start (backlog) and Continue, Update, or Close (active) replace the Start and Archive shortcuts; the post-move event dialog is removed; the menu gains Continue (`/plan-start`) for active plans | Make `plans start` accept an uncommitted portal move | Answer to Open Question 2. `/plan-start` and `/plan-close` make and commit their own moves, so a portal move only creates an uncommitted rename the transition then refuses. The lifecycle dropdown stays as a manual override |
 | **User request:** `plan-start` enters the worktree after `APPROVED` — one folder grant, then the worktree becomes the session's working directory — and mirrors the plan to the primary checkout once at the end | Widen the Claude write-scope hook to sibling worktrees | The hook deliberately bounds writes to the checkout in use; per-file prompts came from the session staying rooted in the primary checkout. Observed in this run: before the folder grant every `cd` into the worktree was reset, after it the directory change persisted and edits stopped prompting |
+| **User decision:** `roborepo package` splits by subcommand. `list`, `inspect`, `status`, and `validate` are allowed; `enable`, `disable`, `reconcile`, `adopt-live`, `manage`, and `dev` ask | Leave `roborepo package` in `ask`, one prompt per paired-skill check | Answer to Open Question 2. In Claude an `ask` match beats a more specific `allow`, so suite skills' `package status` checks prompted every time. There is no top-level `package create`; scaffolding is `package dev create`, covered by `dev` |
+| **User request:** `/plan-close` stops the closed worktree's dev servers automatically after a complete, landed move, and lists them | Ask before stopping; leave it to [[a7bslb00]] | The work has landed, so the servers run stale code and restart cheaply. a7bslb00 only refuses removal while a server runs; it never stops one |
+| The command is `roborepo plans stop-servers <plan>`, not `roborepo runtime stop <path>` | `runtime stop`, with an `ask` rule under the `runtime` allow | Codex renders no `ask` rules (`permissions-render.mjs`), so the `roborepo runtime` allow prefix would run it unprompted; Gemini gives both rules priority 500 with unverified tie-breaking. Taking a plan also keeps the primary checkout out of reach |
+| Ownership is the Git top level of the listener's working directory, not a path prefix | Path prefix; matching the worktree path in the command line | A prefix also claims `.claude/worktrees/*` nested inside the primary checkout; command-line matching would claim editors and `tail -f`. Runtime attributes by working directory, so Home and the command agree |
+| **User request:** reconcile drops retired package IDs from both registry lists | Keep moving them to `disabled` | The maintainer's install showed `plan-docs`, `wrap-up`, and `integration-check` parked in `disabled` after an update; an explicit disable of a package that no longer exists protects nothing and never leaves. The catalog loads with unavailable packages, so only truly removed IDs qualify |
+| An unreaped child (`ps` state `Z`) counts as stopped | Signal 0 alone decides liveness | Observed in the live fixture: listeners exited on `SIGTERM` but their blocked parent had not reaped them, so signal 0 still succeeded and the command reported them `still-running` |
 
 ## Open Questions
 
 1. **`plan-lifecycle-suite-blockers-dependencies` proposes `/plan-write block` and `unblock`
    modes**, which contradicts this plan's no-mode rule. Deferred by the user: that plan needs its own
    revision to make them CLI commands or separate commands.
-2. **`roborepo package status` prompts on every call.** Every suite skill runs it before loading a
-   paired skill, but `roborepo package` is in the `ask` bucket, and in Claude an `ask` match wins
-   over a more specific `allow`.
-   - Split `roborepo package` in `manifests/inventory/agent-permissions.json` into its mutating
-     subcommands (`enable`, `disable`, `reconcile`, `adopt-live`, `create`, `manage`, `dev`) under
-     `ask`, and allow the read-only ones (`list`, `inspect`, `status`, `validate`).
-   - Leave it: one prompt per paired-skill check.
-   - Recommendation: split. Blocked because it changes permissions.
-   - Blocks: nothing; the check works with a prompt.
 
 ## Not tested
 
 - [ ] `/plan-close` refuses on a red suite, an incomplete plan, an unchecked `## Not tested` entry, and an unlanded branch. Agent behavior; needs live sessions.
 - [ ] With `technical-writing` disabled, `/plan-write` asks to enable or skip and names a skip in its report. Agent behavior; needs a live session.
 - [ ] `/plan-start` writes a `## Not tested` entry when it skips a check, and runs `roborepo plans start` for its transition. This run used the manual transition because the command did not exist yet.
-- [ ] Existing installs: a machine with `plan-docs`, `wrap-up`, or `integration-check` enabled is expected to be wiped and re-enabled (non-goal: no migration). Behavior of `roborepo update` against those stale registry ids was not exercised.
+- [ ] `/plan-close` runs `roborepo plans stop-servers` after a complete, landed close and lists what it stopped. Agent behavior; needs a live session.
 - [ ] In the Claude Code CLI, `/add-dir <worktree>` followed by `cd <worktree>` makes the write-scope hook treat the worktree as the checkout in use. Observed only in the Claude desktop app, through its directory-access tool.

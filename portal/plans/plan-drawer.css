@@ -91,6 +91,20 @@ dialog#skill-modal::backdrop {
 .onboarding-list li > ul {
   grid-column: 2;
 }
+
+/* A command row: the command and its summary read as one line, with the row's details button
+ * trailing it. Overrides the icon grid above, which only the top-level rows use. */
+.onboarding-sublist li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 8px;
+  font-size: var(--text-sm);
+  color: var(--dim);
+}
+.onboarding-sublist [data-slot="details"] {
+  font-size: var(--text-xs);
+}
 .priority-slot {
   display: flex;
   flex: 0 0 auto;
@@ -420,35 +434,6 @@ dialog#drawer::backdrop {
   display: grid;
   gap: 2px;
   width: 100%;
-}
-/* Each action row: the action item takes the width; the optional portable variant sits at the end. */
-.plan-menu-action {
-  display: flex;
-  align-items: stretch;
-  gap: 4px;
-  width: 100%;
-  border-radius: 6px;
-}
-.plan-menu-action .menu-button-item {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-.plan-menu-variant {
-  flex: none;
-  align-self: center;
-  border: 1px solid var(--line);
-  background: none;
-  color: var(--dim);
-  font: inherit;
-  font-size: var(--text-2xs);
-  border-radius: 999px;
-  padding: 1px 8px;
-  margin-right: 4px;
-  cursor: pointer;
-}
-.plan-menu-variant:hover {
-  color: var(--ink);
-  border-color: var(--accent);
 }
 .drawer-warnings-section {
   border: 1px solid var(--warn);
