@@ -17,6 +17,7 @@ export function composeHomeOverview({ registry, runtimeState, plansState, teleme
   const runtimeById = runtimeByRepository(runtimeState.data, registry);
   const planCoverage = plansByRepository(plansState.data, now, registry);
   const telemetryById = telemetryByRepository(telemetryState.data, registry);
+  const fixtureTelemetryById = telemetryByRepository({ repositories: telemetryState.data?.fixtureRepositories }, registry);
   const repositories = Object.values(registry.repositories || {})
     .filter((record) => record.visibility !== "hidden" && resolveRegistryAlias(registry, record.id) === record.id)
     .map((record) => repositoryOverview(record, {
@@ -26,6 +27,7 @@ export function composeHomeOverview({ registry, runtimeState, plansState, teleme
       plans: planCoverage.get(record.id) || null,
       telemetryState,
       telemetry: telemetryById[record.id] || null,
+      fixtureTelemetry: fixtureTelemetryById[record.id] || null,
     }));
 
   return {
@@ -65,7 +67,12 @@ export function plansDomainState(snapshot) {
 
 export function telemetryDomainState(projection) {
   if (!projection) return unavailableState("Tokens data is unavailable");
-  return { status: projection.status || "available", updatedAt: projection.updatedAt || null, data: projection };
+  return {
+    status: projection.status || "available",
+    updatedAt: projection.updatedAt || null,
+    data: projection,
+    ...(projection.message ? { message: projection.message } : {}),
+  };
 }
 
 export function unavailableState(message) {
@@ -75,13 +82,16 @@ export function unavailableState(message) {
 function repositoryOverview(record, context) {
   const workspace = context.workspace;
   const lifecycle = workspace?.lifecycle || { state: "idle", reason: "Runtime has not observed this repository yet" };
-  const association = associatePlans(workspace, context.plans);
-  const runtime = perRepositoryEnvelope(context.runtimeState, association.workspace || { lifecycle, checkouts: [] });
+  const runtime = perRepositoryEnvelope(context.runtimeState, workspace || { lifecycle, checkouts: [] });
   const git = perRepositoryEnvelope(context.runtimeState, workspace ? gitSummary(workspace) : { checkouts: [], warnings: [] });
-  const plans = association.plans
-    ? perRepositoryEnvelope(context.plansState, association.plans)
+  const plans = context.plans
+    ? perRepositoryEnvelope(context.plansState, associatePlans(workspace, context.plans))
     : unavailableEnvelope("Plans has not scanned this repository");
-  const tokens = perRepositoryEnvelope(context.telemetryState, context.telemetry || { sessionCount: 0, warningCount: 0, highestSeverity: null, recent: [] });
+  // A dev fixture's warnings come from its fixture spool, so they show whatever the capture state;
+  // every other repository follows the Tokens envelope, which is unavailable while capture is off.
+  const tokens = context.fixtureTelemetry
+    ? { status: "available", updatedAt: null, data: context.fixtureTelemetry }
+    : perRepositoryEnvelope(context.telemetryState, context.telemetry || { sessionCount: 0, warningCount: 0, highestSeverity: null, recent: [] });
   return {
     ...repositorySummary(record),
     fixture: isFixtureRepository(record.id),
@@ -98,38 +108,29 @@ function repositoryOverview(record, context) {
 }
 
 // Joins active plans to the linked worktrees implementing them, by exact `worktree` name only.
-// Lossless by construction: a plan attaches to at most one checkout as `checkout.plan`, and every
-// active plan that does not attach stays in `plans.additionalActive`. A name claimed by two active
-// plans, or exposed by two Runtime worktrees, attaches nothing — picking one would assert a
-// relationship the evidence does not support. Counts and `recent` are untouched; grouping is
-// presentation, not lifecycle. Without plan data the checkouts are returned as they were.
-//
-// The full active list is consumed here and not passed on: each active plan reaches the browser
-// exactly once, beneath its worktree or in Additional Plans, so no view can render one twice.
+// Non-destructive: `plans.active` keeps every active plan in its existing order and Runtime
+// checkouts pass through untouched. A safe match adds only `checkoutRootId` to the plan, a reference
+// into `runtime.checkouts`, so the checkout stays the one source of branch, path, process, Links, and
+// Git facts. A name claimed by two active plans, or exposed by two Runtime worktrees, matches nothing
+// — picking one would assert a relationship the evidence does not support. A worktree without a
+// `rootId` cannot be referenced, so it never matches, though it still counts toward ambiguity.
+// Counts and `recent` are untouched; grouping is presentation, not lifecycle.
 function associatePlans(workspace, plans) {
-  if (!plans) return { workspace, plans };
-  const { active: activePlans = [], ...summary } = plans;
   // Main checkouts never carry a worktreeName (see projectWorkspace), so the name alone gates a match.
   const named = (workspace?.checkouts || []).filter((checkout) => checkout.worktreeName);
-  if (!named.length || !activePlans.some((plan) => plan.worktree)) {
-    return { workspace, plans: { ...summary, additionalActive: activePlans } };
-  }
+  if (!named.length || !plans.active.some((plan) => plan.worktree)) return plans;
 
   const tally = (values) => values.reduce((counts, value) => counts.set(value, (counts.get(value) || 0) + 1), new Map());
   const worktreeNames = tally(named.map((checkout) => checkout.worktreeName));
-  const claims = tally(activePlans.map((plan) => plan.worktree).filter(Boolean));
-  const attachable = new Map(activePlans
-    .filter((plan) => claims.get(plan.worktree) === 1 && worktreeNames.get(plan.worktree) === 1)
-    .map((plan) => [plan.worktree, plan]));
+  const claims = tally(plans.active.map((plan) => plan.worktree).filter(Boolean));
+  const rootIdByName = new Map(named.map((checkout) => [checkout.worktreeName, checkout.rootId]));
 
-  const checkouts = workspace.checkouts.map((checkout) => {
-    const plan = checkout.worktreeName && attachable.get(checkout.worktreeName);
-    return plan ? { ...checkout, plan } : checkout;
+  const active = plans.active.map((plan) => {
+    const unique = plan.worktree && claims.get(plan.worktree) === 1 && worktreeNames.get(plan.worktree) === 1;
+    const rootId = unique ? rootIdByName.get(plan.worktree) : null;
+    return rootId ? { ...plan, checkoutRootId: rootId } : plan;
   });
-  return {
-    workspace: { ...workspace, checkouts },
-    plans: { ...summary, additionalActive: activePlans.filter((plan) => attachable.get(plan.worktree) !== plan) },
-  };
+  return { ...plans, active };
 }
 
 function gitSummary(workspace) {

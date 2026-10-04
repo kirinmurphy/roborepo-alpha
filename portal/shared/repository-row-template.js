@@ -41,7 +41,6 @@ checkoutTemplate.innerHTML = `
         </span>
       </div>
     </div>
-    <div class="repository-root-footer" data-slot="root-footer" hidden></div>
     <div class="repository-members" data-slot="members" hidden></div>
   </div>`;
 

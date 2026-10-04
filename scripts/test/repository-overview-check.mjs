@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import {
   defaultRegistry,
   hideRepository,
@@ -11,6 +12,8 @@ import {
   validateRegistry,
 } from "../../modules/repositories/index.mjs";
 import { createRepositoryOverviewService } from "../cli/repository-overview.mjs";
+import { fixtureTelemetryRepositories, homeTelemetryProjection } from "../cli/telemetry-repository-overview.mjs";
+import { validateCaptureV3 } from "../cli/telemetry-schemas/capture-schema-v3.mjs";
 
 const NOW = new Date("2026-09-30T12:00:00.000Z");
 const ACTIVE = "git:github.com/example/active";
@@ -101,8 +104,8 @@ assert.equal(active.domains.plans.data.recent[0].changedAt, "2026-09-29T12:00:00
 assert.deepEqual(active.domains.plans.data.recent.map((plan) => plan.id), ["active-plan", "backlog-plan"], "recent plans stay inside the trailing seven-day window");
 assert.equal(active.domains.tokens.data.warningCount, 2);
 assert.equal(active.domains.tokens.data.warnings[0].kind, "spike");
-assert.deepEqual(active.domains.plans.data.additionalActive[0].taskCounts, { total: 8, complete: 3 });
-assert.equal("active" in active.domains.plans.data, false, "the full active list stays server-side; each plan is sent once");
+assert.deepEqual(active.domains.plans.data.active[0].taskCounts, { total: 8, complete: 3 });
+assert.equal("additionalActive" in active.domains.plans.data, false, "plans are no longer split into a leftover list");
 assert.equal(active.domains.agents.status, "unavailable");
 assert.equal(home.repositories.find((repository) => repository.repositoryId === PINNED).domains.plans.status, "unavailable", "unscanned Plans coverage is not reported as zero");
 assert.equal(active.domains.runtime.data.checkouts[0].projectRoot, "/private/worktrees/active-feature", "shared checkout tooltips and copy controls receive the checkout path");
@@ -201,8 +204,8 @@ assert.deepEqual(
 assert.equal(grouped.repositories.find((repository) => repository.repositoryId === FIXTURE_IDLE).fixture, true);
 assert.equal(grouped.repositories.find((repository) => repository.repositoryId === REAL_IDLE).fixture, false);
 
-// Plan/worktree association: exact `worktree` name against Runtime's administrative worktree name,
-// lossless, and never arbitrary when a name is ambiguous on either side.
+// Plan/worktree association: exact `worktree` name against Runtime's administrative worktree name.
+// Non-destructive: both lists stay complete, and a safe match only adds `checkoutRootId` to the plan.
 const ASSOC = "git:github.com/acme/associated";
 const associationRegistry = defaultRegistry();
 addRepository(ASSOC, "Associated", "2026-09-30T11:00:00.000Z", associationRegistry);
@@ -222,6 +225,10 @@ const associationRuntime = {
       worktreeRoot("dup-1", "dup", "feature/dup-1"),
       worktreeRoot("dup-2", "dup", "feature/dup-2"),
       worktreeRoot("planless", "planless", "feature/planless"),
+      // Unreferenceable: no rootId, so it never matches; its twin with the same name is ambiguous.
+      worktreeRoot(null, "unrooted", "feature/unrooted"),
+      worktreeRoot(null, "half-rooted", "feature/half-rooted-1"),
+      worktreeRoot("half-rooted", "half-rooted", "feature/half-rooted-2"),
     ],
   }],
 };
@@ -243,6 +250,8 @@ const associationPlans = {
     assocPlan("contested-2", "contested"),
     assocPlan("dup-claim", "dup"),
     assocPlan("backlog-claim", "planless", "backlog"),
+    assocPlan("unrooted", "unrooted"),
+    assocPlan("half-rooted", "half-rooted"),
   ],
 };
 const loadAssociation = ({ runtime: runtimeData = associationRuntime, plans: plansData = associationPlans } = {}) => createRepositoryOverviewService({
@@ -254,37 +263,90 @@ const loadAssociation = ({ runtime: runtimeData = associationRuntime, plans: pla
 }).loadHome().repositories.find((repository) => repository.repositoryId === ASSOC);
 
 const associated = loadAssociation();
-const checkoutPlans = Object.fromEntries(associated.domains.runtime.data.checkouts.map((checkout) => [checkout.rootId, checkout.plan?.id || null]));
-assert.deepEqual(checkoutPlans, { main: null, matched: "matched", contested: null, "dup-1": null, "dup-2": null, planless: null },
-  "only a unique plan claim on a unique linked worktree attaches; main checkouts, contested names, duplicate worktrees, and backlog plans never do");
-assert.equal(associated.domains.runtime.data.checkouts.find((checkout) => checkout.rootId === "main").worktreeName, null, "main checkouts expose no worktree name");
-assert.equal(associated.domains.runtime.data.checkouts.find((checkout) => checkout.rootId === "matched").worktreeName, "feature-a");
-assert.deepEqual(
-  associated.domains.plans.data.additionalActive.map((plan) => plan.id).sort(),
-  ["contested-1", "contested-2", "dup-claim", "main-claim", "missing-worktree", "unassociated"],
-  "every active plan that did not attach stays in Additional Plans, and the attached one is not duplicated",
-);
-assert.deepEqual(associated.domains.plans.data.counts, { active: 7, backlog: 1 }, "repository-wide counts include attached plans");
-assert.equal(associated.domains.plans.data.additionalActive.length
-  + associated.domains.runtime.data.checkouts.filter((checkout) => checkout.plan).length, 7,
-  "every active plan is sent exactly once, beneath its worktree or in Additional Plans");
-assert.deepEqual(associated.domains.runtime.data.checkouts.find((checkout) => checkout.rootId === "matched").plan,
-  { id: "matched", key: "key-matched", title: "Plan matched", lifecycle: "active", changedAt: "2026-09-29T12:00:00.000Z", worktree: "feature-a", taskCounts: { total: 2, complete: 1 } },
-  "the attached plan carries the same compact record Additional Plans rows use, and no path");
-assert.equal(associated.domains.git.data.checkouts.some((checkout) => "plan" in checkout), false, "association lives on the Runtime checkout projection only");
+const runtimeCheckouts = associated.domains.runtime.data.checkouts;
+const activePlans = associated.domains.plans.data.active;
+assert.deepEqual(activePlans.map((plan) => plan.id),
+  ["contested-1", "contested-2", "dup-claim", "half-rooted", "main-claim", "matched", "missing-worktree", "unassociated", "unrooted"],
+  "every active plan appears exactly once, in the existing order (newest change, then title)");
+assert.deepEqual(Object.fromEntries(activePlans.map((plan) => [plan.id, plan.checkoutRootId ?? null])), {
+  "contested-1": null, "contested-2": null, "dup-claim": null, "half-rooted": null, "main-claim": null,
+  matched: "matched", "missing-worktree": null, unassociated: null, unrooted: null,
+}, "only a unique plan claim on a unique, referenceable linked worktree matches; main checkouts, contested names, duplicate worktrees, null rootIds, and backlog plans never do");
+assert.deepEqual(runtimeCheckouts.map((checkout) => checkout.rootId), ["main", "matched", "contested", "dup-1", "dup-2", "planless", null, null, "half-rooted"],
+  "every Runtime checkout stays in the list, matched or not");
+assert.equal(runtimeCheckouts.some((checkout) => "plan" in checkout), false, "checkouts carry no plan; the plan references the checkout");
+assert.equal(runtimeCheckouts.find((checkout) => checkout.rootId === "main").worktreeName, null, "main checkouts expose no worktree name");
+assert.equal(runtimeCheckouts.find((checkout) => checkout.rootId === "matched").worktreeName, "feature-a");
+assert.deepEqual(activePlans.find((plan) => plan.id === "matched"),
+  { id: "matched", key: "key-matched", title: "Plan matched", lifecycle: "active", changedAt: "2026-09-29T12:00:00.000Z", worktree: "feature-a", taskCounts: { total: 2, complete: 1 }, checkoutRootId: "matched" },
+  "a match adds only checkoutRootId: no branch, path, process, Links, or Git fields are copied onto the plan");
+assert.equal("additionalActive" in associated.domains.plans.data, false);
+assert.deepEqual(associated.domains.plans.data.counts, { active: 9, backlog: 1 }, "repository-wide counts are unchanged by matching");
+assert.equal(associated.domains.git.data.checkouts.some((checkout) => "plan" in checkout), false, "the git domain carries no plan either");
 
 const partialAssociation = loadAssociation({ plans: { ...associationPlans, truncated: true } });
 assert.equal(partialAssociation.domains.plans.status, "partial");
 assert.equal(partialAssociation.domains.plans.message, "Plans coverage is incomplete");
-assert.equal(partialAssociation.domains.runtime.data.checkouts.find((checkout) => checkout.rootId === "matched").plan.id, "matched", "partial coverage still associates what it has");
+assert.equal(partialAssociation.domains.plans.data.active.find((plan) => plan.id === "matched").checkoutRootId, "matched", "partial coverage still matches what it has");
 
 const plansOffline = loadAssociation({ plans: null });
 assert.equal(plansOffline.domains.plans.status, "unavailable");
-assert.equal(plansOffline.domains.runtime.data.checkouts.some((checkout) => "plan" in checkout), false, "unavailable Plans data leaves every checkout unchanged");
+assert.deepEqual(plansOffline.domains.runtime.data.checkouts, runtimeCheckouts, "unavailable Plans data leaves every checkout unchanged");
 
 const runtimeOffline = loadAssociation({ runtime: null });
 assert.equal(runtimeOffline.domains.runtime.status, "unavailable");
-assert.equal(runtimeOffline.domains.plans.data.additionalActive.length, 7, "without Runtime every active plan is an Additional Plan");
+assert.equal(runtimeOffline.domains.plans.data.active.length, 9, "without Runtime every active plan is still listed");
+assert.equal(runtimeOffline.domains.plans.data.active.some((plan) => "checkoutRootId" in plan), false, "without Runtime no match is invented");
+
+// Tokens follow the capture switch: with capture off, a real repository's Tokens domain is
+// unavailable even though an older spool still projects warnings for it. Dev fixture repositories
+// get their warnings from the committed fixture spool either way.
+const SHARED_FIXTURE = "git:github.com/example/shared-stack-fixture";
+const MULTI_FIXTURE = "git:github.com/example/multi-member-fixture";
+const IDLE_FIXTURE = "git:github.com/example/idle-checkout-fixture";
+const TOKENS_REAL = "git:github.com/acme/tokens-real";
+const fixtureSpool = fs.readFileSync(new URL("../../local/dev-fixtures/token-warnings-spool.jsonl", import.meta.url), "utf8")
+  .split("\n").filter(Boolean).map((line) => JSON.parse(line));
+for (const row of fixtureSpool) {
+  assert.equal(row.schema, 3, "the fixture spool uses the schema real captures write");
+  validateCaptureV3(row);
+}
+const fixtureRepositories = fixtureTelemetryRepositories(fixtureSpool);
+assert.deepEqual(
+  Object.fromEntries(Object.entries(fixtureRepositories).map(([id, summary]) => [id, summary.warningCount])),
+  { [SHARED_FIXTURE]: 2, [MULTI_FIXTURE]: 6, [IDLE_FIXTURE]: 0 },
+  "the fixture spool runs through the real analysis and lands on the three dev fixtures",
+);
+const relabeled = fixtureSpool.map((row) => ({ ...row, repo: { ...row.repo, repository_id: TOKENS_REAL } }));
+assert.deepEqual(fixtureTelemetryRepositories(relabeled), {}, "fixture rows naming a real repository are dropped");
+
+const tokensRegistry = defaultRegistry();
+for (const [id, name] of [[TOKENS_REAL, "Tokens Real"], [SHARED_FIXTURE, "shared-stack-fixture"]]) {
+  upsertRepository(tokensRegistry, { id, kind: "git", displayName: name, now: NOW.toISOString() });
+  recordDiscovery(tokensRegistry, id, { source: "developer-runtime", evidence: "git-remote", confidence: "high", now: NOW.toISOString() });
+}
+const spoolProjection = {
+  status: "available",
+  updatedAt: "2026-09-30T11:58:00.000Z",
+  repositories: { [TOKENS_REAL]: { sessionCount: 3, warningCount: 2, highestSeverity: "high", recent: [] } },
+};
+const loadTokens = (enabled) => {
+  const repositories = createRepositoryOverviewService({
+    loadRegistry: () => structuredClone(tokensRegistry),
+    loadRuntime: () => null,
+    loadPlans: () => null,
+    loadTelemetry: () => homeTelemetryProjection({ enabled, projection: structuredClone(spoolProjection), fixtureRepositories }),
+    now: () => NOW,
+  }).loadHome().repositories;
+  return (id) => repositories.find((repository) => repository.repositoryId === id).domains.tokens;
+};
+const captureOff = loadTokens(false);
+assert.deepEqual(captureOff(TOKENS_REAL), { status: "unavailable", updatedAt: null, data: null, message: "Token tracking is off" }, "capture off hides an older spool's warnings");
+assert.equal(captureOff(SHARED_FIXTURE).status, "available");
+assert.equal(captureOff(SHARED_FIXTURE).data.warningCount, 2, "a dev fixture shows its fixture warnings with capture off");
+const captureOn = loadTokens(true);
+assert.equal(captureOn(TOKENS_REAL).data.warningCount, 2, "capture on shows the spool's warnings");
+assert.equal(captureOn(SHARED_FIXTURE).data.warningCount, 2, "a dev fixture keeps its fixture warnings with capture on");
 
 console.log("repository-overview-check passed");
 

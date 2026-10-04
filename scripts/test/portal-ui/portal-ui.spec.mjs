@@ -25,110 +25,143 @@ test.describe("repository-first portal Home", () => {
     await expect(page.locator("body")).not.toContainText("/private/");
   });
 
-  test("Additional Plans stays visible with no rows while empty Tokens stays hidden", async ({ page }) => {
-    await patchRoboRepo(page, (repository) => {
-      repository.domains.plans = { status: "available", data: { counts: { active: 1, backlog: 3 }, additionalActive: [], recent: [{ id: "done", title: "Recently completed plan", lifecycle: "completed" }] } };
-    });
+  test("plans lead the card below main; a matched plan is its worktree's row and unclaimed worktrees follow", async ({ page }) => {
+    await planFixture(page);
     await page.goto("/");
     const card = roboRepoCard(page);
-    const plans = additionalPlans(card);
-    await expect(plans.getByRole("heading", { name: "Additional Plans", exact: true })).toBeVisible();
-    await expect(plans).toContainText("1 Active · 3 Backlog");
-    await expect(plans.getByRole("link", { name: "all plans", exact: true })).toHaveAttribute("href", "/plans");
-    await expect(plans.locator(".plan-item")).toHaveCount(0);
-    await expect(card).not.toContainText("No active plans");
-    await expect(card).not.toContainText("Recently completed plan");
-    await expect(card).not.toContainText("Token Warnings");
-  });
-
-  test("Additional Plans states partial coverage and is omitted without active plans", async ({ page }) => {
-    let plansEnvelope;
-    await patchRoboRepo(page, (repository) => { repository.domains.plans = plansEnvelope; });
-    plansEnvelope = { status: "partial", message: "Plans coverage is incomplete", data: {
-      counts: { active: 1, backlog: 2 },
-      additionalActive: [{ id: "partial", title: "Partially scanned plan", taskCounts: { total: 2, complete: 1 } }],
-    } };
-    await page.goto("/");
-    let plans = additionalPlans(roboRepoCard(page));
-    await expect(plans).toContainText("1 Active · 2 Backlog");
-    await expect(plans).toContainText("Plans coverage is incomplete");
-    await expect(plans.getByRole("button", { name: "Partially scanned plan", exact: true })).toBeVisible();
-
-    for (const envelope of [
-      { status: "unavailable", updatedAt: null, data: null, message: "Plans has not scanned this repository" },
-      { status: "available", data: { counts: { active: 0, backlog: 0 }, additionalActive: [] } },
-      { status: "available", data: { counts: { active: 0, backlog: 5 }, additionalActive: [] } },
-    ]) {
-      plansEnvelope = envelope;
-      await page.reload();
-      const card = roboRepoCard(page);
-      await expect(card.locator(".repository-root").first()).toBeVisible();
-      await expect(additionalPlans(card)).toHaveCount(0);
-      await expect(card).not.toContainText("Plans has not scanned this repository");
+    await expect(cardRows(card)).toHaveText([
+      /main branch/, /Plan A/, /Plan B/, /Plan C/, /Plan D/, /feature\/loose/, /4 active · 5 backlog/,
+    ], { useInnerText: true });
+    await expect(card.getByRole("heading", { name: /Active Plans|Additional Plans/ })).toHaveCount(0);
+    for (const title of ["Plan A", "Plan B", "Plan C", "Plan D"]) {
+      await expect(card.getByRole("button", { name: title, exact: true })).toHaveCount(1);
     }
-  });
 
-  test("an associated plan renders beneath its worktree and nowhere else", async ({ page }) => {
-    await patchRoboRepo(page, (repository) => {
-      const associated = { id: "assoc", key: "assoc-key", title: "Worktree plan", worktree: "home-association", taskCounts: { total: 4, complete: 2 } };
-      const contested = [
-        { id: "contested-a", title: "Contested plan A", worktree: "contested", taskCounts: { total: 0, complete: 0 } },
-        { id: "contested-b", title: "Contested plan B", worktree: "contested", taskCounts: { total: 0, complete: 0 } },
-      ];
-      const unassociated = { id: "loose", title: "Unassociated plan", worktree: "", taskCounts: { total: 1, complete: 0 } };
-      repository.domains.plans = { status: "available", data: {
-        counts: { active: 4, backlog: 0 },
-        additionalActive: [...contested, unassociated],
-      } };
-      repository.domains.runtime = { status: "available", data: { checkouts: [
-        { rootId: "main", name: "main", isWorktree: false, worktreeName: null, git: { branch: "main", provider: { ok: true } } },
-        { rootId: "assoc", name: "feature/home-association", isWorktree: true, worktreeName: "home-association", git: { branch: "feature/home-association", provider: { ok: true } }, plan: associated },
-        { rootId: "contested", name: "feature/contested", isWorktree: true, worktreeName: "contested", git: { branch: "feature/contested", provider: { ok: true } } },
-      ] } };
-    });
-    await page.goto("/");
-    const card = roboRepoCard(page);
-    const worktree = checkoutRow(card, "feature/home-association");
-    const attached = worktree.getByRole("group", { name: "Plan in this worktree" });
-    await expect(attached.getByRole("button", { name: "Worktree plan", exact: true })).toBeVisible();
-    await expect(attached.getByRole("progressbar", { name: "Worktree plan completion" })).toHaveAttribute("aria-valuenow", "50");
-    await expect(card.getByRole("button", { name: "Worktree plan", exact: true })).toHaveCount(1);
-    await expect(checkoutRow(card, "main").getByRole("group", { name: "Plan in this worktree" })).toHaveCount(0);
-    await expect(checkoutRow(card, "feature/contested").getByRole("group", { name: "Plan in this worktree" })).toHaveCount(0);
+    const matched = planRowOf(card, "Plan A");
+    await expect(matched.getByRole("progressbar", { name: "Plan A completion" })).toHaveAttribute("aria-valuenow", "50");
+    await expect(matched.getByRole("link", { name: ":5173" })).toHaveAttribute("href", "http://127.0.0.1:5173");
+    await expect(matched.getByRole("button", { name: "Links" })).toBeVisible();
+    await expect(matched.getByRole("button", { name: "Worktree details for Plan A" })).toBeVisible();
+    // The matched worktree's branch label and copy control give way to the plan, and the worktree is
+    // not listed again below.
+    await expect(card.getByText("feature/a", { exact: true })).toHaveCount(0);
+    await expect(matched.locator("[data-slot=root-copy] *")).toHaveCount(0);
+    // Same checkout, same Git warning: the unclaimed worktree carries identical drift.
+    const loose = checkoutRow(card, "feature/loose");
+    await expect(matched.locator(".git-drift")).toHaveText("⚠ 3 behind remote");
+    await expect(loose.locator(".git-drift")).toHaveText("⚠ 3 behind remote");
 
-    const plans = additionalPlans(card);
-    await expect(plans).toContainText("4 Active · 0 Backlog");
-    await expect(plans.locator(".plan-item")).toHaveCount(3);
-    for (const title of ["Contested plan A", "Contested plan B", "Unassociated plan"]) {
-      await expect(plans.getByRole("button", { name: title, exact: true })).toBeVisible();
+    const noApp = planRowOf(card, "Plan B");
+    await expect(noApp.locator(".plan-complete-badge")).toHaveText("done");
+    await expect(noApp.getByRole("progressbar")).toHaveCount(0);
+    await expect(noApp.getByRole("link")).toHaveCount(0);
+    await expect(noApp.getByRole("button", { name: "Links" })).toHaveCount(0);
+
+    const notStarted = planRowOf(card, "Plan C");
+    await expect(notStarted.locator(".plan-match-badge")).toHaveText("not started");
+    await expect(notStarted.locator(".plan-match-badge")).toHaveAttribute("title", "No worktree is associated with this plan");
+    const notRunning = planRowOf(card, "Plan D");
+    await expect(notRunning.locator(".plan-match-badge")).toHaveText("worktree not running");
+    await expect(notRunning.locator(".plan-match-badge")).toHaveAttribute("title", 'Home has no running checkout for worktree "gone"');
+    for (const row of [notStarted, notRunning]) {
+      await expect(row.getByRole("link")).toHaveCount(0);
+      await expect(row.getByRole("button", { name: "Links" })).toHaveCount(0);
     }
-    await expect(plans.getByRole("button", { name: "Worktree plan", exact: true })).toHaveCount(0);
-  });
 
-  test("Home shows inline plan counts, progress and token warnings rolled up by model", async ({ page }) => {
-    await homeFixture(page);
-    await page.goto("/");
-    const card = roboRepoCard(page);
-    await expect(card.getByRole("heading", { name: "Additional Plans", exact: true })).toBeVisible();
-    await expect(card).toContainText("2 Active · 22 Backlog");
-    await expect(card.getByRole("link", { name: "all plans", exact: true })).toHaveAttribute("href", "/plans");
-    await expect(card.getByRole("progressbar", { name: "First plan completion" })).toHaveAttribute("aria-valuenow", "25");
-    await expect(planRow(card, "First plan")).toContainText("25%");
-    await expect(planRow(card, "Untracked plan")).toContainText("—");
-    const finished = planRow(card, "Finished plan");
-    await expect(finished.locator(".plan-complete-badge")).toHaveText("done");
-    await expect(finished.getByRole("progressbar")).toHaveCount(0);
-    await expect(card.locator(".home-domain-row .domain-glyph")).toHaveCount(2);
+    // An unclaimed worktree is the same checkout row as before: branch label with its tooltip, copy
+    // control, port, and Links.
+    await expect(loose.locator("[data-slot=root-info]")).toBeVisible();
+    await expect(loose.locator("[data-slot=root-copy] portal-copy-menu")).toHaveCount(1);
+    await expect(loose.getByRole("link", { name: ":5174" })).toBeVisible();
+    await expect(loose.getByRole("button", { name: "Links" })).toBeVisible();
+
+    const summary = card.locator(".home-plan-summary");
+    await expect(summary).toHaveText(/4 active\s*·\s*5 backlog\s*·\s*all plans$/, { useInnerText: true });
+    await expect(summary.getByRole("link", { name: "all plans", exact: true })).toHaveAttribute("href", "/plans");
     await expect(card.getByRole("heading", { name: "Token Warnings" })).toBeVisible();
     await expect(card).toContainText(/8 warnings from \d{2}\/\d{2} to \d{2}\/\d{2}/);
-    const warnings = card.getByRole("list", { name: "Token warnings" }).getByRole("listitem");
-    await expect(warnings).toHaveText([
+    await expect(card.getByRole("list", { name: "Token warnings" }).getByRole("listitem")).toHaveText([
       "3 token spikes and 2 repeated tool loops in gpt-5-codex",
       "3 repeated tool loops in claude-opus-4-8",
     ]);
     await expect(card.getByRole("link", { name: "all activity", exact: true })).toHaveAttribute("href", "/tokens");
     await expect(card.locator(".home-domain-row.is-warning")).toHaveCount(1);
     await expect(card.locator(".status-dot")).toHaveCount(0);
+  });
+
+  test("the worktree details dropdown copies each value in place and lists only non-default facts", async ({ page }) => {
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await planFixture(page);
+    await page.goto("/");
+    const card = roboRepoCard(page);
+    await card.getByRole("button", { name: "Worktree details for Plan A" }).click();
+    const panel = card.locator(".worktree-details");
+    await expect(panel.locator(".worktree-detail-value")).toHaveText(["feature/a", "feature-a", "/private/wt/feature-a"]);
+    await expect(panel.getByRole("list", { name: "Worktree status" }).getByRole("listitem")).toHaveText([
+      "dirty", "0 ahead, 3 behind origin/feature/a", "4 commits behind main",
+    ]);
+    for (const name of ["Copy branch name", "Copy worktree name", "Copy worktree path"]) {
+      await expect(panel.getByRole("button", { name })).toHaveCount(1);
+    }
+
+    await panel.getByRole("button", { name: "Copy worktree name" }).click();
+    const row = panel.locator(".worktree-detail-row").nth(1);
+    await expect(panel).toBeVisible();
+    await expect(row).toHaveText("Copied", { useInnerText: true });
+    await expect(row.getByText("feature-a", { exact: true })).toBeHidden();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("feature-a");
+    // The shared confirmation interval (5 s), then the value returns.
+    await expect(row.getByText("feature-a", { exact: true })).toBeVisible({ timeout: 8_000 });
+    await expect(row).not.toContainText("Copied");
+
+    // Closing the panel mid-confirmation resets the button, so reopening shows the value, not a stuck
+    // "Copied".
+    await panel.getByRole("button", { name: "Copy branch name" }).click();
+    await expect(panel.locator(".worktree-detail-row").first()).toHaveText("Copied", { useInnerText: true });
+    await page.keyboard.press("Escape");
+    await expect(panel).toHaveCount(0);
+    await card.getByRole("button", { name: "Worktree details for Plan A" }).click();
+    await expect(panel.locator(".worktree-detail-row").first()).toHaveText("feature/a", { useInnerText: true });
+    await expect(panel.getByRole("button", { name: "Copy branch name" })).toBeEnabled();
+
+    await page.keyboard.press("Escape");
+    await card.getByRole("button", { name: "Worktree details for Plan B" }).click();
+    await expect(card.locator(".worktree-details .worktree-detail-value")).toHaveText(["feature/b", "feature-b"]);
+    await expect(card.locator(".worktree-details").getByRole("list", { name: "Worktree status" })).toBeHidden();
+  });
+
+  test("without active plans, or without Plans data, linked worktrees render as before and no summary shows", async ({ page }) => {
+    let plansEnvelope;
+    await planFixture(page, (repository) => { repository.domains.plans = plansEnvelope; });
+    for (const envelope of [
+      { status: "unavailable", updatedAt: null, data: null, message: "Plans has not scanned this repository" },
+      { status: "available", data: { counts: { active: 0, backlog: 5 }, active: [], recent: [] } },
+    ]) {
+      plansEnvelope = envelope;
+      await page.goto("/");
+      const card = roboRepoCard(page);
+      await expect(cardRows(card)).toHaveText([/main branch/, /feature\/a/, /feature\/b/, /feature\/loose/], { useInnerText: true });
+      await expect(card.locator(".home-plan-summary")).toHaveCount(0);
+      await expect(checkoutRow(card, "feature/a").locator("[data-slot=root-copy] portal-copy-menu")).toHaveCount(1);
+      await expect(card).not.toContainText("Plans has not scanned this repository");
+    }
+  });
+
+  test("partial Plans coverage is noted on the summary; without Runtime every plan is badged", async ({ page }) => {
+    let runtimeEnvelope = null;
+    await planFixture(page, (repository) => {
+      repository.domains.plans.status = "partial";
+      repository.domains.plans.message = "Plans coverage is incomplete";
+      if (runtimeEnvelope) repository.domains.runtime = runtimeEnvelope;
+    });
+    await page.goto("/");
+    await expect(roboRepoCard(page).locator(".home-plan-summary")).toHaveText(/4 active\s*·\s*5 backlog\s*·\s*all plans\s*·?\s*Plans coverage is incomplete$/, { useInnerText: true });
+
+    runtimeEnvelope = { status: "unavailable", updatedAt: null, data: null, message: "Runtime data is unavailable" };
+    await page.reload();
+    const card = roboRepoCard(page);
+    await expect(cardRows(card)).toHaveText([/No known checkout/, /Plan A/, /Plan B/, /Plan C/, /Plan D/, /4 active/], { useInnerText: true });
+    await expect(card.locator(".plan-match-badge")).toHaveText(["worktree not running", "worktree not running", "not started", "worktree not running"]);
   });
 
   test("Home Links renders its glyph, discovers routes and closes with Escape", async ({ page }) => {
@@ -305,7 +338,7 @@ test.describe("shared plan drawer", () => {
     await patchRoboRepo(page, (repository) => {
       repository.domains.plans = { status: "available", data: {
         counts: { active: 1, backlog: 0 },
-        additionalActive: [{ id: "drawerfx", key: record.key, title: "Drawer fixture plan", taskCounts: { total: 2, complete: 1 } }],
+        active: [{ id: "drawerfx", key: record.key, title: "Drawer fixture plan", worktree: "", taskCounts: { total: 2, complete: 1 } }],
       } };
     });
     await page.goto("/");
@@ -321,18 +354,18 @@ test.describe("shared plan drawer", () => {
     await expect(drawer).not.toBeVisible();
   });
 
-  test("a plan beneath its worktree opens the same read-only drawer", async ({ page }) => {
+  test("a matched plan row opens the same read-only drawer", async ({ page }) => {
     const plans = await (await page.request.get("/api/plans")).json();
     const record = plans.plans.find((item) => item.plan.title === "Drawer fixture plan");
     await patchRoboRepo(page, (repository) => {
-      const plan = { id: "drawerfx", key: record.key, title: "Drawer fixture plan", worktree: "drawer-tree", taskCounts: { total: 2, complete: 1 } };
-      repository.domains.plans = { status: "available", data: { counts: { active: 1, backlog: 0 }, additionalActive: [] } };
+      const plan = { id: "drawerfx", key: record.key, title: "Drawer fixture plan", worktree: "drawer-tree", checkoutRootId: "drawer-tree", taskCounts: { total: 2, complete: 1 } };
+      repository.domains.plans = { status: "available", data: { counts: { active: 1, backlog: 0 }, active: [plan] } };
       repository.domains.runtime = { status: "available", data: { checkouts: [
-        { rootId: "drawer-tree", name: "feature/drawer", isWorktree: true, worktreeName: "drawer-tree", git: { branch: "feature/drawer", provider: { ok: true } }, plan },
+        { rootId: "drawer-tree", name: "feature/drawer", isWorktree: true, worktreeName: "drawer-tree", git: { branch: "feature/drawer", provider: { ok: true } } },
       ] } };
     });
     await page.goto("/");
-    await checkoutRow(roboRepoCard(page), "feature/drawer").getByRole("button", { name: "Drawer fixture plan" }).click();
+    await planRowOf(roboRepoCard(page), "Drawer fixture plan").getByRole("button", { name: "Drawer fixture plan", exact: true }).click();
     const drawer = page.locator("dialog#drawer");
     await expect(drawer).toBeVisible();
     await expect(page).toHaveURL(/\/$/);
@@ -436,12 +469,13 @@ async function setPlanRoots(page, discoveryRoots) {
   expect(response.ok()).toBe(true);
 }
 
-function planRow(card, title) {
-  return card.locator(".plan-item").filter({ has: card.page().getByRole("button", { name: title, exact: true }) });
+// Every row below the repository row, in order: checkouts, plan rows, and the plan summary line.
+function cardRows(card) {
+  return card.locator("[data-slot=checkouts] > *");
 }
 
-function additionalPlans(card) {
-  return card.locator(".home-domain-row").filter({ has: card.page().getByRole("heading", { name: "Additional Plans", exact: true }) });
+function planRowOf(card, title) {
+  return card.locator(".repository-root").filter({ has: card.page().getByRole("button", { name: title, exact: true }) });
 }
 
 function checkoutRow(card, branch) {
@@ -464,12 +498,7 @@ async function patchRoboRepo(page, mutate) {
 
 async function homeFixture(page) {
   await patchRoboRepo(page, (repository) => {
-    const additionalActive = [
-      { id: "first", title: "First plan", taskCounts: { total: 4, complete: 1 } },
-      { id: "untracked", title: "Untracked plan", taskCounts: { total: 0, complete: 0 } },
-      { id: "finished", title: "Finished plan", taskCounts: { total: 3, complete: 3 } },
-    ];
-    repository.domains.plans = { status: "available", data: { counts: { active: 2, backlog: 22 }, additionalActive } };
+    repository.domains.plans = { status: "available", data: { counts: { active: 0, backlog: 0 }, active: [], recent: [] } };
     repository.domains.tokens = { status: "available", data: {
       warningCount: 8,
       warnings: [
@@ -482,5 +511,46 @@ async function homeFixture(page) {
       rootId: "main", name: "main", git: { branch: "main", provider: { ok: true } },
       primaryEntrypoint: { kind: "listener", opaqueKey: "fixture", origin: "http://127.0.0.1:4317", port: 4317, links: [] },
     }] } };
+  });
+}
+
+// A repository with main, two plan-matched worktrees (one with an app, one without), an unclaimed
+// worktree, two unmatched plans, and token warnings. `adjust` edits the repository after the fixture.
+async function planFixture(page, adjust) {
+  await patchRoboRepo(page, (repository) => {
+    const drift = { behind: 3, ahead: 0 };
+    const app = (port, key) => ({ kind: "listener", opaqueKey: key, origin: `http://127.0.0.1:${port}`, port, links: [] });
+    const worktree = (rootId, name, branch, { git = {}, entrypoint = null } = {}) => ({
+      rootId, name: branch, isWorktree: true, worktreeName: name, projectRoot: `/private/wt/${name}`, checkoutState: "present",
+      git: { branch, provider: { ok: true }, ...git }, primaryEntrypoint: entrypoint,
+    });
+    repository.domains.runtime = { status: "available", data: { checkouts: [
+      { rootId: "main", name: "main", isWorktree: false, worktreeName: null, git: { branch: "main", provider: { ok: true } }, primaryEntrypoint: app(4317, "fixture") },
+      worktree("matched", "feature-a", "feature/a", {
+        git: { ...drift, upstream: "origin/feature/a", dirty: true, baseBehind: 4, baseBranch: "origin/main" },
+        entrypoint: app(5173, "matched-key"),
+      }),
+      { ...worktree("no-app", "feature-b", "feature/b"), projectRoot: null },
+      worktree("loose", "loose", "feature/loose", { git: { ...drift, upstream: "origin/feature/loose" }, entrypoint: app(5174, "loose-key") }),
+    ] } };
+    repository.domains.plans = { status: "available", data: {
+      counts: { active: 4, backlog: 5 },
+      active: [
+        { id: "a", key: "a", title: "Plan A", worktree: "feature-a", checkoutRootId: "matched", taskCounts: { total: 4, complete: 2 } },
+        { id: "b", key: "b", title: "Plan B", worktree: "feature-b", checkoutRootId: "no-app", taskCounts: { total: 3, complete: 3 } },
+        { id: "c", key: "c", title: "Plan C", worktree: "", taskCounts: { total: 0, complete: 0 } },
+        { id: "d", key: "d", title: "Plan D", worktree: "gone", taskCounts: { total: 2, complete: 0 } },
+      ],
+      recent: [],
+    } };
+    repository.domains.tokens = { status: "available", data: {
+      warningCount: 8,
+      warnings: [
+        ...Array.from({ length: 3 }, () => ({ kind: "spike", model: "gpt-5-codex", at: "2026-09-24T12:00:00.000Z" })),
+        ...Array.from({ length: 2 }, () => ({ kind: "loop", model: "gpt-5-codex", at: "2026-09-28T12:00:00.000Z" })),
+        ...Array.from({ length: 3 }, () => ({ kind: "loop", model: "claude-opus-4-8", at: "2026-09-30T12:00:00.000Z" })),
+      ].map((warning, index) => ({ ...warning, severity: "high", sessionId: `session-${index}`, harness: "codex" })),
+    } };
+    adjust?.(repository);
   });
 }

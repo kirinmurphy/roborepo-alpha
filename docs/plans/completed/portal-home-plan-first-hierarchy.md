@@ -1,17 +1,27 @@
 ---
 id: 7m4q9dx
 priority: high
-next_action: Implement Phase 1 — replace checkout.plan and plans.additionalActive with plans.active plus a checkoutRootId reference in repository-overview-projections.mjs, covered by repository-overview-check.mjs.
+next_action:
 blocked_by: []
 depends_on: []
 related:
   - wk7p4n2
   - a7bslb00
-reviewed_commit: 56ab25a
-worktree:
+  - age4cm7r
+reviewed_commit: 2a0f513
+worktree: portal-home-plan-first-hierarchy
 ---
 
 # Make Plans Primary Without Hiding Checkout Activity
+
+## Completion
+
+Completed 2026-10-03. Home's repository cards now list the main checkout, then every active plan,
+then the worktrees no plan claims, then one unlabeled line of plan counts. A plan matched to a
+running worktree is that worktree's checkout row, with a worktree-details dropdown in place of the
+branch label. Any other plan is its own row with a **not started** or **worktree not running**
+badge. The **Additional Plans** section is gone. The work landed on `main` as squash merge `bff0bf4`
+(PR #24). Verification below records the evidence.
 
 ## Summary
 
@@ -129,8 +139,14 @@ So when a plan's worktree exists on disk but has nothing running, the plan has n
 - `portal/shared/menu-button.js` (`<portal-menu-button>`) provides a trigger with a caret that
   opens a positioned panel with caller-supplied content. It handles outside-click and Escape.
 - `portal/shared/copy-button.js` (`<portal-copy-button>`) owns clipboard writes and the in-place
-  **Copied** confirmation. The timer is `COPIED_DURATION_MS` (5 s). Nothing outside the button can
-  currently see the copied state.
+  **Copied** confirmation. The timer is `COPIED_DURATION_MS` (5 s). Outside the button, the copied
+  state shows only as the internal `.copy-button-copied` class on its inner `<button>`; the host
+  element carries no public signal. The host's `aria-label` is not forwarded, so an icon-only button
+  is announced as "Copy" whatever the caller set. Removing a button mid-confirmation (a closed
+  popover) clears its timer without resetting it, so a reconnected button stays on **Copied**,
+  disabled.
+- `<portal-menu-button>` closes on any document click, including clicks inside its own panel;
+  callers with interactive panel content stop propagation themselves (as `copy-menu.js` does).
 
 ## Proposed Design
 
@@ -266,7 +282,8 @@ is the same condition that shows the **Additional Plans** row today.
 The trigger is a `<portal-menu-button>` with the `tree` icon and its caret. Its accessible name is
 `Worktree details for <plan title>`. Positioning, outside-click, and Escape come from the shared
 element. Because its panel uses `.menu-button-panel`, the existing guard in `app.js` already pauses
-polling re-renders while the dropdown is open.
+polling re-renders while the dropdown is open. The panel stops click propagation, so copying a value
+leaves it open and the confirmation visible.
 
 The panel content comes from a `<template>` in `portal/home/index.html`, filled with
 `portalFillSlots`. Don't build it with `createElement` chains or HTML strings. It starts with
@@ -296,10 +313,12 @@ The port/origin link and Links stay outside the panel, in the row's right side.
 
 ### 7. Reuse the shared copied feedback with a row presentation
 
-Each identity row uses an icon-only `<portal-copy-button>`. When copied, the button already
-switches in place to a check plus **Copied**. Add one backwards-compatible hook: the element sets a
-`copied` attribute on itself while the confirmation is showing, and removes it when the existing
-timer resets.
+Each identity row uses an icon-only `<portal-copy-button>` whose `aria-label` names the value
+(`Copy branch name`, `Copy worktree name`, `Copy worktree path`). When copied, the button already
+switches in place to a check plus **Copied**. Add three backwards-compatible changes: the element
+sets a `copied` attribute on itself while the confirmation is showing and removes it when the timer
+resets; it forwards its own `aria-label` to the inner button; and it resets when disconnected, so a
+panel closed mid-confirmation reopens with the value.
 
 The panel's CSS uses `:has(portal-copy-button[copied])` on the identity row to hide the value text.
 While the confirmation shows, the row reads `[BRANCH_ICON] ✓ Copied`, and the leading icon tells
@@ -314,62 +333,67 @@ attribute.
 | Projection | `scripts/cli/repository-overview-projections.mjs` | Non-destructive match; `plans.active` plus `checkoutRootId` |
 | Projection check | `scripts/test/repository-overview-check.mjs` | Replace every `additionalActive` and `checkout.plan` assertion |
 | Shared row | `portal/developer-runtime/repository-root-row.js` | Add `identity`, remove `footer` |
-| Copy button | `portal/shared/copy-button.js` | Set and clear the `copied` attribute |
+| Copy button | `portal/shared/copy-button.js` | Set and clear the `copied` attribute; forward `aria-label`; reset on disconnect |
+| Shared row CSS/helpers | `portal/developer-runtime/styles.css`, `portal/developer-runtime/templates.js`, `portal/shared/repository-row-template.js` | Remove the `root-footer` slot and styles; export `baseName` and `checkoutStateText` for the dropdown |
+| Icons | `portal/shared/icon.js` | Add `folder` for the path row |
 | Home ordering | `portal/home/templates.js` | Main rows, then plan rows, then unmatched worktrees, then summary line |
 | Home plan rows | `portal/home/plan-rows.js` (new) | Matched and unmatched plan rows, badges, summary line |
 | Worktree dropdown | `portal/home/worktree-details.js` (new) | Fills the panel template and mounts copy buttons |
 | Home domains | `portal/home/domains.js` | Remove `additionalPlansRow`; move `planItem` to `plan-rows.js` |
 | Home markup/style | `portal/home/index.html`, `portal/home/styles.css` | Plan-row, badge, summary, and panel templates; remove `tpl-checkout-plan` |
-| UI tests | `scripts/test/portal-ui/portal-ui.spec.mjs` | Replace Additional Plans and footer cases; move drawer fixtures to `plans.active` |
+| UI tests | `scripts/test/portal-ui/portal-ui.spec.mjs`, `scripts/test/portal-ui/developer-runtime-rows.spec.mjs` | Replace Additional Plans and footer cases; move drawer fixtures to `plans.active`; cover the Runtime row's copy control |
+| Docs | `docs/user/reference/repositories.md`, `docs/user/reference/plans-portal.md`, `docs/user/guides/plan/lifecycle/plan-docs.md`, `globals/packages/plan-docs/skills/plan-docs/references/plan-schema.md` | Describe plan rows and badges instead of **Additional Plans** and plans "beneath" a worktree |
 | Unchanged consumer | `portal/repositories/templates.js` | Still reads `counts` and `recent`; no edit expected |
 
-The new Home files keep `templates.js` (96 lines) and `domains.js` (112 lines) under the ~150-line
-soft limit. `repository-root-row.js` is already over the limit, so the `identity` option should be
+The new Home files keep `templates.js` (112 lines after the change) and `domains.js` (77) under the
+~150-line soft limit. `repository-root-row.js` is already over the limit, so the `identity` option should be
 a small branch in `buildRootSection()`, not a new subsystem.
 
 ## Implementation Sequence
 
 ### Phase 1 — Change association output without losing either source list
 
-- [ ] In `associatePlans()`, keep `plans.active` complete and leave Runtime checkouts unmodified.
-- [ ] Add `checkoutRootId` to plans with a unique exact match; require a non-null `rootId`.
-- [ ] Remove `checkout.plan` and `plans.additionalActive`; keep `counts` and `recent`.
-- [ ] Update `scripts/test/repository-overview-check.mjs` for matched, unmatched, stale,
+- [x] In `associatePlans()`, keep `plans.active` complete and leave Runtime checkouts unmodified.
+- [x] Add `checkoutRootId` to plans with a unique exact match; require a non-null `rootId`.
+- [x] Remove `checkout.plan` and `plans.additionalActive`; keep `counts` and `recent`.
+- [x] Update `scripts/test/repository-overview-check.mjs` for matched, unmatched, stale,
       duplicate-claim, duplicate-worktree, null-`rootId`, main-checkout, partial, Plans-unavailable,
       and Runtime-unavailable cases.
 
 ### Phase 2 — Shared row and copy hooks
 
-- [ ] Add the generic `identity` option to `buildRootSection()` and remove `footer`; keep
+- [x] Add the generic `identity` option to `buildRootSection()` and remove `footer`; keep
       `applyGitDrift()` running for rows that pass `identity`.
-- [ ] Set and clear the `copied` attribute in `<portal-copy-button>` alongside its existing state.
-- [ ] Confirm that the Runtime page and existing copy buttons render as before (Runtime page
+- [x] Set and clear the `copied` attribute in `<portal-copy-button>` alongside its existing state.
+- [x] Confirm that the Runtime page and existing copy buttons render as before (Runtime page
       Portal UI cases).
 
 ### Phase 3 — Hybrid Home list and plan rows
 
-- [ ] Move `planItem()` into `portal/home/plan-rows.js` and add matched and unmatched plan rows.
-- [ ] In `templates.js`, order the rows as in §2, using a set of consumed `rootId`s so no worktree
+- [x] Move `planItem()` into `portal/home/plan-rows.js` and add matched and unmatched plan rows.
+- [x] In `templates.js`, order the rows as in §2, using a set of consumed `rootId`s so no worktree
       renders twice.
-- [ ] Add the summary line and remove `additionalPlansRow()`, `tpl-checkout-plan`, and its styles.
-- [ ] Add `index.html` templates and `styles.css` rules for plan rows, badges, and the summary
+- [x] Add the summary line and remove `additionalPlansRow()`, `tpl-checkout-plan`, and its styles.
+- [x] Add `index.html` templates and `styles.css` rules for plan rows, badges, and the summary
       line, keeping the alignment of today's checkout rows.
 
 ### Phase 4 — Worktree-details dropdown
 
-- [ ] Add the panel `<template>` and `portal/home/worktree-details.js`, mounted through
+- [x] Add the panel `<template>` and `portal/home/worktree-details.js`, mounted through
       `<portal-menu-button>`.
-- [ ] Render the branch, worktree, and path rows with icon-only copy buttons and the `:has()`
+- [x] Render the branch, worktree, and path rows with icon-only copy buttons and the `:has()`
       copied presentation.
-- [ ] Render only the non-default summary facts listed in §6.
+- [x] Render only the non-default summary facts listed in §6.
 
 ### Phase 5 — Regression coverage and cleanup
 
-- [ ] Update `portal-ui.spec.mjs` for the behavior listed under Validation; delete the Additional
+- [x] Update `portal-ui.spec.mjs` for the behavior listed under Validation; delete the Additional
       Plans and **Plan in this worktree** cases.
-- [ ] Move the plan-drawer cases (which currently seed `additionalActive`) to `plans.active`
+- [x] Move the plan-drawer cases (which currently seed `additionalActive`) to `plans.active`
       fixtures, so drawer coverage is kept.
-- [ ] Remove dead Home helpers, templates, and styles left from the old layout.
+- [x] Remove dead Home helpers, templates, and styles left from the old layout.
+- [x] Update the user and plan-schema docs that described **Additional Plans** and plans shown
+      beneath a worktree.
 
 ## Validation
 
@@ -419,11 +443,75 @@ Run `npm run check` (`scripts/test/ci.sh`) after the focused projection and Port
 command is blocked by the environment, record the exact command and reason, and don't count it as
 passed.
 
+## Verification
+
+Run in worktree `portal-home-plan-first-hierarchy` on 2026-10-03:
+
+- `node scripts/test/repository-overview-check.mjs` — passed.
+- `npm run test:portal-ui` — 35 passed, 2 skipped (the opt-in documentation-screenshot cases).
+  Removing the copy button's disconnect reset makes the dropdown case fail, so it guards that fix.
+- Manual: the worktree's portal against live Runtime and Plans data showed main, then three plan
+  rows (one matched with its port, Links, and dropdown; one **worktree not running**; one **not
+  started**), then two unclaimed worktrees, then `3 active · 47 backlog · all plans`. The Runtime
+  page's rows were unchanged. The Browser pane blocks clipboard writes, so the live **Copied** state
+  was checked with `navigator.clipboard.writeText` stubbed; the Portal UI case covers the real
+  clipboard.
+- `npm run check` (`scripts/test/ci.sh`) — passed: doctor, CLI tests (422 passed), install
+  collisions, unit, package install, all four clean-machine Docker suites, and Portal UI. Windows
+  installer parity was skipped because `pwsh` is not installed on this machine.
+
+Completion review on `main` at `2a0f513`, 2026-10-03:
+
+- Landed: `git merge-base --is-ancestor` reports the branch as unmerged, because it landed as squash
+  merge `bff0bf4`. Every file the branch changed is byte-identical between the branch head
+  `0c7731e` and `main`, so all of the branch's work is on `main`.
+- `npm run check` on `main` — passed: CLI tests 422 passed, 0 failed; all nine check suites; all
+  four clean-machine Docker suites; Portal UI 35 passed, 2 skipped. Windows installer parity was
+  skipped because `pwsh` is not installed.
+- Plans validation (the Plans API on `main`'s code) — valid, no findings, 18 of 18 tasks complete.
+  `roborepo plans validate` does not exist on `main` yet; it arrives with [[age4cm7r]].
+- Code review against the plan: every goal, non-goal, and Validation bullet maps to the diff or to a
+  Portal UI case. Matching never invents a match for duplicate claims, duplicate names, null
+  `rootId`s, main checkouts, or missing Runtime or Plans data. No leftover `footer`,
+  `tpl-checkout-plan`, `additionalPlansRow`, `.checkout-plan`, or `additionalActive` references
+  remain.
+- `roborepo dev start` from the worktree showed the new layout against live data, with both active
+  plans matched to their running worktrees.
+- Not verified: a screen reader's announcement of the forwarded copy-button `aria-label`s; Windows
+  installer parity. No test covers the poll-refresh pause while the worktree dropdown is open, or
+  closing the dropdown by clicking outside it. Both were confirmed by reading the code only.
+
+## Decision Log
+
+- **A worktree with a null `rootId` still counts toward name ambiguity.** Alternatives: drop it
+  before tallying, which would let its same-named twin match. Counting it keeps "two worktrees share
+  the name" from ever resolving to one of them.
+- **`associatePlans()` returns only the plans payload.** It no longer changes the workspace, so
+  passing the workspace back out was dead weight.
+- **The summary line renders in the checkouts list.** Token Warnings stay in the domain rows below
+  it, unchanged.
+- **The dropdown panel stops click propagation.** Without it, `<portal-menu-button>` closes on the
+  copy click and the confirmation is never seen. Alternative: change the shared element to ignore
+  clicks inside its panel, which would change every other caller's panel.
+- **`<portal-copy-button>` resets on disconnect and forwards its host `aria-label`.** Both were
+  needed for the dropdown, and both match what existing callers already intended: the plan drawer's
+  path button and the shared row's single copy button set a host `aria-label` that was never
+  announced. Alternative for naming: wrap each button in a labelled element, which leaves those two
+  existing buttons announced as "Copy".
+- **Reuse `checkoutStateText` and `baseName` by exporting them.** Duplicating them in Home would
+  let the dropdown's wording drift from the checkout tooltip's.
+- **Add a `folder` icon** for the path row, since the registry had none.
+- **The dropdown panel may be up to 560px wide**, above the shared 420px cap, so a typical worktree
+  path fits on one line.
+- **Docs updated in this plan.** Four docs described the old layout and were missing from the
+  touchpoints.
+
 ## Risks
 
 | Risk | Mitigation |
 | --- | --- |
 | Runtime lists only running worktrees, so an active plan whose worktree is stopped shows **worktree not running** instead of a full checkout row | The badge describes this accurately. Once [[a7bslb00]] lists every worktree, the same match turns these plans into checkout rows with no change to this plan's code |
 | [[a7bslb00]] Phase 3 also edits the shared row template and expects an idle worktree "listed with its plan beneath it" | Whichever plan lands second updates its Home assertions. If this plan lands first, [[a7bslb00]]'s Phase 3 test should assert the plan row instead of a footer |
+| [[age4cm7r]] (in progress in its own worktree) renames `plan-docs` to `plan-write`, including `plan-schema.md` and the `plan-docs.md` lifecycle guide this plan edits, and touches `portal/home/app.js` and `portal-ui.spec.mjs` | The overlap is a two-line paragraph in each doc and unrelated lines in the spec. Whichever lands second carries the paragraph into the renamed file |
 | `repository-root-row.js` grows further past the file-size limit | Keep `identity` to a branch around the existing identity steps; splitting the file is out of scope |
 | A matched row loses the checkout tooltip's full detail (members, fetch time, commit) | The dropdown keeps the facts used most; the full tooltip stays on the Runtime page and on unmatched rows |

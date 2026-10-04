@@ -45,7 +45,7 @@ import {
 import { loadRegistry, updateRegistry, upsertRepository, recordDiscovery } from "../../modules/repositories/index.mjs";
 import { buildRepositoryHashIndex } from "./telemetry-repository.mjs";
 import { createRepositoryOverviewService } from "./repository-overview.mjs";
-import { buildTelemetryRepositoryProjection } from "./telemetry-repository-overview.mjs";
+import { buildTelemetryRepositoryProjection, fixtureTelemetryRepositories, homeTelemetryProjection } from "./telemetry-repository-overview.mjs";
 import { privacyHash } from "./telemetry-schemas/hash.mjs";
 import { buildAnalysisPrompt } from "../harnesses/transcript-locate.mjs";
 import { insightsSummary } from "./telemetry-insights.mjs";
@@ -775,7 +775,11 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     loadRegistry: () => loadRegistry({ stateRoot }),
     loadRuntime: () => loadDeveloperRuntimeSnapshot(),
     loadPlans: () => loadCachedPlansSnapshot(),
-    loadTelemetry: () => loadTelemetryRepositoryProjection(),
+    loadTelemetry: () => homeTelemetryProjection({
+      enabled: readTelemetryState().enabled === true,
+      projection: loadTelemetryRepositoryProjection(),
+      fixtureRepositories: loadFixtureTelemetryRepositories(),
+    }),
   });
   startPortalServer({
     port: options.port,
@@ -1331,16 +1335,32 @@ const MOCK_MARKER = {
   title: "Prefer section-level document reads (demo)",
   ts: "2026-06-13T12:00:00.000Z",
 };
+// Rows of a committed .jsonl file. A missing file reads as no rows and a corrupt line is skipped,
+// so a bad fixture file degrades to an empty view instead of failing the page.
+function readJsonlFile(file) {
+  let text;
+  try { text = fs.readFileSync(file, "utf8"); } catch { return []; }
+  const rows = [];
+  for (const line of text.split("\n")) {
+    if (!line.trim()) continue;
+    try { rows.push(JSON.parse(line)); } catch { /* ignore corrupt lines */ }
+  }
+  return rows;
+}
+
+// Token warnings for the dev fixture repositories, from a committed schema-3 spool. It lives under
+// local/, which npm installs never ship, so off a dev checkout this is empty. Parsed once per
+// process, like the Tokens mock report.
+const FIXTURE_TOKEN_SPOOL_PATH = path.join(repoRoot, "local", "dev-fixtures", "token-warnings-spool.jsonl");
+let _fixtureTelemetryRepositories = null;
+function loadFixtureTelemetryRepositories() {
+  _fixtureTelemetryRepositories ??= fixtureTelemetryRepositories(readJsonlFile(FIXTURE_TOKEN_SPOOL_PATH));
+  return _fixtureTelemetryRepositories;
+}
+
 function loadMockAnalysisJson() {
   if (_mockAnalysisJson) return _mockAnalysisJson;
-  const events = [];
-  try {
-    const text = fs.readFileSync(MOCK_SPOOL_PATH, "utf8");
-    for (const line of text.split("\n")) {
-      if (!line.trim()) continue;
-      try { events.push(JSON.parse(line)); } catch { /* ignore corrupt lines */ }
-    }
-  } catch { /* no mock spool — return empty report */ }
+  const events = readJsonlFile(MOCK_SPOOL_PATH);
   const evidence = conditionDemoEvidence(events);
   const collectingMarker = { ...MOCK_MARKER, marker_id: "mark_0000000000000002", title: "Limit retry loops (demo)",
     ts: "2026-06-15T11:59:00.000Z", effective_at: "2026-06-15T11:59:00.000Z", watching_kinds: ["loop"] };

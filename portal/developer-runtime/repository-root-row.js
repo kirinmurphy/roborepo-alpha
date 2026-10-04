@@ -36,32 +36,31 @@ let memberListSequence = 0;
 
 // `root` is undefined for the main slot when nothing has resolved a rootId yet (no active listener
 // on the main checkout) — the row still renders, so the card never looks like it is missing a piece.
-// `footer` is an optional node the calling page hangs beneath the row head, on the same glyph rail
-// (Home mounts a worktree's plan there). The row stays agnostic about what it holds.
-export function buildRootSection({ root, departed = [], repository, composeActions, instanceActions, mode = "runtime", onMountLinks, footer = null }) {
+// `identity` ({ glyph, label, node }) lets the calling page name the row itself: its glyph and
+// accessible label replace the checkout's, and its node replaces the branch label, checkout tooltip,
+// and copy control at the start of the identity line. Git drift and the actions column still come
+// from `root`, so the row behaves exactly like the checkout it is. Home names a worktree by the plan
+// it implements this way; the row stays agnostic about what the node holds.
+export function buildRootSection({ root, departed = [], repository, composeActions, instanceActions, mode = "runtime", onMountLinks, identity = null }) {
   const section = createRepositoryCheckoutRow({ controls: mode !== "home" });
   // Lets a rebuild find "this same checkout's" row across renders (see reconcileSection in app.js)
   // to carry its open/closed state forward — rootId is stable across polls, DOM position is not.
   section.dataset.rootId = root?.rootId || "main";
 
   const glyph = section.querySelector("[data-slot=root-glyph]");
-  glyph.setAttribute("name", root?.isWorktree ? "tree" : "home");
+  glyph.setAttribute("name", identity?.glyph || (root?.isWorktree ? "tree" : "home"));
   glyph.setAttribute("role", "img");
-  glyph.setAttribute("aria-label", root?.isWorktree ? "Linked worktree" : "Main checkout");
+  glyph.setAttribute("aria-label", identity?.label || (root?.isWorktree ? "Linked worktree" : "Main checkout"));
 
   const composeGroups = root?.composeGroups || [];
-  fillIdentity(section, root, composeGroups);
+  if (identity) section.querySelector(".repository-root-identity-line").prepend(identity.node);
+  else fillIdentity(section, root, composeGroups);
   mountCheckoutRow(section);
   if (root?.git) {
     applyGitDrift(section, root.git);
-    mountCopyDropdown(section, root);
+    if (!identity) mountCopyDropdown(section, root);
   }
   fillPromotedLink(section, root);
-  if (footer) {
-    const slot = section.querySelector("[data-slot=root-footer]");
-    slot.append(footer);
-    slot.hidden = false;
-  }
   if (mode === "home") {
     if (root?.primaryEntrypoint?.opaqueKey) onMountLinks?.(section.querySelector("[data-slot=root-links]"), root.primaryEntrypoint);
     section.querySelector("[data-slot=members]")?.remove();
@@ -354,7 +353,7 @@ function mountCopyDropdown(section, root) {
 
 // A checkout that is not on disk says THAT, rather than nothing: "absent" is a fact about the
 // directory, "unreadable" an admission that we could not look.
-function checkoutStateText(root) {
+export function checkoutStateText(root) {
   if (root?.checkoutState === "absent") return "checkout missing";
   if (root?.checkoutState === "unreadable") return root.checkoutReason || "checkout unreadable";
   return null;

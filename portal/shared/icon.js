@@ -78,6 +78,11 @@ const ICONS = {
     viewBox: "0 0 16 16",
     body: `<path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" d="M1.8 8h3.4M10.8 8h3.4" /><circle cx="8" cy="8" r="2.4" fill="none" stroke="currentColor" stroke-width="1.3" />`,
   },
+  // A checkout's directory on disk, beside the branch and worktree glyphs in Home's worktree details.
+  folder: {
+    viewBox: "0 0 16 16",
+    body: `<path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" d="M1.5 4a1 1 0 0 1 1-1h3.4l1.5 1.5h6.1a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1V4Z" />`,
+  },
   "git-branch": {
     viewBox: "0 0 16 16",
     body: `<circle cx="4" cy="3" r="1.6" fill="none" stroke="currentColor" stroke-width="1.3" /><circle cx="4" cy="13" r="1.6" fill="none" stroke="currentColor" stroke-width="1.3" /><circle cx="12" cy="6" r="1.6" fill="none" stroke="currentColor" stroke-width="1.3" /><path fill="none" stroke="currentColor" stroke-width="1.3" d="M4 4.6V11.4" /><path fill="none" stroke="currentColor" stroke-width="1.3" d="M4 8c0-2.5 2-3.5 4.5-3.8" />`,

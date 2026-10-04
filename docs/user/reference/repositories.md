@@ -40,19 +40,24 @@ Each card combines a compact view of several domains:
 - **Running application** — a checkout's promoted primary application is a clickable port. A host
   development server and a Compose-backed application behave the same here. Secondary ports and
   hosting diagnostics remain on Runtime.
-- **Worktree plan** — an active plan whose `worktree` field names a linked worktree appears beneath
-  that worktree's row. The match is exact: the plan's value must equal the worktree's Git
-  administrative name, exactly one active plan must claim it, and exactly one known worktree must
-  carry it. Branch names and checkout paths are never used to guess.
-- **Additional Plans** — shown while the repository has at least one active plan. It lists every
-  active plan that is not beneath a worktree: plans with no `worktree`, plans naming a worktree Home
-  does not currently show, and plans whose match is ambiguous. Its Active and Backlog counts cover
-  the whole repository, including plans shown beneath worktrees. When every active plan sits beneath
-  a worktree, the heading, counts, and **all plans** link remain. When Plans coverage is partial,
-  the section says so. A repository with no active plans, or one Plans has not scanned, shows no
-  Plans section. Completed plans never fill the section.
-- **Tokens** — recent repository-associated session warnings appear when a cached Tokens analysis is
-  available.
+- **Plans** — below the main checkout, every active plan gets one row, ahead of the remaining
+  worktrees. The plan title opens the plan drawer, and its completion ring or **done** sits beside it.
+  - A plan whose `worktree` field names a linked worktree Home shows becomes that worktree's row: the
+    plan title replaces the branch label, a worktree button opens the branch, worktree name, and path
+    (each with its own copy action) plus any dirty, ahead/behind, or drift facts, and the port, Links,
+    and Git warning stay where the checkout row puts them. The match is exact: the plan's value must
+    equal the worktree's Git administrative name, exactly one active plan must claim it, and exactly
+    one known worktree must carry it. Branch names and checkout paths are never used to guess.
+  - Any other plan is its own row with a badge: **not started** when it names no worktree, and
+    **worktree not running** when the worktree it names is stopped, missing, or claimed twice.
+  - Worktrees no plan claimed follow as ordinary checkout rows.
+  - One unlabeled line closes the list with the repository's Active and Backlog counts and an
+    **all plans** link, and says so when Plans coverage is partial. A repository with no active
+    plans, or one Plans has not scanned, lists its worktrees as plain checkout rows with no plan
+    rows or counts. Completed plans never appear.
+- **Tokens** — recent repository-associated session warnings appear while token tracking is on and a
+  cached Tokens analysis is available. With tracking off, Home shows no warnings, even if earlier
+  captures are still on disk, which matches the Tokens page.
 - **Agents** — repository-scoped agent configuration is currently unavailable and is labeled that
   way.
 

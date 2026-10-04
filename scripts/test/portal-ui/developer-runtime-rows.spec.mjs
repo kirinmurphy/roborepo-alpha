@@ -136,6 +136,12 @@ test.describe("Runtime checkout rows (developer-runtime-repository-row-layout)",
     await expect(tooltip).toHaveText(new RegExp(`^\\s*${WORKTREE_BRANCH}`));
   });
 
+  test("a worktree row keeps its copy control beside the branch label", async ({ page }) => {
+    const worktree = row(page, "demo-wt");
+    await expect(worktree.locator("[data-slot=root-info]")).toBeVisible();
+    await expect(worktree.locator("[data-slot=root-copy]").getByRole("button")).toHaveCount(1);
+  });
+
   test("a Compose-only checkout promotes its web service", async ({ page }) => {
     await expect(row(page, "shop-main").getByRole("link", { name: ":8080", exact: true })).toBeVisible();
   });
