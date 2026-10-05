@@ -10,6 +10,7 @@ depends_on:
 related:
   - tk6s43x3
 reviewed_commit: 585dedb
+worktree: portal-repository-sources
 ---
 
 # Repository Sources: Auto-Discovery and Folders
