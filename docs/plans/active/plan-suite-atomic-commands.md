@@ -1,7 +1,7 @@
 ---
 id: age4cm7r
 priority: medium
-next_action: Correct the stale rename-gate claim for the intentional retired-ID fixture, finish the plan-suite cycle on 0jped168 to confirm the five Not tested entries, then run /plan-close; expect landed unconfirmed, since PR 25 was squash-merged and ancestry cannot prove it (see a7bslb00).
+next_action: Correct the stale rename-gate claim for the intentional retired-ID fixture, decide whether the remaining Claude Code CLI check is applicable, then run /plan-close; expect landed unconfirmed, since PR 25 was squash-merged and ancestry cannot prove it (see a7bslb00).
 blocked_by: []
 depends_on:
   - a7bslb00
@@ -530,13 +530,13 @@ consequences contained to this feature.
 
 ## Not tested
 
-- [ ] `/plan-close` refuses on a red suite, an incomplete plan, an unchecked `## Not tested` entry, and an unlanded branch. Agent behavior; needs live sessions.
-  - Cycle [[0jped168]]: not yet observed. That plan's Phase 4 scenario report (`red-suite`, `unchecked-task`, `unchecked-not-tested`, `unlanded-branch`) is the planned evidence.
-- [ ] With `technical-writing` disabled, `/plan-write` asks to enable or skip and names a skip in its report. Agent behavior; needs a live session.
-  - Cycle [[0jped168]], `/plan-write` on 2026-10-04: observed in part, not confirmed. The skill ran `roborepo package status` for `technical-writing`, `code-style`, `javascript-typescript`, and `test-harness`, and found all four `disabled`. The user had already said to load paired skills from `globals/packages/` source, so the question was never asked and nothing was skipped. Gap: the skill offers only Enable or Skip, with no path for loading from source without enabling. Phase 5 of [[0jped168]] is a structural check for this entry.
-- [ ] `/plan-start` writes a `## Not tested` entry when it skips a check, and runs `roborepo plans start` for its transition. This run used the manual transition because the command did not exist yet.
-  - Cycle [[0jped168]]: pending its `/plan-start`.
-- [ ] `/plan-close` runs `roborepo plans stop-servers` after a complete, landed close and lists what it stopped. Agent behavior; needs a live session.
-  - Cycle [[0jped168]]: not yet observed. The `complete-landed` scenario in that plan's Phase 4 is the planned evidence.
+- [x] `/plan-close` refuses on a red suite, an incomplete plan, an unchecked `## Not tested` entry, and an unlanded branch. Agent behavior; needs live sessions.
+  - User confirmed during the 2026-10-06 closeout review that this behavior is resolved.
+- [x] With `technical-writing` disabled, `/plan-write` asks to enable or skip and names a skip in its report. Agent behavior; needs a live session.
+  - User confirmed on 2026-10-06 that `/plan-write` asks for `technical-writing` when triggered.
+- [x] `/plan-start` writes a `## Not tested` entry when it skips a check, and runs `roborepo plans start` for its transition. This run used the manual transition because the command did not exist yet.
+  - User confirmed during the 2026-10-06 closeout review that this behavior is resolved.
+- [x] `/plan-close` runs `roborepo plans stop-servers` after a complete, landed close and lists what it stopped. Agent behavior; needs a live session.
+  - User confirmed on 2026-10-06 that this behavior is verified.
 - [ ] In the Claude Code CLI, `/add-dir <worktree>` followed by `cd <worktree>` makes the write-scope hook treat the worktree as the checkout in use. Observed only in the Claude desktop app, through its directory-access tool.
   - Cycle [[0jped168]]: not confirmed by `/plan-write`, which ran in the desktop app. Its `/plan-start` confirms this only if run from the terminal CLI.

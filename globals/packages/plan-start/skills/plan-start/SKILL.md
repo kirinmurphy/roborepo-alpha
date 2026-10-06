@@ -176,8 +176,21 @@ then the run proceeds without questions.
     - the implementation diff;
     - runtime behavior;
     - acceptance criteria.
-12. Run completion-level verification.
-13. Report the final state.
+12. Set up and start the repository-appropriate test/development environment or build that
+    exercises the delivered behavior. Determine how to do this from the repository's own
+    instructions, scripts, configuration, and conventions; do not assume a universal framework,
+    command, or launch rule. Keep it available for manual verification and capture the resulting
+    shareable URL or link when the environment exposes one. If the repository cannot expose a
+    link, record what was started and why no link is available.
+13. Run completion-level verification, including manual verification against the started
+    environment when applicable.
+14. Re-read Git status and the implementation diff in the target worktree, then commit the
+    completed implementation changes there with a descriptive message. Include the relevant
+    plan-status updates that belong to the implementation worktree. Do not leave completed code
+    uncommitted. If the run made no implementation changes because the work was already complete,
+    report that no implementation commit was needed. Never create this commit on the primary
+    checkout or base branch.
+15. Report the final state.
 
 ## Not Tested
 
@@ -301,6 +314,10 @@ Implementation is complete when:
 - no unblocked task remains;
 - blockers and deferred scope are explicit;
 - the plan reflects implementation reality.
+- a repository-appropriate test/development environment or build was started, and its shareable
+  link is recorded when one exists;
+- completed implementation changes are committed in the target worktree, or the final report
+  explicitly says that no implementation commit was needed.
 
 Completion does not authorize:
 
@@ -308,7 +325,8 @@ Completion does not authorize:
 - infinite retries around external blockers;
 - guessing through consequential product decisions;
 - pushing, merging, publishing, or deleting worktrees without explicit permission or repository policy;
-- any commit on the base branch other than the plan-only start transition.
+- any commit on the base branch other than the plan-only start transition;
+- leaving completed implementation changes uncommitted in the target worktree.
 
 ## Final Report
 
@@ -329,6 +347,9 @@ Implementation result
 - Material decisions: <count>
 - Open questions: <count>
 - Not tested entries: <count>
+- Implementation commit: <commit and message, or "no implementation commit needed">
+- Test/development environment: <what was started>
+- Shareable link: <URL/link, or why none is available>
 - Verification passed: yes/no/partial
 - Implementation complete: yes/no
 ```
