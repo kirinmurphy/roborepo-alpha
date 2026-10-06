@@ -47,13 +47,11 @@ export function autoDiscoveryBlock(autoDiscovery, { onEnable, onDisable }) {
 
 // Every row offers the same actions whatever found the repository; how it was found is a quiet
 // detail, there to explain and never something to act on.
-export function repositoryRow(repository, { onPin, onIgnore }) {
+export function repositoryRow(repository, { onIgnore }) {
   const node = fill(tpl("tpl-sources-repository"), {
     name: repository.displayName,
     "found-by": repository.foundBy.length ? `Found by: ${repository.foundBy.join(", ")}` : "No current source",
-    pin: repository.pinned ? "Unpin" : "Pin",
   });
-  wireOnce(node.querySelector("[data-slot=pin]"), () => onPin(repository));
   wireOnce(node.querySelector("[data-slot=ignore]"), () => onIgnore(repository));
   return node;
 }

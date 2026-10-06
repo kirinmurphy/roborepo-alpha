@@ -82,6 +82,7 @@ export {
   setEnrollment,
   hideRepository,
   forgetRepository,
+  wipeRepositoryRegistry,
   pinRepository,
   setAlias,
 } from "./registry.mjs";

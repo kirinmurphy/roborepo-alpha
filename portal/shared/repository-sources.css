@@ -184,6 +184,14 @@
   font-size: var(--text-xs);
   margin: 8px 0 4px;
 }
+.sources-repositories-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+.sources-wipe {
+  color: var(--danger);
+}
 .sources-folders {
   display: grid;
   gap: 8px;
@@ -333,4 +341,14 @@
   margin: 0;
   color: var(--dim);
   font-size: var(--text-sm);
+}
+.auto-discovery-prompt-body {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.auto-discovery-prompt-body [data-slot="enable"] {
+  display: inline-block;
+  width: auto;
+  justify-self: start;
 }

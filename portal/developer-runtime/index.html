@@ -204,6 +204,12 @@
         <div class="instance-grid" data-slot="items"></div>
       </section>
     </template>
+    <template id="tpl-sync-status">
+      <span id="runtime-sync-status" class="sync-status" role="status" aria-live="polite">
+        <span class="sync-status-icon" aria-hidden="true"></span>
+        <span data-slot="text">Synced</span>
+      </span>
+    </template>
     <template id="tpl-toolbar-actions">
       <div class="toolbar-actions">
         <button id="refresh" type="button" class="icon-button" title="Refresh" aria-label="Refresh">
@@ -494,8 +500,8 @@
               <!-- No URL here: every checkout's app link sits in its own row, main checkout included,
                    so the header names the repository and nothing about where it runs. -->
               <!-- Card-level state, kept out of the right-hand column so
-                   that column stays reserved for the aligned per-row controls. "mock" marks a dev
-                   fixture; the lifecycle state shows only when the repository is NOT running (an
+                   that column stays reserved for the aligned per-row controls. "mock" marks a
+                   demonstration repository; the lifecycle state shows only when the repository is NOT running (an
                    active one says so by listing its members). -->
               <span class="repository-card-badges">
                 <span class="repository-state-badge is-mock" data-slot="fixture-badge" hidden>mock</span>

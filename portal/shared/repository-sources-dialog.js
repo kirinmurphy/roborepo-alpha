@@ -6,7 +6,7 @@ import * as api from "./repository-sources-api.js";
 import { autoDiscoveryBlock, folderRow, ignoredRow, repositoryRow } from "./repository-sources-templates.js";
 
 // `onChange` runs after every successful mutation so the host page can re-read its own data.
-export function createRepositorySourcesDialog({ onChange = () => {} } = {}) {
+export function createRepositorySourcesDialog({ onChange = () => {}, onPending = () => {} } = {}) {
   const dialog = document.getElementById("repository-sources-dialog");
   const info = document.getElementById("folder-scan-info");
   const slot = (name) => dialog.querySelector(`[data-slot="${name}"]`);
@@ -21,6 +21,7 @@ export function createRepositorySourcesDialog({ onChange = () => {} } = {}) {
   portalWireBackdropClose(info, () => info.close());
   slot("info").addEventListener("click", () => info.showModal());
   slot("add-toggle").addEventListener("click", () => setAddFormOpen(form.hidden));
+  slot("wipe").addEventListener("click", wipeRepositoryList);
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     addFolder();
@@ -48,6 +49,20 @@ export function createRepositorySourcesDialog({ onChange = () => {} } = {}) {
     } finally {
       submit.disabled = false;
     }
+  }
+
+  async function wipeRepositoryList() {
+    if (!payload?.repositories?.length) return;
+    const confirmed = window.confirm(
+      "Wipe the entire repository list? This removes all known and ignored repositories from RoboRepo. It does not delete files or folders. Enabled sources can add repositories again later.",
+    );
+    if (!confirmed) return;
+    const wipe = slot("wipe");
+    wipe.disabled = true;
+    const ok = await run(api.wipeRepositoryList);
+    // A successful run rendered the returned empty payload and keeps the button disabled. Restore
+    // it only when the request failed and the old repository list is still present.
+    if (!ok) wipe.disabled = false;
   }
 
   // An unreadable path cannot be classified, so the user states what it is and submits again. The
@@ -86,11 +101,11 @@ export function createRepositorySourcesDialog({ onChange = () => {} } = {}) {
     const visible = payload.repositories.filter((repository) => repository.visibility !== "hidden");
     const ignored = payload.repositories.filter((repository) => repository.visibility === "hidden");
     const rowActions = {
-      onPin: (repository) => run(() => api.setRepositoryPinned(repository.repositoryId, !repository.pinned).then(api.loadSources)),
       onIgnore: (repository) => run(() => api.setRepositoryIgnored(repository.repositoryId, true).then(api.loadSources)),
     };
     slot("repositories").replaceChildren(...visible.map((repository) => repositoryRow(repository, rowActions)));
     slot("repositories-empty").hidden = visible.length > 0;
+    slot("wipe").hidden = payload.repositories.length === 0;
     slot("ignored-group").hidden = ignored.length === 0;
     slot("ignored-summary").textContent = `Ignored (${ignored.length})`;
     slot("ignored").replaceChildren(...ignored.map((repository) => ignoredRow(repository, {
@@ -121,6 +136,9 @@ export function createRepositorySourcesDialog({ onChange = () => {} } = {}) {
     close: () => dialog.close(),
     // For the Enable buttons outside the dialog (empty states, prompts): same request, same
     // onChange, without opening anything.
-    enableAutoDiscovery: () => run(api.enableAutoDiscovery),
+    enableAutoDiscovery: () => {
+      onPending();
+      return run(api.enableAutoDiscovery);
+    },
   };
 }

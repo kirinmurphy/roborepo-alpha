@@ -276,6 +276,20 @@ export function forgetRepository(registry, id) {
   return true;
 }
 
+// Clear the entire repository registry without touching source configuration or any checkout on
+// disk. This is the Manage repositories dialog's explicit reset action; enabled sources may add
+// repositories again on their next refresh.
+export function wipeRepositoryRegistry(registry) {
+  const hasEntries = Object.keys(registry.repositories || {}).length > 0
+    || Object.keys(registry.aliases || {}).length > 0
+    || Object.keys(registry.localRootPaths || {}).length > 0;
+  if (!hasEntries) return false;
+  registry.repositories = {};
+  registry.aliases = {};
+  if (registry.localRootPaths !== undefined) registry.localRootPaths = {};
+  return true;
+}
+
 // Pin or unpin a repository. Idempotent — returns false when nothing changed.
 //
 // Deliberately a repository-level fact rather than a per-member one: pinning survives the process

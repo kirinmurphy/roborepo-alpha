@@ -23,6 +23,7 @@ import {
   updateRegistry,
   updateSources,
   userSources,
+  wipeRepositoryRegistry,
   walkRepositoryRoots,
 } from "../../modules/repositories/index.mjs";
 import { identifyRepositoryRoot, recordSourceFindings } from "./repository-source-refresh.mjs";
@@ -55,6 +56,11 @@ export function addRepositorySource({ path: input, kind = null, stateRoot = defa
 export function removeRepositorySource({ id, stateRoot = defaultStateRoot, fsApi = fs, homeDir = os.homedir(), now = new Date().toISOString() }) {
   updateSources({ stateRoot, fsApi, mutate: (store) => { removeSource(store, id); } });
   dropEvidence({ source: CONFIGURED_DISCOVERY_SOURCE, sourceId: id }, { stateRoot, fsApi, now });
+  return loadRepositorySources({ stateRoot, fsApi, homeDir });
+}
+
+export function wipeRepositoryList({ stateRoot = defaultStateRoot, fsApi = fs, homeDir = os.homedir() } = {}) {
+  updateRegistry({ stateRoot, fsApi, mutate: (registry) => wipeRepositoryRegistry(registry) });
   return loadRepositorySources({ stateRoot, fsApi, homeDir });
 }
 

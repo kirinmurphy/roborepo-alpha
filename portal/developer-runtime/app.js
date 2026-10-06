@@ -20,7 +20,10 @@ const historyView = createHistoryView({ onStale: () => load({ force: true }) });
 
 // Enabling auto-discovery starts the first process scan server-side; the forced load then waits on
 // that same in-flight scan, so the page fills in as soon as it lands.
-const sourcesDialog = createRepositorySourcesDialog({ onChange: () => load({ force: true }) });
+const sourcesDialog = createRepositorySourcesDialog({
+  onPending: () => setRuntimeSyncStatus(true),
+  onChange: () => load({ force: true }),
+});
 const autoDiscoveryCta = document.getElementById("auto-discovery-cta");
 autoDiscoveryCta.append(autoDiscoveryPrompt({ onEnable: () => sourcesDialog.enableAutoDiscovery() }));
 
@@ -28,6 +31,11 @@ autoDiscoveryCta.append(autoDiscoveryPrompt({ onEnable: () => sourcesDialog.enab
 // node for the page's lifetime so refresh/settings listeners and live spinner state never get
 // torn down by a rebuild.
 const toolbarActionsNode = tmpl.toolbarActions();
+const syncStatusNode = tmpl.syncStatus();
+const syncStatusText = syncStatusNode.querySelector("[data-slot=text]");
+const runtimeHeaderNode = document.createElement("div");
+runtimeHeaderNode.className = "runtime-group-header";
+runtimeHeaderNode.append(syncStatusNode, toolbarActionsNode);
 
 const refs = {
   refresh: toolbarActionsNode.querySelector("#refresh"),
@@ -67,6 +75,7 @@ const renderedCards = new Map();
 // expects the view to reflect current reality, so a full rebuild (reconcile: false) is fine here
 // even though the background poll must never do that on its own.
 async function load({ force = false } = {}) {
+  setRuntimeSyncStatus(true);
   if (force) setRefreshing(true);
   try {
     const snap = force
@@ -75,6 +84,7 @@ async function load({ force = false } = {}) {
     applySnapshot(snap, { reconcile: !force });
   } catch (err) {
     showError(err.message);
+    setRuntimeSyncStatus(false);
   } finally {
     portalHideLoading();
     if (force) setRefreshing(false);
@@ -88,6 +98,12 @@ function setRefreshing(refreshing) {
   refs.refreshIcon.hidden = refreshing;
 }
 
+function setRuntimeSyncStatus(syncing) {
+  syncStatusNode.classList.toggle("is-syncing", syncing);
+  syncStatusNode.classList.toggle("is-synced", !syncing);
+  syncStatusText.textContent = syncing ? "Syncing" : "Synced";
+}
+
 // `reconcile: true` (background poll) patches existing cards in place and never removes a
 // card that disappeared from the snapshot — it's marked offline instead. User-triggered
 // mutations (hide/favorite/associate/alias/settings) pass reconcile: false (the default) and
@@ -95,6 +111,7 @@ function setRefreshing(refreshing) {
 // right away.
 function applySnapshot(snapshot, { reconcile = false } = {}) {
   lastSnapshot = snapshot;
+  setRuntimeSyncStatus(snapshot.refresh?.state === "refreshing");
   autoDiscoveryCta.hidden = snapshot.autoDiscovery?.enabled !== false;
   const hash = state.snapshotHash(snapshot);
   // The hash-skip only makes sense for the reconcile path, where "nothing changed" really does
@@ -112,12 +129,21 @@ function render(snapshot, { reconcile }) {
   renderWarnings(snapshot);
   pruneDepartedTracking(snapshot);
 
+  // Keep the first-run Runtime surface focused on its one actionable banner. The full empty state
+  // remains available once discovery is enabled, and all repository/member rendering stays intact
+  // for real data (or when the retained mock-view flag is turned back on).
+  if (snapshot.autoDiscovery?.enabled === false && !hasRuntimeContent(snapshot)) {
+    renderedCards.clear();
+    refs.content.replaceChildren();
+    return;
+  }
+
   const sections = [
     {
       id: "active",
       kind: "group",
       title: "Running now",
-      headerEnd: toolbarActionsNode,
+      headerEnd: runtimeHeaderNode,
       // Refresh/Settings live in this header, so it must always render even with zero active
       // apps — otherwise those controls would vanish along with the empty-state fallback.
       alwaysShow: true,
@@ -220,6 +246,16 @@ function render(snapshot, { reconcile }) {
   }
 
   reconcileSections(sections, snapshot);
+}
+
+function hasRuntimeContent(snapshot) {
+  return [
+    snapshot.repositories,
+    snapshot.projects,
+    snapshot.composeProjects,
+    snapshot.unmatchedInstances,
+    snapshot.inactiveProjects,
+  ].some((items) => Array.isArray(items) && items.length > 0);
 }
 
 function emptyStateNode(snapshot) {

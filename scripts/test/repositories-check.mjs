@@ -24,6 +24,7 @@ import {
   registerLocalRoot,
   setEnrollment,
   hideRepository,
+  wipeRepositoryRegistry,
   setAlias,
   resolveRegistryAlias,
   associateResolved,
@@ -137,6 +138,18 @@ try {
   assert.equal(recordDiscovery(reg, "git:github.com/kirinmurphy/roborepo", { source: "developer-runtime", evidence: "git-remote", confidence: "high", now }), false, "same-source rediscovery within debounce is a no-op");
   recordDiscovery(reg, "git:github.com/kirinmurphy/roborepo", { source: "plans", evidence: "configured-scan-root", confidence: "high", now });
   assert.equal(reg.repositories["git:github.com/kirinmurphy/roborepo"].discoveries.length, 2, "distinct sources both recorded");
+
+  const wipeReg = defaultRegistry();
+  upsertRepository(wipeReg, { id: "local:2222222222222222", kind: "local", displayName: "wipe-me", now });
+  wipeReg.aliases["old-wipe-id"] = "local:2222222222222222";
+  wipeReg.localRootPaths = {
+    aaaa2222: { path: tempRoot, repositoryId: "local:2222222222222222", firstSeenAt: now, lastSeenAt: now },
+  };
+  assert.equal(wipeRepositoryRegistry(wipeReg), true, "wiping a populated registry changes it");
+  assert.deepEqual(wipeReg.repositories, {});
+  assert.deepEqual(wipeReg.aliases, {});
+  assert.deepEqual(wipeReg.localRootPaths, {});
+  assert.equal(wipeRepositoryRegistry(wipeReg), false, "wiping an empty registry is a no-op");
 
   assert.equal(registerLocalRoot(reg, "git:github.com/kirinmurphy/roborepo", { rootId: "aaaa1111", now }), true);
   assert.equal(registerLocalRoot(reg, "git:github.com/kirinmurphy/roborepo", { rootId: "aaaa1111", now }), false, "same root within debounce is a no-op");

@@ -100,6 +100,7 @@ const row = (page, rootId) => page.locator(`.repository-root[data-root-id="${roo
 
 test.describe("Runtime checkout rows (developer-runtime-repository-row-layout)", () => {
   test("the main checkout row links its app, not its tooling, and the card header links nothing", async ({ page }) => {
+    await expect(page.locator("#runtime-sync-status")).toHaveText("Synced");
     const main = row(page, "demo-main");
     await expect(main.getByRole("link", { name: ":4317", exact: true })).toBeVisible();
     await expect(main.getByRole("link", { name: ":6006", exact: true })).toHaveCount(0);

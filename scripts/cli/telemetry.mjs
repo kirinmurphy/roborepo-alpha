@@ -24,7 +24,7 @@ import { computePortalSourceHash } from "./portal-source-hash.mjs";
 import { readConfigSnapshot, loadConfigSource } from "./config.mjs";
 import { mutatePackage, setSkillInstalled, setBehaviorBucket, setCommandBucket } from "./config-mutate.mjs";
 import { loadPlansSnapshot, loadCachedPlansSnapshot, loadPlanDocument, buildPlansPrompt, updatePlanPriority, updatePlanLifecycle, refreshPlans } from "./plans.mjs";
-import { loadRepositorySources, addRepositorySource, removeRepositorySource, setRepositorySourceEnabled, refreshRepositorySources, autoDiscoveryEnabled } from "./repository-sources.mjs";
+import { loadRepositorySources, addRepositorySource, removeRepositorySource, setRepositorySourceEnabled, refreshRepositorySources, wipeRepositoryList, autoDiscoveryEnabled } from "./repository-sources.mjs";
 import {
   loadDeveloperRuntimeSnapshot,
   loadDeveloperRuntimeHistory,
@@ -35,6 +35,7 @@ import {
   setDeveloperRuntimeRepositoryPinned,
   forgetDeveloperRuntimeRepository,
   setDeveloperRuntimePortalInfo,
+  clearDeveloperRuntimeSnapshotCache,
 } from "./developer-runtime.mjs";
 import {
   loadRepositoriesPayload,
@@ -45,6 +46,7 @@ import {
 import { loadRegistry, updateRegistry, recordDiscoveryIfKnown } from "../../modules/repositories/index.mjs";
 import { buildRepositoryHashIndex } from "./telemetry-repository.mjs";
 import { createRepositoryOverviewService } from "./repository-overview.mjs";
+import { MOCK_FIRST_RUN_VIEWS_ENABLED, mockHomeOverview, purgePersistedMockRepositories } from "./mock-home.mjs";
 import { buildTelemetryRepositoryProjection, fixtureTelemetryRepositories, homeTelemetryProjection } from "./telemetry-repository-overview.mjs";
 import { privacyHash } from "./telemetry-schemas/hash.mjs";
 import { buildAnalysisPrompt } from "../harnesses/transcript-locate.mjs";
@@ -732,6 +734,10 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     }
   }
 
+  // Remove synthetic records left by an earlier development-only mock implementation. Current
+  // first-run mocks are in-memory Home data and never enter the canonical registry.
+  purgePersistedMockRepositories({ stateRoot });
+
   if (options.detach) {
     const port = await startDetachedPortal(options.port, { allowPortFallback, portExplicit: options.portExplicit });
     const detachedPortalUrl = `http://127.0.0.1:${port}`;
@@ -776,6 +782,8 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     loadRuntime: () => loadDeveloperRuntimeSnapshot(),
     loadPlans: () => loadCachedPlansSnapshot(),
     loadAutoDiscoveryEnabled: () => autoDiscoveryEnabled(),
+    loadMockHomeOverview: mockHomeOverview,
+    mockHomeEnabled: MOCK_FIRST_RUN_VIEWS_ENABLED,
     loadTelemetry: () => homeTelemetryProjection({
       enabled: readTelemetryState().enabled === true,
       projection: loadTelemetryRepositoryProjection(),
@@ -833,6 +841,11 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     removeRepositorySource: (params) => afterSourceChange(removeRepositorySource(params)),
     setRepositorySourceEnabled: (params) => afterSourceChange(setRepositorySourceEnabled({ ...params, onAutoDiscoveryEnabled: startAutoDiscoveryScan })),
     refreshRepositorySources: (params) => afterSourceChange(refreshRepositorySources({ ...params, onAutoDiscoveryEnabled: startAutoDiscoveryScan })),
+    wipeRepositoryList: () => {
+      const payload = wipeRepositoryList();
+      clearDeveloperRuntimeSnapshotCache();
+      return afterSourceChange(payload);
+    },
     mutatePackage: (id, enabled) => mutatePackage(id, enabled),
     mutateSkill: (id, enabled) => setSkillInstalled(id, enabled),
     // Section-level bulk enable/disable (portal bulkToggle sections). Lazy import: keeps the

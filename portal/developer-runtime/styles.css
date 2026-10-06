@@ -775,6 +775,36 @@ main {
   padding: 24px;
   color: var(--desc-dim);
 }
+.runtime-group-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.sync-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--desc-dim);
+  font-size: var(--text-xs);
+  line-height: 1;
+  white-space: nowrap;
+}
+.sync-status-icon {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: #35a66f;
+}
+.sync-status.is-syncing .sync-status-icon {
+  border: 1.5px solid var(--dim);
+  border-top-color: transparent;
+  background: transparent;
+  animation: sync-status-spin 0.8s linear infinite;
+}
+.sync-status.is-syncing { color: var(--dim); }
+.sync-status.is-synced { color: var(--desc-dim); }
+@keyframes sync-status-spin { to { transform: rotate(360deg); } }
 dialog {
   color: var(--ink);
   background: var(--panel);
@@ -1296,7 +1326,7 @@ dialog::backdrop {
 .resource-concern-badge[data-tone="danger"] {
   background: var(--danger);
 }
-/* Card-level state badges — lifecycle (idle, stale) and "mock" for dev fixtures — just after the
+/* Card-level state badges — lifecycle (idle, stale) and "mock" for demonstration repositories — just after the
  * repository's info icon. Filled with inverted text: an outlined badge was too easy to miss, and
  * these change how the whole card should be read. */
 .repository-card-badges {

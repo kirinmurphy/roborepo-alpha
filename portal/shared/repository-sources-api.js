@@ -25,6 +25,10 @@ export function refreshSources(id = null) {
   return portalPostJson("/api/repositories/sources/refresh", { id });
 }
 
+export function wipeRepositoryList() {
+  return portalPostJson("/api/repositories/sources/wipe", {});
+}
+
 export function enableAutoDiscovery() {
   return setSourceEnabled(AUTO_DISCOVERY_ID, true);
 }

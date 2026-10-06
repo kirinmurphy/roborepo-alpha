@@ -11,13 +11,14 @@ import { test, expect } from "@playwright/test";
 const ENABLE = "Enable auto-discovery of active repos";
 
 test.describe("first-run repository states", () => {
-  test("Home with nothing known and auto-discovery off: Enable is primary, Add a folder secondary", async ({ page }) => {
+  test("Home with nothing known and auto-discovery off shows only the two onboarding banners", async ({ page }) => {
     await routeHome(page, { repositories: [], autoDiscovery: { enabled: false } });
+    await page.route("**/api/config", (route) => route.fulfill({ json: { harnesses: [{ id: "claude", displayName: "Claude Code" }], machineHarnesses: [], packages: [] } }));
     await page.goto("/");
-    const empty = page.locator(".repository-empty-state");
-    await expect(empty.getByRole("heading", { name: "No repositories yet" })).toBeVisible();
-    await expect(empty.getByRole("button", { name: ENABLE })).toHaveAttribute("data-btn", "cta");
-    await expect(empty.getByRole("button", { name: "Add a folder" })).toHaveAttribute("data-btn", "text");
+    await expect(page.locator("#home-harness-banner portal-notice")).toBeVisible();
+    await expect(page.locator(".auto-discovery-prompt").getByRole("button", { name: ENABLE })).toBeVisible();
+    await expect(page.locator(".repository-empty-state")).toHaveCount(0);
+    await expect(page.locator(".home-heading")).toBeHidden();
     await expect(page.getByRole("button", { name: "Manage repositories" })).toBeHidden();
   });
 
@@ -30,20 +31,63 @@ test.describe("first-run repository states", () => {
     await expect(empty.getByRole("button", { name: "Add a folder" })).toBeVisible();
   });
 
-  test("Home with repositories known and auto-discovery off shows the compact prompt and Manage repositories", async ({ page }) => {
+  test("Home can still render the retained mock view when explicitly supplied", async ({ page }) => {
+    await page.route("**/api/home", async (route) => {
+      const data = await (await route.fetch()).json();
+      const template = data.repositories[0];
+      const mockRepositories = [
+        ["git:github.com/example/shared-stack-fixture", "shared-stack-fixture"],
+        ["git:github.com/example/multi-member-fixture", "multi-member-fixture"],
+        ["git:github.com/example/idle-checkout-fixture", "idle-checkout-fixture"],
+      ].map(([repositoryId, displayName], index) => ({
+        ...template,
+        repositoryId,
+        urlKey: `mock-repository-${index + 1}`,
+        displayName,
+        fixture: true,
+      }));
+      await route.fulfill({ json: { ...data, autoDiscovery: { enabled: false }, repositories: mockRepositories } });
+    });
     await page.goto("/");
-    await expect(page.locator(".repository-card").first()).toBeVisible();
-    await expect(page.locator(".auto-discovery-prompt").getByRole("button", { name: ENABLE })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Manage repositories" })).toBeVisible();
+
+    await expect(page.locator(".auto-discovery-prompt")).toContainText("RoboRepo can automatically discover your developer activity on this machine across active Git repositories, HTTP activity, and Docker containers.");
+    await expect(page.locator(".auto-discovery-prompt [data-notice-icon] portal-icon")).toHaveAttribute("name", "info");
+    await expect(page.locator(".home-mock-disclaimer")).toContainText("These are mocked versions of what you will see");
+    await expect(page.locator("#home-sync-status")).toHaveText("Synced");
+    expect(await page.locator(".repository-card").count()).toBe(3);
+    for (const name of ["Mock: Shared Compose stack", "Mock: Multi-member app", "Mock: Idle checkout"]) {
+      const card = page.locator(".repository-card", { has: page.getByRole("heading", { name, exact: true }) });
+      await expect(card).toBeVisible();
+      await expect(card.locator("[data-slot=mock-badge]")).toHaveText("mock");
+    }
+    expect(await page.locator(".home-auto-discovery").evaluate((node) => node.nextElementSibling?.classList.contains("home-heading"))).toBe(true);
   });
 
   test("Runtime with auto-discovery off offers Enable, and Enable posts the consent", async ({ page }) => {
+    await page.route("**/api/developer-runtime", (route) => route.fulfill({
+      json: {
+        generatedAt: new Date().toISOString(),
+        refresh: { state: "refreshing", startedAt: new Date().toISOString(), error: null, generation: 0 },
+        capabilities: { discovery: "supported", platform: "mock" },
+        warnings: [],
+        projects: [],
+        composeProjects: [],
+        unmatchedInstances: [],
+        repositories: [],
+        inactiveProjects: [],
+        hiddenRepositories: [],
+        hiddenCount: 0,
+        settings: { aliases: [], associations: [], hidden: [] },
+        autoDiscovery: { enabled: false },
+      },
+    }));
     await page.route("**/api/repositories/sources/auto-discovery/enabled", (route) => route.fulfill({
       json: { revision: 2, loadError: null, autoDiscovery: { id: "auto-discovery", enabled: true, repositoryCount: 0 }, sources: [], repositories: [] },
     }));
     await page.goto("/runtime");
     const cta = page.locator("#auto-discovery-cta");
     await expect(cta.getByRole("button", { name: ENABLE })).toBeVisible();
+    await expect(page.locator("#content")).toBeEmpty();
     const enable = page.waitForRequest((request) => request.url().endsWith("/api/repositories/sources/auto-discovery/enabled"));
     await cta.getByRole("button", { name: ENABLE }).click();
     expect((await enable).postDataJSON()).toEqual({ enabled: true });
@@ -93,6 +137,7 @@ test.describe("Manage repositories dialog", () => {
     await page.getByRole("button", { name: "Manage repositories" }).click();
     const dialog = page.locator("#repository-sources-dialog");
     await expect(dialog.getByRole("button", { name: ENABLE })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: /Pin|Unpin/ })).toHaveCount(0);
 
     await dialog.getByRole("button", { name: "Add a folder to find more repos" }).click();
     await dialog.getByLabel("Repository or folder of repositories").fill(projects);
@@ -112,6 +157,7 @@ test.describe("Manage repositories dialog", () => {
     await folder.getByRole("button", { name: "Remove" }).click();
     await expect(dialog.locator("[data-slot=folders] li")).toHaveCount(0);
     await expect(dialog.locator("[data-slot=repositories] li", { hasText: "dialog-fixture" })).toContainText("No current source", { timeout: 5000 });
+
   });
 
   test("an unreadable path asks what it is before it is added", async ({ page }) => {
@@ -174,6 +220,24 @@ test.describe("Manage repositories dialog", () => {
     await expect(close).toBeInViewport();
     expect(await dialog.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
     await expect(dialog).toBeVisible();
+  });
+
+  test("wipes the repository list after confirmation", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Manage repositories" }).click();
+    const dialog = page.getByRole("dialog", { name: "Manage repositories" });
+    await expect(dialog.locator("[data-slot=repositories] li")).not.toHaveCount(0);
+
+    let confirmationMessage;
+    page.once("dialog", (browserDialog) => {
+      confirmationMessage = browserDialog.message();
+      browserDialog.accept();
+    });
+    await dialog.getByRole("button", { name: "Wipe clean" }).click();
+    expect(confirmationMessage).toContain("Wipe the entire repository list");
+    await expect(dialog.locator("[data-slot=repositories] li")).toHaveCount(0);
+    await expect(dialog.locator("[data-slot=repositories-empty]")).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Wipe clean" })).toBeHidden();
   });
 });
 

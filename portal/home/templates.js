@@ -4,6 +4,21 @@ import { appendRepositoryDomains } from "./domains.js";
 import { matchedPlanIdentity, unmatchedPlanRow } from "./plan-rows.js";
 import { buildRootSection } from "/portal/developer-runtime/repository-root-row.js";
 
+const MOCK_NAMES = {
+  "git:github.com/example/shared-stack-fixture": "Mock: Shared Compose stack",
+  "git:github.com/example/multi-member-fixture": "Mock: Multi-member app",
+  "git:github.com/example/idle-checkout-fixture": "Mock: Idle checkout",
+};
+
+export function isHomeMockRepository(repository) {
+  return Boolean(repository?.fixture && (MOCK_NAMES[repository.repositoryId] || /-fixture$/i.test(repository.displayName || "")));
+}
+
+function homeRepositoryName(repository) {
+  if (!isHomeMockRepository(repository)) return repository.displayName;
+  return MOCK_NAMES[repository.repositoryId] || `Mock: ${humanizeMockName(repository.displayName)}`;
+}
+
 export function repositoryDirectory(repositories, actions) {
   const node = tpl("tpl-repository-directory");
   node.append(...repositories.map((repository) => repositoryCard(repository, actions)));
@@ -19,13 +34,19 @@ function repositoryCard(repository, actions) {
   const node = fill(tpl("tpl-repository-card"), {
   });
   mountRepositoryRow(node, {
-    name: repository.displayName,
+    name: homeRepositoryName(repository),
     href: repositoryPageUrl(repository),
     providerUrl: repository.providerUrl,
     menuItems: homeMenuItems(repository),
     onToggleMenu: actions.onToggleMenu,
     onSelectMenu: (key, item, event) => actions.onSelectMenu(key, repository, item, event),
   });
+  if (isHomeMockRepository(repository)) {
+    const badge = node.querySelector("[data-slot=mock-badge]");
+    badge.hidden = false;
+    badge.classList.add("repository-state-badge", "is-mock");
+    badge.title = "Mock repository used to demonstrate the Home view";
+  }
   const lifecycleState = repository.lifecycle?.state || "active";
   if (lifecycleState !== "active") {
     node.classList.add("is-not-running");
@@ -38,6 +59,13 @@ function repositoryCard(repository, actions) {
   node.querySelector("[data-slot=checkouts]").append(...cardRows(repository.domains, actions));
   appendRepositoryDomains(node.querySelector("[data-slot=domains]"), repository.domains);
   return node;
+}
+
+function humanizeMockName(name) {
+  return String(name || "repository")
+    .replace(/-fixture$/i, "")
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 // Below the repository row: the main checkout(s), then every active plan — a matched plan AS its

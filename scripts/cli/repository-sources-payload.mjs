@@ -2,6 +2,7 @@
 // repository with a quiet "Found by" explanation. This is the only payload allowed to carry source
 // paths (pljvmyh §6), and even here they are home-collapsed display strings.
 import { AUTO_DISCOVERY_SOURCE_ID, CONFIGURED_DISCOVERY_SOURCE, autoDiscoverySource, userSources } from "../../modules/repositories/index.mjs";
+import { isFixtureRepository } from "../../modules/developer-runtime/snapshot.mjs";
 
 const DISCOVERY_LABELS = {
   "developer-runtime": "auto-discovery",
@@ -15,7 +16,12 @@ const DISCOVERY_LABELS = {
 export function sourcesManagementPayload({ store, registry, homeDir }) {
   const auto = autoDiscoverySource(store);
   const labels = new Map(userSources(store).map((source) => [source.id, displayPath(source.path, homeDir)]));
-  const records = Object.values(registry.repositories || {}).filter((record) => !registry.aliases?.[record.id]);
+  // Demonstration repositories are intentionally absent from every user-facing source-management
+  // list. They may remain in old registry state after an earlier mock implementation, but they are
+  // not a source the user can manage and should never look like one.
+  const records = Object.values(registry.repositories || {}).filter((record) =>
+    !registry.aliases?.[record.id] && !isFixtureRepository(record.id)
+  );
   const countFor = (predicate) => records.filter((record) => record.discoveries.some(predicate)).length;
   return {
     revision: store.revision,
@@ -41,7 +47,6 @@ export function sourcesManagementPayload({ store, registry, homeDir }) {
         urlKey: record.urlKey,
         displayName: record.displayName,
         visibility: record.visibility,
-        pinned: record.pinned === true,
         foundBy: foundBy(record, labels),
       }))
       .sort((a, b) => a.displayName.localeCompare(b.displayName)),

@@ -67,6 +67,7 @@ export const repositoriesRoutes = defineRoutes([
   },
   postRoute("/api/repositories/sources", (handlers, body) => handlers.addRepositorySource({ path: body.path, kind: body.kind || null })),
   postRoute("/api/repositories/sources/refresh", (handlers, body) => handlers.refreshRepositorySources({ id: body.id || null })),
+  postRoute("/api/repositories/sources/wipe", (handlers) => handlers.wipeRepositoryList()),
   postRoute("/api/repositories/sources/:sourceId/enabled", (handlers, body, params) => handlers.setRepositorySourceEnabled({ id: params.sourceId, enabled: body.enabled })),
   postRoute("/api/repositories/sources/:sourceId/remove", (handlers, body, params) => handlers.removeRepositorySource({ id: params.sourceId })),
   {

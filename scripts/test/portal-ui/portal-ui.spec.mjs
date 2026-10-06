@@ -275,9 +275,9 @@ test.describe("repository-first portal Home", () => {
       expect(focused.text).toBe(expected);
       expect(focused.visible).toBe(true);
     }
-    // Repositories are known and auto-discovery is off (the hermetic default), so the heading's
-    // Manage repositories action and the compact Enable prompt come before the first card.
-    for (const expected of ["Manage repositories", "Enable auto-discovery of active repos"]) {
+    // The compact Enable prompt now sits above the Active Repos section, so its action comes before
+    // the heading's Manage repositories action and both come before the first card.
+    for (const expected of ["Enable auto-discovery of active repos", "Manage repositories"]) {
       await page.keyboard.press("Tab");
       const focused = await focusSummary(page);
       expect(focused.text).toBe(expected);

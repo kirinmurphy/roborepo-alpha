@@ -19,6 +19,9 @@
         <summary data-slot="ignored-summary">Ignored</summary>
         <ul class="sources-list" data-slot="ignored"></ul>
       </details>
+      <div class="sources-repositories-actions">
+        <button type="button" data-btn="text" class="sources-wipe" data-slot="wipe" hidden>Wipe clean</button>
+      </div>
     </section>
     <section class="sources-folders" aria-label="Folders">
       <button type="button" data-btn="text" data-slot="add-toggle">Add a folder to find more repos</button>
@@ -89,7 +92,6 @@
       <span class="sources-row-detail" data-slot="found-by"></span>
     </div>
     <div class="sources-row-actions">
-      <button type="button" data-btn="text" data-slot="pin"></button>
       <button type="button" data-btn="text" data-slot="ignore">Ignore repository</button>
     </div>
   </li>
@@ -127,8 +129,10 @@
 </template>
 <!-- The compact prompt Home and Runtime show above known repositories while auto-discovery is off. -->
 <template id="tpl-auto-discovery-prompt">
-  <aside class="auto-discovery-prompt">
-    <p>Auto-discovery is off. Turn it on and repositories you run a dev server in appear here on their own.</p>
-    <button type="button" data-btn="cta" data-slot="enable">Enable auto-discovery of active repos</button>
-  </aside>
+  <portal-notice class="auto-discovery-prompt" variant="info" icon="info">
+    <div class="auto-discovery-prompt-body">
+      <p>RoboRepo can automatically discover your developer activity on this machine across active Git repositories, HTTP activity, and Docker containers.</p>
+      <button type="button" data-btn="cta" data-slot="enable">Enable auto-discovery of active repos</button>
+    </div>
+  </portal-notice>
 </template>

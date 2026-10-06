@@ -13,6 +13,9 @@ const content = document.getElementById("home-content");
 const warning = document.getElementById("home-warning");
 const harnessBanner = document.getElementById("home-harness-banner");
 const autoDiscoveryMount = document.getElementById("home-auto-discovery");
+const mockDisclaimer = document.getElementById("home-mock-disclaimer");
+const homeHeading = document.querySelector(".home-heading");
+const homeSyncStatus = document.getElementById("home-sync-status");
 const manageRepositories = document.getElementById("manage-repositories");
 let renderedVersion = null;
 let pending = false;
@@ -71,28 +74,37 @@ async function refresh({ force = false } = {}) {
     return;
   }
   pending = true;
+  setHomeSyncStatus(true);
   try {
     const overview = await api.loadHomeOverview();
+    setHomeSyncStatus(overview.sync?.state === "syncing");
     const version = JSON.stringify(overview);
     const hasActiveControl = !force && (content.contains(document.activeElement) || content.querySelector("details[open], .menu-button-panel, [data-menu]:not([hidden])") || document.querySelector("dialog[open]"));
     if (version !== renderedVersion && !hasActiveControl) {
       const known = overview.repositories.length > 0;
       const autoDiscoveryEnabled = overview.autoDiscovery?.enabled === true;
+      const firstRunWithoutMocks = !known && !autoDiscoveryEnabled;
       const body = known
         ? repositoryDirectory(overview.repositories, menuActions)
-        : repositoryEmptyState({ autoDiscoveryEnabled, ...onboarding });
-      content.replaceChildren(body);
+        : firstRunWithoutMocks
+          ? null
+          : repositoryEmptyState({ autoDiscoveryEnabled, ...onboarding });
+      content.replaceChildren(...(body ? [body] : []));
+      homeHeading.hidden = firstRunWithoutMocks;
       manageRepositories.hidden = !known;
-      autoDiscoveryMount.hidden = !known || autoDiscoveryEnabled;
+      autoDiscoveryMount.hidden = autoDiscoveryEnabled;
       autoDiscoveryMount.replaceChildren(...(autoDiscoveryMount.hidden ? [] : [autoDiscoveryPrompt(onboarding)]));
+      mockDisclaimer.hidden = true;
       if (overview.unresolvedActivity.length) content.append(unresolvedActivity(overview.unresolvedActivity));
       renderedVersion = version;
     }
     warning.hidden = true;
     portalSetUpdatedAt(new Date(), { cadenceMs: POLL_MS });
   } catch (error) {
+    setHomeSyncStatus(false);
     warning.textContent = `Repository overview unavailable: ${error.message}`;
     warning.hidden = false;
+    mockDisclaimer.hidden = true;
     if (!content.hasChildNodes()) content.replaceChildren(repositoryEmptyState({ autoDiscoveryEnabled: false, ...onboarding }));
   } finally {
     pending = false;
@@ -102,6 +114,12 @@ async function refresh({ force = false } = {}) {
     forceQueued = false;
     await refresh({ force: true });
   }
+}
+
+function setHomeSyncStatus(syncing) {
+  homeSyncStatus.classList.toggle("is-syncing", syncing);
+  homeSyncStatus.classList.toggle("is-synced", !syncing);
+  homeSyncStatus.querySelector("[data-slot=text]").textContent = syncing ? "Syncing" : "Synced";
 }
 
 await Promise.all([refresh(), renderHarnessBanner()]);
