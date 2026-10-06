@@ -17,8 +17,10 @@ Resolve:
 
 - the repository root and base branch (`main` unless repository policy names another);
 - the selected plan, by id or path;
-- the repository's own test command, from `package.json` scripts, a `Makefile`, `justfile`,
-  `pyproject.toml`, or CI config — never an invented one;
+- the repository's canonical completion gate and any plan-specific tests, from `package.json`
+  scripts, a `Makefile`, `justfile`, `pyproject.toml`, or CI config — never an invented one. A
+  release or publication check is not a universal closure requirement unless the plan owns
+  release or publication behavior;
 - current Git state, including the plan's `worktree` and that worktree's branch.
 
 The eligible source lifecycle is the one that precedes completion in the plan lifecycle policy
@@ -36,13 +38,13 @@ Load these when the run calls for them; do not wait to be asked for them by name
 
 Each row is its own optional package, so check it before loading it:
 
-1. Run `roborepo package status <skill> --json`.
+1. Check the host's skill/package manager for `<skill>` and read its availability and activation state.
 2. If `available` is true, `enabled` is true, and `status` is `enabled` or `configured`, load it.
 3. If it is disabled, ask: "`<skill>` is not enabled. Enable it, or skip it for this run?"
-   - **Enable:** run `roborepo package enable <skill>` with the user's permission, then load it.
+   - **Enable:** use the host's package manager to enable `<skill>` with the user's permission, then load it.
    - **Skip:** continue without it, and name it as skipped in the final report.
 4. If `enabled` and `status` disagree (`partial`, `external`), report the status, offer
-   `roborepo package reconcile` or skip, and never describe a drifted package as loaded.
+   the host's package reconciliation command or skip, and never describe a drifted package as loaded.
 5. If it is `missing` or `unavailable`, skip it and say so in the final report.
 
 ## Workflow
@@ -51,16 +53,25 @@ Each step runs only when the one before it passes. Read `references/verdict.md` 
 
 ### 1. Run the tests
 
-Run the repository's test command from the checkout that holds the plan's landed work, and wait for
-it. Tests run first because a red suite changes the code the verdict would judge.
+Run the repository's canonical completion gate from the checkout that holds the plan's landed work,
+then run focused tests named by the plan. Prefer the repository's canonical CI command over a broad
+discovery command when that command also includes release-only or
+optional environment suites. Tests run first because a red plan-relevant suite changes the code the
+verdict would judge.
 
-On failure, refuse: report the failing output and stop. If the failure is clearly pre-existing and
-unrelated (it also fails on the base branch), say so and ask whether to continue; do not decide
-that alone.
+On a plan-relevant failure, refuse: report the failing output and stop. For an unrelated,
+pre-existing failure, report the exact output and continue only when the user explicitly waives it;
+record the failure as unverified in the completion evidence. The availability of optional tools or
+environment fixtures is not a closure prerequisite for an unrelated plan; evaluate each check
+against the behavior this plan owns. Likewise, environment-matrix, release, registry, and
+publication checks are relevant only when the
+plan owns that environment or release behavior; otherwise classify them as optional evidence rather
+than universal closure gates.
 
 ### 2. Validate the document
 
-Run `roborepo plans validate <plan> --json`. Its findings feed the verdict; a lifecycle finding
+Run the repository's canonical plan validator for `<plan>` with machine-readable output. Its findings
+feed the verdict; a lifecycle finding
 such as an empty `next_action` on an active plan is reported, never invented away.
 
 ### 3. Check the plan against the code
@@ -87,7 +98,7 @@ Follow `references/verdict.md`:
 ### 5. Confirm `## Not tested` is clear
 
 Unchecked `## Not tested` entries are built work nobody confirmed. While any remain, refuse and list
-them; `roborepo plans validate` reports them as `UNCONFIRMED_NOT_TESTED`. Never check one off
+them; the plan validator reports them as `UNCONFIRMED_NOT_TESTED`. Never check one off
 yourself. The user clears an entry by confirming it by hand, or by deleting it with the reason
 recorded in the plan's `## Decision Log`.
 
@@ -98,24 +109,31 @@ The work must be in the base branch, including after a squash or rebase merge.
 - A plan with an empty `worktree` was implemented on the base branch; it has landed.
 - Otherwise resolve the worktree's branch from `git worktree list --porcelain` and run
   `git merge-base --is-ancestor <branch> <base>`. Exit 0 proves it landed.
-- Any other result, or a worktree that no longer resolves, is `landed: unconfirmed`. Ancestry can
-  only prove a merge, not disprove one: a squash merge reads as unmerged. Refuse, and report the
-  branch, the evidence, and that the content-level landed test from the worktree-cleanup plan
-  (`a7bslb00`) is what will settle squash merges once it exists.
+- If ancestry returns non-zero, perform a content-level landed check for squash and rebase merges:
+  identify the implementation files changed by the worktree branch, compare those files with the
+  base branch, and confirm that the implementation content is present on the base branch. Ignore
+  only lifecycle-only plan moves and documented post-merge plan synchronization; do not ignore
+  implementation differences. Record the compared branch, base, and file-level result in the
+  completion evidence.
+- If the content-level check succeeds, report `landed: yes` even though ancestry is false. If the
+  worktree no longer resolves or the content-level comparison cannot prove the implementation is
+  present, report `landed: unconfirmed` and refuse. Ancestry alone can prove a merge, not disprove
+  a squash merge.
 
 ### 7. Close
 
 `git mv` the plan to `docs/plans/completed/`, keeping its filename and `id`. Clear `next_action`,
 add a completion summary, and write a `## Verification` section with the evidence: the test command
 and result, what was checked against the code, and anything that could not be verified. Run
-`roborepo plans validate <plan>` against the moved file and resolve every finding.
+the repository's canonical plan validator against the moved file and resolve every finding.
 
 Stage the plan by path. Commit only when the user asks; never push.
 
 ### 8. Stop the worktree's servers
 
-Only after step 7 closed a complete plan, run `roborepo plans stop-servers <plan> --json`. It sends
-`SIGTERM` to the processes listening on a port from inside the plan's linked worktree, and nothing
+Only after step 7 closed a complete plan, run the repository's canonical linked-worktree server
+cleanup command for `<plan>`. It sends `SIGTERM` to the processes listening on a port from inside
+the plan's linked worktree, and nothing
 else: never the primary checkout, never agent sessions, shells, or editors. Do not ask first; the
 work has landed, so these servers run stale code. Report each server with its PID, ports, and
 result. A server that is `still-running` or `failed` is reported, never killed by other means.

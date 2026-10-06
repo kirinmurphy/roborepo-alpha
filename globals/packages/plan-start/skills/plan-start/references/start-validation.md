@@ -2,12 +2,12 @@
 
 The start transition records which linked worktree implements a plan, commits that fact to the
 canonical plan on the base branch, and proves the result from fresh state before implementation
-moves into the worktree. Home joins plans to Runtime checkouts by this field, so a plan that names
-the wrong worktree, or names it only in an uncommitted file, attaches to nothing or to the wrong
-row.
+moves into the worktree. A plan/worktree integration joins plans to linked worktrees by this field,
+so a plan that names the wrong worktree, or names it only in an uncommitted file, attaches to
+nothing or to the wrong row.
 
-This transition is the one lifecycle change `plan-start` performs. `roborepo plans start` owns its
-rules; this skill owns the judgment around it.
+This transition is the one lifecycle change `plan-start` performs. The repository's plan-start
+transition command owns its rules; this skill owns the judgment around it.
 
 ## Terms
 
@@ -33,7 +33,7 @@ rules; this skill owns the judgment around it.
 Run from the primary checkout, never from the target worktree:
 
 ```text
-roborepo plans start <plan-id-or-path> --worktree <name> [--base <branch>] --json
+<plan-transition-command> start <plan-id-or-path> --worktree <name> [--base <branch>] --json
 ```
 
 It refuses before changing anything when:

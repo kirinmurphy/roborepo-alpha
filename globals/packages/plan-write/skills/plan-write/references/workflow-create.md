@@ -38,7 +38,7 @@ prose does not make an invalid namespace valid.
 
 | Layer | Owns |
 | --- | --- |
-| `plan-write` validation (`workflow-validate.md`: `roborepo plans validate`, then repository consistency) | schema, frontmatter, lifecycle readiness, filename and namespace, cross-plan relationships, claims checked against the code |
+| `plan-write` validation (`workflow-validate.md`: the repository's plan validator, then repository consistency) | schema, frontmatter, lifecycle readiness, filename and namespace, cross-plan relationships, claims checked against the code |
 | `technical-writing` Validator (`review-loop.md`) | organization, representation, anti-patterns, section content, reader clarity |
 
 Ordering:

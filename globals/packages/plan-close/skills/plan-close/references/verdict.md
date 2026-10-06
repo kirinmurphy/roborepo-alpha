@@ -1,7 +1,7 @@
 # Verdict
 
 The verdict is the decision every other step of `/plan-close` serves. Decide it from evidence:
-the test result, the plan's claims checked against the code, and `roborepo plans validate`.
+the test result, the plan's claims checked against the code, and the repository's plan validator.
 
 | Verdict | When | Action |
 | --- | --- | --- |

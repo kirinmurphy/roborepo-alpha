@@ -56,13 +56,13 @@ Load these when the session calls for them; do not wait to be asked for them by 
 
 Each row is its own optional package, so check it before loading it:
 
-1. Run `roborepo package status <skill> --json`.
+1. Check the host's skill/package manager for `<skill>` and read its availability and activation state.
 2. If `available` is true, `enabled` is true, and `status` is `enabled` or `configured`, load it.
 3. If it is disabled, ask: "`<skill>` is not enabled. Enable it, or skip it for this run?"
-   - **Enable:** run `roborepo package enable <skill>` with the user's permission, then load it.
+   - **Enable:** use the host's package manager to enable `<skill>` with the user's permission, then load it.
    - **Skip:** continue without it, and name it as skipped in the status summary.
 4. If `enabled` and `status` disagree (`partial`, `external`), report the status, offer
-   `roborepo package reconcile` or skip, and never describe a drifted package as loaded.
+   the host's package reconciliation command or skip, and never describe a drifted package as loaded.
 5. If it is `missing` or `unavailable`, skip it and say so in the status summary.
 
 ## Workflow
@@ -89,13 +89,13 @@ say so explicitly rather than guessing from the working tree.
 
 - Check for any project-specific tracking doc implied by the session's own work — e.g.
   an abstraction matrix, decision log, architecture doc, ADR directory, changelog. These
-  are project-defined, not roborepo-defined: find them by name/convention already
+  are project-defined, not skill-defined: find them by name/convention already
   established in the repo (search for the doc, don't invent a new one) and update the
   ones this session's changes actually affect. If a dedicated doc-refresh skill exists
   in the current environment, load it; otherwise proceed without one.
 - When the session worked on a repository plan under `docs/plans`, sync it with `plan-write`:
   tick only tasks the code proves done, add `## Not tested` entries for gaps the session left, and
-  update `next_action`. Then run `roborepo plans validate <plan>` and report its findings.
+  update `next_action`. Then run the repository's canonical plan validator for `<plan>` and report its findings.
 - Do not restructure or rewrite docs wholesale. Small, targeted edits, preserving existing
   structure.
 - Report drift found but not fixed, separately from what was changed.
@@ -116,7 +116,7 @@ paths in `git status`:
   and say why it belongs with the session work.
 - If a remaining path is unrelated to the candidate session commit, leave it unstaged and
   classify it by likely commit domain. Use concrete domains from the files and diffs, such as
-  "config portal token-chip UI", "context-cost CLI", or "plan docs".
+  "configuration UI", "command-line behavior", or "plan documentation".
 - If relatedness is ambiguous, ask before staging it. Do not guess from path names alone when
   the diff could belong to a different task.
 
@@ -139,8 +139,8 @@ nothing and wait for instruction.
 
 - Commit exactly the staged candidate set from steps 1-3. Never blanket `git add -A`/`git add .`,
   and never stage a file flagged as unrelated stray work in step 3.
-- Commit message: standard git conventions (see root `CLAUDE.md` commit guidance, not
-  caveman mode) — summarize the *why* pulled from the session's own goal, not just a
+- Commit message: standard repository commit conventions (see local contributor guidance) —
+  summarize the *why* pulled from the session's own goal, not just a
   diff restatement. If the session covered multiple unrelated changes, say so and
   either split into multiple commits or ask which grouping the user wants.
 - Do not push. Committing is as far as this skill goes unless the user separately asks

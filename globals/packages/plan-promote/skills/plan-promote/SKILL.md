@@ -34,13 +34,13 @@ Load these as part of the review; do not wait to be asked for them by name.
 
 Each row is its own optional package, so check it before loading it:
 
-1. Run `roborepo package status <skill> --json`.
+1. Check the host's skill/package manager for `<skill>` and read its availability and activation state.
 2. If `available` is true, `enabled` is true, and `status` is `enabled` or `configured`, load it.
 3. If it is disabled, ask: "`<skill>` is not enabled. Enable it, or skip it for this run?"
-   - **Enable:** run `roborepo package enable <skill>` with the user's permission, then load it.
+   - **Enable:** use the host's package manager to enable `<skill>` with the user's permission, then load it.
    - **Skip:** continue without it, and name it as skipped in the final report.
 4. If `enabled` and `status` disagree (`partial`, `external`), report the status, offer
-   `roborepo package reconcile` or skip, and never describe a drifted package as loaded.
+   the host's package reconciliation command or skip, and never describe a drifted package as loaded.
 5. If it is `missing` or `unavailable`, skip it and say so in the final report.
 
 ## Workflow
@@ -87,7 +87,7 @@ Each row is its own optional package, so check it before loading it:
 9. Preserve the plan ID, filename conventions, frontmatter conventions, lifecycle folder, and repository-relative paths.
 10. Convert vague implementation phases into an executable sequence without prescribing incidental details that can safely be decided during development.
 11. Ensure validation and acceptance criteria are concrete and testable.
-12. Validate the finished document: run `roborepo plans validate <plan>` and resolve its findings,
+12. Validate the finished document with the repository's canonical plan validator and resolve its findings,
     then confirm the repository consistency checks no command makes — referenced paths, commands,
     and tests exist, current-state claims match the code, and related-plan classifications remain
     accurate. The deterministic validator does not replace this semantic reconciliation pass.
@@ -153,7 +153,7 @@ Also report:
 
 - files changed;
 - repository areas reviewed;
-- validation performed, including `roborepo plans validate` output;
+- validation performed, including the plan validator's output;
 - related plans checked, with each relationship classified as landed, unlanded, stale, or conflicting;
 - landed implementation commits verified against the current checkout;
 - active-story conflicts and lifecycle/prose drift found, including how the selected plan reconciles them;

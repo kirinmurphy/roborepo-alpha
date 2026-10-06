@@ -5,7 +5,8 @@ repository can do. Run both; a clean command result is not evidence the second h
 
 ## Deterministic findings
 
-Run `roborepo plans validate <plan> --json` from inside the repository. It reports, in the shape
+Run the repository's canonical plan validator for `<plan>` with its machine-readable output mode.
+It reports, in the shape
 `modules/plan-suite/findings.mjs` defines:
 
 - Schema: recognized lifecycle folder, required frontmatter, unique stable ID, valid enums, normalized arrays.

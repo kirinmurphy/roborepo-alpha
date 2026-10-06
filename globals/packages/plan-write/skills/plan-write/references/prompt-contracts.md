@@ -1,6 +1,6 @@
 # Prompt Contracts
 
-Portal-generated prompts are starting points, not evidence.
+UI-generated prompts are starting points, not evidence.
 
 Repository-aware prompts name repository-relative plan paths and instruct the agent to verify claims against the current repository.
 

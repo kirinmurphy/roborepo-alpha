@@ -1,7 +1,7 @@
 ---
 id: pljvmyh
 priority: high
-next_action: Review and merge the claude/portal-repository-sources branch, then run /plan-close
+next_action:
 blocked_by: []
 depends_on:
   - canonical-repository-identity-plan-v2
@@ -10,7 +10,7 @@ depends_on:
 related:
   - tk6s43x3
   - l1mz96d9
-reviewed_commit: 585dedb
+reviewed_commit: eeb658b
 worktree: portal-repository-sources
 ---
 
@@ -30,6 +30,14 @@ The coherent user story: *I let RoboRepo find the repositories I work in, option
 Plans stops owning its own repository universe and inspects the repositories RoboRepo knows about. Choosing which repository a Portal page shows is a separate story, [[tk6s43x3]].
 
 This is a **clean cutover**: existing registry data and Plans discovery settings are discarded rather than migrated (see [§4](#4-source-provenance-and-removal) and [§9](#9-plans-cutover-to-canonical-repositories)).
+
+## Completion Summary
+
+Repository sources, auto-discovery, folder sources, the shared management dialog, Home/Runtime/Plans
+onboarding, canonical plan scans, path privacy, and their regression coverage landed on `main` in
+squash merge `8aef67f3d670edc5214151c80db8b97d97c6afe9`. Windows folder-source verification is
+deliberately deferred to [[l1mz96d9]], which owns the Windows test environment and cross-platform
+behavior matrix.
 
 ## Relationship to other stories
 
@@ -443,6 +451,20 @@ Latest completion-level verification (2026-10-05):
 - `npm run check` — passed, including doctor, CLI, collision, package-install, clean-machine, and browser gates.
 - `git diff --check` — passed.
 - `roborepo plans validate` — zero blocking findings; the Home refresh behavior is now user-confirmed. Windows folder verification is deferred to [[l1mz96d9]].
+
+## Verification
+
+- `npm run --silent test:unit -- --filter repositories` — 7/7 repository and source checks passed.
+- `npm run test:portal-ui` — 52 passed; 2 documentation screenshot cases were intentionally skipped.
+- `npm run check` — stopped before plan-relevant checks because the current checkout has stale
+  generated Plan Promote commands and a stale skill-invocation audit document; these are unrelated
+  to this plan's implementation and are not release or publication requirements for closing it.
+- `roborepo plans validate` — zero findings before the lifecycle move.
+- The squash landing check compared `main` with `claude/portal-repository-sources`: the only
+  differences are plan/config synchronization files; the implementation files changed by the
+  worktree are present with matching content on `main`.
+- The user confirmed the Home refresh behavior manually; the remaining Windows check is explicitly
+  deferred to [[l1mz96d9]].
 
 Add focused coverage for observable behavior:
 

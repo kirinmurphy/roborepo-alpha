@@ -95,9 +95,9 @@ for (const [id, { boundaryPhrases }] of Object.entries(SKILLS)) {
   const reference = normalize(fs.readFileSync(referencePath, "utf8"));
 
   assert.ok(skill.includes("Read `references/start-validation.md` before"), "plan-start: SKILL.md must load the start-validation reference");
-  // The transition's mechanics live in `roborepo plans start` (covered behaviorally by
-  // plan-suite-commands-check.mjs); the skill must delegate to it rather than restate the procedure.
-  assert.ok(skill.includes("roborepo plans start <plan> --worktree <name>"), "plan-start: SKILL.md must run roborepo plans start");
+  // The transition's mechanics live in the repository's canonical command (covered behaviorally
+  // by its command suite); the skill must delegate to it rather than restate the procedure.
+  assert.ok(skill.includes("canonical plan-start transition command"), "plan-start: SKILL.md must delegate the start transition");
   const order = ["## Start Transition", "## Implementation Workflow"].map((heading) => skill.indexOf(heading));
   assert.ok(order[0] > 0 && order[0] < order[1], "plan-start: Start Transition must precede the Implementation Workflow");
 
@@ -159,15 +159,15 @@ for (const [id, { boundaryPhrases }] of Object.entries(SKILLS)) {
     "reports it back instead of choosing",
     "## Not tested",
     "Never check an entry off yourself",
-    "roborepo package status <skill> --json",
+    "host's skill/package manager",
     "Enable it, or skip it for this run?",
     "never describe a drifted package as loaded",
     // Entering the worktree is what stops per-file write prompts: the write-scope hook allows only the
     // checkout the session is in, so the skill must move the session there with one folder grant.
     "## Enter the Worktree",
-    "request access to the whole worktree folder once",
-    "`/add-dir <worktree>`",
-    "Never ask for access file by file",
+    "request that access once using the environment's standard mechanism",
+    "then make the worktree the session's working directory",
+    "Follow repository-local access instructions when they exist",
   ]) {
     assert.ok(skill.includes(phrase), `plan-start: SKILL.md missing run-mode phrase "${phrase}"`);
   }
@@ -186,7 +186,7 @@ for (const [id, { boundaryPhrases }] of Object.entries(SKILLS)) {
     const skill = normalize(fs.readFileSync(path.join(repoRoot, "globals/packages", id, "skills", id, "SKILL.md"), "utf8"));
     for (const phrase of [
       "## Paired Skills",
-      "roborepo package status <skill> --json",
+      "host's skill/package manager",
       "Enable it, or skip it for this run?",
       "never describe a drifted package as loaded",
     ]) {
@@ -203,12 +203,17 @@ for (const [id, { boundaryPhrases }] of Object.entries(SKILLS)) {
   assert.ok(order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1])), "plan-close: tests, verdict, Not tested, landed, close, then stop servers, in that order");
   for (const phrase of [
     "refuse: report the failing output",
+    "Prefer the repository's canonical CI command over a broad",
+    "release-only or",
+    "availability of optional tools or environment fixtures is not a closure prerequisite",
+    "content-level landed check for squash and rebase merges",
+    "report `landed: yes` even though ancestry is false",
     "landed: unconfirmed",
     "UNCONFIRMED_NOT_TESTED",
     "git merge-base --is-ancestor",
     "never as passed",
     "Never check one off yourself",
-    "roborepo plans stop-servers <plan> --json",
+    "canonical linked-worktree server cleanup command",
     "Skip this step for an archived or refused plan",
     "## Refusal and blocker reporting",
     "report every issue explicitly",

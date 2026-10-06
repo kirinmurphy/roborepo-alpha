@@ -31,13 +31,13 @@ placement still needs `code-style`.
 
 Each row is its own optional package, so check it before loading it:
 
-1. Run `roborepo package status <skill> --json`.
+1. Check the host's skill/package manager for `<skill>` and read its availability and activation state.
 2. If `available` is true, `enabled` is true, and `status` is `enabled` or `configured`, load it.
 3. If it is disabled, ask: "`<skill>` is not enabled. Enable it, or skip it for this run?"
-   - **Enable:** run `roborepo package enable <skill>` with the user's permission, then load it.
+   - **Enable:** use the host's package manager to enable `<skill>` with the user's permission, then load it.
    - **Skip:** continue without it, and name it as skipped in the final report.
 4. If `enabled` and `status` disagree (`partial`, `external`), report the status, offer
-   `roborepo package reconcile` or skip, and never describe a drifted package as loaded.
+   the host's package reconciliation command or skip, and never describe a drifted package as loaded.
 5. If it is `missing` or `unavailable`, skip it and say so in the final report.
 
 State which paired skills applied and which did not — a skipped skill and a forgotten one look
@@ -63,7 +63,7 @@ Read the references for the situation:
   plan loads the checks that decide whether it is deliverable.
 - `update`: read `references/workflow-update.md` and `references/workflow-validate.md`; also read
   `references/writing-guidelines.md` when the revision rewrites prose.
-- Portal-generated prompts: read `references/prompt-contracts.md` when prompt shape matters.
+- UI-generated prompts: read `references/prompt-contracts.md` when prompt shape matters.
 
 ## Creation Gates
 
@@ -85,7 +85,7 @@ These conditions must hold before a new plan can be called created. The full rul
 - **Lifecycle is the folder, never a field.** New plans are written to `docs/plans/backlog/`.
 - **Never encode lifecycle, status, dates, or versions in the filename.**
 - **Load `technical-writing` before drafting, without being asked.**
-- **Run both validation layers before delivering.** `roborepo plans validate` covers schema,
+- **Run both validation layers before delivering.** The repository's plan validator covers schema,
   lifecycle, naming, and cross-plan relationships, and `workflow-validate.md` adds the repository
   consistency checks no command can make; the `technical-writing` Validator covers prose quality and
   every paired skill that applied. A clean report from one does not excuse the other.

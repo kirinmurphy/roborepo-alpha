@@ -48,11 +48,11 @@ Rules:
 New plans and repaired frontmatter carry an empty `worktree:` line. Historical plans without the
 line remain valid and are not bulk-migrated.
 
-The field is an exact join key, not a hint. Home shows an active plan as its Runtime checkout's row
-only when exactly one active plan and exactly one linked worktree in the same repository share the
-name. A stale name (the worktree was removed), a duplicate claim, or an empty value leaves the plan
-as its own row with a **not started** or **worktree not running** badge; nothing is inferred from
-branch names or plan prose.
+The field is an exact join key, not a hint. A plan/worktree integration joins an active plan to its
+linked worktree's row only when exactly one active plan and exactly one linked worktree in the same
+repository share the name. A stale name (the worktree was removed), a duplicate claim, or an empty
+value leaves the plan as its own row with a **not started** or **worktree not running** badge; nothing
+is inferred from branch names or plan prose.
 
 Write a value only when live Git state proves the relationship — the worktree exists now and this
 plan's implementation runs there. A value left behind after the worktree is removed is harmless: it
@@ -139,7 +139,7 @@ Everything above is global. A repository declares only its own domain vocabulary
 {
   "schemaVersion": 1,
   "namespaces": {
-    "portal": "The local web portal, any surface.",
+    "ui": "The local user interface, any surface.",
     "telemetry": "Telemetry capture, classification, metrics, experiments, analysis."
   }
 }
@@ -151,8 +151,8 @@ prefixes alongside the universal set above.
 ### Choosing between them
 
 **A project namespace wins whenever it is the more specific fit.** The universal set is a fallback
-for work a project has not claimed, not a preferred vocabulary. A project that declares `portal`
-should file portal CLI work under `portal`, not `cli`, because the specific namespace is what makes
+for work a project has not claimed, not a preferred vocabulary. A project that declares `ui`
+should file interface work under `ui`, not `cli`, because the specific namespace is what makes
 the plan findable among its siblings.
 
 Prefer the universal namespace only when the work genuinely is generic — cross-cutting Git
@@ -171,13 +171,13 @@ invent unlisted prefixes.
 Instead, say the config is missing, then propose an initial vocabulary **derived from the
 repository itself**:
 
-- top-level source directories (`modules/`, `portal/`, `packages/`) — these usually *are* the
+- top-level source directories (`modules/`, `src/`, `packages/`) — these usually *are* the
   domains;
 - CLI namespaces or command groups the project already exposes;
 - recurring prefixes across existing plan filenames, which reveal the vocabulary the team has
   already been reaching for.
 
-Show the evidence behind each proposal ("`portal` because `portal/` holds five surfaces and six
+Show the evidence behind each proposal ("`ui` because `ui/` holds five surfaces and six
 plans already start with it") so the user can judge it, then **ask them to refine before writing
 the file**. A namespace chosen badly gets copied into every future filename, so it is worth one
 round of discussion. Expect to merge overlapping proposals and rename to the project's own words.

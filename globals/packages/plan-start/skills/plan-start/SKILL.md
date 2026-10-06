@@ -1,6 +1,6 @@
 ---
 name: plan-start
-description: Use when beginning implementation from an existing prepared repository plan. Inspect the current plan and repository, create or safely reuse an isolated worktree, record it in the canonical plan through a validated plan-only start commit, implement every in-scope unblocked objective without milestone check-ins, decide only clear low-consequence questions autonomously and log them, queue the rest as blockers while continuing all unblocked work, verify the work, synchronize the plan, and report the result with every open question batched at the end. Do not use for initial plan preparation, lifecycle orchestration, portal actions, integration-branch closeout, or implementation without an existing plan.
+description: Use when beginning implementation from an existing prepared repository plan. Inspect the current plan and repository, create or safely reuse an isolated worktree, record it in the canonical plan through a validated plan-only start commit, implement every in-scope unblocked objective without milestone check-ins, decide only clear low-consequence questions autonomously and log them, queue the rest as blockers while continuing all unblocked work, verify the work, synchronize the plan, and report the result with every open question batched at the end. Do not use for initial plan preparation, lifecycle orchestration, application UI actions, integration-branch closeout, or implementation without an existing plan.
 ---
 
 # Plan Start
@@ -37,13 +37,13 @@ Each row is its own optional package, so check it before loading it. Run this ch
 for every row the plan's subject matter calls for, before the start transition: it is a pre-run gate
 like the `worktreeRoot` confirmation, so the no-questions run mode is unaffected.
 
-1. Run `roborepo package status <skill> --json`.
+1. Check the host's skill/package manager for `<skill>` and read its availability and activation state.
 2. If `available` is true, `enabled` is true, and `status` is `enabled` or `configured`, load it.
 3. If it is disabled, ask: "`<skill>` is not enabled. Enable it, or skip it for this run?"
-   - **Enable:** run `roborepo package enable <skill>` with the user's permission, then load it.
+   - **Enable:** use the host's package manager to enable `<skill>` with the user's permission, then load it.
    - **Skip:** continue without it, and name it as skipped in the final report.
 4. If `enabled` and `status` disagree (`partial`, `external`), report the status, offer
-   `roborepo package reconcile` or skip, and never describe a drifted package as loaded.
+   the host's package reconciliation command or skip, and never describe a drifted package as loaded.
 5. If it is `missing` or `unavailable`, skip it and say so in the final report.
 
 State which paired skills applied and which did not — a skipped skill and a forgotten one look
@@ -70,7 +70,7 @@ done or blocked by an open question or external blocker.
 1. Read the entire selected plan.
 2. Inspect the current repository state and material plan claims.
 3. Detect whether the plan has become stale or materially incomplete. Run
-   `roborepo plans validate <plan>` for the deterministic document findings; it does not check the
+   the repository's canonical plan validator for the deterministic document findings; it does not check the
    plan's claims against code, so step 2 still applies.
 4. Run the paired-skill check in Paired Skills for every row the plan's subject matter calls for.
 5. Read `docs/plans/plans-config.json` when present. If it declares a `worktreeRoot` (an absolute
@@ -105,12 +105,12 @@ done or blocked by an open question or external blocker.
     is absent there, record that limitation in the plan and final report instead of inventing a
     second source of truth.
 
-When deterministic RoboRepo commands exist for an operation, use them instead of reconstructing the mutation manually.
+When deterministic repository commands exist for an operation, use them instead of reconstructing the mutation manually.
 
 ## Start Transition
 
 Read `references/start-validation.md` before running the transition. It describes what
-`roborepo plans start` does, the validator checks it runs, and how to act on a refusal.
+the plan-start transition command does, the validator checks it runs, and how to act on a refusal.
 
 Run the transition from the primary checkout, after the target worktree is resolved and before any
 implementation:
@@ -121,7 +121,8 @@ implementation:
    run: commit that file alone first, as a configuration-only commit, then continue.
 2. Resolve the target's Git administrative worktree name — not the checkout directory's basename,
    and never a branch name or absolute path.
-3. Run `roborepo plans start <plan> --worktree <name> --json`. It writes `worktree: <name>` into the
+3. Run the repository's canonical plan-start transition command for `<plan>` with worktree `<name>`.
+   It writes `worktree: <name>` into the
    canonical plan's frontmatter, moves a plan still in `backlog/` from `backlog/` to `active/` with
    `git mv` (keeping its filename and `id`; a plan already in `active/` is edited in place), stages
    only the old and new canonical plan paths, and commits the plan-only start transition on the base
@@ -141,12 +142,9 @@ After `APPROVED`, make the worktree the session's working directory before the f
 are allowed without a prompt only inside the checkout the session is working in, so a session still
 rooted in the primary checkout asks for permission on every file it edits in the worktree.
 
-- **Claude:** request access to the whole worktree folder once — in the Claude desktop app, with its
-  directory-access tool and the worktree's path; in the Claude Code CLI, ask the user to run
-  `/add-dir <worktree>`. Then `cd <worktree>` in the shell. Once the folder belongs to the session the
-  directory change persists, and the repository write-scope hook treats the worktree as the
-  checkout in use. Never ask for access file by file.
-- **Codex:** no step is needed; its workspace roots already include `<worktreeRoot>/<repo-name>`.
+- If the execution environment requires explicit access to a linked worktree, request that access
+  once using the environment's standard mechanism, then make the worktree the session's working
+  directory. Follow repository-local access instructions when they exist.
 
 This is part of the pre-implementation gate, like the `worktreeRoot` confirmation: one approval,
 then the run proceeds without questions.
@@ -190,10 +188,11 @@ evidence. Each entry is an unchecked checkbox stating what to check and why a te
 ```markdown
 ## Not tested
 
-- [ ] The portal button enables all five packages. Needs a browser session against a live install.
+- [ ] The user-facing setup action enables all required components. Needs a browser session against
+      the supported live environment.
 ```
 
-Never check an entry off yourself; the user confirms it by hand. `roborepo plans validate` reports
+Never check an entry off yourself; the user confirms it by hand. The plan validator reports
 unchecked entries, and `/plan-close` refuses to close a plan while any remain. List every entry in
 the final report, and say so explicitly when there are none.
 
@@ -273,7 +272,8 @@ Do not declare the entire feature complete while a required objective remains bl
 
 ## Subagents
 
-Claude only; other harnesses skip this section.
+Apply this section only when the repository's execution environment provides the relevant agent
+interface; otherwise record the limitation and continue with the available interfaces.
 
 Delegate procedural slices of the plan to subagents when that clearly helps, for example
 mechanical edits across many files, bulk renames, or long test runs. Rules:
@@ -344,7 +344,7 @@ Also include:
 - Open Questions, asked together as the run's only question batch: each with its options, pros and
   cons, recommendation, and the tasks it blocks;
 - deferred scope;
-- `roborepo plans validate <plan>` output for the canonical plan;
+- the plan validator's output for the canonical plan;
 - current Git status;
 - whether anything was committed, pushed, merged, or published.
 
@@ -356,7 +356,7 @@ Do not:
 - repeat a full planning interview unless the plan is materially stale or incomplete;
 - change lifecycle state, except the backlog-to-active start transition in
   `references/start-validation.md`;
-- own portal behavior;
+- own user-interface behavior;
 - create integration branches;
 - perform closeout or merge orchestration;
 - launch unrelated workflows;
