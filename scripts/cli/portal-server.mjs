@@ -13,6 +13,7 @@ import { developerRuntimeRoutes } from "./portal-routes-developer-runtime.mjs";
 import { telemetryRoutes } from "./portal-routes-telemetry.mjs";
 import { repositoriesRoutes } from "./portal-routes-repositories.mjs";
 import { usageRoutes } from "./portal-routes-usage.mjs";
+import { settingsRoutes } from "./portal-routes-settings.mjs";
 import { handleMetadataAsset } from "./portal-routes-metadata.mjs";
 
 // Every domain's route table, concatenated once — the single enumerable list of this portal's
@@ -25,6 +26,7 @@ const API_ROUTE_TABLES = [
   developerRuntimeRoutes,
   repositoriesRoutes,
   usageRoutes,
+  settingsRoutes,
   telemetryRoutes,
 ];
 validateRouteTables(API_ROUTE_TABLES);
@@ -66,6 +68,7 @@ export const PAGES = [
     title: "Runtime",
     dir: "developer-runtime",
   },
+  { path: "/settings", id: "settings", title: "Settings", dir: "settings" },
 ];
 export const PAGE_ROUTES = [
   ...PAGES.map((page) => ({ ...page, navId: page.id })),

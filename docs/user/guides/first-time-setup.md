@@ -34,7 +34,8 @@ configure in the browser or in the CLI.
 Setup itself leaves your existing Claude and Codex config alone; behaviors you turn on afterwards
 are merged into it. Setup is safe to re-run: once complete it reports that and exits, and an
 interrupted run resumes instead of starting over. Zero detected harnesses is fine; install or launch
-a harness later and run `roborepo harness refresh`.
+a harness later, then open **Settings → Integrations → Check for installs**. The equivalent CLI
+command is `roborepo harness refresh`.
 
 ## Install From A Checkout
 

@@ -3,13 +3,14 @@ import os from "node:os";
 import path from "node:path";
 import { test, expect } from "@playwright/test";
 
-const NAV_ORDER = ["Repos", "Agents", "Plans", "Tokens", "Runtime"];
+const NAV_ORDER = ["Repos", "Agents", "Plans", "Tokens", "Runtime", "Settings"];
 const ROUTES = [
   { path: "/", active: "Repos" },
   { path: "/config", active: "Agents" },
   { path: "/plans", active: "Plans" },
   { path: "/tokens", active: "Tokens" },
   { path: "/runtime", active: "Runtime" },
+  { path: "/settings", active: "Settings" },
 ];
 
 test.describe("repository-first portal Home", () => {
@@ -196,7 +197,11 @@ test.describe("repository-first portal Home", () => {
   });
 
   test("Home shows harness setup as an info prompt linking what it unlocks", async ({ page }) => {
-    await page.route("**/api/config", (route) => route.fulfill({ json: { harnesses: [{ id: "claude", displayName: "Claude Code" }, { id: "codex", displayName: "Codex" }], machineHarnesses: [], packages: [] } }));
+    await page.route("**/api/settings", (route) => route.fulfill({ json: {
+      repositories: { knownCount: 1, visibleCount: 1, autoDiscoveryEnabled: false, hasConfiguredSources: false },
+      harnesses: { supported: [{ id: "claude", displayName: "Claude Code" }, { id: "codex", displayName: "Codex" }], detected: [], active: [] },
+      telemetry: { enabled: false, captureAvailable: false },
+    } }));
     await page.goto("/");
     const banner = page.locator("#home-harness-banner portal-notice");
     await expect(banner).toHaveClass(/notice-info/);
@@ -204,6 +209,20 @@ test.describe("repository-first portal Home", () => {
     await expect(banner.getByRole("link", { name: "agent tools" })).toHaveAttribute("href", "/config");
     await expect(banner.getByRole("link", { name: "token tracking" })).toHaveAttribute("href", "/tokens");
     await expect(banner.locator(".harness-setup-supported")).toHaveText("Supported Harnesses: Claude Code, Codex");
+  });
+
+  test("Settings renders shared setup controls and can check for harness installs", async ({ page }) => {
+    await page.goto("/settings");
+    await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "Repositories" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "Integrations" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "Data" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Manage repositories…" })).toBeVisible();
+    const response = page.waitForResponse((res) => res.url().includes("/api/config/harnesses/refresh") && res.request().method() === "POST");
+    await page.getByRole("button", { name: "Check for installs" }).click();
+    await response;
+    await expect(page.locator("#harness-list")).toBeVisible();
+    await expect(page.getByText("Collect token telemetry", { exact: false })).toBeVisible();
   });
 
   // The detail page is parked: names are plain text and every /repositories/* URL lands on Home.

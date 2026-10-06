@@ -105,7 +105,7 @@ function render(snap) {
   const otherSections = view.filter((section) => !section.categoryId);
   main.replaceChildren(
     ...[
-      tmpl.harnessWarning(snap),
+      tmpl.harnessWarning(lastSetup || snap, { onCheck: refreshHarnesses }),
       tmpl.contextWarnings(snap),
       tmpl.configFiles(snap, { onInspectClick: openSourceModal }),
       tmpl.packagesIntro(),
@@ -124,6 +124,7 @@ function render(snap) {
 
 let last = null;
 let lastSnapshot = null;
+let lastSetup = null;
 function applySnapshot(snap) {
   lastSnapshot = snap;
   const changed = snapshotChanged(last, snap);
@@ -139,12 +140,21 @@ function showError(err) {
 
 async function load() {
   try {
-    applySnapshot(await api.fetchConfig());
+    const [snap, setup] = await Promise.all([api.fetchConfig(), api.fetchSetupState()]);
+    lastSetup = setup;
+    applySnapshot(snap);
   } catch (e) {
     showError(e);
   } finally {
     portalHideLoading();
   }
+}
+
+async function refreshHarnesses() {
+  await api.refreshHarnesses();
+  const [snap, setup] = await Promise.all([api.fetchConfig(), api.fetchSetupState()]);
+  lastSetup = setup;
+  applySnapshot(snap);
 }
 
 const POLL_INTERVAL_MS = 10000;

@@ -18,7 +18,7 @@ const catalog = [
   const notice = configHarnessWarning(snap);
   assert.equal(notice.variant, "warning");
   assert.match(notice.body, /Install a supported harness/);
-  assert.match(notice.body, /roborepo harness refresh/);
+  assert.match(notice.body, /check for installs/);
   assert.match(notice.body, /Claude Code and Codex/);
 }
 

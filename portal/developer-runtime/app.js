@@ -9,6 +9,7 @@ import { buildRoutesDropdown, fillApiRouteDialog } from "./suggestions-view.js";
 import { configureLinksTrigger } from "/portal/shared/repository-components.js";
 import { createRepositorySourcesDialog } from "/portal/shared/repository-sources-dialog.js";
 import { autoDiscoveryPrompt } from "/portal/shared/repository-sources-templates.js";
+import { fetchSetupState } from "/portal/shared/setup-api.js";
 import "/portal/shared/menu-button.js";
 import "/portal/shared/copy-menu.js";
 // The API-route rows in the Links panel use <portal-copy-button> for their curl commands.
@@ -78,9 +79,11 @@ async function load({ force = false } = {}) {
   setRuntimeSyncStatus(true);
   if (force) setRefreshing(true);
   try {
-    const snap = force
-      ? await api.refreshDeveloperRuntime()
-      : await api.fetchDeveloperRuntime();
+    const [snap, setup] = await Promise.all([
+      force ? api.refreshDeveloperRuntime() : api.fetchDeveloperRuntime(),
+      fetchSetupState(),
+    ]);
+    snap.setup = setup;
     applySnapshot(snap, { reconcile: !force });
   } catch (err) {
     showError(err.message);
@@ -112,7 +115,7 @@ function setRuntimeSyncStatus(syncing) {
 function applySnapshot(snapshot, { reconcile = false } = {}) {
   lastSnapshot = snapshot;
   setRuntimeSyncStatus(snapshot.refresh?.state === "refreshing");
-  autoDiscoveryCta.hidden = snapshot.autoDiscovery?.enabled !== false;
+  autoDiscoveryCta.hidden = runtimeAutoDiscoveryEnabled(snapshot);
   const hash = state.snapshotHash(snapshot);
   // The hash-skip only makes sense for the reconcile path, where "nothing changed" really does
   // mean nothing to do. A full rebuild (reconcile: false) can be the only thing that clears
@@ -132,7 +135,7 @@ function render(snapshot, { reconcile }) {
   // Keep the first-run Runtime surface focused on its one actionable banner. The full empty state
   // remains available once discovery is enabled, and all repository/member rendering stays intact
   // for real data (or when the retained mock-view flag is turned back on).
-  if (snapshot.autoDiscovery?.enabled === false && !hasRuntimeContent(snapshot)) {
+  if (!runtimeAutoDiscoveryEnabled(snapshot) && !hasRuntimeContent(snapshot)) {
     renderedCards.clear();
     refs.content.replaceChildren();
     return;
@@ -263,7 +266,7 @@ function emptyStateNode(snapshot) {
     return tmpl.emptyState(
       "No active HTTP apps found",
       // While auto-discovery is off no refresh can find anything; the Enable prompt above is the way.
-      snapshot.autoDiscovery?.enabled === false
+      !runtimeAutoDiscoveryEnabled(snapshot)
         ? "Runtime is not watching running apps while auto-discovery is off."
         : "Refresh after starting a local development server.",
     );
@@ -272,6 +275,10 @@ function emptyStateNode(snapshot) {
     "Saved projects remain available",
     tmpl.noticeWithDoc(snapshot.capabilities.message),
   );
+}
+
+function runtimeAutoDiscoveryEnabled(snapshot) {
+  return snapshot.setup?.repositories?.autoDiscoveryEnabled ?? (snapshot.autoDiscovery?.enabled === true);
 }
 
 function buildSection(section) {

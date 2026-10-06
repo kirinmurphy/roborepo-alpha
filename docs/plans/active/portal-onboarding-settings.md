@@ -1,13 +1,13 @@
 ---
 id: nkhk6bb
 priority: high
-next_action: Add the shared setup-state read model and Settings page around the shipped repository-source/config APIs, then replace the harness CLI handoff and Tokens prerequisite order
+next_action: Review the implementation in the isolated worktree, install the repository's browser-test dependency, run the remaining browser/manual checks, then land or close the plan
 blocked_by: []
 depends_on: []
 related:
   - pljvmyh
   - v6lvuu2
-reviewed_commit: 11b0c8a7311f23ff33bc128a630e5f79a9e853a4
+reviewed_commit: 1da16ceee82b7174aaef9137dc26ec024d03fd8a
 worktree: portal-onboarding-settings
 ---
 
@@ -443,81 +443,96 @@ Reuse `repository-sources-partial.html` instead of duplicating repository-source
 
 ### Phase 1 — Preserve Runtime consent and align enrollment
 
-- [ ] Preserve the Developer Runtime refresh gate so supported process/HTTP discovery runs only when repository `auto-discovery` is on.
-- [ ] Keep canonical repository recording gated by `autoDiscoveryEnabled()` and retain the existing post-scan re-check before writing.
-- [ ] Ensure the off state produces no newly observed Runtime activity while explicit repository/folder sources remain usable.
-- [ ] Keep enabling auto-discovery wired to an immediate Runtime refresh/enrollment pass.
-- [ ] Keep Runtime and repository-source copy explicit that the switch controls both active-process observation and automatic repository enrollment.
-- [ ] Retain `scripts/test/developer-runtime-auto-discovery-check.mjs`'s assertion that no activity is observed when the source is off, and add coverage that an explicit repository/folder source remains usable while active-process auto-discovery is disabled.
+- [x] Preserve the Developer Runtime refresh gate so supported process/HTTP discovery runs only when repository `auto-discovery` is on.
+- [x] Keep canonical repository recording gated by `autoDiscoveryEnabled()` and retain the existing post-scan re-check before writing.
+- [x] Ensure the off state produces no newly observed Runtime activity while explicit repository/folder sources remain usable.
+- [x] Keep enabling auto-discovery wired to an immediate Runtime refresh/enrollment pass.
+- [x] Keep Runtime and repository-source copy explicit that the switch controls both active-process observation and automatic repository enrollment.
+- [x] Retain `scripts/test/developer-runtime-auto-discovery-check.mjs`'s assertion that no activity is observed when the source is off, and add coverage that an explicit repository/folder source remains usable while active-process auto-discovery is disabled.
 - [ ] Add a race regression proving a scan that started before disable cannot write developer-runtime evidence after the source is turned off.
 
 ### Phase 2 — Shared setup-state read model
 
-- [ ] Add `scripts/cli/portal-setup.mjs` as the derived read model, with dependency-injected loaders for repository, harness, and telemetry tests.
-- [ ] Add `scripts/cli/portal-routes-settings.mjs` with `GET /api/settings` and register its route table in `scripts/cli/portal-server.mjs`.
-- [ ] Keep repository source paths out of this response.
-- [ ] Add `scripts/test/portal-setup-check.mjs` for repository, harness, telemetry, optional/independent cases, hidden-versus-visible counts, and a recursive path-leak assertion.
+- [x] Add `scripts/cli/portal-setup.mjs` as the derived read model, with dependency-injected loaders for repository, harness, and telemetry tests.
+- [x] Add `scripts/cli/portal-routes-settings.mjs` with `GET /api/settings` and register its route table in `scripts/cli/portal-server.mjs`.
+- [x] Keep repository source paths out of this response.
+- [x] Add `scripts/test/portal-setup-check.mjs` for repository, harness, telemetry, optional/independent cases, hidden-versus-visible counts, and a recursive path-leak assertion.
 
 ### Phase 3 — Harness controls without CLI handoff
 
-- [ ] Add `scripts/harnesses/service.mjs` as the shared harness enable/disable service and route both `scripts/cli/harness.mjs` and the portal adapter through it.
-- [ ] Add `POST /api/config/harnesses/refresh` backed directly by `refreshHarnessState()`.
-- [ ] Add `POST /api/config/harnesses/:id/enabled` for provider state changes and return the fresh config snapshot.
-- [ ] Return detected and active harness status without treating every registered provider as installed.
-- [ ] Replace portal copy that tells the user to run `roborepo harness refresh` with a portal-native action.
-- [ ] Do not add permanent harness-discovery polling; any later auto-check must be scoped to an unresolved visible prompt.
-- [ ] Add `scripts/test/harness-portal-api-check.mjs` for refresh, enable/disable, unknown-provider rejection, and registered-versus-detected cohort behavior.
+- [x] Add `scripts/harnesses/service.mjs` as the shared harness enable/disable service and route both `scripts/cli/harness.mjs` and the portal adapter through it.
+- [x] Add `POST /api/config/harnesses/refresh` backed directly by `refreshHarnessState()`.
+- [x] Add `POST /api/config/harnesses/:id/enabled` for provider state changes and return the fresh config snapshot.
+- [x] Return detected and active harness status without treating every registered provider as installed.
+- [x] Replace portal copy that tells the user to run `roborepo harness refresh` with a portal-native action.
+- [x] Do not add permanent harness-discovery polling; any later auto-check must be scoped to an unresolved visible prompt.
+- [x] Add `scripts/test/harness-portal-api-check.mjs` for refresh, enable/disable, unknown-provider rejection, and registered-versus-detected cohort behavior.
 
 ### Phase 4 — Settings page
 
-- [ ] Add `/settings` after Runtime in `PAGES` so routing, global navigation, manifest, and sitemap derive it from the same six-page manifest.
-- [ ] Add the Settings page using existing `<template>` + slot-fill conventions.
-- [ ] Render **Repositories**, **Integrations**, and **Data** groups from the shared setup snapshot.
-- [ ] Reuse the shipped repository-source dialog and repository-source mutations directly.
-- [ ] Wire harness refresh/enable/disable to the harness-domain mutations.
-- [ ] Wire telemetry to the existing package mutation path.
-- [ ] Re-render from authoritative post-mutation state and surface in-flight/error state locally; do not optimistically invent a second state cache.
-- [ ] Update `scripts/test/portal-pages-check.mjs` for the sixth navigable page and add Settings navigation/mutation coverage under `scripts/test/portal-ui/`.
+- [x] Add `/settings` after Runtime in `PAGES` so routing, global navigation, manifest, and sitemap derive it from the same six-page manifest.
+- [x] Add the Settings page using existing `<template>` + slot-fill conventions.
+- [x] Render **Repositories**, **Integrations**, and **Data** groups from the shared setup snapshot.
+- [x] Reuse the shipped repository-source dialog and repository-source mutations directly.
+- [x] Wire harness refresh/enable/disable to the harness-domain mutations.
+- [x] Wire telemetry to the existing package mutation path.
+- [x] Re-render from authoritative post-mutation state and surface in-flight/error state locally; do not optimistically invent a second state cache.
+- [x] Update `scripts/test/portal-pages-check.mjs` for the sixth navigable page and add Settings navigation/mutation coverage under `scripts/test/portal-ui/`.
 
 ### Phase 5 — Contextual onboarding consistency
 
-- [ ] Update Home (`portal/home/`) so repository auto-discovery is not treated as a mandatory unresolved step once repositories are already known through another source.
-- [ ] Update Runtime (`portal/developer-runtime/`) to explain the combined observation/enrollment consent boundary and point users to explicit repository/folder sources when appropriate.
-- [ ] Update Agents (`portal/config/` and `portal/shared/harness-warning.js`) to use the portal-native harness prerequisite/check action.
-- [ ] Reverse `portal/tokens/page-state.js` and `portal/tokens/app.js` precedence to harness → telemetry → data and remove the independent prerequisite interpretation.
-- [ ] Have Home, Runtime, Agents, and Tokens consume `GET /api/settings` for shared dependency interpretation while retaining their existing domain payloads for repository, Runtime, config, and report data.
-- [ ] Keep telemetry package state synchronized across Settings, Tokens, and any advanced Agents/package control that remains.
-- [ ] Confirm Plans keeps the shipped canonical-repository onboarding and gains no new source configuration.
+- [x] Update Home (`portal/home/`) so repository auto-discovery is not treated as a mandatory unresolved step once repositories are already known through another source.
+- [x] Update Runtime (`portal/developer-runtime/`) to explain the combined observation/enrollment consent boundary and point users to explicit repository/folder sources when appropriate.
+- [x] Update Agents (`portal/config/` and `portal/shared/harness-warning.js`) to use the portal-native harness prerequisite/check action.
+- [x] Reverse `portal/tokens/page-state.js` and `portal/tokens/app.js` precedence to harness → telemetry → data and remove the independent prerequisite interpretation.
+- [x] Have Home, Runtime, Agents, and Tokens consume `GET /api/settings` for shared dependency interpretation while retaining their existing domain payloads for repository, Runtime, config, and report data.
+- [x] Keep telemetry package state synchronized across Settings, Tokens, and any advanced Agents/package control that remains.
+- [x] Confirm Plans keeps the shipped canonical-repository onboarding and gains no new source configuration.
 
 ### Phase 6 — Documentation and regression coverage
 
-- [ ] Keep [[v6lvuu2]] responsible for staged first-run `/setup`; update its relationship note only if the shared setup read model becomes a consumed dependency.
-- [ ] Update `docs/user/reference/repositories.md`, `docs/user/reference/runtime.md`, and `docs/internal/portal-architecture.md` to preserve the combined Runtime observation and repository-enrollment consent model.
-- [ ] Update `docs/user/guides/harnesses/supported-harnesses.md` and `docs/user/guides/first-time-setup.md` to remove terminal-only refresh requirements where they describe portal onboarding.
-- [ ] Add/adjust the setup-state, Runtime, harness, Tokens page-state, and Settings navigation checks named in Phases 1–4.
-- [ ] Extend Playwright coverage in `scripts/test/portal-ui/` for Settings and the main onboarding transitions.
+- [x] Keep [[v6lvuu2]] responsible for staged first-run `/setup`; update its relationship note only if the shared setup read model becomes a consumed dependency.
+- [x] Update `docs/user/reference/repositories.md`, `docs/user/reference/runtime.md`, and `docs/internal/portal-architecture.md` to preserve the combined Runtime observation and repository-enrollment consent model.
+- [x] Update `docs/user/guides/harnesses/supported-harnesses.md` and `docs/user/guides/first-time-setup.md` to remove terminal-only refresh requirements where they describe portal onboarding.
+- [x] Add/adjust the setup-state, Runtime, harness, Tokens page-state, and Settings navigation checks named in Phases 1–4.
+- [x] Extend Playwright coverage in `scripts/test/portal-ui/` for Settings and the main onboarding transitions.
 - [ ] Run the repository's full checks because the change crosses shared portal, server routing, Runtime discovery, harness state, and Tokens setup.
 
 ## Validation
 
 ### Acceptance criteria
 
-- [ ] The repository-source `auto-discovery` source remains the persisted consent switch controlling both Runtime activity observation and automatic developer-runtime repository discovery evidence.
-- [ ] No `discoverRepositoriesFromRuntime` field is added to Developer Runtime settings.
-- [ ] With repository auto-discovery off, Runtime does not scan or display newly observed active supported apps/processes.
-- [ ] With repository auto-discovery off, a previously unknown running repository is not observed or added to the canonical registry.
-- [ ] With repository auto-discovery off, explicit repository and folder sources remain available and continue to make repositories known through their own configured scans.
-- [ ] Enabling auto-discovery causes currently running identifiable repositories to become eligible for immediate registry enrollment.
-- [ ] Disabling auto-discovery does not hard-delete repositories that remain known through another source.
-- [ ] Settings appears in global portal navigation and reflects authoritative repository, harness, and telemetry state.
-- [ ] Settings reuses the existing **Manage repositories** dialog; there is no duplicate repository-source editor.
-- [ ] Plans has no Plans-specific source setting and scans repositories known through either auto-discovery or explicit sources.
+- [x] The repository-source `auto-discovery` source remains the persisted consent switch controlling both Runtime activity observation and automatic developer-runtime repository discovery evidence.
+- [x] No `discoverRepositoriesFromRuntime` field is added to Developer Runtime settings.
+- [x] With repository auto-discovery off, Runtime does not scan or display newly observed active supported apps/processes.
+- [x] With repository auto-discovery off, a previously unknown running repository is not observed or added to the canonical registry.
+- [x] With repository auto-discovery off, explicit repository and folder sources remain available and continue to make repositories known through their own configured scans.
+- [x] Enabling auto-discovery causes currently running identifiable repositories to become eligible for immediate registry enrollment.
+- [x] Disabling auto-discovery does not hard-delete repositories that remain known through another source.
+- [x] Settings appears in global portal navigation and reflects authoritative repository, harness, and telemetry state.
+- [x] Settings reuses the existing **Manage repositories** dialog; there is no duplicate repository-source editor.
+- [x] Plans has no Plans-specific source setting and scans repositories known through either auto-discovery or explicit sources.
 - [ ] A user can install a supported harness externally, click **Check for installs**, and have RoboRepo detect it without running a terminal command.
 - [ ] Harness enable/disable changes are reflected consistently in Settings, Agents, Home onboarding, and Tokens prerequisites.
-- [ ] Tokens shows missing harness before telemetry-off, then no-data after both prerequisites are satisfied.
-- [ ] Telemetry remains backed by the existing `telemetry` package and has no duplicate boolean/state store.
-- [ ] Cross-portal setup state contains no configured repository source paths.
-- [ ] No portal flow shells out to `roborepo harness refresh`.
+- [x] Tokens shows missing harness before telemetry-off, then no-data after both prerequisites are satisfied.
+- [x] Telemetry remains backed by the existing `telemetry` package and has no duplicate boolean/state store.
+- [x] Cross-portal setup state contains no configured repository source paths.
+- [x] No portal flow shells out to `roborepo harness refresh`.
+
+### Verification evidence
+
+- `node --check` passed for every changed JavaScript/ESM file.
+- Focused checks passed for setup-state derivation, harness portal routes, page manifest, Tokens state ordering, Runtime auto-discovery, repository sources, onboarding copy, portal surface layers, and plan lifecycle validation.
+- The filtered portal, harness, Runtime, and repository-source check groups passed.
+- A real portal smoke check returned HTTP 200 for both `/settings` and `/api/settings`.
+- `git diff --check` passed.
+- `npm run test:unit` reached 123/126 suites with the portal/server integration checks passing; the remaining failures were `clean-machine-container-check.mjs`, `publish-npm-check.mjs`, and `skill-reference-matrix-characterization-check.mjs`.
+- `npm run check` stopped in `scripts/doctor.sh` on stale generated Plan command artifacts and `docs/internal/skill-invocation-audit.md`.
+
+## Not tested
+
+- [ ] `npm run test:portal-ui` — blocked before test collection because the worktree does not have the `@playwright/test` package installed.
+- [ ] Manual browser verification of fresh setup, Settings mutations, external harness installation followed by **Check for installs**, and the full Tokens state transition.
 
 ### Repository checks
 
@@ -561,6 +576,9 @@ Manual browser verification should cover:
 - Harness refresh is an internal portal action backed by `refreshHarnessState()`, never a spawned CLI command.
 - The first implementation uses explicit **Check for installs**. Read-only polling alone cannot discover a new external install because persisted harness state does not change until discovery runs.
 - Telemetry remains implemented by the existing `telemetry` package; Settings adds a product-level control over that same state.
+- The shared setup snapshot reports known repositories separately from visible repositories, excludes fixture repositories, and reports explicit source configuration without returning source paths.
+- The active harness cohort continues to require the existing confirmed-detection rule; registered providers are not presented as installed merely because they are known.
+- Settings mounts the existing repository-source partial and refreshes its state after each domain mutation instead of maintaining an independent optimistic cache.
 
 ## Open Questions
 

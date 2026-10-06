@@ -7,7 +7,8 @@
 import { portalGetJson, portalPostJson, portalHideLoading, portalHideLoadingNow, portalSetUpdatedAt, portalWireBackdropClose } from "/portal/shared/api.js";
 import { pageState } from "./page-state.js";
 import { activePresentedHarnesses, formatHarnessList } from "/portal/shared/harness-cohort.js";
-import { harnessWarningElement } from "/portal/shared/harness-warning.js";
+import { checkForHarnesses, harnessWarningElement } from "/portal/shared/harness-warning.js";
+import { fetchSetupState } from "/portal/shared/setup-api.js";
 import { createConditionsReport } from "./conditions-report.js";
 import { sessionConditionLine, capturedSessionFindings } from "./conditions-context.js";
 import { createDocGuideModal } from "/portal/shared/doc-guide-modal.js";
@@ -63,18 +64,19 @@ async function init() {
   // case. Once a real harness is installed and captures real telemetry, the banner
   // disappears and the report shows real data through the same pipeline.
   let cfg;
+  let setup;
   try {
-    cfg = await portalGetJson("/api/config");
+    [cfg, setup] = await Promise.all([portalGetJson("/api/config"), fetchSetupState()]);
   } catch {
     if (firstLoad) { firstLoad = false; portalHideLoadingNow(); }
     return;
   }
-  const telemetryOn = !!(cfg.telemetry && cfg.telemetry.enabled);
-  const harnessCount = activePresentedHarnesses(cfg).length;
+  const telemetryOn = setup.telemetry.enabled;
+  const harnessCount = setup.harnesses.active.length;
   // Package capability lookups (docLookupHint) read this snapshot — installed/available state
   // comes from the same /api/config the setup cascade already uses. No second fetch.
   window.__tokensConfig = cfg;
-  await applySetupState({ telemetryOn, activeHarnessCount: harnessCount, snap: cfg });
+  await applySetupState({ telemetryOn, activeHarnessCount: harnessCount, snap: setup });
 
   // Always attempt to load the report — even when the setup state is not "full".
   // In the mock state (no real harness), we fetch from /api/tokens/mock which
@@ -85,7 +87,7 @@ async function init() {
   // Re-apply the setup cascade after the first report load: hasData is now established from the
   // real /api/data response, so pageState reflects actual captures — the "no telemetry data yet"
   // panel hides when real data exists instead of persisting from the pre-load default.
-  await applySetupState({ telemetryOn, activeHarnessCount: harnessCount, snap: cfg });
+  await applySetupState({ telemetryOn, activeHarnessCount: harnessCount, snap: setup });
   if (setupReady) {
     pollTimer = setInterval(() => load(), TOKENS_POLL_MS);
   }
@@ -115,7 +117,9 @@ async function applySetupState({ telemetryOn, activeHarnessCount, snap }) {
   // (portal/shared/harness-warning.js — the same portal-notice the Agents page renders);
   // it shows below the state panel whenever telemetry is on and the machine has no active harness.
   // Only once telemetry is on: with it off, the telemetry prompt is the single setup step.
-  const sharedBanner = telemetryOn ? harnessWarningElement(snap) : null;
+  const sharedBanner = telemetryOn
+    ? harnessWarningElement(snap, { onCheck: async () => { await checkForHarnesses(); await init(); } })
+    : null;
   if (state === "telemetry-off") {
     offPanel.style.display = "";
     const title = offPanel.querySelector("[data-slot=title]");

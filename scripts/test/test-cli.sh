@@ -1981,9 +1981,15 @@ assert "telemetry: marker-relative comparisons and confidence gates" \
 assert "telemetry: package telemetry policy validation and evaluation" \
   node "${repo_root}/scripts/test/telemetry-policy-check.mjs"
 
-# Tokens page setup cascade (telemetry off -> no harness -> no data -> full), pure function.
+# Tokens page setup cascade (no harness -> telemetry off -> no data -> full), pure function.
 assert "tokens: page setup-state cascade" \
   node "${repo_root}/scripts/test/tokens-page-state-check.mjs"
+
+assert "portal: shared setup-state is path-free and derived" \
+  node "${repo_root}/scripts/test/portal-setup-check.mjs"
+
+assert "portal: harness refresh and enable routes" \
+  node "${repo_root}/scripts/test/harness-portal-api-check.mjs"
 
 # Phase 6 of docs/plans/active/discoverable-harness-provider-architecture-plan.md: /api/session
 # rejects a missing/unrecognized harness id instead of silently defaulting to Claude.

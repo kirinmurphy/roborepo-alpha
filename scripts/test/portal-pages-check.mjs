@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 // Portal routing manifest check (docs/plans/active/portal-onboarding-home.md).
 //
-// Phase 1 of portal-onboarding-home: `/` is a dedicated Home page, Agents is canonical at
-// `/config`, and PAGES order defines the global nav (Home, Agents, Plans, Tokens, Runtime).
+// PAGES order defines the global nav (Home, Agents, Plans, Tokens, Runtime, Settings).
 // This check pins the manifest invariants that a future routing refactor could silently break:
 // canonical paths, exactly one default page, and the nav order that theme.js renders from
 // window.PORTAL_MANIFEST.
@@ -26,6 +25,7 @@ const EXPECTED = [
   { path: "/plans", id: "plans", title: "Plans", dir: "plans" },
   { path: "/tokens", id: "tokens", title: "Tokens", dir: "tokens" },
   { path: "/runtime", id: "developer-runtime", title: "Runtime", dir: "developer-runtime" },
+  { path: "/settings", id: "settings", title: "Settings", dir: "settings" },
 ];
 
 // The browser-safe manifest must expose exactly the path/id/title triples in PAGES order.
@@ -69,8 +69,8 @@ for (const page of PAGES) {
   }
 }
 
-assert.equal(PAGES.length, 5, "dynamic detail must not enter the five-item navigation manifest");
-assert.equal(PAGE_ROUTES.length, 6, "page-route table adds exactly one non-navigable dynamic route");
+assert.equal(PAGES.length, 6, "dynamic detail must not enter the six-item navigation manifest");
+assert.equal(PAGE_ROUTES.length, 7, "page-route table adds exactly one non-navigable dynamic route");
 const detailRoute = PAGE_ROUTES.find((page) => page.path === "/repositories/:urlKey");
 assert.ok(detailRoute, "repository detail route is registered");
 assert.equal(detailRoute.navId, "home", "repository detail belongs to Home navigation");

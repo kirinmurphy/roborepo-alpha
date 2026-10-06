@@ -26,6 +26,45 @@ function handleToggle(urlPath) {
 }
 
 export const configRoutes = defineRoutes([
+  {
+    method: "POST",
+    path: "/api/config/harnesses/refresh",
+    handler: (req, res, { handlers }) => {
+      readJsonBody(req, (body, err) => {
+        if (err) return send(res, 400, "application/json", JSON.stringify({ error: "invalid JSON body" }));
+        try {
+          const result = handlers.refreshHarnesses();
+          send(res, 200, "application/json", JSON.stringify({
+            ok: true,
+            detected: result.detected,
+            config: handlers.loadConfig(),
+          }));
+        } catch (error) {
+          send(res, 400, "application/json", JSON.stringify({ error: String(error?.message || error) }));
+        }
+      });
+      return true;
+    },
+  },
+  {
+    method: "POST",
+    path: "/api/config/harnesses/:id/enabled",
+    handler: (req, res, { params, handlers }) => {
+      readJsonBody(req, (body, err) => {
+        if (err) return send(res, 400, "application/json", JSON.stringify({ error: "invalid JSON body" }));
+        if (typeof body?.enabled !== "boolean") {
+          return send(res, 400, "application/json", JSON.stringify({ error: "expected { enabled: boolean }" }));
+        }
+        try {
+          handlers.setHarnessEnabled(params.id, body.enabled);
+          send(res, 200, "application/json", JSON.stringify({ ok: true, config: handlers.loadConfig() }));
+        } catch (error) {
+          send(res, 400, "application/json", JSON.stringify({ error: String(error?.message || error) }));
+        }
+      });
+      return true;
+    },
+  },
   { method: "POST", path: "/api/config/packages", handler: handleToggle("/api/config/packages") },
   { method: "POST", path: "/api/config/skills", handler: handleToggle("/api/config/skills") },
   {

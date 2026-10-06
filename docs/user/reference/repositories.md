@@ -1,6 +1,7 @@
 # Repositories in the Portal
 
-The portal Home page is a directory of the repositories RoboRepo already knows about. It puts
+The portal Home page is a directory of the repositories RoboRepo already knows about. Settings
+is the durable place to review repository discovery and the other cross-portal setup choices. It puts
 active checkouts and their running applications first, then links each repository to a persistent
 detail page at `/repositories/<urlKey>`.
 
@@ -54,11 +55,12 @@ The same repository found by several sources is one repository: identity comes f
 
 ### Manage repositories
 
-**Manage repositories** opens one dialog from Home's heading, from the repository count in the Plans
-header, and from the empty states. Top to bottom it shows:
+**Manage repositories** opens one dialog from Settings, Home's heading, the repository count in the
+Plans header, and the empty states. Top to bottom it shows:
 
-1. **Auto-discovery** — the Enable button with a sentence on what it observes, or, when on, a status
-   line such as `On · 4 repos found` and **Turn off**.
+1. **Auto-discovery** — the Enable button with a sentence explaining that it permits observation of
+   active apps and automatic repository enrollment, or, when on, a status line such as
+   `On · 4 repos found` and **Turn off**.
 2. **Repositories** — one list of every known repository. Each row offers **Pin** and **Ignore
    repository**, whatever found it. A quiet `Found by:` line explains the sources, for example
    `Found by: auto-discovery, ~/projects`. Ignored repositories sit in a collapsed **Ignored** group,

@@ -1,4 +1,4 @@
-import { portalGetJson, portalHideLoading, portalSetUpdatedAt } from "/portal/shared/api.js";
+import { portalHideLoading, portalSetUpdatedAt } from "/portal/shared/api.js";
 import { harnessSetupPromptElement } from "/portal/shared/harness-warning.js";
 import { createPlanDrawer } from "/portal/plans/plan-drawer.js";
 import { fetchSnapshot as fetchPlansSnapshot } from "/portal/plans/api.js";
@@ -7,6 +7,7 @@ import { mountHomeLinks } from "./links.js";
 import { repositoryDirectory, unresolvedActivity } from "./templates.js";
 import { createRepositorySourcesDialog } from "/portal/shared/repository-sources-dialog.js";
 import { autoDiscoveryPrompt, repositoryEmptyState } from "/portal/shared/repository-sources-templates.js";
+import { fetchSetupState } from "/portal/shared/setup-api.js";
 
 const POLL_MS = 10_000;
 const content = document.getElementById("home-content");
@@ -130,7 +131,7 @@ setInterval(refresh, POLL_MS);
 // change, so it is checked once per page load rather than on every poll.
 async function renderHarnessBanner() {
   try {
-    const banner = harnessSetupPromptElement(await portalGetJson("/api/config"));
+    const banner = harnessSetupPromptElement(await fetchSetupState());
     harnessBanner.replaceChildren(...(banner ? [banner] : []));
     harnessBanner.hidden = !banner;
   } catch {
