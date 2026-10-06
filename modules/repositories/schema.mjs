@@ -4,7 +4,9 @@
 
 import { validateRepositoryUrlKey } from "./url-key.mjs";
 
-export const REGISTRY_VERSION = 2;
+// v3 (pljvmyh §4): discoveries carry a per-source `sourceId` for configured repository sources. Lower
+// versions are discarded on load rather than migrated — a deliberate clean cutover.
+export const REGISTRY_VERSION = 3;
 
 // Lifecycle is multi-dimensional — never one mutually exclusive enum. Each dimension is validated
 // independently so a repository can be e.g. visible + resolved + active + unmonitored at once.
@@ -15,8 +17,11 @@ export const ACTIVITY_STATES = ["active", "inactive", "unknown"];
 // Domains that can be independently enrolled for ongoing monitoring/association.
 export const ENROLLMENT_DOMAINS = ["plans", "developer-runtime", "telemetry", "agentConfig", "health"];
 
-// Discovery sources allowed in provenance records.
-export const DISCOVERY_SOURCES = ["plans", "developer-runtime", "telemetry", "agentConfig", "doctor", "manual"];
+// Discovery sources allowed in provenance records. `repository-source` is a user-configured folder
+// or exact repository; it is the only kind that carries a `sourceId`, because a repository can be
+// found by several configured sources at once and each must be removable on its own.
+export const DISCOVERY_SOURCES = ["plans", "developer-runtime", "telemetry", "agentConfig", "doctor", "manual", "repository-source"];
+export const CONFIGURED_DISCOVERY_SOURCE = "repository-source";
 
 export const CONFIDENCE_LEVELS = ["high", "medium", "low", "suggestion"];
 
@@ -186,8 +191,10 @@ function validateDiscoveries(discoveries) {
   if (!Array.isArray(discoveries)) throw new Error("repository discoveries must be an array");
   for (const discovery of discoveries) {
     if (!discovery || typeof discovery !== "object" || Array.isArray(discovery)) throw new Error("discovery must be an object");
-    validateObjectKeys(discovery, ["source", "firstSeenAt", "lastSeenAt", "evidence", "confidence"], "discovery");
+    validateObjectKeys(discovery, ["source", "sourceId", "firstSeenAt", "lastSeenAt", "evidence", "confidence"], "discovery");
     if (!DISCOVERY_SOURCES.includes(discovery.source)) throw new Error("discovery source is invalid");
+    if (discovery.source === CONFIGURED_DISCOVERY_SOURCE) safeOpaqueId(discovery.sourceId, "discovery sourceId");
+    else if (discovery.sourceId != null) throw new Error("discovery sourceId is only valid for configured repository sources");
     safeIsoTimestamp(discovery.firstSeenAt, "discovery firstSeenAt");
     safeIsoTimestamp(discovery.lastSeenAt, "discovery lastSeenAt");
     safeString(discovery.evidence, "discovery evidence", 80);

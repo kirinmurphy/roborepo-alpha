@@ -1,5 +1,4 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
@@ -13,21 +12,8 @@ import { renderMarkdown } from "../../scripts/cli/markdown-render.mjs";
 
 export const LIFECYCLES = new Set(["backlog", "active", "completed", "archived"]);
 export const PRIORITIES = new Set(["high", "medium", "low", "none"]);
-const DEFAULT_IGNORED = new Set([
-  "node_modules", ".git", "vendor", "dist", "build",
-  ".cache", "coverage", ".next", ".venv", "__pycache__",
-]);
 const MAX_DOC_BYTES = 1024 * 1024;
-const MAX_REPOS = 250;
 const MAX_PLANS_PER_REPO = 500;
-// Repo-discovery traversal limits — guard against a misconfigured discovery root (e.g. $HOME or
-// /) walking indefinitely or across the whole filesystem.
-const DISCOVERY_MAX_DEPTH = 6;
-// Overridable so tests can force truncation deterministically (set to 0ms against a normal-size
-// tree) instead of needing a real slow scan or a huge synthetic directory tree.
-const DISCOVERY_TIME_BUDGET_MS = process.env.DISCOVERY_TIME_BUDGET_MS !== undefined
-  ? Number(process.env.DISCOVERY_TIME_BUDGET_MS)
-  : 5000;
 
 // Per-file record cache keyed by absolute path. Each entry is invalidated the moment a file's own
 // mtime changes, so edits are always picked up — this only skips the expensive re-parse + git
@@ -35,161 +21,13 @@ const DISCOVERY_TIME_BUDGET_MS = process.env.DISCOVERY_TIME_BUDGET_MS !== undefi
 // listing still runs on every call (cheap `readdirSync`), so new/removed files are always seen.
 const planRecordCache = new Map();
 
-export function settingsPath(stateRoot) {
-  return path.join(stateRoot, "plan-suite", "settings.json");
-}
-
-export function readPlanSettings({ stateRoot, env = process.env } = {}) {
-  const fallback = {
-    schemaVersion: 1,
-    discoveryRoots: env.ROBOREPO_PLAN_ROOTS ? env.ROBOREPO_PLAN_ROOTS.split(path.delimiter).filter(Boolean) : [],
-    ignoredDirectories: [...DEFAULT_IGNORED],
-  };
-  const file = settingsPath(stateRoot);
-  try {
-    const data = JSON.parse(fs.readFileSync(file, "utf8"));
-    return normalizeSettings(data, fallback);
-  } catch {
-    return fallback;
-  }
-}
-
-export function writePlanSettings({ stateRoot, discoveryRoots, ignoredDirectories = [...DEFAULT_IGNORED] }) {
-  const settings = normalizeSettings({ schemaVersion: 1, discoveryRoots, ignoredDirectories }, null);
-  fs.mkdirSync(path.dirname(settingsPath(stateRoot)), { recursive: true });
-  fs.writeFileSync(settingsPath(stateRoot), JSON.stringify(settings, null, 2) + "\n");
-  return settings;
-}
-
-export function normalizeSettings(data, fallback = null) {
-  const roots = Array.isArray(data?.discoveryRoots) ? data.discoveryRoots : fallback?.discoveryRoots || [];
-  const ignored = Array.isArray(data?.ignoredDirectories) ? data.ignoredDirectories : fallback?.ignoredDirectories || [...DEFAULT_IGNORED];
-  return {
-    schemaVersion: 1,
-    discoveryRoots: roots.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim()),
-    ignoredDirectories: ignored.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim()),
-  };
-}
-
-export function normalizeRootInput(input) {
-  if (typeof input !== "string" || !input.trim()) throw new Error("discovery root is required");
-  const expanded = input.trim().replace(/^~(?=$|\/|\\)/, os.homedir());
-  const resolved = path.resolve(expanded);
-  const stat = fs.statSync(resolved);
-  if (!stat.isDirectory()) throw new Error("discovery root must be a readable directory");
-  return resolved;
-}
-
-export function discoverRepositories(settings) {
-  const ignored = new Set(settings.ignoredDirectories || [...DEFAULT_IGNORED]);
-  const repositories = [];
-  const errors = [];
-  const seen = new Set();
-  const visitedReal = new Set(); // realpath'd dirs already descended into (symlink-cycle guard)
-  let truncated = false;
-  const deadline = Date.now() + DISCOVERY_TIME_BUDGET_MS;
-
-  const addRepo = (candidate) => {
-    if (repositories.length >= MAX_REPOS) {
-      truncated = true;
-      return true; // stop
-    }
-    const repo = candidateRepository(candidate);
-    if (repo && !seen.has(repo.root)) {
-      seen.add(repo.root);
-      repositories.push(repo);
-    }
-    return false;
-  };
-
-  // Recursive walk from `dir`. Stops descending the moment a folder is itself an eligible repo
-  // (has a .git entry) — a repo's internal subfolders are never re-scanned as repo candidates.
-  const walk = (dir, depth) => {
-    if (truncated) return;
-    // >= not >: with a 0ms budget the deadline equals the start time, and a walk that begins within
-    // the same millisecond would otherwise skip the check entirely. Identical behavior at the real
-    // 5000ms budget; only makes the exhausted-budget case deterministic.
-    if (Date.now() >= deadline) {
-      truncated = true;
-      return;
-    }
-    if (depth > DISCOVERY_MAX_DEPTH) return;
-    let real;
-    try {
-      real = fs.realpathSync(dir);
-    } catch {
-      return;
-    }
-    if (visitedReal.has(real)) return; // symlink cycle guard
-    visitedReal.add(real);
-
-    // A folder counts as an eligible repo root the moment it has EITHER a .git entry or a
-    // docs/plans dir (matches the pre-existing candidateRepository contract) — stop descending
-    // past it either way so a repo's own subfolders are never re-scanned as repo candidates.
-    if (fs.existsSync(path.join(dir, ".git")) || fs.existsSync(path.join(dir, "docs", "plans"))) {
-      addRepo(dir);
-      return;
-    }
-
-    let entries = [];
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch (err) {
-      // Permission-denied or otherwise unreadable mid-walk: don't abort the whole scan, just skip
-      // this branch (matches walkPlans()'s existing error-tolerant pattern).
-      errors.push({ root: dir, error: String(err?.message || err) });
-      return;
-    }
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      if (entry.name.startsWith(".")) continue;
-      if (ignored.has(entry.name)) continue;
-      if (truncated) return;
-      walk(path.join(dir, entry.name), depth + 1);
-    }
-  };
-
-  for (const rootText of settings.discoveryRoots || []) {
-    let root;
-    try {
-      root = normalizeRootInput(rootText);
-    } catch (err) {
-      errors.push({ root: rootText, error: String(err?.message || err) });
-      continue;
-    }
-    walk(root, 0);
-  }
-
-  return { repositories, errors, truncated };
-}
-
-export function buildPlanSnapshot({ stateRoot, env = process.env, packageState = null } = {}) {
-  const settings = readPlanSettings({ stateRoot, env });
-  const discovery = discoverRepositories(settings);
-  const plans = [];
-  const errors = [...discovery.errors];
-  for (const repo of discovery.repositories) {
-    try {
-      plans.push(...discoverPlansInRepository(repo));
-    } catch (err) {
-      errors.push({ repository: repo.name, root: repo.root, error: String(err?.message || err) });
-    }
-  }
-  return {
-    ok: true,
-    settings,
-    repositories: discovery.repositories.map((repo) => publicRepository(repo)),
-    plans: withRelationshipFindings(plans).map(publicPlan),
-    errors,
-    truncated: discovery.truncated || plans.some((plan) => plan.repository.truncated),
-    planWritePackage: packageState || { available: false, enabled: false, status: "missing" },
-  };
-}
+// Plans scans the repositories RoboRepo knows about (pljvmyh §9); the scan lives beside this module.
+export { buildPlanSnapshot } from "./canonical-scan.mjs";
 
 // Appends each plan's cross-plan findings to a copy of its validation. Records come from
 // planRecordCache, so mutating `plan.validation` in place would stack the same relationship
 // findings onto the cached record again on every rescan of a long-running portal.
-function withRelationshipFindings(plans) {
+export function withRelationshipFindings(plans) {
   const relationships = relationshipFindings(plans);
   return plans.map((record) => {
     const findings = [...record.plan.validation.findings, ...(relationships.get(record.key) || [])];
@@ -279,7 +117,7 @@ export function findPlanByKey(snapshot, key) {
 
 // Stable-identity lookup: plan `id` (frontmatter) survives a lifecycle move even though `key`
 // (hashed from repo root + relative path) does not. `id` uniqueness is only enforced within a
-// single repository (see relationshipWarnings' `${repository.root}:${plan.id}` dedup key), so a
+// single repository (see relationshipFindings' `${repository.id}:${plan.id}` dedup key), so a
 // `repositoryId` is required to disambiguate when the same id could exist in two repos. An empty
 // id ("" — the buildPlanRecord fallback for plans with no frontmatter id) never matches.
 export function findPlanById(snapshot, id, repositoryId) {
@@ -395,27 +233,17 @@ export function buildPrompt(command, selectedPlans, { mode = "repository-aware" 
   ].join("\n");
 }
 
-function candidateRepository(dir) {
-  const hasGit = fs.existsSync(path.join(dir, ".git"));
-  const hasPlans = fs.existsSync(path.join(dir, "docs", "plans"));
-  if (!hasGit && !hasPlans) return null;
-  const root = fs.realpathSync(dir);
-  if (hasGit && isLinkedWorktree(root)) return null;
-  return repositoryRecord(root);
-}
-
-function repositoryRecord(root) {
+// `canonical` carries the registry's identity when the scan comes from a known repository. Every
+// checkout of that repository then shares one `id`, so plans from a worktree group, filter, and
+// resolve relationships with the main checkout's plans; `root` stays the checkout the record was
+// read from, which is where its edits are written.
+export function repositoryRecord(root, canonical = null) {
   const git = gitInfo(root);
-  // Canonical repository identity shared with Runtime/Telemetry. git repos resolve to their
-  // portable git: id; non-git plan roots get an opaque local: id. The existing content-hash `id`
-  // is retained for back-compat during the migration window (browser filters still key on it until
-  // Phase 4's global scope lands).
-  const resolved = resolveProjectIdentity(root, "plan-suite");
-  const repositoryId = canonicalRepositoryId(resolved);
+  const repositoryId = canonical?.repositoryId ?? canonicalRepositoryId(resolveProjectIdentity(root, "plan-suite"));
   return {
-    id: stableKey(root),
+    id: stableKey(canonical?.repositoryId ?? root),
     repositoryId,
-    name: path.basename(root),
+    name: canonical?.name ?? path.basename(root),
     root,
     providerUrl: providerUrlForRepositoryId(repositoryId),
     gitHead: git.head,
@@ -424,7 +252,15 @@ function repositoryRecord(root) {
   };
 }
 
-function discoverPlansInRepository(repository) {
+export function discoverPlansInRepository(repository) {
+  const { files, scoped } = planFilesInRepository(repository);
+  return files.map((absolutePath) => readPlanRecord(scoped, absolutePath));
+}
+
+// The plan files in one checkout, without reading them, plus the repository record carrying that
+// walk's `truncated`/`errors`. Split from discoverPlansInRepository so a scan can decide which files
+// deserve a full record — building one costs several Git subprocesses.
+export function planFilesInRepository(repository) {
   const plansDir = path.join(repository.root, "docs", "plans");
   const files = [];
   const errors = [];
@@ -435,8 +271,7 @@ function discoverPlansInRepository(repository) {
     files.length = MAX_PLANS_PER_REPO;
     truncated = true;
   }
-  const repositoryWithState = { ...repository, truncated, errors };
-  return files.map((absolutePath) => readPlanRecord(repositoryWithState, absolutePath));
+  return { files, scoped: { ...repository, truncated, errors } };
 }
 
 function walkPlans(dir, repoRoot, files, errors) {
@@ -461,7 +296,7 @@ function walkPlans(dir, repoRoot, files, errors) {
   }
 }
 
-function readPlanRecord(repository, absolutePath) {
+export function readPlanRecord(repository, absolutePath) {
   const relativePath = relative(repository.root, absolutePath);
   const stat = fs.statSync(absolutePath);
   // Naming findings depend on the repository's declared namespaces, not only on the plan file, so
@@ -939,7 +774,7 @@ function relationshipFindings(plans) {
   const byRepoAndId = new Map();
   for (const record of plans) {
     if (!record.plan.id) continue;
-    const key = `${record.repository.root}:${record.plan.id}`;
+    const key = `${record.repository.id}:${record.plan.id}`;
     if (!byRepoAndId.has(key)) byRepoAndId.set(key, []);
     byRepoAndId.get(key).push(record);
   }
@@ -968,7 +803,7 @@ function relationshipFindings(plans) {
         // An external blocker names something with no plan document, so there is nothing to resolve
         // against. Only `blocked_by` may carry one; depends_on/related are plan-to-plan by design.
         if (field === "blockers" && isExternalBlocker(ref)) continue;
-        if (!byRepoAndId.has(`${record.repository.root}:${ref}`)) {
+        if (!byRepoAndId.has(`${record.repository.id}:${ref}`)) {
           addFinding(findings, record.key, finding(code, { meta: { [metaKey]: ref } }));
         }
       }
@@ -981,15 +816,6 @@ function gitInfo(root) {
   const head = git(root, ["rev-parse", "--verify", "HEAD"]);
   const branch = git(root, ["branch", "--show-current"]);
   return { available: head.ok, head: head.ok ? head.stdout : null, branch: branch.ok ? branch.stdout : null };
-}
-
-function isLinkedWorktree(root) {
-  const result = git(root, ["rev-parse", "--path-format=absolute", "--git-common-dir", "--git-dir"]);
-  if (!result.ok) return false;
-  const [commonDir, gitDir] = result.stdout.split(/\r?\n/).filter(Boolean).map((item) => path.resolve(item));
-  if (!commonDir || !gitDir) return false;
-  const relativeGitDir = path.relative(commonDir, gitDir).split(path.sep);
-  return relativeGitDir[0] === "worktrees";
 }
 
 function gitFileInfo(root, relativePath, reviewedCommit) {
@@ -1014,7 +840,7 @@ function git(cwd, args) {
   return { ok: result.status === 0, stdout: (result.stdout || "").trim() };
 }
 
-function publicPlan(record) {
+export function publicPlan(record) {
   return {
     key: record.key,
     absolutePath: record.absolutePath,
@@ -1034,7 +860,7 @@ function stripRepositoryRoot(repository) {
   return publicRepo;
 }
 
-function publicRepository(repo) {
+export function publicRepository(repo) {
   return {
     id: repo.id,
     repositoryId: repo.repositoryId ?? null,

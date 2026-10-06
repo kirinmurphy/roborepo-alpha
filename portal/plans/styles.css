@@ -3,7 +3,7 @@
  * reusing them is the plain-CSS equivalent):
  *   765px  — narrow: lifecycle tabs collapse to a dropdown selector. Set ~50px above the point
  *            tabs would wrap to 2 lines, so the dropdown swap happens before wrapping occurs.
- *   960px  — wide: drawer/root-form/filter-row go single-column below it; the plan card's status
+ *   960px  — wide: drawer/filter-row go single-column below it; the plan card's status
  *            section becomes a fixed 200px right-side column at/above it.
  */
 main {
@@ -18,8 +18,6 @@ main {
   border-radius: 8px;
   padding: 1rem 1.5rem;
 }
-/* Discovery-root ("Project Folders") section: styled by the shared .intro-banner
- * (portal/shared/base.css) so it reads the same as other pages' setup prompts. */
 /* Whole-page sticky header block: control-bar + lifecycle tabs ride together and stay pinned for
  * the entire scroll, not just the ~2 rows of their old short wrapper. #plans-header is a direct
  * child of <body> (the page scroll container), so a sticky here tracks the full page. It pins to
@@ -61,6 +59,21 @@ main {
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
+}
+/* The repository count opens Manage repositories; it reads as part of the sentence. */
+.repos-count-button {
+  padding: 0;
+  font: inherit;
+  color: var(--dim);
+}
+.repos-count-button:hover {
+  color: var(--ink);
+}
+#plans-onboarding {
+  margin: 0 0 16px;
+}
+#plans-onboarding .empty-state [data-slot="action"] {
+  margin-top: 6px;
 }
 /* Layout only — button chrome (border/background/padding) now comes from data-btn, not this
  * class. Groups paired icon buttons (update/refresh; Filters/Agent prompts) for consistent
@@ -205,164 +218,6 @@ main {
 }
 /* Button chrome (default/secondary, cta, text) is defined globally in portal/shared/base.css via
  * data-btn — no page-local button {} override here. */
-/* The "Add your first Project Folder" title is .intro-banner-title. Only shown once plan-write is
- * enabled — while it's disabled the banner is the single visible setup step. Once roots exist, the
- * row-1 "N Repos" control item takes over and this whole block relocates into the control bar
- * (unlabeled). */
-#roots-panel-mount:not([hidden]) .settings-body {
-  margin-top: 0;
-  padding: 10px 20px 12px;
-  border-top: 1px solid var(--line);
-  background: color-mix(in srgb, var(--neutral-tint) 8%, var(--panel));
-  margin-left: -20px;
-  margin-right: -20px;
-}
-#roots {
-  margin: 0 0 12px;
-  color: var(--dim);
-  font-size: var(--text-xs);
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-#roots:not(:empty) {
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--line);
-}
-.root-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: min(560px, 100%);
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  padding: 3px 4px 3px 7px;
-  background: var(--bg);
-}
-.root-chip span {
-  overflow-wrap: anywhere;
-}
-.root-remove {
-  padding: 2px 6px;
-  font-size: var(--text-2xs);
-  color: var(--danger);
-}
-#root-form {
-  margin-top: 10px;
-  max-width: 640px;
-}
-.root-form-label-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
-}
-#root-form label {
-  display: inline-block;
-  font-size: var(--text-xs);
-  color: var(--dim);
-  margin-bottom: 0;
-}
-.root-form-row {
-  display: flex;
-  gap: 1rem;
-}
-#root-input {
-  flex: 1;
-}
-dialog#info-modal {
-  width: min(560px, 100%);
-  max-height: 85vh;
-  overflow: auto;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  box-shadow: 0 12px 40px var(--modal-shadow);
-  padding: 18px;
-}
-dialog#info-modal::backdrop {
-  background: var(--backdrop);
-}
-/* info-modal only — narrower box, different head/close treatment than the shared .modal-* chrome
- * in base.css (which #skill-modal below uses as-is). Scoped to the id so it doesn't leak onto
- * #skill-modal via the shared class names. */
-#info-modal .modal-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-  padding: 0;
-  border-bottom: none;
-}
-#info-modal .modal-head h2 {
-  margin: 0;
-  font-size: var(--text-md);
-}
-#info-modal portal-close-button {
-  flex: 0 0 auto;
-  margin-left: 0;
-}
-#info-modal .modal-body {
-  font-size: var(--text-sm);
-  color: var(--dim);
-}
-.folder-tree {
-  margin: 0 0 12px;
-  padding: 12px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  font-size: var(--text-xs);
-  line-height: 1.6;
-  color: var(--dim);
-  overflow-x: auto;
-}
-.tree-root {
-  color: var(--ink);
-  font-weight: 600;
-}
-.tree-branch {
-  color: var(--dim);
-}
-.project-folder {
-  color: var(--warn);
-  font-weight: 600;
-}
-.tree-matched {
-  color: var(--ok);
-  font-weight: 600;
-}
-.tree-plain {
-  color: var(--dim);
-}
-.tree-note {
-  color: var(--dim);
-  font-style: italic;
-}
-.tree-legend {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  margin: 0 0 14px;
-  padding: 0;
-  list-style: none;
-  font-size: var(--text-xs);
-}
-.legend-swatch {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-  margin-right: 6px;
-  vertical-align: -1px;
-}
-.legend-repo {
-  background: var(--warn);
-}
-.legend-matched {
-  background: var(--ok);
-}
 .modal-note {
   margin: 0 0 8px;
   font-size: var(--text-2xs);
@@ -659,11 +514,6 @@ plan-card {
   gap: 6px;
   flex-wrap: wrap;
   align-self: end;
-}
-@media (max-width: 960px) {
-  #root-form {
-    display: grid;
-  }
 }
 @media (max-width: 420px) {
   .filter-row {

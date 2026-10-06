@@ -11,10 +11,6 @@ export function refreshSnapshot() {
   return portalPostJson("/api/plans/refresh", {});
 }
 
-export function saveDiscoveryRoots(discoveryRoots) {
-  return portalPostJson("/api/plans/settings", { discoveryRoots });
-}
-
 export function updatePlanPriority(id, key, priority, expectedPriority, mtimeMs, repositoryId) {
   return portalPostJson("/api/plans/priority", { id, key, priority, expectedPriority, mtimeMs, repositoryId });
 }

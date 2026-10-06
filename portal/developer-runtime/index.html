@@ -9,6 +9,8 @@
     <main class="inner">
       {{LOADING}}
       <section id="warnings" class="notice warn" hidden></section>
+      <!-- Shown while auto-discovery is off: no process is observed until the user turns it on. -->
+      <div id="auto-discovery-cta" hidden></div>
       <section id="content" class="developer-runtime-content"></section>
     </main>
 
@@ -79,12 +81,12 @@
             >
             <label
               ><input id="app-project-hidden" type="checkbox" /> Hide
-              project</label
+              project from Runtime</label
             >
             <label
               ><input id="app-favorite" type="checkbox" /> App favorite</label
             >
-            <label><input id="app-hidden" type="checkbox" /> Hide app</label>
+            <label><input id="app-hidden" type="checkbox" /> Hide app from Runtime</label>
           </div>
           <label>
             Health path
@@ -375,7 +377,7 @@
                    Pin action), and offering it per member asked the user to favorite one port of a
                    thing they were already pinning as a whole. Hide stays — hiding one noisy
                    listener is a real per-member need. -->
-              <button type="button" data-action="hide">Hide</button>
+              <button type="button" data-action="hide">Hide from Runtime</button>
             </div>
           </div>
         </div>
@@ -450,7 +452,7 @@
                      whole repository, not to this one Compose stack. -->
                 <!-- Favorite removed for the same reason as on the instance card: pinning belongs
                      to the repository, not to one Compose stack under it. -->
-                <button type="button" data-action="hide">Hide</button>
+                <button type="button" data-action="hide">Hide from Runtime</button>
               </div>
             </div>
           </div>
@@ -647,6 +649,7 @@
         <button type="button" data-slot="action"></button>
       </div>
     </template>
+    {{REPOSITORY_SOURCES}}
     <script type="module" src="/portal/shared/info-icon.js"></script>
     <script type="module" src="/portal/shared/icon.js"></script>
     <script type="module" src="/portal/shared/close-button.js"></script>

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { recordRepositoryDiscovery, enrollRepositoryInPlans } from "../cli/repositories.mjs";
+import { recordRepositoryDiscovery } from "../cli/repositories.mjs";
 import { loadRegistry, registryPathFor, localRootPath, checkoutRootsFor, repositoryDetailPayload } from "../../modules/repositories/index.mjs";
 
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-repo-service-"));
@@ -33,51 +33,6 @@ try {
   assert.equal(Object.keys(reg.repositories).length, 1, "all roots collapse to one canonical repository");
   assert.equal(reg.repositories[id].localRoots.length, 3, "each distinct root retained");
   assert.equal(reg.repositories[id].localRoots.filter((r) => r.kind === "worktree").length, 1);
-
-  // ---- Plans enrollment: not covered -> adds the EXACT repo root as narrow default ----
-  const repoRoot = path.join(tempRoot, "clones", "roborepo");
-  fs.mkdirSync(repoRoot, { recursive: true });
-  let planSettings = { discoveryRoots: [], ignoredDirectories: [] };
-  const updateCalls = [];
-  let refreshed = 0;
-  const hooks = {
-    readSettings: () => ({ ...planSettings }),
-    updatePlanSettings: ({ discoveryRoots }) => { updateCalls.push(discoveryRoots); planSettings = { ...planSettings, discoveryRoots }; },
-    refreshPlans: () => { refreshed += 1; },
-  };
-  const res = enrollRepositoryInPlans({ repositoryId: id, repoRoot, stateRoot, ...hooks });
-  assert.equal(res.covered, false);
-  assert.equal(res.sourceAdded, path.resolve(repoRoot), "adds the exact repo root, never a parent");
-  assert.deepEqual(updateCalls[updateCalls.length - 1], [path.resolve(repoRoot)]);
-  assert.equal(refreshed, 1);
-  reg = loadRegistry({ stateRoot });
-  assert.equal(reg.repositories[id].enrollments.plans.enabled, true, "enrollment recorded only after Plans write+refresh succeeded");
-
-  // ---- Plans enrollment: already covered -> reuses source, adds no duplicate ----
-  const covered = enrollRepositoryInPlans({ repositoryId: id, repoRoot, stateRoot,
-    readSettings: () => ({ discoveryRoots: [path.resolve(repoRoot)], ignoredDirectories: [] }),
-    updatePlanSettings: () => { throw new Error("must not add a source when already covered"); },
-    refreshPlans: () => {},
-  });
-  assert.equal(covered.covered, true);
-  assert.equal(covered.coveringSource, path.resolve(repoRoot));
-  assert.equal(covered.sourceAdded, null);
-
-  // ---- Enrollment failure leaves the repository unmonitored ----
-  const id2 = "local:1111222233334444";
-  recordRepositoryDiscovery({ repositoryId: id2, kind: "local", displayName: "solo", source: "developer-runtime", evidence: "cwd-in-git-root", confidence: "medium", stateRoot });
-  assert.throws(() => enrollRepositoryInPlans({ repositoryId: id2, repoRoot: path.join(tempRoot, "solo"), stateRoot,
-    readSettings: () => ({ discoveryRoots: [], ignoredDirectories: [] }),
-    updatePlanSettings: () => { throw new Error("disk full"); },
-    refreshPlans: () => {},
-  }), /disk full/);
-  reg = loadRegistry({ stateRoot });
-  assert.equal(reg.repositories[id2].enrollments.plans, undefined, "failed enrollment does not mark monitoring enabled");
-
-  // ---- Unknown repository rejected ----
-  assert.throws(() => enrollRepositoryInPlans({ repositoryId: "git:github.com/x/y", repoRoot, stateRoot,
-    readSettings: () => ({ discoveryRoots: [] }), updatePlanSettings: () => {}, refreshPlans: () => {},
-  }), /unknown repository/);
 
   // ---- Private rootId -> path index (pljvmyh §2, delivered by h4tqm2wz) ----
   const pathId = "git:github.com/kirinmurphy/pathed";

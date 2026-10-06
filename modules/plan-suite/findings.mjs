@@ -244,6 +244,12 @@ const DEFS = {
     message: ({ meta }) => `Duplicate plan id: ${meta.id}.`,
     resolution: "Give one of the plans a different `id`; ids must be unique within a repository.",
   },
+  PLAN_DIFFERS_IN_WORKTREE: {
+    kind: "relationship",
+    severity: "advisory",
+    message: ({ meta }) => `Differs in worktree ${meta.worktree}.`,
+    resolution: "This is the main checkout's copy, which the portal shows and edits. Merge or discard the worktree's changes to this plan to reconcile them.",
+  },
   SELF_DEPENDENCY: {
     kind: "relationship",
     severity: "advisory",

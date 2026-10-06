@@ -18,6 +18,14 @@ roborepo runtime --open
 
 ## Discovery
 
+Runtime observes processes only while **auto-discovery** is on, and it is off until you turn it on.
+While it is off, the page leads with **Enable auto-discovery of active repos**, no process or
+container is observed, and nothing new is registered. Repositories already known — for example from
+a folder added under **Manage repositories** — still appear with their checkouts and Git state, read
+from disk. Turning auto-discovery on starts the first scan immediately; turning it off stops the
+scans and removes the evidence they recorded. See
+[Repository sources](repositories.md#repository-sources).
+
 Automatic discovery currently supports macOS. Other platforms return an explicit capability state
 so the page can say discovery is unsupported instead of implying that no apps are running.
 
@@ -194,11 +202,15 @@ From the portal you can:
 
 - The app dialog can edit project/app names, project/app favorite and hidden flags, hostname
   preference, health path/status policy, and match hints.
-- The action menu can favorite or hide an app without deleting saved links.
+- The action menu can favorite an app or **Hide from Runtime** without deleting saved links. Hiding
+  from Runtime only affects this page.
+- A repository's menu offers **Ignore repository**, which hides the repository everywhere (Home,
+  Plans, and Runtime's normal list), and **Hide from Runtime**, which hides only its running apps
+  and Compose stacks here.
 - The settings dialog lists hidden items, manual associations, and aliases so local decisions can
   be restored or removed. It also lists hidden *repositories* separately: those are whole
-  repositories the 30-day ageing sweep retired from the list, which live in the repository registry
-  rather than in Runtime's settings, and each row restores one.
+  repositories you ignored or the 30-day ageing sweep retired from the list, which live in the
+  repository registry rather than in Runtime's settings, and each row restores one.
 - Removing an association deletes only the association entry. Saved project/app settings and quick
   links remain in settings.
 - Alias creation requires an explicit confirmation checkbox and uses the cycle-safe server-side

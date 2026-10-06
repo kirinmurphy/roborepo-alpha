@@ -11,17 +11,20 @@ export function runtimeByRepository(snapshot, registry) {
   return repositories;
 }
 
+// Coverage comes from the snapshot's per-repository scan state, so a repository Plans has not
+// scanned (or could not read) gets no entry and Home reports "not scanned" instead of zero plans.
 export function plansByRepository(snapshot, now, registry) {
   const coverage = new Map();
-  for (const repository of snapshot?.repositories || []) {
-    const repositoryId = resolveRegistryAlias(registry, repository.repositoryId);
-    if (registry.repositories?.[repositoryId]) coverage.set(repositoryId, { repository, plans: [] });
+  for (const scan of snapshot?.repositoryScans || []) {
+    if (scan.state !== "scanned") continue;
+    const repositoryId = resolveRegistryAlias(registry, scan.repositoryId);
+    if (registry.repositories?.[repositoryId]) coverage.set(repositoryId, { plans: [] });
   }
   for (const record of snapshot?.plans || []) {
     const sourceId = record.repository?.repositoryId;
     const repositoryId = sourceId && resolveRegistryAlias(registry, sourceId);
     if (!repositoryId || !registry.repositories?.[repositoryId]) continue;
-    const group = coverage.get(repositoryId) || { repository: null, plans: [] };
+    const group = coverage.get(repositoryId) || { plans: [] };
     group.plans.push({ ...record.plan, key: record.key });
     coverage.set(repositoryId, group);
   }

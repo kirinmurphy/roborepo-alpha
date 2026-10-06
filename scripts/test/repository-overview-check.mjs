@@ -62,6 +62,13 @@ const plans = {
   truncated: false,
   errors: [],
   repositories: [{ repositoryId: ACTIVE }],
+  // Coverage is the per-repository scan state: IDLE_RECENT was scanned and has no plans, STALE has
+  // no readable checkout, and every other repository has not been scanned at all.
+  repositoryScans: [
+    { repositoryId: ACTIVE, state: "scanned", planCount: 4, checkoutCount: 1 },
+    { repositoryId: IDLE_RECENT, state: "scanned", planCount: 0, checkoutCount: 1 },
+    { repositoryId: STALE, state: "unavailable", planCount: 0, checkoutCount: 0 },
+  ],
   plans: [
     { repository: { repositoryId: ACTIVE }, plan: { id: "active-plan", title: "Active plan", lifecycle: "active", taskCounts: { total: 8, complete: 3 }, gitLastChangedAt: "2026-09-29T12:00:00.000Z", modifiedAt: "2026-09-20T12:00:00.000Z" } },
     { repository: { repositoryId: ACTIVE }, plan: { id: "backlog-plan", title: "Backlog plan", lifecycle: "backlog", gitLastChangedAt: null, modifiedAt: "2026-09-28T12:00:00.000Z" } },
@@ -108,6 +115,8 @@ assert.deepEqual(active.domains.plans.data.active[0].taskCounts, { total: 8, com
 assert.equal("additionalActive" in active.domains.plans.data, false, "plans are no longer split into a leftover list");
 assert.equal(active.domains.agents.status, "unavailable");
 assert.equal(home.repositories.find((repository) => repository.repositoryId === PINNED).domains.plans.status, "unavailable", "unscanned Plans coverage is not reported as zero");
+assert.deepEqual(home.repositories.find((repository) => repository.repositoryId === IDLE_RECENT).domains.plans.data.counts, { active: 0, backlog: 0 }, "a scanned repository without plans reports zero");
+assert.equal(home.repositories.find((repository) => repository.repositoryId === STALE).domains.plans.status, "unavailable", "a repository Plans could not read is not reported as zero");
 assert.equal(active.domains.runtime.data.checkouts[0].projectRoot, "/private/worktrees/active-feature", "shared checkout tooltips and copy controls receive the checkout path");
 
 const detail = service.loadDetail({ urlKey: "active-app" });
@@ -124,6 +133,7 @@ const aliasRuntime = structuredClone(runtime);
 aliasRuntime.repositories.find((repository) => repository.repositoryId === ACTIVE).repositoryId = aliasId;
 const aliasPlans = structuredClone(plans);
 aliasPlans.repositories[0].repositoryId = aliasId;
+aliasPlans.repositoryScans[0].repositoryId = aliasId;
 for (const plan of aliasPlans.plans) plan.repository.repositoryId = aliasId;
 const aliasTelemetry = structuredClone(telemetry);
 aliasTelemetry.repositories[aliasId] = aliasTelemetry.repositories[ACTIVE];
@@ -241,6 +251,7 @@ const associationPlans = {
   truncated: false,
   errors: [],
   repositories: [{ repositoryId: ASSOC }],
+  repositoryScans: [{ repositoryId: ASSOC, state: "scanned", planCount: 10, checkoutCount: 1 }],
   plans: [
     assocPlan("matched", "feature-a"),
     assocPlan("unassociated", ""),

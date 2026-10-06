@@ -7,6 +7,8 @@ import * as fields from "./form-fields.js";
 import { createHistoryView } from "./history-view.js";
 import { buildRoutesDropdown, fillApiRouteDialog } from "./suggestions-view.js";
 import { configureLinksTrigger } from "/portal/shared/repository-components.js";
+import { createRepositorySourcesDialog } from "/portal/shared/repository-sources-dialog.js";
+import { autoDiscoveryPrompt } from "/portal/shared/repository-sources-templates.js";
 import "/portal/shared/menu-button.js";
 import "/portal/shared/copy-menu.js";
 // The API-route rows in the Links panel use <portal-copy-button> for their curl commands.
@@ -15,6 +17,12 @@ import "/portal/shared/copy-button.js";
 // A stale opaque key (the app moved ports since this render) resolves by reloading the snapshot
 // rather than surfacing an error.
 const historyView = createHistoryView({ onStale: () => load({ force: true }) });
+
+// Enabling auto-discovery starts the first process scan server-side; the forced load then waits on
+// that same in-flight scan, so the page fills in as soon as it lands.
+const sourcesDialog = createRepositorySourcesDialog({ onChange: () => load({ force: true }) });
+const autoDiscoveryCta = document.getElementById("auto-discovery-cta");
+autoDiscoveryCta.append(autoDiscoveryPrompt({ onEnable: () => sourcesDialog.enableAutoDiscovery() }));
 
 // Built once and reused across every render/reconcile — the Active apps header holds this same
 // node for the page's lifetime so refresh/settings listeners and live spinner state never get
@@ -87,6 +95,7 @@ function setRefreshing(refreshing) {
 // right away.
 function applySnapshot(snapshot, { reconcile = false } = {}) {
   lastSnapshot = snapshot;
+  autoDiscoveryCta.hidden = snapshot.autoDiscovery?.enabled !== false;
   const hash = state.snapshotHash(snapshot);
   // The hash-skip only makes sense for the reconcile path, where "nothing changed" really does
   // mean nothing to do. A full rebuild (reconcile: false) can be the only thing that clears
@@ -217,7 +226,10 @@ function emptyStateNode(snapshot) {
   if (snapshot.capabilities.discovery === "supported") {
     return tmpl.emptyState(
       "No active HTTP apps found",
-      "Refresh after starting a local development server.",
+      // While auto-discovery is off no refresh can find anything; the Enable prompt above is the way.
+      snapshot.autoDiscovery?.enabled === false
+        ? "Runtime is not watching running apps while auto-discovery is off."
+        : "Refresh after starting a local development server.",
     );
   }
   return tmpl.emptyState(
@@ -428,6 +440,7 @@ function repositoryActions() {
   return {
     onTogglePinned: toggleRepositoryPinned,
     onHide: hideRepository,
+    onIgnore: ignoreRepository,
     onToggleMenu: toggleActionMenu,
     onCloseMenus: closeActionMenus,
     // Binding a repository path describes the whole repository, so the action lives on this menu
@@ -879,6 +892,17 @@ function hiddenRepositoryRows() {
       () => restoreHiddenRepository(item),
     ),
   );
+}
+
+// Registry-wide, like Home's Ignore: the repository leaves Home, Plans, and this page's normal list
+// until it is restored from Settings or the Manage repositories dialog.
+async function ignoreRepository(repository) {
+  try {
+    const result = await api.setRepositoryVisibility({ repositoryId: repository.repositoryId, hidden: true });
+    if (result.developerRuntime) applySnapshot(result.developerRuntime);
+  } catch (err) {
+    showError(err.message);
+  }
 }
 
 async function restoreHiddenRepository(item) {

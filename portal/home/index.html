@@ -9,19 +9,15 @@
         <div id="home-harness-banner" class="home-harness-banner" hidden></div>
         <section class="home-heading" aria-labelledby="home-title">
         <h1 id="home-title">Active Repos</h1>
-        <div class="home-action-slot" aria-hidden="true"></div>
+        <div class="home-action-slot">
+          <button type="button" data-btn="secondary" id="manage-repositories" hidden>Manage repositories</button>
+        </div>
       </section>
       <section id="home-warning" class="notice warn" hidden></section>
+      <div id="home-auto-discovery" hidden></div>
       <section id="home-content" aria-live="polite"></section>
     </main>
 
-    <template id="tpl-home-empty">
-      <section class="home-empty">
-        <h2 data-slot="title"></h2>
-        <p data-slot="body"></p>
-        <a href="/runtime">Open Runtime</a>
-      </section>
-    </template>
     <template id="tpl-repository-directory">
       <div class="repository-directory" data-slot="repositories"></div>
     </template>
@@ -118,6 +114,7 @@
     </template>
 
     {{PLAN_DRAWER}}
+    {{REPOSITORY_SOURCES}}
 
     <script src="/portal/shared/icon.js" type="module"></script>
     <script src="/portal/shared/notice.js" type="module"></script>

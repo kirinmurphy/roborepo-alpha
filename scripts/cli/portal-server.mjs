@@ -129,6 +129,11 @@ const renderWidgetTemplates = () => fs.readFileSync(WIDGET_TEMPLATES_PARTIAL_PAT
 const PLAN_DRAWER_PARTIAL_PATH = path.join(PORTAL_DIR, "plans", "plan-drawer-partial.html");
 const renderPlanDrawer = () => fs.readFileSync(PLAN_DRAWER_PARTIAL_PATH, "utf8");
 
+// The Manage repositories dialog and the repository empty state Home and Plans share. Only pages
+// that place {{REPOSITORY_SOURCES}} get it.
+const REPOSITORY_SOURCES_PARTIAL_PATH = path.join(PORTAL_DIR, "shared", "repository-sources-partial.html");
+const renderRepositorySources = () => fs.readFileSync(REPOSITORY_SOURCES_PARTIAL_PATH, "utf8");
+
 const pageHtml = (page, token, routeParams = {}) =>
   fs
     .readFileSync(path.join(PORTAL_DIR, page.dir, "index.html"), "utf8")
@@ -137,6 +142,7 @@ const pageHtml = (page, token, routeParams = {}) =>
     .replace("{{LOADING}}", renderLoading())
     .replace("{{WIDGET_TEMPLATES}}", renderWidgetTemplates())
     .replace("{{PLAN_DRAWER}}", () => renderPlanDrawer())
+    .replace("{{REPOSITORY_SOURCES}}", () => renderRepositorySources())
     .replace(
       "</head>",
       `<meta name="cli-portal-token" content="${token}" />\n` +

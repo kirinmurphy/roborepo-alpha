@@ -9,7 +9,8 @@ import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { buildPlanSnapshot, parsePlanMarkdown, validateRepositoryPlans, writePlanSettings } from "../../modules/plan-suite/index.mjs";
+import { buildPlanSnapshot, parsePlanMarkdown, validateRepositoryPlans } from "../../modules/plan-suite/index.mjs";
+import { addRepositorySource } from "../cli/repository-sources.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const cli = path.join(repoRoot, "scripts/cli/main.mjs");
@@ -192,8 +193,8 @@ id: fence001
   // The CLI and the portal must agree: the portal's snapshot over discovery roots and the
   // repository-scoped validator report the same findings for the same documents.
   const stateRoot = path.join(tmp, "portal-state");
-  writePlanSettings({ stateRoot, discoveryRoots: [root] });
-  const portal = buildPlanSnapshot({ stateRoot, env: {} });
+  addRepositorySource({ path: root, stateRoot });
+  const portal = buildPlanSnapshot({ stateRoot });
   const cliView = validateRepositoryPlans({ cwd: root });
   const codes = (findings) => findings.map((item) => item.code).sort();
   for (const plan of cliView.plans) {
@@ -202,7 +203,7 @@ id: fence001
     assert.deepEqual(codes(plan.findings), codes(portalPlan.plan.validation.findings), `${plan.relativePath}: CLI and portal findings match`);
   }
   // Rescanning must not stack relationship findings onto cached records.
-  const rescanned = buildPlanSnapshot({ stateRoot, env: {} }).plans.find((record) => record.plan.relativePath === "docs/plans/backlog/test-dangling.md");
+  const rescanned = buildPlanSnapshot({ stateRoot }).plans.find((record) => record.plan.relativePath === "docs/plans/backlog/test-dangling.md");
   assert.equal(rescanned.plan.validation.findings.filter((item) => item.code === "DEPENDENCY_NOT_FOUND").length, 1,
     "a rescan reports each relationship finding once");
 }

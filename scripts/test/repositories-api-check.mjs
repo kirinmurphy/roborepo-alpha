@@ -9,6 +9,7 @@ import {
   loadRepositoriesPayload, loadRepositoryPayload, loadRepositoryPayloadByUrlKey, loadRepositoryAssociations, patchRepository,
 } from "../cli/repositories.mjs";
 import { recordRepositoryDiscovery } from "../cli/repositories.mjs";
+import { addRepositorySource, loadRepositorySources } from "../cli/repository-sources.mjs";
 import { repositorySummary, repositoryDetailPayload } from "../../modules/repositories/index.mjs";
 
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-repo-api-"));
@@ -64,7 +65,6 @@ try {
     loadRepository: (p) => loadRepositoryPayload({ ...p, stateRoot }),
     loadRepositoryAssociations: (p) => loadRepositoryAssociations({ ...p, stateRoot }),
     patchRepository: (p) => patchRepository({ ...p, stateRoot }),
-    enrollRepositoryInPlans: () => ({ covered: true }),
     loadHomeOverview: () => ({ repositories: [{ repositoryId: id }] }),
     loadRepositoryOverview: ({ urlKey }) => urlKey === "roborepo"
       ? { repository: loadRepositoryPayloadByUrlKey({ urlKey, stateRoot }) }
@@ -119,6 +119,23 @@ try {
   req._emit();
   assert.equal(res.statusCode, 200);
   assert.equal(JSON.parse(res.body).visibility, "hidden");
+
+  // ---- Source-management routes ----
+  const sourceHandlers = {
+    ...handlers,
+    loadRepositorySources: () => loadRepositorySources({ stateRoot, homeDir: tempRoot }),
+    addRepositorySource: (p) => addRepositorySource({ ...p, stateRoot, homeDir: tempRoot }),
+  };
+  const sources = get("/api/repositories/sources", sourceHandlers);
+  assert.equal(sources.res.statusCode, 200, "the literal sources segment is not read as a repository id");
+  assert.equal(JSON.parse(sources.res.body).autoDiscovery.enabled, false);
+  const addRes = mockRes();
+  const addReq = patchReq({ path: path.join(tempRoot, "missing-folder") });
+  addReq.method = "POST";
+  dispatchRoutes([repositoriesRoutes], addReq, addRes, "/api/repositories/sources", "", sourceHandlers);
+  addReq._emit();
+  assert.equal(addRes.statusCode, 400);
+  assert.deepEqual(JSON.parse(addRes.body).error.code, "INTENT_REQUIRED", "source errors are structured so the dialog can branch on the code");
 
   console.log("repositories-api-check passed");
 } finally {

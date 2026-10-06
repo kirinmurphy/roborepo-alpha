@@ -381,6 +381,7 @@ export function repositoryCard(repository, { instanceActions, composeActions, re
       repositoryActions?.onCloseMenus();
       if (key === "pin") repositoryActions?.onTogglePinned(repository);
       else if (key === "hide") repositoryActions?.onHide(repository);
+      else if (key === "ignore") repositoryActions?.onIgnore(repository);
       else if (key === "repo") repositoryActions?.onAssociateRepo(repository.composeGroups?.[0]);
     },
   });
@@ -467,7 +468,10 @@ function repositoryMenuItems(repository, actions) {
   return [
     { key: "repo", label: "Associate repo", hidden: !repository.composeGroups?.[0] || !actions?.onAssociateRepo },
     { key: "pin", label: repository.pinned ? "Unpin" : "Pin" },
-    { key: "hide", label: "Hide" },
+    // Ignore is the registry-wide decision Home offers too; Hide from Runtime only tucks this
+    // repository's running members away on this page (pljvmyh §8).
+    { key: "ignore", label: "Ignore repository", hidden: !repository.repositoryId || !actions?.onIgnore },
+    { key: "hide", label: "Hide from Runtime" },
   ];
 }
 

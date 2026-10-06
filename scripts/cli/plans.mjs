@@ -1,16 +1,17 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { packageStatusSummary } from "./package-status.mjs";
 import { stateRoot } from "./paths.mjs";
+import { autoDiscoveryEnabled } from "./repository-sources.mjs";
 import {
   buildPlanSnapshot,
   buildPrompt,
   findPlanByKey,
   movePlanLifecycle as movePlanLifecycleInDocs,
-  normalizeRootInput,
   readPlanDocument,
-  readPlanSettings,
   updatePlanPriority as updatePlanPriorityInDocs,
   validateRepositoryPlans,
-  writePlanSettings,
 } from "../../modules/plan-suite/index.mjs";
 import { startPlan } from "../../modules/plan-suite/start-transition.mjs";
 import { stopPlanServers } from "../../modules/plan-suite/stop-servers.mjs";
@@ -37,15 +38,6 @@ export function buildPlansPrompt({ action, keys, mode }) {
   const selected = (Array.isArray(keys) ? keys : []).map((key) => findPlanByKey(snapshot, key));
   if (selected.length === 0) throw new Error("select at least one plan");
   return { prompt: buildPrompt(action, selected, { mode }) };
-}
-
-export function updatePlanSettings({ discoveryRoots }) {
-  if (!Array.isArray(discoveryRoots)) throw new Error("expected discoveryRoots array");
-  const current = readPlanSettings({ stateRoot });
-  const normalized = [...new Set(discoveryRoots.map((root) => normalizeRootInput(root)))];
-  writePlanSettings({ stateRoot, discoveryRoots: normalized, ignoredDirectories: current.ignoredDirectories });
-  cachedSnapshot = null;
-  return loadPlansSnapshot();
 }
 
 export function updatePlanPriority({ id, key, priority, expectedPriority, mtimeMs, repositoryId }) {
@@ -79,9 +71,11 @@ function planWritePackageState() {
   return { ...packageStatusSummary("plan-write"), message: "" };
 }
 
+// `autoDiscovery` lets the Plans page show the same repository empty state Home does.
 function publicSnapshot(snapshot) {
   return {
     ...snapshot,
+    autoDiscovery: { enabled: autoDiscoveryEnabled({ stateRoot }) },
     plans: snapshot.plans.map(({ absolutePath, repository, ...plan }) => ({
       ...plan,
       repository: stripRepositoryRoot(repository),
@@ -232,7 +226,11 @@ function plansRepairCommand(args) {
     console.error("usage: roborepo plans repair <root> [--dry-run]");
     process.exit(2);
   }
-  const resolvedRoot = normalizeRootInput(root);
+  const resolvedRoot = path.resolve(root.replace(/^~(?=$|\/)/, os.homedir()));
+  if (!fs.existsSync(resolvedRoot) || !fs.statSync(resolvedRoot).isDirectory()) {
+    console.error(`error: ${root} is not a readable directory`);
+    process.exit(2);
+  }
   const { repaired, errors } = repairPlansMissingFrontmatter(resolvedRoot, { dryRun });
   if (repaired.length === 0) {
     console.log("no plan docs missing frontmatter found.");

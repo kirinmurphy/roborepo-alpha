@@ -12,7 +12,9 @@ Open the local portal and go to `/plans`:
 roborepo web
 ```
 
-The Plans page discovers Markdown files under `docs/plans/**/*.md` from configured discovery roots.
+The Plans page reads Markdown files under `docs/plans/**/*.md` in every repository RoboRepo knows
+about. Turn on auto-discovery or add a folder under **Manage repositories** to make repositories
+known.
 It works without enabling any workflow package: you can filter plans, open rendered Markdown, inspect
 warnings/tasks, and copy repository-aware context.
 

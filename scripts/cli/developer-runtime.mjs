@@ -16,6 +16,7 @@ import {
   updateSettings,
 } from "../../modules/developer-runtime/index.mjs";
 import { recordRepositoryDiscovery } from "./repositories.mjs";
+import { autoDiscoveryEnabled } from "./repository-sources.mjs";
 import { resolveProjectIdentity } from "../../modules/developer-runtime/identity.mjs";
 import { canonicalRepositoryId, rootId as computeRootId } from "../../modules/repositories/identity.mjs";
 import {
@@ -49,15 +50,17 @@ let portalInfo = null;
 // every running app — every restart, forever.
 let knownHistoryKeys = null;
 
+// While auto-discovery is off the refresh still runs, but only over checkouts the registry already
+// knows (folder sources): no process or container is observed and nothing new is registered.
 export function loadDeveloperRuntimeSnapshot() {
   const now = new Date();
   if (!lastSnapshot) {
-    lastSnapshot = buildSnapshot({ discovery: emptyDiscovery(), refresh: { state: "idle", startedAt: null, error: null }, now });
+    lastSnapshot = buildSnapshot({ discovery: emptyDiscovery({ observing: autoDiscoveryEnabled({ stateRoot }) }), refresh: { state: "idle", startedAt: null, error: null }, now });
     scheduleRefresh();
-    return lastSnapshot;
+    return withAutoDiscovery(lastSnapshot);
   }
   if (Date.now() - Date.parse(lastSnapshot.generatedAt) > FRESHNESS_MS) scheduleRefresh();
-  return withRefreshState(lastSnapshot);
+  return withAutoDiscovery(withRefreshState(lastSnapshot));
 }
 
 export async function refreshDeveloperRuntimeSnapshot() {
@@ -68,12 +71,13 @@ export async function refreshDeveloperRuntimeSnapshot() {
   inFlightRefresh = (async () => {
     try {
       const settings = loadSettings({ stateRoot });
+      const observing = autoDiscoveryEnabled({ stateRoot });
       const previous = lastSnapshot;
       const registryBeforeDiscovery = loadRegistrySafe();
       // Independent of discovery, so pay for one round of latency rather than two. Both must settle
       // before portalInstance() runs below, since it reads the collected git context synchronously.
       const [discovery] = await Promise.all([
-        discoverInstances({
+        !observing ? emptyDiscovery({ observing }) : discoverInstances({
           settings,
           // Carrying the prior health records forward is what makes failure debouncing work: the
           // classifier is pure, so the consecutive-failure count has to travel with the snapshot.
@@ -85,12 +89,14 @@ export async function refreshDeveloperRuntimeSnapshot() {
         refreshPortalGit(),
       ]);
       if (generation !== refreshGeneration && lastSnapshot) return withRefreshState(lastSnapshot);
-      const portal = portalInstance();
+      const portal = observing ? portalInstance() : null;
       if (portal) {
         discovery.instances = discovery.instances.filter((instance) => !isPortalDuplicate(instance, portal));
         discovery.instances.unshift(portal);
       }
-      recordDiscoveredRepositories(discovery.instances, discovery.composeProjectGit);
+      // Re-read rather than trusting `observing`: a scan takes seconds, and if the user turned
+      // auto-discovery off meanwhile, recording now would restore the evidence that was just removed.
+      if (observing && autoDiscoveryEnabled({ stateRoot })) recordDiscoveredRepositories(discovery.instances, discovery.composeProjectGit);
       // After recording, so a repository discovered on THIS scan is already in the registry and is
       // counted as running rather than appearing as idle on the poll that first found it.
       const runningIds = runningRepositoryIds(discovery);
@@ -447,7 +453,7 @@ function scheduleRefresh() {
 }
 
 function buildSnapshot({ discovery, settings = loadSettings({ stateRoot }), refresh = { state: "idle", startedAt: null, error: null }, now = new Date(), persistedRepositories = [], idleMainCheckouts = new Map(), registry = loadRegistrySafe() }) {
-  return buildDeveloperRuntimeSnapshot({
+  return withAutoDiscovery(buildDeveloperRuntimeSnapshot({
     discovery,
     settings,
     refresh,
@@ -458,7 +464,7 @@ function buildSnapshot({ discovery, settings = loadSettings({ stateRoot }), refr
     idleMainCheckouts,
     hiddenRepositories: collectHiddenRepositories(registry),
     pinnedRepositoryIds: registryPinnedIds(registry),
-  });
+  }));
 }
 
 // Cross-poll, fingerprint-guarded (see modules/repositories/idle-git-cache.mjs). Module-scoped
@@ -800,8 +806,13 @@ function withRefreshState(snapshot) {
   return { ...snapshot, refresh: { state: "refreshing", startedAt: snapshot.refresh?.startedAt || new Date().toISOString(), error: null } };
 }
 
-function emptyDiscovery() {
-  return { capabilities: capabilityForPlatform(process.platform), warnings: [], instances: [portalInstance()].filter(Boolean) };
+function emptyDiscovery({ observing = true } = {}) {
+  return { capabilities: capabilityForPlatform(process.platform), warnings: [], instances: observing ? [portalInstance()].filter(Boolean) : [] };
+}
+
+// The Runtime page reads this to choose between its normal view and the Enable call to action.
+function withAutoDiscovery(snapshot) {
+  return { ...snapshot, autoDiscovery: { enabled: autoDiscoveryEnabled({ stateRoot }) } };
 }
 
 function snapshotDiscovery(snapshot) {

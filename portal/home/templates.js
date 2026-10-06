@@ -4,13 +4,6 @@ import { appendRepositoryDomains } from "./domains.js";
 import { matchedPlanIdentity, unmatchedPlanRow } from "./plan-rows.js";
 import { buildRootSection } from "/portal/developer-runtime/repository-root-row.js";
 
-export function emptyState() {
-  return fill(tpl("tpl-home-empty"), {
-    title: "No repositories yet",
-    body: "Start a local project, then open Runtime so RoboRepo can discover its checkouts and running application.",
-  });
-}
-
 export function repositoryDirectory(repositories, actions) {
   const node = tpl("tpl-repository-directory");
   node.append(...repositories.map((repository) => repositoryCard(repository, actions)));
@@ -102,7 +95,7 @@ function homeMenuItems(repository) {
   const checkouts = repository.domains.runtime.data?.checkouts || [];
   const knownCheckout = checkouts.length > 0;
   return [
-    { key: knownCheckout ? "hide" : "forget", label: knownCheckout ? "Hide" : "Forget This Repo" },
+    { key: knownCheckout ? "hide" : "forget", label: knownCheckout ? "Ignore repository" : "Forget This Repo" },
     { key: "pin", label: repository.pinned ? "Unpin" : "Pin" },
     // Placeholder until repository-scoped agent config exists: shown, but not navigable.
     { key: "agents", label: "Repo Agent Config", hint: "coming soon", disabled: true },

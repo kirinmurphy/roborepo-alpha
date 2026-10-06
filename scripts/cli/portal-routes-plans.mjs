@@ -1,5 +1,5 @@
 // /api/plans* routes — the Plans page's API surface. handlers is the object startPortalServer()
-// was given (loadPlans, loadPlanDocument, buildPlansPrompt, updatePlanSettings, refreshPlans come
+// was given (loadPlans, loadPlanDocument, buildPlansPrompt, refreshPlans come
 // from telemetry.mjs's wiring).
 import { send, readJsonBody } from "./portal-routes-http.mjs";
 import { defineRoutes } from "./portal-router.mjs";
@@ -66,7 +66,6 @@ export const plansRoutes = defineRoutes([
     },
   },
   postJsonRoute("/api/plans/prompt", (handlers, body) => handlers.buildPlansPrompt(body)),
-  postJsonRoute("/api/plans/settings", (handlers, body) => handlers.updatePlanSettings(body)),
   postJsonRoute("/api/plans/priority", (handlers, body) => handlers.updatePlanPriority(body), { domainError: true }),
   postJsonRoute("/api/plans/lifecycle", (handlers, body) => handlers.updatePlanLifecycle(body), { domainError: true }),
   {

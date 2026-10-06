@@ -13,20 +13,14 @@
               Monitoring
               <span id="plans-count-text"><strong>0</strong> Plans</span>
               in
-              <span id="repos-count-text"><strong>0</strong> Repos</span>
+              <button
+                type="button"
+                data-btn="text"
+                class="repos-count-button"
+                id="repos-count-text"
+                title="Manage repositories"
+              ><strong>0</strong> Repos</button>
               <span class="control-toggle-group">
-                <button
-                  type="button"
-                  data-btn="secondary"
-                  class="control-item-action"
-                  id="roots-toggle"
-                  aria-label="Update project folders"
-                  title="Update project folders"
-                >
-                  <portal-icon size="lg"
-                    name="pencil"
-                  ></portal-icon>
-                </button>
                 <button
                   type="button"
                   data-btn="secondary"
@@ -54,7 +48,6 @@
               </button>
             </div>
           </div>
-          <div id="roots-panel-mount" hidden></div>
           <div class="filter-chips" id="filter-chips"></div>
           <div class="filters-body" id="filters-body" hidden>
             <div class="filter-row-grid">
@@ -109,41 +102,9 @@
     </div>
     <main class="inner">
       {{LOADING}}
-      <div class="settings intro-banner" id="settings">
-        <span class="intro-banner-title" id="settings-label"
-          >No Project Folders configured</span
-        >
-        <div class="settings-body" id="settings-body">
-          <div id="roots"></div>
-          <form id="root-form">
-            <div class="root-form-label-row">
-              <label for="root-input" id="root-form-label"
-                ><span id="root-form-label-empty"
-                  >Look for all <b>/docs/plans</b> folders in:</span
-                ><span id="root-form-label-populated" hidden
-                  >Look for more /docs/plans folders in:</span
-                ></label
-              >
-              <portal-info-icon
-                id="info-icon"
-                aria-haspopup="dialog"
-                aria-expanded="false"
-              ></portal-info-icon>
-            </div>
-            <div class="root-form-row">
-              <input
-                id="root-input"
-                placeholder="/path/to/repo or /path/to/projects"
-              />
-              <button type="submit" id="root-submit" data-btn="cta">
-                Add Folder
-              </button>
-              <button id="roots-done" type="button" hidden>Done</button>
-            </div>
-            <div class="item-err" id="root-form-err"></div>
-          </form>
-        </div>
-      </div>
+      <!-- Shown when Plans has nothing to list yet: the shared repository empty state, or the
+           scanning and no-plans steps (app.js chooses; one call to action at a time). -->
+      <div id="plans-onboarding" hidden></div>
       <section id="warnings" class="warnings" hidden></section>
       <!-- Active-tab only; app.js toggles `hidden` with the selected lifecycle. -->
       <div id="active-tasks-bar" class="active-tasks-bar" hidden>
@@ -151,44 +112,6 @@
       </div>
       <section id="groups" class="groups"></section>
     </main>
-    <dialog id="info-modal" aria-labelledby="info-modal-title">
-      <div class="modal-head">
-        <h2 id="info-modal-title">How folder scanning works</h2>
-        <portal-close-button
-          id="info-modal-close"
-          aria-label="Close"
-        ></portal-close-button>
-      </div>
-      <div class="modal-body">
-        <pre class="folder-tree"><span class="tree-root">projects/</span>
-<span class="tree-branch">├── </span><span class="project-folder">git_repo1/</span>
-<span class="tree-branch">│   └── </span><span class="tree-matched">docs/plans/</span>
-<span class="tree-branch">└── </span><span class="project-folder">repos_folder/</span>
-<span class="tree-branch">    ├── </span><span class="tree-plain">git_repo2/</span>
-<span class="tree-branch">    │   └── </span><span class="tree-matched">docs/plans/</span>
-<span class="tree-branch">    └── </span><span class="tree-plain">git_repo3/</span>
-<span class="tree-branch">        └── </span><span class="tree-plain">docs/</span>  <span class="tree-note">(no plans/ dir)</span></pre>
-        <ul class="tree-legend">
-          <li>
-            <span class="legend-swatch legend-repo"></span> project folder (a
-            repository root)
-          </li>
-          <li>
-            <span class="legend-swatch legend-matched"></span> matched
-            docs/plans folder
-          </li>
-        </ul>
-        <p class="modal-note">
-          Stops at the first repository found in each branch — nested folders
-          inside a repo aren't re-scanned. Skips node_modules, dist, .venv, and
-          similar.
-        </p>
-        <p class="modal-note">
-          Results are cached per file and refreshed automatically when files
-          change; use Refresh to force a full re-scan.
-        </p>
-      </div>
-    </dialog>
     <dialog
       id="all-tasks-modal"
       data-dialog-size="xl"
@@ -237,26 +160,14 @@
         </div>
       </div>
     </dialog>
-    <!-- Discovery roots: one chip per configured root path. The enable-skill onboarding banner
-         (tpl-package-banner) lives in plan-drawer-partial.html, since the drawer's menu uses it too. -->
-    <template id="tpl-root-chip">
-      <span class="root-chip">
-        <span data-slot="path"></span>
-        <button
-          type="button"
-          class="root-remove"
-          data-slot="remove"
-          title="Remove discovery root"
-        >
-          Remove
-        </button>
-      </span>
-    </template>
+    <!-- The enable-skill onboarding banner (tpl-package-banner) lives in plan-drawer-partial.html,
+         since the drawer's menu uses it too. -->
     <!-- Generic primitives: reused across panels, no single owner -->
     <template id="tpl-empty-state">
       <section class="empty-state">
         <h2 data-slot="title"></h2>
         <p data-slot="body"></p>
+        <button type="button" data-btn="secondary" data-slot="action" hidden></button>
       </section>
     </template>
     <template id="tpl-warning-line">
@@ -347,8 +258,8 @@
       </article>
     </template>
     {{PLAN_DRAWER}}
+    {{REPOSITORY_SOURCES}}
 
-    <script src="/portal/shared/info-icon.js" type="module"></script>
     <script src="/portal/shared/icon.js" type="module"></script>
     <script src="/portal/shared/notice.js" type="module"></script>
     <script src="/portal/shared/close-button.js" type="module"></script>

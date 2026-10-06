@@ -8,16 +8,21 @@ import {
   unavailableState,
 } from "./repository-overview-projections.mjs";
 
-export function createRepositoryOverviewService({ loadRegistry, loadRuntime, loadPlans, loadTelemetry, now = () => new Date() }) {
+// `loadAutoDiscoveryEnabled` lets Home choose between its empty states and the compact Enable
+// prompt; an unreadable answer is treated as off, since off is what Runtime then does too.
+export function createRepositoryOverviewService({ loadRegistry, loadRuntime, loadPlans, loadTelemetry, loadAutoDiscoveryEnabled = () => false, now = () => new Date() }) {
   function loadHome() {
     const registry = loadRegistry();
-    return composeHomeOverview({
+    const overview = composeHomeOverview({
       registry,
       runtimeState: safely(loadRuntime, runtimeDomainState, "Runtime data is unavailable"),
       plansState: safely(loadPlans, plansDomainState, "Plans data is unavailable"),
       telemetryState: safely(loadTelemetry, telemetryDomainState, "Tokens data is unavailable"),
       now: now(),
     });
+    let enabled = false;
+    try { enabled = loadAutoDiscoveryEnabled() === true; } catch {}
+    return { ...overview, autoDiscovery: { enabled } };
   }
 
   function loadDetail({ urlKey }) {
