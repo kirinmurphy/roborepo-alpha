@@ -8,8 +8,8 @@ description: Use when closing one repository plan whose implementation is finish
 Close one existing plan: prove the work is done, or say exactly why it is not.
 
 A closed plan is a claim the next reader trusts without checking, so this skill refuses rather than
-closes whenever the evidence is incomplete. A refusal names what is open and updates the plan; it
-is a correct outcome, not a failure.
+closes whenever the evidence is incomplete. A refusal names every remaining issue and updates the
+plan when required; it is a correct outcome, not a failure.
 
 ## Inputs
 
@@ -121,6 +121,26 @@ work has landed, so these servers run stale code. Report each server with its PI
 result. A server that is `still-running` or `failed` is reported, never killed by other means.
 Skip this step for an archived or refused plan.
 
+## Refusal and blocker reporting
+
+When any remaining issue prevents closure, stop and report every issue explicitly. Do not report
+only a count or a generic "blocked" status. For each issue, include:
+
+- the exact plan entry, validation finding, failed check, or Git result;
+- why it prevents closure;
+- the user action that would resolve it; and
+- whether it is manual confirmation, implementation work, an external dependency, or an
+  unconfirmed landing result.
+
+For unchecked `## Not tested` entries, quote or faithfully reproduce each entry so the user can
+confirm the specific behavior. For `landed: unconfirmed`, name the branch/worktree, base branch,
+exact ancestry result, and the content-level check that is still needed. Preserve all open issues
+in the plan's lifecycle folder; never check off a manual entry on the user's behalf.
+
+End every blocked or refused report with: **Would you like help resolving any of these issues?**
+If the user says yes, help with the listed issues without silently changing their confirmation or
+merge decisions.
+
 ## Final Report
 
 ```text
@@ -136,7 +156,8 @@ Close result
 ```
 
 Also report the evidence behind the verdict, every refusal reason, unverified checks, paired skills
-loaded or skipped, and current Git status.
+loaded or skipped, the complete remaining-issues list when closure is refused, the help offer, and
+current Git status.
 
 ## Boundaries
 

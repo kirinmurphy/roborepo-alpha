@@ -201,7 +201,20 @@ for (const [id, { boundaryPhrases }] of Object.entries(SKILLS)) {
   const order = ["### 1. Run the tests", "### 3. Check the plan against the code", "### 5. Confirm `## Not tested` is clear", "### 6. Confirm the work landed", "### 7. Close", "### 8. Stop the worktree's servers"]
     .map((heading) => close.indexOf(heading));
   assert.ok(order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1])), "plan-close: tests, verdict, Not tested, landed, close, then stop servers, in that order");
-  for (const phrase of ["refuse: report the failing output", "landed: unconfirmed", "UNCONFIRMED_NOT_TESTED", "git merge-base --is-ancestor", "never as passed", "Never check one off yourself", "roborepo plans stop-servers <plan> --json", "Skip this step for an archived or refused plan"]) {
+  for (const phrase of [
+    "refuse: report the failing output",
+    "landed: unconfirmed",
+    "UNCONFIRMED_NOT_TESTED",
+    "git merge-base --is-ancestor",
+    "never as passed",
+    "Never check one off yourself",
+    "roborepo plans stop-servers <plan> --json",
+    "Skip this step for an archived or refused plan",
+    "## Refusal and blocker reporting",
+    "report every issue explicitly",
+    "the exact plan entry",
+    "Would you like help resolving any of these issues?",
+  ]) {
     assert.ok(close.toLowerCase().includes(phrase.toLowerCase()), `plan-close: SKILL.md missing "${phrase}"`);
   }
 }

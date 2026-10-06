@@ -1,7 +1,7 @@
 ---
 id: pljvmyh
 priority: high
-next_action: Confirm the Not tested entries by hand, review and merge the claude/portal-repository-sources branch, then run /plan-close
+next_action: Review and merge the claude/portal-repository-sources branch, then run /plan-close
 blocked_by: []
 depends_on:
   - canonical-repository-identity-plan-v2
@@ -9,6 +9,7 @@ depends_on:
   - h4tqm2wz
 related:
   - tk6s43x3
+  - l1mz96d9
 reviewed_commit: 585dedb
 worktree: portal-repository-sources
 ---
@@ -441,7 +442,7 @@ Latest completion-level verification (2026-10-05):
 - `npm run test:portal-ui` — 51 passed, with the two opt-in documentation screenshot cases skipped.
 - `npm run check` — passed, including doctor, CLI, collision, package-install, clean-machine, and browser gates.
 - `git diff --check` — passed.
-- `roborepo plans validate` — zero blocking findings; the two manual `Not tested` entries below remain advisory.
+- `roborepo plans validate` — zero blocking findings; the Home refresh behavior is now user-confirmed. Windows folder verification is deferred to [[l1mz96d9]].
 
 Add focused coverage for observable behavior:
 
@@ -490,6 +491,7 @@ Decisions made during implementation (plan-start), each with the alternatives co
 | **User decision:** only the plan's own worktree (its `worktree` field) can mark a plan as differing from the main copy; every other worktree is ignored for that check. | A. any content difference in any worktree marks the plan (§9 as first written); B. mark copies a worktree changed since its merge base; C. mark copies newer than main's. | Raised as an open question: under A, worktrees that were only behind main marked 26 of this repository's 120 plans, with 151 markers in total. Main and the plan's worktree are where a plan changes; with this rule the repository shows 3 markers, each on a plan in its own worktree. |
 | **User decision:** agent sessions add telemetry evidence only to repository records auto-discovery or a folder already created; they never create Home entries. | Keep telemetry as an independent repository source; hide telemetry-only records only in Home; defer to a follow-up plan. | The opt-in repository-source model should define the Home and Plans universe. Tokens reads session data directly, so unmatched usage remains visible and attaches once a source creates the same canonical record. Local repositories match because capture and folder refresh both derive `local:` IDs from the checkout realpath. |
 | The documented folder-walk time budget is 5 s. | Keep the previous "~2.5 s" text. | The code has always used 5000 ms. |
+| Windows folder-source verification is deferred to [[l1mz96d9]]. | Confirm it in this story without a Windows environment. | This repository has no Windows environment; the follow-up establishes a Windows CI environment and a complete cross-platform behavior matrix instead of treating the unsupported check as a permanent manual requirement here. |
 
 ## Open Questions
 
@@ -497,8 +499,7 @@ None.
 
 ## Not tested
 
-- [ ] Turning on auto-discovery from Home's empty state on a clean install lists the first scan's repositories within one Home poll. Checked by hand only from Runtime in a scratch HOME; the Playwright spec mocks the request, because a real scan observes the host machine's processes.
-- [ ] Adding a folder on Windows. Source paths must start with `/`, as registry paths already must, so Windows paths are refused; there is no Windows test environment.
+- [x] Turning on auto-discovery from Home's empty state on a clean install lists the first scan's repositories within the next Home refresh request after the enable action—normally the 10-second poll, although the source dialog may force an immediate refresh. Confirmed by the user; the Playwright spec mocks the request, because a real scan observes the host machine's processes.
 
 ## Risks
 

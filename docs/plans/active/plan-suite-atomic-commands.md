@@ -1,7 +1,7 @@
 ---
 id: age4cm7r
 priority: medium
-next_action: Finish the plan-suite cycle on 0jped168 to confirm the Not tested entries, then run /plan-close; expect landed unconfirmed, since PR 25 was squash-merged and ancestry cannot prove it (see a7bslb00).
+next_action: Correct the stale rename-gate claim for the intentional retired-ID fixture, finish the plan-suite cycle on 0jped168 to confirm the five Not tested entries, then run /plan-close; expect landed unconfirmed, since PR 25 was squash-merged and ancestry cannot prove it (see a7bslb00).
 blocked_by: []
 depends_on:
   - a7bslb00
@@ -446,9 +446,10 @@ Each phase leaves the suite usable end to end.
 
 ## Validation
 
-- [x] `rg -l 'plan-docs|wrap-up|(^|[^-])integration-check' -g '!docs/plans/**' .` returns nothing.
-      The `[^-]` excludes unrelated test files such as `cli-surface-integration-check.mjs`; plans are
-      excluded because some record the old names as history.
+- [ ] `rg -l 'plan-docs|wrap-up|(^|[^-])integration-check' -g '!docs/plans/**' .` returns nothing.
+      The current result includes `scripts/test/package-retired-ids-check.mjs`, whose fixture must
+      retain the retired IDs to test update cleanup. Refine this gate or document the fixture
+      exception before closing.
 - [x] `roborepo plans validate` reports the same findings as the portal for this repository's plans.
 - [x] Fenced Markdown examples containing headings and checkboxes do not create plan sections,
       tasks, or `## Not tested` findings.
