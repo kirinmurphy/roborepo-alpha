@@ -8,14 +8,14 @@ import { fileURLToPath } from "node:url";
 import {
   buildPlanSnapshot,
   buildPrompt,
-  discoverRepositories,
   movePlanLifecycle,
   parseFrontmatter,
   readPlanDocument,
   updatePlanPriority,
   writeFrontmatterField,
-  writePlanSettings,
 } from "../../modules/plan-suite/index.mjs";
+import { walkRepositoryRoots } from "../../modules/repositories/index.mjs";
+import { addRepositorySource } from "../cli/repository-sources.mjs";
 
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-plan-suite-"));
 try {
@@ -153,7 +153,7 @@ Use Markdown as source of truth.
 
 Run targeted checks.
 `);
-  writePlanSettings({ stateRoot, discoveryRoots: [projects] });
+  addRepositorySource({ path: projects, stateRoot });
 
   const snapshot = buildPlanSnapshot({ stateRoot, packageState: { available: true, enabled: false, status: "disabled" } });
   assert.equal(snapshot.repositories.length, 1);
@@ -729,7 +729,6 @@ reviewed_commit:
     env: {
       ...process.env,
       ROBOREPO_STATE_ROOT: stateRoot,
-      ROBOREPO_PLAN_ROOTS: projects,
     },
     encoding: "utf8",
   });
@@ -758,7 +757,7 @@ reviewed_commit:
     })`,
   ], {
     cwd: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".."),
-    env: { ...process.env, ROBOREPO_STATE_ROOT: stateRoot, ROBOREPO_PLAN_ROOTS: projects },
+    env: { ...process.env, ROBOREPO_STATE_ROOT: stateRoot },
     encoding: "utf8",
   });
   assert.equal(lifecycleCliCheck.status, 0, lifecycleCliCheck.stderr);
@@ -834,10 +833,9 @@ reviewed_commit:
   fs.mkdirSync(cacheBlacklisted, { recursive: true });
   fs.writeFileSync(path.join(cacheBlacklisted, ".git"), "gitdir: nowhere\n");
 
-  const traversalSettings = { discoveryRoots: [traversalRoot], ignoredDirectories: undefined };
-  const discovery = discoverRepositories(traversalSettings);
-  assert.equal(discovery.repositories.length, 1, "expected exactly one discovered repo (nested-repo), got: " + JSON.stringify(discovery.repositories.map((r) => r.name)));
-  assert.equal(discovery.repositories[0].name, "nested-repo");
+  const discovery = walkRepositoryRoots([traversalRoot]);
+  assert.equal(discovery.repositories.length, 1, "expected exactly one discovered repo (nested-repo), got: " + JSON.stringify(discovery.repositories));
+  assert.equal(path.basename(discovery.repositories[0]), "nested-repo");
   assert.equal(discovery.truncated, false);
 
   // Linked worktree discovery: a worktree nested under a configured parent must not show as a
@@ -855,8 +853,8 @@ reviewed_commit:
     const committed = commit.status === 0 && spawnSync("git", ["commit", "-m", "seed"], { cwd: primaryWorktree, encoding: "utf8" }).status === 0;
     const added = committed && spawnSync("git", ["worktree", "add", "-b", "feature", linkedWorktree], { cwd: primaryWorktree, encoding: "utf8" }).status === 0;
     if (added) {
-      const worktreeDiscovery = discoverRepositories({ discoveryRoots: [worktreeParent], ignoredDirectories: [] });
-      assert.deepEqual(worktreeDiscovery.repositories.map((item) => item.root), [fs.realpathSync(primaryWorktree)]);
+      const worktreeDiscovery = walkRepositoryRoots([worktreeParent], { ignored: [] });
+      assert.deepEqual(worktreeDiscovery.repositories, [fs.realpathSync(primaryWorktree)]);
     }
   }
 
@@ -866,14 +864,14 @@ reviewed_commit:
   const tooDeepRepo = path.join(deepRoot, ...tooDeepSegments);
   fs.mkdirSync(tooDeepRepo, { recursive: true });
   fs.writeFileSync(path.join(tooDeepRepo, ".git"), "gitdir: nowhere\n");
-  const deepDiscovery = discoverRepositories({ discoveryRoots: [deepRoot], ignoredDirectories: undefined });
+  const deepDiscovery = walkRepositoryRoots([deepRoot]);
   assert.equal(deepDiscovery.repositories.length, 0, "repo beyond the depth cap should not be found");
 
   // Time-budget truncation: force the budget to ~0ms via env override so the walk's first
   // deadline check trips immediately, without needing a real slow scan or a huge synthetic tree.
   const budgetCheck = spawnSync(process.execPath, [
     "-e",
-    "import('./modules/plan-suite/index.mjs').then((m) => { const d = m.discoverRepositories({ discoveryRoots: [process.env.TRAVERSAL_ROOT], ignoredDirectories: undefined }); process.stdout.write(JSON.stringify(d)); })",
+    "import('./modules/repositories/index.mjs').then((m) => { const d = m.walkRepositoryRoots([process.env.TRAVERSAL_ROOT]); process.stdout.write(JSON.stringify(d)); })",
   ], {
     cwd: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".."),
     env: { ...process.env, DISCOVERY_TIME_BUDGET_MS: "0", TRAVERSAL_ROOT: traversalRoot },
@@ -931,7 +929,7 @@ Body.
     ].join("\n")));
 
   const refsStateRoot = path.join(tempRoot, "refs-state");
-  writePlanSettings({ stateRoot: refsStateRoot, discoveryRoots: [refsRepo] });
+  addRepositorySource({ path: refsRepo, stateRoot: refsStateRoot });
   const refsSnapshot = buildPlanSnapshot({ stateRoot: refsStateRoot });
   const sourceRecord = refsSnapshot.plans.find((item) => item.plan.id === "ref-source");
   assert.ok(sourceRecord, "expected the referencing plan in the snapshot");
@@ -1000,7 +998,7 @@ Carry open task text to the portal.
 
 Run targeted checks.
 `);
-  writePlanSettings({ stateRoot: tasksStateRoot, discoveryRoots: [path.join(tempRoot, "projects-tasks")] });
+  addRepositorySource({ path: path.join(tempRoot, "projects-tasks"), stateRoot: tasksStateRoot });
   const tasksSnapshot = buildPlanSnapshot({ stateRoot: tasksStateRoot });
   const tasksRecord = tasksSnapshot.plans.find((item) => item.plan.id === "tasks-plan");
   assert.ok(tasksRecord, "expected the active tasks fixture in the snapshot");

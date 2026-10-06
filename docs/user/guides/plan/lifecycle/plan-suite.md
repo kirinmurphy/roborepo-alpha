@@ -41,7 +41,8 @@ flowchart LR
     C -->|moves verified plan to| D["completed/"]
 ```
 
-1. Run `roborepo web`, open `/plans`, and add a discovery root.
+1. Run `roborepo web`, open `/plans`, and turn on auto-discovery or add a folder so RoboRepo knows
+   your repositories.
 2. Enable the plan suite from the Plans page banner.
 3. Run `/plan-write` to create a backlog plan.
 4. Run `/plan-promote` on it to check it against the repository and resolve open decisions.
@@ -164,14 +165,13 @@ http://127.0.0.1:4317/plans
 
 The page is local-only and uses the same loopback portal server as Config and Telemetry.
 
-## Add Discovery Roots
+## Choose Which Repositories Plans Reads
 
-A discovery root can be either:
+Plans reads every repository RoboRepo knows about. Make repositories known from the Plans empty state
+or from **Manage repositories** (the repository count in the Plans header opens it):
 
-- one repository, or
-- a directory whose immediate children are repositories
-
-Examples:
+- **Enable auto-discovery of active repos** — every repository you run a dev server in becomes known.
+- **Add a folder** — one repository, or a parent folder whose repositories RoboRepo finds for you:
 
 ```text
 ~/projects
@@ -179,18 +179,20 @@ Examples:
 ~/src/specific-repo
 ```
 
-The scanner walks each root up to 6 levels deep and treats the first folder containing `.git` or
-`docs/plans` as a repository. Inside each repository it reads:
+A folder walk treats the first folder containing `.git` or `docs/plans` as a repository and skips
+hidden and common build folders. Inside each repository, Plans reads every checkout — the main
+checkout and its worktrees:
 
 ```text
 docs/plans/**/*.md
 ```
 
-Hidden folders and common build folders (`node_modules`, `dist`, `build`, and similar) are skipped.
-See [Discovery](../../../reference/plans-portal.md#discovery) for the exact limits.
+See [Repository sources](../../../reference/repositories.md#repository-sources) for the walk's limits
+and [Which Repositories Plans Reads](../../../reference/plans-portal.md#which-repositories-plans-reads)
+for how copies in worktrees are shown.
 
-Discovery roots are saved under `~/.roborepo/plan-suite/settings.json`. Installs from before the
-plan suite saved them under a different folder that is no longer read, so add your roots again.
+Plans folders configured before repository sources existed are not carried over; add them again
+under **Manage repositories**.
 
 ## Plan File Layout
 

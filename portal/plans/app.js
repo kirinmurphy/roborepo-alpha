@@ -9,7 +9,8 @@ import {
 } from "/portal/shared/api.js";
 import * as api from "./api.js";
 import * as tmpl from "./templates.js";
-import { createRootsPanel, createInfoModal } from "./panels.js";
+import { createRepositorySourcesDialog } from "/portal/shared/repository-sources-dialog.js";
+import { repositoryEmptyState } from "/portal/shared/repository-sources-templates.js";
 import { createLifecycleErrorDialog } from "./lifecycle-error-dialog.js";
 import { createPlanDrawer } from "./plan-drawer.js";
 import { createBlockersPopover } from "./blockers-popover.js";
@@ -54,15 +55,17 @@ const plansCountTextEl = document.getElementById("plans-count-text");
 const reposCountTextEl = document.getElementById("repos-count-text");
 const lifecycleTabsEl = document.getElementById("lifecycle-tabs");
 const lifecycleDropdownMountEl = document.getElementById("lifecycle-dropdown-mount");
+const onboardingEl = document.getElementById("plans-onboarding");
 let lifecycleDropdownEl = null;
 
-// Only one of {roots panel, filter panel} is open at a time — each setter closes the other.
-const rootsPanel = createRootsPanel({
-  onSnapshot: applySnapshot,
-  onError: showError,
-  onExpand: () => setFiltersExpanded(false),
-});
-createInfoModal();
+// Plans no longer owns which repositories exist: the header count and the onboarding states open the
+// shared Manage repositories dialog, and any change there re-reads the Plans snapshot.
+const sourcesDialog = createRepositorySourcesDialog({ onChange: () => api.refreshSnapshot().then(applySnapshot).catch(showError) });
+const onboarding = {
+  onEnable: () => sourcesDialog.enableAutoDiscovery(),
+  onAddFolder: () => sourcesDialog.open({ addFolder: true }),
+  onManage: () => sourcesDialog.open(),
+};
 // The shared plan detail drawer (plan-drawer.js) — the same popup Home opens. It owns the copy
 // toast and the plan-write skill modal, so the page reuses those rather than creating its own.
 const planDrawer = createPlanDrawer({
@@ -100,6 +103,7 @@ function bindStaticControls() {
     });
   });
   document.getElementById("open-all-tasks").addEventListener("click", openAllTasks);
+  reposCountTextEl.addEventListener("click", onboarding.onManage);
   document.getElementById("all-tasks-close").addEventListener("click", () => allTasksModal.close());
   for (const id of FILTER_IDS) {
     const node = document.getElementById(id);
@@ -128,7 +132,6 @@ function openBlockersPopover({ record, anchor }) {
 function setFiltersExpanded(expanded) {
   state.filtersExpanded = expanded;
   filtersBodyEl.hidden = !expanded;
-  if (expanded) rootsPanel.setExpanded(false);
 }
 
 function resetFilter(id) {
@@ -151,13 +154,12 @@ async function load() {
 function applySnapshot(snapshot) {
   state.snapshot = snapshot;
   portalSetUpdatedAt();
-  // Onboarding is single-step: the enable banner shows whenever plan-write is disabled, and the
-  // "Add your first Project Folder" form appears only after it's enabled (one prompt at a time).
-  rootsPanel.render(snapshot.settings.discoveryRoots, snapshot.planWritePackage.enabled);
-  plansHeaderEl.hidden =
-    !snapshot.planWritePackage.enabled || snapshot.settings.discoveryRoots.length === 0;
+  // One call to action at a time (pljvmyh §7): the package banner while plan-write is disabled,
+  // then the shared repository empty state until a repository is known; the header (and its count,
+  // which opens Manage repositories) only once there is something to monitor.
+  plansHeaderEl.hidden = !snapshot.planWritePackage.enabled || tmpl.plansOnboardingStep(snapshot) === "no-repositories";
   setPluralCount(plansCountTextEl, snapshot.plans.length, "Plan");
-  setPluralCount(reposCountTextEl, snapshot.repositories.length, "Repo");
+  setPluralCount(reposCountTextEl, knownRepositoryCount(snapshot), "Repo");
   populateFilters(snapshot);
   render();
 }
@@ -196,12 +198,15 @@ function render() {
   const snapshot = state.snapshot;
   if (!snapshot) return;
   renderPackageBanner(snapshot);
-  if (!snapshot.planWritePackage.enabled) {
+  const step = tmpl.plansOnboardingStep(snapshot);
+  if (!snapshot.planWritePackage.enabled || step !== "plans") {
     warningsEl.hidden = true;
     activeTasksBarEl.hidden = true;
     groupsEl.replaceChildren();
+    renderOnboarding(snapshot, step);
     return;
   }
+  onboardingEl.hidden = true;
   renderWarnings(snapshot);
   renderFilterChips(snapshot);
   refreshFilterCounts(snapshot);
@@ -217,8 +222,7 @@ function render() {
   // previous tab's bar on screen.
   activeTasksBarEl.hidden = state.selectedLifecycle !== "active" || visiblePlans.length === 0;
   if (visiblePlans.length === 0) {
-    const empty = tmpl.emptyState(snapshot);
-    groupsEl.replaceChildren(...(empty ? [empty] : []));
+    groupsEl.replaceChildren(tmpl.emptyState());
     return;
   }
   const cardActions = {
@@ -436,10 +440,25 @@ function renderFilterChips(snapshot) {
   filterChipsEl.replaceChildren(...descriptors.map(tmpl.filterChip));
 }
 
+function renderOnboarding(snapshot, step) {
+  onboardingEl.hidden = !snapshot.planWritePackage.enabled;
+  if (onboardingEl.hidden) return;
+  const node = step === "no-repositories"
+    ? repositoryEmptyState({ autoDiscoveryEnabled: snapshot.autoDiscovery?.enabled === true, ...onboarding })
+    : tmpl.plansOnboardingState(snapshot, step, onboarding.onManage);
+  onboardingEl.replaceChildren(node);
+}
+
+// Every known repository, scanned or not, so the header agrees with the onboarding copy, Home, and
+// the Manage repositories list; one whose checkouts cannot be read is still being monitored.
+function knownRepositoryCount(snapshot) {
+  return (snapshot.repositoryScans || []).length;
+}
+
 function renderWarnings(snapshot) {
   const warnings = [
-    ...(snapshot.errors || []).map((err) => `${err.root || err.repository || "scan"}: ${err.error}`),
-    ...(snapshot.truncated ? ["Scan results truncated. Narrow discovery roots."] : []),
+    ...(snapshot.errors || []).map((err) => `${err.repository || "scan"}${err.checkout ? ` (${err.checkout})` : ""}: ${err.path ? `${err.path} ` : ""}${err.error}`),
+    ...(snapshot.truncated ? ["Some repositories have more plan documents than the scanner reads; the rest are not shown."] : []),
   ];
   warningsEl.hidden = warnings.length === 0;
   warningsEl.replaceChildren(...warnings.map(tmpl.warningLine));

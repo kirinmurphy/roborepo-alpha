@@ -275,6 +275,14 @@ test.describe("repository-first portal Home", () => {
       expect(focused.text).toBe(expected);
       expect(focused.visible).toBe(true);
     }
+    // The compact Enable prompt now sits above the Active Repos section, so its action comes before
+    // the heading's Manage repositories action and both come before the first card.
+    for (const expected of ["Enable auto-discovery of active repos", "Manage repositories"]) {
+      await page.keyboard.press("Tab");
+      const focused = await focusSummary(page);
+      expect(focused.text).toBe(expected);
+      expect(focused.visible).toBe(true);
+    }
     await page.keyboard.press("Tab");
     // Repository names are plain text while the detail page is parked, so the first card control is
     // the provider link (when the repository has one) or the actions menu.
@@ -309,7 +317,7 @@ function focusSummary(page) {
 }
 
 // One real plan through the real plans pipeline: a throwaway repository with a docs/plans file,
-// registered as a discovery root through the same settings API the Plans page uses.
+// added as a repository source through the same API the Manage repositories dialog uses.
 test.describe("shared plan drawer", () => {
   let planRoot;
   test.beforeAll(() => {
@@ -323,8 +331,8 @@ test.describe("shared plan drawer", () => {
     ].join("\n"));
   });
   test.afterAll(() => fs.rmSync(planRoot, { recursive: true, force: true }));
-  test.beforeEach(async ({ page }) => setPlanRoots(page, [planRoot]));
-  test.afterEach(async ({ page }) => setPlanRoots(page, []));
+  test.beforeEach(async ({ page }) => addRepositorySource(page, planRoot));
+  test.afterEach(async ({ page }) => removeRepositorySources(page));
 
   test("a Plans card opens the plan drawer", async ({ page }) => {
     // The board only shows once plan-write is enabled; the hermetic machine has no packages.
@@ -399,14 +407,14 @@ test.describe("Plans card commands", () => {
   });
   test.afterAll(() => fs.rmSync(planRoot, { recursive: true, force: true }));
   test.beforeEach(async ({ page }) => {
-    await setPlanRoots(page, [planRoot]);
+    await addRepositorySource(page, planRoot);
     await page.route("**/api/plans", async (route) => {
       const data = await (await route.fetch()).json();
       data.planWritePackage = { ...data.planWritePackage, available: true, enabled: true };
       await route.fulfill({ json: data });
     });
   });
-  test.afterEach(async ({ page }) => setPlanRoots(page, []));
+  test.afterEach(async ({ page }) => removeRepositorySources(page));
 
   // The portal copies suite commands; it never moves a plan on their behalf, since /plan-start and
   // /plan-close make and commit those moves themselves.
@@ -468,14 +476,28 @@ test.describe("Plans onboarding", () => {
   });
 });
 
-async function setPlanRoots(page, discoveryRoots) {
+async function portalToken(page) {
   await page.goto("/plans");
-  const token = await page.locator("meta[name=cli-portal-token]").getAttribute("content");
-  const response = await page.request.post("/api/plans/settings", {
-    headers: { "X-Cli-Portal-Token": token },
-    data: { discoveryRoots },
+  return page.locator("meta[name=cli-portal-token]").getAttribute("content");
+}
+
+async function addRepositorySource(page, sourcePath) {
+  const response = await page.request.post("/api/repositories/sources", {
+    headers: { "X-Cli-Portal-Token": await portalToken(page) },
+    data: { path: sourcePath },
   });
   expect(response.ok()).toBe(true);
+}
+
+// The repositories a removed source found stay registered (removal never deletes a repository),
+// which is harmless here: each fixture is its own repository and its folder outlives the describe.
+async function removeRepositorySources(page) {
+  const token = await portalToken(page);
+  const { sources } = await (await page.request.get("/api/repositories/sources")).json();
+  for (const source of sources) {
+    const response = await page.request.post(`/api/repositories/sources/${source.id}/remove`, { headers: { "X-Cli-Portal-Token": token } });
+    expect(response.ok()).toBe(true);
+  }
 }
 
 // Every row below the repository row, in order: checkouts, plan rows, and the plan summary line.

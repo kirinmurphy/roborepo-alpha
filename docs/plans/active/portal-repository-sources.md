@@ -1,7 +1,7 @@
 ---
 id: pljvmyh
 priority: high
-next_action: Bump the repository registry to v3 with per-source discovery provenance, add the server-only repository-sources store with the built-in auto-discovery source (default off) gating Runtime scans, and move bounded repository traversal from Plans into the repository domain
+next_action: Confirm the Not tested entries by hand, review and merge the claude/portal-repository-sources branch, then run /plan-close
 blocked_by: []
 depends_on:
   - canonical-repository-identity-plan-v2
@@ -10,6 +10,7 @@ depends_on:
 related:
   - tk6s43x3
 reviewed_commit: 585dedb
+worktree: portal-repository-sources
 ---
 
 # Repository Sources: Auto-Discovery and Folders
@@ -68,7 +69,7 @@ flowchart TD
 | Canonical repository | One logical repository known to RoboRepo | Registry `repositoryId` |
 | Repository source | A way RoboRepo is allowed to find repositories: the built-in **auto-discovery** source (active processes), or a user-added exact repo or parent folder | New server-only repository-sources store |
 | Auto-discovery | Runtime observing running dev processes and registering the repositories they run in; one switch covers both | Built-in source's `enabled` flag |
-| Repository discovery | Evidence that creates/updates a canonical repository (auto-discovery, a folder source, telemetry, future agent activity) | Registry record `discoveries` |
+| Repository discovery | A configured source creates/updates a canonical repository; telemetry and future agent activity only add evidence to a record a source already created | Registry record `discoveries` |
 | Canonical identity/resolution | Resolving many discovery mechanisms to one repository | `modules/repositories/identity.mjs` |
 | Local root | One checkout/worktree path for a canonical repository | Private `rootId -> path` index (`registry.localRootPaths`) |
 
@@ -81,7 +82,7 @@ flowchart LR
   Auto["Auto-discovery (active processes)"] -->|records evidence in| Registry["Canonical Repository Registry"]
   Repo["Configured exact repository"] -->|records evidence in| Registry
   Folder["Configured parent folder"] -->|records evidence in| Registry
-  Other["Telemetry capture"] -->|records evidence in| Registry
+  Other["Telemetry and agent sessions"] -->|add evidence to known records| Registry
   Registry -->|lists repositories for| Home["Home"]
   Registry -->|supplies local roots to| Plans["Plans"]
 ```
@@ -129,7 +130,12 @@ Verified against `585dedb`.
 
 **Path exposure today:** identity payloads (`repositorySummary`, `repositoryListPayload`, `repositoryDetailPayload`) are path-free. By [[jqi1dof]]'s design, Home's local workspace projection carries each checkout's `projectRoot` for tooltips and copy controls. `/api/plans` exposes discovery-root paths as described above.
 
-**Other discovery producers:** telemetry capture also registers repositories (`source: "telemetry"` in `scripts/cli/telemetry.mjs`). It is already behind its own consent step — the telemetry package's enable action — so this story leaves it unchanged.
+**Other evidence producers:** telemetry capture records `source: "telemetry"` evidence only when
+its canonical `repository_id` already resolves to a registry record created by auto-discovery or a
+folder source. Agent sessions never create repository records. Token data remains available on the
+Tokens page before a source finds the repository; the existing sessions attach on the next
+repository-list reconciliation after the record appears. Home's `unresolvedActivity` is Runtime
+activity only and does not surface unmatched telemetry as a repository.
 
 ## Proposed Design
 
@@ -281,13 +287,14 @@ flowchart LR
 
 For every visible, resolved repository with a valid local root, Plans inspects every checkout — the main checkout and each worktree — and associates records by canonical `repositoryId`. A repository without `docs/plans` is valid and contributes zero plans.
 
-**Decision — read every checkout; the main checkout's copy is canonical.** Copies of a plan in different checkouts are matched by plan `id`, and a content hash decides whether they differ. The main checkout is the one `mainCheckoutPath` resolves from Git's common directory, not the registry's first-registered (`primary`) root, which can be a worktree.
+**Decision — read every checkout; the main checkout's copy is canonical.** Copies of a plan in different checkouts are matched by plan `id`. Only the plan's own worktree (its `worktree` field) is compared with the main copy by content hash; other worktrees mostly hold older copies of main and never mark a plan. The main checkout is the one `mainCheckoutPath` resolves from Git's common directory, not the registry's first-registered (`primary`) root, which can be a worktree.
 
 | Plan exists in | Plans page shows | Edits (priority, lifecycle) write to | Divergence warning |
 | --- | --- | --- | --- |
 | Main checkout only | Main copy | Main checkout | None |
-| Main and worktree, identical | One record | Main checkout | None |
-| Main and worktree, different | Main copy, marked "differs in worktree `<name>`" | Main checkout | Yes, on that plan |
+| Main and the plan's worktree, identical | One record | Main checkout | None |
+| Main and the plan's worktree, different | Main copy, marked "differs in worktree `<name>`" | Main checkout | Yes, on that plan |
+| Main and any other worktree | One record | Main checkout | None |
 | Worktree only (for example, created during implementation) | Worktree copy, labeled with the worktree name | That worktree | None |
 
 The divergence warning is a finding on the affected plan, not a page-level banner, so a repository with active implementation shows one marker per diverging plan instead of global noise. Editing the main copy matches `plan-start` and `plan-close`, which make lifecycle changes on the base branch. The snapshot carries per-repository scan state so the Plans page and Home's existing coverage envelope read the same truth: a repository not yet scanned is reported as such, never as zero plans.
@@ -361,45 +368,57 @@ Keep new modules focused by responsibility: a sources store (persistence and val
 
 ### Phase 1 — Registry v3 and sources store
 
-- [ ] Bump `REGISTRY_VERSION` to 3 with a configured-source discovery kind carrying a source ID; key `recordDiscovery` by kind plus source ID.
-- [ ] Add the server-only sources store: the built-in `auto-discovery` source (default off), stable source IDs, explicit `repository`/`directory` kinds, enabled flag, per-source status; require a chosen intent for unresolved paths.
-- [ ] Gate Runtime process scans on the auto-discovery source.
+- [x] Bump `REGISTRY_VERSION` to 3 with a configured-source discovery kind carrying a source ID; key `recordDiscovery` by kind plus source ID.
+- [x] Add the server-only sources store: the built-in `auto-discovery` source (default off), stable source IDs, explicit `repository`/`directory` kinds, enabled flag, per-source status; require a chosen intent for unresolved paths.
+- [x] Gate Runtime process scans on the auto-discovery source.
 
 ### Phase 2 — Source discovery engine
 
-- [ ] Move `discoverRepositories` and `DEFAULT_IGNORED` into the repository domain; point `repair.mjs` at it.
-- [ ] Resolve exact repositories and walk directory sources; deduplicate against canonical identity, including overlapping sources.
-- [ ] Write repositories, local roots (`localRootPaths`), and per-source discovery entries; record errors, timeouts, and truncation as source status.
-- [ ] Implement source removal per §4.
-- [ ] Add a concurrent-refresh regression test: Runtime discovery and source refresh updating the same repository.
+- [x] Move `discoverRepositories` and `DEFAULT_IGNORED` into the repository domain; point `repair.mjs` at it.
+- [x] Resolve exact repositories and walk directory sources; deduplicate against canonical identity, including overlapping sources.
+- [x] Write repositories, local roots (`localRootPaths`), and per-source discovery entries; record errors, timeouts, and truncation as source status.
+- [x] Implement source removal per §4.
+- [x] Add a concurrent-refresh regression test: Runtime discovery and source refresh updating the same repository.
 
 ### Phase 3 — Source management APIs
 
-- [ ] List/add/remove/disable sources; enable/disable auto-discovery; refresh.
-- [ ] Keep path-bearing data in the management routes only (§6); reuse the mutation guard.
+- [x] List/add/remove/disable sources; enable/disable auto-discovery; refresh.
+- [x] Keep path-bearing data in the management routes only (§6); reuse the mutation guard.
 
 ### Phase 4 — Management UX
 
-- [ ] Build the **Manage repositories…** dialog in the §7 order: auto-discovery block (primary), one repository list with `Found by:` details and an Ignored group, then **Add a folder to find more repos** (secondary) with folder status, remove/disable, and refresh.
-- [ ] Open it from Home's `.home-action-slot`.
-- [ ] Implement the Home and Runtime states from §7, with **Enable auto-discovery of active repos** as the primary action whenever auto-discovery is off.
-- [ ] Relabel **Ignore repository** vs **Hide from Runtime**.
+- [x] Build the **Manage repositories…** dialog in the §7 order: auto-discovery block (primary), one repository list with `Found by:` details and an Ignored group, then **Add a folder to find more repos** (secondary) with folder status, remove/disable, and refresh.
+- [x] Open it from Home's `.home-action-slot`.
+- [x] Implement the Home and Runtime states from §7, with **Enable auto-discovery of active repos** as the primary action whenever auto-discovery is off.
+- [x] Relabel **Ignore repository** vs **Hide from Runtime**.
 
 ### Phase 5 — Plans cutover
 
-- [ ] Build Plans snapshots from every checkout of visible repositories with valid local roots, with per-repository scan state; update `plansByRepository`.
-- [ ] Merge copies by plan `id` per §9: main copy canonical, per-plan divergence finding, worktree-only plans labeled and edited in their worktree.
-- [ ] Remove `discoveryRoots`, `ignoredDirectories`, `ROBOREPO_PLAN_ROOTS`, `/api/plans/settings`, and the Project Folders panel; stop returning `settings` and absolute error roots from `/api/plans`.
-- [ ] Implement the §7 Plans onboarding steps with the shared repository empty state; point the header count at the management dialog; move the scanning explainer into the dialog.
-- [ ] Retire `enrollRepositoryInPlans()`, `/plans-enrollment`, and `plansSourceCoverage`/`planPlansEnrollment`.
-- [ ] Reseed test fixtures and `docs-screenshots.mjs` through repository sources.
+- [x] Build Plans snapshots from every checkout of visible repositories with valid local roots, with per-repository scan state; update `plansByRepository`.
+- [x] Merge copies by plan `id` per §9: main copy canonical, per-plan divergence finding, worktree-only plans labeled and edited in their worktree.
+- [x] Remove `discoveryRoots`, `ignoredDirectories`, `ROBOREPO_PLAN_ROOTS`, `/api/plans/settings`, and the Project Folders panel; stop returning `settings` and absolute error roots from `/api/plans`.
+- [x] Implement the §7 Plans onboarding steps with the shared repository empty state; point the header count at the management dialog; move the scanning explainer into the dialog.
+- [x] Retire `enrollRepositoryInPlans()`, `/plans-enrollment`, and `plansSourceCoverage`/`planPlansEnrollment`.
+- [x] Reseed test fixtures and `docs-screenshots.mjs` through repository sources.
 
 ### Phase 6 — Docs
 
-- [ ] Update `docs/user/reference/plans-portal.md`, `docs/user/reference/repositories.md`, `docs/user/reference/runtime.md`, and `docs/internal/portal-architecture.md`.
-- [ ] Verify no identity payload or `/api/plans` response contains an absolute path.
+- [x] Update `docs/user/reference/plans-portal.md`, `docs/user/reference/repositories.md`, `docs/user/reference/runtime.md`, and `docs/internal/portal-architecture.md`.
+- [x] Verify no identity payload or `/api/plans` response contains an absolute path.
 
 Adjust sequencing if implementation inspection identifies a stronger order.
+
+Implemented on `claude/portal-repository-sources` in the order above. Where the code landed:
+
+| Piece | Location |
+| --- | --- |
+| Registry v3, per-source discovery entries, `removeDiscoveries` | `modules/repositories/schema.mjs`, `registry.mjs` |
+| Sources store (schema, persistence, mutators) | `modules/repositories/sources-schema.mjs`, `sources.mjs` |
+| Bounded walk and source-path classification | `modules/repositories/discovery-walk.mjs` |
+| Source refresh orchestration, execution units, management payload | `scripts/cli/repository-sources.mjs`, `repository-source-refresh.mjs`, `repository-sources-payload.mjs` |
+| Runtime gate | `scripts/cli/developer-runtime.mjs` |
+| Plans scan of known repositories and their checkouts | `modules/plan-suite/canonical-scan.mjs`, `checkouts.mjs` |
+| Manage repositories dialog, shared empty state, auto-discovery prompt | `portal/shared/repository-sources-partial.html`, `repository-sources-dialog.js`, `repository-sources-templates.js`, `repository-sources-api.js`, `repository-sources.css` |
 
 ## Validation
 
@@ -416,6 +435,14 @@ npm run test:unit
 npm run check
 ```
 
+Latest completion-level verification (2026-10-05):
+
+- `npm run test:unit` — 124/124 suites passed.
+- `npm run test:portal-ui` — 51 passed, with the two opt-in documentation screenshot cases skipped.
+- `npm run check` — passed, including doctor, CLI, collision, package-install, clean-machine, and browser gates.
+- `git diff --check` — passed.
+- `roborepo plans validate` — zero blocking findings; the two manual `Not tested` entries below remain advisory.
+
 Add focused coverage for observable behavior:
 
 - a v2 registry loads as an empty v3 registry;
@@ -430,9 +457,48 @@ Add focused coverage for observable behavior:
 - each §9 checkout case: identical copies collapse to one record; a differing worktree copy marks the main copy and edits still write to the main checkout; a worktree-only plan is labeled and edited in its worktree; the main checkout is found through Git even when a worktree was registered first;
 - `discoveryRoots` settings and `ROBOREPO_PLAN_ROOTS` no longer affecting Plans;
 - global ignore/restore surviving Runtime rediscovery; Runtime-only hide remaining distinct;
-- no absolute paths in identity payloads or `/api/plans`; source paths only on management routes.
+- no absolute paths in identity payloads or `/api/plans`; source paths only on management routes;
+- agent sessions never creating a repository record, but adding telemetry evidence after
+  auto-discovery or a folder creates the matching record, including repositories without a Git remote.
 
 Cover the §7 first-run states on Home and Runtime (Enable as the primary action, Add a folder as secondary), each Plans onboarding step with one call to action visible at a time, and the management dialog in the Playwright suite (`scripts/test/portal-ui/`).
+
+## Decision Log
+
+Decisions made during implementation (plan-start), each with the alternatives considered.
+
+| Decision | Alternatives | Why |
+| --- | --- | --- |
+| Source orchestration lives in a new `scripts/cli/repository-sources.mjs`, with execution units in `repository-source-refresh.mjs` and the dialog payload in `repository-sources-payload.mjs`. | Grow `scripts/cli/repositories.mjs` as the Code Touchpoints listed. | `repositories.mjs` was already near the file-size cap; the split keeps orchestration and execution apart (code-style). `repositories.mjs` keeps discovery recording and the browser-safe bridge. |
+| The sources store is `<stateRoot>/repositories/sources.json`, version 1. A malformed or unknown-version file is renamed to `sources.json.invalid-<timestamp>` and sources reset to defaults, with a `loadError` the dialog shows. | Throw on load; silently overwrite. | Throwing would take Home, Runtime, and Plans down with one bad file (§5); silent overwrite loses the user's intent without a trace. |
+| Source status adds `pending` ("Not scanned yet") to the five states §5 named. | Report a never-refreshed source as `healthy` or `stale`. | Either would claim a refresh that never ran. |
+| Folders refresh on add, on enable, and on explicit Refresh only. | A periodic walk; a walk on every Plans refresh. | A broad folder costs up to 5 s per walk; nothing in the plan asked for background walks. |
+| A partial walk (time or repository cap, or unreadable subfolders) and an unavailable source only add evidence; they never remove it. | Treat every refresh as complete. | An incomplete walk is not evidence a repository left. Caught while validating the docs: unreadable subfolders initially dropped evidence. |
+| With auto-discovery off, the Runtime refresh still reads Git for checkouts the registry already knows (folder-found repositories), but observes no process or container, synthesizes no portal instance, and registers nothing. The switch is re-read just before recording, so a scan in flight when the user turns it off records nothing. | Skip the refresh entirely while off. | Runtime would otherwise show nothing for folder-found repositories. The re-check closes a race found in the browser: an in-flight scan restored evidence that turning off had just removed. |
+| Plans includes `local:` (unresolved) repositories with recorded checkouts; one whose checkouts are all unreadable is `unavailable`. | Plans reads `resolution: resolved` repositories only, as §9's wording suggested. | `resolution` only distinguishes Git-remote from local repositories. Excluding local ones would drop plans-only folders Plans has always read. |
+| Checkouts come from Git's administrative files (`<commonDir>/worktrees/*/gitdir`) unioned with registered roots. A second independent clone is treated like a worktree and labeled with its directory name. | `git worktree list` per repository; registered roots only. | No subprocess per repository per scan; registered roots alone miss worktrees nothing has observed. |
+| Only the first checkout and plans found in no other checkout get full plan records; every other copy is matched from its frontmatter `id` and a content hash. | Build a full record for every copy. | Measured on this repository (11 checkouts, about 120 plans each): full records everywhere took 29.6 s on the first scan, blocking the portal and timing out `docs-screenshots.mjs`; the light pass takes 3.3 s, the same order as scanning the main checkout alone. |
+| Every checkout's plan records share `repository.id = stableKey(repositoryId)`, and relationship findings key on it. | Keep the per-root id. | Per-root ids made a worktree-only plan a separate repository for grouping, filtering, and dependency resolution. |
+| Plans onboarding step 3 reads `Not scanned yet: N repositories` instead of `Scanning N repositories for plans…`. | The plan's copy. | The snapshot is built synchronously, so the only unscanned case is a repository with no readable checkout; "Scanning…" would never resolve. |
+| Runtime's repository menu keeps its existing local hide, relabeled **Hide from Runtime**, and gains **Ignore repository**. | Turn the existing item into the registry ignore. | Current State said the Runtime menu's Hide set registry visibility; it actually hid the repository's members in Runtime settings only. Keeping both matches §8 without removing working behavior. |
+| The dialog's Pin, Ignore, and Restore call the existing `POST /api/developer-runtime/repository-pinned` and `repository-visibility` routes. | `PATCH /api/repositories/:id`. | Same mutation Home already uses, and it refreshes Runtime's cached snapshot; the portal client has no PATCH helper. |
+| Source mutations are POST routes (`/api/repositories/sources`, `/sources/refresh`, `/sources/:sourceId/enabled`, `/sources/:sourceId/remove`) that answer errors as `{ error: { code, message } }`. | REST verbs. | `portalPostJson` is the portal's mutation helper and keeps `err.code` only for structured bodies; the dialog branches on `INTENT_REQUIRED`. |
+| **Manage repositories** shows in Home's action slot whenever repositories are known, in both auto-discovery states. | Only while auto-discovery is on, as §7's table lists. | Folders must stay reachable while auto-discovery is off and repositories are known. |
+| `/api/home`, `/api/plans`, and the Runtime snapshot carry `autoDiscovery: { enabled }`. | Each page fetches the management route. | The management route carries source paths; pages that only need the flag should not receive them (§6). |
+| The Plans cached snapshot is rebuilt after every source change and after auto-discovery's first scan. Repositories that later Runtime scans register show as "not scanned" on Home until the next Plans refresh. | Rebuild Plans on every Runtime refresh. | A Plans scan of every checkout on each 8-second Runtime poll is disproportionate; "not scanned" is the honest interim state §9 asks for. |
+| `/api/plans` scan errors carry the repository name, checkout label, repository-relative path, and an error code, not filesystem error messages. | Pass messages through. | Filesystem messages embed absolute paths (§6). |
+| **User decision:** only the plan's own worktree (its `worktree` field) can mark a plan as differing from the main copy; every other worktree is ignored for that check. | A. any content difference in any worktree marks the plan (§9 as first written); B. mark copies a worktree changed since its merge base; C. mark copies newer than main's. | Raised as an open question: under A, worktrees that were only behind main marked 26 of this repository's 120 plans, with 151 markers in total. Main and the plan's worktree are where a plan changes; with this rule the repository shows 3 markers, each on a plan in its own worktree. |
+| **User decision:** agent sessions add telemetry evidence only to repository records auto-discovery or a folder already created; they never create Home entries. | Keep telemetry as an independent repository source; hide telemetry-only records only in Home; defer to a follow-up plan. | The opt-in repository-source model should define the Home and Plans universe. Tokens reads session data directly, so unmatched usage remains visible and attaches once a source creates the same canonical record. Local repositories match because capture and folder refresh both derive `local:` IDs from the checkout realpath. |
+| The documented folder-walk time budget is 5 s. | Keep the previous "~2.5 s" text. | The code has always used 5000 ms. |
+
+## Open Questions
+
+None.
+
+## Not tested
+
+- [ ] Turning on auto-discovery from Home's empty state on a clean install lists the first scan's repositories within one Home poll. Checked by hand only from Runtime in a scratch HOME; the Playwright spec mocks the request, because a real scan observes the host machine's processes.
+- [ ] Adding a folder on Windows. Source paths must start with `/`, as registry paths already must, so Windows paths are refused; there is no Windows test environment.
 
 ## Risks
 
@@ -454,9 +520,10 @@ Cover the §7 first-run states on Home and Runtime (Enable as the primary action
 - Missing/inaccessible sources fail gracefully with per-source state.
 - Plans no longer owns repository-universe settings; `discoveryRoots`, `ROBOREPO_PLAN_ROOTS`, and the Project Folders panel are gone.
 - Plans consumes canonical repositories and exposes explicit per-repository scan state before a repository is scanned.
-- Plans reads every checkout, shows one record per plan with the main checkout's copy canonical, and marks only the plans whose worktree copy differs.
+- Plans reads every checkout, shows one record per plan with the main checkout's copy canonical, and marks only the plans whose own worktree's copy differs.
 - Plans keeps its plan-write gate, then shows the same repository empty state as Home when no repositories are known; it has no folder form of its own.
 - Home automatically benefits from newly discovered/configured repositories; its only changes are the §7 empty states and the auto-discovery prompt.
+- Telemetry and agent activity never add a repository to Home or Plans on their own; existing session evidence attaches after auto-discovery or a folder finds the repository.
 - Source configuration is managed globally through one management dialog.
 - Identity payloads and `/api/plans` carry no absolute paths; configured source paths appear only on source-management routes.
 - `npm run test:unit`, `npm run test:portal-ui`, and `npm run check` pass.

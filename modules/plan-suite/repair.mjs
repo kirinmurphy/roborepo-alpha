@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { discoverRepositories, parseFrontmatter } from "./index.mjs";
+import { walkRepositoryRoots } from "../repositories/index.mjs";
+import { parseFrontmatter } from "./index.mjs";
 import { generatePlanId } from "./plan-id.mjs";
 
 // Scaffold text is deliberately generic and non-empty for `next_action` (required for ready
@@ -64,12 +65,14 @@ function walkPlanFiles(dir, files) {
   }
 }
 
-// Scans every repository under `discoveryRoot` (same repo-eligibility rule as the portal's
-// discoverRepositories: a `.git` or `docs/plans` dir) for plan docs with zero frontmatter.
+// Scans every repository under `discoveryRoot` (the repository domain's bounded walk, so the same
+// eligibility rule as a directory source: a `.git` or `docs/plans` dir) for plan docs with zero
+// frontmatter.
 export function findPlansMissingFrontmatter(discoveryRoot) {
-  const { repositories, errors } = discoverRepositories({ discoveryRoots: [discoveryRoot], ignoredDirectories: undefined });
+  const { repositories: roots, errors } = walkRepositoryRoots([discoveryRoot]);
   const affected = [];
-  for (const repo of repositories) {
+  for (const root of roots) {
+    const repo = { name: path.basename(root), root };
     const plansDir = path.join(repo.root, "docs", "plans");
     const files = [];
     walkPlanFiles(plansDir, files);

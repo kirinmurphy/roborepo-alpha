@@ -23,7 +23,8 @@ import { startPortalServer } from "./portal-server.mjs";
 import { computePortalSourceHash } from "./portal-source-hash.mjs";
 import { readConfigSnapshot, loadConfigSource } from "./config.mjs";
 import { mutatePackage, setSkillInstalled, setBehaviorBucket, setCommandBucket } from "./config-mutate.mjs";
-import { loadPlansSnapshot, loadCachedPlansSnapshot, loadPlanDocument, buildPlansPrompt, updatePlanSettings, updatePlanPriority, updatePlanLifecycle, refreshPlans } from "./plans.mjs";
+import { loadPlansSnapshot, loadCachedPlansSnapshot, loadPlanDocument, buildPlansPrompt, updatePlanPriority, updatePlanLifecycle, refreshPlans } from "./plans.mjs";
+import { loadRepositorySources, addRepositorySource, removeRepositorySource, setRepositorySourceEnabled, refreshRepositorySources, wipeRepositoryList, autoDiscoveryEnabled } from "./repository-sources.mjs";
 import {
   loadDeveloperRuntimeSnapshot,
   loadDeveloperRuntimeHistory,
@@ -34,17 +35,18 @@ import {
   setDeveloperRuntimeRepositoryPinned,
   forgetDeveloperRuntimeRepository,
   setDeveloperRuntimePortalInfo,
+  clearDeveloperRuntimeSnapshotCache,
 } from "./developer-runtime.mjs";
 import {
   loadRepositoriesPayload,
   loadRepositoryPayload,
   loadRepositoryAssociations,
-  enrollRepositoryInPlans,
   patchRepository,
 } from "./repositories.mjs";
-import { loadRegistry, updateRegistry, upsertRepository, recordDiscovery } from "../../modules/repositories/index.mjs";
+import { loadRegistry, updateRegistry, recordDiscoveryIfKnown } from "../../modules/repositories/index.mjs";
 import { buildRepositoryHashIndex } from "./telemetry-repository.mjs";
 import { createRepositoryOverviewService } from "./repository-overview.mjs";
+import { MOCK_FIRST_RUN_VIEWS_ENABLED, mockHomeOverview, purgePersistedMockRepositories } from "./mock-home.mjs";
 import { buildTelemetryRepositoryProjection, fixtureTelemetryRepositories, homeTelemetryProjection } from "./telemetry-repository-overview.mjs";
 import { privacyHash } from "./telemetry-schemas/hash.mjs";
 import { buildAnalysisPrompt } from "../harnesses/transcript-locate.mjs";
@@ -732,6 +734,10 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     }
   }
 
+  // Remove synthetic records left by an earlier development-only mock implementation. Current
+  // first-run mocks are in-memory Home data and never enter the canonical registry.
+  purgePersistedMockRepositories({ stateRoot });
+
   if (options.detach) {
     const port = await startDetachedPortal(options.port, { allowPortFallback, portExplicit: options.portExplicit });
     const detachedPortalUrl = `http://127.0.0.1:${port}`;
@@ -775,6 +781,9 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     loadRegistry: () => loadRegistry({ stateRoot }),
     loadRuntime: () => loadDeveloperRuntimeSnapshot(),
     loadPlans: () => loadCachedPlansSnapshot(),
+    loadAutoDiscoveryEnabled: () => autoDiscoveryEnabled(),
+    loadMockHomeOverview: mockHomeOverview,
+    mockHomeEnabled: MOCK_FIRST_RUN_VIEWS_ENABLED,
     loadTelemetry: () => homeTelemetryProjection({
       enabled: readTelemetryState().enabled === true,
       projection: loadTelemetryRepositoryProjection(),
@@ -808,7 +817,6 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     loadPlans: () => loadPlansSnapshot(),
     loadPlanDocument: (params) => loadPlanDocument(params),
     buildPlansPrompt: (params) => buildPlansPrompt(params),
-    updatePlanSettings: (params) => updatePlanSettings(params),
     updatePlanPriority: (params) => updatePlanPriority(params),
     updatePlanLifecycle: (params) => updatePlanLifecycle(params),
     refreshPlans: () => refreshPlans(),
@@ -825,8 +833,19 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     loadRepositoryAssociations: (params) => loadRepositoryAssociations(params),
     loadHomeOverview: () => repositoryOverview.loadHome(),
     loadRepositoryOverview: (params) => repositoryOverview.loadDetail(params),
-    enrollRepositoryInPlans: (params) => enrollRepositoryInPlans(params),
     patchRepository: (params) => patchRepository(params),
+    // Source changes alter which repositories exist, so the cached Plans snapshot is rebuilt after
+    // each one; enabling auto-discovery starts the first process scan immediately.
+    loadRepositorySources: () => loadRepositorySources(),
+    addRepositorySource: (params) => afterSourceChange(addRepositorySource(params)),
+    removeRepositorySource: (params) => afterSourceChange(removeRepositorySource(params)),
+    setRepositorySourceEnabled: (params) => afterSourceChange(setRepositorySourceEnabled({ ...params, onAutoDiscoveryEnabled: startAutoDiscoveryScan })),
+    refreshRepositorySources: (params) => afterSourceChange(refreshRepositorySources({ ...params, onAutoDiscoveryEnabled: startAutoDiscoveryScan })),
+    wipeRepositoryList: () => {
+      const payload = wipeRepositoryList();
+      clearDeveloperRuntimeSnapshotCache();
+      return afterSourceChange(payload);
+    },
     mutatePackage: (id, enabled) => mutatePackage(id, enabled),
     mutateSkill: (id, enabled) => setSkillInstalled(id, enabled),
     // Section-level bulk enable/disable (portal bulkToggle sections). Lazy import: keeps the
@@ -855,6 +874,15 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
       }, 0);
     },
   });
+}
+
+function startAutoDiscoveryScan() {
+  refreshDeveloperRuntimeSnapshot().then(() => { try { refreshPlans(); } catch {} }).catch(() => {});
+}
+
+function afterSourceChange(payload) {
+  try { refreshPlans(); } catch {}
+  return payload;
 }
 
 export function webStopCommand(args) {
@@ -1180,17 +1208,19 @@ const captureRepositoryHash = privacyHash;
 // Reconcile telemetry-observed repositories into the registry so `capabilities.telemetry` can be
 // true. Runs at portal repo-list load (NOT on the capture hot path): scans the spool's distinct
 // repository_ids and records one `telemetry` discovery each, batched into a single registry write.
-// Cached by spool signature so it only does work when new events have arrived. Best-effort — a
-// registry failure never breaks the repositories list.
+// Agent sessions only attach to repositories a source already found; they never create one
+// (pljvmyh). Cached by spool AND registry signature: a repository a folder or auto-discovery adds
+// later picks up the session evidence already in the spool. Best-effort — a registry failure never
+// breaks the repositories list.
 let _telemetryReconcileSig = null;
 export function reconcileTelemetryRepositories() {
-  const sig = spoolSignature();
+  const sig = `${spoolSignature()}|${registrySignature()}`;
   if (_telemetryReconcileSig === sig) return;
   _telemetryReconcileSig = sig;
-  const seen = new Map(); // repository_id -> label
+  const seen = new Set(); // repository_id
   for (const event of readSpoolEventsCached()) {
     const id = event?.repo?.repository_id;
-    if (id && !seen.has(id)) seen.set(id, event.repo.label || null);
+    if (id) seen.add(id);
   }
   if (seen.size === 0) return;
   try {
@@ -1198,9 +1228,8 @@ export function reconcileTelemetryRepositories() {
       stateRoot,
       mutate: (registry) => {
         let changed = false;
-        for (const [id, label] of seen) {
-          upsertRepository(registry, { id, kind: id.startsWith("git:") ? "git" : "local", displayName: label || id });
-          if (recordDiscovery(registry, id, { source: "telemetry", evidence: "telemetry-session", confidence: id.startsWith("git:") ? "high" : "medium" })) changed = true;
+        for (const id of seen) {
+          if (recordDiscoveryIfKnown(registry, id, { source: "telemetry", evidence: "telemetry-session", confidence: id.startsWith("git:") ? "high" : "medium" })) changed = true;
         }
         return changed;
       },

@@ -108,14 +108,15 @@ export function repositoryIdForUrlKey(registry, urlKey, { includeHidden = false 
   return repositoryId;
 }
 
-// Append or refresh a discovery-provenance entry for one source. Idempotent per source: repeated
-// discoveries from the same source only bump lastSeenAt (debounced). Returns true if anything
-// changed (so updateRegistry can skip a pure-debounce write).
-export function recordDiscovery(registry, id, { source, evidence, confidence, now = new Date().toISOString() }) {
+// Append or refresh a discovery-provenance entry for one source. Idempotent per source kind plus
+// sourceId: repeated discoveries from the same source only bump lastSeenAt (debounced), while two
+// configured sources that both find a repository each keep their own entry. Returns true if
+// anything changed (so updateRegistry can skip a pure-debounce write).
+export function recordDiscovery(registry, id, { source, sourceId = null, evidence, confidence, now = new Date().toISOString() }) {
   const record = requireRecord(registry, id, "record discovery");
-  const existing = record.discoveries.find((d) => d.source === source);
+  const existing = record.discoveries.find((d) => sameDiscoverySource(d, { source, sourceId }));
   if (!existing) {
-    record.discoveries.push({ source, firstSeenAt: now, lastSeenAt: now, evidence, confidence });
+    record.discoveries.push({ source, ...(sourceId != null ? { sourceId } : {}), firstSeenAt: now, lastSeenAt: now, evidence, confidence });
     record.updatedAt = now;
     return true;
   }
@@ -125,6 +126,36 @@ export function recordDiscovery(registry, id, { source, evidence, confidence, no
   if (Date.parse(now) - Date.parse(existing.lastSeenAt) >= LAST_SEEN_DEBOUNCE_MS) { existing.lastSeenAt = now; changed = true; }
   if (changed) record.updatedAt = now;
   return changed;
+}
+
+// Record evidence on the repository an identity resolves to, only when that repository is already
+// known. For observers that are evidence rather than sources (agent sessions, pljvmyh): they
+// consolidate onto a repository a source found and never create one, so every listed repository has
+// a checkout the user asked RoboRepo to read. Returns false when the identity matches no record.
+export function recordDiscoveryIfKnown(registry, identity, discovery) {
+  const id = resolveRegistryAlias(registry, identity);
+  if (!registry.repositories[id]) return false;
+  return recordDiscovery(registry, id, discovery);
+}
+
+// Delete one source's discovery entries from every record (pljvmyh §4). `sourceId` omitted removes
+// every entry of that kind, which is how turning auto-discovery off drops its developer-runtime
+// evidence. Records are never deleted here: a repository left with no evidence stays known and ages
+// out through ageOutCandidates. Returns the ids of records that lost an entry.
+export function removeDiscoveries(registry, { source, sourceId = undefined, now = new Date().toISOString() }) {
+  const affected = [];
+  for (const record of Object.values(registry.repositories || {})) {
+    const kept = record.discoveries.filter((d) => !(d.source === source && (sourceId === undefined || d.sourceId === sourceId)));
+    if (kept.length === record.discoveries.length) continue;
+    record.discoveries = kept;
+    record.updatedAt = now;
+    affected.push(record.id);
+  }
+  return affected;
+}
+
+function sameDiscoverySource(discovery, { source, sourceId }) {
+  return discovery.source === source && (discovery.sourceId ?? null) === (sourceId ?? null);
 }
 
 // Register a local on-disk root (clone or worktree) under a repository. Idempotent by rootId.
@@ -242,6 +273,20 @@ export function forgetRepository(registry, id) {
   for (const [rootId, entry] of Object.entries(registry.localRootPaths || {})) {
     if (entry.repositoryId === id) delete registry.localRootPaths[rootId];
   }
+  return true;
+}
+
+// Clear the entire repository registry without touching source configuration or any checkout on
+// disk. This is the Manage repositories dialog's explicit reset action; enabled sources may add
+// repositories again on their next refresh.
+export function wipeRepositoryRegistry(registry) {
+  const hasEntries = Object.keys(registry.repositories || {}).length > 0
+    || Object.keys(registry.aliases || {}).length > 0
+    || Object.keys(registry.localRootPaths || {}).length > 0;
+  if (!hasEntries) return false;
+  registry.repositories = {};
+  registry.aliases = {};
+  if (registry.localRootPaths !== undefined) registry.localRootPaths = {};
   return true;
 }
 

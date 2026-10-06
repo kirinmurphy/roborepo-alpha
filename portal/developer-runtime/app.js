@@ -7,6 +7,8 @@ import * as fields from "./form-fields.js";
 import { createHistoryView } from "./history-view.js";
 import { buildRoutesDropdown, fillApiRouteDialog } from "./suggestions-view.js";
 import { configureLinksTrigger } from "/portal/shared/repository-components.js";
+import { createRepositorySourcesDialog } from "/portal/shared/repository-sources-dialog.js";
+import { autoDiscoveryPrompt } from "/portal/shared/repository-sources-templates.js";
 import "/portal/shared/menu-button.js";
 import "/portal/shared/copy-menu.js";
 // The API-route rows in the Links panel use <portal-copy-button> for their curl commands.
@@ -16,10 +18,24 @@ import "/portal/shared/copy-button.js";
 // rather than surfacing an error.
 const historyView = createHistoryView({ onStale: () => load({ force: true }) });
 
+// Enabling auto-discovery starts the first process scan server-side; the forced load then waits on
+// that same in-flight scan, so the page fills in as soon as it lands.
+const sourcesDialog = createRepositorySourcesDialog({
+  onPending: () => setRuntimeSyncStatus(true),
+  onChange: () => load({ force: true }),
+});
+const autoDiscoveryCta = document.getElementById("auto-discovery-cta");
+autoDiscoveryCta.append(autoDiscoveryPrompt({ onEnable: () => sourcesDialog.enableAutoDiscovery() }));
+
 // Built once and reused across every render/reconcile — the Active apps header holds this same
 // node for the page's lifetime so refresh/settings listeners and live spinner state never get
 // torn down by a rebuild.
 const toolbarActionsNode = tmpl.toolbarActions();
+const syncStatusNode = tmpl.syncStatus();
+const syncStatusText = syncStatusNode.querySelector("[data-slot=text]");
+const runtimeHeaderNode = document.createElement("div");
+runtimeHeaderNode.className = "runtime-group-header";
+runtimeHeaderNode.append(syncStatusNode, toolbarActionsNode);
 
 const refs = {
   refresh: toolbarActionsNode.querySelector("#refresh"),
@@ -59,6 +75,7 @@ const renderedCards = new Map();
 // expects the view to reflect current reality, so a full rebuild (reconcile: false) is fine here
 // even though the background poll must never do that on its own.
 async function load({ force = false } = {}) {
+  setRuntimeSyncStatus(true);
   if (force) setRefreshing(true);
   try {
     const snap = force
@@ -67,6 +84,7 @@ async function load({ force = false } = {}) {
     applySnapshot(snap, { reconcile: !force });
   } catch (err) {
     showError(err.message);
+    setRuntimeSyncStatus(false);
   } finally {
     portalHideLoading();
     if (force) setRefreshing(false);
@@ -80,6 +98,12 @@ function setRefreshing(refreshing) {
   refs.refreshIcon.hidden = refreshing;
 }
 
+function setRuntimeSyncStatus(syncing) {
+  syncStatusNode.classList.toggle("is-syncing", syncing);
+  syncStatusNode.classList.toggle("is-synced", !syncing);
+  syncStatusText.textContent = syncing ? "Syncing" : "Synced";
+}
+
 // `reconcile: true` (background poll) patches existing cards in place and never removes a
 // card that disappeared from the snapshot — it's marked offline instead. User-triggered
 // mutations (hide/favorite/associate/alias/settings) pass reconcile: false (the default) and
@@ -87,6 +111,8 @@ function setRefreshing(refreshing) {
 // right away.
 function applySnapshot(snapshot, { reconcile = false } = {}) {
   lastSnapshot = snapshot;
+  setRuntimeSyncStatus(snapshot.refresh?.state === "refreshing");
+  autoDiscoveryCta.hidden = snapshot.autoDiscovery?.enabled !== false;
   const hash = state.snapshotHash(snapshot);
   // The hash-skip only makes sense for the reconcile path, where "nothing changed" really does
   // mean nothing to do. A full rebuild (reconcile: false) can be the only thing that clears
@@ -103,12 +129,21 @@ function render(snapshot, { reconcile }) {
   renderWarnings(snapshot);
   pruneDepartedTracking(snapshot);
 
+  // Keep the first-run Runtime surface focused on its one actionable banner. The full empty state
+  // remains available once discovery is enabled, and all repository/member rendering stays intact
+  // for real data (or when the retained mock-view flag is turned back on).
+  if (snapshot.autoDiscovery?.enabled === false && !hasRuntimeContent(snapshot)) {
+    renderedCards.clear();
+    refs.content.replaceChildren();
+    return;
+  }
+
   const sections = [
     {
       id: "active",
       kind: "group",
       title: "Running now",
-      headerEnd: toolbarActionsNode,
+      headerEnd: runtimeHeaderNode,
       // Refresh/Settings live in this header, so it must always render even with zero active
       // apps — otherwise those controls would vanish along with the empty-state fallback.
       alwaysShow: true,
@@ -213,11 +248,24 @@ function render(snapshot, { reconcile }) {
   reconcileSections(sections, snapshot);
 }
 
+function hasRuntimeContent(snapshot) {
+  return [
+    snapshot.repositories,
+    snapshot.projects,
+    snapshot.composeProjects,
+    snapshot.unmatchedInstances,
+    snapshot.inactiveProjects,
+  ].some((items) => Array.isArray(items) && items.length > 0);
+}
+
 function emptyStateNode(snapshot) {
   if (snapshot.capabilities.discovery === "supported") {
     return tmpl.emptyState(
       "No active HTTP apps found",
-      "Refresh after starting a local development server.",
+      // While auto-discovery is off no refresh can find anything; the Enable prompt above is the way.
+      snapshot.autoDiscovery?.enabled === false
+        ? "Runtime is not watching running apps while auto-discovery is off."
+        : "Refresh after starting a local development server.",
     );
   }
   return tmpl.emptyState(
@@ -428,6 +476,7 @@ function repositoryActions() {
   return {
     onTogglePinned: toggleRepositoryPinned,
     onHide: hideRepository,
+    onIgnore: ignoreRepository,
     onToggleMenu: toggleActionMenu,
     onCloseMenus: closeActionMenus,
     // Binding a repository path describes the whole repository, so the action lives on this menu
@@ -879,6 +928,17 @@ function hiddenRepositoryRows() {
       () => restoreHiddenRepository(item),
     ),
   );
+}
+
+// Registry-wide, like Home's Ignore: the repository leaves Home, Plans, and this page's normal list
+// until it is restored from Settings or the Manage repositories dialog.
+async function ignoreRepository(repository) {
+  try {
+    const result = await api.setRepositoryVisibility({ repositoryId: repository.repositoryId, hidden: true });
+    if (result.developerRuntime) applySnapshot(result.developerRuntime);
+  } catch (err) {
+    showError(err.message);
+  }
 }
 
 async function restoreHiddenRepository(item) {

@@ -18,8 +18,8 @@ export function composeHomeOverview({ registry, runtimeState, plansState, teleme
   const planCoverage = plansByRepository(plansState.data, now, registry);
   const telemetryById = telemetryByRepository(telemetryState.data, registry);
   const fixtureTelemetryById = telemetryByRepository({ repositories: telemetryState.data?.fixtureRepositories }, registry);
-  const repositories = Object.values(registry.repositories || {})
-    .filter((record) => record.visibility !== "hidden" && resolveRegistryAlias(registry, record.id) === record.id)
+  const allRepositories = Object.values(registry.repositories || {})
+    .filter((record) => record.visibility !== "hidden" && resolveRegistryAlias(registry, record.id) === record.id && !isFixtureRepository(record.id))
     .map((record) => repositoryOverview(record, {
       runtimeState,
       workspace: runtimeById.get(record.id) || null,
@@ -29,6 +29,10 @@ export function composeHomeOverview({ registry, runtimeState, plansState, teleme
       telemetry: telemetryById[record.id] || null,
       fixtureTelemetry: fixtureTelemetryById[record.id] || null,
     }));
+  const hasActualRepository = allRepositories.some((repository) => !repository.fixture);
+  const repositories = hasActualRepository
+    ? allRepositories.filter((repository) => !repository.fixture)
+    : allRepositories;
 
   return {
     updatedAt: newestTimestamp([runtimeState.updatedAt, plansState.updatedAt, telemetryState.updatedAt]) || now.toISOString(),

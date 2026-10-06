@@ -10,7 +10,9 @@ How the `/plans` page is built, for people changing it. User-facing behavior is 
 
 The page uses:
 
-- `modules/plan-suite/index.mjs` for discovery, parsing, validation, Git metadata, rendering, and prompt generation
+- `modules/plan-suite/index.mjs` for parsing, validation, Git metadata, rendering, and prompt generation
+- `modules/plan-suite/canonical-scan.mjs` and `checkouts.mjs` for the snapshot: every checkout of each visible registry repository, merged by plan `id` with the main checkout canonical
+- `modules/repositories/discovery-walk.mjs` for the bounded folder walk that `roborepo plans repair` uses
 - `modules/plan-suite/start-transition.mjs` for `roborepo plans start`, the one plan mutation that commits
 - `modules/plan-suite/stop-servers.mjs` for `roborepo plans stop-servers`, which resolves a plan's linked worktree and hands it to `modules/developer-runtime/stop.mjs`
 - `scripts/cli/plans.mjs` for portal-facing snapshots, package-state integration, and the `roborepo plans` CLI
@@ -21,7 +23,8 @@ The page uses:
 
 The portal writes to plan files in two ways only: `POST /api/plans/priority` rewrites the
 `priority` frontmatter line, and `POST /api/plans/lifecycle` renames the file into another lifecycle
-folder. `POST /api/plans/settings` writes discovery roots to RoboRepo state, not to any repository.
+folder. Which repositories Plans reads is decided by the repository registry and its sources
+(`scripts/cli/repository-sources.mjs`), not by Plans.
 
 ## Scan Cache
 
@@ -68,7 +71,6 @@ All routes are served by the loopback-only portal server.
 | `/api/plans/prompt` | POST | build repository-aware or portable prompt from server-issued plan keys |
 | `/api/plans/priority` | POST | change one plan's priority, guarded by expected value and mtime |
 | `/api/plans/lifecycle` | POST | move one plan between lifecycle folders, guarded and readiness-validated |
-| `/api/plans/settings` | POST | replace discovery roots |
 | `/api/plans/refresh` | POST | rebuild the in-memory snapshot |
 
 POST routes require the same origin and per-server mutation token protections as other portal

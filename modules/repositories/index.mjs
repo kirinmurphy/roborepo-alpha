@@ -45,6 +45,7 @@ export {
   ACTIVITY_STATES,
   ENROLLMENT_DOMAINS,
   DISCOVERY_SOURCES,
+  CONFIGURED_DISCOVERY_SOURCE,
   CONFIDENCE_LEVELS,
   defaultRegistry,
   validateRegistry,
@@ -71,6 +72,8 @@ export {
   upsertRepository,
   repositoryIdForUrlKey,
   recordDiscovery,
+  recordDiscoveryIfKnown,
+  removeDiscoveries,
   registerLocalRoot,
   registerLocalRootPath,
   localRootPath,
@@ -79,6 +82,7 @@ export {
   setEnrollment,
   hideRepository,
   forgetRepository,
+  wipeRepositoryRegistry,
   pinRepository,
   setAlias,
 } from "./registry.mjs";
@@ -104,8 +108,6 @@ export {
 export {
   isEnrolled,
   enrollmentSourceId,
-  plansSourceCoverage,
-  planPlansEnrollment,
 } from "./enrollment.mjs";
 
 export {
@@ -124,3 +126,40 @@ export {
   repositoryListPayload,
   repositoryDetailPayload,
 } from "./summary.mjs";
+
+export {
+  DEFAULT_IGNORED_DIRECTORIES,
+  DISCOVERY_MAX_DEPTH,
+  DISCOVERY_MAX_REPOSITORIES,
+  isRepositoryRoot,
+  walkRepositoryRoots,
+  classifySourcePath,
+} from "./discovery-walk.mjs";
+
+export {
+  SOURCES_VERSION,
+  AUTO_DISCOVERY_SOURCE_ID,
+  AUTO_DISCOVERY_DEFAULT_ENABLED,
+  SOURCE_KINDS,
+  USER_SOURCE_KINDS,
+  SOURCE_STATES,
+  defaultSources,
+  validateSources,
+} from "./sources-schema.mjs";
+
+export {
+  sourcesPathFor,
+  loadSources,
+  writeSources,
+  updateSources,
+  findSource,
+  autoDiscoverySource,
+  isAutoDiscoveryEnabled,
+  userSources,
+  addSource,
+  removeSource,
+  setSourceEnabled,
+  setSourceStatus,
+  requireSource,
+  sourceError,
+} from "./sources.mjs";

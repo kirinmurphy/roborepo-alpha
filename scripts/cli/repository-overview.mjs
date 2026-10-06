@@ -8,16 +8,27 @@ import {
   unavailableState,
 } from "./repository-overview-projections.mjs";
 
-export function createRepositoryOverviewService({ loadRegistry, loadRuntime, loadPlans, loadTelemetry, now = () => new Date() }) {
+// `loadAutoDiscoveryEnabled` lets Home choose between its empty states and the compact Enable
+// prompt; an unreadable answer is treated as off, since off is what Runtime then does too.
+export function createRepositoryOverviewService({ loadRegistry, loadRuntime, loadPlans, loadTelemetry, loadAutoDiscoveryEnabled = () => false, now = () => new Date(), loadMockHomeOverview = null, mockHomeEnabled = false }) {
   function loadHome() {
     const registry = loadRegistry();
-    return composeHomeOverview({
+    if (mockHomeEnabled && Object.keys(registry.repositories || {}).length === 0 && loadMockHomeOverview) {
+      let enabled = false;
+      try { enabled = loadAutoDiscoveryEnabled() === true; } catch {}
+      return { ...loadMockHomeOverview({ now: now().toISOString() }), autoDiscovery: { enabled }, sync: { state: "synced" } };
+    }
+    const runtimeState = safely(loadRuntime, runtimeDomainState, "Runtime data is unavailable");
+    const overview = composeHomeOverview({
       registry,
-      runtimeState: safely(loadRuntime, runtimeDomainState, "Runtime data is unavailable"),
+      runtimeState,
       plansState: safely(loadPlans, plansDomainState, "Plans data is unavailable"),
       telemetryState: safely(loadTelemetry, telemetryDomainState, "Tokens data is unavailable"),
       now: now(),
     });
+    let enabled = false;
+    try { enabled = loadAutoDiscoveryEnabled() === true; } catch {}
+    return { ...overview, autoDiscovery: { enabled }, sync: syncState(runtimeState) };
   }
 
   function loadDetail({ urlKey }) {
@@ -37,6 +48,10 @@ export function createRepositoryOverviewService({ loadRegistry, loadRuntime, loa
   }
 
   return { loadHome, loadDetail };
+}
+
+function syncState(runtimeState) {
+  return { state: runtimeState.data?.refresh?.state === "refreshing" ? "syncing" : "synced" };
 }
 
 function safely(loader, project, message) {

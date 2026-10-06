@@ -12,6 +12,7 @@ import {
   validateRegistry,
 } from "../../modules/repositories/index.mjs";
 import { createRepositoryOverviewService } from "../cli/repository-overview.mjs";
+import { mockHomeOverview, mockPlansSnapshot, mockRuntimeSnapshot } from "../cli/mock-home.mjs";
 import { fixtureTelemetryRepositories, homeTelemetryProjection } from "../cli/telemetry-repository-overview.mjs";
 import { validateCaptureV3 } from "../cli/telemetry-schemas/capture-schema-v3.mjs";
 
@@ -62,6 +63,13 @@ const plans = {
   truncated: false,
   errors: [],
   repositories: [{ repositoryId: ACTIVE }],
+  // Coverage is the per-repository scan state: IDLE_RECENT was scanned and has no plans, STALE has
+  // no readable checkout, and every other repository has not been scanned at all.
+  repositoryScans: [
+    { repositoryId: ACTIVE, state: "scanned", planCount: 4, checkoutCount: 1 },
+    { repositoryId: IDLE_RECENT, state: "scanned", planCount: 0, checkoutCount: 1 },
+    { repositoryId: STALE, state: "unavailable", planCount: 0, checkoutCount: 0 },
+  ],
   plans: [
     { repository: { repositoryId: ACTIVE }, plan: { id: "active-plan", title: "Active plan", lifecycle: "active", taskCounts: { total: 8, complete: 3 }, gitLastChangedAt: "2026-09-29T12:00:00.000Z", modifiedAt: "2026-09-20T12:00:00.000Z" } },
     { repository: { repositoryId: ACTIVE }, plan: { id: "backlog-plan", title: "Backlog plan", lifecycle: "backlog", gitLastChangedAt: null, modifiedAt: "2026-09-28T12:00:00.000Z" } },
@@ -108,7 +116,40 @@ assert.deepEqual(active.domains.plans.data.active[0].taskCounts, { total: 8, com
 assert.equal("additionalActive" in active.domains.plans.data, false, "plans are no longer split into a leftover list");
 assert.equal(active.domains.agents.status, "unavailable");
 assert.equal(home.repositories.find((repository) => repository.repositoryId === PINNED).domains.plans.status, "unavailable", "unscanned Plans coverage is not reported as zero");
+assert.deepEqual(home.repositories.find((repository) => repository.repositoryId === IDLE_RECENT).domains.plans.data.counts, { active: 0, backlog: 0 }, "a scanned repository without plans reports zero");
+assert.equal(home.repositories.find((repository) => repository.repositoryId === STALE).domains.plans.status, "unavailable", "a repository Plans could not read is not reported as zero");
 assert.equal(active.domains.runtime.data.checkouts[0].projectRoot, "/private/worktrees/active-feature", "shared checkout tooltips and copy controls receive the checkout path");
+
+const firstRunMock = createRepositoryOverviewService({
+  loadRegistry: () => defaultRegistry(),
+  loadRuntime: () => { throw new Error("mock Home must not load Runtime"); },
+  loadPlans: () => { throw new Error("mock Home must not load Plans"); },
+  loadTelemetry: () => { throw new Error("mock Home must not load Tokens"); },
+  loadMockHomeOverview: mockHomeOverview,
+  mockHomeEnabled: true,
+  now: () => NOW,
+}).loadHome();
+assert.equal(firstRunMock.repositories.length, 3, "first-run Home supplies all three isolated mock repositories");
+assert.equal(firstRunMock.repositories.find((repository) => repository.repositoryId === "git:github.com/example/multi-member-fixture").domains.runtime.data.checkouts.length, 5, "the multi-member mock keeps one checkout per distinct state");
+const sharedMock = firstRunMock.repositories.find((repository) => repository.repositoryId === "git:github.com/example/shared-stack-fixture");
+assert.equal(sharedMock.domains.plans.data.active[0].checkoutRootId, "shared-second", "mock plans join to the worktree they name");
+const multiMock = firstRunMock.repositories.find((repository) => repository.repositoryId === "git:github.com/example/multi-member-fixture");
+assert.deepEqual(multiMock.domains.plans.data.active.map((plan) => plan.worktree), ["failing-checkout", "api-checkout"], "mock plans cover multiple worktrees");
+const mockPlans = mockPlansSnapshot();
+assert.equal(mockPlans.plans.length, 4, "the first-run Plans projection contains the mock plans");
+assert.equal(mockPlans.plans.find((record) => record.plan.id === "mock-api-surface").plan.worktree, "api-checkout");
+const mockRuntimeFirstRun = mockRuntimeSnapshot();
+assert.deepEqual(
+  mockRuntimeFirstRun.repositories.find((repository) => repository.repositoryId === "git:github.com/example/multi-member-fixture").roots.map((root) => root.git?.worktreeName || null),
+  [null, "(detached)", "api-checkout", "docs-refresh", "failing-checkout"],
+  "Runtime carries the same mock worktree names used by Plans",
+);
+const multiRuntimeMock = mockRuntimeFirstRun.repositories.find((repository) => repository.repositoryId === "git:github.com/example/multi-member-fixture");
+assert.equal(multiRuntimeMock.members.length, 6, "Runtime exposes the mock listener members across the distinct checkouts");
+assert.equal(multiRuntimeMock.roots.find((root) => root.rootId === "multi-main").members.length, 2, "the main mock checkout demonstrates multiple members");
+assert.ok(multiRuntimeMock.roots.every((root) => root.primaryEntrypoint?.opaqueKey === root.members[0]?.opaqueKey), "promoted listener keys join to their mock member rows");
+const sharedRuntimeMock = mockRuntimeFirstRun.repositories.find((repository) => repository.repositoryId === "git:github.com/example/shared-stack-fixture");
+assert.ok(sharedRuntimeMock.roots.every((root) => root.composeGroups[0]?.containers[0]?.instances[0]?.opaqueKey === root.primaryEntrypoint?.opaqueKey), "promoted Compose keys join to their mock container rows");
 
 const detail = service.loadDetail({ urlKey: "active-app" });
 assert.equal(detail.repository.repositoryId, ACTIVE);
@@ -124,6 +165,7 @@ const aliasRuntime = structuredClone(runtime);
 aliasRuntime.repositories.find((repository) => repository.repositoryId === ACTIVE).repositoryId = aliasId;
 const aliasPlans = structuredClone(plans);
 aliasPlans.repositories[0].repositoryId = aliasId;
+aliasPlans.repositoryScans[0].repositoryId = aliasId;
 for (const plan of aliasPlans.plans) plan.repository.repositoryId = aliasId;
 const aliasTelemetry = structuredClone(telemetry);
 aliasTelemetry.repositories[aliasId] = aliasTelemetry.repositories[ACTIVE];
@@ -167,12 +209,13 @@ assert.equal(degraded.repositories[0].domains.runtime.status, "unavailable");
 assert.equal(degraded.repositories[0].domains.plans.status, "unavailable");
 assert.equal(degraded.repositories[0].domains.tokens.status, "unavailable");
 
-// Home order: pinned, running real repositories, running fixtures, idle real repositories, idle
-// fixtures. The fixtures above all carry the github.com/example prefix, so this mixes in real ids.
+// Home order for ordinary repositories: pinned, running real repositories, then idle repositories.
+// A running real repository also suppresses mock cards, so the old mixed fixture ordering is no
+// longer the expected Home projection.
 const REAL_ACTIVE = "git:github.com/acme/real-active";
 const REAL_IDLE = "git:github.com/acme/real-idle";
 const REAL_PINNED_IDLE = "git:github.com/acme/real-pinned";
-const FIXTURE_IDLE = "git:github.com/example/fixture-idle";
+const FIXTURE_IDLE = "git:github.com/example/idle-fixture";
 const groupedRegistry = defaultRegistry();
 for (const [id, name] of [[REAL_ACTIVE, "Real Active"], [REAL_IDLE, "Zebra Idle"], [REAL_PINNED_IDLE, "Real Pinned"], [FIXTURE_IDLE, "Fixture Idle"], [ACTIVE, "Active App"]]) {
   addRepository(id, name, "2026-09-30T11:00:00.000Z", groupedRegistry);
@@ -198,11 +241,46 @@ const grouped = createRepositoryOverviewService({
 }).loadHome();
 assert.deepEqual(
   grouped.repositories.map((repository) => repository.repositoryId),
-  [REAL_PINNED_IDLE, REAL_ACTIVE, ACTIVE, REAL_IDLE, FIXTURE_IDLE],
-  "Home orders pinned, active, active fixtures, idle, then idle fixtures",
+  [REAL_PINNED_IDLE, ACTIVE, REAL_ACTIVE, REAL_IDLE],
+  "Home orders pinned, active, then idle repositories when real work is active",
 );
-assert.equal(grouped.repositories.find((repository) => repository.repositoryId === FIXTURE_IDLE).fixture, true);
 assert.equal(grouped.repositories.find((repository) => repository.repositoryId === REAL_IDLE).fixture, false);
+
+// First-run mock data remains available to explicit mock-mode tests above, but normal Home never
+// renders fixture repositories, even when the registry contains only fixture records.
+const MOCK_A = "git:github.com/example/shared-stack-fixture";
+const MOCK_B = "git:github.com/example/multi-member-fixture";
+const MOCK_C = "git:github.com/example/idle-checkout-fixture";
+const MOCK_REAL_ACTIVE = "git:github.com/acme/actual-active";
+const mockRegistry = defaultRegistry();
+for (const [id, name] of [[MOCK_A, "shared-stack-fixture"], [MOCK_B, "multi-member-fixture"], [MOCK_C, "idle-checkout-fixture"], [MOCK_REAL_ACTIVE, "Actual active"]]) {
+  addRepository(id, name, NOW.toISOString(), mockRegistry);
+}
+const fallbackRegistry = defaultRegistry();
+for (const [id, name] of [[MOCK_A, "shared-stack-fixture"], [MOCK_B, "multi-member-fixture"], [MOCK_C, "idle-checkout-fixture"]]) {
+  addRepository(id, name, NOW.toISOString(), fallbackRegistry);
+}
+const mockRuntime = (activeId) => ({
+  generatedAt: NOW.toISOString(),
+  refresh: { state: "idle", error: null },
+  repositories: [
+    { repositoryId: MOCK_A, name: "shared-stack-fixture", lifecycle: { state: "idle", reason: null }, roots: [] },
+    { repositoryId: MOCK_B, name: "multi-member-fixture", lifecycle: { state: "active", reason: null }, roots: [] },
+    { repositoryId: MOCK_C, name: "idle-checkout-fixture", lifecycle: { state: "idle", reason: null }, roots: [] },
+    { repositoryId: MOCK_REAL_ACTIVE, name: "Actual active", lifecycle: { state: activeId ? "active" : "idle", reason: null }, roots: [] },
+  ],
+});
+const mockService = (activeId, registry = mockRegistry) => createRepositoryOverviewService({
+  loadRegistry: () => structuredClone(registry),
+  loadRuntime: () => mockRuntime(activeId),
+  loadPlans: () => ({ truncated: false, errors: [], repositories: [], plans: [] }),
+  loadTelemetry: () => ({ status: "available", repositories: {} }),
+  now: () => NOW,
+});
+const withActualActive = mockService(MOCK_REAL_ACTIVE).loadHome();
+assert.deepEqual(withActualActive.repositories.map((repository) => repository.repositoryId), [MOCK_REAL_ACTIVE], "active real work suppresses all mock cards");
+const withNoActualActive = mockService(null, fallbackRegistry).loadHome();
+assert.deepEqual(withNoActualActive.repositories, [], "fixture repositories never render in normal Home mode");
 
 // Plan/worktree association: exact `worktree` name against Runtime's administrative worktree name.
 // Non-destructive: both lists stay complete, and a safe match only adds `checkoutRootId` to the plan.
@@ -241,6 +319,7 @@ const associationPlans = {
   truncated: false,
   errors: [],
   repositories: [{ repositoryId: ASSOC }],
+  repositoryScans: [{ repositoryId: ASSOC, state: "scanned", planCount: 10, checkoutCount: 1 }],
   plans: [
     assocPlan("matched", "feature-a"),
     assocPlan("unassociated", ""),
@@ -299,8 +378,8 @@ assert.equal(runtimeOffline.domains.plans.data.active.length, 9, "without Runtim
 assert.equal(runtimeOffline.domains.plans.data.active.some((plan) => "checkoutRootId" in plan), false, "without Runtime no match is invented");
 
 // Tokens follow the capture switch: with capture off, a real repository's Tokens domain is
-// unavailable even though an older spool still projects warnings for it. Dev fixture repositories
-// get their warnings from the committed fixture spool either way.
+// unavailable even though an older spool still projects warnings for it. Mock repositories stay
+// outside the canonical registry once a real repository exists, so their reports are not attached.
 const SHARED_FIXTURE = "git:github.com/example/shared-stack-fixture";
 const MULTI_FIXTURE = "git:github.com/example/multi-member-fixture";
 const IDLE_FIXTURE = "git:github.com/example/idle-checkout-fixture";
@@ -338,15 +417,14 @@ const loadTokens = (enabled) => {
     loadTelemetry: () => homeTelemetryProjection({ enabled, projection: structuredClone(spoolProjection), fixtureRepositories }),
     now: () => NOW,
   }).loadHome().repositories;
-  return (id) => repositories.find((repository) => repository.repositoryId === id).domains.tokens;
+  return (id) => repositories.find((repository) => repository.repositoryId === id)?.domains.tokens;
 };
 const captureOff = loadTokens(false);
 assert.deepEqual(captureOff(TOKENS_REAL), { status: "unavailable", updatedAt: null, data: null, message: "Token tracking is off" }, "capture off hides an older spool's warnings");
-assert.equal(captureOff(SHARED_FIXTURE).status, "available");
-assert.equal(captureOff(SHARED_FIXTURE).data.warningCount, 2, "a dev fixture shows its fixture warnings with capture off");
+assert.equal(captureOff(SHARED_FIXTURE), undefined, "a mock repository is absent once a real repository is registered");
 const captureOn = loadTokens(true);
 assert.equal(captureOn(TOKENS_REAL).data.warningCount, 2, "capture on shows the spool's warnings");
-assert.equal(captureOn(SHARED_FIXTURE).data.warningCount, 2, "a dev fixture keeps its fixture warnings with capture on");
+assert.equal(captureOn(SHARED_FIXTURE), undefined, "a mock repository stays outside reporting when capture is on");
 
 console.log("repository-overview-check passed");
 

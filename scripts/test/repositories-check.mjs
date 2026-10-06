@@ -20,15 +20,16 @@ import {
   repositoryIdForUrlKey,
   repositoryUrl,
   recordDiscovery,
+  recordDiscoveryIfKnown,
   registerLocalRoot,
   setEnrollment,
   hideRepository,
+  wipeRepositoryRegistry,
   setAlias,
   resolveRegistryAlias,
   associateResolved,
   associateLegacyHashes,
-  plansSourceCoverage,
-  planPlansEnrollment,
+  removeDiscoveries,
   importDeveloperRuntimeAliases,
   canonicalizeDeveloperRuntimeIdentity,
   repositoryScopedFinding,
@@ -138,6 +139,18 @@ try {
   recordDiscovery(reg, "git:github.com/kirinmurphy/roborepo", { source: "plans", evidence: "configured-scan-root", confidence: "high", now });
   assert.equal(reg.repositories["git:github.com/kirinmurphy/roborepo"].discoveries.length, 2, "distinct sources both recorded");
 
+  const wipeReg = defaultRegistry();
+  upsertRepository(wipeReg, { id: "local:2222222222222222", kind: "local", displayName: "wipe-me", now });
+  wipeReg.aliases["old-wipe-id"] = "local:2222222222222222";
+  wipeReg.localRootPaths = {
+    aaaa2222: { path: tempRoot, repositoryId: "local:2222222222222222", firstSeenAt: now, lastSeenAt: now },
+  };
+  assert.equal(wipeRepositoryRegistry(wipeReg), true, "wiping a populated registry changes it");
+  assert.deepEqual(wipeReg.repositories, {});
+  assert.deepEqual(wipeReg.aliases, {});
+  assert.deepEqual(wipeReg.localRootPaths, {});
+  assert.equal(wipeRepositoryRegistry(wipeReg), false, "wiping an empty registry is a no-op");
+
   assert.equal(registerLocalRoot(reg, "git:github.com/kirinmurphy/roborepo", { rootId: "aaaa1111", now }), true);
   assert.equal(registerLocalRoot(reg, "git:github.com/kirinmurphy/roborepo", { rootId: "aaaa1111", now }), false, "same root within debounce is a no-op");
   registerLocalRoot(reg, "git:github.com/kirinmurphy/roborepo", { rootId: "bbbb2222", kind: "worktree", now });
@@ -182,17 +195,23 @@ try {
   fs.writeFileSync(registryPathFor(badState), "{ not json");
   assert.throws(() => loadRegistry({ stateRoot: badState }), /malformed JSON/);
 
-  // Older registries reset directly to a fresh v2 registry, without retaining a backup.
+  // Older registries (v1, and v2 since the repository-sources cutover) reset directly to a fresh
+  // registry, without retaining a backup.
   const legacyState = path.join(tempRoot, "legacy-state");
   fs.mkdirSync(path.join(legacyState, "repositories"), { recursive: true });
   fs.writeFileSync(registryPathFor(legacyState), JSON.stringify({ version: 1, revision: 7, repositories: { old: {} }, aliases: { old: "new" } }));
   assert.deepEqual(loadRegistry({ stateRoot: legacyState }), defaultRegistry());
   assert.equal(fs.existsSync(path.join(legacyState, "repositories", "registry.v1.backup.json")), false, "v1 reset creates no backup");
+  const v2State = path.join(tempRoot, "v2-state");
+  fs.mkdirSync(path.join(v2State, "repositories"), { recursive: true });
+  fs.writeFileSync(registryPathFor(v2State), JSON.stringify({ version: 2, revision: 9, repositories: {}, aliases: {} }));
+  assert.deepEqual(loadRegistry({ stateRoot: v2State }), defaultRegistry(), "a v2 registry loads as an empty v3 registry");
+  assert.equal(JSON.parse(fs.readFileSync(registryPathFor(v2State), "utf8")).version, 3, "the reset is persisted");
 
   // Unknown future versions are refused without rewriting the file.
   const futureState = path.join(tempRoot, "future-state");
   fs.mkdirSync(path.join(futureState, "repositories"), { recursive: true });
-  fs.writeFileSync(registryPathFor(futureState), JSON.stringify({ version: 3, revision: 1, repositories: {}, aliases: {} }));
+  fs.writeFileSync(registryPathFor(futureState), JSON.stringify({ version: 4, revision: 1, repositories: {}, aliases: {} }));
   assert.throws(() => loadRegistry({ stateRoot: futureState }), /unsupported repository registry version/);
 
   // Optimistic concurrency
@@ -236,19 +255,36 @@ try {
   assert.equal(associateLegacyHashes({ normalizedRemoteHash: "nope", hashIndex }).provenance, "unresolved");
   assert.equal(associateLegacyHashes({ hashIndex }).repositoryId, null);
 
-  // ---- Plans source coverage / enrollment planning ----
-  const parent = path.join(tempRoot, "projects");
-  const child = path.join(parent, "app");
-  fs.mkdirSync(child, { recursive: true });
-  assert.equal(plansSourceCoverage(child, [parent]), path.resolve(parent), "descendant is covered by parent source");
-  assert.equal(plansSourceCoverage(child, [path.join(tempRoot, "elsewhere")]), null);
-  assert.equal(plansSourceCoverage(parent, [parent]), path.resolve(parent), "exact match is covered");
+  // ---- Per-source discovery provenance (pljvmyh §4) ----
+  const srcReg = defaultRegistry();
+  const srcId = "git:github.com/x/sourced";
+  upsertRepository(srcReg, { id: srcId, kind: "git", displayName: "sourced" });
+  const t0 = "2026-09-01T00:00:00.000Z";
+  recordDiscovery(srcReg, srcId, { source: "developer-runtime", evidence: "git-remote", confidence: "high", now: t0 });
+  recordDiscovery(srcReg, srcId, { source: "repository-source", sourceId: "src-aaaaaa", evidence: "directory-source", confidence: "high", now: t0 });
+  recordDiscovery(srcReg, srcId, { source: "repository-source", sourceId: "src-bbbbbb", evidence: "repository-source", confidence: "high", now: t0 });
+  assert.equal(srcReg.repositories[srcId].discoveries.length, 3, "each configured source keeps its own entry");
+  assert.equal(recordDiscovery(srcReg, srcId, { source: "repository-source", sourceId: "src-aaaaaa", evidence: "directory-source", confidence: "high", now: t0 }), false, "same source + id is idempotent");
+  validateRegistry(srcReg);
+  assert.throws(() => validateRegistry({ ...srcReg, repositories: { [srcId]: { ...srcReg.repositories[srcId], discoveries: [{ source: "repository-source", firstSeenAt: t0, lastSeenAt: t0, evidence: "x", confidence: "high" }] } } }), /sourceId/, "configured discoveries require a sourceId");
+  assert.throws(() => validateRegistry({ ...srcReg, repositories: { [srcId]: { ...srcReg.repositories[srcId], discoveries: [{ source: "telemetry", sourceId: "src-aaaaaa", firstSeenAt: t0, lastSeenAt: t0, evidence: "x", confidence: "high" }] } } }), /sourceId/, "only configured discoveries carry a sourceId");
+  assert.deepEqual(removeDiscoveries(srcReg, { source: "repository-source", sourceId: "src-aaaaaa" }), [srcId]);
+  assert.deepEqual(srcReg.repositories[srcId].discoveries.map((d) => d.sourceId || d.source), ["developer-runtime", "src-bbbbbb"], "removal is scoped to one source");
+  removeDiscoveries(srcReg, { source: "developer-runtime" });
+  removeDiscoveries(srcReg, { source: "repository-source", sourceId: "src-bbbbbb" });
+  assert.ok(srcReg.repositories[srcId], "a repository left with no evidence is kept, not deleted");
+  assert.equal(srcReg.repositories[srcId].discoveries.length, 0);
 
-  const enrollCovered = planPlansEnrollment(child, [parent]);
-  assert.equal(enrollCovered.covered, true);
-  const enrollUncovered = planPlansEnrollment(child, []);
-  assert.equal(enrollUncovered.covered, false);
-  assert.equal(enrollUncovered.suggestedSource, path.resolve(child), "narrow default is the exact repo root, never a parent");
+  // ---- Evidence-only observers (agent sessions) attach but never create (pljvmyh) ----
+  const telemetry = { source: "telemetry", evidence: "telemetry-session", confidence: "high", now: t0 };
+  assert.equal(recordDiscoveryIfKnown(srcReg, "git:github.com/x/never-found", telemetry), false);
+  assert.equal(srcReg.repositories["git:github.com/x/never-found"], undefined, "an unknown repository is not created");
+  assert.equal(recordDiscoveryIfKnown(srcReg, srcId, telemetry), true);
+  assert.deepEqual(srcReg.repositories[srcId].discoveries.map((d) => d.source), ["telemetry"], "a known repository gains the evidence");
+  setAlias(srcReg, "local:0123456789abcdef", srcId);
+  assert.equal(recordDiscoveryIfKnown(srcReg, "local:0123456789abcdef", { ...telemetry, source: "developer-runtime" }), true);
+  assert.equal(srcReg.repositories["local:0123456789abcdef"], undefined, "an aliased identity consolidates onto its canonical record");
+  assert.equal(srcReg.repositories[srcId].discoveries.length, 2);
 
   // ---- Runtime alias import: idempotent, canonical mapping, skips non-repo targets ----
   assert.equal(canonicalizeDeveloperRuntimeIdentity("git:github.com/kirinmurphy/roborepo").id, "git:github.com/kirinmurphy/roborepo");

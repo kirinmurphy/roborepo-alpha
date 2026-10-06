@@ -1,0 +1,354 @@
+/* Manage repositories dialog and the shared repository empty state (repository-sources-partial.html).
+ * Visual order follows weight: auto-discovery is the primary block, the repository list is the main
+ * content, folders are secondary. */
+.repository-sources-dialog,
+.folder-scan-info {
+  max-height: 85vh;
+  overflow: auto;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 12px 40px var(--modal-shadow);
+  padding: 0;
+}
+.repository-sources-dialog::backdrop,
+.folder-scan-info::backdrop {
+  background: var(--backdrop);
+}
+.repository-sources-dialog,
+.folder-scan-info {
+  /* Scrolling past either end must not scroll the page behind the dialog. */
+  overscroll-behavior: contain;
+}
+.repository-sources-body {
+  display: grid;
+  gap: 18px;
+  padding: 16px;
+}
+/* Tall windows: the title bar stays put and only the body scrolls. */
+.repository-sources-dialog[open] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.repository-sources-dialog .repository-sources-body {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+/* Short windows: a fixed title bar would eat too much of the little height there is, so the whole
+ * dialog scrolls and only the close button stays pinned. The head dissolves into the dialog's grid
+ * so the close button is a direct child of the scroll container, which sticky needs. */
+@media (max-height: 640px) {
+  .repository-sources-dialog[open] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    overflow: auto;
+  }
+  .repository-sources-dialog .modal-head {
+    display: contents;
+  }
+  .repository-sources-dialog .modal-title {
+    grid-column: 1;
+    padding: 12px 0 12px 16px;
+  }
+  .repository-sources-dialog .modal-head portal-close-button {
+    grid-column: 2;
+    grid-row: 1;
+    position: sticky;
+    top: 8px;
+    z-index: 1;
+    margin: 8px 12px 0 0;
+    background: var(--bg);
+    border-radius: 6px;
+  }
+  .repository-sources-dialog .repository-sources-body {
+    grid-column: 1 / -1;
+    overflow: visible;
+    border-top: 1px solid var(--line);
+  }
+}
+.repository-sources-body h3 {
+  margin: 0 0 6px;
+  font-size: var(--text-sm);
+  color: var(--ink);
+}
+.repository-sources-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+.sources-auto {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 6%, var(--panel));
+}
+.sources-auto-off {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+.sources-auto-copy {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--dim);
+}
+.sources-auto-on {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: var(--text-sm);
+  color: var(--ink);
+}
+.sources-auto-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.sources-auto-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ok);
+}
+.sources-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+.sources-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--panel);
+}
+.sources-row-main {
+  display: grid;
+  min-width: 0;
+}
+.sources-row-name {
+  color: var(--ink);
+  font-size: var(--text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sources-path {
+  display: flex;
+}
+.sources-path-head {
+  min-width: 1ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sources-path-tail {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.sources-row-detail,
+.sources-muted {
+  color: var(--dim);
+  font-size: var(--text-2xs);
+}
+.sources-muted {
+  margin: 0;
+}
+.sources-row-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 12px;
+}
+.source-state {
+  text-transform: capitalize;
+}
+.source-state.is-partial,
+.source-state.is-stale {
+  color: var(--warn);
+}
+.source-state.is-unavailable,
+.source-state.is-error {
+  color: var(--danger);
+}
+.sources-ignored summary {
+  cursor: pointer;
+  color: var(--dim);
+  font-size: var(--text-xs);
+  margin: 8px 0 4px;
+}
+.sources-repositories-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+.sources-wipe {
+  color: var(--danger);
+}
+.sources-folders {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.sources-folders > * {
+  justify-self: stretch;
+}
+.sources-folders > [data-slot="add-toggle"] {
+  justify-self: start;
+}
+.sources-add-form {
+  display: grid;
+  gap: 8px;
+}
+.sources-add-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: var(--text-xs);
+  color: var(--dim);
+}
+.sources-add-row {
+  display: flex;
+  gap: 8px;
+}
+.sources-add-row input {
+  flex: 1;
+}
+.sources-intent {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: var(--text-xs);
+}
+.sources-intent legend {
+  color: var(--warn);
+  padding: 0 4px;
+}
+.sources-intent label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+/* base.css pads and borders every <input> for text fields; a radio needs its native box back. */
+.sources-intent input[type="radio"] {
+  width: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+/* The scanning explainer, moved here from the Plans page with the add-folder form it explains. */
+.folder-scan-info .modal-body {
+  padding: 14px 16px;
+  font-size: var(--text-sm);
+  color: var(--dim);
+}
+.folder-tree {
+  margin: 0 0 12px;
+  padding: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  color: var(--dim);
+  overflow-x: auto;
+}
+.tree-root {
+  color: var(--ink);
+  font-weight: 600;
+}
+.project-folder {
+  color: var(--warn);
+  font-weight: 600;
+}
+.tree-note {
+  font-style: italic;
+}
+.tree-legend {
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-xs);
+}
+.legend-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+.legend-repo {
+  background: var(--warn);
+}
+.folder-scan-info .modal-note {
+  margin: 0 0 8px;
+  font-size: var(--text-2xs);
+}
+
+/* Shared repository empty state (Home and Plans) and the compact auto-discovery prompt. */
+.repository-empty-state {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 6%, var(--panel));
+}
+.repository-empty-state h2 {
+  margin: 0;
+  font-size: var(--text-md);
+}
+.repository-empty-state p {
+  margin: 0;
+  color: var(--dim);
+  font-size: var(--text-sm);
+}
+.repository-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.auto-discovery-prompt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 6%, var(--panel));
+}
+.auto-discovery-prompt p {
+  margin: 0;
+  color: var(--dim);
+  font-size: var(--text-sm);
+}
+.auto-discovery-prompt-body {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.auto-discovery-prompt-body [data-slot="enable"] {
+  display: inline-block;
+  width: auto;
+  justify-self: start;
+}

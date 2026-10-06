@@ -51,20 +51,45 @@ export function selectOption([value, label]) {
   return opt;
 }
 
-export function emptyState(snapshot) {
-  if (!snapshot.settings.discoveryRoots.length) {
-    return null; // the "No Project Folders configured" message already lives in the .settings block
-  }
-  if (snapshot.plans.length === 0) {
-    return fill(tpl("tpl-empty-state"), {
-      title: "No plan documents found",
-      body: "The scanner looks for Markdown files under docs/plans in each discovered repository.",
-    });
-  }
+// Which §7 onboarding step the page is on once plan-write is enabled. "plans" means there is a plan
+// board to render; the other steps each show a single call to action instead.
+export function plansOnboardingStep(snapshot) {
+  const scans = snapshot.repositoryScans || [];
+  if (scans.length === 0) return "no-repositories";
+  if (!scans.some((scan) => scan.state === "scanned")) return "not-scanned";
+  return snapshot.plans.length === 0 ? "no-plans" : "plans";
+}
+
+// Never "0 plans" for a repository Plans has not read: a known repository with no readable
+// checkout is reported as not scanned.
+export function plansOnboardingState(snapshot, step, onManage) {
+  const scans = snapshot.repositoryScans || [];
+  const scanned = scans.filter((scan) => scan.state === "scanned").length;
+  const fills = step === "not-scanned"
+    ? {
+      title: `Not scanned yet: ${repositoryCount(scans.length)}`,
+      body: "Plans reads each known repository's checkouts. None of them has a checkout Plans can read right now.",
+    }
+    : {
+      title: `No plans found in ${repositoryCount(scanned)}`,
+      body: "Plans looks for Markdown files under docs/plans in every checkout of each known repository.",
+    };
+  const node = fill(tpl("tpl-empty-state"), { ...fills, action: "Manage repositories…" });
+  const action = node.querySelector("[data-slot=action]");
+  action.hidden = false;
+  action.addEventListener("click", onManage);
+  return node;
+}
+
+export function emptyState() {
   return fill(tpl("tpl-empty-state"), {
     title: "No matching plans",
     body: "Adjust search or filters to show more results.",
   });
+}
+
+function repositoryCount(count) {
+  return `${count} ${count === 1 ? "repository" : "repositories"}`;
 }
 
 export function warningLine(text) {

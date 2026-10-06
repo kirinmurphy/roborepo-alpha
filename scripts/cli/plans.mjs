@@ -1,51 +1,64 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { packageStatusSummary } from "./package-status.mjs";
 import { stateRoot } from "./paths.mjs";
+import { autoDiscoveryEnabled } from "./repository-sources.mjs";
 import {
   buildPlanSnapshot,
   buildPrompt,
   findPlanByKey,
   movePlanLifecycle as movePlanLifecycleInDocs,
-  normalizeRootInput,
   readPlanDocument,
-  readPlanSettings,
   updatePlanPriority as updatePlanPriorityInDocs,
   validateRepositoryPlans,
-  writePlanSettings,
 } from "../../modules/plan-suite/index.mjs";
 import { startPlan } from "../../modules/plan-suite/start-transition.mjs";
 import { stopPlanServers } from "../../modules/plan-suite/stop-servers.mjs";
 import { repairPlansMissingFrontmatter } from "../../modules/plan-suite/repair.mjs";
+import { loadRegistry } from "../../modules/repositories/index.mjs";
+import { MOCK_FIRST_RUN_VIEWS_ENABLED, mockPlanDocument, mockPlansSnapshot } from "./mock-home.mjs";
 
 let cachedSnapshot = null;
+let cachedSnapshotIsMock = false;
 
 export function loadPlansSnapshot() {
+  if (MOCK_FIRST_RUN_VIEWS_ENABLED && hasNoRegisteredRepositories()) {
+    cachedSnapshot = mockPlansSnapshot({ packageState: planWritePackageState() });
+    cachedSnapshotIsMock = true;
+    return cachedSnapshot;
+  }
   cachedSnapshot = buildPlanSnapshot({ stateRoot, packageState: planWritePackageState() });
+  cachedSnapshotIsMock = false;
   return publicSnapshot(cachedSnapshot);
 }
 
 export function loadCachedPlansSnapshot() {
+  if (MOCK_FIRST_RUN_VIEWS_ENABLED && hasNoRegisteredRepositories()) return mockPlansSnapshot({ packageState: planWritePackageState() });
+  if (cachedSnapshotIsMock) {
+    cachedSnapshot = null;
+    cachedSnapshotIsMock = false;
+  }
   return cachedSnapshot ? publicSnapshot(cachedSnapshot) : null;
 }
 
 export function loadPlanDocument({ key }) {
+  if (MOCK_FIRST_RUN_VIEWS_ENABLED && hasNoRegisteredRepositories()) return mockPlanDocument({ key });
   const snapshot = cachedSnapshot || buildPlanSnapshot({ stateRoot, packageState: planWritePackageState() });
   return readPlanDocument(snapshot, key);
 }
 
 export function buildPlansPrompt({ action, keys, mode }) {
+  if (MOCK_FIRST_RUN_VIEWS_ENABLED && hasNoRegisteredRepositories()) {
+    const snapshot = mockPlansSnapshot({ packageState: planWritePackageState() });
+    const selected = (Array.isArray(keys) ? keys : []).map((key) => snapshot.plans.find((plan) => plan.key === key));
+    if (selected.length === 0 || selected.some((plan) => !plan)) throw new Error("select at least one plan");
+    return { prompt: buildPrompt(action, selected, { mode }) };
+  }
   const snapshot = cachedSnapshot || buildPlanSnapshot({ stateRoot, packageState: planWritePackageState() });
   const selected = (Array.isArray(keys) ? keys : []).map((key) => findPlanByKey(snapshot, key));
   if (selected.length === 0) throw new Error("select at least one plan");
   return { prompt: buildPrompt(action, selected, { mode }) };
-}
-
-export function updatePlanSettings({ discoveryRoots }) {
-  if (!Array.isArray(discoveryRoots)) throw new Error("expected discoveryRoots array");
-  const current = readPlanSettings({ stateRoot });
-  const normalized = [...new Set(discoveryRoots.map((root) => normalizeRootInput(root)))];
-  writePlanSettings({ stateRoot, discoveryRoots: normalized, ignoredDirectories: current.ignoredDirectories });
-  cachedSnapshot = null;
-  return loadPlansSnapshot();
 }
 
 export function updatePlanPriority({ id, key, priority, expectedPriority, mtimeMs, repositoryId }) {
@@ -72,6 +85,7 @@ function publicMutationResult(result) {
 
 export function refreshPlans() {
   cachedSnapshot = null;
+  cachedSnapshotIsMock = false;
   return loadPlansSnapshot();
 }
 
@@ -79,9 +93,15 @@ function planWritePackageState() {
   return { ...packageStatusSummary("plan-write"), message: "" };
 }
 
+function hasNoRegisteredRepositories() {
+  return Object.keys(loadRegistry({ stateRoot }).repositories || {}).length === 0;
+}
+
+// `autoDiscovery` lets the Plans page show the same repository empty state Home does.
 function publicSnapshot(snapshot) {
   return {
     ...snapshot,
+    autoDiscovery: { enabled: autoDiscoveryEnabled({ stateRoot }) },
     plans: snapshot.plans.map(({ absolutePath, repository, ...plan }) => ({
       ...plan,
       repository: stripRepositoryRoot(repository),
@@ -232,7 +252,11 @@ function plansRepairCommand(args) {
     console.error("usage: roborepo plans repair <root> [--dry-run]");
     process.exit(2);
   }
-  const resolvedRoot = normalizeRootInput(root);
+  const resolvedRoot = path.resolve(root.replace(/^~(?=$|\/)/, os.homedir()));
+  if (!fs.existsSync(resolvedRoot) || !fs.statSync(resolvedRoot).isDirectory()) {
+    console.error(`error: ${root} is not a readable directory`);
+    process.exit(2);
+  }
   const { repaired, errors } = repairPlansMissingFrontmatter(resolvedRoot, { dryRun });
   if (repaired.length === 0) {
     console.log("no plan docs missing frontmatter found.");

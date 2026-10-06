@@ -4,12 +4,19 @@ import { createPlanDrawer } from "/portal/plans/plan-drawer.js";
 import { fetchSnapshot as fetchPlansSnapshot } from "/portal/plans/api.js";
 import * as api from "./api.js";
 import { mountHomeLinks } from "./links.js";
-import { emptyState, repositoryDirectory, unresolvedActivity } from "./templates.js";
+import { repositoryDirectory, unresolvedActivity } from "./templates.js";
+import { createRepositorySourcesDialog } from "/portal/shared/repository-sources-dialog.js";
+import { autoDiscoveryPrompt, repositoryEmptyState } from "/portal/shared/repository-sources-templates.js";
 
 const POLL_MS = 10_000;
 const content = document.getElementById("home-content");
 const warning = document.getElementById("home-warning");
 const harnessBanner = document.getElementById("home-harness-banner");
+const autoDiscoveryMount = document.getElementById("home-auto-discovery");
+const mockDisclaimer = document.getElementById("home-mock-disclaimer");
+const homeHeading = document.querySelector(".home-heading");
+const homeSyncStatus = document.getElementById("home-sync-status");
+const manageRepositories = document.getElementById("manage-repositories");
 let renderedVersion = null;
 let pending = false;
 let forceQueued = false;
@@ -24,6 +31,14 @@ const planDrawer = createPlanDrawer({
   onError: showWarning,
   readonly: true,
 });
+
+// Any source change can add or remove repositories, so Home re-reads its overview right away.
+const sourcesDialog = createRepositorySourcesDialog({ onChange: () => refresh({ force: true }) });
+manageRepositories.addEventListener("click", () => sourcesDialog.open());
+const onboarding = {
+  onEnable: () => sourcesDialog.enableAutoDiscovery(),
+  onAddFolder: () => sourcesDialog.open({ addFolder: true }),
+};
 
 const menuActions = {
   onMountLinks: (slot, entrypoint) => mountHomeLinks(slot, entrypoint, { onStale: refresh }),
@@ -59,22 +74,38 @@ async function refresh({ force = false } = {}) {
     return;
   }
   pending = true;
+  setHomeSyncStatus(true);
   try {
     const overview = await api.loadHomeOverview();
+    setHomeSyncStatus(overview.sync?.state === "syncing");
     const version = JSON.stringify(overview);
     const hasActiveControl = !force && (content.contains(document.activeElement) || content.querySelector("details[open], .menu-button-panel, [data-menu]:not([hidden])") || document.querySelector("dialog[open]"));
     if (version !== renderedVersion && !hasActiveControl) {
-      const body = overview.repositories.length ? repositoryDirectory(overview.repositories, menuActions) : emptyState();
-      content.replaceChildren(body);
+      const known = overview.repositories.length > 0;
+      const autoDiscoveryEnabled = overview.autoDiscovery?.enabled === true;
+      const firstRunWithoutMocks = !known && !autoDiscoveryEnabled;
+      const body = known
+        ? repositoryDirectory(overview.repositories, menuActions)
+        : firstRunWithoutMocks
+          ? null
+          : repositoryEmptyState({ autoDiscoveryEnabled, ...onboarding });
+      content.replaceChildren(...(body ? [body] : []));
+      homeHeading.hidden = firstRunWithoutMocks;
+      manageRepositories.hidden = !known;
+      autoDiscoveryMount.hidden = autoDiscoveryEnabled;
+      autoDiscoveryMount.replaceChildren(...(autoDiscoveryMount.hidden ? [] : [autoDiscoveryPrompt(onboarding)]));
+      mockDisclaimer.hidden = true;
       if (overview.unresolvedActivity.length) content.append(unresolvedActivity(overview.unresolvedActivity));
       renderedVersion = version;
     }
     warning.hidden = true;
     portalSetUpdatedAt(new Date(), { cadenceMs: POLL_MS });
   } catch (error) {
+    setHomeSyncStatus(false);
     warning.textContent = `Repository overview unavailable: ${error.message}`;
     warning.hidden = false;
-    if (!content.hasChildNodes()) content.replaceChildren(emptyState());
+    mockDisclaimer.hidden = true;
+    if (!content.hasChildNodes()) content.replaceChildren(repositoryEmptyState({ autoDiscoveryEnabled: false, ...onboarding }));
   } finally {
     pending = false;
     portalHideLoading();
@@ -83,6 +114,12 @@ async function refresh({ force = false } = {}) {
     forceQueued = false;
     await refresh({ force: true });
   }
+}
+
+function setHomeSyncStatus(syncing) {
+  homeSyncStatus.classList.toggle("is-syncing", syncing);
+  homeSyncStatus.classList.toggle("is-synced", !syncing);
+  homeSyncStatus.querySelector("[data-slot=text]").textContent = syncing ? "Syncing" : "Synced";
 }
 
 await Promise.all([refresh(), renderHarnessBanner()]);

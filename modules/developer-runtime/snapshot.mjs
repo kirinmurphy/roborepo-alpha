@@ -495,12 +495,13 @@ function displayGroup(repository) {
   return repository.lifecycle && repository.lifecycle.state !== "active" ? 2 : 0;
 }
 
-// The dev fixtures give their repositories deliberately unfetchable github.com/example remotes (see
-// local/dev-fixtures), which is what makes them recognizable here without a registry flag.
-const FIXTURE_REPOSITORY_PREFIX = "git:github.com/example/";
+// The dev fixtures give their repositories deliberately unfetchable github.com/example remotes and
+// a `-fixture` repository suffix (see local/dev-fixtures). The suffix matters: the development
+// checkout itself also uses an example.com remote in tests and must remain a real repository.
+const FIXTURE_REPOSITORY_PATTERN = /^git:github\.com\/example\/.+-fixture$/;
 
 export function isFixtureRepository(repositoryId) {
-  return typeof repositoryId === "string" && repositoryId.startsWith(FIXTURE_REPOSITORY_PREFIX);
+  return typeof repositoryId === "string" && FIXTURE_REPOSITORY_PATTERN.test(repositoryId);
 }
 
 // Last path segment of a git: id, or a generic label for a local: one. Only used when the registry
