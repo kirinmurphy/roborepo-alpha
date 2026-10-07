@@ -1,13 +1,13 @@
 ---
 id: nkhk6bb
 priority: high
-next_action: Install the repository's browser-test dependency, run the new Settings browser cases and manual onboarding transitions, then decide whether to land or close the plan
+next_action: Install the repository's browser-test dependency, run the Settings and onboarding browser cases, and manually verify banner layout, links, and discovery transitions
 blocked_by: []
 depends_on: []
 related:
   - pljvmyh
   - v6lvuu2
-reviewed_commit: 8f827a8
+reviewed_commit: 1b08044
 worktree: portal-onboarding-settings
 ---
 
@@ -51,9 +51,9 @@ The portal still has inconsistent setup behavior outside repository discovery:
 | Module | Current setup behavior |
 | --- | --- |
 | Repos / Home | Uses the shipped repository-source model and shared auto-discovery prompt; separately shows a no-harness info prompt |
-| Agents | Warns when no supported harness is active and tells the user to install one and run `roborepo harness refresh` |
+| Agents | Uses the shared harness prerequisite banner and portal-native **Check for harnesses** action |
 | Plans | Reads canonical repositories automatically; has repository/scanning/no-plan states and separate `plan-write` package onboarding |
-| Tokens | Still checks telemetry before harness availability |
+| Tokens | Checks harness availability before telemetry, then shows no-data or report state |
 | Runtime | Uses the repository `auto-discovery` source as both permission to observe processes and permission to remember repositories |
 
 The repository-source convergence means **Plans no longer needs its own onboarding configuration**. Once RoboRepo knows a repository, Plans scans it. A repository can become known through active-repository auto-discovery or an explicit repository/folder source.
@@ -204,7 +204,7 @@ Runtime observation and automatic repository enrollment. No second toggle is int
 
 `setProviderEnabled()` already exists in `scripts/harnesses/state.mjs`, but portal-facing mutation plumbing should be centralized so callers do not each hand-edit harness state.
 
-The shared no-harness warning still instructs users to run `roborepo harness refresh` in a terminal.
+The shared no-harness warning uses a portal-native check action, with shared copy across Home, Agents, and Tokens.
 
 ### Telemetry is still package-owned
 
@@ -212,12 +212,12 @@ The shared no-harness warning still instructs users to run `roborepo harness ref
 
 Settings must control that same package state. It must not add a separate telemetry boolean.
 
-### Tokens still presents prerequisites in the wrong order
+### Tokens prerequisite order
 
-`portal/tokens/page-state.js` currently defines:
+`portal/tokens/page-state.js` now defines:
 
 ```text
-telemetry off → no harness → no data → full report
+no active harness → telemetry off → no data → full report
 ```
 
 For a new user, the useful order is:
@@ -238,7 +238,7 @@ Settings is a product-level orchestration surface over domain-owned state.
 | --- | --- | --- | --- |
 | Repositories | Active-repository auto-discovery | Repository sources `auto-discovery` source | Show state; enable/disable through existing source API |
 | Repositories | Explicit repositories/folders | Repository sources store | Open the existing **Manage Repos** dialog |
-| Integrations | Supported harnesses | Harness discovery/state | Check for installs; enable/disable detected harnesses |
+| Integrations | Supported harnesses | Harness discovery/state | Check for harnesses; enable/disable detected harnesses |
 | Tokens | Token telemetry | Existing `telemetry` package | Enable/disable the same package |
 
 Do not create generic Settings mutation endpoints that duplicate domain writes. The Settings page should call the existing repository-source and package/config mutations, plus the new harness-domain mutations added by this plan.
@@ -354,7 +354,7 @@ Add portal-facing harness mutations that call the existing internal functions di
 
 Required operations:
 
-- **Check for installs** → `refreshHarnessState()`;
+- **Check for harnesses** → `refreshHarnessState()`;
 - **Enable harness** / **Disable harness** → a shared state service around `readHarnessState()`, `setProviderEnabled()`, and `writeHarnessState()`.
 
 Add portal routes to the existing config domain rather than generic Settings writes:
@@ -370,7 +370,7 @@ CLI and portal adapters should use the same harness-domain functions. Settings m
 
 Do not spawn `roborepo harness refresh`.
 
-For automatic detection while an onboarding prompt is visible, do not poll a read-only persisted snapshot and claim it can detect an external install: persisted state cannot change until discovery runs. The first implementation should use an explicit **Check for installs** button. If lightweight auto-checking is added, it must invoke the same bounded harness refresh/probe only while the unresolved harness prompt is visible and stop immediately after resolution; it must not become a permanent background loop.
+For automatic detection while an onboarding prompt is visible, do not poll a read-only persisted snapshot and claim it can detect an external install: persisted state cannot change until discovery runs. The first implementation should use an explicit **Check for harnesses** button. If lightweight auto-checking is added, it must invoke the same bounded harness refresh/probe only while the unresolved harness prompt is visible and stop immediately after resolution; it must not become a permanent background loop.
 
 Replace shared warning copy that tells the user to run a terminal command with portal-native guidance and the check action.
 
@@ -411,7 +411,7 @@ Use these contextual rules:
 | Home / Repos | If no repositories are known, use the shipped shared repository empty state. Once repositories exist, repository auto-discovery is optional rather than a blocking prerequisite. Then show harness/telemetry setup only when useful. |
 | Runtime | Always show observable Runtime activity. If repository auto-discovery is off, explain that active apps are visible but unknown repositories will not be remembered; offer the enrollment action. |
 | Plans | Consume canonical repositories. Keep existing no-repository / not-scanned / no-plans states. Do not reintroduce source settings. Harness setup is unrelated to finding/rendering Markdown plans. |
-| Agents | If no active harness exists, show install + **Check for installs** guidance before agent configuration. |
+| Agents | If no active harness exists, show install + **Check for harnesses** guidance before agent configuration. |
 | Tokens | 1. Connect supported harness  2. Enable telemetry  3. Run a session / wait for data. |
 | Settings | Show all durable controls and current state; no cascading onboarding mode is needed. |
 
@@ -521,6 +521,7 @@ Reuse `repository-sources-partial.html` instead of duplicating repository-source
 - [x] Use one shared Home/Agents/Tokens harness banner template and copy, changing only the notice variant.
 - [x] Keep Home's sync state pending until the enabled discovery scan completes and refresh the overview during that scan.
 - [x] Show the active token-tracking row with its green status dot, and label the section **Token Activity Tracking**.
+- [x] Restore links to `/config` for **agent tools** and `/tokens` for **token tracking** in the shared supported-harness banner copy.
 
 ## Validation
 
@@ -536,7 +537,7 @@ Reuse `repository-sources-partial.html` instead of duplicating repository-source
 - [x] Settings appears in global portal navigation and reflects authoritative repository, harness, and telemetry state.
 - [x] Settings reuses the existing **Manage repositories** dialog; there is no duplicate repository-source editor.
 - [x] Plans has no Plans-specific source setting and scans repositories known through either auto-discovery or explicit sources.
-- [ ] A user can install a supported harness externally, click **Check for installs**, and have RoboRepo detect it without running a terminal command.
+- [ ] A user can install a supported harness externally, click **Check for harnesses**, and have RoboRepo detect it without running a terminal command.
 - [ ] Harness enable/disable changes are reflected consistently in Settings, Agents, Home onboarding, and Tokens prerequisites.
 - [x] Tokens shows missing harness before telemetry-off, then no-data after both prerequisites are satisfied.
 - [x] Telemetry remains backed by the existing `telemetry` package and has no duplicate boolean/state store.
@@ -565,11 +566,11 @@ Reuse `repository-sources-partial.html` instead of duplicating repository-source
 ## Not tested
 
 - [ ] `npm run test:portal-ui` — blocked before test collection because the worktree does not have the `@playwright/test` package installed.
-- [ ] Manual browser verification of fresh setup, Settings mutations, responsive layout, external harness installation followed by **Check for installs**, and the full Tokens state transition. The in-app browser could not access the loopback smoke server due to an admin browser policy, so this remains a real manual gap rather than a substitute for Playwright.
-- [ ] Visual verification that the large-screen banner action columns sit at the right edge, two-action repository states stack vertically, and the compact layout keeps actions left-aligned. Static responsive rules and a narrow viewport shell check are present, but no browser engine was available in this worktree.
+- [ ] Manual browser verification of fresh setup, Settings mutations, responsive layout, external harness installation followed by **Check for harnesses**, and the full Tokens state transition. The in-app browser could not access the loopback smoke server due to an admin browser policy, so this remains a real manual gap rather than a substitute for Playwright.
+- [ ] Visual verification that banner icons remain in a left column with top alignment and clear spacing, supporting text is dimmed, large-screen actions sit at the right edge, and compact layouts keep actions left-aligned. Static responsive rules are present, but no browser engine was available in this worktree.
 - [ ] Visual verification that Settings renders the full repository-source surface inline, that its telemetry button clearly switches On/Off, and that section separators/header spacing match the shared convention.
 - [ ] Browser verification of wipe-clean source removal, Settings auto-discovery refresh, inline repository labels/empty state, shared harness-check loading, dual Tokens banners, and the updated Token Activity CTA/copy.
-- [ ] Browser verification of repository action placement, scan timing/status after a wipe, identical harness prompt content across Home/Agents/Tokens, and the active token-tracking row.
+- [ ] Browser verification of repository action placement, scan timing/status after a wipe, identical linked harness prompt content across Home/Agents/Tokens, and the active token-tracking row.
 
 ### Repository checks
 
@@ -587,7 +588,7 @@ Manual browser verification should cover:
 - Runtime observation paused while repository auto-discovery is off;
 - adding an explicit repository/folder source while auto-discovery remains off;
 - enabling auto-discovery with an already-running dev server;
-- external harness installation followed by **Check for installs**;
+- external harness installation followed by **Check for harnesses**;
 - harness disable/re-enable;
 - telemetry disable/enable;
 - Tokens transitioning through harness → telemetry → no-data → report states.
@@ -617,13 +618,13 @@ Manual browser verification should cover:
 - Settings uses the page-title scale for its section titles—**Repos**, **Agent Harnesses**, and **Token Activity**—without a redundant page title. The shared Manage Repos surface keeps destructive cleanup beside the auto-discovery controls, removes the repeated repository subtitle, and uses the shorter **Ignore Repo** action.
 - The shared repository-source form uses a right-aligned **Find more repos** trigger, a panel-style form with an inline **Cancel** link, and hides the trigger while the form is open. Agent Harnesses uses the shared row trim, a title-row install check, and one non-actionable status for undetected providers.
 - Token Activity uses an action-labeled telemetry control (**Enable**/**Disable**) instead of displaying the current state as the button label; its bold action copy and explanation form one sentence.
-- Settings uses a slightly more generous section rhythm, and Agent Harnesses keeps **Check for installs** as a low-emphasis inline action in the section header.
-- Opt-in banners share the same primary/supporting text hierarchy. On larger screens their actions are right-aligned, multiple actions stack, and buttons remain intrinsic-width; small screens return the action stack to the normal left-aligned flow.
+- Settings uses a slightly more generous section rhythm, and Agent Harnesses keeps **Check for harnesses** as a low-emphasis inline action in the section header.
+- Opt-in banners share the same primary/supporting text hierarchy. Their icons occupy a left column with top alignment and spacing; larger-screen actions are right-aligned, while compact layouts keep actions left-aligned.
 - Autodiscovery CTAs use the shorter **Auto-discover active repos** label across shared Home, Runtime, Plans, and dialog states.
 - Tokens retains the prerequisite-gated **Turn on token telemetry** CTA, backed by the existing telemetry package path.
 - `[[v6lvuu2]]` continues to own staged first-run `/setup`; this plan owns normal post-init Settings and shared setup state.
 - Harness refresh is an internal portal action backed by `refreshHarnessState()`, never a spawned CLI command.
-- The first implementation uses explicit **Check for installs**. Read-only polling alone cannot discover a new external install because persisted harness state does not change until discovery runs.
+- Harness discovery uses an explicit **Check for harnesses** action. Read-only polling alone cannot discover a new external install because persisted harness state does not change until discovery runs.
 - Telemetry remains implemented by the existing `telemetry` package; Settings adds a product-level control over that same state.
 - The shared setup snapshot reports known repositories separately from visible repositories, excludes fixture repositories, and reports explicit source configuration without returning source paths.
 - The active harness cohort continues to require the existing confirmed-detection rule; registered providers are not presented as installed merely because they are known.

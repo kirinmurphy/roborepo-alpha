@@ -36,7 +36,7 @@ export function harnessWarningElement(snap, { onCheck = checkForHarnesses } = {}
   const panel = tpl("tpl-harness-notice");
   panel.setAttribute("variant", spec.variant);
   panel.setAttribute("icon", "warning");
-  panel.querySelector("[data-slot=copy]").textContent = spec.body;
+  setLinkedHarnessCopy(panel, spec.body);
   setSupportedHarnesses(panel, snap);
   const check = panel.querySelector("[data-slot=check]");
   check.setAttribute("data-btn", "cta");
@@ -52,10 +52,32 @@ function createHarnessNotice(snap, variant) {
   const panel = tpl("tpl-harness-notice");
   panel.setAttribute("variant", variant);
   if (variant === "info") panel.setAttribute("icon", "info");
-  panel.querySelector("[data-slot=copy]").textContent = spec.body;
+  setLinkedHarnessCopy(panel, spec.body);
   setSupportedHarnesses(panel, snap);
   wireCheck(panel.querySelector("[data-slot=check]"));
   return panel;
+}
+
+function setLinkedHarnessCopy(panel, body) {
+  const copy = panel.querySelector("[data-slot=copy]");
+  const links = [
+    { label: "agent tools", href: "/config" },
+    { label: "token tracking", href: "/tokens" },
+  ];
+  const fragment = document.createDocumentFragment();
+  let cursor = 0;
+  for (const { label, href } of links) {
+    const index = body.indexOf(label, cursor);
+    if (index < 0) continue;
+    fragment.append(document.createTextNode(body.slice(cursor, index)));
+    const anchor = document.createElement("a");
+    anchor.href = href;
+    anchor.textContent = label;
+    fragment.append(anchor);
+    cursor = index + label.length;
+  }
+  fragment.append(document.createTextNode(body.slice(cursor)));
+  copy.replaceChildren(fragment);
 }
 
 function setSupportedHarnesses(panel, snap) {
