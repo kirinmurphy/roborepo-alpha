@@ -71,8 +71,20 @@ main {
 #plans-onboarding {
   margin: 0 0 16px;
 }
-#plans-onboarding .empty-state [data-slot="action"] {
-  margin-top: 6px;
+.plans-no-repositories-content { gap: 10px 16px; }
+.plans-no-repositories-content p { margin: 0; }
+.plans-no-repositories-content button { white-space: nowrap; }
+.empty-state--with-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+}
+.empty-state-copy { min-width: 0; }
+.control-bar-row .sync-status { margin-left: 4px; }
+.empty-state--with-action [data-slot="action"] {
+  justify-self: end;
+  white-space: nowrap;
 }
 /* Layout only — button chrome (border/background/padding) now comes from data-btn, not this
  * class. Groups paired icon buttons (update/refresh; Filters/Agent prompts) for consistent
@@ -347,7 +359,7 @@ main {
 .empty-state {
   border: 1px dashed var(--line);
   border-radius: 8px;
-  padding: 28px;
+  padding: 22px 24px;
   color: var(--dim);
   background: var(--panel);
 }
@@ -514,6 +526,17 @@ plan-card {
   flex-wrap: wrap;
   align-self: end;
 }
+@media (max-width: 560px) {
+  .plans-no-repositories-content {
+    grid-template-columns: 1fr;
+  }
+  .plans-no-repositories-content .sync-status { justify-self: start; }
+  .empty-state--with-action {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+  .empty-state--with-action [data-slot="action"] { justify-self: start; }
+}
 @media (max-width: 420px) {
   .filter-row {
     grid-template-columns: 1fr;
@@ -540,6 +563,11 @@ plan-card {
   border-bottom: 1px solid var(--line);
   margin-bottom: 12px;
   flex-wrap: wrap;
+}
+.lifecycle-tabs:empty {
+  display: none;
+  border-bottom: 0;
+  margin-bottom: 0;
 }
 .lifecycle-tab {
   font: inherit;

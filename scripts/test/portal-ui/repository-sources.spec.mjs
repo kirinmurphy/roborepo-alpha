@@ -152,7 +152,7 @@ test.describe("Manage repositories dialog", () => {
     await expect(folder).toContainText("Healthy");
     await expect(folder).toContainText("1 repo");
     const row = dialog.locator("[data-slot=repositories] li", { hasText: "dialog-fixture" });
-    await expect(row).toContainText(`Found by: ${projects}`);
+    await expect(row).toContainText(`in ${path.basename(projects)}`);
 
     await row.getByRole("button", { name: "Ignore Repo" }).click();
     await expect(dialog.locator("[data-slot=repositories] li", { hasText: "dialog-fixture" })).toHaveCount(0);

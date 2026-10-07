@@ -5,7 +5,7 @@
   "description": "Quietly logs hard-to-allowlist shell commands to a local JSONL store. Observation only — evidence for tuning allowlists.",
   "lifecycle": "optional",
   "presentation": {
-    "category": "monitoring",
+    "category": "additional-agents-md-rules",
     "order": 20
   },
   "resources": [

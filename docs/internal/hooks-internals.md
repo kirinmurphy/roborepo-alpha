@@ -44,7 +44,7 @@ but the marker is absent, injects a reminder to run `roborepo index docs docs/`.
 If the marker is present, confirms docs are indexed. The marker is written by
 `roborepo index docs` after a successful run and is excluded from git via the
 global gitignore. Package-owned: authored at
-`globals/packages/jdocmunch/hooks-claude.json` and composed into the live Claude
+`globals/packages-archived/jdocmunch/hooks-claude.json` and composed into the live Claude
 hook config only when `jdocmunch` is enabled.
 
 This is the one hook duplicated near-identically on both harnesses — only the
@@ -84,7 +84,7 @@ Also reminds the model to use jcodemunch tools (`resolve_repo`, `search_symbols`
 etc.) for code exploration instead of `Grep`/`Read`. (Codex gets a jcodemunch SessionStart nudge from the same package.) The `index code` and `index code --watch`
 commands are package-owned; enable `jcodemunch` first if the CLI reports that no
 owning package is enabled. This hook is authored at
-`globals/packages/jcodemunch/hooks-claude.json` and composed into the live
+`globals/packages-archived/jcodemunch/hooks-claude.json` and composed into the live
 Claude hook config only when `jcodemunch` is enabled.
 
 #### Block Grep/Glob — PreToolUse: Grep|Glob
@@ -95,7 +95,7 @@ Hard-blocks the call with `"continue": false`. The stop reason instructs the mod
 to retry using jcodemunch (`search_symbols`, `get_file_outline`, `find_references`,
 `get_context_bundle`). Treated as a redirect, not an error — the model should
 immediately retry via jcodemunch. These tools do not exist on Codex. Package-owned:
-authored at `globals/packages/jcodemunch/hooks-claude.json`, composed into the
+authored at `globals/packages-archived/jcodemunch/hooks-claude.json`, composed into the
 live Claude hook config only when `jcodemunch` is enabled.
 
 #### Block Bash source-exploration — PreToolUse: Bash
@@ -105,7 +105,7 @@ live Claude hook config only when `jcodemunch` is enabled.
 `block-source-exploration.mjs` closes the route-around left by the Grep/Glob tool
 block: the agent can otherwise shell out (`grep src/...`, `cat file.ts`,
 `find . -name '*.ts'`) to read source without touching jcodemunch. Package-owned:
-the script lives at `globals/packages/jcodemunch/hooks/block-source-exploration.mjs`
+the script lives at `globals/packages-archived/jcodemunch/hooks/block-source-exploration.mjs`
 and is wired only when `jcodemunch` is enabled.
 
 It **denies** a command only when **all** hold, and **allows** everything else:
@@ -221,7 +221,7 @@ but the marker is absent, prints a reminder to run `roborepo index docs docs/`.
 If the marker is present, confirms docs are indexed. This is duplicated
 near-identically on Claude — only the output protocol differs (plain text here,
 JSON `systemMessage` on Claude). Package-owned: authored at
-`globals/packages/jdocmunch/hooks-codex.json` and composed into the live Codex
+`globals/packages-archived/jdocmunch/hooks-codex.json` and composed into the live Codex
 hook config only when `jdocmunch` is enabled.
 
 #### Telemetry capture — SessionStart / PreToolUse / PostToolUse / UserPromptSubmit / Stop

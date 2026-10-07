@@ -10,7 +10,6 @@ import {
 import * as api from "./api.js";
 import * as tmpl from "./templates.js";
 import { createRepositorySourcesDialog } from "/portal/shared/repository-sources-dialog.js";
-import { repositoryEmptyState } from "/portal/shared/repository-sources-templates.js";
 import { createLifecycleErrorDialog } from "./lifecycle-error-dialog.js";
 import { createPlanDrawer } from "./plan-drawer.js";
 import { createBlockersPopover } from "./blockers-popover.js";
@@ -57,10 +56,17 @@ const lifecycleTabsEl = document.getElementById("lifecycle-tabs");
 const lifecycleDropdownMountEl = document.getElementById("lifecycle-dropdown-mount");
 const onboardingEl = document.getElementById("plans-onboarding");
 let lifecycleDropdownEl = null;
+let syncPollTimer = null;
+let repositorySyncPending = false;
+let repositorySyncState = "synced";
+let repositoryAutoDiscoveryEnabled = false;
 
 // Plans no longer owns which repositories exist: the header count and the onboarding states open the
 // shared Manage repositories dialog, and any change there re-reads the Plans snapshot.
-const sourcesDialog = createRepositorySourcesDialog({ onChange: () => api.refreshSnapshot().then(applySnapshot).catch(showError) });
+const sourcesDialog = createRepositorySourcesDialog({
+  onPending: setPlansSyncPending,
+  onChange: () => api.refreshSnapshot().then(applySnapshot).catch(showError),
+});
 const onboarding = {
   onEnable: () => sourcesDialog.enableAutoDiscovery(),
   onAddFolder: () => sourcesDialog.open({ addFolder: true }),
@@ -87,6 +93,7 @@ portalWireBackdropClose(allTasksModal, () => allTasksModal.close());
 
 bindStaticControls();
 load();
+void refreshRepositorySyncStatus();
 
 function bindStaticControls() {
   const refreshEl = document.getElementById("refresh");
@@ -165,6 +172,46 @@ function applySnapshot(snapshot) {
   setPluralCount(reposCountTextEl, knownRepositoryCount(snapshot), "Repo");
   populateFilters(snapshot);
   render();
+  renderRepositorySyncStatus();
+}
+
+function renderRepositorySyncStatus() {
+  const labels = { syncing: "Syncing", synced: "Synced", failed: "Sync failed", unavailable: "Sync status unavailable" };
+  for (const node of document.querySelectorAll("[data-repository-sync-status]")) {
+    node.hidden = !repositoryAutoDiscoveryEnabled;
+    node.classList.toggle("is-syncing", repositorySyncState === "syncing");
+    node.classList.toggle("is-synced", repositorySyncState === "synced");
+    node.classList.toggle("is-failed", repositorySyncState === "failed" || repositorySyncState === "unavailable");
+    node.querySelector("[data-slot=text]").textContent = labels[repositorySyncState] || labels.synced;
+  }
+}
+
+function setPlansSyncPending(isPending) {
+  repositorySyncPending = isPending;
+  if (isPending) {
+    repositoryAutoDiscoveryEnabled = true;
+    repositorySyncState = "syncing";
+    clearTimeout(syncPollTimer);
+    renderRepositorySyncStatus();
+  } else {
+    void refreshRepositorySyncStatus();
+  }
+}
+
+async function refreshRepositorySyncStatus() {
+  if (repositorySyncPending) return;
+  try {
+    const overview = await api.fetchHomeOverview();
+    if (repositorySyncPending) return;
+    repositoryAutoDiscoveryEnabled = overview.autoDiscovery?.enabled === true;
+    repositorySyncState = overview.sync?.state || "synced";
+  } catch {
+    if (repositorySyncPending) return;
+    repositorySyncState = "unavailable";
+  }
+  renderRepositorySyncStatus();
+  clearTimeout(syncPollTimer);
+  if (repositorySyncState === "syncing") syncPollTimer = setTimeout(refreshRepositorySyncStatus, 750);
 }
 
 function populateFilters(snapshot) {
@@ -203,6 +250,8 @@ function render() {
   renderPackageBanner(snapshot);
   const step = tmpl.plansOnboardingStep(snapshot);
   if (!snapshot.planWritePackage.enabled || step !== "plans") {
+    lifecycleTabsEl.hidden = true;
+    lifecycleDropdownMountEl.hidden = true;
     warningsEl.hidden = true;
     activeTasksBarEl.hidden = true;
     groupsEl.replaceChildren();
@@ -210,6 +259,8 @@ function render() {
     return;
   }
   onboardingEl.hidden = true;
+  lifecycleTabsEl.hidden = false;
+  lifecycleDropdownMountEl.hidden = false;
   renderWarnings(snapshot);
   renderFilterChips(snapshot);
   refreshFilterCounts(snapshot);
@@ -447,9 +498,10 @@ function renderOnboarding(snapshot, step) {
   onboardingEl.hidden = !snapshot.planWritePackage.enabled;
   if (onboardingEl.hidden) return;
   const node = step === "no-repositories"
-    ? repositoryEmptyState({ autoDiscoveryEnabled: snapshot.autoDiscovery?.enabled === true, ...onboarding })
+    ? tmpl.plansNoRepositories(onboarding.onManage)
     : tmpl.plansOnboardingState(snapshot, step, onboarding.onManage);
   onboardingEl.replaceChildren(node);
+  renderRepositorySyncStatus();
 }
 
 // Every known repository, scanned or not, so the header agrees with the onboarding copy, Home, and

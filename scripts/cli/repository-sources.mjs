@@ -60,6 +60,15 @@ export function removeRepositorySource({ id, stateRoot = defaultStateRoot, fsApi
 }
 
 export function wipeRepositoryList({ stateRoot = defaultStateRoot, fsApi = fs, homeDir = os.homedir() } = {}) {
+  updateSources({
+    stateRoot,
+    fsApi,
+    mutate: (store) => {
+      const retained = store.sources.filter((source) => source.kind === "auto-discovery");
+      if (retained.length === store.sources.length) return false;
+      store.sources = retained;
+    },
+  });
   updateRegistry({ stateRoot, fsApi, mutate: (registry) => wipeRepositoryRegistry(registry) });
   return loadRepositorySources({ stateRoot, fsApi, homeDir });
 }

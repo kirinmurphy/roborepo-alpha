@@ -115,24 +115,26 @@ async function applySetupState({ telemetryOn, activeHarnessCount, snap }) {
   // demonstrate the full report even before a real harness is installed.
   // The "install a supported harness" banner is the SHARED component
   // (portal/shared/harness-warning.js — the same portal-notice the Agents page renders);
-  // it shows below the state panel whenever telemetry is on and the machine has no active harness.
-  // Only once telemetry is on: with it off, the telemetry prompt is the single setup step.
-  const sharedBanner = telemetryOn
-    ? harnessWarningElement(snap, { onCheck: async () => { await checkForHarnesses(); await init(); } })
-    : null;
+  // it shows below the state panel whenever the machine has no active harness. When telemetry is
+  // also off, the telemetry prompt remains visible above it so both setup steps are available.
+  const sharedBanner = harnessWarningElement(snap, { onCheck: async () => { await checkForHarnesses(); await init(); } });
   if (state === "telemetry-off") {
     offPanel.style.display = "";
     const title = offPanel.querySelector("[data-slot=title]");
     const body = offPanel.querySelector("[data-slot=body]");
     if (activeHarnessCount === 0) {
-      title.textContent = "Telemetry setup required";
+      title.textContent = "Token Activity Tracking";
       body.textContent = "Turn telemetry on before token usage can be captured.";
     } else {
-      title.textContent = "Telemetry is off";
+      title.textContent = "Token Activity Tracking";
       body.textContent = "Token usage is not being captured. Turn telemetry on to start collecting data across your harnesses.";
     }
   } else if (state === "no-harness") {
-    offPanel.style.display = "none";
+    offPanel.style.display = telemetryOn ? "none" : "";
+    if (!telemetryOn) {
+      offPanel.querySelector("[data-slot=title]").textContent = "Token Activity Tracking";
+      offPanel.querySelector("[data-slot=body]").textContent = "Enable token tracking to capture and visualize token usage across harnesses.";
+    }
   } else if (state === "no-data") {
     offPanel.style.display = "";
     const title = offPanel.querySelector("[data-slot=title]");

@@ -33,35 +33,46 @@ export function autoDiscoveryPrompt({ onEnable }) {
   return node;
 }
 
-export function autoDiscoveryBlock(autoDiscovery, { onEnable, onDisable, onWipe, hasRepositories = false }) {
+export function autoDiscoveryBlock(autoDiscovery, { onEnable, onDisable, onWipe, hasWipeableItems = false }) {
   if (!autoDiscovery.enabled) {
     const node = tpl("tpl-sources-auto-off");
     wireOnce(node.querySelector("[data-slot=enable]"), onEnable);
-    configureWipe(node, { onWipe, hasRepositories });
+    configureWipe(node, { onWipe, hasWipeableItems });
     return node;
   }
   const count = autoDiscovery.repositoryCount;
   const node = fill(tpl("tpl-sources-auto-on"), { status: `On · ${count} ${count === 1 ? "repo" : "repos"} found` });
   wireOnce(node.querySelector("[data-slot=disable]"), onDisable);
-  configureWipe(node, { onWipe, hasRepositories });
+  configureWipe(node, { onWipe, hasWipeableItems });
   return node;
 }
 
-function configureWipe(node, { onWipe, hasRepositories }) {
+function configureWipe(node, { onWipe, hasWipeableItems }) {
   const wipe = node.querySelector("[data-slot=wipe]");
-  wipe.hidden = !hasRepositories;
-  if (hasRepositories) wireOnce(wipe, onWipe);
+  wipe.hidden = !hasWipeableItems;
+  if (hasWipeableItems) wireOnce(wipe, onWipe);
 }
 
-// Every row offers the same actions whatever found the repository; how it was found is a quiet
-// detail, there to explain and never something to act on.
+// Every row offers the same actions whatever found the repository; its compact source state stays
+// alongside the name so it does not add a second visual row.
 export function repositoryRow(repository, { onIgnore }) {
+  const foundState = repositoryFoundState(repository.foundBy);
   const node = fill(tpl("tpl-sources-repository"), {
     name: repository.displayName,
-    "found-by": repository.foundBy.length ? `Found by: ${repository.foundBy.join(", ")}` : "No current source",
+    "found-state": foundState,
   });
   wireOnce(node.querySelector("[data-slot=ignore]"), () => onIgnore(repository));
   return node;
+}
+
+function repositoryFoundState(foundBy = []) {
+  if (foundBy.includes("auto-discovery")) return "auto-discovered";
+  const folders = foundBy
+    .filter((source) => source.includes("/"))
+    .map((source) => source.split("/").filter(Boolean).at(-1))
+    .filter(Boolean);
+  if (folders.length) return `in /${[...new Set(folders)].join(", /")}`;
+  return foundBy.length ? "auto-discovered" : "no current source";
 }
 
 export function ignoredRow(repository, { onRestore }) {

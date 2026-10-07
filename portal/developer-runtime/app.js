@@ -10,6 +10,7 @@ import { configureLinksTrigger } from "/portal/shared/repository-components.js";
 import { createRepositorySourcesDialog } from "/portal/shared/repository-sources-dialog.js";
 import { autoDiscoveryPrompt } from "/portal/shared/repository-sources-templates.js";
 import { fetchSetupState } from "/portal/shared/setup-api.js";
+import "/portal/shared/notice.js";
 import "/portal/shared/menu-button.js";
 import "/portal/shared/copy-menu.js";
 // The API-route rows in the Links panel use <portal-copy-button> for their curl commands.
@@ -22,8 +23,9 @@ const historyView = createHistoryView({ onStale: () => load({ force: true }) });
 // Enabling auto-discovery starts the first process scan server-side; the forced load then waits on
 // that same in-flight scan, so the page fills in as soon as it lands.
 const sourcesDialog = createRepositorySourcesDialog({
-  onPending: () => setRuntimeSyncStatus(true),
+  onPending: (isPending) => { if (isPending) setRuntimeSyncStatus(true, true); },
   onChange: () => load({ force: true }),
+  onAutoDiscoveryEnabled: () => sourcesDialog.refresh(),
 });
 const autoDiscoveryCta = document.getElementById("auto-discovery-cta");
 autoDiscoveryCta.append(autoDiscoveryPrompt({ onEnable: () => sourcesDialog.enableAutoDiscovery() }));
@@ -76,7 +78,7 @@ const renderedCards = new Map();
 // expects the view to reflect current reality, so a full rebuild (reconcile: false) is fine here
 // even though the background poll must never do that on its own.
 async function load({ force = false } = {}) {
-  setRuntimeSyncStatus(true);
+  setRuntimeSyncStatus(true, runtimeAutoDiscoveryEnabled(lastSnapshot));
   if (force) setRefreshing(true);
   try {
     const [snap, setup] = await Promise.all([
@@ -87,7 +89,7 @@ async function load({ force = false } = {}) {
     applySnapshot(snap, { reconcile: !force });
   } catch (err) {
     showError(err.message);
-    setRuntimeSyncStatus(false);
+    setRuntimeSyncStatus(false, runtimeAutoDiscoveryEnabled(lastSnapshot));
   } finally {
     portalHideLoading();
     if (force) setRefreshing(false);
@@ -101,7 +103,8 @@ function setRefreshing(refreshing) {
   refs.refreshIcon.hidden = refreshing;
 }
 
-function setRuntimeSyncStatus(syncing) {
+function setRuntimeSyncStatus(syncing, visible = true) {
+  syncStatusNode.hidden = !visible;
   syncStatusNode.classList.toggle("is-syncing", syncing);
   syncStatusNode.classList.toggle("is-synced", !syncing);
   syncStatusText.textContent = syncing ? "Syncing" : "Synced";
@@ -114,7 +117,7 @@ function setRuntimeSyncStatus(syncing) {
 // right away.
 function applySnapshot(snapshot, { reconcile = false } = {}) {
   lastSnapshot = snapshot;
-  setRuntimeSyncStatus(snapshot.refresh?.state === "refreshing");
+  setRuntimeSyncStatus(snapshot.refresh?.state === "refreshing", runtimeAutoDiscoveryEnabled(snapshot));
   autoDiscoveryCta.hidden = runtimeAutoDiscoveryEnabled(snapshot);
   const hash = state.snapshotHash(snapshot);
   // The hash-skip only makes sense for the reconcile path, where "nothing changed" really does
@@ -278,7 +281,7 @@ function emptyStateNode(snapshot) {
 }
 
 function runtimeAutoDiscoveryEnabled(snapshot) {
-  return snapshot.setup?.repositories?.autoDiscoveryEnabled ?? (snapshot.autoDiscovery?.enabled === true);
+  return snapshot?.setup?.repositories?.autoDiscoveryEnabled ?? (snapshot?.autoDiscovery?.enabled === true);
 }
 
 function buildSection(section) {

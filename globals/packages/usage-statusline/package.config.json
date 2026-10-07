@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "usage-statusline",
-  "label": "Usage Statusline",
+  "label": "Usage Statusline (CLI's only)",
   "description": "Shows context and rate-limit usage in supported harness footers without model calls.",
   "lifecycle": "optional",
   "presentation": {
@@ -40,5 +40,5 @@
       "harness": "codex"
     }
   ],
-  "defaultEnabled": true
+  "defaultEnabled": false
 }

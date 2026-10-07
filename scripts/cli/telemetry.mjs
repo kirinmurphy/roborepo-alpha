@@ -849,6 +849,7 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     wipeRepositoryList: () => {
       const payload = wipeRepositoryList();
       clearDeveloperRuntimeSnapshotCache();
+      if (payload.autoDiscovery?.enabled) startAutoDiscoveryScan();
       return afterSourceChange(payload);
     },
     mutatePackage: (id, enabled) => mutatePackage(id, enabled),

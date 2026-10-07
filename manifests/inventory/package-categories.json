@@ -15,15 +15,9 @@
     {
       "id": "skills-dev-lifecycle",
       "label": "Plan Suite",
-      "description": "One command for each step of a plan's life: write, promote, start, close, and close out the session. Listed in the order you use them.",
+      "description": "One command for each step of a plan's life: write, promote, start, close, and close out the session.",
       "bulkToggle": true,
       "order": 20
-    },
-    {
-      "id": "skills-writing",
-      "label": "Skills - Writing Assistants",
-      "description": "Long-form writing workflows — case studies and structured documentation.",
-      "order": 25
     },
     {
       "id": "skills-code-quality",
@@ -39,6 +33,12 @@
       "order": 30
     },
     {
+      "id": "skills-writing",
+      "label": "Writing Assistants",
+      "description": "Long-form writing workflows — case studies and structured documentation.",
+      "order": 25
+    },
+    {
       "id": "chat-time-output",
       "label": "Chat-Time Output",
       "description": "Inline chat notes the agent adds while responding — no files written, no workflow started.",
@@ -48,6 +48,11 @@
       "id": "integrations",
       "label": "Integrations",
       "order": 50
+    },
+    {
+      "id": "additional-agents-md-rules",
+      "label": "Additional Agent Rules",
+      "order": 60
     }
   ]
 }

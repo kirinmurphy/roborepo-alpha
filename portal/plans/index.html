@@ -164,10 +164,20 @@
     <!-- Generic primitives: reused across panels, no single owner -->
     <template id="tpl-empty-state">
       <section class="empty-state">
-        <h2 data-slot="title"></h2>
-        <p data-slot="body"></p>
-        <a href="#manage-repositories" data-slot="action" hidden></a>
+        <div class="empty-state-copy">
+          <h2 data-slot="title"></h2>
+          <p data-slot="body"></p>
+        </div>
+        <a href="#manage-repositories" data-btn="secondary" data-slot="action" hidden></a>
       </section>
+    </template>
+    <template id="tpl-plans-no-repositories">
+      <portal-notice class="portal-notice plans-no-repositories" variant="info" icon="info">
+        <div class="portal-banner-content plans-no-repositories-content">
+          <div class="portal-banner-copy"><p><strong>Add a repo</strong><span class="portal-banner-supporting"> to discover associated feature plans.</span></p></div>
+          <div class="portal-banner-action"><button type="button" data-btn="cta" data-slot="manage">Manage Repos</button></div>
+        </div>
+      </portal-notice>
     </template>
     <template id="tpl-warning-line">
       <div data-slot="text"></div>

@@ -29,9 +29,8 @@
   --danger: #f85149;
   --spike: #f85149;
   --on-accent: #0b0e13;
-  /* CTA: a brighter, more saturated green than --ok (which stays reserved for status/validation
-   * indicators elsewhere in the portal) — the one true "primary action" fill color. */
-  --cta: #2ea043;
+  /* Muted green separates primary actions from the brighter --ok status indicators. */
+  --cta: #287d3c;
   --on-cta: #ffffff;
   --badge-skill-ink: #79c0ff;
   --badge-skill-line: #1f6feb;
@@ -145,7 +144,7 @@
   --danger: #cf222e;
   --spike: #cf222e;
   --on-accent: #ffffff;
-  --cta: #1f8f38;
+  --cta: #2c7a3f;
   --on-cta: #ffffff;
   --badge-skill-ink: #0550ae;
   --badge-skill-line: #b6e3ff;
@@ -263,7 +262,7 @@ button:hover,
   border: 1px solid var(--cta);
   border-radius: 5px;
   padding: var(--space-xs) var(--space-sm);
-  font-weight: 600;
+  font-weight: 400;
   cursor: pointer;
 }
 [data-btn="cta"]:hover {
@@ -578,6 +577,17 @@ main {
   border-radius: 50%;
   border: 2px solid var(--line);
   border-top-color: var(--accent);
+  animation: portal-spin 0.7s linear infinite;
+}
+.harness-check-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 6px;
+  vertical-align: -2px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
   animation: portal-spin 0.7s linear infinite;
 }
 /* Ordinary in-page status/meta line, scoped near the content it describes (NOT a persistent
@@ -1135,35 +1145,46 @@ portal-menu-button {
   gap: 8px;
   flex: none;
 }
-.harness-setup-prompt,
-.harness-warning {
+.portal-banner-content,
+.harness-notice-content {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 6px 16px;
 }
-.harness-setup-primary,
-.harness-warning-copy [data-slot="body"] {
+.portal-banner-copy {
+  min-width: 0;
   color: var(--ink);
 }
-.harness-setup-supported {
-  grid-column: 1;
+.portal-banner-copy > :first-child { margin-top: 0; }
+.portal-banner-copy > :last-child { margin-bottom: 0; }
+.portal-banner-supporting { color: var(--dim); }
+.portal-banner-action {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+}
+.harness-notice-content [data-slot="copy"] {
+  color: var(--ink);
+}
+.harness-notice-supported {
+  display: block;
   color: var(--dim);
   font-size: var(--text-xs);
 }
-.harness-warning-copy {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-.harness-warning-copy strong { color: var(--ink); }
+.auto-discovery-prompt p { margin: 0; color: var(--ink); font-size: var(--text-sm); }
+.auto-discovery-prompt > [data-notice-icon] { align-self: flex-start; }
 
 @media (max-width: 700px) {
   .intro-banner-actions,
   .onboarding-actions { align-items: flex-start; }
-  .harness-setup-prompt,
-  .harness-warning { grid-template-columns: 1fr; }
-  .harness-setup-supported { grid-column: 1; }
+  .portal-banner-content,
+  .harness-notice-content { grid-template-columns: 1fr; }
+  .portal-banner-action {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: start;
+  }
 }
 
 /* Shared JS-positioned tooltip bubble (portal/shared/tooltip.js). Fixed to the viewport; tooltip.js
@@ -1206,13 +1227,43 @@ portal-menu-button {
   display: none;
 }
 
+/* Shared repository auto-discovery status indicator. */
+.sync-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--desc-dim);
+  font-size: var(--text-xs);
+  line-height: 1;
+  white-space: nowrap;
+}
+.sync-status-icon {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: #35a66f;
+}
+.sync-status.is-syncing .sync-status-icon {
+  border: 1.5px solid var(--dim);
+  border-top-color: transparent;
+  background: transparent;
+  animation: sync-status-spin 0.8s linear infinite;
+}
+.sync-status.is-syncing { color: var(--dim); }
+.sync-status.is-synced { color: var(--desc-dim); }
+.sync-status.is-failed { color: var(--danger); }
+@keyframes sync-status-spin { to { transform: rotate(360deg); } }
+
 /* Shared notification chrome — the <portal-notice> wrapper (portal/shared/notice.js). Theme only:
  * a subtle per-variant border + background tint and an optional leading icon. Content is slotted by
  * the caller. Variant class (.notice-alert/-warning/-info/-success) is set by the element. */
 .portal-notice {
   display: flex;
-  gap: var(--space-md);
-  align-items: center;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 20px;
+  align-items: flex-start;
   padding: var(--space-sm) var(--space-md);
   border: 1px solid var(--info-line);
   background: var(--info-bg);
@@ -1220,15 +1271,18 @@ portal-menu-button {
   color: var(--ink);
 }
 .portal-notice > [data-notice-icon] {
-  flex: none;
+  flex: 0 0 24px;
+  width: 24px;
   display: inline-flex;
-  margin-top: 5px;
+  align-self: flex-start;
+  justify-self: start;
+  margin-top: 2px;
 }
 /* The slotted content should take the remaining width so multi-line bodies wrap cleanly next to
  * the icon rather than being squeezed. Direct children other than our own icon node. */
 .portal-notice > :not([data-notice-icon]) {
   min-width: 0;
-  flex: 1 1 auto;
+  flex: 1 1 0%;
 }
 .portal-notice.notice-alert {
   border-color: var(--alert-line);

@@ -15,3 +15,11 @@ export function setHarnessEnabled(id, enabled) {
 export function setTelemetryEnabled(enabled) {
   return portalPostJson("/api/config/packages", { id: "telemetry", enabled });
 }
+
+export function refreshDeveloperRuntime() {
+  return portalPostJson("/api/developer-runtime/refresh", {});
+}
+
+export function fetchHomeOverview() {
+  return portalGetJson("/api/home");
+}

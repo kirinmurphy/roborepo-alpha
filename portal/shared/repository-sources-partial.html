@@ -7,6 +7,10 @@
 <dialog id="repository-sources-dialog" class="repository-sources-dialog" data-dialog-size="md" aria-labelledby="repository-sources-title">
   <div class="modal-head">
     <h2 class="modal-title" id="repository-sources-title">Manage Repos</h2>
+    <span class="sync-status is-synced" data-repository-sync-status role="status" aria-live="polite" hidden>
+      <span class="sync-status-icon" aria-hidden="true"></span>
+      <span data-slot="text">Synced</span>
+    </span>
     <portal-close-button data-slot="close" aria-label="Close"></portal-close-button>
   </div>
   <div class="modal-body repository-sources-body" data-sources-host></div>
@@ -42,15 +46,18 @@
     <p class="repository-sources-error" data-slot="error" role="alert" hidden></p>
     <section class="sources-auto" data-slot="auto" aria-label="Auto-discovery"></section>
     <section class="sources-repositories" aria-label="Repository list">
-      <p class="sources-muted" data-slot="repositories-empty" hidden>No repositories yet.</p>
+      <div class="sources-repositories-head" data-slot="repositories-head">
+        <p class="sources-muted" data-slot="repositories-empty" hidden>No repositories yet</p>
+        <button type="button" data-btn="text" data-slot="add-toggle-empty" aria-expanded="false">Find more repos</button>
+      </div>
       <ul class="sources-list" data-slot="repositories"></ul>
+      <button type="button" data-btn="text" data-slot="add-toggle-list" aria-expanded="false" hidden>Find more repos</button>
       <details class="sources-ignored" data-slot="ignored-group" hidden>
         <summary data-slot="ignored-summary">Ignored</summary>
         <ul class="sources-list" data-slot="ignored"></ul>
       </details>
     </section>
     <section class="sources-folders" aria-label="Folders">
-      <button type="button" data-btn="text" data-slot="add-toggle" aria-expanded="false">Find more repos</button>
       <form class="sources-add-form" data-slot="add-form" hidden>
         <div class="sources-add-label-row">
           <label for="repository-source-path">Find more repos in</label>
@@ -61,11 +68,7 @@
           <button type="submit" data-btn="secondary" data-slot="add-submit">Add folder</button>
           <button type="button" data-btn="text" data-slot="cancel">Cancel</button>
         </div>
-        <fieldset class="sources-intent" data-slot="intent" hidden>
-          <legend>RoboRepo can't read this path yet. What is it?</legend>
-          <label><input type="radio" name="repository-source-kind" value="repository" /> One repository</label>
-          <label><input type="radio" name="repository-source-kind" value="directory" /> A folder of repositories</label>
-        </fieldset>
+        <p class="sources-path-error" data-slot="path-error" role="alert" hidden></p>
       </form>
       <ul class="sources-list sources-folder-list" data-slot="folders"></ul>
     </section>
@@ -76,11 +79,11 @@
   <div class="sources-auto-off">
     <p class="sources-auto-copy">
       Auto-discovery watches the dev servers and containers you run and remembers the repositories
-      they run in. Nothing is observed until you turn it on.
+      they run in.
     </p>
     <div class="sources-auto-actions">
       <button type="button" data-btn="cta" data-slot="enable">Auto-discover active repos</button>
-      <button type="button" data-btn="text" class="sources-wipe" data-slot="wipe" hidden>Wipe clean</button>
+      <button type="button" data-btn="text" class="sources-wipe" data-slot="wipe" hidden>Clear All Repos</button>
     </div>
   </div>
 </template>
@@ -89,15 +92,14 @@
     <span class="sources-auto-status"><span class="sources-auto-dot" aria-hidden="true"></span><span data-slot="status"></span></span>
     <div class="sources-auto-actions">
       <button type="button" data-btn="text" data-slot="disable">Turn off</button>
-      <button type="button" data-btn="text" class="sources-wipe" data-slot="wipe" hidden>Wipe clean</button>
+      <button type="button" data-btn="text" class="sources-wipe" data-slot="wipe" hidden>Clear All Repos</button>
     </div>
   </div>
 </template>
 <template id="tpl-sources-repository">
   <li class="sources-row">
     <div class="sources-row-main">
-      <span class="sources-row-name" data-slot="name"></span>
-      <span class="sources-row-detail" data-slot="found-by"></span>
+      <span class="sources-row-name"><span data-slot="name"></span> <span class="sources-row-found-state" data-slot="found-state"></span></span>
     </div>
     <div class="sources-row-actions">
       <button type="button" data-btn="text" data-slot="ignore">Ignore Repo</button>
@@ -137,10 +139,12 @@
 </template>
 <!-- The compact prompt Home and Runtime show above known repositories while auto-discovery is off. -->
 <template id="tpl-auto-discovery-prompt">
-  <portal-notice class="auto-discovery-prompt" variant="info" icon="info">
-    <div class="auto-discovery-prompt-body">
-      <p class="onboarding-primary">RoboRepo can observe active apps and remember the repositories they use across HTTP activity and Docker containers. Nothing is observed until you turn it on.</p>
-      <div class="onboarding-actions"><button type="button" data-btn="cta" data-slot="enable">Auto-discover active repos</button></div>
+  <portal-notice class="portal-notice auto-discovery-prompt" variant="info" icon="info">
+    <div class="portal-banner-content">
+      <div class="portal-banner-copy">
+        <p class="onboarding-primary">RoboRepo can observe active apps and remember the repositories they use across HTTP activity and Docker containers.</p>
+      </div>
+      <div class="portal-banner-action"><button type="button" data-btn="cta" data-slot="enable">Auto-discover active repos</button></div>
     </div>
   </portal-notice>
 </template>

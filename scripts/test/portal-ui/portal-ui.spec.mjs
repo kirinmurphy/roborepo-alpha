@@ -13,6 +13,44 @@ const ROUTES = [
   { path: "/settings", active: "Settings" },
 ];
 
+test.describe("Agents page", () => {
+  test("keeps the high token-use banner hidden", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: {
+      harnesses: {
+        supported: [{ id: "claude", displayName: "Claude Code" }, { id: "codex", displayName: "Codex" }],
+        detected: [],
+        active: [],
+      },
+    } }));
+    await page.route("**/api/config", async (route) => {
+      const response = await route.fetch();
+      const snapshot = await response.json();
+      const activeItem = snapshot.behaviorView.flatMap((section) => section.items || []).find((item) => item.active);
+      expect(activeItem, "fixture needs an active Agents item").toBeTruthy();
+      activeItem.contextCost = { onDemandTokens: 30000, onDemandLevel: "high" };
+      snapshot.contextCost = { ...snapshot.contextCost, onDemandThresholds: { mediumAt: 1000, highAbove: 10000 } };
+      snapshot.harnesses = {
+        ...snapshot.harnesses,
+        supported: [{ id: "claude", displayName: "Claude Code" }, { id: "codex", displayName: "Codex" }],
+        active: [],
+        detected: [],
+      };
+      await route.fulfill({ response, json: snapshot });
+    });
+
+    await page.goto("/config");
+    await expect(page.getByText("The following elements have a high token use:", { exact: true })).toHaveCount(0);
+    await expect(page.locator("#main [data-slot=supported]")).toHaveText("Supported Harnesses: Claude Code, Codex");
+    await expect(page.getByRole("button", { name: "Check for harnesses" })).toHaveAttribute("data-btn", "cta");
+    const warningButtonGrid = await page.getByRole("button", { name: "Check for harnesses" }).evaluate((button) => ({
+      column: getComputedStyle(button.parentElement).gridColumn,
+      row: getComputedStyle(button.parentElement).gridRow,
+    }));
+    expect(warningButtonGrid.column).toBe("2");
+    expect(warningButtonGrid.row).toContain("span 2");
+  });
+});
+
 test.describe("repository-first portal Home", () => {
   test("Home renders the canonical repository directory", async ({ page }) => {
     const response = await page.goto("/");
@@ -206,9 +244,15 @@ test.describe("repository-first portal Home", () => {
     const banner = page.locator("#home-harness-banner portal-notice");
     await expect(banner).toHaveClass(/notice-info/);
     await expect(banner.locator("[data-notice-icon] portal-icon")).toHaveAttribute("name", "info");
-    await expect(banner.getByRole("link", { name: "agent tools" })).toHaveAttribute("href", "/config");
-    await expect(banner.getByRole("link", { name: "token tracking" })).toHaveAttribute("href", "/tokens");
-    await expect(banner.locator(".harness-setup-supported")).toHaveText("Supported Harnesses: Claude Code, Codex");
+    await expect(banner.locator("[data-slot=copy]")).toHaveText("Install a supported harness to add agent tools and enable token tracking.");
+    await expect(banner.locator("[data-slot=supported]")).toHaveText("Supported Harnesses: Claude Code, Codex");
+    await expect(banner.getByRole("button", { name: "Check for harnesses" })).toHaveAttribute("data-btn", "secondary");
+    const infoButtonGrid = await banner.getByRole("button", { name: "Check for harnesses" }).evaluate((button) => ({
+      column: getComputedStyle(button.parentElement).gridColumn,
+      row: getComputedStyle(button.parentElement).gridRow,
+    }));
+    expect(infoButtonGrid.column).toBe("2");
+    expect(infoButtonGrid.row).toContain("span 2");
   });
 
   test("Settings renders shared setup controls and can check for harness installs", async ({ page }) => {
@@ -232,18 +276,18 @@ test.describe("repository-first portal Home", () => {
     await expect(page.locator('nav a[aria-label="Settings"] portal-icon svg')).toBeVisible();
     await expect(page.getByRole("heading", { level: 2, name: "Repos" })).toBeVisible();
     await expect(page.getByRole("heading", { level: 2, name: "Agent Harnesses" })).toBeVisible();
-    await expect(page.getByRole("heading", { level: 2, name: "Token Activity" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "Token Activity Tracking" })).toBeVisible();
     await expect(page.locator("#repository-sources-inline .sources-repositories")).toBeVisible();
     await expect(page.locator("#repository-sources-inline .sources-repositories h3")).toHaveCount(0);
     await expect(page.locator("#repository-sources-inline").getByRole("button", { name: "Auto-discover active repos" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Check for installs" })).toHaveAttribute("data-btn", "text");
+    await expect(page.getByRole("button", { name: "Check for harnesses" })).toHaveAttribute("data-btn", "text");
     const response = page.waitForResponse((res) => res.url().includes("/api/config/harnesses/refresh") && res.request().method() === "POST");
-    await page.getByRole("button", { name: "Check for installs" }).click();
+    await page.getByRole("button", { name: "Check for harnesses" }).click();
     await response;
     await expect(page.locator("#harness-list")).toBeVisible();
     await expect(page.getByRole("button", { name: "Disable Codex" })).toBeVisible();
-    await expect(page.getByText("Enable token telemetry", { exact: false })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Enable token telemetry" })).toHaveText("Enable");
+    await expect(page.getByText("Enable token tracking", { exact: false })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Enable token tracking" })).toHaveText("Enable");
   });
 
   test("Settings explains an empty harness catalog and responds to a setup-state error", async ({ page }) => {
@@ -264,7 +308,7 @@ test.describe("repository-first portal Home", () => {
     await page.reload();
     await expect(page.locator("#settings-error")).toHaveText("setup service unavailable");
     await expect(page.locator("#telemetry-toggle")).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Check for installs" })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Check for harnesses" })).toBeEnabled();
   });
 
   test("Settings shows one non-actionable status for an undetected harness", async ({ page }) => {

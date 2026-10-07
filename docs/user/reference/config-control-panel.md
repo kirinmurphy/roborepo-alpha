@@ -58,8 +58,7 @@ The panel renders these sections:
   `CLAUDE.md` / `AGENTS.md` content, the file path, and the default-rule drill-downs.
 - **Hooks** — quick links to the live `~/.claude/settings.json`, `~/.codex/config.toml`,
   and `~/.codex/hooks.json` files.
-- **Token Optimization** — the jcodemunch / jdocmunch packages, the Caveman plugin
-  package, and Telemetry (a service package). All toggle.
+- **Token Optimization** — the Caveman plugin package and Telemetry (a service package). Both toggle.
 - **Commands** — skills that pair with a slash command, labelled by their `/command`.
   Toggle installs/removes the skill link.
 - **Code Conventions** — auto-loaded skills (no command). Same skill-link toggle.
@@ -68,6 +67,7 @@ The panel renders these sections:
   `rules` package merged into every managed harness. The three note behaviors `requires` response
   shape, so enabling one auto-enables it. Each is off until you enable it; toggling adds or removes
   the behavior's rules block.
+- **Additional Agent Rules** — Branch Safety and Capture Dense Bash.
 - **Permissions** — flat behavior and command buckets. Named behaviors and arbitrary commands can
   be set to `allow`, `ask`, `deny`, or reset to the manifest default. They render as one merged
   list split by authorship rather than by kind: entries the user customized appear first, each

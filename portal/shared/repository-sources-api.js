@@ -9,6 +9,10 @@ export function loadSources() {
   return portalGetJson("/api/repositories/sources");
 }
 
+export function loadHomeOverview() {
+  return portalGetJson("/api/home");
+}
+
 export function addSource({ path, kind = null }) {
   return portalPostJson("/api/repositories/sources", { path, kind });
 }
@@ -27,6 +31,10 @@ export function refreshSources(id = null) {
 
 export function wipeRepositoryList() {
   return portalPostJson("/api/repositories/sources/wipe", {});
+}
+
+export function refreshDeveloperRuntime() {
+  return portalPostJson("/api/developer-runtime/refresh", {});
 }
 
 export function enableAutoDiscovery() {

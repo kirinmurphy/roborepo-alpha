@@ -8,12 +8,18 @@ import { autoDiscoveryBlock, folderRow, ignoredRow, repositoryRow } from "./repo
 // `onChange` runs after every successful mutation so the host page can re-read its own data.
 export function createRepositorySourcesDialog({ onChange = () => {}, onPending = () => {} } = {}) {
   const dialog = document.getElementById("repository-sources-dialog");
+  const syncStatus = dialog.querySelector("[data-repository-sync-status]");
   const info = document.getElementById("folder-scan-info");
+  let syncPollTimer = null;
   const surface = createRepositorySourcesSurface({
     host: dialog.querySelector("[data-sources-host]"),
     info,
     onChange,
-    onPending,
+    onPending: (isPending) => {
+      if (isPending) setDialogSyncStatus("syncing", true);
+      else void refreshDialogSyncStatus();
+      onPending(isPending);
+    },
   });
   dialog.querySelector('[data-slot="close"]').addEventListener("click", () => dialog.close());
   portalWireBackdropClose(dialog, () => dialog.close());
@@ -22,23 +28,57 @@ export function createRepositorySourcesDialog({ onChange = () => {}, onPending =
     if (!dialog.open) dialog.showModal();
     surface.setAddFormOpen(focusAdd);
     await surface.refresh();
+    await refreshDialogSyncStatus();
   }
+
+  async function refreshDialogSyncStatus() {
+    if (!dialog.open) return;
+    try {
+      const overview = await api.loadHomeOverview();
+      if (!dialog.open) return;
+      const enabled = overview.autoDiscovery?.enabled === true;
+      setDialogSyncStatus(enabled ? overview.sync?.state || "synced" : "synced", enabled);
+      clearTimeout(syncPollTimer);
+      if (enabled && overview.sync?.state === "syncing") {
+        syncPollTimer = setTimeout(refreshDialogSyncStatus, 750);
+      }
+    } catch {
+      setDialogSyncStatus("unavailable", !syncStatus.hidden);
+    }
+  }
+
+  function setDialogSyncStatus(state, visible) {
+    syncStatus.hidden = !visible;
+    syncStatus.classList.toggle("is-syncing", state === "syncing");
+    syncStatus.classList.toggle("is-synced", state === "synced");
+    syncStatus.classList.toggle("is-failed", state === "failed" || state === "unavailable");
+    syncStatus.querySelector("[data-slot=text]").textContent = ({
+      syncing: "Syncing",
+      synced: "Synced",
+      failed: "Sync failed",
+      unavailable: "Sync status unavailable",
+    })[state] || "Synced";
+  }
+
+  dialog.addEventListener("close", () => clearTimeout(syncPollTimer));
 
   return {
     open,
     close: () => dialog.close(),
+    refresh: surface.refresh,
     enableAutoDiscovery: surface.enableAutoDiscovery,
   };
 }
 
-export function createRepositorySourcesInline({ host = document.getElementById("repository-sources-inline"), onChange = () => {}, onPending = () => {} } = {}) {
+export function createRepositorySourcesInline({ host = document.getElementById("repository-sources-inline"), onChange = () => {}, onPending = () => {}, onAutoDiscoveryEnabled = () => {} } = {}) {
   const info = document.getElementById("folder-scan-info");
-  const surface = createRepositorySourcesSurface({ host, info, onChange, onPending });
+  const surface = createRepositorySourcesSurface({ host, info, onChange, onPending, onAutoDiscoveryEnabled });
   surface.refresh();
   return surface;
 }
 
-function createRepositorySourcesSurface({ host, info, onChange, onPending }) {
+function createRepositorySourcesSurface({ host, info, onChange, onPending, onAutoDiscoveryEnabled }) {
+  onAutoDiscoveryEnabled ??= refreshAfterAutoDiscovery;
   host.replaceChildren(document.getElementById("tpl-repository-sources-surface").content.cloneNode(true));
   const surface = host.querySelector("[data-sources-surface]");
   const surfaceKey = host.closest("dialog") ? "dialog" : "inline";
@@ -48,34 +88,38 @@ function createRepositorySourcesSurface({ host, info, onChange, onPending }) {
   const slot = (name) => surface.querySelector(`[data-slot="${name}"]`);
   const form = slot("add-form");
   const pathInput = slot("path");
-  const intent = slot("intent");
+  const pathError = slot("path-error");
+  pathError.id = `${pathId}-error`;
+  pathInput.setAttribute("aria-describedby", pathError.id);
   let payload = null;
+  let visibleRepositoryCount = 0;
+  let autoDiscoveryEnabled = false;
 
   info.querySelector("[data-slot=close]").addEventListener("click", () => info.close());
   portalWireBackdropClose(info, () => info.close());
   slot("info").addEventListener("click", () => info.showModal());
-  slot("add-toggle").addEventListener("click", () => setAddFormOpen(form.hidden));
+  for (const toggle of [slot("add-toggle-empty"), slot("add-toggle-list")]) {
+    toggle.addEventListener("click", () => setAddFormOpen(form.hidden));
+  }
   slot("cancel").addEventListener("click", () => {
     pathInput.value = "";
-    resetIntent();
+    clearPathError();
     setAddFormOpen(false);
   });
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     addFolder();
   });
-  // An answer about what one path is says nothing about the next one.
-  pathInput.addEventListener("input", resetIntent);
+  pathInput.addEventListener("input", clearPathError);
 
   async function addFolder() {
-    const kind = intent.hidden ? null : intent.querySelector("input:checked")?.value || null;
     const submit = slot("add-submit");
     submit.disabled = true;
     try {
-      const ok = await run(() => api.addSource({ path: pathInput.value, kind }), { onError: handleAddError });
+      const ok = await run(() => api.addSource({ path: pathInput.value }), { onError: handleAddError });
       if (ok) {
         pathInput.value = "";
-        resetIntent();
+        clearPathError();
         setAddFormOpen(false);
       }
     } finally {
@@ -84,31 +128,44 @@ function createRepositorySourcesSurface({ host, info, onChange, onPending }) {
   }
 
   async function wipeRepositoryList() {
-    if (!payload?.repositories?.length) return;
+    if (!payload || (!payload.repositories.length && !payload.sources.length)) return;
     const confirmed = window.confirm(
-      "Wipe the entire repository list? This removes all known and ignored repositories from RoboRepo. It does not delete files or folders. Enabled sources can add repositories again later.",
+      "Clear all repos? This removes all known and ignored repositories and all configured repository or folder sources from RoboRepo. It does not delete files or folders. Auto-discovery stays as configured and can add repositories again later.",
     );
     if (!confirmed) return;
     const wipe = slot("wipe");
+    const scanAfterWipe = payload.autoDiscovery?.enabled === true;
+    if (scanAfterWipe) onPending(true);
     wipe.disabled = true;
-    const ok = await run(api.wipeRepositoryList);
-    // A successful run rendered the returned empty payload and keeps the button disabled. Restore
-    // it only when the request failed and the old repository list is still present.
-    if (!ok) wipe.disabled = false;
+    try {
+      const ok = await run(async () => {
+        const result = await api.wipeRepositoryList();
+        // A server may clear the registry but leave configured folder sources in its response.
+        // Remove any survivors explicitly, then render a fresh source list.
+        for (const source of result.sources) await api.removeSource(source.id);
+        return api.loadSources();
+      });
+      if (!ok) {
+        wipe.disabled = false;
+      } else if (scanAfterWipe) {
+        await finishAutoDiscovery();
+      }
+    } finally {
+      if (scanAfterWipe) onPending(false);
+    }
   }
 
-  // An unreadable path cannot be classified, so the user states what it is and submits again. The
-  // prompt always opens with nothing chosen: the intent must be the user's, not a leftover default.
   function handleAddError(error) {
     if (error.code !== "INTENT_REQUIRED") return false;
-    intent.hidden = false;
-    intent.querySelector("input")?.focus();
+    pathError.textContent = "Folder not found. Check the path and try again.";
+    pathError.hidden = false;
+    pathInput.focus();
     return true;
   }
 
-  function resetIntent() {
-    intent.hidden = true;
-    for (const radio of intent.querySelectorAll("input")) radio.checked = false;
+  function clearPathError() {
+    pathError.textContent = "";
+    pathError.hidden = true;
   }
 
   async function refresh() {
@@ -120,7 +177,7 @@ function createRepositorySourcesSurface({ host, info, onChange, onPending }) {
     try {
       payload = await action();
       render();
-      if (notify) onChange(payload);
+      if (notify) await onChange(payload);
       return true;
     } catch (error) {
       if (!onError(error)) showError(error);
@@ -130,19 +187,25 @@ function createRepositorySourcesSurface({ host, info, onChange, onPending }) {
 
   function render() {
     if (!payload) return;
+    autoDiscoveryEnabled = payload.autoDiscovery?.enabled === true;
+    const syncStatus = host.closest("dialog")?.querySelector("[data-repository-sync-status]");
+    if (syncStatus) syncStatus.hidden = !autoDiscoveryEnabled;
     slot("auto").replaceChildren(autoDiscoveryBlock(payload.autoDiscovery, {
-      onEnable: () => run(api.enableAutoDiscovery),
+      onEnable: enableAutoDiscovery,
       onDisable: () => run(() => api.setSourceEnabled(api.AUTO_DISCOVERY_ID, false)),
       onWipe: wipeRepositoryList,
-      hasRepositories: payload.repositories.length > 0,
+      hasWipeableItems: payload.repositories.length > 0 || payload.sources.length > 0,
     }));
     const visible = payload.repositories.filter((repository) => repository.visibility !== "hidden");
     const ignored = payload.repositories.filter((repository) => repository.visibility === "hidden");
+    visibleRepositoryCount = visible.length;
+    slot("repositories-head").hidden = visibleRepositoryCount > 0;
     const rowActions = {
       onIgnore: (repository) => run(() => api.setRepositoryIgnored(repository.repositoryId, true).then(api.loadSources)),
     };
     slot("repositories").replaceChildren(...visible.map((repository) => repositoryRow(repository, rowActions)));
     slot("repositories-empty").hidden = visible.length > 0;
+    updateAddToggleVisibility();
     slot("ignored-group").hidden = ignored.length === 0;
     slot("ignored-summary").textContent = `Ignored (${ignored.length})`;
     slot("ignored").replaceChildren(...ignored.map((repository) => ignoredRow(repository, {
@@ -158,10 +221,17 @@ function createRepositorySourcesSurface({ host, info, onChange, onPending }) {
 
   function setAddFormOpen(open) {
     form.hidden = !open;
-    const toggle = slot("add-toggle");
-    toggle.hidden = open;
-    toggle.setAttribute("aria-expanded", String(open));
+    updateAddToggleVisibility();
     if (open) pathInput.focus();
+  }
+
+  function updateAddToggleVisibility() {
+    const emptyToggle = slot("add-toggle-empty");
+    const listToggle = slot("add-toggle-list");
+    emptyToggle.hidden = form.hidden === false || visibleRepositoryCount > 0;
+    listToggle.hidden = form.hidden === false || visibleRepositoryCount === 0;
+    emptyToggle.setAttribute("aria-expanded", String(!form.hidden));
+    listToggle.setAttribute("aria-expanded", String(!form.hidden));
   }
 
   function showError(error) {
@@ -170,13 +240,35 @@ function createRepositorySourcesSurface({ host, info, onChange, onPending }) {
     node.textContent = error ? String(error.message || error) : "";
   }
 
+  async function enableAutoDiscovery() {
+    onPending(true);
+    try {
+      if (await run(api.enableAutoDiscovery)) await finishAutoDiscovery();
+    } finally {
+      onPending(false);
+    }
+  }
+
+  async function finishAutoDiscovery() {
+    try {
+      await onAutoDiscoveryEnabled();
+    } catch (error) {
+      showError(error);
+    }
+  }
+
+  async function refreshAfterAutoDiscovery() {
+    await api.refreshDeveloperRuntime();
+    payload = await api.loadSources();
+    render();
+    await onChange(payload);
+  }
+
   return {
     refresh,
     setAddFormOpen,
     slot,
-    enableAutoDiscovery: () => {
-      onPending();
-      return run(api.enableAutoDiscovery);
-    },
+    getSnapshot: () => payload,
+    enableAutoDiscovery,
   };
 }

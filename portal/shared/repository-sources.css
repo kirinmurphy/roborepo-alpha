@@ -82,7 +82,7 @@
   font-size: var(--text-sm);
 }
 .sources-auto {
-  padding: 12px 14px;
+  padding: 14px 16px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
@@ -130,6 +130,13 @@
   display: grid;
   gap: 8px;
 }
+.sources-repositories-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 20px;
+}
 .sources-auto-status {
   display: inline-flex;
   align-items: center;
@@ -153,7 +160,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 6px 10px;
+  padding: 8px 12px;
   border-radius: 6px;
   background: var(--panel);
 }
@@ -162,11 +169,17 @@
   min-width: 0;
 }
 .sources-row-name {
+  display: block;
   color: var(--ink);
   font-size: var(--text-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.sources-row-found-state {
+  color: var(--dim);
+  font-size: var(--text-2xs);
+  font-weight: 400;
 }
 .sources-path {
   display: flex;
@@ -188,6 +201,9 @@
 }
 .sources-muted {
   margin: 0;
+}
+.sources-repositories > [data-slot="add-toggle-list"] {
+  justify-self: end;
 }
 .sources-row-actions {
   display: flex;
@@ -222,13 +238,10 @@
 .sources-folders > * {
   justify-self: stretch;
 }
-.sources-folders > [data-slot="add-toggle"] {
-  justify-self: end;
-}
 .sources-add-form {
   display: grid;
   gap: 8px;
-  padding: 12px 14px;
+  padding: 14px 16px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
@@ -249,33 +262,10 @@
 .sources-add-row input {
   flex: 1;
 }
-.sources-intent {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+.sources-path-error {
   margin: 0;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
+  color: var(--danger);
   font-size: var(--text-xs);
-}
-.sources-intent legend {
-  color: var(--warn);
-  padding: 0 4px;
-}
-.sources-intent label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-}
-/* base.css pads and borders every <input> for text fields; a radio needs its native box back. */
-.sources-intent input[type="radio"] {
-  width: auto;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: none;
 }
 /* The scanning explainer, moved here from the Plans page with the add-folder form it explains. */
 .folder-scan-info .modal-body {

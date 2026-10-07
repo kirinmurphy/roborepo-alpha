@@ -1,9 +1,9 @@
 // --------------------------------------------------------------------------- behavior view
 //
 // The user-facing section model is computed ONCE, server-side, in buildBehaviorView() (config.mjs)
-// and shipped in the snapshot as snap.behaviorView. The client renders it directly — there is no
-// client-side reimplementation to drift from the server. Items carry web fields (toggle, inspect,
-// urls, badges) and terminal fields (hint); each renderer reads what it needs.
+// and shipped in the snapshot as snap.behaviorView. Items carry web fields (toggle, inspect, urls)
+// and terminal fields (hint); this page omits the telemetry package because token tracking is
+// managed from Settings and Tokens.
 //
 // Wiring only: DOM refs, event listeners, and orchestration between api.js (server calls),
 // state.js (constants/pure lookups), and templates.js (markup). No markup construction should
@@ -16,6 +16,8 @@ import { createConfigModal } from "./panels.js";
 import { snapshotChanged, inspectChipSpecs, setBulkInFlight, isBulkInFlight } from "./state.js";
 
 const modal = createConfigModal();
+// Keep the warning renderer/template available while the Agents-page banner is temporarily hidden.
+const SHOW_CONTEXT_WARNINGS = false;
 
 function openSourceModal(inspect, itemCost = null) {
   const rules = lastSnapshot?.globals?.rules || {};
@@ -96,8 +98,12 @@ function renderSection(section, contextCost) {
 
 function render(snap) {
   const main = document.getElementById("main");
-  // Section model comes straight from the server snapshot (buildBehaviorView), no client fork.
-  const view = snap.behaviorView || [];
+  // Use the server-owned section model, excluding the telemetry package from the Agents surface.
+  const view = (snap.behaviorView || [])
+    .map((section) => section.categoryId
+      ? { ...section, items: section.items.filter((item) => item.id !== "telemetry") }
+      : section)
+    .filter((section) => !section.categoryId || section.items.length > 0);
   // Package-category sections (everything the packages intro describes) vs the non-package
   // sections that follow. The intro sits between the harness file grid and the first package
   // section; the harness-warning notice (no active harness) stays at the top of the page.
@@ -106,7 +112,7 @@ function render(snap) {
   main.replaceChildren(
     ...[
       tmpl.harnessWarning(lastSetup || snap, { onCheck: refreshHarnesses }),
-      tmpl.contextWarnings(snap),
+      ...(SHOW_CONTEXT_WARNINGS ? [tmpl.contextWarnings(snap)] : []),
       tmpl.configFiles(snap, { onInspectClick: openSourceModal }),
       tmpl.packagesIntro(),
     ].filter(Boolean),

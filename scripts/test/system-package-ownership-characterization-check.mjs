@@ -29,7 +29,7 @@ const cli = path.join(repoRoot, "scripts/cli/main.mjs");
 
   const cavemanFragment = JSON.parse(fs.readFileSync(path.join(repoRoot, "globals/packages/caveman/hooks-codex.json"), "utf8"));
   assert.match(cavemanFragment.SessionStart[0].hooks[0].command, /CAVEMAN MODE ACTIVE/, "caveman package owns its Codex SessionStart hook");
-  const jdocmunchFragment = JSON.parse(fs.readFileSync(path.join(repoRoot, "globals/packages/jdocmunch/hooks-codex.json"), "utf8"));
+  const jdocmunchFragment = JSON.parse(fs.readFileSync(path.join(repoRoot, "globals/packages-archived/jdocmunch/hooks-codex.json"), "utf8"));
   assert.match(jdocmunchFragment.SessionStart[0].hooks[0].command, /jdocmunch: docs indexed/, "jdocmunch package owns its Codex SessionStart hook");
 }
 
@@ -85,11 +85,11 @@ const cli = path.join(repoRoot, "scripts/cli/main.mjs");
   assert.doesNotMatch(configToml, /^\[mcp_servers\.jdocmunch\]$/m, "fixed: jdocmunch MCP server no longer hardcoded in Codex baseline");
   assert.doesNotMatch(configToml, /^\[mcp_servers\.jdocmunch\.tools\.search_sections\]$/m, "fixed: jdocmunch tool-approval tables no longer hardcoded in Codex baseline (item 5a)");
 
-  const jcodemunchPkg = JSON.parse(fs.readFileSync(path.join(repoRoot, "globals/packages/jcodemunch/package.config.json"), "utf8"));
+  const jcodemunchPkg = JSON.parse(fs.readFileSync(path.join(repoRoot, "globals/packages-archived/jcodemunch/package.config.json"), "utf8"));
   const jcodemunchApprovals = jcodemunchPkg.resources.find((r) => r.type === "codex_tool_approvals");
   assert.ok(Object.keys(jcodemunchApprovals.approvals).length >= 16, "jcodemunch package declares its full Codex tool-approval set");
 
-  const jdocmunchPkg = JSON.parse(fs.readFileSync(path.join(repoRoot, "globals/packages/jdocmunch/package.config.json"), "utf8"));
+  const jdocmunchPkg = JSON.parse(fs.readFileSync(path.join(repoRoot, "globals/packages-archived/jdocmunch/package.config.json"), "utf8"));
   const jdocmunchApprovals = jdocmunchPkg.resources.find((r) => r.type === "codex_tool_approvals");
   assert.ok(jdocmunchApprovals, "jdocmunch package now declares a codex_tool_approvals component");
   assert.ok(Object.keys(jdocmunchApprovals.approvals).length >= 16, "jdocmunch package declares its full Codex tool-approval set");
@@ -136,7 +136,7 @@ const cli = path.join(repoRoot, "scripts/cli/main.mjs");
 }
 
 // --- Item 6 (FIXED in Phase 5): JCodeMunch's Claude Bash exploration blocker now lives under
-// globals/packages/jcodemunch, installed only via that package's hooks/claude component. The old
+// globals/packages-archived/jcodemunch, installed only via that package's hooks/claude component. The old
 // ~/.claude/settings.json MCP-presence gate was removed entirely (not fixed to check ~/.claude.json)
 // since enable/disable now controls whether the hook is wired at all, making a runtime self-check
 // redundant. ---
@@ -144,14 +144,14 @@ const cli = path.join(repoRoot, "scripts/cli/main.mjs");
   const oldBlockerPath = path.join(repoRoot, "globals/claude/hooks/block-source-exploration.mjs");
   assert.ok(!fs.existsSync(oldBlockerPath), "fixed: JCodeMunch Bash blocker no longer lives under system globals/claude/hooks");
 
-  const newBlockerPath = path.join(repoRoot, "globals/packages/jcodemunch/hooks/block-source-exploration.mjs");
-  assert.ok(fs.existsSync(newBlockerPath), "JCodeMunch Bash blocker now lives under globals/packages/jcodemunch");
+  const newBlockerPath = path.join(repoRoot, "globals/packages-archived/jcodemunch/hooks/block-source-exploration.mjs");
+  assert.ok(fs.existsSync(newBlockerPath), "JCodeMunch Bash blocker now lives under globals/packages-archived/jcodemunch");
   const blockerSrc = fs.readFileSync(newBlockerPath, "utf8");
   assert.doesNotMatch(blockerSrc, /'\.claude',\s*'settings\.json'/, "fixed: blocker no longer gates on ~/.claude/settings.json (gate removed entirely, not repointed)");
 
-  const pkgConfig = JSON.parse(fs.readFileSync(path.join(repoRoot, "globals/packages/jcodemunch/package.config.json"), "utf8"));
+  const pkgConfig = JSON.parse(fs.readFileSync(path.join(repoRoot, "globals/packages-archived/jcodemunch/package.config.json"), "utf8"));
   const claudeHooksComponent = pkgConfig.resources.find((r) => r.type === "hooks" && r.harness === "claude");
-  const fragment = JSON.parse(fs.readFileSync(path.join(repoRoot, "globals/packages/jcodemunch", claudeHooksComponent.source), "utf8"));
+  const fragment = JSON.parse(fs.readFileSync(path.join(repoRoot, "globals/packages-archived/jcodemunch", claudeHooksComponent.source), "utf8"));
   const bashEntry = (fragment.PreToolUse || []).find((e) => e.matcher === "Bash");
   assert.ok(bashEntry, "jcodemunch's Claude hooks fragment now declares a Bash-matcher entry for the blocker");
   assert.match(bashEntry.hooks[0].command, /block-source-exploration\.mjs/, "the Bash entry wires block-source-exploration.mjs");

@@ -29,7 +29,7 @@ Enforced by `normalizePackage`/`normalizeResource` in `scripts/cli/package-catal
 | `description` | yes | non-empty; shown in portal |
 | `lifecycle` | no (defaults `optional`) | `optional` or `system` (`PACKAGE_LIFECYCLES`) |
 | `defaultEnabled` | no (defaults `false`) | boolean; see Default-selection semantics below |
-| `presentation.category` | yes | must exist in `manifests/inventory/package-categories.json` (currently: `token-optimization`, `commands`, `code-conventions`, `chat-time-output`, `integrations`) |
+| `presentation.category` | yes | must exist in `manifests/inventory/package-categories.json` (including `token-optimization`, `skills-dev-lifecycle`, `skills-writing`, `skills-code-quality`, `code-conventions`, `chat-time-output`, `additional-agents-md-rules`, and `integrations`) |
 | `presentation.order` | no (defaults `0`) | numeric, controls sort within category |
 | `requires` | no | array of package IDs; cycle-checked, missing-dep-checked |
 | `resources` | yes | array — see Resource types |

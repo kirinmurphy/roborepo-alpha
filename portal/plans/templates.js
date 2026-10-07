@@ -62,6 +62,12 @@ export function plansOnboardingStep(snapshot) {
 
 // Never "0 plans" for a repository Plans has not read: a known repository with no readable
 // checkout is reported as not scanned.
+export function plansNoRepositories(onManage) {
+  const node = tpl("tpl-plans-no-repositories");
+  node.querySelector("[data-slot=manage]").addEventListener("click", onManage);
+  return node;
+}
+
 export function plansOnboardingState(snapshot, step, onManage) {
   const scans = snapshot.repositoryScans || [];
   const scanned = scans.filter((scan) => scan.state === "scanned").length;
@@ -75,6 +81,7 @@ export function plansOnboardingState(snapshot, step, onManage) {
       body: "Plans looks for Markdown files under docs/plans in every checkout of each known repository.",
     };
   const node = fill(tpl("tpl-empty-state"), { ...fills, action: "Manage Repos" });
+  node.classList.add("empty-state--with-action");
   const action = node.querySelector("[data-slot=action]");
   action.hidden = false;
   action.addEventListener("click", (event) => {

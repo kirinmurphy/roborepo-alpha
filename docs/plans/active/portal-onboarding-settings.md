@@ -503,6 +503,25 @@ Reuse `repository-sources-partial.html` instead of duplicating repository-source
 - [x] Extend Playwright coverage in `scripts/test/portal-ui/` for Settings and the main onboarding transitions.
 - [ ] Run the repository's full checks because the change crosses shared portal, server routing, Runtime discovery, harness state, and Tokens setup.
 
+### Phase 7 — Settings and onboarding UI refinements
+
+- [x] Make **Wipe clean** remove known/ignored repositories and configured repository/folder sources while preserving the auto-discovery preference.
+- [x] Refresh the Settings repository list while an enabled Runtime auto-discovery scan repopulates repositories.
+- [x] Show each repository's discovery state beside its name and align the empty message with **Find more repos**.
+- [x] Use **Check for harnesses** on Settings and shared Home/Agents/Tokens prompts, with a one-second spinner state before the request.
+- [x] Update the Settings Token Activity copy and use a CTA treatment when token tracking is off.
+- [x] Show both telemetry and harness prompts on Tokens when both prerequisites are missing.
+- [x] Remove the telemetry package option from Agents; Settings and Tokens remain the user-facing token-tracking controls.
+- [x] Place **Find more repos** below the repository list and right-align it, while keeping it beside the empty label when the list is empty.
+- [x] Keep Home's sync indicator in **Syncing** until the enabled auto-discovery scan has completed, and refresh Home promptly during that scan.
+- [x] Render Home, Agents, and Tokens harness prompts from one shared template and sentence, varying only the notice style.
+- [x] Give active token tracking the green status row treatment and rename the section **Token Activity Tracking**.
+- [x] Await Runtime discovery from Settings after enabling or wiping with auto-discovery enabled.
+- [x] Keep **Find more repos** beneath the repository list when repositories exist and on the empty-state row otherwise.
+- [x] Use one shared Home/Agents/Tokens harness banner template and copy, changing only the notice variant.
+- [x] Keep Home's sync state pending until the enabled discovery scan completes and refresh the overview during that scan.
+- [x] Show the active token-tracking row with its green status dot, and label the section **Token Activity Tracking**.
+
 ## Validation
 
 ### Acceptance criteria
@@ -524,6 +543,11 @@ Reuse `repository-sources-partial.html` instead of duplicating repository-source
 - [x] Cross-portal setup state contains no configured repository source paths.
 - [x] No portal flow shells out to `roborepo harness refresh`.
 - [x] Settings has explicit loading, empty-catalog, read-error, mutation, and narrow-screen handling in the page shell and browser coverage.
+- [x] Wiping repositories removes configured repository/folder sources but preserves the user's auto-discovery setting.
+- [x] Repository source state appears beside the name; empty repositories and **Find more repos** share a row.
+- [x] All portal harness checks use **Check for harnesses** and show a brief loading state.
+- [x] Tokens shows both missing-prerequisite prompts when telemetry and a supported harness are unavailable.
+- [x] Agents no longer presents the Token Telemetry package option.
 
 ### Verification evidence
 
@@ -544,6 +568,8 @@ Reuse `repository-sources-partial.html` instead of duplicating repository-source
 - [ ] Manual browser verification of fresh setup, Settings mutations, responsive layout, external harness installation followed by **Check for installs**, and the full Tokens state transition. The in-app browser could not access the loopback smoke server due to an admin browser policy, so this remains a real manual gap rather than a substitute for Playwright.
 - [ ] Visual verification that the large-screen banner action columns sit at the right edge, two-action repository states stack vertically, and the compact layout keeps actions left-aligned. Static responsive rules and a narrow viewport shell check are present, but no browser engine was available in this worktree.
 - [ ] Visual verification that Settings renders the full repository-source surface inline, that its telemetry button clearly switches On/Off, and that section separators/header spacing match the shared convention.
+- [ ] Browser verification of wipe-clean source removal, Settings auto-discovery refresh, inline repository labels/empty state, shared harness-check loading, dual Tokens banners, and the updated Token Activity CTA/copy.
+- [ ] Browser verification of repository action placement, scan timing/status after a wipe, identical harness prompt content across Home/Agents/Tokens, and the active token-tracking row.
 
 ### Repository checks
 
@@ -571,7 +597,7 @@ Manual browser verification should cover:
 - **Runtime semantic regression:** [[pljvmyh]] intentionally made auto-discovery the permission to observe processes and enroll repositories. Settings and contextual onboarding must preserve that combined consent boundary rather than imply that Runtime can observe while auto-discovery is off.
 - **Duplicate configuration:** Settings must reuse `/api/repositories/sources*`, harness-domain state, and package mutations. A generic Settings write store would immediately create drift.
 - **Path leakage:** the shared setup snapshot must stay path-free even though the repository management dialog legitimately uses path-bearing protected routes.
-- **Dual telemetry controls:** Settings and Agents can both expose telemetry only if they mutate the same package state and render from authoritative snapshots.
+- **Telemetry control ownership:** Settings owns the durable telemetry control, Tokens owns its contextual enable action, and Agents omits the Token Telemetry package option.
 - **Harness detection cost:** permanent filesystem/process probing is unnecessary. Keep discovery user-triggered first; scope any future auto-check tightly.
 - **Optional auto-discovery pressure:** once a user has explicit repository sources, Home must not present active-repository auto-discovery as if the rest of RoboRepo is incomplete without it.
 
@@ -602,6 +628,8 @@ Manual browser verification should cover:
 - The shared setup snapshot reports known repositories separately from visible repositories, excludes fixture repositories, and reports explicit source configuration without returning source paths.
 - The active harness cohort continues to require the existing confirmed-detection rule; registered providers are not presented as installed merely because they are known.
 - Settings mounts the existing repository-source partial and refreshes its state after each domain mutation instead of maintaining an independent optimistic cache.
+- Wipe clean removes configured repository/folder sources with repository records while preserving the auto-discovery preference; an enabled preference may repopulate the list through Runtime scanning.
+- The user-facing follow-up removes Token Telemetry from Agents; Settings and Tokens remain the telemetry controls.
 - Settings keeps its loading/error controls honest, gives harness actions provider-specific accessible names, renders an explicit empty catalog state, and stacks the repository control below 560px.
 
 ## Open Questions
