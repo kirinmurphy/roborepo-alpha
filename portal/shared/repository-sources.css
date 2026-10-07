@@ -20,9 +20,11 @@
   /* Scrolling past either end must not scroll the page behind the dialog. */
   overscroll-behavior: contain;
 }
-.repository-sources-body {
+.repository-sources-surface {
   display: grid;
   gap: 18px;
+}
+.repository-sources-body {
   padding: 16px;
 }
 /* Tall windows: the title bar stays put and only the body scrolls. */
@@ -69,7 +71,7 @@
     border-top: 1px solid var(--line);
   }
 }
-.repository-sources-body h3 {
+.repository-sources-surface h3 {
   margin: 0 0 6px;
   font-size: var(--text-sm);
   color: var(--ink);
@@ -83,17 +85,38 @@
   padding: 12px 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--accent) 6%, var(--panel));
+  background: var(--panel);
 }
 .sources-auto-off {
-  display: grid;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 10px;
-  justify-items: start;
+}
+.sources-auto-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 12px;
+}
+.sources-auto-off .sources-auto-actions {
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
 }
 .sources-auto-copy {
   margin: 0;
+  min-width: 0;
   font-size: var(--text-sm);
   color: var(--dim);
+}
+.sources-auto-off [data-slot="enable"] {
+  display: inline-block;
+  width: auto;
+  flex: none;
+}
+.repository-sources-inline {
+  min-width: 0;
 }
 .sources-auto-on {
   display: flex;
@@ -102,6 +125,10 @@
   gap: 12px;
   font-size: var(--text-sm);
   color: var(--ink);
+}
+.sources-repositories {
+  display: grid;
+  gap: 8px;
 }
 .sources-auto-status {
   display: inline-flex;
@@ -184,11 +211,6 @@
   font-size: var(--text-xs);
   margin: 8px 0 4px;
 }
-.sources-repositories-actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 8px;
-}
 .sources-wipe {
   color: var(--danger);
 }
@@ -201,11 +223,15 @@
   justify-self: stretch;
 }
 .sources-folders > [data-slot="add-toggle"] {
-  justify-self: start;
+  justify-self: end;
 }
 .sources-add-form {
   display: grid;
   gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
 }
 .sources-add-label-row {
   display: flex;
@@ -217,6 +243,7 @@
 }
 .sources-add-row {
   display: flex;
+  align-items: center;
   gap: 8px;
 }
 .sources-add-row input {
@@ -321,9 +348,14 @@
 }
 .repository-empty-actions {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-end;
   gap: 12px;
+  justify-self: end;
+}
+.repository-empty-actions > button {
+  display: inline-block;
+  width: auto;
 }
 .auto-discovery-prompt {
   display: flex;
@@ -344,11 +376,31 @@
 }
 .auto-discovery-prompt-body {
   display: grid;
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 16px;
   min-width: 0;
 }
-.auto-discovery-prompt-body [data-slot="enable"] {
-  display: inline-block;
-  width: auto;
-  justify-self: start;
+.auto-discovery-prompt-body .onboarding-actions {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+@media (max-width: 700px) {
+  .sources-auto-off {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .repository-empty-actions {
+    align-items: flex-start;
+    justify-self: start;
+  }
+  .auto-discovery-prompt-body {
+    grid-template-columns: 1fr;
+  }
+  .auto-discovery-prompt-body .onboarding-actions {
+    grid-column: 1;
+    grid-row: auto;
+    align-items: flex-start;
+  }
 }

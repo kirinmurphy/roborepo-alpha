@@ -35,7 +35,10 @@ const planDrawer = createPlanDrawer({
 
 // Any source change can add or remove repositories, so Home re-reads its overview right away.
 const sourcesDialog = createRepositorySourcesDialog({ onChange: () => refresh({ force: true }) });
-manageRepositories.addEventListener("click", () => sourcesDialog.open());
+  manageRepositories.addEventListener("click", (event) => {
+    event.preventDefault();
+    sourcesDialog.open();
+  });
 const onboarding = {
   onEnable: () => sourcesDialog.enableAutoDiscovery(),
   onAddFolder: () => sourcesDialog.open({ addFolder: true }),

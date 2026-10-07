@@ -15,11 +15,9 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
   background: color-mix(in srgb, var(--accent) 16%, var(--raised));
   border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
 }
-.harness-setup-prompt { display: grid; gap: 4px; }
 /* Two-line prompt: the icon pins to the first line instead of floating between the two lines; the
  * shared notice icon's own top margin sets its offset. */
 .home-harness-banner .portal-notice > [data-notice-icon] { align-self: flex-start; }
-.harness-setup-supported { color: var(--dim); font-size: var(--text-xs); }
 .home-auto-discovery { margin-bottom: 16px; }
 .home-auto-discovery .portal-notice.notice-info {
   background: color-mix(in srgb, var(--accent) 16%, var(--raised));
@@ -31,8 +29,11 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
   align-items: start;
 }
 .home-auto-discovery .portal-notice > [data-notice-icon] { align-self: flex-start; }
-.home-auto-discovery .auto-discovery-prompt-body { display: grid; gap: 8px; min-width: 0; }
+.home-auto-discovery .auto-discovery-prompt-body { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 16px; min-width: 0; }
 .auto-discovery-prompt p { margin: 0; color: var(--ink); font-size: var(--text-sm); }
+@media (max-width: 700px) {
+  .home-auto-discovery .auto-discovery-prompt-body { grid-template-columns: 1fr; }
+}
 .home-mock-disclaimer {
   display: flex;
   gap: 10px;

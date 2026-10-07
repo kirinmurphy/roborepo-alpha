@@ -1,19 +1,25 @@
 main.settings-main {
-  padding-top: 20px;
-  padding-bottom: 32px;
-  display: grid;
-  gap: 16px;
+  padding-top: 0;
+  padding-bottom: var(--space-xl);
 }
-.settings-heading h1 { margin: 0; font-size: var(--text-xl); font-weight: 600; }
-.settings-heading p { margin: 4px 0 0; color: var(--desc-dim); font-size: var(--text-xs); max-width: 70ch; }
-.settings-panel { display: grid; gap: 12px; }
-.settings-control-row, .settings-list-row, .settings-checkbox-row {
-  display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line);
+.settings-section { padding-top: var(--space-xl); padding-bottom: var(--space-xl); }
+.settings-section:first-of-type { padding-top: var(--space-lg); }
+.settings-main .portal-section-head h2 { font-size: var(--text-xl); }
+.settings-control-row {
+  display: flex; align-items: center; gap: var(--space-md); padding: var(--space-sm) 0; border-top: 1px solid var(--line);
 }
-.settings-control-copy, .settings-list-copy { display: grid; gap: 3px; flex: 1; min-width: 0; }
-.settings-control-copy span, .settings-list-copy span, .settings-checkbox-row small { color: var(--dim); font-size: var(--text-xs); }
-.settings-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.settings-list { list-style: none; padding: 0; margin: 0; }
-.settings-checkbox-row { align-items: flex-start; border-top: 1px solid var(--line); }
-.settings-checkbox-row input { margin-top: 3px; }
-.settings-checkbox-row span { display: grid; gap: 3px; }
+.settings-control-copy, .settings-list-copy { display: grid; gap: var(--space-xs); flex: 1; min-width: 0; }
+.settings-control-copy span { color: var(--dim); font-size: var(--text-xs); }
+.settings-inline-copy { display: block; }
+.settings-list { display: grid; gap: 4px; list-style: none; padding: 0; margin: 0; }
+.settings-list-row { display: flex; align-items: center; gap: var(--space-md); padding: 6px 10px; border-radius: 6px; background: var(--panel); }
+.settings-list-actions { display: flex; align-items: center; gap: var(--space-md); flex-shrink: 0; }
+.settings-list-status { color: var(--dim); font-size: var(--text-xs); }
+.settings-empty { padding: var(--space-sm) 0; color: var(--dim); font-size: var(--text-xs); }
+
+@media (max-width: 560px) {
+  .portal-section-head { align-items: flex-start; }
+  .settings-control-row { align-items: flex-start; }
+  .settings-list-row { align-items: flex-start; }
+  .settings-list-actions { align-items: flex-end; flex-direction: column; gap: var(--space-xs); }
+}

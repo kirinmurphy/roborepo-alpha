@@ -7,13 +7,28 @@ export function harnessRow(harness, detected, onToggle) {
   const toggle = node.querySelector("[data-slot=toggle]");
   if (!entry) {
     status.textContent = "Not detected";
-    toggle.textContent = "Not detected";
-    toggle.disabled = true;
+    toggle.remove();
     return node;
   }
   const active = entry.enabled !== false && (!entry.confidence || entry.confidence === "confirmed");
   status.textContent = active ? "Detected · enabled" : entry.enabled === false ? "Detected · disabled" : "Detected · needs confirmation";
-  toggle.textContent = entry.enabled === false ? "Enable" : "Disable";
-  toggle.addEventListener("click", () => onToggle(harness.id, entry.enabled === false));
+  const enabled = entry.enabled !== false;
+  const action = enabled ? "Disable" : "Enable";
+  toggle.textContent = action;
+  toggle.setAttribute("aria-label", `${action} ${harness.displayName}`);
+  toggle.addEventListener("click", async () => {
+    toggle.disabled = true;
+    toggle.setAttribute("aria-busy", "true");
+    try {
+      await onToggle(harness.id, !enabled);
+    } finally {
+      toggle.disabled = false;
+      toggle.removeAttribute("aria-busy");
+    }
+  });
   return node;
+}
+
+export function harnessEmptyState() {
+  return tpl("tpl-settings-harness-empty");
 }

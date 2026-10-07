@@ -13,13 +13,12 @@
               Monitoring
               <span id="plans-count-text"><strong>0</strong> Plans</span>
               in
-              <button
-                type="button"
-                data-btn="text"
+              <a
                 class="repos-count-button"
                 id="repos-count-text"
-                title="Manage repositories"
-              ><strong>0</strong> Repos</button>
+                href="#manage-repositories"
+                title="Manage Repos"
+              ><strong>0</strong> Repos</a>
               <span class="control-toggle-group">
                 <button
                   type="button"
@@ -167,7 +166,7 @@
       <section class="empty-state">
         <h2 data-slot="title"></h2>
         <p data-slot="body"></p>
-        <button type="button" data-btn="secondary" data-slot="action" hidden></button>
+        <a href="#manage-repositories" data-slot="action" hidden></a>
       </section>
     </template>
     <template id="tpl-warning-line">

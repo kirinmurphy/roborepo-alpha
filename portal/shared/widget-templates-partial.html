@@ -117,18 +117,20 @@
 <template id="tpl-harness-setup-prompt">
   <portal-notice variant="info" icon="info" aria-live="polite">
     <div class="harness-setup-prompt">
-      <span>Install a supported harness, then check for installs to add <a href="/config">agent tools</a> and enable <a href="/tokens">token tracking</a>.</span>
-      <button type="button" data-btn="secondary" data-slot="check">Check for installs</button>
+      <span class="harness-setup-primary">Install a supported harness, then check for installs to add <a href="/config">agent tools</a> and enable <a href="/tokens">token tracking</a>.</span>
+      <div class="onboarding-actions"><button type="button" data-btn="secondary" data-slot="check">Check for installs</button></div>
       <span class="harness-setup-supported" data-slot="supported"><b>Supported Harnesses:</b> <span data-slot="names"></span></span>
     </div>
   </portal-notice>
 </template>
 <template id="tpl-harness-warning">
   <portal-notice aria-live="polite">
-    <div class="config-empty">
-      <strong data-slot="title"></strong>
-      <span data-slot="body"></span>
-      <button type="button" data-btn="secondary" data-slot="check">Check for installs</button>
+    <div class="harness-warning">
+      <div class="harness-warning-copy">
+        <strong data-slot="title"></strong>
+        <span data-slot="body"></span>
+      </div>
+      <div class="onboarding-actions"><button type="button" data-btn="secondary" data-slot="check">Check for installs</button></div>
     </div>
   </portal-notice>
 </template>

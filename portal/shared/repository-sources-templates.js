@@ -33,16 +33,24 @@ export function autoDiscoveryPrompt({ onEnable }) {
   return node;
 }
 
-export function autoDiscoveryBlock(autoDiscovery, { onEnable, onDisable }) {
+export function autoDiscoveryBlock(autoDiscovery, { onEnable, onDisable, onWipe, hasRepositories = false }) {
   if (!autoDiscovery.enabled) {
     const node = tpl("tpl-sources-auto-off");
     wireOnce(node.querySelector("[data-slot=enable]"), onEnable);
+    configureWipe(node, { onWipe, hasRepositories });
     return node;
   }
   const count = autoDiscovery.repositoryCount;
   const node = fill(tpl("tpl-sources-auto-on"), { status: `On · ${count} ${count === 1 ? "repo" : "repos"} found` });
   wireOnce(node.querySelector("[data-slot=disable]"), onDisable);
+  configureWipe(node, { onWipe, hasRepositories });
   return node;
+}
+
+function configureWipe(node, { onWipe, hasRepositories }) {
+  const wipe = node.querySelector("[data-slot=wipe]");
+  wipe.hidden = !hasRepositories;
+  if (hasRepositories) wireOnce(wipe, onWipe);
 }
 
 // Every row offers the same actions whatever found the repository; how it was found is a quiet

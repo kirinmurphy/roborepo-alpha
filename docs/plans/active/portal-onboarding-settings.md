@@ -1,13 +1,13 @@
 ---
 id: nkhk6bb
 priority: high
-next_action: Review the implementation in the isolated worktree, install the repository's browser-test dependency, run the remaining browser/manual checks, then land or close the plan
+next_action: Install the repository's browser-test dependency, run the new Settings browser cases and manual onboarding transitions, then decide whether to land or close the plan
 blocked_by: []
 depends_on: []
 related:
   - pljvmyh
   - v6lvuu2
-reviewed_commit: 1da16ceee82b7174aaef9137dc26ec024d03fd8a
+reviewed_commit: 8f827a8
 worktree: portal-onboarding-settings
 ---
 
@@ -237,9 +237,9 @@ Settings is a product-level orchestration surface over domain-owned state.
 | Settings group | Capability | Source of truth | Settings behavior |
 | --- | --- | --- | --- |
 | Repositories | Active-repository auto-discovery | Repository sources `auto-discovery` source | Show state; enable/disable through existing source API |
-| Repositories | Explicit repositories/folders | Repository sources store | Open the existing **Manage repositories** dialog |
+| Repositories | Explicit repositories/folders | Repository sources store | Open the existing **Manage Repos** dialog |
 | Integrations | Supported harnesses | Harness discovery/state | Check for installs; enable/disable detected harnesses |
-| Data | Token telemetry | Existing `telemetry` package | Enable/disable the same package |
+| Tokens | Token telemetry | Existing `telemetry` package | Enable/disable the same package |
 
 Do not create generic Settings mutation endpoints that duplicate domain writes. The Settings page should call the existing repository-source and package/config mutations, plus the new harness-domain mutations added by this plan.
 
@@ -334,13 +334,15 @@ This preserves the shipped [[pljvmyh]] source, not a new Developer Runtime prefe
 
 ### 4. Reuse repository management directly from Settings
 
-Settings should not recreate source rows or folder forms.
+Settings should not recreate source rows or folder forms. Its Repositories section mounts the exact
+same repository-source surface inline; the Manage Repos dialog and Settings use one template and
+controller, so autodiscovery, known repositories, ignored repositories, and explicit folders cannot
+drift. Settings does not add a second click trigger for that surface.
 
-Mount the existing repository-source partial and `createRepositorySourcesDialog()` on the Settings page. The repository Settings card can show a path-free summary from the shared setup snapshot and provide:
-
-- auto-discovery on/off;
-- **Manage repositories…** to open the existing dialog;
-- optional known-repository/source counts.
+Mount the existing repository-source partial and its shared surface controller on the Settings page.
+The Settings Repositories section renders the surface inline, while Home, Plans, and Runtime retain
+the dialog presentation. Both presentations use the same repository-source partial, templates, and
+mutation handlers.
 
 A successful repository-source mutation should refresh the Settings summary and continue to refresh Home/Plans/Runtime through their existing page behavior when those pages are visited.
 
@@ -472,8 +474,11 @@ Reuse `repository-sources-partial.html` instead of duplicating repository-source
 
 - [x] Add `/settings` after Runtime in `PAGES` so routing, global navigation, manifest, and sitemap derive it from the same six-page manifest.
 - [x] Add the Settings page using existing `<template>` + slot-fill conventions.
-- [x] Render **Repositories**, **Integrations**, and **Data** groups from the shared setup snapshot.
+- [x] Render **Repositories**, **Integrations**, and **Tokens** groups from the shared setup snapshot.
 - [x] Reuse the shipped repository-source dialog and repository-source mutations directly.
+- [x] Render the exact shared repository-source surface inline in Settings instead of a dialog trigger.
+- [x] Replace the Settings telemetry checkbox with a right-aligned On/Off button toggle that mutates the existing telemetry package state.
+- [x] Apply the shared page/section header convention to Settings: compact page header, titled sections, horizontal separators, and no default section backgrounds.
 - [x] Wire harness refresh/enable/disable to the harness-domain mutations.
 - [x] Wire telemetry to the existing package mutation path.
 - [x] Re-render from authoritative post-mutation state and surface in-flight/error state locally; do not optimistically invent a second state cache.
@@ -518,21 +523,27 @@ Reuse `repository-sources-partial.html` instead of duplicating repository-source
 - [x] Telemetry remains backed by the existing `telemetry` package and has no duplicate boolean/state store.
 - [x] Cross-portal setup state contains no configured repository source paths.
 - [x] No portal flow shells out to `roborepo harness refresh`.
+- [x] Settings has explicit loading, empty-catalog, read-error, mutation, and narrow-screen handling in the page shell and browser coverage.
 
 ### Verification evidence
 
-- `node --check` passed for every changed JavaScript/ESM file.
-- Focused checks passed for setup-state derivation, harness portal routes, page manifest, Tokens state ordering, Runtime auto-discovery, repository sources, onboarding copy, portal surface layers, and plan lifecycle validation.
-- The filtered portal, harness, Runtime, and repository-source check groups passed.
-- A real portal smoke check returned HTTP 200 for both `/settings` and `/api/settings`.
-- `git diff --check` passed.
-- `npm run test:unit` reached 123/126 suites with the portal/server integration checks passing; the remaining failures were `clean-machine-container-check.mjs`, `publish-npm-check.mjs`, and `skill-reference-matrix-characterization-check.mjs`.
-- `npm run check` stopped in `scripts/doctor.sh` on stale generated Plan command artifacts and `docs/internal/skill-invocation-audit.md`.
+- `node --check` passed for every changed JavaScript/ESM file, including the Settings modules and all existing onboarding consumers.
+- Focused checks passed for setup-state derivation, harness portal routes, page manifest, Tokens state ordering, Runtime auto-discovery, repository sources, onboarding state, and portal surface layers.
+- A loopback-enabled `npm run test:unit` reached 123/126 suites; the portal/server integration checks passed. The remaining failures were the Docker clean-machine check, stale generated Plan command artifacts, and the stale skill-reference characterization fixture.
+- `npm run check` failed only on the same stale generated Plan command artifacts and `docs/internal/skill-invocation-audit.md`.
+- `npm run test:portal-ui` was attempted and stopped before collection because `@playwright/test` is not installed in this worktree.
+- A hermetic local portal smoke check returned HTTP 200 for `/settings`, `/api/settings`, `/config`, `/plans`, `/tokens`, and `/runtime`; the setup response was path-free in the inspected prefix.
+- `git diff --check` passed after the polish changes.
+- The follow-up UI polish also passed JavaScript syntax validation, all focused portal/setup/repository checks, a fresh path-free `/api/settings` assertion, and a manifest assertion that Settings carries the `settings` gear icon metadata. The local smoke server returned 200 for `/`, `/settings`, `/config`, `/plans`, `/tokens`, and `/runtime`.
+- The follow-up implementation mounts the shared repository-source surface inline, uses a button-based telemetry toggle, and adds reusable page/section header primitives documented in `docs/internal/portal-styleguide.md`.
+- The latest local smoke confirmed `/settings` includes the inline source host and shared source template, includes the telemetry button, omits the old Manage Repos trigger, and retains 200 responses for `/config`, `/plans`, `/tokens`, and `/runtime`; `/api/settings` remained path-free.
 
 ## Not tested
 
 - [ ] `npm run test:portal-ui` — blocked before test collection because the worktree does not have the `@playwright/test` package installed.
-- [ ] Manual browser verification of fresh setup, Settings mutations, external harness installation followed by **Check for installs**, and the full Tokens state transition.
+- [ ] Manual browser verification of fresh setup, Settings mutations, responsive layout, external harness installation followed by **Check for installs**, and the full Tokens state transition. The in-app browser could not access the loopback smoke server due to an admin browser policy, so this remains a real manual gap rather than a substitute for Playwright.
+- [ ] Visual verification that the large-screen banner action columns sit at the right edge, two-action repository states stack vertically, and the compact layout keeps actions left-aligned. Static responsive rules and a narrow viewport shell check are present, but no browser engine was available in this worktree.
+- [ ] Visual verification that Settings renders the full repository-source surface inline, that its telemetry button clearly switches On/Off, and that section separators/header spacing match the shared convention.
 
 ### Repository checks
 
@@ -572,6 +583,18 @@ Manual browser verification should cover:
 - The repository `auto-discovery` source remains the one persistence/enrollment opt-in; no Developer Runtime discovery preference is added.
 - Runtime observation and automatic repository enrollment remain under the same auto-discovery consent switch.
 - Settings reuses the shipped **Manage repositories** dialog and domain APIs instead of recreating repository management.
+- Settings now targets the exact repository-source surface inline; the dialog remains the alternate presentation for pages that need a modal.
+- Settings telemetry uses an accessible right-aligned On/Off button rather than a checkbox, while retaining the existing telemetry package as the owner.
+- Shared page/section header primitives and the internal portal style guide establish compact headers, horizontal section separators, and card backgrounds only for deliberately elevated components.
+- The portal header renders Settings as an accessible gear icon with its label retained for screen readers and keyboard focus; the Settings page subtitle was removed.
+- The Settings gear uses the shared rounded-outline icon treatment so it remains symmetric and legible at the compact navigation size.
+- Settings uses the page-title scale for its section titles—**Repos**, **Agent Harnesses**, and **Token Activity**—without a redundant page title. The shared Manage Repos surface keeps destructive cleanup beside the auto-discovery controls, removes the repeated repository subtitle, and uses the shorter **Ignore Repo** action.
+- The shared repository-source form uses a right-aligned **Find more repos** trigger, a panel-style form with an inline **Cancel** link, and hides the trigger while the form is open. Agent Harnesses uses the shared row trim, a title-row install check, and one non-actionable status for undetected providers.
+- Token Activity uses an action-labeled telemetry control (**Enable**/**Disable**) instead of displaying the current state as the button label; its bold action copy and explanation form one sentence.
+- Settings uses a slightly more generous section rhythm, and Agent Harnesses keeps **Check for installs** as a low-emphasis inline action in the section header.
+- Opt-in banners share the same primary/supporting text hierarchy. On larger screens their actions are right-aligned, multiple actions stack, and buttons remain intrinsic-width; small screens return the action stack to the normal left-aligned flow.
+- Autodiscovery CTAs use the shorter **Auto-discover active repos** label across shared Home, Runtime, Plans, and dialog states.
+- Tokens retains the prerequisite-gated **Turn on token telemetry** CTA, backed by the existing telemetry package path.
 - `[[v6lvuu2]]` continues to own staged first-run `/setup`; this plan owns normal post-init Settings and shared setup state.
 - Harness refresh is an internal portal action backed by `refreshHarnessState()`, never a spawned CLI command.
 - The first implementation uses explicit **Check for installs**. Read-only polling alone cannot discover a new external install because persisted harness state does not change until discovery runs.
@@ -579,6 +602,7 @@ Manual browser verification should cover:
 - The shared setup snapshot reports known repositories separately from visible repositories, excludes fixture repositories, and reports explicit source configuration without returning source paths.
 - The active harness cohort continues to require the existing confirmed-detection rule; registered providers are not presented as installed merely because they are known.
 - Settings mounts the existing repository-source partial and refreshes its state after each domain mutation instead of maintaining an independent optimistic cache.
+- Settings keeps its loading/error controls honest, gives harness actions provider-specific accessible names, renders an explicit empty catalog state, and stacks the repository control below 560px.
 
 ## Open Questions
 

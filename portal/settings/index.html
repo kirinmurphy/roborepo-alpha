@@ -4,47 +4,42 @@
   <body>
     {{CHROME}}
     {{WIDGET_TEMPLATES}}
-    <main id="main" class="inner settings-main">
+    <main id="main" class="inner portal-page settings-main" aria-busy="true">
       {{LOADING}}
-      <header class="settings-heading">
-        <h1>Settings</h1>
-        <p>Durable choices that affect how RoboRepo finds repositories, connects to harnesses, and collects telemetry.</p>
-      </header>
       <p id="settings-error" class="notice warn" role="alert" hidden></p>
-      <section class="panel settings-panel" aria-labelledby="repositories-title">
-        <div class="panel-head"><h2 id="repositories-title">Repositories</h2></div>
-        <p class="panel-desc" id="repositories-summary">Loading repository setup…</p>
-        <div class="settings-control-row">
-          <div class="settings-control-copy">
-            <strong>Auto-discovery of active repositories</strong>
-            <span>Allows Runtime to observe active apps and remember the repositories they use.</span>
-          </div>
-          <button type="button" data-btn="secondary" id="auto-discovery-toggle"></button>
-        </div>
-        <div class="settings-actions">
-          <button type="button" data-btn="secondary" id="manage-repositories">Manage repositories…</button>
-        </div>
+      <section class="portal-section settings-section" aria-labelledby="repos-title">
+        <header class="portal-section-head"><h2 id="repos-title">Repos</h2></header>
+        <div id="repository-sources-inline" class="repository-sources-inline" aria-label="Repository sources"></div>
       </section>
-      <section class="panel settings-panel" aria-labelledby="integrations-title">
-        <div class="panel-head"><h2 id="integrations-title">Integrations</h2></div>
-        <p class="panel-desc">RoboRepo detects supported harnesses installed on this machine. You can keep a detected integration disabled.</p>
-        <div class="settings-actions"><button type="button" data-btn="secondary" id="check-harnesses">Check for installs</button></div>
+      <section class="portal-section settings-section" aria-labelledby="agent-harnesses-title">
+        <header class="portal-section-head">
+          <h2 id="agent-harnesses-title">Agent Harnesses</h2>
+          <button type="button" data-btn="text" id="check-harnesses">Check for installs</button>
+        </header>
         <ul class="settings-list" id="harness-list"></ul>
       </section>
-      <section class="panel settings-panel" aria-labelledby="data-title">
-        <div class="panel-head"><h2 id="data-title">Data</h2></div>
-        <label class="settings-checkbox-row">
-          <input type="checkbox" id="telemetry-toggle" />
-          <span><strong>Collect token telemetry</strong><small>Optional session usage data used by the Tokens report. Your saved preference remains available if no harness is active.</small></span>
-        </label>
+      <section class="portal-section settings-section" aria-labelledby="token-activity-title">
+        <header class="portal-section-head"><h2 id="token-activity-title">Token Activity</h2></header>
+        <div class="settings-control-row">
+          <div class="settings-control-copy settings-inline-copy">
+            <strong>Enable token telemetry</strong><span id="telemetry-description"> Optional session usage data used by the Tokens report. Your saved preference remains available if no harness is active.</span>
+          </div>
+          <button type="button" data-btn="secondary" id="telemetry-toggle" aria-describedby="telemetry-description" disabled></button>
+        </div>
       </section>
     </main>
     {{REPOSITORY_SOURCES}}
     <template id="tpl-settings-harness-row">
       <li class="settings-list-row">
-        <div class="settings-list-copy"><strong data-slot="name"></strong><span data-slot="status"></span></div>
-        <button type="button" data-btn="text" data-slot="toggle"></button>
+        <div class="settings-list-copy"><strong data-slot="name"></strong></div>
+        <div class="settings-list-actions">
+          <span class="settings-list-status" data-slot="status" role="status"></span>
+          <button type="button" data-btn="text" data-slot="toggle"></button>
+        </div>
       </li>
+    </template>
+    <template id="tpl-settings-harness-empty">
+      <li class="settings-empty" role="status">No supported harnesses are registered.</li>
     </template>
     <script src="/portal/shared/icon.js" type="module"></script>
     <script src="/portal/shared/notice.js" type="module"></script>

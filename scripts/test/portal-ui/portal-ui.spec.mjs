@@ -212,17 +212,82 @@ test.describe("repository-first portal Home", () => {
   });
 
   test("Settings renders shared setup controls and can check for harness installs", async ({ page }) => {
+    await page.route("**/api/repositories/sources", (route) => route.fulfill({ json: {
+      revision: 1,
+      loadError: null,
+      autoDiscovery: { id: "auto-discovery", enabled: false, repositoryCount: 0 },
+      repositories: [],
+      sources: [],
+    } }));
+    await page.route("**/api/settings", (route) => route.fulfill({ json: {
+      repositories: { knownCount: 0, visibleCount: 0, autoDiscoveryEnabled: false, hasConfiguredSources: false },
+      harnesses: {
+        supported: [{ id: "codex", displayName: "Codex" }],
+        detected: [{ id: "codex", displayName: "Codex", confidence: "confirmed", enabled: true }],
+        active: [{ id: "codex", displayName: "Codex", confidence: "confirmed", enabled: true }],
+      },
+      telemetry: { enabled: false, captureAvailable: false },
+    } }));
     await page.goto("/settings");
-    await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
-    await expect(page.getByRole("heading", { level: 2, name: "Repositories" })).toBeVisible();
-    await expect(page.getByRole("heading", { level: 2, name: "Integrations" })).toBeVisible();
-    await expect(page.getByRole("heading", { level: 2, name: "Data" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Manage repositories…" })).toBeVisible();
+    await expect(page.locator('nav a[aria-label="Settings"] portal-icon svg')).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "Repos" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "Agent Harnesses" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "Token Activity" })).toBeVisible();
+    await expect(page.locator("#repository-sources-inline .sources-repositories")).toBeVisible();
+    await expect(page.locator("#repository-sources-inline .sources-repositories h3")).toHaveCount(0);
+    await expect(page.locator("#repository-sources-inline").getByRole("button", { name: "Auto-discover active repos" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Check for installs" })).toHaveAttribute("data-btn", "text");
     const response = page.waitForResponse((res) => res.url().includes("/api/config/harnesses/refresh") && res.request().method() === "POST");
     await page.getByRole("button", { name: "Check for installs" }).click();
     await response;
     await expect(page.locator("#harness-list")).toBeVisible();
-    await expect(page.getByText("Collect token telemetry", { exact: false })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Disable Codex" })).toBeVisible();
+    await expect(page.getByText("Enable token telemetry", { exact: false })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Enable token telemetry" })).toHaveText("Enable");
+  });
+
+  test("Settings explains an empty harness catalog and responds to a setup-state error", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: {
+      repositories: { knownCount: 0, visibleCount: 0, autoDiscoveryEnabled: false, hasConfiguredSources: false },
+      harnesses: { supported: [], detected: [], active: [] },
+      telemetry: { enabled: false, captureAvailable: false },
+    } }));
+    await page.goto("/settings");
+    await expect(page.getByRole("status", { name: "No supported harnesses are registered." })).toBeVisible();
+
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+    await page.route("**/api/settings", (route) => route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "setup service unavailable" }),
+    }));
+    await page.reload();
+    await expect(page.locator("#settings-error")).toHaveText("setup service unavailable");
+    await expect(page.locator("#telemetry-toggle")).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Check for installs" })).toBeEnabled();
+  });
+
+  test("Settings shows one non-actionable status for an undetected harness", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: {
+      repositories: { knownCount: 0, visibleCount: 0, autoDiscoveryEnabled: false, hasConfiguredSources: false },
+      harnesses: { supported: [{ id: "codex", displayName: "Codex" }], detected: [], active: [] },
+      telemetry: { enabled: false, captureAvailable: false },
+    } }));
+    await page.goto("/settings");
+    const row = page.locator("#harness-list .settings-list-row");
+    await expect(row).toContainText("Codex");
+    await expect(row.getByRole("status")).toHaveText("Not detected");
+    await expect(row.getByRole("button")).toHaveCount(0);
+  });
+
+  test("Settings keeps its section actions usable on a narrow viewport", async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.goto("/settings");
+    await expect(page.locator("main.settings-main")).toBeVisible();
+    await expect(page.locator("#repository-sources-inline")).toBeVisible();
+    const bounds = await page.locator("main.settings-main").boundingBox();
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(360);
   });
 
   // The detail page is parked: names are plain text and every /repositories/* URL lands on Home.
@@ -296,7 +361,7 @@ test.describe("repository-first portal Home", () => {
     }
     // The compact Enable prompt now sits above the Active Repos section, so its action comes before
     // the heading's Manage repositories action and both come before the first card.
-    for (const expected of ["Enable auto-discovery of active repos", "Manage repositories"]) {
+    for (const expected of ["Auto-discover active repos", "Manage Repos"]) {
       await page.keyboard.press("Tab");
       const focused = await focusSummary(page);
       expect(focused.text).toBe(expected);

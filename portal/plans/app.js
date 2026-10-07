@@ -103,7 +103,10 @@ function bindStaticControls() {
     });
   });
   document.getElementById("open-all-tasks").addEventListener("click", openAllTasks);
-  reposCountTextEl.addEventListener("click", onboarding.onManage);
+  reposCountTextEl.addEventListener("click", (event) => {
+    event.preventDefault();
+    onboarding.onManage();
+  });
   document.getElementById("all-tasks-close").addEventListener("click", () => allTasksModal.close());
   for (const id of FILTER_IDS) {
     const node = document.getElementById(id);

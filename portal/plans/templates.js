@@ -74,10 +74,13 @@ export function plansOnboardingState(snapshot, step, onManage) {
       title: `No plans found in ${repositoryCount(scanned)}`,
       body: "Plans looks for Markdown files under docs/plans in every checkout of each known repository.",
     };
-  const node = fill(tpl("tpl-empty-state"), { ...fills, action: "Manage repositories…" });
+  const node = fill(tpl("tpl-empty-state"), { ...fills, action: "Manage Repos" });
   const action = node.querySelector("[data-slot=action]");
   action.hidden = false;
-  action.addEventListener("click", onManage);
+  action.addEventListener("click", (event) => {
+    event.preventDefault();
+    onManage();
+  });
   return node;
 }
 

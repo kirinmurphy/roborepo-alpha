@@ -60,9 +60,8 @@ main {
   flex-wrap: wrap;
   gap: 6px;
 }
-/* The repository count opens Manage repositories; it reads as part of the sentence. */
+/* The repository count opens Manage Repos; it reads as part of the sentence. */
 .repos-count-button {
-  padding: 0;
   font: inherit;
   color: var(--dim);
 }

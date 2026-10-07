@@ -1,6 +1,6 @@
-// The Manage repositories dialog (pljvmyh §7): a page-singleton controller, opened from Home's
-// action slot, the Plans header count, and the shared empty state. Top to bottom: auto-discovery
-// (primary), one list of every known repository, then folders (secondary).
+// The repository-source surface (pljvmyh §7): one controller powers both the Manage Repos dialog
+// and Settings' inline surface. Top to bottom: auto-discovery (primary), one list of every known
+// repository, then folders (secondary).
 import { portalWireBackdropClose } from "/portal/shared/api.js";
 import * as api from "./repository-sources-api.js";
 import { autoDiscoveryBlock, folderRow, ignoredRow, repositoryRow } from "./repository-sources-templates.js";
@@ -9,31 +9,63 @@ import { autoDiscoveryBlock, folderRow, ignoredRow, repositoryRow } from "./repo
 export function createRepositorySourcesDialog({ onChange = () => {}, onPending = () => {} } = {}) {
   const dialog = document.getElementById("repository-sources-dialog");
   const info = document.getElementById("folder-scan-info");
-  const slot = (name) => dialog.querySelector(`[data-slot="${name}"]`);
+  const surface = createRepositorySourcesSurface({
+    host: dialog.querySelector("[data-sources-host]"),
+    info,
+    onChange,
+    onPending,
+  });
+  dialog.querySelector('[data-slot="close"]').addEventListener("click", () => dialog.close());
+  portalWireBackdropClose(dialog, () => dialog.close());
+
+  async function open({ addFolder: focusAdd = false } = {}) {
+    if (!dialog.open) dialog.showModal();
+    surface.setAddFormOpen(focusAdd);
+    await surface.refresh();
+  }
+
+  return {
+    open,
+    close: () => dialog.close(),
+    enableAutoDiscovery: surface.enableAutoDiscovery,
+  };
+}
+
+export function createRepositorySourcesInline({ host = document.getElementById("repository-sources-inline"), onChange = () => {}, onPending = () => {} } = {}) {
+  const info = document.getElementById("folder-scan-info");
+  const surface = createRepositorySourcesSurface({ host, info, onChange, onPending });
+  surface.refresh();
+  return surface;
+}
+
+function createRepositorySourcesSurface({ host, info, onChange, onPending }) {
+  host.replaceChildren(document.getElementById("tpl-repository-sources-surface").content.cloneNode(true));
+  const surface = host.querySelector("[data-sources-surface]");
+  const surfaceKey = host.closest("dialog") ? "dialog" : "inline";
+  const pathId = `repository-source-path-${surfaceKey}`;
+  surface.querySelector("[data-slot=path]").id = pathId;
+  surface.querySelector("[data-slot=add-form] label").setAttribute("for", pathId);
+  const slot = (name) => surface.querySelector(`[data-slot="${name}"]`);
   const form = slot("add-form");
   const pathInput = slot("path");
   const intent = slot("intent");
   let payload = null;
 
-  slot("close").addEventListener("click", () => dialog.close());
-  portalWireBackdropClose(dialog, () => dialog.close());
   info.querySelector("[data-slot=close]").addEventListener("click", () => info.close());
   portalWireBackdropClose(info, () => info.close());
   slot("info").addEventListener("click", () => info.showModal());
   slot("add-toggle").addEventListener("click", () => setAddFormOpen(form.hidden));
-  slot("wipe").addEventListener("click", wipeRepositoryList);
+  slot("cancel").addEventListener("click", () => {
+    pathInput.value = "";
+    resetIntent();
+    setAddFormOpen(false);
+  });
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     addFolder();
   });
   // An answer about what one path is says nothing about the next one.
   pathInput.addEventListener("input", resetIntent);
-
-  async function open({ addFolder: focusAdd = false } = {}) {
-    if (!dialog.open) dialog.showModal();
-    setAddFormOpen(focusAdd);
-    await run(api.loadSources, { notify: false });
-  }
 
   async function addFolder() {
     const kind = intent.hidden ? null : intent.querySelector("input:checked")?.value || null;
@@ -79,6 +111,10 @@ export function createRepositorySourcesDialog({ onChange = () => {}, onPending =
     for (const radio of intent.querySelectorAll("input")) radio.checked = false;
   }
 
+  async function refresh() {
+    return run(api.loadSources, { notify: false });
+  }
+
   async function run(action, { notify = true, onError = () => false } = {}) {
     showError(null);
     try {
@@ -97,6 +133,8 @@ export function createRepositorySourcesDialog({ onChange = () => {}, onPending =
     slot("auto").replaceChildren(autoDiscoveryBlock(payload.autoDiscovery, {
       onEnable: () => run(api.enableAutoDiscovery),
       onDisable: () => run(() => api.setSourceEnabled(api.AUTO_DISCOVERY_ID, false)),
+      onWipe: wipeRepositoryList,
+      hasRepositories: payload.repositories.length > 0,
     }));
     const visible = payload.repositories.filter((repository) => repository.visibility !== "hidden");
     const ignored = payload.repositories.filter((repository) => repository.visibility === "hidden");
@@ -105,7 +143,6 @@ export function createRepositorySourcesDialog({ onChange = () => {}, onPending =
     };
     slot("repositories").replaceChildren(...visible.map((repository) => repositoryRow(repository, rowActions)));
     slot("repositories-empty").hidden = visible.length > 0;
-    slot("wipe").hidden = payload.repositories.length === 0;
     slot("ignored-group").hidden = ignored.length === 0;
     slot("ignored-summary").textContent = `Ignored (${ignored.length})`;
     slot("ignored").replaceChildren(...ignored.map((repository) => ignoredRow(repository, {
@@ -121,7 +158,9 @@ export function createRepositorySourcesDialog({ onChange = () => {}, onPending =
 
   function setAddFormOpen(open) {
     form.hidden = !open;
-    slot("add-toggle").setAttribute("aria-expanded", String(open));
+    const toggle = slot("add-toggle");
+    toggle.hidden = open;
+    toggle.setAttribute("aria-expanded", String(open));
     if (open) pathInput.focus();
   }
 
@@ -132,10 +171,9 @@ export function createRepositorySourcesDialog({ onChange = () => {}, onPending =
   }
 
   return {
-    open,
-    close: () => dialog.close(),
-    // For the Enable buttons outside the dialog (empty states, prompts): same request, same
-    // onChange, without opening anything.
+    refresh,
+    setAddFormOpen,
+    slot,
     enableAutoDiscovery: () => {
       onPending();
       return run(api.enableAutoDiscovery);
