@@ -3,7 +3,7 @@
 // — collected here so they can be adjusted in one place without touching process code.
 //
 // Kept as module constants rather than a manifest JSON on purpose: modules/repositories is a pure
-// domain module with no filesystem/path dependency (see the developer-runtime/plan-docs module split), so
+// domain module with no filesystem/path dependency (see the developer-runtime/plan-suite module split), so
 // it must not read manifests at import time. This file IS the single source of truth; if a future
 // need arises to tune these at runtime, load a manifest in the CLI bridge and pass overrides in.
 

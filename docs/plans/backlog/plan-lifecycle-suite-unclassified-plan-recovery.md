@@ -43,7 +43,7 @@ without changing how the portal discovers, navigates, or bulk-migrates legacy fi
 
 ## Current State
 
-`modules/plan-docs/index.mjs` returns `unclassified` when a Markdown file is directly
+`modules/plan-suite/index.mjs` returns `unclassified` when a Markdown file is directly
 under `docs/plans/`. The scanner adds a warning, and `portal/plans/app.js` adds the
 Unclassified lifecycle tab only when matching records exist.
 
@@ -112,7 +112,7 @@ coordinate the same mutation API used by cards, drawers, and lifecycle shortcuts
 
 ### Domain and server
 
-- Keep `unclassified` as a source classification in `modules/plan-docs/index.mjs`.
+- Keep `unclassified` as a source classification in `modules/plan-suite/index.mjs`.
 - Ensure lifecycle destination parsing rejects `unclassified`.
 - Add a structured duplicate-ID conflict if stable identity is ambiguous.
 - Do not add a bulk recovery endpoint in this milestone.

@@ -24,10 +24,10 @@ function testStripsRealPackageHooksAndPermissions() {
   const settingsPath = path.join(homePath, "settings.json");
 
   const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
-  const pkgConfig = JSON.parse(fs.readFileSync(path.join(repoRoot, "globals", "packages", "jcodemunch", "package.config.json"), "utf8"));
+  const pkgConfig = JSON.parse(fs.readFileSync(path.join(repoRoot, "globals", "packages-archived", "jcodemunch", "package.config.json"), "utf8"));
   const hooksResource = pkgConfig.resources.find((r) => r.type === "hooks" && r.harness === "claude");
   const permissionsResource = pkgConfig.resources.find((r) => r.type === "permissions");
-  const fragment = JSON.parse(fs.readFileSync(path.join(repoRoot, "globals", "packages", "jcodemunch", hooksResource.source), "utf8"));
+  const fragment = JSON.parse(fs.readFileSync(path.join(repoRoot, "globals", "packages-archived", "jcodemunch", hooksResource.source), "utf8"));
   const firstEvent = Object.keys(fragment)[0];
   const firstCommand = fragment[firstEvent][0].hooks[0].command;
 

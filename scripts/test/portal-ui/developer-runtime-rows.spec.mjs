@@ -17,7 +17,7 @@ import { buildDeveloperRuntimeSnapshot, defaultSettings } from "../../../modules
 const DEMO = "git:github.com/example/demo";
 const SHOP = "git:github.com/example/shop";
 const IDLE = "git:github.com/example/idle";
-const WORKTREE_BRANCH = "codex/telemetry-tokens-conditions-report";
+const WORKTREE_BRANCH = "codex/telemetry-tokens-conditions-and-waste-report";
 const mainGit = { provider: { ok: true }, branch: "main", isWorktree: false, ahead: 0, behind: 0 };
 const worktreeGit = { provider: { ok: true }, branch: WORKTREE_BRANCH, isWorktree: true, ahead: 0, behind: 0 };
 
@@ -100,6 +100,7 @@ const row = (page, rootId) => page.locator(`.repository-root[data-root-id="${roo
 
 test.describe("Runtime checkout rows (developer-runtime-repository-row-layout)", () => {
   test("the main checkout row links its app, not its tooling, and the card header links nothing", async ({ page }) => {
+    await expect(page.locator("#runtime-sync-status")).toHaveText("Synced");
     const main = row(page, "demo-main");
     await expect(main.getByRole("link", { name: ":4317", exact: true })).toBeVisible();
     await expect(main.getByRole("link", { name: ":6006", exact: true })).toHaveCount(0);
@@ -136,6 +137,12 @@ test.describe("Runtime checkout rows (developer-runtime-repository-row-layout)",
     await expect(tooltip).toHaveText(new RegExp(`^\\s*${WORKTREE_BRANCH}`));
   });
 
+  test("a worktree row keeps its copy control beside the branch label", async ({ page }) => {
+    const worktree = row(page, "demo-wt");
+    await expect(worktree.locator("[data-slot=root-info]")).toBeVisible();
+    await expect(worktree.locator("[data-slot=root-copy]").getByRole("button")).toHaveCount(1);
+  });
+
   test("a Compose-only checkout promotes its web service", async ({ page }) => {
     await expect(row(page, "shop-main").getByRole("link", { name: ":8080", exact: true })).toBeVisible();
   });
@@ -163,7 +170,7 @@ test.describe("Runtime checkout rows (developer-runtime-repository-row-layout)",
     await expect(stray.getByRole("button", { name: "Links", exact: true })).toHaveCount(0);
     await stray.getByRole("button", { name: "Actions", exact: true }).click();
     const menu = stray.locator("[data-menu]");
-    await expect(menu.getByRole("button")).toHaveText(["Copy PID", "View history", "Hide"]);
+    await expect(menu.getByRole("button")).toHaveText(["Copy PID", "View history", "Hide from Runtime"]);
   });
 
   // The Links scenarios assert the buttons and never open them: opening fetches /metadata with a
@@ -171,6 +178,7 @@ test.describe("Runtime checkout rows (developer-runtime-repository-row-layout)",
   test("the promoted member's Links dropdown moves into the checkout row", async ({ page }) => {
     const main = row(page, "demo-main");
     await expect(main.locator(".repository-root-head").getByRole("button", { name: "Links", exact: true })).toBeVisible();
+    await expect(main.getByRole("button", { name: "Links", exact: true }).locator("portal-icon[name=link] svg")).toBeVisible();
     await main.getByRole("button", { name: "Show 2 members" }).click();
     const memberCard = (port) => main.locator("[data-slot=members] .instance-card")
       .filter({ has: page.getByRole("link", { name: `:${port}`, exact: true }) });

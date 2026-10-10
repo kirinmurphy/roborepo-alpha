@@ -10,11 +10,14 @@ export function repositorySummary(record) {
   const best = bestDiscovery(record.discoveries || []);
   return {
     repositoryId: record.id,
+    urlKey: record.urlKey,
+    kind: record.kind,
     displayName: record.displayName,
     providerUrl: record.providerUrl || null,
     resolution: record.resolution,
     activity: record.activity,
     visibility: record.visibility,
+    pinned: record.pinned === true,
     confidence: best?.confidence || null,
     evidence: best?.evidence || null,
     discoveredBy: [...new Set(discoveredBy)],

@@ -13,7 +13,8 @@
 //     <div>…your content…</div>
 //   </portal-notice>
 //
-// variant defaults to "info". Set the `no-icon` attribute to drop the leading icon.
+// variant defaults to "info". Set the `no-icon` attribute to drop the leading icon, or `icon` to
+// name a different one (an info notice has none by default; a prompt can opt into "info").
 
 import { portalTpl as tpl, portalFillSlots as fill } from "./api.js";
 
@@ -27,7 +28,7 @@ const VARIANT_ICON = {
 const VALID = new Set(["alert", "warning", "info", "success"]);
 
 class PortalNotice extends HTMLElement {
-  static observedAttributes = ["variant", "no-icon"];
+  static observedAttributes = ["variant", "no-icon", "icon"];
 
   connectedCallback() {
     this.render();
@@ -49,7 +50,7 @@ class PortalNotice extends HTMLElement {
     // are left untouched (only our own [data-notice-icon] node is replaced).
     const existingIcon = this.querySelector(":scope > [data-notice-icon]");
     if (existingIcon) existingIcon.remove();
-    const iconName = VARIANT_ICON[variant];
+    const iconName = this.getAttribute("icon") || VARIANT_ICON[variant];
     if (iconName && !this.hasAttribute("no-icon")) {
       const wrap = fill(tpl("tpl-notice-icon"), { icon: { name: iconName } });
       this.prepend(wrap);

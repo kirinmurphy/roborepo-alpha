@@ -29,9 +29,8 @@
   --danger: #f85149;
   --spike: #f85149;
   --on-accent: #0b0e13;
-  /* CTA: a brighter, more saturated green than --ok (which stays reserved for status/validation
-   * indicators elsewhere in the portal) — the one true "primary action" fill color. */
-  --cta: #2ea043;
+  /* Muted green separates primary actions from the brighter --ok status indicators. */
+  --cta: #287d3c;
   --on-cta: #ffffff;
   --badge-skill-ink: #79c0ff;
   --badge-skill-line: #1f6feb;
@@ -40,6 +39,8 @@
   --badge-cmd-line: #238636;
   --badge-cmd-bg: #0d2214;
   --knob: #fff;
+  /* Brand mark (the header robot): plain white on the dark header. */
+  --logo: #ffffff;
   --warn-line: #7a641f;
   --warn-bg: #241f0e;
   /* Notice/callout tints — subtle border+bg pairs per severity, tuned like --warn-line/--warn-bg
@@ -143,7 +144,7 @@
   --danger: #cf222e;
   --spike: #cf222e;
   --on-accent: #ffffff;
-  --cta: #1f8f38;
+  --cta: #2c7a3f;
   --on-cta: #ffffff;
   --badge-skill-ink: #0550ae;
   --badge-skill-line: #b6e3ff;
@@ -152,6 +153,8 @@
   --badge-cmd-line: #aceebb;
   --badge-cmd-bg: #dafbe1;
   --knob: #ffffff;
+  /* White would vanish on the light header, so light mode inverts the mark to ink. */
+  --logo: var(--ink);
   --warn-line: #d4a72c;
   --warn-bg: #fdf3b8;
   --alert-line: #ffcecb;
@@ -194,6 +197,22 @@
 }
 [hidden] {
   display: none !important;
+}
+/* Inline links come in two styles, never the browser's blue / visited purple:
+ *   default — a plain <a>: body ink and an underline, accent on hover.
+ *   CTA     — .link-cta: accent-colored, for links whose job is to take you to the running thing
+ *             (entrypoint port URLs).
+ * :where() keeps the default at zero specificity, so any classed link styling still wins over it. */
+:where(a) {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+:where(a):hover {
+  color: var(--accent);
+}
+.link-cta {
+  color: var(--accent);
 }
 input,
 select,
@@ -243,7 +262,7 @@ button:hover,
   border: 1px solid var(--cta);
   border-radius: 5px;
   padding: var(--space-xs) var(--space-sm);
-  font-weight: 600;
+  font-weight: 400;
   cursor: pointer;
 }
 [data-btn="cta"]:hover {
@@ -312,26 +331,74 @@ samp {
   display: flex;
 }
 
-/* No flex: h1 + #portal-updated are inline-block instead, so the updated text naturally wraps
- * onto its own line below "roborepo" once the header gets too narrow to fit both — no breakpoint
- * to measure or maintain. */
+/* Wrapping flex: the robot and #portal-updated center on one line, and the updated text drops onto
+ * its own line once the header gets too narrow to fit both — no breakpoint to measure or maintain. */
 .portal-header .logo-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 1rem;
   min-width: 0;
-  padding: 0.5rem 1.25rem;
+  padding: 0.25rem 1.25rem;
   padding-left: 0;
 }
 
 .portal-header h1 {
-  display: inline-block;
+  display: flex;
   font-size: var(--text-md);
+  line-height: 1;
   margin: 0;
-  margin-right: 0.5rem;
   font-weight: 600;
 }
+.portal-logo a {
+  display: inline-flex;
+  color: var(--logo);
+  border-radius: 6px;
+}
+.portal-logo a:hover {
+  filter: brightness(1.1);
+}
+/* Freshness, not a clock: a quiet dot while polling is on time, and a short word only once it
+ * isn't. Each step up is a little more visible than the last; none of them should compete with
+ * page content. States are set by portalSetUpdatedAt in api.js. */
 .portal-updated {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  vertical-align: middle;
   color: var(--dim);
   font-size: var(--text-2xs);
+}
+.portal-updated-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dim);
+  opacity: 0.5;
+}
+.portal-updated[data-state="active"] .portal-updated-dot {
+  background: var(--ok);
+  opacity: 0.55;
+}
+.portal-updated[data-state="active"] .portal-updated-label {
+  opacity: 0.6;
+}
+.portal-updated[data-state="waiting"] .portal-updated-dot {
+  background: var(--warn);
+  opacity: 0.9;
+}
+.portal-updated[data-state="waiting"] {
+  color: var(--warn);
+}
+.portal-updated[data-state="disconnected"] .portal-updated-dot {
+  background: var(--spike);
+  opacity: 1;
+}
+.portal-updated[data-state="disconnected"] {
+  color: var(--spike);
+}
+.portal-updated-label:empty {
+  display: none;
 }
 nav {
   display: flex;
@@ -365,6 +432,25 @@ nav a.active {
   background: var(--active);
   border-color: var(--line);
 }
+.portal-header nav a.nav-icon-only {
+  position: relative;
+  min-width: 40px;
+  align-items: center;
+  padding-left: 0.7rem;
+  padding-right: 0.7rem;
+}
+.portal-header nav a.nav-icon-only .nav-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.portal-header nav a.nav-icon-only portal-icon { display: inline-flex; }
 .portal-footer {
   margin-top: 24px;
   padding: 12px 0;
@@ -400,8 +486,8 @@ portal-info-icon,
  * `sm` is the floor for legibility. */
 :root {
   --icon-sm: 16px;
-  --icon-md: 20px;
-  --icon-lg: 24px;
+  --icon-md: 22px;
+  --icon-lg: 26px;
   --icon-xl: 30px;
   --icon-xxl: 40px;
   --icon-xxxl: 48px;
@@ -493,6 +579,17 @@ main {
   border-top-color: var(--accent);
   animation: portal-spin 0.7s linear infinite;
 }
+.harness-check-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 6px;
+  vertical-align: -2px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: portal-spin 0.7s linear infinite;
+}
 /* Ordinary in-page status/meta line, scoped near the content it describes (NOT a persistent
  * top bar) — used by /config, /plans, /telemetry for their own load-scoped status text. */
 .page-meta {
@@ -530,6 +627,46 @@ main {
   margin: 0;
   font-weight: 600;
   display: inline;
+}
+.portal-page {
+  display: grid;
+  gap: 0;
+}
+.portal-page-header {
+  padding: 12px 0 14px;
+}
+.portal-page-header h1 {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.portal-section {
+  padding: 18px 0;
+}
+.portal-section + .portal-section {
+  border-top: 1px solid var(--line);
+}
+.portal-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.portal-section-head h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.portal-section-description {
+  margin: 0 0 12px;
+  color: var(--dim);
+  font-size: var(--text-xs);
+  max-width: 72ch;
 }
 /* Shared key/value grid — used by /plans' drawer (dtdd via tpl-dtdd-row) and /telemetry's detail
  * modal (#modalbody, same template). .dtdd-row is `display: contents` so it's invisible to the
@@ -991,8 +1128,63 @@ portal-menu-button {
 }
 .intro-banner-actions {
   display: flex;
-  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: flex-start;
+  flex-direction: column;
   gap: 8px;
+}
+.intro-banner-actions > button,
+.onboarding-actions > button {
+  display: inline-block;
+  width: auto;
+}
+.onboarding-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex: none;
+}
+.portal-banner-content,
+.harness-notice-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 16px;
+}
+.portal-banner-copy {
+  min-width: 0;
+  color: var(--ink);
+}
+.portal-banner-copy > :first-child { margin-top: 0; }
+.portal-banner-copy > :last-child { margin-bottom: 0; }
+.portal-banner-supporting { color: var(--dim); }
+.portal-banner-action {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+}
+.harness-notice-content [data-slot="copy"] {
+  color: var(--ink);
+}
+.harness-notice-supported {
+  display: block;
+  color: var(--dim);
+  font-size: var(--text-xs);
+}
+.auto-discovery-prompt p { margin: 0; color: var(--ink); font-size: var(--text-sm); }
+.auto-discovery-prompt > [data-notice-icon] { align-self: flex-start; }
+
+@media (max-width: 700px) {
+  .intro-banner-actions,
+  .onboarding-actions { align-items: flex-start; }
+  .portal-banner-content,
+  .harness-notice-content { grid-template-columns: 1fr; }
+  .portal-banner-action {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: start;
+  }
 }
 
 /* Shared JS-positioned tooltip bubble (portal/shared/tooltip.js). Fixed to the viewport; tooltip.js
@@ -1035,13 +1227,43 @@ portal-menu-button {
   display: none;
 }
 
+/* Shared repository auto-discovery status indicator. */
+.sync-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--desc-dim);
+  font-size: var(--text-xs);
+  line-height: 1;
+  white-space: nowrap;
+}
+.sync-status-icon {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: #35a66f;
+}
+.sync-status.is-syncing .sync-status-icon {
+  border: 1.5px solid var(--dim);
+  border-top-color: transparent;
+  background: transparent;
+  animation: sync-status-spin 0.8s linear infinite;
+}
+.sync-status.is-syncing { color: var(--dim); }
+.sync-status.is-synced { color: var(--desc-dim); }
+.sync-status.is-failed { color: var(--danger); }
+@keyframes sync-status-spin { to { transform: rotate(360deg); } }
+
 /* Shared notification chrome — the <portal-notice> wrapper (portal/shared/notice.js). Theme only:
  * a subtle per-variant border + background tint and an optional leading icon. Content is slotted by
  * the caller. Variant class (.notice-alert/-warning/-info/-success) is set by the element. */
 .portal-notice {
   display: flex;
-  gap: var(--space-md);
-  align-items: center;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 20px;
+  align-items: flex-start;
   padding: var(--space-sm) var(--space-md);
   border: 1px solid var(--info-line);
   background: var(--info-bg);
@@ -1049,15 +1271,18 @@ portal-menu-button {
   color: var(--ink);
 }
 .portal-notice > [data-notice-icon] {
-  flex: none;
+  flex: 0 0 24px;
+  width: 24px;
   display: inline-flex;
-  margin-top: 5px;
+  align-self: flex-start;
+  justify-self: start;
+  margin-top: 2px;
 }
 /* The slotted content should take the remaining width so multi-line bodies wrap cleanly next to
  * the icon rather than being squeezed. Direct children other than our own icon node. */
 .portal-notice > :not([data-notice-icon]) {
   min-width: 0;
-  flex: 1 1 auto;
+  flex: 1 1 0%;
 }
 .portal-notice.notice-alert {
   border-color: var(--alert-line);

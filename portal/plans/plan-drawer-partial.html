@@ -1,0 +1,231 @@
+<!-- The plan detail drawer: the popup a plan title opens on Plans and on Home. Injected at
+     {{PLAN_DRAWER}} (scripts/cli/portal-server.mjs) and driven by portal/plans/plan-drawer.js, so
+     both pages render one component. Carries everything the drawer renders — <plan-status>, the
+     ⋯ action menu, blocker links, the copy toast, the plan-suite skill modal — and its stylesheet. -->
+<link rel="stylesheet" href="/portal/plans/plan-drawer.css" />
+    <div id="toast" class="toast" hidden>
+      <p class="toast-message" data-slot="message"></p>
+      <div class="toast-actions" data-slot="actions"></div>
+    </div>
+    <dialog id="skill-modal" data-dialog-size="lg" aria-labelledby="skill-modal-title">
+      <div class="modal-head">
+        <span
+          class="modal-title"
+          id="skill-modal-title"
+          data-slot="title"
+        ></span>
+        <span class="modal-path" data-slot="path"></span>
+        <portal-close-button
+          data-slot="close"
+          aria-label="Close"
+        ></portal-close-button>
+      </div>
+      <div class="modal-body">
+        <div class="markdown" data-slot="content"></div>
+      </div>
+    </dialog>
+    <dialog id="drawer" data-dialog-size="xl">
+      <div class="drawer-head">
+        <div>
+          <h2 id="drawer-title"></h2>
+          <div class="drawer-path-row">
+            <p id="drawer-path"></p>
+            <portal-copy-button
+              id="drawer-path-copy"
+              icon="copy"
+              aria-label="Copy path"
+            ></portal-copy-button>
+          </div>
+        </div>
+        <portal-close-button id="drawer-close"></portal-close-button>
+      </div>
+      <div class="drawer-body">
+        <div class="drawer-actions" id="drawer-actions">
+          <button
+            type="button"
+            class="recommended-cta"
+            id="drawer-cta"
+            data-btn="cta"
+            hidden
+          ></button>
+          <portal-menu-button
+            id="drawer-menu"
+            icon="copy"
+            aria-label="Plan actions"
+          ></portal-menu-button>
+        </div>
+        <section
+          class="drawer-warnings-section drawer-blockers-section"
+          id="drawer-blocked-by-section"
+          hidden
+        >
+          <h3>
+            <portal-icon name="warning" size="sm"></portal-icon>
+            Blocked by
+          </h3>
+          <div class="drawer-blocker-links" id="drawer-blocked-by-links"></div>
+        </section>
+        <section
+          class="drawer-warnings-section drawer-blockers-section"
+          id="drawer-blocking-section"
+          hidden
+        >
+          <h3>
+            <portal-icon name="warning" size="sm"></portal-icon>
+            Blocking
+          </h3>
+          <div class="drawer-blocker-links" id="drawer-blocking-links"></div>
+        </section>
+        <section
+          class="drawer-warnings-section"
+          id="drawer-warnings-section"
+          hidden
+        >
+          <h3>
+            <portal-icon name="warning" size="sm"></portal-icon>
+            Warnings
+          </h3>
+          <ul id="drawer-warnings"></ul>
+        </section>
+        <div id="drawer-status-mount"></div>
+        <div class="drawer-grid">
+          <section>
+            <h3>Metadata</h3>
+            <dl id="drawer-meta"></dl>
+          </section>
+          <section>
+            <h3>Tasks</h3>
+            <ul id="drawer-tasks"></ul>
+          </section>
+        </div>
+        <article class="markdown" id="drawer-doc"></article>
+      </div>
+    </dialog>
+    <!-- First-run onboarding: an empty-page state (centered content, no banner chrome). Shown only
+         while the plan-write package is disabled — once enabled, the Project Folders form takes
+         over as the single visible setup step (the two are never shown together). Each command
+         row's details button names its skill in data-skill; packageBanner() wires them. -->
+    <template id="tpl-package-banner">
+      <div class="package-onboarding">
+        <h2 class="onboarding-title">Plan and track development with the plan suite</h2>
+        <p class="onboarding-lead">
+          Enable the plan suite to turn next-step ideas into tracked, agent-ready plans, with one
+          command for each step of the development lifecycle.
+        </p>
+        <ul class="onboarding-list">
+          <li>
+            <portal-icon name="plans" size="md"></portal-icon>
+            <span>One Markdown file per plan, in each project's <code>docs/plans/</code> folder.</span>
+          </li>
+          <li>
+            <portal-icon name="filter" size="md"></portal-icon>
+            <span
+              >Plans move through lifecycle folders: 
+              <div class="code-sample">
+                <code>backlog</code> → <code>active</code> →
+                <code>completed</code> → <code>archived</code>.
+              </div>
+            </span>
+          </li>
+          <li>
+            <portal-icon name="pencil" size="md"></portal-icon>
+            <span>Each step of the lifecycle is its own command:</span>
+            <ul class="onboarding-sublist">
+              <li>
+                <code>/plan-write</code> — create a plan, or revise and sync one
+                <button type="button" data-btn="text" data-slot="details" data-skill="plan-write">Details</button>
+              </li>
+              <li>
+                <code>/plan-promote</code> — prepare a plan for development
+                <button type="button" data-btn="text" data-slot="details" data-skill="plan-promote">Details</button>
+              </li>
+              <li>
+                <code>/plan-start</code> — implement it in an isolated worktree
+                <button type="button" data-btn="text" data-slot="details" data-skill="plan-start">Details</button>
+              </li>
+              <li>
+                <code>/plan-close</code> — verify the work and close the plan
+                <button type="button" data-btn="text" data-slot="details" data-skill="plan-close">Details</button>
+              </li>
+              <li>
+                <code>/session-close</code> — commit and hand off the session
+                <button type="button" data-btn="text" data-slot="details" data-skill="session-close">Details</button>
+              </li>
+            </ul>
+          </li>
+        </ul>
+        <div class="banner-links">
+          <button type="button" data-btn="cta" data-slot="action">Enable the Plan Suite</button>
+        </div>
+      </div>
+    </template>
+    <template id="tpl-chip">
+      <span class="chip"></span>
+    </template>
+    <template id="tpl-list-item">
+      <li data-slot="text"></li>
+    </template>
+    <template id="tpl-blocker-link">
+      <button type="button" class="blockers-popover-item" data-slot="title"></button>
+    </template>
+    <template id="tpl-blocker-unresolved">
+      <span class="blockers-popover-item blockers-popover-item-unresolved" data-slot="title"></span>
+    </template>
+    <template id="tpl-menu-item">
+      <button type="button" class="menu-button-item">
+        <portal-icon size="sm"
+          data-slot="icon"
+          class="menu-button-item-icon"
+        ></portal-icon>
+        <div class="menu-button-item-body">
+          <span data-slot="label"></span>
+          <span
+            class="menu-button-item-desc"
+            data-slot="description"
+            hidden
+          ></span>
+        </div>
+      </button>
+    </template>
+    <template id="tpl-plan-menu">
+      <div class="plan-menu">
+        <p class="plan-menu-note" data-slot="note"></p>
+        <div class="plan-menu-group" data-slot="group" hidden></div>
+        <div data-slot="fallback-actions" hidden></div>
+        <div data-slot="copy-path"></div>
+        <div data-slot="package-banner" hidden></div>
+      </div>
+    </template>
+    <template id="tpl-plan-status">
+      <div class="status-section">
+        <div class="status-state-row">
+          <div class="status-state-chips" data-slot="status-chips">
+            <div class="lifecycle-slot" data-slot="lifecycle"></div>
+            <div class="priority-slot" data-slot="priority"></div>
+            <span class="state-badge" data-slot="state-badge" hidden></span>
+          </div>
+          <span class="meta-line" data-slot="meta"></span>
+        </div>
+        <div class="status-implementation" data-slot="implementation">
+          <div class="status-progress-row" data-slot="progress-row">
+            <div class="progress-bar">
+              <div class="progress-fill" data-slot="progress-fill"></div>
+            </div>
+            <span class="progress-label" data-slot="progress-label"></span>
+          </div>
+          <div class="status-complete-row" data-slot="complete-row" hidden>
+            <span class="tasks-complete-badge">All tasks complete</span>
+          </div>
+          <div class="next-line" data-slot="next-row"><span class="next-label">Next up:</span> <span data-slot="next"></span></div>
+        </div>
+      </div>
+    </template>
+    <template id="tpl-dtdd-row">
+      <div class="dtdd-row">
+        <dt data-slot="term"></dt>
+        <dd data-slot="value"></dd>
+      </div>
+    </template>
+    <template id="tpl-task-item">
+      <li data-slot="text"></li>
+    </template>

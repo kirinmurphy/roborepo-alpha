@@ -12,7 +12,8 @@
 // The loading overlay is NOT here: it's real markup in the initial HTML (see {{LOADING}} in
 // portal-server.mjs) so it's visible on first paint instead of flashing in after this module
 // script runs.
-import { portalTpl as tpl } from "/portal/shared/api.js";
+import { portalFillSlots as fill, portalTpl as tpl } from "/portal/shared/api.js";
+import "/portal/shared/icon.js";
 
 if (!window.PORTAL_MANIFEST) {
   throw new Error(
@@ -30,13 +31,25 @@ const PORTAL_PAGES = window.PORTAL_MANIFEST.pages;
   }
   const nav = document.getElementById("nav");
   if (!nav) return;
-  const here = location.pathname;
+  const currentPageId = window.PORTAL_MANIFEST.currentPageId;
   nav.prepend(
     ...PORTAL_PAGES.map((p) => {
       const link = tpl("tpl-nav-link");
       link.href = p.path;
-      link.textContent = p.title;
-      if (p.path === here) link.classList.add("active");
+      fill(link, { label: p.title });
+      if (p.icon) {
+        const icon = document.createElement("portal-icon");
+        icon.setAttribute("name", p.icon);
+        icon.setAttribute("size", "md");
+        icon.setAttribute("aria-hidden", "true");
+        fill(link, { icon });
+        link.classList.add("nav-icon-only");
+        link.setAttribute("aria-label", p.title);
+        link.title = p.title;
+      } else {
+        link.querySelector('[data-slot="icon"]')?.remove();
+      }
+      if (p.id === currentPageId) link.classList.add("active");
       return link;
     }),
   );

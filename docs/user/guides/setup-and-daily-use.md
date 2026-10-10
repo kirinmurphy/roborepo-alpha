@@ -12,20 +12,27 @@ Open the local portal and go to `/plans`:
 roborepo web
 ```
 
-The Plans page discovers Markdown files under `docs/plans/**/*.md` from configured discovery roots.
+The Plans page reads Markdown files under `docs/plans/**/*.md` in every repository RoboRepo knows
+about. Turn on auto-discovery or add a folder under **Manage repositories** to make repositories
+known.
 It works without enabling any workflow package: you can filter plans, open rendered Markdown, inspect
 warnings/tasks, and copy repository-aware context.
 
-Enable the Plan Docs package when you want agent workflow prompts and the `/plan-docs` slash command:
+Enable the plan suite when you want agent workflow prompts and one slash command per lifecycle
+step. The Plans page banner enables all five at once; from the CLI, enable each package:
 
 ```sh
-roborepo package enable plan-docs
+roborepo package enable plan-write
+roborepo package enable plan-promote
+roborepo package enable plan-start
+roborepo package enable plan-close
+roborepo package enable session-close
 ```
 
-Then use `/plan-docs create`, `/plan-docs start`, `/plan-docs sync`, `/plan-docs validate`,
-`/plan-docs review`, or `/plan-docs handoff`.
+Then use `/plan-write` to create or update a plan, `/plan-promote` to prepare it, `/plan-start` to
+implement it, `/plan-close` to close it once the work lands, and `/session-close` to end a chat.
 
-See [Plan Docs Walkthrough](plan/lifecycle/plan-docs.md) for the full user flow.
+See [Plan Suite Walkthrough](plan/lifecycle/plan-suite.md) for the full user flow.
 
 ## Index and watch a repo
 

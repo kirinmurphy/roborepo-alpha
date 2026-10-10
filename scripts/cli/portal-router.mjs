@@ -80,7 +80,7 @@ export function dispatchRoutes(tables, req, res, urlPath, qs, handlers) {
   return false;
 }
 
-function matchSegments(routeSegments, urlPath) {
+export function matchSegments(routeSegments, urlPath) {
   const pathSegments = urlPath.split("/").filter(Boolean);
   if (routeSegments.length !== pathSegments.length) return null;
   const params = {};

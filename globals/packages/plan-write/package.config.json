@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "plan-write",
+  "label": "Plan Write",
+  "description": "Create, revise, and sync repository plan documents.",
+  "lifecycle": "optional",
+  "presentation": {
+    "category": "skills-dev-lifecycle",
+    "order": 10
+  },
+  "resources": [
+    {
+      "type": "skill",
+      "id": "plan-write",
+      "source": "skills/plan-write",
+      "invocation": "manual",
+      "risk": "medium",
+      "entrypoints": [
+        {
+          "type": "slash-command",
+          "name": "plan-write",
+          "description": "Create, revise, or sync a repository plan document.",
+          "harnesses": ["claude", "codex", "gemini"]
+        }
+      ]
+    }
+  ]
+}

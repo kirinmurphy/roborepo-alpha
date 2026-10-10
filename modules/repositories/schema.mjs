@@ -2,7 +2,11 @@
 // developer-runtime settings-schema convention exactly: a *_VERSION const, allow-list validators that
 // THROW on any unknown key, no I/O in this file. See modules/developer-runtime/settings-schema.mjs.
 
-export const REGISTRY_VERSION = 1;
+import { validateRepositoryUrlKey } from "./url-key.mjs";
+
+// v3 (pljvmyh §4): discoveries carry a per-source `sourceId` for configured repository sources. Lower
+// versions are discarded on load rather than migrated — a deliberate clean cutover.
+export const REGISTRY_VERSION = 3;
 
 // Lifecycle is multi-dimensional — never one mutually exclusive enum. Each dimension is validated
 // independently so a repository can be e.g. visible + resolved + active + unmonitored at once.
@@ -13,8 +17,11 @@ export const ACTIVITY_STATES = ["active", "inactive", "unknown"];
 // Domains that can be independently enrolled for ongoing monitoring/association.
 export const ENROLLMENT_DOMAINS = ["plans", "developer-runtime", "telemetry", "agentConfig", "health"];
 
-// Discovery sources allowed in provenance records.
-export const DISCOVERY_SOURCES = ["plans", "developer-runtime", "telemetry", "agentConfig", "doctor", "manual"];
+// Discovery sources allowed in provenance records. `repository-source` is a user-configured folder
+// or exact repository; it is the only kind that carries a `sourceId`, because a repository can be
+// found by several configured sources at once and each must be removable on its own.
+export const DISCOVERY_SOURCES = ["plans", "developer-runtime", "telemetry", "agentConfig", "doctor", "manual", "repository-source"];
+export const CONFIGURED_DISCOVERY_SOURCE = "repository-source";
 
 export const CONFIDENCE_LEVELS = ["high", "medium", "low", "suggestion"];
 
@@ -107,21 +114,25 @@ function validateLocalRootPaths(localRootPaths) {
 
 function validateRepositories(repositories) {
   if (!repositories || typeof repositories !== "object" || Array.isArray(repositories)) throw new Error("registry repositories must be an object");
+  const urlKeys = new Set();
   for (const [id, record] of Object.entries(repositories)) {
     safeRepositoryId(id);
     validateRepositoryRecord(id, record);
+    if (urlKeys.has(record.urlKey)) throw new Error(`duplicate repository urlKey: ${record.urlKey}`);
+    urlKeys.add(record.urlKey);
   }
 }
 
 export function validateRepositoryRecord(id, record) {
   if (!record || typeof record !== "object" || Array.isArray(record)) throw new Error("repository record must be an object");
   validateObjectKeys(record, [
-    "id", "kind", "displayName", "providerUrl", "normalizedRemote",
+    "id", "kind", "urlKey", "displayName", "providerUrl", "normalizedRemote",
     "localRoots", "discoveries", "enrollments", "aliases",
     "visibility", "resolution", "activity", "pinned", "createdAt", "updatedAt", "restoredAt",
   ], "repository record");
   if (record.id !== id) throw new Error("repository record id must match its key");
   safeRepositoryId(record.id);
+  validateRepositoryUrlKey(record.urlKey);
   if (!["git", "local"].includes(record.kind)) throw new Error("repository kind must be git or local");
   safeString(record.displayName, "repository displayName", 120);
   if (record.providerUrl != null) validateProviderUrl(record.providerUrl);
@@ -180,8 +191,10 @@ function validateDiscoveries(discoveries) {
   if (!Array.isArray(discoveries)) throw new Error("repository discoveries must be an array");
   for (const discovery of discoveries) {
     if (!discovery || typeof discovery !== "object" || Array.isArray(discovery)) throw new Error("discovery must be an object");
-    validateObjectKeys(discovery, ["source", "firstSeenAt", "lastSeenAt", "evidence", "confidence"], "discovery");
+    validateObjectKeys(discovery, ["source", "sourceId", "firstSeenAt", "lastSeenAt", "evidence", "confidence"], "discovery");
     if (!DISCOVERY_SOURCES.includes(discovery.source)) throw new Error("discovery source is invalid");
+    if (discovery.source === CONFIGURED_DISCOVERY_SOURCE) safeOpaqueId(discovery.sourceId, "discovery sourceId");
+    else if (discovery.sourceId != null) throw new Error("discovery sourceId is only valid for configured repository sources");
     safeIsoTimestamp(discovery.firstSeenAt, "discovery firstSeenAt");
     safeIsoTimestamp(discovery.lastSeenAt, "discovery lastSeenAt");
     safeString(discovery.evidence, "discovery evidence", 80);
@@ -247,11 +260,12 @@ export function assertAliasGraph(aliases) {
 }
 
 // Build a fresh, valid repository record with sane lifecycle defaults.
-export function newRepositoryRecord(id, { kind, displayName, now = new Date().toISOString(), providerUrl = null, normalizedRemote = null }) {
+export function newRepositoryRecord(id, { kind, urlKey, displayName, now = new Date().toISOString(), providerUrl = null, normalizedRemote = null }) {
   safeRepositoryId(id);
   const record = {
     id,
     kind,
+    urlKey,
     displayName,
     providerUrl: providerUrl ?? null,
     normalizedRemote: normalizedRemote ?? null,

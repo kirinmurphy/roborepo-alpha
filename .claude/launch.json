@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "portal-home-detail-worktree",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "/Users/esteban/.worktrees/roborepo/codex/portal-repository-home-and-detail/scripts/cli/main.mjs",
+        "web",
+        "--no-open",
+        "--port",
+        "4337"
+      ],
+      "port": 4337
+    },
+    {
+      "name": "portal-main",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["scripts/cli/main.mjs", "web", "--no-open", "--port", "4338"],
+      "port": 4338
+    }
+  ]
+}

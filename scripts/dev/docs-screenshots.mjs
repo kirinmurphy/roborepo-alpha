@@ -11,10 +11,10 @@
 //   - Harnesses: stub `claude` / `codex` binaries on PATH, then `roborepo init`, a typical package
 //     set, and telemetry enabled.
 //   - Tokens: the repo's own mock spool (portal/tokens/mock-spool.jsonl).
-//   - Plans: this repository's docs/plans (public content).
-//   - Runtime: two demo apps in throwaway git repos with example remotes (acme/*). Discovery
-//     scans the real machine's listeners, so the page's snapshot is filtered to the demo apps
-//     before it renders.
+//   - Plans: this repository's docs/plans (public content), added as a repository source.
+//   - Runtime: two demo apps in throwaway git repos with example remotes (acme/*). Auto-discovery
+//     is turned on and scans the real machine's listeners, so the page's snapshot is filtered to
+//     the demo apps before it renders.
 // Each shot is one page section (an element screenshot), not a full page.
 import fs from "node:fs";
 import os from "node:os";
@@ -22,6 +22,7 @@ import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { addRepositorySource, setRepositorySourceEnabled } from "../cli/repository-sources.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const cli = path.join(repoRoot, "scripts", "cli", "main.mjs");
@@ -36,7 +37,7 @@ const outIndex = args.indexOf("--out");
 const outDir = path.resolve(outIndex !== -1 ? args[outIndex + 1] : path.join(repoRoot, "docs", "images"));
 
 const PACKAGES = [
-  "plan-docs",
+  "plan-write",
   "code-style",
   "javascript-typescript",
   "test-harness",
@@ -62,7 +63,6 @@ const env = {
   ROBOREPO_STATE_DIR: path.join(home, ".roborepo"),
   PATH: `${path.join(home, "stub-bin")}:${process.env.PATH}`,
   ROBOREPO_PRESETS_ONBOARD: "skip",
-  ROBOREPO_PLAN_ROOTS: repoRoot,
   SKIP_MCP: "1",
 };
 for (const key of ["ROBOREPO_WORKSPACE_ROOT", "ROBOREPO_APP_ROOT"]) delete env[key];
@@ -91,6 +91,11 @@ function setUpHome() {
   const spoolDir = path.join(home, ".roborepo", "telemetry", "spool");
   fs.mkdirSync(spoolDir, { recursive: true });
   fs.copyFileSync(path.join(repoRoot, "portal", "tokens", "mock-spool.jsonl"), path.join(spoolDir, "claude.jsonl"));
+  // Repositories are found only through sources the user turned on: this checkout for Plans, and
+  // auto-discovery for the Runtime demo apps.
+  const stateRoot = env.ROBOREPO_STATE_DIR;
+  addRepositorySource({ path: repoRoot, kind: "repository", stateRoot, homeDir: home });
+  setRepositorySourceEnabled({ id: "auto-discovery", enabled: true, stateRoot, homeDir: home });
 }
 
 // ── Demo apps for Runtime ──

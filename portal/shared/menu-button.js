@@ -100,6 +100,7 @@ class PortalMenuButton extends HTMLElement {
       trigger.append(icon);
     }
     if (this._label) trigger.append(document.createTextNode(this._label));
+    if (this.hasAttribute("aria-label")) trigger.setAttribute("aria-label", this.getAttribute("aria-label"));
     const chevron = document.createElement("portal-icon");
     chevron.setAttribute("name", "chevron");
     chevron.setAttribute("size", "sm");

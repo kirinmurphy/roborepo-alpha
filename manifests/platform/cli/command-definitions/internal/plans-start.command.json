@@ -1,0 +1,13 @@
+{
+  "path": ["plans", "start"],
+  "kind": "internal",
+  "title": "Start plan",
+  "description": "Record a plan's worktree, move it to active, commit, and validate the transition",
+  "usage": "roborepo plans start <plan> --worktree <name> [--base <branch>] [--json]",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/plans.mjs",
+    "export": "plansCommand",
+    "prependArgs": ["start"]
+  }
+}

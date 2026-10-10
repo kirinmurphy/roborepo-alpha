@@ -20,6 +20,9 @@ Discovery is split across provider boundaries:
   transition events.
 - `docker.mjs` collects running-container/Compose data; `process-metrics.mjs` collects live
   CPU/memory/elapsed for discovered PIDs. See [Docker and process metrics](../user/reference/runtime.md#docker-and-process-metrics).
+- `stop.mjs` is the one module that acts on processes: it sends `SIGTERM` to the listeners whose
+  working directory's Git top level is a given checkout. `roborepo plans stop-servers` (and so
+  `/plan-close`) is its only caller; the portal never stops anything.
 
 ## Git Collection
 

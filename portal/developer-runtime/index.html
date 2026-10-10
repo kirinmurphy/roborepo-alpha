@@ -9,6 +9,8 @@
     <main class="inner">
       {{LOADING}}
       <section id="warnings" class="notice warn" hidden></section>
+      <!-- Shown while auto-discovery is off: no process is observed until the user turns it on. -->
+      <div id="auto-discovery-cta" hidden></div>
       <section id="content" class="developer-runtime-content"></section>
     </main>
 
@@ -79,12 +81,12 @@
             >
             <label
               ><input id="app-project-hidden" type="checkbox" /> Hide
-              project</label
+              project from Runtime</label
             >
             <label
               ><input id="app-favorite" type="checkbox" /> App favorite</label
             >
-            <label><input id="app-hidden" type="checkbox" /> Hide app</label>
+            <label><input id="app-hidden" type="checkbox" /> Hide app from Runtime</label>
           </div>
           <label>
             Health path
@@ -190,27 +192,7 @@
     <!-- API endpoint contract. A real modal rather than an inline expander: the routes list is
          itself a popover, so an endpoint's parameter tables and curl command had no room to open
          in place without the row scrolling out from under them. -->
-    <dialog id="api-route-dialog" aria-labelledby="api-route-dialog-title">
-      <div class="modal-head">
-        <h2 id="api-route-dialog-title">
-          <span class="route-api-method" data-slot="method"></span>
-          <span class="route-api-path" data-slot="path"></span>
-        </h2>
-        <portal-close-button data-close aria-label="Close"></portal-close-button>
-      </div>
-      <div class="modal-body">
-        <p class="route-api-description" data-slot="summary" hidden></p>
-        <div data-slot="params"></div>
-        <div class="route-api-curl">
-          <div class="route-api-curl-head">
-            <span class="route-api-curl-label">curl</span>
-            <portal-copy-button data-slot="curl-copy" label="Copy"></portal-copy-button>
-          </div>
-          <pre class="route-api-curl-text" data-slot="curl-text"></pre>
-          <p class="route-api-curl-hint" data-slot="curl-hint" hidden></p>
-        </div>
-      </div>
-    </dialog>
+
 
     <!-- Instance grouping & toolbar -->
     <template id="tpl-group">
@@ -221,6 +203,12 @@
         </header>
         <div class="instance-grid" data-slot="items"></div>
       </section>
+    </template>
+    <template id="tpl-sync-status">
+      <span id="runtime-sync-status" class="sync-status" role="status" aria-live="polite">
+        <span class="sync-status-icon" aria-hidden="true"></span>
+        <span data-slot="text">Synced</span>
+      </span>
     </template>
     <template id="tpl-toolbar-actions">
       <div class="toolbar-actions">
@@ -287,7 +275,7 @@
         <div class="card-head">
           <div class="card-main">
             <div class="card-title">
-              <h3 data-slot="title"></h3>
+              <h3><a data-slot="repository-name"></a></h3>
               <span class="title-separator">-</span>
               <a data-slot="origin" target="_blank" rel="noreferrer"></a>
               <!-- The whale marks a Docker-run instance. Rendered only when the Docker provider
@@ -395,7 +383,7 @@
                    Pin action), and offering it per member asked the user to favorite one port of a
                    thing they were already pinning as a whole. Hide stays — hiding one noisy
                    listener is a real per-member need. -->
-              <button type="button" data-action="hide">Hide</button>
+              <button type="button" data-action="hide">Hide from Runtime</button>
             </div>
           </div>
         </div>
@@ -470,7 +458,7 @@
                      whole repository, not to this one Compose stack. -->
                 <!-- Favorite removed for the same reason as on the instance card: pinning belongs
                      to the repository, not to one Compose stack under it. -->
-                <button type="button" data-action="hide">Hide</button>
+                <button type="button" data-action="hide">Hide from Runtime</button>
               </div>
             </div>
           </div>
@@ -511,27 +499,9 @@
               ></a>
               <!-- No URL here: every checkout's app link sits in its own row, main checkout included,
                    so the header names the repository and nothing about where it runs. -->
-              <span class="info-wrap repository-nested-control" data-tip-html="template">
-                <portal-info-icon aria-label="Show repository details"></portal-info-icon>
-                <template>
-                  <!-- Repository-level facts only. Git is deliberately absent: it is per-checkout
-                       (branch, commit, drift, fetch age all differ between worktrees), so it lives
-                       on each worktree row's own tooltip instead. A "Git" group here previously
-                       rendered a heading above five slots nothing ever filled, because
-                       repositoryCard() never calls applyGitTooltipFields.
-                       Members and Resources stay: both are aggregates across every checkout, which
-                       is a genuinely repository-level question. -->
-                  <span class="info-tooltip-content">
-                    <span class="info-tooltip-group">Repository</span>
-                    <span><strong>Members</strong><span data-slot="members-detail"></span></span>
-                    <span><strong>Resources</strong><span data-slot="resources"></span></span>
-                    <span><strong>Identity</strong><span data-slot="identity"></span></span>
-                  </span>
-                </template>
-              </span>
-              <!-- Card-level state, right after the info icon — kept out of the right-hand column so
-                   that column stays reserved for the aligned per-row controls. "mock" marks a dev
-                   fixture; the lifecycle state shows only when the repository is NOT running (an
+              <!-- Card-level state, kept out of the right-hand column so
+                   that column stays reserved for the aligned per-row controls. "mock" marks a
+                   demonstration repository; the lifecycle state shows only when the repository is NOT running (an
                    active one says so by listing its members). -->
               <span class="repository-card-badges">
                 <span class="repository-state-badge is-mock" data-slot="fixture-badge" hidden>mock</span>
@@ -540,26 +510,7 @@
               <span class="resource-concern-badge" data-slot="resource-concern" hidden></span>
             </div>
           </div>
-          <!-- Repository-scoped actions only. Pin and hide describe the whole repository,
-               not one listener inside it; per-member actions (links, association, history) stay
-               on the member cards where they apply. -->
-          <!-- Hidden until earned — see tpl-card's note. -->
-          <div class="action-menu repository-nested-control" hidden>
-            <button
-              type="button"
-              class="menu-trigger"
-              data-action="menu"
-              aria-label="Actions"
-              aria-expanded="false"
-            >
-              <span></span><span></span><span></span>
-            </button>
-            <div class="menu-panel" data-menu hidden>
-              <button type="button" data-action="repo">Associate repo</button>
-              <button type="button" data-action="pin" data-slot="pin-label">Pin</button>
-              <button type="button" data-action="hide">Hide</button>
-            </div>
-          </div>
+          <span class="repository-nested-control" data-slot="repository-menu"></span>
         </div>
         <p class="card-notice" data-slot="duplicate-notice" hidden></p>
         <!-- One row per checkout (main worktree first, then every linked worktree) instead of one
@@ -567,113 +518,6 @@
              always visible; each has its own independent expand/collapse for its member list. -->
         <div class="repository-roots" data-slot="roots"></div>
       </article>
-    </template>
-    <!-- One row per checkout, persistently listed with its OWN member list — one worktree's members
-         open does not require or affect any other worktree's. The main row always renders, even
-         with nothing running, so canonical repository identity never appears to depend on which
-         root happens to be running.
-
-         Two columns: identity (branch, copy, drift) on the left and actions (promoted link, Links,
-         member toggle) on the right, so every checkout's app link sits in the same place. A plain
-         <div> rather than <details>: the member toggle is a real button, and a button inside a
-         <summary> is interactive content nested in interactive content. See
-         docs/plans/completed/developer-runtime-repository-row-layout.md. -->
-    <template id="tpl-repository-root">
-      <div class="repository-root">
-        <div class="repository-root-head">
-          <!-- Home for the main checkout, tree for a linked worktree. One element, so a later
-               status tint (developer-runtime-remote-branch-status) recolours it as a whole. -->
-          <portal-icon class="repository-root-glyph" data-slot="root-glyph" name="home"></portal-icon>
-          <div class="repository-root-identity">
-            <div class="repository-root-identity-line">
-              <!-- Branch label and info icon are ONE tooltip trigger: hovering either part (or
-                   focusing the icon) opens this checkout's details. Revealed by buildRootSection
-                   once the checkout has git or a path to report. -->
-              <span class="info-wrap repository-root-trigger" data-slot="root-info" data-tip-html="template" data-tip-placement="panel" hidden>
-                <span class="repository-root-branch" data-slot="root-branch"></span>
-                <portal-info-icon aria-label="Show checkout details"></portal-info-icon>
-                <template>
-                  <span class="info-tooltip-content">
-                    <!-- Untruncated identity first: the row caps the branch name, the tooltip never
-                         does. -->
-                    <!-- Two identities, each marked by what it is: the branch (the git-branch glyph
-                         checkout rows used to lead with) and the checkout directory (the row's own
-                         home or tree glyph). -->
-                    <span class="info-tooltip-heading"
-                      ><portal-icon name="git-branch"></portal-icon
-                      ><span data-slot="root-heading"></span
-                    ></span>
-                    <span class="info-tooltip-subheading" data-slot="root-subheading-line" hidden
-                      ><portal-icon data-slot="root-subheading-icon" name="home"></portal-icon
-                      ><span data-slot="root-subheading"></span
-                    ></span>
-                    <span data-slot="root-state-detail" hidden
-                      ><strong>State</strong><span data-slot="root-state-text"></span
-                    ></span>
-                    <!-- A row that folds in its only member inserts that member's own facts
-                         (health, process, resources) as an "App" group just before this one. -->
-                    <span class="info-tooltip-group" data-slot="root-checkout-group">Checkout</span>
-                    <span data-slot="root-path-detail" hidden
-                      ><strong>Path</strong><span data-slot="root-path-text"></span
-                    ></span>
-                    <span><strong>Members</strong><span data-slot="root-members-detail"></span></span>
-                    <span class="info-tooltip-group">Git</span>
-                    <span data-slot="git-detail" hidden
-                      ><strong>Tracking</strong><span data-slot="git-detail-text"></span
-                    ></span>
-                    <span data-slot="git-commit-detail" hidden
-                      ><strong>Commit</strong><span data-slot="git-commit-text"></span
-                    ></span>
-                    <span data-slot="git-status-detail" hidden
-                      ><strong>Working tree</strong><span data-slot="git-status-text"></span
-                    ></span>
-                    <span data-slot="git-drift-detail" hidden
-                      ><strong>Drift</strong><span data-slot="git-drift-text"></span
-                    ></span>
-                    <span data-slot="git-fetch-detail" hidden
-                      ><strong>Fetched</strong><span data-slot="git-fetch-text"></span
-                    ></span>
-                  </span>
-                </template>
-              </span>
-              <!-- Copy branch / copy worktree path — mounted by mountCopyDropdown, outside the
-                   tooltip trigger so copying never opens the tooltip. -->
-              <span class="repository-root-copy" data-slot="root-copy"></span>
-              <!-- Same line as the branch while it fits; when the column narrows, the whole phrase
-                   wraps to the next line as one unit rather than pushing the actions column over. -->
-              <span class="git-drift" data-slot="git-drift" hidden></span>
-            </div>
-          </div>
-          <!-- checkout-actions / checkout-links-cell / checkout-control-cell are shared with member
-               cards (instanceCard), so a row's port and its members' ports line up. -->
-          <div class="repository-root-actions checkout-actions">
-            <!-- Only when the row has folded in its only member, and only when something is wrong:
-                 silence is the healthy state. -->
-            <span class="port-health-badge" data-slot="root-health" hidden></span>
-            <span class="resource-concern-badge" data-slot="resource-concern" hidden></span>
-            <!-- The promoted link, port-only (":4322"): every listener here is loopback, so the
-                 host is implied. The full origin stays on href and title. -->
-            <a class="repository-entrypoint" data-slot="root-entrypoint" target="_blank" rel="noreferrer" hidden></a>
-            <!-- The promoted member's Links dropdown, mounted by app.js. A fixed-width cell, present
-                 even when empty, so the port before it keeps its column. -->
-            <span class="checkout-links-cell"><span data-slot="root-links" hidden></span></span>
-            <!-- The last cell is the same width on every row — present even when empty — so the
-                 port and Links columns before it line up down the card. It holds one of two
-                 controls, never both: -->
-            <span class="repository-root-control checkout-control-cell">
-              <!-- A row with exactly one member, which is the promoted app, shows that member's ⋮
-                   menu instead of a toggle opening onto a card that would repeat the row. -->
-              <span class="repository-root-menu" data-slot="root-menu" hidden></span>
-              <!-- Every other row with members: a bare caret. Its accessible name and title say
-                   what it opens ("Show 2 members", "Show 4 containers", "Show 1 stopped"). -->
-              <button type="button" class="repository-root-toggle" data-action="toggle-members" aria-expanded="false" hidden>
-                <portal-icon name="chevron" class="compose-project-chevron"></portal-icon>
-              </button>
-            </span>
-          </div>
-        </div>
-        <div class="repository-members" data-slot="members" hidden></div>
-      </div>
     </template>
     <!-- One row per container (not per published port) — a single container publishing several
          host ports lists them as nested port rows underneath, instead of repeating the container.
@@ -768,61 +612,6 @@
          captured) or the edit/delete pair (a user-added one). They are mutually exclusive and share
          the row's end position: a user link is saved by definition, so a checkmark there would state
          something that is never in question, where the actions are what that row actually needs. -->
-    <template id="tpl-route-link-row">
-      <a class="route-link-row" data-slot="href" target="_blank" rel="noreferrer">
-        <span class="history-type" data-slot="source"></span>
-        <span class="history-detail" data-slot="path"></span>
-        <portal-icon name="check" data-slot="saved-check" hidden></portal-icon>
-        <span class="route-link-actions" data-slot="row-actions" hidden>
-          <button type="button" class="route-row-action" data-action="edit-link" aria-label="Edit link">
-            <portal-icon name="pencil"></portal-icon>
-          </button>
-          <!-- `close` rather than a trash glyph: the icon set has no trash, and close already reads
-               as "remove this" everywhere else in the portal. Adding a one-use glyph for parity with
-               a convention this UI does not otherwise follow is not worth the surface. -->
-          <button type="button" class="route-row-action" data-action="delete-link" aria-label="Delete link">
-            <portal-icon name="close"></portal-icon>
-          </button>
-        </span>
-      </a>
-    </template>
-    <!-- Section heading with an optional right-aligned action. Used by the Pages heading to carry
-         "+ Add", which is a plain button rather than a CTA: adding a link is one option among the
-         rows below it, not the panel's primary purpose. -->
-    <template id="tpl-routes-section-heading">
-      <div class="routes-section-heading">
-        <span data-slot="title"></span>
-        <button type="button" class="routes-heading-action" data-slot="action" hidden>
-          + Add
-        </button>
-      </div>
-    </template>
-    <!-- An API route is described, not opened. Most need a method, a body, or auth, so a plain link
-         would 404/405 or dump JSON. The row is a button that opens the contract modal
-         (#api-route-dialog) instead of an anchor that navigates. -->
-    <template id="tpl-route-api-row">
-      <button type="button" class="route-api-row">
-        <span class="route-api-method" data-slot="method"></span>
-        <span class="route-api-path" data-slot="path"></span>
-        <!-- A saved API route renders here only, never as a duplicate row under Pages, so this is
-             where its saved state has to appear. -->
-        <portal-icon name="check" data-slot="saved-check" hidden></portal-icon>
-      </button>
-    </template>
-    <template id="tpl-route-param-table">
-      <div class="route-param-table">
-        <div class="route-param-title" data-slot="title"></div>
-        <div class="route-param-rows" data-slot="rows"></div>
-      </div>
-    </template>
-    <template id="tpl-route-param-row">
-      <div class="route-param-row">
-        <span class="route-param-name" data-slot="name"></span>
-        <span class="route-param-type" data-slot="type"></span>
-        <span class="route-param-required" data-slot="required"></span>
-        <span class="route-param-example" data-slot="example"></span>
-      </div>
-    </template>
     <!-- Settings dialog: link editor rows + settings sections -->
     <template id="tpl-link-empty">
       <p class="no-links" data-empty="true">No saved links. Add a row to create one.</p>
@@ -866,6 +655,7 @@
         <button type="button" data-slot="action"></button>
       </div>
     </template>
+    {{REPOSITORY_SOURCES}}
     <script type="module" src="/portal/shared/info-icon.js"></script>
     <script type="module" src="/portal/shared/icon.js"></script>
     <script type="module" src="/portal/shared/close-button.js"></script>

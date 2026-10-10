@@ -17,9 +17,7 @@ const catalog = [
   const snap = { harnesses: catalog, machineHarnesses: [], packages: [] };
   const notice = configHarnessWarning(snap);
   assert.equal(notice.variant, "warning");
-  assert.match(notice.body, /Install a supported harness/);
-  assert.match(notice.body, /roborepo harness refresh/);
-  assert.match(notice.body, /Claude Code and Codex/);
+  assert.equal(notice.body, "Install a supported harness to add agent tools and enable token tracking.");
 }
 
 {

@@ -14,16 +14,16 @@
     },
     {
       "id": "skills-dev-lifecycle",
-      "label": "Skills - Development Life Cycle",
-      "description": "Named slash-command workflows you start intentionally, in the order you use them.",
+      "label": "Plan Suite",
+      "description": "One command for each step of a plan's life: write, promote, start, close, and close out the session.",
       "bulkToggle": true,
       "order": 20
     },
     {
-      "id": "skills-writing",
-      "label": "Skills - Writing Assistants",
-      "description": "Long-form writing workflows — case studies and structured documentation.",
-      "order": 25
+      "id": "skills-code-quality",
+      "label": "Skills - Code Quality",
+      "description": "Commands that clean up code against this project's own patterns.",
+      "order": 27
     },
     {
       "id": "code-conventions",
@@ -31,6 +31,12 @@
       "description": "Skills auto-loaded when relevant — shape output without an explicit command.",
       "footnote": "* builtin-support — help skill for this repo, always loaded.",
       "order": 30
+    },
+    {
+      "id": "skills-writing",
+      "label": "Writing Assistants",
+      "description": "Long-form writing workflows — case studies and structured documentation.",
+      "order": 25
     },
     {
       "id": "chat-time-output",
@@ -42,6 +48,11 @@
       "id": "integrations",
       "label": "Integrations",
       "order": 50
+    },
+    {
+      "id": "additional-agents-md-rules",
+      "label": "Additional Agent Rules",
+      "order": 60
     }
   ]
 }

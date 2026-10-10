@@ -41,9 +41,9 @@ function countFileValue(sessionId) {
 {
   const session = "smoke-session-a";
   const reads = [
-    ["plan-docs", "plan-schema.md"],
-    ["plan-docs", "lifecycle.md"],
-    ["plan-docs", "workflow-validate.md"],
+    ["plan-write", "plan-schema.md"],
+    ["plan-write", "lifecycle.md"],
+    ["plan-write", "workflow-validate.md"],
   ];
   reads.forEach(([skill, reference], i) => {
     const stdout = readReference(session, skill, reference);
@@ -65,8 +65,8 @@ function countFileValue(sessionId) {
 // --- a non-reference read (SKILL.md, a source file) never advances the counter ------------------
 {
   const session = "smoke-session-b";
-  readReference(session, "plan-docs", "plan-schema.md");
-  const skillEntryPoint = path.join(claudeSkills, "plan-docs", "SKILL.md");
+  readReference(session, "plan-write", "plan-schema.md");
+  const skillEntryPoint = path.join(claudeSkills, "plan-write", "SKILL.md");
   const result = spawnSync(process.execPath, [hook], {
     input: JSON.stringify({ session_id: session, tool_input: { file_path: skillEntryPoint } }),
     encoding: "utf8",
@@ -80,9 +80,9 @@ function countFileValue(sessionId) {
 {
   const sessionX = "smoke-session-x";
   const sessionY = "smoke-session-y";
-  readReference(sessionX, "plan-docs", "plan-schema.md");
-  readReference(sessionX, "plan-docs", "lifecycle.md");
-  readReference(sessionY, "plan-docs", "plan-schema.md");
+  readReference(sessionX, "plan-write", "plan-schema.md");
+  readReference(sessionX, "plan-write", "lifecycle.md");
+  readReference(sessionY, "plan-write", "plan-schema.md");
   assert.equal(countFileValue(sessionX), 2, "session x keeps its own count");
   assert.equal(countFileValue(sessionY), 1, "session y starts its own count, unaffected by session x");
 }

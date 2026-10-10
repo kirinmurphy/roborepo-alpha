@@ -5,7 +5,7 @@ import crypto from "node:crypto";
 import { repoRoot } from "./paths.mjs";
 import { computePortalSourceHash } from "./portal-source-hash.mjs";
 import { send } from "./portal-routes-http.mjs";
-import { dispatchRoutes, validateRouteTables } from "./portal-router.mjs";
+import { dispatchRoutes, matchSegments, validateRouteTables } from "./portal-router.mjs";
 import { configRoutes } from "./portal-routes-config.mjs";
 import { maintenanceRoutes } from "./portal-routes-maintenance.mjs";
 import { plansRoutes } from "./portal-routes-plans.mjs";
@@ -13,6 +13,7 @@ import { developerRuntimeRoutes } from "./portal-routes-developer-runtime.mjs";
 import { telemetryRoutes } from "./portal-routes-telemetry.mjs";
 import { repositoriesRoutes } from "./portal-routes-repositories.mjs";
 import { usageRoutes } from "./portal-routes-usage.mjs";
+import { settingsRoutes } from "./portal-routes-settings.mjs";
 import { handleMetadataAsset } from "./portal-routes-metadata.mjs";
 
 // Every domain's route table, concatenated once — the single enumerable list of this portal's
@@ -25,6 +26,7 @@ const API_ROUTE_TABLES = [
   developerRuntimeRoutes,
   repositoriesRoutes,
   usageRoutes,
+  settingsRoutes,
   telemetryRoutes,
 ];
 validateRouteTables(API_ROUTE_TABLES);
@@ -55,7 +57,7 @@ const STATIC_TYPES = {
 // marks the page served at "/" (what `roborepo web` opens). Home owns "/" as its canonical route;
 // Agents lives at canonical "/config". Order here is the global nav order.
 export const PAGES = [
-  { path: "/", id: "home", title: "Home", dir: "home", default: true },
+  { path: "/", id: "home", title: "Repos", dir: "home", default: true },
   { path: "/config", id: "config", title: "Agents", dir: "config" },
   { path: "/plans", id: "plans", title: "Plans", dir: "plans" },
   // The token report owns /tokens (id/dir keep the tokens module paths).
@@ -66,10 +68,22 @@ export const PAGES = [
     title: "Runtime",
     dir: "developer-runtime",
   },
+  { path: "/settings", id: "settings", title: "Settings", icon: "settings", dir: "settings" },
 ];
-const PAGE_BY_PATH = new Map(PAGES.map((p) => [p.path, p]));
+export const PAGE_ROUTES = [
+  ...PAGES.map((page) => ({ ...page, navId: page.id })),
+  // Parked: the detail page stays in the tree but every request redirects Home until it returns.
+  { path: "/repositories/:urlKey", id: "repository-detail", navId: "home", title: "Repository", dir: "repositories", redirect: "/" },
+].map((page) => ({ ...page, segments: page.path.split("/").filter(Boolean) }));
 // Shape shared by /api/portal/status and the browser-injected manifest so both can never drift.
-const pageManifest = () => PAGES.map(({ path, id, title }) => ({ path, id, title }));
+const pageManifest = () => PAGES.map(({ path, id, title, icon }) => ({ path, id, title, ...(icon ? { icon } : {}) }));
+
+export function serializeInlineJson(value) {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
 
 // The <head> boilerplate (theme-flash guard + meta tags) is identical across every page except
 // the title and stylesheet href, so each page's index.html holds just a {{HEAD}} marker instead
@@ -113,17 +127,29 @@ const WIDGET_TEMPLATES_PARTIAL_PATH = path.join(
 );
 const renderWidgetTemplates = () => fs.readFileSync(WIDGET_TEMPLATES_PARTIAL_PATH, "utf8");
 
-const pageHtml = (page, token) =>
+// The plan detail drawer (dialog, its templates, and its stylesheet link) — shared by Plans and
+// Home so a plan title opens the same popup on both. Only pages that place {{PLAN_DRAWER}} get it.
+const PLAN_DRAWER_PARTIAL_PATH = path.join(PORTAL_DIR, "plans", "plan-drawer-partial.html");
+const renderPlanDrawer = () => fs.readFileSync(PLAN_DRAWER_PARTIAL_PATH, "utf8");
+
+// The Manage repositories dialog and the repository empty state Home and Plans share. Only pages
+// that place {{REPOSITORY_SOURCES}} get it.
+const REPOSITORY_SOURCES_PARTIAL_PATH = path.join(PORTAL_DIR, "shared", "repository-sources-partial.html");
+const renderRepositorySources = () => fs.readFileSync(REPOSITORY_SOURCES_PARTIAL_PATH, "utf8");
+
+const pageHtml = (page, token, routeParams = {}) =>
   fs
     .readFileSync(path.join(PORTAL_DIR, page.dir, "index.html"), "utf8")
     .replace("{{HEAD}}", renderHead(page))
     .replace("{{CHROME}}", renderChrome())
     .replace("{{LOADING}}", renderLoading())
     .replace("{{WIDGET_TEMPLATES}}", renderWidgetTemplates())
+    .replace("{{PLAN_DRAWER}}", () => renderPlanDrawer())
+    .replace("{{REPOSITORY_SOURCES}}", () => renderRepositorySources())
     .replace(
       "</head>",
       `<meta name="cli-portal-token" content="${token}" />\n` +
-        `<script>window.PORTAL_MANIFEST = ${JSON.stringify({ token, pages: pageManifest() })};</script>\n</head>`,
+      `<script>window.PORTAL_MANIFEST = ${serializeInlineJson({ token, pages: pageManifest(), currentPageId: page.navId || page.id, routeParams })};</script>\n</head>`,
     );
 
 export function startPortalServer(handlers) {
@@ -172,7 +198,8 @@ export function startPortalServer(handlers) {
   return server;
 }
 
-// Loopback bind keeps the portal local, but browser pages can still attempt cross-origin POSTs.
+// Loopback bind keeps the portal local, but browser pages can still attempt cross-origin POSTs, and
+// a DNS-rebound page can attempt reads (see hostAllowed).
 // Mutating routes require both a loopback Origin (when present) and the per-server token embedded
 // only in served portal HTML. Read-only routes stay tokenless for curl/debugging.
 const LOOPBACK_ORIGIN = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/;
@@ -180,6 +207,18 @@ function originAllowed(req) {
   const origin = req.headers.origin;
   if (!origin) return true;
   return LOOPBACK_ORIGIN.test(origin);
+}
+
+// Reads are tokenless, so the Host header is what stops DNS rebinding: a hostile page whose own
+// hostname has been re-pointed at 127.0.0.1 reaches this server, but its requests still name that
+// hostname. Only loopback names are served. A request with no Host header (HTTP/1.0) cannot have come
+// from a browser page and is let through.
+const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "localhost", "[::1]"]);
+function hostAllowed(req) {
+  const host = req.headers.host;
+  if (!host) return true;
+  const hostname = host.startsWith("[") ? host.slice(0, host.indexOf("]") + 1) : host.split(":")[0];
+  return LOOPBACK_HOSTNAMES.has(hostname.toLowerCase());
 }
 
 function mutationTokenAllowed(req, token) {
@@ -199,6 +238,14 @@ function isMutation(req) {
 function route(req, res, handlers, mutationToken) {
   const [urlPath, qs = ""] = (req.url || "/").split("?");
 
+  if (!hostAllowed(req)) {
+    return send(
+      res,
+      403,
+      "application/json",
+      JSON.stringify({ error: "portal only answers loopback host names" }),
+    );
+  }
   if (isMutation(req) && !originAllowed(req)) {
     return send(
       res,
@@ -226,10 +273,23 @@ function route(req, res, handlers, mutationToken) {
 }
 
 function handlePortalPage(req, res, urlPath, mutationToken) {
-  const page = PAGE_BY_PATH.get(urlPath);
-  if (!page) return false;
-  send(res, 200, "text/html; charset=utf-8", pageHtml(page, mutationToken));
+  const match = matchPortalPage(urlPath);
+  if (!match) return false;
+  if (match.page.redirect) {
+    res.writeHead(302, { Location: match.page.redirect });
+    res.end();
+    return true;
+  }
+  send(res, 200, "text/html; charset=utf-8", pageHtml(match.page, mutationToken, match.params));
   return true;
+}
+
+export function matchPortalPage(urlPath) {
+  for (const page of PAGE_ROUTES) {
+    const params = matchSegments(page.segments, urlPath);
+    if (params !== null) return { page, params };
+  }
+  return null;
 }
 
 function handlePortalAsset(req, res, urlPath) {

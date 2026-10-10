@@ -1,4 +1,5 @@
 import { portalCopyText, portalFillSlots as fill, portalMiddleEllipsis, portalTpl as tpl } from "/portal/shared/api.js";
+import { configureLinksTrigger, mountRepositoryRow, repositoryPageUrl } from "/portal/shared/repository-components.js";
 import { healthState, provenanceLabel, statusDetail, statusText, UNMATCHED_PROJECT_NAME } from "./state.js";
 import { buildRootSection } from "./repository-root-row.js";
 
@@ -25,6 +26,10 @@ export function group(title, headerEnd, nodes) {
 
 export function toolbarActions() {
   return tpl("tpl-toolbar-actions");
+}
+
+export function syncStatus() {
+  return tpl("tpl-sync-status");
 }
 
 export function collapsibleGroup(title, meta, nodes) {
@@ -229,7 +234,7 @@ function wireComposeCardActions(node, composeProject, actions) {
     event.stopPropagation();
     actions.onToggleMenu(node);
   });
-  // "Associate repo" now lives on the repository card's menu (see wireRepositoryActions) because it
+  // "Associate repo" now lives on the repository card's menu because it
   // binds a path to the whole repository rather than to this one stack. Optional-chained rather
   // than deleted outright so a standalone Compose card — one with no repository card above it —
   // still wires the action if its template ever carries the button again.
@@ -356,41 +361,13 @@ export function repositoryCard(repository, { instanceActions, composeActions, re
       if (repository.lifecycle?.reason) badge.title = repository.lifecycle.reason;
     }
   }
-  // A dev fixture (local/dev-fixtures) looks exactly like a real project otherwise.
+  // A mock repository looks exactly like a real project otherwise, so label it without implying
+  // that the user started a development-only fixture.
   if (repository.fixture) {
     const fixtureBadge = node.querySelector("[data-slot=fixture-badge]");
     fixtureBadge.hidden = false;
-    fixtureBadge.title = "Test fixture started by roborepo dev fixture start";
+    fixtureBadge.title = "Mock repository used to demonstrate the Runtime view";
   }
-  const tooltip = node.querySelector(".info-wrap > template").content;
-  // Shared stacks are marked as such rather than listed indistinguishably among the rest. The list
-  // is the one place every member of every checkout appears together, so an unqualified name here
-  // read as "a member of some worktree" — the exact reading the Shared services region exists to
-  // correct.
-  const sharedGroupNames = new Set((repository.sharedComposeGroups || []).map((group) => group.name));
-  const memberNames = [
-    ...repository.composeGroups.map((group) =>
-      sharedGroupNames.has(group.name) ? `compose ${group.name} (shared)` : `compose ${group.name}`),
-    ...repository.members.map((member) => member.name),
-  ];
-  // Both figures are totals across EVERY checkout (repository.members is the flat cross-root array;
-  // cpuPercentOfHost sums all of them), which is what makes them repository-level rather than a
-  // duplicate of what each worktree row already reports for itself. Now that every root shows its
-  // own member list, the labels say "across N checkouts" outright — unqualified "Members" and
-  // "Resources" read as facts about one checkout when a card has several.
-  const rootCount = repository.roots?.length || 0;
-  const acrossSuffix = rootCount > 1 ? ` (across ${rootCount} checkouts)` : "";
-  fill(tooltip, {
-    "members-detail": (memberNames.join(", ") || "none") + acrossSuffix,
-    // Same discipline as composeProjectCard: the raw figure lives here, and only crosses onto the
-    // card as a badge once applyResourceConcernBadge decides it warrants action.
-    resources: repository.cpuPercentOfHost != null
-      ? `${repository.cpuPercentOfHost.toFixed(1)}% of machine CPU${acrossSuffix}`
-      : "unavailable",
-    // A git: id is portable across machines and promotable to other pages; a local: id is stable
-    // but derived from this machine's path, so the distinction is worth stating outright.
-    identity: repository.identityKind === "git" ? "git repository" : "local repository (no remote)",
-  });
   // No repository-level git badge: git is per-checkout now (see the roots loop below), and the
   // repository header itself — name, provider link — never depends on which root is running.
   applyResourceConcernBadge(node, repository.cpuPercentOfHost);
@@ -398,15 +375,23 @@ export function repositoryCard(repository, { instanceActions, composeActions, re
   // One provider link per repository (not per root): a repository has exactly one canonical
   // remote, however many checkouts run it, so it belongs at the header rather than repeated in
   // every root section's git row.
+  mountRepositoryRow(node, {
+    name: repository.name,
+    href: repositoryPageUrl(repository),
+    providerUrl: repository.providerUrl,
+    providerLabel: repository.providerUrl ? providerHostLabel(repository.providerUrl) : null,
+    menuItems: repositoryMenuItems(repository, repositoryActions),
+    onToggleMenu: repositoryActions?.onToggleMenu,
+    onSelectMenu: (key) => {
+      repositoryActions?.onCloseMenus();
+      if (key === "pin") repositoryActions?.onTogglePinned(repository);
+      else if (key === "hide") repositoryActions?.onHide(repository);
+      else if (key === "ignore") repositoryActions?.onIgnore(repository);
+      else if (key === "repo") repositoryActions?.onAssociateRepo(repository.composeGroups?.[0]);
+    },
+  });
   const providerLinkSlot = node.querySelector("[data-slot=provider-link]");
-  if (providerLinkSlot && repository.providerUrl) {
-    providerLinkSlot.hidden = false;
-    providerLinkSlot.href = repository.providerUrl;
-    providerLinkSlot.querySelector("[data-slot=provider-link-label]").textContent = providerHostLabel(repository.providerUrl);
-    providerLinkSlot.title = repoNameFromProviderUrl(repository.providerUrl);
-  }
-
-  wireRepositoryActions(node, repository, repositoryActions);
+  if (providerLinkSlot && repository.providerUrl) providerLinkSlot.title = repoNameFromProviderUrl(repository.providerUrl);
 
   // No URL in the header: each checkout row carries its own promoted app link, main checkout
   // included, so every link sits in the same place (see repository-root-row.js).
@@ -484,54 +469,15 @@ export function repositoryCard(repository, { instanceActions, composeActions, re
   return node;
 }
 
-// The trigger sits inside <summary>, the only child a closed <details> keeps rendered, so its click
-// must not also toggle the card open/closed.
-function wireRepositoryActions(node, repository, actions) {
-  const trigger = node.querySelector("[data-action=menu]");
-  const menu = node.querySelector("[data-menu]");
-  // No actions means every button here would be inert. Returning before the reveal at the end of
-  // this function is all it takes to leave the menu off the card — the affirmative default handles
-  // a case that previously needed its own explicit hide.
-  if (!trigger || !actions) return;
-  trigger.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    actions.onToggleMenu(node);
-  });
-  // The label states what the click will DO, not what the repository currently is — "Unpin" on a
-  // pinned repository. A menu item that named the current state would read as a status line and
-  // leave the action ambiguous.
-  const pin = node.querySelector("[data-action=pin]");
-  if (pin) {
-    pin.textContent = repository.pinned ? "Unpin" : "Pin";
-    pin.addEventListener("click", (event) => {
-      event.preventDefault();
-      actions.onCloseMenus();
-      actions.onTogglePinned(repository);
-    });
-  }
-  node.querySelector("[data-action=hide]")?.addEventListener("click", (event) => {
-    event.preventDefault();
-    actions.onCloseMenus();
-    actions.onHide(repository);
-  });
-  // Repository-scoped: binds a filesystem path to the whole repository, which is why it moved here
-  // from the Compose card's menu. Only offered when the repository actually has a Compose group to
-  // bind — the dialog it opens is Compose-shaped.
-  const repoAction = node.querySelector("[data-action=repo]");
-  if (repoAction) {
-    const composeGroup = repository.composeGroups?.[0];
-    if (!composeGroup || !actions.onAssociateRepo) repoAction.hidden = true;
-    else {
-      repoAction.addEventListener("click", (event) => {
-        event.preventDefault();
-        actions.onCloseMenus();
-        actions.onAssociateRepo(composeGroup);
-      });
-    }
-  }
-  menu?.addEventListener("click", (event) => event.stopPropagation());
-  revealActionMenuIfUsable(node);
+function repositoryMenuItems(repository, actions) {
+  return [
+    { key: "repo", label: "Associate repo", hidden: !repository.composeGroups?.[0] || !actions?.onAssociateRepo },
+    { key: "pin", label: repository.pinned ? "Unpin" : "Pin" },
+    // Ignore is the registry-wide decision Home offers too; Hide from Runtime only tucks this
+    // repository's running members away on this page (pljvmyh §8).
+    { key: "ignore", label: "Ignore repository", hidden: !repository.repositoryId || !actions?.onIgnore },
+    { key: "hide", label: "Hide from Runtime" },
+  ];
 }
 
 export function instanceCard(project, instance, actions) {
@@ -629,7 +575,7 @@ function layOutMemberCard(node) {
   title.querySelector(".title-separator")?.remove();
 
   const origin = node.querySelector("[data-slot=origin]");
-  origin.classList.add("repository-entrypoint");
+  origin.classList.add("repository-entrypoint", "link-cta");
   const linksCell = document.createElement("span");
   linksCell.className = "checkout-links-cell";
   linksCell.append(node.querySelector("[data-slot=routes-trigger]"));
@@ -799,7 +745,7 @@ const DRIFT_RULES = [
     return git.baseBehind
       ? {
           level: "warn",
-          text: `${formatDuration(age)}${suffix} behind ${base} (${git.baseBehind})`,
+          text: `${formatDuration(age)}${suffix} behind ${base} (${git.baseBehind} commit${git.baseBehind === 1 ? "" : "s"})`,
           title: driftTitle(git, base, now),
         }
       // Nothing landed on the base, so there is no merge to do — only a branch point that is
@@ -846,7 +792,7 @@ function baseDriftAge(git, now) {
   return age > BASE_DRIFT_THRESHOLD_MS ? age : null;
 }
 
-function baseName(git) {
+export function baseName(git) {
   return String(git.baseBranch || "").replace(/^origin\//, "");
 }
 

@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "session-close",
+  "label": "Session Close",
+  "description": "End a work session cleanly: self-review added code, sync docs, commit, then produce a handoff note.",
+  "lifecycle": "optional",
+  "presentation": {
+    "category": "skills-dev-lifecycle",
+    "order": 50
+  },
+  "resources": [
+    {
+      "type": "skill",
+      "id": "session-close",
+      "source": "skills/session-close",
+      "invocation": "manual",
+      "risk": "medium",
+      "entrypoints": [
+        {
+          "type": "slash-command",
+          "name": "session-close",
+          "harnesses": [
+            "claude",
+            "codex",
+            "gemini"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -199,7 +199,7 @@ flowchart LR
 
 ![The Plans page: lifecycle tabs and a plan card with priority, review state, and workflow actions](docs/images/plans.png)
 
-[Plan Docs walkthrough →](docs/user/guides/plan/lifecycle/plan-docs.md)  
+[Plan Suite walkthrough →](docs/user/guides/plan/lifecycle/plan-suite.md)\
 [Plans reference →](docs/user/reference/plans-portal.md)
 
 ---

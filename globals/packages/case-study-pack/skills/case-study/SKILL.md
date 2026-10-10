@@ -128,6 +128,17 @@ defaulting to a dense paragraph.
    should read as a shortened title, not a separate label. (The frontmatter `slug` is the
    public URL and may differ from the filename for SEO; the filename tracks the title.)
 
+## Article tags
+
+When the destination project uses article tags, read its tag manifest before choosing any.
+Use only tags from the project's approved or whitelist vocabulary. Also read the project's
+blacklist and never assign a blacklisted tag, even if it appears in the approved list or
+would otherwise describe the article. If the project exposes both lists, the blacklist wins.
+
+The reserved blacklist begins with:
+
+1. `architecture`
+
 ## Splitting one source into multiple articles
 
 When a source covers several distinct decisions, split **by architectural concept (the

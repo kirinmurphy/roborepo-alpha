@@ -26,7 +26,8 @@ import { startPortalServer } from "./portal-server.mjs";
 import { computePortalSourceHash } from "./portal-source-hash.mjs";
 import { readConfigSnapshot, loadConfigSource } from "./config.mjs";
 import { mutatePackage, setSkillInstalled, setBehaviorBucket, setCommandBucket } from "./config-mutate.mjs";
-import { loadPlansSnapshot, loadPlanDocument, buildPlansPrompt, updatePlanSettings, updatePlanPriority, updatePlanLifecycle, refreshPlans } from "./plans.mjs";
+import { loadPlansSnapshot, loadCachedPlansSnapshot, loadPlanDocument, buildPlansPrompt, updatePlanPriority, updatePlanLifecycle, refreshPlans } from "./plans.mjs";
+import { loadRepositorySources, addRepositorySource, removeRepositorySource, setRepositorySourceEnabled, refreshRepositorySources, wipeRepositoryList, autoDiscoveryEnabled } from "./repository-sources.mjs";
 import {
   loadDeveloperRuntimeSnapshot,
   loadDeveloperRuntimeHistory,
@@ -35,23 +36,29 @@ import {
   updateDeveloperRuntimeSettings,
   setDeveloperRuntimeRepositoryVisibility,
   setDeveloperRuntimeRepositoryPinned,
+  forgetDeveloperRuntimeRepository,
   setDeveloperRuntimePortalInfo,
+  clearDeveloperRuntimeSnapshotCache,
 } from "./developer-runtime.mjs";
 import {
   loadRepositoriesPayload,
   loadRepositoryPayload,
   loadRepositoryAssociations,
-  enrollRepositoryInPlans,
   patchRepository,
 } from "./repositories.mjs";
-import { loadRegistry, updateRegistry, upsertRepository, recordDiscovery } from "../../modules/repositories/index.mjs";
+import { loadRegistry, updateRegistry, recordDiscoveryIfKnown } from "../../modules/repositories/index.mjs";
 import { buildRepositoryHashIndex } from "./telemetry-repository.mjs";
+import { createRepositoryOverviewService } from "./repository-overview.mjs";
+import { MOCK_FIRST_RUN_VIEWS_ENABLED, mockHomeOverview, purgePersistedMockRepositories } from "./mock-home.mjs";
+import { buildTelemetryRepositoryProjection, fixtureTelemetryRepositories, homeTelemetryProjection } from "./telemetry-repository-overview.mjs";
 import { privacyHash } from "./telemetry-schemas/hash.mjs";
 import { buildAnalysisPrompt } from "../harnesses/transcript-locate.mjs";
 import { insightsSummary } from "./telemetry-insights.mjs";
 import { deriveSessionFindings } from "./telemetry-session-findings.mjs";
 import { hookFilePath, writeHooksFile } from "./hook-composition.mjs";
 import { getHarnessProvider, hasHarnessProvider, listHarnessProviders, harnessDisplayName } from "../harnesses/registry.mjs";
+import { refreshHarnessState, setHarnessEnabled } from "../harnesses/service.mjs";
+import { loadSetupState } from "./portal-setup.mjs";
 import { ensureInitialized, finalizeInitialization, describeNewerSchemaRefusal } from "./initialization-bootstrap.mjs";
 
 export async function telemetryCommand(rest) {
@@ -732,6 +739,10 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     }
   }
 
+  // Remove synthetic records left by an earlier development-only mock implementation. Current
+  // first-run mocks are in-memory Home data and never enter the canonical registry.
+  purgePersistedMockRepositories({ stateRoot });
+
   if (options.detach) {
     const port = await startDetachedPortal(options.port, { allowPortFallback, portExplicit: options.portExplicit });
     const detachedPortalUrl = `http://127.0.0.1:${port}`;
@@ -779,6 +790,19 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
   // `window` ({ rangeMs, end }) scopes the whole report to a trailing time slice before analysis, so
   // every panel — not just the chart — reflects the dashboard's time filter. loadSession bridges a
   // flagged event to its chat transcript (file I/O lives here, not in the server).
+  const repositoryOverview = createRepositoryOverviewService({
+    loadRegistry: () => loadRegistry({ stateRoot }),
+    loadRuntime: () => loadDeveloperRuntimeSnapshot(),
+    loadPlans: () => loadCachedPlansSnapshot(),
+    loadAutoDiscoveryEnabled: () => autoDiscoveryEnabled(),
+    loadMockHomeOverview: mockHomeOverview,
+    mockHomeEnabled: MOCK_FIRST_RUN_VIEWS_ENABLED,
+    loadTelemetry: () => homeTelemetryProjection({
+      enabled: readTelemetryState().enabled === true,
+      projection: loadTelemetryRepositoryProjection(),
+      fixtureRepositories: loadFixtureTelemetryRepositories(),
+    }),
+  });
   const server = startPortalServer({
     port: options.port,
     // Phase 6 additions (model/repo/markerId) layer a normalized cohort filter on top of the
@@ -803,11 +827,13 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     loadTelemetryAnalysis: (body) => loadTelemetryAnalysisRequest(body),
     loadTelemetryGuide: () => loadTelemetryGuide(),
     loadConfig: () => readConfigSnapshot(),
+    loadSetupState: () => loadSetupState(),
+    refreshHarnesses: () => refreshHarnessState(),
+    setHarnessEnabled: (id, enabled) => setHarnessEnabled(id, enabled),
     loadConfigSource: (params) => loadConfigSource(params),
     loadPlans: () => loadPlansSnapshot(),
     loadPlanDocument: (params) => loadPlanDocument(params),
     buildPlansPrompt: (params) => buildPlansPrompt(params),
-    updatePlanSettings: (params) => updatePlanSettings(params),
     updatePlanPriority: (params) => updatePlanPriority(params),
     updatePlanLifecycle: (params) => updatePlanLifecycle(params),
     refreshPlans: () => refreshPlans(),
@@ -816,13 +842,28 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     updateDeveloperRuntimeSettings: (params) => updateDeveloperRuntimeSettings(params),
     setDeveloperRuntimeRepositoryVisibility: (params) => setDeveloperRuntimeRepositoryVisibility(params),
     setDeveloperRuntimeRepositoryPinned: (params) => setDeveloperRuntimeRepositoryPinned(params),
+    forgetDeveloperRuntimeRepository: (params) => forgetDeveloperRuntimeRepository(params),
     loadDeveloperRuntimeHistory: (key) => loadDeveloperRuntimeHistory(key),
     loadDeveloperRuntimeMetadata: (key) => loadDeveloperRuntimeMetadata(key),
     loadRepositories: () => { reconcileTelemetryRepositories(); return loadRepositoriesPayload(); },
     loadRepository: (params) => loadRepositoryPayload(params),
     loadRepositoryAssociations: (params) => loadRepositoryAssociations(params),
-    enrollRepositoryInPlans: (params) => enrollRepositoryInPlans(params),
+    loadHomeOverview: () => repositoryOverview.loadHome(),
+    loadRepositoryOverview: (params) => repositoryOverview.loadDetail(params),
     patchRepository: (params) => patchRepository(params),
+    // Source changes alter which repositories exist, so the cached Plans snapshot is rebuilt after
+    // each one; enabling auto-discovery starts the first process scan immediately.
+    loadRepositorySources: () => loadRepositorySources(),
+    addRepositorySource: (params) => afterSourceChange(addRepositorySource(params)),
+    removeRepositorySource: (params) => afterSourceChange(removeRepositorySource(params)),
+    setRepositorySourceEnabled: (params) => afterSourceChange(setRepositorySourceEnabled({ ...params, onAutoDiscoveryEnabled: startAutoDiscoveryScan })),
+    refreshRepositorySources: (params) => afterSourceChange(refreshRepositorySources({ ...params, onAutoDiscoveryEnabled: startAutoDiscoveryScan })),
+    wipeRepositoryList: () => {
+      const payload = wipeRepositoryList();
+      clearDeveloperRuntimeSnapshotCache();
+      if (payload.autoDiscovery?.enabled) startAutoDiscoveryScan();
+      return afterSourceChange(payload);
+    },
     mutatePackage: (id, enabled) => mutatePackage(id, enabled),
     mutateSkill: (id, enabled) => setSkillInstalled(id, enabled),
     // Section-level bulk enable/disable (portal bulkToggle sections). Lazy import: keeps the
@@ -847,6 +888,8 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
       warmupTimer = setTimeout(() => {
         if (closing) return;
         oracle.start();
+        reconcileTelemetryRepositories();
+        try { refreshPlans(); } catch {}
         startAnalysisRefresh();
       }, 0);
     },
@@ -856,6 +899,15 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     void stopBackgroundWork();
   });
   return server;
+}
+
+function startAutoDiscoveryScan() {
+  refreshDeveloperRuntimeSnapshot().then(() => { try { refreshPlans(); } catch {} }).catch(() => {});
+}
+
+function afterSourceChange(payload) {
+  try { refreshPlans(); } catch {}
+  return payload;
 }
 
 export function webStopCommand(args) {
@@ -1175,17 +1227,19 @@ const captureRepositoryHash = privacyHash;
 // Reconcile telemetry-observed repositories into the registry so `capabilities.telemetry` can be
 // true. Runs at portal repo-list load (NOT on the capture hot path): scans the spool's distinct
 // repository_ids and records one `telemetry` discovery each, batched into a single registry write.
-// Cached by evidence signature; a registry mutation can also require another reconciliation.
-// Unchanged discoveries skip writes. Registry failures never break the repositories list.
+// Agent sessions only attach to repositories a source already found; they never create one
+// (pljvmyh). Cached by spool AND registry signature: a repository a folder or auto-discovery adds
+// later picks up the session evidence already in the spool. Unchanged discoveries skip writes.
+// Best-effort — a registry failure never breaks the repositories list.
 let _telemetryReconcileSig = null;
 export function reconcileTelemetryRepositories() {
-  const sig = spoolSignature();
+  const sig = `${spoolSignature()}|${registrySignature()}`;
   if (_telemetryReconcileSig === sig) return;
   _telemetryReconcileSig = sig;
-  const seen = new Map(); // repository_id -> label
+  const seen = new Set(); // repository_id
   for (const event of readSpoolEventsCached()) {
     const id = event?.repo?.repository_id;
-    if (id && !seen.has(id)) seen.set(id, event.repo.label || null);
+    if (id) seen.add(id);
   }
   if (seen.size === 0) return;
   try {
@@ -1193,9 +1247,8 @@ export function reconcileTelemetryRepositories() {
       stateRoot,
       mutate: (registry) => {
         let changed = false;
-        for (const [id, label] of seen) {
-          upsertRepository(registry, { id, kind: id.startsWith("git:") ? "git" : "local", displayName: label || id });
-          if (recordDiscovery(registry, id, { source: "telemetry", evidence: "telemetry-session", confidence: id.startsWith("git:") ? "high" : "medium" })) changed = true;
+        for (const id of seen) {
+          if (recordDiscoveryIfKnown(registry, id, { source: "telemetry", evidence: "telemetry-session", confidence: id.startsWith("git:") ? "high" : "medium" })) changed = true;
         }
         return changed;
       },
@@ -1282,7 +1335,10 @@ function cachedAnalysisEntry(window, harness, extra = {}) {
   // Cache the serialized JSON, not the report object: the only consumer is the /api/data route,
   // which sends the string, so retaining the ~10MB object per entry would be dead memory. The report
   // object is discarded once stringified.
-  const entry = { json: JSON.stringify(report) };
+  const entry = {
+    json: JSON.stringify(report),
+    repositoryProjection: buildTelemetryRepositoryProjection(allEvents, report, repositoryHashIndex),
+  };
   // Prune the oldest entry once over the cap. Signature changes mint fresh keys on every new
   // capture, so stale-signature entries accumulate otherwise; Map preserves insertion order.
   if (_analysisCache.size >= ANALYSIS_CACHE_MAX) {
@@ -1295,6 +1351,15 @@ function cachedAnalysisEntry(window, harness, extra = {}) {
 // Serialized report JSON for the hot /api/data path, memoized per signature+window+harness+cohort.
 function cachedAnalysisJson(window, harness, extra = {}) {
   return cachedAnalysisEntry(window, harness, extra).json;
+}
+
+export function loadTelemetryRepositoryProjection() {
+  const key = analysisKey(null, null);
+  return _analysisCache.get(key)?.repositoryProjection || {
+    status: "unavailable",
+    updatedAt: null,
+    repositories: {},
+  };
 }
 
 // Mock analysis for the /tokens page: reads the bundled mock spool file
@@ -1317,16 +1382,32 @@ const MOCK_MARKER = {
   title: "Prefer section-level document reads (demo)",
   ts: "2026-06-13T12:00:00.000Z",
 };
+// Rows of a committed .jsonl file. A missing file reads as no rows and a corrupt line is skipped,
+// so a bad fixture file degrades to an empty view instead of failing the page.
+function readJsonlFile(file) {
+  let text;
+  try { text = fs.readFileSync(file, "utf8"); } catch { return []; }
+  const rows = [];
+  for (const line of text.split("\n")) {
+    if (!line.trim()) continue;
+    try { rows.push(JSON.parse(line)); } catch { /* ignore corrupt lines */ }
+  }
+  return rows;
+}
+
+// Token warnings for the dev fixture repositories, from a committed schema-3 spool. It lives under
+// local/, which npm installs never ship, so off a dev checkout this is empty. Parsed once per
+// process, like the Tokens mock report.
+const FIXTURE_TOKEN_SPOOL_PATH = path.join(repoRoot, "local", "dev-fixtures", "token-warnings-spool.jsonl");
+let _fixtureTelemetryRepositories = null;
+function loadFixtureTelemetryRepositories() {
+  _fixtureTelemetryRepositories ??= fixtureTelemetryRepositories(readJsonlFile(FIXTURE_TOKEN_SPOOL_PATH));
+  return _fixtureTelemetryRepositories;
+}
+
 function loadMockAnalysisJson() {
   if (_mockAnalysisJson) return _mockAnalysisJson;
-  const events = [];
-  try {
-    const text = fs.readFileSync(MOCK_SPOOL_PATH, "utf8");
-    for (const line of text.split("\n")) {
-      if (!line.trim()) continue;
-      try { events.push(JSON.parse(line)); } catch { /* ignore corrupt lines */ }
-    }
-  } catch { /* no mock spool — return empty report */ }
+  const events = readJsonlFile(MOCK_SPOOL_PATH);
   const evidence = conditionDemoEvidence(events);
   const collectingMarker = { ...MOCK_MARKER, marker_id: "mark_0000000000000002", title: "Limit retry loops (demo)",
     ts: "2026-06-15T11:59:00.000Z", effective_at: "2026-06-15T11:59:00.000Z", watching_kinds: ["loop"] };

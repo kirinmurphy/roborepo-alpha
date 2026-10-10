@@ -106,6 +106,8 @@ async function readGitContext(projectRoot, options) {
     // module contacts a remote, so every comparison is only as fresh as this timestamp.
     fetchedAt: readFetchTime(fsApi, pathApi, resolved),
     isWorktree: resolved.isWorktree,
+    // Joins this checkout to the plan whose `worktree` frontmatter names it (see resolveGitDir).
+    worktreeName: resolved.worktreeName,
     provider: { ok: true, reason: null },
   };
 }
@@ -245,6 +247,7 @@ function unavailable(reason) {
     baseMergeBaseAt: null,
     fetchedAt: null,
     isWorktree: false,
+    worktreeName: null,
     provider: { ok: false, reason },
   };
 }

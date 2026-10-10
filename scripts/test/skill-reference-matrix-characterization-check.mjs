@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Characterizes the mode/reference matrices that `technical-writing` and `plan-docs` declare in
+// Characterizes the mode/reference matrices that `technical-writing` and `plan-write` declare in
 // their own `SKILL.md` prose.
 //
 // Why this exists: an agent routes by reading the "For a named mode, read only the needed
@@ -23,7 +23,7 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 const TECHNICAL_WRITING = "globals/packages/technical-writing/skills/technical-writing";
-const PLAN_DOCS = "globals/packages/plan-docs/skills/plan-docs";
+const PLAN_WRITE = "globals/packages/plan-write/skills/plan-write";
 
 testMatricesParse();
 testWriteModeLoadsTheReviewLoop();
@@ -31,10 +31,10 @@ testWriteIsTheOnlyArtifactProducingMode();
 testReviewStaysReadOnly();
 testCompletionGateIsVisibleFromTheEntryPoint();
 testValidatorRuleSetNamesEveryAuthoringReference();
-testPlanDocsCreateRequiresSchemaAndNamespaceResolution();
-testPlanDocsCreateRunsBothValidationLayers();
-testPlanDocsPairsTechnicalWritingUnconditionally();
-testPlanDocsNamesConditionalPairedSkillsAndTheirTriggers();
+testPlanWriteCreateRequiresSchemaAndNamespaceResolution();
+testPlanWriteCreateRunsBothValidationLayers();
+testPlanWritePairsTechnicalWritingUnconditionally();
+testPlanWriteNamesConditionalPairedSkillsAndTheirTriggers();
 testBothSkillsInstructPairedLoadingWithoutBeingAsked();
 testEveryReferencedFileExists();
 console.log("ok: skill reference matrix characterization passed");
@@ -50,7 +50,9 @@ console.log("ok: skill reference matrix characterization passed");
 // requirement the SKILL.md never states, and a later edit narrowing one could not be detected.
 function parseReferenceMatrix(skillRelativePath) {
   const content = read(path.join(skillRelativePath, "SKILL.md"));
-  const section = /For a named mode, read only the needed references:\n([\s\S]*?)\n\n/.exec(content);
+  // technical-writing routes by named mode; plan-write takes no mode, so it routes by situation.
+  // Both lists share one bullet shape.
+  const section = /(?:For a named mode, read only the needed references|Read the references for the situation):\n([\s\S]*?)\n\n/.exec(content);
   assert.ok(section, `${skillRelativePath}/SKILL.md no longer contains a parseable mode/reference list — if the wording changed deliberately, update this parser; do not delete the assertion`);
 
   const bullets = section[1].split(/\n(?=- )/).map((bullet) => bullet.replace(/\s+/g, " ").trim()).filter(Boolean);
@@ -90,10 +92,16 @@ function testMatricesParse() {
   assert.ok(writing.review, "technical-writing must declare a `review` mode");
   assert.ok(writing.write.length >= 4, `\`write\` parsed only ${writing.write.length} references; the list shape likely changed`);
 
-  const plans = parseReferenceMatrix(PLAN_DOCS);
-  for (const mode of ["create", "next", "start", "sync", "validate", "review", "handoff"]) {
-    assert.ok(plans[mode], `plan-docs must declare a \`${mode}\` mode`);
+  // plan-write is one atomic command: it creates or updates, and every other lifecycle step is its
+  // own suite command, so none of the retired modes may reappear as a situation here.
+  const plans = parseReferenceMatrix(PLAN_WRITE);
+  for (const situation of ["create", "update"]) {
+    assert.ok(plans[situation], `plan-write must declare a \`${situation}\` situation`);
   }
+  for (const retired of ["next", "start", "sync", "validate", "review", "handoff"]) {
+    assert.ok(!plans[retired], `plan-write must not route a \`${retired}\` mode; that step is its own command or CLI`);
+  }
+  assert.match(flat(`${PLAN_WRITE}/SKILL.md`), /`\/plan-write` takes no mode/, "plan-write must say it takes no mode argument");
 }
 
 // --- technical-writing ------------------------------------------------------------------------
@@ -160,26 +168,26 @@ function testValidatorRuleSetNamesEveryAuthoringReference() {
   assert.match(loop, /paired skill/i, "the rule set must say how paired implementation skills contribute constraints");
 }
 
-// --- plan-docs ---------------------------------------------------------------------------------
+// --- plan-write ---------------------------------------------------------------------------------
 
-function testPlanDocsCreateRequiresSchemaAndNamespaceResolution() {
-  const matrix = parseReferenceMatrix(PLAN_DOCS);
+function testPlanWriteCreateRequiresSchemaAndNamespaceResolution() {
+  const matrix = parseReferenceMatrix(PLAN_WRITE);
   for (const required of ["references/plan-schema.md", "references/workflow-create.md", "references/writing-guidelines.md"]) {
-    assert.ok(matrix.create.includes(required), `\`plan-docs create\` must require ${required}`);
+    assert.ok(matrix.create.includes(required), `\`plan-write create\` must require ${required}`);
   }
   // Creation ends in validation, so the mode producing the plan has to reach the reference that
   // says how the plan is checked — the same reachability rule `write`/review-loop.md follows.
   assert.ok(matrix.create.includes("references/workflow-validate.md"),
-    "`plan-docs create` must require references/workflow-validate.md; a completion check parked behind another mode is one the creation path never has to run");
+    "`plan-write create` must require references/workflow-validate.md; a completion check parked behind another mode is one the creation path never has to run");
 
-  const skill = flat(`${PLAN_DOCS}/SKILL.md`);
-  assert.match(skill, /## Creation Gates/, "plan-docs SKILL.md must carry creation gates at the entry point");
+  const skill = flat(`${PLAN_WRITE}/SKILL.md`);
+  assert.match(skill, /## Creation Gates/, "plan-write SKILL.md must carry creation gates at the entry point");
   assert.match(skill, /Resolve the plan identity before drafting body content/,
     "the identity checkpoint must be visible before any reference is opened");
   assert.match(skill, /plans-config\.json/, "the entry point must name the namespace source file");
   assert.match(skill, /docs\/plans\/backlog\//, "the entry point must state that creation lands in backlog");
 
-  const create = flat(`${PLAN_DOCS}/references/workflow-create.md`);
+  const create = flat(`${PLAN_WRITE}/references/workflow-create.md`);
   assert.match(create, /Identity checkpoint/, "the create workflow must have a pre-draft identity checkpoint");
   assert.match(create, /before drafting/i, "the checkpoint must be ordered before drafting, not after");
   for (const decision of ["Namespace", "Filename", "H1"]) {
@@ -189,22 +197,25 @@ function testPlanDocsCreateRequiresSchemaAndNamespaceResolution() {
 
 // A plan is both a lifecycle artifact and a durable document, and the two validators own different
 // things. Either one alone can pass a plan the other would reject.
-function testPlanDocsCreateRunsBothValidationLayers() {
-  const create = flat(`${PLAN_DOCS}/references/workflow-create.md`);
+function testPlanWriteCreateRunsBothValidationLayers() {
+  const create = flat(`${PLAN_WRITE}/references/workflow-create.md`);
   assert.match(create, /technical-writing/, "the create workflow must invoke the technical-writing Validator");
   assert.match(create, /review-loop\.md/, "the create workflow must point at the Validator contract by path");
-  assert.match(create, /workflow-validate\.md|plan-docs. validation/,
-    "the create workflow must invoke deterministic plan-docs validation");
+  assert.match(create, /workflow-validate\.md|plan-write. validation/,
+    "the create workflow must invoke deterministic plan-write validation");
   assert.match(create, /both layers/,
     "the create workflow must state that a revision is rechecked by both layers, not just the one that reported");
-  assert.match(create, /workflow-start\.md/,
-    "a requested start must be sequenced after the backlog artifact passes, and must name the workflow that performs it");
+  assert.match(create, /hand off to `\/plan-start` only after the backlog artifact passes both layers/,
+    "a requested start must be sequenced after the backlog artifact passes, and must name the command that performs it");
 
-  const validate = flat(`${PLAN_DOCS}/references/workflow-validate.md`);
+  const validate = flat(`${PLAN_WRITE}/references/workflow-validate.md`);
   assert.match(validate, /Naming:/, "the validate workflow must list the naming checks the domain now enforces");
   assert.match(validate, /plans-config\.json/, "naming validation reads declared namespaces from the config");
   assert.match(validate, /backlog. and .active/,
     "the validate workflow must state that naming findings are scoped to non-terminal lifecycles");
+  assert.match(validate, /canonical plan validator/, "deterministic findings are delegated to the repository's validator, not prose the skill re-derives");
+  assert.match(validate, /machine-readable output mode/, "the validator runs with structured output for deterministic findings");
+  assert.match(validate, /Repository consistency/, "the judgment half the CLI cannot make stays in the workflow");
 }
 
 // --- paired skills ------------------------------------------------------------------------------
@@ -213,7 +224,7 @@ function testPlanDocsCreateRunsBothValidationLayers() {
 // having named the skill. A rule that only fires when asked for is a rule the user is enforcing by
 // hand, which is the thing being removed.
 function testBothSkillsInstructPairedLoadingWithoutBeingAsked() {
-  for (const skill of [PLAN_DOCS, TECHNICAL_WRITING]) {
+  for (const skill of [PLAN_WRITE, TECHNICAL_WRITING]) {
     const content = flat(`${skill}/SKILL.md`);
     assert.match(content, /## Paired Skills/, `${skill} must declare paired skills at the entry point`);
     assert.match(content, /do not wait to be asked for them by name/,
@@ -230,10 +241,10 @@ function testBothSkillsInstructPairedLoadingWithoutBeingAsked() {
 // for it to be loaded. Prose that merely observes the two skills are related ("pair with
 // technical-writing") reads as background, not as an instruction, and background does not get
 // followed — so the requirement has to be stated as one, and stated at the entry point.
-function testPlanDocsPairsTechnicalWritingUnconditionally() {
-  const skill = flat(`${PLAN_DOCS}/SKILL.md`);
-  assert.match(skill, /## Paired Skills/, "plan-docs must declare its paired skills at the entry point");
-  assert.match(skill, /Load these as part of the mode; do not wait to be asked for them by name/,
+function testPlanWritePairsTechnicalWritingUnconditionally() {
+  const skill = flat(`${PLAN_WRITE}/SKILL.md`);
+  assert.match(skill, /## Paired Skills/, "plan-write must declare its paired skills at the entry point");
+  assert.match(skill, /Load these as part of the work; do not wait to be asked for them by name/,
     "the paired-skill list must instruct loading rather than describe a relationship");
   assert.match(skill, /`technical-writing` \| \*\*Always\*\*/,
     "technical-writing is unconditional: every plan is prose someone reads later");
@@ -243,14 +254,14 @@ function testPlanDocsPairsTechnicalWritingUnconditionally() {
 
 // Conditional skills need their trigger written down. "Load when relevant" defers the judgment back
 // to the reader and is why these get skipped.
-function testPlanDocsNamesConditionalPairedSkillsAndTheirTriggers() {
-  const skill = flat(`${PLAN_DOCS}/SKILL.md`);
+function testPlanWriteNamesConditionalPairedSkillsAndTheirTriggers() {
+  const skill = flat(`${PLAN_WRITE}/SKILL.md`);
   for (const [paired, trigger] of [
     ["code-style", /module boundaries/],
     ["javascript-typescript", /ESM, exports, types/],
     ["test-harness", /tests, verification commands, or a regression strategy/],
   ]) {
-    assert.ok(skill.includes(`\`${paired}\``), `plan-docs must name ${paired} as a paired skill`);
+    assert.ok(skill.includes(`\`${paired}\``), `plan-write must name ${paired} as a paired skill`);
     assert.match(skill, trigger, `${paired} must carry a concrete load condition, not "when relevant"`);
   }
   assert.match(skill, /subject matter, never plan size|not on how large the plan is/,
@@ -264,7 +275,7 @@ function testPlanDocsNamesConditionalPairedSkillsAndTheirTriggers() {
 // A matrix entry pointing at a file that does not exist routes an agent to nothing, and the failure
 // is silent: the reference simply cannot be read.
 function testEveryReferencedFileExists() {
-  for (const skill of [TECHNICAL_WRITING, PLAN_DOCS]) {
+  for (const skill of [TECHNICAL_WRITING, PLAN_WRITE]) {
     for (const [mode, references] of Object.entries(parseReferenceMatrix(skill))) {
       for (const reference of references) {
         const full = path.join(repoRoot, skill, reference);

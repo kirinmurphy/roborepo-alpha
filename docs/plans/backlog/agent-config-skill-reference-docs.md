@@ -38,8 +38,8 @@ what shipped, and what's intentionally deferred.
 **`globals/packages/javascript-typescript/skills/javascript-typescript/references/framework-less-markup.md`**
 
 Extracted the "Building Markup" section out of the main `SKILL.md` body into
-a reference doc, following the same pattern `plan-docs` already uses
-(`plan-docs/skills/plan-docs/references/*.md`, conditionally read per
+a reference doc, following the same pattern `plan-write` already uses
+(`plan-write/skills/plan-write/references/*.md`, conditionally read per
 subcommand). `SKILL.md` now has a two-line pointer instead of the full
 section:
 
@@ -74,7 +74,7 @@ Skills in this repo are trigger-matched independently by `description`
 frontmatter — see `docs/internal/skills-and-commands.md`. There is
 no cross-skill loading mechanism; a reference doc is not a special
 construct either harness understands, it's just a file the skill's body
-tells the agent to `Read` conditionally. `plan-docs` already proves this
+tells the agent to `Read` conditionally. `plan-write` already proves this
 works: the top-level `SKILL.md` stays the trigger-matched entry point, and
 its body fans out to `references/*.md` based on which subcommand applies.
 
@@ -98,7 +98,7 @@ already a coherent, accurate universal condition — so `code-style` could be
 the thing that always loads first, then conditionally reads
 `references/javascript-typescript.md`, `references/react.md`,
 `references/astro.md`, `references/go.md`, etc. based on what the touched
-files actually are, the same way `plan-docs` fans out by subcommand.
+files actually are, the same way `plan-write` fans out by subcommand.
 
 This is different from (and better than) an earlier version of this idea
 that got rejected during discussion: collapsing all stack-specific skills
@@ -203,5 +203,5 @@ require guessing a shared shape from only one migrated page).
 - `docs/internal/skills-and-commands.md` — skill vs. rule vs. hook
   decision model; source for the always-on-rule call on the validation
   persona and the reference-doc mechanism explanation.
-- `globals/packages/plan-docs/skills/plan-docs/` — the existing
+- `globals/packages/plan-write/skills/plan-write/` — the existing
   skill+references precedent this doc's shipped change followed.

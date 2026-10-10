@@ -2,7 +2,14 @@
 // state, no DOM. app.js decides what to do with the results.
 
 import { portalGetJson, portalPostJson } from "/portal/shared/api.js";
+import { fetchSetupState } from "/portal/shared/setup-api.js";
 import { TOGGLE_ENDPOINT } from "./state.js";
+
+export { fetchSetupState };
+
+export function refreshHarnesses() {
+  return portalPostJson("/api/config/harnesses/refresh", {});
+}
 
 export function fetchConfig() {
   return portalGetJson("/api/config");

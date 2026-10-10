@@ -6,7 +6,7 @@
   "lifecycle": "optional",
   "presentation": {
     "category": "token-optimization",
-    "order": 50
+    "order": 40
   },
   "urls": [
     {

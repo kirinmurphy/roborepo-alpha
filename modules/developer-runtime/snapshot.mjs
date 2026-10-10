@@ -13,6 +13,9 @@ export function buildDeveloperRuntimeSnapshot({
   // here so this stays a pure builder (the caller owns state access, as it already does for
   // settings). Empty is fine: naming falls back to whatever the running checkouts report.
   repositoryNames = new Map(),
+  // repositoryId -> stable browser key for the repository detail page. Injected alongside names
+  // so the runtime card can make the repository title the same detail link Home uses.
+  repositoryUrlKeys = new Map(),
   // Repositories the registry knows that have nothing running right now, already carrying their
   // lifecycle state and (for present checkouts) git context. Injected for the same reason as
   // repositoryNames: reading the registry and shelling out to git are the caller's job, so this
@@ -186,7 +189,7 @@ export function buildDeveloperRuntimeSnapshot({
     // Repository-keyed view over the same instances the three collections above hold. Built
     // alongside them during the migration (developer-runtime-repository-card-merge) so existing consumers
     // keep working while the portal moves over; the legacy three are removed once nothing reads them.
-    repositories: buildRepositories({ projects, composeProjects, unmatchedInstances, repositoryNames, persistedRepositories, idleMainCheckouts, pinnedRepositoryIds }),
+    repositories: buildRepositories({ projects, composeProjects, unmatchedInstances, repositoryNames, repositoryUrlKeys, persistedRepositories, idleMainCheckouts, pinnedRepositoryIds }),
     inactiveProjects: inactiveProjects.sort(compareProjects),
     hiddenRepositories,
     hiddenCount,
@@ -236,7 +239,7 @@ function groupByContainer(instances) {
 // Only a real repositoryId groups. `process:` identities resolve to null (canonicalRepositoryId
 // returns null for them — no repository exists to be a member of) and stay unmatched, as do
 // Compose projects whose repo never resolved.
-function buildRepositories({ projects, composeProjects, unmatchedInstances, repositoryNames = new Map(), persistedRepositories = [], idleMainCheckouts = new Map(), pinnedRepositoryIds = new Set() }) {
+function buildRepositories({ projects, composeProjects, unmatchedInstances, repositoryNames = new Map(), repositoryUrlKeys = new Map(), persistedRepositories = [], idleMainCheckouts = new Map(), pinnedRepositoryIds = new Set() }) {
   const byRepository = new Map();
 
   // A worktree's project-level `name` is commonly its branch or directory name (e.g.
@@ -255,6 +258,7 @@ function buildRepositories({ projects, composeProjects, unmatchedInstances, repo
     if (!byRepository.has(repositoryId)) {
       byRepository.set(repositoryId, {
         repositoryId,
+        urlKey: repositoryUrlKeys.get(repositoryId) || null,
         // git: ids are portable across machines and promotable to other pages; local: ids are
         // stable but path-derived, so they stay on this surface only.
         identityKind: repositoryId.startsWith("git:") ? "git" : "local",
@@ -448,6 +452,9 @@ function buildRepositories({ projects, composeProjects, unmatchedInstances, repo
     for (const checkout of persisted.checkouts || []) {
       if (!checkout?.rootId) continue;
       const root = ensureRoot(entry, checkout.rootId, checkout.git, checkout.projectRoot);
+      // A checkout that is gone has no git to say it was a worktree; the registry recorded which
+      // kind it was when Runtime saw it, so a missing worktree still renders and sorts as one.
+      if (checkout.kind === "worktree") root.isWorktree = true;
       root.checkoutState = checkout.state;
       root.checkoutReason = checkout.reason || null;
     }
@@ -488,12 +495,13 @@ function displayGroup(repository) {
   return repository.lifecycle && repository.lifecycle.state !== "active" ? 2 : 0;
 }
 
-// The dev fixtures give their repositories deliberately unfetchable github.com/example remotes (see
-// local/dev-fixtures), which is what makes them recognizable here without a registry flag.
-const FIXTURE_REPOSITORY_PREFIX = "git:github.com/example/";
+// The dev fixtures give their repositories deliberately unfetchable github.com/example remotes and
+// a `-fixture` repository suffix (see local/dev-fixtures). The suffix matters: the development
+// checkout itself also uses an example.com remote in tests and must remain a real repository.
+const FIXTURE_REPOSITORY_PATTERN = /^git:github\.com\/example\/.+-fixture$/;
 
-function isFixtureRepository(repositoryId) {
-  return typeof repositoryId === "string" && repositoryId.startsWith(FIXTURE_REPOSITORY_PREFIX);
+export function isFixtureRepository(repositoryId) {
+  return typeof repositoryId === "string" && FIXTURE_REPOSITORY_PATTERN.test(repositoryId);
 }
 
 // Last path segment of a git: id, or a generic label for a local: one. Only used when the registry
@@ -669,6 +677,7 @@ function primaryEntrypointFor(root, compareMembers) {
     opaqueKey: best.instance.opaqueKey,
     origin: best.instance.origin,
     port: best.instance.bind.port,
+    links: best.instance.app?.links || [],
   };
 }
 

@@ -98,7 +98,7 @@ assert() {
 assert "source layout: globals system skills exist" test -d "${repo_root}/globals/system/skills"
 assert "source layout: globals harnesses Claude source exists" test -d "${repo_root}/globals/harnesses/claude"
 assert "source layout: globals harnesses Codex source exists" test -d "${repo_root}/globals/harnesses/codex"
-assert "source layout: generated per-package Codex commands exist" test -d "${repo_root}/generated/packages/plan-docs/codex/commands"
+assert "source layout: generated per-package Codex commands exist" test -d "${repo_root}/generated/packages/plan-write/codex/commands"
 assert "source layout: local internal skills exist" test -d "${repo_root}/local/skills"
 assert "source layout: legacy agents root absent" bash -c "! test -e '${repo_root}/agents'"
 assert "source layout: legacy claude root absent" bash -c "! test -e '${repo_root}/claude'"
@@ -367,9 +367,9 @@ assert "skill native --full: prints fallback when native help unavailable" \
 assert "skill render-commands: check dispatches generated command verifier" \
   bash -c "cd '${repo_root}' && node '${cli}' skill render-commands --check >/dev/null"
 assert "skill render-commands: generated Claude wrapper exists" \
-  grep -q 'Use the `plan-docs` skill' "${repo_root}/generated/packages/plan-docs/claude/commands/plan-docs.md"
+  grep -q 'Use the `plan-write` skill' "${repo_root}/generated/packages/plan-write/claude/commands/plan-write.md"
 assert "skill render-commands: generated Codex wrapper uses codex skill path" \
-  grep -q '~/.codex/skills/plan-docs/SKILL.md' "${repo_root}/generated/packages/plan-docs/codex/commands/plan-docs.md"
+  grep -q '~/.codex/skills/plan-write/SKILL.md' "${repo_root}/generated/packages/plan-write/codex/commands/plan-write.md"
 assert "skill render-commands: capture observer has no slash command" \
   bash -c "! test -e '${repo_root}/generated/packages/convention-capture/claude/commands/capture-convention.md'"
 assert "skill render-commands: capture observer absent from Codex commands" \
@@ -886,6 +886,10 @@ if node -e 'const s=require("node:net").createServer();s.once("error",()=>proces
     bash -c "curl -s 'http://127.0.0.1:${cfg_port}/docs/user/reference/runtime.md' | grep -q '^# Runtime'"
   assert "developer-runtime: GET snapshot works without token" \
     bash -c "curl -s 'http://127.0.0.1:${cfg_port}/api/developer-runtime' >'${cfg_home}/developer-runtime-get.json' && node -e \"const j=require('${cfg_home}/developer-runtime-get.json');process.exit(j.capabilities&&Array.isArray(j.projects)&&Array.isArray(j.unmatchedInstances)?0:1)\""
+  assert "portal: GET with a non-loopback Host is rejected (DNS rebinding)" \
+    bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' 'http://127.0.0.1:${cfg_port}/api/home' -H 'Host: rebind.example.com:${cfg_port}')\" = 403 ]"
+  assert "portal: GET with a localhost Host is served" \
+    bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' 'http://127.0.0.1:${cfg_port}/api/developer-runtime' -H 'Host: localhost:${cfg_port}')\" = 200 ]"
   assert "developer-runtime: refresh rejects missing token" \
     bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' -X POST 'http://127.0.0.1:${cfg_port}/api/developer-runtime/refresh' -H 'Content-Type: application/json' -d '{}')\" = 403 ]"
   assert "developer-runtime: mutation rejects cross-origin request" \
@@ -1693,6 +1697,10 @@ assert "git-inventory: repository inventory derivation" \
 assert "package library: disabling a package updates persisted state" \
   node "${repo_root}/scripts/test/package-library-disable-update-check.mjs"
 
+# Update across a package rename: retired IDs leave both registry lists and their projections go.
+assert "package registry: update drops retired package ids" \
+  node "${repo_root}/scripts/test/package-retired-ids-check.mjs"
+
 assert "permissions: writes stay scoped to the current repository" \
   node "${repo_root}/scripts/test/repo-write-scope-check.mjs"
 
@@ -1898,6 +1906,11 @@ assert "developer-runtime: docker provider parsing" \
 assert "developer-runtime: process etime parsing" \
   node "${repo_root}/scripts/test/developer-runtime-process-check.mjs"
 
+# Stopping a checkout's servers: Git-top-level attribution (subdirectories in, nested worktrees out),
+# SIGTERM-only with survivors reported, PID-reuse protection, and unsupported platforms. All injected.
+assert "developer-runtime: stop a checkout's servers" \
+  node "${repo_root}/scripts/test/developer-runtime-stop-check.mjs"
+
 # Same-origin metadata discovery: manifest/robots/sitemap/OpenAPI sources, the loopback fetch guards
 # (external redirect, body cap, timeout), auth-looking path exclusion, and source-priority dedupe.
 assert "developer-runtime: metadata suggestion discovery" \
@@ -1968,9 +1981,15 @@ assert "telemetry: marker-relative comparisons and confidence gates" \
 assert "telemetry: package telemetry policy validation and evaluation" \
   node "${repo_root}/scripts/test/telemetry-policy-check.mjs"
 
-# Tokens page setup cascade (telemetry off -> no harness -> no data -> full), pure function.
+# Tokens page setup cascade (no harness -> telemetry off -> no data -> full), pure function.
 assert "tokens: page setup-state cascade" \
   node "${repo_root}/scripts/test/tokens-page-state-check.mjs"
+
+assert "portal: shared setup-state is path-free and derived" \
+  node "${repo_root}/scripts/test/portal-setup-check.mjs"
+
+assert "portal: harness refresh and enable routes" \
+  node "${repo_root}/scripts/test/harness-portal-api-check.mjs"
 
 # Phase 6 of docs/plans/active/discoverable-harness-provider-architecture-plan.md: /api/session
 # rejects a missing/unrecognized harness id instead of silently defaulting to Claude.
@@ -2035,19 +2054,22 @@ assert "markdown-render: heading ids, tables, mermaid fallback" \
 # Plan docs: scanning, frontmatter parsing, guarded lifecycle moves, readiness validation, and the
 # portal's pure mutation-orchestration helpers. These have npm scripts of their own but were never
 # reachable from `npm test`, so a plans-domain regression could pass CI unnoticed.
-assert "plan-docs: scanning, frontmatter, guarded lifecycle moves" \
-  node "${repo_root}/scripts/test/plan-docs-check.mjs"
+assert "plan-suite: scanning, frontmatter, guarded lifecycle moves" \
+  node "${repo_root}/scripts/test/plan-suite-check.mjs"
 
-assert "plan-docs: findings catalog and destination policy" \
-  node "${repo_root}/scripts/test/plan-docs-findings-check.mjs"
+assert "plan-suite: findings catalog and destination policy" \
+  node "${repo_root}/scripts/test/plan-suite-findings-check.mjs"
 
-assert "plan-docs: frontmatter repair pass" \
-  node "${repo_root}/scripts/test/plan-docs-repair-check.mjs"
+assert "plan-suite: frontmatter repair pass" \
+  node "${repo_root}/scripts/test/plan-suite-repair-check.mjs"
+
+assert "plan-suite: validate, start, and package status commands" \
+  node "${repo_root}/scripts/test/plan-suite-commands-check.mjs"
 
 assert "plans: portal mutation-orchestration helpers" \
   node "${repo_root}/scripts/test/plans-portal-state-check.mjs"
 
-# The mode/reference matrices technical-writing and plan-docs declare in their own SKILL.md prose.
+# The mode/reference matrices technical-writing and plan-write declare in their own SKILL.md prose.
 # A required reference dropped from an artifact-producing mode is invisible at runtime — the work
 # still gets delivered, just without the rule that would have caught the defect.
 assert "skills: mode/reference matrices and completion gates" \

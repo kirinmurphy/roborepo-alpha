@@ -142,7 +142,7 @@ function routeLinkRow(project, instance, suggestion, { captureLink, isSaved, onE
   // are mutually exclusive.
   if (isSavedLink) {
     const actions = row.querySelector("[data-slot=row-actions]");
-    if (actions) actions.hidden = false;
+    if (actions) actions.hidden = !onEditLink && !onDeleteLink;
     // Both sit inside the row's anchor, so each must stop the click from also navigating.
     row.querySelector("[data-action=edit-link]")?.addEventListener("click", (event) => {
       event.preventDefault();

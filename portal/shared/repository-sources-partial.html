@@ -1,0 +1,150 @@
+<!-- Manage repositories: the one global surface for how RoboRepo finds repositories (pljvmyh §7).
+     Injected at {{REPOSITORY_SOURCES}} (scripts/cli/portal-server.mjs) on Home, Plans, Runtime, and
+     Settings. The same surface template is mounted in the Manage Repos dialog and inline Settings;
+     both are driven by portal/shared/repository-sources-dialog.js. It also carries the repository
+     empty state Home and Plans share, so their onboarding copy and actions cannot drift. -->
+<link rel="stylesheet" href="/portal/shared/repository-sources.css" />
+<dialog id="repository-sources-dialog" class="repository-sources-dialog" data-dialog-size="md" aria-labelledby="repository-sources-title">
+  <div class="modal-head">
+    <h2 class="modal-title" id="repository-sources-title">Manage Repos</h2>
+    <span class="sync-status is-synced" data-repository-sync-status role="status" aria-live="polite" hidden>
+      <span class="sync-status-icon" aria-hidden="true"></span>
+      <span data-slot="text">Synced</span>
+    </span>
+    <portal-close-button data-slot="close" aria-label="Close"></portal-close-button>
+  </div>
+  <div class="modal-body repository-sources-body" data-sources-host></div>
+</dialog>
+<dialog id="folder-scan-info" class="folder-scan-info" data-dialog-size="sm" aria-labelledby="folder-scan-info-title">
+  <div class="modal-head">
+    <h2 class="modal-title" id="folder-scan-info-title">How folder scanning works</h2>
+    <portal-close-button data-slot="close" aria-label="Close"></portal-close-button>
+  </div>
+  <div class="modal-body">
+    <pre class="folder-tree"><span class="tree-root">projects/</span>
+<span class="tree-branch">├── </span><span class="project-folder">git_repo1/</span>
+<span class="tree-branch">│   └── </span><span class="tree-plain">docs/plans/</span>
+<span class="tree-branch">├── </span><span class="project-folder">plans_only/</span>
+<span class="tree-branch">│   └── </span><span class="tree-plain">docs/plans/</span>
+<span class="tree-branch">└── </span><span class="tree-plain">repos_folder/</span>
+<span class="tree-branch">    ├── </span><span class="project-folder">git_repo2/</span>
+<span class="tree-branch">    └── </span><span class="tree-plain">notes/</span>  <span class="tree-note">(no .git or docs/plans)</span></pre>
+    <ul class="tree-legend">
+      <li><span class="legend-swatch legend-repo"></span> found repository (a folder with .git or docs/plans)</li>
+    </ul>
+    <p class="modal-note">
+      Stops at the first repository found in each branch — folders inside a repository aren't
+      re-scanned. Looks six folders deep, for up to five seconds and 250 repositories. Skips
+      node_modules, dist, .venv, and similar.
+    </p>
+    <p class="modal-note">Plans inside every found repository are picked up automatically.</p>
+  </div>
+</dialog>
+
+<template id="tpl-repository-sources-surface">
+  <div class="repository-sources-surface" data-sources-surface>
+    <p class="repository-sources-error" data-slot="error" role="alert" hidden></p>
+    <section class="sources-auto" data-slot="auto" aria-label="Auto-discovery"></section>
+    <section class="sources-repositories" aria-label="Repository list">
+      <div class="sources-repositories-head" data-slot="repositories-head">
+        <p class="sources-muted" data-slot="repositories-empty" hidden>No repositories yet</p>
+        <button type="button" data-btn="text" data-slot="add-toggle-empty" aria-expanded="false" hidden>Find more repos</button>
+      </div>
+      <ul class="sources-list" data-slot="repositories"></ul>
+      <button type="button" data-btn="text" data-slot="add-toggle-list" aria-expanded="false" hidden>Find more repos</button>
+      <details class="sources-ignored" data-slot="ignored-group" hidden>
+        <summary data-slot="ignored-summary">Ignored</summary>
+        <ul class="sources-list" data-slot="ignored"></ul>
+      </details>
+    </section>
+    <section class="sources-folders" aria-label="Folders">
+      <form class="sources-add-form" data-slot="add-form" hidden>
+        <div class="sources-add-label-row">
+          <label for="repository-source-path">Find more repos in</label>
+          <button type="button" data-btn="text" class="sources-info-trigger" data-slot="info">How folder scanning works</button>
+        </div>
+        <div class="sources-add-row">
+          <input id="repository-source-path" data-slot="path" placeholder="~/projects or ~/projects/app" autocomplete="off" />
+          <button type="submit" data-btn="secondary" data-slot="add-submit">Add folder</button>
+          <button type="button" data-btn="text" data-slot="cancel">Cancel</button>
+        </div>
+        <p class="sources-path-error" data-slot="path-error" role="alert" hidden></p>
+      </form>
+      <ul class="sources-list sources-folder-list" data-slot="folders"></ul>
+    </section>
+  </div>
+</template>
+
+<template id="tpl-sources-auto-off">
+  <div class="sources-auto-off">
+    <p class="sources-auto-copy">
+      Auto-discovery watches the dev servers and containers you run and remembers the repositories
+      they run in.
+    </p>
+    <div class="sources-auto-actions">
+      <button type="button" data-btn="cta" data-slot="enable">Auto-discover active repos</button>
+      <button type="button" data-btn="text" class="sources-wipe" data-slot="wipe" hidden>Clear All Repos</button>
+    </div>
+  </div>
+</template>
+<template id="tpl-sources-auto-on">
+  <div class="sources-auto-on">
+    <span class="sources-auto-status"><span class="sources-auto-dot" aria-hidden="true"></span><span data-slot="status"></span></span>
+    <div class="sources-auto-actions">
+      <button type="button" data-btn="text" data-slot="disable">Turn off</button>
+      <button type="button" data-btn="text" class="sources-wipe" data-slot="wipe" hidden>Clear All Repos</button>
+    </div>
+  </div>
+</template>
+<template id="tpl-sources-repository">
+  <li class="sources-row">
+    <div class="sources-row-main">
+      <span class="sources-row-name"><span data-slot="name"></span> <span class="sources-row-found-state" data-slot="found-state"></span></span>
+    </div>
+    <div class="sources-row-actions">
+      <button type="button" data-btn="text" data-slot="ignore">Ignore Repo</button>
+    </div>
+  </li>
+</template>
+<template id="tpl-sources-ignored">
+  <li class="sources-row">
+    <div class="sources-row-main"><span class="sources-row-name" data-slot="name"></span></div>
+    <div class="sources-row-actions"><button type="button" data-btn="text" data-slot="restore">Restore</button></div>
+  </li>
+</template>
+<template id="tpl-sources-folder">
+  <li class="sources-row">
+    <div class="sources-row-main">
+      <span class="sources-row-name sources-path" data-slot="path"></span>
+      <span class="sources-row-detail"><span class="source-state" data-slot="state"></span> · <span data-slot="summary"></span></span>
+    </div>
+    <div class="sources-row-actions">
+      <button type="button" data-btn="text" data-slot="refresh">Refresh</button>
+      <button type="button" data-btn="text" data-slot="toggle"></button>
+      <button type="button" data-btn="text" data-slot="remove">Remove</button>
+    </div>
+  </li>
+</template>
+
+<!-- The repository empty state Home and Plans share: Enable is primary, Add a folder secondary. -->
+<template id="tpl-repository-empty-state">
+  <section class="repository-empty-state">
+    <h2 data-slot="title"></h2>
+    <p data-slot="body"></p>
+    <div class="repository-empty-actions">
+      <button type="button" data-btn="cta" data-slot="enable">Auto-discover active repos</button>
+      <button type="button" data-btn="text" data-slot="add-folder">Add a folder</button>
+    </div>
+  </section>
+</template>
+<!-- The compact prompt Home and Runtime show above known repositories while auto-discovery is off. -->
+<template id="tpl-auto-discovery-prompt">
+  <portal-notice class="portal-notice auto-discovery-prompt" variant="info" icon="info">
+    <div class="portal-banner-content">
+      <div class="portal-banner-copy">
+        <p class="onboarding-primary">RoboRepo can observe active apps and remember the repositories they use across HTTP activity and Docker containers.</p>
+      </div>
+      <div class="portal-banner-action"><button type="button" data-btn="cta" data-slot="enable">Auto-discover active repos</button></div>
+    </div>
+  </portal-notice>
+</template>

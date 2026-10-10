@@ -25,7 +25,7 @@ call sites can migrate without restructuring.
 
 Three private copies predate it, each byte-similar and each missing protections:
 
-- `modules/plan-docs/index.mjs` — `gitInfo` / `gitFileInfo`
+- `modules/plan-suite/index.mjs` — `gitInfo` / `gitFileInfo`
 - `scripts/cli/telemetry-capture.mjs` — `repoMetadata`
 - `scripts/cli/telemetry-markers.mjs` — `resolveGitIdentity`
 

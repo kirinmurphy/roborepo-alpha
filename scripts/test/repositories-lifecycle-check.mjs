@@ -146,7 +146,7 @@ check("the record that took the root is not superseded", supersededBy(reg, RENAM
   const oldIso = new Date(nowMs - 40 * 24 * 60 * 60 * 1000).toISOString();
   const RID = "local:aaaaaaaaaaaaaaaa";
   const record = () => ({
-    id: RID, kind: "local", displayName: "aged-repo", providerUrl: null, normalizedRemote: null,
+    id: RID, kind: "local", urlKey: "aged-repo", displayName: "aged-repo", providerUrl: null, normalizedRemote: null,
     localRoots: [{ rootId: "r", kind: "primary", firstSeenAt: oldIso, lastSeenAt: oldIso }],
     discoveries: [], enrollments: {}, aliases: [], visibility: "visible",
     resolution: "resolved", activity: "unknown", createdAt: oldIso, updatedAt: oldIso,
@@ -218,8 +218,8 @@ check("the record that took the root is not superseded", supersededBy(reg, RENAM
   const aliased = {
     version: REGISTRY_VERSION, revision: 1, aliases: {}, localRootPaths: {},
     repositories: {
-      [OLD]: { id: OLD, kind: "git", displayName: "shared-name", providerUrl: null, normalizedRemote: null, localRoots: [], discoveries: [], enrollments: {}, aliases: [], visibility: "visible", resolution: "resolved", activity: "unknown", createdAt: nowIsoBase, updatedAt: nowIsoBase },
-      [NEW]: { id: NEW, kind: "git", displayName: "shared-name", providerUrl: null, normalizedRemote: null, localRoots: [], discoveries: [], enrollments: {}, aliases: [], visibility: "visible", resolution: "resolved", activity: "unknown", createdAt: nowIsoBase, updatedAt: nowIsoBase },
+      [OLD]: { id: OLD, kind: "git", urlKey: "old-name", displayName: "shared-name", providerUrl: null, normalizedRemote: null, localRoots: [], discoveries: [], enrollments: {}, aliases: [], visibility: "visible", resolution: "resolved", activity: "unknown", createdAt: nowIsoBase, updatedAt: nowIsoBase },
+      [NEW]: { id: NEW, kind: "git", urlKey: "new-name", displayName: "shared-name", providerUrl: null, normalizedRemote: null, localRoots: [], discoveries: [], enrollments: {}, aliases: [], visibility: "visible", resolution: "resolved", activity: "unknown", createdAt: nowIsoBase, updatedAt: nowIsoBase },
     },
   };
   // Both records resolve to themselves, so both would render — the duplicate the user sees.

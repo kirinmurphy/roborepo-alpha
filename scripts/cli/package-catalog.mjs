@@ -7,6 +7,7 @@ import { hasHarnessProvider, getHarnessProvider } from "../harnesses/registry.mj
 
 export const PACKAGE_CATEGORIES_PATH = path.join(repoRoot, "manifests", "inventory", "package-categories.json");
 export const BUILT_IN_PACKAGES_DIR = path.join(repoRoot, "globals", "packages");
+export const ARCHIVED_PACKAGES_DIR = path.join(repoRoot, "globals", "packages-archived");
 export const EXPERIMENTAL_PACKAGES_ENV = "LOAD_EXPERIMENTAL_PACKAGES";
 
 const PENDING_STATUS = "pending";
@@ -99,7 +100,9 @@ export function readPackageCategories() {
 }
 
 function readBuiltInPackageConfigs() {
-  return packageConfigFiles(BUILT_IN_PACKAGES_DIR).map((file) => readPackageConfig(file, "built-in"));
+  return [BUILT_IN_PACKAGES_DIR, ARCHIVED_PACKAGES_DIR]
+    .flatMap((root) => packageConfigFiles(root))
+    .map((file) => readPackageConfig(file, "built-in"));
 }
 
 function readWorkspacePackageConfigs({ builtInIds = new Set(), overrides = readWorkspaceOverrides() } = {}) {
@@ -253,6 +256,7 @@ function normalizePackage(pkg, { file, root, origin }) {
     sourceRoot: root,
     sourceFile: file,
     origin,
+    archived: path.resolve(root).startsWith(`${path.resolve(ARCHIVED_PACKAGES_DIR)}${path.sep}`),
   };
 }
 

@@ -6,7 +6,7 @@
   "lifecycle": "optional",
   "presentation": {
     "category": "code-conventions",
-    "order": 30
+    "order": 20
   },
   "resources": [
     {

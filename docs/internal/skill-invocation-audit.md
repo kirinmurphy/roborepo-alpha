@@ -26,15 +26,15 @@ Keep shared `SKILL.md` frontmatter portable; use package-backed checks before ad
 | `code-style` | auto | low | false | none | Keep auto if trigger remains narrow. |
 | `javascript-typescript` | auto | low | false | none | Keep auto if trigger remains narrow. |
 | `react` | auto | low | false | none | Keep auto if trigger remains narrow. |
-| `supabase-integration-testing` | auto | medium | false | none | Keep trigger narrow; add near-miss tests. |
 | `test-harness` | auto | low | false | none | Keep auto if trigger remains narrow. |
+| `supabase-integration-testing` | auto | medium | false | none | Keep trigger narrow; add near-miss tests. |
+| `tighten` | auto | medium | true | names a paired skill in prose but declares no Paired Skills table | Keep trigger narrow; add near-miss tests. |
 | `telemetry-marker` | manual | low | true | none | Keep manual-only or command-gated. |
-| `plan-docs` | manual | medium | true | none | Keep manual-only or command-gated. |
+| `plan-write` | manual | medium | true | none | Keep manual-only or command-gated. |
 | `plan-promote` | manual | medium | true | side-effect keyword | Keep manual-only or command-gated. |
 | `plan-start` | manual | high | true | none | Keep manual-only or command-gated. |
-| `wrap-up` | manual | medium | true | names a paired skill in prose but declares no Paired Skills table | Keep manual-only or command-gated. |
-| `tighten` | auto | medium | true | names a paired skill in prose but declares no Paired Skills table | Keep trigger narrow; add near-miss tests. |
-| `integration-check` | manual | high | true | none | Keep manual-only or command-gated. |
+| `plan-close` | manual | high | true | side-effect keyword | Keep manual-only or command-gated. |
+| `session-close` | manual | medium | true | none | Keep manual-only or command-gated. |
 | `case-study` | auto | medium | true | side-effect keyword | Keep trigger narrow; add near-miss tests. |
 | `technical-writing` | manual | low | true | none | Keep manual-only or command-gated. |
 

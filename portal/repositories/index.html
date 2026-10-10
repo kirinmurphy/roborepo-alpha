@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  {{HEAD}}
+  <body>
+    {{CHROME}}
+    {{WIDGET_TEMPLATES}}
+    <main id="main" class="inner repository-main">
+      {{LOADING}}
+      <a class="back-link" href="/">← All repositories</a>
+      <section id="repository-warning" class="notice warn" hidden></section>
+      <section id="repository-content" aria-live="polite"></section>
+    </main>
+
+    <template id="tpl-repository-detail">
+      <article class="repository-detail">
+        <header class="detail-header">
+          <div><p class="detail-eyebrow">Repository</p><h1 data-slot="name"></h1><p data-slot="meta"></p></div>
+          <span class="detail-lifecycle" data-slot="lifecycle"></span>
+        </header>
+        <dl class="identity-grid" data-slot="identity"></dl>
+        <nav class="domain-links" aria-label="Repository domains">
+          <a href="/runtime">Runtime</a><a href="/plans">Plans</a><a href="/tokens">Tokens</a><a href="/config">Agents</a>
+        </nav>
+        <div class="detail-sections" data-slot="sections"></div>
+      </article>
+    </template>
+    <template id="tpl-detail-fact"><div class="detail-fact"><dt data-slot="label"></dt><dd data-slot="value"></dd></div></template>
+    <template id="tpl-detail-section">
+      <section class="detail-section"><header><div><h2 data-slot="title"></h2><p data-slot="subtitle"></p></div><span class="detail-status" data-slot="status"></span></header><div data-slot="body"></div></section>
+    </template>
+    <template id="tpl-detail-checkouts"><div class="detail-checkouts" data-slot="items"></div></template>
+    <template id="tpl-detail-checkout">
+      <div class="detail-checkout"><div><strong data-slot="name"></strong><span data-slot="kind"></span></div><p data-slot="git"></p><span data-slot="entrypoint"></span></div>
+    </template>
+    <template id="tpl-detail-list"><ul class="detail-list" data-slot="items"></ul></template>
+    <template id="tpl-detail-list-item"><li><strong data-slot="title"></strong><span data-slot="meta"></span></li></template>
+    <template id="tpl-detail-message"><p class="detail-message" data-slot="message"></p></template>
+
+    <script src="/portal/shared/icon.js" type="module"></script>
+    <script src="/portal/shared/theme.js" type="module"></script>
+    <script src="/portal/repositories/app.js" type="module"></script>
+  </body>
+</html>

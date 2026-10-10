@@ -22,9 +22,18 @@ const catalog = loadPackageCatalog({ includeUnavailable: true });
 validatePackageCatalog(catalog);
 
 const packageIds = new Set(catalog.map((pkg) => pkg.id));
+assert(
+  !catalog.some((pkg) => pkg.origin === "built-in" && pkg.defaultEnabled),
+  "built-in packages should all be off by default",
+);
 for (const id of ["jcodemunch", "jdocmunch", "telemetry", "caveman", "plan-promote", "plan-start"]) {
   assert(packageIds.has(id), `missing package: ${id}`);
 }
+for (const id of ["jcodemunch", "jdocmunch"]) {
+  assert(catalog.find((pkg) => pkg.id === id)?.archived, `${id} should be marked archived`);
+}
+assert(!(catalog.find((pkg) => pkg.id === "plan-write")?.urls || []).length,
+  "Plan Write should not expose external links");
 assert(!packageIds.has("code-intel"), "Code Intelligence composite package should not be present");
 
 const commands = listPackageCommands({ includeUnavailable: true }).map((command) => command.name).sort();
@@ -33,7 +42,7 @@ for (const name of ["index code", "index docs", "watch code"]) {
 }
 
 const slashNames = loadSlashCommandPlan().commands.map((command) => command.name).sort();
-for (const name of ["case-study", "plan-docs", "tighten", "wrap-up", "plan-promote", "plan-start"]) {
+for (const name of ["case-study", "plan-write", "tighten", "session-close", "plan-promote", "plan-start", "plan-close"]) {
   assert(slashNames.includes(name), `missing slash command: ${name}`);
 }
 
@@ -70,8 +79,30 @@ for (const label of ["Permissions", "Local Stores"]) {
   assert(sections.has(label), `missing ${label} section`);
 }
 
-assert(sections.get("Token Optimization").items.some((item) => item.id === "jcodemunch"), "jcodemunch not visible in Token Optimization");
-assert(sections.get("Skills - Development Life Cycle").items.some((item) => item.id === "tighten"), "tighten not visible in Skills - Development Life Cycle");
+assert(!sections.get("Token Optimization").items.some((item) => ["jcodemunch", "jdocmunch"].includes(item.id)), "archived indexers should not appear in the Agents UI");
+assert(sections.get("Writing Assistants"), "Writing Assistants category label should be updated");
+assert(snapshot.behaviorView.findIndex((section) => section.category === "Writing Assistants")
+  > snapshot.behaviorView.findIndex((section) => section.category === "Code Conventions"),
+"Writing Assistants should follow Code Conventions");
+const tokenItems = sections.get("Token Optimization").items.map((item) => item.id);
+assert(tokenItems.indexOf("caveman") < tokenItems.indexOf("tool-call-optimization"),
+  "Caveman Plugin should precede Tool Call Optimization");
+assert(sections.get("Code Conventions").items.at(-1)?.id === "tighten", "tighten should be last in Code Conventions");
+assert(sections.get("Code Conventions").items.findIndex((item) => item.id === "react")
+  < sections.get("Code Conventions").items.findIndex((item) => item.id === "test-harness"),
+"React should precede Test Harness");
+assert(sections.get("Code Conventions").items.findIndex((item) => item.id === "test-harness")
+  < sections.get("Code Conventions").items.findIndex((item) => item.id === "supabase-integration-testing"),
+"Test Harness should precede Supabase Integration Testing");
+assert(sections.get("Additional Agent Rules").items.map((item) => item.id).join(",") === "branch-safety,capture-dense-bash",
+  "Additional Agent Rules should contain Branch Safety and Capture Dense Bash in order");
+assert(snapshot.behaviorView.findIndex((section) => section.category === "Additional Agent Rules")
+  > snapshot.behaviorView.findIndex((section) => section.category === "Chat-Time Output"),
+"Additional Agent Rules should follow Chat-Time Output");
+assert(snapshot.behaviorView.filter((section) => section.categoryId).at(-1)?.category === "Additional Agent Rules",
+  "Additional Agent Rules should be the final package section");
+assert(sections.get("Plan Suite").items.map((item) => item.id).join(",") === "plan-write,plan-promote,plan-start,plan-close,session-close",
+  "the Plan Suite section lists the five suite commands in lifecycle order");
 
 const libraryStepTitles = new Set(buildOnboardSteps().map((step) => step.title));
 for (const section of snapshot.behaviorView) {

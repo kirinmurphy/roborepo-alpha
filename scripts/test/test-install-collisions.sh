@@ -224,7 +224,7 @@ EOF
 
   assert_file_contains "$home_dir/wiz.out" "Applying changes" "wizard runs deferred batch apply after a toggle"
   assert_file_not_contains "$home_dir/wiz.out" "failed:" "wizard toggle applies without error"
-  assert_file_contains "$home_dir/wiz.out" "enable jcodemunch — ok" "wizard applies the toggled package"
+  assert_file_contains "$home_dir/wiz.out" "enable caveman — ok" "wizard applies the toggled package"
   trap - RETURN
   cp "$claude_settings_backup" "$repo_root/generated/claude/settings.json"
 }

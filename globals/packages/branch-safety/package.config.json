@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "branch-safety",
+  "label": "Branch safety",
+  "description": "Ask before creating or moving Git branches and worktrees.",
+  "lifecycle": "optional",
+  "defaultEnabled": false,
+  "presentation": {
+    "category": "additional-agents-md-rules",
+    "order": 10
+  },
+  "resources": [
+    {
+      "type": "rules",
+      "source": "rules.md",
+      "harness": "claude"
+    }
+  ]
+}

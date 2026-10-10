@@ -29,7 +29,7 @@ flat array under `manifests/`, alongside genuinely platform-owned files like
 `manifests/inventory/package-categories.json` (the valid `presentation.category` values — a closed
 platform vocabulary, correctly platform-owned). The trigger-tests file is different in kind: every
 entry's `skill` field names one specific package's skill (`case-study`, `frontend-design`,
-`plan-docs`, `tighten`, `plan-promote`, `plan-start`). That content is package knowledge sitting in
+`plan-write`, `tighten`, `plan-promote`, `plan-start`). That content is package knowledge sitting in
 platform territory.
 
 This breaks the boundary the package system is meant to guarantee: swap out or remove any package
@@ -60,7 +60,7 @@ exist. Every other package-specific fact already lives inside `globals/packages/
 ## Current state
 
 - Fixture data: `manifests/inventory/skill-trigger-tests.json`, one `tests[]` array, 6 entries
-  (`case-study`, `frontend-design`, `plan-docs`, `tighten`, `plan-promote`, `plan-start`).
+  (`case-study`, `frontend-design`, `plan-write`, `tighten`, `plan-promote`, `plan-start`).
 - Reader: `scripts/cli/skill-trigger-check.mjs` — `TRIGGER_TESTS_REL` constant points at the file
   above; `packageSkillSources()` already resolves each fixture's `skill` id to its package source
   via `loadPackageCatalog()`, so the lookup mechanism generalizes cleanly to a per-package source.
@@ -104,7 +104,7 @@ way `agents/openai.yaml` already is.
       pick one and record the reason).
 - [ ] Update `scripts/cli/skill-trigger-check.mjs` to discover fixtures via the catalog instead of
       reading `TRIGGER_TESTS_REL`, preserving the existing pass/fail semantics and CLI output format.
-- [ ] Migrate the 6 existing entries (`case-study`, `frontend-design`, `plan-docs`, `tighten`,
+- [ ] Migrate the 6 existing entries (`case-study`, `frontend-design`, `plan-write`, `tighten`,
       `plan-promote`, `plan-start`) from `manifests/inventory/skill-trigger-tests.json` into their
       respective package directories, then delete the central file.
 - [ ] Update `scripts/cli/skill-new.mjs` / `skill-new-templates.mjs` so scaffolding a new

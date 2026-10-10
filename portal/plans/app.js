@@ -5,17 +5,13 @@
 import {
   portalSetUpdatedAt,
   portalHideLoading,
-  portalCopyText,
   portalWireBackdropClose,
 } from "/portal/shared/api.js";
-import { createSkillDetailModal } from "/portal/shared/skill-detail-modal.js";
-import { renderMermaidBlocks } from "/portal/shared/markdown-mermaid.js";
 import * as api from "./api.js";
 import * as tmpl from "./templates.js";
-import { createRootsPanel, createInfoModal, createPromptModal } from "./panels.js";
-import { createLifecycleEventDialog, lifecycleEvents } from "./lifecycle-event-dialog.js";
+import { createRepositorySourcesDialog } from "/portal/shared/repository-sources-dialog.js";
 import { createLifecycleErrorDialog } from "./lifecycle-error-dialog.js";
-import { createOutcomeToast } from "./toast-controller.js";
+import { createPlanDrawer } from "./plan-drawer.js";
 import { createBlockersPopover } from "./blockers-popover.js";
 import {
   FILTER_IDS,
@@ -23,7 +19,6 @@ import {
   FILTER_OPTION_DEFS,
   LIFECYCLE_LABELS,
   filteredPlans,
-  actionablePlans,
   sortForLifecycle,
   isNotStarted,
   completionRatio,
@@ -31,7 +26,6 @@ import {
   replaceRecord,
   filteredListActionFor,
   resolveBlockers,
-  resolveBlocking,
   optionCounts,
   optionLabel,
   repositoryContext,
@@ -46,15 +40,11 @@ const state = {
   filters: { ...FILTER_DEFAULTS },
   filtersExpanded: false,
   selectedLifecycle: lifecycleFromSearchParams(new URLSearchParams(location.search)),
-  openDrawerKey: null,
 };
 
-const toastEl = document.getElementById("toast");
 const groupsEl = document.getElementById("groups");
 const warningsEl = document.getElementById("warnings");
 const bannerEl = document.getElementById("package-banner");
-const drawer = document.getElementById("drawer");
-const nextPrompt = document.getElementById("next-prompt");
 const plansHeaderEl = document.getElementById("plans-header");
 const filtersToggleEl = document.getElementById("filters-toggle");
 const filtersBodyEl = document.getElementById("filters-body");
@@ -64,38 +54,46 @@ const plansCountTextEl = document.getElementById("plans-count-text");
 const reposCountTextEl = document.getElementById("repos-count-text");
 const lifecycleTabsEl = document.getElementById("lifecycle-tabs");
 const lifecycleDropdownMountEl = document.getElementById("lifecycle-dropdown-mount");
+const onboardingEl = document.getElementById("plans-onboarding");
 let lifecycleDropdownEl = null;
+let syncPollTimer = null;
+let repositorySyncPending = false;
+let repositorySyncState = "synced";
+let repositoryAutoDiscoveryEnabled = false;
 
-// Only one of {roots panel, filter panel} is open at a time — each setter closes the other.
-const rootsPanel = createRootsPanel({
-  onSnapshot: applySnapshot,
-  onError: showError,
-  onExpand: () => setFiltersExpanded(false),
+// Plans no longer owns which repositories exist: the header count and the onboarding states open the
+// shared Manage repositories dialog, and any change there re-reads the Plans snapshot.
+const sourcesDialog = createRepositorySourcesDialog({
+  onPending: setPlansSyncPending,
+  onChange: () => api.refreshSnapshot().then(applySnapshot).catch(showError),
 });
-createInfoModal();
-const skillModal = createSkillDetailModal(document.getElementById("skill-modal"));
-const promptModal = createPromptModal(document.getElementById("prompt-modal"));
-const outcomeToast = createOutcomeToast(toastEl);
+const onboarding = {
+  onEnable: () => sourcesDialog.enableAutoDiscovery(),
+  onAddFolder: () => sourcesDialog.open({ addFolder: true }),
+  onManage: () => sourcesDialog.open(),
+};
+// The shared plan detail drawer (plan-drawer.js) — the same popup Home opens. It owns the copy
+// toast and the plan-write skill modal, so the page reuses those rather than creating its own.
+const planDrawer = createPlanDrawer({
+  getPlans: () => state.snapshot.plans,
+  getPlanWritePackage: () => state.snapshot.planWritePackage,
+  onEnablePackage: enablePackage,
+  onError: showError,
+});
+const skillModal = planDrawer.skillModal;
+const outcomeToast = planDrawer.toast;
 const blockersPopover = createBlockersPopover(document.getElementById("blockers-popover"), {
   onOpenPlan: (key) => openPlan(key),
-});
-const lifecycleEventDialog = createLifecycleEventDialog(document.getElementById("lifecycle-event-modal"), {
-  onCopyPrompt: (record) => copyPrompt("start", [record.key], "repository-aware"),
-  onViewPlan: (record) => openPlan(record.key),
-  onRevert: (record, previousValue) => handlePlanChange({ property: "lifecycle", value: previousValue, record }),
 });
 const lifecycleErrorDialog = createLifecycleErrorDialog(document.getElementById("lifecycle-error-modal"), {
   onViewPlan: (key) => openPlan(key),
 });
 const allTasksModal = document.getElementById("all-tasks-modal");
-portalWireBackdropClose(drawer, () => drawer.close());
 portalWireBackdropClose(allTasksModal, () => allTasksModal.close());
-// Fires however the dialog closes (button, backdrop, Escape, or a programmatic .close() call
-// from presentChangeOutcome) — one place to clear which plan the drawer was showing.
-drawer.addEventListener("close", () => { state.openDrawerKey = null; });
 
 bindStaticControls();
 load();
+void refreshRepositorySyncStatus();
 
 function bindStaticControls() {
   const refreshEl = document.getElementById("refresh");
@@ -111,9 +109,11 @@ function bindStaticControls() {
       refreshSpinnerEl.hidden = true;
     });
   });
-  nextPrompt.addEventListener("click", openNextPrompt);
-  document.getElementById("drawer-close").addEventListener("click", () => drawer.close());
   document.getElementById("open-all-tasks").addEventListener("click", openAllTasks);
+  reposCountTextEl.addEventListener("click", (event) => {
+    event.preventDefault();
+    onboarding.onManage();
+  });
   document.getElementById("all-tasks-close").addEventListener("click", () => allTasksModal.close());
   for (const id of FILTER_IDS) {
     const node = document.getElementById(id);
@@ -142,7 +142,6 @@ function openBlockersPopover({ record, anchor }) {
 function setFiltersExpanded(expanded) {
   state.filtersExpanded = expanded;
   filtersBodyEl.hidden = !expanded;
-  if (expanded) rootsPanel.setExpanded(false);
 }
 
 function resetFilter(id) {
@@ -165,15 +164,54 @@ async function load() {
 function applySnapshot(snapshot) {
   state.snapshot = snapshot;
   portalSetUpdatedAt();
-  // Onboarding is single-step: the enable banner shows whenever plan-docs is disabled, and the
-  // "Add your first Project Folder" form appears only after it's enabled (one prompt at a time).
-  rootsPanel.render(snapshot.settings.discoveryRoots, snapshot.planDocsPackage.enabled);
-  plansHeaderEl.hidden =
-    !snapshot.planDocsPackage.enabled || snapshot.settings.discoveryRoots.length === 0;
+  // One call to action at a time (pljvmyh §7): the package banner while plan-write is disabled,
+  // then the shared repository empty state until a repository is known; the header (and its count,
+  // which opens Manage repositories) only once there is something to monitor.
+  plansHeaderEl.hidden = !snapshot.planWritePackage.enabled || tmpl.plansOnboardingStep(snapshot) === "no-repositories";
   setPluralCount(plansCountTextEl, snapshot.plans.length, "Plan");
-  setPluralCount(reposCountTextEl, snapshot.repositories.length, "Repo");
+  setPluralCount(reposCountTextEl, knownRepositoryCount(snapshot), "Repo");
   populateFilters(snapshot);
   render();
+  renderRepositorySyncStatus();
+}
+
+function renderRepositorySyncStatus() {
+  const labels = { syncing: "Syncing", synced: "Synced", failed: "Sync failed", unavailable: "Sync status unavailable" };
+  for (const node of document.querySelectorAll("[data-repository-sync-status]")) {
+    node.hidden = !repositoryAutoDiscoveryEnabled;
+    node.classList.toggle("is-syncing", repositorySyncState === "syncing");
+    node.classList.toggle("is-synced", repositorySyncState === "synced");
+    node.classList.toggle("is-failed", repositorySyncState === "failed" || repositorySyncState === "unavailable");
+    node.querySelector("[data-slot=text]").textContent = labels[repositorySyncState] || labels.synced;
+  }
+}
+
+function setPlansSyncPending(isPending) {
+  repositorySyncPending = isPending;
+  if (isPending) {
+    repositoryAutoDiscoveryEnabled = true;
+    repositorySyncState = "syncing";
+    clearTimeout(syncPollTimer);
+    renderRepositorySyncStatus();
+  } else {
+    void refreshRepositorySyncStatus();
+  }
+}
+
+async function refreshRepositorySyncStatus() {
+  if (repositorySyncPending) return;
+  try {
+    const overview = await api.fetchHomeOverview();
+    if (repositorySyncPending) return;
+    repositoryAutoDiscoveryEnabled = overview.autoDiscovery?.enabled === true;
+    repositorySyncState = overview.sync?.state || "synced";
+  } catch {
+    if (repositorySyncPending) return;
+    repositorySyncState = "unavailable";
+  }
+  renderRepositorySyncStatus();
+  clearTimeout(syncPollTimer);
+  if (repositorySyncState === "syncing") syncPollTimer = setTimeout(refreshRepositorySyncStatus, 750);
 }
 
 function populateFilters(snapshot) {
@@ -210,22 +248,27 @@ function render() {
   const snapshot = state.snapshot;
   if (!snapshot) return;
   renderPackageBanner(snapshot);
-  if (!snapshot.planDocsPackage.enabled) {
+  const step = tmpl.plansOnboardingStep(snapshot);
+  if (!snapshot.planWritePackage.enabled || step !== "plans") {
+    lifecycleTabsEl.hidden = true;
+    lifecycleDropdownMountEl.hidden = true;
     warningsEl.hidden = true;
     activeTasksBarEl.hidden = true;
     groupsEl.replaceChildren();
+    renderOnboarding(snapshot, step);
     return;
   }
+  onboardingEl.hidden = true;
+  lifecycleTabsEl.hidden = false;
+  lifecycleDropdownMountEl.hidden = false;
   renderWarnings(snapshot);
   renderFilterChips(snapshot);
   refreshFilterCounts(snapshot);
   const allMatchingCurrentFilters = filteredPlans(snapshot.plans, state.filters);
   renderLifecycleTabs(allMatchingCurrentFilters);
-  nextPrompt.hidden = false;
-  // Sorted here rather than inside filteredPlans: that result spans every lifecycle (the tabs read
-  // it for counts, and visibleNextPromptKeys takes the top 20 across all of them in priority
-  // order). Completion ordering is Active-only, so it applies to the visible slice, after the tab
-  // filter has narrowed it to one lifecycle.
+  // Sorted here rather than inside filteredPlans: that result spans every lifecycle, and the tabs
+  // read it for counts. Completion ordering is Active-only, so it applies to the visible slice,
+  // after the tab filter has narrowed it to one lifecycle.
   const visiblePlans = allMatchingCurrentFilters
     .filter((record) => record.plan.lifecycle === state.selectedLifecycle)
     .sort(sortForLifecycle(state.selectedLifecycle));
@@ -233,21 +276,17 @@ function render() {
   // previous tab's bar on screen.
   activeTasksBarEl.hidden = state.selectedLifecycle !== "active" || visiblePlans.length === 0;
   if (visiblePlans.length === 0) {
-    const empty = tmpl.emptyState(snapshot);
-    groupsEl.replaceChildren(...(empty ? [empty] : []));
+    groupsEl.replaceChildren(tmpl.emptyState());
     return;
   }
   const cardActions = {
     onOpen: openPlan,
     onCopyPath: copyText,
     onCopyContext: (record) => copyText(repositoryContext(record)),
-    onCopyPortableContext: (key) => copyPrompt("review", [key], "portable"),
-    onPlanDocsAction: (key, mode, { portable } = {}) =>
-      copyPrompt(mode, [key], portable ? "portable" : "repository-aware"),
-    onStart: startPlan,
-    onArchive: (record) => handlePlanChange({ property: "lifecycle", value: "archived", record }),
-    planDocsEnabled: snapshot.planDocsPackage.enabled,
-    planDocsPackage: snapshot.planDocsPackage,
+    onCopyPortableContext: (key) => copyPrompt(null, [key], "portable"),
+    onPlanAction: (key, command) => copyPrompt(command, [key], "repository-aware"),
+    planWriteEnabled: snapshot.planWritePackage.enabled,
+    planWritePackage: snapshot.planWritePackage,
     skillModal,
     onEnablePackage: enablePackage,
     onError: showError,
@@ -372,8 +411,8 @@ async function handlePlanChange({ property, value, record }, mutationOptions) {
   // (dropdown spinner) forever, since it never receives the new record. presentChangeOutcome may
   // close the drawer for a lifecycle move (a stale key by then); re-set only when it's still open
   // for this same plan.
-  if (drawer.open && state.openDrawerKey === previousKey) {
-    const drawerStatus = document.getElementById("drawer-status-mount").querySelector("plan-status");
+  if (planDrawer.isOpen && planDrawer.openKey === previousKey) {
+    const drawerStatus = planDrawer.statusElement;
     if (drawerStatus) drawerStatus.record = result.record;
   }
   presentChangeOutcome({ result, wasVisible, nowVisible, previousKey, view: viewAtRequestTime });
@@ -385,8 +424,8 @@ async function handlePlanChange({ property, value, record }, mutationOptions) {
 // state even though nothing about the underlying record actually changed.
 function refreshMountedStatus(record) {
   render();
-  if (!drawer.open) return;
-  const drawerStatus = document.getElementById("drawer-status-mount").querySelector("plan-status");
+  if (!planDrawer.isOpen) return;
+  const drawerStatus = planDrawer.statusElement;
   if (drawerStatus && drawerStatus.record?.key === record.key) drawerStatus.record = record;
 }
 
@@ -399,12 +438,12 @@ async function recoverFromStaleConflict(record) {
   }
   const current = state.snapshot.plans.find((item) => item.plan.id && item.plan.id === record.plan.id) ||
     state.snapshot.plans.find((item) => item.key === record.key);
-  if (drawer.open && state.openDrawerKey === record.key) {
+  if (planDrawer.isOpen && planDrawer.openKey === record.key) {
     if (current) {
       showError({ message: `This plan changed outside the portal, so the update wasn't applied. The page has been refreshed. Current lifecycle: ${current.plan.lifecycle}.` });
       openPlan(current.key);
     } else {
-      drawer.close();
+      planDrawer.close();
       showError({ message: "This plan was removed or renamed outside the portal." });
     }
   } else {
@@ -412,21 +451,16 @@ async function recoverFromStaleConflict(record) {
   }
 }
 
-// Decides which outcome surface (if any) to show after a successful mutation. Lifecycle moves
-// into a configured lifecycleEvents destination (Active, Completed) always get the event dialog,
-// regardless of current visibility. Everything else gets the passive toast, but only when the
-// mutation actually removed the record from view — an unrelated field change that keeps the
-// record visible needs no notification.
+// Decides whether to show the outcome toast after a successful mutation: only when the mutation
+// actually removed the record from view — an unrelated field change that keeps the record visible
+// needs no notification. Lifecycle moves here are the manual dropdown override; the suite commands
+// (`/plan-start`, `/plan-close`) make and commit their own moves, so none gets a follow-up prompt.
 function presentChangeOutcome({ result, wasVisible, nowVisible, previousKey, view }) {
   const { change, record } = result;
   // A lifecycle move invalidates the open drawer's key/path/actions — close it before showing
   // either outcome surface rather than leaving a stale detail view open behind the dialog/toast.
-  if (change.property === "lifecycle" && drawer.open && state.openDrawerKey === previousKey) {
-    drawer.close();
-  }
-  if (change.property === "lifecycle" && lifecycleEvents[change.newValue]) {
-    lifecycleEventDialog.open({ change, record, isTransition: true });
-    return;
+  if (change.property === "lifecycle" && planDrawer.isOpen && planDrawer.openKey === previousKey) {
+    planDrawer.close();
   }
   if (!(wasVisible && !nowVisible)) return;
   // Use the tab/filters captured when the mutation started, not whatever is current now — the
@@ -453,18 +487,6 @@ function applyFilteredListAction(action) {
   }
 }
 
-// Backlog Start: move the plan into Active through the shared mutation, then the Active dialog
-// opens automatically via presentChangeOutcome (Active is a configured lifecycleEvents
-// destination). Active Start: no mutation — open the same dialog content directly, since the plan
-// is already where it needs to be.
-async function startPlan(record) {
-  if (record.plan.lifecycle === "active") {
-    lifecycleEventDialog.open({ change: null, record, isTransition: false });
-    return;
-  }
-  await handlePlanChange({ property: "lifecycle", value: "active", record });
-}
-
 function renderFilterChips(snapshot) {
   const descriptors = tmpl.filterChipDescriptors(state.filters, FILTER_DEFAULTS, (id, value) =>
     optionLabel(snapshot, id, value),
@@ -472,42 +494,33 @@ function renderFilterChips(snapshot) {
   filterChipsEl.replaceChildren(...descriptors.map(tmpl.filterChip));
 }
 
-function visibleNextPromptKeys() {
-  return actionablePlans(filteredPlans(state.snapshot.plans, state.filters))
-    .map((record) => record.key)
-    .slice(0, 20);
+function renderOnboarding(snapshot, step) {
+  onboardingEl.hidden = !snapshot.planWritePackage.enabled;
+  if (onboardingEl.hidden) return;
+  const node = step === "no-repositories"
+    ? tmpl.plansNoRepositories(onboarding.onManage)
+    : tmpl.plansOnboardingState(snapshot, step, onboarding.onManage);
+  onboardingEl.replaceChildren(node);
+  renderRepositorySyncStatus();
 }
 
-// The popup shows the scope count up front, so it needs the (cheap) key list before the user
-// commits to copying — copyPrompt's own key list is recomputed at click-time in case filters
-// changed while the popup was open.
-function openNextPrompt() {
-  const keys = visibleNextPromptKeys();
-  promptModal.open({
-    title: "/plan-docs next",
-    objective:
-      "Copies a prompt that asks an agent to work through the next actionable step across these plans, one at a time.",
-    scopeCount: keys.length,
-    onCopy: async () => {
-      const freshKeys = visibleNextPromptKeys();
-      if (freshKeys.length === 0) throw new Error("no active or backlog plans in the current view");
-      await copyPrompt("next", freshKeys, "portable");
-    },
-    onError: showError,
-  });
+// Every known repository, scanned or not, so the header agrees with the onboarding copy, Home, and
+// the Manage repositories list; one whose checkouts cannot be read is still being monitored.
+function knownRepositoryCount(snapshot) {
+  return (snapshot.repositoryScans || []).length;
 }
 
 function renderWarnings(snapshot) {
   const warnings = [
-    ...(snapshot.errors || []).map((err) => `${err.root || err.repository || "scan"}: ${err.error}`),
-    ...(snapshot.truncated ? ["Scan results truncated. Narrow discovery roots."] : []),
+    ...(snapshot.errors || []).map((err) => `${err.repository || "scan"}${err.checkout ? ` (${err.checkout})` : ""}: ${err.path ? `${err.path} ` : ""}${err.error}`),
+    ...(snapshot.truncated ? ["Some repositories have more plan documents than the scanner reads; the rest are not shown."] : []),
   ];
   warningsEl.hidden = warnings.length === 0;
   warningsEl.replaceChildren(...warnings.map(tmpl.warningLine));
 }
 
 function renderPackageBanner(snapshot) {
-  const pkg = snapshot.planDocsPackage || {};
+  const pkg = snapshot.planWritePackage || {};
   // Banner is the step-1 onboarding prompt: visible whenever the package is disabled (even with
   // roots already configured — a mid-life disable needs its re-enable path back). Once enabled,
   // the Project Folders form is the only visible setup surface.
@@ -521,26 +534,22 @@ function renderPackageBanner(snapshot) {
 
 async function enablePackage() {
   try {
-    await api.enablePlanDocsPackage();
+    await api.enablePlanSuitePackages();
     applySnapshot(await api.fetchSnapshot());
   } catch (err) {
     showError(err);
   }
 }
 
-async function openPlan(key) {
-  try {
-    renderDrawer(await api.fetchPlanDocument(key));
-  } catch (err) {
-    showError(err);
-  }
+function openPlan(key) {
+  return planDrawer.open(key);
 }
 
 // Every active plan's remaining work in one view, ordered the same way the Active tab is so the
 // dialog and the board never disagree about what is furthest along.
 //
 // Reads the plans already in the snapshot rather than fetching: `openTasks` ships with the list
-// payload for active plans (see modules/plan-docs/index.mjs), so this needs no round trip and
+// payload for active plans (see modules/plan-suite/index.mjs), so this needs no round trip and
 // cannot show something staler than the cards behind it. Respects the current filters for the same
 // reason — a dialog opened from a filtered board that ignored the filter would be a different
 // answer to the question the user is looking at.
@@ -570,71 +579,12 @@ function openAllTasks() {
   allTasksModal.showModal();
 }
 
-function renderDrawer(doc) {
-  state.openDrawerKey = doc.plan.key;
-  const content = tmpl.drawerContent(doc, {
-    onCopyPath: copyText,
-    onCopyRepoContext: (record) => copyText(repositoryContext(record)),
-    onCopyPortableContext: (key) => copyPrompt("review", [key], "portable"),
-    onPlanDocsAction: (key, mode, { portable } = {}) =>
-      copyPrompt(mode, [key], portable ? "portable" : "repository-aware"),
-    onEnablePackage: enablePackage,
-    planDocsPackage: state.snapshot.planDocsPackage,
-    skillModal,
-    onError: showError,
-  });
-  document.getElementById("drawer-title").textContent = content.title;
-  document.getElementById("drawer-path").textContent = content.path;
-  const pathCopyEl = document.getElementById("drawer-path-copy");
-  pathCopyEl.copySource = () => doc.plan.plan.relativePath;
-  const drawerDocEl = document.getElementById("drawer-doc");
-  drawerDocEl.innerHTML = content.html;
-  // Plan bodies routinely carry architecture diagrams; render them rather than showing the source.
-  renderMermaidBlocks(drawerDocEl);
-  document.getElementById("drawer-meta").replaceChildren(...content.meta);
-  document
-    .getElementById("drawer-warnings")
-    .replaceChildren(...content.warnings.map(tmpl.listItem));
-  document.getElementById("drawer-warnings-section").hidden =
-    content.warnings.length === 0;
-  document.getElementById("drawer-tasks").replaceChildren(...tmpl.drawerTaskItems(content.tasks));
-  renderDrawerBlockers(doc.plan);
-  const statusEl = document.createElement("plan-status");
-  statusEl.record = doc.plan;
-  document.getElementById("drawer-status-mount").replaceChildren(statusEl);
-  // Recommended-next CTA (hidden when there's no clear recommendation) + the unified ⋯ menu.
-  const ctaEl = document.getElementById("drawer-cta");
-  if (content.cta) {
-    ctaEl.textContent = content.cta.label;
-    ctaEl.hidden = false;
-    ctaEl.onclick = () => copyPrompt(content.cta.mode, [doc.plan.key], "repository-aware");
-  } else {
-    ctaEl.hidden = true;
-    ctaEl.onclick = null;
-  }
-  document.getElementById("drawer-menu").panelContent = content.menu;
-  drawer.showModal();
+function copyPrompt(actionName, keys, mode = "repository-aware") {
+  return planDrawer.copyPrompt(actionName, keys, mode);
 }
 
-// Blocked by (this plan's own blocked_by, resolved) and Blocking (other plans that list this one)
-// render as two independent warning-styled sections above the drawer's main content — each hidden
-// when empty. Every resolved entry is a link that closes to the same drawer re-opened for the
-// target plan; unresolved blocked_by ids render as plain text (see resolveBlockers).
-function renderDrawerBlockers(record) {
-  const blockedBy = resolveBlockers(record, state.snapshot.plans);
-  const blocking = resolveBlocking(record, state.snapshot.plans);
-  document.getElementById("drawer-blocked-by-section").hidden = blockedBy.length === 0;
-  document.getElementById("drawer-blocked-by-links").replaceChildren(...blockedBy.map((b) => tmpl.blockerLink(b, openPlan)));
-  document.getElementById("drawer-blocking-section").hidden = blocking.length === 0;
-  document.getElementById("drawer-blocking-links").replaceChildren(...blocking.map((b) => tmpl.blockerLink(b, openPlan)));
-}
-
-async function copyPrompt(actionName, keys, mode = "repository-aware") {
-  await copyText(await api.generatePrompt(actionName, keys, mode));
-}
-
-async function copyText(text) {
-  await portalCopyText(text, () => outcomeToast.show({ message: "copied" }));
+function copyText(text) {
+  return planDrawer.copyText(text);
 }
 
 function setPluralCount(node, count, noun) {

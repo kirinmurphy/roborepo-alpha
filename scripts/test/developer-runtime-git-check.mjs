@@ -54,6 +54,7 @@ try {
   assert.equal(plain.shortHead, "463e0e9");
   assert.equal(plain.detached, false);
   assert.equal(plain.isWorktree, false);
+  assert.equal(plain.worktreeName, null, "a main checkout has no administrative worktree name");
   console.log("ok  branch and commit from loose refs");
 
   // ---- Detached HEAD ----
@@ -99,6 +100,12 @@ try {
   assert.equal(worktreeResult.head, SHA);
   assert.equal(worktreeResult.upstream, "origin/wt-branch", "upstream comes from the common dir's config");
   assert.deepEqual([worktreeResult.behind, worktreeResult.ahead], [1, 2]);
+  assert.equal(worktreeResult.worktreeName, "wt");
+  // Git suffixes the administrative name when two worktrees share a directory basename, so the
+  // identity must come from the gitdir, never from the checkout path.
+  const renamed = mkWorktree("feature", { branch: "feature-branch", sha: SHA, adminName: "feature1" });
+  const renamedResult = await collectGitContext(renamed, { runGit: stubGit({ status: "" }) });
+  assert.equal(renamedResult.worktreeName, "feature1");
   console.log("ok  linked worktree");
 
   // ---- Dirty state ----
@@ -122,6 +129,7 @@ try {
   const bareResult = await collectGitContext(bare, { runGit: stubGit({ status: "" }) });
   assert.equal(bareResult.provider.ok, false);
   assert.equal(bareResult.provider.reason, "not-a-git-root");
+  assert.equal(bareResult.worktreeName, null);
   assert.equal(await collectGitContext(null, {}), null);
   console.log("ok  non-git root degrades honestly");
 
@@ -193,7 +201,7 @@ function mkRepo(name, { head, refs = {}, packedRefs = null, config = null }) {
 
 // A linked worktree: `.git` is a file pointing at a per-worktree gitdir, which in turn holds a
 // `commondir` pointer back to the primary repository's git directory.
-function mkWorktree(name, { branch, sha }) {
+function mkWorktree(name, { branch, sha, adminName = name }) {
   const primary = path.join(tempRoot, `${name}-primary`);
   const commonDir = path.join(primary, ".git");
   fs.mkdirSync(commonDir, { recursive: true });
@@ -203,7 +211,7 @@ function mkWorktree(name, { branch, sha }) {
   );
 
   const worktree = path.join(tempRoot, name);
-  const gitDir = path.join(commonDir, "worktrees", name);
+  const gitDir = path.join(commonDir, "worktrees", adminName);
   fs.mkdirSync(gitDir, { recursive: true });
   fs.mkdirSync(worktree, { recursive: true });
   fs.writeFileSync(path.join(worktree, ".git"), `gitdir: ${gitDir}\n`);

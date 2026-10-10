@@ -10,7 +10,11 @@ export function portalConfig() {
 export async function portalGetJson(path) {
   const res = await fetch(path);
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || data.message || "request failed");
+  if (!res.ok) {
+    const err = new Error(data.error || data.message || "request failed");
+    err.status = res.status;
+    throw err;
+  }
   return data;
 }
 
@@ -25,7 +29,7 @@ export async function portalPostJson(path, body) {
   });
   const data = await res.json();
   if (!res.ok || data.ok === false) {
-    // Structured errors (see plan-docs' domainError / portal-routes-plans' sendDomainError)
+    // Structured errors (see plan-suite's domainError / portal-routes-plans' sendDomainError)
     // arrive as { error: { code, message, resolution, details } }; older/unmigrated routes still
     // send a flat string. Preserve whichever shape came back instead of collapsing both to a
     // plain message, so callers can branch on err.code (e.g. STALE_PLAN) without parsing text.
@@ -71,13 +75,44 @@ export function portalMiddleEllipsis(value, maxLength = PORTAL_MIDDLE_ELLIPSIS_M
   return `${value.slice(0, head)}…${value.slice(value.length - tail)}`;
 }
 
-export function portalSetUpdatedAt(date = new Date()) {
+// Header freshness indicator. Each successful poll calls this; the indicator then ages on its own
+// so a page that stops hearing from the server says so without anyone reading a timestamp:
+//   active        — heard from the server within 2× the poll cadence (a dot and a faint "Synced")
+//   waiting       — 2×–10× the cadence since the last update
+//   disconnected  — more than 10× the cadence
+// Pages that load once and never poll pass no cadence, and stay active. `date` is the data's own
+// timestamp, shown only in the tooltip; freshness is measured from when this was called.
+const FRESHNESS_LABELS = { active: "Synced", waiting: "Waiting", disconnected: "Not connected" };
+const updated = { at: null, contactAt: 0, cadenceMs: null, clock: null };
+
+export function portalUpdateFreshness(ageMs, cadenceMs) {
+  if (!cadenceMs) return "active";
+  if (ageMs > cadenceMs * 10) return "disconnected";
+  if (ageMs > cadenceMs * 2) return "waiting";
+  return "active";
+}
+
+export function portalSetUpdatedAt(date = new Date(), { cadenceMs = null } = {}) {
+  const value = date instanceof Date ? date : new Date(date);
+  updated.at = Number.isNaN(value.getTime()) ? null : value;
+  updated.contactAt = Date.now();
+  updated.cadenceMs = cadenceMs;
+  paintUpdated();
+  if (cadenceMs && !updated.clock) updated.clock = setInterval(paintUpdated, 1000);
+}
+
+function paintUpdated() {
   const node = document.getElementById("portal-updated");
   if (!node) return;
-  const value = date instanceof Date ? date : new Date(date);
-  node.textContent = Number.isNaN(value.getTime())
-    ? "updated unknown"
-    : "updated " + value.toLocaleTimeString();
+  const state = portalUpdateFreshness(Date.now() - updated.contactAt, updated.cadenceMs);
+  if (node.dataset.state === state && node.dataset.at === String(updated.at?.getTime())) return;
+  node.dataset.state = state;
+  node.dataset.at = String(updated.at?.getTime());
+  const label = FRESHNESS_LABELS[state];
+  node.querySelector("[data-slot=label]").textContent = label;
+  const time = updated.at ? updated.at.toLocaleTimeString() : "unknown";
+  node.title = `${label} · updated ${time}`;
+  node.setAttribute("aria-label", node.title);
 }
 
 // Hides the full-page loading overlay after a page's first data fetch resolves (success or

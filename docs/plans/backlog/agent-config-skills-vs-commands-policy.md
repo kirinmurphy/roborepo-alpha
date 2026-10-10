@@ -38,7 +38,7 @@ This policy answers three user-facing questions:
 
 Current shared skills include `case-study`, `code-style`, `frontend-design`,
 `javascript-typescript`, `react`, `roborepo-support`,
-`supabase-integration-testing`, `plan-docs`, and `test-harness`.
+`supabase-integration-testing`, `plan-write`, and `test-harness`.
 They are all currently treated as auto-invokable by description. The current
 shared skill format should not assume `disable-model-invocation` support until
 Claude and Codex support is verified.
@@ -88,7 +88,7 @@ Examples:
 - `supabase-integration-testing`: use only when most conditions match: Supabase,
   real integration behavior, RLS, RPC, migrations, service role, anon access, or
   database/API behavior that is not mocked.
-- `plan-docs`: use for creating or revising managed plan docs; do not
+- `plan-write`: use for creating or revising managed plan docs; do not
   use for ordinary quick notes or brief implementation summaries unless the user
   asks for a structured doc.
 
@@ -129,12 +129,12 @@ Proposed shared manifest:
 {
   "skills": [
     {
-      "skill": "plan-docs",
+      "skill": "plan-write",
       "invocation": "manual",
       "risk": "medium",
       "claude_strategy": "shared-skill",
       "codex_strategy": "shared-skill",
-      "notes": "Use explicit /plan-docs modes for plan lifecycle work."
+      "notes": "Use explicit /plan-write modes for plan lifecycle work."
     }
   ]
 }
@@ -180,7 +180,7 @@ Examples:
 ```
 
 ```txt
-/plan-docs mode           # persistent mode
+/plan-write mode           # persistent mode
 /audit-plan               # one-time action
 /generate-inventory       # one-time action
 ```
@@ -245,11 +245,11 @@ rendering bug: the command file is a three-line shim whose body is "Read the ski
 workflow," so both entries run identical work.
 
 It reads as two different commands because the two descriptions are written for different jobs and
-have drifted apart. Observed for `/wrap-up`:
+have drifted apart. Observed for `/session-close`:
 
 ```text
-/wrap-up    Use ONLY when the user explicitly asks to wrap up, close out, finish…   ← SKILL.md
-/wrap-up    End a work session cleanly: self-review added code, sync docs, commit…  ← command shim
+/session-close    Use ONLY when the user explicitly asks to wrap up, close out, finish…   ← SKILL.md
+/session-close    End a work session cleanly: self-review added code, sync docs, commit…  ← command shim
 ```
 
 All seven packages with a skill-backed command are affected. Six of the seven have diverging text:
@@ -258,11 +258,11 @@ All seven packages with a skill-backed command are affected. Six of the seven ha
 | --- | --- |
 | `case-study-pack` | identical |
 | `frontend-design` | diverges |
-| `plan-docs` | diverges |
+| `plan-write` | diverges |
 | `technical-writing` | diverges |
 | `telemetry` | diverges |
 | `tighten` | diverges |
-| `wrap-up` | diverges |
+| `session-close` | diverges |
 
 The divergence is structural, not sloppiness. `package.config.json` holds one description reused for
 both the package label and the command shim, and it is written as *what the workflow does*. The
@@ -306,7 +306,7 @@ Classify each skill by the user impact of accidental loading.
 | Risk   | Meaning                                                                                                | Examples                                                       | Default policy                                                    |
 | ------ | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------- | ----------------------------------------------------------------- |
 | Low    | Adds narrow read-only context or style guidance                                                        | `react`, `javascript-typescript`, `code-style`, `test-harness` | Keep auto-invokable, tighten triggers                             |
-| Medium | Shapes output, structure, design taste, or writing mode                                                | `frontend-design`, `plan-docs`, `case-study`                         | Keep for now, tighten triggers, consider split into helper + mode |
+| Medium | Shapes output, structure, design taste, or writing mode                                                | `frontend-design`, `plan-write`, `case-study`                         | Keep for now, tighten triggers, consider split into helper + mode |
 | High   | Changes permissions, grants tools, runs shell, commits, deploys, hands off, or creates persistent mode | future `commit`, `deploy`, `handoff`, shell-backed skills      | Manual command or hook only                                       |
 
 ### What improves

@@ -6,7 +6,9 @@
 // safe because neither module calls into the other while it is being evaluated — only from inside
 // functions invoked later, at render time.
 
-import { portalMiddleEllipsis, portalTpl as tpl } from "/portal/shared/api.js";
+import { portalMiddleEllipsis } from "/portal/shared/api.js";
+import { createRepositoryCheckoutRow } from "/portal/shared/repository-row-template.js";
+import { mountCheckoutRow } from "/portal/shared/repository-components.js";
 import { healthState, statusDetail, statusText } from "./state.js";
 import {
   applyGitDrift,
@@ -24,7 +26,7 @@ import {
 // capped — and middle-truncated, since the tail usually identifies the branch — so a long name never
 // pushes the actions column onto a second line. The full name is the tooltip's heading. Standalone
 // cards keep the shared cap (BRANCH_NAME_MAX_LENGTH in templates.js).
-const CHECKOUT_BRANCH_MAX_LENGTH = 30;
+const CHECKOUT_BRANCH_MAX_LENGTH = 40;
 
 // Health states worth interrupting for, and the badge tone each gets. Healthy and unknown say
 // nothing: silence is the healthy state.
@@ -34,24 +36,36 @@ let memberListSequence = 0;
 
 // `root` is undefined for the main slot when nothing has resolved a rootId yet (no active listener
 // on the main checkout) — the row still renders, so the card never looks like it is missing a piece.
-export function buildRootSection({ root, departed, repository, composeActions, instanceActions }) {
-  const section = tpl("tpl-repository-root");
+// `identity` ({ glyph, label, node }) lets the calling page name the row itself: its glyph and
+// accessible label replace the checkout's, and its node replaces the branch label, checkout tooltip,
+// and copy control at the start of the identity line. Git drift and the actions column still come
+// from `root`, so the row behaves exactly like the checkout it is. Home names a worktree by the plan
+// it implements this way; the row stays agnostic about what the node holds.
+export function buildRootSection({ root, departed = [], repository, composeActions, instanceActions, mode = "runtime", onMountLinks, identity = null }) {
+  const section = createRepositoryCheckoutRow({ controls: mode !== "home" });
   // Lets a rebuild find "this same checkout's" row across renders (see reconcileSection in app.js)
   // to carry its open/closed state forward — rootId is stable across polls, DOM position is not.
   section.dataset.rootId = root?.rootId || "main";
 
   const glyph = section.querySelector("[data-slot=root-glyph]");
-  glyph.setAttribute("name", root?.isWorktree ? "tree" : "home");
+  glyph.setAttribute("name", identity?.glyph || (root?.isWorktree ? "tree" : "home"));
   glyph.setAttribute("role", "img");
-  glyph.setAttribute("aria-label", root?.isWorktree ? "Linked worktree" : "Main checkout");
+  glyph.setAttribute("aria-label", identity?.label || (root?.isWorktree ? "Linked worktree" : "Main checkout"));
 
   const composeGroups = root?.composeGroups || [];
-  fillIdentity(section, root, composeGroups);
+  if (identity) section.querySelector(".repository-root-identity-line").prepend(identity.node);
+  else fillIdentity(section, root, composeGroups);
+  mountCheckoutRow(section);
   if (root?.git) {
     applyGitDrift(section, root.git);
-    mountCopyDropdown(section, root);
+    if (!identity) mountCopyDropdown(section, root);
   }
   fillPromotedLink(section, root);
+  if (mode === "home") {
+    if (root?.primaryEntrypoint?.opaqueKey) onMountLinks?.(section.querySelector("[data-slot=root-links]"), root.primaryEntrypoint);
+    section.querySelector("[data-slot=members]")?.remove();
+    return section;
+  }
   const promotedKey = mountRowLinks(section, root, repository, { composeActions, instanceActions });
   // The promoted member's Links dropdown now lives in the row; its card dropping its own copy keeps
   // one app from offering the same panel twice, a few pixels apart.
@@ -118,8 +132,8 @@ export function setCheckoutRowOpen(section, open) {
   toggle.title = name;
 }
 
-// Branch label, info icon, and the checkout tooltip behind both. The row shows the capped label;
-// the tooltip leads with the untruncated identity.
+// Branch/worktree label and the checkout tooltip behind it. The row shows the capped label; the
+// tooltip leads with the untruncated identity.
 function fillIdentity(section, root, composeGroups) {
   const trigger = section.querySelector("[data-slot=root-info]");
   const tooltip = trigger.querySelector("template").content;
@@ -324,6 +338,9 @@ function mountCopyDropdown(section, root) {
   if (items.length === 1) {
     const button = document.createElement("portal-copy-button");
     button.setAttribute("icon", "copy");
+    // The same glyph size as the copy dropdown's trigger (tpl-copy-menu-trigger), so rows with one
+    // copy action and rows with two show the same icon.
+    button.setAttribute("icon-size", "md");
     button.setAttribute("aria-label", items[0].label);
     button.copySource = items[0].value;
     slot.append(button);
@@ -336,7 +353,7 @@ function mountCopyDropdown(section, root) {
 
 // A checkout that is not on disk says THAT, rather than nothing: "absent" is a fact about the
 // directory, "unreadable" an admission that we could not look.
-function checkoutStateText(root) {
+export function checkoutStateText(root) {
   if (root?.checkoutState === "absent") return "checkout missing";
   if (root?.checkoutState === "unreadable") return root.checkoutReason || "checkout unreadable";
   return null;

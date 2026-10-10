@@ -136,7 +136,15 @@ class PlanStatusElement extends HTMLElement {
     });
     node.querySelector("[data-slot=meta]").title = new Date(plan.modifiedAt).toLocaleString();
     const stateBadgeSlot = node.querySelector("[data-slot=state-badge]");
-    if (isBlocked) {
+    // Read-only (a page without the Plans mutation orchestrator, e.g. Home): lifecycle and
+    // priority render as plain chips and the blocked badge is static, since nothing would handle
+    // the plan-change / blocked-click events they dispatch.
+    const readonly = this.hasAttribute("readonly");
+    if (isBlocked && readonly) {
+      stateBadgeSlot.textContent = `blocked by ${plan.blockers.length}`;
+      stateBadgeSlot.classList.add("warn");
+      stateBadgeSlot.hidden = false;
+    } else if (isBlocked) {
       const badgeBtn = document.createElement("button");
       badgeBtn.type = "button";
       badgeBtn.className = "state-badge warn state-badge-blocked";
@@ -166,9 +174,13 @@ class PlanStatusElement extends HTMLElement {
         : []),
       chip(plan.reviewState, plan.reviewState === "possibly-stale" ? "warn" : ""),
     );
-    node.querySelector("[data-slot=lifecycle]").append(this.renderLifecycleDropdown(record));
-    if (!LIFECYCLES_WITHOUT_PRIORITY.has(plan.lifecycle)) {
-      node.querySelector("[data-slot=priority]").append(this.renderPriorityDropdown(record));
+    const showPriority = !LIFECYCLES_WITHOUT_PRIORITY.has(plan.lifecycle);
+    if (readonly) {
+      node.querySelector("[data-slot=lifecycle]").append(chip(LIFECYCLE_LABELS[plan.lifecycle] || plan.lifecycle));
+      if (showPriority) node.querySelector("[data-slot=priority]").append(chip(`${plan.priority} priority`));
+    } else {
+      node.querySelector("[data-slot=lifecycle]").append(this.renderLifecycleDropdown(record));
+      if (showPriority) node.querySelector("[data-slot=priority]").append(this.renderPriorityDropdown(record));
     }
     this.replaceChildren(node);
   }

@@ -7,12 +7,12 @@ export function fetchSnapshot() {
   return portalGetJson("/api/plans");
 }
 
-export function refreshSnapshot() {
-  return portalPostJson("/api/plans/refresh", {});
+export function fetchHomeOverview() {
+  return portalGetJson("/api/home");
 }
 
-export function saveDiscoveryRoots(discoveryRoots) {
-  return portalPostJson("/api/plans/settings", { discoveryRoots });
+export function refreshSnapshot() {
+  return portalPostJson("/api/plans/refresh", {});
 }
 
 export function updatePlanPriority(id, key, priority, expectedPriority, mtimeMs, repositoryId) {
@@ -33,9 +33,13 @@ export function generatePrompt(action, keys, mode = "repository-aware") {
   );
 }
 
-export function enablePlanDocsPackage() {
-  return portalPostJson("/api/config/packages", {
-    id: "plan-docs",
+// The plan suite's packages, in lifecycle order. The onboarding banner enables them as one unit
+// through the config section's bulk endpoint: one preflight, one reconcile pass.
+export const PLAN_SUITE_PACKAGES = ["plan-write", "plan-promote", "plan-start", "plan-close", "session-close"];
+
+export function enablePlanSuitePackages() {
+  return portalPostJson("/api/config/packages/bulk", {
+    ids: PLAN_SUITE_PACKAGES,
     enabled: true,
   });
 }

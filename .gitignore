@@ -31,8 +31,10 @@
 .backups/
 
 # devDependency install (Playwright test tooling) — never committed; the shipped npm package
-# stays zero-dependency via the files whitelist + no `dependencies` field.
-node_modules/
+# stays zero-dependency via the files whitelist + no `dependencies` field. No trailing slash: a
+# linked worktree may symlink node_modules to the primary checkout's, and `node_modules/` only
+# matches a directory.
+node_modules
 
 # Playwright output (portal-ui browser suite) — last-run state + failure screenshots.
 test-results/

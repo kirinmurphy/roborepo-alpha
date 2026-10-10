@@ -13,20 +13,13 @@
               Monitoring
               <span id="plans-count-text"><strong>0</strong> Plans</span>
               in
-              <span id="repos-count-text"><strong>0</strong> Repos</span>
+              <a
+                class="repos-count-button"
+                id="repos-count-text"
+                href="#manage-repositories"
+                title="Manage Repos"
+              ><strong>0</strong> Repos</a>
               <span class="control-toggle-group">
-                <button
-                  type="button"
-                  data-btn="secondary"
-                  class="control-item-action"
-                  id="roots-toggle"
-                  aria-label="Update project folders"
-                  title="Update project folders"
-                >
-                  <portal-icon size="lg"
-                    name="pencil"
-                  ></portal-icon>
-                </button>
                 <button
                   type="button"
                   data-btn="secondary"
@@ -52,22 +45,8 @@
                 <portal-icon name="filter" size="lg"></portal-icon>
                 Filters
               </button>
-              <button
-                type="button"
-                data-btn="secondary"
-                class="control-item-action"
-                id="next-prompt"
-                hidden
-                aria-label="Agent prompts"
-                title="Agent prompts"
-              >
-                <portal-icon size="lg"
-                  name="agent-prompt"
-                ></portal-icon>
-              </button>
             </div>
           </div>
-          <div id="roots-panel-mount" hidden></div>
           <div class="filter-chips" id="filter-chips"></div>
           <div class="filters-body" id="filters-body" hidden>
             <div class="filter-row-grid">
@@ -116,51 +95,15 @@
         ></div>
       </div>
     </div>
-    <div id="toast" class="toast" hidden>
-      <p class="toast-message" data-slot="message"></p>
-      <div class="toast-actions" data-slot="actions"></div>
-    </div>
     <div id="blockers-popover" class="blockers-popover" hidden role="menu">
       <p class="blockers-popover-title" data-slot="title"></p>
       <div class="blockers-popover-list" data-slot="list"></div>
     </div>
     <main class="inner">
       {{LOADING}}
-      <div class="settings intro-banner" id="settings">
-        <span class="intro-banner-title" id="settings-label"
-          >No Project Folders configured</span
-        >
-        <div class="settings-body" id="settings-body">
-          <div id="roots"></div>
-          <form id="root-form">
-            <div class="root-form-label-row">
-              <label for="root-input" id="root-form-label"
-                ><span id="root-form-label-empty"
-                  >Look for all <b>/docs/plans</b> folders in:</span
-                ><span id="root-form-label-populated" hidden
-                  >Look for more /docs/plans folders in:</span
-                ></label
-              >
-              <portal-info-icon
-                id="info-icon"
-                aria-haspopup="dialog"
-                aria-expanded="false"
-              ></portal-info-icon>
-            </div>
-            <div class="root-form-row">
-              <input
-                id="root-input"
-                placeholder="/path/to/repo or /path/to/projects"
-              />
-              <button type="submit" id="root-submit" data-btn="cta">
-                Add Folder
-              </button>
-              <button id="roots-done" type="button" hidden>Done</button>
-            </div>
-            <div class="item-err" id="root-form-err"></div>
-          </form>
-        </div>
-      </div>
+      <!-- Shown when Plans has nothing to list yet: the shared repository empty state, or the
+           scanning and no-plans steps (app.js chooses; one call to action at a time). -->
+      <div id="plans-onboarding" hidden></div>
       <section id="warnings" class="warnings" hidden></section>
       <!-- Active-tab only; app.js toggles `hidden` with the selected lifecycle. -->
       <div id="active-tasks-bar" class="active-tasks-bar" hidden>
@@ -168,44 +111,6 @@
       </div>
       <section id="groups" class="groups"></section>
     </main>
-    <dialog id="info-modal" aria-labelledby="info-modal-title">
-      <div class="modal-head">
-        <h2 id="info-modal-title">How folder scanning works</h2>
-        <portal-close-button
-          id="info-modal-close"
-          aria-label="Close"
-        ></portal-close-button>
-      </div>
-      <div class="modal-body">
-        <pre class="folder-tree"><span class="tree-root">projects/</span>
-<span class="tree-branch">├── </span><span class="project-folder">git_repo1/</span>
-<span class="tree-branch">│   └── </span><span class="tree-matched">docs/plans/</span>
-<span class="tree-branch">└── </span><span class="project-folder">repos_folder/</span>
-<span class="tree-branch">    ├── </span><span class="tree-plain">git_repo2/</span>
-<span class="tree-branch">    │   └── </span><span class="tree-matched">docs/plans/</span>
-<span class="tree-branch">    └── </span><span class="tree-plain">git_repo3/</span>
-<span class="tree-branch">        └── </span><span class="tree-plain">docs/</span>  <span class="tree-note">(no plans/ dir)</span></pre>
-        <ul class="tree-legend">
-          <li>
-            <span class="legend-swatch legend-repo"></span> project folder (a
-            repository root)
-          </li>
-          <li>
-            <span class="legend-swatch legend-matched"></span> matched
-            docs/plans folder
-          </li>
-        </ul>
-        <p class="modal-note">
-          Stops at the first repository found in each branch — nested folders
-          inside a repo aren't re-scanned. Skips node_modules, dist, .venv, and
-          similar.
-        </p>
-        <p class="modal-note">
-          Results are cached per file and refreshed automatically when files
-          change; use Refresh to force a full re-scan.
-        </p>
-      </div>
-    </dialog>
     <dialog
       id="all-tasks-modal"
       data-dialog-size="xl"
@@ -223,69 +128,6 @@
       </div>
       <div class="modal-body">
         <div id="all-tasks-body" class="all-tasks-body"></div>
-      </div>
-    </dialog>
-    <dialog id="skill-modal" data-dialog-size="lg" aria-labelledby="skill-modal-title">
-      <div class="modal-head">
-        <span
-          class="modal-title"
-          id="skill-modal-title"
-          data-slot="title"
-        ></span>
-        <span class="modal-path" data-slot="path"></span>
-        <portal-close-button
-          data-slot="close"
-          aria-label="Close"
-        ></portal-close-button>
-      </div>
-      <div class="modal-body">
-        <div class="markdown" data-slot="content"></div>
-      </div>
-    </dialog>
-    <dialog id="prompt-modal" aria-labelledby="prompt-modal-title">
-      <div class="modal-head">
-        <span
-          class="modal-title"
-          id="prompt-modal-title"
-          data-slot="title"
-        ></span>
-        <portal-close-button
-          data-slot="close"
-          aria-label="Close"
-        ></portal-close-button>
-      </div>
-      <div class="modal-body">
-        <p class="modal-note" data-slot="objective"></p>
-        <p class="modal-note" data-slot="scope"></p>
-        <div class="modalactions">
-          <button type="button" data-btn="cta" data-slot="copy">
-            Copy prompt
-          </button>
-        </div>
-      </div>
-    </dialog>
-    <dialog id="lifecycle-event-modal" aria-labelledby="lifecycle-event-modal-title">
-      <div class="modal-head">
-        <span
-          class="modal-title"
-          id="lifecycle-event-modal-title"
-          data-slot="title"
-        ></span>
-        <portal-close-button
-          data-slot="close"
-          aria-label="Close"
-        ></portal-close-button>
-      </div>
-      <div class="modal-body">
-        <p class="modal-note" data-slot="transition-note" hidden></p>
-        <p class="modal-note" data-slot="explanation"></p>
-        <div class="modalactions">
-          <button type="button" data-btn="cta" data-slot="copy-prompt">
-            Copy Start Prompt
-          </button>
-          <button type="button" data-slot="view-plan">View Plan</button>
-        </div>
-        <button type="button" class="revert-action" data-slot="revert" hidden></button>
       </div>
     </dialog>
     <dialog id="lifecycle-error-modal" aria-labelledby="lifecycle-error-modal-title">
@@ -317,153 +159,28 @@
         </div>
       </div>
     </dialog>
-    <dialog id="drawer" data-dialog-size="xl">
-      <div class="drawer-head">
-        <div>
-          <h2 id="drawer-title"></h2>
-          <div class="drawer-path-row">
-            <p id="drawer-path"></p>
-            <portal-copy-button
-              id="drawer-path-copy"
-              icon="copy"
-              aria-label="Copy path"
-            ></portal-copy-button>
-          </div>
-        </div>
-        <portal-close-button id="drawer-close"></portal-close-button>
-      </div>
-      <div class="drawer-body">
-        <div class="drawer-actions" id="drawer-actions">
-          <button
-            type="button"
-            class="recommended-cta"
-            id="drawer-cta"
-            data-btn="cta"
-            hidden
-          ></button>
-          <portal-menu-button
-            id="drawer-menu"
-            icon="copy"
-            aria-label="Plan actions"
-          ></portal-menu-button>
-        </div>
-        <section
-          class="drawer-warnings-section drawer-blockers-section"
-          id="drawer-blocked-by-section"
-          hidden
-        >
-          <h3>
-            <portal-icon name="warning" size="sm"></portal-icon>
-            Blocked by
-          </h3>
-          <div class="drawer-blocker-links" id="drawer-blocked-by-links"></div>
-        </section>
-        <section
-          class="drawer-warnings-section drawer-blockers-section"
-          id="drawer-blocking-section"
-          hidden
-        >
-          <h3>
-            <portal-icon name="warning" size="sm"></portal-icon>
-            Blocking
-          </h3>
-          <div class="drawer-blocker-links" id="drawer-blocking-links"></div>
-        </section>
-        <section
-          class="drawer-warnings-section"
-          id="drawer-warnings-section"
-          hidden
-        >
-          <h3>
-            <portal-icon name="warning" size="sm"></portal-icon>
-            Warnings
-          </h3>
-          <ul id="drawer-warnings"></ul>
-        </section>
-        <div id="drawer-status-mount"></div>
-        <div class="drawer-grid">
-          <section>
-            <h3>Metadata</h3>
-            <dl id="drawer-meta"></dl>
-          </section>
-          <section>
-            <h3>Tasks</h3>
-            <ul id="drawer-tasks"></ul>
-          </section>
-        </div>
-        <article class="markdown" id="drawer-doc"></article>
-      </div>
-    </dialog>
-    <!-- Discovery roots: enable-skill banner + one chip per configured root path -->
-    <!-- First-run onboarding: an empty-page state (centered content, no banner chrome). Shown only
-         while the plan-docs package is disabled — once enabled, the Project Folders form takes
-         over as the single visible setup step (the two are never shown together). -->
-    <template id="tpl-package-banner">
-      <div class="package-onboarding">
-        <h2 class="onboarding-title">Plan and track development with plan-docs</h2>
-        <p class="onboarding-lead">
-          Enable the plan-docs skill to turn next-step ideas into tracked, agent-ready plans.
-        </p>
-        <ul class="onboarding-list">
-          <li>
-            <portal-icon name="plans" size="md"></portal-icon>
-            <span>One Markdown file per plan, in each project's <code>docs/plans/</code> folder.</span>
-          </li>
-          <li>
-            <portal-icon name="filter" size="md"></portal-icon>
-            <span
-              >Plans move through lifecycle folders: 
-              <div class="code-sample">
-                <code>backlog</code> → <code>active</code> →
-                <code>completed</code> → <code>archived</code>.
-              </div>
-            </span>
-          </li>
-          <li>
-            <portal-icon name="pencil" size="md"></portal-icon>
-            <span>A suite of skills drives the development lifecycle:</span>
-            <ul class="onboarding-sublist">
-              <li><code>/plan-docs</code> — create and manage plans</li>
-              <li><code>/plan-promote</code> — prepare a plan for development</li>
-              <li><code>/plan-start</code> — implement it in an isolated worktree</li>
-              <li><code>/wrap-up</code> — commit and hand off the session</li>
-            </ul>
-          </li>
-        </ul>
-        <div class="banner-links">
-          <button type="button" data-btn="cta" data-slot="action">Enable Plan Docs</button>
-          <button type="button" data-btn="text" data-slot="details">View Skill Details</button>
-        </div>
-      </div>
-    </template>
-    <template id="tpl-root-chip">
-      <span class="root-chip">
-        <span data-slot="path"></span>
-        <button
-          type="button"
-          class="root-remove"
-          data-slot="remove"
-          title="Remove discovery root"
-        >
-          Remove
-        </button>
-      </span>
-    </template>
+    <!-- The enable-skill onboarding banner (tpl-package-banner) lives in plan-drawer-partial.html,
+         since the drawer's menu uses it too. -->
     <!-- Generic primitives: reused across panels, no single owner -->
     <template id="tpl-empty-state">
       <section class="empty-state">
-        <h2 data-slot="title"></h2>
-        <p data-slot="body"></p>
+        <div class="empty-state-copy">
+          <h2 data-slot="title"></h2>
+          <p data-slot="body"></p>
+        </div>
+        <a href="#manage-repositories" data-btn="secondary" data-slot="action" hidden></a>
       </section>
     </template>
-    <template id="tpl-chip">
-      <span class="chip"></span>
+    <template id="tpl-plans-no-repositories">
+      <portal-notice class="portal-notice plans-no-repositories" variant="info" icon="info">
+        <div class="portal-banner-content plans-no-repositories-content">
+          <div class="portal-banner-copy"><p><strong>Add a repo</strong><span class="portal-banner-supporting"> to discover associated feature plans.</span></p></div>
+          <div class="portal-banner-action"><button type="button" data-btn="cta" data-slot="manage">Manage Repos</button></div>
+        </div>
+      </portal-notice>
     </template>
     <template id="tpl-warning-line">
       <div data-slot="text"></div>
-    </template>
-    <template id="tpl-list-item">
-      <li data-slot="text"></li>
     </template>
     <template id="tpl-spinner">
       <span class="spinner"></span>
@@ -479,7 +196,8 @@
       ></button>
     </template>
 
-    <!-- Plan action menu (⋯): shared by the card and the drawer -->
+    <!-- Card actions. The ⋯ menu templates both cards and the drawer use are in
+         plan-drawer-partial.html. -->
     <template id="tpl-recommended-cta">
       <button
         type="button"
@@ -487,57 +205,6 @@
         data-btn="cta"
         data-slot="label"
       ></button>
-    </template>
-    <template id="tpl-secondary-action">
-      <button
-        type="button"
-        class="secondary-action"
-        data-slot="label"
-      ></button>
-    </template>
-    <template id="tpl-blocker-link">
-      <button type="button" class="blockers-popover-item" data-slot="title"></button>
-    </template>
-    <template id="tpl-blocker-unresolved">
-      <span class="blockers-popover-item blockers-popover-item-unresolved" data-slot="title"></span>
-    </template>
-    <template id="tpl-menu-item">
-      <button type="button" class="menu-button-item">
-        <portal-icon size="sm"
-          data-slot="icon"
-          class="menu-button-item-icon"
-        ></portal-icon>
-        <div class="menu-button-item-body">
-          <span data-slot="label"></span>
-          <span
-            class="menu-button-item-desc"
-            data-slot="description"
-            hidden
-          ></span>
-        </div>
-      </button>
-    </template>
-    <template id="tpl-plan-menu">
-      <div class="plan-menu">
-        <p class="plan-menu-note" data-slot="note"></p>
-        <div class="plan-menu-group" data-slot="group" hidden></div>
-        <div data-slot="fallback-actions" hidden></div>
-        <div data-slot="copy-path"></div>
-        <div data-slot="package-banner" hidden></div>
-      </div>
-    </template>
-    <template id="tpl-plan-menu-action">
-      <div class="plan-menu-action">
-        <div data-slot="item"></div>
-        <button
-          type="button"
-          class="plan-menu-variant"
-          data-slot="portable"
-          hidden
-        >
-          portable
-        </button>
-      </div>
     </template>
     <!-- Lifecycle readiness findings (blocked-move dialog) -->
     <template id="tpl-lifecycle-finding">
@@ -599,40 +266,9 @@
         <div data-slot="status-mount"></div>
       </article>
     </template>
-    <template id="tpl-plan-status">
-      <div class="status-section">
-        <div class="status-state-row">
-          <div class="status-state-chips" data-slot="status-chips">
-            <div class="lifecycle-slot" data-slot="lifecycle"></div>
-            <div class="priority-slot" data-slot="priority"></div>
-            <span class="state-badge" data-slot="state-badge" hidden></span>
-          </div>
-          <span class="meta-line" data-slot="meta"></span>
-        </div>
-        <div class="status-implementation" data-slot="implementation">
-          <div class="status-progress-row" data-slot="progress-row">
-            <div class="progress-bar">
-              <div class="progress-fill" data-slot="progress-fill"></div>
-            </div>
-            <span class="progress-label" data-slot="progress-label"></span>
-          </div>
-          <div class="status-complete-row" data-slot="complete-row" hidden>
-            <span class="tasks-complete-badge">All tasks complete</span>
-          </div>
-          <div class="next-line" data-slot="next-row"><span class="next-label">Next up:</span> <span data-slot="next"></span></div>
-        </div>
-      </div>
-    </template>
-    <template id="tpl-dtdd-row">
-      <div class="dtdd-row">
-        <dt data-slot="term"></dt>
-        <dd data-slot="value"></dd>
-      </div>
-    </template>
-    <template id="tpl-task-item">
-      <li data-slot="text"></li>
-    </template>
-    <script src="/portal/shared/info-icon.js" type="module"></script>
+    {{PLAN_DRAWER}}
+    {{REPOSITORY_SOURCES}}
+
     <script src="/portal/shared/icon.js" type="module"></script>
     <script src="/portal/shared/notice.js" type="module"></script>
     <script src="/portal/shared/close-button.js" type="module"></script>

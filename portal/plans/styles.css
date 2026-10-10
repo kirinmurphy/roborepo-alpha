@@ -3,7 +3,7 @@
  * reusing them is the plain-CSS equivalent):
  *   765px  — narrow: lifecycle tabs collapse to a dropdown selector. Set ~50px above the point
  *            tabs would wrap to 2 lines, so the dropdown swap happens before wrapping occurs.
- *   960px  — wide: drawer/root-form/filter-row go single-column below it; the plan card's status
+ *   960px  — wide: drawer/filter-row go single-column below it; the plan card's status
  *            section becomes a fixed 200px right-side column at/above it.
  */
 main {
@@ -18,8 +18,6 @@ main {
   border-radius: 8px;
   padding: 1rem 1.5rem;
 }
-/* Discovery-root ("Project Folders") section: styled by the shared .intro-banner
- * (portal/shared/base.css) so it reads the same as other pages' setup prompts. */
 /* Whole-page sticky header block: control-bar + lifecycle tabs ride together and stay pinned for
  * the entire scroll, not just the ~2 rows of their old short wrapper. #plans-header is a direct
  * child of <body> (the page scroll container), so a sticky here tracks the full page. It pins to
@@ -61,6 +59,32 @@ main {
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
+}
+/* The repository count opens Manage Repos; it reads as part of the sentence. */
+.repos-count-button {
+  font: inherit;
+  color: var(--dim);
+}
+.repos-count-button:hover {
+  color: var(--ink);
+}
+#plans-onboarding {
+  margin: 0 0 16px;
+}
+.plans-no-repositories-content { gap: 10px 16px; }
+.plans-no-repositories-content p { margin: 0; }
+.plans-no-repositories-content button { white-space: nowrap; }
+.empty-state--with-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+}
+.empty-state-copy { min-width: 0; }
+.control-bar-row .sync-status { margin-left: 4px; }
+.empty-state--with-action [data-slot="action"] {
+  justify-self: end;
+  white-space: nowrap;
 }
 /* Layout only — button chrome (border/background/padding) now comes from data-btn, not this
  * class. Groups paired icon buttons (update/refresh; Filters/Agent prompts) for consistent
@@ -205,199 +229,11 @@ main {
 }
 /* Button chrome (default/secondary, cta, text) is defined globally in portal/shared/base.css via
  * data-btn — no page-local button {} override here. */
-/* The "Add your first Project Folder" title is .intro-banner-title. Only shown once plan-docs is
- * enabled — while it's disabled the banner is the single visible setup step. Once roots exist, the
- * row-1 "N Repos" control item takes over and this whole block relocates into the control bar
- * (unlabeled). */
-#roots-panel-mount:not([hidden]) .settings-body {
-  margin-top: 0;
-  padding: 10px 20px 12px;
-  border-top: 1px solid var(--line);
-  background: color-mix(in srgb, var(--neutral-tint) 8%, var(--panel));
-  margin-left: -20px;
-  margin-right: -20px;
-}
-#roots {
-  margin: 0 0 12px;
-  color: var(--dim);
-  font-size: var(--text-xs);
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-#roots:not(:empty) {
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--line);
-}
-.root-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: min(560px, 100%);
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  padding: 3px 4px 3px 7px;
-  background: var(--bg);
-}
-.root-chip span {
-  overflow-wrap: anywhere;
-}
-.root-remove {
-  padding: 2px 6px;
-  font-size: var(--text-2xs);
-  color: var(--danger);
-}
-#root-form {
-  margin-top: 10px;
-  max-width: 640px;
-}
-.root-form-label-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
-}
-#root-form label {
-  display: inline-block;
-  font-size: var(--text-xs);
-  color: var(--dim);
-  margin-bottom: 0;
-}
-.root-form-row {
-  display: flex;
-  gap: 1rem;
-}
-#root-input {
-  flex: 1;
-}
-dialog#info-modal {
-  width: min(560px, 100%);
-  max-height: 85vh;
-  overflow: auto;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  box-shadow: 0 12px 40px var(--modal-shadow);
-  padding: 18px;
-}
-dialog#info-modal::backdrop {
-  background: var(--backdrop);
-}
-/* info-modal only — narrower box, different head/close treatment than the shared .modal-* chrome
- * in base.css (which #skill-modal below uses as-is). Scoped to the id so it doesn't leak onto
- * #skill-modal via the shared class names. */
-#info-modal .modal-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-  padding: 0;
-  border-bottom: none;
-}
-#info-modal .modal-head h2 {
-  margin: 0;
-  font-size: var(--text-md);
-}
-#info-modal portal-close-button {
-  flex: 0 0 auto;
-  margin-left: 0;
-}
-#info-modal .modal-body {
-  font-size: var(--text-sm);
-  color: var(--dim);
-}
-/* Width comes from data-dialog-size="lg" (portal/shared/base.css). */
-dialog#skill-modal {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  max-height: 85vh;
-  padding: 0;
-}
-dialog#skill-modal[open] {
-  display: flex;
-  flex-direction: column;
-}
-dialog#skill-modal::backdrop {
-  background: var(--backdrop);
-}
-.folder-tree {
-  margin: 0 0 12px;
-  padding: 12px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  font-size: var(--text-xs);
-  line-height: 1.6;
-  color: var(--dim);
-  overflow-x: auto;
-}
-.tree-root {
-  color: var(--ink);
-  font-weight: 600;
-}
-.tree-branch {
-  color: var(--dim);
-}
-.project-folder {
-  color: var(--warn);
-  font-weight: 600;
-}
-.tree-matched {
-  color: var(--ok);
-  font-weight: 600;
-}
-.tree-plain {
-  color: var(--dim);
-}
-.tree-note {
-  color: var(--dim);
-  font-style: italic;
-}
-.tree-legend {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  margin: 0 0 14px;
-  padding: 0;
-  list-style: none;
-  font-size: var(--text-xs);
-}
-.legend-swatch {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-  margin-right: 6px;
-  vertical-align: -1px;
-}
-.legend-repo {
-  background: var(--warn);
-}
-.legend-matched {
-  background: var(--ok);
-}
 .modal-note {
   margin: 0 0 8px;
   font-size: var(--text-2xs);
   color: var(--dim);
 }
-#prompt-modal {
-  width: min(480px, 100%);
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  box-shadow: 0 12px 40px var(--modal-shadow);
-  padding: 18px;
-}
-#prompt-modal::backdrop {
-  background: var(--backdrop);
-}
-#prompt-modal .modalactions {
-  margin-top: 12px;
-}
-#lifecycle-event-modal,
 #lifecycle-error-modal {
   width: min(560px, 100%);
   max-height: 85vh;
@@ -408,27 +244,11 @@ dialog#skill-modal::backdrop {
   box-shadow: 0 12px 40px var(--modal-shadow);
   padding: 26px;
 }
-#lifecycle-event-modal::backdrop,
 #lifecycle-error-modal::backdrop {
   background: var(--backdrop);
 }
-#lifecycle-event-modal .modalactions,
 #lifecycle-error-modal .modalactions {
   margin-top: 16px;
-}
-.revert-action {
-  display: block;
-  margin-top: 14px;
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--dim);
-  font-size: var(--text-xs);
-  text-decoration: underline;
-  cursor: pointer;
-}
-.revert-action:hover {
-  color: var(--ink);
 }
 /* Onboarding empty-page mount: full-width, fills the space between the shared chrome (sticky
  * header above, footer below) so the hero sits in the true visual middle of the page. A display
@@ -448,82 +268,6 @@ dialog#skill-modal::backdrop {
 
 .package-banner[hidden] {
   display: none;
-}
-
-/* Narrow content column, left-aligned inside it (the page centers the box, never the text). */
-.package-onboarding {
-  max-width: 660px;
-  width: 100%;
-  margin: auto; /* vertical centering within the flex mount */
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.onboarding-title {
-  margin: 0;
-  font-size: var(--text-xl);
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.onboarding-lead {
-  margin: 0;
-  font-size: var(--text-md);
-  color: var(--dim);
-}
-
-.onboarding-list {
-  list-style: none;
-  margin: 0;
-  padding: 1rem 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.onboarding-list portal-icon {
-  flex-shrink: 0;
-  color: var(--accent);
-  margin-top: 1px; /* optically centers the 20px glyph against the first text line */
-}
-
-.onboarding-list .snippet {
-  padding-top: .5rem;
-}
-
-/* Nested skill rows under the "suite of skills" bullet: indented to the bullet text's left edge,
- * one skill per line, no icons — the parent glyph covers the whole group. */
-.onboarding-sublist {
-  list-style: none;
-  margin: 2px 0 0;
-  padding: .5rem 0 0 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: var(--text-sm);
-  color: var(--dim);
-}
-
-/* The li is a flex row (icon + spans); the sublist must span full width under both, so it needs
- * its own grid column. */
-.onboarding-list li {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  column-gap: 12px;
-  align-items: start;
-  font-size: var(--text-md);
-  line-height: 1.45;
-  color: var(--ink);
-}
-
-.onboarding-list li > portal-icon {
-  grid-column: 1;
-}
-
-.onboarding-list li > span,
-.onboarding-list li > ul {
-  grid-column: 2;
 }
 
 .package-banner strong {
@@ -615,7 +359,7 @@ dialog#skill-modal::backdrop {
 .empty-state {
   border: 1px dashed var(--line);
   border-radius: 8px;
-  padding: 28px;
+  padding: 22px 24px;
   color: var(--dim);
   background: var(--panel);
 }
@@ -760,59 +504,6 @@ plan-card {
   margin: 0;
   width: 100%;
 }
-.priority-slot {
-  display: flex;
-  flex: 0 0 auto;
-}
-/* Distinct surface so the priority control reads as an actionable widget, not flat card text. */
-.priority-slot .dropdown-trigger {
-  font-size: var(--text-sm);
-  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
-  padding: 3px 9px;
-}
-.priority-slot .dropdown-chevron {
-  font-size: var(--text-2xs);
-  color: var(--ink);
-}
-/* Failed priority update (e.g. stale mtime conflict): the page-level warning banner is far above
- * the card grid, so put a visible marker on the control itself too — a native title tooltip
- * alone is too easy to miss. */
-.priority-slot option-dropdown.dropdown-error .dropdown-trigger {
-  border-color: var(--danger);
-  color: var(--danger);
-}
-.lifecycle-slot {
-  display: flex;
-  flex: 0 0 auto;
-}
-.lifecycle-slot .dropdown-trigger {
-  font-size: var(--text-sm);
-  padding: 3px 9px;
-}
-.lifecycle-slot option-dropdown.dropdown-error .dropdown-trigger {
-  border-color: var(--danger);
-  color: var(--danger);
-}
-.chips {
-  display: flex;
-  gap: 5px;
-  flex-wrap: wrap;
-}
-.chip {
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  color: var(--dim);
-  padding: 1px 5px;
-  font-size: var(--text-2xs);
-}
-.chip.warn {
-  color: var(--warn);
-  border-color: var(--warn-line);
-}
-.chip.ok {
-  color: var(--ok);
-  border-color: var(--ok);
-}
 
 .plan-card .doc-details footer {
   display: flex;
@@ -824,156 +515,10 @@ plan-card {
   margin-top: 2px;
   align-items: stretch;
 }
-/* Card's ⋯/copy menu trigger sits beside the recommended-cta button and should match its height
- * (both share [data-btn="cta"]-equivalent padding, but a bare icon has a shorter line-box than
- * text) — align-items: stretch above plus box-sizing here closes that gap. Icon bumped up from the
- * component's 14px default since it's the row's only visual affordance now (no label text). Shared
- * with .drawer-actions below — same portal-menu-button widget, same trigger face, on both surfaces. */
-.plan-card .card-actions portal-menu-button,
-.drawer-actions portal-menu-button {
-  display: inline-flex;
-  align-self: stretch;
-}
-.plan-card .card-actions .menu-button-trigger,
-.drawer-actions .menu-button-trigger {
-  box-sizing: border-box;
-  height: 100%;
-}
-/* Sized from the shared scale (base.css / portal/shared/icon.js) rather than an off-scale 18px,
- * so these trigger icons match every other icon at the same visual weight. */
-.plan-card
-  .card-actions
-  .menu-button-trigger
-  portal-icon:not(.menu-button-chevron)
-  svg,
-.drawer-actions .menu-button-trigger portal-icon:not(.menu-button-chevron) svg {
-  width: var(--icon-lg);
-  height: var(--icon-lg);
-}
-/* Surface-neutral base: layout only, no chrome assumptions — <plan-status> renders inside both
- * the card (bottom of a rounded/bordered box) and the drawer (plain top border, no rounding), so
- * background/border/radius live in the modifiers below instead of here. */
-.status-section {
-  padding: 8px 12px;
-  display: grid;
-  gap: 6px;
-  overflow-wrap: anywhere;
-}
 .plan-card plan-status .status-section {
   border-top: 1px solid var(--warn-line);
   border-radius: 0 0 7px 7px;
   background: color-mix(in srgb, var(--warn) 10%, var(--panel));
-}
-#drawer-status-mount .status-section {
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  margin-bottom: 4px;
-}
-.status-state-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-}
-.status-state-chips {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-.state-badge {
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  padding: 1px 6px;
-  font-size: var(--text-2xs);
-  font-weight: 600;
-  text-transform: capitalize;
-  color: var(--dim);
-}
-.state-badge.warn {
-  color: var(--warn);
-  border-color: var(--warn-line);
-}
-/* .state-badge is a <span> for readiness/review chips but a real <button> when it's the
-   blocked-by trigger (plan-status.js) — reset button chrome so it keeps the chip's look. */
-.state-badge-blocked {
-  background: none;
-  font: inherit;
-  cursor: pointer;
-}
-.state-badge-blocked:hover,
-.state-badge-blocked:focus-visible {
-  background: color-mix(in srgb, var(--warn) 12%, transparent);
-}
-.status-state-row .meta-line {
-  font-size: var(--text-2xs);
-  min-width: 0;
-}
-.status-implementation {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-.status-implementation[hidden] {
-  display: none;
-}
-.status-progress-row {
-  display: flex;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-}
-.status-progress-row[hidden],
-.status-complete-row[hidden] {
-  display: none;
-}
-/* Replaces the progress bar once every task is checked: a full bar reads as "in progress at 100%",
-   which is a different claim than "finished". Right-aligned so it lands where the percentage label
-   would have been. */
-.status-complete-row {
-  display: flex;
-  justify-content: flex-end;
-}
-.tasks-complete-badge {
-  border: 1px solid var(--ok);
-  border-radius: 4px;
-  padding: 1px 6px;
-  font-size: var(--text-2xs);
-  font-weight: 600;
-  color: var(--ok);
-  white-space: nowrap;
-}
-.progress-bar {
-  flex: 1 1 60px;
-  min-width: 0;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--line);
-  overflow: hidden;
-}
-.progress-fill {
-  height: 100%;
-  background: var(--ok);
-  border-radius: 3px;
-}
-.progress-label {
-  font-size: var(--text-2xs);
-  color: var(--dim);
-  white-space: nowrap;
-}
-.status-section .next-line {
-  font-size: var(--text-sm);
-  color: var(--ink);
-  min-width: 0;
-}
-.status-section .next-line[hidden] {
-  display: none;
-}
-.next-label {
-  color: var(--dim);
-  font-weight: 600;
 }
 .card-actions {
   display: flex;
@@ -981,257 +526,16 @@ plan-card {
   flex-wrap: wrap;
   align-self: end;
 }
-.toast {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  z-index: 20;
-  max-width: min(360px, calc(100vw - 40px));
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 10px 14px;
-  font-size: var(--text-xs);
-  color: var(--ink);
-  box-shadow: 0 8px 24px var(--modal-shadow);
-  display: grid;
-  gap: 6px;
-}
-.toast[hidden] {
-  display: none;
-}
-.toast-message {
-  margin: 0;
-}
-.toast-actions {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.toast-actions button,
-.toast-actions a {
-  background: none;
-  border: none;
-  padding: 0;
-  margin: 0;
-  font: inherit;
-  font-size: var(--text-xs);
-  color: var(--accent);
-  text-decoration: underline;
-  cursor: pointer;
-}
-.toast-actions button:hover,
-.toast-actions a:hover {
-  color: var(--ink);
-}
-/* Width comes from data-dialog-size="xl" (portal/shared/base.css). */
-dialog#drawer {
-  max-height: 85vh;
-  overflow: auto;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  box-shadow: 0 12px 40px var(--modal-shadow);
-  padding: 0;
-}
-dialog#drawer::backdrop {
-  background: var(--backdrop);
-}
-.drawer-head {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: start;
-  background: var(--bg);
-  border-bottom: 1px solid var(--line);
-  padding: 18px 18px 12px;
-}
-.drawer-body {
-  padding: 0 18px 18px;
-}
-.drawer-head h2 {
-  margin: 0;
-  font-size: var(--text-lg);
-}
-.drawer-path-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 3px;
-}
-.drawer-path-row p {
-  color: var(--dim);
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-.drawer-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin: 12px 0;
-}
-.drawer-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-}
-.drawer-grid section {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel);
-  padding: 12px;
-}
-.drawer-grid h3 {
-  margin: 0 0 8px;
-  color: var(--dim);
-  font-size: var(--text-xs);
-  text-transform: uppercase;
-}
-/* Unified plan ⋯ menu (drawer-menu / card ⋯ panel content, built in templates.js#planMenuBody) plus
-   the recommended-next CTA that sits beside the ⋯ trigger. */
-.recommended-cta {
-  white-space: nowrap;
-}
-.plan-menu {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-  width: 100%;
-}
-.plan-menu-note {
-  margin: 0;
-  padding: 4px 8px 8px;
-  font-size: var(--text-xs);
-  color: var(--desc-dim);
-}
-.plan-menu-group {
-  display: grid;
-  gap: 2px;
-  width: 100%;
-}
-/* Each action row: the action item takes the width; the optional portable variant sits at the end. */
-.plan-menu-action {
-  display: flex;
-  align-items: stretch;
-  gap: 4px;
-  width: 100%;
-  border-radius: 6px;
-}
-.plan-menu-action .menu-button-item {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-.plan-menu-variant {
-  flex: none;
-  align-self: center;
-  border: 1px solid var(--line);
-  background: none;
-  color: var(--dim);
-  font: inherit;
-  font-size: var(--text-2xs);
-  border-radius: 999px;
-  padding: 1px 8px;
-  margin-right: 4px;
-  cursor: pointer;
-}
-.plan-menu-variant:hover {
-  color: var(--ink);
-  border-color: var(--accent);
-}
-.drawer-warnings-section {
-  border: 1px solid var(--warn);
-  background: color-mix(in srgb, var(--warn) 10%, var(--panel));
-  border-radius: 8px;
-  padding: 12px;
-  margin-bottom: 12px;
-}
-.drawer-warnings-section h3 {
-  margin: 0 0 8px;
-  color: var(--warn);
-  font-size: var(--text-xs);
-  text-transform: uppercase;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-/* Blocked by / Blocking share .drawer-warnings-section's warning-box chrome; only the link-row
-   layout below is section-specific. */
-.drawer-blocker-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 14px;
-}
-.drawer-blocker-links .blockers-popover-item {
-  font-size: var(--text-xs);
-}
-
-/* Card/drawer "blocked by N" popup — anchored via popover-position.js, same fixed-panel pattern
-   as option-dropdown/menu-button's menus. */
-.blockers-popover {
-  position: fixed;
-  z-index: 30;
-  min-width: 200px;
-  max-width: min(320px, calc(100vw - 16px));
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 10px 12px;
-  box-shadow: 0 8px 24px var(--modal-shadow);
-  overflow-y: auto;
-}
-.blockers-popover[hidden] {
-  display: none;
-}
-.blockers-popover-title {
-  margin: 0 0 6px;
-  font-size: var(--text-2xs);
-  text-transform: uppercase;
-  color: var(--warn);
-}
-.blockers-popover-list {
-  display: grid;
-  gap: 4px;
-}
-.blockers-popover-item {
-  background: none;
-  border: none;
-  padding: 0;
-  margin: 0;
-  font: inherit;
-  font-size: var(--text-xs);
-  color: var(--accent);
-  text-decoration: underline;
-  cursor: pointer;
-  text-align: left;
-}
-.blockers-popover-item:hover {
-  color: var(--ink);
-}
-.blockers-popover-item-unresolved {
-  color: var(--dim);
-  text-decoration: none;
-  cursor: default;
-}
-.task-done {
-  color: var(--dim);
-  text-decoration: line-through;
-}
-.task-open {
-  color: var(--ink);
-}
-/* Layout only — the drawer's measure and offset. All element chrome (headings, code, tables,
- * mermaid, task checkboxes) comes from the shared portal/shared/markdown.css. */
-.markdown {
-  margin-top: 14px;
-  max-width: 860px;
-}
-@media (max-width: 960px) {
-  #root-form {
-    display: grid;
+@media (max-width: 560px) {
+  .plans-no-repositories-content {
+    grid-template-columns: 1fr;
   }
+  .plans-no-repositories-content .sync-status { justify-self: start; }
+  .empty-state--with-action {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+  .empty-state--with-action [data-slot="action"] { justify-self: start; }
 }
 @media (max-width: 420px) {
   .filter-row {
@@ -1252,82 +556,6 @@ dialog#drawer::backdrop {
   vertical-align: -1px;
 }
 
-/* CTA row: primary action left (visually first), details link secondary beside it. */
-.banner-links {
-  display: flex;
-  gap: 14px;
-  align-items: center;
-  margin-top: 4px;
-}
-
-/* Shared <option-dropdown> popover — used for the per-card priority picker and the mobile
-   lifecycle selector. */
-option-dropdown {
-  display: inline-block;
-  position: relative;
-}
-.dropdown-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--panel);
-  color: var(--ink);
-  font: inherit;
-  font-size: var(--text-2xs);
-  padding: 1px 6px;
-  cursor: pointer;
-}
-.dropdown-trigger:hover {
-  border-color: var(--accent);
-}
-.dropdown-trigger:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-.dropdown-trigger:disabled {
-  cursor: default;
-  opacity: 0.7;
-}
-.dropdown-chevron {
-  color: var(--dim);
-  font-size: var(--text-2xs);
-}
-.dropdown-menu {
-  position: fixed;
-  z-index: 30;
-  display: grid;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  box-shadow: 0 8px 24px var(--modal-shadow);
-  padding: 4px;
-  min-width: 100px;
-  /* max-height is set inline by positionPopoverPanel (popover-position.js) to keep the far edge
-     on-screen; scroll internally past that instead of overflowing the viewport. */
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-.dropdown-option {
-  border: none;
-  background: none;
-  font: inherit;
-  font-size: var(--text-sm);
-  text-align: left;
-  color: var(--ink);
-  padding: 5px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.dropdown-option:hover,
-.dropdown-option.highlighted {
-  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
-}
-.dropdown-option[aria-selected="true"] {
-  font-weight: 600;
-}
-
 /* Lifecycle tabs (desktop) / dropdown fallback (narrow screens), replacing stacked sections. */
 .lifecycle-tabs {
   display: flex;
@@ -1335,6 +563,11 @@ option-dropdown {
   border-bottom: 1px solid var(--line);
   margin-bottom: 12px;
   flex-wrap: wrap;
+}
+.lifecycle-tabs:empty {
+  display: none;
+  border-bottom: 0;
+  margin-bottom: 0;
 }
 .lifecycle-tab {
   font: inherit;

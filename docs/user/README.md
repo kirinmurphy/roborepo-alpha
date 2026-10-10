@@ -11,8 +11,7 @@ These docs are for people installing and using the RoboRepo package.
 | Understand install/update choices | [Install Workflows](guides/install-workflows.md) |
 | Use the CLI | [RoboRepo CLI Commands](reference/roborepo-cli.md) |
 | Understand exact install collision behavior | [Config Collision Handling](reference/config-collision-handling.md) |
-| Browse and manage plan docs | [Plan Docs Walkthrough](guides/plan/lifecycle/plan-docs.md) |
-| Review an integration branch | [Integration Check Walkthrough](guides/plan/lifecycle/integration-check.md) |
+| Write, implement, and close plans | [Plan Suite Walkthrough](guides/plan/lifecycle/plan-suite.md) |
 | Investigate token usage and recorded changes | [Tokens Page User Guide](guides/telemetry.md) |
 | Know which agent CLIs RoboRepo manages | [Supported Harnesses](guides/harnesses/supported-harnesses.md) |
 
@@ -26,6 +25,7 @@ These docs are for people installing and using the RoboRepo package.
 | Skills | [RoboRepo Skills Interface](reference/roborepo-skills.md) |
 | Hooks | [Claude Hooks](reference/claude-hooks.md), [Codex Hooks](reference/codex-hooks.md) |
 | Plans portal | [Plans Portal](reference/plans-portal.md) |
+| Repository Home and detail | [Repositories in the Portal](reference/repositories.md) |
 | Runtime | [Runtime](reference/runtime.md) |
 | Telemetry | [Telemetry Service Reference](reference/telemetry.md) |
 | Indexing | [jcodemunch](reference/jcodemunch.md), [jdocmunch](reference/jdocmunch.md) |

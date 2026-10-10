@@ -23,6 +23,16 @@ const ICONS = {
     viewBox: "0 0 24 24",
     body: `<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="15 3 21 3 21 9" /><line stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" x1="10" y1="14" x2="21" y2="3" />`,
   },
+  link: {
+    viewBox: "0 0 16 16",
+    body: `<path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" d="m6.2 9.8 3.6-3.6M6.5 5.2l2-2a3 3 0 0 1 4.3 4.3l-2 2M9.5 10.8l-2 2a3 3 0 0 1-4.3-4.3l2-2" />`,
+  },
+  // Info: a circled "i" — the same stroke family as warning, for prompts that invite an action
+  // rather than flag a problem.
+  info: {
+    viewBox: "0 0 16 16",
+    body: `<circle fill="none" stroke="currentColor" stroke-width="1.3" cx="8" cy="8" r="6.5" /><path fill="currentColor" d="M7.4 7h1.2v4.5H7.4V7Z" /><circle fill="currentColor" cx="8" cy="5" r="0.75" />`,
+  },
   warning: {
     viewBox: "0 0 16 16",
     body: `<path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round" d="M8 1.5 15 13.8H1L8 1.5Z" /><path fill="currentColor" d="M7.4 6h1.2v4.2H7.4V6Z" /><circle fill="currentColor" cx="8" cy="11.7" r="0.75" />`,
@@ -30,6 +40,10 @@ const ICONS = {
   close: {
     viewBox: "0 0 16 16",
     body: `<path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" d="M3 3l10 10M13 3 3 13" />`,
+  },
+  settings: {
+    viewBox: "0 0 24 24",
+    body: `<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.09a2 2 0 0 1 1 1.74v.5a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z" /><circle cx="12" cy="12" r="3.5" fill="none" stroke="currentColor" stroke-width="2" />`,
   },
   copy: {
     viewBox: "0 0 16 16",
@@ -68,6 +82,11 @@ const ICONS = {
     viewBox: "0 0 16 16",
     body: `<path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" d="M1.8 8h3.4M10.8 8h3.4" /><circle cx="8" cy="8" r="2.4" fill="none" stroke="currentColor" stroke-width="1.3" />`,
   },
+  // A checkout's directory on disk, beside the branch and worktree glyphs in Home's worktree details.
+  folder: {
+    viewBox: "0 0 16 16",
+    body: `<path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" d="M1.5 4a1 1 0 0 1 1-1h3.4l1.5 1.5h6.1a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1V4Z" />`,
+  },
   "git-branch": {
     viewBox: "0 0 16 16",
     body: `<circle cx="4" cy="3" r="1.6" fill="none" stroke="currentColor" stroke-width="1.3" /><circle cx="4" cy="13" r="1.6" fill="none" stroke="currentColor" stroke-width="1.3" /><circle cx="12" cy="6" r="1.6" fill="none" stroke="currentColor" stroke-width="1.3" /><path fill="none" stroke="currentColor" stroke-width="1.3" d="M4 4.6V11.4" /><path fill="none" stroke="currentColor" stroke-width="1.3" d="M4 8c0-2.5 2-3.5 4.5-3.8" />`,
@@ -84,6 +103,20 @@ const ICONS = {
     body: `<path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" d="M5.2 9.6a2.6 2.6 0 0 1-.5-5.1 3.4 3.4 0 0 1 6.6 0 2.6 2.6 0 0 1-.5 5.1Z" /><path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" d="M8 9.6v4.9M5.8 14.5h4.4" />`,
   },
 
+  // Header brand mark only. Outlined like the rest of the set, but heavier (1.5) so it holds up as
+  // the brand mark; the eyes stay solid so the face reads at a glance. No antenna. The glyph spans
+  // x 2.75–21.25, y 6–19, so the viewBox is cropped to a square centered on those bounds — a stock
+  // 24×24 box left it riding high and small in the header.
+  robot: {
+    viewBox: "2 2.5 20 20",
+    body: `<rect x="5.75" y="6.75" width="12.5" height="11.5" rx="3" fill="none" stroke="currentColor" stroke-width="1.5" /><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M5.75 10.5H4.5a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h1.25M18.25 10.5h1.25a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-1.25M10 15.25h4" /><circle cx="9.75" cy="11.75" r="1.25" fill="currentColor" /><circle cx="14.25" cy="11.75" r="1.25" fill="currentColor" />`,
+  },
+  // GitHub mark (Octicons mark-github, MIT). Stands in for the "GitHub" provider-link text on
+  // repository rows; other forges keep their text label (see configureProviderLink).
+  github: {
+    viewBox: "0 0 16 16",
+    body: `<path fill="currentColor" d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z" />`,
+  },
   // Portal section glyphs — the monochrome entry-point icons for Home's destination cards.
   // Same stroke family as the rest of this set (1.3 weight, round caps/joins, currentColor).
   // Home: a house — roof peak over a door, read as "start here".
@@ -124,7 +157,7 @@ const ICONS = {
 // the copy sheets) lost their interior detail and read as smudges next to text, which is what made
 // the small icons on the repository card hard to identify. Each step is ~1.25x its predecessor so
 // the gaps stay visually distinct rather than being pixel-adjacent.
-const ICON_SIZES = { sm: 16, md: 20, lg: 24, xl: 30, xxl: 40, xxxl: 48 };
+const ICON_SIZES = { sm: 16, md: 22, lg: 26, xl: 30, xxl: 40, xxxl: 48 };
 const DEFAULT_ICON_SIZE = "md";
 
 class PortalIcon extends HTMLElement {

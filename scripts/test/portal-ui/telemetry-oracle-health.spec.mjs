@@ -67,11 +67,13 @@ test("oracle polling updates independently and endpoint failure leaves the repor
   await expect(page.getByRole("heading", { name: "Identifiable waste" })).toBeVisible();
 });
 
-test("live telemetry keeps polling oracle health after a settled status", async ({ page, request }) => {
-  const config = await (await request.get("/api/config")).json();
-  config.telemetry = { ...config.telemetry, enabled: true };
-  config.machineHarnesses = [{ id: "claude", enabled: true, confidence: "confirmed" }];
-  await page.route("**/api/config", (route) => route.fulfill({ json: config }));
+test("live telemetry keeps polling oracle health after a settled status", async ({ page }) => {
+  await page.route("**/api/settings", async (route) => {
+    const setup = await (await route.fetch()).json();
+    setup.telemetry.enabled = true;
+    setup.harnesses.active = [{ id: "claude", displayName: "Claude Code", enabled: true, confidence: "confirmed" }];
+    await route.fulfill({ json: setup });
+  });
   await page.route("**/api/data", (route) => route.fulfill({ json: documentationScenario().report }));
   await page.route("**/api/telemetry/markers", (route) => route.abort());
   let requests = 0;

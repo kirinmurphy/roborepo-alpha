@@ -392,7 +392,10 @@ const withPersisted = buildDeveloperRuntimeSnapshot({
       lifecycle: { state: "idle", reason: null },
       lastSeenAt: "2026-08-01T00:00:00.000Z",
       favorite: false,
-      checkouts: [{ rootId: "idle-root", kind: "primary", state: "present", reason: null, projectRoot: "/tmp/idle-one", git: { branch: "main", isWorktree: false } }],
+      checkouts: [
+        { rootId: "idle-root", kind: "primary", state: "present", reason: null, projectRoot: "/tmp/idle-one", git: { branch: "main", isWorktree: false } },
+        { rootId: "idle-gone-wt", kind: "worktree", state: "absent", reason: "checkout directory no longer exists", projectRoot: "/tmp/idle-one-wt", git: null },
+      ],
     },
     {
       repositoryId: STALE,
@@ -413,8 +416,12 @@ assert.equal(withPersisted.repositories.length, 3);
 // branches, its identity — and has no members, which is the entire difference.
 assert.equal(idle.lifecycle.state, "idle");
 assert.equal(idle.members.length, 0);
-assert.equal(idle.roots.length, 1);
+assert.equal(idle.roots.length, 2);
 assert.equal(idle.roots[0].git.branch, "main");
+// A deleted worktree has no git left to say it was one; the registry's recorded kind keeps it a
+// worktree row, sorted after the main checkout, instead of a second "main checkout".
+assert.equal(idle.roots[1].isWorktree, true);
+assert.equal(idle.roots[1].checkoutState, "absent");
 assert.equal(idle.lastSeenAt, "2026-08-01T00:00:00.000Z");
 // A checkout that is not on disk carries that as a fact about the directory, so the card can say
 // "checkout missing" rather than the misleading "no active members".

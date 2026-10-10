@@ -2,8 +2,8 @@
   <header class="portal-header">
     <div class="inner">
       <div class="logo-wrapper">
-        <h1>roborepo</h1>
-        <span id="portal-updated" class="portal-updated">updated --</span>
+        <h1 class="portal-logo"><a href="/" aria-label="roborepo home" title="roborepo"><portal-icon name="robot" size="xl"></portal-icon></a></h1>
+        <span id="portal-updated" class="portal-updated" role="status" data-state="pending" title="Connecting"><span class="portal-updated-dot" aria-hidden="true"></span><span class="portal-updated-label" data-slot="label"></span></span>
       </div>
       <nav id="nav" aria-label="Portal sections"></nav>
     </div>
@@ -22,5 +22,5 @@
   </footer>
 </template>
 <template id="tpl-nav-link">
-  <a></a>
+  <a><span data-slot="icon"></span><span class="nav-label" data-slot="label"></span></a>
 </template>

@@ -35,6 +35,7 @@ import { spawnSync } from "node:child_process";
 // The second fixture: plain Node servers across a repository and two worktrees, for the checkout-row
 // cases the Compose stack cannot show (several process members, a failing app, an API-only checkout).
 import { startMultiMemberFixture, statusMultiMemberFixture, stopMultiMemberFixture } from "./multi-member-fixture.mjs";
+import { startIdleCheckoutFixture, statusIdleCheckoutFixture, stopIdleCheckoutFixture } from "./idle-checkout-fixture.mjs";
 
 const FIXTURE_ROOT = path.join(os.homedir(), "projects", "prototypin", "shared-stack-fixture");
 // The second checkout is the first path plus a "-wt" suffix on purpose: it doubles as the
@@ -179,18 +180,18 @@ function statusComposeFixture() {
     : `provisioned but stopped (${FIXTURE_ROOT})`;
 }
 
-// Every action covers both fixtures. Each result is either a string or { ok: false, message }; the
-// combined result fails if either part did, and reports both either way.
-function both(composeAction, multiMemberAction) {
-  const results = [composeAction(), multiMemberAction()];
+// Every action covers every fixture. Each result is either a string or { ok: false, message }; the
+// combined result fails if any part did, and reports all of them either way.
+function all(...actions) {
+  const results = actions.map((action) => action());
   const ok = results.every((result) => typeof result === "string" || result.ok !== false);
   const message = results.map((result) => (typeof result === "string" ? result : result.message)).join("\n");
   return ok ? message : { ok: false, message };
 }
 
-const start = () => both(startComposeFixture, startMultiMemberFixture);
-const stop = () => both(stopComposeFixture, stopMultiMemberFixture);
-const status = () => both(statusComposeFixture, statusMultiMemberFixture);
+const start = () => all(startComposeFixture, startMultiMemberFixture, startIdleCheckoutFixture);
+const stop = () => all(stopComposeFixture, stopMultiMemberFixture, stopIdleCheckoutFixture);
+const status = () => all(statusComposeFixture, statusMultiMemberFixture, statusIdleCheckoutFixture);
 
 const ACTIONS = { start, stop, status };
 const action = process.argv[2];

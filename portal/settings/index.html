@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  {{HEAD}}
+  <body>
+    {{CHROME}}
+    {{WIDGET_TEMPLATES}}
+    <main id="main" class="inner portal-page settings-main" aria-busy="true">
+      {{LOADING}}
+      <p id="settings-error" class="notice warn" role="alert" hidden></p>
+      <section class="portal-section settings-section" aria-labelledby="repos-title">
+        <header class="portal-section-head">
+          <h2 id="repos-title">Repos</h2>
+          <span id="settings-repo-sync-status" class="sync-status is-synced" role="status" aria-live="polite" hidden>
+            <span class="sync-status-icon" aria-hidden="true"></span>
+            <span data-slot="text">Synced</span>
+          </span>
+        </header>
+        <div id="repository-sources-inline" class="repository-sources-inline" aria-label="Repository sources"></div>
+      </section>
+      <section class="portal-section settings-section" aria-labelledby="agent-harnesses-title">
+        <header class="portal-section-head">
+          <h2 id="agent-harnesses-title">Agent Harnesses</h2>
+          <button type="button" data-btn="text" id="check-harnesses">Check for harnesses</button>
+        </header>
+        <ul class="settings-list" id="harness-list"></ul>
+      </section>
+      <section class="portal-section settings-section" aria-labelledby="token-activity-title">
+        <header class="portal-section-head"><h2 id="token-activity-title">Token Activity Tracking</h2></header>
+        <div class="settings-control-row" id="token-tracking-row">
+          <div class="settings-control-copy settings-inline-copy">
+            <div class="settings-token-active" id="token-tracking-active" hidden><span class="settings-token-active-dot" aria-hidden="true"></span>Token Tracking Active</div>
+            <span id="token-tracking-enable-copy">
+              <strong>Enable token tracking</strong><span id="telemetry-description"> with your agents to capture and visualize token usage across harnesses.</span>
+            </span>
+          </div>
+          <button type="button" data-btn="secondary" id="telemetry-toggle" aria-describedby="telemetry-description" disabled></button>
+        </div>
+      </section>
+    </main>
+    {{REPOSITORY_SOURCES}}
+    <template id="tpl-settings-harness-row">
+      <li class="settings-list-row">
+        <div class="settings-list-copy"><strong data-slot="name"></strong></div>
+        <div class="settings-list-actions">
+          <span class="settings-list-status" data-slot="status" role="status"></span>
+          <button type="button" data-btn="text" data-slot="toggle"></button>
+        </div>
+      </li>
+    </template>
+    <template id="tpl-settings-harness-empty">
+      <li class="settings-empty" role="status">No supported harnesses are registered.</li>
+    </template>
+    <script src="/portal/shared/icon.js" type="module"></script>
+    <script src="/portal/shared/notice.js" type="module"></script>
+    <script src="/portal/shared/theme.js" type="module"></script>
+    <script src="/portal/shared/close-button.js" type="module"></script>
+    <script src="/portal/settings/app.js" type="module"></script>
+  </body>
+</html>

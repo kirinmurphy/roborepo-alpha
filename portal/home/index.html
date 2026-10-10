@@ -3,50 +3,137 @@
   {{HEAD}}
   <body>
     {{CHROME}}
-    {{WIDGET_TEMPLATES}}
-    <main id="main" class="inner home-main">
-      <!-- Home is intentionally static: it carries no loading-overlay marker (the overlay is only
-           injected where that marker appears) and no page-local script module, because nothing on
-           this page waits on an API response or harness state. It is the first-run landing page
-           even on a machine with no harnesses. -->
-      <section class="home-welcome">
-        <h1 class="home-title">Welcome to RoboRepo</h1>
-        <p class="home-lead">
-          A passive admin panel for your local dev environment.
-        </p>
+      {{WIDGET_TEMPLATES}}
+      <main id="main" class="inner home-main">
+        {{LOADING}}
+        <div id="home-harness-banner" class="home-harness-banner" hidden></div>
+        <div id="home-auto-discovery" class="home-auto-discovery" hidden></div>
+        <section class="home-heading" aria-labelledby="home-title">
+        <div class="home-title-group">
+          <h1 id="home-title">Active Repos</h1>
+          <span id="home-sync-status" class="sync-status" role="status" aria-live="polite" hidden>
+            <span class="sync-status-icon" aria-hidden="true"></span>
+            <span data-slot="text">Synced</span>
+          </span>
+        </div>
+        <div class="home-action-slot">
+          <a href="#manage-repositories" id="manage-repositories" hidden>Manage Repos</a>
+        </div>
       </section>
-      <nav class="home-cards" aria-label="Portal sections">
-        <a class="home-card" href="/config">
-          <portal-icon name="agents" size="xxxl" class="home-card-icon"></portal-icon>
-          <span class="home-card-title">Agents</span>
-          <span class="home-card-desc">
-            Harness config and tooling via agent-agnostic packages (rules, skills, hooks, mcp & permissions).
-          </span>
-        </a>
-        <a class="home-card" href="/plans">
-          <portal-icon name="plans" size="xxxl" class="home-card-icon"></portal-icon>
-          <span class="home-card-title">Plans</span>
-          <span class="home-card-desc">
-            View and manage implementation plans and their lifecycle.
-          </span>
-        </a>
-        <a class="home-card" href="/tokens">
-          <portal-icon name="tokens" size="xxxl" class="home-card-icon"></portal-icon>
-          <span class="home-card-title">Tokens</span>
-          <span class="home-card-desc">
-            Inspect agent-session token usage.
-          </span>
-        </a>
-        <a class="home-card" href="/runtime">
-          <portal-icon name="runtime" size="xxxl" class="home-card-icon"></portal-icon>
-          <span class="home-card-title">Runtime</span>
-          <span class="home-card-desc">
-            Observe all http and docker activity on your local system.
-          </span>
-        </a>
-      </nav>
+      <div id="home-mock-disclaimer" class="home-mock-disclaimer" hidden>
+        <span>These are mocked versions of what you will see when RoboRepo discovers your developer activity.</span>
+      </div>
+      <section id="home-warning" class="notice warn" hidden></section>
+      <section id="home-content" aria-live="polite"></section>
     </main>
+
+    <template id="tpl-repository-directory">
+      <div class="repository-directory" data-slot="repositories"></div>
+    </template>
+    <template id="tpl-repository-card">
+      <article class="instance-card repository-card">
+        <div class="card-head card-title-row">
+          <div class="card-main">
+            <div class="card-title">
+              <h3><a data-slot="repository-name"></a></h3>
+              <a class="git-repo-link repository-nested-control" data-slot="provider-link" target="_blank" rel="noreferrer" hidden>
+                <span data-slot="provider-link-label">GitHub</span><portal-icon name="external-link" size="sm"></portal-icon>
+              </a>
+              <span class="repository-card-badges">
+                <span data-slot="mock-badge" hidden>mock</span>
+                <span class="repository-state-badge" data-slot="lifecycle-state" hidden></span>
+              </span>
+            </div>
+          </div>
+          <span data-slot="repository-menu"></span>
+        </div>
+        <div class="repository-roots" data-slot="checkouts"></div>
+        <div class="home-domain-rows" data-slot="domains"></div>
+      </article>
+    </template>
+    <template id="tpl-domain-row">
+      <section class="home-domain-row">
+        <portal-icon class="domain-glyph" data-slot="glyph" aria-hidden="true"></portal-icon>
+        <div class="domain-body">
+          <div class="domain-heading">
+            <h4 data-slot="label"></h4>
+            <span class="domain-summary" data-slot="summary"></span>
+            <a class="domain-link" data-slot="link"></a>
+          </div>
+          <div class="domain-details" data-slot="details" hidden></div>
+        </div>
+      </section>
+    </template>
+    <template id="tpl-plan-item">
+      <div class="plan-item">
+        <button type="button" class="plan-title" data-slot="title"></button>
+        <span class="plan-completion">
+          <span class="plan-progress" data-slot="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"></span>
+          <span class="plan-percent" data-slot="percent"></span>
+          <span class="plan-complete-badge" data-slot="complete" hidden>done</span>
+        </span>
+      </div>
+    </template>
+    <template id="tpl-domain-note">
+      <p class="domain-note" data-slot="message"></p>
+    </template>
+    <!-- plan-rows.js: a matched plan's identity inside the shared checkout row (title, completion,
+         worktree-details trigger), and a Home-owned row on the same glyph rail for an unmatched plan. -->
+    <template id="tpl-plan-identity">
+      <span class="plan-identity"></span>
+    </template>
+    <template id="tpl-plan-row">
+      <div class="repository-root home-plan-row">
+        <div class="repository-root-head">
+          <portal-icon class="repository-root-glyph" name="plans" role="img" aria-label="Plan"></portal-icon>
+          <div class="repository-root-identity-line" data-slot="identity"></div>
+        </div>
+      </div>
+    </template>
+    <template id="tpl-plan-match-badge">
+      <span class="plan-match-badge" data-slot="badge"></span>
+    </template>
+    <!-- worktree-details.js: the matched plan's worktree dropdown panel. -->
+    <template id="tpl-worktree-details">
+      <div class="worktree-details">
+        <div class="worktree-details-identity" data-slot="identity"></div>
+        <ul class="worktree-details-facts" data-slot="facts" aria-label="Worktree status" hidden></ul>
+      </div>
+    </template>
+    <template id="tpl-worktree-detail-row">
+      <div class="worktree-detail-row">
+        <portal-icon data-slot="icon" size="sm" aria-hidden="true"></portal-icon>
+        <span class="worktree-detail-value" data-slot="value"></span>
+        <portal-copy-button icon="copy"></portal-copy-button>
+      </div>
+    </template>
+    <template id="tpl-worktree-detail-fact">
+      <li data-slot="text"></li>
+    </template>
+    <template id="tpl-token-warnings">
+      <ul class="token-warnings" aria-label="Token warnings"></ul>
+    </template>
+    <template id="tpl-token-warning">
+      <li class="token-warning"><span data-slot="summary"></span> in <span class="warning-model" data-slot="model"></span></li>
+    </template>
+    <template id="tpl-unresolved-activity">
+      <aside class="unresolved-activity">
+        <div><strong>Unresolved Runtime activity</strong><p data-slot="summary"></p></div>
+        <a href="/runtime">Associate in Runtime</a>
+      </aside>
+    </template>
+
+    {{PLAN_DRAWER}}
+    {{REPOSITORY_SOURCES}}
+
     <script src="/portal/shared/icon.js" type="module"></script>
+    <script src="/portal/shared/notice.js" type="module"></script>
     <script src="/portal/shared/theme.js" type="module"></script>
+    <script src="/portal/shared/tooltip.js" type="module"></script>
+    <script src="/portal/shared/menu-button.js" type="module"></script>
+    <script src="/portal/shared/close-button.js" type="module"></script>
+    <script src="/portal/shared/copy-button.js" type="module"></script>
+    <script src="/portal/shared/copy-menu.js" type="module"></script>
+    <script src="/portal/home/app.js" type="module"></script>
   </body>
 </html>

@@ -1,0 +1,18 @@
+{
+  "path": ["package", "status"],
+  "kind": "command",
+  "title": "Package status",
+  "description": "Show one package's desired and live state",
+  "order": 35,
+  "usage": "roborepo package status <package-id> [--json]",
+  "arguments": [{ "name": "package-id", "required": true, "interactive": { "prompt": "Choose package", "source": "packages" } }],
+  "onComplete": "returnToSubmenu",
+  "loadingMessage": "Checking package...",
+  "continuePrompt": "Press any key to return to packages",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/packages.mjs",
+    "export": "packageCommand",
+    "prependArgs": ["status"]
+  }
+}

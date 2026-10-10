@@ -18,6 +18,12 @@ import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
 import { guardPortal } from "../lib/portal-cleanup.mjs";
+import {
+  defaultRegistry,
+  recordDiscovery,
+  upsertRepository,
+  writeRegistry,
+} from "../../../modules/repositories/index.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..", "..", "..");
@@ -32,6 +38,22 @@ if (!fs.existsSync(browserPath)) {
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "portal-ui-"));
 const readyFile = path.join(tmp, "portal.ready");
+const stateDir = path.join(tmp, ".roborepo");
+const registry = defaultRegistry();
+upsertRepository(registry, {
+  id: "git:github.com/example/roborepo",
+  kind: "git",
+  displayName: "RoboRepo",
+  providerUrl: "https://github.com/example/roborepo",
+  now: "2026-09-30T12:00:00.000Z",
+});
+recordDiscovery(registry, "git:github.com/example/roborepo", {
+  source: "manual",
+  evidence: "configured-source",
+  confidence: "high",
+  now: "2026-09-30T12:00:00.000Z",
+});
+writeRegistry({ stateRoot: stateDir, registry });
 const cli = path.join(repoRoot, "scripts", "cli", "main.mjs");
 const server = spawn(
   process.execPath,
@@ -41,7 +63,7 @@ const server = spawn(
     env: {
       ...process.env,
       HOME: tmp,
-      ROBOREPO_STATE_DIR: path.join(tmp, ".roborepo"),
+      ROBOREPO_STATE_DIR: stateDir,
       PORTAL_READY_FILE: readyFile,
     },
     stdio: ["ignore", "inherit", "inherit"],

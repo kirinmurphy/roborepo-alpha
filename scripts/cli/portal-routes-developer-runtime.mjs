@@ -97,4 +97,16 @@ export const developerRuntimeRoutes = defineRoutes([
       return true;
     },
   },
+  {
+    method: "POST",
+    path: "/api/developer-runtime/repository-forget",
+    handler: (req, res, { handlers }) => {
+      readJsonBody(req, (body, err) => {
+        if (err) return send(res, 400, "application/json", JSON.stringify({ error: "invalid JSON body" }));
+        const result = handlers.forgetDeveloperRuntimeRepository(body || {});
+        send(res, result.status || (result.ok ? 200 : 400), "application/json", JSON.stringify(result));
+      });
+      return true;
+    },
+  },
 ]);

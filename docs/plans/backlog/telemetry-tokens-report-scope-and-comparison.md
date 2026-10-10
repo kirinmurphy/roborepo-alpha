@@ -7,6 +7,7 @@ depends_on: []
 related:
   - k8mngttv
   - pljvmyh
+  - tk6s43x3
   - jqi1dof
   - n8kw3rp2
   - telemetry-analyze-single-pass-perf
@@ -26,7 +27,7 @@ decides what happens to the server endpoints that lost their only caller when th
 It consolidates three sources that would otherwise drift apart:
 
 - the recommended next product iteration in [Tokens portal review](../../internal/tokens-portal-review.md);
-- the Tokens migration inside [[pljvmyh]] (shared repository scope), which owns only the repository
+- the Tokens migration inside [[tk6s43x3]] (shared repository scope), which owns only the repository
   dimension;
 - the endpoint and filter capabilities the legacy dashboard used and the current page does not.
 
@@ -40,7 +41,7 @@ page replaced them with fixed sections.
 
 ## Goals
 
-- Scope the whole report by time range, harness, model, and (through [[pljvmyh]]) repository.
+- Scope the whole report by time range, harness, model, and (through [[tk6s43x3]]) repository.
 - Show a change's effect on a headline metric, not only on spikes, loops, and read warnings.
 - Make the page's recommendations a single prioritized list and shorten the path from a finding to
   a recorded change.
@@ -50,7 +51,7 @@ page replaced them with fixed sections.
 
 - Changing analysis semantics, evidence floors, or the ±20% display band from [[k8mngttv]].
 - Exact file revision tracking; that remains [[f0j4j8y2]].
-- Repository discovery, `urlKey`, or the shared selector; those belong to [[pljvmyh]].
+- Repository discovery (owned by [[pljvmyh]]), `urlKey`, or the shared selector (owned by [[tk6s43x3]]).
 - Causal claims. Every comparison stays association-only.
 
 ## Current state
@@ -71,7 +72,7 @@ Within this repository, the only callers of the analysis and experiment endpoint
 ### Phase 1: Report scope controls
 
 - Add range, harness, and model controls near the page header. Repository joins them when
-  [[pljvmyh]] lands, using its shared selector rather than a page-local one.
+  [[tk6s43x3]] lands, using its shared selector rather than a page-local one.
 - Serialize the selection into the URL and restore it on load, so a scoped view can be shared.
 - Send the selection to `/api/data`; the server already returns a scoped report and caches by
   signature. The mock report ignores scope and must say so.
@@ -122,7 +123,7 @@ which already owns analysis cost.
 ## Implementation checklist
 
 - [ ] Phase 1: range, harness, and model controls wired to `/api/data`, URL-serialized
-- [ ] Phase 1: repository control through the shared selector once [[pljvmyh]] lands
+- [ ] Phase 1: repository control through the shared selector once [[tk6s43x3]] lands
 - [ ] Phase 2: headline-metric before/after on marked changes
 - [ ] Phase 2: task-type and time-window comparison controls
 - [ ] Phase 3: single prioritized decision list

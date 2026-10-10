@@ -1,13 +1,13 @@
 // /api/plans* routes — the Plans page's API surface. handlers is the object startPortalServer()
-// was given (loadPlans, loadPlanDocument, buildPlansPrompt, updatePlanSettings, refreshPlans come
+// was given (loadPlans, loadPlanDocument, buildPlansPrompt, refreshPlans come
 // from telemetry.mjs's wiring).
 import { send, readJsonBody } from "./portal-routes-http.mjs";
 import { defineRoutes } from "./portal-router.mjs";
 
-// Serializes a domain error (see modules/plan-docs/index.mjs's domainError helper) into the
+// Serializes a domain error (see modules/plan-suite/index.mjs's domainError helper) into the
 // structured { error: { code, message, resolution, details } } shape the client's portalPostJson
 // preserves. Falls back to a plain 400 for any error that isn't domain-shaped (shouldn't happen
-// once every plan-docs throw site uses domainError, but keeps the route defensive).
+// once every plan-suite throw site uses domainError, but keeps the route defensive).
 function sendDomainError(res, error) {
   const status = Number.isInteger(error?.status) ? error.status : 400;
   const body = {
@@ -66,7 +66,6 @@ export const plansRoutes = defineRoutes([
     },
   },
   postJsonRoute("/api/plans/prompt", (handlers, body) => handlers.buildPlansPrompt(body)),
-  postJsonRoute("/api/plans/settings", (handlers, body) => handlers.updatePlanSettings(body)),
   postJsonRoute("/api/plans/priority", (handlers, body) => handlers.updatePlanPriority(body), { domainError: true }),
   postJsonRoute("/api/plans/lifecycle", (handlers, body) => handlers.updatePlanLifecycle(body), { domainError: true }),
   {
