@@ -244,13 +244,14 @@ warning_rows="$(harness_warning_rows)"
 if [[ "${#all_harness_rows[@]}" -gt 0 ]]; then
   for row in "${all_harness_rows[@]}"; do
     IFS=$'\t' read -r _id _home present display_name _root_config_path confidence <<< "${row}"
-    status="${RR_DIM}not installed${RR_RESET}"
-    [[ "${present}" == "1" ]] && status="${RR_GREEN}available${RR_RESET}"
-    [[ "${present}" != "1" && "${confidence}" == "probable" ]] && status="${RR_DIM}installed, not launched yet${RR_RESET}"
     warning="$(printf '%s\n' "${warning_rows}" | awk -F'\t' -v id="${_id}" '$1 == id { print $2; exit }')"
-    [[ "${present}" != "1" && "${confidence}" != "probable" && -n "${warning}" ]] && status="${RR_DIM}installed, setup needed${RR_RESET}"
+    status="${RR_DIM}not installed${RR_RESET}"
+    [[ "${present}" == "1" ]] && status="${RR_DIM}configuration present, runtime unavailable${RR_RESET}"
+    [[ "${confidence}" == "confirmed" ]] && status="${RR_GREEN}available${RR_RESET}"
+    [[ "${confidence}" == "probable" ]] && status="${RR_DIM}installed, not launched yet${RR_RESET}"
+    [[ "${confidence}" != "confirmed" && "${confidence}" != "probable" && -n "${warning}" ]] && status="${RR_DIM}installed, setup needed${RR_RESET}"
     echo "  ${RR_BOLD}${display_name}${RR_RESET}  ${status}"
-    [[ "${present}" != "1" && -n "${warning}" ]] && echo "    ${warning}"
+    [[ -n "${warning}" ]] && echo "    ${warning}"
   done
 fi
 echo ""

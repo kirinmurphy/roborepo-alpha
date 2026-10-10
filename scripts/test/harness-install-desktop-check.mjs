@@ -39,6 +39,24 @@ try {
 
   const doctor = spawnSync("bash", ["scripts/doctor.sh", "--quiet"], { cwd: repo, env, encoding: "utf8", timeout: 30_000 });
   assert.match(`${doctor.stdout}\n${doctor.stderr}`, /hint: Launch Codex once, then run roborepo update/);
+
+  const leftoverHome = path.join(temp, "leftover-home");
+  fs.mkdirSync(path.join(leftoverHome, ".claude"), { recursive: true });
+  const leftoverEnv = { ...env, HOME: leftoverHome, ROBOREPO_STATE_DIR: path.join(leftoverHome, ".roborepo") };
+  const leftoverInstalled = spawnSync("bash", ["scripts/install/main.sh"], { cwd: repo, env: leftoverEnv, encoding: "utf8", timeout: 60_000 });
+  assert.equal(leftoverInstalled.status, 0, `${leftoverInstalled.stdout}\n${leftoverInstalled.stderr}`);
+  assert.match(leftoverInstalled.stdout, /Claude Code.*configuration present, runtime unavailable/);
+
+  const claudeHome = path.join(temp, "claude-home");
+  fs.mkdirSync(path.join(claudeHome, ".claude"), { recursive: true });
+  const claudeContents = path.join(temp, "Applications", "Claude.app", "Contents");
+  fs.mkdirSync(claudeContents, { recursive: true });
+  fs.writeFileSync(path.join(claudeContents, "Info.plist"), '<?xml version="1.0"?><plist><dict><key>CFBundleIdentifier</key><string>com.anthropic.claudefordesktop</string></dict></plist>');
+  const claudeEnv = { ...env, HOME: claudeHome, ROBOREPO_STATE_DIR: path.join(claudeHome, ".roborepo") };
+  const claudeInstalled = spawnSync("bash", ["scripts/install/main.sh"], { cwd: repo, env: claudeEnv, encoding: "utf8", timeout: 60_000 });
+  assert.equal(claudeInstalled.status, 0, `${claudeInstalled.stdout}\n${claudeInstalled.stderr}`);
+  assert.match(claudeInstalled.stdout, /Claude Code.*installed, setup needed/);
+  assert.match(claudeInstalled.stdout, /Open Claude Desktop’s Code tab to install Claude Code/);
   console.log("desktop install presence checks passed");
 } finally {
   fs.rmSync(temp, { recursive: true, force: true });

@@ -51,9 +51,11 @@ try {
   assert.equal(detectHarnessProvider(claude, options).evidence.find((item) => item.source === "desktop")?.version, "2.1.295");
   assert.equal(selectedHarnessExecutable(claude, options), path.join(flatBundle, "Contents/MacOS/claude"));
 
-  executable(path.join(bin, "claude"), 'echo "3.0.0 (Claude Code)"\n');
+  executable(path.join(bin, "claude"), 'echo "1.0.0 (Claude Code)"\n');
   const both = detectHarnessProvider(claude, options);
   assert.deepEqual(new Set(both.evidence.filter((item) => item.kind === "executable").map((item) => item.source)), new Set(["cli", "desktop"]));
+  assert.equal(both.evidence.find((item) => item.source === "cli")?.version, "1.0.0 (Claude Code)");
+  assert.equal(both.evidence.find((item) => item.source === "desktop")?.version, "2.1.295");
   assert.equal(selectedHarnessExecutable(claude, options), path.join(bin, "claude"));
   fs.unlinkSync(path.join(bin, "claude"));
 
@@ -81,7 +83,9 @@ try {
   fs.writeFileSync(path.join(path.dirname(broken), ".verified"), "ok");
   assert.match(detectHarnessProvider(claude, options).warnings.join(" "), /version check/);
   assert.equal(detectHarnessProvider(claude, options).confidence, "absent");
-  app(path.join(fixture, "outside", "claude.app"), "com.anthropic.claude-code", "Contents/MacOS/claude", "9.0");
+  fs.rmSync(claudeRoot, { recursive: true });
+  const moved = app(path.join(fixture, "outside", "claude.app"), "com.anthropic.claude-code", "Contents/MacOS/claude", "9.0");
+  fs.writeFileSync(path.join(path.dirname(moved), ".verified"), "ok");
   assert.equal(detectHarnessProvider(claude, options).confidence, "absent");
 
   const codexBundle = app(path.join(appRoot, "ChatGPT.app"), "com.openai.codex", "Contents/Resources/codex", "0.155.0");
