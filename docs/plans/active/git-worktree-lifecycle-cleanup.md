@@ -1,7 +1,7 @@
 ---
 id: a7bslb00
 priority: high
-next_action: Implement Phase 1 — the shared worktree inventory and the first-parent landed test in modules/repositories, covered by a fixture-repository check for every row of §3's classification table.
+next_action: Review the remaining live GitHub pull and Home walkthrough confirmations, then close the plan after the implementation branch lands.
 blocked_by: []
 depends_on: []
 related:
@@ -10,7 +10,7 @@ related:
   - pljvmyh
   - 6q16tocb
   - git-exec-consolidation
-reviewed_commit: f877579
+reviewed_commit: 989a82bc59f1dda7476fe5dc9a33577611c5325b
 worktree: git-worktree-lifecycle-cleanup
 ---
 
@@ -38,21 +38,21 @@ all works on plain Git; the GitHub CLI is not required.
 
 ## Goals
 
-- [ ] Show every linked worktree of a known repository on Home, running or not and without
+- [x] Show every linked worktree of a known repository on Home, running or not and without
       collapsing them behind a count, so a story's worktree and its associated plan stay visible for
       the whole story.
-- [ ] Derive one lifecycle state per worktree: `running`, `idle`, `stale`, or `landed`.
-- [ ] Decide "landed" from content, so squash and rebase merges count, without the `gh` CLI, and
+- [x] Derive one lifecycle state per worktree: `running`, `idle`, `stale`, or `landed`.
+- [x] Decide "landed" from content, so squash and rebase merges count, without the `gh` CLI, and
       keep the answer stable as `main` moves on.
-- [ ] Remove landed, clean worktrees and their local branches automatically, along with landed
+- [x] Remove landed, clean worktrees and their local branches automatically, along with landed
       local branches that have no worktree, behind the guards in this plan.
-- [ ] Never remove a worktree before `/plan-close` has closed its plan, and have `/plan-close`
+- [x] Never remove a worktree before `/plan-close` has closed its plan, and have `/plan-close`
       remove it as the last step of closing, so one command finishes the story.
-- [ ] Let the user hide a worktree from Home, or remove one that will never land, keeping its
+- [x] Let the user hide a worktree from Home, or remove one that will never land, keeping its
       branch tip restorable.
-- [ ] Suggest stale worktrees for removal after a threshold that defaults to 7 days and is
+- [x] Suggest stale worktrees for removal after a threshold that defaults to 7 days and is
       configurable in settings and through an environment variable.
-- [ ] Trigger automatic removal from an opt-in Git `post-merge` hook, so a pull of `main` after a
+- [x] Trigger automatic removal from an opt-in Git `post-merge` hook, so a pull of `main` after a
       GitHub merge cleans up.
 
 ## Non-goals
@@ -265,7 +265,7 @@ both conditions:
 | Term | Resolved as |
 | --- | --- |
 | `<base>` | the remote's default branch (`refs/remotes/origin/HEAD`), falling back to the local default branch |
-| `<start>` | where the branch began: the oldest entry of its reflog (`git reflog show <branch>`), falling back to `<fork>` when the reflog has expired or never existed |
+| `<start>` | where the branch began: the oldest entry of its reflog (`git reflog show <branch>`), falling back to the branch tip when the reflog has expired or never existed so missing history cannot establish own work |
 | `<fork>` | `git merge-base <base> <branch>` |
 
 The scan stops at the first absorbing commit, which for a squash merge is the PR's own commit, so a
@@ -515,76 +515,76 @@ Reconciliation notes for related plans, recorded here rather than edited into th
 
 ### Phase 1 — Inventory and landed test
 
-- [ ] Add `modules/repositories/worktree-inventory.mjs`: move the admin-file enumerator out of
+- [x] Add `modules/repositories/worktree-inventory.mjs`: move the admin-file enumerator out of
       `modules/plan-suite/checkouts.mjs`, extend it per §2, and point `checkouts.mjs` at it with no
       change to `repositoryCheckouts`' output.
-- [ ] Add `modules/repositories/worktree-landed.mjs` with the §3 landed test: own-work check and
+- [x] Add `modules/repositories/worktree-landed.mjs` with the §3 landed test: own-work check and
       first-parent scan with the cap, both through `runGitProcess`.
-- [ ] Add `scripts/test/worktree-lifecycle-check.mjs`, building temporary repositories for every
+- [x] Add `scripts/test/worktree-lifecycle-check.mjs`, building temporary repositories for every
       row of both §3 tables, plus detached, locked, and prunable worktrees, an expired reflog, and a
       fork older than the cap.
-- [ ] List the check in the `ci` group of `scripts/test/check-groups.json`, which `npm run check`
+- [x] List the check in the `ci` group of `scripts/test/check-groups.json`, which `npm run check`
       runs through `scripts/test/ci.sh`.
-- [ ] Rewrite `/plan-close` step 6 to describe the §3 test (own work, then the first absorbing
+- [x] Rewrite `/plan-close` step 6 to describe the §3 test (own work, then the first absorbing
       first-parent commit), keeping the `landed: unconfirmed` refusal when the branch cannot be
       resolved, and regenerate its rendered commands with `scripts/build/render-slash-commands.mjs`.
 
 ### Phase 2 — States, activity, and threshold
 
-- [ ] Add `modules/repositories/worktree-state.mjs` deriving the four states from §4 and §5, taking
+- [x] Add `modules/repositories/worktree-state.mjs` deriving the four states from §4 and §5, taking
       the clock as an argument so the check can age a worktree without waiting.
-- [ ] Add the `worktreeStaleDays` preference and `ROBOREPO_WORKTREE_STALE_DAYS`, with a finding for
+- [x] Add the `worktreeStaleDays` preference and `ROBOREPO_WORKTREE_STALE_DAYS`, with a finding for
       invalid values; cover default, setting, and environment precedence in the check.
-- [ ] Record inventoried worktrees in the registry so Runtime and Home share one list.
+- [x] Record inventoried worktrees in the registry so Runtime and Home share one list.
 
 ### Phase 3 — Home and Runtime presentation
 
-- [ ] Inject the inventory from `scripts/cli/developer-runtime.mjs` and add idle, stale, and landed
+- [x] Inject the inventory from `scripts/cli/developer-runtime.mjs` and add idle, stale, and landed
       worktrees as roots in the Runtime snapshot.
-- [ ] Add the dimmed idle row and the stale and landed markers to the shared row template, keeping
+- [x] Add the dimmed idle row and the stale and landed markers to the shared row template, keeping
       `repository-root-row.js` free of Plans knowledge.
-- [ ] Add Home cases to `portal-ui.spec.mjs` using `patchRoboRepo`: an idle worktree is listed with
+- [x] Add Home cases to `portal-ui.spec.mjs` using `patchRoboRepo`: an idle worktree is listed with
       its plan beneath it, and stale and landed rows show their markers, selected by role and text.
 
 ### Phase 4 — Automatic removal and triggers
 
-- [ ] Add `modules/repositories/worktree-guards.mjs` with every guard in §6, including the
+- [x] Add `modules/repositories/worktree-guards.mjs` with every guard in §6, including the
       plan-active guard joined on the `worktree` frontmatter, and
       `modules/repositories/worktree-removal.mjs` with removal, the removal log, and the lock,
       re-reading Git state before each removal.
-- [ ] Add `scripts/cli/worktree-cleanup.mjs` as the orchestrator the command and the hook share.
-- [ ] Add the cleanup command: dry run by default, apply on an explicit flag, one line per worktree
+- [x] Add `scripts/cli/worktree-cleanup.mjs` as the orchestrator the command and the hook share.
+- [x] Add the cleanup command: dry run by default, apply on an explicit flag, one line per worktree
       with its state and any guard that blocked it.
-- [ ] Add hook install and uninstall, honoring `core.hooksPath` and refusing to overwrite a foreign
+- [x] Add hook install and uninstall, honoring `core.hooksPath` and refusing to overwrite a foreign
       hook.
-- [ ] Add step 9 to `/plan-close`: after step 8, run the repository's canonical worktree cleanup
+- [x] Add step 9 to `/plan-close`: after step 8, run the repository's canonical worktree cleanup
       command for the plan and report the result; regenerate its rendered commands.
-- [ ] Measure whether `post-merge` fires on a fast-forward `git pull`, on an up-to-date pull, and on
+- [x] Measure whether `post-merge` fires on a fast-forward `git pull`, on an up-to-date pull, and on
       `git pull --rebase` with no local commits, and record all three results in this plan.
-- [ ] Write the removal log and document restoring from it.
-- [ ] Extend the check with a bare remote and a clone: install the hook, squash-merge on the remote
+- [x] Write the removal log and document restoring from it.
+- [x] Extend the check with a bare remote and a clone: install the hook, squash-merge on the remote
       side, `git pull` in the clone, and assert that a worktree with an active plan is kept with
       "plan not closed", that the plan-scoped cleanup removes and logs it once its plan is in
       `completed/`, and that the worktree the pull ran in survives.
 
 ### Phase 5 — Hide and confirmed removal
 
-- [ ] Add `hiddenAt` to the registry's worktree record, and make §4's derivation return a hidden
+- [x] Add `hiddenAt` to the registry's worktree record, and make §4's derivation return a hidden
       worktree to Home once its latest activity is newer than `hiddenAt`.
-- [ ] Add hide, unhide, and confirmed remove to the cleanup command, with confirmed removal running
+- [x] Add hide, unhide, and confirmed remove to the cleanup command, with confirmed removal running
       the Confirmed column of §6 and writing `refs/roborepo/abandoned/<branch>` before deleting.
-- [ ] Add the token-guarded `POST` routes in `scripts/cli/portal-routes-repositories.mjs`, calling
+- [x] Add the token-guarded `POST` routes in `scripts/cli/portal-routes-repositories.mjs`, calling
       the same orchestrator.
-- [ ] Add the row actions, the remove confirmation, and the "N hidden" list to the shared row
+- [x] Add the row actions, the remove confirmation, and the "N hidden" list to the shared row
       template.
-- [ ] Extend the fixture check: remove an unmerged branch, restore it from the archive ref, and
+- [x] Extend the fixture check: remove an unmerged branch, restore it from the archive ref, and
       compare the restored tip; hide a worktree, add a commit, and assert it is no longer hidden.
-- [ ] Add a Home case to `portal-ui.spec.mjs`: Hide moves a row under "N hidden", and Unhide
+- [x] Add a Home case to `portal-ui.spec.mjs`: Hide moves a row under "N hidden", and Unhide
       restores it, selecting the actions by role and name.
 
 ### Phase 6 — Verify against this repository
 
-- [ ] Dry run here and compare with the Current State table, adjusted for anything removed by hand
+- [x] Dry run here and compare with the Current State table, adjusted for anything removed by hand
       since `f877579`. Expected:
       - landed worktrees under `worktreeRoot` whose plans are closed are removed unless a guard
         names a reason;
@@ -597,38 +597,57 @@ Reconciliation notes for related plans, recorded here rather than edited into th
 - [ ] Install the hook, merge a throwaway PR on GitHub, pull `main`, and confirm the worktree is
       kept with "plan not closed"; run `/plan-close` and confirm it removes and logs the worktree.
 - [ ] Hide one unlanded worktree from Home and confirm it is listed under "N hidden".
-- [ ] Update `docs/user/reference/repositories.md`.
+- [x] Update `docs/user/reference/repositories.md`.
 
 ## Validation
 
-- [ ] A fresh worktree with no commits is never `landed`.
-- [ ] Squash- and rebase-merged branches are `landed`, and so is a merge-commit-merged branch
+- [x] A fresh worktree with no commits is never `landed`.
+- [x] Squash- and rebase-merged branches are `landed`, and so is a merge-commit-merged branch
       whose reflog is present; with its reflog expired it is not.
-- [ ] A squash-merged branch stays `landed` after `main` later moves its plan file to `completed/`
+- [x] A squash-merged branch stays `landed` after `main` later moves its plan file to `completed/`
       and edits files the branch touched.
-- [ ] A branch with a commit after its merge is not `landed`.
-- [ ] A branch whose fork is older than the scan cap is not `landed`.
-- [ ] A landed branch with no worktree is deleted and logged; one checked out in any worktree is
+- [x] A branch with a commit after its merge is not `landed`.
+- [x] A branch whose fork is older than the scan cap is not `landed`.
+- [x] A landed branch with no worktree is deleted and logged; one checked out in any worktree is
       kept.
-- [ ] A landed worktree whose plan is `active` is kept with "plan not closed", and the plan-scoped
+- [x] A landed worktree whose plan is `active` is kept with "plan not closed", and the plan-scoped
       cleanup removes it once the plan is in `completed/`.
-- [ ] Each guard in §6 produces its stated outcome for both automatic and confirmed removal, in the
+- [x] Each guard in §6 produces its stated outcome for both automatic and confirmed removal, in the
       fixture check.
-- [ ] A worktree holding an ignored `.env` is kept by both kinds of removal, with `.env` named in
+- [x] A worktree holding an ignored `.env` is kept by both kinds of removal, with `.env` named in
       the reason.
-- [ ] Confirmed removal of an unmerged branch writes `refs/roborepo/abandoned/<branch>`, and
+- [x] Confirmed removal of an unmerged branch writes `refs/roborepo/abandoned/<branch>`, and
       restoring from it yields the original tip.
-- [ ] A hidden worktree leaves Home and returns when a commit lands on its branch.
-- [ ] The candidate list is identical with `gh` absent from `PATH`.
-- [ ] Home lists every linked worktree of a known repository that is not hidden, including ones
+- [x] A hidden worktree leaves Home and returns when a commit lands on its branch.
+- [x] The candidate list is identical with `gh` absent from `PATH`.
+- [x] Home lists every linked worktree of a known repository that is not hidden, including ones
       with nothing running.
-- [ ] `repositoryCheckouts` returns the same list before and after it moves onto the shared
+- [x] `repositoryCheckouts` returns the same list before and after it moves onto the shared
       enumerator; `plan-suite-canonical-check.mjs` passes unchanged.
-- [ ] `ROBOREPO_WORKTREE_STALE_DAYS=1` makes a two-day-idle worktree `stale`; unset, it is `idle`.
-- [ ] In the fixture check, the hook removes a landed worktree after `git pull` and never removes
+- [x] `ROBOREPO_WORKTREE_STALE_DAYS=1` makes a two-day-idle worktree `stale`; unset, it is `idle`.
+- [x] In the fixture check, the hook removes a landed worktree after `git pull` and never removes
       the worktree it runs in.
-- [ ] A second cleanup started while one holds the lock exits without acting.
-- [ ] `npm run test:portal-ui` and `npm run check` pass.
+- [x] A second cleanup started while one holds the lock exits without acting.
+- [x] `npm run test:portal-ui` and `npm run check` pass.
+
+The fixture repository covers Git inventory, historical landing, removal guards, the archive ref,
+hook installation, and a squash merge followed by a pull. A real-repository dry run on 2026-10-10
+found five eligible landed worktrees, four eligible landed branches without worktrees, the active
+`plan-suite-atomic-commands` worktree kept with "plan not closed", and the landed `.claude/worktrees/`
+checkout suggested for manual removal. It removed nothing. `npm run check` passed with 427 unit
+checks and 59 browser tests (2 skipped documentation screenshots). The post-merge fixture measured
+fast-forward pull: hook fired; already up-to-date pull: did not fire; pull with `--rebase` and no
+local commits: hook fired.
+
+## Not tested
+
+- [ ] Install the hook in this live repository, merge a throwaway GitHub PR, pull `main`, and
+      close its associated plan to confirm removal and logging. The fixture exercises the same
+      sequence locally, but the live run writes a shared Git hook and merges an external PR; it
+      awaits the approval in Open Questions.
+- [ ] Hide an unlanded worktree from the live Home page and confirm it moves into "N hidden",
+      then unhide it. Browser automation passed against fixtures, but the admin browser policy
+      blocked access to this local portal for the live walkthrough.
 
 ## Risks
 
@@ -664,11 +683,26 @@ Reconciliation notes for related plans, recorded here rather than edited into th
   already protected: unsaved edits fail the clean-tree guard, and a new commit means the branch is
   no longer landed. The signal also depends on the optional telemetry package, which can be
   disabled, so it was an unreliable guard that `/plan-close` would have had to waive anyway.
+- 2026-10-10 — Keep the disposable ignored-path list fixed at `node_modules/` and `test-results/`.
+  A per-repository setting could allow more automatic removals, but a short fixed list preserves
+  unfamiliar ignored files and only costs a manual cleanup when it blocks removal.
+- 2026-10-10 — Treat an expired or absent branch reflog as insufficient evidence of own work.
+  Falling back to the fork can falsely classify a branch whose starting point is unknown;
+  falling back to the tip keeps the worktree for review. The fixture confirms this on a merged
+  branch after reflog expiry.
+- 2026-10-10 — Fail cleanup when running-process discovery fails. Assuming no processes would
+  let an incomplete survey remove a worktree used by a server; a failed cleanup can be retried.
+- 2026-10-10 — Use one cleanup lock per repository. A global lock would make an unrelated
+  repository wait for another repository's deletion; repository keys preserve concurrency without
+  allowing two removals in the same Git common directory.
 
 ## Open Questions
 
-- Should the disposable list of ignored paths be fixed, or configurable per repository?
-  Recommendation: fixed for now. A path missing from the list only keeps a worktree and names the
-  path on Home, so the cost of a short list is a manual cleanup, never lost data. Add a
-  per-repository extension (for example in `docs/plans/plans-config.json`, beside `worktreeRoot`)
-  once a real repository's build output blocks removal repeatedly.
+- **Live GitHub verification:** May this run install the opt-in `post-merge` hook in this repository,
+  create and merge a throwaway GitHub PR, pull `main`, and close its test plan? Doing so changes
+  the shared Git hooks directory and external repository history. The local bare-remote fixture
+  has already passed. **Options:** approve the live sequence, which validates the production
+  integration but makes those Git and GitHub changes; or defer it, leaving the fixture as the
+  implementation evidence and the live item untested. **Recommendation:** defer until the
+  implementation branch is merged, then run the sequence against the installed command on `main`.
+  **Blocked task:** the second item in Phase 6 and the first `## Not tested` entry.

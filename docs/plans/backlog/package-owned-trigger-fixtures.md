@@ -1,11 +1,15 @@
 ---
 id: e6f1pknt
 priority: high
-next_action: Design the per-package fixture location/schema and confirm it with the user before migrating existing entries
+next_action: Extract a catalog-driven fixture loader into scripts/cli/skill-trigger-fixtures.mjs that reads each package's optional skill-triggers.json, and cover it with a synthetic-package check before migrating the six existing entries
 blocked_by: []
 depends_on: []
-related: []
-reviewed_commit: 8697e52cb9e1f532631d95c8133b3240ccfee8ab
+related:
+  - 0jped168
+  - age4cm7r
+  - skills-vs-commands-invocation-policy
+reviewed_commit: 731937640d7483d945ee1e21466533574d686fbf
+worktree:
 ---
 
 # Package-Owned Trigger Fixtures
@@ -13,131 +17,212 @@ reviewed_commit: 8697e52cb9e1f532631d95c8133b3240ccfee8ab
 ## Summary
 
 Move skill trigger fixtures out of the platform-owned `manifests/inventory/skill-trigger-tests.json`
-and into each package's own directory, so the package system stays swappable: the platform should
-never hold a file that names specific packages.
+and into a `skill-triggers.json` file at the root of each package that has them. A package then
+owns its skills' trigger policy, and adding, removing, or swapping a package never requires an
+edit to the platform's trigger data.
 
 ## Context
 
-`roborepo skill triggers --check` verifies that a skill's `SKILL.md` description contains the
-trigger/skip phrases a fixture claims, and that example prompts (`match`/`nearMiss`) actually
-exercise them. The check itself (`scripts/cli/skill-trigger-check.mjs`) is generic — it walks
-`loadPackageCatalog()` and reads whichever skill source a fixture names, without hardcoding any
-package id in code.
+`roborepo skill triggers --check` is a static guard on skill invocation policy. For each fixture it
+checks three things:
 
-The fixture *data*, however, is centralized: `manifests/inventory/skill-trigger-tests.json` is one
-flat array under `manifests/`, alongside genuinely platform-owned files like
-`manifests/inventory/package-categories.json` (the valid `presentation.category` values — a closed
-platform vocabulary, correctly platform-owned). The trigger-tests file is different in kind: every
-entry's `skill` field names one specific package's skill (`case-study`, `frontend-design`,
-`plan-write`, `tighten`, `plan-promote`, `plan-start`). That content is package knowledge sitting in
-platform territory.
+| Check | Fails when |
+| --- | --- |
+| Description coverage | A `triggerPhrases` or `skipPhrases` entry is absent from the skill's `SKILL.md` description |
+| Match prompts | A `match` prompt contains no trigger phrase |
+| Near-miss prompts | A `nearMiss` prompt contains a trigger phrase |
 
-This breaks the boundary the package system is meant to guarantee: swap out or remove any package
-and the platform's own files should need no edit. Today, removing `tighten` would leave a dangling
-package reference inside a file `manifests/` is supposed to own independently of which packages
-exist. Every other package-specific fact already lives inside `globals/packages/<id>/` —
-`package.config.json`, `SKILL.md`, `agents/openai.yaml` — this is the one exception.
+The checker in `scripts/cli/skill-trigger-check.mjs` is already package-agnostic: it resolves each
+fixture's `skill` id to a source directory through `loadPackageCatalog()` and names no package in
+code. The fixture *data* is not. It sits in `manifests/inventory/`, and every entry names one
+package's skill. Delete the `tighten` package today and the central file keeps a dangling entry that
+fails the check until someone edits a platform file to remove it. Every other per-skill fact —
+`package.config.json`, `SKILL.md`, `agents/openai.yaml` — already lives under
+`globals/packages/<package-id>/`.
 
 ## Goals
 
-- Every trigger fixture lives inside the package directory it describes, alongside that package's
-  `SKILL.md`.
-- `manifests/` contains no file that names a specific package.
-- `roborepo skill triggers --check` continues to validate the same things it does today, sourced
-  from the new location.
-- The `roborepo skill new` scaffold can generate the new fixture location (or a stub for it) as part
-  of package creation, matching how it already scaffolds `package.config.json` and `SKILL.md`.
+- Every trigger fixture lives in the package that declares the skill it tests.
+- `manifests/inventory/skill-trigger-tests.json` is deleted, and nothing in the repository reads it.
+- `roborepo skill triggers --check` applies the same three checks to the same fixtures, discovered
+  through the package catalog.
+- Adding a fixture for a new package touches only that package's directory.
 
 ## Non-goals
 
-- Changing what the trigger check validates (phrase-in-description, phrase-in-match-prompt,
-  phrase-absent-from-near-miss). Only where the data lives changes.
-- Making trigger fixtures mandatory. They stay optional per package, as today.
-- Touching `manifests/inventory/package-categories.json` or other genuinely platform-owned
-  manifests — those define closed platform vocabularies, not package-specific data, and are out of
-  scope here.
+- Changing what the check validates. Only the data's location changes.
+- Making fixtures mandatory. They stay optional per package, as today.
+- Removing other package names from `manifests/`. `reserved-commands.json` names `caveman`, and
+  `presets.json` and `agent-permissions.json` name `telemetry`; those are separate boundary
+  questions.
+- Prompting for trigger phrases in `roborepo skill new`.
 
 ## Current state
 
-- Fixture data: `manifests/inventory/skill-trigger-tests.json`, one `tests[]` array, 6 entries
-  (`case-study`, `frontend-design`, `plan-write`, `tighten`, `plan-promote`, `plan-start`).
-- Reader: `scripts/cli/skill-trigger-check.mjs` — `TRIGGER_TESTS_REL` constant points at the file
-  above; `packageSkillSources()` already resolves each fixture's `skill` id to its package source
-  via `loadPackageCatalog()`, so the lookup mechanism generalizes cleanly to a per-package source.
-- Scaffold: `scripts/cli/skill-new.mjs` writes `package.config.json`, `SKILL.md`, and
-  `agents/openai.yaml` per package, but never touches trigger fixtures — a package author adds them
-  by hand to the central file today, if at all.
-- Fixtures are optional: `integration-check` (risk: `high`) has none, confirming nothing currently
-  enforces their presence.
+| Concern | Location | Today |
+| --- | --- | --- |
+| Fixture data | `manifests/inventory/skill-trigger-tests.json` | One `tests[]` array, 6 entries, 14 `match` and 17 `nearMiss` prompts |
+| Checker | `scripts/cli/skill-trigger-check.mjs` | Reads the path in `TRIGGER_TESTS_REL`; prints `ok: N skill trigger fixture(s)` or one `fail:` line per problem and exits 1 |
+| Skill lookup | `packageSkillSources()` in the checker | `loadPackageCatalog({ includeUnavailable: true })`, so disabled packages are still checked |
+| Packaging checklist | `manifests/platform/source-files.tsv` | Lists the central file; `scripts/doctor.sh` fails when a listed file is missing |
+| Scaffold | `scripts/cli/skill-new.mjs` | Writes `package.config.json`, `SKILL.md`, and `agents/openai.yaml`; never mentions fixtures |
+| Test coverage | `scripts/test/test-cli.sh` | One assertion that the live repository's fixtures pass; no test exercises a failing fixture |
+
+The six fixture entries map to these package directories. `case-study` shows why the path must
+come from the catalog: its package id is not its skill id.
+
+| Skill | Package directory |
+| --- | --- |
+| `case-study` | `globals/packages/case-study-pack/` |
+| `plan-write` | `globals/packages/plan-write/` |
+| `plan-promote` | `globals/packages/plan-promote/` |
+| `plan-start` | `globals/packages/plan-start/` |
+| `plan-close` | `globals/packages/plan-close/` |
+| `tighten` | `globals/packages/tighten/` |
+
+These files name the central fixture path and must change with it:
+
+| File | Reference |
+| --- | --- |
+| `scripts/cli/skill-trigger-check.mjs` | `TRIGGER_TESTS_REL` |
+| `manifests/platform/source-files.tsv` | Required-file row |
+| `manifests/inventory/README.md` | Files table row and the closing "after editing" paragraph |
+| `docs/user/reference/roborepo-cli.md` | `skill triggers` command row |
+| `docs/user/reference/roborepo-skills.md` | "Trigger Fixtures" section |
+| `globals/system/skills/builtin-support/SKILL.md` | "add/update trigger fixtures" instruction under "Adding a shared skill" |
 
 ## Proposed design
 
-Give each package an optional sibling file next to its `SKILL.md`, e.g.
-`globals/packages/<id>/skills/<id>/trigger-fixture.json`, holding exactly one fixture object (the
-shape currently nested inside `tests[]`, minus the redundant `skill` key since the id is implied by
-location):
+Each package that has fixtures gets one optional file at its root, beside `package.config.json`:
+
+```text
+globals/packages/plan-write/
+  package.config.json
+  skill-triggers.json        <- new; never copied to harness homes
+  skills/plan-write/
+    SKILL.md
+    agents/openai.yaml
+```
+
+The file keeps today's entry shape unchanged, including the `skill` key, because one package may
+declare several skill resources:
 
 ```json
 {
-  "match": ["..."],
-  "nearMiss": ["..."],
-  "triggerPhrases": ["..."],
-  "skipPhrases": ["..."]
+  "tests": [
+    {
+      "skill": "plan-write",
+      "match": ["..."],
+      "nearMiss": ["..."],
+      "triggerPhrases": ["..."],
+      "skipPhrases": ["..."]
+    }
+  ]
 }
 ```
 
-`skill-trigger-check.mjs` changes from reading one central JSON file to aggregating: walk
-`loadPackageCatalog()`, and for each `skill` resource, check whether its source directory has a
-`trigger-fixture.json`; if so, run the same validation it runs today. `manifests/inventory/` no
-longer needs a trigger-tests file at all once migration completes.
+The file sits at the package root, not inside `skills/<skill>/`, because skill directories are
+copied whole: `copyDir` in `scripts/cli/skill-files.mjs` and the `cpSync` calls in
+`scripts/cli/config-mutate.mjs` and `scripts/cli/workspace-resources.mjs` copy them into
+`~/.roborepo/skills/` and from there into every harness, and `roborepo skill export-to-project`
+copies them into client repositories. Package roots are never copied.
 
-This mirrors how `resources[]` entries already work — the platform loader (`package-catalog.mjs`)
-knows the *shape* of a package (a skill has a source dir, may have entrypoints), never a specific
-package's *identity*. The fixture becomes one more optional per-skill artifact, discovered the same
-way `agents/openai.yaml` already is.
+```mermaid
+flowchart LR
+  check[skill-trigger-check.mjs] -->|calls| loader[skill-trigger-fixtures.mjs]
+  loader -->|walks| catalog[loadPackageCatalog]
+  catalog -->|yields sourceRoot per package| loader
+  loader -->|reads optional| file[pkg/skill-triggers.json]
+  loader -->|returns fixtures with packageId| check
+  check -->|reads description from| skill[pkg/skills/id/SKILL.md]
+```
+
+Responsibilities split across two files:
+
+| File | Role |
+| --- | --- |
+| `scripts/cli/skill-trigger-fixtures.mjs` (new) | Loader. Walks `loadPackageCatalog({ includeUnavailable: true })`, reads each package's `skill-triggers.json` when present, and returns `{ packageId, skill, ...fixture }` entries in catalog order. Fails with the file path on malformed JSON, and fails when an entry names a skill its own package does not declare. |
+| `scripts/cli/skill-trigger-check.mjs` | Command. Calls the loader, runs the three checks unchanged, and keeps the existing `ok:` and `fail:` output. |
+
+A separate loader gives the planned live eval suite in [[0jped168]] one function to import instead
+of a second reader. The loader passes unknown keys through, so that plan's optional `liveMatch`
+arrays keep passing the static check.
+
+Workspace packages come from the same catalog, so a user's custom packages can ship fixtures with
+no extra wiring.
 
 ## Implementation plan
 
-- [ ] Confirm the exact fixture file name/location with the user (this doc proposes
-      `trigger-fixture.json` beside `SKILL.md`; alternatives include embedding it as a
-      `resources[].triggerFixture` field inside `package.config.json` instead of a sibling file —
-      pick one and record the reason).
-- [ ] Update `scripts/cli/skill-trigger-check.mjs` to discover fixtures via the catalog instead of
-      reading `TRIGGER_TESTS_REL`, preserving the existing pass/fail semantics and CLI output format.
-- [ ] Migrate the 6 existing entries (`case-study`, `frontend-design`, `plan-write`, `tighten`,
-      `plan-promote`, `plan-start`) from `manifests/inventory/skill-trigger-tests.json` into their
-      respective package directories, then delete the central file.
-- [ ] Update `scripts/cli/skill-new.mjs` / `skill-new-templates.mjs` so scaffolding a new
-      skill-command package can optionally emit a starter fixture file (or document how to add one
-      by hand, matching current `agents/openai.yaml` generation style).
-- [ ] Update any docs referencing the central fixture file (`roborepo-support` `SKILL.md` mentions
-      "add/update trigger fixtures") to point at the new per-package location.
-- [ ] Confirm no other script reads `manifests/inventory/skill-trigger-tests.json` before deleting it
-      (`grep -r skill-trigger-tests.json` across `scripts/`, `docs/`, tests).
+- [ ] Add `scripts/cli/skill-trigger-fixtures.mjs` with the loader described above.
+- [ ] Add `scripts/test/skill-trigger-fixtures-check.mjs` and register it in the `ci` group of
+      `scripts/test/check-groups.json`. Build synthetic packages in a temp directory and point
+      `ROBOREPO_APP_ROOT` at it, as the manual-only package assertion in `scripts/test/test-cli.sh`
+      does. Assert observable CLI results:
+      - a package with no `skill-triggers.json` contributes zero fixtures and passes;
+      - a valid fixture passes and is counted in the `ok:` line;
+      - a description missing a trigger phrase exits 1 with a `fail:` line naming the skill;
+      - an entry naming a skill its package does not declare exits 1;
+      - malformed JSON exits 1 with a message naming the file;
+      - an entry carrying an unknown key such as `liveMatch` still passes.
+- [ ] Switch `scripts/cli/skill-trigger-check.mjs` to the loader and remove `TRIGGER_TESTS_REL`
+      and `readJson`.
+- [ ] Move each of the six entries into its package's `skill-triggers.json`, using the mapping in
+      Current state. Before deleting the central file, confirm the loader returns the central
+      file's six entries with identical field values.
+- [ ] Delete `manifests/inventory/skill-trigger-tests.json` and its row in
+      `manifests/platform/source-files.tsv`.
+- [ ] Point the four documentation files listed under Current state (`manifests/inventory/README.md`,
+      both `docs/user/reference/` files, and `builtin-support/SKILL.md`) at
+      `globals/packages/<package-id>/skill-triggers.json`.
+- [ ] In `scripts/cli/skill-new.mjs`, when the new skill's risk is `medium` or `high`, add a line to
+      the printed next steps naming the package's `skill-triggers.json` path and
+      `roborepo skill triggers --check`. Do not write a stub file.
 
 ## Validation
 
-- `roborepo skill triggers --check` passes with the same 6 fixtures relocated, output unchanged in
-  meaning (count and pass/fail).
-- `node scripts/build/render-slash-commands.mjs --check` and `roborepo package validate <id>` remain
-  unaffected for every package that gains a fixture file.
-- `manifests/inventory/` contains zero occurrences of any package id after migration (grep check).
-- Adding a fresh fixture for a new package requires touching only that package's directory, not
-  `manifests/`.
+| Check | Command | Expected |
+| --- | --- | --- |
+| Fixtures still pass | `roborepo skill triggers --check` | `ok: 6 skill trigger fixture(s)` |
+| Loader behavior | `node scripts/test/skill-trigger-fixtures-check.mjs` | Every case listed in the loader-check task passes |
+| Central file gone | `git grep -n skill-trigger-tests` | Matches only under `docs/plans/` |
+| Doctor accepts the deletion | `bash scripts/doctor.sh --quiet` | Exits 0 |
+| Packages still validate | `roborepo package validate` | No new findings |
+| Completion gate | `npm run check` | Exits 0 |
+
+Acceptance:
+
+- Each of the six fixtures appears exactly once, in its own package, with field values identical to
+  the central file's entry.
+- Adding a fixture to a package that has none touches only that package's directory.
+- Disabled packages (`case-study-pack`, `tighten`) are still checked.
 
 ## Risks
 
-- `skill-trigger-check.mjs`'s current error messages assume a flat fixture list; aggregating from
-  multiple package directories needs to preserve deterministic ordering for stable CI output.
-- Migrating 6 existing entries by hand risks a transcription error (a phrase or prompt dropped or
-  altered); diff each migrated fixture against its original entry before deleting the central file.
+| Risk | Mitigation |
+| --- | --- |
+| A phrase or prompt is dropped while moving entries | The migration task compares loader output to the central file before deletion |
+| Output order changes when packages are reordered in presentation | Order follows `loadPackageCatalog`, which is deterministic; tests assert on content, not line order |
+| Concurrent edits to shared files | Work for [[3jp3yhtq]] modifies `scripts/test/check-groups.json` and `scripts/test/test-cli.sh`. The loader check appends one line to the first and leaves the second untouched; resolve any conflict by keeping both entries |
 
-## Open questions
+## Related plans
 
-- Sibling JSON file next to `SKILL.md`, or a field inside `package.config.json`? A sibling file
-  carries lower schema risk (no `normalizeResource()` or catalog-validation changes); a
-  `package.config.json` field keeps all package metadata in one place but expands the schema this
-  plan would otherwise leave untouched. This plan defaults to a sibling file; the user should
-  confirm before implementation.
-- Should the scaffold (`roborepo skill new`) prompt for trigger phrases interactively, or only
-  document the manual step, matching how risk-medium/high guidance is advisory today?
+| Plan | Classification | Effect on this plan |
+| --- | --- | --- |
+| [[0jped168]] live behavior evals (backlog) | Plan-vs-plan touchpoint overlap | It plans `liveMatch` arrays in the central file and a fixture reader. Whichever lands second moves its `liveMatch` additions into the per-package files and imports `skill-trigger-fixtures.mjs`. That plan already anticipates the move; its prose is not edited here. |
+| [[age4cm7r]] plan-suite atomic commands (active) | Landed dependency; lifecycle drift | Squash-merged as `b91f03f` (PR 25). It added the `plan-close` fixture and removed `integration-check`, both visible on `main`. It remains in `active/`; its tables still name the central file as history. Closing it is its own `/plan-close` run. |
+| [[skills-vs-commands-invocation-policy]] (backlog) | Related, no conflict | Introduced the trigger check and plans more fixtures; new fixtures would land in package files instead. |
+| [[3jp3yhtq]] desktop harness discovery (active) | No dependency | Shares only the test files named under Risks. |
+| [[a7bslb00]] worktree lifecycle cleanup (active) | No dependency | Its branch edits the `plan-close` `SKILL.md` body, not the `description` the `plan-close` fixture checks. |
+
+## Decision Log
+
+- Fixtures live in a package-root `skill-triggers.json`, chosen by the user over a sibling of
+  `SKILL.md` and a `package.config.json` field. Skill directories are copied into harness homes and
+  exported projects, so test data there would ship to agents. A config field would expand the
+  package schema to hold test-only data.
+- The file keeps the `skill` key and `tests[]` shape, so a package with several skills needs no
+  second format and each entry moves without edits.
+- An entry that names a skill outside its own package fails the check, so one package cannot hold
+  fixtures for another.
+- `roborepo skill new` prints a next step instead of writing a stub. An empty stub has no phrases,
+  passes the check trivially, and would read as coverage that does not exist.
