@@ -81,6 +81,7 @@ function createRepositorySourcesSurface({ host, info, onChange, onPending, onAut
   onAutoDiscoveryEnabled ??= refreshAfterAutoDiscovery;
   host.replaceChildren(document.getElementById("tpl-repository-sources-surface").content.cloneNode(true));
   const surface = host.querySelector("[data-sources-surface]");
+  const foldersSection = surface.querySelector(".sources-folders");
   const surfaceKey = host.closest("dialog") ? "dialog" : "inline";
   const pathId = `repository-source-path-${surfaceKey}`;
   surface.querySelector("[data-slot=path]").id = pathId;
@@ -216,13 +217,19 @@ function createRepositorySourcesSurface({ host, info, onChange, onPending, onAut
       onToggle: () => run(() => api.setSourceEnabled(source.id, !source.enabled)),
       onRemove: () => run(() => api.removeSource(source.id)),
     })));
+    updateFoldersSectionVisibility();
     if (payload.loadError) showError(payload.loadError);
   }
 
   function setAddFormOpen(open) {
     form.hidden = !open;
+    updateFoldersSectionVisibility();
     updateAddToggleVisibility();
     if (open) pathInput.focus();
+  }
+
+  function updateFoldersSectionVisibility() {
+    foldersSection.hidden = Boolean(payload && payload.sources.length === 0 && form.hidden);
   }
 
   function updateAddToggleVisibility() {

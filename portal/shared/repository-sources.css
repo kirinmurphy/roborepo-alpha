@@ -235,6 +235,9 @@
   gap: 8px;
   justify-items: start;
 }
+.sources-folders[hidden] {
+  display: none;
+}
 .sources-folders > * {
   justify-self: stretch;
 }

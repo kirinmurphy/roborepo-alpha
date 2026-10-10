@@ -1,13 +1,13 @@
 ---
 id: nkhk6bb
 priority: high
-next_action: Install the repository's browser-test dependency, run the Settings and onboarding browser cases, and manually verify banner layout, links, and discovery transitions
+next_action: Resolve stale generated Plan commands, the skill-audit output, and the Plan Write reference mismatch; rerun `npm run check`, then continue browser and manual onboarding verification
 blocked_by: []
 depends_on: []
 related:
   - pljvmyh
   - v6lvuu2
-reviewed_commit: 1b08044
+reviewed_commit: 46a93de
 worktree: portal-onboarding-settings
 ---
 
@@ -451,7 +451,7 @@ Reuse `repository-sources-partial.html` instead of duplicating repository-source
 - [x] Keep enabling auto-discovery wired to an immediate Runtime refresh/enrollment pass.
 - [x] Keep Runtime and repository-source copy explicit that the switch controls both active-process observation and automatic repository enrollment.
 - [x] Retain `scripts/test/developer-runtime-auto-discovery-check.mjs`'s assertion that no activity is observed when the source is off, and add coverage that an explicit repository/folder source remains usable while active-process auto-discovery is disabled.
-- [ ] Add a race regression proving a scan that started before disable cannot write developer-runtime evidence after the source is turned off.
+- [x] Add a race regression proving a scan that started before disable cannot write developer-runtime evidence after the source is turned off.
 
 ### Phase 2 — Shared setup-state read model
 
@@ -521,6 +521,7 @@ Reuse `repository-sources-partial.html` instead of duplicating repository-source
 - [x] Use one shared Home/Agents/Tokens harness banner template and copy, changing only the notice variant.
 - [x] Keep Home's sync state pending until the enabled discovery scan completes and refresh the overview during that scan.
 - [x] Show the active token-tracking row with its green status dot, and label the section **Token Activity Tracking**.
+- [x] Hide the empty repository-folder section so it adds no blank panel spacing, while keeping the section visible when the add-folder form is open.
 - [x] Restore links to `/config` for **agent tools** and `/tokens` for **token tracking** in the shared supported-harness banner copy.
 
 ## Validation
@@ -562,15 +563,19 @@ Reuse `repository-sources-partial.html` instead of duplicating repository-source
 - The follow-up UI polish also passed JavaScript syntax validation, all focused portal/setup/repository checks, a fresh path-free `/api/settings` assertion, and a manifest assertion that Settings carries the `settings` gear icon metadata. The local smoke server returned 200 for `/`, `/settings`, `/config`, `/plans`, `/tokens`, and `/runtime`.
 - The follow-up implementation mounts the shared repository-source surface inline, uses a button-based telemetry toggle, and adds reusable page/section header primitives documented in `docs/internal/portal-styleguide.md`.
 - The latest local smoke confirmed `/settings` includes the inline source host and shared source template, includes the telemetry button, omits the old Manage Repos trigger, and retains 200 responses for `/config`, `/plans`, `/tokens`, and `/runtime`; `/api/settings` remained path-free.
+- The new auto-discovery race regression pauses an injected discovery pass, disables the source, then confirms the released pass cannot restore repository evidence. `node scripts/test/developer-runtime-auto-discovery-check.mjs` passed.
+- `node scripts/test/harness-refresh-simulation-check.mjs` passed using a temporary supported-provider CLI shim and home/config fixture. It exercised the real harness refresh and portal route, confirmed detection without an installed harness, checked path-free config output, and verified an explicit disable survives refresh.
+- `npm run check` stopped in `doctor` after 101 passing checks because six generated Plan command files and `docs/internal/skill-invocation-audit.md` are stale.
+- An elevated `npm run --silent test:unit` completed with 123/126 suites passing. The remaining failures were `clean-machine-container-check.mjs` and `publish-npm-check.mjs` (both blocked by the same stale doctor outputs), plus `skill-reference-matrix-characterization-check.mjs` (its Plan Write wording expectation does not match the current reference).
+- Manual regression on 2026-10-08 confirmed the empty states, banner presentation, Settings surface, Clear All Repos behavior, harness banners, and Tokens banners. On 2026-10-09 the user also confirmed the empty folder section behavior.
 
 ## Not tested
 
 - [ ] `npm run test:portal-ui` — blocked before test collection because the worktree does not have the `@playwright/test` package installed.
-- [ ] Manual browser verification of fresh setup, Settings mutations, responsive layout, external harness installation followed by **Check for harnesses**, and the full Tokens state transition. The in-app browser could not access the loopback smoke server due to an admin browser policy, so this remains a real manual gap rather than a substitute for Playwright.
-- [ ] Visual verification that banner icons remain in a left column with top alignment and clear spacing, supporting text is dimmed, large-screen actions sit at the right edge, and compact layouts keep actions left-aligned. Static responsive rules are present, but no browser engine was available in this worktree.
-- [ ] Visual verification that Settings renders the full repository-source surface inline, that its telemetry button clearly switches On/Off, and that section separators/header spacing match the shared convention.
-- [ ] Browser verification of wipe-clean source removal, Settings auto-discovery refresh, inline repository labels/empty state, shared harness-check loading, dual Tokens banners, and the updated Token Activity CTA/copy.
+- [ ] Browser verification that the **Check for harnesses** banner button invokes the refresh flow, and manual verification of the full Tokens state transition. The refresh and persistence behavior are covered by `scripts/test/harness-refresh-simulation-check.mjs`; the in-app browser could not access the loopback smoke server due to an admin browser policy.
+- [ ] Browser verification of Settings auto-discovery refresh after wipe, repository labels/action placement, shared harness-check loading, and the Token Activity CTA/copy/active row.
 - [ ] Browser verification of repository action placement, scan timing/status after a wipe, identical linked harness prompt content across Home/Agents/Tokens, and the active token-tracking row.
+- [ ] Rerun `npm run check` after the stale generated Plan command outputs and skill invocation audit are reconciled; the latest run stopped during `doctor` before the full gate could continue.
 
 ### Repository checks
 
