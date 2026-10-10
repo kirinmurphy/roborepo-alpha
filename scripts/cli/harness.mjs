@@ -3,8 +3,8 @@
 // and console output only; harness provider logic stays in scripts/harnesses/.
 
 import { listHarnessProviders, getHarnessProvider, hasHarnessProvider } from "../harnesses/registry.mjs";
-import { refreshHarnessState } from "../harnesses/refresh.mjs";
-import { readHarnessState, writeHarnessState, setProviderEnabled } from "../harnesses/state.mjs";
+import { refreshHarnessState, setHarnessEnabled } from "../harnesses/service.mjs";
+import { readHarnessState } from "../harnesses/state.mjs";
 import { resolveHarnessPath, hasHarnessPath } from "../harnesses/paths.mjs";
 import fs from "node:fs";
 
@@ -46,15 +46,13 @@ export function harnessRefresh() {
 
 export function harnessEnable(rest) {
   const id = requireProviderId(rest, "enable");
-  const state = readHarnessState();
-  writeHarnessState(setProviderEnabled(state, id, true));
+  setHarnessEnabled(id, true);
   console.log(`enabled: ${id}`);
 }
 
 export function harnessDisable(rest) {
   const id = requireProviderId(rest, "disable");
-  const state = readHarnessState();
-  writeHarnessState(setProviderEnabled(state, id, false));
+  setHarnessEnabled(id, false);
   console.log(`disabled: ${id}`);
 }
 

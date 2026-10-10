@@ -109,24 +109,16 @@
   </span>
 </template>
 
-<!-- harness-warning.js — the shared "install a supported harness" banner, rendered by
-     harnessWarningElement() on any page (Agents + Tokens). One template so the two pages can
-     never drift. -->
-<!-- harness-warning.js harnessSetupPromptElement() — Home's info-toned version of the same
-     condition: a prompt to set things up rather than a warning that something is missing. -->
-<template id="tpl-harness-setup-prompt">
-  <portal-notice variant="info" icon="info" aria-live="polite">
-    <div class="harness-setup-prompt">
-      <span>Install a supported harness and run <b>roborepo harness refresh</b> to add <a href="/config">agent tools</a> and enable <a href="/tokens">token tracking</a>.</span>
-      <span class="harness-setup-supported" data-slot="supported"><b>Supported Harnesses:</b> <span data-slot="names"></span></span>
-    </div>
-  </portal-notice>
-</template>
-<template id="tpl-harness-warning">
-  <portal-notice aria-live="polite">
-    <div class="config-empty">
-      <strong data-slot="title"></strong>
-      <span data-slot="body"></span>
+<!-- Shared harness setup banner. Home, Agents, and Tokens use the same copy and action; only the
+     portal-notice variant changes by page context. -->
+<template id="tpl-harness-notice">
+  <portal-notice class="portal-notice" aria-live="polite">
+    <div class="harness-notice-content">
+      <div class="portal-banner-copy">
+        <span data-slot="copy"></span>
+        <span class="harness-notice-supported" data-slot="supported"><strong>Supported Harnesses:</strong> <span data-slot="names"></span></span>
+      </div>
+      <div class="portal-banner-action"><button type="button" data-btn="cta" data-slot="check">Check for harnesses</button></div>
     </div>
   </portal-notice>
 </template>

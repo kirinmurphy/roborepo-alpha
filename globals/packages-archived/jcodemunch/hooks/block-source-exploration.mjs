@@ -8,7 +8,7 @@ import path from 'node:path'
 // jcodemunch-first rule. This hook closes that door for SOURCE files only.
 //
 // PACKAGE-OWNED: this hook is installed/removed only when the jcodemunch package is enabled/disabled
-// (globals/packages/jcodemunch/package.config.json's hooks/claude component), so it is never present
+// (globals/packages-archived/jcodemunch/package.config.json's hooks/claude component), so it is never present
 // on a machine where jcodemunch isn't actually available. No runtime self-check is needed — a prior
 // version gated on `mcpServers.jcodemunch` in ~/.claude/settings.json (the wrong native store; the
 // real live MCP registration lives in ~/.claude.json) as a belt-and-suspenders guard against stale

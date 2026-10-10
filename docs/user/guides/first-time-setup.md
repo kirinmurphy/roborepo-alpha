@@ -34,7 +34,8 @@ configure in the browser or in the CLI.
 Setup itself leaves your existing Claude and Codex config alone; behaviors you turn on afterwards
 are merged into it. Setup is safe to re-run: once complete it reports that and exits, and an
 interrupted run resumes instead of starting over. Zero detected harnesses is fine; install or launch
-a harness later and run `roborepo harness refresh`.
+a harness later, then open **Settings → Agent Harnesses → Check for harnesses**. The equivalent CLI
+command is `roborepo harness refresh`.
 
 ## Install From A Checkout
 
@@ -62,8 +63,8 @@ you turn it on). Choose behaviors in the portal's `/config` page, or in the term
 roborepo library
 ```
 
-The chooser walks the same sections the `/config` page shows — Token Optimization, Commands, Code
-Conventions, Chat-Time Output, and a read-only Permissions panel — one section per step:
+The chooser walks the available package sections, then a read-only Permissions panel, one section per
+step:
 
 | Key | Action |
 | --- | --- |

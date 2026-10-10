@@ -1,5 +1,14 @@
 import { test, expect } from "@playwright/test";
 
+async function routeReadySetup(page) {
+  await page.route("**/api/settings", async (route) => {
+    const setup = await (await route.fetch()).json();
+    setup.telemetry.enabled = true;
+    setup.harnesses.active = [{ id: "claude", displayName: "Claude Code", enabled: true, confidence: "confirmed" }];
+    await route.fulfill({ json: setup });
+  });
+}
+
 for (const theme of ["light", "dark"]) {
   test(`tokens conditions and coverage render in ${theme}`, async ({ page }) => {
     const errors = [];
@@ -55,6 +64,7 @@ test("mark change records backdated scope and keeps editing history", async ({ p
   config.machineHarnesses = [{ id: "claude", enabled: true, confidence: "confirmed" }];
   const posted = [];
   await page.route("**/api/config", (route) => route.fulfill({ json: config }));
+  await routeReadySetup(page);
   await page.route("**/api/data", (route) => route.fulfill({ json: demo }));
   await page.route("**/api/telemetry/markers", async (route) => {
     posted.push(route.request().postDataJSON());
@@ -124,6 +134,7 @@ test("polling preserves an open comparison and a change draft", async ({ page, r
   config.telemetry = { ...config.telemetry, enabled: true };
   config.machineHarnesses = [{ id: "claude", enabled: true, confidence: "confirmed" }];
   await page.route("**/api/config", (route) => route.fulfill({ json: config }));
+  await routeReadySetup(page);
   let version = 0;
   await page.route("**/api/data", (route) => route.fulfill({ json: { ...demo, version: String(++version) } }));
   await page.goto("/tokens");

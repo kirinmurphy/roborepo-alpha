@@ -28,7 +28,7 @@ export function createRepositoryOverviewService({ loadRegistry, loadRuntime, loa
     });
     let enabled = false;
     try { enabled = loadAutoDiscoveryEnabled() === true; } catch {}
-    return { ...overview, autoDiscovery: { enabled }, sync: syncState(runtimeState) };
+    return { ...overview, autoDiscovery: { enabled }, sync: syncState(runtimeState, enabled) };
   }
 
   function loadDetail({ urlKey }) {
@@ -50,8 +50,12 @@ export function createRepositoryOverviewService({ loadRegistry, loadRuntime, loa
   return { loadHome, loadDetail };
 }
 
-function syncState(runtimeState) {
-  return { state: runtimeState.data?.refresh?.state === "refreshing" ? "syncing" : "synced" };
+function syncState(runtimeState, autoDiscoveryEnabled) {
+  if (!autoDiscoveryEnabled) return { state: "synced" };
+  const refresh = runtimeState.data?.refresh;
+  if (runtimeState.status === "unavailable" || refresh?.state === "failed") return { state: "failed" };
+  if (refresh?.state === "refreshing" || !Number.isInteger(refresh?.generation)) return { state: "syncing" };
+  return { state: "synced" };
 }
 
 function safely(loader, project, message) {

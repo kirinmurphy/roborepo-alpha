@@ -377,10 +377,10 @@ export function contextWarnings(snap) {
 }
 
 // The "install a supported harness" warning banner — rendered from the SHARED module
-// (harness-warning.js + tpl-harness-warning) so /config and /tokens can never drift. Null when
+// (harness-warning.js + tpl-harness-notice) so /config and /tokens can never drift. Null when
 // the machine has at least one active harness.
-export function harnessWarning(snap) {
-  return harnessWarningElement(snap);
+export function harnessWarning(snap, options) {
+  return harnessWarningElement(snap, options);
 }
 
 // Persistent intro above the package sections. Always rendered (not an ephemeral onboarding

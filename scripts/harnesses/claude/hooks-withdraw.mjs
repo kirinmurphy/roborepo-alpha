@@ -7,7 +7,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { repoRoot } from "../../cli/roots.mjs";
 
-const PACKAGES_DIR = path.join(repoRoot, "globals", "packages");
+const PACKAGE_DIRS = [
+  path.join(repoRoot, "globals", "packages"),
+  path.join(repoRoot, "globals", "packages-archived"),
+];
 
 // Ported from scripts/install/uninstall.sh's strip_package_hooks (characterization test:
 // scripts/test/harness-hooks-write-remove-characterization-check.mjs). Strips BOTH package-
@@ -29,26 +32,27 @@ export function hooksWriteRemove({ homePath, dryRun = false } = {}) {
     return { ok: true, changed: false, providerId: "claude", action: "hooks.write", paths, warnings };
   }
 
-  if (!fs.existsSync(PACKAGES_DIR)) {
-    return { ok: true, changed: false, providerId: "claude", action: "hooks.write", paths, warnings };
-  }
-
-  const packages = fs.readdirSync(PACKAGES_DIR, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => path.join(PACKAGES_DIR, entry.name, "package.config.json"))
-    .filter((file) => fs.existsSync(file))
-    .flatMap((file) => {
-      try {
-        return [JSON.parse(fs.readFileSync(file, "utf8"))];
-      } catch {
-        return [];
-      }
-    });
+  const packages = PACKAGE_DIRS.flatMap((packagesDir) => {
+    try {
+      return fs.readdirSync(packagesDir, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => ({ root: path.join(packagesDir, entry.name), file: path.join(packagesDir, entry.name, "package.config.json") }))
+        .filter(({ file }) => fs.existsSync(file))
+        .flatMap(({ root, file }) => {
+          try {
+            return [{ root, config: JSON.parse(fs.readFileSync(file, "utf8")) }];
+          } catch {
+            return [];
+          }
+        });
+    } catch {
+      return [];
+    }
+  });
 
   let changed = false;
 
-  for (const pkg of packages) {
-    const root = path.join(PACKAGES_DIR, pkg.id);
+  for (const { root, config: pkg } of packages) {
     for (const resource of pkg.resources || []) {
       if (resource.type !== "hooks" || resource.harness !== "claude") continue;
       const hooksFile = path.join(root, resource.source);
@@ -80,7 +84,7 @@ export function hooksWriteRemove({ homePath, dryRun = false } = {}) {
   }
 
   const toRemove = new Set(
-    packages.flatMap((pkg) => (pkg.resources || []).filter((c) => c.type === "permissions").flatMap((c) => c.allow || []))
+    packages.flatMap(({ config: pkg }) => (pkg.resources || []).filter((c) => c.type === "permissions").flatMap((c) => c.allow || []))
   );
   const existingAllow = settings.permissions?.allow || [];
   const nextAllow = existingAllow.filter((p) => !toRemove.has(p));

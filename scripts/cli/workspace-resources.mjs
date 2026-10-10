@@ -340,16 +340,18 @@ function readWorkspaceMcpFile() {
 }
 
 function readBuiltInPackages() {
-  const packagesRoot = path.join(appRoot, "globals", "packages");
-  try {
-    return fs.readdirSync(packagesRoot, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
-      .map((entry) => path.join(packagesRoot, entry.name, "package.config.json"))
-      .filter((file) => fs.existsSync(file))
-      .map((file) => JSON.parse(fs.readFileSync(file, "utf8")));
-  } catch {
-    return [];
-  }
+  return ["packages", "packages-archived"].flatMap((directory) => {
+    const packagesRoot = path.join(appRoot, "globals", directory);
+    try {
+      return fs.readdirSync(packagesRoot, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+        .map((entry) => path.join(packagesRoot, entry.name, "package.config.json"))
+        .filter((file) => fs.existsSync(file))
+        .map((file) => JSON.parse(fs.readFileSync(file, "utf8")));
+    } catch {
+      return [];
+    }
+  });
 }
 
 function readBuiltInMcpServers() {
@@ -388,17 +390,19 @@ function validateMcpServer(server, file) {
 function builtInSkillSource(name) {
   const systemSkill = path.join(appRoot, "globals", "system", "skills", name);
   if (fs.existsSync(systemSkill)) return systemSkill;
-  const packagesRoot = path.join(appRoot, "globals", "packages");
   let entries;
-  try {
-    entries = fs.readdirSync(packagesRoot, { withFileTypes: true });
-  } catch {
-    return null;
-  }
-  for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
-    const candidate = path.join(packagesRoot, entry.name, "skills", name);
-    if (fs.existsSync(candidate)) return candidate;
+  for (const directory of ["packages", "packages-archived"]) {
+    const packagesRoot = path.join(appRoot, "globals", directory);
+    try {
+      entries = fs.readdirSync(packagesRoot, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+      const candidate = path.join(packagesRoot, entry.name, "skills", name);
+      if (fs.existsSync(candidate)) return candidate;
+    }
   }
   return null;
 }

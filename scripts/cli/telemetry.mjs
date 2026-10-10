@@ -54,6 +54,8 @@ import { insightsSummary } from "./telemetry-insights.mjs";
 import { deriveSessionFindings } from "./telemetry-session-findings.mjs";
 import { hookFilePath, writeHooksFile } from "./hook-composition.mjs";
 import { getHarnessProvider, hasHarnessProvider, listHarnessProviders, harnessDisplayName } from "../harnesses/registry.mjs";
+import { refreshHarnessState, setHarnessEnabled } from "../harnesses/service.mjs";
+import { loadSetupState } from "./portal-setup.mjs";
 import { ensureInitialized, finalizeInitialization, describeNewerSchemaRefusal } from "./initialization-bootstrap.mjs";
 
 export async function telemetryCommand(rest) {
@@ -813,6 +815,9 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     loadTelemetryAnalysis: (body) => loadTelemetryAnalysisRequest(body),
     loadTelemetryGuide: () => loadTelemetryGuide(),
     loadConfig: () => readConfigSnapshot(),
+    loadSetupState: () => loadSetupState(),
+    refreshHarnesses: () => refreshHarnessState(),
+    setHarnessEnabled: (id, enabled) => setHarnessEnabled(id, enabled),
     loadConfigSource: (params) => loadConfigSource(params),
     loadPlans: () => loadPlansSnapshot(),
     loadPlanDocument: (params) => loadPlanDocument(params),
@@ -844,6 +849,7 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     wipeRepositoryList: () => {
       const payload = wipeRepositoryList();
       clearDeveloperRuntimeSnapshotCache();
+      if (payload.autoDiscovery?.enabled) startAutoDiscoveryScan();
       return afterSourceChange(payload);
     },
     mutatePackage: (id, enabled) => mutatePackage(id, enabled),

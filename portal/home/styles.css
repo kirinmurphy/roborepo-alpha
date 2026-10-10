@@ -8,31 +8,7 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 .repository-directory { display: grid; gap: 18px; }
 .home-harness-banner { margin-bottom: 16px; }
 .home-harness-banner[hidden] { display: none; }
-/* Home's setup prompt is the one thing to act on here, so it steps forward from the page: a filled,
- * lighter gray-blue instead of the shared info notice's near-background tint. Mixed from the theme
- * tokens so light mode gets the same treatment. */
-.home-harness-banner .portal-notice.notice-info {
-  background: color-mix(in srgb, var(--accent) 16%, var(--raised));
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
-}
-.harness-setup-prompt { display: grid; gap: 4px; }
-/* Two-line prompt: the icon pins to the first line instead of floating between the two lines; the
- * shared notice icon's own top margin sets its offset. */
-.home-harness-banner .portal-notice > [data-notice-icon] { align-self: flex-start; }
-.harness-setup-supported { color: var(--dim); font-size: var(--text-xs); }
 .home-auto-discovery { margin-bottom: 16px; }
-.home-auto-discovery .portal-notice.notice-info {
-  background: color-mix(in srgb, var(--accent) 16%, var(--raised));
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
-}
-.home-auto-discovery .portal-notice {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
-}
-.home-auto-discovery .portal-notice > [data-notice-icon] { align-self: flex-start; }
-.home-auto-discovery .auto-discovery-prompt-body { display: grid; gap: 8px; min-width: 0; }
-.auto-discovery-prompt p { margin: 0; color: var(--ink); font-size: var(--text-sm); }
 .home-mock-disclaimer {
   display: flex;
   gap: 10px;

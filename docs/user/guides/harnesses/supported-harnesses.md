@@ -114,6 +114,10 @@ exactly what it would remove and touches nothing.
 An explicit `disable` survives `refresh`. Re-running discovery will not silently re-enable a harness
 you turned off.
 
+When using the portal, open **Settings → Agent Harnesses** and select **Check for harnesses** after
+installing a supported harness. This performs the same discovery without requiring a terminal
+command; the CLI commands remain available for scripted workflows.
+
 ## Platform Support
 
 macOS and Linux are the primary platforms and share the same install path. Windows has its own

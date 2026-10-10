@@ -3,14 +3,47 @@ import os from "node:os";
 import path from "node:path";
 import { test, expect } from "@playwright/test";
 
-const NAV_ORDER = ["Repos", "Agents", "Plans", "Tokens", "Runtime"];
+const NAV_ORDER = ["Repos", "Agents", "Plans", "Tokens", "Runtime", "Settings"];
 const ROUTES = [
   { path: "/", active: "Repos" },
   { path: "/config", active: "Agents" },
   { path: "/plans", active: "Plans" },
   { path: "/tokens", active: "Tokens" },
   { path: "/runtime", active: "Runtime" },
+  { path: "/settings", active: "Settings" },
 ];
+
+test.describe("Agents page", () => {
+  test("keeps the high token-use banner hidden", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: {
+      harnesses: {
+        supported: [{ id: "claude", displayName: "Claude Code" }, { id: "codex", displayName: "Codex" }],
+        detected: [],
+        active: [],
+      },
+    } }));
+    await page.route("**/api/config", async (route) => {
+      const response = await route.fetch();
+      const snapshot = await response.json();
+      const activeItem = snapshot.behaviorView.flatMap((section) => section.items || []).find((item) => item.active);
+      expect(activeItem, "fixture needs an active Agents item").toBeTruthy();
+      activeItem.contextCost = { onDemandTokens: 30000, onDemandLevel: "high" };
+      snapshot.contextCost = { ...snapshot.contextCost, onDemandThresholds: { mediumAt: 1000, highAbove: 10000 } };
+      await route.fulfill({ response, json: snapshot });
+    });
+
+    await page.goto("/config");
+    await expect(page.getByText("The following elements have a high token use:", { exact: true })).toHaveCount(0);
+    await expect(page.locator("#main [data-slot=supported]")).toHaveText("Supported Harnesses: Claude Code, Codex");
+    await expect(page.getByRole("button", { name: "Check for harnesses" })).toHaveAttribute("data-btn", "cta");
+    const warningButtonGrid = await page.getByRole("button", { name: "Check for harnesses" }).evaluate((button) => ({
+      column: getComputedStyle(button.parentElement).gridColumn,
+      row: getComputedStyle(button.parentElement).gridRow,
+    }));
+    expect(warningButtonGrid.column).toBe("2");
+    expect(warningButtonGrid.row).toBe("1");
+  });
+});
 
 test.describe("repository-first portal Home", () => {
   test("Home renders the canonical repository directory", async ({ page }) => {
@@ -196,14 +229,139 @@ test.describe("repository-first portal Home", () => {
   });
 
   test("Home shows harness setup as an info prompt linking what it unlocks", async ({ page }) => {
-    await page.route("**/api/config", (route) => route.fulfill({ json: { harnesses: [{ id: "claude", displayName: "Claude Code" }, { id: "codex", displayName: "Codex" }], machineHarnesses: [], packages: [] } }));
+    await page.route("**/api/settings", (route) => route.fulfill({ json: {
+      repositories: { knownCount: 1, visibleCount: 1, autoDiscoveryEnabled: false, hasConfiguredSources: false },
+      harnesses: { supported: [{ id: "claude", displayName: "Claude Code" }, { id: "codex", displayName: "Codex" }], detected: [], active: [] },
+      telemetry: { enabled: false, captureAvailable: false },
+    } }));
     await page.goto("/");
     const banner = page.locator("#home-harness-banner portal-notice");
     await expect(banner).toHaveClass(/notice-info/);
     await expect(banner.locator("[data-notice-icon] portal-icon")).toHaveAttribute("name", "info");
-    await expect(banner.getByRole("link", { name: "agent tools" })).toHaveAttribute("href", "/config");
-    await expect(banner.getByRole("link", { name: "token tracking" })).toHaveAttribute("href", "/tokens");
-    await expect(banner.locator(".harness-setup-supported")).toHaveText("Supported Harnesses: Claude Code, Codex");
+    await expect(banner.locator("[data-slot=copy]")).toHaveText("Install a supported harness to add agent tools and enable token tracking.");
+    await expect(banner.locator("[data-slot=supported]")).toHaveText("Supported Harnesses: Claude Code, Codex");
+    await expect(banner.getByRole("button", { name: "Check for harnesses" })).toHaveAttribute("data-btn", "secondary");
+    const infoButtonGrid = await banner.getByRole("button", { name: "Check for harnesses" }).evaluate((button) => ({
+      column: getComputedStyle(button.parentElement).gridColumn,
+      row: getComputedStyle(button.parentElement).gridRow,
+    }));
+    expect(infoButtonGrid.column).toBe("2");
+    expect(infoButtonGrid.row).toBe("1");
+  });
+
+  test("Settings renders shared setup controls and can check for harness installs", async ({ page }) => {
+    await page.route("**/api/repositories/sources", (route) => route.fulfill({ json: {
+      revision: 1,
+      loadError: null,
+      autoDiscovery: { id: "auto-discovery", enabled: false, repositoryCount: 0 },
+      repositories: [],
+      sources: [],
+    } }));
+    await page.route("**/api/settings", (route) => route.fulfill({ json: {
+      repositories: { knownCount: 0, visibleCount: 0, autoDiscoveryEnabled: false, hasConfiguredSources: false },
+      harnesses: {
+        supported: [{ id: "codex", displayName: "Codex" }],
+        detected: [{ id: "codex", displayName: "Codex", confidence: "confirmed", enabled: true }],
+        active: [{ id: "codex", displayName: "Codex", confidence: "confirmed", enabled: true }],
+      },
+      telemetry: { enabled: false, captureAvailable: false },
+    } }));
+    await page.goto("/settings");
+    await expect(page.locator('nav a[aria-label="Settings"] portal-icon svg')).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "Repos" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "Agent Harnesses" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "Token Activity Tracking" })).toBeVisible();
+    await expect(page.locator("#repository-sources-inline .sources-repositories")).toBeVisible();
+    await expect(page.locator("#repository-sources-inline .sources-repositories h3")).toHaveCount(0);
+    await expect(page.locator("#repository-sources-inline").getByRole("button", { name: "Auto-discover active repos" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Check for harnesses" })).toHaveAttribute("data-btn", "text");
+    const response = page.waitForResponse((res) => res.url().includes("/api/config/harnesses/refresh") && res.request().method() === "POST");
+    await page.getByRole("button", { name: "Check for harnesses" }).click();
+    await response;
+    await expect(page.locator("#harness-list")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Disable Codex" })).toBeVisible();
+    await expect(page.getByText("Enable token tracking", { exact: false })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Enable token tracking" })).toHaveText("Enable");
+  });
+
+  test("Settings queues one refresh when another mutation completes during a fetch", async ({ page }) => {
+    let settingsRequests = 0;
+    let releasePendingSettings;
+    const settings = {
+      repositories: { knownCount: 0, visibleCount: 0, autoDiscoveryEnabled: false, hasConfiguredSources: false },
+      harnesses: {
+        supported: [{ id: "codex", displayName: "Codex" }],
+        detected: [{ id: "codex", displayName: "Codex", confidence: "confirmed", enabled: true }],
+        active: [{ id: "codex", displayName: "Codex", confidence: "confirmed", enabled: true }],
+      },
+      telemetry: { enabled: false, captureAvailable: false },
+    };
+    await page.route("**/api/repositories/sources", (route) => route.fulfill({ json: {
+      revision: 1,
+      loadError: null,
+      autoDiscovery: { id: "auto-discovery", enabled: false, repositoryCount: 0 },
+      repositories: [],
+      sources: [],
+    } }));
+    await page.route("**/api/settings", async (route) => {
+      settingsRequests += 1;
+      if (settingsRequests === 2) await new Promise((resolve) => { releasePendingSettings = resolve; });
+      await route.fulfill({ json: settings });
+    });
+    await page.route("**/api/config/harnesses/codex/enabled", (route) => route.fulfill({ json: { enabled: false } }));
+    await page.route("**/api/config/packages", (route) => route.fulfill({ json: { enabled: true } }));
+
+    await page.goto("/settings");
+    await page.getByRole("button", { name: "Disable Codex" }).click();
+    await expect.poll(() => settingsRequests).toBe(2);
+    await page.getByRole("button", { name: "Enable token tracking" }).click();
+    await expect.poll(() => releasePendingSettings).toBeTruthy();
+    releasePendingSettings();
+    await expect.poll(() => settingsRequests).toBe(3);
+  });
+
+  test("Settings explains an empty harness catalog and responds to a setup-state error", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: {
+      repositories: { knownCount: 0, visibleCount: 0, autoDiscoveryEnabled: false, hasConfiguredSources: false },
+      harnesses: { supported: [], detected: [], active: [] },
+      telemetry: { enabled: false, captureAvailable: false },
+    } }));
+    await page.goto("/settings");
+    await expect(page.getByRole("status").filter({ hasText: "No supported harnesses are registered." })).toBeVisible();
+
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+    await page.route("**/api/settings", (route) => route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "setup service unavailable" }),
+    }));
+    await page.reload();
+    await expect(page.locator("#settings-error")).toHaveText("setup service unavailable");
+    await expect(page.locator("#telemetry-toggle")).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Check for harnesses" })).toBeEnabled();
+  });
+
+  test("Settings shows one non-actionable status for an undetected harness", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: {
+      repositories: { knownCount: 0, visibleCount: 0, autoDiscoveryEnabled: false, hasConfiguredSources: false },
+      harnesses: { supported: [{ id: "codex", displayName: "Codex" }], detected: [], active: [] },
+      telemetry: { enabled: false, captureAvailable: false },
+    } }));
+    await page.goto("/settings");
+    const row = page.locator("#harness-list .settings-list-row");
+    await expect(row).toContainText("Codex");
+    await expect(row.getByRole("status")).toHaveText("Not detected");
+    await expect(row.getByRole("button")).toHaveCount(0);
+  });
+
+  test("Settings keeps its section actions usable on a narrow viewport", async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.goto("/settings");
+    await expect(page.locator("main.settings-main")).toBeVisible();
+    await expect(page.locator("#repository-sources-inline")).toBeVisible();
+    const bounds = await page.locator("main.settings-main").boundingBox();
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(360);
   });
 
   // The detail page is parked: names are plain text and every /repositories/* URL lands on Home.
@@ -263,6 +421,11 @@ test.describe("repository-first portal Home", () => {
     const config = await (await request.get("/api/config")).json();
     config.machineHarnesses = [{ id: "claude", enabled: true, confidence: "confirmed" }];
     await page.route("**/api/config", (route) => route.fulfill({ json: config }));
+    await page.route("**/api/settings", async (route) => {
+      const setup = await (await route.fetch()).json();
+      setup.harnesses.active = [{ id: "claude", displayName: "Claude Code", enabled: true, confidence: "confirmed" }];
+      await route.fulfill({ json: setup });
+    });
     await page.goto("/");
     await expect(roboRepoCard(page)).toBeVisible();
     await page.keyboard.press("Tab");
@@ -277,7 +440,7 @@ test.describe("repository-first portal Home", () => {
     }
     // The compact Enable prompt now sits above the Active Repos section, so its action comes before
     // the heading's Manage repositories action and both come before the first card.
-    for (const expected of ["Enable auto-discovery of active repos", "Manage repositories"]) {
+    for (const expected of ["Auto-discover active repos", "Manage Repos"]) {
       await page.keyboard.press("Tab");
       const focused = await focusSummary(page);
       expect(focused.text).toBe(expected);

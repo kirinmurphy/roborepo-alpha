@@ -8,16 +8,6 @@
     "category": "skills-dev-lifecycle",
     "order": 10
   },
-  "urls": [
-    {
-      "label": "Guide",
-      "url": "https://github.com/kirinmurphy/harness_configs/blob/main/docs/user/guides/plan/lifecycle/plan-suite.md"
-    },
-    {
-      "label": "Reference",
-      "url": "https://github.com/kirinmurphy/harness_configs/blob/main/docs/user/reference/plans-portal.md"
-    }
-  ],
   "resources": [
     {
       "type": "skill",

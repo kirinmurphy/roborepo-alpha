@@ -7,14 +7,18 @@
     {{LOADING}}
     <main class="inner">
       <div class="banner-stack" id="tokensbanner-stack">
-        <section class="intro-banner tokens-off" id="tokensoff" style="display:none">
-          <h2 class="intro-banner-title" data-slot="title">telemetry is off</h2>
-          <p class="intro-banner-body" data-slot="body"></p>
-          <div class="intro-banner-actions">
-            <button data-btn="cta" id="tokensenable">turn on telemetry</button>
+        <portal-notice class="portal-notice tokens-off" id="tokensoff" variant="info" icon="info" style="display:none">
+          <div class="portal-banner-content">
+            <div class="portal-banner-copy">
+              <h2 class="intro-banner-title" data-slot="title">Token Activity Tracking</h2>
+              <p class="intro-banner-body portal-banner-supporting" data-slot="body"></p>
+            </div>
+            <div class="portal-banner-action">
+              <button data-btn="cta" id="tokensenable">Turn On Token Telemetry</button>
+            </div>
+            <div class="item-err" id="tokensenableerr"></div>
           </div>
-          <div class="item-err" id="tokensenableerr"></div>
-        </section>
+        </portal-notice>
         <div id="tokensbanner" style="display:none"></div>
         <div id="mock-disclaimer" class="mock-disclaimer" style="display:none">
           <span class="mock-text">Below is a <b>simulated tracking report</b>, track your activity after running your own agent sessions.</span>

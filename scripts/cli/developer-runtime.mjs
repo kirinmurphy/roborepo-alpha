@@ -80,7 +80,12 @@ export function loadDeveloperRuntimeSnapshot() {
   return withAutoDiscovery(withRefreshState(lastSnapshot));
 }
 
-export async function refreshDeveloperRuntimeSnapshot() {
+// Discovery and Git refresh can be held at the boundary in checks, so an opt-out can be interleaved
+// deterministically without depending on a real process or harness installation.
+export async function refreshDeveloperRuntimeSnapshot({
+  discover = discoverInstances,
+  refreshGit = refreshPortalGit,
+} = {}) {
   if (MOCK_FIRST_RUN_VIEWS_ENABLED && hasNoRegisteredRepositories()) {
     mockSnapshotActive = true;
     lastSnapshot = mockRuntimeSnapshot();
@@ -103,7 +108,7 @@ export async function refreshDeveloperRuntimeSnapshot() {
       // Independent of discovery, so pay for one round of latency rather than two. Both must settle
       // before portalInstance() runs below, since it reads the collected git context synchronously.
       const [discovery] = await Promise.all([
-        !observing ? emptyDiscovery({ observing }) : discoverInstances({
+        !observing ? emptyDiscovery({ observing }) : discover({
           settings,
           // Carrying the prior health records forward is what makes failure debouncing work: the
           // classifier is pure, so the consecutive-failure count has to travel with the snapshot.
@@ -112,7 +117,7 @@ export async function refreshDeveloperRuntimeSnapshot() {
           // mounts actually depend on rather than by the directory it was started from.
           checkoutRootsByRepository: registryCheckoutRoots(registryBeforeDiscovery),
         }),
-        refreshPortalGit(),
+        refreshGit(),
       ]);
       if (generation !== refreshGeneration && lastSnapshot) return withRefreshState(lastSnapshot);
       const portal = observing ? portalInstance() : null;

@@ -79,6 +79,19 @@ function main() {
     runCommand(binPath, ["harness", "refresh"], dirs.cwd, env);
     runCommand(binPath, ["harness", "list"], dirs.cwd, env);
 
+    // The smoke PATH starts with no supported harnesses so the fresh-install check above stays
+    // meaningful. Add a tiny validated Claude fixture now so config apply exercises the
+    // package-mode root-config update path without requiring Claude Code to be installed.
+    const claudeHome = path.join(dirs.home, ".claude");
+    fs.mkdirSync(claudeHome, { recursive: true });
+    fs.writeFileSync(path.join(claudeHome, "settings.json"), "{}\n");
+    fs.writeFileSync(
+      path.join(dirs.sandbox, "tools", "claude"),
+      "#!/bin/sh\nprintf 'Claude Code test fixture\\n'\n",
+      { mode: 0o755 },
+    );
+    runCommand(binPath, ["harness", "refresh"], dirs.cwd, env);
+
     const applyOut = runCommand(binPath, ["config", "apply"], dirs.cwd, env);
     assert.match(applyOut.stdout, /updated root config/, `expected config apply to report updated root configs\n${applyOut.stdout}`);
 

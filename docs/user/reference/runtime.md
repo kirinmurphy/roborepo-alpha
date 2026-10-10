@@ -4,6 +4,10 @@ Runtime is the `/runtime` page in the local RoboRepo portal. It discovers active
 apps, associates them with a stable project/app identity, and stores machine-local quick links such
 as `/admin` or `/resume`.
 
+Settings is the durable place to change the repository auto-discovery consent used by Runtime.
+That one switch controls both active-process observation and automatic enrollment of the
+repositories those apps use; explicit repository or folder sources remain available separately.
+
 ## Commands
 
 ```sh
@@ -23,8 +27,8 @@ While it is off, the page leads with **Enable auto-discovery of active repos**, 
 container is observed, and nothing new is registered. Repositories already known — for example from
 a folder added under **Manage repositories** — still appear with their checkouts and Git state, read
 from disk. Turning auto-discovery on starts the first scan immediately; turning it off stops the
-scans and removes the evidence they recorded. See
-[Repository sources](repositories.md#repository-sources).
+scans and removes the evidence they recorded. See [Repository sources](repositories.md#repository-sources)
+and [Manage repositories](repositories.md#manage-repositories).
 
 Automatic discovery currently supports macOS. Other platforms return an explicit capability state
 so the page can say discovery is unsupported instead of implying that no apps are running.

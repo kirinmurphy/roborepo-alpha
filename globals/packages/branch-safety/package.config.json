@@ -4,10 +4,10 @@
   "label": "Branch safety",
   "description": "Ask before creating or moving Git branches and worktrees.",
   "lifecycle": "optional",
-  "defaultEnabled": true,
+  "defaultEnabled": false,
   "presentation": {
-    "category": "code-conventions",
-    "order": 15
+    "category": "additional-agents-md-rules",
+    "order": 10
   },
   "resources": [
     {

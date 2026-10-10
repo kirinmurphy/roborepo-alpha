@@ -8,7 +8,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { test, expect } from "@playwright/test";
 
-const ENABLE = "Enable auto-discovery of active repos";
+const ENABLE = "Auto-discover active repos";
 
 test.describe("first-run repository states", () => {
   test("Home with nothing known and auto-discovery off shows only the two onboarding banners", async ({ page }) => {
@@ -19,7 +19,7 @@ test.describe("first-run repository states", () => {
     await expect(page.locator(".auto-discovery-prompt").getByRole("button", { name: ENABLE })).toBeVisible();
     await expect(page.locator(".repository-empty-state")).toHaveCount(0);
     await expect(page.locator(".home-heading")).toBeHidden();
-    await expect(page.getByRole("button", { name: "Manage repositories" })).toBeHidden();
+    await expect(page.getByRole("link", { name: "Manage Repos" })).toBeHidden();
   });
 
   test("Home with nothing found yet and auto-discovery on drops the Enable action", async ({ page }) => {
@@ -50,7 +50,7 @@ test.describe("first-run repository states", () => {
     });
     await page.goto("/");
 
-    await expect(page.locator(".auto-discovery-prompt")).toContainText("RoboRepo can automatically discover your developer activity on this machine across active Git repositories, HTTP activity, and Docker containers.");
+    await expect(page.locator(".auto-discovery-prompt")).toContainText("RoboRepo can observe active apps and remember the repositories they use across HTTP activity and Docker containers.");
     await expect(page.locator(".auto-discovery-prompt [data-notice-icon] portal-icon")).toHaveAttribute("name", "info");
     await expect(page.locator(".home-mock-disclaimer")).toContainText("These are mocked versions of what you will see");
     await expect(page.locator("#home-sync-status")).toHaveText("Synced");
@@ -94,7 +94,7 @@ test.describe("first-run repository states", () => {
   });
 
   for (const [step, scans, plans, title] of [
-    ["no repositories", [], [], "No repositories yet"],
+    ["no repositories", [], [], "Add a repo"],
     ["repositories not scanned", [{ repositoryId: "local:aaaaaaaaaaaaaaaa", state: "unavailable", planCount: 0, checkoutCount: 0 }], [], "Not scanned yet: 1 repository"],
     ["no plans found", [{ repositoryId: "local:aaaaaaaaaaaaaaaa", state: "scanned", planCount: 0, checkoutCount: 1 }], [], "No plans found in 1 repository"],
   ]) {
@@ -105,17 +105,18 @@ test.describe("first-run repository states", () => {
       });
       await page.goto("/plans");
       const onboarding = page.locator("#plans-onboarding");
-      await expect(onboarding.getByRole("heading", { name: title })).toBeVisible();
+      if (step === "no repositories") await expect(onboarding.getByText(title, { exact: true })).toBeVisible();
+      else await expect(onboarding.getByRole("heading", { name: title })).toBeVisible();
       await expect(page.locator("#package-banner")).toBeHidden();
       await expect(page.locator("#groups")).toBeEmpty();
       if (step === "no repositories") {
         await expect(page.locator("#plans-header")).toBeHidden();
-        await expect(onboarding.getByRole("button", { name: ENABLE })).toBeVisible();
-        await expect(onboarding.getByRole("button", { name: "Add a folder" })).toBeVisible();
+        await expect(onboarding.getByRole("button", { name: "Manage Repos" })).toBeVisible();
+        await expect(onboarding.getByRole("button")).toHaveCount(1);
       } else {
         await expect(page.locator("#repos-count-text")).toContainText("1 Repo");
         await expect(onboarding.getByRole("button", { name: ENABLE })).toHaveCount(0);
-        await onboarding.getByRole("button", { name: "Manage repositories…" }).click();
+        await onboarding.getByRole("link", { name: "Manage Repos" }).click();
         await expect(page.locator("#repository-sources-dialog")).toBeVisible();
       }
     });
@@ -134,21 +135,27 @@ test.describe("Manage repositories dialog", () => {
 
   test("adds a folder, explains how its repositories were found, ignores and restores one, and removes the folder", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: "Manage repositories" }).click();
+    await page.getByRole("link", { name: "Manage Repos" }).click();
     const dialog = page.locator("#repository-sources-dialog");
     await expect(dialog.getByRole("button", { name: ENABLE })).toBeVisible();
     await expect(dialog.getByRole("button", { name: /Pin|Unpin/ })).toHaveCount(0);
 
-    await dialog.getByRole("button", { name: "Add a folder to find more repos" }).click();
-    await dialog.getByLabel("Repository or folder of repositories").fill(projects);
+    const findMore = dialog.getByRole("button", { name: "Find more repos" });
+    await findMore.click();
+    await expect(findMore).toBeHidden();
+    await expect(dialog.getByLabel("Find more repos in")).toBeVisible();
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(findMore).toBeVisible();
+    await findMore.click();
+    await dialog.getByLabel("Find more repos in").fill(projects);
     await dialog.getByRole("button", { name: "Add folder" }).click();
     const folder = dialog.locator("[data-slot=folders] li", { hasText: projects });
     await expect(folder).toContainText("Healthy");
     await expect(folder).toContainText("1 repo");
     const row = dialog.locator("[data-slot=repositories] li", { hasText: "dialog-fixture" });
-    await expect(row).toContainText(`Found by: ${projects}`);
+    await expect(row).toContainText(`in /${path.basename(projects)}`);
 
-    await row.getByRole("button", { name: "Ignore repository" }).click();
+    await row.getByRole("button", { name: "Ignore Repo" }).click();
     await expect(dialog.locator("[data-slot=repositories] li", { hasText: "dialog-fixture" })).toHaveCount(0);
     await dialog.getByText("Ignored (1)").click();
     await dialog.locator("[data-slot=ignored] li", { hasText: "dialog-fixture" }).getByRole("button", { name: "Restore" }).click();
@@ -156,44 +163,33 @@ test.describe("Manage repositories dialog", () => {
 
     await folder.getByRole("button", { name: "Remove" }).click();
     await expect(dialog.locator("[data-slot=folders] li")).toHaveCount(0);
-    await expect(dialog.locator("[data-slot=repositories] li", { hasText: "dialog-fixture" })).toContainText("No current source", { timeout: 5000 });
+    await expect(dialog.locator("[data-slot=repositories] li", { hasText: "dialog-fixture" })).toContainText("no current source", { timeout: 5000 });
 
   });
 
-  test("an unreadable path asks what it is before it is added", async ({ page }) => {
+  test("an unreadable path shows an inline error and is not added", async ({ page }) => {
     const missing = path.join(projects, "not-there-yet");
     await page.goto("/");
-    await page.getByRole("button", { name: "Manage repositories" }).click();
+    await page.getByRole("link", { name: "Manage Repos" }).click();
     const dialog = page.locator("#repository-sources-dialog");
-    await dialog.getByRole("button", { name: "Add a folder to find more repos" }).click();
-    await dialog.getByLabel("Repository or folder of repositories").fill(missing);
+    await dialog.getByRole("button", { name: "Find more repos" }).click();
+    await dialog.getByLabel("Find more repos in").fill(missing);
     await dialog.getByRole("button", { name: "Add folder" }).click();
-    await expect(dialog.getByRole("group", { name: /can't read this path/ })).toBeVisible();
-    const directoryIntent = dialog.getByLabel("A folder of repositories");
-    await directoryIntent.check();
-    await dialog.getByLabel("Repository or folder of repositories").fill(`${missing}-changed`);
-    await expect(directoryIntent).not.toBeChecked();
-    await dialog.getByLabel("Repository or folder of repositories").fill(missing);
-    await dialog.getByRole("button", { name: "Add folder" }).click();
-    await expect(dialog.getByRole("group", { name: /can't read this path/ })).toBeVisible();
-    await directoryIntent.check();
-    await dialog.getByRole("button", { name: "Add folder" }).click();
-    const folder = dialog.locator("[data-slot=folders] li", { hasText: missing });
-    await expect(folder).toContainText("Unavailable");
-    await folder.getByRole("button", { name: "Remove" }).click();
-    await expect(folder).toHaveCount(0);
+    await expect(dialog.locator("[data-slot=path-error]")).toHaveText("Folder not found. Check the path and try again.");
+    await expect(dialog.getByRole("group", { name: /can't read this path/ })).toHaveCount(0);
+    await expect(dialog.locator("[data-slot=folders] li", { hasText: missing })).toHaveCount(0);
   });
 
   test("keeps the title fixed while a tall dialog body scrolls and shows full paths on hover", async ({ page }) => {
     await page.setViewportSize({ width: 760, height: 800 });
     await routeRepositorySources(page, crowdedSourcesPayload());
     await page.goto("/");
-    await page.getByRole("button", { name: "Manage repositories" }).click();
+    await page.getByRole("link", { name: "Manage Repos" }).click();
 
-    const dialog = page.getByRole("dialog", { name: "Manage repositories" });
+    const dialog = page.getByRole("dialog", { name: "Manage Repos" });
     const body = dialog.locator(".repository-sources-body");
     await expect.poll(() => body.evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true);
-    const heading = dialog.getByRole("heading", { name: "Manage repositories" });
+    const heading = dialog.getByRole("heading", { name: "Manage Repos" });
     const before = await heading.boundingBox();
     await body.evaluate((node) => { node.scrollTop = node.scrollHeight; });
     const after = await heading.boundingBox();
@@ -211,9 +207,9 @@ test.describe("Manage repositories dialog", () => {
     const initialTheme = await page.locator("html").getAttribute("data-theme");
     await page.getByRole("button", { name: "Toggle theme" }).click();
     await expect(page.locator("html")).not.toHaveAttribute("data-theme", initialTheme);
-    await page.getByRole("button", { name: "Manage repositories" }).click();
+    await page.getByRole("link", { name: "Manage Repos" }).click();
 
-    const dialog = page.getByRole("dialog", { name: "Manage repositories" });
+    const dialog = page.getByRole("dialog", { name: "Manage Repos" });
     await expect.poll(() => dialog.evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true);
     await dialog.evaluate((node) => { node.scrollTop = node.scrollHeight; });
     const close = dialog.getByRole("button", { name: "Close" });
@@ -224,20 +220,21 @@ test.describe("Manage repositories dialog", () => {
 
   test("wipes the repository list after confirmation", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: "Manage repositories" }).click();
-    const dialog = page.getByRole("dialog", { name: "Manage repositories" });
+    await page.getByRole("link", { name: "Manage Repos" }).click();
+    const dialog = page.getByRole("dialog", { name: "Manage Repos" });
     await expect(dialog.locator("[data-slot=repositories] li")).not.toHaveCount(0);
+    await expect(dialog.locator(".sources-auto-actions").getByRole("button", { name: "Clear All Repos" })).toBeVisible();
 
     let confirmationMessage;
     page.once("dialog", (browserDialog) => {
       confirmationMessage = browserDialog.message();
       browserDialog.accept();
     });
-    await dialog.getByRole("button", { name: "Wipe clean" }).click();
-    expect(confirmationMessage).toContain("Wipe the entire repository list");
+    await dialog.getByRole("button", { name: "Clear All Repos" }).click();
+    expect(confirmationMessage).toContain("Clear all repos?");
     await expect(dialog.locator("[data-slot=repositories] li")).toHaveCount(0);
     await expect(dialog.locator("[data-slot=repositories-empty]")).toBeVisible();
-    await expect(dialog.getByRole("button", { name: "Wipe clean" })).toBeHidden();
+    await expect(dialog.getByRole("button", { name: "Clear All Repos" })).toBeHidden();
   });
 });
 

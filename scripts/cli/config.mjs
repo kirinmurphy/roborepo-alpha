@@ -152,6 +152,7 @@ export function readConfigSnapshot() {
   const packages = availablePackages.map((pkg) => ({
     id: pkg.id,
     label: pkg.label,
+    archived: pkg.archived === true,
     description: pkg.description || null,
     status: packageLiveState.get(pkg.id)?.status || "disabled",
     catalogStatus: pkg.status || "available",
@@ -286,6 +287,7 @@ export function buildBehaviorView(snap) {
   const toolByPackage = new Map((snap.tools || []).map((tool) => [tool.packageId, tool]));
   const packageCosts = snap.contextCost?.packages || {};
   for (const item of snap.packages) {
+    if (item.archived) continue;
     const section = byCategory.get(item.presentation?.category);
     if (!section) continue;
     section.items.push(packagePresentationItem(item, toolByPackage.get(item.id), packageCosts[item.id] || null));

@@ -7,6 +7,10 @@ export function fetchSnapshot() {
   return portalGetJson("/api/plans");
 }
 
+export function fetchHomeOverview() {
+  return portalGetJson("/api/home");
+}
+
 export function refreshSnapshot() {
   return portalPostJson("/api/plans/refresh", {});
 }
