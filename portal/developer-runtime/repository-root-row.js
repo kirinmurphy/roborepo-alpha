@@ -41,11 +41,20 @@ let memberListSequence = 0;
 // and copy control at the start of the identity line. Git drift and the actions column still come
 // from `root`, so the row behaves exactly like the checkout it is. Home names a worktree by the plan
 // it implements this way; the row stays agnostic about what the node holds.
-export function buildRootSection({ root, departed = [], repository, composeActions, instanceActions, mode = "runtime", onMountLinks, identity = null }) {
+export function buildRootSection({ root, departed = [], repository, composeActions, instanceActions, mode = "runtime", onMountLinks, onWorktreeAction, identity = null }) {
   const section = createRepositoryCheckoutRow({ controls: mode !== "home" });
   // Lets a rebuild find "this same checkout's" row across renders (see reconcileSection in app.js)
   // to carry its open/closed state forward — rootId is stable across polls, DOM position is not.
   section.dataset.rootId = root?.rootId || "main";
+  if (root?.isWorktree && root.worktreeState) {
+    section.classList.add(`worktree-is-${root.worktreeState}`);
+    const badge = section.querySelector("[data-slot=worktree-state]");
+    if (root.worktreeState !== "running") {
+      badge.hidden = false;
+      badge.textContent = root.worktreeState === "stale" ? "suggested for removal" : root.worktreeState;
+      if (root.worktreeReason) badge.title = root.worktreeReason;
+    }
+  }
 
   const glyph = section.querySelector("[data-slot=root-glyph]");
   glyph.setAttribute("name", identity?.glyph || (root?.isWorktree ? "tree" : "home"));
@@ -62,6 +71,15 @@ export function buildRootSection({ root, departed = [], repository, composeActio
   }
   fillPromotedLink(section, root);
   if (mode === "home") {
+    if (root?.isWorktree && root.worktreeState && root.worktreeState !== "running" && root.git?.branch && onWorktreeAction) {
+      const actions = section.querySelector("[data-slot=worktree-actions]");
+      actions.hidden = false;
+      for (const action of ["hide", "remove"]) {
+        const button = actions.querySelector(`[data-action=${action}-worktree]`);
+        button.setAttribute("aria-label", `${action === "hide" ? "Hide" : "Remove"} ${root.git.branch}`);
+        button.addEventListener("click", () => onWorktreeAction(action, root));
+      }
+    }
     if (root?.primaryEntrypoint?.opaqueKey) onMountLinks?.(section.querySelector("[data-slot=root-links]"), root.primaryEntrypoint);
     section.querySelector("[data-slot=members]")?.remove();
     return section;

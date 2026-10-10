@@ -56,7 +56,8 @@ function repositoryCard(repository, actions) {
     badge.classList.add(`is-${lifecycleState}`);
     if (repository.lifecycle?.reason) badge.title = repository.lifecycle.reason;
   }
-  node.querySelector("[data-slot=checkouts]").append(...cardRows(repository.domains, actions));
+  node.querySelector("[data-slot=checkouts]").append(...cardRows(repository.domains, { ...actions, repositoryId: repository.repositoryId }));
+  mountHiddenWorktrees(node.querySelector("[data-slot=hidden-worktrees]"), repository, actions);
   appendRepositoryDomains(node.querySelector("[data-slot=domains]"), repository.domains);
   return node;
 }
@@ -66,6 +67,22 @@ function humanizeMockName(name) {
     .replace(/-fixture$/i, "")
     .replace(/[-_]+/g, " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function mountHiddenWorktrees(slot, repository, actions) {
+  const hidden = repository.domains.runtime.data?.hiddenWorktrees || [];
+  if (!hidden.length) return;
+  const group = tpl("tpl-hidden-worktrees");
+  group.querySelector("[data-slot=count]").textContent = `${hidden.length} hidden`;
+  for (const worktree of hidden) {
+    const row = tpl("tpl-hidden-worktree");
+    row.querySelector("[data-slot=name]").textContent = worktree.name;
+    const button = row.querySelector("[data-action=unhide]");
+    button.setAttribute("aria-label", `Unhide ${worktree.name}`);
+    button.addEventListener("click", () => actions.onWorktreeAction?.("unhide", { git: { branch: worktree.name }, repositoryId: repository.repositoryId }));
+    group.querySelector("[data-slot=items]").append(row);
+  }
+  slot.append(group);
 }
 
 // Below the repository row: the main checkout(s), then every active plan — a matched plan AS its
@@ -100,6 +117,10 @@ function checkoutRow(checkout, actions, identity = null) {
       projectRoot: checkout.projectRoot,
       checkoutState: checkout.checkoutState,
       checkoutReason: checkout.checkoutReason,
+      worktreeState: checkout.worktreeState,
+      worktreeReason: checkout.worktreeReason,
+      unmergedCommits: checkout.unmergedCommits,
+      repositoryId: actions.repositoryId,
       git: checkout.git,
       primaryEntrypoint: checkout.primaryEntrypoint,
       members: [],
@@ -108,6 +129,7 @@ function checkoutRow(checkout, actions, identity = null) {
     repository: { name: "Repository" },
     mode: "home",
     onMountLinks: actions.onMountLinks,
+    onWorktreeAction: (action, root) => actions.onWorktreeAction?.(action, { ...root, repositoryId: actions.repositoryId }),
     identity,
   });
 }

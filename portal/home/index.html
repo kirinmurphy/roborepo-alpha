@@ -48,8 +48,18 @@
           <span data-slot="repository-menu"></span>
         </div>
         <div class="repository-roots" data-slot="checkouts"></div>
+        <div data-slot="hidden-worktrees"></div>
         <div class="home-domain-rows" data-slot="domains"></div>
       </article>
+    </template>
+    <template id="tpl-hidden-worktrees">
+      <details class="home-hidden-worktrees">
+        <summary data-slot="count"></summary>
+        <ul data-slot="items"></ul>
+      </details>
+    </template>
+    <template id="tpl-hidden-worktree">
+      <li><span data-slot="name"></span><button type="button" data-action="unhide">Unhide</button></li>
     </template>
     <template id="tpl-domain-row">
       <section class="home-domain-row">

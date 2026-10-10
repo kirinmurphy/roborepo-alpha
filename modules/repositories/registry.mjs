@@ -159,7 +159,7 @@ function sameDiscoverySource(discovery, { source, sourceId }) {
 }
 
 // Register a local on-disk root (clone or worktree) under a repository. Idempotent by rootId.
-export function registerLocalRoot(registry, id, { rootId, kind = "clone", now = new Date().toISOString() }) {
+export function registerLocalRoot(registry, id, { rootId, kind = "clone", now = new Date().toISOString(), refreshSeen = true }) {
   const record = requireRecord(registry, id, "register local root");
   const existing = record.localRoots.find((r) => r.rootId === rootId);
   if (!existing) {
@@ -169,12 +169,29 @@ export function registerLocalRoot(registry, id, { rootId, kind = "clone", now = 
     record.updatedAt = now;
     return true;
   }
-  if (Date.parse(now) - Date.parse(existing.lastSeenAt) >= LAST_SEEN_DEBOUNCE_MS) {
+  if (kind === "worktree" && existing.kind !== "worktree") {
+    existing.kind = "worktree";
+    record.updatedAt = now;
+    return true;
+  }
+  if (refreshSeen && Date.parse(now) - Date.parse(existing.lastSeenAt) >= LAST_SEEN_DEBOUNCE_MS) {
     existing.lastSeenAt = now;
     record.updatedAt = now;
     return true;
   }
   return false;
+}
+
+export function setWorktreeHidden(registry, id, rootId, { hidden, now = new Date().toISOString() }) {
+  const record = requireRecord(registry, id, "set worktree hidden");
+  const root = record.localRoots.find((item) => item.rootId === rootId && item.kind === "worktree");
+  if (!root) throw new Error(`unknown worktree: ${rootId}`);
+  if (hidden && root.hiddenAt === now) return false;
+  if (!hidden && !root.hiddenAt) return false;
+  if (hidden) root.hiddenAt = now;
+  else delete root.hiddenAt;
+  record.updatedAt = now;
+  return true;
 }
 
 // Record where a rootId actually lives on disk (pljvmyh §2's private index). Separate from

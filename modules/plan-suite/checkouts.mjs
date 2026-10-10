@@ -4,6 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { checkoutRootsFor, mainCheckoutPath, resolveGitDir } from "../repositories/index.mjs";
+import { linkedWorktrees } from "../repositories/worktree-inventory.mjs";
 
 // Returns [{ path, isMain, isWorktree, label }], main first. `label` names a non-main checkout for
 // display: the worktree's administrative name, or a second clone's directory name. The main checkout
@@ -19,7 +20,9 @@ export function repositoryCheckouts(registry, repositoryId, { fsApi = fs } = {})
   if (main) {
     checkouts.set(main, { path: main, isMain: true, isWorktree: false, label: null });
     const git = resolveGitDir(main, { fsApi });
-    if (git) for (const worktree of linkedWorktrees(git.commonDir, fsApi)) checkouts.set(worktree.path, worktree);
+    if (git) for (const worktree of linkedWorktrees(git.commonDir, { fsApi })) {
+      if (!worktree.prunable) checkouts.set(worktree.path, { path: worktree.path, isMain: false, isWorktree: true, label: worktree.name });
+    }
   }
   for (const root of known) {
     if (checkouts.has(root)) continue;
@@ -30,28 +33,6 @@ export function repositoryCheckouts(registry, repositoryId, { fsApi = fs } = {})
   return first?.isMain
     ? [first, ...rest.sort((a, b) => a.label.localeCompare(b.label))]
     : [first, ...rest].sort((a, b) => a.label.localeCompare(b.label));
-}
-
-// <commonDir>/worktrees/<name>/gitdir holds the path of that worktree's `.git` file.
-function linkedWorktrees(commonDir, fsApi) {
-  let names = [];
-  try {
-    names = fsApi.readdirSync(path.join(commonDir, "worktrees"));
-  } catch {
-    return [];
-  }
-  const out = [];
-  for (const name of names) {
-    let gitFile;
-    try {
-      gitFile = fsApi.readFileSync(path.join(commonDir, "worktrees", name, "gitdir"), "utf8").trim();
-    } catch {
-      continue;
-    }
-    const root = realpathOrNull(path.dirname(path.resolve(commonDir, "worktrees", name, gitFile)), fsApi);
-    if (root && isDirectory(root, fsApi)) out.push({ path: root, isMain: false, isWorktree: true, label: name });
-  }
-  return out;
 }
 
 function realpathOrNull(value, fsApi) {

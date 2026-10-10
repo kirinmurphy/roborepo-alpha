@@ -48,6 +48,7 @@ import { buildRepositoryHashIndex } from "./telemetry-repository.mjs";
 import { createRepositoryOverviewService } from "./repository-overview.mjs";
 import { MOCK_FIRST_RUN_VIEWS_ENABLED, mockHomeOverview, purgePersistedMockRepositories } from "./mock-home.mjs";
 import { buildTelemetryRepositoryProjection, fixtureTelemetryRepositories, homeTelemetryProjection } from "./telemetry-repository-overview.mjs";
+import { mutateWorktree } from "./worktree-cleanup.mjs";
 import { privacyHash } from "./telemetry-schemas/hash.mjs";
 import { buildAnalysisPrompt } from "../harnesses/transcript-locate.mjs";
 import { insightsSummary } from "./telemetry-insights.mjs";
@@ -839,6 +840,11 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     loadHomeOverview: () => repositoryOverview.loadHome(),
     loadRepositoryOverview: (params) => repositoryOverview.loadDetail(params),
     patchRepository: (params) => patchRepository(params),
+    mutateWorktree: async (params) => {
+      const result = await mutateWorktree(params);
+      await refreshDeveloperRuntimeSnapshot();
+      return result;
+    },
     // Source changes alter which repositories exist, so the cached Plans snapshot is rebuilt after
     // each one; enabling auto-discovery starts the first process scan immediately.
     loadRepositorySources: () => loadRepositorySources(),

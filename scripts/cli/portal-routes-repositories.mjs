@@ -28,12 +28,18 @@ function postRoute(path, run) {
     handler: (req, res, { params, handlers }) => {
       readJsonBody(req, (body, err) => {
         if (err) return send(res, 400, "application/json", JSON.stringify({ error: "invalid JSON body" }));
-        try {
-          send(res, 200, "application/json", JSON.stringify(run(handlers, body || {}, params)));
-        } catch (error) {
+        const success = (result) => {
+          send(res, 200, "application/json", JSON.stringify(result));
+        };
+        const failure = (error) => {
           const status = error?.code === "NOT_FOUND" ? 404 : 400;
           send(res, status, "application/json", JSON.stringify({ error: { code: error?.code || "INVALID_SOURCE", message: String(error?.message || error) } }));
-        }
+        };
+        try {
+          const result = run(handlers, body || {}, params);
+          if (result && typeof result.then === "function") result.then(success, failure);
+          else success(result);
+        } catch (error) { failure(error); }
       });
       return true;
     },
@@ -70,6 +76,7 @@ export const repositoriesRoutes = defineRoutes([
   postRoute("/api/repositories/sources/wipe", (handlers) => handlers.wipeRepositoryList()),
   postRoute("/api/repositories/sources/:sourceId/enabled", (handlers, body, params) => handlers.setRepositorySourceEnabled({ id: params.sourceId, enabled: body.enabled })),
   postRoute("/api/repositories/sources/:sourceId/remove", (handlers, body, params) => handlers.removeRepositorySource({ id: params.sourceId })),
+  postRoute("/api/repositories/:id/worktrees/:action", (handlers, body, params) => handlers.mutateWorktree({ repositoryId: params.id, action: params.action, branch: body.branch, confirm: body.confirm === true })),
   {
     method: "GET",
     path: "/api/repositories",

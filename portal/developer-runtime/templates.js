@@ -631,6 +631,18 @@ export function settingsRow(title, meta, label, onClick) {
   return node;
 }
 
+export function worktreeThreshold(days, onSave) {
+  const node = tpl("tpl-worktree-threshold");
+  const input = node.querySelector("[data-field=days]");
+  input.value = String(days);
+  node.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (!node.reportValidity()) return;
+    onSave(Number(input.value));
+  });
+  return node;
+}
+
 // Render Git context, distinguishing "no uncommitted changes" from "we could not tell". A dirty
 // marker only appears for an explicit true; null means the subprocess could not answer, and drawing
 // nothing there is the honest choice — a card that implied "clean" would be acted on.

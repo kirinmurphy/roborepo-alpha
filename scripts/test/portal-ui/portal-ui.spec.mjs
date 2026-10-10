@@ -46,6 +46,40 @@ test.describe("Agents page", () => {
 });
 
 test.describe("repository-first portal Home", () => {
+  test("idle worktrees stay beside their plans; stale and landed markers and Hide/Unhide are visible", async ({ page }) => {
+    let hidden = false;
+    await page.route("**/api/repositories/*/worktrees/*", async (route) => {
+      const action = new URL(route.request().url()).pathname.split("/").at(-1);
+      hidden = action === "hide";
+      await route.fulfill({ json: { action: hidden ? "hidden" : "unhidden" } });
+    });
+    await patchRoboRepo(page, (repository) => {
+      repository.domains.plans = { status: "available", data: { active: [
+        { id: "idle-plan", key: "idle-plan", title: "Idle Story", worktree: "idle-tree", checkoutRootId: "idle-tree", taskCounts: { total: 1, complete: 0 } },
+      ], counts: { active: 1, backlog: 0 }, recent: [] } };
+      const worktree = (rootId, branch, state) => ({ rootId, name: branch, worktreeName: rootId, isWorktree: true, worktreeState: state, git: { branch, provider: { ok: true } } });
+      repository.domains.runtime = { status: "available", data: {
+        checkouts: [
+          { rootId: "main", name: "main", isWorktree: false, git: { branch: "main", provider: { ok: true } } },
+          ...(!hidden ? [worktree("idle-tree", "feature/idle", "idle")] : []),
+          worktree("stale-tree", "feature/stale", "stale"),
+          worktree("landed-tree", "feature/landed", "landed"),
+        ],
+        hiddenWorktrees: hidden ? [{ rootId: "idle-tree", name: "feature/idle", worktreeName: "idle-tree", state: "idle" }] : [],
+      } };
+    });
+    await page.goto("/");
+    const card = roboRepoCard(page);
+    await expect(planRowOf(card, "Idle Story").getByText("idle", { exact: true })).toBeVisible();
+    await expect(checkoutRow(card, "feature/stale").getByText("suggested for removal")).toBeVisible();
+    await expect(checkoutRow(card, "feature/landed").getByText("landed", { exact: true })).toBeVisible();
+    await card.getByRole("button", { name: "Hide feature/idle" }).click();
+    await expect(card.getByText("1 hidden")).toBeVisible();
+    await card.getByText("1 hidden").click();
+    await card.getByRole("button", { name: "Unhide feature/idle" }).click();
+    await expect(planRowOf(card, "Idle Story")).toBeVisible();
+  });
+
   test("Home renders the canonical repository directory", async ({ page }) => {
     const response = await page.goto("/");
     expect(response.status()).toBe(200);

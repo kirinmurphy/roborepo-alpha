@@ -95,7 +95,7 @@ flowchart TD
 | Time budget per walk | 5 seconds |
 | Maximum repositories per walk | 250 |
 | Skipped folder names | names starting with `.`, and `node_modules`, `.git`, `vendor`, `dist`, `build`, `.cache`, `coverage`, `.next`, `.venv`, `__pycache__` |
-| Linked Git worktrees | not registered on their own; the main checkout stands for the repository |
+| Linked Git worktrees | registered as checkouts of the known repository; they are not separate repositories |
 
 The walk tracks each folder's real path and never descends into one twice, so symlink cycles end.
 
@@ -166,7 +166,7 @@ Each card combines a compact view of several domains:
     equal the worktree's Git administrative name, exactly one active plan must claim it, and exactly
     one known worktree must carry it. Branch names and checkout paths are never used to guess.
   - Any other plan is its own row with a badge: **not started** when it names no worktree, and
-    **worktree not running** when the worktree it names is stopped, missing, or claimed twice.
+    **worktree not running** when the named worktree is missing or claimed twice.
   - Worktrees no plan claimed follow as ordinary checkout rows.
   - One unlabeled line closes the list with the repository's Active and Backlog counts and an
     **all plans** link, and says so when Plans coverage is partial. A repository with no active
@@ -177,6 +177,42 @@ Each card combines a compact view of several domains:
   captures are still on disk, which matches the Tokens page.
 - **Agents** — repository-scoped agent configuration is currently unavailable and is labeled that
   way.
+
+### Worktree states and cleanup
+
+Home and Runtime list linked worktrees of a known repository even when no application is running.
+Each has one state: **running**, **idle**, **stale**, or **landed**. Landed means the branch's work
+was absorbed by a commit on the base branch's first-parent history. Stale means no observed
+activity during the configured interval; it is a suggestion for review, not evidence of a merge.
+The interval defaults to 7 days. Change it in Runtime's Settings under **Worktrees**, or set
+`ROBOREPO_WORKTREE_STALE_DAYS` to a number from 1 to 365 to override the setting.
+
+Use **Hide** on a worktree row to move it into the card's **N hidden** list. **Unhide** restores it;
+new branch activity also restores a hidden worktree. **Remove** asks for confirmation and shows the
+branch, its unmerged commit count, and the archive ref used to preserve its tip. Removal refuses a
+locked, dirty, or running worktree, a worktree with valuable ignored files or submodules, and the
+current or main checkout. A blocked landed worktree shows its reason on Home.
+
+`roborepo git worktrees cleanup` previews candidates and reasons. Add `--apply` to remove eligible
+landed worktrees and local branches. `--plan <id>` limits it to a completed plan's worktree. The
+command also accepts `--hide <branch>`, `--unhide <branch>`, and `--remove <branch> --confirm --apply`.
+Automatic cleanup waits for an associated plan to leave `active`. It only removes a clean,
+unlocked, landed worktree beneath the repository's configured `worktreeRoot`, and never uses
+`git worktree remove --force`. A worktree elsewhere is suggested for manual review. The command
+does not touch remote branches.
+
+`roborepo git worktrees hook install` enables automatic cleanup after a successful merge or pull
+in that repository. It returns immediately and writes cleanup output to
+`<state root>/worktree-cleanup/hook.log`. An existing foreign `post-merge` hook is left intact; the
+installer prints a line to add to it. Use `roborepo git worktrees hook uninstall` to remove a hook
+installed by RoboRepo. Fetches and pulls that are already up to date do not invoke the hook.
+
+The removal log is `<state root>/worktree-cleanup/removals.jsonl`; each line names the branch and
+commit. A confirmed removal also writes `refs/roborepo/abandoned/<branch>`. Restore its branch with
+`git branch <branch> refs/roborepo/abandoned/<branch>`, then restore a checkout with
+`git worktree add <path> <branch>`. List archive refs with
+`git for-each-ref refs/roborepo/abandoned` and delete one after review with
+`git update-ref -d refs/roborepo/abandoned/<branch>`.
 
 Cards with more than five checkouts put the additional rows in an expandable section. An open
 section and a focused control are not rebuilt during polling, so keyboard position and expanded

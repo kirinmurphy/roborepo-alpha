@@ -15,3 +15,7 @@ export function setRepositoryPinned(payload) {
 export function forgetRepository(payload) {
   return portalPostJson("/api/developer-runtime/repository-forget", payload);
 }
+
+export function mutateWorktree({ repositoryId, action, branch, confirm = false }) {
+  return portalPostJson(`/api/repositories/${encodeURIComponent(repositoryId)}/worktrees/${action}`, { branch, confirm });
+}

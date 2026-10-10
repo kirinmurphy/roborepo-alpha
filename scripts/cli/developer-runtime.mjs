@@ -39,6 +39,8 @@ import {
 import { createIdleGitCache } from "../../modules/repositories/idle-git-cache.mjs";
 import { MOCK_FIRST_RUN_VIEWS_ENABLED, mockRuntimeSnapshot } from "./mock-home.mjs";
 import { isFixtureRepository } from "../../modules/developer-runtime/snapshot.mjs";
+import { collectKnownWorktrees } from "./worktree-observations.mjs";
+import { loadWorktreeSessionActivity } from "./worktree-activity.mjs";
 
 const FRESHNESS_MS = 8000;
 const HISTORY_API_LIMIT = 200;
@@ -48,6 +50,7 @@ let inFlightRefresh = null;
 let refreshGeneration = 0;
 let mockSnapshotActive = false;
 let portalInfo = null;
+let lastKnownWorktrees = new Map();
 // associationKeys already present in the history file, read once. Without it, the first refresh
 // after a portal restart has no previous snapshot to compare against and would emit a firstSeen for
 // every running app — every restart, forever.
@@ -56,6 +59,7 @@ let knownHistoryKeys = null;
 export function clearDeveloperRuntimeSnapshotCache() {
   lastSnapshot = null;
   mockSnapshotActive = false;
+  lastKnownWorktrees = new Map();
 }
 
 // While auto-discovery is off the refresh still runs, but only over checkouts the registry already
@@ -132,9 +136,17 @@ export async function refreshDeveloperRuntimeSnapshot({
       // counted as running rather than appearing as idle on the poll that first found it.
       const runningIds = runningRepositoryIds(discovery);
       const registryNow = loadRegistrySafe();
-      const idleMainCheckouts = await collectIdleMainCheckouts(discovery, runningIds, registryNow);
+      const runningRootIds = new Set((discovery.instances || []).map((instance) => instance.project?.rootId).filter(Boolean));
+      for (const resolved of (discovery.composeProjectGit || new Map()).values()) if (resolved?.rootId) runningRootIds.add(resolved.rootId);
+      const inventory = registryNow ? await collectKnownWorktrees(registryNow, {
+        stateRoot, settings, readGit: readIdleGit, runningRootIds,
+        sessionActivity: loadWorktreeSessionActivity(stateRoot),
+      }) : { registry: null, worktrees: new Map(), findings: [] };
+      lastKnownWorktrees = inventory.worktrees;
+      (discovery.warnings ||= []).push(...inventory.findings);
+      const idleMainCheckouts = await collectIdleMainCheckouts(discovery, runningIds, inventory.registry);
       const { persistedRepositories, registry } = await collectPersistedRepositories(runningIds, {
-        registry: registryNow,
+        registry: inventory.registry,
         extraLiveRoots: [...idleMainCheckouts.values()].map((checkout) => checkout.projectRoot),
       });
       lastSnapshot = buildSnapshot({
@@ -208,6 +220,7 @@ export function updateDeveloperRuntimeSettings(input) {
     const settings = updateSettings({ stateRoot, input });
     const discovery = snapshotDiscovery(lastSnapshot);
     lastSnapshot = buildSnapshot({ discovery, settings });
+    if (input?.type === "preferences") scheduleRefresh();
     return { ok: true, developerRuntime: lastSnapshot };
   } catch (err) {
     if (err?.code === "REVISION_CONFLICT") {
@@ -483,7 +496,7 @@ function scheduleRefresh() {
   if (!inFlightRefresh) refreshDeveloperRuntimeSnapshot().catch(() => {});
 }
 
-function buildSnapshot({ discovery, settings = loadSettings({ stateRoot }), refresh = { state: "idle", startedAt: null, error: null }, now = new Date(), persistedRepositories = [], idleMainCheckouts = new Map(), registry = loadRegistrySafe() }) {
+function buildSnapshot({ discovery, settings = loadSettings({ stateRoot }), refresh = { state: "idle", startedAt: null, error: null }, now = new Date(), persistedRepositories = [], idleMainCheckouts = new Map(), knownWorktrees = lastKnownWorktrees, registry = loadRegistrySafe() }) {
   return withoutFixtureRepositories(withAutoDiscovery(buildDeveloperRuntimeSnapshot({
     discovery,
     settings,
@@ -493,6 +506,7 @@ function buildSnapshot({ discovery, settings = loadSettings({ stateRoot }), refr
     repositoryUrlKeys: registryUrlKeys(registry),
     persistedRepositories,
     idleMainCheckouts,
+    knownWorktrees,
     hiddenRepositories: collectHiddenRepositories(registry),
     pinnedRepositoryIds: registryPinnedIds(registry),
   })));

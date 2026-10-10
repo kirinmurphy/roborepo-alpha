@@ -83,6 +83,11 @@ function applyMutation(settings, input) {
   if (input.type === "association") return mutateAssociation(settings, input);
   if (input.type === "alias") return mutateAlias(settings, input);
   if (input.type === "composeProject") return mutateComposeProject(settings, input);
+  if (input.type === "preferences") {
+    if (!Number.isInteger(input.worktreeStaleDays) || input.worktreeStaleDays < 1 || input.worktreeStaleDays > 365) throw new Error("worktreeStaleDays must be between 1 and 365");
+    settings.preferences.worktreeStaleDays = input.worktreeStaleDays;
+    return;
+  }
   throw new Error("unknown developer-runtime settings mutation");
 }
 

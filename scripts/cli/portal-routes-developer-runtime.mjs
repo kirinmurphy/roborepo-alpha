@@ -68,6 +68,7 @@ export const developerRuntimeRoutes = defineRoutes([
   mutationRoute("project"),
   mutationRoute("alias"),
   mutationRoute("compose-project"),
+  mutationRoute("preferences"),
   // Not a mutationRoute: those all funnel into updateDeveloperRuntimeSettings, and repository visibility
   // lives in the repository registry rather than in Runtime's settings file. Same shape and same
   // response contract, different store.

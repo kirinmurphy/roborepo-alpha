@@ -916,6 +916,9 @@ async function hideInstance(project, instance) {
 
 function renderSettingsDialog() {
   refs.settingsBody.replaceChildren(
+    tmpl.settingsSection("Worktrees", [tmpl.worktreeThreshold(lastSnapshot.settings?.worktreeStaleDays ?? 7, (days) =>
+      mutateSettings(() => api.updatePreferences({ revision: lastSnapshot.settingsRevision, worktreeStaleDays: days })),
+    )]),
     // Two hidden lists, deliberately separate. "Hidden" holds projects and apps the user hid by
     // hand, in Runtime's settings. "Hidden repositories" holds whole repositories the 30-day
     // ageing sweep retired from the list — a different store, a different actor, and a different

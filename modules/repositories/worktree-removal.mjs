@@ -1,0 +1,72 @@
+import fs from "node:fs";
+import path from "node:path";
+import { createHash } from "node:crypto";
+import { runGitProcess } from "./git-exec.mjs";
+
+export function removalLogPath(stateRoot) {
+  return path.join(stateRoot, "worktree-cleanup", "removals.jsonl");
+}
+
+export async function withCleanupLock(stateRoot, action, { fsApi = fs, repositoryPath = null } = {}) {
+  const dir = path.join(stateRoot, "worktree-cleanup");
+  fsApi.mkdirSync(dir, { recursive: true });
+  const repositoryKey = repositoryPath ? createHash("sha256").update(repositoryPath).digest("hex").slice(0, 16) : "global";
+  const file = path.join(dir, `${repositoryKey}.lock`);
+  let handle;
+  try {
+    handle = fsApi.openSync(file, "wx");
+  } catch (err) {
+    if (err?.code === "EEXIST") return { locked: true, result: null };
+    throw err;
+  }
+  try {
+    fsApi.writeSync(handle, `${process.pid}\n`);
+    return { locked: false, result: await action() };
+  } finally {
+    fsApi.closeSync(handle);
+    fsApi.rmSync(file, { force: true });
+  }
+}
+
+export async function archiveBranchTip(mainPath, branch, tip, { runGit = runGitProcess } = {}) {
+  const ref = `refs/roborepo/abandoned/${branch}`;
+  const existing = await runGit(mainPath, ["rev-parse", "--verify", ref]);
+  if (existing.ok && existing.stdout.trim() !== tip) return { ok: false, reason: `archive ref already exists: ${ref}` };
+  const result = await runGit(mainPath, ["update-ref", ref, tip], { timeoutMs: 10000 });
+  return result.ok ? { ok: true, ref } : { ok: false, reason: result.error || "could not archive branch" };
+}
+
+export async function removeWorktree(mainPath, worktree, { kind, stateRoot, tip, runGit = runGitProcess, fsApi = fs } = {}) {
+  let archiveRef = null;
+  if (kind === "confirmed") {
+    const archived = await archiveBranchTip(mainPath, worktree.branch || worktree.name, tip, { runGit });
+    if (!archived.ok) return { ok: false, reason: archived.reason };
+    archiveRef = archived.ref;
+  }
+  const removed = await runGit(mainPath, ["worktree", "remove", worktree.path], { timeoutMs: 120000 });
+  if (!removed.ok) return { ok: false, reason: removed.error || "worktree remove failed", archiveRef };
+  let branchDeleted = false;
+  if (worktree.branch) {
+    const branch = await runGit(mainPath, ["branch", "-D", worktree.branch], { timeoutMs: 10000 });
+    branchDeleted = branch.ok;
+  }
+  const entry = { at: new Date().toISOString(), kind, path: worktree.path, branch: worktree.branch, commit: tip, archiveRef, branchDeleted };
+  appendRemoval(stateRoot, entry, fsApi);
+  return branchDeleted || !worktree.branch
+    ? { ok: true, entry }
+    : { ok: false, reason: "worktree removed but branch deletion failed", entry };
+}
+
+export async function removeLandedBranch(mainPath, branch, { stateRoot, tip, runGit = runGitProcess, fsApi = fs } = {}) {
+  const removed = await runGit(mainPath, ["branch", "-D", branch], { timeoutMs: 10000 });
+  if (!removed.ok) return { ok: false, reason: removed.error || "branch deletion failed" };
+  const entry = { at: new Date().toISOString(), kind: "automatic", path: null, branch, commit: tip, archiveRef: null, branchDeleted: true };
+  appendRemoval(stateRoot, entry, fsApi);
+  return { ok: true, entry };
+}
+
+function appendRemoval(stateRoot, entry, fsApi) {
+  const file = removalLogPath(stateRoot);
+  fsApi.mkdirSync(path.dirname(file), { recursive: true });
+  fsApi.appendFileSync(file, `${JSON.stringify(entry)}\n`);
+}

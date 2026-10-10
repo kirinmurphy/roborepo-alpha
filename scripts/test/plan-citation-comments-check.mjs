@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Code comments must stand on their own: no comment may cite a plan document, a plan phase or
-// milestone, a plan id, or a plan decision. Plans are renamed, rescoped, and closed; a comment that
+// milestone, a plan id, or a rationale recorded only elsewhere. Plans are renamed, rescoped, and closed; a comment that
 // points at one goes stale while the code it explains stays. A comment states the reason itself.
 //
 // Only comments are checked. Plan paths in string literals are behavior — plan-suite reads and

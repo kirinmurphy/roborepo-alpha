@@ -26,6 +26,7 @@ checkoutTemplate.innerHTML = `
           </span>
           <span class="repository-root-copy" data-slot="root-copy"></span>
           <span class="git-drift" data-slot="git-drift" hidden></span>
+          <span class="worktree-state-badge" data-slot="worktree-state" hidden></span>
         </div>
       </div>
       <div class="repository-root-actions checkout-actions">
@@ -33,6 +34,10 @@ checkoutTemplate.innerHTML = `
         <span class="resource-concern-badge" data-slot="resource-concern" hidden></span>
         <a class="repository-entrypoint link-cta" data-slot="root-entrypoint" target="_blank" rel="noreferrer" hidden></a>
         <span class="checkout-links-cell"><span data-slot="root-links" hidden></span></span>
+        <span class="worktree-row-actions" data-slot="worktree-actions" hidden>
+          <button type="button" data-action="hide-worktree">Hide</button>
+          <button type="button" data-action="remove-worktree">Remove</button>
+        </span>
         <span class="repository-root-control checkout-control-cell">
           <span class="repository-root-menu" data-slot="root-menu" hidden></span>
           <button type="button" class="repository-root-toggle" data-action="toggle-members" aria-expanded="false" hidden>

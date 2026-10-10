@@ -54,7 +54,27 @@ const menuActions = {
   onToggleMenu: toggleActionMenu,
   onSelectMenu: selectRepositoryAction,
   onOpenPlan: openPlan,
+  onWorktreeAction: changeWorktree,
 };
+
+async function changeWorktree(action, worktree) {
+  const branch = worktree.git?.branch;
+  if (!branch || !worktree.repositoryId) return;
+  if (action === "remove") {
+    const count = Number.isInteger(worktree.unmergedCommits) ? worktree.unmergedCommits : "unknown";
+    const archive = `refs/roborepo/abandoned/${branch}`;
+    if (!window.confirm(`Remove worktree ${branch}?\nUnmerged commits: ${count}\nArchive ref: ${archive}`)) return;
+  }
+  try {
+    const result = await api.mutateWorktree({ repositoryId: worktree.repositoryId, action, branch, confirm: action === "remove" });
+    if (["failed", "kept"].includes(result.action)) throw new Error(result.reason || "worktree was kept");
+    renderedVersion = null;
+    await refresh({ force: true });
+  } catch (error) {
+    warning.textContent = `Worktree action unavailable: ${error.message}`;
+    warning.hidden = false;
+  }
+}
 
 // The plans snapshot supplies what the drawer resolves against (blockers, plan-write package state); it is
 // fetched on open rather than polled, since Home only needs it while a drawer is showing.

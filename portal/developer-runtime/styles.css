@@ -287,6 +287,41 @@ main {
   display: block;
   font-size: var(--text-sm);
 }
+.repository-root.worktree-is-idle .repository-root-branch,
+.repository-root.worktree-is-stale .repository-root-branch,
+.repository-root.worktree-is-idle .repository-root-glyph,
+.repository-root.worktree-is-stale .repository-root-glyph {
+  color: var(--dim);
+}
+.worktree-state-badge {
+  font-size: var(--text-xs);
+  color: var(--dim);
+}
+.worktree-is-stale .worktree-state-badge { color: var(--warn); }
+.worktree-is-landed .worktree-state-badge { color: var(--ok); }
+.worktree-row-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+.worktree-row-actions[hidden] { display: none; }
+.worktree-row-actions button,
+.home-hidden-worktrees button {
+  border: 0;
+  background: none;
+  color: var(--dim);
+  cursor: pointer;
+  font: inherit;
+}
+.worktree-row-actions button:hover,
+.home-hidden-worktrees button:hover { color: var(--accent); }
+.home-hidden-worktrees {
+  padding: 8px 16px;
+  color: var(--dim);
+  font-size: var(--text-sm);
+}
+.home-hidden-worktrees summary { cursor: pointer; }
+.home-hidden-worktrees ul { list-style: none; margin: 6px 0 0; padding: 0; }
+.home-hidden-worktrees li { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; }
 .repository-root:not(:last-child) {
   border-bottom: 1px solid var(--line);
 }
@@ -885,6 +920,14 @@ dialog::backdrop {
 .settings-row span {
   color: var(--dim);
   font-size: var(--text-xs);
+}
+.settings-threshold-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.settings-threshold-controls input {
+  width: 5rem;
 }
 /* Git context badge in the card title row. Reuses the shared semantic tokens rather than
    introducing colors, so light and dark themes both track base.css. */
