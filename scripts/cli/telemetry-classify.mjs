@@ -3,7 +3,7 @@ import { privacyHash } from "./telemetry-schemas/hash.mjs";
 // Pure semantic classification of a tool command into an operation category (test/lint/build/...)
 // plus, for tests specifically, a runner and scope (targeted vs full). Deliberately has zero
 // dependency on telemetry-capture.mjs's state/IO so it stays cheap enough to import from the hot
-// capture path (see the plan doc's "Semantic tool-operation classification" section) and to unit
+// capture path and to unit
 // test in isolation.
 //
 // Store this version alongside every classification result so historical data stays interpretable
@@ -130,8 +130,8 @@ function commandSignature(normalized) {
   return privacyHash(normalized);
 }
 
-// Failure-signature hashing for redundant-rerun detection (plan: "failure signature", "unchanged
-// failure signature reruns"). Callers pass whatever privacy-safe failure text they already have
+// Failure-signature hashing for redundant-rerun detection (reruns
+// whose failure signature did not change). Callers pass whatever privacy-safe failure text they already have
 // (e.g. a bounded stderr tail) — this module never sees or stores raw output.
 export function failureSignature(text) {
   if (typeof text !== "string" || !text.trim()) return null;

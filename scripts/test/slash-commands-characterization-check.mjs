@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 // Characterizes slash-commands.mjs's runtime install/remove path (installPackageCommands/
-// removePackageCommands) before Phase 5 replaces SLASH_COMMAND_HARNESSES's genDir/liveDir/
-// skillPath lookup with provider path resolution
-// (docs/plans/active/discoverable-harness-provider-architecture-plan.md). The build-time render
+// removePackageCommands), which resolves paths through provider path resolution. The
+// build-time render
 // path (renderSlashCommands/render-slash-commands.mjs) already has strong coverage via
 // `scripts/doctor.sh`'s --check run against the real generated tree; this file covers the
 // runtime path doctor doesn't touch: copying a package's already-generated wrapper into a live

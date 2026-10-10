@@ -6,7 +6,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-// Phase 2 of docs/plans/active/roborepo-telemetry-events-experiments-plan.md: `telemetry mark`
+// `telemetry mark`
 // and `telemetry experiment start|end|status`, end to end through the real CLI process (so
 // git-identity resolution, snapshot creation, and persistence all run for real, matching how a
 // user would invoke it — not just the pure schema validators covered by telemetry-schemas-check.mjs).

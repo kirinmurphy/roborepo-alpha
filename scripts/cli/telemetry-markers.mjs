@@ -62,8 +62,8 @@ export function assertSupersedable(targetId, markers) {
 }
 
 // Builds, validates, and persists a marker from CLI-supplied fields. Machine-derived identity
-// (repo/branch/sha/timestamp/snapshot) is always resolved here, never accepted from the caller —
-// per the plan's "automatic metadata is correct" exit criterion.
+// (repo/branch/sha/timestamp/snapshot) is always resolved here, never accepted from the caller,
+// so automatic metadata is always correct.
 export function createMarker(fields, { cwd = process.cwd() } = {}) {
   if (fields.supersedes != null) assertSupersedable(fields.supersedes, readMarkers());
   const identity = resolveGitIdentity(cwd);
@@ -100,7 +100,7 @@ export function createMarker(fields, { cwd = process.cwd() } = {}) {
 
 // Task category/scale are explicit-only when set through the CLI (see telemetry.mjs's
 // --task-category and friends) — task_category_source is always "explicit" here.
-// telemetry-task-infer.mjs's inferTaskCategory() is for future analysis-time (Phase 5+) inference
+// telemetry-task-infer.mjs's inferTaskCategory() is for future analysis-time inference
 // over accumulated session signals, not something this marker-creation path calls itself.
 function taskFields(fields) {
   if (fields.task_category == null) return {};
@@ -127,8 +127,7 @@ export function listMarkers() {
 
 export { MARKER_TYPES, OUTCOME_STATUSES, EXPECTED_DIRECTIONS, COMPARISON_MODES, TASK_CATEGORIES };
 
-// Creates an experiment definition plus its start marker in one step, per the plan's CLI design
-// ("start creates both the experiment definition and its marker").
+// Creates an experiment definition plus its start marker in one step.
 export function startExperiment(fields, { cwd = process.cwd() } = {}) {
   const startMarker = createMarker({
     type: "experiment-start",
@@ -200,14 +199,12 @@ function readSpoolEventsForStatus() {
   return events;
 }
 
-// Cohort sizing/readiness (Phase 5): resolves the experiment's start marker, splits sessions into
+// Cohort sizing/readiness: resolves the experiment's start marker, splits sessions into
 // before/after cohorts via the same marker-relative comparison engine the portal and CLI report use
 // (telemetry-compare.mjs), and reports whether the eligibility threshold is met — not merely a
 // lifecycle summary. `ready` means: primary_metric is computable for both cohorts, both cohorts meet
 // eligibility.minimum_sessions_per_cohort, and no serious data-quality issue was flagged. This never
-// reports a provisional winner — only whether there is enough data to trust one, per the plan's
-// "Status must show cohort size, eligibility, data-quality warnings, and whether the result is
-// ready — not merely a provisional winner."
+// reports a provisional winner — only whether there is enough data to trust one.
 export function experimentStatus(experimentId) {
   const experiments = experimentId ? [readExperiment(experimentId)].filter(Boolean) : readExperiments();
   if (experimentId && experiments.length === 0) throw new Error(`unknown experiment: ${experimentId}`);

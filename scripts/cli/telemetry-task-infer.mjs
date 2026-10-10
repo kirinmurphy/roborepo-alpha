@@ -1,5 +1,4 @@
-// Pure, explainable task category/scale inference (plan: "Outcomes and task cohorts" — "Task
-// categories", "Task scale"). Zero fs/config dependency, same discipline as telemetry-classify.mjs
+// Pure, explainable task category/scale inference. Zero fs/config dependency, same discipline as telemetry-classify.mjs
 // and telemetry-phase-infer.mjs. Operates only on already-summarized, privacy-safe file-touch
 // signals (extension/category counts, insertion/deletion totals) — never raw paths or diff content.
 export const TASK_CLASSIFIER_VERSION = 1;
@@ -40,8 +39,8 @@ function classification(category, confidence) {
   return { task_category: category === "unknown" || confidence < 0.5 ? "unknown" : category, task_category_source: "inferred", confidence };
 }
 
-// Categorizes a single file extension without exposing the file path itself (plan: "code,
-// configuration, documentation, or generated-file mix"). Callers pass file_ext (already extracted
+// Categorizes a single file extension without exposing the file path itself (code,
+// configuration, documentation, or generated-file mix). Callers pass file_ext (already extracted
 // elsewhere, e.g. telemetry-capture.mjs's fileExt()) plus an optional path-shape hint that itself
 // must not be persisted — only this function's return value is stored.
 export function categorizeFile(ext, { looksGenerated = false } = {}) {

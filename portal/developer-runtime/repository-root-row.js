@@ -1,6 +1,6 @@
 // One checkout row on a repository card: the main checkout or a linked worktree. Split out of
 // templates.js, which renders every other card kind, so the row's two-column layout and its member
-// toggle live in one place. See docs/plans/completed/developer-runtime-repository-row-layout.md.
+// toggle live in one place.
 //
 // Imports from templates.js while templates.js imports buildRootSection from here. The cycle is
 // safe because neither module calls into the other while it is being evaluated — only from inside

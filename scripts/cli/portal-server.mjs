@@ -52,7 +52,7 @@ const STATIC_TYPES = {
 // Single source of truth for portal HTML pages. To add a page: (1) add an entry here, (2) create
 // portal/<dir>/{index.html,styles.css,app.js} linking /portal/shared/base.css + theme.js. The
 // browser nav (portal/shared/theme.js) reads this list from window.PORTAL_MANIFEST, injected by
-// pageHtml() below, so there is nothing to hand-sync client-side. See docs/internal/portal-architecture.md.
+// pageHtml() below, so there is nothing to hand-sync client-side.
 // Each page's HTML is just its index.html read from disk (mirrors static assets). `default: true`
 // marks the page served at "/" (what `roborepo web` opens). Home owns "/" as its canonical route;
 // Agents lives at canonical "/config". Order here is the global nav order.
@@ -226,7 +226,7 @@ function mutationTokenAllowed(req, token) {
 }
 
 // Any non-read method mutates and must clear the origin+token guard. Today only POST endpoints
-// exist; PATCH was added with the repository API (Phase 4), so the guard covers it too.
+// exist; PATCH was added with the repository API, so the guard covers it too.
 const MUTATING_METHODS = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 function isMutation(req) {
   return MUTATING_METHODS.has(req.method);

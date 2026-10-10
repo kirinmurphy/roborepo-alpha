@@ -16,7 +16,7 @@
 // so a hung git wedges the caller indefinitely:
 //   modules/plan-suite/index.mjs, scripts/cli/telemetry-capture.mjs, scripts/cli/telemetry-markers.mjs
 // They are synchronous, which is why defaultRunGitSync exists — migrating them is mechanical but out
-// of scope here. See docs/plans/backlog/git-exec-consolidation.md.
+// of scope here.
 
 import { execFile, spawnSync } from "node:child_process";
 import { promisify } from "node:util";

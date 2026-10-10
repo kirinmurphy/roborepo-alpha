@@ -514,7 +514,7 @@
         </div>
         <p class="card-notice" data-slot="duplicate-notice" hidden></p>
         <!-- One row per checkout (main worktree first, then every linked worktree) instead of one
-             flat member list — see the plan doc's "Worktree/Root Hierarchy" section. Every row is
+             flat member list. Every row is
              always visible; each has its own independent expand/collapse for its member list. -->
         <div class="repository-roots" data-slot="roots"></div>
       </article>
@@ -524,9 +524,8 @@
          Process metrics (CPU/RSS/elapsed) are container-level facts — one PID serves every port
          a container publishes — shown once per row rather than repeated on each port. -->
     <!-- Only concern-worthy/actionable facts stay on the persistent row; image, exact RSS, and
-         other reference-only details move into the info tooltip (see the follow-up plan doc's
-         resource-threshold section for the "what counts as concerning" classification, not yet
-         built — this row shows raw values until that lands). -->
+         other reference-only details move into the info tooltip. There is no "what counts as concerning"
+         classification yet, so this row shows raw values. -->
     <template id="tpl-compose-container-row">
       <div class="compose-container-row">
         <div class="compose-container-head">

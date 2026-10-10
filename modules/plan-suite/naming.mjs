@@ -1,8 +1,8 @@
 // Deterministic filename and namespace validation for plan documents.
 //
 // The naming convention — `<namespace>-<slug>.md`, lowercase and hyphenated, no lifecycle or date
-// suffix — has lived only in `plan-schema.md` prose, which means it held exactly as often as the
-// authoring agent remembered to open that file. This module is the machine-checkable half: given a
+// suffix — is otherwise enforced only by the authoring agent's memory. This module is the
+// machine-checkable half: given a
 // path and a repository's declared namespaces, it returns the same structured findings every other
 // plan-suite rule produces, so the portal, the CLI, and the repair prompt all describe a bad
 // filename with one wording.
@@ -14,8 +14,7 @@
 //     record: renaming it would break inbound links to settle a convention that no longer governs
 //     any future work.
 //   - Opt-in. A repository with no declared namespaces in `plans-config.json` gets no findings at
-//     all. `plan-schema.md` treats the universal namespaces as a fallback rather than a default,
-//     and holding a repository to a vocabulary it never declared would flag every plan it has.
+//     all. The universal namespaces are a fallback rather than a default, and holding a repository to a vocabulary it never declared would flag every plan it has.
 //
 // What this module does NOT judge: whether the chosen namespace is the *best* fit, or whether the
 // slug reads well. Those need judgment about intent. It checks only what a rule can prove.
@@ -23,9 +22,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { finding } from "./findings.mjs";
 
-// Namespaces that apply to most software projects and need no per-repository declaration. Mirrors
-// the "Universal namespaces" table in `plan-schema.md`; that table stays the reader-facing source
-// and this is its executable form.
+// Namespaces that apply to most software projects and need no per-repository declaration.
 export const UNIVERSAL_NAMESPACES = Object.freeze([
   "cli", "git", "infra", "os", "test", "docs", "security", "perf",
 ]);
@@ -94,8 +91,8 @@ export function readProjectNamespaces(repositoryRoot) {
 // `projectNamespaces` is the list of keys declared in `plans-config.json`.
 //
 // An empty namespace list means the repository has not declared a vocabulary, and the convention is
-// deliberately inert there. `plan-schema.md` is explicit that the universal namespaces are a
-// fallback rather than a default, and that a repository without a config should be asked for one
+// deliberately inert there. The universal namespaces are a fallback rather than a default, and a
+// repository without a config should be asked for one
 // rather than silently held to a convention it never adopted — enforcing shape anyway would flag
 // every plan in most repositories, which is noise rather than a finding.
 export function validatePlanNaming({ filename, lifecycle, projectNamespaces = [] }) {

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Live fixture for the `shared` Compose-ownership verdict (developer-runtime-workspace-model Phase 4).
+# Live fixture for the `shared` Compose-ownership verdict.
 #
 # Why this exists: the classifier's `shared` path cannot be exercised by the repositories on a
 # typical dev machine, because they each have exactly one checkout — every real stack classifies

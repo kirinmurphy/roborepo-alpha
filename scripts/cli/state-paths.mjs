@@ -48,8 +48,8 @@ export const usageLatestDir = path.join(usageDir, "latest");
 // record. Segmented by harness because each record already carries a harness dimension and one
 // harness's corpus should be resettable on its own.
 //
-// Machine-local, and classified Sensitive machine history / Exclude by
-// docs/plans/backlog/infra-portable-user-profile-backup.md: these logs hold real paths, hostnames,
+// Machine-local, and classified Sensitive machine history / Exclude for profile backup:
+// these logs hold real paths, hostnames,
 // and arguments, so they sit under STATE_ROOT rather than the portable profile boundary. They are
 // deliberately NOT under a harness's own directory (~/.claude/logs and the like) — that is a
 // container the user may disable or remove, and it cannot be sandboxed by ROBOREPO_STATE_ROOT.
@@ -93,11 +93,11 @@ export function portalPidPathForPort(port) {
   // piece of roborepo state.
   return path.join(stateDir, "portal", `server-${port}.pid`);
 }
-// Registry of enabled packages — source of truth for rules rendering (Phase 3+).
+// Registry of enabled packages — source of truth for rules rendering.
 export const enabledPackagesPath = path.join(stateDir, "enabled-packages.json");
 // Content hash of root config (settings.json / config.toml) as of roborepo's last write, keyed by
 // harness. Lets update/repair tell "unchanged since we last wrote it" apart from "something else
-// touched this file" without attempting to merge. See docs/plans/completed/root-config-layered-inheritance.md.
+// touched this file" without attempting to merge.
 export const rootConfigStatePath = path.join(stateDir, "config-state", "root-config.json");
 // Provenance for individual owned scalars a package sets inside a harness config (e.g. Codex's
 // tui.status_line_use_colors). Content-hash drift (rootConfigStatePath) tracks whole-file writes; a

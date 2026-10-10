@@ -6,12 +6,12 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-// Phase 4 of docs/plans/active/roborepo-telemetry-events-experiments-plan.md: inferred phase
+// Inferred phase
 // tagging and intervening-work signals wired into the real capture hot path, exercised through the
 // actual CLI process (matching telemetry-capture-v3-check.mjs's approach) so hook-stdin parsing,
 // the session activity cursor, and transcript-derived exit_status/failure_signature are covered for
-// real. This is the capture-time half of the plan's "screenshot scenario": Phase 4 stores the raw
-// signals per capture; deriving cohort-level findings from them is Phase 5.
+// real. This is the capture-time half: capture stores the raw signals; deriving cohort-level
+// findings from them happens at analysis time.
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const cli = path.join(repoRoot, "scripts/cli/main.mjs");
@@ -105,7 +105,7 @@ function testRerunWithUnchangedFailureSignatureIsDetected() {
   capture({ session_id: sessionId, cwd: repoRoot, transcript_path: transcriptPath, tool_name: "Bash", tool_use_id: "tu_r1", tool_input: { command: "npm test" } }, { event: "PostToolUse" });
 
   // Second full-suite run, identical failure text, no intervening edit — the redundant-rerun case
-  // the plan's "full-suite reruns with the same failure signature" finding depends on.
+  // the "full-suite reruns with the same failure signature" finding depends on.
   capture({ session_id: sessionId, cwd: repoRoot, transcript_path: transcriptPath, tool_name: "Bash", tool_use_id: "tu_r2", tool_input: { command: "npm test" } }, { event: "PreToolUse" });
   appendTranscriptTurn(transcriptPath, { toolUseId: "tu_r2", toolName: "Bash", resultText: "same failure every time", isError: true });
   capture({ session_id: sessionId, cwd: repoRoot, transcript_path: transcriptPath, tool_name: "Bash", tool_use_id: "tu_r2", tool_input: { command: "npm test" } }, { event: "PostToolUse" });
@@ -129,7 +129,7 @@ function testEditAfterFailureFlipsInterveningEditSinceLastTest() {
   capture({ session_id: sessionId, cwd: repoRoot, transcript_path: transcriptPath, tool_name: "Bash", tool_use_id: "tu_e1", tool_input: { command: "npm test" } }, { event: "PostToolUse" });
 
   // An edit completes after the failure — this must be reflected in the next capture's intervening
-  // signal (plan: "whether a write/edit tool completed").
+  // signal.
   capture({ session_id: sessionId, cwd: repoRoot, transcript_path: transcriptPath, tool_name: "Edit", tool_use_id: "tu_edit1", tool_input: { file_path: "src/thing.js" } }, { event: "PreToolUse" });
   appendTranscriptTurn(transcriptPath, { toolUseId: "tu_edit1", toolName: "Edit", resultText: "ok", isError: false });
   capture({ session_id: sessionId, cwd: repoRoot, transcript_path: transcriptPath, tool_name: "Edit", tool_use_id: "tu_edit1", tool_input: { file_path: "src/thing.js" } }, { event: "PostToolUse" });

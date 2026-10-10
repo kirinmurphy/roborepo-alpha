@@ -20,7 +20,7 @@ import {
   FILTER_DEFAULTS,
 } from "../../portal/plans/state.js";
 
-// Phase 9 of docs/plans/active/plan-lifecycle-toggle-control.md: pure mutation-orchestration
+// Pure mutation-orchestration
 // helpers (isVisible, replaceRecord, filteredListActionFor) have no DOM dependency, so this test
 // drives them directly the same way telemetry-portal-state-check.mjs exercises telemetry's URL
 // state helpers — no browser needed.
@@ -262,7 +262,7 @@ function testFindingGroupsHandleAnErrorWithNeither() {
   assert.deepEqual([blocking, advisory], [[], []], "an error with no findings or details renders no list at all");
 }
 
-// The plan doc's "copies a prompt matching the current findings" — the actual invariant behind
+// "Copies a prompt matching the current findings" — the actual invariant behind
 // that check, testable here even though the clipboard call itself is not.
 function testEveryDisplayedFindingAppearsInTheRepairPrompt() {
   const err = {
@@ -295,7 +295,7 @@ function testCanRepairRequiresANonEmptyPrompt() {
   assert.equal(canRepairLifecycleError(undefined), false, "a missing error is not repairable");
 }
 
-// The plan doc requires lifecycle options to stay selectable until the server rejects a submitted
+// Lifecycle options stay selectable until the server rejects a submitted
 // move, so a stale browser snapshot can never pre-empt the authoritative finding set. Nothing
 // disables them today; this asserts it stays that way, since the regression would be invisible
 // in every other test here.

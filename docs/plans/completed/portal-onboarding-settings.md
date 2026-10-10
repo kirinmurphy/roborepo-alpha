@@ -1,14 +1,14 @@
 ---
 id: nkhk6bb
 priority: high
-next_action: Run focused portal checks for the final onboarding fixes, then reconcile the remaining full-gate blockers and browser verification
+next_action:
 blocked_by: []
 depends_on: []
 related:
   - pljvmyh
   - v6lvuu2
   - u8211thb
-reviewed_commit: 473fdbe
+reviewed_commit: f877579
 worktree: portal-onboarding-settings
 ---
 
@@ -109,7 +109,7 @@ HTML `<template>` elements or the existing server-rendered partials, not nested 
 
 - Add a top-level **Settings** portal page; do not introduce an “Admin” concept.
 - Make Settings the normal place to inspect and change durable cross-module setup.
-- Reuse the shipped repository-source model and **Manage repositories** dialog instead of creating a second Runtime or Plans discovery setting.
+- Reuse the shipped repository-source model and shared repository-management surface instead of creating a second Runtime or Plans discovery setting.
 - Keep repository-source state, harness state, and telemetry state owned by their existing domains.
 - Add a shared server-owned setup-state view model consumed by Settings and contextual onboarding.
 - Preserve the shipped Runtime consent boundary: when repository auto-discovery is off, Runtime does not observe active apps; explicit repository/folder sources continue to work as separate user-configured sources.
@@ -238,7 +238,7 @@ Settings is a product-level orchestration surface over domain-owned state.
 | Settings group | Capability | Source of truth | Settings behavior |
 | --- | --- | --- | --- |
 | Repositories | Active-repository auto-discovery | Repository sources `auto-discovery` source | Show state; enable/disable through existing source API |
-| Repositories | Explicit repositories/folders | Repository sources store | Open the existing **Manage Repos** dialog |
+| Repositories | Explicit repositories/folders | Repository sources store | Render the shared repository-management surface inline |
 | Integrations | Supported harnesses | Harness discovery/state | Check for harnesses; enable/disable detected harnesses |
 | Tokens | Token telemetry | Existing `telemetry` package | Enable/disable the same package |
 
@@ -410,7 +410,7 @@ Use these contextual rules:
 | Surface | Contextual behavior |
 | --- | --- |
 | Home / Repos | If no repositories are known, use the shipped shared repository empty state. Once repositories exist, repository auto-discovery is optional rather than a blocking prerequisite. Then show harness/telemetry setup only when useful. |
-| Runtime | Always show observable Runtime activity. If repository auto-discovery is off, explain that active apps are visible but unknown repositories will not be remembered; offer the enrollment action. |
+| Runtime | Show activity discovered while repository auto-discovery is enabled. When it is off, explain that observation is paused and offer the enrollment action or an explicit repository/folder source. |
 | Plans | Consume canonical repositories. Keep existing no-repository / not-scanned / no-plans states. Do not reintroduce source settings. Harness setup is unrelated to finding/rendering Markdown plans. |
 | Agents | If no active harness exists, show install + **Check for harnesses** guidance before agent configuration. |
 | Tokens | 1. Connect supported harness  2. Enable telemetry  3. Run a session / wait for data. |
@@ -476,7 +476,7 @@ Reuse `repository-sources-partial.html` instead of duplicating repository-source
 - [x] Add `/settings` after Runtime in `PAGES` so routing, global navigation, manifest, and sitemap derive it from the same six-page manifest.
 - [x] Add the Settings page using existing `<template>` + slot-fill conventions.
 - [x] Render **Repositories**, **Integrations**, and **Tokens** groups from the shared setup snapshot.
-- [x] Reuse the shipped repository-source dialog and repository-source mutations directly.
+- [x] Reuse the shipped repository-source surface and repository-source mutations directly.
 - [x] Render the exact shared repository-source surface inline in Settings instead of a dialog trigger.
 - [x] Replace the Settings telemetry checkbox with a right-aligned On/Off button toggle that mutates the existing telemetry package state.
 - [x] Apply the shared page/section header convention to Settings: compact page header, titled sections, horizontal separators, and no default section backgrounds.
@@ -502,7 +502,7 @@ Reuse `repository-sources-partial.html` instead of duplicating repository-source
 - [x] Update `docs/user/guides/harnesses/supported-harnesses.md` and `docs/user/guides/first-time-setup.md` to remove terminal-only refresh requirements where they describe portal onboarding.
 - [x] Add/adjust the setup-state, Runtime, harness, Tokens page-state, and Settings navigation checks named in Phases 1–4.
 - [x] Extend Playwright coverage in `scripts/test/portal-ui/` for Settings and the main onboarding transitions.
-- [ ] Run the repository's full checks because the change crosses shared portal, server routing, Runtime discovery, harness state, and Tokens setup.
+- [x] Run the repository's full checks because the change crosses shared portal, server routing, Runtime discovery, harness state, and Tokens setup.
 
 ### Phase 7 — Settings and onboarding UI refinements
 
@@ -537,10 +537,8 @@ Reuse `repository-sources-partial.html` instead of duplicating repository-source
 - [x] Enabling auto-discovery causes currently running identifiable repositories to become eligible for immediate registry enrollment.
 - [x] Disabling auto-discovery does not hard-delete repositories that remain known through another source.
 - [x] Settings appears in global portal navigation and reflects authoritative repository, harness, and telemetry state.
-- [x] Settings reuses the existing **Manage repositories** dialog; there is no duplicate repository-source editor.
+- [x] Settings renders the existing repository-management surface inline; there is no duplicate repository-source editor.
 - [x] Plans has no Plans-specific source setting and scans repositories known through either auto-discovery or explicit sources.
-- [ ] A user can install a supported harness externally, click **Check for harnesses**, and have RoboRepo detect it without running a terminal command.
-- [ ] Harness enable/disable changes are reflected consistently in Settings, Agents, Home onboarding, and Tokens prerequisites.
 - [x] Tokens shows missing harness before telemetry-off, then no-data after both prerequisites are satisfied.
 - [x] Telemetry remains backed by the existing `telemetry` package and has no duplicate boolean/state store.
 - [x] Cross-portal setup state contains no configured repository source paths.
@@ -570,14 +568,15 @@ Reuse `repository-sources-partial.html` instead of duplicating repository-source
 - An elevated `npm run --silent test:unit` completed with 123/126 suites passing. The remaining failures were `clean-machine-container-check.mjs` and `publish-npm-check.mjs` (both blocked by the same stale doctor outputs), plus `skill-reference-matrix-characterization-check.mjs` (its Plan Write wording expectation does not match the current reference).
 - Manual regression on 2026-10-08 confirmed the empty states, banner presentation, Settings surface, Clear All Repos behavior, harness banners, and Tokens banners. On 2026-10-09 the user also confirmed the empty folder section behavior.
 - On 2026-10-09 the user confirmed the full Tokens UI transition as complete. Real harness detection/enablement and token capture after an agent session are tracked separately in [[u8211thb]].
+- On 2026-10-10, `npm run check` passed on `main` with loopback access: 427 CLI checks passed, the unit and package-install stages passed, and the portal browser suite passed 58 tests with 2 intentional skips. The first sandboxed attempt failed three CLI suites solely because binding `127.0.0.1` was denied; the elevated rerun passed.
+- `npm run test:unit` passed 127/127 suites. The focused setup-state, Runtime auto-discovery, harness refresh simulation and portal API, Tokens page-state, portal page manifest, and config onboarding checks also passed.
+- The linked `codex/portal-onboarding-settings` branch is not an ancestor of `main`, but a file-level comparison found its implementation and test content identical on `main`; only five unrelated plan documents differ between the branch and `main`.
 
 ## Not tested
 
-- [ ] `npm run test:portal-ui` — blocked before test collection because the worktree does not have the `@playwright/test` package installed.
-- [ ] Browser verification that the **Check for harnesses** banner button invokes the refresh flow. The refresh and persistence behavior are covered by `scripts/test/harness-refresh-simulation-check.mjs`; the in-app browser could not access the loopback smoke server due to an admin browser policy.
-- [ ] Browser verification of Settings auto-discovery refresh after wipe, repository labels/action placement, shared harness-check loading, and the Token Activity CTA/copy/active row.
-- [ ] Browser verification of repository action placement, scan timing/status after a wipe, identical linked harness prompt content across Home/Agents/Tokens, and the active token-tracking row.
-- [ ] Rerun `npm run check` after the stale generated Plan command outputs and skill invocation audit are reconciled; the latest run stopped during `doctor` before the full gate could continue.
+- [x] `npm run test:portal-ui` passed on `main` on 2026-10-10 (58 passed, 2 intentional screenshot skips), clearing the earlier worktree's missing `@playwright/test` blocker.
+- [x] The user confirmed the Settings auto-discovery refresh after wipe, repository labels/action placement, shared harness-check loading, and Token Activity CTA/copy/active row checks are resolved on 2026-10-10.
+- [x] `npm run check` passed on `main` on 2026-10-10 after the plan-close skill update, clearing the earlier stale generated Plan command and skill invocation audit blocker.
 
 ### Repository checks
 
@@ -638,9 +637,32 @@ Manual browser verification should cover:
 - Wipe clean removes configured repository/folder sources with repository records while preserving the auto-discovery preference; an enabled preference may repopulate the list through Runtime scanning.
 - The user-facing follow-up removes Token Telemetry from Agents; Settings and Tokens remain the telemetry controls.
 - Settings keeps its loading/error controls honest, gives harness actions provider-specific accessible names, renders an explicit empty catalog state, and stacks the repository control below 560px.
+- On 2026-10-10 the user moved real external harness detection and cross-page harness enable/disable verification to [[u8211thb]]. Those two unchecked acceptance criteria are no longer completion criteria for this Settings plan; the portal harness simulation and API checks remain as automated evidence here.
+- The user also closed the two browser-only follow-ups for the shared **Check for harnesses** button and the mixed repository/harness/token UI review without further manual testing. Harness behavior is covered by [[u8211thb]]; the remaining UI checks are accepted as unverified scope exclusions for this plan.
 
 ## Open Questions
 
-None are blocking promotion. The plan treats canonical records as “known” even when hidden, uses
+No design questions remain. The plan treats canonical records as “known” even when hidden, uses
 visible count for page readiness, places Settings last in the global navigation, and lets the
-portal use the same registered-provider validation as the existing CLI state mutation.
+portal use the same registered-provider validation as the existing CLI state mutation. The
+external harness checks moved to [[u8211thb]] by user decision.
+
+## Completion Summary
+
+Settings now composes repository sources, supported harness controls, and the existing telemetry
+package. A path-free setup snapshot drives contextual onboarding across Home, Runtime, Agents,
+and Tokens. Repository auto-discovery continues to gate Runtime observation and automatic
+repository enrollment. The shared repository-management surface appears inline in Settings.
+
+The user accepted closing the remaining manual browser checks without further testing and moved
+real external harness detection and cross-page harness verification to [[u8211thb]]. Those
+behaviors are not claimed as manually verified by this plan.
+
+## Verification
+
+- `npm run check` passed on `main` on 2026-10-10 after the skill and generated-command edits. It included 427 passing CLI checks, package-install and clean-machine checks, and the portal browser suite (58 passed, 2 intentional screenshot skips).
+- `npm run test:unit` passed 127/127 suites. The separate `npm run test:portal-ui` run passed 58 tests with 2 intentional screenshot skips.
+- Focused setup-state, Runtime consent, harness refresh simulation and portal API, Tokens page-state, portal page manifest, and config onboarding checks passed.
+- Code review confirmed that Settings uses domain-owned repository, harness, and telemetry mutations; the setup response excludes repository source paths; Runtime observation is gated by auto-discovery; and Tokens orders harness, telemetry, then captured-data prerequisites.
+- The `codex/portal-onboarding-settings` branch is not an ancestor of `main`, but its implementation and test files match `main` by file-level comparison. The only differing files are five unrelated plan documents.
+- Real external harness detection and cross-page harness enable/disable behavior remain unverified here and belong to [[u8211thb]]. The user accepted the remaining browser-only UI checks as closure exclusions on 2026-10-10.

@@ -25,7 +25,7 @@ source "${repo_root}/scripts/install/install-lib.sh"
 # shellcheck source=scripts/install/uninstall-lib.sh
 # Reusable removal building blocks — also sourced by `roborepo harness withdraw <id>`
 # (scripts/cli/harness.mjs shells to a small bash entrypoint) to reuse the same logic scoped to
-# one provider. See docs/plans/active/discoverable-harness-provider-architecture-plan.md Phase 4.
+# one provider.
 source "${repo_root}/scripts/install/uninstall-lib.sh"
 
 if [[ "${check_clean}" -eq 1 ]]; then

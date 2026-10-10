@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Reusable uninstall building blocks, extracted from uninstall.sh (Phase 4:
-# docs/plans/active/discoverable-harness-provider-architecture-plan.md) so `roborepo harness
+# Reusable uninstall building blocks, extracted from uninstall.sh so `roborepo harness
 # withdraw <id>` can reuse the same per-capability removal logic uninstall.sh uses, scoped to one
 # provider, without executing uninstall.sh's full top-to-bottom sequence. Source this file; do not
 # execute. Requires ${repo_root}, ${dry_run}, and ${HOME} to be set by the caller, and
@@ -157,7 +156,7 @@ reclaim_link_target() {
 }
 
 # Reclaim a rendered_rules target (CLAUDE.md / AGENTS.md):
-#   1) Remove any legacy repo symlink (pre-Phase-3 install).
+#   1) Remove any legacy repo symlink (older installs).
 #   2) Remove only Roborepo managed blocks from normal files.
 #   3) For legacy whole-file rendered output, remove the file and restore the user's pre-install
 #      backup if one was saved.
@@ -214,7 +213,7 @@ remove_root_config() {
   local src_rel="${3:-}"
   [[ -f "${home_abs}" ]] || return 0
 
-  # Drift gate (docs/plans/completed/root-config-layered-inheritance.md, "Uninstall"): a root_config file is
+  # Drift gate: a root_config file is
   # mutable and may have been hand-edited or written by a native harness flow after roborepo's own
   # last write. If the recorded sidecar hash no longer matches on-disk content, the file has drifted
   # and we do not know which parts are safe to touch — leave it in place and report the path rather
@@ -272,7 +271,7 @@ remove_root_config() {
 # ported from this function's own former inline bash+node — see
 # scripts/test/harness-mcp-remove-characterization-check.mjs for the pinned behavior. Codex has no
 # mcp.remove adapter yet (asymmetric: Codex stores MCP servers in config.toml
-# [mcp_servers.*] tables, not migrated to a provider adapter as of this Phase 4 pass), so this
+# [mcp_servers.*] tables, not migrated to a provider adapter), so this
 # stays Claude-only, matching the original function.
 remove_mcp_servers() {
   command -v node >/dev/null 2>&1 || return 0
@@ -304,7 +303,7 @@ import(process.argv[1] + "/scripts/harnesses/claude/index.mjs").then(async ({ cl
 # claude/index.mjs), ported from this function's own former inline bash+node — see
 # scripts/test/harness-hooks-write-remove-characterization-check.mjs for the pinned behavior.
 # Claude-only: hooks.write has no Codex implementation (Codex hooks live in a separate hooks.json
-# sidecar, not migrated to a provider adapter as of this Phase 4 pass).
+# sidecar, not migrated to a provider adapter).
 strip_package_hooks() {
   local settings="${HOME}/.claude/settings.json"
   [[ -f "${settings}" ]] || return 0

@@ -1,4 +1,4 @@
-// /api/repositories* routes — the canonical repository API surface (Phase 4). Read-only summaries
+// /api/repositories* routes — the canonical repository API surface. Read-only summaries
 // are separated from mutations; mutations (POST/PATCH) rely on portal-server.mjs's existing
 // loopback-origin + token guard exactly like the other domains.
 //

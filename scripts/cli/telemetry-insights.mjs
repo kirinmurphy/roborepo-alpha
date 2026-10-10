@@ -4,8 +4,7 @@
 // conclusions. Each rule is independent, fires only when its data supports it, and is deliberately
 // conservative so the headline never cries wolf.
 //
-// Phase 7 upgrade (plan: "Actionable finding contract" / "Upgrade insight rows to the actionable
-// finding contract"): every finding below still carries its original severity/headline/detail/metric
+// Actionable finding contract: every finding below still carries its original severity/headline/detail/metric
 // fields (existing portal/CLI consumers keep working unchanged) PLUS a `confidence` label and a
 // `next_action` string, assembled by attachActionableFields() at the end of deriveInsights(). These
 // deterministic-rule findings are direct observations over the full dataset (not a cohort
@@ -148,7 +147,7 @@ export function deriveInsights(report) {
 // philosophy, scaled down since these are per-call rather than per-session findings.
 const STRONG_SIGNAL_MIN_CALLS = MIN_CALLS * 2;
 
-// Adds the plan's actionable-finding-contract fields (confidence, analysis_filter_state) to a
+// Adds the actionable-finding-contract fields (confidence, analysis_filter_state) to a
 // deterministic finding, on top of its existing severity/headline/detail/metric shape. Every finding
 // that reaches this point already passed its rule's own evidence threshold, so confidence here only
 // distinguishes "solid sample" from "thin but still above the firing threshold" — never
@@ -160,9 +159,9 @@ function attachActionableFields(finding) {
   return {
     ...finding,
     confidence,
-    // Reproduces this finding's shape in the Analysis explorer (plan: "ready-to-apply Analysis
-    // filter state"). kind maps 1:1 to the metric/cohort dimension the explorer would pre-select;
-    // portal-side wiring (analysis-explorer.js, Phase 7) reads this to open the explorer pre-filled.
+    // Reproduces this finding's shape in the Analysis explorer as ready-to-apply filter state.
+    // kind maps 1:1 to the metric/cohort dimension the explorer would pre-select;
+    // portal-side wiring (analysis-explorer.js) reads this to open the explorer pre-filled.
     analysis_filter_state: { kind: finding.kind ?? null },
   };
 }

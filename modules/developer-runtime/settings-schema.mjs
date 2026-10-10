@@ -205,9 +205,8 @@ function validateAssociations(associations) {
 // to a filesystem path (identities are one-way fingerprints -- see resolveProjectIdentity), and a
 // Docker container has no cwd of its own for the normal by-cwd git resolution to run against. A
 // real path lets the exact same resolveProjectIdentity/collectGitContext path every other project
-// uses run for a manually-associated repo too. When the canonical repository registry from
-// docs/plans/backlog/portal-homepage-repository-section.md lands, this should become a
-// repositoryId reference instead -- kept to this one field so that's a rename, not a redesign.
+// uses run for a manually-associated repo too. Once compose projects key off the canonical
+// repository registry, this should become a repositoryId reference instead -- kept to this one field so that's a rename, not a redesign.
 function validateComposeProjects(composeProjects) {
   if (!composeProjects || typeof composeProjects !== "object" || Array.isArray(composeProjects)) {
     throw new Error("settings composeProjects must be an object");

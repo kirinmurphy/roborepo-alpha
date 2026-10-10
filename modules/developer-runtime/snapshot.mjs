@@ -20,7 +20,7 @@ export function buildDeveloperRuntimeSnapshot({
   // lifecycle state and (for present checkouts) git context. Injected for the same reason as
   // repositoryNames: reading the registry and shelling out to git are the caller's job, so this
   // stays a pure function of its inputs. Empty means "no persistence available", which degrades to
-  // the pre-Phase-3 behaviour of listing only what is running.
+  // listing only what is running.
   persistedRepositories = [],
   // repositoryId -> { rootId, projectRoot, git, state } for the main checkout of a RUNNING repository
   // that has nothing running in it. Found and read by the caller for the same reason as
@@ -150,7 +150,7 @@ export function buildDeveloperRuntimeSnapshot({
       }
       inactiveProjects.push({
         identity,
-        // Which repository this saved slot belongs to, when its identity resolves to one. Phase 3
+        // Which repository this saved slot belongs to, when its identity resolves to one. The portal
         // renders repositories from the registry instead, so a slot that HAS a repository is
         // already represented by that repository's card and must not also appear as a loose saved
         // app; only the never-resolved ones are still listed on their own.
@@ -299,7 +299,7 @@ function buildRepositories({ projects, composeProjects, unmatchedInstances, repo
 
   // rootId is per-checkout even though repositoryId is shared across a repo's worktrees — this is
   // what lets a worktree's branch stay scoped to its own section instead of leaking onto the
-  // repository-level badge (see the plan doc's "Worktree/Root Hierarchy" section).
+  // repository-level badge.
   const ensureRoot = (entry, rootId, git, projectRoot) => {
     let root = entry.roots.find((candidate) => candidate.rootId === rootId);
     if (!root) {
@@ -345,7 +345,7 @@ function buildRepositories({ projects, composeProjects, unmatchedInstances, repo
     // checkouts (`shared`), or in none of them (`repo-root`), or that has no bind mounts to read at
     // all (`unverified`), is not the main checkout's — placing it there tells the user a worktree
     // owns infrastructure that in fact backs several, and hides the sharing that is the whole point
-    // of classifying. Phase 4 sets rootId only for `owned`, so a null rootId here is the verdict,
+    // of classifying. Classification sets rootId only for `owned`, so a null rootId here is the verdict,
     // not missing data.
     if (!composeProject.rootId) {
       entry.sharedComposeGroups.push(group);
@@ -427,7 +427,7 @@ function buildRepositories({ projects, composeProjects, unmatchedInstances, repo
     // tracks their own traffic, not application load — but no field currently separates them from a
     // real dev server: on live data ngrok and a Next.js server agree on probe status, title,
     // identity, confidence, and relative cwd, differing only in process command name. Excluding them
-    // needs a real signal rather than a name list; see the plan doc's open questions.
+    // needs a real signal rather than a name list, which does not exist yet.
     entry.cpuPercentOfHost = sumValues([
       ...entry.composeGroups.map((group) => group.cpuPercentOfHost),
       ...entry.members.map((member) => member.cpuPercentOfHost),

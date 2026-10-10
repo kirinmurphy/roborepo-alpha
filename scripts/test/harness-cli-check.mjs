@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 // `roborepo harness list|inspect|refresh|enable|disable`, end to end through the real CLI
-// process. See docs/plans/active/discoverable-harness-provider-architecture-plan.md Phase 2.
+// process.
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const cli = path.join(repoRoot, "scripts/cli/main.mjs");
@@ -71,12 +71,11 @@ function testEnableDisableRoundTrip() {
   assert.match(result.stdout, /^codex\t.*\tenabled\t/m, "codex must show enabled after explicit enable");
 }
 
-// `harness detected`: the row source shell install/uninstall/repair/doctor scripts consume
-// (Phase 4). Presence must reflect home-dir existence only, independent of state.json and
+// `harness detected`: the row source shell install/uninstall/repair/doctor scripts consume.
+// Presence must reflect home-dir existence only, independent of state.json and
 // independent of whether an executable happens to be on PATH — same semantics as the
-// harness_present() shell function it replaces. See
-// docs/plans/completed/discoverable-harness-provider-architecture-plan.md Phase 4 and
-// docs/plans/backlog/harness-presence-signal-expansion.md for the broader signal left for later.
+// harness_present() shell function it replaces. Install never creates a home directory the harness
+// itself has not created.
 function testDetectedReflectsHomeDirOnly() {
   let result = run(["harness", "detected"]);
   assert.equal(result.status, 0, `detected failed:\n${result.stdout}\n${result.stderr}`);

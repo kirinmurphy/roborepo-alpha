@@ -122,7 +122,7 @@ function parseMarkArgs(args) {
       case "--supersedes": options.supersedes = args[++i]; break;
       // Task category/scale are explicit-only through the CLI — a human or scripted caller stating
       // "this was a bug-fix touching 3 files" is task_category_source: "explicit" by construction.
-      // Inferred task classification (telemetry-task-infer.mjs) is a Phase 5+ analysis-time concern,
+      // Inferred task classification (telemetry-task-infer.mjs) is an analysis-time concern,
       // not something this command computes itself.
       case "--task-category": options.task_category = args[++i]; break;
       case "--files-touched": options.files_touched = Number(args[++i]); break;
@@ -794,7 +794,7 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
   });
   startPortalServer({
     port: options.port,
-    // Phase 6 additions (model/repo/markerId) layer a normalized cohort filter on top of the
+    // model/repo/markerId layer a normalized cohort filter on top of the
     // existing time/harness window; folded into cachedAnalysisJson's cache key (see
     // cachedAnalysisEntry above) so cohort-filtered views stay cached the same way the default
     // view is. See telemetry-analyze.mjs's analyzeTelemetry() options and telemetry-cohort.mjs for
@@ -1195,7 +1195,7 @@ function filterByWindow(events, window) {
 // object is discarded once stringified rather than retained as dead memory.
 const _analysisCache = new Map();
 const ANALYSIS_CACHE_MAX = 32;
-// Phase 6 additions (model/repo/markerId) layer a normalized cohort filter on top of the existing
+// model/repo/markerId layer a normalized cohort filter on top of the existing
 // time/harness window; folded into the cache key so a cohort-filtered view gets its own cached
 // entry instead of colliding with (or evicting) the unfiltered default view.
 function analysisKey(window, harness, { model = null, repo = null, repository = null, markerId = null } = {}) {
@@ -1312,11 +1312,10 @@ function cachedAnalysisEntry(window, harness, extra = {}) {
   );
   report.available_models = availableModels;
   report.available_repos = availableRepos;
-  // Metric ids from the shared registry (plan: "available ... metric" dimension) so the Analysis
+  // Metric ids from the shared registry so the Analysis
   // explorer's metric select never hand-maintains its own list.
   report.available_metrics = listMetrics().map((m) => m.id);
-  // Window-scoped markers for the chart overlay (plan: "The server supplies window-scoped
-  // markers"). Uses the same filterByWindow the events themselves went through.
+  // Window-scoped markers for the chart overlay, supplied by the server. Uses the same filterByWindow the events themselves went through.
   report.markers = filterByWindow(markers, window);
   report.experiments = readExperiments();
   report.deepread_cli = findDeepReadCli();
@@ -1498,10 +1497,9 @@ function cachedTranscriptTitle(sessionId, harness) {
   return t;
 }
 
-// Phase 7 session-detail extension (plan: "Extend the current session modal with: model history,
-// configuration snapshot, active packages/skills, explicit versus inferred task category and
-// outcome, phase timeline, semantic operation totals, testing-efficiency summary, markers inside or
-// adjacent to the session, data-quality flags"). Scans the already-loaded spool for this session's
+// Session-detail extension for the session modal: model history, configuration snapshot, active
+// packages/skills, explicit versus inferred task category and outcome, phase timeline, semantic
+// operation totals, testing-efficiency summary, nearby markers, and data-quality flags. Scans the already-loaded spool for this session's
 // own captures (cheap: one session's records only, not a re-read) and pulls together everything
 // derivable without touching the transcript. Best-effort throughout — missing data reports as
 // unavailable rather than guessed.
@@ -1537,8 +1535,8 @@ function sessionSpoolContext(sessionId, markers) {
   }
 
   // Explicit outcome/task-category marker for this session, if any (kept distinguishable from any
-  // future inferred value — the plan requires "explicit versus inferred" stay separate, and today
-  // only explicit outcome markers set task_category, per Phase 4 notes).
+  // future inferred value — explicit and inferred stay separate, and today only explicit
+  // outcome markers set task_category).
   const outcomeMarker = markers.find((m) => m.type === "outcome" && m.session_id === sessionId) ?? null;
 
   // Markers "inside or adjacent to" the session: any marker whose timestamp falls within the
@@ -1666,14 +1664,14 @@ function loadInsightsLlm() {
   return runDeepRead(analyzeTelemetry(readSpoolEventsCached()));
 }
 
-// --- Phase 6: portal marker/experiment/analysis request handlers ------------------------------
+// --- Portal marker/experiment/analysis request handlers ---------------------------------------
 // All three reuse the exact same domain functions the CLI calls (createMarker/startExperiment/
-// endExperiment from telemetry-markers.mjs) — no browser-side rule duplication, per the plan's
-// "Do not duplicate experiment rules in the browser." Server-side validation mirrors the CLI's own
+// endExperiment from telemetry-markers.mjs) — experiment rules are never duplicated in the
+// browser. Server-side validation mirrors the CLI's own
 // argument checks (parseMarkArgs/parseExperimentStartArgs) since a browser POST body skips that path.
 
 // Portal markers omit --session/--phase/--status conveniences the CLI supports via flags the portal
-// doesn't yet render a control for; only the fields the plan's marker-creation UI needs are accepted.
+// doesn't yet render a control for; only the fields the portal's marker-creation UI needs are accepted.
 function createMarkerFromPortalRequest(body) {
   if (typeof body.type !== "string" || !MARKER_TYPES.has(body.type)) {
     return { ok: false, error: `type must be one of: ${[...MARKER_TYPES].join(", ")}` };
@@ -1745,8 +1743,7 @@ function endExperimentFromPortalRequest(experimentId) {
 }
 
 // POST /api/telemetry/analysis: dedicated high-dimensional comparison endpoint for the Analysis
-// explorer (plan: "Add a dedicated endpoint for high-dimensional comparisons rather than inflating
-// /api/data for every explorer interaction"). Body: { cohort_a, cohort_b, metric, marker_id }.
+// explorer, so /api/data is not inflated for every explorer interaction. Body: { cohort_a, cohort_b, metric, marker_id }.
 // Validates known metric ids and cohort filter shapes server-side; never trusts client-supplied
 // formulas or cohort definitions beyond selecting from the shared registry/cohort model.
 function loadTelemetryAnalysisRequest(body) {
@@ -1757,7 +1754,7 @@ function loadTelemetryAnalysisRequest(body) {
   const allEvents = readSpoolEvents();
   const markers = readMarkers();
 
-  // marker_id (or cohort_a.marker_id) selects the marker-relative path — the plan's preferred
+  // marker_id (or cohort_a.marker_id) selects the marker-relative path — the preferred
   // comparison when a change marker exists. Falling back to a bare cohort_a-vs-cohort_b comparison
   // (two independent cohort filters, no marker) is supported for the explorer's "compare two
   // arbitrary cohorts" mode, using a simple metric-value-per-cohort comparison rather than the

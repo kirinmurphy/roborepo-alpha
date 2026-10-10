@@ -48,7 +48,7 @@ for (const file of ["valid-claude.json", "valid-codex.json", "valid-gemini.json"
   }
 }
 
-// Every declared capability has a required-method mapping (Phase 1 contract completeness).
+// Every declared capability has a required-method mapping (contract completeness).
 for (const capability of HARNESS_CAPABILITIES) {
   assert(CAPABILITY_REQUIRED_METHODS[capability], `capability "${capability}" has no entry in CAPABILITY_REQUIRED_METHODS`);
 }

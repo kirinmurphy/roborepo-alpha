@@ -22,7 +22,6 @@ const ANSI = process.stdout.isTTY && !process.env.ROBOREPO_NO_COLOR
 
 // The forced onboarding gate that used to live here (maybeRunPresetOnboarding) is gone: first-run
 // behavior is now `roborepo init`, routed from main.mjs via scripts/cli/first-run-routing.mjs.
-// The old gate's body is recorded in docs/plans/completed/onboarding-reinstatement.md.
 
 export async function presetsCommand(rest) {
   const [sub, ...args] = rest;
@@ -67,7 +66,7 @@ export async function bundleCommand(args) {
 // Interactive onboarding, organized around the four user-facing behavior sections that the /config
 // web portal shows (Token Optimization, Commands, Code Conventions, Permissions) rather than the
 // internal bundle list. Each toggleable item drives the same config-mutate primitives the web POST
-// endpoints use, so terminal and web stay in lockstep. Permissions are read-only here (Phase 2).
+// endpoints use, so terminal and web stay in lockstep. Permissions are read-only here.
 // Non-TTY (headless) keeps applying the default configuration, the same set install wires up.
 export async function presetsOnboard(args) {
   rejectUnknownFlags(args, new Set(["--menu", "--launch-portal"]));
@@ -726,7 +725,7 @@ function restorePreInstallBackup(row) {
 }
 
 function removeRenderedRulesRow(row) {
-  // Unlink a legacy repo symlink if present (pre-Phase-3 installs).
+  // Unlink a legacy repo symlink if present (older installs).
   const link = readlink(row.homeAbs);
   if (link && resolvesInsideRepo(row.homeAbs)) {
     fs.unlinkSync(row.homeAbs);

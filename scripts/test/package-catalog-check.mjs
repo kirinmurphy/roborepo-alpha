@@ -284,7 +284,7 @@ try {
   fs.cpSync(path.resolve("scripts"), path.join(devRoot, "scripts"), { recursive: true });
   // package-catalog.mjs resolves harnesses through scripts/harnesses/registry.mjs, whose Claude
   // and Codex provider modules read their manifest from globals/harnesses/<id>/provider.json —
-  // needed here too, same gap the Phase 3 grounding notes describe for test-cli.sh sandboxes.
+  // needed here too, same gap test-cli.sh sandboxes have.
   fs.mkdirSync(path.join(devRoot, "globals"), { recursive: true });
   fs.cpSync(path.resolve("globals/harnesses"), path.join(devRoot, "globals", "harnesses"), { recursive: true });
   const cliPath = path.resolve("scripts/cli/main.mjs");

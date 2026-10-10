@@ -14,7 +14,7 @@ related:
   - qjsbhel5
   - package-cli-test-guide
   - harness-parity-todo
-  - harness-presence-signal-expansion
+  - 3jp3yhtq
   - harness-capability-derived-resource-targeting
   - plan-session-launching-milestone-1
   - plan-lifecycle-suite-workflow-navigation

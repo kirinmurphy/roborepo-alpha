@@ -4,9 +4,8 @@ set -euo pipefail
 # `roborepo harness withdraw <id>`: actively unmerges RoboRepo's previously-written content back
 # out of ONE provider's live config, reusing uninstall's per-capability removal logic
 # (scripts/install/uninstall-lib.sh) scoped to that provider instead of running the full
-# uninstall. Distinct from `harness disable <id>` (Phase 2 — flips a state bit only, never touches
+# uninstall. Distinct from `harness disable <id>` (flips a state bit only, never touches
 # files): withdraw is the explicit, confirmable action that actually removes RoboRepo's content.
-# See docs/plans/active/discoverable-harness-provider-architecture-plan.md, "Disable vs. withdraw".
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 dry_run=0

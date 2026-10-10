@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { telemetryRoutes } from "../cli/portal-routes-telemetry.mjs";
 import { dispatchRoutes } from "../cli/portal-router.mjs";
 
-// Phase 6 of discoverable-harness-provider-architecture-plan.md: /api/session must reject a missing
+// /api/session must reject a missing
 // or unrecognized harness id instead of silently defaulting to Claude. Fakes just enough of
 // req/res for send()'s writeHead/end contract — no real HTTP socket needed.
 

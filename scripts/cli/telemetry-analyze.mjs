@@ -16,9 +16,8 @@ import { hasHarnessProvider, getHarnessProvider } from "../harnesses/registry.mj
 
 // Whether `harness` declares the telemetry-rate-limits capability — Codex today, potentially other
 // providers later. Namespaced field name (event.details.codex_rate_limits) stays as-is (see the
-// field-shape note above hasRateLimits' call sites): the plan's Phase 6 item allowed either
-// normalizing the field or namespacing it as a provider extension, and the field was already
-// namespaced. What was still hardcoded was the *check* (`harness === "codex"`), not the data shape —
+// field-shape note above hasRateLimits' call sites): either normalizing the field or
+// namespacing it as a provider extension was acceptable, and the field was already namespaced. What was still hardcoded was the *check* (`harness === "codex"`), not the data shape —
 // this makes the check capability-driven so a future rate-limited provider doesn't need a new
 // literal string added here.
 function hasRateLimitsCapability(harness) {
@@ -38,7 +37,7 @@ const MIXED_CODE_LOOKUP_NATIVE_READS = 4;
 const DOC_EXTS = new Set([".md", ".mdx", ".rst", ".txt"]);
 const SOURCE_EXTS = new Set([".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".json", ".css", ".scss", ".sh", ".py", ".rb", ".go", ".rs", ".java", ".kt", ".swift", ".php", ".cs", ".cpp", ".c", ".h", ".hpp", ".toml", ".yaml", ".yml"]);
 
-// `options` (Phase 5 addition, fully optional so every existing call site keeps working unchanged):
+// `options` (fully optional so every existing call site keeps working unchanged):
 //   - cohortFilter: a normalized (or raw, pre-normalization) cohort filter object (telemetry-cohort.mjs).
 //     Applied on top of `events` before every downstream computation, so cohort-scoped callers (the
 //     portal's Analysis explorer, a future CLI --filter flag) get one filtered event set feeding every
@@ -46,8 +45,7 @@ const SOURCE_EXTS = new Set([".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".jso
 //   - markers: the marker timeline, needed for outcome-aware metrics and marker-relative comparison.
 //   - markerId: when set (and found in `markers`), triggers a marker-relative comparison for
 //     `compareMetric` (default "tokens.total") and demotes the existing midpoint regression() to a
-//     labeled exploratory fallback in the report (plan: "Retain midpoint regression as a labeled
-//     exploratory fallback when no marker is selected").
+//     labeled exploratory fallback in the report.
 //   - compareMetric: metric id for the marker-relative comparison (only used when markerId is set).
 export function analyzeTelemetry(events, options = {}) {
   const { cohortFilter = null, markers = [], repositoryHashIndex = null } = options;
@@ -137,27 +135,26 @@ function analyzeRows(rows, scopedEvents, events, normalizedFilter, { markers = [
     group_cost: groupCost(captures),
     spike_anatomy: spikeAnatomy(captures, spikeCaptures),
     package_cost: packageCost(captures),
-    // Midpoint regression is now a labeled EXPLORATORY fallback (plan: "Retain midpoint regression as
-    // a labeled exploratory fallback when no marker is selected") — marker_comparison below is the
+    // Midpoint regression is a labeled EXPLORATORY fallback when no marker is selected —
+    // marker_comparison below is the
     // PREFERRED path once a change marker exists to compare across. regression() itself is untouched.
     regression: { ...regression(captures), exploratory: true, label: "midpoint (exploratory — not tied to any specific change)" },
     loops: detectLoops(captures, sessionsById, wasteLedger),
     data_quality_warnings: dataQualityWarnings(scopedEvents),
     read_warnings: readWarnings(rows, sessionsById, wasteLedger),
-    // Phase 5: testing-efficiency summary (plan: "Derived testing findings"), computed from the same
+    // Testing-efficiency summary, computed from the same
     // metrics registry the CLI report and portal both read — see telemetry-metrics.mjs.
     testing_efficiency: testingEfficiencySummary(captures),
     // Identifiable waste, per turn and counted once — built after loops/read_warnings ran above so
     // their nominations are in the ledger. Filled in just below (object literal order matters).
     waste: null,
-    // Phase 5: cohort context so a filtered response can describe itself (plan: "readable cohort
-    // summary" / "expose cohorts and sample size").
+    // Cohort context so a filtered response can describe itself and its sample size.
     cohort: normalizedFilter
       ? { filter: normalizedFilter, summary: describeCohortFilter(normalizedFilter), active_filter_count: activeFilterCount(normalizedFilter) }
       : null,
   };
   report.waste = wasteLedger.summarize(captureIndex.latestTs);
-  // Marker-relative comparison (Phase 5 "preferred" path) — only computed when the caller selected a
+  // Marker-relative comparison (the preferred path) — only computed when the caller selected a
   // marker. Uses the FULL (pre-cohort-filter) event set so the marker's own before/after split isn't
   // additionally restricted by the same filter that might have selected this marker's sessions; a
   // caller wanting both should pass a marker whose surrounding sessions remain visible in `events`.

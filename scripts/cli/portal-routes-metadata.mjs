@@ -34,7 +34,7 @@ export function handleMetadataAsset(req, res, urlPath, { pages, appName, apiRout
 // sitemap above manifest), since every page in PAGES is also in the sitemap. That is dedup working
 // as designed, not a bug — to see manifest's own suggestion distinctly, temporarily comment out the
 // /sitemap.xml branch below (or point PAGES-derived sitemap at a subset) so manifest's "/" has no
-// sitemap entry to collide with. See docs/plans/active/developer-runtime-metadata-suggestions.md.
+// sitemap entry to collide with.
 function buildManifest(pages, appName) {
   return {
     name: appName,

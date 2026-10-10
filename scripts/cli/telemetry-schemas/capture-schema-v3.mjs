@@ -22,7 +22,7 @@ export function generateCaptureId() {
 // v2 records pass through unvalidated by this module (telemetry-capture.mjs already governs their
 // shape) — this function's job is only to validate the v3-additive fields when present, and to
 // leave a record with schema 2 (or no v3 fields at all) alone. Schema-v2 read compatibility is a
-// hard requirement from the plan doc; this validator must never reject a plain v2 record.
+// hard requirement; this validator must never reject a plain v2 record.
 export function validateCaptureV3(record) {
   if (!record || typeof record !== "object" || Array.isArray(record)) throw new Error("capture record must be an object");
   if (record.schema !== CAPTURE_SCHEMA_V2 && record.schema !== CAPTURE_SCHEMA_V3) {
@@ -34,7 +34,7 @@ export function validateCaptureV3(record) {
   if (record.call_id != null && typeof record.call_id !== "string") throw new Error("capture call_id must be a string");
   // Snapshot IDs are content-addressed hashes (snapshot-schema.mjs computeSnapshotId), 24 hex
   // chars — not the generic 16-hex generateId() shape isValidId(..., "cfg") checks for. Same fix
-  // as marker-schema.mjs's config_snapshot_id (see Phase 2 notes in the plan doc).
+  // as marker-schema.mjs's config_snapshot_id.
   if (record.config_snapshot_id != null && !/^cfg_[a-f0-9]{24}$/.test(record.config_snapshot_id)) {
     throw new Error(`invalid capture config_snapshot_id: ${record.config_snapshot_id}`);
   }
@@ -100,8 +100,8 @@ const INTERVENING_FIELDS = [
   "failure_signature_changed",
 ];
 
-// Privacy-safe "what happened since the last equivalent test run" signals (plan: "Intervening-work
-// analysis"). Booleans/counts/category labels only — no file paths, no diff content. diff_fingerprint
+// Privacy-safe "what happened since the last equivalent test run" signals
+// (intervening-work analysis). Booleans/counts/category labels only — no file paths, no diff content. diff_fingerprint
 // is itself a hash (see telemetry-capture.mjs diffFingerprint()), not a real Git diff.
 function validateIntervening(intervening) {
   if (typeof intervening !== "object" || Array.isArray(intervening)) throw new Error("capture intervening must be an object");

@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 // Characterizes permissions-render.mjs's renderPermissionsTo (the LIVE home-config path used by
 // config controls, distinct from scripts/build/render-agent-permissions.mjs's build-time repo
-// SOURCE render, which stays Phase 8 scope and is already covered by doctor's real
+// SOURCE render, which is out of scope here and already covered by doctor's real
 // `render-agent-permissions.mjs --check` run). Dispatches through each present harness's own
-// permissions.render adapter (docs/plans/active/discoverable-harness-provider-architecture-plan.md
-// Phase 5). Pins: only present harness config gets written, Codex is skipped when its config.toml
+// permissions.render adapter. Pins: only present harness config gets written, Codex is skipped when its config.toml
 // doesn't already exist (never fabricated from nothing), Claude's model key is always stripped,
 // Gemini's Policy Engine file is written whenever ~/.gemini/ is present (Gemini fully owns that
 // file, so — unlike Codex — there's no "don't fabricate" gate), and every harness's generated

@@ -1,12 +1,10 @@
 // Gemini CLI harness provider — the first real (non-synthetic) third provider, proving the
-// registry/adapter contract against actual native config complexity. See
-// docs/plans/active/gemini-cli-provider-integration-plan.md for the full shape comparison against
-// Claude/Codex and the verification trail behind each capability below.
+// registry/adapter contract against actual native config complexity.
 //
 // rules/skills/commands/hooks.read+write/mcp.add+remove stay stubbed (notYetMigrated), matching
 // the current bar for Claude and Codex — those capabilities are declared in the manifest (real,
 // verified shapes exist) but their render/link logic still lives in scripts/cli/*.mjs, unmigrated
-// for any provider yet (Phase 3-6 backlog on the parent migration, not specific to Gemini).
+// for any provider yet (not specific to Gemini).
 
 import fs from "node:fs";
 import path from "node:path";
@@ -109,7 +107,7 @@ function renderGeminiPermissions(_current, behaviorManifest, overrides) {
 
 // Single-server add/remove: Gemini has a real config file to write into directly (settings.json's
 // mcpServers key), confirmed via a real `gemini mcp add test-server echo hello --scope user` call
-// (Phase 1 verification) — {command, args} for stdio, {url}/{httpUrl} for sse/http, no CLI shell-
+// {command, args} for stdio, {url}/{httpUrl} for sse/http, no CLI shell-
 // out required unlike Claude. Same { changed, content } return shape as Codex's mcpAddServer.
 function readSettingsMcp(settingsPath) {
   let settings = {};

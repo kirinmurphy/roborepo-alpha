@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Portal routing manifest check (docs/plans/active/portal-onboarding-home.md).
+// Portal routing manifest check.
 //
 // PAGES order defines the global nav (Home, Agents, Plans, Tokens, Runtime, Settings).
 // This check pins the manifest invariants that a future routing refactor could silently break:
@@ -18,7 +18,7 @@ import { PAGES, PAGE_ROUTES, matchPortalPage, serializeInlineJson } from "../../
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..", "..");
 
-// Canonical page map from the plan: order is the nav order, and each route is unique (no alias).
+// Canonical page map: order is the nav order, and each route is unique (no alias).
 const EXPECTED = [
   { path: "/", id: "home", title: "Repos", dir: "home", default: true },
   { path: "/config", id: "config", title: "Agents", dir: "config" },

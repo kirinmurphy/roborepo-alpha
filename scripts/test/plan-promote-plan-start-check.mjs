@@ -30,9 +30,9 @@ const SKILLS = {
   },
   "plan-close": {
     boundaryPhrases: [
-      "implement missing work",
+      "fix agent-resolvable gaps before the verdict",
       "merge, push, delete branches, or remove worktrees",
-      "check off `## Not tested` entries",
+      "manual-only `## Not tested` entries",
     ],
   },
   "plan-start": {
@@ -174,7 +174,7 @@ for (const [id, { boundaryPhrases }] of Object.entries(SKILLS)) {
 }
 
 // --- suite-wide conventions: every plan-suite skill checks its paired packages before loading them,
-// and /plan-close refuses rather than closing on incomplete evidence. Prose-presence coverage, like
+// and /plan-close repairs agent-resolvable gaps before refusing on incomplete evidence. Prose-presence coverage, like
 // the blocks above: these are agent-followed instructions with no code path of their own. ---
 {
   // Assembled from parts so this guard does not itself trip the repository-wide check that no
@@ -202,7 +202,7 @@ for (const [id, { boundaryPhrases }] of Object.entries(SKILLS)) {
     .map((heading) => close.indexOf(heading));
   assert.ok(order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1])), "plan-close: tests, verdict, Not tested, landed, close, then stop servers, in that order");
   for (const phrase of [
-    "refuse: report the failing output",
+    "continue independent agent-resolvable work",
     "Prefer the repository's canonical CI command over a broad",
     "release-only or",
     "availability of optional tools or environment fixtures is not a closure prerequisite",
@@ -212,12 +212,16 @@ for (const [id, { boundaryPhrases }] of Object.entries(SKILLS)) {
     "UNCONFIRMED_NOT_TESTED",
     "git merge-base --is-ancestor",
     "never as passed",
-    "Never check one off yourself",
+    "add a missing regression test",
+    "rerun the affected checks",
+    "manual-only `## Not tested` entries",
     "canonical linked-worktree server cleanup command",
     "Skip this step for an archived or refused plan",
     "## Refusal and blocker reporting",
     "report every issue explicitly",
     "the exact plan entry",
+    "user-visible behavior",
+    "expected and observed outcome",
     "Would you like help resolving any of these issues?",
   ]) {
     assert.ok(close.toLowerCase().includes(phrase.toLowerCase()), `plan-close: SKILL.md missing "${phrase}"`);

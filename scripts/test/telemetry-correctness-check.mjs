@@ -34,7 +34,7 @@ function testClaudeTranscript() {
   assert.equal(stats.last_result.tool, "Read");
   assert.equal(stats.last_result.chars, 120);
   assert.equal(stats.last_result.is_error, false);
-  // Phase 4: a successful result must never populate the bounded failure-text field — only the
+  // A successful result must never populate the bounded failure-text field — only the
   // is_error branch does, and only telemetry-capture.mjs's failureSignature() call consumes it.
   assert.equal(stats.last_result_failure_text, null);
 }

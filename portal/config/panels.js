@@ -1,6 +1,6 @@
 // Wiring for the Config page's single self-contained chrome panel: the source-inspect /
 // snapshot-view <dialog>. app.js calls into this controller instead of owning the modal's DOM
-// refs and listeners itself. See docs/plans/portal-config-web-components-plan.md — this is a
+// refs and listeners itself. This is a
 // panel-factory (like createInfoModal in plans/panels.js), not a custom element: the modal is a
 // page singleton referenced by id, never declaratively instantiated or cloned.
 

@@ -1,7 +1,6 @@
 #!/usr/bin/env node
-// Characterizes config-mutate.mjs's setSkillInstalled (skill linking) before Phase 5 replaces its
-// hardcoded HARNESS_SKILL_DIRS ([~/.claude/skills, ~/.codex/skills]) with provider-manifest-driven
-// paths (docs/plans/active/discoverable-harness-provider-architecture-plan.md). Pins the real
+// Characterizes config-mutate.mjs's setSkillInstalled (skill linking), which resolves
+// harness skill dirs from provider manifests rather than a hardcoded Claude/Codex list. Pins the real
 // symlink-into-machine-cache behavior: enable materializes a shared skill into the machine-local
 // cache then symlinks each present harness's skill dir at it; disable removes both; a native
 // (non-managed) skill directory of the same name is left untouched (conflict, not overwrite).

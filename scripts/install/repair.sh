@@ -5,7 +5,7 @@ set -euo pipefail
 #
 # Symptom this fixes: every managed link under ~/.claude and ~/.codex (including per-skill links
 # under skills/) and the ~/.local/bin/roborepo command point at the checkout's old absolute path,
-# so they dangle and `roborepo` drops off PATH. (See docs/plans/portable-install-relocation.md.)
+# so they dangle and `roborepo` drops off PATH.
 #
 # What it does: reclaim stale symlinks that still point at the prior checkout (or dangle),
 # re-link the bin command against the current checkout, refresh the base shared skill view,
@@ -134,8 +134,7 @@ repair_skill_links() {
   link_global_skills "${1%/skills}" builtin-support
 }
 
-# Provider iteration (docs/plans/active/discoverable-harness-provider-architecture-plan.md Phase
-# 4) instead of a fixed Claude/Codex pair. home_path is always the resolved manifest location
+# Iterates every registered provider instead of a fixed Claude/Codex pair. home_path is always the resolved manifest location
 # regardless of presence, so the -d guard still decides whether repair touches this machine's copy.
 while IFS=$'\t' read -r id home_path _present _display_name _root_config_path; do
   [[ -z "${id}" ]] && continue

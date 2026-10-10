@@ -49,7 +49,7 @@ const LEGACY_GENERATED_RULES_FILE = path.join(stateDir, "rules", "generated-rule
 // Returns { exists: boolean, packages: string[], disabled: string[] }. `packages` is the explicit-
 // enable list; `disabled` is the explicit-disable list (only meaningful for default-enabled
 // packages, since an explicit disable of a non-default package is just absence from `packages`).
-// `exists` distinguishes "no registry yet" (pre-Phase-3, fall back to text scan in config.mjs) from
+// `exists` distinguishes "no registry yet" (older installs; fall back to text scan in config.mjs) from
 // "registry exists but empty".
 export function readEnabledPackagesRegistry() {
   try {

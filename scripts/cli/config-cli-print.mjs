@@ -1,9 +1,8 @@
 import { buildRootConfigView, ROOT_CONFIG_STATE_LABEL } from "./root-config-view.mjs";
 import { formatBytes } from "../../modules/retention/index.mjs";
 
-// Read-only report of baseline vs. active root config vs. drift state, per harness. No writes —
-// see docs/plans/completed/root-config-layered-inheritance.md for the update/repair behavior that acts on
-// this same drift signal.
+// Read-only report of baseline vs. active root config vs. drift state, per harness. No writes;
+// update and repair act on this same drift signal.
 export function configRootInspect() {
   for (const row of buildRootConfigView()) {
     console.log(`\n${row.harness}`);
@@ -16,7 +15,7 @@ export function configRootInspect() {
       console.log(`  run \`roborepo update\` to resolve — see docs/user/reference/config-collision-handling.md`);
       // Codex owns a native profile mechanism for permanent personal config; point drifted Codex
       // users at it instead of re-drifting the managed baseline every update. Claude has no
-      // equivalent, so this hint is Codex-only. See config-collision-handling.md "Codex Native Profiles".
+      // equivalent, so this hint is Codex-only.
       if (row.harness === "codex") {
         console.log(`  for a permanent personal slice, use a Codex profile (~/.codex/<name>.config.toml, --profile <name>)`);
       }

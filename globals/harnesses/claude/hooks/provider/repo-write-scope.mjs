@@ -30,7 +30,7 @@ import { fileURLToPath } from 'node:url'
 // express that. Rule paths are literal strings with no variable expansion, and no anchor resolves
 // to the current repository — `/path` in a user-level settings file resolves relative to that
 // settings file's own directory, not to any checkout. So the boundary has to be decided at
-// tool-call time. See docs/plans/backlog/agent-config-repo-scoped-write-permissions.md.
+// tool-call time.
 //
 // The static rules remain the coarse layer: they allow the scratch directories that are correct
 // regardless of which repository is in use. This hook narrows the repository half of that scope

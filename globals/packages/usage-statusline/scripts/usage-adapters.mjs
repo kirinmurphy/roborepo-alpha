@@ -9,7 +9,7 @@
 export const SCHEMA_VERSION = 1;
 
 // Documented durations for the explicitly named Claude windows. Only applied to a window whose
-// identity is certain (plan: do not infer duration from a generic/renamed rate-limit slot).
+// identity is certain; a generic or renamed rate-limit slot never gets an inferred duration.
 const FIVE_HOUR_MINUTES = 300;
 const WEEKLY_MINUTES = 10080;
 

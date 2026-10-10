@@ -7,9 +7,8 @@ import {
 } from "../cli/telemetry-cohort.mjs";
 import { buildRepositoryHashIndex, repositoryRefForEvent } from "../cli/telemetry-repository.mjs";
 
-// Phase 5 of docs/plans/active/roborepo-telemetry-events-experiments-plan.md: the normalized cohort
-// filter object shared by the CLI and portal (plan: "Cohort model" — "All panels must receive the
-// same globally filtered event set"). Pure module over already-loaded capture/marker arrays; no fs.
+// The normalized cohort filter object shared by the CLI and portal, so all panels receive the same
+// globally filtered event set. Pure module over already-loaded capture/marker arrays; no fs.
 
 testNormalizeFillsDefaults();
 testNormalizeIgnoresGarbage();
@@ -126,8 +125,8 @@ function testApplyFilterByOutcomeRequiresMarkers() {
 }
 
 function testApplyFilterByOutcomeIgnoredWithoutMarkers() {
-  // Filtering by outcome with no markers passed must not silently drop everything — the plan
-  // requires never inferring outcomes, so an outcome filter with no marker data degrades to a no-op
+  // Filtering by outcome with no markers passed must not silently drop everything — outcomes
+  // are never inferred, so an outcome filter with no marker data degrades to a no-op
   // for that dimension rather than excluding every capture.
   const events = [event({ session_id: "s1" })];
   const filtered = applyCohortFilter(events, normalizeCohortFilter({ outcomes: ["successful"] }));

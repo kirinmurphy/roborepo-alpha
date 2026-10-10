@@ -57,7 +57,7 @@ export function readHistoryEvents({ stateRoot, fsApi = fs } = {}) {
   return events;
 }
 
-// Append a batch in a single write. This is the "in-memory write queue" the plan calls for: one
+// Append a batch in a single write. This is the in-memory write queue: one
 // refresh produces one array of events from diffSnapshots and flushes it in one syscall. A queue
 // spanning refreshes would only add a flush-on-exit failure mode, since refreshes are already
 // serialized by the inFlightRefresh guard in scripts/cli/developer-runtime.mjs.

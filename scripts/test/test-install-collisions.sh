@@ -1022,7 +1022,7 @@ test_root_config_keep_policy_does_not_record_false_clean() {
     || fail "keep policy does not falsely clear drift status"
 }
 
-# Uninstall drift-awareness (docs/plans/completed/root-config-layered-inheritance.md, "Uninstall", step 5):
+# Uninstall drift-awareness:
 # a root_config the user hand-edited after roborepo's last write (sidecar hash no longer matches)
 # must be left in place with its path reported, not deleted — even though is_builtin_authored still
 # matches the markers underneath the edit. A clean builtin-written root_config is still removed.

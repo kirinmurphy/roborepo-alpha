@@ -29,17 +29,17 @@ export const CAPABILITY_REQUIRED_METHODS = Object.freeze({
   permissions: { group: "permissions", methods: ["render"] },
   skills: { group: "skills", methods: ["link"] },
   "slash-commands": { group: "commands", methods: ["render"] },
-  // read/write: withdraw's blanket strip-all (Phase 4 — see harness withdraw <id>). merge/unmerge:
-  // one package's hooks fragment added/removed during package install/disable (Phase 5). Four
+  // read/write: withdraw's blanket strip-all (see harness withdraw <id>). merge/unmerge:
+  // one package's hooks fragment added/removed during package install/disable. Four
   // separate names on purpose — "write" was already claimed by withdraw's removal-only semantics
-  // before Phase 5, so reusing it for a generic install-time merge would make one name mean two
+  // first, so reusing it for a generic install-time merge would make one name mean two
   // different operations depending on caller.
   hooks: { group: "hooks", methods: ["read", "write", "merge", "unmerge"] },
-  // add/remove: Phase 4's bulk operations (add = not yet migrated; remove = withdraw's "strip
+  // add/remove: bulk operations (add = not yet migrated; remove = withdraw's "strip
   // every MCP server this package owns" sweep, real for Claude). addServer/removeServer/list:
-  // Phase 5's single-server operations (add one server, remove one named server, enumerate
+  // single-server operations (add one server, remove one named server, enumerate
   // configured servers) -- separate names on purpose, same lesson as hooks' merge/unmerge vs
-  // write: "remove" was already claimed by bulk-removal semantics before Phase 5, so reusing it
+  // write: "remove" was already claimed by bulk-removal semantics first, so reusing it
   // for a single-server op would make one name mean two different things depending on caller.
   mcp: { group: "mcp", methods: ["add", "remove", "addServer", "removeServer", "list"] },
   "package-config": { group: "rootConfig", methods: ["mergePackageComponent", "unmergePackageComponent"] },

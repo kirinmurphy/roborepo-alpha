@@ -66,8 +66,8 @@ export function harnessDisable(rest) {
 // executable on PATH with no home dir yet as present, useful for `harness list`/`refresh` signal).
 // Shell install/uninstall/repair actions gate on home-dir existence only, matching the exact
 // semantics of the harness_present() function this replaces, so swapping the source is
-// behavior-preserving. See docs/plans/backlog/harness-presence-signal-expansion.md for
-// broadening what "present" means for install-time decisions.
+// behavior-preserving. Install-time writes stay home-gated so RoboRepo never creates a home
+// directory the harness itself has not created.
 // One row per provider: id, home path, "1"/"0" home-dir presence, display name, root-config home
 // path (empty string if the provider declares no "rootConfig" manifest path). The root-config
 // path's basename follows the same convention as this repo's generated/<id>/<basename> build

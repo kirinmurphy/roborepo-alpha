@@ -10,8 +10,8 @@
 // re-reads. A cache that cannot go stale without the underlying directory changing is not the
 // forever-cache that comment warns about.
 //
-// Why it exists at all: an `idle` repository has no listener to hang git context off, so Phase 3
-// reads it from the persisted checkout path instead. Doing that uncached costs one `git` subprocess
+// Why it exists at all: an `idle` repository has no listener to hang git context off, so git context
+// is read from the persisted checkout path instead. Doing that uncached costs one `git` subprocess
 // per idle repository per poll — at a ~10s poll and a dozen idle repositories, a dozen subprocesses
 // every tick, forever, for data that changes when the user commits and not otherwise. Active
 // repositories are unaffected: they keep using the per-scan cache.

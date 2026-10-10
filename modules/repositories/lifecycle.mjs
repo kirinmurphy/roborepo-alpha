@@ -87,7 +87,7 @@ export function deriveLifecycle(registry, repositoryId, { runningRepositoryIds =
 
 // The repository that now owns every checkout this one used to, or null.
 //
-// This is the read side of the rename decision Phase 2 made deliberately: when a checkout resolves
+// This is the read side of a deliberate rename decision: when a checkout resolves
 // to a new git identity the checkout REPOINTS and both records survive, because a renamed remote and
 // a deleted-then-recloned directory produce identical stored data and a wrong merge hides one
 // repository's work inside another. Nothing is merged automatically, and that still holds.
@@ -135,8 +135,8 @@ export function supersededBy(registry, repositoryId) {
 // index, while the shared rootId sat in plain view in both arrays.
 //
 // A rootId is a hash of an absolute path, so two records listing the same one is direct evidence the
-// same DIRECTORY was seen under both remotes. That is the fact Phase 2 said it did not have when it
-// refused to merge a rename automatically. Its stated worry was that "a deleted-then-recloned
+// same DIRECTORY was seen under both remotes. That is the evidence the rename path lacked when it
+// refused to merge a rename automatically. Its worry was that "a deleted-then-recloned
 // directory produces identical stored data" — but the two are distinguishable here:
 //
 //   rename : the old record's roots are all still present on the new one. Nothing was left behind,

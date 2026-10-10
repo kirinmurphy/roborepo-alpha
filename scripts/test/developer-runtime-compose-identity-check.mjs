@@ -241,7 +241,7 @@ async function runCommand(command, args) {
 //
 // It no longer suppresses `docker inspect`, though. Placement (which CHECKOUT) is decided by bind
 // mounts for every stack, including ones whose repository came from working_dir — that is the whole
-// point of developer-runtime-workspace-model Phase 4, since working_dir answers "where was the command
+// point of bind-mount placement, since working_dir answers "where was the command
 // typed" rather than "what do these containers depend on". An earlier revision of this test asserted
 // mounts were never inspected in this case; that guard was about cost, and it is superseded by the
 // placement requirement.
@@ -298,7 +298,7 @@ async function runCommand(command, args) {
   assert.equal(resolved.rootId, null, "a shared stack never claims a checkout");
 }
 
-// ---- Compose ownership classification (developer-runtime-workspace-model Phase 4) ----
+// ---- Compose ownership classification ----
 // Placement is decided by bind mounts only. working_dir still resolves WHICH REPOSITORY a stack
 // belongs to, but must never decide WHICH CHECKOUT — a shared database started from whichever
 // worktree you happened to be in would otherwise render under that worktree, and `docker compose

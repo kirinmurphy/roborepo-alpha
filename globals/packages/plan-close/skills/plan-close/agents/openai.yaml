@@ -1,3 +1,3 @@
 interface:
   display_name: "Plan Close"
-  short_description: "Verify a finished plan and move it to completed or archived"
+  short_description: "Finish checks and close a verified plan"

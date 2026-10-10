@@ -160,7 +160,6 @@ function planCardElement(record, cardActions) {
 // clipboard prompt — the portal never runs a command or moves a file for it; the agent does both
 // after you paste. Label is the plain, in-context verb; description is the one-line effect.
 // `/plan-start` appears twice because it both begins a backlog plan and resumes an active one.
-// Wording tracks docs/user/guides/plan/lifecycle/plan-suite.md.
 const PLAN_ACTIONS = [
   ["plan-promote", "Promote", "Review and prepare this plan for development.", "backlog"],
   ["plan-start", "Start", "Implement this plan in an isolated worktree.", "backlog"],

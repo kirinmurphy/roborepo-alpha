@@ -5,7 +5,7 @@ import { parseFrontmatter } from "./index.mjs";
 import { generatePlanId } from "./plan-id.mjs";
 
 // Scaffold text is deliberately generic and non-empty for `next_action` (required for ready
-// backlog/active plans per plan-schema.md) so a repaired file is immediately writable from the
+// backlog/active plans) so a repaired file is immediately writable from the
 // portal's priority toggle, not just parseable.
 const SCAFFOLD_PRIORITY = "none";
 const SCAFFOLD_NEXT_ACTION = "Fill in the next concrete task.";

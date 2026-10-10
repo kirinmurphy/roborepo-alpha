@@ -165,7 +165,7 @@ try {
   assert.ok(stores.length > 0, "the registry is populated");
   assertBounded(stores);
 
-  // The guarantee the plan's acceptance criteria names: no store may be registered unbounded.
+  // The guarantee: no store may be registered unbounded.
   assert.throws(
     () => assertBounded([{ id: "bad", policy: { maxAgeDays: null, maxBytes: null } }]),
     /unbounded/,

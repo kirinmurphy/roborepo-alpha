@@ -1,15 +1,15 @@
 ---
 name: plan-close
-description: Use when closing one repository plan whose implementation is finished or abandoned. Run the repository's tests, check the plan's claims against the code, decide complete, incomplete, blocked, or superseded, refuse to close while Not tested entries remain unconfirmed or the work has not landed in the base branch, and move a verified plan to docs/plans/completed/ or an abandoned one to docs/plans/archived/. Trigger on explicit /plan-close or requests such as close this plan, archive this plan, or review whether a plan is complete. Do not use for creating or revising plans (plan-write), preparing a plan (plan-promote), implementing (plan-start), ending a session (session-close), reviewing a working diff, or merging branches.
+description: Use when closing one repository plan whose implementation is finished or abandoned. Run the repository's checks, fix agent-resolvable gaps including missing tests, check claims and landing, and move a verified plan to docs/plans/completed/ or an abandoned one to docs/plans/archived/. Refuse only for unresolved work, unconfirmed manual checks, or unconfirmed landing. Trigger on explicit /plan-close or requests such as close this plan, archive this plan, or review whether a plan is complete. Do not use for creating or revising plans (plan-write), preparing a plan (plan-promote), beginning implementation (plan-start), ending a session (session-close), reviewing a working diff, or merging branches.
 ---
 
 # Plan Close
 
 Close one existing plan: prove the work is done, or say exactly why it is not.
 
-A closed plan is a claim the next reader trusts without checking, so this skill refuses rather than
-closes whenever the evidence is incomplete. A refusal names every remaining issue and updates the
-plan when required; it is a correct outcome, not a failure.
+A closed plan is a claim the next reader trusts without checking. Resolve gaps within the selected
+plan's scope when the agent can do so, then refuse only if evidence or required work remains
+incomplete. A refusal names every remaining issue and updates the plan when required.
 
 ## Inputs
 
@@ -49,7 +49,8 @@ Each row is its own optional package, so check it before loading it:
 
 ## Workflow
 
-Each step runs only when the one before it passes. Read `references/verdict.md` before step 3.
+Work through the steps in order. Repairs can return the run to tests and validation; decide the
+verdict only from the resulting state. Read `references/verdict.md` before step 3.
 
 ### 1. Run the tests
 
@@ -59,8 +60,12 @@ discovery command when that command also includes release-only or
 optional environment suites. Tests run first because a red plan-relevant suite changes the code the
 verdict would judge.
 
-On a plan-relevant failure, refuse: report the failing output and stop. For an unrelated,
-pre-existing failure, report the exact output and continue only when the user explicitly waives it;
+On a plan-relevant failure, inspect the cause and fix it when the change is within the selected
+plan's scope and can be made autonomously. Add a missing regression test when needed, rerun the
+affected checks, and rerun the completion gate after code or test changes. If the failure needs a
+user decision or an external dependency, record the failing output, continue independent
+agent-resolvable work, and refuse at the verdict if it remains. For an unrelated, pre-existing
+failure, report the exact output and continue only when the user explicitly waives it;
 record the failure as unverified in the completion evidence. The availability of optional tools or
 environment fixtures is not a closure prerequisite for an unrelated plan; evaluate each check
 against the behavior this plan owns. Likewise, environment-matrix, release, registry, and
@@ -70,8 +75,8 @@ than universal closure gates.
 
 ### 2. Validate the document
 
-Run the repository's canonical plan validator for `<plan>` with machine-readable output. Its findings
-feed the verdict; a lifecycle finding
+Run the repository's canonical plan validator for `<plan>` with machine-readable output. Resolve
+agent-actionable findings and rerun it. Its remaining findings feed the verdict; a lifecycle finding
 such as an empty `next_action` on an active plan is reported, never invented away.
 
 ### 3. Check the plan against the code
@@ -85,22 +90,33 @@ Check every claim against the code, not against its checkboxes:
   reported as open;
 - UI or manual checks that could not run are reported as unverified, never as passed.
 
+You must fix agent-resolvable gaps before the verdict: correct in-scope code or plan claims, add a
+missing regression test for untested observable behavior, and perform available UI
+checks. Keep the fix within the selected plan and existing authorization. Rerun the affected checks,
+the canonical completion gate after code or test changes, and the plan validator after document
+changes. Only leave an issue open when it needs a user decision, manual confirmation, an external
+dependency, or work outside this plan.
+
 ### 4. Decide the verdict
 
 Follow `references/verdict.md`:
 
-- **Incomplete or blocked:** refuse. Name the open work, update the plan's tasks and `next_action`,
-  and leave it in its lifecycle folder.
+- **Incomplete or blocked after agent-resolvable repairs:** refuse. Name the remaining work, update
+  the plan's tasks and `next_action`, and leave it in its lifecycle folder.
 - **Superseded or abandoned:** record the reason in the plan, then `git mv` it to
   `docs/plans/archived/`.
 - **Complete:** continue to step 5.
 
 ### 5. Confirm `## Not tested` is clear
 
-Unchecked `## Not tested` entries are built work nobody confirmed. While any remain, refuse and list
-them; the plan validator reports them as `UNCONFIRMED_NOT_TESTED`. Never check one off
-yourself. The user clears an entry by confirming it by hand, or by deleting it with the reason
-recorded in the plan's `## Decision Log`.
+Unchecked `## Not tested` entries are built work nobody confirmed. Attempt each check the agent
+can perform: run an existing test, add a missing regression test for observable behavior, or use an
+available UI. Check off an entry only after recording the concrete passing evidence in the plan.
+If this changes code or tests, rerun the affected checks and canonical completion gate; rerun the
+plan validator after changing the document. Never check off manual-only `## Not tested` entries
+without the user's confirmation. A user may instead defer an entry to another plan; record that
+scope decision and its reason in the `## Decision Log` before removing the entry. While any
+unchecked entries remain, refuse and list them; the validator reports `UNCONFIRMED_NOT_TESTED`.
 
 ### 6. Confirm the work landed
 
@@ -142,7 +158,10 @@ Skip this step for an archived or refused plan.
 ## Refusal and blocker reporting
 
 When any remaining issue prevents closure, stop and report every issue explicitly. Do not report
-only a count or a generic "blocked" status. For each issue, include:
+only a count or a generic "blocked" status. Lead with the user-visible behavior or concrete
+input/output: what someone tries to do, the expected and observed outcome, and what remains
+uncertain if the action has not been tried. Use plain language before naming internal files, test
+codes, or Git mechanics. For each issue, include:
 
 - the exact plan entry, validation finding, failed check, or Git result;
 - why it prevents closure;
@@ -153,7 +172,7 @@ only a count or a generic "blocked" status. For each issue, include:
 For unchecked `## Not tested` entries, quote or faithfully reproduce each entry so the user can
 confirm the specific behavior. For `landed: unconfirmed`, name the branch/worktree, base branch,
 exact ancestry result, and the content-level check that is still needed. Preserve all open issues
-in the plan's lifecycle folder; never check off a manual entry on the user's behalf.
+in the plan's lifecycle folder; never check off a manual entry without user confirmation.
 
 End every blocked or refused report with: **Would you like help resolving any of these issues?**
 If the user says yes, help with the listed issues without silently changing their confirmation or
@@ -183,7 +202,7 @@ Do not:
 
 - close a plan while tests fail, work is open, a `## Not tested` entry is unchecked, or landing is
   unconfirmed;
-- check off `## Not tested` entries;
-- implement missing work; report it and leave it to `/plan-start`;
+- check off manual-only `## Not tested` entries without user confirmation;
+- expand implementation beyond the selected plan's scope or silently decide a material design tradeoff;
 - merge, push, delete branches, or remove worktrees;
 - close more than the one named plan.

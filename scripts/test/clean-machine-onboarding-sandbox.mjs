@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // Onboarding/init-lifecycle machine shapes that a redirected-HOME unit test cannot produce: a real
-// npm-installed binary and a real clean PATH. See docs/internal/docker-test-sandboxes.md.
+// npm-installed binary and a real clean PATH.
 //
 // initialization-lifecycle-check.mjs already proves the state machine itself (missing/in-progress/
 // complete, corrupt-record tolerance, schema validation, downgrade guard, routing, startedAt
@@ -248,7 +248,7 @@ echo "case 11: OK"
 # --- Case 12: first-run \`init\` and first-run \`web\` must produce equivalent procedural machine
 # state for the same harness fixture. Run both on identical fresh envs with one fake claude, then
 # compare the initialization record (schemaVersion/workflowVersion/status) and persisted harness
-# discovery (claude enabled). This is the plan's "init and web cannot drift" guarantee asserted
+# discovery (claude enabled). This is the "init and web cannot drift" guarantee asserted
 # end to end, not just in-process. ---
 echo "case 12: init and web produce equivalent procedural state"
 fresh_env case12a

@@ -3,8 +3,7 @@
 //
 // The boundary is "the repository the session is working in", which cannot be expressed as a
 // permission rule — Claude's rule paths are literal and no anchor resolves to the current
-// repository — so it lives in a hook and is only checkable by running it. See
-// docs/plans/backlog/agent-config-repo-scoped-write-permissions.md.
+// repository — so it lives in a hook and is only checkable by running it.
 //
 // The case that motivates the whole thing is "sibling repository": two checkouts under one parent
 // are indistinguishable to a path glob, so the old `~/projects/**` scope let an agent working in

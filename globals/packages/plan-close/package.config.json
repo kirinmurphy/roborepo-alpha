@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "plan-close",
   "label": "Plan Close",
-  "description": "Verify finished plan work against tests and code, then move the plan to completed or archived.",
+  "description": "Resolve in-scope closure gaps, verify plan work against tests and code, then move the plan to completed or archived.",
   "lifecycle": "optional",
   "presentation": {
     "category": "skills-dev-lifecycle",

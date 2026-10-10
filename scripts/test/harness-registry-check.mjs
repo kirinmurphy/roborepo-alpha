@@ -1,6 +1,5 @@
 #!/usr/bin/env node
-// Harness provider registry, discovery, state, and harness-runtime (Phase 2). See
-// docs/plans/active/discoverable-harness-provider-architecture-plan.md Phase 2 validation section.
+// Harness provider registry, discovery, state, and harness-runtime.
 
 import { defineHarnessProvider } from "../harnesses/contract.mjs";
 import { detectHarnessProvider } from "../harnesses/discovery.mjs";
@@ -29,8 +28,7 @@ function assertThrows(fn, label) {
 }
 
 // --- Real registry: exactly claude + codex + gemini, all constructible and passing contract
-// validation. Gemini is the first real (non-synthetic) third provider — see
-// docs/plans/active/gemini-cli-provider-integration-plan.md. ---
+// validation. Gemini is the first real (non-synthetic) third provider. ---
 const providers = listHarnessProviders();
 assert(providers.length === 3, `expected 3 registered providers, got ${providers.length}`);
 assert(hasHarnessProvider("claude") && hasHarnessProvider("codex") && hasHarnessProvider("gemini"), "registry must know claude, codex, and gemini");

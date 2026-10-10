@@ -1,4 +1,4 @@
-// Normalized cohort filter object shared by CLI and portal analysis (plan: "Cohort model", Phase 5).
+// Normalized cohort filter object shared by CLI and portal analysis.
 // A cohort filter never touches fs — it is applied to an already-loaded array of capture events (the
 // same array analyzeTelemetry() already receives), so both the CLI report and the portal's /api/data
 // and /api/telemetry/analysis handlers can build one filter object and get identical results.
@@ -9,7 +9,7 @@
 //   harnesses: string[],
 //   models: string[],
 //   repos: string[],              // legacy label match (event.repo.label) — preserved as-is
-//   repository_ids: string[],     // canonical repository ids; composes with repos (Phase 2+)
+//   repository_ids: string[],     // canonical repository ids; composes with repos
 //   packages: [{ id, state }],    // state: "active" — matched against config_snapshot's packages
 //   skills: [{ id, state }],      // state: "active" — matched against config_snapshot's skills
 //   operations: string[],         // operation.category values
@@ -94,7 +94,7 @@ function snapshotLookup() {
 // explicit outcome marker are excluded only when an `outcomes` filter is active (there is nothing to
 // match against otherwise) — callers filtering by outcome must pass `markers` so session_id -> status
 // can be resolved; omitting markers while filtering by outcome degrades to "no restriction" rather
-// than silently dropping every capture, since the plan requires never inferring outcomes.
+// than silently dropping every capture, since outcomes are never inferred.
 export function applyCohortFilter(captures, filter, { markers = [], repositoryHashIndex = null } = {}) {
   const f = filter || emptyCohortFilter();
   const lookupSnapshot = snapshotLookup();
@@ -152,7 +152,7 @@ function outcomeStatusBySession(markers) {
 }
 
 // Task category per session, from each session's outcome marker (task category lives only on
-// outcome markers per Phase 4). Last explicit marker wins, mirroring outcomeStatusBySession's
+// outcome markers). Last explicit marker wins, mirroring outcomeStatusBySession's
 // tie-break rule.
 function taskCategoryStatusBySession(markers) {
   const map = new Map();

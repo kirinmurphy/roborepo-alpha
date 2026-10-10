@@ -4,10 +4,10 @@ import { configRoutes } from "../cli/portal-routes-config.mjs";
 import { dispatchRoutes } from "../cli/portal-router.mjs";
 import { loadConfigSource, readConfigSnapshot } from "../cli/config.mjs";
 
-// Phase 7 of discoverable-harness-provider-architecture-plan.md: /api/config/source must reject a
+// /api/config/source must reject a
 // missing or unrecognized harness id for harness-scoped kinds (live-rules, harness-hooks,
 // globals-rules, command, command-skill) instead of silently defaulting to Claude — same fix
-// telemetry's /api/session got in Phase 6. Kinds that resolve the harness from `id` itself
+// telemetry's /api/session got. Kinds that resolve the harness from `id` itself
 // (config-file, skill) must keep working with no harness param at all.
 
 testMissingHarnessRejectedForScopedKind();

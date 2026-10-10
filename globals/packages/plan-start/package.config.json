@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "plan-start",
   "label": "Plan Start",
-  "description": "Implement from an existing prepared plan: worktree, in-scope objectives, verification, sync.",
+  "description": "Implement from an existing prepared plan: worktree, in-scope objectives, verification, sync. Adds a rule that keeps plan citations out of code.",
   "lifecycle": "optional",
   "presentation": {
     "category": "skills-dev-lifecycle",
@@ -26,6 +26,11 @@
           ]
         }
       ]
+    },
+    {
+      "type": "rules",
+      "source": "rules.md",
+      "harness": "both"
     }
   ]
 }

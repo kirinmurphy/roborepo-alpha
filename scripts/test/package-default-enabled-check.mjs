@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Default-selection provenance contract (roborepo-package-development-infrastructure-plan.md,
-// acceptance criterion "Default selection respects explicit enable/disable provenance"):
+// Default-selection provenance contract (default selection respects explicit enable/disable
+// provenance):
 //   effective = explicit-enable OR (defaultEnabled AND NOT explicit-disable)
 //   precedence: explicit-disable > explicit-enable > current defaults
 // Covers both the pure computation (effectiveEnabledIds) and the live CLI path (a default-enabled

@@ -12,8 +12,7 @@
 # Harness presence (harness_present) is no longer TSV-backed — it shells to
 # `roborepo harness detected` (scripts/cli/harness.mjs), which reads the provider registry
 # (scripts/harnesses/), so there is one source of truth for known harnesses instead of two
-# independently-maintained enums drifting apart. See
-# docs/plans/active/discoverable-harness-provider-architecture-plan.md Phase 4.
+# independently-maintained enums drifting apart.
 #
 # manifest_path
 #   Echo the absolute path to the manifest.

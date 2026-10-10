@@ -57,7 +57,7 @@ function testMarkerValidation() {
   assert.deepEqual(validateMarker(phase), phase);
   assert.throws(() => validateMarker({ ...base, type: "phase" }), /requires a non-empty phase/);
 
-  // Phase 4: task_category/task_scale, outcome-marker-only.
+  // task_category/task_scale, outcome-marker-only.
   const outcomeWithTask = {
     ...outcome,
     marker_id: generateMarkerId(),

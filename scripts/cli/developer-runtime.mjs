@@ -445,7 +445,7 @@ function recordDiscoveredRepositories(instances, composeProjectGit = null) {
       });
     } catch {
       // Registry unavailable/corrupt — Runtime keeps working; the failure surfaces elsewhere
-      // (Phase 4 reports registry errors as a structured health finding).
+      // (registry errors are reported as a structured health finding).
     }
   }
 }
@@ -547,7 +547,7 @@ async function collectPersistedRepositories(runningRepositoryIds, { registry = l
     // which reads the registry directly rather than this snapshot field.
     if (record?.visibility === "hidden") continue;
     // A record whose every checkout has been repointed to another repository — the surviving half of
-    // a rename Phase 2 deliberately did not merge. Listing it renders two cards with the same name,
+    // a rename that was deliberately not merged. Listing it renders two cards with the same name,
     // one of which is a remote nobody uses any more. The record is untouched; it is only folded out
     // of this view, and it returns the moment any checkout resolves back to it.
     if (supersededBy(registry, id)) continue;
@@ -591,14 +591,14 @@ async function collectPersistedRepositories(runningRepositoryIds, { registry = l
 // Alias a record onto the repository that a remote rename moved it into, and return the registry as
 // it now stands.
 //
-// Phase 2 refused to act on a rename because it believed the evidence could not distinguish one from
+// Rename handling once refused to act because it assumed the evidence could not distinguish one from
 // a deleted-and-recloned directory. `renamedInto` shows it can: a rootId is a hash of an absolute
 // path, so the two records naming the same one is direct evidence the same directory was seen under
 // both remotes, and the most-recently-used root separates the two cases (see lifecycle.mjs).
 //
 // The action stays an ALIAS, never a merge, and that is what makes doing it automatically
 // defensible. An alias leaves both records intact, renders one row instead of two, and is reversed
-// by deleting one line; a wrong one costs a row until it is removed. A merge — the thing Phase 2
+// by deleting one line; a wrong one costs a row until it is removed. A merge — the thing rename handling
 // actually refused — would rewrite ownership and could hide one repository's work inside another,
 // and is still not done here.
 //
@@ -772,7 +772,7 @@ export async function collectIdleMainCheckouts(discovery, runningIds, registry) 
 // Git for a persisted checkout path, but only once that path is confirmed to still BE this
 // repository.
 //
-// The plan's "reused directory" risk: a checkout is deleted and a different repository cloned to the
+// The reused-directory risk: a checkout is deleted and a different repository cloned to the
 // same path. The registry still records the path against the old record, so reading git from it
 // blind would print the new repository's branch on the old repository's card — a wrong fact stated
 // confidently, which is worse than the missing one it replaces. A running repository never has this

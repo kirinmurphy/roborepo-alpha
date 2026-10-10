@@ -2,10 +2,10 @@
 import assert from "node:assert/strict";
 import { classifyCommand, failureSignature, CLASSIFIER_VERSION } from "../cli/telemetry-classify.mjs";
 
-// Phase 3 of docs/plans/active/roborepo-telemetry-events-experiments-plan.md: pure semantic
+// Pure semantic
 // classification of Bash commands into operation category/runner/scope. This repo's own
 // package.json (npm test -> full suite via test-cli.sh, npm run test:xxx -> targeted single
-// files) is the canonical full-vs-targeted fixture the plan doc's classification rules describe.
+// files) is the canonical full-vs-targeted fixture.
 
 testFullSuiteVsTargeted();
 testOtherCategories();

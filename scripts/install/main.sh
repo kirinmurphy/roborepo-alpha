@@ -127,7 +127,6 @@ esac
 # `roborepo harness detected` — not a fixed two-harness enum. present_harness_ids holds the ids
 # present on this machine; present_harness_rows/all_harness_rows keep the full
 # id/home/present/displayName/rootConfigPath rows for the sections below.
-# See docs/plans/active/discoverable-harness-provider-architecture-plan.md Phase 4.
 present_harness_ids=()
 present_harness_rows=()
 all_harness_rows=()

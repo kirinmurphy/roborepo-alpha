@@ -1,11 +1,10 @@
 #!/usr/bin/env node
-// Regression suite for docs/plans/active/roborepo-system-package-ownership-and-generated-output-plan.md
-// (all 8 phases now complete).
+// Regression suite for package-owned generated output.
 //
-// Originally written in Phase 0 as characterization tests asserting CURRENT (leaky) behavior on
+// Originally written as characterization tests asserting CURRENT (leaky) behavior on
 // purpose — a disabled package left Codex-side behavior wired, because that behavior was hardcoded
 // into committed baseline files instead of being package-owned. Every assertion below has since been
-// inverted (Phases 3-7) as its corresponding leak was fixed. Kept in place rather than deleted: these
+// inverted as its corresponding leak was fixed. Kept in place rather than deleted: these
 // assertions and their temp-HOME scaffolding now serve as the permanent regression guard confirming
 // each leak stays fixed — re-hardcoding any of this behavior into a shared baseline file would fail
 // these tests immediately.
@@ -19,7 +18,7 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const cli = path.join(repoRoot, "scripts/cli/main.mjs");
 
-// --- Item 1/3 (FIXED in Phase 3): Caveman and JDocMunch Codex SessionStart hooks are no longer
+// --- Item 1/3 (FIXED): Caveman and JDocMunch Codex SessionStart hooks are no longer
 // hardcoded in the committed baseline hooks.json — each now owns a hooks/codex component
 // (globals/packages/{caveman,jdocmunch}/hooks-codex.json) composed via hook-composition.mjs. ---
 {
@@ -33,7 +32,7 @@ const cli = path.join(repoRoot, "scripts/cli/main.mjs");
   assert.match(jdocmunchFragment.SessionStart[0].hooks[0].command, /jdocmunch: docs indexed/, "jdocmunch package owns its Codex SessionStart hook");
 }
 
-// --- Item 2 (FIXED in Phase 3): the stale caveman@caveman-repo plugin entry is gone from the Codex
+// --- Item 2 (FIXED): the stale caveman@caveman-repo plugin entry is gone from the Codex
 // baseline entirely — the Codex SessionStart hook (above) is the sole Codex-side Caveman mechanism. ---
 {
   const configToml = fs.readFileSync(path.join(repoRoot, "generated/codex/config.toml"), "utf8");
@@ -73,7 +72,7 @@ const cli = path.join(repoRoot, "scripts/cli/main.mjs");
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 
-// --- Item 4/5/5a (FIXED in Phase 4): JCodeMunch and JDocMunch MCP servers + tool-approval tables
+// --- Item 4/5/5a (FIXED): JCodeMunch and JDocMunch MCP servers + tool-approval tables
 // are no longer hardcoded in the committed Codex baseline. JCodeMunch's codex_tool_approvals
 // component was extended from a single stray "register_edit" entry to the full 16-tool set that
 // actually matched the old baseline; JDocMunch gained a new codex_tool_approvals component (it had
@@ -96,7 +95,7 @@ const cli = path.join(repoRoot, "scripts/cli/main.mjs");
 }
 
 // --- Item 4/5 integration: disabled baseline -> enable -> apply -> disable -> apply remains
-// disabled, for both jcodemunch and jdocmunch, per the plan doc's stated round-trip. ---
+// disabled, for both jcodemunch and jdocmunch. ---
 {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-codex-mcp-ownership-"));
   // No SKIP_MCP here (unlike the hook-composition test above): this test asserts on the
@@ -123,9 +122,8 @@ const cli = path.join(repoRoot, "scripts/cli/main.mjs");
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 
-// --- Item 11 (FIXED in Phases 3+4): verify-content.tsv no longer asserts any optional-package
-// content unconditionally. The Caveman row was removed in Phase 3; jcodemunch's MCP-server and
-// MCP-args rows were removed in Phase 4 alongside the baseline blocks they were asserting. ---
+// --- Item 11 (FIXED): verify-content.tsv no longer asserts any optional-package content
+// unconditionally, including the Caveman row and jcodemunch's MCP-server and MCP-args rows. ---
 {
   const verifyContent = fs.readFileSync(path.join(repoRoot, "manifests/platform/verify-content.tsv"), "utf8");
   const dataRows = verifyContent.split("\n").filter((line) => line && !line.startsWith("#"));
@@ -135,7 +133,7 @@ const cli = path.join(repoRoot, "scripts/cli/main.mjs");
   assert.equal(jcodemunchRows.length, 0, "fixed: verify-content.tsv no longer asserts jcodemunch MCP strings unconditionally");
 }
 
-// --- Item 6 (FIXED in Phase 5): JCodeMunch's Claude Bash exploration blocker now lives under
+// --- Item 6 (FIXED): JCodeMunch's Claude Bash exploration blocker now lives under
 // globals/packages-archived/jcodemunch, installed only via that package's hooks/claude component. The old
 // ~/.claude/settings.json MCP-presence gate was removed entirely (not fixed to check ~/.claude.json)
 // since enable/disable now controls whether the hook is wired at all, making a runtime self-check
@@ -158,7 +156,7 @@ const cli = path.join(repoRoot, "scripts/cli/main.mjs");
 }
 
 // --- Item 6 integration: enabled jcodemunch blocks Bash source-file exploration; disabled leaves
-// Bash exploration unaffected — the exit criterion literally stated in the plan doc. ---
+// Bash exploration unaffected. ---
 {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-jcodemunch-bash-blocker-"));
   const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_DIR: path.join(tmp, ".roborepo"), SKIP_MCP: "1" };
@@ -184,7 +182,7 @@ const cli = path.join(repoRoot, "scripts/cli/main.mjs");
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 
-// --- Item 7/8 (FIXED in Phase 6): telemetry now declares hooks/claude and hooks/codex components
+// --- Item 7/8 (FIXED): telemetry now declares hooks/claude and hooks/codex components
 // (globals/packages/telemetry/hooks-{claude,codex}.json), so the generic enable/disable switch
 // removes capture hooks like any other package-owned hook. wireCaptureHooks (used by the standalone
 // `roborepo telemetry install` path) is now a thin wrapper over the same hook-composition.mjs
@@ -226,11 +224,10 @@ const cli = path.join(repoRoot, "scripts/cli/main.mjs");
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 
-// --- Item 10 (FIXED in Phase 7): disabled command-backed package leaves no native slash command,
+// --- Item 10 (FIXED): disabled command-backed package leaves no native slash command,
 // and disabling one package's command never removes another package's or the user's own command.
-// This is the backfilled Phase-0 test the plan doc flagged as missing from the original characterization
-// pass — added here directly against the fix rather than as a separate leaky-then-fixed pair, since
-// Phase 0 never captured the "before" state for this item. ---
+// Added directly against the fix rather than as a separate leaky-then-fixed pair, since the
+// original characterization pass never captured the "before" state for this item. ---
 {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-command-ownership-"));
   const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_DIR: path.join(tmp, ".roborepo"), SKIP_MCP: "1" };

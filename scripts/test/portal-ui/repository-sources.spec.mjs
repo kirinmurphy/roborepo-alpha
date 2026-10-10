@@ -1,4 +1,4 @@
-// Repository sources in the browser (docs/plans/active/portal-repository-sources.md §7): the
+// Repository sources in the browser: the
 // first-run states on Home, Runtime, and Plans — Enable auto-discovery primary, Add a folder
 // secondary, one call to action at a time — and the Manage repositories dialog against the real
 // hermetic server, where auto-discovery starts off.

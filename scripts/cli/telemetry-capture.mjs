@@ -81,11 +81,11 @@ export async function telemetryCaptureCommand(args) {
     duration_ms: toolDuration(event, callId),
     config_snapshot_id: await resolveConfigSnapshotId(event, sessionId, options.harness, stats),
     operation,
-    // Explicit phase markers (`telemetry mark --type phase`) are read at analysis time (Phase 5+) and
+    // Explicit phase markers (`telemetry mark --type phase`) are read at analysis time and
     // take precedence from their timestamp forward — this capture-time field is always the inferred
     // reading from this session's accumulated activity signals, never a lookup against markers (that
-    // would require importing marker persistence into the hot path, which the plan's performance
-    // constraints rule out).
+    // would require importing marker persistence into the hot path, which capture's performance
+    // budget rules out).
     phase: activity ? inferPhase(activity.phaseSignals) : null,
     intervening: activity ? activity.intervening : null,
     prompt: promptMetadata(input),
@@ -216,7 +216,7 @@ function repoMetadata(cwd) {
 }
 
 // Tool names whose PostToolUse counts as an "edit completed" for phase inference and intervening-work
-// tracking (plan: "whether a write/edit tool completed"). Kept to the tools that mutate repo files —
+// tracking. Kept to the tools that mutate repo files —
 // Read/Grep/Glob-shaped tools are discovery signals, not edits.
 const EDIT_TOOL_NAMES = new Set(["Write", "Edit", "MultiEdit", "NotebookEdit"]);
 const READ_TOOL_NAMES = new Set(["Read", "Grep", "Glob", "WebFetch", "WebSearch"]);
@@ -355,7 +355,7 @@ function dedupe(values) {
 }
 
 // Content-addressed fingerprint of the working tree's current diff shape — a hash, never the diff
-// text itself (plan: "whether Git diff fingerprint changed"). `git diff --stat` names/sizes changed
+// text itself. `git diff --stat` names/sizes changed
 // files without their content, which is enough to detect "something changed" without persisting any
 // source text. Returns null (not thrown) when cwd isn't a git repo or git is unavailable.
 function gitDiffFingerprint(cwd) {
@@ -442,9 +442,8 @@ function deltaTokens(sessionId, cumulativeTotal) {
 // Best-effort: a missing start (hook race, restart) yields null rather than a bogus duration.
 //
 // Keyed by call_id (not session alone) so nested/concurrent tool calls within one session cannot
-// clobber each other's cursor — this was limitation #10 in the plan doc and the reason Phase 3
-// exists: the old session-only cursor meant a second tool starting before the first one's
-// PostToolUse fired would silently overwrite the first call's start stamp.
+// clobber each other's cursor. With a session-only cursor, a second tool starting before the first
+// one's PostToolUse fired would silently overwrite the first call's start stamp.
 function toolDuration(event, callId) {
   if (!callId) return null;
   const cursorPath = path.join(telemetryCollectorDir, `tool-${hash(callId)}.json`);
@@ -470,11 +469,10 @@ function toolDuration(event, callId) {
 }
 
 // Prefer a harness-provided tool-use id (Claude: tool_use_id on PostToolUse payloads; Codex
-// transcripts key tool calls by call_id — see Phase 0 notes in the plan doc). When the harness
+// transcripts key tool calls by call_id). When the harness
 // doesn't supply one on this hook's stdin (observed to happen on PreToolUse for some harness
 // versions, or when a harness omits it entirely), derive a best-effort id from session, tool name,
-// and an incrementing per-session-per-tool cursor, exactly as the plan's capture-v3 section
-// specifies. Two back-to-back calls to the *same* tool in the *same* session without a harness id
+// and an incrementing per-session-per-tool cursor. Two back-to-back calls to the *same* tool in the *same* session without a harness id
 // would otherwise collide; the cursor makes each one unique.
 function resolveCallId(input, sessionId, toolName, event) {
   const harnessId = input.tool_use_id || input.toolUseId || input.call_id || input.callId || null;
@@ -509,8 +507,8 @@ function derivedCallId(sessionId, toolName, event) {
 }
 
 // Effective-configuration snapshot for this session. Built once on SessionStart (dynamic-importing
-// config.mjs's heavier readConfigSnapshot()/buildEffectiveSnapshot() only for that one event, per
-// the plan's "keep the hot capture import graph small" constraint) and cached in the session
+// config.mjs's heavier readConfigSnapshot()/buildEffectiveSnapshot() only for that one event, to
+// keep the hot capture import graph small) and cached in the session
 // cursor dir; every later event in the same session reads the cached id back for free. Best-effort
 // throughout — a session with no cached snapshot (e.g. telemetry enabled mid-session, or a
 // telemetry-only install where config.mjs's dependencies aren't installed) reports null rather than

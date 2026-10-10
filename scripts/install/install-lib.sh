@@ -708,8 +708,8 @@ link_item_clean() {
 }
 
 # Record the content hash of a root_config file roborepo just wrote, so a later install/update can
-# tell "roborepo's own baseline changed" apart from "something else touched this file since." See
-# docs/plans/completed/root-config-layered-inheritance.md. Best-effort: node is already required elsewhere in
+# tell "roborepo's own baseline changed" apart from "something else touched this file since."
+# Best-effort: node is already required elsewhere in
 # these scripts, but never let hash bookkeeping block an install.
 record_root_config_write() {
   local harness="$1"
@@ -769,7 +769,7 @@ export_user_config() {
   # Honor --on-conflict abort for root configs too. A genuine collision is a real local file the
   # user already had or edited (drift status "unwritten" or "drifted") that the merge would change.
   # A clean file is only receiving a baseline update, which is not a conflict. The documented abort
-  # contract is "stop before writing anything" (docs/user/reference/config-collision-handling.md),
+  # contract is "stop before writing anything",
   # so we bail before mutating instead of silently merging. Matches abortOnConflict in presets.mjs.
   if [[ "${ROBOREPO_ON_CONFLICT:-}" == "abort" && -f "${home_path}" && ! -L "${home_path}" ]]; then
     local abort_status abort_tmp
@@ -785,8 +785,7 @@ export_user_config() {
     fi
   fi
 
-  # Drift-aware collision routing (docs/plans/completed/root-config-layered-inheritance.md, and
-  # config-collision-handling.md): a *drifted* root config is one the user hand-edited after
+  # Drift-aware collision routing: a *drifted* root config is one the user hand-edited after
   # roborepo's last write (sidecar hash mismatch). For a fresh adopt ("unwritten") or a
   # builtin-clean file, the non-destructive merge below is correct and policy-agnostic. But once a
   # file has genuinely drifted, the merge must NOT silently fold the baseline into the user's edits

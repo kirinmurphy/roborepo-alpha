@@ -1,6 +1,6 @@
 // /api/data, /api/session, /api/insights-llm, /api/telemetry/analysis, and the marker/experiment
 // endpoints — the Telemetry page's full API surface. handlers is the object startPortalServer()
-// was given (loadAnalysisJson, loadSession, loadInsightsLlm, plus the Phase 5/6 marker/experiment/
+// was given (loadAnalysisJson, loadSession, loadInsightsLlm, plus the marker/experiment/
 // analysis handlers, all from telemetry.mjs's wiring).
 import { send, readJsonBody } from "./portal-routes-http.mjs";
 import { hasHarnessProvider } from "../harnesses/registry.mjs";
@@ -39,7 +39,7 @@ export const telemetryRoutes = defineRoutes([
     // The client passes ?range=<ms> to scope the WHOLE report (every panel) to a trailing time
     // window, and an optional &end=<ms epoch> when panning to a fixed window rather than "latest".
     // ?harness=claude (or codex) scopes all panels to a single harness; omit for all harnesses.
-    // Phase 6 additions: ?model=, ?repo=, ?marker_id= (marker-relative comparison) layer on top of
+    // ?model=, ?repo=, ?marker_id= (marker-relative comparison) layer on top of
     // the existing time/harness window without changing their meaning.
     path: "/api/data",
     handler: (req, res, { qs, handlers }) => {
@@ -86,7 +86,7 @@ export const telemetryRoutes = defineRoutes([
     },
   },
 
-  // --- Phase 6: marker endpoints ---------------------------------------------------------------
+  // --- Marker endpoints ------------------------------------------------------------------------
   // All mutations reuse the same validation/persistence functions the CLI uses (telemetry-markers.mjs)
   // — see telemetry.mjs's serveCommand wiring for createMarkerFromRequest's implementation.
   {
@@ -110,7 +110,7 @@ export const telemetryRoutes = defineRoutes([
     },
   },
 
-  // --- Phase 6: experiment endpoints ------------------------------------------------------------
+  // --- Experiment endpoints --------------------------------------------------------------------
   {
     method: "GET",
     path: "/api/telemetry/experiments",
@@ -141,7 +141,7 @@ export const telemetryRoutes = defineRoutes([
     },
   },
 
-  // --- Phase 5/7: dedicated high-dimensional comparison endpoint -------------------------------
+  // --- Dedicated high-dimensional comparison endpoint ------------------------------------------
   // Kept separate from /api/data (which every panel polls every 5s) so an Analysis-explorer
   // interaction doesn't inflate the hot polling payload — plan: "Add a dedicated endpoint for
   // high-dimensional comparisons rather than inflating /api/data for every explorer interaction."

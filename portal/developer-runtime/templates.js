@@ -80,7 +80,7 @@ const OWNERSHIP_EVIDENCE = {
 // getting its own top-level card — a Compose stack (app, db, proxy, mailhog...) is one logical
 // operation, not N unrelated ones. Each container is its own row (not each published port) since a
 // single container publishing several host ports (e.g. one Traefik proxy on 80/443/8080) is one
-// operational unit, not three. See docs/plans/active/developer-runtime-compose-project-grouping.md.
+// operational unit, not three.
 // `hideProviderLink` covers the shared-services case, which is neither of the two the isMember flag
 // distinguishes: the card is standalone (no owning checkout to inherit git context from, so it keeps
 // its own badge) but it is NOT top-level, so the repository header above it already carries the one
@@ -1090,8 +1090,8 @@ function applyProcessMetricsBadge(tooltip, metrics) {
 // would have fired on container count rather than real load.
 //
 // CPU only earns persistent space once it is worth acting on; below the warn threshold the number
-// stays in the tooltip. Provisional fixed defaults — the plan doc's resource-threshold follow-up
-// covers spike detection and per-project overrides, which this intentionally does not attempt.
+// stays in the tooltip. Provisional fixed defaults; spike detection and per-project overrides are
+// intentionally not attempted.
 const CPU_WARN_PERCENT_OF_HOST = 25;
 const CPU_ALERT_PERCENT_OF_HOST = 60;
 

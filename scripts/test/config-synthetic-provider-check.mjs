@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
-// Phase 7 of discoverable-harness-provider-architecture-plan.md: prove the Config snapshot's
+// Prove the Config snapshot's
 // `harnesses` list (grid columns, defaults popover) and root-config baseline/active path maps do
 // not encode a two-provider assumption. Same subprocess-isolation technique as
 // telemetry-synthetic-provider-check.mjs (registry.mjs's PROVIDERS map is a static import-time

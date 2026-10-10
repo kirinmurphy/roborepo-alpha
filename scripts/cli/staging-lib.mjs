@@ -3,7 +3,7 @@ import path from "node:path";
 
 // Shared timestamped-sibling staging convention. Used by install-time collision handling
 // (presets.mjs) and by root-config drift handling (root-config-state.mjs) so both go through one
-// staging mechanism instead of two. See docs/user/reference/config-collision-handling.md.
+// staging mechanism instead of two.
 
 export function pathExists(target) {
   try {

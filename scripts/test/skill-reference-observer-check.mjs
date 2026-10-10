@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// Phase 9/10 of docs/plans/active/agent-config-skill-reference-compliance.md: pins the behavior
+// Pins the behavior
 // of the skill-visibility PostToolUse hooks that inject observed reference reads into a turn.
 //
 // The hook is a pure stdin -> stdout function, so every case here is deterministic and needs no
 // harness. What it cannot cover is whether injected context survives to the end of a long turn —
 // that assertion requires a live model in a real session and is verified by the manual probe
-// documented in docs/internal/skill-reference-observation.md.
+// in scripts/dev/skill-observation-probe/.
 //
 // The literal-path case is the one worth reading twice. Agents open references through
 // ~/.claude/skills/..., a symlink into ~/.roborepo/skills/... Resolving that symlink would report a
@@ -199,7 +199,7 @@ for (const [label, payload] of [
 
 // --- the counter stores a count, never what was read -------------------------------------------
 //
-// Phase 9's persist-nothing constraint is relaxed for exactly one integer per session. This asserts
+// The persist-nothing constraint is relaxed for exactly one integer per session. This asserts
 // the relaxation stays that narrow: no reference name may reach disk.
 {
   const dir = path.join(stateRoot, "skill-visibility");

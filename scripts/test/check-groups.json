@@ -8,6 +8,7 @@
     "managed-uninstall-check.mjs",
     "plan-promote-plan-start-check.mjs",
     "core-hook-wiring-check.mjs",
-    "permission-rule-home-path-check.mjs"
+    "permission-rule-home-path-check.mjs",
+    "plan-citation-comments-check.mjs"
   ]
 }

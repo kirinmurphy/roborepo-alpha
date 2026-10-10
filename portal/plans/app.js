@@ -343,8 +343,7 @@ window.addEventListener("popstate", () => {
 });
 
 // mutations: property -> (record, value) => Promise<{change, record}>. Both call through the
-// same shared result contract (see docs/plans/active/plan-lifecycle-toggle-control.md's "Shared
-// domain mutation result"), so handlePlanChange doesn't need to know which one ran.
+// same shared domain mutation result contract, so handlePlanChange doesn't need to know which one ran.
 const mutations = {
   priority: (record, value) =>
     api.updatePlanPriority(record.plan.id, record.key, value, record.plan.priority, record.mtimeMs, record.repository.id),

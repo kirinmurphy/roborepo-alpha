@@ -6,7 +6,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-// Phase 3 of docs/plans/active/roborepo-telemetry-events-experiments-plan.md: capture_id/call_id,
+// capture_id/call_id,
 // call-aware duration pairing, config snapshot references, and operation classification wired into
 // the real capture hot path (telemetry-capture.mjs), exercised through the actual CLI process so
 // hook-stdin parsing and the collector-dir cursor files are covered for real — not just the pure
@@ -67,7 +67,7 @@ function testSessionStartBuildsSnapshotReusedByLaterCaptures() {
 }
 
 function testCallAwareDurationPairingSurvivesConcurrentCalls() {
-  // Regression fixture for the exact gap Phase 3 exists to close: two tool calls in the same
+  // Regression fixture for call-aware pairing: two tool calls in the same
   // session overlapping in time (B starts before A ends) must not clobber each other's duration.
   capture({ session_id: "sess-concurrent", cwd: repoRoot, tool_name: "Read", tool_use_id: "call_A" }, { event: "PreToolUse" });
   capture({ session_id: "sess-concurrent", cwd: repoRoot, tool_name: "Bash", tool_use_id: "call_B", tool_input: { command: "echo hi" } }, { event: "PreToolUse" });

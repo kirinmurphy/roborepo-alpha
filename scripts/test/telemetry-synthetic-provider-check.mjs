@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
-// Phase 6 of discoverable-harness-provider-architecture-plan.md: prove the shared telemetry
+// Prove the shared telemetry
 // analysis and the harness-capability lookups it now uses (hasRateLimitsCapability,
 // harness_display_names) do not encode a two-provider assumption. Both real providers
 // (claude/codex) always exist together, so this can only be proven by registering a genuinely

@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Single generic per-harness install entrypoint, replacing install-claude.sh/install-codex.sh
-# (docs/plans/active/discoverable-harness-provider-architecture-plan.md Phase 4). The two prior
+# Single generic per-harness install entrypoint, replacing install-claude.sh/install-codex.sh. The two prior
 # scripts were byte-identical except for the harness id literal — this loads that id from argv
 # and resolves everything else (home path, display name, presence check) through the registry-
 # backed harness_detected_rows(), so a new provider needs no new script.

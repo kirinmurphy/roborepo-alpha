@@ -6,8 +6,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-// Initialization state + first-run routing, per
-// docs/plans/active/infra-packaging-02-install-lifecycle.md Phases 1-2.
+// Initialization state + first-run routing.
 //
 // The state-record assertions run in-process against a sandboxed ROBOREPO_STATE_DIR. The routing
 // assertions call the pure decision function rather than spawning a PTY: the rule under test is

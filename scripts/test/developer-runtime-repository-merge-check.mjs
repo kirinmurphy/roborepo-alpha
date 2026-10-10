@@ -103,7 +103,7 @@ assert.equal(menugoats.composeGroups.length, 1);
 assert.equal(menugoats.composeGroups[0].containers.length, 11);
 assert.equal(menugoats.composeGroups[0].resolvedFrom, "auto-bind");
 
-// This stack carries no rootId — Phase 4 sets one only when bind mounts place it in exactly one
+// This stack carries no rootId — classification sets one only when bind mounts place it in exactly one
 // checkout — so it belongs to the repository, not to any checkout of it. It must NOT land in the
 // main root: that was the old fallback, and it told the user the main checkout owned infrastructure
 // the evidence never placed there.
@@ -187,8 +187,7 @@ assert.equal(collapsed.members.find((member) => member.port === 63409).entrypoin
 
 // Worktree/root hierarchy: a repository with a listener on its main checkout and another on a
 // linked worktree groups into two `roots[]` sections, each with its own git context and member
-// list, instead of one arbitrary branch badge for the whole card
-// (docs/plans/active/developer-runtime-metadata-suggestions.md, "Worktree/Root Hierarchy").
+// list, instead of one arbitrary branch badge for the whole card.
 const mainGit = { provider: { ok: true }, branch: "main", isWorktree: false, ahead: 0, behind: 0 };
 const featureGit = { provider: { ok: true }, branch: "feature/x", isWorktree: true, ahead: 2, behind: 0 };
 // Different `identity` per root (as it is live: a worktree commonly resolves its own alias, e.g.
@@ -370,8 +369,8 @@ assert.ok(ownedRoot, "an owned stack creates the checkout section it was placed 
 assert.equal(ownedRoot.composeGroups.length, 1);
 assert.equal(ownedRoot.composeGroups[0].ownership, "owned");
 
-// --- Phase 3: persisted repositories join the same list ---
-// The point of the phase: a repository you ran once and stopped stays listed. Before this the page
+// --- Persisted repositories join the same list ---
+// A repository you ran once and stopped stays listed. Before this the page
 // showed only what was running, and the separate "Inactive saved projects" list held app slots the
 // user had configured — so an ordinary repository, run and stopped, appeared nowhere at all.
 const IDLE = "git:github.com/k/idle-one";
@@ -458,7 +457,7 @@ const doubled = buildDeveloperRuntimeSnapshot({
 assert.equal(doubled.repositories.filter((r) => r.repositoryId === MENUGOATS).length, 1);
 assert.equal(doubled.repositories[0].lifecycle.state, "active", "the running view wins over the persisted one");
 
-// Absent the field entirely, the snapshot is exactly what it was before Phase 3 — persistence being
+// Absent the field entirely, the snapshot is exactly what it was without persistence — persistence being
 // unavailable costs the idle repositories and nothing else.
 assert.equal(snapshot.repositories.every((r) => r.lifecycle.state === "active"), true);
 

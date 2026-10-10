@@ -195,7 +195,7 @@ function testBacklogRequiresNextAction() {
 
 // --- active -----------------------------------------------------------------------------------
 
-// The plan doc requires every problem in one response, not one field at a time.
+// Every problem is reported in one response, not one field at a time.
 function testActiveReportsEveryProblemTogether() {
   const bare = doc({ frontmatter: "id: p\npriority: high\n", sections: ["Summary", "Goals", "Context"] });
   assert.deepEqual(codesFor(bare, "active"), [

@@ -1,5 +1,5 @@
 // Installs the survival probe into ~/.claude/settings.json, backing up the current file first.
-// Undo with restore.mjs. See docs/internal/skill-reference-observation.md.
+// Undo with restore.mjs.
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
