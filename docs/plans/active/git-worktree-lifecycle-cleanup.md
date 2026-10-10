@@ -11,7 +11,7 @@ related:
   - 6q16tocb
   - git-exec-consolidation
 reviewed_commit: f877579
-worktree:
+worktree: git-worktree-lifecycle-cleanup
 ---
 
 # Retire Story Worktrees When Their Work Lands
