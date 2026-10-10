@@ -9,7 +9,7 @@ related:
   - age4cm7r
   - skills-vs-commands-invocation-policy
 reviewed_commit: 731937640d7483d945ee1e21466533574d686fbf
-worktree:
+worktree: package-owned-trigger-fixtures
 ---
 
 # Package-Owned Trigger Fixtures
