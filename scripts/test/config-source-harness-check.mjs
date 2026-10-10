@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { configRoutes } from "../cli/portal-routes-config.mjs";
 import { dispatchRoutes } from "../cli/portal-router.mjs";
 import { loadConfigSource, readConfigSnapshot } from "../cli/config.mjs";
+import { fakeResponse } from "./lib/fake-response.mjs";
 
 // Phase 7 of discoverable-harness-provider-architecture-plan.md: /api/config/source must reject a
 // missing or unrecognized harness id for harness-scoped kinds (live-rules, harness-hooks,
@@ -16,13 +17,6 @@ testKnownHarnessReachesLoadConfigSource();
 testConfigFileKindIgnoresMissingHarness();
 testSnapshotHarnessesListMatchesRegistry();
 console.log("config source harness checks passed");
-
-function fakeRes() {
-  const res = { status: null, body: null };
-  res.writeHead = (status) => { res.status = status; };
-  res.end = (body) => { res.body = body; };
-  return res;
-}
 
 function testMissingHarnessRejectedForScopedKind() {
   const result = loadConfigSource({ kind: "live-rules", id: "agent-rules", harness: null });
@@ -52,7 +46,7 @@ function testKnownHarnessReachesLoadConfigSource() {
 // (~/.claude/settings.json) that a bare CI runner does not have — so assert the request was not
 // rejected FOR A HARNESS REASON rather than asserting the file was readable.
 function testConfigFileKindIgnoresMissingHarness() {
-  const res = fakeRes();
+  const res = fakeResponse();
   dispatchRoutes([configRoutes], { method: "GET" }, res, "/api/config/source", "kind=config-file&id=claude-settings", { loadConfigSource });
   const body = JSON.parse(res.body);
   if (!body.ok) {

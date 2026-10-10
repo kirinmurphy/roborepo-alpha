@@ -1,16 +1,22 @@
-# Telemetry conditions screenshots
+# Tokens page screenshots
 
 These images show the real Tokens UI using **fictional, deterministic sample data**.
 They contain no personal telemetry. Both light and dark versions are provided.
 Dates use UTC and formatting uses `en-US`.
 
-| Image | Suggested documentation caption |
-|---|---|
-| `conditions-{light,dark}.png` | Conditions compare observed problem rates with known presence versus known absence. |
-| `comparison-detail-{light,dark}.png` | The example has 3 affected of 12 sessions with the condition, versus 9 of 12 without. Two unknown sessions affect coverage only. |
-| `event-ledger-{light,dark}.png` | The event ledger places observed problems and recorded changes in time. |
-| `recorded-change-{light,dark}.png` | Change comparisons expose before/after counts and excluded boundary observations. |
-| `mark-change-{light,dark}.png` | Record a response now or an earlier suspected change, with repository scope and watching kinds. |
+## Gallery
+
+Click an image to inspect it at full size. Each row shows the same sample in both themes.
+
+| View | Light | Dark |
+| --- | --- | --- |
+| Conditions: compare known presence with known absence | ![Conditions in light mode](conditions-light.png) | ![Conditions in dark mode](conditions-dark.png) |
+| Comparison detail: 3/12 affected with the condition, 9/12 without; two unknown sessions affect coverage only | ![Comparison detail in light mode](comparison-detail-light.png) | ![Comparison detail in dark mode](comparison-detail-dark.png) |
+| Event ledger: observed problems and recorded changes in time | ![Event ledger in light mode](event-ledger-light.png) | ![Event ledger in dark mode](event-ledger-dark.png) |
+| Recorded change: before/after counts and boundary exclusions | ![Recorded change in light mode](recorded-change-light.png) | ![Recorded change in dark mode](recorded-change-dark.png) |
+| Mark a change: effective time, repository scope, and watched problems | ![Mark a change in light mode](mark-change-light.png) | ![Mark a change in dark mode](mark-change-dark.png) |
+| Oracle health: the live comparison badge beside the report period | ![Oracle health badge in light mode](oracle-health-light.png) | ![Oracle health badge in dark mode](oracle-health-dark.png) |
+| Oracle health details: freshness, aggregate counts, coverage, checked invariants, and limits | ![Oracle health details in light mode](oracle-health-detail-light.png) | ![Oracle health details in dark mode](oracle-health-detail-dark.png) |
 
 ## Reproduce
 

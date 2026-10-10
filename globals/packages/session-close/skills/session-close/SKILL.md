@@ -5,7 +5,8 @@ description: >
   chat/session before starting a new one — via the `/session-close` command or a clear
   instruction like "wrap this up", "let's close this out", "get this ready for a new
   chat". Runs a fixed sequence: self-review the code changed this session, sync
-  project-specific tracking docs when they exist (e.g. an abstraction-matrix), flag
+  project-specific tracking docs when they exist (e.g. an abstraction-matrix), refresh
+  documentation screenshots the session's UI changes made stale, flag
   stray/uncommitted files, commit, then produce a status summary and handoff note for
   the next chat. Do not auto-invoke on ordinary edits, do not
   trigger on the mere presence of a diff, and do not run mid-task — this is an
@@ -98,6 +99,20 @@ say so explicitly rather than guessing from the working tree.
   update `next_action`. Then run the repository's canonical plan validator for `<plan>` and report its findings.
 - Do not restructure or rewrite docs wholesale. Small, targeted edits, preserving existing
   structure.
+- Refresh documentation screenshots the session made stale. A screenshot is stale when the
+  session changed UI it depicts, or added UI that a documented view or doc section now describes
+  but no image shows. Find the repository's existing capture mechanism (a capture script,
+  opt-in screenshot tests, a documented reproduce command) by searching the images' directory and
+  docs; do not invent one.
+  - Regenerate through that mechanism, never by hand-editing or mocking up images. Copy the
+    current images aside first, compare afterward, and keep only the files that actually changed.
+  - For new UI no capture covers, add a capture to the existing mechanism with deterministic
+    sample data consistent with the neighbouring captures, and reference the image where the
+    docs describe that UI (and in any screenshot gallery).
+  - Look at every regenerated or new image before committing: it shows the intended state, in
+    every theme the gallery provides, with no personal data.
+  - If no capture mechanism exists or regeneration needs something unavailable (a browser,
+    credentials, live data), report the stale images by path as drift not fixed.
 - Report drift found but not fixed, separately from what was changed.
 
 ### 3. Check for stray or uncommitted state

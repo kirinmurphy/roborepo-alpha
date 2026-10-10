@@ -17,6 +17,7 @@ for (const theme of ["light", "dark"]) {
     await page.route("**/api/data", (route) => route.fulfill({ json: report }));
     // This fixture never writes a marker or uses personal telemetry.
     await page.route("**/api/telemetry/markers", (route) => route.abort());
+    await page.route("**/api/telemetry/oracle-health", (route) => route.fulfill({ json: oracleHealthSample() }));
     await page.addInitScript((value) => localStorage.setItem("portal-theme", value), theme);
     await page.goto("/tokens");
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
@@ -27,6 +28,13 @@ for (const theme of ["light", "dark"]) {
       await locator.scrollIntoViewIfNeeded();
       await locator.screenshot({ path: path.join(destination, `${name}-${theme}.png`), animations: "disabled" });
     };
+    await expect(page.getByRole("status", { name: "Oracle health" })).toHaveText("Oracle health: Passed");
+    await capture(page.locator(".t2-report-meta"), "oracle-health");
+    await page.getByRole("button", { name: "Oracle health details" }).click();
+    const oracleDialog = page.getByRole("dialog", { name: "Oracle health details" });
+    await expect(oracleDialog).toContainText("26 events · 26 sessions");
+    await capture(oracleDialog, "oracle-health-detail");
+    await oracleDialog.getByRole("button", { name: "Close" }).click();
     await expect(page.locator("#condition-cards")).toContainText("67%");
     await capture(page.locator("#condition-report"), "conditions");
     const packageCard = page.locator(".condition-card").filter({ has: page.getByRole("heading", { name: "Configured packages", exact: true }) });
@@ -58,7 +66,7 @@ test("Tokens user guide serves its screenshots inside the portal", async ({ page
   expect(guide.ok).toBe(true);
   expect(guide.title).toBe("Tokens page user guide");
   const images = [...guide.html.matchAll(/<img src="([^"]+)"/g)].map((match) => match[1]);
-  expect(images).toHaveLength(4);
+  expect(images).toHaveLength(6);
   for (const image of images) {
     expect(image).toMatch(/^\/docs\/images\/tokens\//);
     const response = await request.get(image);
@@ -75,3 +83,15 @@ test("Tokens user guide serves its screenshots inside the portal", async ({ page
   await expect(image).toBeVisible();
   await expect.poll(() => image.evaluate((element) => element.complete && element.naturalWidth > 0)).toBe(true);
 });
+
+// Fictional, fixed oracle health so the badge and its details render identically on every capture.
+// Counts match the documentation report's 26 single-event sessions shown in the header beside it.
+function oracleHealthSample() {
+  return {
+    schema: 1, status: "passed", checked_at: "2026-09-04T03:20:00.000Z", duration_ms: 292,
+    evidence_signature: `sha256:${"0".repeat(64)}`, event_count: 26, session_count: 26, operation_count: 26,
+    coverage: { supported_events: 26, unsupported_events: 0, comparable: true, complete: true, issues: [],
+      checks: ["sessions", "operations", "conditions", "boundaries", "gating", "regression", "loops"] },
+    differences: [], summary: "Production and oracle calculations agree for the checked supported evidence.",
+  };
+}

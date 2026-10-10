@@ -3,12 +3,15 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import net from "node:net";
+import { createHash } from "node:crypto";
+import { Worker } from "node:worker_threads";
 import { spawnSync, spawn } from "node:child_process";
 import { markTelemetrySelected } from "./presets.mjs";
 import { repoRoot, stateRoot, harnessHome, rootConfigActive } from "./paths.mjs";
 import { portalPidPathForPort, legacyTelemetryPidPath, telemetryBackupDir, telemetryCollectorDir, telemetryDir, telemetrySpoolDir, telemetryMarkersPath, telemetryExperimentsDir, telemetrySnapshotsDir, repositoriesRegistryPath } from "./state-paths.mjs";
 import { conditionDemoEvidence } from "./telemetry-conditions-demo.mjs";
 import { analyzeTelemetry } from "./telemetry-analyze.mjs";
+import { createTelemetryOracleObserver } from "./telemetry-oracle-observer.mjs";
 import { readMarkers, readSnapshot, readSnapshots, readExperiments } from "./telemetry-schemas/persistence.mjs";
 import { readSourceFile } from "./config-source-lookup.mjs";
 import {
@@ -763,9 +766,17 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
   writePid(resolved.port, process.pid);
   options.port = resolved.port;
   const portalUrl = (port) => `http://127.0.0.1:${port}`;
-  // Clean up the PID file (and stop the refresh timer) when the server exits cleanly (SIGTERM from
-  // stop or OS shutdown).
-  process.on("SIGTERM", () => { stopAnalysisRefresh(); clearPid(resolved.port); process.exit(0); });
+  const oracle = createTelemetryOracleObserver({ readSignature: telemetryOracleEvidenceSignature,
+    createWorker: (signature) => new Worker(path.join(repoRoot, "scripts", "cli", "telemetry-oracle-worker.mjs"), {
+      workerData: { paths: ORACLE_EVIDENCE_PATHS, evidence_signature: signature },
+    }) });
+  let warmupTimer = null, closing = false;
+  const stopBackgroundWork = () => {
+    closing = true; clearTimeout(warmupTimer); stopAnalysisRefresh(); clearPid(resolved.port);
+    return oracle.stop();
+  };
+  const stopProcess = () => { void stopBackgroundWork().finally(() => process.exit(0)); };
+  process.once("SIGTERM", stopProcess); process.once("SIGINT", stopProcess);
   if (readTelemetryState().enabled !== true) {
     console.log("telemetry is disabled; serving whatever is already in the spool.");
   }
@@ -792,7 +803,7 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
       fixtureRepositories: loadFixtureTelemetryRepositories(),
     }),
   });
-  startPortalServer({
+  const server = startPortalServer({
     port: options.port,
     // Phase 6 additions (model/repo/markerId) layer a normalized cohort filter on top of the
     // existing time/harness window; folded into cachedAnalysisJson's cache key (see
@@ -801,6 +812,7 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     // the shared filter shape the CLI report will eventually reuse too.
     loadAnalysisJson: (window, harness, extra = {}) => cachedAnalysisJson(window, harness, extra),
     loadMockAnalysisJson: () => loadMockAnalysisJson(),
+    loadOracleHealth: () => oracle.getHealth(),
     loadSession: (req) => loadSessionDetail({
       ...req,
       spoolContext: sessionSpoolContext(req.id, readMarkers()),
@@ -873,13 +885,20 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
       // ever sees the child as ready. The dashboard's first request may still race it and pay the
       // analyze cost itself, which is the pre-existing behavior for a cold portal — the difference
       // is that the server is now listening while it happens.
-      setTimeout(() => {
+      warmupTimer = setTimeout(() => {
+        if (closing) return;
+        oracle.start();
         reconcileTelemetryRepositories();
         try { refreshPlans(); } catch {}
         startAnalysisRefresh();
       }, 0);
     },
   });
+  server.once("close", () => {
+    process.removeListener("SIGTERM", stopProcess); process.removeListener("SIGINT", stopProcess);
+    void stopBackgroundWork();
+  });
+  return server;
 }
 
 function startAutoDiscoveryScan() {
@@ -983,63 +1002,59 @@ function telemetryStatePath() {
   return `${telemetryDir}/state.json`;
 }
 
-// Cheap change-detector for the spool: newest mtime + total size + file count across all .jsonl
-// files. Captures append (mtime + size grow) and file add/remove (count changes), so it flips
-// whenever a new telemetry event lands. Used to memoize loadAnalysis — the 5s dashboard poll and
-// every page nav would otherwise re-read the whole spool and re-run the (~1.5s) analysis on data
-// that hasn't changed, blocking the single-threaded server for other pages' requests meanwhile.
+const ORACLE_EVIDENCE_PATHS = Object.freeze({ spoolDir: telemetrySpoolDir, markersPath: telemetryMarkersPath,
+  snapshotsDir: telemetrySnapshotsDir, registryPath: repositoriesRegistryPath });
+
+// Metadata-only, per-file stamps cover replacements and provenance changes as well as appends.
+// Hash before leaving this boundary: directory entries and state paths are private evidence.
+export function telemetryOracleEvidenceSignature(paths = ORACLE_EVIDENCE_PATHS) {
+  return hashEvidence(oracleEvidence(paths, true));
+}
+
+function oracleEvidence(paths, strict) {
+  return [evidenceDirectoryStamp(paths.spoolDir, ".jsonl", strict), evidenceFileStamp(paths.markersPath, true, strict),
+    evidenceDirectoryStamp(paths.snapshotsDir, ".json", strict), evidenceFileStamp(paths.registryPath, true, strict)];
+}
+
+function hashEvidence(evidence) {
+  return `sha256:${createHash("sha256").update(JSON.stringify(evidence)).digest("hex")}`;
+}
+
+// Non-strict stamps record an unreadable entry in place instead of throwing.
+function evidenceDirectoryStamp(directory, extension, strict = true) {
+  let files;
+  try { files = fs.readdirSync(directory).filter((file) => file.endsWith(extension)).sort(); }
+  catch (error) { if (error.code === "ENOENT") return ["missing"]; if (strict) throw error; return unreadableStamp(error); }
+  // A disappearing member is an unstable read, not an empty directory. The observer retries.
+  return files.map((file) => [file, evidenceFileStamp(path.join(directory, file), false, strict)]);
+}
+
+function evidenceFileStamp(file, optional = true, strict = true) {
+  try {
+    const stat = fs.statSync(file, { bigint: true });
+    if (!stat.isFile()) throw new Error("Evidence entry is not a file");
+    return [stat.dev, stat.ino, stat.size, stat.mtimeNs, stat.ctimeNs].map(String);
+  } catch (error) {
+    if (optional && error.code === "ENOENT") return ["missing"];
+    if (strict) throw error;
+    return unreadableStamp(error);
+  }
+}
+
+function unreadableStamp(error) {
+  return ["unreadable", error.code || "not-a-file"];
+}
+
+// Reports also consume experiments, which do not affect the oracle's declared projections.
+// Report cache keys degrade per entry instead of throwing: a persistently unreadable entry yields a
+// stable key (no recompute on every request) while changes to every other entry still invalidate it.
+// A single constant fallback would instead freeze the cache on stale data. The oracle stays strict.
+export function telemetryReportEvidenceSignature(paths = { ...ORACLE_EVIDENCE_PATHS, experimentsDir: telemetryExperimentsDir }) {
+  return hashEvidence([...oracleEvidence(paths, false), evidenceDirectoryStamp(paths.experimentsDir, ".json", false)]);
+}
+
 function spoolSignature() {
-  let files = [];
-  try {
-    files = fs.readdirSync(telemetrySpoolDir).filter((file) => file.endsWith(".jsonl"));
-  } catch {
-    return "none";
-  }
-  let maxMtime = 0;
-  let totalSize = 0;
-  for (const file of files) {
-    try {
-      const stat = fs.statSync(path.join(telemetrySpoolDir, file));
-      if (stat.mtimeMs > maxMtime) maxMtime = stat.mtimeMs;
-      totalSize += stat.size;
-    } catch {
-      // File vanished between readdir and stat; ignore — the next tick re-signs the spool.
-    }
-  }
-  // Cached reports embed markers and experiments (chart overlay, cohort/marker-relative
-  // comparisons, the recent-markers list) alongside spool-derived data, so a marker/experiment
-  // mutation must also invalidate the cache even though it never touches the spool directory
-  // itself — otherwise a marker or experiment created through the portal would not appear in
-  // /api/data until the next unrelated capture landed.
-  let markersStamp = "0:0";
-  try {
-    const stat = fs.statSync(telemetryMarkersPath);
-    markersStamp = `${stat.mtimeMs}:${stat.size}`;
-  } catch {
-    // No markers file yet; stable "0:0" until one is created.
-  }
-  // Experiments are one file per experiment_id (mutable in place — status/end_marker_id update),
-  // so the signature is a count+max-mtime over the directory rather than a single file stamp.
-  let experimentsStamp = "0:0";
-  try {
-    const experimentFiles = fs.readdirSync(telemetryExperimentsDir).filter((file) => file.endsWith(".json"));
-    let maxExpMtime = 0;
-    for (const file of experimentFiles) {
-      const stat = fs.statSync(path.join(telemetryExperimentsDir, file));
-      if (stat.mtimeMs > maxExpMtime) maxExpMtime = stat.mtimeMs;
-    }
-    experimentsStamp = `${experimentFiles.length}:${maxExpMtime}`;
-  } catch {
-    // No experiments dir yet; stable "0:0" until one is created.
-  }
-  let snapshotsStamp = "missing";
-  try {
-    snapshotsStamp = fs.readdirSync(telemetrySnapshotsDir).filter((file) => file.endsWith(".json")).sort().map((file) => {
-      const stat = fs.statSync(path.join(telemetrySnapshotsDir, file));
-      return `${file}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`;
-    }).join("|");
-  } catch { /* Missing/evicted snapshot evidence is reevaluated as unknown. */ }
-  return `${files.length}:${maxMtime}:${totalSize}|${markersStamp}|${experimentsStamp}|${snapshotsStamp}`;
+  return telemetryReportEvidenceSignature();
 }
 
 // Plain full-read of the whole spool. Used by the one-shot CLI paths (`telemetry report`/`export`)
@@ -1202,10 +1217,8 @@ function analysisKey(window, harness, { model = null, repo = null, repository = 
   return `${spoolSignature()}|${window ? `${window.rangeMs}:${window.end ?? ""}` : "all"}|${harness || "all"}|${model || "all"}|${repo || "all"}|${repository || "all"}|${markerId || "none"}`;
 }
 
-// Returns the cache entry { json } for the given view, computing (and caching) it on a miss.
-// Registry-derived hash index for read-time legacy telemetry association, cached by spool signature
-// so it is rebuilt only when the spool changes (the registry is small; loading it is cheap, and a
-// missing/corrupt registry degrades to an empty index rather than throwing).
+// Registry-derived hash index for read-time legacy telemetry association, cached by the registry's
+// file stamp. Missing/corrupt registry evidence degrades to an empty index rather than throwing.
 let _repositoryHashIndex = null;
 let _repositoryHashIndexSig = null;
 // Matching capture's hash is what makes normalized_remote_hash values line up, and both sides now
@@ -1216,8 +1229,8 @@ const captureRepositoryHash = privacyHash;
 // repository_ids and records one `telemetry` discovery each, batched into a single registry write.
 // Agent sessions only attach to repositories a source already found; they never create one
 // (pljvmyh). Cached by spool AND registry signature: a repository a folder or auto-discovery adds
-// later picks up the session evidence already in the spool. Best-effort — a registry failure never
-// breaks the repositories list.
+// later picks up the session evidence already in the spool. Unchanged discoveries skip writes.
+// Best-effort — a registry failure never breaks the repositories list.
 let _telemetryReconcileSig = null;
 export function reconcileTelemetryRepositories() {
   const sig = `${spoolSignature()}|${registrySignature()}`;
@@ -1245,13 +1258,12 @@ export function reconcileTelemetryRepositories() {
   }
 }
 
-// Signature of the registry file itself (mtime+size), so the hash index is rebuilt only when the
+// Signature of the registry file itself, so the hash index is rebuilt only when the
 // REGISTRY changes — not on every spool change (the index is derived from the registry, not the
-// spool). Missing file -> "none" so a first write invalidates.
+// spool). A stable missing-file stamp makes the first write invalidate the cache.
 function registrySignature() {
   try {
-    const st = fs.statSync(repositoriesRegistryPath);
-    return `${st.mtimeMs}:${st.size}`;
+    return JSON.stringify(evidenceFileStamp(repositoriesRegistryPath));
   } catch {
     return "none";
   }

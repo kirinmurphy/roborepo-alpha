@@ -22,6 +22,36 @@ Telemetry is opt-in and stored locally. If the page asks you to **turn on teleme
 it and run a session in an installed agent harness. Until live data is available, the page can
 show a report labeled **simulated tracking report**. Recording changes requires live telemetry.
 
+## Oracle health
+
+The **Oracle health** badge beside the report period compares selected analytics with an
+independent recomputation over the same current local evidence. Open **Oracle health details** for
+freshness, duration, aggregate evidence counts, coverage, checked invariants, and the latest
+privacy-safe result.
+
+![Oracle health badge reading Passed beside the report period, with its details button.](../../images/tokens/oracle-health-light.png)
+
+![Oracle health details showing a passed status, current evidence, aggregate counts, coverage, checked invariants, and limits.](../../images/tokens/oracle-health-detail-light.png)
+
+| Status | Meaning |
+| --- | --- |
+| **Passed** | The production analyzer and independent oracle agree for every supported checked row, and the result matches the current evidence. |
+| **Checking** | A comparison is running and no current result is available yet. |
+| **Stale** | Evidence changed after the last comparison. The prior result remains visible in the details but is not current. |
+| **Partial** | Covered values agree, but some required evidence could not be interpreted independently. |
+| **Unavailable** | No complete comparable input could be evaluated, or the isolated comparison could not run. |
+| **Failed** | The two implementations disagree on at least one covered field for the current evidence. |
+
+The live oracle checks harness-scoped sessions, mirrored operation deduplication, condition
+comparisons, change boundaries and exclusions, evidence gates, per-call regression, and
+harness-local loop detection. It does not prove that capture is complete, verify every dashboard
+metric, or show that a condition caused an outcome. The badge reports the local runtime comparison;
+the deterministic CI oracle remains a separate build-time guardrail.
+
+The details contain only aggregate counts and allowlisted status categories. They do not expose raw
+events, prompts, transcripts, file paths, command output, or replayable JSONL. The Tokens report
+continues working when oracle health is unavailable.
+
 ## Find a problem worth investigating
 
 Read the page from top to bottom:

@@ -1,5 +1,5 @@
 class PortalInfoIcon extends HTMLElement {
-  static observedAttributes = ["aria-expanded", "aria-haspopup", "aria-label", "disabled", "title"];
+  static observedAttributes = ["aria-controls", "aria-expanded", "aria-haspopup", "aria-label", "disabled", "title"];
 
   connectedCallback() {
     if (!this.button) {

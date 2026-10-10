@@ -10,6 +10,10 @@
 // matches anchorId once it exists in the DOM (renderMarkdown() in scripts/cli/markdown-render.mjs
 // gives every heading a stable GitHub-style slug id) — info icons throughout the host page pass
 // their section's anchor so "view docs" from any panel lands on the relevant section, not the top.
+//
+// Triggers: any element with data-doc-anchor opens the guide at that anchor, through one delegated
+// listener the factory owns. The trigger reports aria-expanded while the guide is open, and a
+// trigger inside another open dialog closes that dialog first, since the guide replaces it.
 import { portalWireBackdropClose } from "./api.js";
 // Diagram rendering now lives in portal/shared/markdown-mermaid.js so /config and /plans get it too
 // — it was private to this modal, which is why only the Telemetry guide rendered diagrams.
@@ -22,6 +26,19 @@ export function createDocGuideModal(dialogEl, fetchGuide) {
 
   dialogEl.querySelector('[data-slot="close"]').addEventListener("click", close);
   portalWireBackdropClose(dialogEl, close);
+  document.addEventListener("click", (event) => {
+    const trigger = event.target.closest("[data-doc-anchor]");
+    if (!trigger) return;
+    const host = trigger.closest("dialog");
+    if (host && host !== dialogEl && host.open) host.close();
+    trigger.setAttribute("aria-expanded", "true");
+    open(trigger.dataset.docAnchor);
+  });
+  dialogEl.addEventListener("close", () => {
+    for (const trigger of document.querySelectorAll("[data-doc-anchor][aria-expanded='true']")) {
+      trigger.setAttribute("aria-expanded", "false");
+    }
+  });
 
   let cachedHtml = null;
 

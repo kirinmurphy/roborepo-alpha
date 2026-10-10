@@ -27,7 +27,13 @@
       <div id="tokenscontent" hidden>
         <!-- Frame-of-reference meta line (v1 renderMeta contract): sessions · captures · period,
              with the Codex rate limit riding along as a dim clause when the provider reports one. -->
-        <div id="tokensmeta" class="t2-meta"></div>
+        <div class="t2-report-meta">
+          <div id="tokensmeta" class="t2-meta"></div>
+          <div class="oracle-health-control">
+            <span id="oracle-health-status" class="oracle-health-badge" role="status" aria-label="Oracle health" aria-live="polite" data-status="checking">Oracle health: Checking</span>
+            <portal-info-icon id="oracle-health-open" aria-label="Oracle health details" aria-haspopup="dialog" aria-controls="oracle-health-dialog" aria-expanded="false" title="Oracle health details"></portal-info-icon>
+          </div>
+        </div>
         <!-- Section: waste stats — the dashboard header. One card per range (this week /
              all time): color-graded % badge, tokens context, top-3 violators, and a
              "[more]" tooltip with the full violator table. -->
@@ -127,13 +133,33 @@
       <div class="t2-session-body" data-slot="body"></div>
     </dialog>
     <!-- Doc-guide popup: server-rendered docs/user/guides/telemetry.md, shared factory. -->
-    <dialog id="tokensdocmodal" data-dialog-size="lg">
+    <dialog id="tokensdocmodal" data-dialog-size="lg" aria-labelledby="tokensdocmodal-title">
       <div class="modal-head">
-        <span class="modal-title" data-slot="title"></span>
+        <span class="modal-title" id="tokensdocmodal-title" data-slot="title"></span>
         <span class="modal-path" data-slot="path"></span>
         <portal-close-button data-slot="close"></portal-close-button>
       </div>
       <div class="modal-body" data-slot="content"></div>
+    </dialog>
+    <dialog id="oracle-health-dialog" data-dialog-size="md" aria-labelledby="oracle-health-title">
+      <div class="modal-head">
+        <span class="modal-title" id="oracle-health-title">Oracle health details</span>
+        <portal-close-button data-slot="close"></portal-close-button>
+      </div>
+      <div class="oracle-health-body">
+      <p class="oracle-health-intro">Independent recomputation checks selected telemetry analytics against the same local evidence.</p>
+      <dl class="oracle-health-facts">
+        <div><dt>Status</dt><dd data-oracle-status>Checking</dd></div>
+        <div><dt>Evidence current</dt><dd data-oracle-freshness>Pending</dd></div>
+        <div><dt>Last checked</dt><dd data-oracle-checked>Not yet checked</dd></div>
+        <div><dt>Duration</dt><dd data-oracle-duration>Not available</dd></div>
+        <div><dt>Evidence</dt><dd data-oracle-counts>0 events · 0 sessions · 0 operations</dd></div>
+        <div><dt>Coverage</dt><dd data-oracle-coverage>0 supported · 0 unsupported</dd></div>
+      </dl>
+      <section><h3>Checked invariants</h3><p data-oracle-checks-empty>Waiting for a completed comparison.</p><ul class="oracle-health-checks"><li data-oracle-check="sessions">Harness-scoped sessions</li><li data-oracle-check="operations">Mirrored operation deduplication</li><li data-oracle-check="conditions">Condition comparisons</li><li data-oracle-check="boundaries">Change boundaries and exclusions</li><li data-oracle-check="gating">Evidence policy gates</li><li data-oracle-check="regression">Per-call regression</li><li data-oracle-check="loops">Harness-local loop detection</li></ul></section>
+      <section><h3>Latest privacy-safe output</h3><p data-oracle-output>An independent comparison is in progress.</p></section>
+      <section><h3>Limits</h3><p>This checks the listed calculations only. It does not prove capture completeness, verify every dashboard metric, or show that a condition caused an outcome. No raw events, prompts, paths, command output, or transcripts are shown here.</p><button type="button" class="oracle-health-guide" data-doc-anchor="oracle-health">Read the Oracle health guide</button></section>
+      </div>
     </dialog>
     <script src="/portal/shared/theme.js" type="module"></script>
     <script src="/portal/shared/api.js" type="module"></script>

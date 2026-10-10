@@ -11,18 +11,13 @@ import {
 import { recordRepositoryDiscovery } from "../cli/repositories.mjs";
 import { addRepositorySource, loadRepositorySources } from "../cli/repository-sources.mjs";
 import { repositorySummary, repositoryDetailPayload } from "../../modules/repositories/index.mjs";
+import { fakeResponse } from "./lib/fake-response.mjs";
 
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-repo-api-"));
 const stateRoot = path.join(tempRoot, "state");
 
-// Minimal mock res capturing status/body.
-function mockRes() {
-  return { statusCode: null, body: null, headers: {},
-    writeHead(code, headers) { this.statusCode = code; Object.assign(this.headers, headers || {}); },
-    end(body) { this.body = body; } };
-}
 function get(urlPath, handlers) {
-  const res = mockRes();
+  const res = fakeResponse();
   const matched = dispatchRoutes([repositoriesRoutes], { method: "GET" }, res, urlPath, "", handlers);
   return { matched, res };
 }
@@ -80,7 +75,7 @@ try {
   assert.equal(JSON.parse(overview.res.body).repository.urlKey, "roborepo");
   const missingOverview = get("/api/repositories/missing/overview", handlers);
   assert.equal(missingOverview.res.statusCode, 404);
-  assert.equal(dispatchRoutes([repositoriesRoutes], { method: "GET" }, mockRes(), "/api/repositories/%E0%A4%A/overview", "", handlers), false, "malformed urlKey encoding does not match a route");
+  assert.equal(dispatchRoutes([repositoriesRoutes], { method: "GET" }, fakeResponse(), "/api/repositories/%E0%A4%A/overview", "", handlers), false, "malformed urlKey encoding does not match a route");
 
   const list = get("/api/repositories", handlers);
   assert.equal(list.matched, true);
@@ -109,10 +104,10 @@ try {
   assert.equal(missing.res.statusCode, 404, "unknown repository -> 404");
 
   // Non-repositories path is not matched (lets route() fall through).
-  assert.equal(dispatchRoutes([repositoriesRoutes], { method: "GET" }, mockRes(), "/api/plans", "", handlers), false);
+  assert.equal(dispatchRoutes([repositoriesRoutes], { method: "GET" }, fakeResponse(), "/api/plans", "", handlers), false);
 
   // ---- PATCH visibility via handler (POST/PATCH body path) ----
-  const res = mockRes();
+  const res = fakeResponse();
   const req = patchReq({ visibility: "hidden" });
   dispatchRoutes([repositoriesRoutes], req, res, `/api/repositories/${encoded}`, "", handlers);
   // readJsonBody consumes the request async; flush the mock's data/end below.
@@ -129,7 +124,7 @@ try {
   const sources = get("/api/repositories/sources", sourceHandlers);
   assert.equal(sources.res.statusCode, 200, "the literal sources segment is not read as a repository id");
   assert.equal(JSON.parse(sources.res.body).autoDiscovery.enabled, false);
-  const addRes = mockRes();
+  const addRes = fakeResponse();
   const addReq = patchReq({ path: path.join(tempRoot, "missing-folder") });
   addReq.method = "POST";
   dispatchRoutes([repositoriesRoutes], addReq, addRes, "/api/repositories/sources", "", sourceHandlers);

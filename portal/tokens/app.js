@@ -12,6 +12,7 @@ import { fetchSetupState } from "/portal/shared/setup-api.js";
 import { createConditionsReport } from "./conditions-report.js";
 import { sessionConditionLine, capturedSessionFindings } from "./conditions-context.js";
 import { createDocGuideModal } from "/portal/shared/doc-guide-modal.js";
+import { createOracleHealthPanel } from "./oracle-health.js";
 
 // ── State ──
 let firstLoad = true;
@@ -28,6 +29,7 @@ let lastSetupState = null;
 // The most recent report object — session chips and timeline marks look sessions up here at
 // click time, so a click always acts on the live report rather than a stale closure.
 let lastSessionData = null;
+const oracleHealth = createOracleHealthPanel();
 
 // ── Formatting helpers (local) ──
 const fmt = (n) => Number(n || 0).toLocaleString("en-US");
@@ -68,6 +70,7 @@ async function init() {
   try {
     [cfg, setup] = await Promise.all([portalGetJson("/api/config"), fetchSetupState()]);
   } catch {
+    oracleHealth.start({ live: false });
     if (firstLoad) { firstLoad = false; portalHideLoadingNow(); }
     return;
   }
@@ -83,6 +86,7 @@ async function init() {
   // reads the bundled mock-spool.jsonl through the same analyzeTelemetry pipeline.
   // In the full state, we fetch from /api/data (the real spool).
   const isFullState = setupReady;
+  oracleHealth.start({ live: isFullState });
   await load(!isFullState);
   // Re-apply the setup cascade after the first report load: hasData is now established from the
   // real /api/data response, so pageState reflects actual captures — the "no telemetry data yet"
@@ -1301,42 +1305,25 @@ function sessionLink(sessionId, harness, data, fallbackLabel) {
   return `<span class="session-chip session-link" data-session-id="${esc(id)}" data-harness="${esc(s.harness || "")}" tabindex="0" role="button" aria-label="open session detail"><code>${esc(label)}</code></span>`;
 }
 
-// One-time delegated listeners: waste-source links, session-chip drill-down, doc-guide info
-// icons, "+N more" dropdown, sticky-header measure. Declared functions hoist, but the
+// One-time delegated listeners: waste-source links, session-chip drill-down, "+N more" dropdown,
+// sticky-header measure. Declared functions hoist, but the
 // `let stickyHeaderOffset` they touch does not — so the calls sit here, after every declaration,
 // at module end.
 wireWasteSourceLinks();
 wireSessionChips();
-wireDocGuideIcons();
 wireHintToggle();
 
-// ── Doc-guide info icons ──
-// Same one-delegate pattern as the v1 dashboard: any <portal-info-icon data-doc-anchor> opens
-// the shared doc-guide popup pre-scrolled to that heading. The guide is server-rendered from
-// docs/user/guides/telemetry.md — the popup and the on-disk doc are always the same content.
-// Anchors are placed only where the guide section genuinely describes the tokens section
-// (testing-efficiency, session-detail); sections the guide doesn't cover get NO icon rather
-// than a mismatched one.
-const docModal = createDocGuideModal(document.getElementById("tokensdocmodal"), async () => {
+// ── Doc-guide triggers ──
+// Every [data-doc-anchor] trigger (section info icons, the Oracle health guide button) opens the
+// shared popup at its anchor; the factory owns that delegate. The guide is server-rendered from
+// docs/user/guides/telemetry.md.
+createDocGuideModal(document.getElementById("tokensdocmodal"), async () => {
   try {
     return await portalGetJson("/api/telemetry/guide");
   } catch (err) {
     return { ok: false, error: (err && err.message) || String(err) };
   }
 });
-document.getElementById("tokensdocmodal").addEventListener("close", () => {
-  for (const icon of document.querySelectorAll("portal-info-icon[aria-expanded='true']")) {
-    icon.setAttribute("aria-expanded", "false");
-  }
-});
-function wireDocGuideIcons() {
-  document.addEventListener("click", (event) => {
-    const trigger = event.target.closest("portal-info-icon[data-doc-anchor]");
-    if (!trigger) return;
-    trigger.setAttribute("aria-expanded", "true");
-    docModal.open(trigger.dataset.docAnchor);
-  });
-}
 
 // ── Helpers ──
 function emptyMsg(msg) {

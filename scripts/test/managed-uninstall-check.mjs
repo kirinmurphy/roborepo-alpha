@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { fakeResponse } from "./lib/fake-response.mjs";
 
 // Managed uninstall workspace policy, per
 // docs/plans/active/infra-packaging-02-install-lifecycle.md Phase 4.
@@ -381,15 +382,6 @@ function testEveryDeclaredStatePathIsClassified() {
 // semantics, error mapping) is all handler-side, and a real detached server strands a process when
 // the test's sandboxed HOME does not match the one holding its PID file — which hung this suite.
 // The origin+token guard runs in portal-server.mjs before dispatch and is covered by that layer.
-function fakeRes() {
-  const res = { statusCode: null, body: null, headers: {}, ended: false };
-  res.writeHead = (status, headers) => { res.statusCode = status; Object.assign(res.headers, headers || {}); return res; };
-  res.setHeader = (k, v) => { res.headers[k] = v; };
-  res.end = (chunk) => { res.body = chunk ? String(chunk) : res.body; res.ended = true; return res; };
-  res.write = (chunk) => { res.body = (res.body || "") + String(chunk); return true; };
-  return res;
-}
-
 function fakeReq({ method, body }) {
   const payload = body === undefined ? null : JSON.stringify(body);
   const listeners = {};
@@ -432,7 +424,7 @@ async function testPortalUninstallRequiresExplicitConfirm() {
   };
 
   // A POST without { confirm: true } must be rejected by the handler itself, before any removal.
-  const res = fakeRes();
+  const res = fakeResponse();
   const handled = dispatch(fakeReq({ method: "POST", body: {} }), res, "/api/maintenance/uninstall", "", handlers);
   assert.equal(handled, true, "handler must claim the uninstall route");
   await settle();
@@ -442,7 +434,7 @@ async function testPortalUninstallRequiresExplicitConfirm() {
 
   // Unknown maintenance paths fall through so portal-server can try the next domain / 404.
   assert.equal(
-    dispatch(fakeReq({ method: "GET" }), fakeRes(), "/api/maintenance/nope", "", handlers),
+    dispatch(fakeReq({ method: "GET" }), fakeResponse(), "/api/maintenance/nope", "", handlers),
     false,
     "unmatched maintenance paths must not be claimed",
   );

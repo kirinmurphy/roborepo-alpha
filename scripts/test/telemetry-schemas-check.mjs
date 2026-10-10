@@ -1,18 +1,12 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { testPersistenceRoundTrip } from "./telemetry-schemas/persistence-checks.mjs";
+import { testPrivacyHashIsPinned, testPrivacyHashHasOneImplementation, testPrivacyHashModuleStaysDependencyFree } from "./telemetry-schemas/privacy-checks.mjs";
 import { generateId, isValidId } from "../cli/telemetry-schemas/id.mjs";
 import { generateMarkerId, validateMarker } from "../cli/telemetry-schemas/marker-schema.mjs";
 import { computeSnapshotId, validateSnapshot, buildEffectiveSnapshot } from "../cli/telemetry-schemas/snapshot-schema.mjs";
 import { generateExperimentId, validateExperiment } from "../cli/telemetry-schemas/experiment-schema.mjs";
-import { validateCaptureV3 } from "../cli/telemetry-schemas/capture-schema-v3.mjs";
-import { privacyHash, PRIVACY_HASH_WIDTH } from "../cli/telemetry-schemas/hash.mjs";
-
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+import { testCaptureV3Compat } from "./telemetry-schemas/capture-checks.mjs";
 
 testIdGenerator();
 testMarkerValidation();
@@ -118,109 +112,4 @@ function testExperimentValidation() {
     () => validateExperiment({ ...base, eligibility: { ...base.eligibility, minimum_sessions_per_cohort: 0 } }),
     /minimum_sessions_per_cohort must be a positive integer/,
   );
-}
-
-function testCaptureV3Compat() {
-  const v2Record = { schema: 2, ts: new Date().toISOString(), harness: "claude", event: "PostToolUse" };
-  assert.deepEqual(validateCaptureV3(v2Record), v2Record, "a plain v2 record must pass through unchanged");
-
-  const v3Record = {
-    ...v2Record,
-    schema: 3,
-    capture_id: generateId("cap"),
-    call_id: "toolu_abc123",
-    operation: { category: "test", scope: "targeted", exit_status: "pass" },
-    phase: { name: "debugging", source: "inferred", confidence: 0.8, classifier_version: 1 },
-    intervening: {
-      edit_since_last_test: true,
-      changed_file_count: 2,
-      changed_file_categories: ["code", "doc"],
-      diff_fingerprint: "abc123",
-      diff_fingerprint_changed: true,
-      targeted_test_ran_since_last_full: false,
-      failure_signature_changed: true,
-    },
-  };
-  assert.deepEqual(validateCaptureV3(v3Record), v3Record);
-  assert.throws(
-    () => validateCaptureV3({ ...v3Record, operation: { ...v3Record.operation, category: "nonsense" } }),
-    /unknown operation category/,
-  );
-  assert.throws(() => validateCaptureV3({ ...v2Record, schema: 4 }), /unsupported capture schema version/);
-  assert.throws(
-    () => validateCaptureV3({ ...v3Record, intervening: { ...v3Record.intervening, changed_file_count: "two" } }),
-    /changed_file_count must be an integer/,
-  );
-  assert.throws(
-    () => validateCaptureV3({ ...v3Record, intervening: { ...v3Record.intervening, unknown_field: 1 } }),
-    /unknown capture intervening field/,
-  );
-}
-
-// Persistence functions import state-paths.mjs, whose STATE_ROOT is a top-level const resolved from
-// ROBOREPO_STATE_DIR at import time (see paths.mjs). Sandboxing that requires setting the env var
-// on a freshly spawned node process, not inside this already-running one — same pattern as
-// package-lifecycle-check.mjs's spawnSync(cli, ..., { env }).
-function testPersistenceRoundTrip() {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-telemetry-schemas-"));
-  try {
-    const script = path.join(repoRoot, "scripts/test/telemetry-schemas-persistence-child.mjs");
-    const env = { ...process.env, ROBOREPO_STATE_DIR: path.join(tmp, ".roborepo") };
-    const result = spawnSync(process.execPath, [script], { env, encoding: "utf8" });
-    assert.equal(result.status, 0, `persistence child process failed:\n${result.stdout}\n${result.stderr}`);
-  } finally {
-    fs.rmSync(tmp, { recursive: true, force: true });
-  }
-}
-
-// --- privacy hash --------------------------------------------------------------------------
-
-// Hashed values are joined across files and across time: capture writes a file_path_hash today, and
-// a consumer months later hashes a path it knows and looks for a match. Change the algorithm or the
-// width and nothing throws — the joins just return zero rows, which reads exactly like "the session
-// touched nothing". These expected values are literals on purpose; deriving them would re-implement
-// the thing under test and pass no matter what it became.
-function testPrivacyHashIsPinned() {
-  assert.equal(PRIVACY_HASH_WIDTH, 24, "changing the truncation width invalidates every stored hash");
-  assert.equal(privacyHash(""), "e3b0c44298fc1c149afbf4c8", "the empty string's hash is a fixed value");
-  assert.equal(privacyHash("roborepo"), "7bf53fdcbcb90ea72b356e58");
-  assert.equal(privacyHash("npm run test:plans"), "69ff1328de27345a75595590");
-
-  for (const value of ["", "a", "/tmp/x.md", 0, null, undefined]) {
-    assert.equal(privacyHash(value).length, PRIVACY_HASH_WIDTH, `every hash is ${PRIVACY_HASH_WIDTH} characters, including for ${String(value)}`);
-    assert.match(privacyHash(value), /^[0-9a-f]+$/, "hashes are lowercase hex");
-  }
-  assert.equal(privacyHash(123), privacyHash("123"), "values are stringified before hashing, so a number and its text form agree");
-  assert.notEqual(privacyHash("a"), privacyHash("b"));
-}
-
-// The consolidation itself. Five copies of this algorithm were kept aligned by a comment; a sixth
-// copy appearing anywhere in the pipeline reintroduces exactly the drift this replaced.
-function testPrivacyHashHasOneImplementation() {
-  const pattern = /createHash\(\s*["']sha256["']\s*\)[\s\S]{0,120}?slice\(\s*0\s*,\s*24\s*\)/;
-  const searched = [];
-  const offenders = [];
-  for (const dir of ["scripts/cli", "scripts/cli/telemetry-schemas", "modules/telemetry"]) {
-    const full = path.join(repoRoot, dir);
-    if (!fs.existsSync(full)) continue;
-    for (const entry of fs.readdirSync(full)) {
-      if (!entry.endsWith(".mjs") || entry === "hash.mjs") continue;
-      const file = path.join(full, entry);
-      if (!fs.statSync(file).isFile()) continue;
-      searched.push(path.join(dir, entry));
-      if (pattern.test(fs.readFileSync(file, "utf8"))) offenders.push(path.join(dir, entry));
-    }
-  }
-  assert.ok(searched.length > 5, `expected to search the telemetry modules, only saw ${searched.length} files`);
-  assert.deepEqual(offenders, [],
-    "each file listed here reimplements privacyHash inline; import it from telemetry-schemas/hash.mjs instead — a second copy drifts silently, and a width mismatch empties every cross-file join without failing anything");
-}
-
-// telemetry-capture.mjs imports this module and runs on every PreToolUse/PostToolUse hook, so the
-// hash module has to stay as cheap to load as the inline copy it replaced.
-function testPrivacyHashModuleStaysDependencyFree() {
-  const source = fs.readFileSync(path.join(repoRoot, "scripts/cli/telemetry-schemas/hash.mjs"), "utf8");
-  const imports = [...source.matchAll(/^import\s[\s\S]*?from\s+["']([^"']+)["']/gm)].map((match) => match[1]);
-  assert.deepEqual(imports, ["node:crypto"],
-    "hash.mjs may import node:crypto and nothing else; capture's minimal-import constraint depends on it");
 }
