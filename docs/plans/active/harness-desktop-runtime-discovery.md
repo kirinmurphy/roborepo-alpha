@@ -1,7 +1,7 @@
 ---
 id: 3jp3yhtq
 priority: high
-next_action: Run the unchecked desktop-session checks in Not tested, then verify the results and sync this plan.
+next_action: Complete the remaining real desktop-session and rendered portal checks, then run Windows installer parity in a disposable pwsh environment and verify the results.
 blocked_by: []
 depends_on: []
 related:
@@ -9,7 +9,7 @@ related:
   - usage-statusline-codex-hook-parity
   - windows-provider-path-schema
   - 7k3m9qd
-reviewed_commit: 731937640d7483d945ee1e21466533574d686fbf
+reviewed_commit: 79f951285e140deec5d6433d3b90e22be38237a6
 worktree: harness-desktop-runtime-discovery
 ---
 
@@ -304,32 +304,54 @@ config, not a separate provider or package switch.
   executable was also available through `PATH`, so desktop-only Codex is fixture-tested.
 - With a temporary home and project, Claude Desktop's `2.1.295` runtime successfully completed
   MCP add, list, and remove at `user`, `project`, and `local` scopes. No unsupported scope was
-  found. The temporary files were removed.
+  found. QA repeated all three scope round trips with the installed desktop binary and no CLI on
+  `PATH`; the temporary files were removed.
 - The refresh simulation compares native config, bundle metadata, and runtime executable bytes
   before and after a refresh on macOS. A forced non-darwin unit test covers candidate suppression;
-  the implementation was not run on a Linux host.
+  the clean-machine, install, permissions, and onboarding Docker suites now pass on Linux.
 - The targeted harness, MCP, doctor, and diff checks passed. `npm run check` passed, including the
-  12 CI unit groups, package install smoke, and clean-machine install/onboarding checks. The gate
-  skipped Windows installer parity because `pwsh` is unavailable and skipped the portal browser
-  suite because Chromium is not installed.
+  427 CLI checks, 12 CI unit groups, package install smoke, and all four Docker clean-machine
+  suites. The gate skipped Windows installer parity because `pwsh` is unavailable and skipped the
+  portal browser suite because Chromium is not installed.
 - An isolated local portal preview using fixture apps reported exactly one confirmed Claude
   provider and one confirmed Codex provider through `/api/config`. This does not establish the
   live desktop app's rendered UI or session effects.
+- In QA on macOS, a refresh with temporary home and state directories, controlled `which`, and the
+  installed app bundles returned one confirmed desktop-only provider for each product. Claude
+  Desktop was version `2.31226.1`; its Code runtimes reported `2.1.295` and `2.1.293`, with
+  `2.1.295` selected. The Codex desktop app was version `26.917.62051`; its runtime reported
+  `codex-cli 0.155.0-alpha.16.3`. No native Claude or Codex configuration was written by this QA.
+- The user observed Claude and Codex identified in the **portal UI** on this Mac. That observation
+  establishes the surface of identification, but did not establish an exact provider-card count,
+  a not-launched warning, or desktop feature effects.
+- QA reproduced an install-summary defect: with a Claude home and Claude Desktop app but no Code
+  runtime, the summary said `available` and hid the Code-tab instruction. It now reports
+  `installed, setup needed` and prints that instruction. A leftover home without a runtime now
+  reports `configuration present, runtime unavailable`. Both cases have isolated installer tests.
+- The configured Claude `statusLine` command exists and printed `Context: 42% · 5h: — · Weekly: —`
+  for a sample payload under temporary state. This proves the command can run, not that Claude
+  Desktop invokes or displays it.
 
 ## Not tested
 
-- [ ] Start a Claude Desktop Code session and verify that the shared `statusLine` command runs and
-      displays its output. A fixture cannot observe the signed-in desktop session UI.
-- [ ] Start a Codex desktop session and check whether `tui.status_line` appears in the desktop UI.
-      A fixture cannot observe the signed-in desktop session UI.
-- [ ] Start a session in each desktop app and confirm hook execution and telemetry transcript
-      capture, then record which data is actually available. This needs live session events and
-      access to each app's native transcript store.
-- [ ] In the live portal, confirm one provider card per product and the warning copy for an app
-      without a launched coding runtime. API and component checks do not establish the rendered
-      browser result; this also requires a controlled not-launched app state.
-- [ ] Run the Windows installer parity suite in an environment with `pwsh`; the local completion
-      gate skipped it because PowerShell is unavailable here.
+- [ ] In a fresh Claude Desktop Code QA session, verify that `statusLine` runs and its output is
+      visible. The configured command ran with sample input, but automatic approval review rejected
+      inspection of the selected window because it showed an unrelated private conversation.
+- [ ] Check whether the configured `tui.status_line` fields appear in the Codex desktop UI.
+      Computer use refused access to the Codex app window; the TOML setting alone does not establish
+      a UI effect.
+- [ ] Confirm hook execution and telemetry transcript capture in a real session in each desktop
+      app, recording the actual fields available. This Mac's telemetry state is disabled and its
+      Codex hooks file has no entries. Claude has configured hooks, but their execution was not
+      observed in a QA session. Native configuration was left untouched.
+- [ ] Confirm exactly one rendered provider card for Claude and one for Codex, plus the warning
+      rendered for an app without a launched coding runtime. The user saw both identified in the
+      portal UI, and the fixture preview responded on port 19087, but browser policy blocked
+      navigation to the local preview. The prior API result is not a rendered UI observation.
+- [ ] Run `pwsh -File scripts/test/windows-installer-check.ps1` in a disposable environment.
+      Attempting it on the macOS host exited 127 (`pwsh: command not found`). The existing
+      `node:22-bookworm-slim` Docker image also lacks `pwsh`, and no local PowerShell image is
+      available; Windows installer parity remains unverified.
 
 ## Risks
 
