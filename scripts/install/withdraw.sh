@@ -83,7 +83,7 @@ else
   echo "unsupported: mcp.remove has no ${harness_id} adapter yet — MCP entries were not withdrawn" >&2
 fi
 
-while IFS=$'\t' read -r id home_path _present _display_name _root_config_path; do
+while IFS=$'\t' read -r id home_path _present _display_name _root_config_path _confidence; do
   [[ "${id}" == "${harness_id}" ]] || continue
   [[ -z "${home_path}" ]] && continue
   remove_skill_links "${home_path}/skills"

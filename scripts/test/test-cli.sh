@@ -1576,7 +1576,7 @@ assert "legacy: real ~/.agents/skills user dir is preserved, not reclaimed" \
 # ---------------------------------------------------------------------------
 zero_home="${reloc_root}/presence-zero/home"
 mkdir -p "${zero_home}/.local/bin"
-zero_out="$(HOME="${zero_home}" ROBOREPO_STATE_DIR="${zero_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 \
+zero_out="$(HOME="${zero_home}" ROBOREPO_STATE_DIR="${zero_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 NODE_ENV=test ROBOREPO_TEST_DESKTOP_ROOTS='{}' \
   ROBOREPO_ON_CONFLICT=overwrite bash "${repo_root}/scripts/install/main.sh" 2>&1)"
 assert "install: zero harnesses present does not crash (no unbound variable)" \
   bash -c "! echo '${zero_out}' | grep -q 'unbound variable'"
@@ -1585,7 +1585,7 @@ assert "install: zero-harness summary shows both as not installed" \
 
 claude_only_home="${reloc_root}/presence-claude-only/home"
 mkdir -p "${claude_only_home}/.claude" "${claude_only_home}/.local/bin"
-claude_only_out="$(HOME="${claude_only_home}" ROBOREPO_STATE_DIR="${claude_only_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 \
+claude_only_out="$(HOME="${claude_only_home}" ROBOREPO_STATE_DIR="${claude_only_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 NODE_ENV=test ROBOREPO_TEST_DESKTOP_ROOTS='{}' \
   ROBOREPO_ON_CONFLICT=overwrite bash "${repo_root}/scripts/install/main.sh" 2>&1)"
 assert "install: Claude-only presence does not crash" \
   bash -c "! echo '${claude_only_out}' | grep -q 'unbound variable'"
@@ -1596,7 +1596,7 @@ assert "install: Claude-only links the base skill into .claude" \
 
 codex_only_home="${reloc_root}/presence-codex-only/home"
 mkdir -p "${codex_only_home}/.codex" "${codex_only_home}/.local/bin"
-codex_only_out="$(HOME="${codex_only_home}" ROBOREPO_STATE_DIR="${codex_only_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 \
+codex_only_out="$(HOME="${codex_only_home}" ROBOREPO_STATE_DIR="${codex_only_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 NODE_ENV=test ROBOREPO_TEST_DESKTOP_ROOTS='{}' \
   ROBOREPO_ON_CONFLICT=overwrite bash "${repo_root}/scripts/install/main.sh" 2>&1)"
 assert "install: Codex-only presence does not crash" \
   bash -c "! echo '${codex_only_out}' | grep -q 'unbound variable'"

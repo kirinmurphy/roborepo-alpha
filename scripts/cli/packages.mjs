@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
 import { repoRoot, rootConfigActive, harnessHome, workspacePackagesDir, packageMode, initializeWorkspace } from "./paths.mjs";
 import { forgetPackageIds, readEnabledPackagesRegistry, setPackageEnabled, renderHomeRules, effectiveEnabledIds, knownHarnessIds, harnessIdsWithCapability } from "./rules-render.mjs";
 import { loadPackageCatalog, unavailablePackageMessage, validatePackageCatalog, BUILT_IN_PACKAGES_DIR, readPackageCategories } from "./package-catalog.mjs";
@@ -16,6 +15,7 @@ import { installPackageRuntimeAsset, mergeHarnessConfig, removePackageRuntimeAss
 import { installPackageCommands, removePackageCommands } from "./slash-commands.mjs";
 import { cleanupPackageProjections } from "./package-projection-cleanup.mjs";
 import { getHarnessProvider } from "../harnesses/registry.mjs";
+import { hasClaudeCli } from "../harnesses/mcp-claude-cli.mjs";
 
 export const USER_CLAUDE_SETTINGS = rootConfigActive.claude;
 export const USER_CODEX_CONFIG = rootConfigActive.codex;
@@ -341,7 +341,7 @@ function installMcpPreset(presetId) {
   const spec = getMcpPresets().get(presetId.toLowerCase());
   if (!spec) throw new Error(`mcp add failed for preset: ${presetId} (unknown preset)`);
 
-  if (spawnSync("claude", ["--version"], { encoding: "utf8" }).status === 0) {
+  if (hasClaudeCli()) {
     if (getHarnessProvider("claude").adapters.mcp.list().includes(spec.name)) {
       console.log(`  ok: claude mcp ${spec.name} already present`);
     } else {

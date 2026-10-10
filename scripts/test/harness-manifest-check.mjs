@@ -101,25 +101,25 @@ validateDiscoveryResult({
   providerId: "claude",
   status: "detected",
   confidence: "confirmed",
-  evidence: [{ kind: "executable", value: "claude", resolvedPath: "/usr/local/bin/claude" }],
+  evidence: [{ kind: "executable", value: "claude", resolvedPath: "/usr/local/bin/claude", source: "cli", version: "1.0" }],
   warnings: [],
 });
 assertThrows(
-  () => validateDiscoveryResult({ providerId: "claude", status: "installed", confidence: "confirmed", evidence: [] }),
+  () => validateDiscoveryResult({ providerId: "claude", status: "installed", confidence: "confirmed", evidence: [], warnings: [] }),
   "status must be one of",
   "discovery result with bad status",
 );
 
 validateHarnessState({
-  schemaVersion: 1,
+  schemaVersion: 2,
   lastDiscoveredAt: new Date().toISOString(),
   providers: {
-    claude: { enabled: true, selectionSource: "discovery", confidence: "confirmed", evidence: [] },
-    codex: { enabled: true, selectionSource: "user", confidence: "probable", evidence: [] },
+    claude: { enabled: true, selectionSource: "discovery", confidence: "confirmed", evidence: [], warnings: [] },
+    codex: { enabled: true, selectionSource: "user", confidence: "probable", evidence: [], warnings: [] },
   },
 });
 assertThrows(
-  () => validateHarnessState({ schemaVersion: 1, lastDiscoveredAt: "not-a-date", providers: {} }),
+  () => validateHarnessState({ schemaVersion: 2, lastDiscoveredAt: "not-a-date", providers: {} }),
   "lastDiscoveredAt must be an ISO 8601 timestamp",
   "harness state with bad timestamp",
 );

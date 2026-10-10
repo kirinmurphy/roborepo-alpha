@@ -170,7 +170,7 @@ function testCollidingPrefix(tarballName) {
 // rendered from the provider registry rather than from Claude/Codex assumptions.
 //
 // `harness detected` is the surface asserted for presentation. It emits one tab-separated row per
-// known provider (id, home, present, display name, root config path) straight from live filesystem
+// known provider (id, home, present, display name, root config path, confidence) straight from live filesystem
 // discovery, and it is the row source the shell install/uninstall/repair/doctor scripts consume —
 // so a regression here is a regression in every one of those. There is no `roborepo list` command;
 // `harness list` and `harness detected` are the real ones.
@@ -199,7 +199,10 @@ function testHarnessCountMatrix(tarballName) {
       row="$(roborepo harness detected | awk -F'\\t' -v id=${exe} '$1 == id')"
       [ -n "$row" ] || { echo "FAIL: harness detected omitted ${exe} entirely" >&2; exit 1; }
       got="$(printf '%s' "$row" | cut -f3)"
-      [ "$got" = "${present}" ] || { echo "FAIL: ${exe} present=$got, expected ${present}" >&2; exit 1; }`;
+      [ "$got" = "${present}" ] || { echo "FAIL: ${exe} present=$got, expected ${present}" >&2; exit 1; }
+      confidence="$(printf '%s' "$row" | cut -f6)"
+      expected_confidence="${present === "1" ? "confirmed" : "probable"}"
+      [ "$confidence" = "$expected_confidence" ] || { echo "FAIL: ${exe} confidence=$confidence, expected $expected_confidence" >&2; exit 1; }`;
     }).join("\n");
 
     // Stage N is the anti-hardcoding check: every registered provider must appear, including the

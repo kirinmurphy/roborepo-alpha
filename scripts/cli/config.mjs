@@ -130,6 +130,17 @@ export function configSnapshotMachineHarnesses() {
     .filter(Boolean);
 }
 
+export function configSnapshotHarnessGuidance() {
+  return discoverHarnessProviders(listHarnessProviders())
+    .filter((result) => result.status !== "detected" && (result.confidence === "probable" || result.warnings.length > 0))
+    .map((result) => ({
+      id: result.providerId,
+      displayName: getHarnessProvider(result.providerId).manifest.displayName,
+      confidence: result.confidence,
+      warnings: result.warnings,
+    }));
+}
+
 export function readConfigSnapshot() {
   const allPackages = loadPackageCatalog({ includeUnavailable: true });
   const availablePackages = allPackages.filter((pkg) => isPackageAvailable(pkg));
@@ -213,6 +224,7 @@ export function readConfigSnapshot() {
     // machine actually has. Primary user-facing presentation must use the latter.
     harnesses: configSnapshotHarnesses(),
     machineHarnesses: configSnapshotMachineHarnesses(),
+    machineHarnessGuidance: configSnapshotHarnessGuidance(),
     packages,
     bundles,
     tools,

@@ -5,6 +5,8 @@
     "package-default-enabled-check.mjs",
     "initialization-lifecycle-check.mjs",
     "harness-cohort-presentation-check.mjs",
+    "harness-desktop-runtime-check.mjs",
+    "harness-install-desktop-check.mjs",
     "managed-uninstall-check.mjs",
     "plan-promote-plan-start-check.mjs",
     "core-hook-wiring-check.mjs",

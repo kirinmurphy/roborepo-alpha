@@ -13,6 +13,8 @@ const SELECTION_SOURCES = new Set(["discovery", "user", "migration"]);
  * @property {"executable"|"home"|"config"} kind
  * @property {string} value
  * @property {string} [resolvedPath]
+ * @property {"cli"|"desktop"} [source] Required for executable evidence.
+ * @property {string} [version] Required for executable evidence.
  */
 
 /**
@@ -46,6 +48,8 @@ export function validateDiscoveryResult(result) {
     for (const [index, item] of result.evidence.entries()) {
       if (typeof item !== "object" || item === null || !EVIDENCE_KINDS.has(item.kind) || typeof item.value !== "string") {
         errors.push(`${label} evidence[${index}] must have a known kind and a string value`);
+      } else if (item.kind === "executable" && (typeof item.resolvedPath !== "string" || !["cli", "desktop"].includes(item.source) || typeof item.version !== "string")) {
+        errors.push(`${label} evidence[${index}] executable must have a path, source, and version`);
       }
     }
   }
@@ -62,11 +66,12 @@ export function validateDiscoveryResult(result) {
  * @property {"discovery"|"user"|"migration"} selectionSource
  * @property {"confirmed"|"probable"|"possible"|"absent"} confidence
  * @property {DiscoveryEvidence[]} evidence
+ * @property {string[]} warnings
  */
 
 /**
  * @typedef {object} HarnessState
- * @property {1} schemaVersion
+ * @property {2} schemaVersion
  * @property {string} lastDiscoveredAt ISO 8601 timestamp
  * @property {Record<string, PersistedProviderState>} providers
  */
@@ -77,7 +82,7 @@ export function validateHarnessState(state) {
   if (typeof state !== "object" || state === null) {
     throw new Error("harness state must be an object");
   }
-  if (state.schemaVersion !== 1) errors.push("harness state schemaVersion must be 1");
+  if (state.schemaVersion !== 2) errors.push("harness state schemaVersion must be 2");
   if (typeof state.lastDiscoveredAt !== "string" || Number.isNaN(Date.parse(state.lastDiscoveredAt))) {
     errors.push("harness state lastDiscoveredAt must be an ISO 8601 timestamp string");
   }
@@ -98,6 +103,9 @@ export function validateHarnessState(state) {
         errors.push(`${label}.confidence must be one of ${[...DISCOVERY_CONFIDENCES].join(", ")}`);
       }
       if (!Array.isArray(entry.evidence)) errors.push(`${label}.evidence must be an array`);
+      if (!Array.isArray(entry.warnings) || entry.warnings.some((warning) => typeof warning !== "string")) {
+        errors.push(`${label}.warnings must be an array of strings`);
+      }
     }
   }
 

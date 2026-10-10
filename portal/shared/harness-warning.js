@@ -16,10 +16,12 @@ const CHECK_LABEL = "Check for harnesses";
 export function harnessWarningSpec(snap) {
   const normalized = normalizeSetupSnapshot(snap);
   if (activePresentedHarnesses(normalized).length > 0) return null;
+  const guidance = snap?.harnesses?.guidance ?? snap?.machineHarnessGuidance ?? [];
+  const nextStep = guidance.find((entry) => entry.warnings?.length)?.warnings[0];
   return {
     variant: "warning",
     title: "",
-    body: "Install a supported harness to add agent tools and enable token tracking.",
+    body: nextStep || "Install a supported harness to add agent tools and enable token tracking.",
   };
 }
 
