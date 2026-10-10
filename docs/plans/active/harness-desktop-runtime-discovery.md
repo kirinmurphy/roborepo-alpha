@@ -10,7 +10,7 @@ related:
   - windows-provider-path-schema
   - 7k3m9qd
 reviewed_commit: f877579b0281a22780313aa056b53bd70833b7e1
-worktree:
+worktree: harness-desktop-runtime-discovery
 ---
 
 # Recognize desktop coding runtimes as existing harnesses
