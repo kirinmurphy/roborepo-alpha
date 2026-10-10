@@ -89,6 +89,7 @@ async function init() {
   // panel hides when real data exists instead of persisting from the pre-load default.
   await applySetupState({ telemetryOn, activeHarnessCount: harnessCount, snap: setup });
   if (setupReady) {
+    clearInterval(pollTimer);
     pollTimer = setInterval(() => load(), TOKENS_POLL_MS);
   }
 }

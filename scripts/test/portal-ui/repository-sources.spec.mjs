@@ -152,7 +152,7 @@ test.describe("Manage repositories dialog", () => {
     await expect(folder).toContainText("Healthy");
     await expect(folder).toContainText("1 repo");
     const row = dialog.locator("[data-slot=repositories] li", { hasText: "dialog-fixture" });
-    await expect(row).toContainText(`in ${path.basename(projects)}`);
+    await expect(row).toContainText(`in /${path.basename(projects)}`);
 
     await row.getByRole("button", { name: "Ignore Repo" }).click();
     await expect(dialog.locator("[data-slot=repositories] li", { hasText: "dialog-fixture" })).toHaveCount(0);
@@ -166,7 +166,7 @@ test.describe("Manage repositories dialog", () => {
 
   });
 
-  test("an unreadable path asks what it is before it is added", async ({ page }) => {
+  test("an unreadable path shows an inline error and is not added", async ({ page }) => {
     const missing = path.join(projects, "not-there-yet");
     await page.goto("/");
     await page.getByRole("link", { name: "Manage Repos" }).click();
@@ -174,20 +174,9 @@ test.describe("Manage repositories dialog", () => {
     await dialog.getByRole("button", { name: "Find more repos" }).click();
     await dialog.getByLabel("Find more repos in").fill(missing);
     await dialog.getByRole("button", { name: "Add folder" }).click();
-    await expect(dialog.getByRole("group", { name: /can't read this path/ })).toBeVisible();
-    const directoryIntent = dialog.getByLabel("A folder of repositories");
-    await directoryIntent.check();
-    await dialog.getByLabel("Find more repos in").fill(`${missing}-changed`);
-    await expect(directoryIntent).not.toBeChecked();
-    await dialog.getByLabel("Find more repos in").fill(missing);
-    await dialog.getByRole("button", { name: "Add folder" }).click();
-    await expect(dialog.getByRole("group", { name: /can't read this path/ })).toBeVisible();
-    await directoryIntent.check();
-    await dialog.getByRole("button", { name: "Add folder" }).click();
-    const folder = dialog.locator("[data-slot=folders] li", { hasText: missing });
-    await expect(folder).toContainText("Unavailable");
-    await folder.getByRole("button", { name: "Remove" }).click();
-    await expect(folder).toHaveCount(0);
+    await expect(dialog.locator("[data-slot=path-error]")).toHaveText("Folder not found. Check the path and try again.");
+    await expect(dialog.getByRole("group", { name: /can't read this path/ })).toHaveCount(0);
+    await expect(dialog.locator("[data-slot=folders] li", { hasText: missing })).toHaveCount(0);
   });
 
   test("keeps the title fixed while a tall dialog body scrolls and shows full paths on hover", async ({ page }) => {
@@ -233,18 +222,18 @@ test.describe("Manage repositories dialog", () => {
     await page.getByRole("link", { name: "Manage Repos" }).click();
     const dialog = page.getByRole("dialog", { name: "Manage Repos" });
     await expect(dialog.locator("[data-slot=repositories] li")).not.toHaveCount(0);
-    await expect(dialog.locator(".sources-auto-actions").getByRole("button", { name: "Wipe clean" })).toBeVisible();
+    await expect(dialog.locator(".sources-auto-actions").getByRole("button", { name: "Clear All Repos" })).toBeVisible();
 
     let confirmationMessage;
     page.once("dialog", (browserDialog) => {
       confirmationMessage = browserDialog.message();
       browserDialog.accept();
     });
-    await dialog.getByRole("button", { name: "Wipe clean" }).click();
-    expect(confirmationMessage).toContain("Wipe the entire repository list");
+    await dialog.getByRole("button", { name: "Clear All Repos" }).click();
+    expect(confirmationMessage).toContain("Clear all repos?");
     await expect(dialog.locator("[data-slot=repositories] li")).toHaveCount(0);
     await expect(dialog.locator("[data-slot=repositories-empty]")).toBeVisible();
-    await expect(dialog.getByRole("button", { name: "Wipe clean" })).toBeHidden();
+    await expect(dialog.getByRole("button", { name: "Clear All Repos" })).toBeHidden();
   });
 });
 

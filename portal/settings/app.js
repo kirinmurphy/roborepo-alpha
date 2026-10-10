@@ -15,6 +15,7 @@ const repoSyncStatus = document.getElementById("settings-repo-sync-status");
 const repoSyncStatusText = repoSyncStatus.querySelector("[data-slot=text]");
 let setup = null;
 let pending = false;
+let refreshQueued = false;
 let syncPollTimer = null;
 let repositorySyncPending = false;
 
@@ -28,7 +29,10 @@ checkHarnesses.addEventListener("click", refreshHarnesses);
 telemetryToggle.addEventListener("click", toggleTelemetry);
 
 async function refresh() {
-  if (pending) return;
+  if (pending) {
+    refreshQueued = true;
+    return;
+  }
   pending = true;
   showError(null);
   try {
@@ -42,6 +46,10 @@ async function refresh() {
     main.setAttribute("aria-busy", "false");
     portalHideLoading();
     void refreshRepositorySyncStatus();
+  }
+  if (refreshQueued) {
+    refreshQueued = false;
+    await refresh();
   }
 }
 

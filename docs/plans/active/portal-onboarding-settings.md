@@ -1,13 +1,14 @@
 ---
 id: nkhk6bb
 priority: high
-next_action: Resolve stale generated Plan commands, the skill-audit output, and the Plan Write reference mismatch; rerun `npm run check`, then continue browser and manual onboarding verification
+next_action: Run focused portal checks for the final onboarding fixes, then reconcile the remaining full-gate blockers and browser verification
 blocked_by: []
 depends_on: []
 related:
   - pljvmyh
   - v6lvuu2
-reviewed_commit: 46a93de
+  - u8211thb
+reviewed_commit: 473fdbe
 worktree: portal-onboarding-settings
 ---
 
@@ -568,11 +569,12 @@ Reuse `repository-sources-partial.html` instead of duplicating repository-source
 - `npm run check` stopped in `doctor` after 101 passing checks because six generated Plan command files and `docs/internal/skill-invocation-audit.md` are stale.
 - An elevated `npm run --silent test:unit` completed with 123/126 suites passing. The remaining failures were `clean-machine-container-check.mjs` and `publish-npm-check.mjs` (both blocked by the same stale doctor outputs), plus `skill-reference-matrix-characterization-check.mjs` (its Plan Write wording expectation does not match the current reference).
 - Manual regression on 2026-10-08 confirmed the empty states, banner presentation, Settings surface, Clear All Repos behavior, harness banners, and Tokens banners. On 2026-10-09 the user also confirmed the empty folder section behavior.
+- On 2026-10-09 the user confirmed the full Tokens UI transition as complete. Real harness detection/enablement and token capture after an agent session are tracked separately in [[u8211thb]].
 
 ## Not tested
 
 - [ ] `npm run test:portal-ui` — blocked before test collection because the worktree does not have the `@playwright/test` package installed.
-- [ ] Browser verification that the **Check for harnesses** banner button invokes the refresh flow, and manual verification of the full Tokens state transition. The refresh and persistence behavior are covered by `scripts/test/harness-refresh-simulation-check.mjs`; the in-app browser could not access the loopback smoke server due to an admin browser policy.
+- [ ] Browser verification that the **Check for harnesses** banner button invokes the refresh flow. The refresh and persistence behavior are covered by `scripts/test/harness-refresh-simulation-check.mjs`; the in-app browser could not access the loopback smoke server due to an admin browser policy.
 - [ ] Browser verification of Settings auto-discovery refresh after wipe, repository labels/action placement, shared harness-check loading, and the Token Activity CTA/copy/active row.
 - [ ] Browser verification of repository action placement, scan timing/status after a wipe, identical linked harness prompt content across Home/Agents/Tokens, and the active token-tracking row.
 - [ ] Rerun `npm run check` after the stale generated Plan command outputs and skill invocation audit are reconciled; the latest run stopped during `doctor` before the full gate could continue.
@@ -593,10 +595,8 @@ Manual browser verification should cover:
 - Runtime observation paused while repository auto-discovery is off;
 - adding an explicit repository/folder source while auto-discovery remains off;
 - enabling auto-discovery with an already-running dev server;
-- external harness installation followed by **Check for harnesses**;
 - harness disable/re-enable;
 - telemetry disable/enable;
-- Tokens transitioning through harness → telemetry → no-data → report states.
 
 ## Risks
 
@@ -630,6 +630,7 @@ Manual browser verification should cover:
 - `[[v6lvuu2]]` continues to own staged first-run `/setup`; this plan owns normal post-init Settings and shared setup state.
 - Harness refresh is an internal portal action backed by `refreshHarnessState()`, never a spawned CLI command.
 - Harness discovery uses an explicit **Check for harnesses** action. Read-only polling alone cannot discover a new external install because persisted harness state does not change until discovery runs.
+- Real harness detection/enablement and token capture after an agent session are deferred to [[u8211thb]]; the current Tokens UI transition is complete.
 - Telemetry remains implemented by the existing `telemetry` package; Settings adds a product-level control over that same state.
 - The shared setup snapshot reports known repositories separately from visible repositories, excludes fixture repositories, and reports explicit source configuration without returning source paths.
 - The active harness cohort continues to require the existing confirmed-detection rule; registered providers are not presented as installed merely because they are known.

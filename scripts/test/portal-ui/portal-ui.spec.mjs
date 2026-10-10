@@ -290,6 +290,42 @@ test.describe("repository-first portal Home", () => {
     await expect(page.getByRole("button", { name: "Enable token tracking" })).toHaveText("Enable");
   });
 
+  test("Settings queues one refresh when another mutation completes during a fetch", async ({ page }) => {
+    let settingsRequests = 0;
+    let releasePendingSettings;
+    const settings = {
+      repositories: { knownCount: 0, visibleCount: 0, autoDiscoveryEnabled: false, hasConfiguredSources: false },
+      harnesses: {
+        supported: [{ id: "codex", displayName: "Codex" }],
+        detected: [{ id: "codex", displayName: "Codex", confidence: "confirmed", enabled: true }],
+        active: [{ id: "codex", displayName: "Codex", confidence: "confirmed", enabled: true }],
+      },
+      telemetry: { enabled: false, captureAvailable: false },
+    };
+    await page.route("**/api/repositories/sources", (route) => route.fulfill({ json: {
+      revision: 1,
+      loadError: null,
+      autoDiscovery: { id: "auto-discovery", enabled: false, repositoryCount: 0 },
+      repositories: [],
+      sources: [],
+    } }));
+    await page.route("**/api/settings", async (route) => {
+      settingsRequests += 1;
+      if (settingsRequests === 2) await new Promise((resolve) => { releasePendingSettings = resolve; });
+      await route.fulfill({ json: settings });
+    });
+    await page.route("**/api/config/harnesses/codex/enabled", (route) => route.fulfill({ json: { enabled: false } }));
+    await page.route("**/api/config/packages", (route) => route.fulfill({ json: { enabled: true } }));
+
+    await page.goto("/settings");
+    await page.getByRole("button", { name: "Disable Codex" }).click();
+    await expect.poll(() => settingsRequests).toBe(2);
+    await page.getByRole("button", { name: "Enable token tracking" }).click();
+    await expect.poll(() => releasePendingSettings).toBeTruthy();
+    releasePendingSettings();
+    await expect.poll(() => settingsRequests).toBe(3);
+  });
+
   test("Settings explains an empty harness catalog and responds to a setup-state error", async ({ page }) => {
     await page.route("**/api/settings", (route) => route.fulfill({ json: {
       repositories: { knownCount: 0, visibleCount: 0, autoDiscoveryEnabled: false, hasConfiguredSources: false },
