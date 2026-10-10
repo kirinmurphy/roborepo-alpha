@@ -51,7 +51,10 @@ function createHarnessNotice(snap, variant) {
   if (!spec) return null;
   const panel = tpl("tpl-harness-notice");
   panel.setAttribute("variant", variant);
-  if (variant === "info") panel.setAttribute("icon", "info");
+  if (variant === "info") {
+    panel.setAttribute("icon", "info");
+    panel.querySelector("[data-slot=check]").setAttribute("data-btn", "secondary");
+  }
   setLinkedHarnessCopy(panel, spec.body);
   setSupportedHarnesses(panel, snap);
   wireCheck(panel.querySelector("[data-slot=check]"));
@@ -124,6 +127,6 @@ function normalizeSetupSnapshot(snap) {
   if (!Array.isArray(snap?.harnesses?.active)) return snap;
   return {
     harnesses: snap.harnesses.supported || [],
-    machineHarnesses: snap.harnesses.detected || [],
+    machineHarnesses: snap.harnesses.active,
   };
 }

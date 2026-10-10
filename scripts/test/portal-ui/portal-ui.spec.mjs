@@ -29,12 +29,6 @@ test.describe("Agents page", () => {
       expect(activeItem, "fixture needs an active Agents item").toBeTruthy();
       activeItem.contextCost = { onDemandTokens: 30000, onDemandLevel: "high" };
       snapshot.contextCost = { ...snapshot.contextCost, onDemandThresholds: { mediumAt: 1000, highAbove: 10000 } };
-      snapshot.harnesses = {
-        ...snapshot.harnesses,
-        supported: [{ id: "claude", displayName: "Claude Code" }, { id: "codex", displayName: "Codex" }],
-        active: [],
-        detected: [],
-      };
       await route.fulfill({ response, json: snapshot });
     });
 
@@ -47,7 +41,7 @@ test.describe("Agents page", () => {
       row: getComputedStyle(button.parentElement).gridRow,
     }));
     expect(warningButtonGrid.column).toBe("2");
-    expect(warningButtonGrid.row).toContain("span 2");
+    expect(warningButtonGrid.row).toBe("1");
   });
 });
 
@@ -252,7 +246,7 @@ test.describe("repository-first portal Home", () => {
       row: getComputedStyle(button.parentElement).gridRow,
     }));
     expect(infoButtonGrid.column).toBe("2");
-    expect(infoButtonGrid.row).toContain("span 2");
+    expect(infoButtonGrid.row).toBe("1");
   });
 
   test("Settings renders shared setup controls and can check for harness installs", async ({ page }) => {
@@ -333,7 +327,7 @@ test.describe("repository-first portal Home", () => {
       telemetry: { enabled: false, captureAvailable: false },
     } }));
     await page.goto("/settings");
-    await expect(page.getByRole("status", { name: "No supported harnesses are registered." })).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: "No supported harnesses are registered." })).toBeVisible();
 
     await page.unrouteAll({ behavior: "ignoreErrors" });
     await page.route("**/api/settings", (route) => route.fulfill({
@@ -427,6 +421,11 @@ test.describe("repository-first portal Home", () => {
     const config = await (await request.get("/api/config")).json();
     config.machineHarnesses = [{ id: "claude", enabled: true, confidence: "confirmed" }];
     await page.route("**/api/config", (route) => route.fulfill({ json: config }));
+    await page.route("**/api/settings", async (route) => {
+      const setup = await (await route.fetch()).json();
+      setup.harnesses.active = [{ id: "claude", displayName: "Claude Code", enabled: true, confidence: "confirmed" }];
+      await route.fulfill({ json: setup });
+    });
     await page.goto("/");
     await expect(roboRepoCard(page)).toBeVisible();
     await page.keyboard.press("Tab");

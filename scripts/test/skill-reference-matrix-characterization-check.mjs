@@ -213,7 +213,8 @@ function testPlanWriteCreateRunsBothValidationLayers() {
   assert.match(validate, /plans-config\.json/, "naming validation reads declared namespaces from the config");
   assert.match(validate, /backlog. and .active/,
     "the validate workflow must state that naming findings are scoped to non-terminal lifecycles");
-  assert.match(validate, /roborepo plans validate/, "deterministic findings come from the CLI, not prose the skill re-derives");
+  assert.match(validate, /canonical plan validator/, "deterministic findings are delegated to the repository's validator, not prose the skill re-derives");
+  assert.match(validate, /machine-readable output mode/, "the validator runs with structured output for deterministic findings");
   assert.match(validate, /Repository consistency/, "the judgment half the CLI cannot make stays in the workflow");
 }
 

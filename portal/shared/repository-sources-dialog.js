@@ -235,8 +235,8 @@ function createRepositorySourcesSurface({ host, info, onChange, onPending, onAut
   function updateAddToggleVisibility() {
     const emptyToggle = slot("add-toggle-empty");
     const listToggle = slot("add-toggle-list");
-    emptyToggle.hidden = form.hidden === false || visibleRepositoryCount > 0;
-    listToggle.hidden = form.hidden === false || visibleRepositoryCount === 0;
+    emptyToggle.hidden = !payload || form.hidden === false || visibleRepositoryCount > 0;
+    listToggle.hidden = !payload || form.hidden === false || visibleRepositoryCount === 0;
     emptyToggle.setAttribute("aria-expanded", String(!form.hidden));
     listToggle.setAttribute("aria-expanded", String(!form.hidden));
   }

@@ -50,7 +50,7 @@ test.describe("first-run repository states", () => {
     });
     await page.goto("/");
 
-    await expect(page.locator(".auto-discovery-prompt")).toContainText("RoboRepo can automatically discover your developer activity on this machine across active Git repositories, HTTP activity, and Docker containers.");
+    await expect(page.locator(".auto-discovery-prompt")).toContainText("RoboRepo can observe active apps and remember the repositories they use across HTTP activity and Docker containers.");
     await expect(page.locator(".auto-discovery-prompt [data-notice-icon] portal-icon")).toHaveAttribute("name", "info");
     await expect(page.locator(".home-mock-disclaimer")).toContainText("These are mocked versions of what you will see");
     await expect(page.locator("#home-sync-status")).toHaveText("Synced");
@@ -94,7 +94,7 @@ test.describe("first-run repository states", () => {
   });
 
   for (const [step, scans, plans, title] of [
-    ["no repositories", [], [], "No repositories yet"],
+    ["no repositories", [], [], "Add a repo"],
     ["repositories not scanned", [{ repositoryId: "local:aaaaaaaaaaaaaaaa", state: "unavailable", planCount: 0, checkoutCount: 0 }], [], "Not scanned yet: 1 repository"],
     ["no plans found", [{ repositoryId: "local:aaaaaaaaaaaaaaaa", state: "scanned", planCount: 0, checkoutCount: 1 }], [], "No plans found in 1 repository"],
   ]) {
@@ -105,13 +105,14 @@ test.describe("first-run repository states", () => {
       });
       await page.goto("/plans");
       const onboarding = page.locator("#plans-onboarding");
-      await expect(onboarding.getByRole("heading", { name: title })).toBeVisible();
+      if (step === "no repositories") await expect(onboarding.getByText(title, { exact: true })).toBeVisible();
+      else await expect(onboarding.getByRole("heading", { name: title })).toBeVisible();
       await expect(page.locator("#package-banner")).toBeHidden();
       await expect(page.locator("#groups")).toBeEmpty();
       if (step === "no repositories") {
         await expect(page.locator("#plans-header")).toBeHidden();
-        await expect(onboarding.getByRole("button", { name: ENABLE })).toBeVisible();
-        await expect(onboarding.getByRole("button", { name: "Add a folder" })).toBeVisible();
+        await expect(onboarding.getByRole("button", { name: "Manage Repos" })).toBeVisible();
+        await expect(onboarding.getByRole("button")).toHaveCount(1);
       } else {
         await expect(page.locator("#repos-count-text")).toContainText("1 Repo");
         await expect(onboarding.getByRole("button", { name: ENABLE })).toHaveCount(0);
@@ -162,7 +163,7 @@ test.describe("Manage repositories dialog", () => {
 
     await folder.getByRole("button", { name: "Remove" }).click();
     await expect(dialog.locator("[data-slot=folders] li")).toHaveCount(0);
-    await expect(dialog.locator("[data-slot=repositories] li", { hasText: "dialog-fixture" })).toContainText("No current source", { timeout: 5000 });
+    await expect(dialog.locator("[data-slot=repositories] li", { hasText: "dialog-fixture" })).toContainText("no current source", { timeout: 5000 });
 
   });
 

@@ -55,7 +55,7 @@
         "close this plan now that it has merged"
       ],
       "triggerPhrases": ["beginning implementation from an existing prepared repository plan", "create or safely reuse an isolated worktree"],
-      "skipPhrases": ["initial plan preparation", "lifecycle orchestration", "portal actions", "integration-branch closeout"]
+      "skipPhrases": ["initial plan preparation", "lifecycle orchestration", "application UI actions", "integration-branch closeout"]
     },
     {
       "skill": "plan-close",
