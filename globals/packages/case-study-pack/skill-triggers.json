@@ -1,0 +1,23 @@
+{
+  "tests": [
+    {
+      "skill": "case-study",
+      "match": [
+        "write a case study about the root config drift decision",
+        "/case-study root config architecture"
+      ],
+      "nearMiss": [
+        "write a PR description for the root config change",
+        "summarize this implementation note"
+      ],
+      "triggerPhrases": [
+        "case study",
+        "/case-study"
+      ],
+      "skipPhrases": [
+        "PR descriptions",
+        "implementation notes"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "tests": [
+    {
+      "skill": "plan-start",
+      "match": [
+        "help me with beginning implementation from an existing prepared repository plan, docs/plans/active/example.md",
+        "please create or safely reuse an isolated worktree and implement this plan"
+      ],
+      "nearMiss": [
+        "prepare this plan before we start building",
+        "sync this plan with what we just changed",
+        "close this plan now that it has merged"
+      ],
+      "triggerPhrases": [
+        "beginning implementation from an existing prepared repository plan",
+        "create or safely reuse an isolated worktree"
+      ],
+      "skipPhrases": [
+        "initial plan preparation",
+        "lifecycle orchestration",
+        "application UI actions",
+        "integration-branch closeout"
+      ]
+    }
+  ]
+}

@@ -1,14 +1,14 @@
 ---
 id: e6f1pknt
 priority: high
-next_action: Extract a catalog-driven fixture loader into scripts/cli/skill-trigger-fixtures.mjs that reads each package's optional skill-triggers.json, and cover it with a synthetic-package check before migrating the six existing entries
+next_action: Review and merge claude/package-owned-trigger-fixtures, then run /plan-close
 blocked_by: []
 depends_on: []
 related:
   - 0jped168
   - age4cm7r
   - skills-vs-commands-invocation-policy
-reviewed_commit: 731937640d7483d945ee1e21466533574d686fbf
+reviewed_commit: 5a5fd5d49cd1c67e5ac0213f827ba8c5bafaa9f1
 worktree: package-owned-trigger-fixtures
 ---
 
@@ -153,8 +153,8 @@ no extra wiring.
 
 ## Implementation plan
 
-- [ ] Add `scripts/cli/skill-trigger-fixtures.mjs` with the loader described above.
-- [ ] Add `scripts/test/skill-trigger-fixtures-check.mjs` and register it in the `ci` group of
+- [x] Add `scripts/cli/skill-trigger-fixtures.mjs` with the loader described above.
+- [x] Add `scripts/test/skill-trigger-fixtures-check.mjs` and register it in the `ci` group of
       `scripts/test/check-groups.json`. Build synthetic packages in a temp directory and point
       `ROBOREPO_APP_ROOT` at it, as the manual-only package assertion in `scripts/test/test-cli.sh`
       does. Assert observable CLI results:
@@ -164,17 +164,17 @@ no extra wiring.
       - an entry naming a skill its package does not declare exits 1;
       - malformed JSON exits 1 with a message naming the file;
       - an entry carrying an unknown key such as `liveMatch` still passes.
-- [ ] Switch `scripts/cli/skill-trigger-check.mjs` to the loader and remove `TRIGGER_TESTS_REL`
+- [x] Switch `scripts/cli/skill-trigger-check.mjs` to the loader and remove `TRIGGER_TESTS_REL`
       and `readJson`.
-- [ ] Move each of the six entries into its package's `skill-triggers.json`, using the mapping in
+- [x] Move each of the six entries into its package's `skill-triggers.json`, using the mapping in
       Current state. Before deleting the central file, confirm the loader returns the central
       file's six entries with identical field values.
-- [ ] Delete `manifests/inventory/skill-trigger-tests.json` and its row in
+- [x] Delete `manifests/inventory/skill-trigger-tests.json` and its row in
       `manifests/platform/source-files.tsv`.
-- [ ] Point the four documentation files listed under Current state (`manifests/inventory/README.md`,
+- [x] Point the four documentation files listed under Current state (`manifests/inventory/README.md`,
       both `docs/user/reference/` files, and `builtin-support/SKILL.md`) at
       `globals/packages/<package-id>/skill-triggers.json`.
-- [ ] In `scripts/cli/skill-new.mjs`, when the new skill's risk is `medium` or `high`, add a line to
+- [x] In `scripts/cli/skill-new.mjs`, when the new skill's risk is `medium` or `high`, add a line to
       the printed next steps naming the package's `skill-triggers.json` path and
       `roborepo skill triggers --check`. Do not write a stub file.
 
@@ -226,3 +226,44 @@ Acceptance:
   fixtures for another.
 - `roborepo skill new` prints a next step instead of writing a stub. An empty stub has no phrases,
   passes the check trivially, and would read as coverage that does not exist.
+- The loader check calls `skillTriggerCheck` in a child process instead of running `main.mjs`. The
+  CLI command catalog also resolves from `ROBOREPO_APP_ROOT`, so a real `main.mjs` run would need
+  the whole app root copied in. The child process still produces real exit codes and output. It also
+  isolates the app, state, and workspace roots, so the user's own workspace packages cannot leak
+  in. Rejected alternative: `makeAppRoot()` from `app-root-fixture.mjs`, which copies `globals/` and
+  would bring every real package's fixtures along with the synthetic ones.
+- Loader errors (malformed JSON, a fixture naming another package's skill) print as one `fail:`
+  line and exit 1. That matches the checker's existing failure format; the alternative was an
+  uncaught stack trace.
+- The loader check also covers a workspace package and a package that declares two skills. The
+  docs claim both, and each case is a few lines.
+- `roborepo skill new` coverage went into the existing scaffold block of `test-cli.sh`, near line
+  440. A medium-risk skill names its `skill-triggers.json` and writes no stub; a low-risk skill
+  prints no fixture step. The [[3jp3yhtq]] branch edits `test-cli.sh` only near line 1576, so the
+  two branches do not conflict.
+- Outside this plan's scope, but needed for the completion gate: on `main`,
+  `plan-citation-comments-check.mjs` flagged its own header comment ("a plan decision"), so the
+  `ci` group failed before this work started. The header now says "a decision recorded in a plan".
+  What the check enforces is unchanged.
+
+## Verification
+
+| Check | Result |
+| --- | --- |
+| `roborepo skill triggers --check` | `ok: 6 skill trigger fixture(s)` |
+| Loader output vs. central file, before deletion | All six entries identical field-for-field, each loaded from its own package |
+| `node scripts/test/skill-trigger-fixtures-check.mjs` | Passes; fails as expected when the ownership guard is disabled |
+| `git grep -n skill-trigger-tests` | Matches only under `docs/plans/` |
+| `bash scripts/doctor.sh --quiet` | `doctor passed (100 checks)` |
+| `roborepo package validate` | `ok: 25 package(s) valid` |
+| `npm run check` | `CI checks passed` (test-cli: 430 passed, 0 failed) |
+
+## Open Questions
+
+None.
+
+## Not tested
+
+None. Each acceptance criterion is covered by the loader check, the `test-cli.sh` assertions, or
+the live `roborepo skill triggers --check` run. The live run checks the disabled `case-study-pack`
+and `tighten` packages.
