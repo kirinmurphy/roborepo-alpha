@@ -12,19 +12,43 @@ export async function withCleanupLock(stateRoot, action, { fsApi = fs, repositor
   fsApi.mkdirSync(dir, { recursive: true });
   const repositoryKey = repositoryPath ? createHash("sha256").update(repositoryPath).digest("hex").slice(0, 16) : "global";
   const file = path.join(dir, `${repositoryKey}.lock`);
-  let handle;
-  try {
-    handle = fsApi.openSync(file, "wx");
-  } catch (err) {
-    if (err?.code === "EEXIST") return { locked: true, result: null };
-    throw err;
+  let handle = openLock(file, fsApi);
+  // A cleanup killed by a signal or a reboot never reaches `finally`, and its lock would otherwise
+  // block every later run. Take over only when the recorded process is gone.
+  if (handle == null && staleLock(file, fsApi)) {
+    fsApi.rmSync(file, { force: true });
+    handle = openLock(file, fsApi);
   }
+  if (handle == null) return { locked: true, result: null };
   try {
     fsApi.writeSync(handle, `${process.pid}\n`);
     return { locked: false, result: await action() };
   } finally {
     fsApi.closeSync(handle);
     fsApi.rmSync(file, { force: true });
+  }
+}
+
+function openLock(file, fsApi) {
+  try {
+    return fsApi.openSync(file, "wx");
+  } catch (err) {
+    if (err?.code === "EEXIST") return null;
+    throw err;
+  }
+}
+
+// An empty lock may belong to a run that has opened it but not yet written its pid, so only a
+// recorded pid with no live process counts as stale.
+function staleLock(file, fsApi) {
+  let pid;
+  try { pid = Number.parseInt(fsApi.readFileSync(file, "utf8"), 10); } catch { return false; }
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch (err) {
+    return err?.code === "ESRCH";
   }
 }
 

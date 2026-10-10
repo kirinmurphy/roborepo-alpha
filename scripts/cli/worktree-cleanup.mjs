@@ -10,6 +10,7 @@ import { removeLandedBranch, removeWorktree, withCleanupLock } from "../../modul
 import { runGitProcess } from "../../modules/repositories/git-exec.mjs";
 import { checkoutRootsFor, loadRegistry, updateRegistry, setWorktreeHidden } from "../../modules/repositories/registry.mjs";
 import { rootId } from "../../modules/repositories/identity.mjs";
+import { parseFrontmatter } from "../../modules/plan-suite/index.mjs";
 import { STATE_ROOT } from "./paths.mjs";
 
 export async function cleanupWorktrees({ cwd = process.cwd(), stateRoot = STATE_ROOT, apply = false, plan = null, hide = null, unhide = null, remove = null, confirm = false, currentPath = cwd, discover = discoverInstances } = {}) {
@@ -33,6 +34,7 @@ export async function cleanupWorktrees({ cwd = process.cwd(), stateRoot = STATE_
       if (scopedName && worktree.name !== scopedName) continue;
       if (selectedBranch && worktree.branch !== selectedBranch && worktree.name !== selectedBranch) continue;
       const kind = remove ? "confirmed" : "automatic";
+      const surveyTip = await worktreeTip(mainPath, worktree);
       const landing = worktree.branch ? await inspectBranchLanding(mainPath, worktree.branch) : { landed: false, reason: "detached" };
       const guard = await checkWorktreeRemoval({
         worktree, kind, landed: landing.landed, worktreeRoot, mainPath, currentPath,
@@ -42,7 +44,7 @@ export async function cleanupWorktrees({ cwd = process.cwd(), stateRoot = STATE_
       if (apply && guard.ok) {
         const fresh = linkedWorktrees(gitDir).find((item) => item.name === worktree.name);
         const freshTip = fresh ? await worktreeTip(mainPath, fresh) : null;
-        if (!fresh || fresh.path !== worktree.path || fresh.branch !== worktree.branch || freshTip !== landing.tip && worktree.branch) {
+        if (!fresh || fresh.path !== worktree.path || fresh.branch !== worktree.branch || !freshTip || freshTip !== surveyTip) {
           row.reason = "Git state changed after survey";
           row.eligible = false;
         } else {
@@ -95,10 +97,12 @@ function planFiles(mainPath, lifecycle) {
   catch { return []; }
 }
 
+// The Plans parser, so a quoted `worktree: "name"` still joins and keeps its worktree protected.
 function planFields(file) {
   try {
-    const header = fs.readFileSync(file, "utf8").split("---", 3)[1] || "";
-    return Object.fromEntries(header.split("\n").map((line) => line.match(/^(id|worktree):\s*(.*)$/)).filter(Boolean).map((match) => [match[1], match[2].trim()]));
+    const { frontmatter } = parseFrontmatter(fs.readFileSync(file, "utf8"));
+    const field = (key) => typeof frontmatter[key] === "string" ? frontmatter[key].trim() : "";
+    return { id: field("id"), worktree: field("worktree") };
   } catch { return {}; }
 }
 
@@ -174,7 +178,12 @@ export async function worktreeCleanupCommand(args) {
   }
   const rows = await cleanupWorktrees(options);
   if (options.json) console.log(JSON.stringify(rows, null, 2));
-  else for (const row of rows) console.log(`${row.branch || row.name || "worktree"}: ${row.action} (${row.state || "unknown"})${row.reason ? ` — ${row.reason}` : ""}`);
+  // A dry run keeps everything; name the rows `--apply` would remove so they read differently from
+  // rows a guard blocked.
+  else for (const row of rows) {
+    const action = row.action === "kept" && row.eligible ? "eligible" : row.action;
+    console.log(`${row.branch || row.name || "worktree"}: ${action} (${row.state || "unknown"})${row.reason ? ` — ${row.reason}` : ""}`);
+  }
   return rows;
 }
 

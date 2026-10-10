@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 import { inspectBranchLanding } from "../../modules/repositories/worktree-landed.mjs";
 import { linkedWorktrees } from "../../modules/repositories/worktree-inventory.mjs";
 import { deriveWorktreeState, resolveWorktreeStaleDays } from "../../modules/repositories/worktree-state.mjs";
-import { cleanupWorktrees } from "../cli/worktree-cleanup.mjs";
+import { activeWorktreeNames, cleanupWorktrees } from "../cli/worktree-cleanup.mjs";
 import { removalLogPath, withCleanupLock } from "../../modules/repositories/worktree-removal.mjs";
 import { checkWorktreeRemoval } from "../../modules/repositories/worktree-guards.mjs";
 import { manageWorktreeHook } from "../cli/worktree-hook.mjs";
@@ -329,6 +329,124 @@ try {
     assert.equal(fs.existsSync(feature), false);
     assert.equal(fs.readFileSync(removalLogPath(stateRoot), "utf8").trim().split("\n").length, 2);
     assert.equal(fs.existsSync(receiver), true, "the checkout that pulled survives");
+  }
+  {
+    // A relative core.hooksPath resolves inside whichever working tree runs the hook, so the hook
+    // installed for the main checkout fires for merges there and never for merges in a linked one.
+    const { main, worktree } = repository("relative-hooks");
+    fs.mkdirSync(path.join(main, "docs/plans"), { recursive: true });
+    fs.writeFileSync(path.join(main, "docs/plans/plans-config.json"), JSON.stringify({ worktreeRoot: root }));
+    const done = path.join(root, "relative-hooks-done");
+    git(main, "worktree", "add", "-q", "-b", "done", done);
+    commit(done, "done.txt", "done\n");
+    git(main, "merge", "--squash", "done");
+    git(main, "commit", "-qm", "squash done");
+    git(main, "config", "core.hooksPath", ".githooks");
+    const stateRoot = path.join(root, "relative-hooks-state");
+    const installed = await manageWorktreeHook({ cwd: worktree, stateRoot });
+    assert.equal(installed.action, "installed");
+    assert.equal(installed.scope, "checkout");
+    assert.equal(installed.checkout, fs.realpathSync(main));
+    assert.equal(installed.hook, path.join(fs.realpathSync(main), ".githooks", "post-merge"));
+    const log = path.join(stateRoot, "worktree-cleanup", "hook.log");
+    git(worktree, "merge", "-q", "--no-edit", "main");
+    assert.equal(fs.existsSync(log), false, "a merge in a linked worktree does not find the main checkout's relative hooks");
+    commit(worktree, "side.txt", "side\n");
+    git(main, "merge", "-q", "--no-edit", "feature");
+    await waitFor(() => fs.existsSync(log) && /done: (removed|kept|failed)/.test(fs.readFileSync(log, "utf8")));
+    assert.match(fs.readFileSync(log, "utf8"), /done: removed/);
+    assert.equal(fs.existsSync(done), false, "a merge in the main checkout runs cleanup");
+  }
+  {
+    // Git exports GIT_DIR to a hook running in a linked worktree; the cleanup it starts must still
+    // read each candidate worktree's own status.
+    const { main, worktree } = repository("linked-hook");
+    fs.mkdirSync(path.join(main, "docs/plans"), { recursive: true });
+    fs.writeFileSync(path.join(main, "docs/plans/plans-config.json"), JSON.stringify({ worktreeRoot: root }));
+    const done = path.join(root, "linked-hook-done");
+    git(main, "worktree", "add", "-q", "-b", "done", done);
+    commit(done, "done.txt", "done\n");
+    git(main, "merge", "--squash", "done");
+    git(main, "commit", "-qm", "squash done");
+    const stateRoot = path.join(root, "linked-hook-state");
+    const installed = await manageWorktreeHook({ cwd: main, stateRoot });
+    assert.equal(installed.scope, "repository");
+    // Its own commit gives the merging worktree an index that differs from every other checkout.
+    commit(worktree, "own.txt", "own\n");
+    git(worktree, "merge", "-q", "--no-edit", "main");
+    const log = path.join(stateRoot, "worktree-cleanup", "hook.log");
+    await waitFor(() => fs.existsSync(log) && /done: (removed|kept|failed)/.test(fs.readFileSync(log, "utf8")));
+    assert.match(fs.readFileSync(log, "utf8"), /done: removed/);
+    assert.equal(fs.existsSync(done), false);
+    assert.equal(fs.existsSync(worktree), true, "the worktree that merged survives");
+  }
+  {
+    const { main, worktree } = repository("hook-refusals");
+    const stateRoot = path.join(root, "hook-refusals-state");
+    const defaultHook = path.join(main, ".git/hooks/post-merge");
+    const globalConfig = path.join(root, "hook-refusals-gitconfig");
+    fs.writeFileSync(globalConfig, `[core]\n\thooksPath = ${path.join(root, "shared-hooks")}\n`);
+    const originalGlobal = process.env.GIT_CONFIG_GLOBAL;
+    let shared;
+    try {
+      process.env.GIT_CONFIG_GLOBAL = globalConfig;
+      shared = await manageWorktreeHook({ cwd: main, stateRoot });
+    } finally {
+      if (originalGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL;
+      else process.env.GIT_CONFIG_GLOBAL = originalGlobal;
+    }
+    assert.equal(shared.action, "refused");
+    assert.match(shared.reason, /global Git config/);
+    assert.equal(fs.existsSync(path.join(root, "shared-hooks", "post-merge")), false, "a global hooks directory is never written");
+    const cli = path.join(fs.realpathSync(worktree), "scripts/cli/main.mjs");
+    fs.mkdirSync(path.dirname(cli), { recursive: true });
+    fs.writeFileSync(cli, "");
+    const insideWorktree = await manageWorktreeHook({ cwd: main, stateRoot, cli });
+    assert.equal(insideWorktree.action, "refused");
+    assert.match(insideWorktree.reason, /inside linked worktree/);
+    assert.equal(fs.existsSync(defaultHook), false, "a hook that cleanup could orphan is not installed");
+    git(main, "config", "extensions.worktreeConfig", "true");
+    const worktreeHooks = path.join(root, "hook-refusals-worktree-hooks");
+    git(worktree, "config", "--worktree", "core.hooksPath", worktreeHooks);
+    const perWorktree = await manageWorktreeHook({ cwd: worktree, stateRoot });
+    assert.equal(perWorktree.action, "installed");
+    assert.equal(perWorktree.scope, "checkout", "worktree config scopes even an absolute hooks path to one checkout");
+    assert.equal(perWorktree.checkout, fs.realpathSync(worktree));
+    assert.equal(perWorktree.hook, path.join(worktreeHooks, "post-merge"));
+  }
+  {
+    const stateRoot = path.join(root, "stale-lock-state");
+    const repositoryPath = path.join(root, "stale-lock-repo");
+    const lockDir = path.join(stateRoot, "worktree-cleanup");
+    let file;
+    await withCleanupLock(stateRoot, async () => { file = path.join(lockDir, fs.readdirSync(lockDir).find((name) => name.endsWith(".lock"))); }, { repositoryPath });
+    const deadPid = spawnSync(process.execPath, ["-e", ""]).pid;
+    fs.writeFileSync(file, `${deadPid}\n`);
+    assert.equal((await withCleanupLock(stateRoot, async () => "ran", { repositoryPath })).result, "ran", "a lock left by a dead cleanup is taken over");
+    fs.writeFileSync(file, `${process.pid}\n`);
+    assert.equal((await withCleanupLock(stateRoot, async () => "ran", { repositoryPath })).locked, true, "a live holder keeps the lock");
+    fs.writeFileSync(file, "");
+    assert.equal((await withCleanupLock(stateRoot, async () => "ran", { repositoryPath })).locked, true, "a lock whose pid is not yet written is held");
+    fs.rmSync(file);
+  }
+  {
+    // A real dependency install lists far more than the Git output buffer holds file by file.
+    const { main, worktree } = repository("installed-deps");
+    commit(worktree, ".gitignore", "node_modules/\n");
+    for (let pkg = 0; pkg < 300; pkg++) {
+      const dir = path.join(worktree, "node_modules", `package-with-a-long-name-${pkg}`, "lib");
+      fs.mkdirSync(dir, { recursive: true });
+      for (let file = 0; file < 100; file++) fs.writeFileSync(path.join(dir, `module-${file}.js`), "");
+    }
+    const item = linkedWorktrees(path.join(main, ".git"))[0];
+    const result = await checkWorktreeRemoval({ worktree: item, kind: "automatic", landed: true, worktreeRoot: fs.realpathSync(root), mainPath: main, currentPath: main });
+    assert.equal(result.ok, true, result.reason);
+  }
+  {
+    const { main } = repository("quoted-plan");
+    fs.mkdirSync(path.join(main, "docs/plans/active"), { recursive: true });
+    fs.writeFileSync(path.join(main, "docs/plans/active/story.md"), "---\nid: quoted\nworktree: \"quoted-plan-work\"\n---\n");
+    assert.equal(activeWorktreeNames(main).has("quoted-plan-work"), true, "a quoted worktree field still protects its worktree");
   }
   console.log("worktree lifecycle: inventory and landing ok");
 } finally {

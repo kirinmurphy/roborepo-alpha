@@ -17,7 +17,9 @@ export async function checkWorktreeRemoval({ worktree, kind, landed = false, wor
   const status = await runGit(worktree.path, ["status", "--porcelain=v1", "--untracked-files=all"], { timeoutMs: 10000 });
   if (!status.ok) return blocked("working tree status unavailable");
   if (status.stdout.trim()) return blocked("uncommitted or untracked changes");
-  const ignored = await runGit(worktree.path, ["status", "--ignored", "--porcelain=v1", "--untracked-files=all"], { timeoutMs: 10000 });
+  // Normal untracked mode reports a wholly ignored directory once (`!! node_modules/`); listing all
+  // files would enumerate every installed dependency and overflow the Git output buffer.
+  const ignored = await runGit(worktree.path, ["status", "--ignored", "--porcelain=v1"], { timeoutMs: 10000 });
   if (!ignored.ok) return blocked("ignored files status unavailable");
   const valuable = ignored.stdout.split("\n")
     .filter((line) => line.startsWith("!! "))

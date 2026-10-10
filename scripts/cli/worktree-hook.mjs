@@ -1,37 +1,75 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runGitProcess } from "../../modules/repositories/git-exec.mjs";
+import { linkedWorktrees } from "../../modules/repositories/worktree-inventory.mjs";
 import { STATE_ROOT } from "./paths.mjs";
 
 const MARKER = "# roborepo-worktree-cleanup";
+const DEFAULT_CLI = fileURLToPath(new URL("main.mjs", import.meta.url));
 
-export async function manageWorktreeHook({ cwd = process.cwd(), install = true, stateRoot = STATE_ROOT } = {}) {
+export async function manageWorktreeHook({ cwd = process.cwd(), install = true, stateRoot = STATE_ROOT, cli = DEFAULT_CLI } = {}) {
   const common = await runGitProcess(cwd, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
   if (!common.ok) throw new Error("Git common directory unavailable");
-  const mainPath = path.dirname(common.stdout.trim());
-  const configured = await runGitProcess(cwd, ["config", "--local", "--get", "core.hooksPath"]);
-  const hookDir = configured.ok && configured.stdout.trim()
-    ? path.resolve(mainPath, configured.stdout.trim())
-    : path.join(common.stdout.trim(), "hooks");
-  const hook = path.join(hookDir, "post-merge");
+  const commonDir = common.stdout.trim();
+  const mainPath = path.dirname(commonDir);
+  const target = await hooksTarget(cwd, commonDir, mainPath);
+  if (target.refused) return { action: "refused", hook: null, reason: target.refused };
+  const hook = path.join(target.dir, "post-merge");
+  const scope = { scope: target.scope, checkout: target.checkout };
   const existing = fs.existsSync(hook) ? fs.readFileSync(hook, "utf8") : null;
   if (!install) {
-    if (!existing?.includes(MARKER)) return { action: "unchanged", hook };
+    if (!existing?.includes(MARKER)) return { action: "unchanged", hook, ...scope };
     fs.rmSync(hook);
-    return { action: "uninstalled", hook };
+    return { action: "uninstalled", hook, ...scope };
   }
-  if (existing && !existing.includes(MARKER)) return { action: "foreign hook", hook, line: hookInvocation(stateRoot) };
-  const content = `#!/bin/sh\n${MARKER}\n${hookInvocation(stateRoot)}\n`;
-  if (existing === content) return { action: "unchanged", hook };
-  fs.mkdirSync(hookDir, { recursive: true });
+  // The hook runs the CLI from the path recorded here. A CLI inside one of this repository's linked
+  // worktrees would be deleted by the cleanup it starts once that worktree lands.
+  const host = linkedWorktrees(commonDir).find((worktree) => inside(realpath(cli), worktree.path));
+  if (host) return { action: "refused", hook, reason: `the roborepo CLI at ${cli} is inside linked worktree ${host.path}, which cleanup can remove; install from the main checkout or an installed roborepo` };
+  if (existing && !existing.includes(MARKER)) return { action: "foreign hook", hook, line: hookInvocation(stateRoot, cli), ...scope };
+  const content = `#!/bin/sh\n${MARKER}\n${hookInvocation(stateRoot, cli)}\n`;
+  if (existing === content) return { action: "unchanged", hook, ...scope };
+  fs.mkdirSync(target.dir, { recursive: true });
   fs.writeFileSync(hook, content, { mode: 0o755 });
   fs.chmodSync(hook, 0o755);
-  return { action: "installed", hook };
+  return { action: "installed", hook, ...scope };
 }
 
-function hookInvocation(stateRoot) {
-  const cli = fileURLToPath(new URL("main.mjs", import.meta.url));
+// Git runs hooks from `core.hooksPath` when set, else `<common dir>/hooks`. A relative hooksPath is
+// resolved against the working tree each hook runs in, so every linked worktree looks inside its own
+// checkout: the hook written here fires only for merges in the checkout it is resolved against.
+async function hooksTarget(cwd, commonDir, mainPath) {
+  const result = await runGitProcess(cwd, ["config", "--show-scope", "--get-all", "core.hooksPath"]);
+  // The seam's own `-c core.hooksPath=/dev/null` appears with the `command` scope; it is not the
+  // repository's setting.
+  const entries = result.ok
+    ? result.stdout.split("\n").map((line) => line.split("\t")).filter(([scope, value]) => scope && scope !== "command" && value)
+    : [];
+  const effective = entries.at(-1);
+  if (!effective) return { dir: path.join(commonDir, "hooks"), scope: "repository", checkout: null };
+  const [scope, raw] = effective;
+  if (scope !== "local" && scope !== "worktree") {
+    return { refused: `core.hooksPath is set in ${scope} Git config (${raw}); a hook there would run cleanup for every repository that uses it` };
+  }
+  const value = raw === "~" ? os.homedir() : raw.startsWith("~/") ? path.join(os.homedir(), raw.slice(2)) : raw;
+  // Worktree-scoped config (`extensions.worktreeConfig`) applies only to the checkout that set it.
+  if (scope === "worktree") {
+    const checkout = await toplevel(cwd);
+    return { dir: path.resolve(checkout, value), scope: "checkout", checkout };
+  }
+  if (path.isAbsolute(value)) return { dir: value, scope: "repository", checkout: null };
+  return { dir: path.resolve(mainPath, value), scope: "checkout", checkout: mainPath };
+}
+
+async function toplevel(cwd) {
+  const result = await runGitProcess(cwd, ["rev-parse", "--show-toplevel"]);
+  if (!result.ok) throw new Error("working tree unavailable");
+  return result.stdout.trim();
+}
+
+function hookInvocation(stateRoot, cli) {
   const log = path.join(stateRoot, "worktree-cleanup", "hook.log");
   return `mkdir -p ${quote(path.dirname(log))}\ncurrent=$(git rev-parse --show-toplevel)\nnohup env ROBOREPO_STATE_DIR=${quote(stateRoot)} ${quote(process.execPath)} ${quote(cli)} git worktrees cleanup --apply --current "$current" >> ${quote(log)} 2>&1 </dev/null &`;
 }
@@ -40,11 +78,24 @@ function quote(value) {
   return `'${String(value).replaceAll("'", "'\\''")}'`;
 }
 
+function realpath(value) {
+  try { return fs.realpathSync(value); } catch { return path.resolve(value); }
+}
+
+function inside(candidate, root) {
+  const relative = path.relative(root, candidate);
+  return Boolean(relative) && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
+
 export async function worktreeHookCommand(args) {
   const [action] = args;
   if (!["install", "uninstall"].includes(action)) throw new Error("usage: roborepo git worktrees hook install|uninstall");
   const result = await manageWorktreeHook({ install: action === "install" });
+  if (result.action === "refused") throw new Error(`hook not ${action}ed: ${result.reason}`);
   console.log(`${result.action}: ${result.hook}`);
+  if (result.scope === "checkout") {
+    console.log(`This hook fires only for merges and pulls in ${result.checkout}: core.hooksPath is relative or set for that worktree alone, so other checkouts resolve their own hooks directory.`);
+  }
   if (result.line) console.log(`Add this line to the existing hook:\n${result.line}`);
   return result;
 }

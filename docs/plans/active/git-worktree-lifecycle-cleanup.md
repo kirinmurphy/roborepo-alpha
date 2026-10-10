@@ -1,7 +1,7 @@
 ---
 id: a7bslb00
 priority: high
-next_action: Review the remaining live GitHub pull and Home walkthrough confirmations, then close the plan after the implementation branch lands.
+next_action: Record the live Home walkthrough, merge the implementation branch, then approve the cleanup candidates before installing the hook from main and running the throwaway-PR check.
 blocked_by: []
 depends_on: []
 related:
@@ -10,7 +10,7 @@ related:
   - pljvmyh
   - 6q16tocb
   - git-exec-consolidation
-reviewed_commit: 989a82bc59f1dda7476fe5dc9a33577611c5325b
+reviewed_commit: c93eb7f792f4ad9469cf87f4e5e24ae3ff03fe09
 worktree: git-worktree-lifecycle-cleanup
 ---
 
@@ -455,14 +455,32 @@ conflicts. Its behavior on a fast-forward `git pull`, on a pull that is already 
 hooks directory, the hook also fires in feature worktrees, which is why the current-worktree guard
 exists.
 
-Installation is per repository and opt-in. The installer writes into the repository's hooks
-directory, which is `core.hooksPath` when that is set (Husky sets it, for example) and the common
-Git directory's `hooks/` otherwise. If a foreign `post-merge` hook is already present, the installer
-does not overwrite it; it prints the one line to add instead.
+Installation is per repository and opt-in. The installer writes into the directory Git runs hooks
+from. If a foreign `post-merge` hook is already present, the installer does not overwrite it; it
+prints the one line to add instead.
+
+| `core.hooksPath` | Installer writes to | Hook fires for merges in |
+| --- | --- | --- |
+| unset | the common Git directory's `hooks/` | every checkout |
+| absolute, in repository config | that directory | every checkout |
+| relative, in repository config (Husky sets one) | that path under the main checkout | the main checkout only; the installer says so |
+| in worktree config | that path in the checkout that set it | that checkout only |
+| in global or system config | nothing; it refuses | — |
+
+Git resolves a relative `core.hooksPath` inside the working tree that runs the hook, so a linked
+worktree looks for its own copy. Measured with Git 2.50.1: with `core.hooksPath=.githooks` and the
+hook in the main checkout's `.githooks/`, a merge in a linked worktree ran no hook and a merge in
+the main checkout did. Pulling `main` happens in the main checkout, and one cleanup run covers every
+worktree, so the main-checkout hook still serves the design.
 
 The hook calls absolute paths to `node` and the roborepo CLI entry, recorded at install time.
 Git clients run hooks with their own `PATH`, and GUI clients often omit the npm prefix where
-`roborepo` lives.
+`roborepo` lives. The installer refuses a CLI path inside one of the repository's linked worktrees,
+because the cleanup the hook starts removes that worktree once it lands.
+
+Git exports `GIT_DIR` to a hook running in a linked worktree. `runGitProcess` drops the
+repository-locating variables that `git rev-parse --local-env-vars` lists, so the cleanup a hook
+starts reads each candidate worktree's own status rather than the hooked worktree's index.
 
 ### 9. Relationship to `/plan-close`
 
@@ -498,6 +516,7 @@ Reconciliation notes for related plans, recorded here rather than edited into th
 | Plans checkout listing | `modules/plan-suite/checkouts.mjs` | Consume the shared enumerator instead of its private `linkedWorktrees` |
 | State derivation | `modules/repositories/worktree-state.mjs` | New: §4 and §5, a pure function of inventory, activity, threshold, hidden flags, and clock |
 | Guards | `modules/repositories/worktree-guards.mjs` | New: §6 guards as single-purpose checks, each taking the removal kind and returning pass or a reason |
+| Git seam | `modules/repositories/git-exec.mjs` | Drop the repository-locating environment variables a hook inherits, so `cwd` alone chooses the repository |
 | Removal | `modules/repositories/worktree-removal.mjs` | New: worktree and branch removal, archive ref, removal log, lock, all through `runGitProcess` |
 | Cleanup orchestration | `scripts/cli/worktree-cleanup.mjs` | New: the command, hook, and Home-action entry; sequences inventory → state → guards → removal |
 | Registry | `modules/repositories/schema.mjs` | Allow recording linked worktrees found by inventory, with an optional `hiddenAt` |
@@ -629,15 +648,26 @@ Reconciliation notes for related plans, recorded here rather than edited into th
       the worktree it runs in.
 - [x] A second cleanup started while one holds the lock exits without acting.
 - [x] `npm run test:portal-ui` and `npm run check` pass.
+- [x] A relative `core.hooksPath` installs into the main checkout and reports that scope; a merge in
+      a linked worktree runs no cleanup, and a merge in the main checkout does.
+- [x] A hook firing in a linked worktree, where Git exports `GIT_DIR`, removes a clean landed
+      worktree instead of reading it against the hooked worktree's index.
+- [x] The installer refuses a global `core.hooksPath` and a CLI path inside a linked worktree,
+      writing no hook.
+- [x] A lock left by a dead cleanup process is taken over; a live or not-yet-written lock is held.
+- [x] An ignored `node_modules/` of 30,000 files passes the ignored-files guard.
+- [x] A quoted `worktree:` field in an active plan still protects its worktree.
 
 The fixture repository covers Git inventory, historical landing, removal guards, the archive ref,
 hook installation, and a squash merge followed by a pull. A real-repository dry run on 2026-10-10
-found five eligible landed worktrees, four eligible landed branches without worktrees, the active
-`plan-suite-atomic-commands` worktree kept with "plan not closed", and the landed `.claude/worktrees/`
-checkout suggested for manual removal. It removed nothing. `npm run check` passed with 427 unit
-checks and 59 browser tests (2 skipped documentation screenshots). The post-merge fixture measured
-fast-forward pull: hook fired; already up-to-date pull: did not fire; pull with `--rebase` and no
-local commits: hook fired.
+from `main` at `d191c31`, with the QA fixes applied, found six eligible landed worktrees and four
+eligible landed branches without worktrees, and removed nothing. `plan-suite-atomic-commands`
+became eligible once [[age4cm7r]] moved to `completed/`; an earlier run had kept it with "plan not
+closed". The landed `.claude/worktrees/localhost-runtime-layout-b3215c` checkout is suggested for
+manual removal, and every other branch is not landed: no own work, or no absorbing base commit.
+`npm run check` passed with 427 unit checks and 59 browser tests (2 skipped documentation
+screenshots). The post-merge fixture measured fast-forward pull: hook fired; already up-to-date
+pull: did not fire; pull with `--rebase` and no local commits: hook fired.
 
 ## Not tested
 
@@ -695,6 +725,21 @@ local commits: hook fired.
 - 2026-10-10 — Use one cleanup lock per repository. A global lock would make an unrelated
   repository wait for another repository's deletion; repository keys preserve concurrency without
   allowing two removals in the same Git common directory.
+
+- 2026-10-10 — With a relative `core.hooksPath`, install into the main checkout's resolved path and
+  report that the hook fires only there. Copying the hook into every worktree would leave an
+  untracked or ignored file that fails the clean-tree and ignored-files guards, and would miss
+  worktrees created later; refusing would disable cleanup for Husky repositories whose main-checkout
+  pull is the trigger this design needs.
+- 2026-10-10 — Refuse a `core.hooksPath` from global or system config. Writing there would start
+  this repository's cleanup from every repository sharing the directory; installing into
+  `.git/hooks` instead would never fire, because Git reads the global path.
+- 2026-10-10 — Refuse to record a CLI path inside one of the repository's linked worktrees. Once
+  that worktree lands, the hook's own cleanup removes the CLI and every later run fails into
+  `hook.log`. Refusal costs a re-run from the main checkout or an installed `roborepo`.
+- 2026-10-10 — Take over a cleanup lock whose recorded process no longer exists. Without that, a
+  cleanup killed by a signal or reboot blocks every later run; an empty lock is still treated as
+  held, because its writer may not have recorded its pid yet.
 
 ## Open Questions
 

@@ -207,6 +207,28 @@ in that repository. It returns immediately and writes cleanup output to
 installer prints a line to add to it. Use `roborepo git worktrees hook uninstall` to remove a hook
 installed by RoboRepo. Fetches and pulls that are already up to date do not invoke the hook.
 
+The installer writes `post-merge` into the directory Git runs hooks from:
+
+| `core.hooksPath` | Hook location | Fires for merges and pulls in |
+| --- | --- | --- |
+| unset | `<common Git dir>/hooks/` | every checkout of the repository |
+| absolute, in repository config | that directory | every checkout of the repository |
+| relative, in repository config | that path under the main checkout | the main checkout only |
+| set in one worktree's config | that path in that checkout | that checkout only |
+| set in global or system config | none; the installer refuses | — |
+
+Git resolves a relative `core.hooksPath` inside the working tree that runs the hook, so a linked
+worktree looks for its own copy and never finds the one in the main checkout. The installer says so
+when it installs. Cleanup covers every worktree of the repository whichever checkout triggers it,
+so pulling `main` in the main checkout is enough. A shared global hooks directory would run this
+repository's cleanup for every repository, so the installer prints the reason and writes nothing.
+
+The hook records absolute paths to `node` and to the CLI that installed it, because Git clients run
+hooks with their own `PATH`. Install it from the main checkout or an installed `roborepo`: the
+installer refuses a CLI inside one of the repository's linked worktrees, since cleanup removes that
+worktree once it lands. After moving or upgrading `node`, run the install again to record the new
+path; until then each run logs its failure to `hook.log`.
+
 The removal log is `<state root>/worktree-cleanup/removals.jsonl`; each line names the branch and
 commit. A confirmed removal also writes `refs/roborepo/abandoned/<branch>`. Restore its branch with
 `git branch <branch> refs/roborepo/abandoned/<branch>`, then restore a checkout with
