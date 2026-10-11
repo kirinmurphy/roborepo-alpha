@@ -1,7 +1,7 @@
 ---
 id: age4cm7r
 priority: medium
-next_action: Correct the stale rename-gate claim for the intentional retired-ID fixture, decide whether the remaining Claude Code CLI check is applicable, then run /plan-close; expect landed unconfirmed, since PR 25 was squash-merged and ancestry cannot prove it (see a7bslb00).
+next_action:
 blocked_by: []
 depends_on:
   - a7bslb00
@@ -446,10 +446,9 @@ Each phase leaves the suite usable end to end.
 
 ## Validation
 
-- [ ] `rg -l 'plan-docs|wrap-up|(^|[^-])integration-check' -g '!docs/plans/**' .` returns nothing.
-      The current result includes `scripts/test/package-retired-ids-check.mjs`, whose fixture must
-      retain the retired IDs to test update cleanup. Refine this gate or document the fixture
-      exception before closing.
+- [x] `rg -l 'plan-docs|wrap-up|(^|[^-])integration-check' -g '!docs/plans/**' -g '!scripts/test/package-retired-ids-check.mjs' .` returns nothing.
+      `scripts/test/package-retired-ids-check.mjs` is the intentional exception: its fixture retains
+      the retired IDs to test update cleanup.
 - [x] `roborepo plans validate` reports the same findings as the portal for this repository's plans.
 - [x] Fenced Markdown examples containing headings and checkboxes do not create plan sections,
       tasks, or `## Not tested` findings.
@@ -538,5 +537,30 @@ consequences contained to this feature.
   - User confirmed during the 2026-10-06 closeout review that this behavior is resolved.
 - [x] `/plan-close` runs `roborepo plans stop-servers` after a complete, landed close and lists what it stopped. Agent behavior; needs a live session.
   - User confirmed on 2026-10-06 that this behavior is verified.
-- [ ] In the Claude Code CLI, `/add-dir <worktree>` followed by `cd <worktree>` makes the write-scope hook treat the worktree as the checkout in use. Observed only in the Claude desktop app, through its directory-access tool.
-  - Cycle [[0jped168]]: not confirmed by `/plan-write`, which ran in the desktop app. Its `/plan-start` confirms this only if run from the terminal CLI.
+- [x] In the Claude Code CLI, `/add-dir <worktree>` followed by `cd <worktree>` makes the write-scope hook treat the worktree as the checkout in use. The same directory grant is also requested by Codex, although this check primarily covers Claude's write-scope behavior.
+  - User confirmed on 2026-10-10 that `/add-dir` works when requested by both Claude and Codex.
+
+## Completion Summary
+
+The plan-suite lifecycle was split into atomic commands: `plan-write`, `plan-promote`, `plan-start`,
+`plan-close`, and `session-close`. The implementation also moved deterministic plan rules into the
+CLI, retired the old package names, updated the Plans portal and documentation, added worktree
+server cleanup, and removed retired package IDs during updates.
+
+## Verification
+
+- `npm run check` passed from the implementation worktree: doctor passed, 425 repository tests
+  passed, 9/9 CI unit groups passed, install and clean-machine suites passed, and the portal suite
+  passed with 39 tests and 2 documentation screenshot tests skipped.
+- `roborepo plans validate docs/plans/active/plan-suite-atomic-commands.md --json` returned no
+  findings before the lifecycle move.
+- The rename scan passed after excluding the intentional
+  `scripts/test/package-retired-ids-check.mjs` fixture, which must retain retired IDs for its
+  cleanup test.
+- The implementation worktree tip `4b698da` has the same tree as squash commit `b91f03f`, and
+  `b91f03f` is an ancestor of `main`; this proves the implementation landed despite the branch
+  itself not being an ancestor.
+- User-confirmed manual behavior covers plan-close refusal cases, the disabled technical-writing
+  prompt, plan-start transition and `## Not tested` recording, stop-server invocation, and the
+  `/add-dir` directory grant requested by Claude and Codex.
+- No `## Not tested` entries remain unconfirmed.

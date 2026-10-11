@@ -91,12 +91,12 @@ test.describe("repository-first portal Home", () => {
     await expect(noApp.getByRole("button", { name: "Links" })).toHaveCount(0);
 
     const notStarted = planRowOf(card, "Plan C");
-    await expect(notStarted.locator(".plan-match-badge")).toHaveText("not started");
-    await expect(notStarted.locator(".plan-match-badge")).toHaveAttribute("title", "No worktree is associated with this plan");
-    const notRunning = planRowOf(card, "Plan D");
-    await expect(notRunning.locator(".plan-match-badge")).toHaveText("worktree not running");
-    await expect(notRunning.locator(".plan-match-badge")).toHaveAttribute("title", 'Home has no running checkout for worktree "gone"');
-    for (const row of [notStarted, notRunning]) {
+    await expect(notStarted.locator(".plan-match-badge")).toHaveText("no worktree");
+    await expect(notStarted.locator(".plan-match-badge")).toHaveAttribute("title", "This plan names no worktree");
+    const missing = planRowOf(card, "Plan D");
+    await expect(missing.locator(".plan-match-badge")).toHaveText("worktree missing");
+    await expect(missing.locator(".plan-match-badge")).toHaveAttribute("title", 'No worktree named "gone" exists in this repository');
+    for (const row of [notStarted, missing]) {
       await expect(row.getByRole("link")).toHaveCount(0);
       await expect(row.getByRole("button", { name: "Links" })).toHaveCount(0);
     }
@@ -203,7 +203,24 @@ test.describe("repository-first portal Home", () => {
     await page.goto("/");
     const card = roboRepoCard(page);
     await expect(cardRows(card)).toHaveText([/No known checkout/, /Plan A/, /Plan B/, /Plan C/, /Plan D/], { useInnerText: true });
-    await expect(card.locator(".plan-match-badge")).toHaveText(["worktree not running", "worktree not running", "not started", "worktree not running"]);
+    // These plans carry no worktreeState from the server, so a named worktree reads as unknown.
+    await expect(card.locator(".plan-match-badge")).toHaveText(["worktree status unknown", "worktree status unknown", "no worktree", "worktree missing"]);
+  });
+
+  test("an unmatched plan's badge names its worktree state", async ({ page }) => {
+    let state;
+    await planFixture(page, (repository) => { repository.domains.plans.data.active.find((plan) => plan.id === "d").worktreeState = state; });
+    for (const [worktreeState, text, title] of [
+      ["unlisted", "worktree not listed", 'Worktree "gone" exists, but Runtime does not list it'],
+      ["ambiguous", "worktree ambiguous", 'Worktree "gone" is claimed by another active plan or matches more than one checkout'],
+      ["unknown", "worktree status unknown", 'Home cannot tell whether worktree "gone" is running'],
+    ]) {
+      state = worktreeState;
+      await page.goto("/");
+      const badge = planRowOf(roboRepoCard(page), "Plan D").locator(".plan-match-badge");
+      await expect(badge).toHaveText(text);
+      await expect(badge).toHaveAttribute("title", title);
+    }
   });
 
   test("Home Links renders its glyph, discovers routes and closes with Escape", async ({ page }) => {
@@ -733,7 +750,7 @@ async function planFixture(page, adjust) {
         { id: "a", key: "a", title: "Plan A", worktree: "feature-a", checkoutRootId: "matched", taskCounts: { total: 4, complete: 2 } },
         { id: "b", key: "b", title: "Plan B", worktree: "feature-b", checkoutRootId: "no-app", taskCounts: { total: 3, complete: 3 } },
         { id: "c", key: "c", title: "Plan C", worktree: "", taskCounts: { total: 0, complete: 0 } },
-        { id: "d", key: "d", title: "Plan D", worktree: "gone", taskCounts: { total: 2, complete: 0 } },
+        { id: "d", key: "d", title: "Plan D", worktree: "gone", worktreeState: "missing", taskCounts: { total: 2, complete: 0 } },
       ],
       recent: [],
     } };

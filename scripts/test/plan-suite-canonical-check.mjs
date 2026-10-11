@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { buildPlanSnapshot, movePlanLifecycle, updatePlanPriority } from "../../modules/plan-suite/index.mjs";
+import { buildPlanSnapshot, movePlanLifecycle, planSnapshotFingerprint, updatePlanPriority } from "../../modules/plan-suite/index.mjs";
 import { hideRepository, loadRegistry, updateRegistry } from "../../modules/repositories/index.mjs";
 import { recordRepositoryDiscovery } from "../cli/repositories.mjs";
 import { addRepositorySource } from "../cli/repository-sources.mjs";
@@ -64,8 +64,23 @@ try {
   });
   assert.equal(loadRegistry({ stateRoot }).repositories[REPOSITORY_ID].localRoots[0].kind, "primary", "the registry's first root is the worktree");
 
+  // The fingerprint gates Home's rebuilds: stable while nothing changes, moved by a plan edit or a
+  // new worktree.
+  const fingerprint = planSnapshotFingerprint({ stateRoot });
+  assert.equal(planSnapshotFingerprint({ stateRoot }), fingerprint, "an unchanged tree fingerprints the same");
+  const fingerprintFile = path.join(worktree, "docs/plans/active/new.md");
+  fs.appendFileSync(fingerprintFile, "\n");
+  const afterEdit = planSnapshotFingerprint({ stateRoot });
+  assert.notEqual(afterEdit, fingerprint, "editing a plan in any checkout changes the fingerprint");
+  const extra = path.join(tempRoot, "trees", "extra");
+  git(main, "worktree", "add", "-q", "-b", "extra", extra);
+  assert.notEqual(planSnapshotFingerprint({ stateRoot }), afterEdit, "adding a worktree changes the fingerprint");
+  git(main, "worktree", "remove", "--force", extra);
+  fs.writeFileSync(fingerprintFile, plan("new444", "Worktree only"));
+
   const snapshot = snapshotFor(stateRoot);
-  assert.deepEqual(snapshot.repositoryScans, [{ repositoryId: REPOSITORY_ID, state: "scanned", planCount: 4, checkoutCount: 3 }]);
+  assert.deepEqual(snapshot.repositoryScans, [{ repositoryId: REPOSITORY_ID, state: "scanned", planCount: 4, checkoutCount: 3, worktrees: ["behind", "feature-x"] }],
+    "a scan lists every linked worktree Git knows, by administrative name");
   const byId = Object.fromEntries(snapshot.plans.map((record) => [record.plan.id, record]));
   assert.deepEqual(Object.keys(byId).sort(), ["diff222", "main333", "new444", "same111"], "identical copies collapse to one record");
   assert.equal(snapshot.plans.length, 4);
@@ -105,6 +120,23 @@ try {
   assert.ok(!publicSnapshot.plans.some((record) => record.plan.id === "decoy555"), "discoveryRoots and ROBOREPO_PLAN_ROOTS are ignored");
   assert.equal(publicSnapshot.settings, undefined, "/api/plans no longer returns Plans settings");
   assert.ok(!portal.stdout.includes(tempRoot), "/api/plans carries no absolute path");
+
+  // ---- Home's cached loader rebuilds when a plan changes, without anyone loading /api/plans ----
+  const cachedScript = `
+    import fs from "node:fs";
+    const plans = await import("./scripts/cli/plans.mjs");
+    const title = () => plans.loadCachedPlansSnapshot().plans.find((record) => record.plan.id === "same111").plan.title;
+    const before = title();
+    fs.writeFileSync(process.env.PLAN_FILE, fs.readFileSync(process.env.PLAN_FILE, "utf8").replace("# Same", "# Same, renamed"));
+    process.stdout.write(JSON.stringify([before, title()]));
+  `;
+  const cached = spawnSync(process.execPath, ["--input-type=module", "-e", cachedScript], {
+    cwd: repoRoot,
+    env: { ...process.env, ROBOREPO_STATE_ROOT: stateRoot, PLAN_FILE: path.join(main, "docs/plans/backlog/same.md") },
+    encoding: "utf8",
+  });
+  assert.equal(cached.status, 0, cached.stderr);
+  assert.deepEqual(JSON.parse(cached.stdout), ["Same", "Same, renamed"], "the cached snapshot is built on first use and rebuilt after a plan edit");
 
   // ---- Explicit scan state: unavailable checkouts and hidden repositories ----
   const vanishedState = path.join(tempRoot, "state-vanished");

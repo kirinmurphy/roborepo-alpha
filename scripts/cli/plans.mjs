@@ -9,6 +9,7 @@ import {
   buildPrompt,
   findPlanByKey,
   movePlanLifecycle as movePlanLifecycleInDocs,
+  planSnapshotFingerprint,
   readPlanDocument,
   updatePlanPriority as updatePlanPriorityInDocs,
   validateRepositoryPlans,
@@ -21,25 +22,37 @@ import { MOCK_FIRST_RUN_VIEWS_ENABLED, mockPlanDocument, mockPlansSnapshot } fro
 
 let cachedSnapshot = null;
 let cachedSnapshotIsMock = false;
+// planSnapshotFingerprint() as of the last real build; null whenever cachedSnapshot is not one.
+let cachedFingerprint = null;
 
 export function loadPlansSnapshot() {
   if (MOCK_FIRST_RUN_VIEWS_ENABLED && hasNoRegisteredRepositories()) {
     cachedSnapshot = mockPlansSnapshot({ packageState: planWritePackageState() });
     cachedSnapshotIsMock = true;
+    cachedFingerprint = null;
     return cachedSnapshot;
   }
-  cachedSnapshot = buildPlanSnapshot({ stateRoot, packageState: planWritePackageState() });
-  cachedSnapshotIsMock = false;
+  rebuildSnapshot(loadRegistry({ stateRoot }));
   return publicSnapshot(cachedSnapshot);
 }
 
+// Home polls this every few seconds. A full build runs Git subprocesses per checkout, so it is
+// rebuilt only when the stat-only fingerprint says plan files or checkouts changed (or nothing is
+// cached yet). Without that check, Home kept whatever the Plans page last loaded.
 export function loadCachedPlansSnapshot() {
   if (MOCK_FIRST_RUN_VIEWS_ENABLED && hasNoRegisteredRepositories()) return mockPlansSnapshot({ packageState: planWritePackageState() });
-  if (cachedSnapshotIsMock) {
-    cachedSnapshot = null;
-    cachedSnapshotIsMock = false;
-  }
-  return cachedSnapshot ? publicSnapshot(cachedSnapshot) : null;
+  const registry = loadRegistry({ stateRoot });
+  const fingerprint = planSnapshotFingerprint({ registry });
+  if (!cachedSnapshot || cachedSnapshotIsMock || fingerprint !== cachedFingerprint) rebuildSnapshot(registry, fingerprint);
+  return publicSnapshot(cachedSnapshot);
+}
+
+// The fingerprint is taken before the build, so a file that changes mid-build shows up as a
+// mismatch on the next check rather than being masked.
+function rebuildSnapshot(registry, fingerprint = planSnapshotFingerprint({ registry })) {
+  cachedSnapshot = buildPlanSnapshot({ stateRoot, registry, packageState: planWritePackageState() });
+  cachedSnapshotIsMock = false;
+  cachedFingerprint = fingerprint;
 }
 
 export function loadPlanDocument({ key }) {
