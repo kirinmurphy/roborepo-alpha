@@ -1,0 +1,27 @@
+{
+  "tests": [
+    {
+      "skill": "plan-promote",
+      "match": [
+        "I need help reviewing and preparing an existing repository implementation plan before we start coding",
+        "please reconcile stale assumptions and validate readiness on docs/plans/backlog/example.md"
+      ],
+      "nearMiss": [
+        "create an implementation plan for package reconciliation",
+        "start implementing this plan",
+        "close this plan now that it has merged"
+      ],
+      "triggerPhrases": [
+        "reviewing and preparing an existing repository implementation plan",
+        "reconcile stale assumptions",
+        "validate readiness"
+      ],
+      "skipPhrases": [
+        "creating a new plan from scratch",
+        "writing feature code",
+        "creating worktrees",
+        "resuming active implementation"
+      ]
+    }
+  ]
+}

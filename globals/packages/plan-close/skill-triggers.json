@@ -1,0 +1,28 @@
+{
+  "tests": [
+    {
+      "skill": "plan-close",
+      "match": [
+        "/plan-close docs/plans/active/example.md",
+        "the work merged, so close this plan and move it to completed",
+        "review whether a plan is complete"
+      ],
+      "nearMiss": [
+        "sync this plan with what we just changed",
+        "wrap up this chat",
+        "review this diff for bugs"
+      ],
+      "triggerPhrases": [
+        "/plan-close",
+        "close this plan",
+        "review whether a plan is complete"
+      ],
+      "skipPhrases": [
+        "creating or revising plans",
+        "ending a session",
+        "reviewing a working diff",
+        "merging branches"
+      ]
+    }
+  ]
+}

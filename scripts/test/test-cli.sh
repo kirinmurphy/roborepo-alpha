@@ -429,19 +429,25 @@ cat > "${new_harness}/README.md" <<'EOF_README'
 | --- | --- | --- |
 EOF_README
 
-( cd "${work}" && node "${new_harness}/scripts/cli/main.mjs" skill new --kind=auto --name=demo-helper --description="Demo helper workflow." --category=repo >/dev/null )
+( cd "${work}" && node "${new_harness}/scripts/cli/main.mjs" skill new --kind=auto --name=demo-helper --description="Demo helper workflow." --category=repo >"${work}/skill-new-auto.out" )
 assert "skill new: auto helper creates skill" \
   test -f "${new_harness}/globals/packages/demo-helper/skills/demo-helper/SKILL.md"
 assert "skill new: auto helper writes package policy" \
   grep -q '"invocation": "auto"' "${new_harness}/globals/packages/demo-helper/package.config.json"
 assert "skill new: auto helper updates README Automatic Helpers" \
   grep -q 'demo-helper' "${new_harness}/README.md"
+assert "skill new: low-risk skill does not prompt for trigger fixtures" \
+  bash -c "! grep -q 'skill-triggers.json' '${work}/skill-new-auto.out'"
 
-( cd "${work}" && node "${new_harness}/scripts/cli/main.mjs" skill new --kind=skill-command --name=demo-plan --command=demo-plan --description="Demo planning workflow." --risk=medium >/dev/null )
+( cd "${work}" && node "${new_harness}/scripts/cli/main.mjs" skill new --kind=skill-command --name=demo-plan --command=demo-plan --description="Demo planning workflow." --risk=medium >"${work}/skill-new-medium.out" )
 assert "skill new: skill-command creates command wrapper" \
   grep -q 'Use the `demo-plan` skill' "${new_harness}/generated/packages/demo-plan/claude/commands/demo-plan.md"
 assert "skill new: skill-command updates slash manifest" \
   grep -q '"entrypoints"' "${new_harness}/globals/packages/demo-plan/package.config.json"
+assert "skill new: medium-risk skill names its package trigger fixture file" \
+  grep -q 'globals/packages/demo-plan/skill-triggers.json' "${work}/skill-new-medium.out"
+assert "skill new: medium-risk skill does not write a stub trigger fixture" \
+  test ! -e "${new_harness}/globals/packages/demo-plan/skill-triggers.json"
 
 ( cd "${work}" && node "${new_harness}/scripts/cli/main.mjs" skill new --kind=standalone --name=demo-command --description="Demo command workflow." --harnesses=claude >/dev/null )
 assert "skill new: standalone creates shared command source" \
