@@ -22,7 +22,7 @@ const MAX_PLANS_PER_REPO = 500;
 const planRecordCache = new Map();
 
 // Plans scans the repositories RoboRepo knows about (pljvmyh §9); the scan lives beside this module.
-export { buildPlanSnapshot } from "./canonical-scan.mjs";
+export { buildPlanSnapshot, planSnapshotFingerprint } from "./canonical-scan.mjs";
 
 // Appends each plan's cross-plan findings to a copy of its validation. Records come from
 // planRecordCache, so mutating `plan.validation` in place would stack the same relationship

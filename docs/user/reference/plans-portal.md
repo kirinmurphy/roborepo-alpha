@@ -134,9 +134,11 @@ without the line stay valid. `plan-start` records the value, commits it to the p
 branch, and validates it before implementation moves into the worktree.
 
 Home uses the value to show an active plan as its worktree's checkout row. Anything short of one
-exact match leaves the plan as its own row with a badge: **not started** for an empty value, and
-**worktree not running** for a worktree that is stopped, no longer exists, or is claimed by two
-plans. See [Repositories](repositories.md#repository-cards).
+exact match leaves the plan as its own row with a badge: **no worktree** for an empty value,
+**worktree idle** for a worktree Git has that Runtime does not list, **worktree missing** for a
+name Git has no worktree for, **worktree ambiguous** for a name claimed by two plans or matching more
+than one checkout, and **worktree status unknown** when Runtime is unavailable. See
+[Repositories](repositories.md#repository-cards).
 
 ## Validation
 
