@@ -184,6 +184,7 @@ no extra wiring.
 | --- | --- | --- |
 | Fixtures still pass | `roborepo skill triggers --check` | `ok: 6 skill trigger fixture(s)` |
 | Loader behavior | `node scripts/test/skill-trigger-fixtures-check.mjs` | Every case listed in the loader-check task passes |
+| Fixtures never ship | `node scripts/test/skill-trigger-fixtures-shipping-check.mjs` | No `skill-triggers.json` in a synced home or an exported project |
 | Central file gone | `git grep -n skill-trigger-tests` | Matches only under `docs/plans/` |
 | Doctor accepts the deletion | `bash scripts/doctor.sh --quiet` | Exits 0 |
 | Packages still validate | `roborepo package validate` | No new findings |
@@ -235,6 +236,12 @@ Acceptance:
 - Loader errors (malformed JSON, a fixture naming another package's skill) print as one `fail:`
   line and exit 1. That matches the checker's existing failure format; the alternative was an
   uncaught stack trace.
+- A separate `skill-trigger-fixtures-shipping-check.mjs` (user decision) runs the real
+  `skill sync-global` and `skill export-to-project` against an isolated app root, home, and project.
+  It then asserts that no `skill-triggers.json` appears in any of them. It first asserts that a
+  skill whose package has fixtures was actually copied, so the check cannot pass vacuously. It is a
+  separate file because it needs the full isolated CLI, while the loader check uses synthetic
+  packages. It runs in about 1.5s, so it sits in the `ci` group.
 - The loader check also covers a workspace package and a package that declares two skills. The
   docs claim both, and each case is a few lines.
 - `roborepo skill new` coverage went into the existing scaffold block of `test-cli.sh`, near line
@@ -253,6 +260,8 @@ Acceptance:
 | `roborepo skill triggers --check` | `ok: 6 skill trigger fixture(s)` |
 | Loader output vs. central file, before deletion | All six entries identical field-for-field, each loaded from its own package |
 | `node scripts/test/skill-trigger-fixtures-check.mjs` | Passes; fails as expected when the ownership guard is disabled |
+| `node scripts/test/skill-trigger-fixtures-shipping-check.mjs` | Passes; fails and names all five leaked copies when a fixture is planted inside a skill directory |
+| `npm pack --dry-run` | Ships all six `skill-triggers.json` files and the loader, so `skill triggers --check` still works from an npm install |
 | `git grep -n skill-trigger-tests` | Matches only under `docs/plans/` |
 | `bash scripts/doctor.sh --quiet` | `doctor passed (100 checks)` |
 | `roborepo package validate` | `ok: 25 package(s) valid` |
@@ -266,4 +275,5 @@ None.
 
 None. Each acceptance criterion is covered by the loader check, the `test-cli.sh` assertions, or
 the live `roborepo skill triggers --check` run. The live run checks the disabled `case-study-pack`
-and `tighten` packages.
+and `tighten` packages. The shipping check covers the design premise that fixtures never reach a
+harness home or an exported project.

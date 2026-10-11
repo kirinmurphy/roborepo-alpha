@@ -10,6 +10,7 @@
     "core-hook-wiring-check.mjs",
     "permission-rule-home-path-check.mjs",
     "plan-citation-comments-check.mjs",
-    "skill-trigger-fixtures-check.mjs"
+    "skill-trigger-fixtures-check.mjs",
+    "skill-trigger-fixtures-shipping-check.mjs"
   ]
 }
