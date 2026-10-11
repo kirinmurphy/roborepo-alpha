@@ -185,15 +185,23 @@ Each card combines a compact view of several domains:
 ### Worktree states and cleanup
 
 Home and Runtime list linked worktrees of a known repository even when no application is running.
-Each has one state: **running**, **idle**, **stale**, or **landed**. Landed means the branch's work
-was absorbed by a commit on the base branch's first-parent history. Stale means no observed
-activity during the configured interval; it is a suggestion for review, not evidence of a merge.
-The interval defaults to 7 days. Change it in Runtime's Settings under **Worktrees**, or set
-`ROBOREPO_WORKTREE_STALE_DAYS` to a number from 1 to 365 to override the setting.
+Each worktree row shows how it stands:
 
-A landed row says what happens next: the reason a guard keeps it (such as **plan not closed**), or
-**removed on next pull** when the cleanup hook is installed, or **ready for cleanup** when nothing
-will remove it until `/plan-close` or a cleanup run.
+| Shows | Means |
+| --- | --- |
+| a port, or **idle**, in the actions column | something is running in it, or nothing is |
+| **merged** (a purple pill; its tooltip names the base branch) | a commit on the base branch's first-parent history absorbed the branch's work |
+| **suggested for removal** | not merged, and no activity during the configured interval; a prompt to review, not evidence of a merge |
+
+Activity is the latest of a running process Runtime saw, the branch's last commit, and the last
+agent session on the branch. The interval defaults to 7 days. Change it in Runtime's Settings under
+**Worktrees**, or set `ROBOREPO_WORKTREE_STALE_DAYS` to a number from 1 to 365 to override the
+setting. A detached worktree, such as one the desktop app creates, is named by its folder with
+**(detached)**.
+
+A merged row adds a note only when there is something to act on: the reason a guard keeps it (such
+as **plan not closed** or **not in your worktree folder**), or **removed on next pull** when the
+cleanup hook is installed.
 
 **Remove worktree…** is in the worktree dropdown on a plan's row and in the ⋮ menu on any other
 worktree row; no row shows it inline. It opens a confirmation naming the branch, its unmerged commit

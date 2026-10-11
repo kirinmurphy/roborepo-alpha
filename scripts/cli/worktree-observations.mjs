@@ -1,5 +1,5 @@
 import { rootId as computeRootId } from "../../modules/repositories/identity.mjs";
-import { registerLocalRoot, registerLocalRootPath, updateRegistry } from "../../modules/repositories/registry.mjs";
+import { markLocalRootRunning, registerLocalRoot, registerLocalRootPath, updateRegistry } from "../../modules/repositories/registry.mjs";
 import { repositoryWorktrees } from "../../modules/repositories/worktree-inventory.mjs";
 import { inspectBranchLanding } from "../../modules/repositories/worktree-landed.mjs";
 import { deriveWorktreeState, resolveWorktreeStaleDays } from "../../modules/repositories/worktree-state.mjs";
@@ -25,6 +25,7 @@ export async function collectKnownWorktrees(registry, { stateRoot, settings, now
       for (const { repositoryId, worktree, rootId } of live) {
         if (registerLocalRoot(next, repositoryId, { rootId, kind: "worktree", now: now.toISOString(), refreshSeen: false })) changed = true;
         if (registerLocalRootPath(next, repositoryId, { rootId, path: worktree.path, now: now.toISOString() })) changed = true;
+        if (runningRootIds.has(rootId) && markLocalRootRunning(next, repositoryId, rootId, { now: now.toISOString() })) changed = true;
       }
       return changed;
     } });
@@ -47,7 +48,7 @@ export async function collectKnownWorktrees(registry, { stateRoot, settings, now
         worktree.branch ? inspectBranchLanding(worktree.path, worktree.branch) : Promise.resolve({ landed: false }),
         worktree.branch ? runGitProcess(worktree.path, ["log", "-1", "--format=%cI", worktree.branch]) : Promise.resolve({ ok: false }),
       ]);
-      const activityAt = [root?.lastSeenAt, lastCommit.ok ? lastCommit.stdout.trim() : null, sessionActivity.get(`${repositoryId}\0${worktree.branch}`)].filter(Boolean);
+      const activityAt = [root?.lastRunningAt, lastCommit.ok ? lastCommit.stdout.trim() : null, sessionActivity.get(`${repositoryId}\0${worktree.branch}`)].filter(Boolean);
       const state = deriveWorktreeState({ running: runningRootIds.has(rootId), landed: landing.landed, activityAt, staleDays: threshold.days, now });
       const guard = landing.landed ? await checkWorktreeRemoval({
         worktree, kind: "automatic", landed: true, worktreeRoot: policy.get(worktree.mainPath)?.root,
@@ -57,7 +58,11 @@ export async function collectKnownWorktrees(registry, { stateRoot, settings, now
       const count = worktree.branch && landing.base
         ? await runGitProcess(worktree.path, ["rev-list", "--count", `${landing.base}..${worktree.branch}`])
         : { ok: false };
-      return { ...worktree, rootId, projectRoot: worktree.path, git, ...state, landing, unmergedCommits: count.ok ? Number(count.stdout.trim()) : null, reason: guard?.reason || null };
+      return {
+        ...worktree, rootId, projectRoot: worktree.path, git, ...state, landing, running: runningRootIds.has(rootId),
+        mergedInto: landing.landed ? shortBranchName(landing.base) : null,
+        unmergedCommits: count.ok ? Number(count.stdout.trim()) : null, reason: guard?.reason || null,
+      };
     }));
     byRepository.set(repositoryId, observations);
   }
@@ -67,6 +72,11 @@ export async function collectKnownWorktrees(registry, { stateRoot, settings, now
     if (mainPath) cleanup.set(repositoryId, await cleanupStatus(mainPath, worktrees, registry.repositories?.[repositoryId]));
   }
   return { registry, worktrees: byRepository, cleanup, findings: threshold.finding ? [threshold.finding] : [] };
+}
+
+// `refs/remotes/origin/main` and `refs/heads/main` both read as "main".
+function shortBranchName(ref) {
+  return ref ? ref.replace(/^refs\/(remotes\/[^/]+|heads)\//, "") : null;
 }
 
 // What Home needs to offer opt-in cleanup for one repository: whether the hook is in place, the

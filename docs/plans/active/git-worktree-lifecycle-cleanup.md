@@ -1,7 +1,7 @@
 ---
 id: a7bslb00
 priority: high
-next_action: Record the live Home walkthrough of Remove and the cleanup notice, settle the open questions, then merge and run the live /plan-close check.
+next_action: Merge the implementation branch, then run the live /plan-close check after a throwaway PR and the live hook opt-in with plan-close disabled.
 blocked_by: []
 depends_on: []
 related:
@@ -323,9 +323,9 @@ Each state decides what Home shows and what may remove the worktree:
 | State | Meaning | Home | Automatic action | Remove in the row menu |
 | --- | --- | --- | --- | --- |
 | `running` | A Runtime member runs in it | today's row | none | listed but disabled: "stop its servers first" |
-| `idle` | No process, recent activity, not landed | dimmed row; its plan attaches | none | with confirmation |
-| `stale` | Idle past the threshold, not landed | dimmed row, "suggested for removal" | none | with confirmation |
-| `landed` | Passes §3 | "landed" with the blocking reason as visible text ("plan not closed" included); with no blocker, "removed on next pull" when the hook is installed and "ready for cleanup" otherwise | removed when every guard passes and a trigger runs (§8) | with confirmation |
+| `idle` | No process, recent activity, not landed | dimmed row, "idle" in the actions column where a port would be; its plan attaches | none | with confirmation |
+| `stale` | Idle past the threshold, not landed | dimmed row, "suggested for removal", "idle" in the actions column | none | with confirmation |
+| `landed` | Passes §3 | a purple "merged" pill (tooltip "Merged into <base>") before the Git warnings; a note only for a blocking reason ("plan not closed", "not in your worktree folder") or "removed on next pull" when the hook is installed | removed when every guard passes and a trigger runs (§8) | with confirmation |
 
 `landed` takes precedence over the others, but a running landed worktree is never removed (§6). No
 row shows Remove inline: it lives in the row's menu (§7), so the card reads as a status list.
@@ -336,14 +336,13 @@ row shows Remove inline: it lives in the row's menu (§7), so the card reads as 
 
 | Signal | Source |
 | --- | --- |
-| Runtime last saw a member running in it | registry `localRoots[].lastSeenAt` |
+| Runtime last saw a member running in it | registry `localRoots[].lastRunningAt`, written by the inventory when Runtime reports a member running in the worktree |
 | Last commit on the branch | `git log -1 --format=%cI <branch>` |
 | Last agent session on the branch | telemetry events matching `repository_id` and `branch` |
 
-Registering a worktree found by inventory currently stamps `lastSeenAt` with the time of that first
-inventory, because the registry requires the field. That counts as Runtime activity, so no worktree
-can read `stale` until the threshold has passed since it was first inventoried. The fix is an open
-question (see Open Questions).
+`lastSeenAt` is not the signal: registering a worktree found by inventory stamps it with nothing
+running, which would keep every worktree from reading `stale` until the threshold had passed since
+its first inventory.
 
 The threshold defaults to 7 days. Precedence: the `ROBOREPO_WORKTREE_STALE_DAYS` environment
 variable, then the `worktreeStaleDays` preference beside `historyRetentionDays` in
@@ -553,7 +552,7 @@ Reconciliation notes for related plans, recorded here rather than edited into th
 | Cleanup orchestration | `scripts/cli/worktree-cleanup.mjs` | New: the command, hook, and Home-action entry; sequences inventory → state → guards → removal |
 | Cleanup policy | `scripts/cli/worktree-policy.mjs` | New: the worktree folder (plans config, else the recorded one), the folder proposal, and active plans' worktree claims |
 | Cleanup opt-in | `scripts/cli/worktree-cleanup-optin.mjs` | New: Home's turn-on (folder validation, record, install) and dismissal |
-| Registry | `modules/repositories/schema.mjs`, `modules/repositories/registry.mjs` | Allow recording linked worktrees found by inventory; an optional per-repository record of the confirmed worktree folder and a dismissed cleanup notice |
+| Registry | `modules/repositories/schema.mjs`, `modules/repositories/registry.mjs` | Allow recording linked worktrees found by inventory, with an optional `lastRunningAt`; an optional per-repository record of the confirmed worktree folder and a dismissed cleanup notice |
 | Runtime snapshot | `scripts/cli/developer-runtime.mjs`, `modules/developer-runtime/snapshot.mjs` | The CLI reads the inventory and injects it, as it already injects `idleMainCheckouts`; the snapshot adds those worktrees as roots |
 | Home projection | `scripts/cli/repository-overview-sources.mjs`, `scripts/cli/repository-overview-projections.mjs` | Carry worktree state and the guard reason in `projectWorkspace`, and the cleanup-notice state per repository |
 | Home actions | `scripts/cli/portal-routes-repositories.mjs`, `scripts/cli/worktree-hook.mjs` | Token-guarded `POST` routes for remove and for turning cleanup on, calling the cleanup orchestrator and the installer |
@@ -676,6 +675,11 @@ Reconciliation notes for related plans, recorded here rather than edited into th
       package disabled and no hook, and its dialog installs the hook.
 - [x] Update `docs/user/reference/repositories.md` and `docs/user/reference/plans-portal.md` for
       Remove, the notice, and the removed Hide.
+- [x] Record `lastRunningAt` when Runtime sees a worktree running and read it for §5's Runtime
+      signal instead of `lastSeenAt`.
+- [x] Show a landed worktree as a purple "merged" pill before the Git warnings, with a note only
+      when it says something actionable; move "idle" into the actions column; name a detached
+      worktree by its folder; word the folder guard as "not in your worktree folder".
 
 ## Validation
 
@@ -720,6 +724,8 @@ Reconciliation notes for related plans, recorded here rather than edited into th
 - [x] Turning cleanup on from Home installs the hook and records the confirmed folder; automatic
       removal in a repository without `plans-config.json` stays inside that folder.
 - [x] With the plan-close package enabled, Home shows no cleanup notice.
+- [x] A worktree whose only activity is a ten-day-old commit reads `stale` on its first inventory;
+      after Runtime sees it running, it reads `idle`.
 
 The fixture repository covers Git inventory, historical landing, removal guards, the archive ref,
 hook installation, and a squash merge followed by a pull. A real-repository dry run on 2026-10-10
@@ -823,21 +829,18 @@ pull: did not fire; pull with `--rebase` and no local commits: hook fired.
 - 2026-10-11 — Remove lives in a menu on every worktree row: the worktree dropdown on a plan's row,
   the shared ⋮ action menu otherwise, disabled while the worktree runs. Inline buttons on every row
   made removal look like the expected next step for work in progress.
+- 2026-10-11 — Record `lastRunningAt` for §5's Runtime signal. Ignoring `lastSeenAt` when it equals
+  `firstSeenAt` needed no schema change but would mark a worktree that ran once briefly as stale.
+- 2026-10-11 — Landed worktrees whose plans closed before `/plan-close` removed worktrees need no
+  special action: Remove in each row's menu, or one `roborepo git worktrees cleanup --apply`,
+  covers them.
+- 2026-10-11 — Show `landed` as "merged", GitHub's term for the same fact, in its merged purple, and
+  drop the "ready for cleanup" note it carried on every row; a note now appears only when it changes
+  what the user should do. "idle" is runtime activity, so it sits where a running checkout's port
+  does.
 
 ## Open Questions
 
-- **Stale detection after first inventory:** inventory stamps a newly registered worktree's
-  `lastSeenAt`, which §5 counts as Runtime activity, so nothing reads `stale` until the threshold
-  has passed since the first inventory. **Options:** add an optional `lastRunningAt` to the
-  worktree record, written only when Runtime sees a member running, and read it instead of
-  `lastSeenAt`; or ignore `lastSeenAt` when it equals `firstSeenAt`, which needs no schema change
-  but can mark a worktree that ran once briefly as stale. **Recommendation:** `lastRunningAt`.
-  **Blocked task:** none; `stale` is only a suggestion.
-- **Landed worktrees whose plans closed before `/plan-close` removed worktrees:** six such
-  worktrees exist here today, and no trigger will run for them in a plan-suite repository.
-  **Options:** a one-time "clean up landed worktrees" action on Home; Remove from each row's menu;
-  or running `roborepo git worktrees cleanup --apply` once. The user asked to settle this after the
-  Phase 7 decisions. **Blocked task:** none.
 - **Live GitHub verification:** May a run create and merge a throwaway GitHub PR, pull `main`, and
   close its test plan with `/plan-close`? It changes external repository history; no hook is
   installed in this repository. **Recommendation:** run it after this branch merges. **Blocked

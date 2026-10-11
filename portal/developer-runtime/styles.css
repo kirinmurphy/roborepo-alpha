@@ -298,7 +298,19 @@ main {
   color: var(--dim);
 }
 .worktree-is-stale .worktree-state-badge { color: var(--warn); }
-.worktree-is-landed .worktree-state-badge { color: var(--ok); }
+/* GitHub's merged pill: the branch's work is in the base branch. */
+.worktree-is-landed .worktree-state-badge {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--merged);
+  color: #fff;
+  font-weight: 500;
+}
+/* Runtime activity sits in the actions column, where a running checkout shows its port. */
+.worktree-activity {
+  font-size: var(--text-xs);
+  color: var(--dim);
+}
 .worktree-state-note {
   font-size: var(--text-xs);
   color: var(--dim);

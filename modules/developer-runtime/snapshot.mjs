@@ -477,6 +477,8 @@ function buildRepositories({ projects, composeProjects, unmatchedInstances, repo
       root.isWorktree = true;
       root.worktreeState = worktree.state;
       root.worktreeReason = worktree.reason || null;
+      root.worktreeRunning = worktree.running === true;
+      root.mergedInto = worktree.mergedInto || null;
       root.worktreeName = worktree.name;
       root.unmergedCommits = worktree.unmergedCommits;
       root.checkoutState = worktree.prunable ? "absent" : "present";

@@ -34,13 +34,15 @@ const HEALTH_BADGE_TONES = { starting: "warn", degraded: "warn", unhealthy: "dan
 
 let memberListSequence = 0;
 
-// A landed worktree says what happens next: the guard that keeps it, or that nothing does. With the
-// cleanup hook installed the next pull removes it; otherwise it waits for /plan-close or a cleanup
-// run, so the row only says it is ready.
+// Lifecycle badges. Idle and running are runtime activity, which the actions column shows instead.
+const WORKTREE_BADGES = { stale: "suggested for removal", landed: "merged" };
+
+// A merged worktree adds a note only when there is something to act on: the guard that keeps it, or
+// that the installed cleanup hook removes it on the next pull.
 function worktreeStateNote(root) {
   if (root.worktreeState !== "landed") return null;
   if (root.worktreeReason) return root.worktreeReason;
-  return root.cleanupHookInstalled ? "removed on next pull" : "ready for cleanup";
+  return root.cleanupHookInstalled ? "removed on next pull" : null;
 }
 
 // `root` is undefined for the main slot when nothing has resolved a rootId yet (no active listener
@@ -58,10 +60,14 @@ export function buildRootSection({ root, departed = [], repository, composeActio
   if (root?.isWorktree && root.worktreeState) {
     section.classList.add(`worktree-is-${root.worktreeState}`);
     const badge = section.querySelector("[data-slot=worktree-state]");
-    if (root.worktreeState !== "running") {
+    if (WORKTREE_BADGES[root.worktreeState]) {
       badge.hidden = false;
-      badge.textContent = root.worktreeState === "stale" ? "suggested for removal" : root.worktreeState;
+      badge.textContent = WORKTREE_BADGES[root.worktreeState];
+      if (root.worktreeState === "landed") badge.title = `Merged into ${root.mergedInto || "the base branch"}`;
     }
+    // A merged worktree can still be running; the state only says idle when it is not.
+    const running = root.worktreeRunning ?? root.worktreeState === "running";
+    if (!running) section.querySelector("[data-slot=worktree-activity]").hidden = false;
     const note = worktreeStateNote(root);
     if (note) {
       const slot = section.querySelector("[data-slot=worktree-note]");
@@ -174,7 +180,7 @@ function fillIdentity(section, root, composeGroups) {
 
   const fullName = git ? fullBranchName(git) : directory;
   const label = section.querySelector("[data-slot=root-branch]");
-  label.textContent = portalMiddleEllipsis(git ? branchLabel(git) : directory, CHECKOUT_BRANCH_MAX_LENGTH);
+  label.textContent = portalMiddleEllipsis(git ? branchLabel(git, directory) : directory, CHECKOUT_BRANCH_MAX_LENGTH);
 
   tooltip.querySelector("[data-slot=root-heading]").textContent = fullName;
   // Without git the heading already IS the directory, so there is no second identity to show; and
@@ -207,9 +213,9 @@ function fillIdentity(section, root, composeGroups) {
 }
 
 // The default branch is named by its role — "main branch" reads as where you are, a bare "main" as
-// just another branch name.
-function branchLabel(git) {
-  if (git.detached) return "detached";
+// just another branch name. A detached checkout has no branch, so its directory names it.
+function branchLabel(git, directory = null) {
+  if (git.detached) return directory ? `${directory} (detached)` : "detached";
   return DEFAULT_BRANCHES.has(git.branch) ? `${git.branch} branch` : git.branch;
 }
 

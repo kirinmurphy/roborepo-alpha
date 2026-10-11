@@ -107,6 +107,8 @@ function checkoutRow(checkout, actions, { identity = null, hookInstalled = false
       checkoutReason: checkout.checkoutReason,
       worktreeState: checkout.worktreeState,
       worktreeReason: checkout.worktreeReason,
+      worktreeRunning: checkout.worktreeRunning ?? undefined,
+      mergedInto: checkout.mergedInto,
       cleanupHookInstalled: hookInstalled,
       repositoryId: actions.repositoryId,
       git: checkout.git,

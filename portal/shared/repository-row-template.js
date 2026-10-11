@@ -25,15 +25,16 @@ checkoutTemplate.innerHTML = `
             </template>
           </span>
           <span class="repository-root-copy" data-slot="root-copy"></span>
-          <span class="git-drift" data-slot="git-drift" hidden></span>
           <span class="worktree-state-badge" data-slot="worktree-state" hidden></span>
           <span class="worktree-state-note" data-slot="worktree-note" hidden></span>
+          <span class="git-drift" data-slot="git-drift" hidden></span>
         </div>
       </div>
       <div class="repository-root-actions checkout-actions">
         <span class="port-health-badge" data-slot="root-health" hidden></span>
         <span class="resource-concern-badge" data-slot="resource-concern" hidden></span>
         <a class="repository-entrypoint link-cta" data-slot="root-entrypoint" target="_blank" rel="noreferrer" hidden></a>
+        <span class="worktree-activity" data-slot="worktree-activity" hidden>idle</span>
         <span class="checkout-links-cell"><span data-slot="root-links" hidden></span></span>
         <span class="worktree-row-menu" data-slot="worktree-menu" hidden></span>
         <span class="repository-root-control checkout-control-cell">

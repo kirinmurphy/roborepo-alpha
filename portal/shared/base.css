@@ -56,6 +56,8 @@
   --next-ink: #c7dbff;
   --code-bg: #010409;
   --code-ink: #d2a8ff;
+  /* GitHub's merged-pull-request purple, for a worktree whose branch has merged. */
+  --merged: #8957e5;
   --code-inline-bg: rgba(255, 255, 255, 0.04);
   --overlay: rgba(13, 17, 23, 0.7);
   --tooltip-bg: #010409;
@@ -166,6 +168,7 @@
   --next-ink: #0a3977;
   --code-bg: #f6f8fa;
   --code-ink: #8250df;
+  --merged: #8250df;
   --code-inline-bg: rgba(27, 31, 36, 0.05);
   --overlay: rgba(255, 255, 255, 0.7);
   --tooltip-bg: #ffffff;

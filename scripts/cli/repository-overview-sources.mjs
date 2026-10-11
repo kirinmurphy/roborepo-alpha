@@ -105,6 +105,8 @@ function projectWorkspace(repository) {
       worktreeName: root.isWorktree === true ? root.worktreeName || root.git?.worktreeName || null : null,
       worktreeState: root.worktreeState || null,
       worktreeReason: root.worktreeReason || null,
+      worktreeRunning: root.worktreeRunning ?? null,
+      mergedInto: root.mergedInto || null,
       unmergedCommits: root.unmergedCommits ?? null,
       projectRoot: root.projectRoot || null,
       checkoutState: root.checkoutState || "present",

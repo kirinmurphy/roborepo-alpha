@@ -63,19 +63,26 @@ test.describe("repository-first portal Home", () => {
           { rootId: "main", name: "main", isWorktree: false, git: { branch: "main", provider: { ok: true } } },
           worktree("idle-tree", "feature/idle", "idle"),
           worktree("stale-tree", "feature/stale", "stale"),
-          worktree("landed-tree", "feature/landed", "landed"),
+          worktree("landed-tree", "feature/landed", "landed", { mergedInto: "main" }),
           worktree("blocked-tree", "feature/blocked", "landed", { worktreeReason: "plan not closed" }),
-          worktree("running-tree", "feature/running", "running"),
+          worktree("running-tree", "feature/running", "running", { worktreeRunning: true }),
+          worktree("app-tree", null, "idle", { projectRoot: "/private/app/runtime-row", git: { detached: true, shortHead: "d19c7b1", provider: { ok: true } } }),
         ],
         worktreeCleanup: null,
       } };
     });
     await page.goto("/");
     const card = roboRepoCard(page);
-    await expect(planRowOf(card, "Idle Story").getByText("idle", { exact: true })).toBeVisible();
+    // Idle is runtime activity, shown in the actions column where a running checkout shows its port.
+    await expect(planRowOf(card, "Idle Story").locator(".repository-root-actions").getByText("idle", { exact: true })).toBeVisible();
     await expect(checkoutRow(card, "feature/stale").getByText("suggested for removal")).toBeVisible();
-    await expect(checkoutRow(card, "feature/landed").getByText("ready for cleanup")).toBeVisible();
+    const merged = checkoutRow(card, "feature/landed").getByText("merged", { exact: true });
+    await expect(merged).toBeVisible();
+    await expect(merged).toHaveAttribute("title", "Merged into main");
+    await expect(checkoutRow(card, "feature/landed").locator(".worktree-state-note")).toBeHidden();
     await expect(checkoutRow(card, "feature/blocked").getByText("plan not closed")).toBeVisible();
+    await expect(checkoutRow(card, "feature/running").getByText("idle", { exact: true })).toBeHidden();
+    await expect(checkoutRow(card, "runtime-row (detached)")).toHaveCount(1);
     await expect(card.getByRole("button", { name: /^Remove/ })).toHaveCount(0);
 
     await card.getByRole("button", { name: "Actions for feature/running" }).click();

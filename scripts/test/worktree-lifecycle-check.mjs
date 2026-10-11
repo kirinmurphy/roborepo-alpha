@@ -16,6 +16,7 @@ import { rootId } from "../../modules/repositories/identity.mjs";
 import { removalLogPath, withCleanupLock } from "../../modules/repositories/worktree-removal.mjs";
 import { checkWorktreeRemoval } from "../../modules/repositories/worktree-guards.mjs";
 import { inspectWorktreeHook, manageWorktreeHook } from "../cli/worktree-hook.mjs";
+import { collectKnownWorktrees } from "../cli/worktree-observations.mjs";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-worktree-lifecycle-"));
 
@@ -219,7 +220,7 @@ try {
     const item = linkedWorktrees(path.join(main, ".git"))[0];
     const base = { worktree: item, kind: "automatic", landed: true, worktreeRoot: fs.realpathSync(root), mainPath: main, currentPath: main };
     assert.equal((await checkWorktreeRemoval({ ...base, landed: false })).reason, "not landed");
-    assert.match((await checkWorktreeRemoval({ ...base, worktreeRoot: main })).reason, /outside worktree root/);
+    assert.match((await checkWorktreeRemoval({ ...base, worktreeRoot: main })).reason, /not in your worktree folder/);
     assert.equal((await checkWorktreeRemoval({ ...base, kind: "confirmed", worktreeRoot: main })).ok, true);
     assert.equal((await checkWorktreeRemoval({ ...base, currentPath: item.path })).reason, "current or main checkout");
     assert.equal((await checkWorktreeRemoval({ ...base, kind: "confirmed", currentPath: item.path })).reason, "current or main checkout");
@@ -484,7 +485,7 @@ try {
     }
     const options = { cwd: main, stateRoot, discover: async () => ({ instances: [] }) };
     let rows = await cleanupWorktrees(options);
-    assert.match(rows.find((row) => row.branch === "inside").reason, /outside worktree root/, "with no folder, landed work is only suggested");
+    assert.match(rows.find((row) => row.branch === "inside").reason, /not in your worktree folder/, "with no folder, landed work is only suggested");
     assert.equal((await inspectWorktreeHook({ cwd: main })).state, "absent");
     await assert.rejects(enableWorktreeCleanup({ repositoryId, folder: os.homedir(), stateRoot }), /home directory/);
     await assert.rejects(enableWorktreeCleanup({ repositoryId, folder: path.join(root, "no-such-folder"), stateRoot }), /Folder not found/);
@@ -495,7 +496,7 @@ try {
     assert.equal((await inspectWorktreeHook({ cwd: main })).state, "installed");
     rows = await cleanupWorktrees({ ...options, apply: true });
     assert.equal(rows.find((row) => row.branch === "inside").action, "removed", rows.find((row) => row.branch === "inside").reason);
-    assert.match(rows.find((row) => row.branch === "outside").reason, /outside worktree root/);
+    assert.match(rows.find((row) => row.branch === "outside").reason, /not in your worktree folder/);
     assert.equal(fs.existsSync(inside), false);
     assert.equal(fs.existsSync(outside), true, "a landed worktree outside the confirmed folder is kept");
     dismissWorktreeCleanupNotice({ repositoryId, stateRoot });
@@ -503,6 +504,33 @@ try {
     assert.equal(loadRegistry({ stateRoot }).repositories[repositoryId].worktreeCleanup.root, fs.realpathSync(folder), "dismissal keeps the folder");
     fs.writeFileSync(path.join(main, ".git/hooks/post-merge"), "#!/bin/sh\n# another tool\n");
     assert.equal((await inspectWorktreeHook({ cwd: main })).state, "foreign");
+  }
+  {
+    // The first inventory registers a worktree with nothing running; that must not count as
+    // activity, so a worktree untouched for ten days reads stale at once. A running sighting does.
+    const { main, worktree } = repository("first-inventory");
+    const realMain = fs.realpathSync(main);
+    const stateRoot = path.join(root, "first-inventory-state");
+    const repositoryId = "git:example.com/test/first-inventory";
+    recordRepositoryDiscovery({
+      repositoryId, kind: "git", displayName: "first-inventory", source: "developer-runtime", evidence: "git-remote",
+      confidence: "high", localRoot: rootId(realMain), localRootKind: "clone", localRootPath: realMain, stateRoot,
+    });
+    const tenDaysAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString();
+    fs.writeFileSync(path.join(worktree, "old.txt"), "old\n");
+    git(worktree, "add", "old.txt");
+    const dated = spawnSync("git", ["-c", "user.email=test@example.com", "-c", "user.name=Test", "commit", "-qm", "old"], {
+      cwd: worktree, encoding: "utf8", env: { ...process.env, GIT_AUTHOR_DATE: tenDaysAgo, GIT_COMMITTER_DATE: tenDaysAgo },
+    });
+    assert.equal(dated.status, 0, dated.stderr);
+    const observe = async (runningRootIds = new Set()) => (await collectKnownWorktrees(loadRegistry({ stateRoot }), { stateRoot, settings: {}, runningRootIds }))
+      .worktrees.get(repositoryId).find((item) => item.branch === "feature");
+    assert.equal((await observe()).state, "stale", "registering a worktree is not activity");
+    const worktreeRootId = rootId(fs.realpathSync(worktree));
+    assert.equal((await observe(new Set([worktreeRootId]))).running, true);
+    assert.ok(loadRegistry({ stateRoot }).repositories[repositoryId].localRoots.find((item) => item.rootId === worktreeRootId).lastRunningAt,
+      "a running sighting is recorded");
+    assert.equal((await observe()).state, "idle", "a recent running sighting counts as activity");
   }
   console.log("worktree lifecycle: inventory and landing ok");
 } finally {

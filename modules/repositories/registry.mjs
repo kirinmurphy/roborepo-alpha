@@ -182,6 +182,15 @@ export function registerLocalRoot(registry, id, { rootId, kind = "clone", now = 
   return false;
 }
 
+// Records that Runtime saw something running in a checkout, at most once per debounce interval.
+export function markLocalRootRunning(registry, id, rootId, { now = new Date().toISOString() } = {}) {
+  const root = requireRecord(registry, id, "mark local root running").localRoots.find((item) => item.rootId === rootId);
+  if (!root) return false;
+  if (root.lastRunningAt && Date.parse(now) - Date.parse(root.lastRunningAt) < LAST_SEEN_DEBOUNCE_MS) return false;
+  root.lastRunningAt = now;
+  return true;
+}
+
 // Merges `changes` into the repository's opt-in worktree cleanup record (see schema.mjs).
 export function setWorktreeCleanup(registry, id, changes, { now = new Date().toISOString() } = {}) {
   const record = requireRecord(registry, id, "set worktree cleanup");
