@@ -48,18 +48,18 @@
           <span data-slot="repository-menu"></span>
         </div>
         <div class="repository-roots" data-slot="checkouts"></div>
-        <div data-slot="hidden-worktrees"></div>
         <div class="home-domain-rows" data-slot="domains"></div>
+        <div data-slot="cleanup-notice"></div>
       </article>
     </template>
-    <template id="tpl-hidden-worktrees">
-      <details class="home-hidden-worktrees">
-        <summary data-slot="count"></summary>
-        <ul data-slot="items"></ul>
-      </details>
-    </template>
-    <template id="tpl-hidden-worktree">
-      <li><span data-slot="name"></span><button type="button" data-action="unhide">Unhide</button></li>
+    <!-- worktree-dialogs.js: the card-footer offer to turn on automatic worktree cleanup. -->
+    <template id="tpl-worktree-cleanup-notice">
+      <div class="worktree-cleanup-notice" role="note">
+        <portal-icon name="tree" size="sm" aria-hidden="true"></portal-icon>
+        <span class="worktree-cleanup-notice-text" data-slot="text"></span>
+        <button type="button" data-btn="secondary" data-action="enable">Turn on automatic cleanup</button>
+        <button type="button" data-btn="text" data-action="dismiss">Dismiss</button>
+      </div>
     </template>
     <template id="tpl-domain-row">
       <section class="home-domain-row">
@@ -108,6 +108,7 @@
       <div class="worktree-details">
         <div class="worktree-details-identity" data-slot="identity"></div>
         <ul class="worktree-details-facts" data-slot="facts" aria-label="Worktree status" hidden></ul>
+        <button type="button" class="worktree-details-remove" data-slot="remove" hidden>Remove worktree…</button>
       </div>
     </template>
     <template id="tpl-worktree-detail-row">
@@ -132,6 +133,55 @@
         <a href="/runtime">Associate in Runtime</a>
       </aside>
     </template>
+
+    <dialog id="worktree-remove-dialog" data-dialog-size="md" aria-labelledby="worktree-remove-title">
+      <form method="dialog">
+        <div class="modal-head">
+          <h2 id="worktree-remove-title">Remove worktree</h2>
+          <portal-close-button data-close aria-label="Close"></portal-close-button>
+        </div>
+        <div class="modal-body">
+          <dl class="worktree-remove-facts">
+            <dt>Branch</dt><dd data-slot="branch"></dd>
+            <dt>Unmerged commits</dt><dd data-slot="unmerged"></dd>
+            <dt>Archive ref</dt><dd data-slot="archive"></dd>
+          </dl>
+          <p class="worktree-remove-plan" data-slot="plan" hidden></p>
+          <p class="worktree-dialog-help">The checkout and its local branch are deleted. The branch tip stays restorable from the archive ref; remote branches are not touched.</p>
+          <div class="item-err" data-slot="error" hidden></div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" data-btn="secondary" data-close>Cancel</button>
+          <button type="button" data-btn="cta" data-slot="confirm">Remove worktree</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="worktree-cleanup-dialog" data-dialog-size="md" aria-labelledby="worktree-cleanup-title">
+      <form method="dialog">
+        <div class="modal-head">
+          <h2 id="worktree-cleanup-title">Turn on automatic cleanup</h2>
+          <portal-close-button data-close aria-label="Close"></portal-close-button>
+        </div>
+        <div class="modal-body">
+          <p class="worktree-dialog-help">After each merge or pull in <strong data-slot="repository"></strong>, RoboRepo removes worktrees whose branches have landed, when they are clean and inside this folder. Work that has not landed is never removed automatically.</p>
+          <label>
+            Worktree folder
+            <input data-slot="folder" required spellcheck="false" autocomplete="off" />
+          </label>
+          <p class="worktree-dialog-help" data-slot="folder-source" hidden>Set by <code>docs/plans/plans-config.json</code>.</p>
+          <div class="worktree-cleanup-foreign" data-slot="foreign" hidden>
+            <p>Another tool's <code>post-merge</code> hook is already installed at <code data-slot="hook"></code>. Add this line to it:</p>
+            <pre data-slot="line"></pre>
+          </div>
+          <div class="item-err" data-slot="error" hidden></div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" data-btn="secondary" data-close>Cancel</button>
+          <button type="button" data-btn="cta" data-slot="confirm">Turn on</button>
+        </div>
+      </form>
+    </dialog>
 
     {{PLAN_DRAWER}}
     {{REPOSITORY_SOURCES}}

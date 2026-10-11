@@ -4,7 +4,7 @@
   "title": "Clean up worktrees",
   "description": "Preview landed worktree cleanup or apply it behind safety guards",
   "order": 10,
-  "usage": "roborepo git worktrees cleanup [--apply] [--plan <id>] [--hide <branch>|--unhide <branch>|--remove <branch> --confirm --apply] [--json]",
+  "usage": "roborepo git worktrees cleanup [--apply] [--plan <id>] [--remove <branch> --confirm --apply] [--json]",
   "execution": {
     "adapter": "module",
     "module": "scripts/cli/worktree-cleanup.mjs",

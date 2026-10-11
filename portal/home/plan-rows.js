@@ -4,18 +4,17 @@ import { worktreeDetailsButton } from "./worktree-details.js";
 // What a matched plan hands the shared checkout row (buildRootSection's `identity`): the plans glyph,
 // and the title, completion, and worktree-details trigger in place of the branch label. Everything
 // else on the row — Git warning, port, Links — still comes from the checkout.
-export function matchedPlanIdentity(plan, checkout, onOpenPlan) {
+export function matchedPlanIdentity(plan, checkout, { onOpenPlan, onRemove = null } = {}) {
   const node = tpl("tpl-plan-identity");
-  node.append(planItem(plan, onOpenPlan), worktreeDetailsButton(plan, checkout));
+  node.append(planItem(plan, onOpenPlan), worktreeDetailsButton(plan, checkout, { onRemove }));
   return { glyph: "plans", label: "Plan", node };
 }
 
 // A plan Home could not pair with any checkout. The badge says why, and it is not a lifecycle state:
 // "no worktree" when the plan names none (a fact about association, not progress: the ring already
 // says how far along it is); otherwise the server's `worktreeState` says
-// whether the named worktree is hidden, unlisted, gone, contested, or cannot be determined.
+// whether the named worktree is unlisted, gone, contested, or cannot be determined.
 const WORKTREE_BADGES = {
-  hidden: { text: "worktree hidden", title: (name) => `Worktree "${name}" is hidden on Home; unhide it from this card's hidden list` },
   unlisted: { text: "worktree not listed", title: (name) => `Worktree "${name}" exists, but Runtime does not list it` },
   missing: { text: "worktree missing", title: (name) => `No worktree named "${name}" exists in this repository` },
   ambiguous: { text: "worktree ambiguous", title: (name) => `Worktree "${name}" is claimed by another active plan or matches more than one checkout` },

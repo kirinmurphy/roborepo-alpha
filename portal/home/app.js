@@ -5,6 +5,7 @@ import { fetchSnapshot as fetchPlansSnapshot } from "/portal/plans/api.js";
 import * as api from "./api.js";
 import { mountHomeLinks } from "./links.js";
 import { repositoryDirectory, unresolvedActivity } from "./templates.js";
+import { createWorktreeCleanupDialog, createWorktreeRemoveDialog } from "./worktree-dialogs.js";
 import { createRepositorySourcesDialog } from "/portal/shared/repository-sources-dialog.js";
 import { autoDiscoveryPrompt, repositoryEmptyState } from "/portal/shared/repository-sources-templates.js";
 import { fetchSetupState } from "/portal/shared/setup-api.js";
@@ -49,29 +50,33 @@ const onboarding = {
   onAddFolder: () => sourcesDialog.open({ addFolder: true }),
 };
 
+// Both dialogs change what the card lists, so Home re-reads its overview as soon as one succeeds.
+const afterWorktreeChange = () => {
+  renderedVersion = null;
+  refresh({ force: true });
+};
+const removeDialog = createWorktreeRemoveDialog({ onRemoved: afterWorktreeChange });
+const cleanupDialog = createWorktreeCleanupDialog({ onChanged: afterWorktreeChange });
+
 const menuActions = {
   onMountLinks: (slot, entrypoint) => mountHomeLinks(slot, entrypoint, { onStale: refresh }),
   onToggleMenu: toggleActionMenu,
   onSelectMenu: selectRepositoryAction,
   onOpenPlan: openPlan,
-  onWorktreeAction: changeWorktree,
+  onRemoveWorktree: (target) => {
+    closeActionMenus();
+    removeDialog.open(target);
+  },
+  onEnableCleanup: (repository) => cleanupDialog.open(repository),
+  onDismissCleanup: dismissCleanupNotice,
 };
 
-async function changeWorktree(action, worktree) {
-  const branch = worktree.git?.branch;
-  if (!branch || !worktree.repositoryId) return;
-  if (action === "remove") {
-    const count = Number.isInteger(worktree.unmergedCommits) ? worktree.unmergedCommits : "unknown";
-    const archive = `refs/roborepo/abandoned/${branch}`;
-    if (!window.confirm(`Remove worktree ${branch}?\nUnmerged commits: ${count}\nArchive ref: ${archive}`)) return;
-  }
+async function dismissCleanupNotice(repository) {
   try {
-    const result = await api.mutateWorktree({ repositoryId: worktree.repositoryId, action, branch, confirm: action === "remove" });
-    if (["failed", "kept"].includes(result.action)) throw new Error(result.reason || "worktree was kept");
-    renderedVersion = null;
-    await refresh({ force: true });
+    await api.dismissWorktreeCleanupNotice({ repositoryId: repository.repositoryId });
+    afterWorktreeChange();
   } catch (error) {
-    warning.textContent = `Worktree action unavailable: ${error.message}`;
+    warning.textContent = `Could not dismiss the cleanup notice: ${error.message}`;
     warning.hidden = false;
   }
 }
@@ -188,15 +193,17 @@ async function renderHarnessBanner() {
   }
 }
 
-function toggleActionMenu(card) {
-  const menu = card.querySelector("[data-menu]");
-  const trigger = card.querySelector("[data-action=menu]");
+// `target` is a repository card, whose first menu is the repository's own, or a worktree row's
+// `.action-menu`. Either way the card is raised so the open panel overlaps the cards below it.
+function toggleActionMenu(target) {
+  const menu = target.querySelector("[data-menu]");
+  const trigger = target.querySelector("[data-action=menu]");
   if (!menu || !trigger) return;
   const willOpen = menu.hidden;
   closeActionMenus();
   menu.hidden = !willOpen;
   trigger.setAttribute("aria-expanded", String(willOpen));
-  if (willOpen) card.classList.add("has-open-menu");
+  if (willOpen) target.closest(".repository-card")?.classList.add("has-open-menu");
 }
 
 function closeActionMenus() {

@@ -182,14 +182,12 @@ export function registerLocalRoot(registry, id, { rootId, kind = "clone", now = 
   return false;
 }
 
-export function setWorktreeHidden(registry, id, rootId, { hidden, now = new Date().toISOString() }) {
-  const record = requireRecord(registry, id, "set worktree hidden");
-  const root = record.localRoots.find((item) => item.rootId === rootId && item.kind === "worktree");
-  if (!root) throw new Error(`unknown worktree: ${rootId}`);
-  if (hidden && root.hiddenAt === now) return false;
-  if (!hidden && !root.hiddenAt) return false;
-  if (hidden) root.hiddenAt = now;
-  else delete root.hiddenAt;
+// Merges `changes` into the repository's opt-in worktree cleanup record (see schema.mjs).
+export function setWorktreeCleanup(registry, id, changes, { now = new Date().toISOString() } = {}) {
+  const record = requireRecord(registry, id, "set worktree cleanup");
+  const next = { ...(record.worktreeCleanup || {}), ...changes };
+  if (JSON.stringify(next) === JSON.stringify(record.worktreeCleanup || {})) return false;
+  record.worktreeCleanup = next;
   record.updatedAt = now;
   return true;
 }

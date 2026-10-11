@@ -34,6 +34,15 @@ const HEALTH_BADGE_TONES = { starting: "warn", degraded: "warn", unhealthy: "dan
 
 let memberListSequence = 0;
 
+// A landed worktree says what happens next: the guard that keeps it, or that nothing does. With the
+// cleanup hook installed the next pull removes it; otherwise it waits for /plan-close or a cleanup
+// run, so the row only says it is ready.
+function worktreeStateNote(root) {
+  if (root.worktreeState !== "landed") return null;
+  if (root.worktreeReason) return root.worktreeReason;
+  return root.cleanupHookInstalled ? "removed on next pull" : "ready for cleanup";
+}
+
 // `root` is undefined for the main slot when nothing has resolved a rootId yet (no active listener
 // on the main checkout) — the row still renders, so the card never looks like it is missing a piece.
 // `identity` ({ glyph, label, node }) lets the calling page name the row itself: its glyph and
@@ -41,7 +50,7 @@ let memberListSequence = 0;
 // and copy control at the start of the identity line. Git drift and the actions column still come
 // from `root`, so the row behaves exactly like the checkout it is. Home names a worktree by the plan
 // it implements this way; the row stays agnostic about what the node holds.
-export function buildRootSection({ root, departed = [], repository, composeActions, instanceActions, mode = "runtime", onMountLinks, onWorktreeAction, identity = null }) {
+export function buildRootSection({ root, departed = [], repository, composeActions, instanceActions, mode = "runtime", onMountLinks, onMountWorktreeMenu, identity = null }) {
   const section = createRepositoryCheckoutRow({ controls: mode !== "home" });
   // Lets a rebuild find "this same checkout's" row across renders (see reconcileSection in app.js)
   // to carry its open/closed state forward — rootId is stable across polls, DOM position is not.
@@ -52,7 +61,12 @@ export function buildRootSection({ root, departed = [], repository, composeActio
     if (root.worktreeState !== "running") {
       badge.hidden = false;
       badge.textContent = root.worktreeState === "stale" ? "suggested for removal" : root.worktreeState;
-      if (root.worktreeReason) badge.title = root.worktreeReason;
+    }
+    const note = worktreeStateNote(root);
+    if (note) {
+      const slot = section.querySelector("[data-slot=worktree-note]");
+      slot.hidden = false;
+      slot.textContent = note;
     }
   }
 
@@ -71,14 +85,11 @@ export function buildRootSection({ root, departed = [], repository, composeActio
   }
   fillPromotedLink(section, root);
   if (mode === "home") {
-    if (root?.isWorktree && root.worktreeState && root.worktreeState !== "running" && root.git?.branch && onWorktreeAction) {
-      const actions = section.querySelector("[data-slot=worktree-actions]");
-      actions.hidden = false;
-      for (const action of ["hide", "remove"]) {
-        const button = actions.querySelector(`[data-action=${action}-worktree]`);
-        button.setAttribute("aria-label", `${action === "hide" ? "Hide" : "Remove"} ${root.git.branch}`);
-        button.addEventListener("click", () => onWorktreeAction(action, root));
-      }
+    // A plan's row keeps its worktree actions in the worktree dropdown its identity carries.
+    if (root?.isWorktree && !identity && onMountWorktreeMenu) {
+      const slot = section.querySelector("[data-slot=worktree-menu]");
+      slot.hidden = false;
+      onMountWorktreeMenu(slot, root);
     }
     if (root?.primaryEntrypoint?.opaqueKey) onMountLinks?.(section.querySelector("[data-slot=root-links]"), root.primaryEntrypoint);
     section.querySelector("[data-slot=members]")?.remove();

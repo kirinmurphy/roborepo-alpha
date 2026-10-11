@@ -13,7 +13,7 @@ import {
   unresolvedRuntimeActivity,
 } from "./repository-overview-sources.mjs";
 
-export function composeHomeOverview({ registry, runtimeState, plansState, telemetryState, now = new Date() }) {
+export function composeHomeOverview({ registry, runtimeState, plansState, telemetryState, planCloseEnabled = false, now = new Date() }) {
   const runtimeById = runtimeByRepository(runtimeState.data, registry);
   const planCoverage = plansByRepository(plansState.data, now, registry);
   const telemetryById = telemetryByRepository(telemetryState.data, registry);
@@ -23,6 +23,7 @@ export function composeHomeOverview({ registry, runtimeState, plansState, teleme
     .map((record) => repositoryOverview(record, {
       runtimeState,
       workspace: runtimeById.get(record.id) || null,
+      planCloseEnabled,
       plansState,
       plans: planCoverage.get(record.id) || null,
       telemetryState,
@@ -86,7 +87,7 @@ export function unavailableState(message) {
 function repositoryOverview(record, context) {
   const workspace = context.workspace;
   const lifecycle = workspace?.lifecycle || { state: "idle", reason: "Runtime has not observed this repository yet" };
-  const runtime = perRepositoryEnvelope(context.runtimeState, workspace || { lifecycle, checkouts: [] });
+  const runtime = perRepositoryEnvelope(context.runtimeState, workspace ? withCleanupOffer(workspace, context.planCloseEnabled) : { lifecycle, checkouts: [] });
   const git = perRepositoryEnvelope(context.runtimeState, workspace ? gitSummary(workspace) : { checkouts: [], warnings: [] });
   const runtimeAvailable = context.runtimeState.status !== "unavailable";
   const plans = context.plans
@@ -124,7 +125,6 @@ function repositoryOverview(record, context) {
 // A plan that names a worktree but did not match gets `worktreeState` instead, saying why:
 // - "ambiguous": the name is claimed by another active plan, or Runtime exposes it without a single
 //   referenceable checkout.
-// - "hidden": the user hid the worktree on Home, so Runtime lists it among the hidden ones instead.
 // - "missing": Git has no linked worktree by that name.
 // - "unlisted": Git has the worktree, and Runtime is up but does not list it as a checkout. This is
 //   about pairing, not activity: whether a listed worktree is running or idle is Runtime's state.
@@ -139,24 +139,33 @@ function associatePlans(workspace, plans, { worktrees = null, runtimeAvailable =
   const worktreeNames = tally(named.map((checkout) => checkout.worktreeName));
   const claims = tally(plans.active.map((plan) => plan.worktree).filter(Boolean));
   const rootIdByName = new Map(named.map((checkout) => [checkout.worktreeName, checkout.rootId]));
-  const hiddenNames = new Set((workspace?.hiddenWorktrees || []).map((worktree) => worktree.worktreeName).filter(Boolean));
 
   const active = plans.active.map((plan) => {
     if (!plan.worktree) return plan;
     const unique = claims.get(plan.worktree) === 1 && worktreeNames.get(plan.worktree) === 1;
     const rootId = unique ? rootIdByName.get(plan.worktree) : null;
     if (rootId) return { ...plan, checkoutRootId: rootId };
-    return { ...plan, worktreeState: unmatchedWorktreeState(plan.worktree, { claims, worktreeNames, hiddenNames, worktrees, runtimeAvailable }) };
+    return { ...plan, worktreeState: unmatchedWorktreeState(plan.worktree, { claims, worktreeNames, worktrees, runtimeAvailable }) };
   });
   return { ...plans, active };
 }
 
-function unmatchedWorktreeState(name, { claims, worktreeNames, hiddenNames, worktrees, runtimeAvailable }) {
+function unmatchedWorktreeState(name, { claims, worktreeNames, worktrees, runtimeAvailable }) {
   if (claims.get(name) > 1 || worktreeNames.has(name)) return "ambiguous";
-  if (hiddenNames.has(name)) return "hidden";
   if (!worktrees) return "unknown";
   if (!worktrees.has(name)) return "missing";
   return runtimeAvailable ? "unlisted" : "unknown";
+}
+
+// Home offers the opt-in cleanup hook only where the plan suite is not closing stories: the
+// plan-close package is disabled, the repository has linked worktrees, the hook is absent or another
+// tool's, and the user has not dismissed the offer. A shared global hooks path cannot be offered.
+function withCleanupOffer(workspace, planCloseEnabled) {
+  const cleanup = workspace.worktreeCleanup;
+  if (!cleanup) return workspace;
+  const hasWorktrees = workspace.checkouts.some((checkout) => checkout.isWorktree);
+  const offered = !planCloseEnabled && hasWorktrees && !cleanup.dismissed && ["absent", "foreign"].includes(cleanup.hook);
+  return { ...workspace, worktreeCleanup: { ...cleanup, offered } };
 }
 
 function gitSummary(workspace) {

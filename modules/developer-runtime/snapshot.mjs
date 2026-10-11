@@ -27,6 +27,8 @@ export function buildDeveloperRuntimeSnapshot({
   // persistedRepositories; it fills the main row, which would otherwise render blank.
   idleMainCheckouts = new Map(),
   knownWorktrees = new Map(),
+  // Per repository: the opt-in cleanup hook's status and worktree folder, for Home's cleanup notice.
+  worktreeCleanup = new Map(),
   // Repositories the 30-day ageing sweep has hidden. Name and last-seen only — enough for the
   // "Show hidden" affordance to offer them back, without deriving lifecycle or reading git for
   // repositories that are by construction not on the page.
@@ -190,7 +192,7 @@ export function buildDeveloperRuntimeSnapshot({
     // Repository-keyed view over the same instances the three collections above hold. Built
     // alongside them during the migration (developer-runtime-repository-card-merge) so existing consumers
     // keep working while the portal moves over; the legacy three are removed once nothing reads them.
-    repositories: buildRepositories({ projects, composeProjects, unmatchedInstances, repositoryNames, repositoryUrlKeys, persistedRepositories, idleMainCheckouts, knownWorktrees, pinnedRepositoryIds }),
+    repositories: buildRepositories({ projects, composeProjects, unmatchedInstances, repositoryNames, repositoryUrlKeys, persistedRepositories, idleMainCheckouts, knownWorktrees, worktreeCleanup, pinnedRepositoryIds }),
     inactiveProjects: inactiveProjects.sort(compareProjects),
     hiddenRepositories,
     hiddenCount,
@@ -240,7 +242,7 @@ function groupByContainer(instances) {
 // Only a real repositoryId groups. `process:` identities resolve to null (canonicalRepositoryId
 // returns null for them — no repository exists to be a member of) and stay unmatched, as do
 // Compose projects whose repo never resolved.
-function buildRepositories({ projects, composeProjects, unmatchedInstances, repositoryNames = new Map(), repositoryUrlKeys = new Map(), persistedRepositories = [], idleMainCheckouts = new Map(), knownWorktrees = new Map(), pinnedRepositoryIds = new Set() }) {
+function buildRepositories({ projects, composeProjects, unmatchedInstances, repositoryNames = new Map(), repositoryUrlKeys = new Map(), persistedRepositories = [], idleMainCheckouts = new Map(), knownWorktrees = new Map(), worktreeCleanup = new Map(), pinnedRepositoryIds = new Set() }) {
   const byRepository = new Map();
 
   // A worktree's project-level `name` is commonly its branch or directory name (e.g.
@@ -293,7 +295,6 @@ function buildRepositories({ projects, composeProjects, unmatchedInstances, repo
         // and the portal then renders its section empty rather than this array being padded with a
         // placeholder.
         roots: [],
-        hiddenWorktrees: [],
       });
     }
     return byRepository.get(repositoryId);
@@ -472,11 +473,6 @@ function buildRepositories({ projects, composeProjects, unmatchedInstances, repo
     const entry = byRepository.get(repositoryId);
     if (!entry) continue;
     for (const worktree of worktrees) {
-      if (worktree.hidden) {
-        entry.roots = entry.roots.filter((root) => root.rootId !== worktree.rootId);
-        entry.hiddenWorktrees.push(worktree);
-        continue;
-      }
       const root = ensureRoot(entry, worktree.rootId, worktree.git, worktree.projectRoot);
       root.isWorktree = true;
       root.worktreeState = worktree.state;
@@ -486,6 +482,10 @@ function buildRepositories({ projects, composeProjects, unmatchedInstances, repo
       root.checkoutState = worktree.prunable ? "absent" : "present";
     }
     entry.roots.sort((a, b) => a.isWorktree - b.isWorktree || (a.git?.branch || "").localeCompare(b.git?.branch || ""));
+  }
+  for (const [repositoryId, cleanup] of worktreeCleanup) {
+    const entry = byRepository.get(repositoryId);
+    if (entry) entry.worktreeCleanup = cleanup;
   }
 
   // Applied to every entry at once, after both the running and persisted passes, because a pin is a

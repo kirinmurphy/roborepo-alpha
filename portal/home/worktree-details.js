@@ -8,17 +8,21 @@ const WORKTREE_PATH_MAX_LENGTH = 50;
 
 // The worktree behind a matched plan row: the identity its branch label and copy control used to
 // show, each value with its own copy action, plus the Git facts worth a glance. The full checkout
-// tooltip stays on Runtime and on unmatched worktree rows.
-export function worktreeDetailsButton(plan, checkout) {
+// tooltip stays on Runtime and on unmatched worktree rows. Remove sits at the foot of the panel, so
+// removing a plan's worktree is never the row's most prominent action.
+export function worktreeDetailsButton(plan, checkout, { onRemove = null } = {}) {
   const button = document.createElement("portal-menu-button");
   button.setAttribute("icon", "tree");
   button.setAttribute("aria-label", `Worktree details for ${plan.title}`);
   button.title = "Worktree details";
-  button.panelContent = worktreeDetailsPanel(checkout);
+  button.panelContent = worktreeDetailsPanel(checkout, onRemove && (() => {
+    button.close();
+    onRemove();
+  }));
   return button;
 }
 
-function worktreeDetailsPanel(checkout) {
+function worktreeDetailsPanel(checkout, onRemove) {
   const panel = tpl("tpl-worktree-details");
   // The shared menu button closes on any document click; copying a value must leave it open so the
   // in-place Copied confirmation is visible.
@@ -27,7 +31,20 @@ function worktreeDetailsPanel(checkout) {
   const facts = panel.querySelector("[data-slot=facts]");
   facts.append(...summaryFacts(checkout).map((text) => fill(tpl("tpl-worktree-detail-fact"), { text })));
   facts.hidden = !facts.childElementCount;
+  if (onRemove) mountRemove(panel.querySelector("[data-slot=remove]"), checkout, onRemove);
   return panel;
+}
+
+// A running worktree cannot pass the removal guards, so the control says why instead of offering a
+// refusal.
+function mountRemove(button, checkout, onRemove) {
+  button.hidden = false;
+  if (checkout.worktreeState === "running") {
+    button.disabled = true;
+    button.textContent = "Remove worktree… (stop its servers first)";
+    return;
+  }
+  button.addEventListener("click", onRemove);
 }
 
 function identityRows(checkout) {

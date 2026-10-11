@@ -1,5 +1,3 @@
-import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { discoverInstances } from "../../modules/developer-runtime/discovery.mjs";
 import { findProjectRoot, mainCheckoutPath, resolveGitDir } from "../../modules/repositories/identity.mjs";
@@ -8,25 +6,22 @@ import { inspectBranchLanding } from "../../modules/repositories/worktree-landed
 import { checkWorktreeRemoval } from "../../modules/repositories/worktree-guards.mjs";
 import { removeLandedBranch, removeWorktree, withCleanupLock } from "../../modules/repositories/worktree-removal.mjs";
 import { runGitProcess } from "../../modules/repositories/git-exec.mjs";
-import { checkoutRootsFor, loadRegistry, updateRegistry, setWorktreeHidden } from "../../modules/repositories/registry.mjs";
-import { rootId } from "../../modules/repositories/identity.mjs";
-import { parseFrontmatter } from "../../modules/plan-suite/index.mjs";
+import { checkoutRootsFor, loadRegistry } from "../../modules/repositories/registry.mjs";
+import { activeWorktreeNames, findPlanWorktree, repositoryRecordFor, worktreeFolder } from "./worktree-policy.mjs";
 import { STATE_ROOT } from "./paths.mjs";
 
-export async function cleanupWorktrees({ cwd = process.cwd(), stateRoot = STATE_ROOT, apply = false, plan = null, hide = null, unhide = null, remove = null, confirm = false, currentPath = cwd, discover = discoverInstances } = {}) {
+export async function cleanupWorktrees({ cwd = process.cwd(), stateRoot = STATE_ROOT, apply = false, plan = null, remove = null, confirm = false, currentPath = cwd, discover = discoverInstances } = {}) {
   const mainPath = mainCheckout(cwd);
   if (!mainPath) throw new Error("a non-bare Git checkout is required");
   const gitDir = path.join(mainPath, ".git");
-  const worktreeRoot = configuredRoot(mainPath);
+  const worktreeRoot = worktreeFolder(mainPath, repositoryRecordFor(loadRegistry({ stateRoot }), mainPath));
   const scopedName = plan ? findPlanWorktree(mainPath, plan) : null;
   if (plan && !scopedName) throw new Error(`plan not found or has no worktree: ${plan}`);
   const worktrees = linkedWorktrees(gitDir);
-  const selectedBranch = hide || unhide || remove;
-  if (selectedBranch && [hide, unhide, remove].filter(Boolean).length !== 1) throw new Error("choose one worktree action");
+  const selectedBranch = remove;
   if (remove && !confirm) throw new Error("confirmed removal requires --confirm");
   if (selectedBranch && !worktrees.some((item) => item.branch === selectedBranch || item.name === selectedBranch)) throw new Error(`worktree not found: ${selectedBranch}`);
   const action = async () => {
-    if (hide || unhide) return [setHiddenWorktree(mainPath, stateRoot, worktrees, hide || unhide, Boolean(hide))];
     const running = await runningPaths(discover);
     const activePlans = activeWorktreeNames(mainPath);
     const rows = [];
@@ -79,47 +74,6 @@ function mainCheckout(cwd) {
   return resolveGitDir(main)?.commonDir === git.commonDir ? main : null;
 }
 
-export function configuredRoot(mainPath) {
-  try {
-    const config = JSON.parse(fs.readFileSync(path.join(mainPath, "docs/plans/plans-config.json"), "utf8"));
-    const raw = config.worktreeRoot;
-    if (typeof raw !== "string" || !raw) return null;
-    const resolved = raw === "~" ? os.homedir()
-      : raw.startsWith(`~${path.sep}`) ? path.join(os.homedir(), raw.slice(2))
-        : path.resolve(mainPath, raw);
-    return fs.realpathSync(resolved);
-  } catch { return null; }
-}
-
-function planFiles(mainPath, lifecycle) {
-  const dir = path.join(mainPath, "docs/plans", lifecycle);
-  try { return fs.readdirSync(dir).filter((file) => file.endsWith(".md")).map((file) => path.join(dir, file)); }
-  catch { return []; }
-}
-
-// The Plans parser, so a quoted `worktree: "name"` still joins and keeps its worktree protected.
-function planFields(file) {
-  try {
-    const { frontmatter } = parseFrontmatter(fs.readFileSync(file, "utf8"));
-    const field = (key) => typeof frontmatter[key] === "string" ? frontmatter[key].trim() : "";
-    return { id: field("id"), worktree: field("worktree") };
-  } catch { return {}; }
-}
-
-export function activeWorktreeNames(mainPath) {
-  return new Set(planFiles(mainPath, "active").map((file) => planFields(file).worktree).filter(Boolean));
-}
-
-function findPlanWorktree(mainPath, plan) {
-  for (const lifecycle of ["completed", "active", "backlog"]) {
-    for (const file of planFiles(mainPath, lifecycle)) {
-      const fields = planFields(file);
-      if (fields.id === plan || file === path.resolve(plan) || path.basename(file) === plan) return fields.worktree || null;
-    }
-  }
-  return null;
-}
-
 async function runningPaths(discover) {
   const result = await discover();
   if (!Array.isArray(result?.instances)) throw new Error("running process discovery unavailable; cleanup kept all worktrees");
@@ -158,21 +112,11 @@ async function cleanupDetachedBranches(mainPath, worktrees, { apply, stateRoot }
   return rows;
 }
 
-function setHiddenWorktree(mainPath, stateRoot, worktrees, selected, hidden) {
-  const worktree = worktrees.find((item) => item.branch === selected || item.name === selected);
-  if (!worktree || worktree.prunable) throw new Error("worktree unavailable");
-  const registry = loadRegistry({ stateRoot });
-  const repositoryId = Object.entries(registry.repositories || {}).find(([, record]) => record.localRoots?.some((root) => root.rootId === rootId(worktree.path)))?.[0];
-  if (!repositoryId) throw new Error("worktree is not registered");
-  updateRegistry({ stateRoot, mutate: (next) => setWorktreeHidden(next, repositoryId, rootId(worktree.path), { hidden }) });
-  return { path: worktree.path, branch: worktree.branch, action: hidden ? "hidden" : "unhidden", reason: null };
-}
-
 export async function worktreeCleanupCommand(args) {
   const options = { apply: false, confirm: false, json: false };
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    if (["--plan", "--hide", "--unhide", "--remove", "--current"].includes(arg)) options[arg.slice(2) === "current" ? "currentPath" : arg.slice(2)] = args[++i];
+    if (["--plan", "--remove", "--current"].includes(arg)) options[arg.slice(2) === "current" ? "currentPath" : arg.slice(2)] = args[++i];
     else if (["--apply", "--confirm", "--json"].includes(arg)) options[arg.slice(2)] = true;
     else throw new Error(`unknown cleanup option: ${arg}`);
   }
@@ -187,12 +131,18 @@ export async function worktreeCleanupCommand(args) {
   return rows;
 }
 
-export async function mutateWorktree({ repositoryId, action, branch, confirm = false, stateRoot = STATE_ROOT }) {
-  if (!["hide", "unhide", "remove"].includes(action) || typeof branch !== "string" || !branch) throw new Error("invalid worktree action");
+// Home's Remove: confirmed removal of one worktree, through the same guards as the command.
+export async function removeRepositoryWorktree({ repositoryId, branch, stateRoot = STATE_ROOT }) {
+  if (typeof branch !== "string" || !branch) throw new Error("a worktree branch is required");
+  const main = repositoryMainCheckout(repositoryId, stateRoot);
+  const rows = await cleanupWorktrees({ cwd: main, stateRoot, remove: branch, apply: true, confirm: true });
+  return rows[0] || { action: "kept", reason: "worktree unavailable" };
+}
+
+export function repositoryMainCheckout(repositoryId, stateRoot = STATE_ROOT) {
   const registry = loadRegistry({ stateRoot });
   if (!registry.repositories?.[repositoryId]) throw new Error("unknown repository");
   const main = mainCheckoutPath(checkoutRootsFor(registry, repositoryId).map((root) => root.path));
   if (!main) throw new Error("main checkout unavailable");
-  const rows = await cleanupWorktrees({ cwd: main, stateRoot, [action]: branch, apply: action === "remove", confirm });
-  return rows[0] || { action: "kept", reason: "worktree unavailable" };
+  return main;
 }

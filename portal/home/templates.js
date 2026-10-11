@@ -1,7 +1,8 @@
 import { portalFillSlots as fill, portalTpl as tpl } from "/portal/shared/api.js";
-import { mountRepositoryRow, repositoryPageUrl } from "/portal/shared/repository-components.js";
+import { mountActionMenu, mountRepositoryRow, repositoryPageUrl } from "/portal/shared/repository-components.js";
 import { appendRepositoryDomains } from "./domains.js";
 import { matchedPlanIdentity, unmatchedPlanRow } from "./plan-rows.js";
+import { worktreeCleanupNotice } from "./worktree-dialogs.js";
 import { buildRootSection } from "/portal/developer-runtime/repository-root-row.js";
 
 const MOCK_NAMES = {
@@ -57,8 +58,9 @@ function repositoryCard(repository, actions) {
     if (repository.lifecycle?.reason) badge.title = repository.lifecycle.reason;
   }
   node.querySelector("[data-slot=checkouts]").append(...cardRows(repository.domains, { ...actions, repositoryId: repository.repositoryId }));
-  mountHiddenWorktrees(node.querySelector("[data-slot=hidden-worktrees]"), repository, actions);
   appendRepositoryDomains(node.querySelector("[data-slot=domains]"), repository.domains);
+  const notice = worktreeCleanupNotice(repository, { onEnable: actions.onEnableCleanup, onDismiss: actions.onDismissCleanup });
+  if (notice) node.querySelector("[data-slot=cleanup-notice]").append(notice);
   return node;
 }
 
@@ -69,32 +71,17 @@ function humanizeMockName(name) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function mountHiddenWorktrees(slot, repository, actions) {
-  const hidden = repository.domains.runtime.data?.hiddenWorktrees || [];
-  if (!hidden.length) return;
-  const group = tpl("tpl-hidden-worktrees");
-  group.querySelector("[data-slot=count]").textContent = `${hidden.length} hidden`;
-  for (const worktree of hidden) {
-    const row = tpl("tpl-hidden-worktree");
-    row.querySelector("[data-slot=name]").textContent = worktree.name;
-    const button = row.querySelector("[data-action=unhide]");
-    button.setAttribute("aria-label", `Unhide ${worktree.name}`);
-    button.addEventListener("click", () => actions.onWorktreeAction?.("unhide", { git: { branch: worktree.name }, repositoryId: repository.repositoryId }));
-    group.querySelector("[data-slot=items]").append(row);
-  }
-  slot.append(group);
-}
-
 // Below the repository row: the main checkout(s), then every active plan — a matched plan AS its
 // worktree's checkout row — then every worktree no plan claimed, then the plan summary. Matching is
 // the server's (`checkoutRootId`); Home only consumes each referenced checkout so none renders twice.
 // With no active plans this is exactly the checkout list, in Runtime order.
 function cardRows(domains, actions) {
   const checkouts = domains.runtime.data?.checkouts || [];
+  const hookInstalled = domains.runtime.data?.worktreeCleanup?.hook === "installed";
   const byRootId = new Map(checkouts.filter((checkout) => checkout.isWorktree && checkout.rootId).map((checkout) => [checkout.rootId, checkout]));
   const consumed = new Set();
   const rows = checkouts.length
-    ? checkouts.filter((checkout) => !checkout.isWorktree).map((checkout) => checkoutRow(checkout, actions))
+    ? checkouts.filter((checkout) => !checkout.isWorktree).map((checkout) => checkoutRow(checkout, actions, { hookInstalled }))
     : [noCheckoutRow()];
   for (const plan of domains.plans.data?.active || []) {
     const checkout = byRootId.get(plan.checkoutRootId);
@@ -103,13 +90,14 @@ function cardRows(domains, actions) {
       continue;
     }
     consumed.add(checkout);
-    rows.push(checkoutRow(checkout, actions, matchedPlanIdentity(plan, checkout, actions.onOpenPlan)));
+    const onRemove = () => actions.onRemoveWorktree({ repositoryId: actions.repositoryId, checkout, plan });
+    rows.push(checkoutRow(checkout, actions, { hookInstalled, identity: matchedPlanIdentity(plan, checkout, { onOpenPlan: actions.onOpenPlan, onRemove }) }));
   }
-  rows.push(...checkouts.filter((checkout) => checkout.isWorktree && !consumed.has(checkout)).map((checkout) => checkoutRow(checkout, actions)));
+  rows.push(...checkouts.filter((checkout) => checkout.isWorktree && !consumed.has(checkout)).map((checkout) => checkoutRow(checkout, actions, { hookInstalled })));
   return rows;
 }
 
-function checkoutRow(checkout, actions, identity = null) {
+function checkoutRow(checkout, actions, { identity = null, hookInstalled = false } = {}) {
   return buildRootSection({
     root: {
       rootId: checkout.rootId,
@@ -119,7 +107,7 @@ function checkoutRow(checkout, actions, identity = null) {
       checkoutReason: checkout.checkoutReason,
       worktreeState: checkout.worktreeState,
       worktreeReason: checkout.worktreeReason,
-      unmergedCommits: checkout.unmergedCommits,
+      cleanupHookInstalled: hookInstalled,
       repositoryId: actions.repositoryId,
       git: checkout.git,
       primaryEntrypoint: checkout.primaryEntrypoint,
@@ -129,8 +117,22 @@ function checkoutRow(checkout, actions, identity = null) {
     repository: { name: "Repository" },
     mode: "home",
     onMountLinks: actions.onMountLinks,
-    onWorktreeAction: (action, root) => actions.onWorktreeAction?.(action, { ...root, repositoryId: actions.repositoryId }),
+    onMountWorktreeMenu: (slot) => mountWorktreeMenu(slot, checkout, actions),
     identity,
+  });
+}
+
+// A worktree no plan claims keeps Remove in a ⋮ menu at the end of its row. A running worktree
+// cannot pass the removal guards, so the item says why instead of offering a refusal.
+function mountWorktreeMenu(slot, checkout, actions) {
+  const running = checkout.worktreeState === "running";
+  const name = checkout.git?.branch || checkout.worktreeName || "worktree";
+  const menu = mountActionMenu(slot, [
+    { key: "remove", label: "Remove worktree…", disabled: running, hint: running ? "stop its servers first" : null },
+  ], {
+    ariaLabel: `Actions for ${name}`,
+    onToggle: () => actions.onToggleMenu(menu),
+    onSelect: () => actions.onRemoveWorktree({ repositoryId: actions.repositoryId, checkout }),
   });
 }
 

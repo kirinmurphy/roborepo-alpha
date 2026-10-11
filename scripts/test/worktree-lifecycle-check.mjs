@@ -7,10 +7,15 @@ import { spawnSync } from "node:child_process";
 import { inspectBranchLanding } from "../../modules/repositories/worktree-landed.mjs";
 import { linkedWorktrees } from "../../modules/repositories/worktree-inventory.mjs";
 import { deriveWorktreeState, resolveWorktreeStaleDays } from "../../modules/repositories/worktree-state.mjs";
-import { activeWorktreeNames, cleanupWorktrees } from "../cli/worktree-cleanup.mjs";
+import { cleanupWorktrees } from "../cli/worktree-cleanup.mjs";
+import { activeWorktreeNames, proposedWorktreeFolder } from "../cli/worktree-policy.mjs";
+import { dismissWorktreeCleanupNotice, enableWorktreeCleanup } from "../cli/worktree-cleanup-optin.mjs";
+import { recordRepositoryDiscovery } from "../cli/repositories.mjs";
+import { loadRegistry } from "../../modules/repositories/registry.mjs";
+import { rootId } from "../../modules/repositories/identity.mjs";
 import { removalLogPath, withCleanupLock } from "../../modules/repositories/worktree-removal.mjs";
 import { checkWorktreeRemoval } from "../../modules/repositories/worktree-guards.mjs";
-import { manageWorktreeHook } from "../cli/worktree-hook.mjs";
+import { inspectWorktreeHook, manageWorktreeHook } from "../cli/worktree-hook.mjs";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-worktree-lifecycle-"));
 
@@ -55,8 +60,6 @@ try {
     assert.equal(deriveWorktreeState({ activityAt: [twoDaysAgo], now, staleDays: 1 }).state, "stale");
     assert.equal(deriveWorktreeState({ activityAt: [twoDaysAgo], now, landed: true }).state, "landed");
     assert.equal(deriveWorktreeState({ activityAt: [twoDaysAgo], now, running: true }).state, "running");
-    assert.equal(deriveWorktreeState({ activityAt: [twoDaysAgo], hiddenAt: "2026-10-09T00:00:00Z", now }).hidden, true);
-    assert.equal(deriveWorktreeState({ activityAt: ["2026-10-10T01:00:00Z"], hiddenAt: "2026-10-09T00:00:00Z", now }).hidden, false);
     assert.equal(resolveWorktreeStaleDays().days, 7);
     assert.equal(resolveWorktreeStaleDays({ preference: 4 }).days, 4);
     assert.equal(resolveWorktreeStaleDays({ preference: 4, environment: "1" }).days, 1);
@@ -447,6 +450,59 @@ try {
     fs.mkdirSync(path.join(main, "docs/plans/active"), { recursive: true });
     fs.writeFileSync(path.join(main, "docs/plans/active/story.md"), "---\nid: quoted\nworktree: \"quoted-plan-work\"\n---\n");
     assert.equal(activeWorktreeNames(main).has("quoted-plan-work"), true, "a quoted worktree field still protects its worktree");
+  }
+  {
+    assert.equal(proposedWorktreeFolder([
+      { path: "/work/repo/.claude/worktrees/app-owned", prunable: false },
+      { path: "/work/trees/repo/one", prunable: false },
+      { path: "/work/trees/repo/nested/two", prunable: false },
+    ]), "/work/trees/repo", "the proposal is the deepest folder holding every worktree a user owns");
+    assert.equal(proposedWorktreeFolder([{ path: "/work/repo/.claude/worktrees/app-owned", prunable: false }]), null);
+  }
+  {
+    // A repository without plans-config.json: automatic removal stays inside the folder the user
+    // confirmed when turning cleanup on, and suggests everything until then.
+    const { main } = repository("optin");
+    const realMain = fs.realpathSync(main);
+    const stateRoot = path.join(root, "optin-state");
+    const repositoryId = "git:example.com/test/optin";
+    recordRepositoryDiscovery({
+      repositoryId, kind: "git", displayName: "optin", source: "developer-runtime", evidence: "git-remote",
+      confidence: "high", localRoot: rootId(realMain), localRootKind: "clone", localRootPath: realMain, stateRoot,
+    });
+    const folder = path.join(root, "optin-trees");
+    fs.mkdirSync(folder);
+    const inside = path.join(folder, "inside");
+    const outside = path.join(root, "optin-outside");
+    git(main, "worktree", "add", "-q", "-b", "inside", inside);
+    git(main, "worktree", "add", "-q", "-b", "outside", outside);
+    commit(inside, "inside.txt", "inside\n");
+    commit(outside, "outside.txt", "outside\n");
+    for (const branch of ["inside", "outside"]) {
+      git(main, "merge", "--squash", branch);
+      git(main, "commit", "-qm", `squash ${branch}`);
+    }
+    const options = { cwd: main, stateRoot, discover: async () => ({ instances: [] }) };
+    let rows = await cleanupWorktrees(options);
+    assert.match(rows.find((row) => row.branch === "inside").reason, /outside worktree root/, "with no folder, landed work is only suggested");
+    assert.equal((await inspectWorktreeHook({ cwd: main })).state, "absent");
+    await assert.rejects(enableWorktreeCleanup({ repositoryId, folder: os.homedir(), stateRoot }), /home directory/);
+    await assert.rejects(enableWorktreeCleanup({ repositoryId, folder: path.join(root, "no-such-folder"), stateRoot }), /Folder not found/);
+    const enabled = await enableWorktreeCleanup({ repositoryId, folder, stateRoot });
+    assert.equal(enabled.action, "installed");
+    assert.equal(enabled.root, fs.realpathSync(folder));
+    assert.equal(loadRegistry({ stateRoot }).repositories[repositoryId].worktreeCleanup.root, fs.realpathSync(folder), "the confirmed folder is recorded");
+    assert.equal((await inspectWorktreeHook({ cwd: main })).state, "installed");
+    rows = await cleanupWorktrees({ ...options, apply: true });
+    assert.equal(rows.find((row) => row.branch === "inside").action, "removed", rows.find((row) => row.branch === "inside").reason);
+    assert.match(rows.find((row) => row.branch === "outside").reason, /outside worktree root/);
+    assert.equal(fs.existsSync(inside), false);
+    assert.equal(fs.existsSync(outside), true, "a landed worktree outside the confirmed folder is kept");
+    dismissWorktreeCleanupNotice({ repositoryId, stateRoot });
+    assert.ok(loadRegistry({ stateRoot }).repositories[repositoryId].worktreeCleanup.noticeDismissedAt, "dismissal is recorded");
+    assert.equal(loadRegistry({ stateRoot }).repositories[repositoryId].worktreeCleanup.root, fs.realpathSync(folder), "dismissal keeps the folder");
+    fs.writeFileSync(path.join(main, ".git/hooks/post-merge"), "#!/bin/sh\n# another tool\n");
+    assert.equal((await inspectWorktreeHook({ cwd: main })).state, "foreign");
   }
   console.log("worktree lifecycle: inventory and landing ok");
 } finally {

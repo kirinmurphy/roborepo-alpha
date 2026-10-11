@@ -10,16 +10,13 @@ export function resolveWorktreeStaleDays({ preference = DEFAULT_WORKTREE_STALE_D
   return { days: value, finding: null };
 }
 
-// The state is a view of current observations. Hidden is separate, because new activity restores a
-// hidden worktree without changing whether it is idle, stale, running, or landed.
-export function deriveWorktreeState({ running = false, landed = false, activityAt = [], hiddenAt = null, staleDays = DEFAULT_WORKTREE_STALE_DAYS, now = new Date() } = {}) {
+// The state is a view of current observations: landed outranks running, which outranks stale.
+export function deriveWorktreeState({ running = false, landed = false, activityAt = [], staleDays = DEFAULT_WORKTREE_STALE_DAYS, now = new Date() } = {}) {
   const times = activityAt.map((value) => Date.parse(value)).filter(Number.isFinite);
   const lastActivity = times.length ? Math.max(...times) : null;
-  const hiddenTime = hiddenAt ? Date.parse(hiddenAt) : null;
-  const hidden = Number.isFinite(hiddenTime) && (lastActivity == null || lastActivity <= hiddenTime);
   let state = "idle";
   if (running) state = "running";
   else if (lastActivity != null && now.getTime() - lastActivity >= staleDays * DAY_MS) state = "stale";
   if (landed) state = "landed";
-  return { state, hidden, lastActivityAt: lastActivity == null ? null : new Date(lastActivity).toISOString() };
+  return { state, lastActivityAt: lastActivity == null ? null : new Date(lastActivity).toISOString() };
 }

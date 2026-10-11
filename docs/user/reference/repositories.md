@@ -161,16 +161,17 @@ Each card combines a compact view of several domains:
   worktrees. The plan title opens the plan drawer, and its completion ring or **done** sits beside it.
   - A plan whose `worktree` field names a linked worktree Home shows becomes that worktree's row: the
     plan title replaces the branch label, a worktree button opens the branch, worktree name, and path
-    (each with its own copy action) plus any dirty, ahead/behind, or drift facts, and the port, Links,
+    (each with its own copy action) plus any dirty, ahead/behind, or drift facts and
+    **Remove worktree…**, and the port, Links,
     and Git warning stay where the checkout row puts them. The match is exact: the plan's value must
     equal the worktree's Git administrative name, exactly one active plan must claim it, and exactly
     one known worktree must carry it. Branch names and checkout paths are never used to guess.
   - Any other plan is its own row with a badge: **no worktree** when it names none;
-    otherwise **worktree hidden** (hidden from Home; unhide it from the card's hidden list),
-    **worktree not listed** (Git has it, Runtime does not list it), **worktree missing** (Git
+    otherwise **worktree not listed** (Git has it, Runtime does not list it), **worktree missing** (Git
     has no worktree by that name), **worktree ambiguous** (claimed twice, or more than one checkout
     carries the name), or **worktree status unknown** (Runtime is unavailable).
-  - Worktrees no plan claimed follow as ordinary checkout rows.
+  - Worktrees no plan claimed follow as ordinary checkout rows, each with a ⋮ menu holding
+    **Remove worktree…**.
   - One unlabeled line closes the list with the repository's Active and Backlog counts and an
     **all plans** link, and says so when Plans coverage is partial. A repository with no active
     plans, or one Plans has not scanned, lists its worktrees as plain checkout rows with no plan
@@ -190,19 +191,37 @@ activity during the configured interval; it is a suggestion for review, not evid
 The interval defaults to 7 days. Change it in Runtime's Settings under **Worktrees**, or set
 `ROBOREPO_WORKTREE_STALE_DAYS` to a number from 1 to 365 to override the setting.
 
-Use **Hide** on a worktree row to move it into the card's **N hidden** list. **Unhide** restores it;
-new branch activity also restores a hidden worktree. **Remove** asks for confirmation and shows the
-branch, its unmerged commit count, and the archive ref used to preserve its tip. Removal refuses a
-locked, dirty, or running worktree, a worktree with valuable ignored files or submodules, and the
-current or main checkout. A blocked landed worktree shows its reason on Home.
+A landed row says what happens next: the reason a guard keeps it (such as **plan not closed**), or
+**removed on next pull** when the cleanup hook is installed, or **ready for cleanup** when nothing
+will remove it until `/plan-close` or a cleanup run.
+
+**Remove worktree…** is in the worktree dropdown on a plan's row and in the ⋮ menu on any other
+worktree row; no row shows it inline. It opens a confirmation naming the branch, its unmerged commit
+count, the archive ref that preserves its tip, and the active plan when one claims the worktree.
+Removal refuses a locked, dirty, or running worktree (a running row's menu item says to stop its
+servers first), a worktree with valuable ignored files or submodules, and the current or main
+checkout; the confirmation shows the reason.
 
 `roborepo git worktrees cleanup` previews candidates and reasons. Add `--apply` to remove eligible
 landed worktrees and local branches. `--plan <id>` limits it to a completed plan's worktree. The
-command also accepts `--hide <branch>`, `--unhide <branch>`, and `--remove <branch> --confirm --apply`.
-Automatic cleanup waits for an associated plan to leave `active`. It only removes a clean,
-unlocked, landed worktree beneath the repository's configured `worktreeRoot`, and never uses
-`git worktree remove --force`. A worktree elsewhere is suggested for manual review. The command
-does not touch remote branches.
+command also accepts `--remove <branch> --confirm --apply`. Automatic cleanup waits for an
+associated plan to leave `active`. It only removes a clean, unlocked, landed worktree beneath the
+repository's worktree folder, and never uses `git worktree remove --force`. The folder is
+`worktreeRoot` from `docs/plans/plans-config.json`, or else the folder confirmed when cleanup was
+turned on from Home. A worktree elsewhere is suggested for manual review. The command does not touch
+remote branches.
+
+With the plan-close package enabled, `/plan-close` removes each story's worktree as its last step,
+and Home does not offer the hook. With it disabled, a repository card with linked worktrees and no
+hook shows **Automatic worktree cleanup is off** in its footer. **Turn on automatic cleanup**
+confirms the worktree folder (proposed as the deepest folder holding the repository's worktrees,
+outside `.claude/worktrees/`) and installs the hook; **Dismiss** hides the offer for that
+repository. If another tool's `post-merge` hook is already installed, the dialog shows the line to
+add to it.
+
+A hook installed before the plan-close package is enabled keeps working: a worktree whose active
+plan names it waits for `/plan-close`. An active plan that does not name its worktree cannot protect
+it, so if that branch lands the hook may remove the worktree first; the removal log keeps its tip.
 
 `roborepo git worktrees hook install` enables automatic cleanup after a successful merge or pull
 in that repository. It returns immediately and writes cleanup output to

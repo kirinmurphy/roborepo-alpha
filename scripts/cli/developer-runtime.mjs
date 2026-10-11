@@ -51,6 +51,7 @@ let refreshGeneration = 0;
 let mockSnapshotActive = false;
 let portalInfo = null;
 let lastKnownWorktrees = new Map();
+let lastWorktreeCleanup = new Map();
 // associationKeys already present in the history file, read once. Without it, the first refresh
 // after a portal restart has no previous snapshot to compare against and would emit a firstSeen for
 // every running app — every restart, forever.
@@ -60,6 +61,7 @@ export function clearDeveloperRuntimeSnapshotCache() {
   lastSnapshot = null;
   mockSnapshotActive = false;
   lastKnownWorktrees = new Map();
+  lastWorktreeCleanup = new Map();
 }
 
 // While auto-discovery is off the refresh still runs, but only over checkouts the registry already
@@ -141,8 +143,9 @@ export async function refreshDeveloperRuntimeSnapshot({
       const inventory = registryNow ? await collectKnownWorktrees(registryNow, {
         stateRoot, settings, readGit: readIdleGit, runningRootIds,
         sessionActivity: loadWorktreeSessionActivity(stateRoot),
-      }) : { registry: null, worktrees: new Map(), findings: [] };
+      }) : { registry: null, worktrees: new Map(), cleanup: new Map(), findings: [] };
       lastKnownWorktrees = inventory.worktrees;
+      lastWorktreeCleanup = inventory.cleanup;
       (discovery.warnings ||= []).push(...inventory.findings);
       const idleMainCheckouts = await collectIdleMainCheckouts(discovery, runningIds, inventory.registry);
       const { persistedRepositories, registry } = await collectPersistedRepositories(runningIds, {
@@ -496,7 +499,7 @@ function scheduleRefresh() {
   if (!inFlightRefresh) refreshDeveloperRuntimeSnapshot().catch(() => {});
 }
 
-function buildSnapshot({ discovery, settings = loadSettings({ stateRoot }), refresh = { state: "idle", startedAt: null, error: null }, now = new Date(), persistedRepositories = [], idleMainCheckouts = new Map(), knownWorktrees = lastKnownWorktrees, registry = loadRegistrySafe() }) {
+function buildSnapshot({ discovery, settings = loadSettings({ stateRoot }), refresh = { state: "idle", startedAt: null, error: null }, now = new Date(), persistedRepositories = [], idleMainCheckouts = new Map(), knownWorktrees = lastKnownWorktrees, worktreeCleanup = lastWorktreeCleanup, registry = loadRegistrySafe() }) {
   return withoutFixtureRepositories(withAutoDiscovery(buildDeveloperRuntimeSnapshot({
     discovery,
     settings,
@@ -507,6 +510,7 @@ function buildSnapshot({ discovery, settings = loadSettings({ stateRoot }), refr
     persistedRepositories,
     idleMainCheckouts,
     knownWorktrees,
+    worktreeCleanup,
     hiddenRepositories: collectHiddenRepositories(registry),
     pinnedRepositoryIds: registryPinnedIds(registry),
   })));

@@ -1,7 +1,7 @@
 ---
 id: a7bslb00
 priority: high
-next_action: Implement Phase 7 — drop Hide, move Remove into row menus with a portal confirmation dialog, and add the opt-in cleanup notice with its confirmed worktree folder.
+next_action: Record the live Home walkthrough of Remove and the cleanup notice, settle the open questions, then merge and run the live /plan-close check.
 blocked_by: []
 depends_on: []
 related:
@@ -48,11 +48,11 @@ all works on plain Git; the GitHub CLI is not required.
       local branches that have no worktree, behind the guards in this plan.
 - [x] Never remove a worktree before `/plan-close` has closed its plan, and have `/plan-close`
       remove it as the last step of closing, so one command finishes the story.
-- [ ] Let the user remove any worktree from a menu on its Home row, after a confirmation, keeping
+- [x] Let the user remove any worktree from a menu on its Home row, after a confirmation, keeping
       its branch tip restorable.
 - [x] Suggest stale worktrees for removal after a threshold that defaults to 7 days and is
       configurable in settings and through an environment variable.
-- [ ] Trigger automatic removal from an opt-in Git `post-merge` hook, so a pull of `main` after a
+- [x] Trigger automatic removal from an opt-in Git `post-merge` hook, so a pull of `main` after a
       GitHub merge cleans up, and let a user without the plan suite turn it on from Home.
 
 ## Non-goals
@@ -325,7 +325,7 @@ Each state decides what Home shows and what may remove the worktree:
 | `running` | A Runtime member runs in it | today's row | none | listed but disabled: "stop its servers first" |
 | `idle` | No process, recent activity, not landed | dimmed row; its plan attaches | none | with confirmation |
 | `stale` | Idle past the threshold, not landed | dimmed row, "suggested for removal" | none | with confirmation |
-| `landed` | Passes §3 | "landed" with "removed on next cleanup" when every guard passes, or with the blocking reason as visible text ("plan not closed" included) | removed when every guard passes and a trigger runs (§8) | with confirmation |
+| `landed` | Passes §3 | "landed" with the blocking reason as visible text ("plan not closed" included); with no blocker, "removed on next pull" when the hook is installed and "ready for cleanup" otherwise | removed when every guard passes and a trigger runs (§8) | with confirmation |
 
 `landed` takes precedence over the others, but a running landed worktree is never removed (§6). No
 row shows Remove inline: it lives in the row's menu (§7), so the card reads as a status list.
@@ -551,11 +551,13 @@ Reconciliation notes for related plans, recorded here rather than edited into th
 | Git seam | `modules/repositories/git-exec.mjs` | Drop the repository-locating environment variables a hook inherits, so `cwd` alone chooses the repository |
 | Removal | `modules/repositories/worktree-removal.mjs` | New: worktree and branch removal, archive ref, removal log, lock, all through `runGitProcess` |
 | Cleanup orchestration | `scripts/cli/worktree-cleanup.mjs` | New: the command, hook, and Home-action entry; sequences inventory → state → guards → removal |
+| Cleanup policy | `scripts/cli/worktree-policy.mjs` | New: the worktree folder (plans config, else the recorded one), the folder proposal, and active plans' worktree claims |
+| Cleanup opt-in | `scripts/cli/worktree-cleanup-optin.mjs` | New: Home's turn-on (folder validation, record, install) and dismissal |
 | Registry | `modules/repositories/schema.mjs`, `modules/repositories/registry.mjs` | Allow recording linked worktrees found by inventory; an optional per-repository record of the confirmed worktree folder and a dismissed cleanup notice |
 | Runtime snapshot | `scripts/cli/developer-runtime.mjs`, `modules/developer-runtime/snapshot.mjs` | The CLI reads the inventory and injects it, as it already injects `idleMainCheckouts`; the snapshot adds those worktrees as roots |
 | Home projection | `scripts/cli/repository-overview-sources.mjs`, `scripts/cli/repository-overview-projections.mjs` | Carry worktree state and the guard reason in `projectWorkspace`, and the cleanup-notice state per repository |
 | Home actions | `scripts/cli/portal-routes-repositories.mjs`, `scripts/cli/worktree-hook.mjs` | Token-guarded `POST` routes for remove and for turning cleanup on, calling the cleanup orchestrator and the installer |
-| Home and Runtime rows | `portal/shared/repository-row-template.js`, `portal/shared/repository-components.js`, `portal/developer-runtime/repository-root-row.js`, `portal/home/`, `portal/developer-runtime/styles.css` | Dimmed idle row; stale and landed markers; Remove in the worktree dropdown or the ⋮ menu; the confirmation dialog; the card-footer cleanup notice |
+| Home and Runtime rows | `portal/shared/repository-row-template.js`, `portal/developer-runtime/repository-root-row.js`, `portal/home/` (`templates.js`, `worktree-details.js`, `worktree-dialogs.js`, `index.html`, `styles.css`), `portal/developer-runtime/styles.css` | Dimmed idle row; stale and landed markers with the landed note; Remove in the worktree dropdown or the ⋮ menu; the confirmation dialog; the card-footer cleanup notice and its dialog |
 | CLI | `manifests/platform/cli-commands.json` | Register the cleanup command and hook install/uninstall |
 | Settings | `modules/developer-runtime/settings-schema.mjs` | `worktreeStaleDays` in `DEFAULT_PREFERENCES` |
 | `/plan-close` | `globals/packages/plan-close/skills/plan-close/SKILL.md`, then the rendered `generated/packages/plan-close/` commands | Step 6 describes the §3 test; new step 9 removes the plan's worktree |
@@ -643,36 +645,36 @@ Reconciliation notes for related plans, recorded here rather than edited into th
       shows the worktree "landed" with "plan not closed"; run `/plan-close` and confirm it removes
       and logs the worktree. This repository has the plan-close package enabled, so no hook is
       installed here.
-- [ ] From the live Home page, open Remove on an unlanded worktree, check that the dialog names the
+- [x] From the live Home page, open Remove on an unlanded worktree, check that the dialog names the
       branch, the unmerged commit count, and the archive ref, and Cancel.
 - [x] Update `docs/user/reference/repositories.md`.
 
 ### Phase 7 — Remove from row menus, and opt-in cleanup from Home
 
-- [ ] Drop Hide: the cleanup command's `--hide` and `--unhide`, their routes, the registry's
+- [x] Drop Hide: the cleanup command's `--hide` and `--unhide`, their routes, the registry's
       `hiddenAt`, the hidden branch of §4's derivation, the card's "N hidden" list, and the plan
       badge "worktree hidden".
-- [ ] Move Remove off the row: into the worktree dropdown on a plan's row, and into a right-aligned
+- [x] Move Remove off the row: into the worktree dropdown on a plan's row, and into a right-aligned
       ⋮ menu built with `mountActionMenu` on a row no plan claims; disabled with "stop its servers
       first" on a running row.
-- [ ] Replace the native `confirm` with a portal dialog naming the branch, its unmerged commit
+- [x] Replace the native `confirm` with a portal dialog naming the branch, its unmerged commit
       count, the archive ref, and the active plan when one claims the worktree; show a refused
       removal's reason in the dialog.
-- [ ] Show "removed on next cleanup" on an eligible landed row and the blocking reason as visible
-      text on a blocked one.
-- [ ] Add the card-footer cleanup notice for repositories with linked worktrees and no hook while
+- [x] Show the blocking reason as visible text on a blocked landed row, and on an eligible one
+      "removed on next pull" with the hook installed or "ready for cleanup" without it.
+- [x] Add the card-footer cleanup notice for repositories with linked worktrees and no hook while
       the plan-close package is disabled, with per-repository dismissal; its dialog confirms the
       worktree folder (from `plans-config.json`, else a proposed folder the user can edit), records
       it in the registry, and installs the hook through a token-guarded route, reporting a foreign
       hook or a refused `core.hooksPath`.
-- [ ] Make the §6 worktree-folder guard read the recorded folder when `plans-config.json` names
+- [x] Make the §6 worktree-folder guard read the recorded folder when `plans-config.json` names
       none.
-- [ ] Extend the fixture check: a repository without `plans-config.json` removes landed worktrees
+- [x] Extend the fixture check: a repository without `plans-config.json` removes landed worktrees
       only under its recorded folder, and none without one.
-- [ ] Add Home cases to `portal-ui.spec.mjs`: Remove in each menu opens the dialog and Cancel leaves
+- [x] Add Home cases to `portal-ui.spec.mjs`: Remove in each menu opens the dialog and Cancel leaves
       the row; a running row's Remove is disabled; the notice appears only with the plan-close
       package disabled and no hook, and its dialog installs the hook.
-- [ ] Update `docs/user/reference/repositories.md` and `docs/user/reference/plans-portal.md` for
+- [x] Update `docs/user/reference/repositories.md` and `docs/user/reference/plans-portal.md` for
       Remove, the notice, and the removed Hide.
 
 ## Validation
@@ -713,11 +715,11 @@ Reconciliation notes for related plans, recorded here rather than edited into th
 - [x] A lock left by a dead cleanup process is taken over; a live or not-yet-written lock is held.
 - [x] An ignored `node_modules/` of 30,000 files passes the ignored-files guard.
 - [x] A quoted `worktree:` field in an active plan still protects its worktree.
-- [ ] No worktree row shows Remove inline; Remove in either menu opens a dialog naming the branch,
+- [x] No worktree row shows Remove inline; Remove in either menu opens a dialog naming the branch,
       unmerged commits, archive ref, and any active plan, and Cancel changes nothing.
-- [ ] Turning cleanup on from Home installs the hook and records the confirmed folder; automatic
+- [x] Turning cleanup on from Home installs the hook and records the confirmed folder; automatic
       removal in a repository without `plans-config.json` stays inside that folder.
-- [ ] With the plan-close package enabled, Home shows no cleanup notice.
+- [x] With the plan-close package enabled, Home shows no cleanup notice.
 
 The fixture repository covers Git inventory, historical landing, removal guards, the archive ref,
 hook installation, and a squash merge followed by a pull. A real-repository dry run on 2026-10-10
@@ -736,8 +738,11 @@ pull: did not fire; pull with `--rebase` and no local commits: hook fired.
       with `/plan-close` to confirm live removal and logging. The fixture exercises the same
       sequence locally, but the live run merges an external PR; it awaits the approval in Open
       Questions.
-- [ ] Open Remove on an unlanded worktree from the live Home page, check the dialog, and Cancel.
-      Browser automation covers it against fixtures; the live check is the user's.
+- [x] Open Remove on an unlanded worktree from the live Home page, check the dialog, and Cancel.
+      Done on 2026-10-11 in the built-in browser against this repository's portal: the ⋮ menu on
+      `codex/telemetry-analytics-oracle` and the worktree dropdown on the Package-Owned Trigger
+      Fixtures plan each opened a dialog naming the branch, unmerged commits, and archive ref (and
+      the active plan for the plan row); Cancel closed both without a request.
 - [ ] Turn on automatic cleanup from the Home notice in a live repository while the plan-close
       package is disabled, then pull after a merge and confirm the hook's removal. Fixture and
       browser tests cover the pieces; a live run changes that repository's Git hooks.

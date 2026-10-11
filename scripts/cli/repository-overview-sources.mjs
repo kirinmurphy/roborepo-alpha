@@ -95,12 +95,7 @@ function projectWorkspace(repository) {
   return {
     lifecycle: repository.lifecycle || { state: "active", reason: null },
     lastSeenAt: repository.lastSeenAt || null,
-    hiddenWorktrees: (repository.hiddenWorktrees || []).map((worktree) => ({
-      rootId: worktree.rootId,
-      name: worktree.branch || worktree.name,
-      worktreeName: worktree.name,
-      state: worktree.state,
-    })),
+    worktreeCleanup: repository.worktreeCleanup || null,
     checkouts: (repository.roots || []).map((root) => ({
       rootId: root.rootId || null,
       name: root.git?.branch || (root.isWorktree ? "Worktree" : "Main checkout"),

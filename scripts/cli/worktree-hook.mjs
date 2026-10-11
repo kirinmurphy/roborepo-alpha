@@ -9,12 +9,19 @@ import { STATE_ROOT } from "./paths.mjs";
 const MARKER = "# roborepo-worktree-cleanup";
 const DEFAULT_CLI = fileURLToPath(new URL("main.mjs", import.meta.url));
 
+// Whether this repository's post-merge hook runs cleanup: "installed", "absent", "foreign" (another
+// tool's hook is there), or "refused" (Git reads hooks from a shared global directory).
+export async function inspectWorktreeHook({ cwd }) {
+  const { target } = await resolveHook(cwd);
+  if (target.refused) return { state: "refused", hook: null, reason: target.refused };
+  const hook = path.join(target.dir, "post-merge");
+  const existing = fs.existsSync(hook) ? fs.readFileSync(hook, "utf8") : null;
+  const state = existing == null ? "absent" : existing.includes(MARKER) ? "installed" : "foreign";
+  return { state, hook, reason: null };
+}
+
 export async function manageWorktreeHook({ cwd = process.cwd(), install = true, stateRoot = STATE_ROOT, cli = DEFAULT_CLI } = {}) {
-  const common = await runGitProcess(cwd, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
-  if (!common.ok) throw new Error("Git common directory unavailable");
-  const commonDir = common.stdout.trim();
-  const mainPath = path.dirname(commonDir);
-  const target = await hooksTarget(cwd, commonDir, mainPath);
+  const { commonDir, target } = await resolveHook(cwd);
   if (target.refused) return { action: "refused", hook: null, reason: target.refused };
   const hook = path.join(target.dir, "post-merge");
   const scope = { scope: target.scope, checkout: target.checkout };
@@ -35,6 +42,13 @@ export async function manageWorktreeHook({ cwd = process.cwd(), install = true, 
   fs.writeFileSync(hook, content, { mode: 0o755 });
   fs.chmodSync(hook, 0o755);
   return { action: "installed", hook, ...scope };
+}
+
+async function resolveHook(cwd) {
+  const common = await runGitProcess(cwd, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+  if (!common.ok) throw new Error("Git common directory unavailable");
+  const commonDir = common.stdout.trim();
+  return { commonDir, target: await hooksTarget(cwd, commonDir, path.dirname(commonDir)) };
 }
 
 // Git runs hooks from `core.hooksPath` when set, else `<common dir>/hooks`. A relative hooksPath is

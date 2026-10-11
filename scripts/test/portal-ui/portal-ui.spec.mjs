@@ -46,38 +46,111 @@ test.describe("Agents page", () => {
 });
 
 test.describe("repository-first portal Home", () => {
-  test("idle worktrees stay beside their plans; stale and landed markers and Hide/Unhide are visible", async ({ page }) => {
-    let hidden = false;
-    await page.route("**/api/repositories/*/worktrees/*", async (route) => {
-      const action = new URL(route.request().url()).pathname.split("/").at(-1);
-      hidden = action === "hide";
-      await route.fulfill({ json: { action: hidden ? "hidden" : "unhidden" } });
+  test("worktree rows show their state; Remove lives in row menus behind a confirmation", async ({ page }) => {
+    const removals = [];
+    let removal = { action: "removed" };
+    await page.route("**/api/repositories/*/worktrees/remove", async (route) => {
+      removals.push(route.request().postDataJSON());
+      await route.fulfill({ json: removal });
     });
     await patchRoboRepo(page, (repository) => {
       repository.domains.plans = { status: "available", data: { active: [
         { id: "idle-plan", key: "idle-plan", title: "Idle Story", worktree: "idle-tree", checkoutRootId: "idle-tree", taskCounts: { total: 1, complete: 0 } },
       ], counts: { active: 1, backlog: 0 }, recent: [] } };
-      const worktree = (rootId, branch, state) => ({ rootId, name: branch, worktreeName: rootId, isWorktree: true, worktreeState: state, git: { branch, provider: { ok: true } } });
+      const worktree = (rootId, branch, state, extra = {}) => ({ rootId, name: branch, worktreeName: rootId, isWorktree: true, worktreeState: state, unmergedCommits: 3, git: { branch, provider: { ok: true } }, ...extra });
       repository.domains.runtime = { status: "available", data: {
         checkouts: [
           { rootId: "main", name: "main", isWorktree: false, git: { branch: "main", provider: { ok: true } } },
-          ...(!hidden ? [worktree("idle-tree", "feature/idle", "idle")] : []),
+          worktree("idle-tree", "feature/idle", "idle"),
           worktree("stale-tree", "feature/stale", "stale"),
           worktree("landed-tree", "feature/landed", "landed"),
+          worktree("blocked-tree", "feature/blocked", "landed", { worktreeReason: "plan not closed" }),
+          worktree("running-tree", "feature/running", "running"),
         ],
-        hiddenWorktrees: hidden ? [{ rootId: "idle-tree", name: "feature/idle", worktreeName: "idle-tree", state: "idle" }] : [],
+        worktreeCleanup: null,
       } };
     });
     await page.goto("/");
     const card = roboRepoCard(page);
     await expect(planRowOf(card, "Idle Story").getByText("idle", { exact: true })).toBeVisible();
     await expect(checkoutRow(card, "feature/stale").getByText("suggested for removal")).toBeVisible();
-    await expect(checkoutRow(card, "feature/landed").getByText("landed", { exact: true })).toBeVisible();
-    await card.getByRole("button", { name: "Hide feature/idle" }).click();
-    await expect(card.getByText("1 hidden")).toBeVisible();
-    await card.getByText("1 hidden").click();
-    await card.getByRole("button", { name: "Unhide feature/idle" }).click();
-    await expect(planRowOf(card, "Idle Story")).toBeVisible();
+    await expect(checkoutRow(card, "feature/landed").getByText("ready for cleanup")).toBeVisible();
+    await expect(checkoutRow(card, "feature/blocked").getByText("plan not closed")).toBeVisible();
+    await expect(card.getByRole("button", { name: /^Remove/ })).toHaveCount(0);
+
+    await card.getByRole("button", { name: "Actions for feature/running" }).click();
+    const runningRemove = card.getByRole("button", { name: /Remove worktree/ });
+    await expect(runningRemove).toBeDisabled();
+    await expect(runningRemove).toContainText("stop its servers first");
+    await page.keyboard.press("Escape");
+
+    const dialog = page.getByRole("dialog", { name: "Remove worktree" });
+    await card.getByRole("button", { name: "Actions for feature/stale" }).click();
+    await card.getByRole("button", { name: /Remove worktree/ }).click();
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText("feature/stale");
+    await expect(dialog).toContainText("3");
+    await expect(dialog).toContainText("refs/roborepo/abandoned/feature/stale");
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(dialog).toBeHidden();
+    expect(removals).toEqual([]);
+
+    removal = { action: "kept", reason: "uncommitted or untracked changes" };
+    await card.getByRole("button", { name: "Actions for feature/stale" }).click();
+    await card.getByRole("button", { name: /Remove worktree/ }).click();
+    await dialog.getByRole("button", { name: "Remove worktree" }).click();
+    await expect(dialog).toContainText("uncommitted or untracked changes");
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+
+    removal = { action: "removed" };
+    await card.getByRole("button", { name: "Worktree details for Idle Story" }).click();
+    await page.getByRole("button", { name: "Remove worktree…" }).click();
+    await expect(dialog).toContainText('Active plan "Idle Story" uses this worktree');
+    await dialog.getByRole("button", { name: "Remove worktree" }).click();
+    await expect(dialog).toBeHidden();
+    expect(removals).toEqual([{ branch: "feature/stale" }, { branch: "feature/idle" }]);
+  });
+
+  test("the cleanup notice confirms a folder and turns on the hook, or shows the line for another tool's hook", async ({ page }) => {
+    const requests = [];
+    let enabled = { action: "installed" };
+    let offered = true;
+    await page.route("**/api/repositories/*/worktree-cleanup/*", async (route) => {
+      const action = new URL(route.request().url()).pathname.split("/").at(-1);
+      requests.push({ action, body: route.request().postDataJSON() });
+      if (action === "dismiss") offered = false;
+      await route.fulfill({ json: action === "enable" ? enabled : { action: "dismissed" } });
+    });
+    await patchRoboRepo(page, (repository) => {
+      repository.domains.runtime = { status: "available", data: {
+        checkouts: [
+          { rootId: "main", name: "main", isWorktree: false, git: { branch: "main", provider: { ok: true } } },
+          { rootId: "tree", name: "feature/tree", worktreeName: "tree", isWorktree: true, worktreeState: "idle", git: { branch: "feature/tree", provider: { ok: true } } },
+        ],
+        worktreeCleanup: { offered, hook: "absent", hookReason: null, folder: null, folderSource: null, proposedFolder: "/private/trees", dismissed: false },
+      } };
+    });
+    await page.goto("/");
+    const card = roboRepoCard(page);
+    const notice = card.getByRole("note");
+    await expect(notice).toContainText("Automatic worktree cleanup is off");
+    const dialog = page.getByRole("dialog", { name: "Turn on automatic cleanup" });
+    await notice.getByRole("button", { name: "Turn on automatic cleanup" }).click();
+    await expect(dialog.getByRole("textbox", { name: "Worktree folder" })).toHaveValue("/private/trees");
+    await dialog.getByRole("button", { name: "Turn on" }).click();
+    await expect(dialog).toBeHidden();
+    expect(requests.at(-1)).toEqual({ action: "enable", body: { folder: "/private/trees" } });
+
+    enabled = { action: "foreign hook", hook: "/private/repo/.git/hooks/post-merge", line: "nohup roborepo-cleanup &" };
+    await notice.getByRole("button", { name: "Turn on automatic cleanup" }).click();
+    await dialog.getByRole("button", { name: "Turn on" }).click();
+    await expect(dialog).toContainText("nohup roborepo-cleanup &");
+    await dialog.getByRole("button", { name: "Done" }).click();
+    await expect(dialog).toBeHidden();
+
+    await notice.getByRole("button", { name: "Dismiss" }).click();
+    await expect(card.getByRole("note")).toHaveCount(0);
+    expect(requests.at(-1).action).toBe("dismiss");
   });
 
   test("Home renders the canonical repository directory", async ({ page }) => {
@@ -245,7 +318,6 @@ test.describe("repository-first portal Home", () => {
     let state;
     await planFixture(page, (repository) => { repository.domains.plans.data.active.find((plan) => plan.id === "d").worktreeState = state; });
     for (const [worktreeState, text, title] of [
-      ["hidden", "worktree hidden", 'Worktree "gone" is hidden on Home; unhide it from this card\'s hidden list'],
       ["unlisted", "worktree not listed", 'Worktree "gone" exists, but Runtime does not list it'],
       ["ambiguous", "worktree ambiguous", 'Worktree "gone" is claimed by another active plan or matches more than one checkout'],
       ["unknown", "worktree status unknown", 'Home cannot tell whether worktree "gone" is running'],

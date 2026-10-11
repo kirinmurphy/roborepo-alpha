@@ -136,3 +136,46 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
   .home-heading, .unresolved-activity { align-items: stretch; flex-direction: column; }
   .home-action-slot { justify-content: flex-start; }
 }
+/* Removing a plan's worktree is the panel's last, quietest item, set off from the facts above it. */
+.worktree-details-remove {
+  justify-self: start;
+  margin-top: 2px;
+  padding: 6px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: none;
+  color: var(--dim);
+  font: inherit;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+.worktree-details-remove:hover:not(:disabled) { color: var(--accent); }
+.worktree-details-remove:disabled { cursor: default; opacity: 0.7; }
+/* Card footer, beside the token warnings it shares the raised band with. */
+.worktree-cleanup-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--dim);
+  font-size: var(--text-sm);
+  border-radius: 0 0 6px 6px;
+}
+/* The notice becomes the card's last band, so the domain rows above it lose their rounded foot. */
+.repository-card:has(.worktree-cleanup-notice) .home-domain-rows { border-radius: 0; }
+.worktree-cleanup-notice-text { flex: 1 1 auto; min-width: 0; }
+.worktree-remove-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 0;
+}
+.worktree-remove-facts dt { color: var(--dim); }
+.worktree-remove-facts dd { margin: 0; font-family: var(--mono); font-size: var(--text-xs); overflow-wrap: anywhere; }
+.worktree-dialog-help, .worktree-remove-plan { margin: 0; color: var(--dim); font-size: var(--text-sm); }
+.worktree-remove-plan { color: var(--warn); }
+.worktree-cleanup-foreign pre { margin: 6px 0 0; padding: 8px; overflow-x: auto; background: var(--raised); border: 1px solid var(--line); font-size: var(--text-2xs); }
