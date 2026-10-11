@@ -211,7 +211,7 @@ test.describe("repository-first portal Home", () => {
     let state;
     await planFixture(page, (repository) => { repository.domains.plans.data.active.find((plan) => plan.id === "d").worktreeState = state; });
     for (const [worktreeState, text, title] of [
-      ["idle", "worktree idle", 'Worktree "gone" exists but nothing is running in it'],
+      ["unlisted", "worktree not listed", 'Worktree "gone" exists, but Runtime does not list it'],
       ["ambiguous", "worktree ambiguous", 'Worktree "gone" is claimed by another active plan or matches more than one checkout'],
       ["unknown", "worktree status unknown", 'Home cannot tell whether worktree "gone" is running'],
     ]) {

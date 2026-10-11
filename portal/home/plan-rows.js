@@ -13,9 +13,9 @@ export function matchedPlanIdentity(plan, checkout, onOpenPlan) {
 // A plan Home could not pair with any checkout. The badge says why, and it is not a lifecycle state:
 // "no worktree" when the plan names none (a fact about association, not progress: the ring already
 // says how far along it is); otherwise the server's `worktreeState` says
-// whether the named worktree is idle, gone, contested, or cannot be determined.
+// whether the named worktree is unlisted, gone, contested, or cannot be determined.
 const WORKTREE_BADGES = {
-  idle: { text: "worktree idle", title: (name) => `Worktree "${name}" exists but nothing is running in it` },
+  unlisted: { text: "worktree not listed", title: (name) => `Worktree "${name}" exists, but Runtime does not list it` },
   missing: { text: "worktree missing", title: (name) => `No worktree named "${name}" exists in this repository` },
   ambiguous: { text: "worktree ambiguous", title: (name) => `Worktree "${name}" is claimed by another active plan or matches more than one checkout` },
   unknown: { text: "worktree status unknown", title: (name) => `Home cannot tell whether worktree "${name}" is running` },

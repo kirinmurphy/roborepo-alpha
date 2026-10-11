@@ -166,7 +166,7 @@ Each card combines a compact view of several domains:
     equal the worktree's Git administrative name, exactly one active plan must claim it, and exactly
     one known worktree must carry it. Branch names and checkout paths are never used to guess.
   - Any other plan is its own row with a badge: **no worktree** when it names none;
-    otherwise **worktree idle** (Git has it, Runtime does not list it), **worktree missing** (Git
+    otherwise **worktree not listed** (Git has it, Runtime does not list it), **worktree missing** (Git
     has no worktree by that name), **worktree ambiguous** (claimed twice, or more than one checkout
     carries the name), or **worktree status unknown** (Runtime is unavailable).
   - Worktrees no plan claimed follow as ordinary checkout rows.

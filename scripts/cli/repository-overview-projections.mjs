@@ -125,7 +125,8 @@ function repositoryOverview(record, context) {
 // - "ambiguous": the name is claimed by another active plan, or Runtime exposes it without a single
 //   referenceable checkout.
 // - "missing": Git has no linked worktree by that name.
-// - "idle": Git has the worktree, and Runtime is up but does not expose it as a checkout.
+// - "unlisted": Git has the worktree, and Runtime is up but does not list it as a checkout. This is
+//   about pairing, not activity: whether a listed worktree is running or idle is Runtime's state.
 // - "unknown": the evidence to tell those apart is unavailable (Runtime down with the worktree
 //   present, or a scan that did not report worktree names).
 function associatePlans(workspace, plans, { worktrees = null, runtimeAvailable = true } = {}) {
@@ -152,7 +153,7 @@ function unmatchedWorktreeState(name, { claims, worktreeNames, worktrees, runtim
   if (claims.get(name) > 1 || worktreeNames.has(name)) return "ambiguous";
   if (!worktrees) return "unknown";
   if (!worktrees.has(name)) return "missing";
-  return runtimeAvailable ? "idle" : "unknown";
+  return runtimeAvailable ? "unlisted" : "unknown";
 }
 
 function gitSummary(workspace) {
