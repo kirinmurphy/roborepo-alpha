@@ -1,14 +1,14 @@
 ---
 id: e6f1pknt
 priority: high
-next_action: Review and merge claude/package-owned-trigger-fixtures, then run /plan-close
+next_action:
 blocked_by: []
 depends_on: []
 related:
   - 0jped168
   - age4cm7r
   - skills-vs-commands-invocation-policy
-reviewed_commit: 5a5fd5d49cd1c67e5ac0213f827ba8c5bafaa9f1
+reviewed_commit: 34ef6064cc1b9b92b7315770b32ee427523138ac
 worktree: package-owned-trigger-fixtures
 ---
 
@@ -253,7 +253,36 @@ Acceptance:
   `ci` group failed before this work started. The header now says "a decision recorded in a plan".
   What the check enforces is unchanged.
 
+## Completion Summary
+
+Skill trigger fixtures now live in the package that declares each skill. A package owns its
+fixtures in an optional `skill-triggers.json` at its root. `roborepo skill triggers --check` finds
+them through the package catalog, and `manifests/inventory/skill-trigger-tests.json` is gone.
+Adding, removing, or swapping a package no longer requires an edit to platform trigger data. The
+work landed on `main` as squash merge `34ef606` (PR #29).
+
 ## Verification
+
+Closure ran the completion gate on `main` at `34ef606`: `npm run check` printed
+`CI checks passed`. In that run test-cli reported 430 passed and 0 failed, and the `ci` group
+passed 12 of 12 suites, including both trigger-fixture checks. The plan validator reported 0
+findings.
+
+Landing: `git merge-base --is-ancestor claude/package-owned-trigger-fixtures main` exits 1,
+because the branch landed as a squash merge. The content-level check passed:
+`git diff main claude/package-owned-trigger-fixtures` is empty, so every implementation file on the
+branch is present on `main`.
+
+Claims checked against the code on `main`:
+
+- Six `globals/packages/*/skill-triggers.json` files exist, one per package in the Current state
+  mapping.
+- `manifests/inventory/skill-trigger-tests.json` is absent, and `git grep skill-trigger-tests`
+  matches only under `docs/plans/`.
+- `roborepo skill triggers --check` prints `ok: 6 skill trigger fixture(s)`. That count includes the
+  disabled `case-study-pack` and `tighten` packages.
+
+Nothing was left unverified. The checks below ran during implementation, on the feature branch.
 
 | Check | Result |
 | --- | --- |
