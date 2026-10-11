@@ -1,7 +1,7 @@
 ---
 id: 3jp3yhtq
 priority: high
-next_action: Make discovery.mjs honor platforms.darwin.detection overrides, then add bounded macOS desktop runtime candidates for Claude Code and Codex with isolated fixture-app tests.
+next_action: Run the unchecked desktop-session checks in Not tested, then verify the results and sync this plan.
 blocked_by: []
 depends_on: []
 related:
@@ -9,8 +9,8 @@ related:
   - usage-statusline-codex-hook-parity
   - windows-provider-path-schema
   - 7k3m9qd
-reviewed_commit: f877579b0281a22780313aa056b53bd70833b7e1
-worktree:
+reviewed_commit: 731937640d7483d945ee1e21466533574d686fbf
+worktree: harness-desktop-runtime-discovery
 ---
 
 # Recognize desktop coding runtimes as existing harnesses
@@ -228,71 +228,108 @@ config, not a separate provider or package switch.
 
 ### Phase 1: Discovery and state
 
-- [ ] Make `discovery.mjs` apply `platforms[process.platform].detection` overrides, layered the way
+- [x] Make `discovery.mjs` apply `platforms[process.platform].detection` overrides, layered the way
       `paths.mjs` layers paths. Cover the layering in `scripts/test/harness-registry-check.mjs`.
-- [ ] Extend `provider-manifest.schema.json` and `contract.mjs` with desktop runtime candidates,
+- [x] Extend `provider-manifest.schema.json` and `contract.mjs` with desktop runtime candidates,
       allowing absolute roots for them only.
-- [ ] Add the bounded macOS candidate resolver under `scripts/harnesses/` with injectable roots,
+- [x] Add the bounded macOS candidate resolver under `scripts/harnesses/` with injectable roots,
       and feed its validated observations into `discovery.mjs` as `desktop` executable evidence.
-- [ ] Declare the Claude and Codex desktop candidates in their manifests, covering both Claude
+- [x] Declare the Claude and Codex desktop candidates in their manifests, covering both Claude
       layouts.
-- [ ] Update `schemas.mjs` and `state.mjs`: evidence `source`/`version`, persisted `warnings`,
+- [x] Update `schemas.mjs` and `state.mjs`: evidence `source`/`version`, persisted `warnings`,
       `schemaVersion` 2, other versions read as empty.
-- [ ] Show runtime observations and warnings in `harness inspect`, and a runtime summary in
+- [x] Show runtime observations and warnings in `harness inspect`, and a runtime summary in
       `harness list`.
 
 ### Phase 2: Presence report and guidance
 
-- [ ] Add the confidence column to `harness detected`. Update every `harness_detected_rows`
+- [x] Add the confidence column to `harness detected`. Update every `harness_detected_rows`
       reader, the bash fallback in `scripts/lib/manifests-data.sh`, and the two tests that parse
       the rows.
-- [ ] Replace the generic install-summary line in `scripts/install/main.sh` with
+- [x] Replace the generic install-summary line in `scripts/install/main.sh` with
       not-launched guidance, and add the matching hint to `scripts/doctor.sh`.
-- [ ] Expose below-minimum providers with guidance in the setup snapshot and render them through
+- [x] Expose below-minimum providers with guidance in the setup snapshot and render them through
       `portal/shared/harness-warning.js`.
 
 ### Phase 3: Claude executable selection
 
-- [ ] Add the selected-executable resolver and route `mcp-claude-cli.mjs`, `claude/mcp.mjs`, and
+- [x] Add the selected-executable resolver and route `mcp-claude-cli.mjs`, `claude/mcp.mjs`, and
       the preset gate in `scripts/cli/packages.mjs` through it.
-- [ ] Prove desktop-only MCP add, list, and remove under an isolated home, and record any scope
+- [x] Prove desktop-only MCP add, list, and remove under an isolated home, and record any scope
       that does not work.
 
 ### Phase 4: Surface effects and docs
 
 - [ ] Run the feature-effect checks above in both desktop apps and correct package and portal
       wording to match the results.
-- [ ] Update `docs/user/guides/harnesses/supported-harnesses.md` and
+- [x] Update `docs/user/guides/harnesses/supported-harnesses.md` and
       `docs/internal/harness-provider-interface.md` with the supported app locations, the
       not-launched guidance, and the moved-app limitation.
 
 ## Validation
 
-- [ ] Discovery tests extend `scripts/test/harness-refresh-simulation-check.mjs` with isolated
-      `HOME`, `PATH`, and injected fixture app bundles. Cover CLI only, desktop only, both, leftover
+- [x] Discovery tests in `scripts/test/harness-desktop-runtime-check.mjs` and
+      `scripts/test/harness-refresh-simulation-check.mjs` use isolated `HOME`, `PATH`, and injected
+      fixture app bundles. Cover CLI only, desktop only, both, leftover
       home only, never-launched runtime, Claude app without a Code runtime, wrong bundle ID, failed
       `--version`, two Claude versions in each layout, and an app outside the supported roots.
-- [ ] Discovery on a non-darwin platform (forced `platform` in a unit test) never evaluates the
+- [x] Discovery on a non-darwin platform (forced `platform` in a unit test) never evaluates the
       desktop candidates.
-- [ ] CLI tests in `scripts/test/harness-cli-check.mjs` prove refresh, `list`, and `inspect` show
+- [x] CLI tests in `scripts/test/harness-cli-check.mjs` prove refresh, `list`, and `inspect` show
       one enabled provider for a desktop runtime with a home, keep an explicit disable after
       refresh, and print the sixth `harness detected` column while column 3 still reflects home
       presence only.
-- [ ] An installer test on a clean home with a fixture runtime and no native home proves install
+- [x] An installer test on a clean home with a fixture runtime and no native home proves install
       writes nothing into that home and prints the not-launched guidance. `doctor` prints the
       matching hint.
-- [ ] MCP tests prove the desktop Claude executable can add, list, and remove a server with no
+- [x] MCP checks prove the desktop Claude executable can add, list, and remove a server with no
       `claude` on `PATH`.
-- [ ] A refresh run leaves native config files and app bundles unchanged (compare checksums before
+- [x] A refresh run leaves native config files and app bundles unchanged (compare file bytes before
       and after).
 - [ ] Manual macOS check on the installed apps: candidate layouts, one provider per product in the
       portal, guidance copy, and the feature-effect table. Record app versions and results in the
       implementation verification report.
-- [ ] Run `node scripts/test/harness-registry-check.mjs`, `node scripts/test/harness-cli-check.mjs`,
+- [x] Run `node scripts/test/harness-registry-check.mjs`, `node scripts/test/harness-cli-check.mjs`,
       `node scripts/test/harness-refresh-simulation-check.mjs`, the MCP checks under
       `scripts/test/mcp-*-check.mjs`, `bash scripts/doctor.sh --quiet`, `git diff --check`, and
       `npm run check`. Discovery and install behavior are cross-cutting, so the full local parity
       gate is required before handoff.
+
+## Implementation verification
+
+- Installed Claude Desktop Code runtime `2.1.295 (Claude Code)` was detected at the nested
+  `claude.app` layout; `2.1.293` was also present. The flat layout and version preference are
+  covered by isolated fixture apps.
+- Installed Codex desktop runtime reported `codex-cli 0.155.0-alpha.16.3`; the inspected
+  executable was also available through `PATH`, so desktop-only Codex is fixture-tested.
+- With a temporary home and project, Claude Desktop's `2.1.295` runtime successfully completed
+  MCP add, list, and remove at `user`, `project`, and `local` scopes. No unsupported scope was
+  found. The temporary files were removed.
+- The refresh simulation compares native config, bundle metadata, and runtime executable bytes
+  before and after a refresh on macOS. A forced non-darwin unit test covers candidate suppression;
+  the implementation was not run on a Linux host.
+- The targeted harness, MCP, doctor, and diff checks passed. `npm run check` passed, including the
+  12 CI unit groups, package install smoke, and clean-machine install/onboarding checks. The gate
+  skipped Windows installer parity because `pwsh` is unavailable and skipped the portal browser
+  suite because Chromium is not installed.
+- An isolated local portal preview using fixture apps reported exactly one confirmed Claude
+  provider and one confirmed Codex provider through `/api/config`. This does not establish the
+  live desktop app's rendered UI or session effects.
+
+## Not tested
+
+- [ ] Start a Claude Desktop Code session and verify that the shared `statusLine` command runs and
+      displays its output. A fixture cannot observe the signed-in desktop session UI.
+- [ ] Start a Codex desktop session and check whether `tui.status_line` appears in the desktop UI.
+      A fixture cannot observe the signed-in desktop session UI.
+- [ ] Start a session in each desktop app and confirm hook execution and telemetry transcript
+      capture, then record which data is actually available. This needs live session events and
+      access to each app's native transcript store.
+- [ ] In the live portal, confirm one provider card per product and the warning copy for an app
+      without a launched coding runtime. API and component checks do not establish the rendered
+      browser result; this also requires a controlled not-launched app state.
+- [ ] Run the Windows installer parity suite in an environment with `pwsh`; the local completion
+      gate skipped it because PowerShell is unavailable here.
 
 ## Risks
 

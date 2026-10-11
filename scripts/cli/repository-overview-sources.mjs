@@ -13,23 +13,29 @@ export function runtimeByRepository(snapshot, registry) {
 
 // Coverage comes from the snapshot's per-repository scan state, so a repository Plans has not
 // scanned (or could not read) gets no entry and Home reports "not scanned" instead of zero plans.
+// Each entry is `{ summary, worktrees }`: `worktrees` is the set of linked worktree names Git knows
+// for the repository (running or not), or null when the scan did not report them.
 export function plansByRepository(snapshot, now, registry) {
   const coverage = new Map();
   for (const scan of snapshot?.repositoryScans || []) {
     if (scan.state !== "scanned") continue;
     const repositoryId = resolveRegistryAlias(registry, scan.repositoryId);
-    if (registry.repositories?.[repositoryId]) coverage.set(repositoryId, { plans: [] });
+    if (!registry.repositories?.[repositoryId]) continue;
+    const group = coverage.get(repositoryId) || { plans: [], worktrees: null };
+    // An alias scanned alongside its canonical record contributes its worktrees too.
+    if (Array.isArray(scan.worktrees)) group.worktrees = new Set([...(group.worktrees || []), ...scan.worktrees]);
+    coverage.set(repositoryId, group);
   }
   for (const record of snapshot?.plans || []) {
     const sourceId = record.repository?.repositoryId;
     const repositoryId = sourceId && resolveRegistryAlias(registry, sourceId);
     if (!repositoryId || !registry.repositories?.[repositoryId]) continue;
-    const group = coverage.get(repositoryId) || { plans: [] };
+    const group = coverage.get(repositoryId) || { plans: [], worktrees: null };
     group.plans.push({ ...record.plan, key: record.key });
     coverage.set(repositoryId, group);
   }
   const result = new Map();
-  for (const [repositoryId, group] of coverage) result.set(repositoryId, planSummary(group.plans, now));
+  for (const [repositoryId, group] of coverage) result.set(repositoryId, { summary: planSummary(group.plans, now), worktrees: group.worktrees });
   return result;
 }
 

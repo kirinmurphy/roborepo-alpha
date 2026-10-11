@@ -308,6 +308,8 @@ const associationRuntime = {
       worktreeRoot(null, "half-rooted", "feature/half-rooted-1"),
       worktreeRoot("half-rooted", "half-rooted", "feature/half-rooted-2"),
     ],
+    // Hidden on Home: Runtime lists it apart from the checkouts, so it can never match.
+    hiddenWorktrees: [{ rootId: "hidden", name: "hidden-tree", branch: "feature/hidden", state: "idle" }],
   }],
 };
 const assocPlan = (id, worktree, lifecycle = "active") => ({
@@ -319,9 +321,12 @@ const associationPlans = {
   truncated: false,
   errors: [],
   repositories: [{ repositoryId: ASSOC }],
-  repositoryScans: [{ repositoryId: ASSOC, state: "scanned", planCount: 10, checkoutCount: 1 }],
+  // Git's linked worktrees, running or not. "removed-worktree" and "main-claim" are not among them.
+  repositoryScans: [{ repositoryId: ASSOC, state: "scanned", planCount: 12, checkoutCount: 1, worktrees: ["contested", "dup", "feature-a", "half-rooted", "hidden-tree", "unlisted-tree", "planless", "unrooted"] }],
   plans: [
     assocPlan("matched", "feature-a"),
+    assocPlan("unlisted", "unlisted-tree"),
+    assocPlan("hidden", "hidden-tree"),
     assocPlan("unassociated", ""),
     assocPlan("missing-worktree", "removed-worktree"),
     assocPlan("main-claim", "main-claim"),
@@ -345,11 +350,11 @@ const associated = loadAssociation();
 const runtimeCheckouts = associated.domains.runtime.data.checkouts;
 const activePlans = associated.domains.plans.data.active;
 assert.deepEqual(activePlans.map((plan) => plan.id),
-  ["contested-1", "contested-2", "dup-claim", "half-rooted", "main-claim", "matched", "missing-worktree", "unassociated", "unrooted"],
+  ["contested-1", "contested-2", "dup-claim", "half-rooted", "hidden", "main-claim", "matched", "missing-worktree", "unassociated", "unlisted", "unrooted"],
   "every active plan appears exactly once, in the existing order (newest change, then title)");
 assert.deepEqual(Object.fromEntries(activePlans.map((plan) => [plan.id, plan.checkoutRootId ?? null])), {
-  "contested-1": null, "contested-2": null, "dup-claim": null, "half-rooted": null, "main-claim": null,
-  matched: "matched", "missing-worktree": null, unassociated: null, unrooted: null,
+  "contested-1": null, "contested-2": null, "dup-claim": null, "half-rooted": null, hidden: null, "main-claim": null,
+  matched: "matched", "missing-worktree": null, unassociated: null, unlisted: null, unrooted: null,
 }, "only a unique plan claim on a unique, referenceable linked worktree matches; main checkouts, contested names, duplicate worktrees, null rootIds, and backlog plans never do");
 assert.deepEqual(runtimeCheckouts.map((checkout) => checkout.rootId), ["main", "matched", "contested", "dup-1", "dup-2", "planless", null, null, "half-rooted"],
   "every Runtime checkout stays in the list, matched or not");
@@ -359,8 +364,13 @@ assert.equal(runtimeCheckouts.find((checkout) => checkout.rootId === "matched").
 assert.deepEqual(activePlans.find((plan) => plan.id === "matched"),
   { id: "matched", key: "key-matched", title: "Plan matched", lifecycle: "active", changedAt: "2026-09-29T12:00:00.000Z", worktree: "feature-a", taskCounts: { total: 2, complete: 1 }, checkoutRootId: "matched" },
   "a match adds only checkoutRootId: no branch, path, process, Links, or Git fields are copied onto the plan");
+assert.deepEqual(Object.fromEntries(activePlans.map((plan) => [plan.id, plan.worktreeState ?? null])), {
+  "contested-1": "ambiguous", "contested-2": "ambiguous", "dup-claim": "ambiguous", "half-rooted": "ambiguous", hidden: "hidden",
+  "main-claim": "missing", matched: null, "missing-worktree": "missing", unassociated: null, unlisted: "unlisted", unrooted: "ambiguous",
+}, "an unmatched named worktree says why: contested or unreferenceable, absent from Git, hidden on Home, or present but not listed by Runtime");
 assert.equal("additionalActive" in associated.domains.plans.data, false);
-assert.deepEqual(associated.domains.plans.data.counts, { active: 9, backlog: 1 }, "repository-wide counts are unchanged by matching");
+assert.equal("worktrees" in associated.domains.plans.data, false, "Git's worktree list informs matching but is not published");
+assert.deepEqual(associated.domains.plans.data.counts, { active: 11, backlog: 1 }, "repository-wide counts are unchanged by matching");
 assert.equal(associated.domains.git.data.checkouts.some((checkout) => "plan" in checkout), false, "the git domain carries no plan either");
 
 const partialAssociation = loadAssociation({ plans: { ...associationPlans, truncated: true } });
@@ -374,8 +384,14 @@ assert.deepEqual(plansOffline.domains.runtime.data.checkouts, runtimeCheckouts, 
 
 const runtimeOffline = loadAssociation({ runtime: null });
 assert.equal(runtimeOffline.domains.runtime.status, "unavailable");
-assert.equal(runtimeOffline.domains.plans.data.active.length, 9, "without Runtime every active plan is still listed");
+assert.equal(runtimeOffline.domains.plans.data.active.length, 11, "without Runtime every active plan is still listed");
 assert.equal(runtimeOffline.domains.plans.data.active.some((plan) => "checkoutRootId" in plan), false, "without Runtime no match is invented");
+const offlineStates = Object.fromEntries(runtimeOffline.domains.plans.data.active.map((plan) => [plan.id, plan.worktreeState ?? null]));
+assert.deepEqual([offlineStates.matched, offlineStates.unlisted, offlineStates["missing-worktree"], offlineStates["contested-1"]], ["unknown", "unknown", "missing", "ambiguous"],
+  "without Runtime an existing worktree is unknown, not unlisted; Git absence and double claims still hold");
+
+const namelessScan = loadAssociation({ plans: { ...associationPlans, repositoryScans: [{ repositoryId: ASSOC, state: "scanned", planCount: 11, checkoutCount: 1 }] } });
+assert.equal(namelessScan.domains.plans.data.active.find((plan) => plan.id === "unlisted").worktreeState, "unknown", "a scan without worktree names cannot call a worktree missing or unlisted");
 
 // Tokens follow the capture switch: with capture off, a real repository's Tokens domain is
 // unavailable even though an older spool still projects warnings for it. Mock repositories stay

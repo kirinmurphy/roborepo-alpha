@@ -165,8 +165,11 @@ Each card combines a compact view of several domains:
     and Git warning stay where the checkout row puts them. The match is exact: the plan's value must
     equal the worktree's Git administrative name, exactly one active plan must claim it, and exactly
     one known worktree must carry it. Branch names and checkout paths are never used to guess.
-  - Any other plan is its own row with a badge: **not started** when it names no worktree, and
-    **worktree not running** when the named worktree is missing or claimed twice.
+  - Any other plan is its own row with a badge: **no worktree** when it names none;
+    otherwise **worktree hidden** (hidden from Home; unhide it from the card's hidden list),
+    **worktree not listed** (Git has it, Runtime does not list it), **worktree missing** (Git
+    has no worktree by that name), **worktree ambiguous** (claimed twice, or more than one checkout
+    carries the name), or **worktree status unknown** (Runtime is unavailable).
   - Worktrees no plan claimed follow as ordinary checkout rows.
   - One unlabeled line closes the list with the repository's Active and Backlog counts and an
     **all plans** link, and says so when Plans coverage is partial. A repository with no active
