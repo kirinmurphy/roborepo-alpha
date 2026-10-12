@@ -7,6 +7,7 @@ depends_on: []
 related:
   - pljvmyh
   - windows-provider-path-schema
+  - 3jp3yhtq
 reviewed_commit:
 worktree:
 ---
@@ -159,6 +160,9 @@ added without duplicating runner setup.
       portal, Runtime, and telemetry groups on Windows where their dependencies are available.
 - [ ] Extend the existing Windows installer check only where it is needed to distinguish static
       parity from real installer behavior; keep its current guardrails intact.
+- [ ] Run `pwsh -File scripts/test/windows-installer-check.ps1` in the disposable Windows runner
+      and record its result in the compatibility ledger. The macOS desktop-runtime discovery QA
+      could not run it because `pwsh` was unavailable there.
 - [ ] Add observable assertions for every expected-unsupported Windows behavior, including the
       current Runtime discovery capability message and source-path rejection behavior.
 
