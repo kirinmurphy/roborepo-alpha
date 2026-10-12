@@ -52,6 +52,46 @@ Each row is its own optional package, so check it before loading it:
 Work through the steps in order. Repairs can return the run to tests and validation; decide the
 verdict only from the resulting state. Read `references/verdict.md` before step 3.
 
+### 0. Confirm the worktree's plan copy is integrated
+
+Do this first, before step 1, from the primary checkout (the first `worktree` entry of
+`git worktree list --porcelain`). While a plan is active, the copy in its assigned worktree is the
+authoritative one; by the time a plan is complete its branch has merged, so the worktree has
+nothing left to contribute. This step reads the worktree's copy once, and the rest of the run works
+only in the primary checkout.
+
+The worktree's copy is usable when the primary copy is in `docs/plans/active/` and names a
+worktree, Git has a linked worktree with that administrative name, and that worktree holds a
+readable copy with the same `id`, still in `docs/plans/active/`, naming the same worktree. When the
+plan names no worktree, skip this step. When the worktree's copy is not usable, skip the check and
+state in the final report that the worktree's plan state was not available.
+
+Otherwise the copy is integrated when the base branch already has every plan version the worktree
+has: the worktree copy's working bytes equal the primary copy's working bytes, or its blob id is
+the plan at the branch's fork or a plan blob the base branch produced since then. Run in the
+primary checkout:
+
+```text
+git merge-base HEAD <branch>                              # <fork>
+git hash-object <worktree>/<plan path>                    # the worktree copy's blob id
+git rev-parse <fork>:<plan path>                          # the plan at the fork
+git log --raw --no-abbrev --format= <fork>..HEAD -- docs/plans
+```
+
+In the `--raw` lines, the fourth field is the blob each commit produced.
+
+- **Not integrated:** the worktree holds a plan version the base branch never had, so its plan
+  progress has not landed. Refuse with `plan: not integrated`, naming the worktree and the plan
+  path, and make no plan edits. Never copy the worktree's version into the primary checkout. The
+  only other outcome of such a run is archiving superseded or abandoned work through the archive
+  handoff in step 4.
+- **Integrated:** authority returns to the primary copy for the rest of the run. Every plan edit in
+  steps 2 through 7 — validator fixes, corrected claims, `## Not tested` evidence, verification,
+  the move to `completed/` — goes to the primary copy, including the notes of a later refusal.
+  Never edit the worktree's copy. Until the plan closes, the portal reports those notes as an
+  outside edit; a rerun of this step still passes, because the base branch has every version the
+  worktree has.
+
 ### 1. Run the tests
 
 Run the repository's canonical completion gate from the checkout that holds the plan's landed work,
@@ -104,7 +144,19 @@ Follow `references/verdict.md`:
 - **Incomplete or blocked after agent-resolvable repairs:** refuse. Name the remaining work, update
   the plan's tasks and `next_action`, and leave it in its lifecycle folder.
 - **Superseded or abandoned:** record the reason in the plan, then `git mv` it to
-  `docs/plans/archived/`.
+  `docs/plans/archived/`, in the primary checkout. Abandoned work never merges, so Git never
+  brings the worktree's plan copy to the base branch; archiving carries it there once, as step 0
+  left the copies:
+
+  | Copies | Archiving does |
+  | --- | --- |
+  | Worktree copy integrated, or the plan names no worktree | Records the reason in the primary copy and moves it |
+  | Worktree copy not integrated, and the primary copy equals the plan at the fork or a blob the worktree branch produced (`git log --raw --no-abbrev --format= <fork>..<branch> -- docs/plans`) | Writes the worktree copy's content into the primary copy, records the reason, and moves it, staged by path as one archive change on the base branch |
+  | Worktree copy not integrated, and the primary copy holds a version the worktree never had | Refuses with `plan: conflicting copies`, naming both; the user merges the base branch into the worktree, or moves the edit into the worktree's copy and reverts it in the primary checkout |
+  | Worktree copy unavailable | Archives the primary copy and states in the final report that the worktree's plan state was not available |
+
+  This is the only time plan content is copied between checkouts: once, one way, at the archive
+  transition. Never merge two edited copies.
 - **Complete:** continue to step 5.
 
 ### 5. Confirm `## Not tested` is clear

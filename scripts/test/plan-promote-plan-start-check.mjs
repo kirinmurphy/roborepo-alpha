@@ -105,9 +105,9 @@ for (const [id, { boundaryPhrases }] of Object.entries(SKILLS)) {
   // fresh validation, and only then the context switch.
   const transition = skill.slice(order[0], order[1]);
   const steps = [
-    "writes `worktree: <name>` into the canonical plan",
+    "writes `worktree: <name>` into the primary checkout's copy of the plan",
     "from `backlog/` to `active/`",
-    "only the old and new canonical plan paths",
+    "only the old and new plan paths",
     "runs the start validator against fresh disk and Git state",
     "Enter the implementation worktree only after the validator returns `APPROVED`",
   ];
@@ -137,6 +137,46 @@ for (const [id, { boundaryPhrases }] of Object.entries(SKILLS)) {
   }
 
   assert.ok(skill.includes("from `backlog/` to `active/` with `git mv`"), "plan-start: SKILL.md must own the backlog-to-active move");
+}
+
+// --- plan authority: after the start transition the worktree's copy is the plan, and only
+// /plan-close hands authority back to the primary checkout. Prose-presence coverage, like the
+// blocks above; the portal's side of the rule is covered behaviorally by the plan-suite checks. ---
+{
+  const normalize = (text) => text.replace(/\s+/g, " ");
+  const read = (relative) => normalize(fs.readFileSync(path.join(repoRoot, "globals/packages", relative), "utf8"));
+  const start = read("plan-start/skills/plan-start/SKILL.md");
+  const startReference = read("plan-start/skills/plan-start/references/start-validation.md");
+  for (const text of [start, startReference]) {
+    assert.ok(!/mirror|canonical copy|Plan status updates still go|synchronized in the matching plan document/i.test(text), "plan-start: no instruction to copy plan updates to the primary checkout");
+  }
+  assert.ok(start.includes("Never copy plan updates to the primary checkout"), "plan-start: plan updates stay in the worktree's copy");
+  assert.ok(startReference.includes("never a copy to the primary checkout"), "plan-start: start-validation.md hands the plan to the worktree");
+
+  const schema = read("plan-write/skills/plan-write/references/plan-schema.md");
+  for (const phrase of ["## Plan authority", "PLAN_EDITED_OUTSIDE_WORKTREE", "PLAN_WORKTREE_COPY_UNAVAILABLE", "never copy plan content between checkouts"]) {
+    assert.ok(schema.includes(phrase), `plan-schema.md missing "${phrase}"`);
+  }
+  const write = read("plan-write/skills/plan-write/SKILL.md");
+  assert.ok(write.includes("resolve its authoritative copy by the \"Plan authority\" rule"), "plan-write: resolves the authoritative copy before editing");
+  assert.ok(write.includes("ask for write access to the worktree rather than editing the primary copy"), "plan-write: never falls back to the primary copy for access");
+
+  const close = read("plan-close/skills/plan-close/SKILL.md");
+  const integration = close.indexOf("### 0. Confirm the worktree's plan copy is integrated");
+  assert.ok(integration > 0 && integration < close.indexOf("### 1. Run the tests"), "plan-close: the integration check runs before step 1");
+  for (const phrase of [
+    "plan: not integrated",
+    "make no plan edits",
+    "Never copy the worktree's version into the primary checkout",
+    "goes to the primary copy, including the notes of a later refusal",
+    "Never edit the worktree's copy",
+    "plan: conflicting copies",
+    "Writes the worktree copy's content into the primary copy",
+    "the worktree's plan state was not available",
+    "Never merge two edited copies",
+  ]) {
+    assert.ok(close.includes(phrase), `plan-close: SKILL.md missing "${phrase}"`);
+  }
 }
 
 // --- plan-start's run mode: no check-ins, strict autonomy bar, queued questions batched at the end ---

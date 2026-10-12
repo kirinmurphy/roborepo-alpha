@@ -58,6 +58,41 @@ Write a value only when live Git state proves the relationship — the worktree 
 plan's implementation runs there. A value left behind after the worktree is removed is harmless: it
 matches nothing, and only active plans are joined at all.
 
+## Plan authority
+
+A plan can have a copy in the primary checkout and another in a linked worktree. Exactly one copy is
+authoritative: the one the portal shows and every tool writes. Which copy it is follows from the
+plan's lifecycle and its `worktree` field, never from which branch is ahead or behind.
+
+The primary checkout is the first `worktree` entry of `git worktree list --porcelain`. The primary
+copy decides which lifecycle stage a plan is in, because every lifecycle transition is committed
+there. The assigned worktree's copy is authoritative only when all of these hold:
+
+1. the primary copy is in `docs/plans/active/` and names a worktree;
+2. Git has a linked worktree with that administrative name;
+3. that worktree holds a readable copy with the same `id`, still in `docs/plans/active/`, naming the
+   same worktree.
+
+Otherwise the primary copy is authoritative.
+
+| Plan condition | Authoritative copy |
+| --- | --- |
+| Backlog, completed, or archived in the primary checkout | Primary |
+| Active, with no `worktree` | Primary |
+| Active, and the assigned worktree holds a usable copy | Worktree |
+| Active, but the assigned worktree or its copy is not usable | Primary, with `PLAN_WORKTREE_COPY_UNAVAILABLE` |
+| Present only in a worktree | That worktree |
+| A copy in any worktree the plan is not assigned to | Never |
+
+Edit only the authoritative copy, and never copy plan content between checkouts to keep them in
+step. Git carries the worktree's plan to the primary checkout when its branch merges.
+
+An edit to the primary copy of a plan whose worktree copy is authoritative is an outside edit, and
+the portal reports it as `PLAN_EDITED_OUTSIDE_WORKTREE`. Resolve it with Git: merge the base branch
+into the worktree, or move the edit into the worktree's copy and revert it in the primary checkout.
+Lifecycle moves of such a plan happen only through the lifecycle commands, which run in the primary
+checkout.
+
 Do not add `status`, `validated`, `updated_at`, `created_at`, `owner`, `percent_complete`, `estimated_hours`, or `tags` unless a later plan explicitly adds them.
 
 ## Plan ids

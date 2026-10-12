@@ -94,8 +94,13 @@ Implements a plan in an isolated linked worktree. It:
 2. runs `roborepo plans start`, which records the worktree in the plan, moves a backlog plan to
    `active/`, makes one plan-only commit on the base branch, and validates the result;
 3. works through every unblocked task without stopping for check-ins;
-4. records untested work in the plan's `## Not tested` section as it goes;
+4. records progress, decisions, and untested work in the worktree's copy of the plan as it goes;
 5. reports once at the end, with every open question in one batch.
+
+From the start transition on, the worktree's copy is the plan. The Plans page reads it there, so
+progress shows up without anything being copied back to the main checkout, and Git carries the
+plan to the base branch when the branch merges. An edit to the main checkout's copy in the meantime
+is reported as **Edited outside worktree**.
 
 The first run in a repository asks you to confirm where worktrees go. Later runs reuse that answer.
 In Claude, each run also asks once for access to the worktree folder, then works inside it, so edits
@@ -105,13 +110,18 @@ there do not prompt one file at a time.
 
 Closes one plan, and refuses rather than closing on incomplete evidence. In order, it:
 
+0. confirms the plan's worktree copy holds nothing the base branch lacks, and refuses with
+   `plan: not integrated` when it does; from then on every plan edit goes to the main checkout's
+   copy;
 1. runs the repository's test command and stops on a failure;
 2. checks every claim in the plan against the code;
 3. decides complete, incomplete, blocked, superseded, or abandoned;
 4. refuses while any `## Not tested` entry is unchecked;
 5. refuses until the work has landed in the base branch;
 6. moves a complete plan to `completed/` with a Verification section, or an abandoned or superseded
-   one to `archived/` with the reason;
+   one to `archived/` with the reason. Abandoned work never merges, so archiving carries the
+   worktree's copy of the plan to the main checkout once, and refuses with
+   `plan: conflicting copies` when the main copy was also edited;
 7. after closing a complete plan, stops the dev servers still running in its worktree and lists
    them.
 

@@ -22,7 +22,8 @@ const MAX_PLANS_PER_REPO = 500;
 const planRecordCache = new Map();
 
 // Plans scans the repositories RoboRepo knows about (pljvmyh §9); the scan lives beside this module.
-export { buildPlanSnapshot, planSnapshotFingerprint } from "./canonical-scan.mjs";
+export { buildPlanSnapshot } from "./canonical-scan.mjs";
+export { planSnapshotFingerprint } from "./snapshot-fingerprint.mjs";
 
 // Appends each plan's cross-plan findings to a copy of its validation. Records come from
 // planRecordCache, so mutating `plan.validation` in place would stack the same relationship
@@ -146,6 +147,7 @@ const DOMAIN_ERROR_STATUS = {
   STALE_PLAN: 409,
   DESTINATION_EXISTS: 409,
   LIFECYCLE_REQUIREMENTS: 422,
+  LIFECYCLE_OWNED_BY_PRIMARY: 409,
   PLAN_NOT_FOUND: 404,
   MOVE_FAILED: 500,
 };
@@ -637,6 +639,8 @@ export function updatePlanField(snapshot, { id, key, property, value, expectedVa
   fs.writeFileSync(realFile, updated);
   planRecordCache.delete(record.absolutePath);
   const rebuilt = rebuildPlanRecordAt(record.repository, realFile);
+  // A frontmatter field edit leaves where the plan was read from unchanged.
+  rebuilt.plan = { ...rebuilt.plan, checkout: record.plan.checkout ?? null, authority: record.plan.authority ?? null };
   return {
     change: { property, previousValue: record.plan[property], newValue: value },
     record: rebuilt,
@@ -653,6 +657,14 @@ export function updatePlanPriority(snapshot, { id, key, priority, expectedPriori
 export function movePlanLifecycle(snapshot, { id, key, lifecycle, expectedLifecycle, mtimeMs, repositoryId, skipDestinationValidation = false }) {
   if (!LIFECYCLES.has(lifecycle)) throw domainError("INVALID_CHANGE", `invalid lifecycle: ${lifecycle}`);
   const record = resolvePlanForMutation(snapshot, { id, key, repositoryId });
+  // Lifecycle transitions are committed in the primary checkout. Moving the worktree copy would give
+  // the plan a second lifecycle, and moving the primary copy would release the plan without
+  // integrating what the worktree recorded.
+  if (record.plan.authority?.source === "worktree") {
+    throw domainError("LIFECYCLE_OWNED_BY_PRIMARY", `"${record.plan.title}" is being worked on in worktree ${record.plan.authority.worktree}, so its lifecycle can't be changed here.`, {
+      resolution: "Close it with /plan-close once its branch has merged, or clear `worktree` in the primary checkout's copy to release it first.",
+    });
+  }
   if (record.plan.lifecycle === lifecycle) throw domainError("INVALID_CHANGE", `plan is already ${lifecycle}`);
   assertExpectedState(record, { key, expectedLifecycle, mtimeMs });
   if (!record.absolutePath) throw domainError("PLAN_NOT_FOUND", "plan file path unavailable");
@@ -887,7 +899,7 @@ function portablePlanSummary(item) {
   ].join("\n");
 }
 
-function lifecycleFromPath(relativePath) {
+export function lifecycleFromPath(relativePath) {
   const parts = relativePath.split(/[\\/]/);
   if (parts[0] !== "docs" || parts[1] !== "plans") return "unknown";
   const lifecycle = parts[2];

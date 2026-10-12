@@ -1,7 +1,7 @@
 # Start Validation
 
 The start transition records which linked worktree implements a plan, commits that fact to the
-canonical plan on the base branch, and proves the result from fresh state before implementation
+primary checkout's copy of the plan on the base branch, and proves the result from fresh state before implementation
 moves into the worktree. A plan/worktree integration joins plans to linked worktrees by this field,
 so a plan that names the wrong worktree, or names it only in an uncommitted file, attaches to
 nothing or to the wrong row.
@@ -13,7 +13,7 @@ transition command owns its rules; this skill owns the judgment around it.
 
 | Term | Meaning |
 | --- | --- |
-| Primary checkout | First `worktree` entry of `git worktree list --porcelain`. Holds the canonical plan. |
+| Primary checkout | First `worktree` entry of `git worktree list --porcelain`. Holds the plan's primary copy, where lifecycle transitions are committed. |
 | Base branch | The branch implementation starts from: `main` unless repository policy names another (`--base`). |
 | Target worktree | The linked worktree created or reused for this plan. |
 | Worktree name | `basename` of `git -C <target> rev-parse --absolute-git-dir`, i.e. Git's administrative name under `.git/worktrees/`. Not the checkout directory's basename and not the branch. |
@@ -68,7 +68,7 @@ not count, because another session may have moved the checkout in between.
 
 | # | Check | Evidence |
 | --- | --- | --- |
-| 1 | The canonical plan is in `active/`. | `git ls-files docs/plans/active/<file>` prints the path. |
+| 1 | The primary copy of the plan is in `active/`. | `git ls-files docs/plans/active/<file>` prints the path. |
 | 2 | `worktree` is nonempty and equals the target's worktree name. | The frontmatter value from `git show <base>:docs/plans/active/<file>` matches `basename $(git -C <target> rev-parse --absolute-git-dir)`. |
 | 3 | The transition is committed on the base branch. | The working file is identical to the committed blob (`git diff --quiet <base> -- <path>`). |
 | 4 | The transition commit touches only the plan. | `git show --name-status --format= <commit>` lists only the plan's rename (`R`) or modification (`M`), and the document body is unchanged. |
@@ -95,5 +95,5 @@ force-moving files, or editing other plans to make a check pass.
 Switch execution into the target worktree, as SKILL.md's Enter the Worktree describes, and continue
 with the Implementation Workflow. Fix any
 `staleLinks` there, as part of the feature branch: the base branch takes no commit but the
-transition. Plan status updates still go to the primary checkout's canonical copy, as Preflight
-requires. Later updates are ordinary plan edits, not part of this transition.
+transition. From approval on, the worktree's copy is the authoritative plan: every later plan
+update is an ordinary edit there, never a copy to the primary checkout.

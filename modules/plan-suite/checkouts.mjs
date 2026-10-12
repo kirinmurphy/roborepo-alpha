@@ -6,8 +6,9 @@ import path from "node:path";
 import { checkoutRootsFor, mainCheckoutPath, resolveGitDir } from "../repositories/index.mjs";
 import { linkedWorktrees } from "../repositories/worktree-inventory.mjs";
 
-// Returns [{ path, isMain, isWorktree, label }], main first. `label` names a non-main checkout for
-// display: the worktree's administrative name, or a second clone's directory name. The main checkout
+// Returns [{ path, isMain, isWorktree, label, branch }], main first. `label` names a non-main checkout
+// for display: the worktree's administrative name, or a second clone's directory name. `branch` is a
+// linked worktree's checked-out branch, null when detached and for every other checkout. The main checkout
 // comes from Git's common directory, never from the registry's first-registered root, which can be a
 // worktree.
 export function repositoryCheckouts(registry, repositoryId, { fsApi = fs } = {}) {
@@ -18,16 +19,16 @@ export function repositoryCheckouts(registry, repositoryId, { fsApi = fs } = {})
   const main = mainCheckoutPath(known, { fsApi }) || known.find((root) => !resolveGitDir(root, { fsApi })?.isWorktree) || null;
   const checkouts = new Map();
   if (main) {
-    checkouts.set(main, { path: main, isMain: true, isWorktree: false, label: null });
+    checkouts.set(main, { path: main, isMain: true, isWorktree: false, label: null, branch: null });
     const git = resolveGitDir(main, { fsApi });
     if (git) for (const worktree of linkedWorktrees(git.commonDir, { fsApi })) {
-      if (!worktree.prunable) checkouts.set(worktree.path, { path: worktree.path, isMain: false, isWorktree: true, label: worktree.name });
+      if (!worktree.prunable) checkouts.set(worktree.path, { path: worktree.path, isMain: false, isWorktree: true, label: worktree.name, branch: worktree.branch });
     }
   }
   for (const root of known) {
     if (checkouts.has(root)) continue;
     const git = resolveGitDir(root, { fsApi });
-    checkouts.set(root, { path: root, isMain: false, isWorktree: Boolean(git?.isWorktree), label: git?.isWorktree ? git.worktreeName : path.basename(root) });
+    checkouts.set(root, { path: root, isMain: false, isWorktree: Boolean(git?.isWorktree), label: git?.isWorktree ? git.worktreeName : path.basename(root), branch: null });
   }
   const [first, ...rest] = [...checkouts.values()];
   return first?.isMain
