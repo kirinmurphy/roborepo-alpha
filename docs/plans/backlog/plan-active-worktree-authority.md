@@ -1,14 +1,16 @@
 ---
 id: 6q16tocb
 priority: high
-next_action: Implement Phase 1 by replacing hash-only worktree divergence detection with a tested directional variant classifier for the main checkout and an active plan's assigned worktree.
+next_action: Implement Phase 1 — a pure authority resolver and the outside-edit check, with fixture tests for every row of the authority and lifecycle-transition tables.
 blocked_by: []
-depends_on: []
+depends_on:
+  - a7bslb00
 related:
   - age4cm7r
   - wk7p4n2
   - 7m4q9dx
-reviewed_commit: e43770079a37cd5f6b1b23f806280c432b756551
+  - a7bslb00
+reviewed_commit: 4ba1cbfe2a22ef670e66c90ec8452eb48cfa459b
 worktree:
 ---
 
@@ -16,277 +18,445 @@ worktree:
 
 ## Summary
 
-RoboRepo already scans every known checkout for plan documents, merges copies by stable plan `id`, treats the primary checkout as canonical, and reports when the copy in a plan's assigned worktree differs. That observer is useful, but the authority rule still works against normal Git development: `/plan-start` establishes the active plan on the base branch, implementation then happens in the linked worktree, while plan progress is expected to be mirrored back into the primary checkout so the portal can stay current.
+A normal RoboRepo user runs one RoboRepo instance from the primary checkout (`main`). That instance
+reads plan documents from every checkout of each known repository, including linked worktrees whose
+branches have diverged from `main`. During implementation, the plan's progress is written in the
+worktree, but today the portal shows the primary checkout's copy, so `/plan-start` copies the plan
+back to `main` at the end of each run to keep the portal current.
 
-Make the assigned worktree the **working source of truth for an active plan**. The primary checkout remains the published/base copy, and it remains authoritative for backlog plans and for plans after their implementation has landed. The observer compares the two copies and classifies whether only the worktree changed, only the primary checkout changed, both changed, or neither changed. Normal worktree-only progress is not a conflict. A primary-checkout change made after active work began, or a true two-sided divergence, is surfaced explicitly.
+This plan gives each plan exactly one authoritative copy, decided by its lifecycle stage:
 
-This uses the feature worktree as the plan's existing draft branch. It does not add a database, lockfile, CI file mover, in-app Markdown editor, or dedicated `roborepo/plans` branch. A dedicated plan branch remains a possible follow-up if cross-machine plan collaboration or build-trigger cost proves that the worktree-authority model is insufficient.
+| Stage | Authoritative copy |
+| --- | --- |
+| Backlog | Primary checkout |
+| Active, with an assigned worktree that holds the plan | That worktree |
+| Active, with no usable assigned worktree | Primary checkout |
+| Completed or archived | Primary checkout, after integration |
+
+The primary portal aggregates: it reads an active plan's content directly from its worktree and
+never asks for it to be copied to `main`. Nothing synchronizes copies in either direction. Git
+carries the worktree's plan to `main` when the branch merges, like any other file on the branch; the
+one exception is abandoned work, which never merges, so `/plan-close` carries its plan to `main`
+once, in the archive commit. The
+one check RoboRepo adds is whether the *other* copy was edited out of turn; when it was, the plan
+shows a finding, and nothing is chosen, overwritten, or merged automatically.
 
 ## Context
 
-Plan Markdown is intentionally repository-owned source material rather than data in a RoboRepo database. Git worktrees therefore create legitimate copies of the same plan file. The system cannot prevent a user, agent, editor, or another Git workflow from changing any one of those copies, and hostile enforcement would work against the filesystem-first model.
+### Terms
 
-The useful invariant is narrower:
+| Term | Meaning |
+| --- | --- |
+| Primary checkout | The repository's main working tree, resolved from Git administrative state by `modules/plan-suite/checkouts.mjs`, not from the registry's first root |
+| Assigned worktree | The linked worktree whose administrative name equals the primary copy's `worktree` frontmatter |
+| Authoritative copy | The one copy of a plan that the portal shows and RoboRepo writes |
+| Outside edit | A change to the non-authoritative copy of an active plan that the authoritative copy never had |
+| Primary portal | The RoboRepo instance started from the primary checkout; the normal deployment |
 
-> RoboRepo must know which copy should drive the current plan view, and it must not silently hide competing edits.
+### What exists today
 
-The repository already has most of the required identity and observation primitives:
+Verified on `main` at `4ba1cbf`.
 
-- `modules/plan-suite/canonical-scan.mjs` scans every checkout of each known repository, merges plans by stable `id`, and reads the main checkout first.
-- The current scan keeps the main copy when both main and a worktree contain a plan. Only the plan's assigned worktree can add the advisory `PLAN_DIFFERS_IN_WORKTREE` finding.
-- `modules/plan-suite/checkouts.mjs` resolves the true main checkout and linked worktrees from Git administrative state rather than assuming the registry's first root is main.
-- `modules/plan-suite/index.mjs` already separates the global Plans snapshot from repository-local validation and carries stable IDs, lifecycle, worktree association, optimistic `mtimeMs` checks, and structured findings.
-- `scripts/test/plan-suite-canonical-check.mjs` already proves that identical copies collapse, an unrelated behind worktree does not create a divergence finding, the main copy currently wins when an assigned worktree differs, and a worktree-only plan remains discoverable.
-- `globals/packages/plan-start/skills/plan-start/SKILL.md` currently instructs implementation runs to mirror active plan updates back into the primary checkout at the end of a run so global Plans can see them.
-- The Plans drawer already renders structured validation warnings, so plan-authority warnings have an existing user-visible surface.
+- `modules/plan-suite/canonical-scan.mjs#scanRepository` reads every checkout, main first, and
+  merges copies by plan `id`. The main copy always wins when it exists. When the copy in the plan's
+  own worktree has a different content hash, the main record gets `divergentCheckouts` and an
+  advisory `PLAN_DIFFERS_IN_WORKTREE` finding whose resolution says the main copy is the one the
+  portal shows and edits. Copies in unrelated worktrees are ignored. A plan found only in a
+  worktree is shown from there with `checkout` set to the worktree's label.
+- `modules/plan-suite/index.mjs#updatePlanField` and `#movePlanLifecycle` write to the selected
+  record's `absolutePath`, with optimistic `mtimeMs` checks. Whichever copy the scan selects is the
+  copy the portal writes, so changing the selection changes where portal writes land.
+- `planSnapshotFingerprint` decides when to rebuild the snapshot from directory stats under each
+  checkout's `docs/plans`. It reads no Git refs.
+- `globals/packages/plan-start/skills/plan-start/SKILL.md` Preflight item 14 and Implementation
+  Workflow item 8 tell an implementation run to mirror plan updates into the primary checkout's copy
+  once at the end, and `references/start-validation.md` calls the primary copy "the canonical
+  plan". That mirroring was a user request recorded in [[age4cm7r]]'s Decision Log, made so the
+  portal could show active progress.
+- `globals/packages/plan-close/skills/plan-close/SKILL.md` step 6 confirms landing and ignores
+  "documented post-merge plan synchronization" when comparing files.
+- `docs/user/reference/plans-portal.md` documents the copy table above, including "The main
+  checkout's copy is canonical".
+- `scripts/test/plan-suite-canonical-check.mjs` asserts the current behavior: identical copies
+  collapse, an unrelated behind worktree marks nothing, and the main copy wins when the assigned
+  worktree differs.
+- `modules/repositories/git-exec.mjs` allows `merge-base`, `rev-parse`, and `log` on its read-only
+  path, which is all the outside-edit check needs.
 
-The remaining problem is that a raw content mismatch cannot say **which side changed**. It also makes the system depend on copying active plan progress back to main even though the implementation branch is the natural place for those edits.
+### The mirror already drifts
+
+On 2026-10-11 the primary copy of `docs/plans/active/git-worktree-lifecycle-cleanup.md` differed
+from the copy in its assigned worktree: the worktree had a newer `next_action`, a newer
+`reviewed_commit`, and rewritten §7 and §8. The portal showed the older primary copy, with a
+**Differs in worktree** finding. This is the normal outcome of mirroring: the worktree keeps moving
+and the mirror lags.
 
 ## Goals
 
-- [ ] Make one authority rule explicit for every plan state instead of treating every filesystem copy as equally meaningful.
-- [ ] Use the assigned linked worktree as the working authority for an active plan when that exact worktree exists.
-- [ ] Keep the primary checkout authoritative for backlog plans, unassigned plans, and post-landing/closed plan state.
-- [ ] Distinguish normal worktree progress from a primary-checkout edit and from true two-sided divergence.
-- [ ] Make the global Plans snapshot and plan document reads show the active worktree's current plan content without copying that content into main.
-- [ ] Route RoboRepo-owned active-plan edits to the same authoritative worktree copy so the portal and deterministic commands do not recreate the split they observe.
-- [ ] Remove the plan-start convention that mirrors active plan progress into the primary checkout.
-- [ ] Surface ambiguous or competing edits as structured findings without blocking ordinary local editing or adding CI failures.
-- [ ] Preserve stable plan identity, lifecycle folders, worktree association, Markdown source of truth, and the existing no-database architecture.
-- [ ] Keep the authority and divergence logic in shared plan-domain code so Home, Plans, CLI commands, and skills consume one result.
+- [ ] Every plan has exactly one authoritative copy, decided by its lifecycle stage and its assigned
+      worktree, never by which branch is ahead or behind.
+- [ ] The primary portal shows an active plan's content from its assigned worktree, with no copy to
+      `main`.
+- [ ] RoboRepo writes only to the authoritative copy: portal mutations, skills, and commands.
+- [ ] An outside edit to the non-authoritative copy is reported as a finding; nothing merges,
+      overwrites, or picks between copies automatically.
+- [ ] Authority moves only at defined lifecycle transitions: `/plan-start`, integration by merge,
+      and `/plan-close`.
+- [ ] A worktree is never removed while it holds the only copy of its plan's current state.
+- [ ] Any RoboRepo instance, of any version, running from any checkout, derives authority from the
+      same repository state, with nothing persisted or shared between instances.
+- [ ] `plan-start` stops mirroring plan updates into the primary checkout.
 
 ## Non-goals
 
-- Creating a dedicated `roborepo/plans` or documentation branch.
-- Adding `canonicalPlanRef`, branch protection, remote push/fetch orchestration, or a general Git-ref-backed document store.
-- Adding a database, local shadow database, lockfile, lease, or distributed locking protocol.
-- Preventing users or agents from editing plan Markdown directly.
-- Adding CI that moves plan files, fails builds because a plan copy exists in a worktree, or automatically commits plan changes.
-- Building a Markdown editor in the portal.
-- Automatically merging a true two-sided plan conflict.
-- Changing the meaning of the existing `worktree` frontmatter field.
-- Changing the plan lifecycle or introducing new lifecycle states.
-- Solving cross-machine real-time collaboration. Git remains the transport between machines.
+- Synchronizing plan copies in either direction, or reconciling them on a schedule.
+- A dedicated `roborepo/plans` branch, `canonicalPlanRef`, or any Git-ref-backed document store.
+- A database, lockfile, lease, shared registry entry, or service that records which copy owns a plan.
+- Preventing direct edits to plan Markdown. RoboRepo detects outside edits; it does not block them.
+- CI that moves plan files, fails builds over plan copies, or commits plan changes.
+- A Markdown editor in the portal.
+- Automatically merging two edited copies.
+- Changing the meaning of the `worktree` frontmatter field, or adding lifecycle states.
+- Cross-machine collaboration. Git remains the transport between machines.
 
 ## Authority Model
 
-The plan observer should choose one **effective record** while retaining enough metadata to explain other known copies.
+### One rule
 
-| Plan condition | Effective source | Expected treatment |
-| --- | --- | --- |
-| Backlog plan | Primary checkout | Primary copy is authoritative |
-| Active plan with no `worktree` | Primary checkout | Primary copy is authoritative |
-| Active plan with an exact live assigned worktree | Assigned worktree | Worktree copy is the working authority |
-| Active plan whose assigned worktree is unavailable | Primary checkout fallback | Show a worktree-unavailable finding |
-| Active plan present only in its exact assigned worktree | Assigned worktree | Show it, but mark it worktree-only/unpublished |
-| Completed or archived plan | Primary checkout | Closed history is read from the landed/base copy |
-| Copy in an unrelated worktree | Never authoritative | Ignore it for authority and divergence |
+The primary copy decides **which stage** a plan is in, because every lifecycle transition is
+committed there (`/plan-start` commits the start transition on the base branch; `/plan-close` moves
+the plan on the base branch). During the active stage, the assigned worktree decides **what the plan
+says**.
 
-The lifecycle-aware choice is intentionally asymmetric. The primary checkout is the stable baseline; the assigned active worktree is where implementation and plan progress are expected to evolve.
+The worktree copy is authoritative only when all of these hold:
+
+1. the primary copy is in `docs/plans/active/` and names a worktree;
+2. Git has a linked worktree with that administrative name;
+3. that worktree holds a readable copy with the same `id`, still in `docs/plans/active/`, naming the
+   same worktree.
+
+Otherwise the primary copy is authoritative. Condition 3 makes the handoff at start atomic: the
+worktree copy becomes usable only once the worktree contains the start-transition commit, which
+`roborepo plans start` fast-forwards into a fresh worktree.
 
 ```mermaid
-flowchart LR
-    Main[Primary checkout plan] --> Observer[Plan authority resolver]
-    Worktree[Assigned worktree plan] --> Observer
-    Observer -->|backlog / unassigned / closed| MainView[Primary copy drives view]
-    Observer -->|active + assigned worktree| WorktreeView[Worktree copy drives view]
-    Observer --> Variant[Variant state]
-    Variant --> Portal[Plans / Home warnings]
-    Variant --> Skills[Plan workflow guidance]
+flowchart TD
+    P{"primary copy in active/<br/>and names a worktree?"}
+    P -->|no| M["primary copy is authoritative"]
+    P -->|yes| W{"that worktree exists and its copy<br/>is in active/ naming the same worktree?"}
+    W -->|no| F["primary copy is authoritative<br/>+ PLAN_WORKTREE_COPY_UNAVAILABLE"]
+    W -->|yes| A["worktree copy is authoritative"]
+    A -->|then checks the primary copy| C{"primary copy holds a version<br/>the worktree never had?"}
+    C -->|no| Q["no finding"]
+    C -->|yes| E["PLAN_EDITED_OUTSIDE_WORKTREE"]
 ```
 
-## Directional Variant State
+### Every case
 
-Replace the current hash-only "different" result with a directional comparison against the plan's Git base.
+| Plan condition | Authoritative copy | Finding |
+| --- | --- | --- |
+| Backlog, completed, or archived in the primary checkout | Primary | none |
+| Active in the primary, no `worktree` | Primary | none |
+| Active in the primary, assigned worktree holds a usable copy | Worktree | `PLAN_EDITED_OUTSIDE_WORKTREE` only when the primary copy has an outside edit |
+| Active in the primary, assigned worktree missing, its copy missing or unreadable, or its copy no longer in `active/` or naming a different worktree | Primary | `PLAN_WORKTREE_COPY_UNAVAILABLE`, with the reason |
+| Present only in a worktree | That worktree, labeled with its name, as today | none |
+| A copy in any unassigned worktree | Never | none |
 
-For an active plan with an assigned worktree, compare:
+A worktree being behind or ahead of `main` changes nothing in this table.
 
-1. the plan at the relevant common Git base;
-2. the current primary-checkout copy, including uncommitted changes;
-3. the current assigned-worktree copy, including uncommitted changes.
+### Outside edits
 
-Stable plan `id`, not path, identifies the document when lifecycle moves or renames make paths differ across revisions.
+The worktree copy is free to change; that is normal progress, and RoboRepo never reports it. The
+check runs only on the non-authoritative primary copy of an active plan.
 
-| State | Primary vs. base | Worktree vs. base | Meaning | Finding |
-| --- | --- | --- | --- | --- |
-| `synced` | unchanged | unchanged/equal | No competing plan edits | none |
-| `worktree-changed` | unchanged | changed | Normal active-plan progress | none |
-| `primary-changed` | changed | unchanged | Base copy changed after active work began | advisory |
-| `diverged` | changed | changed differently | Both sides edited the plan | advisory, prominent |
-| `worktree-only` | missing | present | Assigned worktree contains a plan not published to primary | advisory |
-| `worktree-missing` | present | missing/unavailable | Assigned plan has no readable worktree copy | advisory |
-| `unknown` | unknown | unknown | Git cannot establish a trustworthy comparison base | advisory |
+The primary copy is consistent when its bytes equal a version of the plan that the worktree's own
+history already contains:
 
-A branch merely being behind is not enough to call a plan divergent. The comparison is about whether that plan changed on each side relative to the common base.
+- the plan at the merge base of the primary checkout's `HEAD` and the worktree branch, read at the
+  primary copy's path; or
+- any plan blob the worktree branch's own commits produced (`git log --raw <base>..<branch> --
+  docs/plans`); or
+- the worktree's current working bytes.
 
-### Git comparison rules
+Anything else is an outside edit. Matching by content needs no path tracking: a blob that equals
+the primary copy byte for byte carries the same `id`.
 
-- Reuse the repository Git execution boundary in `modules/repositories/` rather than scattering `spawnSync("git", ...)` calls through portal or plan UI code.
-- Resolve the common base from the assigned worktree branch and the primary checkout's current branch/HEAD.
-- Resolve the historical plan at the base by stable `id`; do not assume its current lifecycle path existed at the base.
-- Hash normalized raw Markdown bytes for equality. Do not parse and reserialize documents merely to compare them.
-- Compare working-tree bytes, not only committed blobs, so unsaved-to-Git plan edits remain observable.
-- If Git cannot establish a trustworthy base, return an explicit `unknown`/unavailable comparison result rather than guessing which side changed.
-- Do not expose absolute checkout paths through `/api/plans`.
+| What happened to the primary copy | Consistent? | Why |
+| --- | --- | --- |
+| Nothing since `/plan-start` | yes | equals the merge-base version |
+| The branch was squash- or rebase-merged and `main` pulled | yes | equals a blob the branch produced |
+| `main` was merged into the worktree after an edit on `main` | yes | the merge base moved past the edit |
+| Edited on `main`, committed or not, and not yet merged into the worktree | no | the worktree never had that version |
+| An older RoboRepo portal wrote a priority change to the primary copy | no | same as any outside edit |
+
+The check is a pure function of current Git and filesystem state. It persists nothing, and it is
+recomputed on every snapshot rebuild, so rebases and moving merge bases need no special handling.
+It runs only when the two copies differ, and costs one `merge-base`, one `rev-parse`, and one `log`
+per such plan. When Git cannot answer (detached `HEAD`, missing branch, timeout), the plan gets
+`PLAN_AUTHORITY_UNCHECKED` instead of a guess.
+
+### Resolving an outside edit
+
+RoboRepo reports and stops there. The finding names both copies and offers the two Git-native
+resolutions:
+
+- merge the base branch into the worktree, which brings `main`'s edit into the authoritative copy
+  through an ordinary Git merge and its conflict handling; or
+- move the edit into the worktree copy by hand, then revert it in the primary checkout.
+
+The portal keeps showing the worktree copy while the finding stands.
+
+## Lifecycle Transitions
+
+The normal story:
+
+1. `/plan-start` commits the start transition in the primary checkout and fast-forwards the fresh
+   worktree to it. The worktree copy becomes authoritative.
+2. Implementation runs edit the plan in the worktree. The primary portal shows those edits as they
+   happen, and the primary copy stays as `/plan-start` left it.
+3. The branch merges into `main` through a PR, and the primary checkout pulls. The primary copy now
+   equals the worktree copy.
+4. `/plan-close` confirms the two copies match, records verification in the primary copy, and moves
+   it to `completed/`. The primary copy is authoritative again.
+5. [[a7bslb00]]'s cleanup removes the worktree, since its plan is no longer active.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Primary: plan-write creates it in backlog/
+    Primary --> Worktree: /plan-start commits the transition and fast-forwards the worktree
+    Worktree --> Worktree: implementation edits the worktree copy
+    Worktree --> Integrated: the branch merges and main is pulled
+    Integrated --> Worktree: a new edit in the worktree un-lands the plan copy
+    Integrated --> Closed: /plan-close confirms the copies match and moves the plan
+    Worktree --> Closed: /plan-close archives abandoned work, carrying the worktree copy
+    Worktree --> Primary: the worktree copy becomes unusable, or worktree is cleared
+    Closed --> [*]: cleanup removes the worktree
+```
+
+`Integrated` is still the worktree-authoritative stage; it names the moment both copies are equal.
+
+Authority changes hands only at these points:
+
+| Transition | Who | Authority before → after | Safeguard |
+| --- | --- | --- | --- |
+| Start | `/plan-start` → `roborepo plans start`, from the primary checkout | primary → worktree | unchanged transition: plan-only commit on the base branch, fast-forward of a fresh worktree; the worktree copy becomes usable only once it contains that commit |
+| Implementation | `plan-start`, `plan-write`, `session-close`, the portal | worktree | every write goes to the worktree copy; nothing is copied to `main` |
+| Merge main into the worktree | the user | worktree | Git merges `main`'s plan edits into the worktree copy and reports conflicts itself |
+| Merge the branch into `main` | the user, through a PR | worktree; the primary copy now equals it | the primary copy matches a blob the branch produced, so no finding |
+| Close as completed | `/plan-close`, from the primary checkout | worktree → primary | new integration check, below; then the existing landed check and move |
+| Close as archived | `/plan-close`, from the primary checkout | worktree → primary | archive handoff, below: the worktree copy is carried into the primary checkout once, refused on an outside edit |
+| Release without closing | the user clears `worktree` in the primary copy | worktree → primary | explicit; the worktree copy is ignored from then on |
+| Automatic worktree cleanup | [[a7bslb00]] | none | its plan-active guard reads the primary copy's `active/` folder, so it waits for `/plan-close` |
+| Confirmed worktree removal | the user, from Home or the cleanup command | worktree → primary, with `PLAN_WORKTREE_COPY_UNAVAILABLE` | [[a7bslb00]]'s clean-tree guard keeps uncommitted edits; the archive ref keeps committed ones |
+
+### Integration check in `/plan-close`
+
+Before closing a plan as completed, `/plan-close` confirms that the worktree's current plan copy is
+already in the base branch: the worktree's working bytes for the plan equal the primary copy's
+bytes. If they differ, the worktree holds plan progress that has not landed, and `/plan-close`
+refuses with `plan: not integrated`, naming the worktree and the plan path. It does not copy the
+worktree's version into `main`.
+
+After this check, `/plan-close` edits the primary copy (verification evidence, the move to
+`completed/`), and authority is back in the primary checkout.
+
+This check is what keeps cleanup safe. [[a7bslb00]]'s automatic removal waits until the plan leaves
+`active/`, and the plan leaves `active/` only through `/plan-close`, which now refuses while the
+worktree holds unlanded plan state. Between merging the PR and running `/plan-close`, the plan
+should not be edited in the worktree. An edit made there is either uncommitted, which fails the
+clean-tree guard, or a new commit, which makes the branch no longer landed; either way the worktree
+is kept.
+
+### Archive handoff in `/plan-close`
+
+Abandoned or superseded work never merges, so Git never brings the worktree's plan copy, including
+the reason the work stopped, to `main`. Closing as archived therefore carries it there once:
+
+| Copies | `/plan-close` archiving does |
+| --- | --- |
+| Equal | records the reason in the primary copy and moves it to `archived/`, as today |
+| Worktree copy authoritative, primary copy consistent | writes the worktree copy's content into the primary copy, records the reason, and moves it to `archived/`, all in one archive commit on the base branch |
+| Primary copy has an outside edit | refuses with `plan: conflicting copies`, naming both; the user resolves it as in "Resolving an outside edit" |
+| Worktree copy unavailable | archives the primary copy and states in the report that the worktree's plan state was not available |
+
+This is the only place RoboRepo copies plan content between checkouts. It runs once, in one
+direction, at a lifecycle transition, and never merges two edited copies.
+
+## Multiple Portal Instances
+
+Developing RoboRepo itself can mean several portals at once, each started from a different
+worktree and possibly running a different RoboRepo version. They need no coordination, because:
+
+- authority is derived from Git and filesystem state on every scan, and never stored;
+- `repositoryCheckouts` resolves the primary checkout from Git's administrative files, so a portal
+  started from a worktree still treats the primary checkout as primary;
+- the scan writes nothing; the only writes are user-initiated mutations, each guarded by an
+  `mtimeMs` check on the file it writes.
+
+A portal that predates this plan still shows and writes the primary copy. Its writes are outside
+edits, and every instance that has this plan reports them as `PLAN_EDITED_OUTSIDE_WORKTREE`.
 
 ## Proposed Design
 
-### 1. Separate authority selection from checkout discovery
+### 1. A pure authority resolver
 
-Keep `modules/plan-suite/checkouts.mjs` responsible for discovering the primary checkout and linked worktrees.
+Add `modules/plan-suite/plan-authority.mjs`, separate from checkout discovery and from the scan
+loop:
 
-Move copy classification and authority selection out of the scan loop into a focused plan-domain unit, for example `modules/plan-suite/plan-authority.mjs`. The exact filename may follow local ownership conventions, but the responsibilities should stay separate:
+- `resolvePlanAuthority({ primary, assigned })` takes the primary copy and the assigned worktree's
+  copy (either may be absent) and returns `{ source, reason }` per the rule above. It is pure.
+- `checkOutsideEdits({ primary, assigned, git })` runs only when `source` is `worktree` and the bytes
+  differ. It asks Git, through `defaultRunGitSync` in `modules/repositories/git-exec.mjs`, for the
+  merge base, the base blob, and the branch's plan blobs, computes the Git blob id of the primary
+  copy's bytes in process (`hash-object` is not on the read-only allow-list), and returns
+  `consistent`, `outside-edit` (with whether it is committed), or `unchecked`.
 
-- collect the copies for one stable plan `id`;
-- identify the primary copy and exact assigned-worktree copy;
-- classify their directional state;
-- choose the effective record from lifecycle plus worktree evidence;
-- return structured metadata/findings to the caller.
+`canonical-scan.mjs` stays orchestration: enumerate checkouts, collect copies per `id`, call the
+resolver, and build the snapshot.
 
-`canonical-scan.mjs` should remain orchestration: enumerate repositories/checkouts, collect plan copies, ask the authority unit to resolve each plan, then build the public snapshot.
+### 2. The scan returns the authoritative record
 
-### 2. Make the active worktree record drive the global view
+Change `scanRepository` so it collects the primary copy and the assigned worktree's copy for each
+plan before choosing a record, then returns the authoritative one. Only the selected copy needs a
+full `readPlanRecord`; other copies still need only their `id` and hash, as today.
 
-Today `canonical-scan.mjs` retains the first/main record and mutates it with `divergentCheckouts`. Change that composition rule so an active plan with an exact, readable assigned worktree returns the worktree record as the effective plan.
-
-The public plan still belongs to the same canonical repository identity. Existing repository grouping, stable IDs, relationships, lifecycle counts, and Home worktree joins must continue to work.
-
-Add compact runtime metadata sufficient for consumers to explain the state, for example:
+Each public plan carries a compact, path-free authority object:
 
 ```json
-{
-  "authority": {
-    "source": "worktree",
-    "worktree": "plan-active-worktree-authority",
-    "variantState": "worktree-changed"
-  }
-}
+{ "authority": { "source": "worktree", "worktree": "plan-active-worktree-authority" } }
 ```
 
-The exact field names are implementation details, but the API must not leak absolute paths, branch-local filesystem identifiers, or a second plan identity.
+`source` is `primary` or `worktree`; `worktree` is set only for `worktree`. Remove
+`divergentCheckouts` and `PLAN_DIFFERS_IN_WORKTREE`; the authority object and the findings below
+replace them.
 
-Retire `divergentCheckouts` if the directional authority object fully replaces it; do not maintain two overlapping representations.
+Repository grouping, `id` and key resolution, relationships, lifecycle counts, and Home's
+plan-to-worktree join (`repository-overview-projections.mjs#associatePlans`, which joins on the
+`worktree` field) are unchanged. The lifecycle a plan is counted under is the primary copy's, which
+an authoritative worktree copy shares by condition 3.
 
-### 3. Keep normal worktree progress quiet
+Add to `planSnapshotFingerprint` the `HEAD` file of the primary checkout and of each linked
+worktree, and the loose ref or `packed-refs` stat it points to. A merge of `main` into a worktree
+can change the outside-edit result without touching any plan file, and the fingerprint must notice.
+Move the fingerprint and its `statPlanTree` helper into `modules/plan-suite/snapshot-fingerprint.mjs`
+so `canonical-scan.mjs` stays a short orchestrator within the file-size cap.
 
-`worktree-changed` is the expected state while implementation is active. It should not make the plan invalid and should not produce a warning badge.
+### 3. Findings
 
-Add structured findings for the cases that need attention:
+Add to `modules/plan-suite/findings.mjs`, all advisory:
 
-- primary changed after work began;
-- both copies changed;
-- assigned worktree is unavailable/missing its copy;
-- the plan exists only in the assigned worktree.
+| Code | When | Message names | Resolution |
+| --- | --- | --- | --- |
+| `PLAN_EDITED_OUTSIDE_WORKTREE` | The primary copy of an active plan holds a version its worktree never had | the worktree, and whether the edit is committed | Merge the base branch into the worktree, or move the edit into the worktree copy and revert it in the primary checkout. RoboRepo shows the worktree copy and merges nothing |
+| `PLAN_WORKTREE_COPY_UNAVAILABLE` | The primary copy names a worktree whose copy is not usable | the worktree and the reason: worktree missing, copy missing or unreadable, copy left `active/`, or copy names another worktree | Restore the worktree, land its plan changes, or clear `worktree` to release the plan to the primary checkout. Progress recorded only in the worktree is not shown |
+| `PLAN_AUTHORITY_UNCHECKED` | Git could not establish the merge base or branch history | the worktree and the Git failure, without paths | Showing the worktree copy; an outside edit to the primary copy cannot be ruled out |
 
-The existing warning pipeline in `modules/plan-suite/findings.mjs` and the Plans drawer should render these without a new notification framework.
+None of them marks a plan invalid for lifecycle moves, and none blocks editing.
 
-A true divergence warning must say which two sources disagree and what the user should do next. It must not claim that main is automatically correct.
+### 4. Writes follow authority
 
-### 4. Route RoboRepo-owned active-plan writes to authority
+Because portal mutations already write the selected record's file, selecting the worktree copy
+routes them there. Make that explicit and close the one gap:
 
-Any RoboRepo path that begins from the global plan snapshot must mutate the effective record's checkout, not automatically the main copy.
+- Plan document reads and `updatePlanField` (priority) write the authoritative copy, with the
+  existing `mtimeMs` check on that file.
+- `movePlanLifecycle` refuses when `authority.source` is `worktree`, with a new domain error
+  `LIFECYCLE_OWNED_BY_PRIMARY`: lifecycle moves are committed in the primary checkout, so moving
+  the worktree copy would create a second lifecycle. Its resolution points to `/plan-close`, or to
+  clearing `worktree` first. The dropdown stays a manual override wherever the primary copy is
+  authoritative.
+- `roborepo plans start` is unchanged; it already runs in the primary checkout.
+- Audit `scripts/cli/plans.mjs` and `scripts/cli/portal-routes-plans.mjs` for any other path that
+  resolves a plan from the global snapshot and assumes the primary checkout.
 
-Cover at least:
+### 5. Skills follow the same rule
 
-- plan document reads;
-- editable plan frontmatter fields exposed by the portal;
-- portal lifecycle mutations where the existing product still allows them;
-- deterministic plan commands that accept a plan selected from the global snapshot.
+Write the rule once, in `globals/packages/plan-write/skills/plan-write/references/plan-schema.md`,
+as a "Plan authority" section beside "Worktree association", in tool-neutral prose. Each suite
+skill applies it rather than restating it:
 
-Keep operation-specific lifecycle rules intact:
+| Skill | Change |
+| --- | --- |
+| `plan-start` | Delete Preflight item 14's synchronization sentence and Implementation Workflow item 8. State that after `APPROVED` the worktree copy is the plan, and every plan update, including `## Not tested` entries, goes there. In `references/start-validation.md`, stop calling the primary copy "the canonical plan" and drop "Plan status updates still go to the primary checkout's canonical copy" |
+| `plan-write` | Before editing an active plan, resolve the authoritative copy by the rule and edit only that copy. When the rule falls back to the primary copy because the worktree copy is unavailable, or the primary copy has an outside edit, report it and edit nothing else |
+| `session-close` | No change expected: it delegates plan syncing to `plan-write`. Confirm no text tells it to copy to the primary checkout |
+| `plan-close` | Add the integration check before closing as completed, and the archive handoff when closing as archived. Remove "documented post-merge plan synchronization" from step 6's ignore list, since there is no such synchronization |
 
-- `roborepo plans start` still runs from the primary checkout. It establishes `worktree`, performs the backlog-to-active transition, commits that plan-only start transition on the base branch, and fast-forwards/reconciles the fresh worktree as it does today.
-- Once start has succeeded and the worktree is authoritative, implementation-time plan edits stay in that worktree.
-- `/plan-close` continues to judge the landed base branch. Closing is post-landing behavior, so completed/archived state belongs in the primary checkout.
-- A generic portal lifecycle move that would take an assigned plan out of `active/` must not simply rename the worktree copy. Treat leaving `active/` as an authority handoff: if the worktree is the only changed side, reconcile its current plan content into the primary checkout and perform the lifecycle move there; if the primary also changed or the comparison is unknown, refuse that mutation with the structured conflict state instead of guessing. This keeps a manual lifecycle move from leaving main and the worktree in contradictory lifecycle folders.
+### 6. Portal presentation
 
-The authority handoff is the exceptional operation that may update the primary plan from worktree state. It is tied to an explicit lifecycle transition, not continuous progress synchronization. Do not add automatic commits or pushes for implementation-time plan progress.
+- The Plans drawer shows where the plan was read from ("From worktree `<name>`") when
+  `authority.source` is `worktree`, and renders the three findings in the existing warning section.
+- Normal worktree progress is quiet: no badge, no warning.
+- Home adds nothing. Its worktree row already represents the plan, and a separate badge would
+  restate the drawer.
+- When `movePlanLifecycle` refuses, the existing domain-error surface shows the message and
+  resolution.
 
-### 5. Update suite skills to follow the authority rule
+## Affected Repository Files
 
-Update the plan-suite instructions that currently encode primary-checkout mirroring.
-
-At minimum:
-
-- `globals/packages/plan-start/skills/plan-start/SKILL.md`
-  - remove the requirement to mirror active plan-document updates into the primary checkout at the end of the run;
-  - state that after the approved start transition, the assigned worktree owns active plan progress until landing.
-- `globals/packages/plan-write/skills/plan-write/SKILL.md`
-  - when revising/syncing an active assigned plan, resolve the exact assigned worktree and edit that copy;
-  - when the worktree is unavailable or the observer reports `primary-changed`/`diverged`, preserve the condition and report it rather than silently choosing a different copy.
-- `globals/packages/session-close/skills/session-close/SKILL.md`
-  - when it invokes `plan-write`, inherit the same authority behavior rather than copying the result to main.
-- `globals/packages/plan-close/skills/plan-close/SKILL.md`
-  - keep closure on the landed base copy; clarify only if needed so it does not inherit active-worktree authority after landing.
-
-Where a deterministic resolver exists, skills should call it instead of independently reconstructing the authority rule.
-
-### 6. Surface the state without turning it into a roadblock
-
-The portal already displays plan warnings. Extend that existing surface rather than adding a modal, editor, or blocking workflow.
-
-For an active plan:
-
-- `worktree-changed`: no warning; this is normal.
-- `primary-changed`: warn that the primary/base copy changed after the worktree baseline and should be reconciled.
-- `diverged`: warn that both copies changed and require explicit reconciliation.
-- `worktree-only`: warn that the active plan has not landed/published to the primary checkout.
-- `worktree-missing`: warn that the assigned worktree cannot currently supply the working copy.
-
-Home may consume the same compact authority state for a small badge only if that can be added through its existing plan projection without duplicating the classification rules. The Plans drawer remains the detailed explanation surface.
-
-Do not disable editing globally because a variant exists. Only an operation that would overwrite an ambiguous competing copy should refuse and return a structured stale/conflict result.
+| Area | Path | Change |
+| --- | --- | --- |
+| Authority | `modules/plan-suite/plan-authority.mjs` | New: `resolvePlanAuthority` and `checkOutsideEdits` |
+| Scan | `modules/plan-suite/canonical-scan.mjs` | Collect copies, return the authoritative record, add `authority`, remove `divergentCheckouts` and `markDiverged` |
+| Fingerprint | `modules/plan-suite/snapshot-fingerprint.mjs` | New: `planSnapshotFingerprint` moved out of `canonical-scan.mjs`, extended with `HEAD` refs; `modules/plan-suite/index.mjs` re-exports it from the new file |
+| Checkout listing | `modules/plan-suite/checkouts.mjs`, or `modules/repositories/worktree-inventory.mjs` once [[a7bslb00]] lands | Expose each worktree's branch, which the inventory already reads |
+| Findings | `modules/plan-suite/findings.mjs` | Add the three codes; remove `PLAN_DIFFERS_IN_WORKTREE` |
+| Mutations | `modules/plan-suite/index.mjs` | `movePlanLifecycle` refusal; `publicPlan` carries `authority` |
+| Routes and CLI | `scripts/cli/portal-routes-plans.mjs`, `scripts/cli/plans.mjs` | Audit; change only where a path assumes the primary copy |
+| Plans UI | `portal/plans/plan-drawer.js`, `portal/plans/plan-drawer-partial.html` | "From worktree" line |
+| Plan schema | `globals/packages/plan-write/skills/plan-write/references/plan-schema.md` | "Plan authority" section |
+| Skills | `globals/packages/plan-start/skills/plan-start/SKILL.md`, its `references/start-validation.md`, `globals/packages/plan-write/skills/plan-write/SKILL.md`, `globals/packages/plan-close/skills/plan-close/SKILL.md`, then the rendered `generated/packages/` commands | As in §5 |
+| Checks | `scripts/test/plan-suite-canonical-check.mjs`, `scripts/test/plan-suite-check.mjs`, `scripts/test/plans-portal-state-check.mjs`, `scripts/test/plan-promote-plan-start-check.mjs` | Replace the main-copy-wins assertions; add the fixture cases and skill-text assertions in Validation |
+| Docs | `docs/user/reference/plans-portal.md`, `docs/user/guides/plan/lifecycle/plan-suite.md` | Replace the copy table and "main checkout's copy is canonical"; describe the integration check |
 
 ## Implementation Plan
 
-### Phase 1 — Directional variant classifier
+### Phase 1 — Authority resolver and outside-edit check
 
-- [ ] Add a focused plan-authority/variant module under `modules/plan-suite/`.
-- [ ] Represent the primary and exact assigned-worktree copies by stable plan `id`.
-- [ ] Resolve a Git common base and historical plan copy by ID rather than current path.
-- [ ] Classify `synced`, `worktree-changed`, `primary-changed`, `diverged`, `worktree-only`, `worktree-missing`, and unknown Git-base cases.
-- [ ] Include uncommitted working-tree plan edits in the comparison.
-- [ ] Keep unrelated worktrees out of the classification.
-- [ ] Add fixture-repository tests for every state before changing which copy the portal returns.
+- [ ] Add `modules/plan-suite/plan-authority.mjs` with `resolvePlanAuthority`, covering every row of
+      the "Every case" table.
+- [ ] Add `checkOutsideEdits` through the read-only Git path, covering every row of the "Outside
+      edits" table, uncommitted primary edits, and the `unchecked` case.
+- [ ] Unit-test the resolver as a pure function, and the check against temporary fixture
+      repositories with a primary checkout and a linked worktree.
 
-### Phase 2 — Lifecycle-aware authority selection
+### Phase 2 — Scan and findings
 
-- [ ] Refactor `modules/plan-suite/canonical-scan.mjs` to collect copies before choosing an effective record.
-- [ ] Select the assigned worktree copy for active plans with an exact live worktree match.
-- [ ] Keep the primary copy for backlog, unassigned, completed, and archived plans.
-- [ ] Define the fallback record and finding when an assigned worktree is unavailable.
-- [ ] Preserve repository identity, relationships, lifecycle counts, plan keys/IDs, and path-free API output.
-- [ ] Replace `PLAN_DIFFERS_IN_WORKTREE`/`divergentCheckouts` with the directional model if they no longer add independent information.
+- [ ] Refactor `scanRepository` to collect copies and return the authoritative record, keeping one
+      full record per plan.
+- [ ] Add the `authority` object; remove `divergentCheckouts`, `markDiverged`, and
+      `PLAN_DIFFERS_IN_WORKTREE`.
+- [ ] Add the three findings and their messages.
+- [ ] Move `planSnapshotFingerprint` into `snapshot-fingerprint.mjs` and extend it with `HEAD` and
+      ref state.
+- [ ] Rewrite the main-copy-wins assertions in `plan-suite-canonical-check.mjs`.
 
-### Phase 3 — Mutation and workflow routing
+### Phase 3 — Writes
 
-- [ ] Audit `modules/plan-suite/index.mjs`, `scripts/cli/plans.mjs`, and Plans API routes for assumptions that a globally selected plan lives in the primary checkout.
-- [ ] Route ordinary active-plan reads and supported non-lifecycle mutations to the effective worktree record.
-- [ ] Add an explicit authority-handoff path for a generic portal move from `active/` to another lifecycle: reconcile worktree-only changes into the primary checkout, or refuse when the primary also changed / comparison is unknown.
-- [ ] Preserve current optimistic stale-write checks at the selected file.
-- [ ] Keep `roborepo plans start` as a primary-checkout transition and `/plan-close` as a post-landing primary-checkout workflow.
-- [ ] Remove end-of-run primary-checkout plan mirroring from `plan-start`.
-- [ ] Update `plan-write` and `session-close` guidance to edit the active authoritative worktree copy.
-- [ ] Ensure a conflicting primary/worktree state is reported rather than silently overwritten.
+- [ ] Add the `LIFECYCLE_OWNED_BY_PRIMARY` refusal to `movePlanLifecycle`.
+- [ ] Confirm `updatePlanField` and document reads use the authoritative copy, with fixture tests.
+- [ ] Audit `scripts/cli/plans.mjs` and `scripts/cli/portal-routes-plans.mjs`.
 
-### Phase 4 — Portal presentation
+### Phase 4 — Skills and schema
 
-- [ ] Add structured finding definitions for primary-only change, true divergence, worktree-only, and unavailable worktree cases.
-- [ ] Reuse the existing Plans warning section for detailed messages and resolutions.
-- [ ] Expose only the compact authority metadata the UI needs.
-- [ ] Add a Home badge only if the existing repository projection can consume the same state without reimplementing the rules.
-- [ ] Keep `worktree-changed` visually quiet.
+Start after [[a7bslb00]] lands, because it rewrites `/plan-close` steps 6 and 9 in the same file.
 
-### Phase 5 — Documentation and cleanup
+- [ ] Add "Plan authority" to `plan-schema.md`.
+- [ ] Remove mirroring from `plan-start` and `start-validation.md`.
+- [ ] Add authority resolution to `plan-write`; confirm `session-close` needs nothing.
+- [ ] Add the integration check and the archive handoff to `plan-close`, and remove the post-merge
+      synchronization exception.
+- [ ] Regenerate the rendered commands with `scripts/build/render-slash-commands.mjs`.
+- [ ] Add the skill-text assertions from Validation to `scripts/test/plan-promote-plan-start-check.mjs`.
 
-- [ ] Update the plan-suite user/reference documentation to define active-worktree authority.
-- [ ] Remove stale prose that calls the primary checkout the authoritative copy throughout active implementation.
-- [ ] Document that direct edits remain allowed and that RoboRepo detects rather than prohibits competing variants.
-- [ ] Record the dedicated documentation-branch approach as deferred architecture, not as an available setting.
+### Phase 5 — Portal and docs
+
+- [ ] Add the "From worktree" line to the Plans drawer and render the new findings.
+- [ ] Update `docs/user/reference/plans-portal.md` and the plan-suite guide.
 
 ## Validation
 
-Use the repository's existing focused checks first:
+Focused checks while iterating:
 
 ```text
 node scripts/test/plan-suite-canonical-check.mjs
@@ -297,22 +467,36 @@ node scripts/test/plans-portal-state-check.mjs
 node scripts/test/repository-overview-check.mjs
 ```
 
-Add or extend fixture coverage proving:
+Fixture coverage, each a temporary repository with a primary checkout and at least one linked
+worktree:
 
-- [ ] An active assigned worktree that alone edits its plan becomes the effective global record and produces no conflict warning.
-- [ ] A primary-only plan edit after work begins produces `primary-changed` rather than generic divergence.
-- [ ] Independent edits on both sides produce `diverged`.
-- [ ] An unrelated old worktree copy produces no finding.
-- [ ] Uncommitted plan edits are classified correctly.
-- [ ] A lifecycle/path move is still matched by stable plan `id`.
-- [ ] A missing assigned worktree falls back predictably without hiding the plan.
-- [ ] A worktree-only active plan is visible and explicitly identified as unpublished.
-- [ ] Portal priority/frontmatter mutation of an active assigned plan changes the worktree copy and leaves the primary copy untouched.
-- [ ] A generic portal move out of `active/` hands authority back to the primary checkout when reconciliation is one-sided, and refuses when the two copies genuinely compete.
-- [ ] Backlog plan mutation still changes the primary checkout copy.
-- [ ] The public API exposes no absolute checkout paths.
+- [ ] An active plan edited only in its assigned worktree is returned from the worktree, with
+      `authority.source: "worktree"` and no finding.
+- [ ] A worktree that is behind `main` and never touched the plan changes nothing: the plan is read
+      from the worktree, and there is no finding.
+- [ ] An uncommitted edit to the primary copy produces `PLAN_EDITED_OUTSIDE_WORKTREE`; so does a
+      committed one; merging `main` into the worktree clears it.
+- [ ] After a squash merge of the branch and a pull in the primary checkout, there is no finding.
+- [ ] A missing worktree, a missing worktree copy, a worktree copy moved out of `active/`, and a
+      worktree copy naming another worktree each fall back to the primary copy with
+      `PLAN_WORKTREE_COPY_UNAVAILABLE` and the matching reason.
+- [ ] A worktree that does not yet contain the start-transition commit is not authoritative.
+- [ ] A copy in an unassigned worktree is never authoritative and produces no finding.
+- [ ] An unresolvable merge base produces `PLAN_AUTHORITY_UNCHECKED`.
+- [ ] A worktree-only plan is still shown, labeled with its worktree.
+- [ ] Changing an active plan's priority from the portal writes the worktree copy and leaves the
+      primary copy byte-identical.
+- [ ] Changing a backlog plan's priority writes the primary copy.
+- [ ] Moving a worktree-authoritative plan out of `active/` from the portal is refused with
+      `LIFECYCLE_OWNED_BY_PRIMARY`, and neither copy changes.
+- [ ] Merging `main` into a worktree without touching any plan file changes the snapshot
+      fingerprint.
+- [ ] `/api/plans` output contains no absolute path.
+- [ ] Skill checks: `plan-start` contains no instruction to copy plan updates to the primary
+      checkout, and `plan-close` describes the integration check and the archive handoff.
 
-Because this changes shared Plans behavior and portal-visible state, finish with the repository's broader gate:
+Because this changes shared Plans behavior, portal-visible state, and rendered skill output, finish
+with the repository gate:
 
 ```text
 npm run check
@@ -320,56 +504,138 @@ npm run check
 
 ## Success Criteria
 
-- An active plan can evolve normally in its implementation worktree without RoboRepo copying the file back to main merely to keep the portal current.
-- The Plans portal shows that active worktree copy as the current plan.
-- A normal worktree-only plan edit is not presented as a conflict.
-- An edit made to the primary copy after active work begins is distinguishable from a worktree edit.
-- Two-sided edits are surfaced as a true divergence with neither side silently discarded.
-- RoboRepo-owned mutations follow the same authority rule as reads.
-- Starting and closing retain their existing base-branch responsibilities.
-- No database, dedicated plan branch, lockfile, CI mover, or portal Markdown editor is introduced.
-- The design remains Git-native: implementation plus its active plan progress land together through the repository's ordinary branch integration.
+- An active plan progresses in its worktree, and the primary portal shows that progress with no copy
+  to `main`.
+- Each plan has one authoritative copy, and every RoboRepo write goes to it.
+- A worktree that is behind or ahead of `main` never changes which copy is authoritative and never
+  produces a finding by itself.
+- An outside edit to the primary copy is reported, and neither copy is changed by RoboRepo.
+- `/plan-close` refuses to complete a plan whose worktree holds unlanded plan state, so cleanup never
+  removes the only copy of it.
+- An archived plan on `main` carries its worktree's final plan content, including why the work
+  stopped.
+- Two portals of different versions, started from different checkouts, show the same authoritative
+  copy for every plan, with no shared state between them.
+- No synchronization machinery, database, plan branch, lockfile, CI mover, or editor is introduced.
 
 ## Risks
 
-### Squash, rebase, and changing merge bases
-
-A worktree branch may be rebased or merged from main while implementation is active. The classifier must recompute from current Git state and never persist a merge-base assumption as plan metadata.
-
-### Uncommitted changes
-
-The important plan state can exist outside commits. Comparing only Git blobs would miss the exact edits the observer is meant to surface, so working-tree bytes are part of the authority calculation.
-
-### Missing worktrees
-
-An active plan can outlive its local worktree. The portal must remain usable by falling back to the primary copy while clearly saying the working authority is unavailable.
-
-### Worktree-only plans
-
-A manually created active plan may exist only in a worktree. Showing it is better than hiding it, but it must not look as though it has already been published to the primary branch.
-
-### Cross-machine state
-
-This plan improves consistency among checkouts visible to one RoboRepo installation. Another machine can still hold unpushed plan edits. A dedicated remote plan branch would address a different problem and should be justified separately if that becomes common.
+| Risk | Mitigation |
+| --- | --- |
+| A rebase or a merge of `main` changes the merge base mid-story | The check is recomputed from current Git state on every rebuild and persists nothing; the fingerprint includes `HEAD` refs |
+| The plan's important state is uncommitted | The worktree's working bytes are the authoritative content and an accepted version in the check; the primary copy's working bytes are what is checked |
+| A Git clean filter or line-ending conversion makes identical text hash differently | The blob id is computed in process from working bytes, with no filters applied, so a repository whose filters rewrite Markdown can see a false outside edit. The finding is advisory, and the fixture covers plain Markdown only |
+| The assigned worktree is removed while the plan is active | Fallback to the primary copy with `PLAN_WORKTREE_COPY_UNAVAILABLE`; [[a7bslb00]]'s archive ref holds committed progress, and its clean-tree guard refuses removal over uncommitted progress |
+| A plan is edited in the worktree after its PR merged | `/plan-close`'s integration check refuses; the edit lands through another merge, or is discarded |
+| An older RoboRepo version writes the primary copy | Reported as an outside edit by every current instance |
+| Two copies are edited and the user wants them combined | Git merges them when `main` is merged into the worktree; RoboRepo never does |
+| Cross-machine unpushed edits | Out of scope; Git is the transport between machines |
 
 ## Decision Log
 
-### Use the assigned worktree as the draft/working branch
+### Use the assigned worktree as the authoritative active copy
 
-**Decision:** During active implementation, the exact worktree already associated with the plan is the working source of truth.
+**Decision:** During active implementation, the worktree named by the plan's `worktree` field is the
+one authoritative copy.
 
-**Alternatives considered:** continuously mirror to main; add a dedicated plan branch; store mutable plan state in a database.
+**Alternatives considered:** continuously mirror to `main`; add a dedicated plan branch; store plan
+state in a database.
 
-**Reason:** The worktree already provides isolated Git history, conflict detection, and eventual merge into main. Reusing it removes synchronization writes and build-trigger pressure without introducing another persistence layer.
+**Reason:** The worktree already provides isolated history, conflict handling, and eventual merge
+into `main`. Reusing it removes synchronization writes without adding a persistence layer.
 
 ### Detect competing edits instead of blocking them
 
-**Decision:** Direct file editing remains valid. RoboRepo observes and classifies variants rather than installing CI failures or filesystem locks.
+**Decision:** Direct file editing stays valid. RoboRepo reports outside edits rather than installing
+CI failures or locks.
 
-**Reason:** RoboRepo does not own every editor or agent that can change Markdown. Advisory detection preserves the filesystem-first model and avoids hostile false positives.
+**Reason:** RoboRepo does not own every editor or agent that changes Markdown. Advisory detection
+keeps the filesystem-first model.
 
 ### Defer a dedicated plan branch
 
-**Decision:** Do not add `roborepo/plans` or a configurable canonical plan ref in this story.
+**Decision:** No `roborepo/plans` branch or configurable canonical plan ref in this story.
 
-**Reason:** A dedicated branch adds remote synchronization, push/fetch policy, branch lifecycle, permissions, and conflict handling before the simpler active-worktree model has been tested. Revisit it if cross-machine collaboration or deployment/build triggers remain a demonstrated problem after this plan lands.
+**Reason:** A dedicated branch adds remote synchronization, branch lifecycle, permissions, and
+conflict handling before the simpler worktree model has been tried. Revisit only if cross-machine
+collaboration becomes a demonstrated problem.
+
+### 2026-10-11 — One authority per stage; no reconciliation machinery
+
+**Decision:** Replaced the earlier design, which compared both copies against a common base,
+classified seven variant states, and had a generic portal move out of `active/` copy worktree
+content into the primary checkout. Now the primary copy decides the stage, the worktree decides
+active content, and the only check is whether the non-authoritative copy holds a version the
+authority never had.
+
+**Reason:** The seven-state classifier treated both copies as peers whose changes had to be
+weighed, and the portal handoff was a synchronization path. Under a single authority, a change in
+the worktree is never a conflict, so only edits to the other copy need detection, and those are
+resolved by Git merges the user already performs.
+
+### 2026-10-11 — Lifecycle moves of a worktree-authoritative plan are refused in the portal
+
+**Decision:** The portal's lifecycle dropdown refuses to move a plan whose authoritative copy is in
+its worktree, pointing to `/plan-close` or to clearing `worktree`.
+
+**Reason:** Lifecycle transitions are committed in the primary checkout. Moving the worktree copy
+would give the plan two lifecycles, and moving the primary copy would release authority without
+integrating the worktree's state. This narrows the manual override recorded in [[age4cm7r]] to
+plans whose primary copy is authoritative. The user confirmed the reversal on 2026-10-11.
+
+### 2026-10-11 — `/plan-start` stops mirroring to the primary checkout
+
+**Decision:** Remove the end-of-run mirror that [[age4cm7r]] added at the user's request.
+
+**Reason:** The mirror existed so the portal could show active progress. The portal now reads the
+worktree copy directly, and the mirror is itself an outside edit under this model; on 2026-10-11 it
+had already drifted from the worktree copy of [[a7bslb00]]. The user confirmed the reversal on
+2026-10-11.
+
+### 2026-10-11 — `/plan-close` refuses unlanded plan state instead of copying it
+
+**Decision:** Closing as completed requires the worktree's plan copy to equal the primary copy.
+
+**Reason:** Completed work has already merged, so Git is available to carry any remaining plan edits
+to `main`. Refusing keeps the merge as the only path for landed work, and keeps [[a7bslb00]]'s
+cleanup from removing the only copy of the plan's final state.
+
+### 2026-10-11 — `/plan-close` carries an abandoned plan's worktree copy to `main` once
+
+**Decision:** Closing as archived writes the worktree copy into the primary checkout in the archive
+commit, refusing when the primary copy has an outside edit. Confirmed by the user.
+
+**Alternatives considered:**
+
+| | Refuse until landed | Archive the primary copy | Carry the worktree copy once (chosen) |
+| --- | --- | --- | --- |
+| Archived record on `main` | complete | missing the worktree's progress and the reason work stopped | complete |
+| Cost to the user | a merge for work being abandoned | none | none |
+| Copies between checkouts | none | none | one, one-way, at a lifecycle transition |
+
+**Reason:** Abandoned work never merges, so Git cannot carry its plan. A single one-way transfer at
+the archive transition keeps the record complete without ongoing synchronization.
+
+### 2026-10-11 — No `worktree-only` or `primary-changed` distinction
+
+**Decision:** A worktree-only plan keeps today's labeled display with no finding, and an outside
+edit is one finding whether or not the worktree also changed.
+
+**Reason:** Neither distinction changes what the user does next. Fewer states keep the findings
+readable.
+
+## Cross-Plan Notes
+
+Recorded here rather than edited into the other plans.
+
+- [[a7bslb00]] (worktree lifecycle cleanup) is compatible. Its plan-active guard reads the primary
+  copy's `active/` folder, which matches "the primary copy decides the stage", and its landed test
+  plus clean-tree guard keep any worktree that holds unlanded plan edits. Its Delete Worktree
+  confirmation already names the active plan; it would help to also say that the plan's worktree
+  progress will no longer be shown. Its §9 note that confirmed removal "can" remove an
+  authoritative copy stays true, and this plan's fallback finding covers it. Its §2 moves the
+  worktree enumerator out of `checkouts.mjs`, which this plan consumes; this plan depends on it for
+  that and for the `/plan-close` file it also edits.
+- [[age4cm7r]] (atomic plan-suite commands) is compatible. `roborepo plans start` keeps its
+  primary-checkout transition and fast-forward unchanged. Two of its Decision Log rows are
+  superseded: the end-of-run mirror, and the lifecycle dropdown as an unconditional manual override.
