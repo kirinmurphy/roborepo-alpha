@@ -167,6 +167,21 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 }
 .worktree-remove-facts dt { color: var(--dim); }
 .worktree-remove-facts dd { margin: 0; font-family: var(--mono); font-size: var(--text-xs); overflow-wrap: anywhere; }
-.worktree-dialog-help, .worktree-remove-plan { margin: 0; color: var(--dim); font-size: var(--text-sm); }
-.worktree-remove-plan { color: var(--warn); }
+.worktree-dialog-help { margin: 0; color: var(--dim); font-size: var(--text-sm); }
+.worktree-remove-lead, .worktree-remove-status { margin: 0; }
+.worktree-remove-status { color: var(--dim); }
+.worktree-remove-warning {
+  margin: 0;
+  padding: 8px 10px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+  border-radius: 5px;
+}
+/* min-width: 0 lets the long restore commands scroll inside their box instead of widening the
+ * dialog body (a grid item otherwise grows to fit its widest line). */
+.worktree-remove-details { min-width: 0; }
+.worktree-remove-details > summary { color: var(--dim); font-size: var(--text-sm); cursor: pointer; }
+.worktree-remove-details > :not(summary) { margin-top: 8px; }
+.worktree-remove-restore { margin: 0; padding: 8px; overflow-x: auto; background: var(--raised); border: 1px solid var(--line); border-radius: 5px; font-size: var(--text-2xs); }
 .worktree-cleanup-foreign pre { margin: 6px 0 0; padding: 8px; overflow-x: auto; background: var(--raised); border: 1px solid var(--line); font-size: var(--text-2xs); }

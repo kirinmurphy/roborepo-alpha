@@ -25,19 +25,45 @@ export function createWorktreeRemoveDialog({ onRemoved }) {
       const selector = branch || checkout.worktreeName;
       if (!repositoryId || !selector) return;
       target = { repositoryId, branch: selector };
+      // The ref ends in the tip's short SHA (archiveRefName in worktree-removal.mjs).
+      const archive = `refs/roborepo/abandoned/${selector}-${checkout.git?.shortHead || "<commit>"}`;
+      const folder = checkout.projectRoot || "<folder>";
+      const running = isRunning(checkout);
       fill(dialog, {
-        branch: branch || `detached (${checkout.worktreeName})`,
-        unmerged: Number.isInteger(checkout.unmergedCommits) ? String(checkout.unmergedCommits) : "unknown",
-        // The ref ends in the tip's short SHA (archiveRefName in worktree-removal.mjs).
-        archive: `refs/roborepo/abandoned/${selector}-${checkout.git?.shortHead || "<commit>"}`,
+        lead: branch
+          ? `This deletes the worktree's folder on this computer and its local branch, ${branch}.`
+          : `This deletes the worktree's folder on this computer. It is not on a branch (detached at ${checkout.git?.shortHead || "an unknown commit"}).`,
+        status: removalStatus(checkout),
+        branch: branch || "none (detached)",
+        folder,
+        archive,
+        restore: branch ? `git branch ${branch} ${archive}\ngit worktree add ${folder} ${branch}` : `git worktree add ${folder} ${archive}`,
       });
       slot("plan").hidden = !plan;
-      slot("plan").textContent = plan ? `Active plan "${plan.title}" uses this worktree. Deleting it leaves the plan active without its worktree.` : "";
-      slot("running").hidden = !isRunning(checkout);
+      slot("plan").textContent = plan ? `The active plan "${plan.title}" is still using this worktree. Deleting it can lose work the plan still needs, and the plan stays active without it.` : "";
+      slot("running").hidden = !running;
+      // Merged and stale worktrees are routine cleanup; one an active plan or a running server
+      // still uses is not, so its confirmation turns red alongside the warning that says why.
+      confirm.dataset.btn = plan || running ? "danger" : "cta";
+      dialog.querySelector(".worktree-remove-details").open = false;
       showError(dialog, null);
       dialog.showModal();
     },
   };
+}
+
+// What deleting would cost, in one sentence. Every removal archives the tip, so even unmerged work
+// can be brought back; the sentence says so rather than leaving a commit count to interpret.
+function removalStatus(checkout) {
+  if (checkout.worktreeState === "landed") return `Its changes are already merged into ${checkout.mergedInto || "the main branch"}, so nothing is lost.`;
+  const count = checkout.unmergedCommits;
+  if (count === 0) return "It has no commits that aren't already on the main branch, so nothing is lost.";
+  if (Number.isInteger(count)) {
+    return count === 1
+      ? "It has 1 commit that was never merged. A backup is kept so you can bring it back."
+      : `It has ${count} commits that were never merged. A backup is kept so you can bring them back.`;
+  }
+  return "A backup of its latest commit is kept so you can bring it back.";
 }
 
 // The card-footer notice's dialog: confirm the folder automatic removal may act in, then install the

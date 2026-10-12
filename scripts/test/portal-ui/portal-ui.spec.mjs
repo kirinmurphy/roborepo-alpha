@@ -115,7 +115,9 @@ test.describe("repository-first portal Home", () => {
     const dialog = page.getByRole("dialog", { name: "Delete worktree" });
     await card.getByRole("button", { name: "Actions for feature/running" }).click();
     await card.getByRole("button", { name: "Delete Worktree" }).click();
-    await expect(dialog).toContainText("Its running servers are stopped first.");
+    await expect(dialog).toContainText("Something is running in this worktree.");
+    // A running worktree's deletion is not routine: the confirmation turns red.
+    await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "danger");
     await dialog.getByRole("button", { name: "Cancel" }).click();
 
     await card.getByRole("button", { name: "Actions for feature/stale" }).click();
@@ -123,12 +125,23 @@ test.describe("repository-first portal Home", () => {
     await expect(card.getByRole("button", { name: "Delete Worktree" })).toHaveClass(/menu-item-danger/);
     await card.getByRole("button", { name: "Delete Worktree" }).click();
     await expect(dialog).toBeVisible();
-    await expect(dialog).toContainText("feature/stale");
-    await expect(dialog).toContainText("3");
-    await expect(dialog).toContainText("refs/roborepo/abandoned/feature/stale-abc1234");
-    await expect(dialog.getByText("Its running servers are stopped first.")).toBeHidden();
+    await expect(dialog).toContainText("its local branch, feature/stale.");
+    await expect(dialog).toContainText("It has 3 commits that were never merged. A backup is kept so you can bring them back.");
+    // The archive ref and restore commands sit behind Details, out of the way until asked for.
+    const restore = dialog.locator("[data-slot=restore]");
+    await expect(restore).toBeHidden();
+    await dialog.getByText("Details and how to restore").click();
+    await expect(restore).toHaveText("git branch feature/stale refs/roborepo/abandoned/feature/stale-abc1234\ngit worktree add <folder> feature/stale");
+    await expect(dialog.getByText("Something is running in this worktree.")).toBeHidden();
+    // A stale worktree is routine cleanup: the confirmation stays green.
+    await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "cta");
     await dialog.getByRole("button", { name: "Cancel" }).click();
     await expect(dialog).toBeHidden();
+    await card.getByRole("button", { name: "Actions for feature/landed" }).click();
+    await card.getByRole("button", { name: "Delete Worktree" }).click();
+    await expect(dialog).toContainText("Its changes are already merged into main, so nothing is lost.");
+    await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "cta");
+    await dialog.getByRole("button", { name: "Cancel" }).click();
     expect(removals).toEqual([]);
 
     removal = { action: "kept", reason: "uncommitted or untracked changes" };
@@ -187,7 +200,10 @@ test.describe("repository-first portal Home", () => {
     await expect(page.getByRole("button", { name: "Stop Server" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Delete Worktree" }).locator('portal-icon[name="trash"]')).toHaveCount(1);
     await page.getByRole("button", { name: "Delete Worktree" }).click();
-    await expect(dialog).toContainText('Active plan "Idle Story" uses this worktree');
+    await expect(dialog).toContainText('The active plan "Idle Story" is still using this worktree.');
+    await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "danger");
+    // Details start folded each time the dialog opens.
+    await expect(dialog.locator("[data-slot=restore]")).toBeHidden();
     await dialog.getByRole("button", { name: "Delete worktree" }).click();
     await expect(dialog).toBeHidden();
     expect(removals).toEqual([{ branch: "feature/stale" }, { branch: "feature/idle" }]);

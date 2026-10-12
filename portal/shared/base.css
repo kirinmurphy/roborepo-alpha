@@ -32,6 +32,8 @@
   /* Muted green separates primary actions from the brighter --ok status indicators. */
   --cta: #287d3c;
   --on-cta: #ffffff;
+  /* --danger is tuned for text; white on it would be too faint, so the solid fill is darker. */
+  --cta-danger: #b62324;
   --badge-skill-ink: #79c0ff;
   --badge-skill-line: #1f6feb;
   --badge-skill-bg: #0d1b2e;
@@ -148,6 +150,7 @@
   --on-accent: #ffffff;
   --cta: #2c7a3f;
   --on-cta: #ffffff;
+  --cta-danger: #cf222e;
   --badge-skill-ink: #0550ae;
   --badge-skill-line: #b6e3ff;
   --badge-skill-bg: #ddf4ff;
@@ -230,13 +233,15 @@ select {
   border-radius: 5px;
   padding: var(--space-xs) var(--space-sm);
 }
-/* Global button system — three variants selected via data-btn (not a class) so the intent is
- * legible at the call site: data-btn="cta" | "secondary" | "text". A bare <button> with no
+/* Global button system — four variants selected via data-btn (not a class) so the intent is
+ * legible at the call site: data-btn="cta" | "danger" | "secondary" | "text". A bare <button> with no
  * data-btn defaults to "secondary" (the trim-but-not-accented look), matching how most buttons in
  * the portal are default/dismiss/toggle actions rather than CTAs — CTA is the deliberate opt-in.
  *
  * cta: primary workflow-terminating actions (submit, save, add, run, enable). Solid, high-contrast
  *   fill — there should be at most one per view competing for attention.
+ * danger: a cta whose action can lose something the user still needs. Same shape, red fill; use it
+ *   in place of cta, not beside it.
  * secondary (default): everything else that still needs button chrome — cancel, close, persistent
  *   toggles that open a popup/panel, default/neutral actions. Enough contrast off the page
  *   background to read as clickable, without competing with a CTA.
@@ -268,6 +273,18 @@ button:hover,
   cursor: pointer;
 }
 [data-btn="cta"]:hover {
+  filter: brightness(1.08);
+}
+[data-btn="danger"] {
+  color: var(--on-cta);
+  background: var(--cta-danger);
+  border: 1px solid var(--cta-danger);
+  border-radius: 5px;
+  padding: var(--space-xs) var(--space-sm);
+  font-weight: 400;
+  cursor: pointer;
+}
+[data-btn="danger"]:hover {
   filter: brightness(1.08);
 }
 [data-btn="text"] {

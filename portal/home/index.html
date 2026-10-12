@@ -144,14 +144,21 @@
           <portal-close-button data-close aria-label="Close"></portal-close-button>
         </div>
         <div class="modal-body">
-          <dl class="worktree-remove-facts">
-            <dt>Branch</dt><dd data-slot="branch"></dd>
-            <dt>Unmerged commits</dt><dd data-slot="unmerged"></dd>
-            <dt>Archive ref</dt><dd data-slot="archive"></dd>
-          </dl>
-          <p class="worktree-remove-plan" data-slot="plan" hidden></p>
-          <p class="worktree-dialog-help" data-slot="running" hidden>Its running servers are stopped first.</p>
-          <p class="worktree-dialog-help">The checkout and its local branch are deleted. The branch tip stays restorable from the archive ref; remote branches are not touched.</p>
+          <p class="worktree-remove-lead" data-slot="lead"></p>
+          <p class="worktree-remove-status" data-slot="status"></p>
+          <p class="worktree-remove-warning" data-slot="plan" hidden></p>
+          <p class="worktree-remove-warning" data-slot="running" hidden>Something is running in this worktree. It is stopped before the folder is deleted.</p>
+          <details class="worktree-remove-details">
+            <summary>Details and how to restore</summary>
+            <dl class="worktree-remove-facts">
+              <dt>Branch</dt><dd data-slot="branch"></dd>
+              <dt>Folder</dt><dd data-slot="folder"></dd>
+              <dt>Backup</dt><dd data-slot="archive"></dd>
+            </dl>
+            <p class="worktree-dialog-help">To bring it back, run:</p>
+            <pre class="worktree-remove-restore" data-slot="restore"></pre>
+            <p class="worktree-dialog-help">Copies of the branch on GitHub or any other remote are not touched.</p>
+          </details>
           <div class="item-err" data-slot="error" hidden></div>
         </div>
         <div class="modal-actions">
