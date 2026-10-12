@@ -182,6 +182,18 @@ export function registerLocalRoot(registry, id, { rootId, kind = "clone", now = 
   return false;
 }
 
+// Drops a linked worktree's checkout record and path once the worktree is gone. Only `worktree`
+// roots qualify: an absent clone may simply have moved, and its record is how Home says so.
+export function forgetWorktreeRoot(registry, id, rootId, { now = new Date().toISOString() } = {}) {
+  const record = requireRecord(registry, id, "forget worktree root");
+  const index = record.localRoots.findIndex((root) => root.rootId === rootId && root.kind === "worktree");
+  if (index === -1) return false;
+  record.localRoots.splice(index, 1);
+  if (registry.localRootPaths?.[rootId]?.repositoryId === id) delete registry.localRootPaths[rootId];
+  record.updatedAt = now;
+  return true;
+}
+
 // Records that Runtime saw something running in a checkout, at most once per debounce interval.
 export function markLocalRootRunning(registry, id, rootId, { now = new Date().toISOString() } = {}) {
   const root = requireRecord(registry, id, "mark local root running").localRoots.find((item) => item.rootId === rootId);

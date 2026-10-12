@@ -1,5 +1,6 @@
+import fs from "node:fs";
 import { rootId as computeRootId } from "../../modules/repositories/identity.mjs";
-import { markLocalRootRunning, registerLocalRoot, registerLocalRootPath, updateRegistry } from "../../modules/repositories/registry.mjs";
+import { checkoutRootsFor, forgetWorktreeRoot, markLocalRootRunning, registerLocalRoot, registerLocalRootPath, updateRegistry } from "../../modules/repositories/registry.mjs";
 import { repositoryWorktrees } from "../../modules/repositories/worktree-inventory.mjs";
 import { inspectBranchLanding } from "../../modules/repositories/worktree-landed.mjs";
 import { deriveWorktreeState, resolveWorktreeStaleDays } from "../../modules/repositories/worktree-state.mjs";
@@ -9,23 +10,35 @@ import { activeWorktreeNames, configuredRoot, proposedWorktreeFolder, worktreeFo
 import { inspectWorktreeHook } from "./worktree-hook.mjs";
 
 // One survey feeds Runtime and the cleanup command. Only live admin entries are registered; a
-// prunable entry is shown as a finding but never turned into a new checkout record.
+// prunable entry is shown as a finding but never turned into a new checkout record. A registered
+// worktree that Git no longer lists and whose folder is gone was removed, so its record is dropped;
+// otherwise a repository with nothing running would keep listing it on Home.
 export async function collectKnownWorktrees(registry, { stateRoot, settings, now = new Date(), readGit = async () => null, runningRootIds = new Set(), sessionActivity = new Map() } = {}) {
   const raw = new Map();
+  const departed = [];
   for (const repositoryId of Object.keys(registry?.repositories || {})) {
-    const { worktrees } = repositoryWorktrees(registry, repositoryId);
+    const { worktrees, commonDirs } = repositoryWorktrees(registry, repositoryId);
     raw.set(repositoryId, worktrees);
+    // Without a readable Git directory the inventory proves nothing about which worktrees exist.
+    if (!commonDirs.length) continue;
+    const listed = new Set(worktrees.map((worktree) => computeRootId(worktree.path)));
+    for (const root of checkoutRootsFor(registry, repositoryId)) {
+      if (root.kind === "worktree" && !listed.has(root.rootId) && !fs.existsSync(root.path)) departed.push({ repositoryId, rootId: root.rootId });
+    }
   }
   const live = [...raw].flatMap(([repositoryId, worktrees]) => worktrees
     .filter((worktree) => !worktree.prunable)
     .map((worktree) => ({ repositoryId, worktree, rootId: computeRootId(worktree.path) })));
-  if (live.length && stateRoot) {
+  if ((live.length || departed.length) && stateRoot) {
     registry = updateRegistry({ stateRoot, mutate: (next) => {
       let changed = false;
       for (const { repositoryId, worktree, rootId } of live) {
         if (registerLocalRoot(next, repositoryId, { rootId, kind: "worktree", now: now.toISOString(), refreshSeen: false })) changed = true;
         if (registerLocalRootPath(next, repositoryId, { rootId, path: worktree.path, now: now.toISOString() })) changed = true;
         if (runningRootIds.has(rootId) && markLocalRootRunning(next, repositoryId, rootId, { now: now.toISOString() })) changed = true;
+      }
+      for (const { repositoryId, rootId } of departed) {
+        if (next.repositories?.[repositoryId] && forgetWorktreeRoot(next, repositoryId, rootId, { now: now.toISOString() })) changed = true;
       }
       return changed;
     } });

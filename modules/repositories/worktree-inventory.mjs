@@ -12,7 +12,7 @@ export function repositoryWorktrees(registry, repositoryId, options = {}) {
     if (git?.commonDir && path.basename(git.commonDir) === ".git") commonDirs.add(git.commonDir);
   }
   const worktrees = [...commonDirs].flatMap((commonDir) => linkedWorktrees(commonDir, options).map((worktree) => ({ ...worktree, mainPath: path.dirname(commonDir) })));
-  return { main, worktrees };
+  return { main, worktrees, commonDirs: [...commonDirs] };
 }
 
 // Git keeps one administrative directory per linked worktree. Read it directly so inventory does

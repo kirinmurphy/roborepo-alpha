@@ -140,6 +140,12 @@ a name Git has no worktree for, **worktree ambiguous** for a name claimed by two
 more than one checkout, and **worktree status unknown** when Runtime is unavailable. See
 [Repositories](repositories.md#repository-cards).
 
+The plan row's worktree dropdown offers **Stop Server** and **Delete Worktree**; the deletion
+confirmation names the active plan that claims the worktree. Automatic worktree cleanup never
+removes a worktree an active plan names. `/plan-close` removes it as its last step, once the plan is
+in `completed/` and every removal guard passes. See
+[Worktree states and cleanup](repositories.md#worktree-states-and-cleanup).
+
 ## Validation
 
 Readiness requires:

@@ -1,7 +1,7 @@
 ---
 id: a7bslb00
 priority: high
-next_action: Merge the implementation branch, then run the live /plan-close check after a throwaway PR and the live hook opt-in with plan-close disabled.
+next_action:
 blocked_by: []
 depends_on: []
 related:
@@ -442,7 +442,9 @@ worktree.
 
 The confirmation is a portal dialog, not the browser's native `confirm`, so it matches the rest of
 Home and can show the guard's reason in place when removal is refused. Removal is reversible with
-`git branch <branch> refs/roborepo/abandoned/<branch>`, then `git worktree add <path> <branch>`.
+`git branch <branch> refs/roborepo/abandoned/<branch>-<commit>`, then
+`git worktree add <path> <branch>`. The short-commit suffix keeps a later archive of the same
+branch name from overwriting an earlier one.
 
 The archive ref keeps an unmerged branch's commits reachable, so `git gc` cannot collect them after
 the branch is deleted. Archive refs stay until the user deletes them; they do not appear in
@@ -635,7 +637,7 @@ Reconciliation notes for related plans, recorded here rather than edited into th
 ### Phase 5 — Confirmed removal
 
 - [x] Add confirmed remove to the cleanup command, running the Confirmed column of §6 and writing
-      `refs/roborepo/abandoned/<branch>` before deleting.
+      `refs/roborepo/abandoned/<branch>-<commit>` before deleting.
 - [x] Add the token-guarded `POST` route in `scripts/cli/portal-routes-repositories.mjs`, calling
       the same orchestrator.
 - [x] Extend the fixture check: remove an unmerged branch, restore it from the archive ref, and
@@ -653,10 +655,10 @@ Reconciliation notes for related plans, recorded here rather than edited into th
         suggested only;
       - the four landed branches without worktrees are deleted;
       - branches with no own work and both unmerged branches are not offered.
-- [ ] Merge a throwaway PR on GitHub whose plan names its worktree, pull `main`, and confirm Home
-      shows the worktree "landed" with "plan not closed"; run `/plan-close` and confirm it removes
-      and logs the worktree. This repository has the plan-close package enabled, so no hook is
-      installed here.
+- [x] Merge a PR on GitHub whose plan names its worktree, pull `main`, and confirm Home shows the
+      worktree "landed" with "plan not closed"; run `/plan-close` and confirm it removes and logs
+      the worktree. This plan's own PR #31 served: see `## Not tested` and `## Verification`. This
+      repository has the plan-close package enabled, so no hook is installed here.
 - [x] From the live Home page, open Remove on an unlanded worktree, check that the dialog names the
       branch, the unmerged commit count, and the archive ref, and Cancel.
 - [x] Update `docs/user/reference/repositories.md`.
@@ -710,6 +712,9 @@ Reconciliation notes for related plans, recorded here rather than edited into th
       and trash icons on Stop Server and Delete Worktree, in the ⋮ menu too.
 - [x] Drop the Git drift warning on merged rows; keep the facts in the tooltip and dropdown.
 - [x] Share one inset for status pills (`--pill-padding`): merged, done, and plan badges.
+- [x] Forget a removed worktree's registry record on the next inventory survey, so a repository
+      with nothing running stops listing it on Home. Only `worktree` roots that Git no longer lists
+      and whose folder is gone qualify; a hand-deleted worktree Git still lists as prunable stays.
 
 ## Validation
 
@@ -728,8 +733,8 @@ Reconciliation notes for related plans, recorded here rather than edited into th
       fixture check.
 - [x] A worktree holding an ignored `.env` is kept by both kinds of removal, with `.env` named in
       the reason.
-- [x] Confirmed removal of an unmerged branch writes `refs/roborepo/abandoned/<branch>`, and
-      restoring from it yields the original tip.
+- [x] Confirmed removal of an unmerged branch writes
+      `refs/roborepo/abandoned/<branch>-<commit>`, and restoring from it yields the original tip.
 - [x] The candidate list is identical with `gh` absent from `PATH`.
 - [x] Home lists every linked worktree of a known repository, including ones with nothing
       running.
@@ -758,6 +763,8 @@ Reconciliation notes for related plans, recorded here rather than edited into th
       worktree; otherwise it stops the servers and removes the worktree.
 - [x] A worktree whose only activity is a ten-day-old commit reads `stale` on its first inventory;
       after Runtime sees it running, it reads `idle`.
+- [x] After a worktree is removed, the next survey drops its registry record, and a repository with
+      nothing running no longer lists it; a prunable worktree and the main checkout keep theirs.
 
 The fixture repository covers Git inventory, historical landing, removal guards, the archive ref,
 hook installation, and a squash merge followed by a pull. A real-repository dry run on 2026-10-10
@@ -772,18 +779,24 @@ pull: did not fire; pull with `--rebase` and no local commits: hook fired.
 
 ## Not tested
 
-- [ ] Merge a throwaway GitHub PR whose plan names its worktree, pull `main`, and close that plan
-      with `/plan-close` to confirm live removal and logging. The fixture exercises the same
-      sequence locally, but the live run merges an external PR; it awaits the approval in Open
-      Questions.
+- [x] Merge a GitHub PR whose plan names its worktree, pull `main`, and close that plan with
+      `/plan-close` to confirm live removal and logging. This plan's own branch served: PR #31
+      squash-merged at `7627bfc`, and on 2026-10-11 Home showed its worktree row as **merged** with
+      **plan not closed**. Closing this plan runs the removal; its result is in `## Verification`.
 - [x] Open Remove on an unlanded worktree from the live Home page, check the dialog, and Cancel.
       Done on 2026-10-11 in the built-in browser against this repository's portal: the ⋮ menu on
       `codex/telemetry-analytics-oracle` and the worktree dropdown on the Package-Owned Trigger
       Fixtures plan each opened a dialog naming the branch, unmerged commits, and archive ref (and
       the active plan for the plan row); Cancel closed both without a request.
-- [ ] Turn on automatic cleanup from the Home notice in a live repository while the plan-close
-      package is disabled, then pull after a merge and confirm the hook's removal. Fixture and
-      browser tests cover the pieces; a live run changes that repository's Git hooks.
+- [x] Turn on automatic cleanup from the Home notice in a live repository while the plan-close
+      package is disabled, then pull after a merge and confirm the hook's removal. Done on
+      2026-10-11 against the live portal with a scratch repository (an upstream, a clone, and one
+      linked worktree) added as a folder source. With plan-close disabled, the clone's card and
+      this repository's card both showed the notice; the dialog proposed the folder holding the
+      worktree; **Turn on** installed `post-merge`. After a squash merge upstream, a fast-forward
+      `git pull` in the clone fired the hook: `hook.log` recorded `feature: removed (landed)`, the
+      worktree and branch were gone, and the removal log gained an `automatic` entry. Home kept
+      listing the removed worktree for the idle repository, which led to the registry fix above.
 
 ## Risks
 
@@ -873,10 +886,39 @@ pull: did not fire; pull with `--rebase` and no local commits: hook fired.
   drop the "ready for cleanup" note it carried on every row; a note now appears only when it changes
   what the user should do. "idle" is runtime activity, so it sits where a running checkout's port
   does.
+- 2026-10-11 — The live `/plan-close` check uses this plan's own squash-merged PR #31 instead of a
+  throwaway PR. It is the same scenario (a merged story whose plan names its worktree) and adds no
+  commits or pull requests to the repository.
+- 2026-10-11 — A removed worktree's registry record is dropped when Git no longer lists it and its
+  folder is gone. Removal-time cleanup alone would miss worktrees removed with plain
+  `git worktree remove` and records left by earlier removals; requiring the missing folder keeps
+  any worktree whose clone the survey could not read.
 
 ## Open Questions
 
-- **Live GitHub verification:** May a run create and merge a throwaway GitHub PR, pull `main`, and
-  close its test plan with `/plan-close`? It changes external repository history; no hook is
-  installed in this repository. **Recommendation:** run it after this branch merges. **Blocked
-  task:** the first item in Phase 6 and the first `## Not tested` entry.
+None.
+
+## Completion Summary
+
+Every linked worktree of a known repository is now listed on Home with one lifecycle state:
+`running`, `idle`, `stale`, or `landed` (shown as **merged**). "Landed" is decided from content, so
+squash and rebase merges count without the `gh` CLI. Landed worktrees are removed behind the §6
+guards by `/plan-close` as its last step, or by an opt-in `post-merge` hook that Home offers while
+the plan-close package is disabled. Any worktree can be removed from its row menu after a
+confirmation that archives the branch tip. The work landed through PR #31 (squash commit
+`7627bfc`). Closing the plan added the registry fix that drops a removed worktree's record, found
+during the live hook check.
+
+## Verification
+
+| Check | Result |
+| --- | --- |
+| `npm run check` on `main` at `4871539` | Passed: 430 repository tests, the unit `ci` group (including `worktree-lifecycle-check.mjs`), the install and clean-machine container suites, and 61 portal UI tests. Windows installer parity was skipped because `pwsh` is not installed |
+| `npm run check` after the registry fix | Passed with the same counts; the lifecycle check includes the new removed-worktree case |
+| `roborepo plans validate` before the move | No findings once both `## Not tested` entries were confirmed |
+| Landed | `codex/git-worktree-lifecycle-cleanup` is not an ancestor of `main` (squash merge). Its own work starts at reflog entry `21f03d7` and has 11 commits off `main`'s first-parent history; `inspectBranchLanding` reports `7627bfc` as the first absorbing commit, and all 61 files the branch changed are identical on `main` |
+| Plan against code | Every module, command definition, setting, and portal file in Affected Repository Files exists on `main`; no `--hide`, `--unhide`, or "worktree hidden" remains |
+| Corrections at close | `plans-portal.md` gained the plan row's worktree actions and the `/plan-close` removal. The archive ref is `refs/roborepo/abandoned/<branch>-<commit>`, as the code and `repositories.md` say; three places in this plan said `<branch>` |
+| Live hook opt-in | See the second `## Not tested` entry |
+| Live `/plan-close` removal | Home showed this plan's worktree as **merged** with **plan not closed** before the close. After the move to `completed/`, `roborepo plans stop-servers a7bslb00` stopped pid 40142 on `:4339`, and `roborepo git worktrees cleanup --plan a7bslb00 --apply` reported `removed (landed)`: the worktree folder and local branch are gone, and the removal log records commit `2949b3c`. The worktree's `node_modules` symlink was unlinked; the main checkout's `node_modules` is intact |
+

@@ -567,6 +567,31 @@ try {
     assert.equal((await observe()).state, "idle", "a recent running sighting counts as activity");
   }
   {
+    // A removed worktree leaves the registry on the next survey, so a repository with nothing
+    // running stops listing it. One deleted by hand is still in Git's list (prunable) and stays.
+    const { main, worktree } = repository("departed");
+    const realMain = fs.realpathSync(main);
+    const stateRoot = path.join(root, "departed-state");
+    const repositoryId = "git:example.com/test/departed";
+    recordRepositoryDiscovery({
+      repositoryId, kind: "git", displayName: "departed", source: "developer-runtime", evidence: "git-remote",
+      confidence: "high", localRoot: rootId(realMain), localRootKind: "clone", localRootPath: realMain, stateRoot,
+    });
+    const handDeleted = path.join(root, "departed-hand-deleted");
+    git(main, "worktree", "add", "-q", "-b", "hand-deleted", handDeleted);
+    const survey = async () => collectKnownWorktrees(loadRegistry({ stateRoot }), { stateRoot, settings: {} });
+    await survey();
+    const worktreeRoots = () => loadRegistry({ stateRoot }).repositories[repositoryId].localRoots.filter((item) => item.kind === "worktree");
+    assert.equal(worktreeRoots().length, 2, "both worktrees are registered");
+    git(main, "worktree", "remove", worktree);
+    fs.rmSync(handDeleted, { recursive: true, force: true });
+    await survey();
+    const remaining = worktreeRoots().map((item) => loadRegistry({ stateRoot }).localRootPaths[item.rootId].path);
+    assert.deepEqual(remaining, [path.join(fs.realpathSync(root), "departed-hand-deleted")], "a removed worktree is forgotten; a prunable one is kept");
+    assert.ok(loadRegistry({ stateRoot }).repositories[repositoryId].localRoots.find((item) => item.rootId === rootId(realMain)),
+      "the main checkout's record is untouched");
+  }
+  {
     // Home's Delete Worktree stops the worktree's servers, but only after every other guard passed.
     const { main, worktree } = repository("delete-stops");
     const realMain = fs.realpathSync(main);
