@@ -1,7 +1,7 @@
 ---
 id: qk4mz7t2
 priority: high
-next_action: Commit and land the changes, confirm the Ubuntu CI leg is green on that commit, then close this plan
+next_action:
 blocked_by: []
 depends_on: []
 related:
@@ -9,7 +9,7 @@ related:
   - 46up8y7a
   - 3jp3yhtq
   - l1mz96d9
-reviewed_commit: 77fb095
+reviewed_commit: 6072b52
 worktree:
 ---
 
@@ -28,6 +28,23 @@ home-relative credential denies, and `test:package-install` caught a determinist
 drift before any browser or live harness test did. The Docker sandboxes are the next layer: they
 exercise the same package artifact under a cleaner `HOME` and `PATH`, with a colliding npm prefix
 case.
+
+## Completion Summary
+
+Four Docker suites now prove install behavior on a clean machine: the container install matrix,
+the narrow install sandbox, the permissions sandbox, and the onboarding sandbox. Each installs the
+packed tarball in a fresh container with no harness on `PATH`. CI runs all four on the Ubuntu leg
+through `npm run check`, and that leg now fails rather than skips when Docker is missing.
+
+Adding hook-behavior checks to the permissions sandbox found two bugs that affected every npm
+install, and both are fixed:
+
+- Claude's repository-boundary hook could not find the platform manifest, so it never asked
+  before a write into another repository.
+- Codex's hook scripts were never installed, so `~/.codex/hooks.json` pointed at missing files.
+
+The work landed on `main` in `be7e441` and `066fd0b`. Windows installer verification of the
+restored Codex hooks row moved to [[l1mz96d9]].
 
 ## Goals
 
@@ -196,18 +213,7 @@ decision. Without the restored row, that step fails with `Cannot find module
 
 ## Validation
 
-After the hook fix:
-
-```text
-npm run check -> pass ("CI checks passed")
-  test-cli.sh 434/434, unit group 13/13, package-install smoke,
-  all four clean-machine suites in strict mode, portal UI suite
-```
-
-Earlier runs of `test-cli.sh` on this change failed the portal-adoption tests
-(`config: web --detach adopts a healthy portal ...`) twice out of five runs, then passed. An
-unmodified `HEAD` export passed its one run. The failures look like timing, but nothing has shown
-whether they are pre-existing.
+Regression evidence for the hook fixes:
 
 - The permissions sandbox now passes every projection and hook assertion, and its uninstall removes
   `app-root.json` without leaving remnants. Before the fix it failed with
@@ -224,14 +230,15 @@ whether they are pre-existing.
   and `uname` stubbed: `CI=true` on Linux exits 1, while `CI=true` on Darwin and an unset `CI` on
   Linux skip with exit 0.
 
-Before these changes, verified locally at `77fb095` with Docker 29.6.2:
+Before these changes, all four suites passed locally in strict mode at `77fb095` with Docker
+29.6.2:
 
-```text
-CLEAN_MACHINE_STRICT=1 npm run test:clean-machine                     -> pass (stages 0..N)
-CLEAN_MACHINE_STRICT=1 npm run test:clean-machine-install-sandbox     -> pass
-CLEAN_MACHINE_STRICT=1 npm run test:clean-machine-permissions-sandbox -> pass
-CLEAN_MACHINE_STRICT=1 npm run test:clean-machine-onboarding-sandbox  -> pass (12 cases)
-```
+| Suite (`CLEAN_MACHINE_STRICT=1`) | Result |
+| --- | --- |
+| `test:clean-machine` | pass, stages 0 through N |
+| `test:clean-machine-install-sandbox` | pass |
+| `test:clean-machine-permissions-sandbox` | pass |
+| `test:clean-machine-onboarding-sandbox` | pass, 12 cases |
 
 CI: the `check (ubuntu-latest)` job passed on `main` at `4871539` and `77fb095`. That job runs
 `npm run check`, which includes all four suites when Docker is present.
@@ -245,7 +252,48 @@ CI: the `check (ubuntu-latest)` job passed on `main` at `4871539` and `77fb095`.
       runs under `set -e` with permissions before onboarding, so onboarding running means
       permissions passed.
 
-## Remaining Work
+## Verification
 
-- Commit and land these changes, confirm the Ubuntu CI leg is green on that commit, then close this
-  plan.
+`npm run check` passed (`CI checks passed`) on `main` at `6072b52`, which contains both commits
+from this plan:
+
+| Gate step | Result |
+| --- | --- |
+| `scripts/doctor.sh` | pass |
+| `scripts/test/test-cli.sh` | 434 passed, 0 failed |
+| `scripts/test/test-install-collisions.sh` | pass |
+| `test:unit -- --group ci` | 13/13 suites passed |
+| `test:package-install` | pass |
+| `test:clean-machine`, strict | pass |
+| `test:clean-machine-install-sandbox`, strict | pass |
+| `test:clean-machine-permissions-sandbox`, strict | pass |
+| `test:clean-machine-onboarding-sandbox`, strict | pass |
+| `test:portal-ui` | pass |
+| Windows installer parity | skipped: `pwsh` unavailable |
+
+Checked against the code at close:
+
+- `package.json` registers all four `test:clean-machine*` scripts, and `scripts/test/ci.sh` runs
+  them strict, failing on a Linux CI runner without Docker.
+- `manifests/platform/manifest.tsv` has the `codex managed_copy globals/system/hooks/codex hooks`
+  row, and the `hooks` bundle in `manifests/platform/presets.json` lists `codex:hooks`.
+- `recordAppRoot()` is called from first-run bootstrap, `renderPermissionsToHome`, and preset
+  apply. `refreshAppRootRecord()` runs on every CLI invocation.
+- Both hooks read `app-root.json`. Uninstall removes it and lists it in the remnant check, and the
+  package-install coupling scan exempts it.
+- The permissions sandbox asserts Claude allow and ask decisions, Codex deny and defer decisions,
+  and the single Gemini write rule.
+
+CI evidence: the user-supplied `check (ubuntu-latest)` log shows the clean-machine suites running,
+with no Docker skip line.
+
+Not verified:
+
+- **CI on the new commits.** `be7e441` and `066fd0b` were not pushed at close, so CI has not run
+  them. The local gate above covers the same suites.
+- **Windows installer parity.** `pwsh` is not installed on the closing machine. Ownership moved to
+  [[l1mz96d9]].
+- **`test-cli.sh` portal-adoption flake.** The portal-adoption checks in `test-cli.sh` failed in 2
+  of about 10 local runs during this work and passed in every later run, including the gate above.
+  The cause was not found, and nothing shows whether the flake predates this plan. It is outside
+  this plan's scope; the portal UI is a non-goal.
