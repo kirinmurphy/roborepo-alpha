@@ -719,6 +719,9 @@ test.describe("repository-first portal Home", () => {
     const firstCardControl = await focusSummary(page);
     expect(["GitHub", "Actions"]).toContain(firstCardControl.ariaLabel);
     expect(firstCardControl.visible).toBe(true);
+    // Home's harness-banner request for /api/settings is never awaited here, so on a slow runner it
+    // can still be in flight through the patched route when the test ends.
+    await page.unrouteAll({ behavior: "ignoreErrors" });
   });
 
   test("repository row exposes the configured Home actions", async ({ page }) => {

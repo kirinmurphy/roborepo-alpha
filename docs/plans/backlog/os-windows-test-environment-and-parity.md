@@ -159,6 +159,11 @@ added without duplicating runner setup.
       portal, Runtime, and telemetry groups on Windows where their dependencies are available.
 - [ ] Extend the existing Windows installer check only where it is needed to distinguish static
       parity from real installer behavior; keep its current guardrails intact.
+- [ ] Verify that a real `install-windows.ps1` run installs and uninstalls the Codex hook scripts
+      from the `codex managed_copy globals/system/hooks/codex hooks` row in
+      `manifests/platform/manifest.tsv`. The installer reads manifest rows generically, but no
+      PowerShell run has exercised that row. `windows-installer-check.ps1` only parses the script
+      and compares harness ids, and the machine that restored the row had no `pwsh`.
 - [ ] Add observable assertions for every expected-unsupported Windows behavior, including the
       current Runtime discovery capability message and source-path rejection behavior.
 

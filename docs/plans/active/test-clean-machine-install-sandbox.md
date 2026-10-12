@@ -8,6 +8,7 @@ related:
   - ia1q1z9
   - 46up8y7a
   - 3jp3yhtq
+  - l1mz96d9
 reviewed_commit: 77fb095
 worktree:
 ---
@@ -201,7 +202,6 @@ After the hook fix:
 npm run check -> pass ("CI checks passed")
   test-cli.sh 434/434, unit group 13/13, package-install smoke,
   all four clean-machine suites in strict mode, portal UI suite
-  skipped: Windows installer parity (pwsh unavailable)
 ```
 
 Earlier runs of `test-cli.sh` on this change failed the portal-adoption tests
