@@ -1,0 +1,7 @@
+{
+  "path": ["git", "worktrees"],
+  "kind": "namespace",
+  "title": "Worktrees",
+  "description": "Inspect and clean up story worktrees",
+  "order": 30
+}

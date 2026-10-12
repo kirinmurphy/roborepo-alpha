@@ -123,18 +123,19 @@ unchecked entries remain, refuse and list them; the validator reports `UNCONFIRM
 The work must be in the base branch, including after a squash or rebase merge.
 
 - A plan with an empty `worktree` was implemented on the base branch; it has landed.
-- Otherwise resolve the worktree's branch from `git worktree list --porcelain` and run
-  `git merge-base --is-ancestor <branch> <base>`. Exit 0 proves it landed.
-- If ancestry returns non-zero, perform a content-level landed check for squash and rebase merges:
-  identify the implementation files changed by the worktree branch, compare those files with the
-  base branch, and confirm that the implementation content is present on the base branch. Ignore
-  only lifecycle-only plan moves and documented post-merge plan synchronization; do not ignore
-  implementation differences. Record the compared branch, base, and file-level result in the
-  completion evidence.
-- If the content-level check succeeds, report `landed: yes` even though ancestry is false. If the
-  worktree no longer resolves or the content-level comparison cannot prove the implementation is
-  present, report `landed: unconfirmed` and refuse. Ancestry alone can prove a merge, not disprove
-  a squash merge.
+- Otherwise resolve the worktree's branch from `git worktree list --porcelain`. If it no longer
+  resolves, report `landed: unconfirmed` and refuse.
+- Confirm the branch carried its own work: starting at its oldest reflog entry, find at least one
+  commit on the branch that is absent from the base branch's first-parent history. If the reflog
+  has expired, do not infer a starting point from ancestry alone; report `landed: unconfirmed`.
+- Find the branch's fork with `git merge-base <base> <branch>`. Walk the base's first-parent commits
+  after that fork, oldest first, up to the repository's scan limit. A commit absorbs the branch
+  when merging the branch into that historical commit changes no tree content. Use the repository's
+  canonical landed check when available; otherwise compare the merge result's tree to the base
+  commit's tree. The first absorbing commit proves the work landed even if later base commits
+  changed those files. Record the branch, base, and absorbing commit in the completion evidence.
+- If no scanned first-parent commit absorbs the branch, the scan limit is exceeded, or any required
+  Git evidence is unavailable, report `landed: unconfirmed` and refuse.
 
 ### 7. Close
 
@@ -154,6 +155,13 @@ else: never the primary checkout, never agent sessions, shells, or editors. Do n
 work has landed, so these servers run stale code. Report each server with its PID, ports, and
 result. A server that is `still-running` or `failed` is reported, never killed by other means.
 Skip this step for an archived or refused plan.
+
+### 9. Remove the closed worktree
+
+After step 8, when the plan was moved to `completed/`, run the repository's canonical worktree
+cleanup command scoped to this plan with its apply flag. Report whether it removed the worktree and
+branch or which guard kept them. Do not remove the worktree by hand or bypass a guard. Skip this step
+for an archived or refused plan, and in repositories without a canonical cleanup command.
 
 ## Refusal and blocker reporting
 

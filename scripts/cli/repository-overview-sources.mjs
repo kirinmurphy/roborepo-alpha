@@ -95,13 +95,19 @@ function projectWorkspace(repository) {
   return {
     lifecycle: repository.lifecycle || { state: "active", reason: null },
     lastSeenAt: repository.lastSeenAt || null,
+    worktreeCleanup: repository.worktreeCleanup || null,
     checkouts: (repository.roots || []).map((root) => ({
       rootId: root.rootId || null,
       name: root.git?.branch || (root.isWorktree ? "Worktree" : "Main checkout"),
       isWorktree: root.isWorktree === true,
       // Git's administrative worktree name; the key a plan's `worktree` frontmatter joins on. Main
       // checkouts never carry one, so they can never receive a plan.
-      worktreeName: root.isWorktree === true ? root.git?.worktreeName || null : null,
+      worktreeName: root.isWorktree === true ? root.worktreeName || root.git?.worktreeName || null : null,
+      worktreeState: root.worktreeState || null,
+      worktreeReason: root.worktreeReason || null,
+      worktreeRunning: root.worktreeRunning ?? null,
+      mergedInto: root.mergedInto || null,
+      unmergedCommits: root.unmergedCommits ?? null,
       projectRoot: root.projectRoot || null,
       checkoutState: root.checkoutState || "present",
       checkoutReason: root.checkoutReason || null,

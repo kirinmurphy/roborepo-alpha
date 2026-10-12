@@ -335,11 +335,12 @@ const associationPlans = {
     assocPlan("half-rooted", "half-rooted"),
   ],
 };
-const loadAssociation = ({ runtime: runtimeData = associationRuntime, plans: plansData = associationPlans } = {}) => createRepositoryOverviewService({
+const loadAssociation = ({ runtime: runtimeData = associationRuntime, plans: plansData = associationPlans, loadPlanCloseEnabled } = {}) => createRepositoryOverviewService({
   loadRegistry: () => structuredClone(associationRegistry),
   loadRuntime: () => { if (!runtimeData) throw new Error("runtime offline"); return structuredClone(runtimeData); },
   loadPlans: () => { if (!plansData) throw new Error("plans offline"); return structuredClone(plansData); },
   loadTelemetry: () => ({ status: "available", repositories: {} }),
+  loadPlanCloseEnabled,
   now: () => NOW,
 }).loadHome().repositories.find((repository) => repository.repositoryId === ASSOC);
 
@@ -387,8 +388,24 @@ const offlineStates = Object.fromEntries(runtimeOffline.domains.plans.data.activ
 assert.deepEqual([offlineStates.matched, offlineStates.unlisted, offlineStates["missing-worktree"], offlineStates["contested-1"]], ["unknown", "unknown", "missing", "ambiguous"],
   "without Runtime an existing worktree is unknown, not unlisted; Git absence and double claims still hold");
 
-const namelessScan = loadAssociation({ plans: { ...associationPlans, repositoryScans: [{ repositoryId: ASSOC, state: "scanned", planCount: 11, checkoutCount: 1 }] } });
+const namelessScan = loadAssociation({ plans: { ...associationPlans, repositoryScans: [{ repositoryId: ASSOC, state: "scanned", planCount: 10, checkoutCount: 1 }] } });
 assert.equal(namelessScan.domains.plans.data.active.find((plan) => plan.id === "unlisted").worktreeState, "unknown", "a scan without worktree names cannot call a worktree missing or unlisted");
+
+// Home offers the opt-in cleanup hook only while the plan-close package is disabled, to a repository
+// with linked worktrees whose hook is absent or another tool's, until the user dismisses it.
+const cleanupOffer = (cleanup, loadPlanCloseEnabled) => loadAssociation({
+  runtime: { ...associationRuntime, repositories: [{ ...associationRuntime.repositories[0], worktreeCleanup: cleanup }] },
+  loadPlanCloseEnabled,
+}).domains.runtime.data.worktreeCleanup;
+const absentHook = { hook: "absent", hookReason: null, folder: null, folderSource: null, proposedFolder: "/private/trees", dismissed: false };
+assert.equal(cleanupOffer(absentHook, () => false).offered, true, "without plan-close, a repository with worktrees and no hook is offered cleanup");
+assert.equal(cleanupOffer(absentHook, () => true).offered, false, "plan-close users are never offered the hook");
+assert.equal(cleanupOffer(absentHook, () => { throw new Error("package state unreadable"); }).offered, false, "an unreadable package state offers nothing");
+assert.equal(cleanupOffer({ ...absentHook, hook: "foreign" }, () => false).offered, true, "another tool's hook still gets the offer, with the line to add");
+assert.equal(cleanupOffer({ ...absentHook, hook: "installed" }, () => false).offered, false);
+assert.equal(cleanupOffer({ ...absentHook, hook: "refused" }, () => false).offered, false, "a shared global hooks path cannot be offered");
+assert.equal(cleanupOffer({ ...absentHook, dismissed: true }, () => false).offered, false, "a dismissed offer stays dismissed");
+assert.equal(loadAssociation().domains.runtime.data.worktreeCleanup, null, "a repository Runtime has no cleanup status for carries none");
 
 // Tokens follow the capture switch: with capture off, a real repository's Tokens domain is
 // unavailable even though an older spool still projects warnings for it. Mock repositories stay

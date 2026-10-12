@@ -119,6 +119,23 @@ export function runGitProcessSync(cwd, args, { timeoutMs = GIT_TIMEOUT_MS } = {}
   return { ok: true, stdout: result.stdout ?? "", stderr: result.stderr ?? "", code: 0, error: null };
 }
 
+// `git rev-parse --local-env-vars`: variables that point Git at a specific repository, index, or
+// object store. Git exports GIT_DIR to hooks it runs in a linked worktree, so a process started from
+// such a hook would otherwise aim every command at that worktree's index whatever `cwd` says. `cwd`
+// alone chooses the repository here.
+const REPOSITORY_ENV = [
+  "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_CONFIG", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT",
+  "GIT_OBJECT_DIRECTORY", "GIT_DIR", "GIT_WORK_TREE", "GIT_IMPLICIT_WORK_TREE", "GIT_GRAFT_FILE",
+  "GIT_INDEX_FILE", "GIT_NO_REPLACE_OBJECTS", "GIT_REPLACE_REF_BASE", "GIT_PREFIX", "GIT_SHALLOW_FILE",
+  "GIT_COMMON_DIR",
+];
+
+function gitEnvironment() {
+  const env = { ...process.env, ...HARDENING_ENV };
+  for (const name of REPOSITORY_ENV) delete env[name];
+  return env;
+}
+
 function execOptions(cwd, timeoutMs) {
   return {
     cwd,
@@ -127,7 +144,7 @@ function execOptions(cwd, timeoutMs) {
     maxBuffer: GIT_MAX_BUFFER,
     // stdin closed so nothing can wait on input even if a prompt slips past HARDENING_ENV.
     stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env, ...HARDENING_ENV },
+    env: gitEnvironment(),
   };
 }
 

@@ -13,7 +13,7 @@ import {
   unresolvedRuntimeActivity,
 } from "./repository-overview-sources.mjs";
 
-export function composeHomeOverview({ registry, runtimeState, plansState, telemetryState, now = new Date() }) {
+export function composeHomeOverview({ registry, runtimeState, plansState, telemetryState, planCloseEnabled = false, now = new Date() }) {
   const runtimeById = runtimeByRepository(runtimeState.data, registry);
   const planCoverage = plansByRepository(plansState.data, now, registry);
   const telemetryById = telemetryByRepository(telemetryState.data, registry);
@@ -23,6 +23,7 @@ export function composeHomeOverview({ registry, runtimeState, plansState, teleme
     .map((record) => repositoryOverview(record, {
       runtimeState,
       workspace: runtimeById.get(record.id) || null,
+      planCloseEnabled,
       plansState,
       plans: planCoverage.get(record.id) || null,
       telemetryState,
@@ -86,7 +87,7 @@ export function unavailableState(message) {
 function repositoryOverview(record, context) {
   const workspace = context.workspace;
   const lifecycle = workspace?.lifecycle || { state: "idle", reason: "Runtime has not observed this repository yet" };
-  const runtime = perRepositoryEnvelope(context.runtimeState, workspace || { lifecycle, checkouts: [] });
+  const runtime = perRepositoryEnvelope(context.runtimeState, workspace ? withCleanupOffer(workspace, context.planCloseEnabled) : { lifecycle, checkouts: [] });
   const git = perRepositoryEnvelope(context.runtimeState, workspace ? gitSummary(workspace) : { checkouts: [], warnings: [] });
   const runtimeAvailable = context.runtimeState.status !== "unavailable";
   const plans = context.plans
@@ -154,6 +155,17 @@ function unmatchedWorktreeState(name, { claims, worktreeNames, worktrees, runtim
   if (!worktrees) return "unknown";
   if (!worktrees.has(name)) return "missing";
   return runtimeAvailable ? "unlisted" : "unknown";
+}
+
+// Home offers the opt-in cleanup hook only where the plan suite is not closing stories: the
+// plan-close package is disabled, the repository has linked worktrees, the hook is absent or another
+// tool's, and the user has not dismissed the offer. A shared global hooks path cannot be offered.
+function withCleanupOffer(workspace, planCloseEnabled) {
+  const cleanup = workspace.worktreeCleanup;
+  if (!cleanup) return workspace;
+  const hasWorktrees = workspace.checkouts.some((checkout) => checkout.isWorktree);
+  const offered = !planCloseEnabled && hasWorktrees && !cleanup.dismissed && ["absent", "foreign"].includes(cleanup.hook);
+  return { ...workspace, worktreeCleanup: { ...cleanup, offered } };
 }
 
 function gitSummary(workspace) {

@@ -469,11 +469,7 @@ dialog#drawer::backdrop {
   z-index: 30;
   min-width: 200px;
   max-width: min(320px, calc(100vw - 16px));
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
   padding: 10px 12px;
-  box-shadow: 0 8px 24px var(--modal-shadow);
   overflow-y: auto;
 }
 .blockers-popover[hidden] {
@@ -569,11 +565,6 @@ option-dropdown {
   position: fixed;
   z-index: 30;
   display: grid;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  box-shadow: 0 8px 24px var(--modal-shadow);
-  padding: 4px;
   min-width: 100px;
   /* max-height is set inline by positionPopoverPanel (popover-position.js) to keep the far edge
      on-screen; scroll internally past that instead of overflowing the viewport. */
@@ -581,19 +572,7 @@ option-dropdown {
   overscroll-behavior: contain;
 }
 .dropdown-option {
-  border: none;
-  background: none;
-  font: inherit;
   font-size: var(--text-sm);
-  text-align: left;
-  color: var(--ink);
-  padding: 5px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.dropdown-option:hover,
-.dropdown-option.highlighted {
-  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
 }
 .dropdown-option[aria-selected="true"] {
   font-weight: 600;

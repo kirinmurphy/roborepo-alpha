@@ -1,7 +1,9 @@
 import { portalFillSlots as fill, portalTpl as tpl } from "/portal/shared/api.js";
-import { mountRepositoryRow, repositoryPageUrl } from "/portal/shared/repository-components.js";
+import { mountActionMenu, mountRepositoryRow, repositoryPageUrl } from "/portal/shared/repository-components.js";
 import { appendRepositoryDomains } from "./domains.js";
 import { matchedPlanIdentity, unmatchedPlanRow } from "./plan-rows.js";
+import { worktreeCleanupNotice } from "./worktree-dialogs.js";
+import { isRunning } from "./worktree-details.js";
 import { buildRootSection } from "/portal/developer-runtime/repository-root-row.js";
 
 const MOCK_NAMES = {
@@ -56,8 +58,10 @@ function repositoryCard(repository, actions) {
     badge.classList.add(`is-${lifecycleState}`);
     if (repository.lifecycle?.reason) badge.title = repository.lifecycle.reason;
   }
-  node.querySelector("[data-slot=checkouts]").append(...cardRows(repository.domains, actions));
+  node.querySelector("[data-slot=checkouts]").append(...cardRows(repository.domains, { ...actions, repositoryId: repository.repositoryId }));
   appendRepositoryDomains(node.querySelector("[data-slot=domains]"), repository.domains);
+  const notice = worktreeCleanupNotice(repository, { onEnable: actions.onEnableCleanup, onDismiss: actions.onDismissCleanup });
+  if (notice) node.querySelector("[data-slot=cleanup-notice]").append(notice);
   return node;
 }
 
@@ -74,10 +78,11 @@ function humanizeMockName(name) {
 // With no active plans this is exactly the checkout list, in Runtime order.
 function cardRows(domains, actions) {
   const checkouts = domains.runtime.data?.checkouts || [];
+  const hookInstalled = domains.runtime.data?.worktreeCleanup?.hook === "installed";
   const byRootId = new Map(checkouts.filter((checkout) => checkout.isWorktree && checkout.rootId).map((checkout) => [checkout.rootId, checkout]));
   const consumed = new Set();
   const rows = checkouts.length
-    ? checkouts.filter((checkout) => !checkout.isWorktree).map((checkout) => checkoutRow(checkout, actions))
+    ? checkouts.filter((checkout) => !checkout.isWorktree).map((checkout) => checkoutRow(checkout, actions, { hookInstalled }))
     : [noCheckoutRow()];
   for (const plan of domains.plans.data?.active || []) {
     const checkout = byRootId.get(plan.checkoutRootId);
@@ -86,13 +91,19 @@ function cardRows(domains, actions) {
       continue;
     }
     consumed.add(checkout);
-    rows.push(checkoutRow(checkout, actions, matchedPlanIdentity(plan, checkout, actions.onOpenPlan)));
+    const target = { repositoryId: actions.repositoryId, checkout, plan };
+    const identity = matchedPlanIdentity(plan, checkout, {
+      onOpenPlan: actions.onOpenPlan,
+      onStopServers: () => actions.onStopServers(target),
+      onDelete: () => actions.onRemoveWorktree(target),
+    });
+    rows.push(checkoutRow(checkout, actions, { hookInstalled, identity }));
   }
-  rows.push(...checkouts.filter((checkout) => checkout.isWorktree && !consumed.has(checkout)).map((checkout) => checkoutRow(checkout, actions)));
+  rows.push(...checkouts.filter((checkout) => checkout.isWorktree && !consumed.has(checkout)).map((checkout) => checkoutRow(checkout, actions, { hookInstalled })));
   return rows;
 }
 
-function checkoutRow(checkout, actions, identity = null) {
+function checkoutRow(checkout, actions, { identity = null, hookInstalled = false } = {}) {
   return buildRootSection({
     root: {
       rootId: checkout.rootId,
@@ -100,6 +111,11 @@ function checkoutRow(checkout, actions, identity = null) {
       projectRoot: checkout.projectRoot,
       checkoutState: checkout.checkoutState,
       checkoutReason: checkout.checkoutReason,
+      worktreeState: checkout.worktreeState,
+      worktreeReason: checkout.worktreeReason,
+      mergedInto: checkout.mergedInto,
+      cleanupHookInstalled: hookInstalled,
+      repositoryId: actions.repositoryId,
       git: checkout.git,
       primaryEntrypoint: checkout.primaryEntrypoint,
       members: [],
@@ -108,7 +124,23 @@ function checkoutRow(checkout, actions, identity = null) {
     repository: { name: "Repository" },
     mode: "home",
     onMountLinks: actions.onMountLinks,
+    onMountWorktreeMenu: (slot) => mountWorktreeMenu(slot, checkout, actions),
     identity,
+  });
+}
+
+// A worktree no plan claims keeps its actions in a ⋮ menu at the end of its row: Stop Server while
+// something runs in it, and Delete Worktree, which stops it as well.
+function mountWorktreeMenu(slot, checkout, actions) {
+  const name = checkout.git?.branch || checkout.worktreeName || "worktree";
+  const target = { repositoryId: actions.repositoryId, checkout };
+  const menu = mountActionMenu(slot, [
+    { key: "stop-servers", label: "Stop Server", icon: "stop", hidden: !isRunning(checkout) },
+    { key: "delete", label: "Delete Worktree", icon: "trash", danger: true },
+  ], {
+    ariaLabel: `Actions for ${name}`,
+    onToggle: () => actions.onToggleMenu(menu),
+    onSelect: (key) => (key === "delete" ? actions.onRemoveWorktree(target) : actions.onStopServers(target)),
   });
 }
 

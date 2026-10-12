@@ -39,6 +39,10 @@ export function updateComposeProject(payload) {
   return portalPostJson("/api/developer-runtime/compose-project", payload);
 }
 
+export function updatePreferences(payload) {
+  return portalPostJson("/api/developer-runtime/preferences", payload);
+}
+
 // Repository visibility lives in the repository registry rather than Runtime's settings, so this
 // carries no settings revision — see setDeveloperRuntimeRepositoryVisibility for why none is needed.
 export function setRepositoryVisibility(payload) {

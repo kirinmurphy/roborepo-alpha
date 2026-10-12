@@ -654,6 +654,16 @@
         <button type="button" data-slot="action"></button>
       </div>
     </template>
+    <template id="tpl-worktree-threshold">
+      <form class="settings-row" data-worktree-threshold>
+        <label for="worktree-stale-days">Suggest stale worktrees after</label>
+        <div class="settings-threshold-controls">
+          <input id="worktree-stale-days" type="number" min="1" max="365" required data-field="days" />
+          <span>days</span>
+          <button type="submit">Save</button>
+        </div>
+      </form>
+    </template>
     {{REPOSITORY_SOURCES}}
     <script type="module" src="/portal/shared/info-icon.js"></script>
     <script type="module" src="/portal/shared/icon.js"></script>

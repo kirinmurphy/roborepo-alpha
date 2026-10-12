@@ -54,7 +54,9 @@ for (const [theme, palette] of [["dark", tokens(":root")], ["light", { ...tokens
     gap("surface-sunken", "surface-inset") > gap("surface-band", "surface-sunken"),
     `${theme}: inset units are not the most distinct layer (${gap("surface-sunken", "surface-inset").toFixed(1)} vs ${gap("surface-band", "surface-sunken").toFixed(1)})`,
   );
-  assert.ok(gap("tooltip-bg", "wash-heading") >= 2 * STEP, `${theme}: tooltip heading bands do not stand out (${gap("tooltip-bg", "wash-heading").toFixed(1)})`);
+  // Dropdowns, menus, and tooltips share --popover-bg; it must not bleed into the card it opens from.
+  assert.ok(gap("popover-bg", "panel") >= 2 * STEP, `${theme}: a dropdown blends into its card (${gap("popover-bg", "panel").toFixed(1)})`);
+  assert.ok(gap("popover-bg", "wash-heading") >= 2 * STEP, `${theme}: tooltip heading bands do not stand out (${gap("popover-bg", "wash-heading").toFixed(1)})`);
   console.log(`ok  ${theme} surface layers`);
 }
 

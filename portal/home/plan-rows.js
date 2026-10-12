@@ -4,9 +4,9 @@ import { worktreeDetailsButton } from "./worktree-details.js";
 // What a matched plan hands the shared checkout row (buildRootSection's `identity`): the plans glyph,
 // and the title, completion, and worktree-details trigger in place of the branch label. Everything
 // else on the row — Git warning, port, Links — still comes from the checkout.
-export function matchedPlanIdentity(plan, checkout, onOpenPlan) {
+export function matchedPlanIdentity(plan, checkout, { onOpenPlan, onStopServers = null, onDelete = null } = {}) {
   const node = tpl("tpl-plan-identity");
-  node.append(planItem(plan, onOpenPlan), worktreeDetailsButton(plan, checkout));
+  node.append(planItem(plan, onOpenPlan), worktreeDetailsButton(plan, checkout, { onStopServers, onDelete }));
   return { glyph: "plans", label: "Plan", node };
 }
 

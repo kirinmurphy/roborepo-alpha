@@ -48,6 +48,9 @@ import { buildRepositoryHashIndex } from "./telemetry-repository.mjs";
 import { createRepositoryOverviewService } from "./repository-overview.mjs";
 import { MOCK_FIRST_RUN_VIEWS_ENABLED, mockHomeOverview, purgePersistedMockRepositories } from "./mock-home.mjs";
 import { buildTelemetryRepositoryProjection, fixtureTelemetryRepositories, homeTelemetryProjection } from "./telemetry-repository-overview.mjs";
+import { removeRepositoryWorktree, stopRepositoryWorktreeServers } from "./worktree-cleanup.mjs";
+import { dismissWorktreeCleanupNotice, enableWorktreeCleanup } from "./worktree-cleanup-optin.mjs";
+import { packageStatusSummary } from "./package-status.mjs";
 import { privacyHash } from "./telemetry-schemas/hash.mjs";
 import { buildAnalysisPrompt } from "../harnesses/transcript-locate.mjs";
 import { insightsSummary } from "./telemetry-insights.mjs";
@@ -784,6 +787,7 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     loadRuntime: () => loadDeveloperRuntimeSnapshot(),
     loadPlans: () => loadCachedPlansSnapshot(),
     loadAutoDiscoveryEnabled: () => autoDiscoveryEnabled(),
+    loadPlanCloseEnabled: () => packageStatusSummary("plan-close").enabled,
     loadMockHomeOverview: mockHomeOverview,
     mockHomeEnabled: MOCK_FIRST_RUN_VIEWS_ENABLED,
     loadTelemetry: () => homeTelemetryProjection({
@@ -839,6 +843,10 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     loadHomeOverview: () => repositoryOverview.loadHome(),
     loadRepositoryOverview: (params) => repositoryOverview.loadDetail(params),
     patchRepository: (params) => patchRepository(params),
+    removeRepositoryWorktree: (params) => afterWorktreeChange(removeRepositoryWorktree(params)),
+    stopRepositoryWorktreeServers: (params) => afterWorktreeChange(stopRepositoryWorktreeServers(params)),
+    enableWorktreeCleanup: (params) => afterWorktreeChange(enableWorktreeCleanup(params)),
+    dismissWorktreeCleanupNotice: (params) => afterWorktreeChange(dismissWorktreeCleanupNotice(params)),
     // Source changes alter which repositories exist, so the cached Plans snapshot is rebuilt after
     // each one; enabling auto-discovery starts the first process scan immediately.
     loadRepositorySources: () => loadRepositorySources(),
@@ -884,6 +892,14 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
 
 function startAutoDiscoveryScan() {
   refreshDeveloperRuntimeSnapshot().then(() => { try { refreshPlans(); } catch {} }).catch(() => {});
+}
+
+// A worktree removal or a cleanup opt-in changes what Home's next poll should show, so Runtime
+// re-inventories before the response returns.
+async function afterWorktreeChange(pending) {
+  const result = await pending;
+  await refreshDeveloperRuntimeSnapshot();
+  return result;
 }
 
 function afterSourceChange(payload) {
