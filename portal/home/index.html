@@ -108,7 +108,10 @@
       <div class="worktree-details">
         <div class="worktree-details-identity" data-slot="identity"></div>
         <ul class="worktree-details-facts" data-slot="facts" aria-label="Worktree status" hidden></ul>
-        <button type="button" class="worktree-details-remove" data-slot="remove" hidden>Remove worktree…</button>
+        <div class="worktree-details-actions" data-slot="actions" hidden>
+          <button type="button" data-action="stop-servers" hidden>Stop Server</button>
+          <button type="button" data-action="delete-worktree">Delete Worktree</button>
+        </div>
       </div>
     </template>
     <template id="tpl-worktree-detail-row">
@@ -137,7 +140,7 @@
     <dialog id="worktree-remove-dialog" data-dialog-size="md" aria-labelledby="worktree-remove-title">
       <form method="dialog">
         <div class="modal-head">
-          <h2 id="worktree-remove-title">Remove worktree</h2>
+          <h2 id="worktree-remove-title">Delete worktree</h2>
           <portal-close-button data-close aria-label="Close"></portal-close-button>
         </div>
         <div class="modal-body">
@@ -147,12 +150,13 @@
             <dt>Archive ref</dt><dd data-slot="archive"></dd>
           </dl>
           <p class="worktree-remove-plan" data-slot="plan" hidden></p>
+          <p class="worktree-dialog-help" data-slot="running" hidden>Its running servers are stopped first.</p>
           <p class="worktree-dialog-help">The checkout and its local branch are deleted. The branch tip stays restorable from the archive ref; remote branches are not touched.</p>
           <div class="item-err" data-slot="error" hidden></div>
         </div>
         <div class="modal-actions">
           <button type="button" data-btn="secondary" data-close>Cancel</button>
-          <button type="button" data-btn="cta" data-slot="confirm">Remove worktree</button>
+          <button type="button" data-btn="cta" data-slot="confirm">Delete worktree</button>
         </div>
       </form>
     </dialog>

@@ -46,24 +46,31 @@ test.describe("Agents page", () => {
 });
 
 test.describe("repository-first portal Home", () => {
-  test("worktree rows show their state; Remove lives in row menus behind a confirmation", async ({ page }) => {
+  test("worktree rows show their state; Stop Server and Delete Worktree live in row menus", async ({ page }) => {
     const removals = [];
     let removal = { action: "removed" };
     await page.route("**/api/repositories/*/worktrees/remove", async (route) => {
       removals.push(route.request().postDataJSON());
       await route.fulfill({ json: removal });
     });
+    const stops = [];
+    await page.route("**/api/repositories/*/worktrees/stop-servers", async (route) => {
+      stops.push(route.request().postDataJSON());
+      await route.fulfill({ json: { action: "stopped", stopped: 1, reason: null } });
+    });
     await patchRoboRepo(page, (repository) => {
       repository.domains.plans = { status: "available", data: { active: [
         { id: "idle-plan", key: "idle-plan", title: "Idle Story", worktree: "idle-tree", checkoutRootId: "idle-tree", taskCounts: { total: 1, complete: 0 } },
       ], counts: { active: 1, backlog: 0 }, recent: [] } };
+      // Ten days behind origin/main: a Git warning on any branch still in progress.
+      const drift = { baseBranch: "origin/main", baseBehind: 30, baseMergeBaseAt: Math.floor(Date.now() / 1000) - 10 * 24 * 60 * 60 };
       const worktree = (rootId, branch, state, extra = {}) => ({ rootId, name: branch, worktreeName: rootId, isWorktree: true, worktreeState: state, unmergedCommits: 3, git: { branch, provider: { ok: true } }, ...extra });
       repository.domains.runtime = { status: "available", data: {
         checkouts: [
           { rootId: "main", name: "main", isWorktree: false, git: { branch: "main", provider: { ok: true } } },
           worktree("idle-tree", "feature/idle", "idle"),
-          worktree("stale-tree", "feature/stale", "stale"),
-          worktree("landed-tree", "feature/landed", "landed", { mergedInto: "main" }),
+          worktree("stale-tree", "feature/stale", "stale", { git: { branch: "feature/stale", ...drift, provider: { ok: true } } }),
+          worktree("landed-tree", "feature/landed", "landed", { mergedInto: "main", git: { branch: "feature/landed", ...drift, provider: { ok: true } } }),
           worktree("blocked-tree", "feature/blocked", "landed", { worktreeReason: "plan not closed" }),
           worktree("running-tree", "feature/running", "running", { worktreeRunning: true }),
           worktree("app-tree", null, "idle", { projectRoot: "/private/app/runtime-row", git: { detached: true, shortHead: "d19c7b1", provider: { ok: true } } }),
@@ -83,39 +90,50 @@ test.describe("repository-first portal Home", () => {
     await expect(checkoutRow(card, "feature/blocked").getByText("plan not closed")).toBeVisible();
     await expect(checkoutRow(card, "feature/running").getByText("idle", { exact: true })).toBeHidden();
     await expect(checkoutRow(card, "runtime-row (detached)")).toHaveCount(1);
-    await expect(card.getByRole("button", { name: /^Remove/ })).toHaveCount(0);
+    await expect(card.getByRole("button", { name: /^(Delete|Stop)/ })).toHaveCount(0);
+    // A merged row drops the Git warning a branch in progress shows.
+    await expect(checkoutRow(card, "feature/stale").locator(".git-drift")).toBeVisible();
+    await expect(checkoutRow(card, "feature/landed").locator(".git-drift")).toBeHidden();
 
     await card.getByRole("button", { name: "Actions for feature/running" }).click();
-    const runningRemove = card.getByRole("button", { name: /Remove worktree/ });
-    await expect(runningRemove).toBeDisabled();
-    await expect(runningRemove).toContainText("stop its servers first");
-    await page.keyboard.press("Escape");
+    await card.getByRole("button", { name: "Stop Server" }).click();
+    expect(stops).toEqual([{ branch: "feature/running" }]);
 
-    const dialog = page.getByRole("dialog", { name: "Remove worktree" });
+    const dialog = page.getByRole("dialog", { name: "Delete worktree" });
+    await card.getByRole("button", { name: "Actions for feature/running" }).click();
+    await card.getByRole("button", { name: "Delete Worktree" }).click();
+    await expect(dialog).toContainText("Its running servers are stopped first.");
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+
     await card.getByRole("button", { name: "Actions for feature/stale" }).click();
-    await card.getByRole("button", { name: /Remove worktree/ }).click();
+    await expect(card.getByRole("button", { name: "Stop Server" })).toHaveCount(0);
+    await card.getByRole("button", { name: "Delete Worktree" }).click();
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText("feature/stale");
     await expect(dialog).toContainText("3");
     await expect(dialog).toContainText("refs/roborepo/abandoned/feature/stale");
+    await expect(dialog.getByText("Its running servers are stopped first.")).toBeHidden();
     await dialog.getByRole("button", { name: "Cancel" }).click();
     await expect(dialog).toBeHidden();
     expect(removals).toEqual([]);
 
     removal = { action: "kept", reason: "uncommitted or untracked changes" };
     await card.getByRole("button", { name: "Actions for feature/stale" }).click();
-    await card.getByRole("button", { name: /Remove worktree/ }).click();
-    await dialog.getByRole("button", { name: "Remove worktree" }).click();
+    await card.getByRole("button", { name: "Delete Worktree" }).click();
+    await dialog.getByRole("button", { name: "Delete worktree" }).click();
     await expect(dialog).toContainText("uncommitted or untracked changes");
     await dialog.getByRole("button", { name: "Cancel" }).click();
 
     removal = { action: "removed" };
     await card.getByRole("button", { name: "Worktree details for Idle Story" }).click();
-    await page.getByRole("button", { name: "Remove worktree…" }).click();
+    await expect(page.getByRole("button", { name: "Stop Server" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Delete Worktree" }).click();
     await expect(dialog).toContainText('Active plan "Idle Story" uses this worktree');
-    await dialog.getByRole("button", { name: "Remove worktree" }).click();
+    await dialog.getByRole("button", { name: "Delete worktree" }).click();
     await expect(dialog).toBeHidden();
     expect(removals).toEqual([{ branch: "feature/stale" }, { branch: "feature/idle" }]);
+    // The deletion's follow-up refresh may still be in flight through the patched route.
+    await page.unrouteAll({ behavior: "ignoreErrors" });
   });
 
   test("the cleanup notice confirms a folder and turns on the hook, or shows the line for another tool's hook", async ({ page }) => {
@@ -158,6 +176,8 @@ test.describe("repository-first portal Home", () => {
     await notice.getByRole("button", { name: "Dismiss" }).click();
     await expect(card.getByRole("note")).toHaveCount(0);
     expect(requests.at(-1).action).toBe("dismiss");
+    // The dismissal's follow-up refresh may still be in flight through the patched route.
+    await page.unrouteAll({ behavior: "ignoreErrors" });
   });
 
   test("Home renders the canonical repository directory", async ({ page }) => {

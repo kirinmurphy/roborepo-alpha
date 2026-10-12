@@ -802,6 +802,10 @@ dd {
   color: var(--dim);
   font-size: var(--text-2xs);
 }
+/* Status pills (merged, done, plan badges) share one inset so they read as one family. */
+:root {
+  --pill-padding: 2px 9px;
+}
 /* Dialog width scale. Set `data-dialog-size` on a <dialog> to pick one instead of hardcoding a
  * max-width in the page's own styles.css:
  *

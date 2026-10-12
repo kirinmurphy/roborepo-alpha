@@ -31,7 +31,7 @@ work landed:
 | --- | --- | --- |
 | Landed, with an associated plan | `/plan-close`, as its last step | after moving the plan to `completed/` and stopping the worktree's servers, it removes the worktree and branch behind the guards in §6 (§9) |
 | Landed, no associated plan | the cleanup job, once the user turns it on | pulling `main` triggers cleanup behind the guards in §6; Home offers to turn it on when the plan-close package is disabled (§8) |
-| Any worktree the user no longer wants (abandoned, superseded, an experiment) | the user, explicitly | Remove in the row's menu, with confirmation; the branch tip stays restorable (§7) |
+| Any worktree the user no longer wants (abandoned, superseded, an experiment) | the user, explicitly | Delete Worktree in the row's menu, with confirmation; it stops the worktree's servers, and the branch tip stays restorable (§7) |
 
 Worktrees untouched past a configurable threshold are marked `stale` and suggested for removal. It
 all works on plain Git; the GitHub CLI is not required.
@@ -320,15 +320,17 @@ stateDiagram-v2
 
 Each state decides what Home shows and what may remove the worktree:
 
-| State | Meaning | Home | Automatic action | Remove in the row menu |
+| State | Meaning | Home | Automatic action | Delete Worktree in the row menu |
 | --- | --- | --- | --- | --- |
-| `running` | A Runtime member runs in it | today's row | none | listed but disabled: "stop its servers first" |
+| `running` | A Runtime member runs in it | today's row | none | stops its servers, then deletes; Stop Server is offered beside it |
 | `idle` | No process, recent activity, not landed | dimmed row, "idle" in the actions column where a port would be; its plan attaches | none | with confirmation |
 | `stale` | Idle past the threshold, not landed | dimmed row, "suggested for removal", "idle" in the actions column | none | with confirmation |
 | `landed` | Passes §3 | a purple "merged" pill (tooltip "Merged into <base>") before the Git warnings; a note only for a blocking reason ("plan not closed", "not in your worktree folder") or "removed on next pull" when the hook is installed | removed when every guard passes and a trigger runs (§8) | with confirmation |
 
 `landed` takes precedence over the others, but a running landed worktree is never removed (§6). No
-row shows Remove inline: it lives in the row's menu (§7), so the card reads as a status list.
+row shows an action inline: they live in the row's menu (§7), so the card reads as a status list. A
+merged row also drops the Git drift warning (behind, unpushed), which only matters for work in
+progress; the checkout tooltip and the worktree dropdown keep the facts.
 
 ### 5. Last activity is the latest of several signals
 
@@ -409,23 +411,34 @@ removal appends path, branch, and commit to a removal log under the state root, 
 
 A story can end without merging: abandoned, superseded by another branch, or an experiment. A
 landed worktree can also stay behind when a guard blocked its cleanup, or when no trigger has run.
-Every worktree row on Home therefore offers Remove, never inline:
+Every worktree row on Home therefore offers two actions, never inline:
 
-| Row | Where Remove lives |
+| Row | Where the actions live |
 | --- | --- |
-| A worktree an active plan claims (the plan is the row) | the row's worktree dropdown, beside the worktree facts |
+| A worktree an active plan claims (the plan is the row) | the foot of the row's worktree dropdown, styled as menu items |
 | A worktree no plan claims | a right-aligned ⋮ menu, the shared `mountActionMenu` that repository cards already use |
-| A running worktree | either place, listed but disabled, with the hint "stop its servers first" |
+
+| Action | Shown | Does |
+| --- | --- | --- |
+| Stop Server | while something runs in the worktree | SIGTERMs the dev servers listening from it, as `/plan-close` step 8 does |
+| Delete Worktree | always | opens the confirmation; confirming stops the worktree's servers, then removes it |
 
 ```mermaid
 flowchart TD
-    W["any worktree row"] -->|user picks Remove in its menu| D["confirmation dialog: branch,<br/>unmerged commits, archive ref,<br/>and the active plan if one claims it"]
+    W["any worktree row"] -->|user picks Delete Worktree| D["confirmation dialog: branch,<br/>unmerged commits, archive ref,<br/>the active plan, and that servers stop first"]
     D -->|Cancel| N["nothing changes"]
-    D -->|Remove| G{"guards pass?<br/>Confirmed column, §6"}
-    G -->|fails| K["dialog shows the reason;<br/>row keeps it"]
-    G -->|passes| P["archive branch tip under<br/>refs/roborepo/abandoned/"]
+    D -->|Delete worktree| G{"every guard but the running one passes?<br/>Confirmed column, §6"}
+    G -->|fails| K["dialog shows the reason;<br/>nothing is stopped"]
+    G -->|passes| S{"its servers stop?"}
+    S -->|no| K
+    S -->|yes| P["archive branch tip under<br/>refs/roborepo/abandoned/"]
     P -->|removes| R["remove worktree, delete branch,<br/>append removal log"]
 ```
+
+Checking the other guards before stopping anything means a deletion that would be refused anyway,
+say for uncommitted changes, never takes the user's servers down. After the stop, the full guard
+pass runs again, including the running guard, so a container or the portal itself still keeps the
+worktree.
 
 The confirmation is a portal dialog, not the browser's native `confirm`, so it matches the rest of
 Home and can show the guard's reason in place when removal is refused. Removal is reversible with
@@ -435,9 +448,9 @@ The archive ref keeps an unmerged branch's commits reachable, so `git gc` cannot
 the branch is deleted. Archive refs stay until the user deletes them; they do not appear in
 `git branch` output. A remote copy of the branch is never touched.
 
-The Home action calls a token-guarded `POST` route in `scripts/cli/portal-routes-repositories.mjs`,
-which shares the cleanup orchestrator with the command, so Home and the CLI cannot disagree about a
-guard.
+The Home actions call token-guarded `POST` routes in `scripts/cli/portal-routes-repositories.mjs`,
+which share the cleanup orchestrator and `stopCheckoutServers` with the command and `/plan-close`,
+so Home and the CLI cannot disagree about a guard.
 
 ### 8. Triggers
 
@@ -447,7 +460,7 @@ guard.
 | Home cleanup notice | when the user picks **Turn on automatic cleanup** in a card's footer notice | confirms the worktree folder, records it, and installs the hook for that repository |
 | `/plan-close`, last step | after it closes a complete plan and stops its servers | runs the cleanup command scoped to that plan's worktree, and reports the removal or the guard that blocked it |
 | `roborepo` cleanup command | when invoked | dry run by default; applies with an explicit flag; takes a plan to scope to that plan's worktree, as `roborepo plans stop-servers <plan>` does; removes a named branch with `--remove <branch> --confirm` |
-| Home Remove | when the user confirms Remove in a row's menu | the same as the command for that one worktree |
+| Home Delete Worktree / Stop Server | when the user confirms Delete Worktree, or picks Stop Server, in a row's menu | stops that worktree's servers; Delete then runs the command's confirmed removal for it |
 | Runtime refresh | each snapshot | derives and displays states; never removes |
 
 The hook does not fire on `git fetch`, on the GitHub merge button itself, or on a merge stopped by
@@ -460,8 +473,8 @@ Installation is per repository and opt-in. Who is offered it depends on the plan
 
 | Plan-close package on this machine | Removal path | Home offers the hook |
 | --- | --- | --- |
-| enabled | `/plan-close` removes each story's worktree; Remove in the row menu covers the rest | no |
-| disabled | the hook, once the user turns it on; Remove in the row menu | yes, in the card footer |
+| enabled | `/plan-close` removes each story's worktree; Delete Worktree in the row menu covers the rest | no |
+| disabled | the hook, once the user turns it on; Delete Worktree in the row menu | yes, in the card footer |
 
 The offer is a notice in the repository card's footer, where token warnings already appear, because
 it changes one repository's Git hooks. It appears when the plan-close package is disabled, the
@@ -681,6 +694,15 @@ Reconciliation notes for related plans, recorded here rather than edited into th
       when it says something actionable; move "idle" into the actions column; name a detached
       worktree by its folder; word the folder guard as "not in your worktree folder".
 
+### Phase 8 — Row actions and alignment
+
+- [x] Split the row actions into Stop Server (while something runs) and Delete Worktree, which stops
+      the worktree's servers after the other guards pass; add the token-guarded stop route.
+- [x] Style the worktree dropdown's actions as menu items, matching the ⋮ menu.
+- [x] Reserve the ⋮ cell on every Home row so "idle" and port links end at one edge.
+- [x] Drop the Git drift warning on merged rows; keep the facts in the tooltip and dropdown.
+- [x] Share one inset for status pills (`--pill-padding`): merged, done, and plan badges.
+
 ## Validation
 
 - [x] A fresh worktree with no commits is never `landed`.
@@ -724,6 +746,8 @@ Reconciliation notes for related plans, recorded here rather than edited into th
 - [x] Turning cleanup on from Home installs the hook and records the confirmed folder; automatic
       removal in a repository without `plans-config.json` stays inside that folder.
 - [x] With the plan-close package enabled, Home shows no cleanup notice.
+- [x] Delete Worktree refused by a guard stops no server; one whose server keeps running keeps the
+      worktree; otherwise it stops the servers and removes the worktree.
 - [x] A worktree whose only activity is a ten-day-old commit reads `stale` on its first inventory;
       after Runtime sees it running, it reads `idle`.
 
@@ -829,6 +853,9 @@ pull: did not fire; pull with `--rebase` and no local commits: hook fired.
 - 2026-10-11 — Remove lives in a menu on every worktree row: the worktree dropdown on a plan's row,
   the shared ⋮ action menu otherwise, disabled while the worktree runs. Inline buttons on every row
   made removal look like the expected next step for work in progress.
+- 2026-10-11 — Delete Worktree stops the worktree's servers instead of refusing a running worktree,
+  and Stop Server sits beside it. The other guards run first, so a refused deletion never stops a
+  server; a running worktree that should stay keeps its servers unless the user confirms deletion.
 - 2026-10-11 — Record `lastRunningAt` for §5's Runtime signal. Ignoring `lastSeenAt` when it equals
   `firstSeenAt` needed no schema change but would mark a worktree that ran once briefly as stale.
 - 2026-10-11 — Landed worktrees whose plans closed before `/plan-close` removed worktrees need no

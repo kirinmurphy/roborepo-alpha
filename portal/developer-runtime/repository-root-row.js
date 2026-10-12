@@ -86,17 +86,18 @@ export function buildRootSection({ root, departed = [], repository, composeActio
   else fillIdentity(section, root, composeGroups);
   mountCheckoutRow(section);
   if (root?.git) {
-    applyGitDrift(section, root.git);
+    // Drift is a prompt to sync work in progress; once the branch has merged it no longer applies.
+    // The checkout tooltip and the worktree dropdown still carry the Git facts.
+    if (root.worktreeState !== "landed") applyGitDrift(section, root.git);
     if (!identity) mountCopyDropdown(section, root);
   }
   fillPromotedLink(section, root);
   if (mode === "home") {
-    // A plan's row keeps its worktree actions in the worktree dropdown its identity carries.
-    if (root?.isWorktree && !identity && onMountWorktreeMenu) {
-      const slot = section.querySelector("[data-slot=worktree-menu]");
-      slot.hidden = false;
-      onMountWorktreeMenu(slot, root);
-    }
+    // Every Home row keeps the ⋮ cell so its actions column lines up with its neighbours'. A plan's
+    // row leaves it empty: its worktree actions live in the worktree dropdown its identity carries.
+    const menuSlot = section.querySelector("[data-slot=worktree-menu]");
+    menuSlot.hidden = false;
+    if (root?.isWorktree && !identity && onMountWorktreeMenu) onMountWorktreeMenu(menuSlot, root);
     if (root?.primaryEntrypoint?.opaqueKey) onMountLinks?.(section.querySelector("[data-slot=root-links]"), root.primaryEntrypoint);
     section.querySelector("[data-slot=members]")?.remove();
     return section;

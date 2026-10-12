@@ -66,7 +66,7 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 .repository-root .plan-item { padding: 0; font-size: inherit; }
 .plan-identity { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
 .plan-match-badge {
-  padding: 0 7px;
+  padding: var(--pill-padding);
   border: 1px solid var(--line);
   border-radius: 999px;
   color: var(--dim);
@@ -120,7 +120,7 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
   mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
 }
 .plan-percent { font-variant-numeric: tabular-nums; }
-.plan-complete-badge { padding: 0 7px; border-radius: 999px; background: var(--chip-low-bg); color: var(--chip-ink); font-weight: 600; }
+.plan-complete-badge { padding: var(--pill-padding); border-radius: 999px; background: var(--chip-low-bg); color: var(--chip-ink); font-weight: 600; }
 .token-warnings { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
 .token-warning { font-size: var(--text-sm); overflow-wrap: anywhere; }
 .warning-model { font-family: var(--mono); font-size: var(--text-xs); }
@@ -136,22 +136,20 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
   .home-heading, .unresolved-activity { align-items: stretch; flex-direction: column; }
   .home-action-slot { justify-content: flex-start; }
 }
-/* Removing a plan's worktree is the panel's last, quietest item, set off from the facts above it. */
-.worktree-details-remove {
-  justify-self: start;
-  margin-top: 2px;
-  padding: 6px 0 0;
+/* The panel's actions read as menu items, matching the ⋮ menu: full-width rows that fill on hover. */
+.worktree-details-actions { display: grid; gap: 2px; padding-top: 4px; border-top: 1px solid var(--line); }
+.worktree-details-actions button {
+  padding: 6px 8px;
   border: 0;
-  border-top: 1px solid var(--line);
-  background: none;
-  color: var(--dim);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink);
   font: inherit;
-  cursor: pointer;
-  width: 100%;
   text-align: left;
+  cursor: pointer;
 }
-.worktree-details-remove:hover:not(:disabled) { color: var(--accent); }
-.worktree-details-remove:disabled { cursor: default; opacity: 0.7; }
+.worktree-details-actions button:hover,
+.worktree-details-actions button:focus-visible { background: var(--panel); }
 /* Card footer, beside the token warnings it shares the raised band with. */
 .worktree-cleanup-notice {
   display: flex;

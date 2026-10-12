@@ -161,8 +161,8 @@ Each card combines a compact view of several domains:
   worktrees. The plan title opens the plan drawer, and its completion ring or **done** sits beside it.
   - A plan whose `worktree` field names a linked worktree Home shows becomes that worktree's row: the
     plan title replaces the branch label, a worktree button opens the branch, worktree name, and path
-    (each with its own copy action) plus any dirty, ahead/behind, or drift facts and
-    **Remove worktree…**, and the port, Links,
+    (each with its own copy action) plus any dirty, ahead/behind, or drift facts and the
+    **Stop Server** and **Delete Worktree** actions, and the port, Links,
     and Git warning stay where the checkout row puts them. The match is exact: the plan's value must
     equal the worktree's Git administrative name, exactly one active plan must claim it, and exactly
     one known worktree must carry it. Branch names and checkout paths are never used to guess.
@@ -171,7 +171,7 @@ Each card combines a compact view of several domains:
     has no worktree by that name), **worktree ambiguous** (claimed twice, or more than one checkout
     carries the name), or **worktree status unknown** (Runtime is unavailable).
   - Worktrees no plan claimed follow as ordinary checkout rows, each with a ⋮ menu holding
-    **Remove worktree…**.
+    **Stop Server** (while something runs in it) and **Delete Worktree**.
   - One unlabeled line closes the list with the repository's Active and Backlog counts and an
     **all plans** link, and says so when Plans coverage is partial. A repository with no active
     plans, or one Plans has not scanned, lists its worktrees as plain checkout rows with no plan
@@ -203,12 +203,16 @@ A merged row adds a note only when there is something to act on: the reason a gu
 as **plan not closed** or **not in your worktree folder**), or **removed on next pull** when the
 cleanup hook is installed.
 
-**Remove worktree…** is in the worktree dropdown on a plan's row and in the ⋮ menu on any other
-worktree row; no row shows it inline. It opens a confirmation naming the branch, its unmerged commit
-count, the archive ref that preserves its tip, and the active plan when one claims the worktree.
-Removal refuses a locked, dirty, or running worktree (a running row's menu item says to stop its
-servers first), a worktree with valuable ignored files or submodules, and the current or main
-checkout; the confirmation shows the reason.
+**Stop Server** stops the dev servers listening from that worktree, as `/plan-close` does.
+**Delete Worktree** opens a confirmation naming the branch, its unmerged commit count, the archive
+ref that preserves its tip, and the active plan when one claims the worktree; confirming stops its
+servers and removes it. Both live in the worktree dropdown on a plan's row and in the ⋮ menu on any
+other worktree row; no row shows them inline. Deletion refuses a locked or dirty worktree, a
+worktree with valuable ignored files or submodules, a server that does not stop, and the current or
+main checkout, and the confirmation shows the reason. A refused deletion stops nothing.
+
+A merged row drops the Git warnings (behind, unpushed) the row shows for work in progress; the
+checkout tooltip and the worktree dropdown still carry them.
 
 `roborepo git worktrees cleanup` previews candidates and reasons. Add `--apply` to remove eligible
 landed worktrees and local branches. `--plan <id>` limits it to a completed plan's worktree. The

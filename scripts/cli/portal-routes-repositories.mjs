@@ -77,6 +77,7 @@ export const repositoriesRoutes = defineRoutes([
   postRoute("/api/repositories/sources/:sourceId/enabled", (handlers, body, params) => handlers.setRepositorySourceEnabled({ id: params.sourceId, enabled: body.enabled })),
   postRoute("/api/repositories/sources/:sourceId/remove", (handlers, body, params) => handlers.removeRepositorySource({ id: params.sourceId })),
   postRoute("/api/repositories/:id/worktrees/remove", (handlers, body, params) => handlers.removeRepositoryWorktree({ repositoryId: params.id, branch: body.branch })),
+  postRoute("/api/repositories/:id/worktrees/stop-servers", (handlers, body, params) => handlers.stopRepositoryWorktreeServers({ repositoryId: params.id, branch: body.branch })),
   postRoute("/api/repositories/:id/worktree-cleanup/enable", (handlers, body, params) => handlers.enableWorktreeCleanup({ repositoryId: params.id, folder: body.folder })),
   postRoute("/api/repositories/:id/worktree-cleanup/dismiss", (handlers, body, params) => handlers.dismissWorktreeCleanupNotice({ repositoryId: params.id })),
   {

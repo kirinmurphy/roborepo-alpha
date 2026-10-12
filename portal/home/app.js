@@ -67,9 +67,22 @@ const menuActions = {
     closeActionMenus();
     removeDialog.open(target);
   },
+  onStopServers: stopWorktreeServers,
   onEnableCleanup: (repository) => cleanupDialog.open(repository),
   onDismissCleanup: dismissCleanupNotice,
 };
+
+async function stopWorktreeServers({ repositoryId, checkout }) {
+  closeActionMenus();
+  try {
+    const result = await api.stopWorktreeServers({ repositoryId, branch: checkout.git?.branch || checkout.worktreeName });
+    if (result.action !== "stopped") throw new Error(result.reason || "the servers kept running");
+    afterWorktreeChange();
+  } catch (error) {
+    warning.textContent = `Could not stop the worktree's servers: ${error.message}`;
+    warning.hidden = false;
+  }
+}
 
 async function dismissCleanupNotice(repository) {
   try {

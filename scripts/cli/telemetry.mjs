@@ -48,7 +48,7 @@ import { buildRepositoryHashIndex } from "./telemetry-repository.mjs";
 import { createRepositoryOverviewService } from "./repository-overview.mjs";
 import { MOCK_FIRST_RUN_VIEWS_ENABLED, mockHomeOverview, purgePersistedMockRepositories } from "./mock-home.mjs";
 import { buildTelemetryRepositoryProjection, fixtureTelemetryRepositories, homeTelemetryProjection } from "./telemetry-repository-overview.mjs";
-import { removeRepositoryWorktree } from "./worktree-cleanup.mjs";
+import { removeRepositoryWorktree, stopRepositoryWorktreeServers } from "./worktree-cleanup.mjs";
 import { dismissWorktreeCleanupNotice, enableWorktreeCleanup } from "./worktree-cleanup-optin.mjs";
 import { packageStatusSummary } from "./package-status.mjs";
 import { privacyHash } from "./telemetry-schemas/hash.mjs";
@@ -844,6 +844,7 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     loadRepositoryOverview: (params) => repositoryOverview.loadDetail(params),
     patchRepository: (params) => patchRepository(params),
     removeRepositoryWorktree: (params) => afterWorktreeChange(removeRepositoryWorktree(params)),
+    stopRepositoryWorktreeServers: (params) => afterWorktreeChange(stopRepositoryWorktreeServers(params)),
     enableWorktreeCleanup: (params) => afterWorktreeChange(enableWorktreeCleanup(params)),
     dismissWorktreeCleanupNotice: (params) => afterWorktreeChange(dismissWorktreeCleanupNotice(params)),
     // Source changes alter which repositories exist, so the cached Plans snapshot is rebuilt after

@@ -1,9 +1,9 @@
 import { portalFillSlots as fill, portalTpl as tpl, portalWireBackdropClose } from "/portal/shared/api.js";
 import * as api from "./api.js";
 
-// Home's worktree removal confirmation. One dialog serves every row: `open` fills it for a worktree,
-// and confirming removes it through the same guards as `roborepo git worktrees cleanup --remove`.
-// A refused removal keeps the dialog open with the guard's reason.
+// Home's Delete Worktree confirmation. One dialog serves every row: `open` fills it for a worktree,
+// and confirming stops its servers and removes it through the same guards as
+// `roborepo git worktrees cleanup --remove`. A refused removal keeps the dialog open with the reason.
 export function createWorktreeRemoveDialog({ onRemoved }) {
   const dialog = document.getElementById("worktree-remove-dialog");
   const slot = (name) => dialog.querySelector(`[data-slot=${name}]`);
@@ -29,7 +29,8 @@ export function createWorktreeRemoveDialog({ onRemoved }) {
         archive: `refs/roborepo/abandoned/${selector}`,
       });
       slot("plan").hidden = !plan;
-      slot("plan").textContent = plan ? `Active plan "${plan.title}" uses this worktree. Removing it leaves the plan active without its worktree.` : "";
+      slot("plan").textContent = plan ? `Active plan "${plan.title}" uses this worktree. Deleting it leaves the plan active without its worktree.` : "";
+      slot("running").hidden = !(checkout.worktreeRunning ?? checkout.worktreeState === "running");
       showError(dialog, null);
       dialog.showModal();
     },

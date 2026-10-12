@@ -3,6 +3,7 @@ import { mountActionMenu, mountRepositoryRow, repositoryPageUrl } from "/portal/
 import { appendRepositoryDomains } from "./domains.js";
 import { matchedPlanIdentity, unmatchedPlanRow } from "./plan-rows.js";
 import { worktreeCleanupNotice } from "./worktree-dialogs.js";
+import { isRunning } from "./worktree-details.js";
 import { buildRootSection } from "/portal/developer-runtime/repository-root-row.js";
 
 const MOCK_NAMES = {
@@ -90,8 +91,13 @@ function cardRows(domains, actions) {
       continue;
     }
     consumed.add(checkout);
-    const onRemove = () => actions.onRemoveWorktree({ repositoryId: actions.repositoryId, checkout, plan });
-    rows.push(checkoutRow(checkout, actions, { hookInstalled, identity: matchedPlanIdentity(plan, checkout, { onOpenPlan: actions.onOpenPlan, onRemove }) }));
+    const target = { repositoryId: actions.repositoryId, checkout, plan };
+    const identity = matchedPlanIdentity(plan, checkout, {
+      onOpenPlan: actions.onOpenPlan,
+      onStopServers: () => actions.onStopServers(target),
+      onDelete: () => actions.onRemoveWorktree(target),
+    });
+    rows.push(checkoutRow(checkout, actions, { hookInstalled, identity }));
   }
   rows.push(...checkouts.filter((checkout) => checkout.isWorktree && !consumed.has(checkout)).map((checkout) => checkoutRow(checkout, actions, { hookInstalled })));
   return rows;
@@ -124,17 +130,18 @@ function checkoutRow(checkout, actions, { identity = null, hookInstalled = false
   });
 }
 
-// A worktree no plan claims keeps Remove in a ⋮ menu at the end of its row. A running worktree
-// cannot pass the removal guards, so the item says why instead of offering a refusal.
+// A worktree no plan claims keeps its actions in a ⋮ menu at the end of its row: Stop Server while
+// something runs in it, and Delete Worktree, which stops it as well.
 function mountWorktreeMenu(slot, checkout, actions) {
-  const running = checkout.worktreeState === "running";
   const name = checkout.git?.branch || checkout.worktreeName || "worktree";
+  const target = { repositoryId: actions.repositoryId, checkout };
   const menu = mountActionMenu(slot, [
-    { key: "remove", label: "Remove worktree…", disabled: running, hint: running ? "stop its servers first" : null },
+    { key: "stop-servers", label: "Stop Server", hidden: !isRunning(checkout) },
+    { key: "delete", label: "Delete Worktree" },
   ], {
     ariaLabel: `Actions for ${name}`,
     onToggle: () => actions.onToggleMenu(menu),
-    onSelect: () => actions.onRemoveWorktree({ repositoryId: actions.repositoryId, checkout }),
+    onSelect: (key) => (key === "delete" ? actions.onRemoveWorktree(target) : actions.onStopServers(target)),
   });
 }
 

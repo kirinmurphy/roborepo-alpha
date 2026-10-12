@@ -300,7 +300,7 @@ main {
 .worktree-is-stale .worktree-state-badge { color: var(--warn); }
 /* GitHub's merged pill: the branch's work is in the base branch. */
 .worktree-is-landed .worktree-state-badge {
-  padding: 1px 7px;
+  padding: var(--pill-padding);
   border-radius: 999px;
   background: var(--merged);
   color: #fff;
@@ -505,6 +505,11 @@ main {
 .worktree-row-menu .action-menu {
   display: inline-flex;
   align-items: center;
+}
+/* Every Home row reserves the ⋮ cell, empty or not, so idle text and port links end at one edge. */
+.worktree-row-menu {
+  justify-content: center;
+  width: var(--checkout-control-height);
 }
 /* Reuses the Compose port rows' status pill, sized down to sit beside the port link. */
 .repository-root-actions .port-health-badge {

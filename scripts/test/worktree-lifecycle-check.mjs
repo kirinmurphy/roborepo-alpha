@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 import { inspectBranchLanding } from "../../modules/repositories/worktree-landed.mjs";
 import { linkedWorktrees } from "../../modules/repositories/worktree-inventory.mjs";
 import { deriveWorktreeState, resolveWorktreeStaleDays } from "../../modules/repositories/worktree-state.mjs";
-import { cleanupWorktrees } from "../cli/worktree-cleanup.mjs";
+import { cleanupWorktrees, removeRepositoryWorktree, stopRepositoryWorktreeServers } from "../cli/worktree-cleanup.mjs";
 import { activeWorktreeNames, proposedWorktreeFolder } from "../cli/worktree-policy.mjs";
 import { dismissWorktreeCleanupNotice, enableWorktreeCleanup } from "../cli/worktree-cleanup-optin.mjs";
 import { recordRepositoryDiscovery } from "../cli/repositories.mjs";
@@ -531,6 +531,37 @@ try {
     assert.ok(loadRegistry({ stateRoot }).repositories[repositoryId].localRoots.find((item) => item.rootId === worktreeRootId).lastRunningAt,
       "a running sighting is recorded");
     assert.equal((await observe()).state, "idle", "a recent running sighting counts as activity");
+  }
+  {
+    // Home's Delete Worktree stops the worktree's servers, but only after every other guard passed.
+    const { main, worktree } = repository("delete-stops");
+    const realMain = fs.realpathSync(main);
+    const stateRoot = path.join(root, "delete-stops-state");
+    const repositoryId = "git:example.com/test/delete-stops";
+    recordRepositoryDiscovery({
+      repositoryId, kind: "git", displayName: "delete-stops", source: "developer-runtime", evidence: "git-remote",
+      confidence: "high", localRoot: rootId(realMain), localRootKind: "clone", localRootPath: realMain, stateRoot,
+    });
+    commit(worktree, "work.txt", "work\n");
+    const stops = [];
+    const stop = (ok) => async (checkoutPath) => {
+      stops.push(checkoutPath);
+      return { ok, servers: ok ? [{ pid: 101, result: "stopped" }] : [{ pid: 102, result: "still-running" }], warnings: [] };
+    };
+    const discover = async () => ({ instances: [] });
+    fs.writeFileSync(path.join(worktree, "stray.txt"), "stray\n");
+    let result = await removeRepositoryWorktree({ repositoryId, branch: "feature", stateRoot, stop: stop(true), discover });
+    assert.equal(result.reason, "uncommitted or untracked changes");
+    assert.deepEqual(stops, [], "a deletion the guards refuse stops nothing");
+    fs.rmSync(path.join(worktree, "stray.txt"));
+    result = await removeRepositoryWorktree({ repositoryId, branch: "feature", stateRoot, stop: stop(false), discover });
+    assert.match(result.reason, /did not stop \(pid 102\)/);
+    assert.equal(fs.existsSync(worktree), true, "a server that keeps running keeps its worktree");
+    assert.deepEqual(await stopRepositoryWorktreeServers({ repositoryId, branch: "feature", stateRoot, stop: stop(true) }), { action: "stopped", stopped: 1, reason: null });
+    result = await removeRepositoryWorktree({ repositoryId, branch: "feature", stateRoot, stop: stop(true), discover });
+    assert.equal(result.action, "removed", result.reason);
+    assert.equal(fs.existsSync(worktree), false);
+    assert.equal(stops.length, 3);
   }
   console.log("worktree lifecycle: inventory and landing ok");
 } finally {
