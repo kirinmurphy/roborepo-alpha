@@ -921,4 +921,3 @@ during the live hook check.
 | Corrections at close | `plans-portal.md` gained the plan row's worktree actions and the `/plan-close` removal. The archive ref is `refs/roborepo/abandoned/<branch>-<commit>`, as the code and `repositories.md` say; three places in this plan said `<branch>` |
 | Live hook opt-in | See the second `## Not tested` entry |
 | Live `/plan-close` removal | Home showed this plan's worktree as **merged** with **plan not closed** before the close. After the move to `completed/`, `roborepo plans stop-servers a7bslb00` stopped pid 40142 on `:4339`, and `roborepo git worktrees cleanup --plan a7bslb00 --apply` reported `removed (landed)`: the worktree folder and local branch are gone, and the removal log records commit `2949b3c`. The worktree's `node_modules` symlink was unlinked; the main checkout's `node_modules` is intact |
-
