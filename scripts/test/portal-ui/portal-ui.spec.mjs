@@ -47,6 +47,9 @@ test.describe("Agents page", () => {
 
 test.describe("repository-first portal Home", () => {
   test("worktree rows show their state; Stop Server and Delete Worktree live in row menus", async ({ page }) => {
+    // Short enough that the card scrolls, so the open dropdown has a page to follow.
+    await page.setViewportSize({ width: 1280, height: 420 });
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
     const removals = [];
     let removal = { action: "removed" };
     await page.route("**/api/repositories/*/worktrees/remove", async (route) => {
@@ -68,7 +71,7 @@ test.describe("repository-first portal Home", () => {
       repository.domains.runtime = { status: "available", data: {
         checkouts: [
           { rootId: "main", name: "main", isWorktree: false, git: { branch: "main", provider: { ok: true } } },
-          worktree("idle-tree", "feature/idle", "idle"),
+          worktree("idle-tree", "feature/idle", "idle", { projectRoot: "/private/trees/a-worktree-with-a-long-name-that-fills-the-dropdown", git: { branch: "feature/idle", dirty: true, ahead: 12, behind: 0, upstream: "origin/feature/idle", ...drift, provider: { ok: true } } }),
           worktree("stale-tree", "feature/stale", "stale", { git: { branch: "feature/stale", ...drift, provider: { ok: true } } }),
           worktree("landed-tree", "feature/landed", "landed", { mergedInto: "main", git: { branch: "feature/landed", ...drift, provider: { ok: true } } }),
           worktree("blocked-tree", "feature/blocked", "landed", { worktreeReason: "plan not closed" }),
@@ -80,15 +83,17 @@ test.describe("repository-first portal Home", () => {
     });
     await page.goto("/");
     const card = roboRepoCard(page);
-    // Idle is runtime activity, shown in the actions column where a running checkout shows its port.
-    await expect(planRowOf(card, "Idle Story").locator(".repository-root-actions").getByText("idle", { exact: true })).toBeVisible();
+    // No port says nothing runs; the row does not spell out "idle".
+    await expect(card.getByText("idle", { exact: true })).toHaveCount(0);
+    // Only a worktree no plan claims has a ⋮ cell; a plan's row keeps its actions in its dropdown.
+    await expect(planRowOf(card, "Idle Story").locator(".worktree-row-menu")).toBeHidden();
+    await expect(checkoutRow(card, "feature/stale").locator(".worktree-row-menu")).toBeVisible();
     await expect(checkoutRow(card, "feature/stale").getByText("suggested for removal")).toBeVisible();
     const merged = checkoutRow(card, "feature/landed").getByText("merged", { exact: true });
     await expect(merged).toBeVisible();
     await expect(merged).toHaveAttribute("title", "Merged into main");
     await expect(checkoutRow(card, "feature/landed").locator(".worktree-state-note")).toBeHidden();
     await expect(checkoutRow(card, "feature/blocked").getByText("plan not closed")).toBeVisible();
-    await expect(checkoutRow(card, "feature/running").getByText("idle", { exact: true })).toBeHidden();
     await expect(checkoutRow(card, "runtime-row (detached)")).toHaveCount(1);
     await expect(card.getByRole("button", { name: /^(Delete|Stop)/ })).toHaveCount(0);
     // A merged row drops the Git warning a branch in progress shows.
@@ -96,6 +101,8 @@ test.describe("repository-first portal Home", () => {
     await expect(checkoutRow(card, "feature/landed").locator(".git-drift")).toBeHidden();
 
     await card.getByRole("button", { name: "Actions for feature/running" }).click();
+    await expect(card.getByRole("button", { name: "Stop Server" }).locator('portal-icon[name="stop"]')).toHaveCount(1);
+    await expect(card.getByRole("button", { name: "Delete Worktree" }).locator('portal-icon[name="trash"]')).toHaveCount(1);
     await card.getByRole("button", { name: "Stop Server" }).click();
     expect(stops).toEqual([{ branch: "feature/running" }]);
 
@@ -125,8 +132,35 @@ test.describe("repository-first portal Home", () => {
     await dialog.getByRole("button", { name: "Cancel" }).click();
 
     removal = { action: "removed" };
+    // The plan's dropdown: one status line, then the same drift warning the row shows.
+    const rowWarning = await planRowOf(card, "Idle Story").locator(".git-drift").textContent();
     await card.getByRole("button", { name: "Worktree details for Idle Story" }).click();
+    const details = page.locator(".worktree-details");
+    await expect(details.getByText("dirty · 12 ahead · 0 behind remote", { exact: true })).toBeVisible();
+    await expect(details.locator(".git-drift")).toHaveText([rowWarning]);
+    // Every dropdown and menu shares one surface.
+    const surfaces = await page.evaluate(() => {
+      const background = (selector) => getComputedStyle(document.querySelector(selector)).backgroundColor;
+      return [background(".menu-button-panel"), getComputedStyle(document.documentElement).getPropertyValue("--popover-bg").trim()];
+    });
+    expect(surfaces[0]).not.toBe("rgba(0, 0, 0, 0)");
+    expect(await page.evaluate((color) => { const probe = document.createElement("div"); probe.style.color = color; document.body.append(probe); const value = getComputedStyle(probe).color; probe.remove(); return value; }, surfaces[1])).toBe(surfaces[0]);
+    // A copy confirms in place without changing the panel's width.
+    const panel = page.locator(".menu-button-panel");
+    const width = (await panel.boundingBox()).width;
+    await details.getByRole("button", { name: "Copy worktree path" }).click();
+    await expect(details.locator("portal-copy-button[copied]")).toHaveCount(1);
+    expect((await panel.boundingBox()).width).toBe(width);
+    // The open dropdown scrolls with the page, staying attached to its trigger.
+    const trigger = card.getByRole("button", { name: "Worktree details for Idle Story" });
+    const gap = async () => (await panel.boundingBox()).y - (await trigger.boundingBox()).y;
+    const before = await gap();
+    const triggerTop = (await trigger.boundingBox()).y;
+    await page.evaluate(() => window.scrollBy(0, 120));
+    await expect.poll(async () => Math.round((await trigger.boundingBox()).y)).toBeLessThan(Math.round(triggerTop));
+    await expect.poll(async () => Math.round(await gap())).toBe(Math.round(before));
     await expect(page.getByRole("button", { name: "Stop Server" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Delete Worktree" }).locator('portal-icon[name="trash"]')).toHaveCount(1);
     await page.getByRole("button", { name: "Delete Worktree" }).click();
     await expect(dialog).toContainText('Active plan "Idle Story" uses this worktree');
     await dialog.getByRole("button", { name: "Delete worktree" }).click();
@@ -265,7 +299,7 @@ test.describe("repository-first portal Home", () => {
     // The worktree is identified by its path alone; its name was the path's last segment repeated.
     await expect(panel.locator(".worktree-detail-value")).toHaveText(["feature/a", "/private/wt/feature-a"]);
     await expect(panel.getByRole("list", { name: "Worktree status" }).getByRole("listitem")).toHaveText([
-      "dirty", "0 ahead, 3 behind origin/feature/a", "4 commits behind main",
+      "dirty · 0 ahead", "⚠ 3 behind remote",
     ]);
     for (const name of ["Copy branch name", "Copy worktree path"]) {
       await expect(panel.getByRole("button", { name })).toHaveCount(1);
@@ -275,17 +309,17 @@ test.describe("repository-first portal Home", () => {
     await panel.getByRole("button", { name: "Copy worktree path" }).click();
     const row = panel.locator(".worktree-detail-row").nth(1);
     await expect(panel).toBeVisible();
-    await expect(row).toHaveText("Copied", { useInnerText: true });
-    await expect(row.getByText("/private/wt/feature-a", { exact: true })).toBeHidden();
+    // The value stays put and the button confirms with its check alone, so the panel keeps its width.
+    await expect(row.locator("portal-copy-button[copied]")).toHaveCount(1);
+    await expect(row).toHaveText("/private/wt/feature-a", { useInnerText: true });
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("/private/wt/feature-a");
-    // The shared confirmation interval (5 s), then the value returns.
-    await expect(row.getByText("/private/wt/feature-a", { exact: true })).toBeVisible({ timeout: 8_000 });
-    await expect(row).not.toContainText("Copied");
+    // The shared confirmation interval (5 s), then the button returns to idle.
+    await expect(row.locator("portal-copy-button[copied]")).toHaveCount(0, { timeout: 8_000 });
 
-    // Closing the panel mid-confirmation resets the button, so reopening shows the value, not a stuck
-    // "Copied".
+    // Closing the panel mid-confirmation resets the button, so reopening shows an idle copy button,
+    // not a stuck confirmation.
     await panel.getByRole("button", { name: "Copy branch name" }).click();
-    await expect(panel.locator(".worktree-detail-row").first()).toHaveText("Copied", { useInnerText: true });
+    await expect(panel.locator(".worktree-detail-row").first().locator("portal-copy-button[copied]")).toHaveCount(1);
     await page.keyboard.press("Escape");
     await expect(panel).toHaveCount(0);
     await card.getByRole("button", { name: "Worktree details for Plan A" }).click();

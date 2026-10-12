@@ -60,8 +60,8 @@
   --merged: #8957e5;
   --code-inline-bg: rgba(255, 255, 255, 0.04);
   --overlay: rgba(13, 17, 23, 0.7);
-  --tooltip-bg: #010409;
-  --tooltip-shadow: rgba(0, 0, 0, 0.5);
+  /* Every floating panel: dropdowns, menus, popovers, tooltips. See the shared rules below. */
+  --popover-bg: #010409;
   --row-hover: #1c2230;
   /* Surface-relative row hover, for clickable rows that sit on --panel or any other raised surface
    * rather than on the page background. --row-hover is an absolute color tuned against --bg: on a
@@ -171,8 +171,7 @@
   --merged: #8250df;
   --code-inline-bg: rgba(27, 31, 36, 0.05);
   --overlay: rgba(255, 255, 255, 0.7);
-  --tooltip-bg: #ffffff;
-  --tooltip-shadow: rgba(31, 35, 40, 0.12);
+  --popover-bg: #e7eaee;
   --row-hover: #eaeef2;
   /* Darkens rather than lightens: light surfaces are at or near white, so a white tint has nowhere
    * to go. Same token, inverted direction — see the dark theme's definition for why it exists. */
@@ -186,7 +185,7 @@
   --surface-inset: #ffffff;
   --wash-control: rgba(31, 35, 40, 0.1);
   --wash-control-strong: rgba(31, 35, 40, 0.16);
-  --wash-heading: #e9ecef;
+  --wash-heading: #d0d7de;
   --backdrop: rgba(31, 35, 40, 0.4);
   --chip-ink: #ffffff;
   --chip-muted-bg: #d0d7de;
@@ -737,12 +736,8 @@ dd {
   gap: 6px;
   min-width: 240px;
   padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--tooltip-bg);
   color: var(--ink);
   font-size: var(--text-2xs);
-  box-shadow: 0 10px 24px var(--tooltip-shadow);
   white-space: normal;
   cursor: default;
 }
@@ -801,6 +796,74 @@ dd {
 .chip-tip-foot {
   color: var(--dim);
   font-size: var(--text-2xs);
+}
+/* One surface for everything that floats over the page — dropdowns, menus, popovers, tooltips.
+ * --popover-bg (per theme, above) sits well apart from every card, so a panel reads as layered
+ * above the card it opened from rather than bleeding into it. */
+:root {
+  --popover-border: var(--line);
+  --popover-radius: 8px;
+  --popover-shadow: 0 14px 40px var(--modal-shadow);
+  --popover-item-hover: color-mix(in srgb, var(--accent) 18%, var(--popover-bg));
+}
+.menu-panel,
+.menu-button-panel,
+.copy-menu-panel,
+.dropdown-menu,
+.blockers-popover,
+.portal-tooltip,
+.chip-tip {
+  background: var(--popover-bg);
+  border: 1px solid var(--popover-border);
+  border-radius: var(--popover-radius);
+  box-shadow: var(--popover-shadow);
+}
+/* One list item for every dropdown: full width, icon then label, and a hover or keyboard highlight
+ * filled with the accent so the item under the pointer is unmistakable. */
+.menu-panel button,
+.menu-panel a,
+.menu-button-item,
+.copy-menu-item,
+.dropdown-option,
+.worktree-details-actions button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.menu-panel button:hover:not(:disabled),
+.menu-panel a:hover,
+.menu-button-item:hover,
+.copy-menu-item:hover:not(:disabled),
+.dropdown-option:hover,
+.dropdown-option.highlighted,
+.worktree-details-actions button:hover,
+.menu-panel button:focus-visible,
+.menu-panel a:focus-visible,
+.menu-button-item:focus-visible,
+.copy-menu-item:focus-visible,
+.dropdown-option:focus-visible,
+.worktree-details-actions button:focus-visible {
+  background: var(--popover-item-hover);
+  outline: none;
+}
+.menu-panel button:disabled,
+.dropdown-option:disabled {
+  color: var(--dim);
+  cursor: default;
+}
+.menu-item-icon {
+  flex: none;
+  color: var(--dim);
 }
 /* Status pills (merged, done, plan badges) share one inset so they read as one family. */
 :root {
@@ -971,10 +1034,6 @@ portal-copy-menu {
 .copy-menu-panel {
   position: fixed;
   z-index: 30;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px var(--modal-shadow);
   padding: 6px;
   min-width: 180px;
   max-width: min(360px, 90vw);
@@ -983,20 +1042,7 @@ portal-copy-menu {
   overscroll-behavior: contain;
 }
 .copy-menu-item {
-  display: block;
-  width: 100%;
-  border: none;
-  background: none;
-  font: inherit;
-  text-align: left;
-  color: var(--ink);
-  padding: 7px 8px;
-  border-radius: 5px;
-  cursor: pointer;
   white-space: nowrap;
-}
-.copy-menu-item:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
 }
 /* Disabled only while showing "Copied!", so it reads as confirmation rather than as unavailable. */
 .copy-menu-item:disabled {
@@ -1018,10 +1064,6 @@ portal-menu-button {
 .menu-button-panel {
   position: fixed;
   z-index: 30;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px var(--modal-shadow);
   padding: 6px;
   min-width: 220px;
   max-width: min(420px, 90vw);
@@ -1031,21 +1073,7 @@ portal-menu-button {
   overscroll-behavior: contain;
 }
 .menu-button-item {
-  display: flex;
   align-items: flex-start;
-  gap: 8px;
-  width: 100%;
-  border: none;
-  background: none;
-  font: inherit;
-  text-align: left;
-  color: var(--ink);
-  padding: 7px 8px;
-  border-radius: 5px;
-  cursor: pointer;
-}
-.menu-button-item:hover {
-  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
 }
 .menu-button-item-icon {
   flex-shrink: 0;
@@ -1200,14 +1228,10 @@ portal-menu-button {
   position: fixed;
   z-index: 60;
   max-width: 260px;
-  background: var(--tooltip-bg);
   color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: 6px;
   padding: 8px 10px;
   font-size: var(--text-2xs);
   line-height: 1.5;
-  box-shadow: 0 4px 16px var(--tooltip-shadow);
   pointer-events: none;
 }
 /* Structured/multi-row content (key-value grids, badges) needs more room than a one-line hint. */

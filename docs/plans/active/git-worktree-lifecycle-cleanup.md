@@ -323,8 +323,8 @@ Each state decides what Home shows and what may remove the worktree:
 | State | Meaning | Home | Automatic action | Delete Worktree in the row menu |
 | --- | --- | --- | --- | --- |
 | `running` | A Runtime member runs in it | today's row | none | stops its servers, then deletes; Stop Server is offered beside it |
-| `idle` | No process, recent activity, not landed | dimmed row, "idle" in the actions column where a port would be; its plan attaches | none | with confirmation |
-| `stale` | Idle past the threshold, not landed | dimmed row, "suggested for removal", "idle" in the actions column | none | with confirmation |
+| `idle` | No process, recent activity, not landed | dimmed row with no port (no "idle" label: a missing port already says it); its plan attaches | none | with confirmation |
+| `stale` | Idle past the threshold, not landed | dimmed row, "suggested for removal" | none | with confirmation |
 | `landed` | Passes §3 | a purple "merged" pill (tooltip "Merged into <base>") before the Git warnings; a note only for a blocking reason ("plan not closed", "not in your worktree folder") or "removed on next pull" when the hook is installed | removed when every guard passes and a trigger runs (§8) | with confirmation |
 
 `landed` takes precedence over the others, but a running landed worktree is never removed (§6). No
@@ -699,7 +699,15 @@ Reconciliation notes for related plans, recorded here rather than edited into th
 - [x] Split the row actions into Stop Server (while something runs) and Delete Worktree, which stops
       the worktree's servers after the other guards pass; add the token-guarded stop route.
 - [x] Style the worktree dropdown's actions as menu items, matching the ⋮ menu.
-- [x] Reserve the ⋮ cell on every Home row so "idle" and port links end at one edge.
+- [x] Drop the "idle" label (no port already says nothing runs); only a row with a ⋮ menu takes
+      the ⋮ cell.
+- [x] One surface for every dropdown, menu, popover, and tooltip (`--popover-bg`, set apart from the
+      cards in both themes and held there by `portal-surface-layers-check.mjs`), and one dropdown
+      item style with an accent hover and focus fill.
+- [x] Fixed popovers follow their trigger on scroll and resize instead of staying put.
+- [x] Worktree dropdown: a copy confirms with its check alone so the panel keeps its width; one
+      status line (`dirty · 12 ahead · 0 behind remote`); the row's drift rules for warnings; stop
+      and trash icons on Stop Server and Delete Worktree, in the ⋮ menu too.
 - [x] Drop the Git drift warning on merged rows; keep the facts in the tooltip and dropdown.
 - [x] Share one inset for status pills (`--pill-padding`): merged, done, and plan badges.
 

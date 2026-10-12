@@ -34,7 +34,6 @@ checkoutTemplate.innerHTML = `
         <span class="port-health-badge" data-slot="root-health" hidden></span>
         <span class="resource-concern-badge" data-slot="resource-concern" hidden></span>
         <a class="repository-entrypoint link-cta" data-slot="root-entrypoint" target="_blank" rel="noreferrer" hidden></a>
-        <span class="worktree-activity" data-slot="worktree-activity" hidden>idle</span>
         <span class="checkout-links-cell"><span data-slot="root-links" hidden></span></span>
         <span class="worktree-row-menu" data-slot="worktree-menu" hidden></span>
         <span class="repository-root-control checkout-control-cell">

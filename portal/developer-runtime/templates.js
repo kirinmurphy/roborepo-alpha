@@ -743,6 +743,7 @@ const DRIFT_RULES = [
   (git) => {
     if (!git.behind) return null;
     return {
+      kind: "remote",
       level: "danger",
       text: `${git.behind} behind remote`,
       title: `${git.upstream || "The remote branch"} has ${git.behind} commit${git.behind === 1 ? "" : "s"} you do not have locally — pull before continuing`,
@@ -784,17 +785,18 @@ const DRIFT_RULES = [
 
 export function applyGitDrift(badge, git) {
   const slot = badge.querySelector("[data-slot=git-drift]");
-  if (!slot) return;
-  const now = Date.now();
-  for (const rule of DRIFT_RULES) {
-    const hit = rule(git, now);
-    if (!hit) continue;
-    slot.hidden = false;
-    slot.textContent = `⚠ ${hit.text}`;
-    slot.title = hit.title;
-    slot.dataset.level = hit.level;
-    return;
-  }
+  const [hit] = gitDriftWarnings(git);
+  if (!slot || !hit) return;
+  slot.hidden = false;
+  slot.textContent = `⚠ ${hit.text}`;
+  slot.title = hit.title;
+  slot.dataset.level = hit.level;
+}
+
+// Every drift rule that applies, most severe first. A row shows the first; a detail view that has
+// room shows them all, so the two never disagree about what counts as drift.
+export function gitDriftWarnings(git, now = Date.now()) {
+  return DRIFT_RULES.map((rule) => rule(git, now)).filter(Boolean);
 }
 
 // Age of the branch point, or null when there is no base to compare against or it is still fresh.

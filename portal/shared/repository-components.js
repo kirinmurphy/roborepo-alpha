@@ -90,6 +90,14 @@ export function mountActionMenu(host, items, { onToggle, onSelect, ariaLabel = "
     const control = item.href && !item.disabled ? document.createElement("a") : document.createElement("button");
     if (control.tagName === "BUTTON") control.type = "button";
     control.textContent = item.label;
+    if (item.icon) {
+      const icon = document.createElement("portal-icon");
+      icon.className = "menu-item-icon";
+      icon.setAttribute("name", item.icon);
+      icon.setAttribute("size", "sm");
+      icon.setAttribute("aria-hidden", "true");
+      control.prepend(icon);
+    }
     control.dataset.action = item.key;
     if (item.disabled) control.disabled = true;
     if (item.hint) {

@@ -113,7 +113,6 @@ function checkoutRow(checkout, actions, { identity = null, hookInstalled = false
       checkoutReason: checkout.checkoutReason,
       worktreeState: checkout.worktreeState,
       worktreeReason: checkout.worktreeReason,
-      worktreeRunning: checkout.worktreeRunning ?? undefined,
       mergedInto: checkout.mergedInto,
       cleanupHookInstalled: hookInstalled,
       repositoryId: actions.repositoryId,
@@ -136,8 +135,8 @@ function mountWorktreeMenu(slot, checkout, actions) {
   const name = checkout.git?.branch || checkout.worktreeName || "worktree";
   const target = { repositoryId: actions.repositoryId, checkout };
   const menu = mountActionMenu(slot, [
-    { key: "stop-servers", label: "Stop Server", hidden: !isRunning(checkout) },
-    { key: "delete", label: "Delete Worktree" },
+    { key: "stop-servers", label: "Stop Server", icon: "stop", hidden: !isRunning(checkout) },
+    { key: "delete", label: "Delete Worktree", icon: "trash" },
   ], {
     ariaLabel: `Actions for ${name}`,
     onToggle: () => actions.onToggleMenu(menu),

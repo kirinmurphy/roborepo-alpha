@@ -34,7 +34,8 @@ const HEALTH_BADGE_TONES = { starting: "warn", degraded: "warn", unhealthy: "dan
 
 let memberListSequence = 0;
 
-// Lifecycle badges. Idle and running are runtime activity, which the actions column shows instead.
+// Lifecycle badges. Idle and running need none: a running checkout shows its port, and no port says
+// nothing is running.
 const WORKTREE_BADGES = { stale: "suggested for removal", landed: "merged" };
 
 // A merged worktree adds a note only when there is something to act on: the guard that keeps it, or
@@ -65,9 +66,6 @@ export function buildRootSection({ root, departed = [], repository, composeActio
       badge.textContent = WORKTREE_BADGES[root.worktreeState];
       if (root.worktreeState === "landed") badge.title = `Merged into ${root.mergedInto || "the base branch"}`;
     }
-    // A merged worktree can still be running; the state only says idle when it is not.
-    const running = root.worktreeRunning ?? root.worktreeState === "running";
-    if (!running) section.querySelector("[data-slot=worktree-activity]").hidden = false;
     const note = worktreeStateNote(root);
     if (note) {
       const slot = section.querySelector("[data-slot=worktree-note]");
@@ -93,11 +91,13 @@ export function buildRootSection({ root, departed = [], repository, composeActio
   }
   fillPromotedLink(section, root);
   if (mode === "home") {
-    // Every Home row keeps the ⋮ cell so its actions column lines up with its neighbours'. A plan's
-    // row leaves it empty: its worktree actions live in the worktree dropdown its identity carries.
-    const menuSlot = section.querySelector("[data-slot=worktree-menu]");
-    menuSlot.hidden = false;
-    if (root?.isWorktree && !identity && onMountWorktreeMenu) onMountWorktreeMenu(menuSlot, root);
+    // A plan's row keeps its worktree actions in the worktree dropdown its identity carries, so only a
+    // worktree no plan claims takes the ⋮ cell.
+    if (root?.isWorktree && !identity && onMountWorktreeMenu) {
+      const menuSlot = section.querySelector("[data-slot=worktree-menu]");
+      menuSlot.hidden = false;
+      onMountWorktreeMenu(menuSlot, root);
+    }
     if (root?.primaryEntrypoint?.opaqueKey) onMountLinks?.(section.querySelector("[data-slot=root-links]"), root.primaryEntrypoint);
     section.querySelector("[data-slot=members]")?.remove();
     return section;

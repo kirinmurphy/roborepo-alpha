@@ -161,7 +161,8 @@ Each card combines a compact view of several domains:
   worktrees. The plan title opens the plan drawer, and its completion ring or **done** sits beside it.
   - A plan whose `worktree` field names a linked worktree Home shows becomes that worktree's row: the
     plan title replaces the branch label, a worktree button opens the branch, worktree name, and path
-    (each with its own copy action) plus any dirty, ahead/behind, or drift facts and the
+    (each with its own copy action), one status line such as `dirty · 12 ahead · 0 behind remote`,
+    the same Git warnings the row's warning is chosen from, and the
     **Stop Server** and **Delete Worktree** actions, and the port, Links,
     and Git warning stay where the checkout row puts them. The match is exact: the plan's value must
     equal the worktree's Git administrative name, exactly one active plan must claim it, and exactly
@@ -189,7 +190,7 @@ Each worktree row shows how it stands:
 
 | Shows | Means |
 | --- | --- |
-| a port, or **idle**, in the actions column | something is running in it, or nothing is |
+| a port in the actions column, or none | something is running in it, or nothing is |
 | **merged** (a purple pill; its tooltip names the base branch) | a commit on the base branch's first-parent history absorbed the branch's work |
 | **suggested for removal** | not merged, and no activity during the configured interval; a prompt to review, not evidence of a merge |
 

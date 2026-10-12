@@ -1,5 +1,6 @@
 import { portalFillSlots as fill, portalTpl as tpl, portalWireBackdropClose } from "/portal/shared/api.js";
 import * as api from "./api.js";
+import { isRunning } from "./worktree-details.js";
 
 // Home's Delete Worktree confirmation. One dialog serves every row: `open` fills it for a worktree,
 // and confirming stops its servers and removes it through the same guards as
@@ -30,7 +31,7 @@ export function createWorktreeRemoveDialog({ onRemoved }) {
       });
       slot("plan").hidden = !plan;
       slot("plan").textContent = plan ? `Active plan "${plan.title}" uses this worktree. Deleting it leaves the plan active without its worktree.` : "";
-      slot("running").hidden = !(checkout.worktreeRunning ?? checkout.worktreeState === "running");
+      slot("running").hidden = !isRunning(checkout);
       showError(dialog, null);
       dialog.showModal();
     },

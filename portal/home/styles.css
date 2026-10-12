@@ -82,9 +82,9 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 .worktree-detail-row { display: flex; align-items: center; gap: 8px; color: var(--dim); }
 .worktree-detail-row > portal-icon { flex: none; }
 .worktree-detail-value { min-width: 0; color: var(--ink); font-family: var(--mono); font-size: var(--text-2xs); overflow-wrap: anywhere; }
-/* While a value's copy button confirms, the value steps aside: the row reads "[glyph] ✓ Copied", and
- * the glyph says which value went to the clipboard. */
-.worktree-detail-row:has(portal-copy-button[copied]) .worktree-detail-value { display: none; }
+/* A copy confirms with its green check alone: the value stays and no "Copied" label appears, so
+ * the panel keeps its width while the confirmation shows. */
+.worktree-detail-row .copy-button [data-slot="label"] { display: none; }
 .worktree-detail-row .copy-button { border: 0; background: none; padding: 2px; border-radius: 5px; color: var(--dim); }
 .worktree-detail-row .copy-button:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .worktree-detail-row .copy-button.copy-button-copied { color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); }
@@ -136,20 +136,8 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
   .home-heading, .unresolved-activity { align-items: stretch; flex-direction: column; }
   .home-action-slot { justify-content: flex-start; }
 }
-/* The panel's actions read as menu items, matching the ⋮ menu: full-width rows that fill on hover. */
+/* The panel's actions use the shared dropdown item (base.css), set off from the facts above them. */
 .worktree-details-actions { display: grid; gap: 2px; padding-top: 4px; border-top: 1px solid var(--line); }
-.worktree-details-actions button {
-  padding: 6px 8px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--ink);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.worktree-details-actions button:hover,
-.worktree-details-actions button:focus-visible { background: var(--panel); }
 /* Card footer, beside the token warnings it shares the raised band with. */
 .worktree-cleanup-notice {
   display: flex;

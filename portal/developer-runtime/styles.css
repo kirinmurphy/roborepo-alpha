@@ -306,11 +306,6 @@ main {
   color: #fff;
   font-weight: 500;
 }
-/* Runtime activity sits in the actions column, where a running checkout shows its port. */
-.worktree-activity {
-  font-size: var(--text-xs);
-  color: var(--dim);
-}
 .worktree-state-note {
   font-size: var(--text-xs);
   color: var(--dim);
@@ -506,7 +501,7 @@ main {
   display: inline-flex;
   align-items: center;
 }
-/* Every Home row reserves the ⋮ cell, empty or not, so idle text and port links end at one edge. */
+/* One width for every row's ⋮ cell, so the menus line up down the card. */
 .worktree-row-menu {
   justify-content: center;
   width: var(--checkout-control-height);
@@ -656,9 +651,6 @@ main {
   right: 0;
   top: calc(100% + 6px);
   min-width: 240px;
-  border: 1px solid var(--line);
-  background: var(--bg);
-  box-shadow: 0 14px 40px var(--modal-shadow);
 }
 /* Content layout only — position/background/border/shadow/show-hide now live in the shared
  * .portal-tooltip bubble (portal/shared/tooltip.js + base.css), which screen-aware-positions
@@ -784,24 +776,16 @@ main {
   display: none;
 }
 .menu-panel button {
-  border: 0;
-  background: transparent;
-  text-align: left;
   white-space: nowrap;
 }
-.menu-panel button:hover {
-  background: var(--panel);
-}
-/* A placeholder entry ("coming soon"): same box as its siblings, dimmed, and inert on hover. */
-.menu-panel button:disabled {
-  color: var(--dim);
-  cursor: default;
-}
-.menu-panel button:disabled:hover {
-  background: transparent;
+/* A menu item with a hint ("coming soon") stacks the hint under its label. */
+.menu-panel button:has(.menu-item-hint) {
+  flex-wrap: wrap;
+  row-gap: 0;
 }
 .menu-item-hint {
   display: block;
+  flex-basis: 100%;
   color: var(--desc-dim);
   font-size: var(--text-xs);
 }
