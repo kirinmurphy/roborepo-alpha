@@ -2,8 +2,8 @@ import { portalFillSlots as fill, portalMiddleEllipsis, portalTpl as tpl } from 
 import { checkoutStateText } from "/portal/developer-runtime/repository-root-row.js";
 import { gitDriftWarnings } from "/portal/developer-runtime/templates.js";
 
-// Worktree paths are long; the dropdown middle-truncates them like the checkout rows do, and copies
-// (and titles) the full path.
+// Worktree and plan paths are long; the dropdown middle-truncates them like the checkout rows do,
+// and copies (and titles) the full path.
 const WORKTREE_PATH_MAX_LENGTH = 50;
 
 // The worktree behind a matched plan row: the identity its branch label and copy control used to
@@ -19,16 +19,16 @@ export function worktreeDetailsButton(plan, checkout, { onStopServers = null, on
     button.close();
     action();
   });
-  button.panelContent = worktreeDetailsPanel(checkout, { onStopServers: closing(onStopServers), onDelete: closing(onDelete) });
+  button.panelContent = worktreeDetailsPanel(plan, checkout, { onStopServers: closing(onStopServers), onDelete: closing(onDelete) });
   return button;
 }
 
-function worktreeDetailsPanel(checkout, actions) {
+function worktreeDetailsPanel(plan, checkout, actions) {
   const panel = tpl("tpl-worktree-details");
   // The shared menu button closes on any document click; copying a value must leave it open so the
   // in-place Copied confirmation is visible.
   panel.addEventListener("click", (event) => event.stopPropagation());
-  panel.querySelector("[data-slot=identity]").append(...identityRows(checkout).map(detailRow));
+  panel.querySelector("[data-slot=identity]").append(...identityRows(plan, checkout).map(detailRow));
   const facts = panel.querySelector("[data-slot=facts]");
   facts.append(...summaryFacts(checkout).map(factItem));
   facts.hidden = !facts.childElementCount;
@@ -49,7 +49,7 @@ export function isRunning(checkout) {
   return checkout.worktreeRunning ?? checkout.worktreeState === "running";
 }
 
-function identityRows(checkout) {
+function identityRows(plan, checkout) {
   const git = checkout.git;
   const rows = [];
   if (git?.detached) {
@@ -64,7 +64,17 @@ function identityRows(checkout) {
   rows.push(path
     ? { icon: "tree", value: portalMiddleEllipsis(path, WORKTREE_PATH_MAX_LENGTH), title: path, copy: path, label: "Copy worktree path" }
     : { icon: "tree", value: checkout.worktreeName });
+  // The plan file inside this worktree, not the main checkout's copy: the worktree is where the plan
+  // is being worked on and its tasks ticked off.
+  const planPath = path && plan.relativePath ? joinPath(path, plan.relativePath) : null;
+  if (planPath) rows.push({ icon: "plans", value: portalMiddleEllipsis(planPath, WORKTREE_PATH_MAX_LENGTH), title: planPath, copy: planPath, label: "Copy plan path" });
   return rows;
+}
+
+// Joins with the separator the checkout path already uses, so a Windows path stays backslashed.
+function joinPath(root, relativePath) {
+  const separator = root.includes("\\") && !root.includes("/") ? "\\" : "/";
+  return `${root.replace(/[\\/]+$/, "")}${separator}${relativePath.replace(/[\\/]/g, separator)}`;
 }
 
 function detailRow({ icon, value, title, copy, label }) {

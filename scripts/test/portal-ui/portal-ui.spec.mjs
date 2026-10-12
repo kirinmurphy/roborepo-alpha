@@ -338,11 +338,12 @@ test.describe("repository-first portal Home", () => {
     await card.getByRole("button", { name: "Worktree details for Plan A" }).click();
     const panel = card.locator(".worktree-details");
     // The worktree is identified by its path alone; its name was the path's last segment repeated.
-    await expect(panel.locator(".worktree-detail-value")).toHaveText(["feature/a", "/private/wt/feature-a"]);
+    // The plan path points at the plan's copy inside that worktree.
+    await expect(panel.locator(".worktree-detail-value")).toHaveText(["feature/a", "/private/wt/feature-a", "/private/wt/feature-a/docs/plans/active/plan-a.md"]);
     await expect(panel.getByRole("list", { name: "Worktree status" }).getByRole("listitem")).toHaveText([
       "dirty · 0 ahead", "3 behind remote",
     ]);
-    for (const name of ["Copy branch name", "Copy worktree path"]) {
+    for (const name of ["Copy branch name", "Copy worktree path", "Copy plan path"]) {
       await expect(panel.getByRole("button", { name })).toHaveCount(1);
     }
     await expect(panel.getByRole("button", { name: "Copy worktree name" })).toHaveCount(0);
@@ -357,6 +358,9 @@ test.describe("repository-first portal Home", () => {
     // The shared confirmation interval (5 s), then the button returns to idle.
     await expect(row.locator("portal-copy-button[copied]")).toHaveCount(0, { timeout: 8_000 });
 
+    await panel.getByRole("button", { name: "Copy plan path" }).click();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("/private/wt/feature-a/docs/plans/active/plan-a.md");
+
     // Closing the panel mid-confirmation resets the button, so reopening shows an idle copy button,
     // not a stuck confirmation.
     await panel.getByRole("button", { name: "Copy branch name" }).click();
@@ -369,6 +373,7 @@ test.describe("repository-first portal Home", () => {
 
     await page.keyboard.press("Escape");
     await card.getByRole("button", { name: "Worktree details for Plan B" }).click();
+    // Without a resolved worktree path there is no plan path to build, so that row is left out.
     await expect(card.locator(".worktree-details .worktree-detail-value")).toHaveText(["feature/b", "feature-b"]);
     await expect(card.locator(".worktree-details").getByRole("list", { name: "Worktree status" })).toBeHidden();
   });
@@ -387,6 +392,13 @@ test.describe("repository-first portal Home", () => {
     await expect(value).toHaveAttribute("title", longPath);
     await card.getByRole("button", { name: "Copy worktree path" }).click();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(longPath);
+
+    const planPath = `${longPath}/docs/plans/active/plan-a.md`;
+    const planValue = card.locator(".worktree-details .worktree-detail-value").nth(2);
+    await expect(planValue).toHaveText(/^.{50}$/);
+    await expect(planValue).toHaveAttribute("title", planPath);
+    await card.getByRole("button", { name: "Copy plan path" }).click();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(planPath);
   });
 
   test("without active plans, or without Plans data, linked worktrees render as before", async ({ page }) => {
@@ -1000,8 +1012,8 @@ async function planFixture(page, adjust) {
     repository.domains.plans = { status: "available", data: {
       counts: { active: 4, backlog: 5 },
       active: [
-        { id: "a", key: "a", title: "Plan A", worktree: "feature-a", checkoutRootId: "matched", taskCounts: { total: 4, complete: 2 } },
-        { id: "b", key: "b", title: "Plan B", worktree: "feature-b", checkoutRootId: "no-app", taskCounts: { total: 3, complete: 3 } },
+        { id: "a", key: "a", title: "Plan A", worktree: "feature-a", relativePath: "docs/plans/active/plan-a.md", checkoutRootId: "matched", taskCounts: { total: 4, complete: 2 } },
+        { id: "b", key: "b", title: "Plan B", worktree: "feature-b", relativePath: "docs/plans/active/plan-b.md", checkoutRootId: "no-app", taskCounts: { total: 3, complete: 3 } },
         { id: "c", key: "c", title: "Plan C", worktree: "", taskCounts: { total: 0, complete: 0 } },
         { id: "d", key: "d", title: "Plan D", worktree: "gone", worktreeState: "missing", taskCounts: { total: 2, complete: 0 } },
       ],

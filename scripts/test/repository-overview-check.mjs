@@ -71,7 +71,7 @@ const plans = {
     { repositoryId: STALE, state: "unavailable", planCount: 0, checkoutCount: 0 },
   ],
   plans: [
-    { repository: { repositoryId: ACTIVE }, plan: { id: "active-plan", title: "Active plan", lifecycle: "active", taskCounts: { total: 8, complete: 3 }, gitLastChangedAt: "2026-09-29T12:00:00.000Z", modifiedAt: "2026-09-20T12:00:00.000Z" } },
+    { repository: { repositoryId: ACTIVE }, plan: { id: "active-plan", title: "Active plan", lifecycle: "active", relativePath: "docs/plans/active/active-plan.md", taskCounts: { total: 8, complete: 3 }, gitLastChangedAt: "2026-09-29T12:00:00.000Z", modifiedAt: "2026-09-20T12:00:00.000Z" } },
     { repository: { repositoryId: ACTIVE }, plan: { id: "backlog-plan", title: "Backlog plan", lifecycle: "backlog", gitLastChangedAt: null, modifiedAt: "2026-09-28T12:00:00.000Z" } },
     { repository: { repositoryId: ACTIVE }, plan: { id: "old-plan", title: "Old plan", lifecycle: "completed", gitLastChangedAt: "2026-09-23T11:59:59.999Z", modifiedAt: null } },
     { repository: { repositoryId: ACTIVE }, plan: { id: "future-plan", title: "Future plan", lifecycle: "completed", gitLastChangedAt: "2026-10-01T12:00:00.000Z", modifiedAt: null } },
@@ -113,6 +113,7 @@ assert.deepEqual(active.domains.plans.data.recent.map((plan) => plan.id), ["acti
 assert.equal(active.domains.tokens.data.warningCount, 2);
 assert.equal(active.domains.tokens.data.warnings[0].kind, "spike");
 assert.deepEqual(active.domains.plans.data.active[0].taskCounts, { total: 8, complete: 3 });
+assert.equal(active.domains.plans.data.active[0].relativePath, "docs/plans/active/active-plan.md", "active plans carry their repository-relative file path");
 assert.equal("additionalActive" in active.domains.plans.data, false, "plans are no longer split into a leftover list");
 assert.equal(active.domains.agents.status, "unavailable");
 assert.equal(home.repositories.find((repository) => repository.repositoryId === PINNED).domains.plans.status, "unavailable", "unscanned Plans coverage is not reported as zero");
@@ -360,7 +361,7 @@ assert.equal(runtimeCheckouts.some((checkout) => "plan" in checkout), false, "ch
 assert.equal(runtimeCheckouts.find((checkout) => checkout.rootId === "main").worktreeName, null, "main checkouts expose no worktree name");
 assert.equal(runtimeCheckouts.find((checkout) => checkout.rootId === "matched").worktreeName, "feature-a");
 assert.deepEqual(activePlans.find((plan) => plan.id === "matched"),
-  { id: "matched", key: "key-matched", title: "Plan matched", lifecycle: "active", changedAt: "2026-09-29T12:00:00.000Z", worktree: "feature-a", taskCounts: { total: 2, complete: 1 }, checkoutRootId: "matched" },
+  { id: "matched", key: "key-matched", title: "Plan matched", lifecycle: "active", changedAt: "2026-09-29T12:00:00.000Z", worktree: "feature-a", relativePath: "", taskCounts: { total: 2, complete: 1 }, checkoutRootId: "matched" },
   "a match adds only checkoutRootId: no branch, path, process, Links, or Git fields are copied onto the plan");
 assert.deepEqual(Object.fromEntries(activePlans.map((plan) => [plan.id, plan.worktreeState ?? null])), {
   "contested-1": "ambiguous", "contested-2": "ambiguous", "dup-claim": "ambiguous", "half-rooted": "ambiguous",

@@ -487,6 +487,7 @@ function mockHomePlan(definition, checkoutRootId) {
     lifecycle: definition.lifecycle,
     changedAt: definition.changedAt,
     worktree: definition.worktree,
+    relativePath: definition.relativePath,
     taskCounts: definition.taskCounts,
     checkoutRootId,
     priority: definition.priority,
