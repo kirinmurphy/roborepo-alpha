@@ -3,7 +3,11 @@ import os from "node:os";
 import path from "node:path";
 import { test, expect } from "@playwright/test";
 
-const NAV_ORDER = ["Repos", "Agents", "Plans", "Tokens", "Runtime", "Settings"];
+// The header bar holds the primary pages; the secondary ones live only in its ⋮ menu, and below
+// the narrow breakpoint the menu holds every page.
+const NAV_PRIMARY = ["Repos", "Agents", "Plans", "Tokens"];
+const NAV_SECONDARY = ["Runtime", "Settings"];
+const NAV_ORDER = [...NAV_PRIMARY, ...NAV_SECONDARY];
 const ROUTES = [
   { path: "/", active: "Repos" },
   { path: "/config", active: "Agents" },
@@ -473,7 +477,10 @@ test.describe("repository-first portal Home", () => {
       telemetry: { enabled: false, captureAvailable: false },
     } }));
     await page.goto("/settings");
-    await expect(page.locator('nav a[aria-label="Settings"] portal-icon svg')).toBeVisible();
+    await expect(page.locator(".nav-more-trigger")).toHaveClass(/\bactive\b/);
+    await page.locator(".nav-more-trigger").click();
+    await expect(page.locator('#nav-more-panel a[aria-current="page"] portal-icon[name="settings"] svg')).toBeVisible();
+    await page.keyboard.press("Escape");
     await expect(page.getByRole("heading", { level: 2, name: "Repos" })).toBeVisible();
     await expect(page.getByRole("heading", { level: 2, name: "Agent Harnesses" })).toBeVisible();
     await expect(page.getByRole("heading", { level: 2, name: "Token Activity Tracking" })).toBeVisible();
@@ -585,16 +592,48 @@ test.describe("repository-first portal Home", () => {
     }
   });
 
-  test("global navigation remains the static five-item manifest", async ({ page }) => {
+  test("global navigation keeps primary pages in the bar and the rest in the ⋮ menu", async ({ page }) => {
     await page.goto("/");
-    const labels = await page.locator("#nav a").allTextContents();
-    expect(labels.map((label) => label.trim())).toEqual(NAV_ORDER);
+    await expect(page.locator("#nav > a")).toHaveText(NAV_PRIMARY);
+    const trigger = page.locator(".nav-more-trigger");
+    const panel = page.locator("#nav-more-panel");
+    await expect(panel).toBeHidden();
+    await trigger.click();
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+    await expect(panel.locator("a:visible")).toHaveText(NAV_SECONDARY);
+    // Outside click and Escape both close it; Escape hands focus back to the trigger.
+    await page.locator("main").click({ position: { x: 5, y: 5 } });
+    await expect(panel).toBeHidden();
+    await trigger.click();
+    await page.keyboard.press("Escape");
+    await expect(panel).toBeHidden();
+    await expect(trigger).toBeFocused();
+    await expect(trigger).toHaveAttribute("aria-expanded", "false");
+
     for (const { path, active } of ROUTES) {
       const response = await page.goto(path);
       expect(response.status()).toBe(200);
-      await expect(page.locator("#nav a.active")).toHaveText(active);
-      await expect(page.locator("#nav a.active")).toHaveCount(1);
+      const secondary = NAV_SECONDARY.includes(active);
+      // A primary page is current in the bar and in the menu's narrow-screen copy; a secondary page
+      // is current only in the menu, so the trigger carries the highlight in the bar.
+      await expect(page.locator("#nav a.active")).toHaveText(secondary ? [active] : [active, active]);
+      if (secondary) await expect(trigger).toHaveClass(/\bactive\b/);
+      else await expect(trigger).not.toHaveClass(/\bactive\b/);
     }
+  });
+
+  test("a narrow viewport moves every page into the ⋮ menu", async ({ page }) => {
+    await page.setViewportSize({ width: 420, height: 780 });
+    await page.goto("/");
+    await expect(page.locator("#nav > a:visible")).toHaveCount(0);
+    await page.locator(".nav-more-trigger").click();
+    const links = page.locator("#nav-more-panel a:visible");
+    await expect(links).toHaveText(NAV_ORDER);
+    const panel = await page.locator("#nav-more-panel").boundingBox();
+    expect(panel.x).toBeGreaterThanOrEqual(0);
+    expect(panel.x + panel.width).toBeLessThanOrEqual(420);
+    await links.filter({ hasText: "Plans" }).click();
+    await expect(page).toHaveURL(/\/plans$/);
   });
 
   test("the content column stays centered and the card responds at mobile width", async ({ page }) => {
@@ -616,6 +655,7 @@ test.describe("repository-first portal Home", () => {
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     await page.locator("#theme-toggle").click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await page.locator(".nav-more-trigger").click();
     await page.locator("#nav").getByRole("link", { name: "Runtime", exact: true }).click();
     await expect(page).toHaveURL(/\/runtime$/);
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
@@ -638,12 +678,17 @@ test.describe("repository-first portal Home", () => {
     const logo = await focusSummary(page);
     expect(logo.ariaLabel).toBe("roborepo home");
     expect(logo.visible).toBe(true);
-    for (const expected of NAV_ORDER) {
+    for (const expected of NAV_PRIMARY) {
       await page.keyboard.press("Tab");
       const focused = await focusSummary(page);
       expect(focused.text).toBe(expected);
       expect(focused.visible).toBe(true);
     }
+    // The closed ⋮ menu is one stop; its links stay out of the tab order until it opens.
+    await page.keyboard.press("Tab");
+    const more = await focusSummary(page);
+    expect(more.ariaLabel).toBe("More pages");
+    expect(more.visible).toBe(true);
     // The compact Enable prompt now sits above the Active Repos section, so its action comes before
     // the heading's Manage repositories action and both come before the first card.
     for (const expected of ["Auto-discover active repos", "Manage Repos"]) {

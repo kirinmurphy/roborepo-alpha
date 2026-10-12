@@ -22,5 +22,20 @@
   </footer>
 </template>
 <template id="tpl-nav-link">
-  <a><span data-slot="icon"></span><span class="nav-label" data-slot="label"></span></a>
+  <a><span class="nav-label" data-slot="label"></span></a>
+</template>
+<!-- The ⋮ menu at the end of the header nav. Its panel lists every page; CSS shows only the
+     secondary ones while the primary pages fit in the bar, and all of them once they don't. -->
+<template id="tpl-nav-more">
+  <div class="nav-more">
+    <button
+      type="button"
+      class="nav-more-trigger"
+      aria-label="More pages"
+      title="More"
+      aria-expanded="false"
+      aria-controls="nav-more-panel"
+    ><span></span><span></span><span></span></button>
+    <div id="nav-more-panel" class="nav-more-panel" hidden></div>
+  </div>
 </template>

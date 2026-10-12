@@ -56,19 +56,24 @@ const STATIC_TYPES = {
 // Each page's HTML is just its index.html read from disk (mirrors static assets). `default: true`
 // marks the page served at "/" (what `roborepo web` opens). Home owns "/" as its canonical route;
 // Agents lives at canonical "/config". Order here is the global nav order.
+// `icon` labels the page in the header's ⋮ menu. `secondary` pages are lower-priority destinations
+// that live only in that menu; the rest sit in the header bar until the viewport gets narrow, when
+// every page moves into the menu.
 export const PAGES = [
-  { path: "/", id: "home", title: "Repos", dir: "home", default: true },
-  { path: "/config", id: "config", title: "Agents", dir: "config" },
-  { path: "/plans", id: "plans", title: "Plans", dir: "plans" },
+  { path: "/", id: "home", title: "Repos", icon: "home", dir: "home", default: true },
+  { path: "/config", id: "config", title: "Agents", icon: "agents", dir: "config" },
+  { path: "/plans", id: "plans", title: "Plans", icon: "plans", dir: "plans" },
   // The token report owns /tokens (id/dir keep the tokens module paths).
-  { path: "/tokens", id: "tokens", title: "Tokens", dir: "tokens" },
+  { path: "/tokens", id: "tokens", title: "Tokens", icon: "tokens", dir: "tokens" },
   {
     path: "/runtime",
     id: "developer-runtime",
     title: "Runtime",
+    icon: "runtime",
     dir: "developer-runtime",
+    secondary: true,
   },
-  { path: "/settings", id: "settings", title: "Settings", icon: "settings", dir: "settings" },
+  { path: "/settings", id: "settings", title: "Settings", icon: "settings", dir: "settings", secondary: true },
 ];
 export const PAGE_ROUTES = [
   ...PAGES.map((page) => ({ ...page, navId: page.id })),
@@ -76,7 +81,8 @@ export const PAGE_ROUTES = [
   { path: "/repositories/:urlKey", id: "repository-detail", navId: "home", title: "Repository", dir: "repositories", redirect: "/" },
 ].map((page) => ({ ...page, segments: page.path.split("/").filter(Boolean) }));
 // Shape shared by /api/portal/status and the browser-injected manifest so both can never drift.
-const pageManifest = () => PAGES.map(({ path, id, title, icon }) => ({ path, id, title, ...(icon ? { icon } : {}) }));
+const pageManifest = () =>
+  PAGES.map(({ path, id, title, icon, secondary }) => ({ path, id, title, ...(icon ? { icon } : {}), ...(secondary ? { secondary } : {}) }));
 
 export function serializeInlineJson(value) {
   return JSON.stringify(value)

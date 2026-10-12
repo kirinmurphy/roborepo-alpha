@@ -439,25 +439,94 @@ nav a.active {
   background: var(--active);
   border-color: var(--line);
 }
-.portal-header nav a.nav-icon-only {
+/* The ⋮ menu closing the header nav. Its trigger reads as one more nav cell; the panel lists the
+ * secondary pages, plus every primary page once the bar collapses (see the breakpoint below). */
+.nav-more {
   position: relative;
+  display: flex;
+  border-left: 1px solid var(--line);
+}
+.nav-more-trigger {
+  display: inline-grid;
+  place-items: center;
+  align-content: center;
+  gap: 2px;
   min-width: 40px;
-  align-items: center;
-  padding-left: 0.7rem;
-  padding-right: 0.7rem;
-}
-.portal-header nav a.nav-icon-only .nav-label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
+  padding: 0.25rem 0.7rem;
   border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--dim);
+  cursor: pointer;
 }
-.portal-header nav a.nav-icon-only portal-icon { display: inline-flex; }
+.nav-more-trigger span {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.nav-more-trigger:hover,
+.nav-more-trigger[aria-expanded="true"] {
+  color: var(--ink);
+  background: none;
+}
+.nav-more-trigger.active {
+  color: var(--active-ink);
+  background: var(--active);
+}
+.nav-more-panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  right: 0;
+  display: grid;
+  min-width: 180px;
+  /* Items run flush to the edges; this keeps their highlight inside the rounded corners. */
+  overflow: hidden;
+}
+.nav-more-panel[hidden] {
+  display: none;
+}
+/* Page toolbars that pin over the header while scrolling (Plans' #plans-header sits at z-index 11)
+ * would cover the open panel, so the header comes forward only while its menu is open. */
+.portal-header:has(.nav-more-panel:not([hidden])) {
+  z-index: 12;
+}
+/* Undo the bar-cell look `nav a` gives every link: menu items are rows separated by rules. */
+.portal-header .nav-more-panel a {
+  flex-direction: row;
+  justify-content: flex-start;
+  border: 0;
+  white-space: nowrap;
+}
+.portal-header .nav-more-panel a:not(:last-child) {
+  border-bottom: 1px solid var(--popover-border);
+}
+.portal-header .nav-more-panel a.active {
+  color: var(--active-ink);
+  background: var(--active);
+}
+.nav-more-panel .nav-more-primary {
+  display: none;
+}
+/* Below this width the primary links no longer fit beside the logo, so the bar keeps only the ⋮
+ * trigger and the menu lists every page. */
+@media (max-width: 640px) {
+  .portal-header nav > a {
+    display: none;
+  }
+  .portal-header .nav-more-panel .nav-more-primary {
+    display: flex;
+  }
+  .nav-more {
+    border-left: 0;
+  }
+  /* Every page is in the menu now, so a highlighted trigger no longer says anything. */
+  .nav-more-trigger.active {
+    color: var(--dim);
+    background: none;
+  }
+}
 .portal-footer {
   margin-top: 24px;
   padding: 12px 0;
@@ -815,6 +884,7 @@ dd {
 }
 .menu-panel,
 .menu-button-panel,
+.nav-more-panel,
 .copy-menu-panel,
 .dropdown-menu,
 .blockers-popover,
@@ -830,6 +900,7 @@ dd {
  * panel's edges (panels carry no padding) and are separated by a rule rather than by space. */
 .menu-panel button,
 .menu-panel a,
+.nav-more-panel a,
 .menu-button-item,
 .copy-menu-item,
 .dropdown-option,
@@ -850,6 +921,7 @@ dd {
 }
 .menu-panel button:hover:not(:disabled),
 .menu-panel a:hover,
+.nav-more-panel a:hover,
 .menu-button-item:hover,
 .copy-menu-item:hover:not(:disabled),
 .dropdown-option:hover,
@@ -857,6 +929,7 @@ dd {
 .worktree-details-actions button:hover,
 .menu-panel button:focus-visible,
 .menu-panel a:focus-visible,
+.nav-more-panel a:focus-visible,
 .menu-button-item:focus-visible,
 .copy-menu-item:focus-visible,
 .dropdown-option:focus-visible,
