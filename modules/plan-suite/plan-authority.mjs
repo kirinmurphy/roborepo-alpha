@@ -31,17 +31,19 @@ export function resolvePlanAuthority({ primary, assigned }) {
 // worktree's working bytes. Matching by content needs no path tracking: an equal blob carries the
 // same `id`.
 //
-// `primary` is { checkoutPath, relativePath, bytes }; `assigned` is { branch, bytes }, with a null
-// branch for a detached worktree. Returns { state: "consistent" }, { state: "outside-edit",
-// committed }, or { state: "unchecked", reason } when Git cannot answer. Reasons never carry paths.
+// `primary` is { checkoutPath, relativePath, bytes }; `assigned` is { checkoutPath, branch, bytes },
+// with a null branch for a detached worktree. Returns { state: "consistent" }, { state:
+// "outside-edit", committed }, or { state: "unchecked", reason } when Git cannot answer. Reasons
+// never carry paths.
 export function checkOutsideEdits({ primary, assigned, runGit = defaultRunGitSync }) {
   if (Buffer.compare(primary.bytes, assigned.bytes) === 0) return { state: "consistent" };
-  if (!assigned.branch) return unchecked("the worktree's HEAD is detached");
+  const branch = assigned.branch === REFTABLE_HEAD_BRANCH ? checkedOutBranch(assigned.checkoutPath, runGit) : assigned.branch;
+  if (!branch) return unchecked("the worktree's HEAD is detached");
   const git = (args) => runGit(primary.checkoutPath, args);
   if (!git(["symbolic-ref", "-q", "HEAD"]).ok) return unchecked("the primary checkout's HEAD is detached");
   const format = git(["rev-parse", "--show-object-format"]);
   if (!format.ok) return unchecked("the object format could not be read");
-  const branchRef = `refs/heads/${assigned.branch}`;
+  const branchRef = `refs/heads/${branch}`;
   const base = git(["merge-base", "HEAD", branchRef]);
   if (!base.ok) return unchecked("no merge base with the worktree branch");
   const baseCommit = base.stdout.trim();
@@ -75,6 +77,17 @@ function producedBlobs(rawLog) {
     if (produced && !/^0+$/.test(produced)) blobs.add(produced);
   }
   return blobs;
+}
+
+// A reftable repository keeps HEAD in the reftable and writes `ref: refs/heads/.invalid` to every
+// HEAD file, so a branch read from that file is this placeholder; `.invalid` can never name a real
+// branch. Only Git can say which branch such a worktree has checked out.
+const REFTABLE_HEAD_BRANCH = ".invalid";
+
+function checkedOutBranch(checkoutPath, runGit) {
+  const head = checkoutPath ? runGit(checkoutPath, ["symbolic-ref", "-q", "HEAD"]) : { ok: false };
+  const ref = head.ok ? head.stdout.trim() : "";
+  return ref.startsWith("refs/heads/") ? ref.slice("refs/heads/".length) : null;
 }
 
 function unchecked(reason) {

@@ -61,6 +61,7 @@ testForbiddenSuffixesAreReported();
 testOrdinalSeriesIsNotMistakenForAVersion();
 testNamingFindingsCarryTheirFilename();
 testRepositoryPlansProduceNoNamingFindings();
+testAuthorityFindingsExplainThemselves();
 console.log("ok: plan docs findings and lifecycle policy checks passed");
 
 // The tiered id check. Short base36 is the current convention; hyphenated slugs are accepted but
@@ -165,6 +166,37 @@ function testMessagesOfProjectsMessages() {
   const findings = [finding("MISSING_TITLE"), finding("MISSING_ID")];
   assert.deepEqual(messagesOf(findings), ["Missing H1 title.", "Missing frontmatter id."],
     "messagesOf must project exactly the message field, in order");
+}
+
+// The three findings about which copy of an active plan is shown are what the drawer prints, so
+// each names its worktree, says what happened in words, and offers the Git-native way out.
+function testAuthorityFindingsExplainThemselves() {
+  assert.ok(!FINDING_CODES.includes("PLAN_DIFFERS_IN_WORKTREE"), "the old divergence finding is gone");
+
+  const edited = (committed) => finding("PLAN_EDITED_OUTSIDE_WORKTREE", { meta: { worktree: "wt", committed } });
+  assert.match(edited(true).message, /^Edited outside worktree wt: .*a committed change/);
+  assert.match(edited(false).message, /an uncommitted change/);
+  assert.match(edited(false).resolution, /Merge the base branch into the worktree/);
+  assert.match(edited(false).resolution, /merges nothing/);
+
+  const reasons = {
+    "worktree-missing": "the worktree no longer exists",
+    "copy-missing": "the worktree has no readable copy of this plan",
+    "copy-not-active": "the worktree's copy is not in active/",
+    "copy-other-worktree": "the worktree's copy names a different worktree",
+    "something-new": "it could not be used",
+  };
+  for (const [reason, words] of Object.entries(reasons)) {
+    const unavailable = finding("PLAN_WORKTREE_COPY_UNAVAILABLE", { meta: { worktree: "wt", reason } });
+    assert.equal(unavailable.message, `Worktree wt's copy is unavailable: ${words}.`, reason);
+    assert.match(unavailable.resolution, /clear `worktree`/);
+  }
+
+  const unchecked = finding("PLAN_AUTHORITY_UNCHECKED", { meta: { worktree: "wt", reason: "the worktree's HEAD is detached" } });
+  assert.equal(unchecked.message, "Outside edits not checked for worktree wt: the worktree's HEAD is detached.");
+  assert.match(unchecked.resolution, /Showing the worktree's copy/);
+
+  for (const item of [edited(true), unchecked]) assert.equal(item.severity, "advisory", `${item.code} never blocks`);
 }
 
 function testSortBySeverityPutsBlockingFirst() {

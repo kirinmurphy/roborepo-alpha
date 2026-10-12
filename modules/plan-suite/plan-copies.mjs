@@ -19,7 +19,15 @@ import { lifecycleFromPath, parseFrontmatter, planFilesInRepository, readPlanRec
 
 export function scanCheckout(checkout, canonical) {
   const { files, scoped } = planFilesInRepository(repositoryRecord(checkout.path, canonical));
-  return { checkout, scoped, copies: files.map((file) => readCopy(file, checkout.path)) };
+  const copies = [];
+  // An unreadable file is a scan error, not a plan: building its record would throw and fail the
+  // whole repository's scan, and in an assigned worktree it must leave the plan's primary copy to
+  // stand in with PLAN_WORKTREE_COPY_UNAVAILABLE.
+  for (const copy of files.map((file) => readCopy(file, checkout.path))) {
+    if (copy.bytes) copies.push(copy);
+    else scoped.errors.push({ path: copy.relativePath, error: "could not be read" });
+  }
+  return { checkout, scoped, copies };
 }
 
 export function selectRecords([primary, ...others]) {
@@ -28,7 +36,7 @@ export function selectRecords([primary, ...others]) {
   const seen = new Set();
   for (const copy of primary.copies) {
     // A repeated id in one checkout is a genuine duplicate; both stay so DUPLICATE_PLAN_ID fires.
-    records.push(seen.has(copy.key) ? fullRecord(primary, copy, { source: "primary" }) : authoritativeRecord(primary, copy, worktrees));
+    records.push(...(seen.has(copy.key) ? [fullRecord(primary, copy, { source: "primary" })] : authoritativeRecords(primary, copy, worktrees)));
     seen.add(copy.key);
   }
   for (const entry of others) {
@@ -44,19 +52,28 @@ export function selectRecords([primary, ...others]) {
   return records;
 }
 
-function authoritativeRecord(primary, copy, worktrees) {
+// The records one primary copy stands for: usually one, from whichever copy is authoritative.
+function authoritativeRecords(primary, copy, worktrees) {
   const assignedEntry = copy.worktree ? worktrees.get(copy.worktree) : null;
-  const assignedCopy = assignedEntry?.copies.find((candidate) => candidate.key === copy.key) || null;
+  const assignedCopies = assignedEntry?.copies.filter((candidate) => candidate.key === copy.key) || [];
+  const assignedCopy = assignedCopies.find((candidate) => candidate.lifecycle === "active" && candidate.worktree === copy.worktree) || assignedCopies[0] || null;
   const authority = resolvePlanAuthority({ primary: copy, assigned: assignedEntry ? { copy: assignedCopy } : null });
   if (authority.source === "primary") {
     const record = fullRecord(primary, copy, { source: "primary" });
-    return authority.reason ? withFinding(record, "PLAN_WORKTREE_COPY_UNAVAILABLE", { worktree: copy.worktree, reason: authority.reason }) : record;
+    return [authority.reason ? withFinding(record, "PLAN_WORKTREE_COPY_UNAVAILABLE", { worktree: copy.worktree, reason: authority.reason }) : record];
   }
-  const record = fullRecord(assignedEntry, assignedCopy, { source: "worktree", worktree: copy.worktree });
+  const worktreeAuthority = { source: "worktree", worktree: copy.worktree };
+  // A repeated id in the authoritative checkout is a genuine duplicate, as in the primary checkout:
+  // every copy stays so DUPLICATE_PLAN_ID fires, rather than file order silently picking one.
+  if (assignedCopies.length > 1) return assignedCopies.map((candidate) => fullRecord(assignedEntry, candidate, worktreeAuthority));
+  return [outsideEditChecked(primary, copy, assignedEntry, assignedCopy, fullRecord(assignedEntry, assignedCopy, worktreeAuthority))];
+}
+
+function outsideEditChecked(primary, copy, assignedEntry, assignedCopy, record) {
   if (copy.hash === assignedCopy.hash) return record;
   const check = checkOutsideEdits({
     primary: { checkoutPath: primary.checkout.path, relativePath: copy.relativePath, bytes: copy.bytes },
-    assigned: { branch: assignedEntry.checkout.branch, bytes: assignedCopy.bytes },
+    assigned: { checkoutPath: assignedEntry.checkout.path, branch: assignedEntry.checkout.branch, bytes: assignedCopy.bytes },
   });
   if (check.state === "outside-edit") return withFinding(record, "PLAN_EDITED_OUTSIDE_WORKTREE", { worktree: copy.worktree, committed: check.committed });
   if (check.state === "unchecked") return withFinding(record, "PLAN_AUTHORITY_UNCHECKED", { worktree: copy.worktree, reason: check.reason });
@@ -79,14 +96,14 @@ function withFinding(record, code, meta) {
 }
 
 // The identity, stage, assignment, and bytes of one copy, read without building a record. An
-// unreadable copy is keyed by its path, so it never stands in for a plan's other copies.
+// unreadable copy has null bytes and nothing else.
 function readCopy(file, checkoutPath) {
   const relativePath = path.relative(checkoutPath, file).split(path.sep).join("/");
   let bytes;
   try {
     bytes = fs.readFileSync(file);
   } catch {
-    return { file, relativePath, key: `path:${file}`, hash: null, bytes: null, lifecycle: lifecycleFromPath(relativePath), worktree: "" };
+    return { file, relativePath, bytes: null };
   }
   const { frontmatter } = parseFrontmatter(bytes.toString("utf8"));
   const id = frontmatter.id;

@@ -386,8 +386,14 @@ plan-to-worktree join (`repository-overview-projections.mjs#associatePlans`, whi
 `worktree` field) are unchanged. The lifecycle a plan is counted under is the primary copy's, which
 an authoritative worktree copy shares by condition 3.
 
+An unreadable plan file is a scan error reported by its repository-relative path, never a record:
+in an assigned worktree it leaves the primary copy to stand in with `PLAN_WORKTREE_COPY_UNAVAILABLE`.
+Two copies with one `id` in the assigned worktree are a genuine duplicate there, so both are returned
+with `DUPLICATE_PLAN_ID`, as in the primary checkout.
+
 Add to `planSnapshotFingerprint` the `HEAD` file of the primary checkout and of each linked
-worktree, and the loose ref or `packed-refs` stat it points to. A merge of `main` into a worktree
+worktree, the loose ref or `packed-refs` stat it points to, and, in a reftable repository, the
+shared and per-worktree `reftable/tables.list`. A merge of `main` into a worktree
 can change the outside-edit result without touching any plan file, and the fingerprint must notice.
 Move the fingerprint and its `statPlanTree` helper into `modules/plan-suite/snapshot-fingerprint.mjs`
 so `canonical-scan.mjs` stays a short orchestrator within the file-size cap.
@@ -519,6 +525,10 @@ Focused checks while iterating:
 
 ```text
 node scripts/test/plan-suite-canonical-check.mjs
+node scripts/test/plan-authority-check.mjs
+node scripts/test/plan-suite-authority-scan-check.mjs
+node scripts/test/plan-suite-authority-edge-check.mjs
+node scripts/test/plan-close-integration-check.mjs
 node scripts/test/plan-suite-check.mjs
 node scripts/test/plan-suite-commands-check.mjs
 node scripts/test/plan-suite-findings-check.mjs
@@ -559,6 +569,23 @@ worktree:
       and refusal note to the primary copy, and describes the archive handoff.
 - [x] Portal UI: the Delete Worktree confirmation for a plan's worktree says the plan's worktree
       progress will no longer be shown.
+- [x] A registry that knows only the worktree, or knows it before the primary checkout, still
+      returns the assigned worktree's copy.
+- [x] A second clone whose directory has the assigned worktree's name is never authoritative; a plan
+      found only in that clone is labeled with the clone's directory.
+- [x] An unreadable copy in the assigned worktree falls back to the primary copy with
+      `PLAN_WORKTREE_COPY_UNAVAILABLE` (`copy-missing`), the repository scan still succeeds, and the
+      file is listed as a scan error by its relative path.
+- [x] Two copies with one `id` in the assigned worktree are both shown with `DUPLICATE_PLAN_ID`.
+- [x] A merge into a worktree whose branch ref was packed changes the fingerprint.
+- [x] In a reftable repository, an outside edit is reported rather than left unchecked, and a commit
+      or merge in a worktree changes the fingerprint.
+- [x] Each authority finding's message names its worktree and reason, and its resolution offers the
+      documented way out.
+- [x] `/plan-close`'s step 0 and archive commands, read from the shipped skill and run against a
+      squash-merged fixture, give the documented verdicts: integrated after a squash merge and after a
+      refusal note, not integrated after new worktree progress, integrated for a plan the worktree
+      never edited, and `plan: conflicting copies` for an outside edit until `main` is merged.
 
 Because this changes shared Plans behavior, portal-visible state, and rendered skill output, finish
 with the repository gate:
@@ -613,7 +640,15 @@ npm run check
 - Fixture coverage: `scripts/test/plan-authority-check.mjs` (resolver table, outside-edit check
   including squash, rebase, unresolvable merge base, detached `HEAD`s, SHA-256),
   `scripts/test/plan-suite-authority-scan-check.mjs` (scan, findings, writes, fingerprint,
-  `/api/plans`), and the existing canonical, skill-text, and portal UI checks.
+  `/api/plans`), `scripts/test/plan-suite-authority-edge-check.mjs` (registration order, second
+  clones, unreadable and duplicate worktree copies, packed refs, reftable),
+  `scripts/test/plan-close-integration-check.mjs` (the skill's own Git commands),
+  `testAuthorityFindingsExplainThemselves` in `plan-suite-findings-check.mjs`, and the existing
+  canonical, skill-text, and portal UI checks.
+- `npm run check` runs `test-cli.sh` and only the `ci` group of `run-checks.mjs`, so a new
+  `*-check.mjs` is not in the gate by being discovered. The canonical, authority, edge, and
+  `/plan-close` integration checks are registered in `test-cli.sh` beside the other plan-suite
+  suites.
 
 ## Not tested
 
@@ -637,6 +672,30 @@ npm run check
 None.
 
 ## Decision Log
+
+### 2026-10-12 — A duplicate `id` in the assigned worktree shows every copy
+
+**Decision:** When the assigned worktree holds more than one copy with the plan's `id`, the scan
+returns all of them from the worktree, each carrying `DUPLICATE_PLAN_ID`. Authority is resolved from
+the copy in `active/` that names the worktree. Confirmed by the user.
+
+**Alternatives considered:** fall back to the primary copy with a new `copy-duplicated` reason; leave
+the first file in sort order to win.
+
+**Reason:** File order silently hid the real copy behind a stray one. Reporting both matches how a
+duplicate in the primary checkout is already shown.
+
+### 2026-10-12 — In a reftable repository, Git names the worktree's branch
+
+**Decision:** When a worktree's `HEAD` file holds reftable's `refs/heads/.invalid` placeholder, the
+outside-edit check asks Git for the checked-out branch with `symbolic-ref`, one extra read-only call
+made only when the copies differ. `worktree-inventory.mjs` is unchanged. Confirmed by the user.
+
+**Alternatives considered:** fix the shared inventory so it never reports `.invalid`; record
+reftable as a known gap.
+
+**Reason:** The placeholder made every differing plan `PLAN_AUTHORITY_UNCHECKED`. The inventory
+avoids subprocesses by design and serves other callers, so the fix stays where the branch is used.
 
 ### 2026-10-12 — A worktree-only plan carries no authority object
 

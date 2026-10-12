@@ -54,7 +54,8 @@ function statPlanTree(dir, parts) {
 }
 
 // A loose ref holds its commit id, so its contents are read; a packed ref lives in packed-refs,
-// whose stat changes whenever Git rewrites it.
+// whose stat changes whenever Git rewrites it. A reftable repository keeps every ref, HEAD included,
+// in binary tables, and rewrites the shared and the per-worktree tables.list on each ref update.
 function headState(checkoutPath, parts) {
   const git = resolveGitDir(checkoutPath);
   if (!git) return;
@@ -67,6 +68,9 @@ function headState(checkoutPath, parts) {
     parts.push(`packed\0${stat.mtimeMs}\0${stat.size}`);
   } catch {
     parts.push("packed\0none");
+  }
+  for (const dir of new Set([git.commonDir, git.gitDir])) {
+    parts.push(`reftable\0${readOrEmpty(path.join(dir, "reftable", "tables.list")).trim()}`);
   }
 }
 
