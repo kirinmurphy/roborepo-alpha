@@ -68,6 +68,13 @@ for (const page of PAGES) {
   }
 }
 
+// Runtime and Settings are lower-priority destinations: the header shows them only in its ⋮ menu.
+assert.deepEqual(
+  PAGES.filter((p) => p.secondary).map((p) => p.id),
+  ["developer-runtime", "settings"],
+  "only Runtime and Settings are secondary (menu-only) pages",
+);
+
 assert.equal(PAGES.length, 6, "dynamic detail must not enter the six-item navigation manifest");
 assert.equal(PAGE_ROUTES.length, 8, "page-route table adds the old Agents redirect and a dynamic route");
 const oldAgentsRoute = PAGE_ROUTES.find((page) => page.path === "/config");

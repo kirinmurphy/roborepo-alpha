@@ -4,7 +4,7 @@ priority: low
 next_action: Resolve the local-vs-global override policy decision (item 2)
 blocked_by: []
 depends_on: []
-related: [skills-vs-commands-invocation-policy, package-registry-live-state-reconciliation]
+related: [skills-vs-commands-invocation-policy, o9zwxuav]
 reviewed_commit: b8684ef
 ---
 
@@ -57,7 +57,7 @@ backlog reads honestly.
 ### Recommended Next Pick
 
 For immediate product value, start with
-[`package-registry-live-state-reconciliation.md`](package-registry-live-state-reconciliation.md):
+[`package-desired-state-and-dependencies.md`](package-desired-state-and-dependencies.md):
 it resolves the portal's ambiguous enabled/installed/partial states across rules,
 plugins, services, skills, MCP, and permissions.
 

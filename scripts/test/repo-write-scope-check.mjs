@@ -169,6 +169,27 @@ try {
     "setting repo-write-boundary to allow should disable the hook's decision entirely",
   );
 
+  // An installed hook is a copy under the harness home, so walking back from its own location finds
+  // no manifest. An npm install writes no install-state.json either; the app root the CLI records
+  // under the state root is the only route to the manifest, and without it the boundary defers.
+  const installedHook = path.join(tmp, "installed-home", ".claude", "hooks", "provider", "repo-write-scope.mjs");
+  fs.mkdirSync(path.dirname(installedHook), { recursive: true });
+  fs.copyFileSync(hook, installedHook);
+  const packageState = path.join(tmp, "package-state");
+  fs.mkdirSync(packageState, { recursive: true });
+  const decideInstalled = () => {
+    const result = spawnSync(process.execPath, [installedHook], {
+      input: JSON.stringify({ cwd: repoA, tool_name: "Write", tool_input: { file_path: outsideEverything } }),
+      encoding: "utf8",
+      env: { ...process.env, REPO_ROOT: "", ROBOREPO_STATE_DIR: "", ROBOREPO_STATE_ROOT: packageState },
+    });
+    if (!result.stdout.trim()) return "defer";
+    return JSON.parse(result.stdout).hookSpecificOutput.permissionDecision;
+  };
+  assert.equal(decideInstalled(), "defer", "a copied hook with no recorded app root has no manifest and must defer");
+  fs.writeFileSync(path.join(packageState, "app-root.json"), JSON.stringify({ appRoot: repoRoot }));
+  assert.equal(decideInstalled(), "ask", "a copied hook should find the manifest through the recorded app root");
+
   // Malformed input must never block a write. A hook that cannot parse its input has no basis for
   // a decision, and failing closed here would break writing on an unanticipated payload shape.
   for (const payload of ["not json", "", "{}", '{"tool_input":{}}']) {

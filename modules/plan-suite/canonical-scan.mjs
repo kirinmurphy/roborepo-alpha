@@ -38,7 +38,10 @@ export function buildPlanSnapshot({ stateRoot, packageState = null, registry = n
       repositories.push(scan.repository);
       plans.push(...scan.plans);
       errors.push(...scan.errors.map((error) => ({ repository: record.displayName, ...error })));
-      repositoryScans.push({ repositoryId: record.id, state: "scanned", planCount: scan.plans.length, checkoutCount: checkouts.length });
+      // Linked worktree names straight from Git's administrative files, running or not, so Home can
+      // tell a plan's idle worktree from one that no longer exists.
+      const worktrees = checkouts.filter((checkout) => checkout.isWorktree).map((checkout) => checkout.label);
+      repositoryScans.push({ repositoryId: record.id, state: "scanned", planCount: scan.plans.length, checkoutCount: checkouts.length, worktrees });
     } catch (err) {
       errors.push({ repository: record.displayName, error: pathFreeError(err) });
       repositoryScans.push({ repositoryId: record.id, state: "error", planCount: 0, checkoutCount: checkouts.length });
@@ -53,6 +56,49 @@ export function buildPlanSnapshot({ stateRoot, packageState = null, registry = n
     truncated: plans.some((plan) => plan.repository.truncated),
     planWritePackage: packageState || { available: false, enabled: false, status: "missing" },
   };
+}
+
+// A cheap stand-in for "would buildPlanSnapshot return something different?": the scanned
+// repositories, each one's checkouts, and the path, mtime, and size of every entry under each
+// checkout's docs/plans (plans-config.json included, since it changes validation). Only directory
+// reads, stats, and Git's small administrative files — no plan contents, no Git subprocesses — so a
+// poller can check it every tick and pay for a full rebuild only when it changes. Per-plan Git fields (last commit time, review state) are not covered; readPlanRecord
+// caches those by file mtime too, so a rebuild would not refresh them.
+export function planSnapshotFingerprint({ stateRoot, registry = null } = {}) {
+  const known = registry || loadRegistry({ stateRoot });
+  const parts = [];
+  for (const record of plannableRepositories(known)) {
+    if (!checkoutRootsFor(known, record.id).length) continue;
+    parts.push(`repo\0${record.id}\0${record.displayName}`);
+    for (const checkout of repositoryCheckouts(known, record.id)) {
+      parts.push(`checkout\0${checkout.path}\0${checkout.label ?? ""}\0${checkout.isWorktree}`);
+      statPlanTree(path.join(checkout.path, "docs", "plans"), parts);
+    }
+  }
+  return crypto.createHash("sha256").update(parts.join("\n")).digest("hex");
+}
+
+function statPlanTree(dir, parts) {
+  let entries = [];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch (err) {
+    parts.push(`unreadable\0${dir}\0${err?.code || ""}`);
+    return;
+  }
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      statPlanTree(full, parts);
+      continue;
+    }
+    try {
+      const stat = fs.statSync(full);
+      parts.push(`file\0${full}\0${stat.mtimeMs}\0${stat.size}`);
+    } catch {
+      parts.push(`gone\0${full}`);
+    }
+  }
 }
 
 // Visible canonical records only: an alias points at another record that is scanned in its place,

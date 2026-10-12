@@ -112,8 +112,12 @@ try {
     associations: {},
     aliases: {},
     composeProjects: {},
-    preferences: { showNonHttp: false, historyRetentionDays: 14 },
+    preferences: { showNonHttp: false, historyRetentionDays: 14, worktreeStaleDays: 7 },
   });
+  const thresholdStateRoot = path.join(tempRoot, "threshold-state");
+  const threshold = updateSettings({ stateRoot: thresholdStateRoot, input: { revision: 1, type: "preferences", worktreeStaleDays: 3 } });
+  assert.equal(threshold.preferences.worktreeStaleDays, 3);
+  assert.throws(() => updateSettings({ stateRoot: thresholdStateRoot, input: { revision: 2, type: "preferences", worktreeStaleDays: 0 } }), /between 1 and 365/);
   const legacyStateRoot = path.join(tempRoot, "legacy-state");
   fs.mkdirSync(path.dirname(settingsPathFor(legacyStateRoot)), { recursive: true });
   fs.writeFileSync(settingsPathFor(legacyStateRoot), `${JSON.stringify({

@@ -154,7 +154,7 @@ roborepo index code --watch
 | `roborepo skill inspect <name>` | Reports skill source, managed/unmanaged ownership, native collision state, and per-harness install state. |
 | `roborepo skill native [--full]` | Shows native Claude/Codex plugin entrypoints; `--full` prints native help output inline. |
 | `roborepo skill audit [--check]` | Renders or checks the shared skill invocation audit. |
-| `roborepo skill triggers [--check]` | Checks trigger and near-miss fixtures from `manifests/inventory/skill-trigger-tests.json`. |
+| `roborepo skill triggers [--check]` | Checks trigger and near-miss fixtures from each package's optional `globals/packages/<package-id>/skill-triggers.json`. |
 | `roborepo skill render-commands [--check]` | Renders generated slash commands from package `slash-command` resources, or verifies them. |
 
 See [RoboRepo Skills Interface](roborepo-skills.md) for the managed/native boundary and examples.

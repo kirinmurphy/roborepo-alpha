@@ -56,7 +56,8 @@ both harnesses in one step:
 roborepo skill new
 ```
 It can create automatic helper skills, skill-backed slash commands, or standalone slash commands.
-For medium-risk skill descriptions, add/update trigger fixtures and run:
+For medium-risk skill descriptions, add/update trigger fixtures in the package's
+`globals/packages/<package-id>/skill-triggers.json` and run:
 ```bash
 roborepo skill triggers --check
 ```

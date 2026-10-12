@@ -32,6 +32,8 @@
   /* Muted green separates primary actions from the brighter --ok status indicators. */
   --cta: #287d3c;
   --on-cta: #ffffff;
+  /* --danger is tuned for text; white on it would be too faint, so the solid fill is darker. */
+  --cta-danger: #b62324;
   --badge-skill-ink: #79c0ff;
   --badge-skill-line: #1f6feb;
   --badge-skill-bg: #0d1b2e;
@@ -56,10 +58,12 @@
   --next-ink: #c7dbff;
   --code-bg: #010409;
   --code-ink: #d2a8ff;
+  /* GitHub's merged-pull-request purple, for a worktree whose branch has merged. */
+  --merged: #8957e5;
   --code-inline-bg: rgba(255, 255, 255, 0.04);
   --overlay: rgba(13, 17, 23, 0.7);
-  --tooltip-bg: #010409;
-  --tooltip-shadow: rgba(0, 0, 0, 0.5);
+  /* Every floating panel: dropdowns, menus, popovers, tooltips. See the shared rules below. */
+  --popover-bg: #010409;
   --row-hover: #1c2230;
   /* Surface-relative row hover, for clickable rows that sit on --panel or any other raised surface
    * rather than on the page background. --row-hover is an absolute color tuned against --bg: on a
@@ -146,6 +150,7 @@
   --on-accent: #ffffff;
   --cta: #2c7a3f;
   --on-cta: #ffffff;
+  --cta-danger: #cf222e;
   --badge-skill-ink: #0550ae;
   --badge-skill-line: #b6e3ff;
   --badge-skill-bg: #ddf4ff;
@@ -166,10 +171,10 @@
   --next-ink: #0a3977;
   --code-bg: #f6f8fa;
   --code-ink: #8250df;
+  --merged: #8250df;
   --code-inline-bg: rgba(27, 31, 36, 0.05);
   --overlay: rgba(255, 255, 255, 0.7);
-  --tooltip-bg: #ffffff;
-  --tooltip-shadow: rgba(31, 35, 40, 0.12);
+  --popover-bg: #e7eaee;
   --row-hover: #eaeef2;
   /* Darkens rather than lightens: light surfaces are at or near white, so a white tint has nowhere
    * to go. Same token, inverted direction — see the dark theme's definition for why it exists. */
@@ -183,7 +188,7 @@
   --surface-inset: #ffffff;
   --wash-control: rgba(31, 35, 40, 0.1);
   --wash-control-strong: rgba(31, 35, 40, 0.16);
-  --wash-heading: #e9ecef;
+  --wash-heading: #d0d7de;
   --backdrop: rgba(31, 35, 40, 0.4);
   --chip-ink: #ffffff;
   --chip-muted-bg: #d0d7de;
@@ -228,13 +233,15 @@ select {
   border-radius: 5px;
   padding: var(--space-xs) var(--space-sm);
 }
-/* Global button system — three variants selected via data-btn (not a class) so the intent is
- * legible at the call site: data-btn="cta" | "secondary" | "text". A bare <button> with no
+/* Global button system — four variants selected via data-btn (not a class) so the intent is
+ * legible at the call site: data-btn="cta" | "danger" | "secondary" | "text". A bare <button> with no
  * data-btn defaults to "secondary" (the trim-but-not-accented look), matching how most buttons in
  * the portal are default/dismiss/toggle actions rather than CTAs — CTA is the deliberate opt-in.
  *
  * cta: primary workflow-terminating actions (submit, save, add, run, enable). Solid, high-contrast
  *   fill — there should be at most one per view competing for attention.
+ * danger: a cta whose action can lose something the user still needs. Same shape, red fill; use it
+ *   in place of cta, not beside it.
  * secondary (default): everything else that still needs button chrome — cancel, close, persistent
  *   toggles that open a popup/panel, default/neutral actions. Enough contrast off the page
  *   background to read as clickable, without competing with a CTA.
@@ -268,6 +275,18 @@ button:hover,
 [data-btn="cta"]:hover {
   filter: brightness(1.08);
 }
+[data-btn="danger"] {
+  color: var(--on-cta);
+  background: var(--cta-danger);
+  border: 1px solid var(--cta-danger);
+  border-radius: 5px;
+  padding: var(--space-xs) var(--space-sm);
+  font-weight: 400;
+  cursor: pointer;
+}
+[data-btn="danger"]:hover {
+  filter: brightness(1.08);
+}
 [data-btn="text"] {
   color: var(--dim);
   background: none;
@@ -284,6 +303,11 @@ button:disabled,
 [data-btn]:disabled {
   cursor: default;
   opacity: 0.6;
+}
+/* A button disabled because its own request is running stays at full strength: its spinner says
+ * "working", and fading it would say "unavailable". */
+[data-btn][aria-busy="true"]:disabled {
+  opacity: 1;
 }
 body {
   margin: 0;
@@ -432,25 +456,94 @@ nav a.active {
   background: var(--active);
   border-color: var(--line);
 }
-.portal-header nav a.nav-icon-only {
+/* The ⋮ menu closing the header nav. Its trigger reads as one more nav cell; the panel lists the
+ * secondary pages, plus every primary page once the bar collapses (see the breakpoint below). */
+.nav-more {
   position: relative;
+  display: flex;
+  border-left: 1px solid var(--line);
+}
+.nav-more-trigger {
+  display: inline-grid;
+  place-items: center;
+  align-content: center;
+  gap: 2px;
   min-width: 40px;
-  align-items: center;
-  padding-left: 0.7rem;
-  padding-right: 0.7rem;
-}
-.portal-header nav a.nav-icon-only .nav-label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
+  padding: 0.25rem 0.7rem;
   border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--dim);
+  cursor: pointer;
 }
-.portal-header nav a.nav-icon-only portal-icon { display: inline-flex; }
+.nav-more-trigger span {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.nav-more-trigger:hover,
+.nav-more-trigger[aria-expanded="true"] {
+  color: var(--ink);
+  background: none;
+}
+.nav-more-trigger.active {
+  color: var(--active-ink);
+  background: var(--active);
+}
+.nav-more-panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  right: 0;
+  display: grid;
+  min-width: 180px;
+  /* Items run flush to the edges; this keeps their highlight inside the rounded corners. */
+  overflow: hidden;
+}
+.nav-more-panel[hidden] {
+  display: none;
+}
+/* Page toolbars that pin over the header while scrolling (Plans' #plans-header sits at z-index 11)
+ * would cover the open panel, so the header comes forward only while its menu is open. */
+.portal-header:has(.nav-more-panel:not([hidden])) {
+  z-index: 12;
+}
+/* Undo the bar-cell look `nav a` gives every link: menu items are rows separated by rules. */
+.portal-header .nav-more-panel a {
+  flex-direction: row;
+  justify-content: flex-start;
+  border: 0;
+  white-space: nowrap;
+}
+.portal-header .nav-more-panel a:not(:last-child) {
+  border-bottom: 1px solid var(--popover-border);
+}
+.portal-header .nav-more-panel a.active {
+  color: var(--active-ink);
+  background: var(--active);
+}
+.nav-more-panel .nav-more-primary {
+  display: none;
+}
+/* Below this width the primary links no longer fit beside the logo, so the bar keeps only the ⋮
+ * trigger and the menu lists every page. */
+@media (max-width: 640px) {
+  .portal-header nav > a {
+    display: none;
+  }
+  .portal-header .nav-more-panel .nav-more-primary {
+    display: flex;
+  }
+  .nav-more {
+    border-left: 0;
+  }
+  /* Every page is in the menu now, so a highlighted trigger no longer says anything. */
+  .nav-more-trigger.active {
+    color: var(--dim);
+    background: none;
+  }
+}
 .portal-footer {
   margin-top: 24px;
   padding: 12px 0;
@@ -579,6 +672,8 @@ main {
   border-top-color: var(--accent);
   animation: portal-spin 0.7s linear infinite;
 }
+/* An inline spinner inside a busy button, drawn in the button's own text color. */
+.button-spinner,
 .harness-check-spinner {
   display: inline-block;
   width: 12px;
@@ -734,12 +829,8 @@ dd {
   gap: 6px;
   min-width: 240px;
   padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--tooltip-bg);
   color: var(--ink);
   font-size: var(--text-2xs);
-  box-shadow: 0 10px 24px var(--tooltip-shadow);
   white-space: normal;
   cursor: default;
 }
@@ -798,6 +889,102 @@ dd {
 .chip-tip-foot {
   color: var(--dim);
   font-size: var(--text-2xs);
+}
+/* One surface for everything that floats over the page — dropdowns, menus, popovers, tooltips.
+ * --popover-bg (per theme, above) sits well apart from every card, so a panel reads as layered
+ * above the card it opened from rather than bleeding into it. */
+:root {
+  --popover-border: var(--line);
+  --popover-radius: 8px;
+  --popover-shadow: 0 14px 40px var(--modal-shadow);
+  --popover-item-hover: color-mix(in srgb, var(--accent) 18%, var(--popover-bg));
+}
+.menu-panel,
+.menu-button-panel,
+.nav-more-panel,
+.copy-menu-panel,
+.dropdown-menu,
+.blockers-popover,
+.portal-tooltip,
+.chip-tip {
+  background: var(--popover-bg);
+  border: 1px solid var(--popover-border);
+  border-radius: var(--popover-radius);
+  box-shadow: var(--popover-shadow);
+}
+/* One list item for every dropdown: full width, icon then label, and a hover or keyboard highlight
+ * filled with the accent so the item under the pointer is unmistakable. Items run flush to the
+ * panel's edges (panels carry no padding) and are separated by a rule rather than by space. */
+.menu-panel button,
+.menu-panel a,
+.nav-more-panel a,
+.menu-button-item,
+.copy-menu-item,
+.dropdown-option,
+.worktree-details-actions button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.menu-panel button:hover:not(:disabled),
+.menu-panel a:hover,
+.nav-more-panel a:hover,
+.menu-button-item:hover,
+.copy-menu-item:hover:not(:disabled),
+.dropdown-option:hover,
+.dropdown-option.highlighted,
+.worktree-details-actions button:hover,
+.menu-panel button:focus-visible,
+.menu-panel a:focus-visible,
+.nav-more-panel a:focus-visible,
+.menu-button-item:focus-visible,
+.copy-menu-item:focus-visible,
+.dropdown-option:focus-visible,
+.worktree-details-actions button:focus-visible {
+  background: var(--popover-item-hover);
+  outline: none;
+}
+.menu-panel button:disabled,
+.dropdown-option:disabled {
+  color: var(--dim);
+  cursor: default;
+}
+/* A hidden item takes no place in the list, so the rule goes on the next visible one only. */
+.menu-panel > :is(button, a):not([hidden]) + :is(button, a),
+.menu-button-item:not([hidden]) + .menu-button-item,
+.copy-menu-item:not([hidden]) + .copy-menu-item,
+.dropdown-option:not([hidden]) + .dropdown-option,
+.worktree-details-actions button:not([hidden]) + button {
+  border-top: 1px solid var(--popover-border);
+}
+.menu-item-icon {
+  flex: none;
+  color: var(--dim);
+}
+/* A destructive item (Delete Worktree): red label and icon, and a red-tinted highlight. */
+.menu-item-danger,
+.menu-item-danger .menu-item-icon {
+  color: var(--danger);
+}
+.menu-panel .menu-item-danger:hover:not(:disabled),
+.menu-panel .menu-item-danger:focus-visible,
+.worktree-details-actions .menu-item-danger:hover,
+.worktree-details-actions .menu-item-danger:focus-visible {
+  background: color-mix(in srgb, var(--danger) 16%, var(--popover-bg));
+}
+/* Status pills (merged, done, plan badges) share one inset so they read as one family. */
+:root {
+  --pill-padding: 2px 9px;
 }
 /* Dialog width scale. Set `data-dialog-size` on a <dialog> to pick one instead of hardcoding a
  * max-width in the page's own styles.css:
@@ -964,11 +1151,6 @@ portal-copy-menu {
 .copy-menu-panel {
   position: fixed;
   z-index: 30;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px var(--modal-shadow);
-  padding: 6px;
   min-width: 180px;
   max-width: min(360px, 90vw);
   /* max-height is set inline by positionPopoverPanel — see .menu-button-panel. */
@@ -976,20 +1158,7 @@ portal-copy-menu {
   overscroll-behavior: contain;
 }
 .copy-menu-item {
-  display: block;
-  width: 100%;
-  border: none;
-  background: none;
-  font: inherit;
-  text-align: left;
-  color: var(--ink);
-  padding: 7px 8px;
-  border-radius: 5px;
-  cursor: pointer;
   white-space: nowrap;
-}
-.copy-menu-item:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
 }
 /* Disabled only while showing "Copied!", so it reads as confirmation rather than as unavailable. */
 .copy-menu-item:disabled {
@@ -1011,11 +1180,6 @@ portal-menu-button {
 .menu-button-panel {
   position: fixed;
   z-index: 30;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px var(--modal-shadow);
-  padding: 6px;
   min-width: 220px;
   max-width: min(420px, 90vw);
   /* max-height is set inline by positionPopoverPanel (popover-position.js) so the far edge stays
@@ -1024,21 +1188,7 @@ portal-menu-button {
   overscroll-behavior: contain;
 }
 .menu-button-item {
-  display: flex;
   align-items: flex-start;
-  gap: 8px;
-  width: 100%;
-  border: none;
-  background: none;
-  font: inherit;
-  text-align: left;
-  color: var(--ink);
-  padding: 7px 8px;
-  border-radius: 5px;
-  cursor: pointer;
-}
-.menu-button-item:hover {
-  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
 }
 .menu-button-item-icon {
   flex-shrink: 0;
@@ -1193,14 +1343,10 @@ portal-menu-button {
   position: fixed;
   z-index: 60;
   max-width: 260px;
-  background: var(--tooltip-bg);
   color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: 6px;
   padding: 8px 10px;
   font-size: var(--text-2xs);
   line-height: 1.5;
-  box-shadow: 0 4px 16px var(--tooltip-shadow);
   pointer-events: none;
 }
 /* Structured/multi-row content (key-value grids, badges) needs more room than a one-line hint. */

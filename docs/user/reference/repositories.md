@@ -95,7 +95,7 @@ flowchart TD
 | Time budget per walk | 5 seconds |
 | Maximum repositories per walk | 250 |
 | Skipped folder names | names starting with `.`, and `node_modules`, `.git`, `vendor`, `dist`, `build`, `.cache`, `coverage`, `.next`, `.venv`, `__pycache__` |
-| Linked Git worktrees | not registered on their own; the main checkout stands for the repository |
+| Linked Git worktrees | registered as checkouts of the known repository; they are not separate repositories |
 
 The walk tracks each folder's real path and never descends into one twice, so symlink cycles end.
 
@@ -161,13 +161,18 @@ Each card combines a compact view of several domains:
   worktrees. The plan title opens the plan drawer, and its completion ring or **done** sits beside it.
   - A plan whose `worktree` field names a linked worktree Home shows becomes that worktree's row: the
     plan title replaces the branch label, a worktree button opens the branch, worktree name, and path
-    (each with its own copy action) plus any dirty, ahead/behind, or drift facts, and the port, Links,
+    (each with its own copy action), one status line such as `dirty · 12 ahead · 0 behind remote`,
+    the same Git warnings the row's warning is chosen from, and the
+    **Stop Server** and **Delete Worktree** actions, and the port, Links,
     and Git warning stay where the checkout row puts them. The match is exact: the plan's value must
     equal the worktree's Git administrative name, exactly one active plan must claim it, and exactly
     one known worktree must carry it. Branch names and checkout paths are never used to guess.
-  - Any other plan is its own row with a badge: **not started** when it names no worktree, and
-    **worktree not running** when the worktree it names is stopped, missing, or claimed twice.
-  - Worktrees no plan claimed follow as ordinary checkout rows.
+  - Any other plan is its own row with a badge: **no worktree** when it names none;
+    otherwise **worktree not listed** (Git has it, Runtime does not list it), **worktree missing** (Git
+    has no worktree by that name), **worktree ambiguous** (claimed twice, or more than one checkout
+    carries the name), or **worktree status unknown** (Runtime is unavailable).
+  - Worktrees no plan claimed follow as ordinary checkout rows, each with a ⋮ menu holding
+    **Stop Server** (while something runs in it) and **Delete Worktree**.
   - One unlabeled line closes the list with the repository's Active and Backlog counts and an
     **all plans** link, and says so when Plans coverage is partial. A repository with no active
     plans, or one Plans has not scanned, lists its worktrees as plain checkout rows with no plan
@@ -177,6 +182,101 @@ Each card combines a compact view of several domains:
   captures are still on disk, which matches the Tokens page.
 - **Agents** — repository-scoped agent configuration is currently unavailable and is labeled that
   way.
+
+### Worktree states and cleanup
+
+Home and Runtime list linked worktrees of a known repository even when no application is running.
+Each worktree row shows how it stands:
+
+| Shows | Means |
+| --- | --- |
+| a port in the actions column, or none | something is running in it, or nothing is |
+| **merged** (a purple pill; its tooltip names the base branch) | a commit on the base branch's first-parent history absorbed the branch's work |
+| **stale** | not merged, and no activity during the configured interval; a prompt to review, not evidence of a merge |
+
+Activity is the latest of a running process Runtime saw, the branch's last commit, and the last
+agent session on the branch. The interval defaults to 7 days. Change it in Runtime's Settings under
+**Worktrees**, or set `ROBOREPO_WORKTREE_STALE_DAYS` to a number from 1 to 365 to override the
+setting. A detached worktree, such as one the desktop app creates, is named by its folder with
+**(detached)**.
+
+A merged row adds a note only when there is something to act on: the reason a guard keeps it (such
+as **plan not closed** or **not in worktree folder**), or **removed on next pull** when the
+cleanup hook is installed.
+
+**Stop Server** stops the dev servers listening from that worktree, as `/plan-close` does.
+**Delete Worktree** opens a confirmation that says in plain words what is deleted (the worktree's
+folder and its local branch) and what that costs: nothing for merged work, or how many commits were
+never merged and that a backup keeps them. A worktree an active plan claims, or one with something
+running, shows a warning and a red **Delete worktree** button; otherwise the button is green.
+**Details and how to restore** shows the branch, folder, archive ref, and the commands that bring it
+back. Confirming stops the worktree's servers and removes it. Both live in the worktree dropdown on a plan's row and in the ⋮ menu on any
+other worktree row; no row shows them inline. Deletion refuses a locked or dirty worktree, a
+worktree with valuable ignored files or submodules, a server that does not stop, and the current or
+main checkout, and the confirmation shows the reason. Servers stop only after those checks pass, so
+a refusal at that point stops nothing. The removal itself can still fail after the servers have
+stopped, for example when Git state changed in between; the confirmation shows that reason too.
+
+A merged row drops the Git warnings (behind, unpushed) the row shows for work in progress; the
+checkout tooltip and the worktree dropdown still carry them.
+
+`roborepo git worktrees cleanup` previews candidates and reasons. Add `--apply` to remove eligible
+landed worktrees and local branches. `--plan <id>` limits it to a completed plan's worktree. The
+command also accepts `--remove <branch> --confirm --apply`. Automatic cleanup waits for an
+associated plan to leave `active`. It only removes a clean, unlocked, landed worktree beneath the
+repository's worktree folder, and never uses `git worktree remove --force`. The folder is
+`worktreeRoot` from `docs/plans/plans-config.json`, or else the folder confirmed when cleanup was
+turned on from Home. A worktree elsewhere is suggested for manual review. The command does not touch
+remote branches.
+
+With the plan-close package enabled, `/plan-close` removes each story's worktree as its last step,
+and Home does not offer the hook. With it disabled, a repository card with linked worktrees and no
+hook shows **Automatic worktree cleanup is off** in its footer. **Turn on automatic cleanup**
+confirms the worktree folder (proposed as the deepest folder holding the repository's worktrees,
+outside `.claude/worktrees/`) and installs the hook; **Dismiss** hides the offer for that
+repository. If another tool's `post-merge` hook is already installed, the dialog shows the line to
+add to it.
+
+A hook installed before the plan-close package is enabled keeps working: a worktree whose active
+plan names it waits for `/plan-close`. An active plan that does not name its worktree cannot protect
+it, so if that branch lands the hook may remove the worktree first; the removal log keeps its tip.
+
+`roborepo git worktrees hook install` enables automatic cleanup after a successful merge or pull
+in that repository. It returns immediately and writes cleanup output to
+`<state root>/worktree-cleanup/hook.log`. An existing foreign `post-merge` hook is left intact; the
+installer prints a line to add to it. Use `roborepo git worktrees hook uninstall` to remove a hook
+installed by RoboRepo. Fetches and pulls that are already up to date do not invoke the hook.
+
+The installer writes `post-merge` into the directory Git runs hooks from:
+
+| `core.hooksPath` | Hook location | Fires for merges and pulls in |
+| --- | --- | --- |
+| unset | `<common Git dir>/hooks/` | every checkout of the repository |
+| absolute, in repository config | that directory | every checkout of the repository |
+| relative, in repository config | that path under the main checkout | the main checkout only |
+| relative, with the Git directory outside the main checkout (`--separate-git-dir`) | none; the installer refuses | — |
+| set in one worktree's config | that path in that checkout | that checkout only |
+| set in global or system config | none; the installer refuses | — |
+
+Git resolves a relative `core.hooksPath` inside the working tree that runs the hook, so a linked
+worktree looks for its own copy and never finds the one in the main checkout. The installer says so
+when it installs. Cleanup covers every worktree of the repository whichever checkout triggers it,
+so pulling `main` in the main checkout is enough. A shared global hooks directory would run this
+repository's cleanup for every repository, so the installer prints the reason and writes nothing.
+
+The hook records absolute paths to `node` and to the CLI that installed it, because Git clients run
+hooks with their own `PATH`. Install it from the main checkout or an installed `roborepo`: the
+installer refuses a CLI inside one of the repository's linked worktrees, since cleanup removes that
+worktree once it lands. After moving or upgrading `node`, run the install again to record the new
+path; until then each run logs its failure to `hook.log`.
+
+The removal log is `<state root>/worktree-cleanup/removals.jsonl`; each line names the branch and
+commit. A confirmed removal also writes `refs/roborepo/abandoned/<branch>-<commit>`, where
+`<commit>` is the tip's seven-character short SHA, so archiving the same branch name again keeps the
+earlier archive. Restore its branch with `git branch <branch> refs/roborepo/abandoned/<branch>-<commit>`,
+then restore a checkout with `git worktree add <path> <branch>`. List archive refs with
+`git for-each-ref refs/roborepo/abandoned` and delete one after review with
+`git update-ref -d refs/roborepo/abandoned/<branch>-<commit>`.
 
 Cards with more than five checkouts put the additional rows in an expandable section. An open
 section and a focused control are not rebuilt during polling, so keyboard position and expanded

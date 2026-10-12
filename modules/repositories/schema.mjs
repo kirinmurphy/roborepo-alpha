@@ -129,6 +129,7 @@ export function validateRepositoryRecord(id, record) {
     "id", "kind", "urlKey", "displayName", "providerUrl", "normalizedRemote",
     "localRoots", "discoveries", "enrollments", "aliases",
     "visibility", "resolution", "activity", "pinned", "createdAt", "updatedAt", "restoredAt",
+    "worktreeCleanup",
   ], "repository record");
   if (record.id !== id) throw new Error("repository record id must match its key");
   safeRepositoryId(record.id);
@@ -156,7 +157,17 @@ export function validateRepositoryRecord(id, record) {
   // lastSeenAt, which restoring does not change, so without this the next sweep would undo the
   // decision immediately and every time thereafter.
   if (record.restoredAt != null) safeIsoTimestamp(record.restoredAt, "repository restoredAt");
+  if (record.worktreeCleanup != null) validateWorktreeCleanup(record.worktreeCleanup);
   return record;
+}
+
+// Opt-in worktree cleanup for a repository without a plans config: the folder automatic removal
+// may act in, confirmed by the user, and when the user dismissed Home's offer to turn cleanup on.
+function validateWorktreeCleanup(cleanup) {
+  if (typeof cleanup !== "object" || Array.isArray(cleanup)) throw new Error("repository worktreeCleanup must be an object");
+  validateObjectKeys(cleanup, ["root", "noticeDismissedAt"], "repository worktreeCleanup");
+  if (cleanup.root != null) safeAbsolutePath(cleanup.root, "worktreeCleanup root");
+  if (cleanup.noticeDismissedAt != null) safeIsoTimestamp(cleanup.noticeDismissedAt, "worktreeCleanup noticeDismissedAt");
 }
 
 // Only https loopback-free provider URLs for recognized-shape hosts. Never embed credentials.
@@ -184,6 +195,8 @@ function validateLocalRoots(localRoots) {
     if (!["primary", "clone", "worktree"].includes(root.kind)) throw new Error("localRoot kind is invalid");
     safeIsoTimestamp(root.firstSeenAt, "localRoot firstSeenAt");
     safeIsoTimestamp(root.lastSeenAt, "localRoot lastSeenAt");
+    // When Runtime last saw something running in the checkout. `lastSeenAt` cannot stand in for it:
+    // registering a worktree found by inventory stamps `lastSeenAt` with nothing running.
     if (root.lastRunningAt != null) safeIsoTimestamp(root.lastRunningAt, "localRoot lastRunningAt");
   }
 }

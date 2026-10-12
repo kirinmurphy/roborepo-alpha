@@ -35,7 +35,8 @@ let caseId = 0;
 const OWNED_STATE_ENTRIES = [
   "command-overrides.json", "enabled-packages.json", "telemetry", "telemetry-backups", "backups",
   "presets", "rules", "config-state", "harnesses", "repositories", "usage", "capture", "portal",
-  "skills", "package-runtime", "install-state.json", "initialization.json", "experimental.json",
+  "skills", "package-runtime", "install-state.json", "app-root.json", "initialization.json",
+  "experimental.json",
 ];
 // User-owned content, or a pointer whose fate follows it — preserved by default.
 const PRESERVED_STATE_ENTRIES = ["workspace", "workspace-root.json"];

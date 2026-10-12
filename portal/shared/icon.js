@@ -23,6 +23,15 @@ const ICONS = {
     viewBox: "0 0 24 24",
     body: `<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="15 3 21 3 21 9" /><line stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" x1="10" y1="14" x2="21" y2="3" />`,
   },
+  // Stop: an octagon, the stop-sign shape, for stopping a running server.
+  stop: {
+    viewBox: "0 0 16 16",
+    body: `<path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" d="M5.4 1.8h5.2l3.6 3.6v5.2l-3.6 3.6H5.4l-3.6-3.6V5.4l3.6-3.6Z" /><path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" d="M5.5 8h5" />`,
+  },
+  trash: {
+    viewBox: "0 0 16 16",
+    body: `<path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" d="M2.5 4.2h11M6.2 4.2V2.6h3.6v1.6M3.9 4.2l.7 9.2h6.8l.7-9.2M6.6 6.8v4.2M9.4 6.8v4.2" />`,
+  },
   link: {
     viewBox: "0 0 16 16",
     body: `<path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" d="m6.2 9.8 3.6-3.6M6.5 5.2l2-2a3 3 0 0 1 4.3 4.3l-2 2M9.5 10.8l-2 2a3 3 0 0 1-4.3-4.3l2-2" />`,
@@ -141,10 +150,11 @@ const ICONS = {
     viewBox: "0 0 16 16",
     body: `<circle cx="8" cy="8" r="5.4" fill="none" stroke="currentColor" stroke-width="1.3" /><path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" d="M6.4 6.4h3.2M8 6.4v3.2" />`,
   },
-  // Runtime: a terminal — the dev-server / local process side of the portal.
+  // Runtime: a bare `>_` prompt — the dev-server / local process side of the portal. No terminal
+  // frame, so the prompt fills the box and reads at the same weight as its neighbors.
   runtime: {
     viewBox: "0 0 16 16",
-    body: `<rect x="2.5" y="3.5" width="11" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3" /><path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" d="M5 6.5l2 2-2 2" /><path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" d="M8.5 10.5h2.5" />`,
+    body: `<path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d="M2.5 3.5 7 8l-4.5 4.5" /><path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" d="M8.5 12.5h5" />`,
   },
 };
 

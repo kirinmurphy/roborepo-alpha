@@ -8,6 +8,9 @@ import { resolveCommand } from "./command-resolver.mjs";
 import { shouldRouteToInit } from "./first-run-routing.mjs";
 import { renderHelp } from "./help-renderer.mjs";
 import { runInteractiveMenu } from "./interactive-menu.mjs";
+import { refreshAppRootRecord } from "./state-paths.mjs";
+
+refreshAppRootRecord();
 
 // --no-presets-onboard used to opt out of a forced onboarding pass that ran before dispatch. That
 // gate is gone (first-run routing below replaces it), but the flag stays accepted-and-ignored so

@@ -1,0 +1,14 @@
+{
+  "path": ["git", "worktrees", "hook", "install"],
+  "kind": "command",
+  "title": "Install cleanup hook",
+  "description": "Enable automatic worktree cleanup after a merge or pull",
+  "order": 10,
+  "usage": "roborepo git worktrees hook install",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/worktree-hook.mjs",
+    "export": "worktreeHookCommand",
+    "prependArgs": ["install"]
+  }
+}

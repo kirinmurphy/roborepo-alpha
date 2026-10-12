@@ -3,7 +3,11 @@ import os from "node:os";
 import path from "node:path";
 import { test, expect } from "@playwright/test";
 
-const NAV_ORDER = ["Repos", "Agents", "Plans", "Tokens", "Runtime", "Settings"];
+// The header bar holds the primary pages; the secondary ones live only in its ⋮ menu, and below
+// the narrow breakpoint the menu holds every page.
+const NAV_PRIMARY = ["Repos", "Agents", "Plans", "Tokens"];
+const NAV_SECONDARY = ["Runtime", "Settings"];
+const NAV_ORDER = [...NAV_PRIMARY, ...NAV_SECONDARY];
 const ROUTES = [
   { path: "/", active: "Repos" },
   { path: "/agents", active: "Agents" },
@@ -90,6 +94,211 @@ test.describe("Tokens without captures", () => {
 });
 
 test.describe("repository-first portal Home", () => {
+  test("worktree rows show their state; Stop Server and Delete Worktree live in row menus", async ({ page }) => {
+    // Short enough that the card scrolls, so the open dropdown has a page to follow.
+    await page.setViewportSize({ width: 1280, height: 420 });
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    const removals = [];
+    let removal = { action: "removed" };
+    let removalHeld = null; // a promise the next removal response waits on, to observe the busy state
+    await page.route("**/api/repositories/*/worktrees/remove", async (route) => {
+      removals.push(route.request().postDataJSON());
+      await removalHeld;
+      await route.fulfill({ json: removal });
+    });
+    const stops = [];
+    await page.route("**/api/repositories/*/worktrees/stop-servers", async (route) => {
+      stops.push(route.request().postDataJSON());
+      await route.fulfill({ json: { action: "stopped", stopped: 1, reason: null } });
+    });
+    await patchRoboRepo(page, (repository) => {
+      repository.domains.plans = { status: "available", data: { active: [
+        { id: "idle-plan", key: "idle-plan", title: "Idle Story", worktree: "idle-tree", checkoutRootId: "idle-tree", taskCounts: { total: 1, complete: 0 } },
+      ], counts: { active: 1, backlog: 0 }, recent: [] } };
+      // Ten days behind origin/main: a Git warning on any branch still in progress.
+      const drift = { baseBranch: "origin/main", baseBehind: 30, baseMergeBaseAt: Math.floor(Date.now() / 1000) - 10 * 24 * 60 * 60 };
+      const worktree = (rootId, branch, state, extra = {}) => ({ rootId, name: branch, worktreeName: rootId, isWorktree: true, worktreeState: state, unmergedCommits: 3, git: { branch, provider: { ok: true } }, ...extra });
+      repository.domains.runtime = { status: "available", data: {
+        checkouts: [
+          { rootId: "main", name: "main", isWorktree: false, git: { branch: "main", provider: { ok: true } } },
+          worktree("idle-tree", "feature/idle", "idle", { projectRoot: "/private/trees/a-worktree-with-a-long-name-that-fills-the-dropdown", git: { branch: "feature/idle", dirty: true, ahead: 12, behind: 0, upstream: "origin/feature/idle", ...drift, provider: { ok: true } } }),
+          worktree("stale-tree", "feature/stale", "stale", { git: { branch: "feature/stale", shortHead: "abc1234", ...drift, provider: { ok: true } } }),
+          worktree("landed-tree", "feature/landed", "landed", { mergedInto: "main", git: { branch: "feature/landed", ...drift, provider: { ok: true } } }),
+          worktree("blocked-tree", "feature/blocked", "landed", { worktreeReason: "plan not closed" }),
+          worktree("running-tree", "feature/running", "running", { worktreeRunning: true }),
+          worktree("app-tree", null, "idle", { projectRoot: "/private/app/runtime-row", git: { detached: true, shortHead: "d19c7b1", provider: { ok: true } } }),
+        ],
+        worktreeCleanup: null,
+      } };
+    });
+    await page.goto("/");
+    const card = roboRepoCard(page);
+    // No port says nothing runs; the row does not spell out "idle".
+    await expect(card.getByText("idle", { exact: true })).toHaveCount(0);
+    // Only a worktree no plan claims has a ⋮ cell; a plan's row keeps its actions in its dropdown.
+    await expect(planRowOf(card, "Idle Story").locator(".worktree-row-menu")).toBeHidden();
+    await expect(checkoutRow(card, "feature/stale").locator(".worktree-row-menu")).toBeVisible();
+    await expect(checkoutRow(card, "feature/stale").getByText("stale", { exact: true })).toBeVisible();
+    const merged = checkoutRow(card, "feature/landed").getByText("merged", { exact: true });
+    await expect(merged).toBeVisible();
+    await expect(merged).toHaveAttribute("title", "Merged into main");
+    await expect(checkoutRow(card, "feature/landed").locator(".worktree-state-note")).toBeHidden();
+    await expect(checkoutRow(card, "feature/blocked").getByText("plan not closed")).toBeVisible();
+    await expect(checkoutRow(card, "runtime-row (detached)")).toHaveCount(1);
+    await expect(card.getByRole("button", { name: /^(Delete|Stop)/ })).toHaveCount(0);
+    // A merged row drops the Git warning a branch in progress shows.
+    await expect(checkoutRow(card, "feature/stale").locator(".git-drift")).toBeVisible();
+    await expect(checkoutRow(card, "feature/landed").locator(".git-drift")).toBeHidden();
+
+    await card.getByRole("button", { name: "Actions for feature/running" }).click();
+    await expect(card.getByRole("button", { name: "Stop Server" }).locator('portal-icon[name="stop"]')).toHaveCount(1);
+    await expect(card.getByRole("button", { name: "Delete Worktree" }).locator('portal-icon[name="trash"]')).toHaveCount(1);
+    await card.getByRole("button", { name: "Stop Server" }).click();
+    expect(stops).toEqual([{ branch: "feature/running" }]);
+
+    const dialog = page.getByRole("dialog", { name: "Delete worktree" });
+    await card.getByRole("button", { name: "Actions for feature/running" }).click();
+    await card.getByRole("button", { name: "Delete Worktree" }).click();
+    await expect(dialog).toContainText("Something is running in this worktree.");
+    // A running worktree's deletion is not routine: the confirmation turns red.
+    await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "danger");
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+
+    await card.getByRole("button", { name: "Actions for feature/stale" }).click();
+    await expect(card.getByRole("button", { name: "Stop Server" })).toHaveCount(0);
+    await expect(card.getByRole("button", { name: "Delete Worktree" })).toHaveClass(/menu-item-danger/);
+    await card.getByRole("button", { name: "Delete Worktree" }).click();
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText("its local branch, feature/stale.");
+    await expect(dialog).toContainText("It has 3 commits that were never merged. A backup is kept so you can bring them back.");
+    // The archive ref and restore commands sit behind Details, out of the way until asked for.
+    const restore = dialog.locator("[data-slot=restore]");
+    await expect(restore).toBeHidden();
+    await dialog.getByText("Details and how to restore").click();
+    await expect(restore).toHaveText("git branch feature/stale refs/roborepo/abandoned/feature/stale-abc1234\ngit worktree add <folder> feature/stale");
+    await expect(dialog.getByText("Something is running in this worktree.")).toBeHidden();
+    // A stale worktree is routine cleanup: the confirmation stays green.
+    await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "cta");
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(dialog).toBeHidden();
+    await card.getByRole("button", { name: "Actions for feature/landed" }).click();
+    await card.getByRole("button", { name: "Delete Worktree" }).click();
+    await expect(dialog).toContainText("Its changes are already merged into main, so nothing is lost.");
+    await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "cta");
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    expect(removals).toEqual([]);
+
+    removal = { action: "kept", reason: "uncommitted or untracked changes" };
+    let release;
+    removalHeld = new Promise((resolve) => { release = resolve; });
+    await card.getByRole("button", { name: "Actions for feature/stale" }).click();
+    await card.getByRole("button", { name: "Delete Worktree" }).click();
+    const confirm = dialog.locator("[data-slot=confirm]");
+    await confirm.click();
+    // While the request runs the confirm button spins and every dialog button is disabled.
+    await expect(confirm).toBeDisabled();
+    await expect(confirm).toHaveAttribute("aria-busy", "true");
+    await expect(confirm.locator(".button-spinner")).toHaveCount(1);
+    await expect(confirm).toHaveText("Deleting…");
+    await expect(dialog.getByRole("button", { name: "Cancel" })).toBeDisabled();
+    release();
+    removalHeld = null;
+    await expect(dialog).toContainText("uncommitted or untracked changes");
+    await expect(confirm).toBeEnabled();
+    await expect(confirm).toHaveText("Delete worktree");
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+
+    removal = { action: "removed" };
+    // The plan's dropdown: one status line, then the same drift warning the row shows.
+    const rowWarning = await planRowOf(card, "Idle Story").locator(".git-drift").textContent();
+    await card.getByRole("button", { name: "Worktree details for Idle Story" }).click();
+    const details = page.locator(".worktree-details");
+    await expect(details.getByText("dirty · 12 ahead · 0 behind remote", { exact: true })).toBeVisible();
+    // The row prefixes its warning with ⚠; the dropdown puts icons in a gutter instead — GitHub on the
+    // status line, a warning glyph on each warning — so every line's text shares one left edge.
+    await expect(details.locator(".git-drift")).toHaveText([rowWarning.replace(/^⚠\s*/, "")]);
+    await expect(details.locator(".worktree-detail-fact").first().locator("portal-icon")).toHaveAttribute("name", "github");
+    await expect(details.locator(".git-drift portal-icon")).toHaveAttribute("name", "warning");
+    await expect(details.getByRole("button", { name: "Delete Worktree" })).toHaveClass(/menu-item-danger/);
+    // Every dropdown and menu shares one surface.
+    const surfaces = await page.evaluate(() => {
+      const background = (selector) => getComputedStyle(document.querySelector(selector)).backgroundColor;
+      return [background(".menu-button-panel"), getComputedStyle(document.documentElement).getPropertyValue("--popover-bg").trim()];
+    });
+    expect(surfaces[0]).not.toBe("rgba(0, 0, 0, 0)");
+    expect(await page.evaluate((color) => { const probe = document.createElement("div"); probe.style.color = color; document.body.append(probe); const value = getComputedStyle(probe).color; probe.remove(); return value; }, surfaces[1])).toBe(surfaces[0]);
+    // A copy confirms in place without changing the panel's width.
+    const panel = page.locator(".menu-button-panel");
+    const width = (await panel.boundingBox()).width;
+    await details.getByRole("button", { name: "Copy worktree path" }).click();
+    await expect(details.locator("portal-copy-button[copied]")).toHaveCount(1);
+    expect((await panel.boundingBox()).width).toBe(width);
+    // The open dropdown scrolls with the page, staying attached to its trigger.
+    const trigger = card.getByRole("button", { name: "Worktree details for Idle Story" });
+    const gap = async () => (await panel.boundingBox()).y - (await trigger.boundingBox()).y;
+    const before = await gap();
+    const triggerTop = (await trigger.boundingBox()).y;
+    await page.evaluate(() => window.scrollBy(0, 120));
+    await expect.poll(async () => Math.round((await trigger.boundingBox()).y)).toBeLessThan(Math.round(triggerTop));
+    await expect.poll(async () => Math.round(await gap())).toBe(Math.round(before));
+    await expect(page.getByRole("button", { name: "Stop Server" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Delete Worktree" }).locator('portal-icon[name="trash"]')).toHaveCount(1);
+    await page.getByRole("button", { name: "Delete Worktree" }).click();
+    await expect(dialog).toContainText('The active plan "Idle Story" is still using this worktree.');
+    await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "danger");
+    // Details start folded each time the dialog opens.
+    await expect(dialog.locator("[data-slot=restore]")).toBeHidden();
+    await dialog.getByRole("button", { name: "Delete worktree" }).click();
+    await expect(dialog).toBeHidden();
+    expect(removals).toEqual([{ branch: "feature/stale" }, { branch: "feature/idle" }]);
+    // The deletion's follow-up refresh may still be in flight through the patched route.
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+  });
+
+  test("the cleanup notice confirms a folder and turns on the hook, or shows the line for another tool's hook", async ({ page }) => {
+    const requests = [];
+    let enabled = { action: "installed" };
+    let offered = true;
+    await page.route("**/api/repositories/*/worktree-cleanup/*", async (route) => {
+      const action = new URL(route.request().url()).pathname.split("/").at(-1);
+      requests.push({ action, body: route.request().postDataJSON() });
+      if (action === "dismiss") offered = false;
+      await route.fulfill({ json: action === "enable" ? enabled : { action: "dismissed" } });
+    });
+    await patchRoboRepo(page, (repository) => {
+      repository.domains.runtime = { status: "available", data: {
+        checkouts: [
+          { rootId: "main", name: "main", isWorktree: false, git: { branch: "main", provider: { ok: true } } },
+          { rootId: "tree", name: "feature/tree", worktreeName: "tree", isWorktree: true, worktreeState: "idle", git: { branch: "feature/tree", provider: { ok: true } } },
+        ],
+        worktreeCleanup: { offered, hook: "absent", hookReason: null, folder: null, folderSource: null, proposedFolder: "/private/trees", dismissed: false },
+      } };
+    });
+    await page.goto("/");
+    const card = roboRepoCard(page);
+    const notice = card.getByRole("note");
+    await expect(notice).toContainText("Automatic worktree cleanup is off");
+    const dialog = page.getByRole("dialog", { name: "Turn on automatic cleanup" });
+    await notice.getByRole("button", { name: "Turn on automatic cleanup" }).click();
+    await expect(dialog.getByRole("textbox", { name: "Worktree folder" })).toHaveValue("/private/trees");
+    await dialog.getByRole("button", { name: "Turn on" }).click();
+    await expect(dialog).toBeHidden();
+    expect(requests.at(-1)).toEqual({ action: "enable", body: { folder: "/private/trees" } });
+
+    enabled = { action: "foreign hook", hook: "/private/repo/.git/hooks/post-merge", line: "nohup roborepo-cleanup &" };
+    await notice.getByRole("button", { name: "Turn on automatic cleanup" }).click();
+    await dialog.getByRole("button", { name: "Turn on" }).click();
+    await expect(dialog).toContainText("nohup roborepo-cleanup &");
+    await dialog.getByRole("button", { name: "Done" }).click();
+    await expect(dialog).toBeHidden();
+
+    await notice.getByRole("button", { name: "Dismiss" }).click();
+    await expect(card.getByRole("note")).toHaveCount(0);
+    expect(requests.at(-1).action).toBe("dismiss");
+    // The dismissal's follow-up refresh may still be in flight through the patched route.
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+  });
+
   test("Home renders the canonical repository directory", async ({ page }) => {
     const response = await page.goto("/");
     expect(response.status()).toBe(200);
@@ -135,12 +344,12 @@ test.describe("repository-first portal Home", () => {
     await expect(noApp.getByRole("button", { name: "Links" })).toHaveCount(0);
 
     const notStarted = planRowOf(card, "Plan C");
-    await expect(notStarted.locator(".plan-match-badge")).toHaveText("not started");
-    await expect(notStarted.locator(".plan-match-badge")).toHaveAttribute("title", "No worktree is associated with this plan");
-    const notRunning = planRowOf(card, "Plan D");
-    await expect(notRunning.locator(".plan-match-badge")).toHaveText("worktree not running");
-    await expect(notRunning.locator(".plan-match-badge")).toHaveAttribute("title", 'Home has no running checkout for worktree "gone"');
-    for (const row of [notStarted, notRunning]) {
+    await expect(notStarted.locator(".plan-match-badge")).toHaveText("no worktree");
+    await expect(notStarted.locator(".plan-match-badge")).toHaveAttribute("title", "This plan names no worktree");
+    const missing = planRowOf(card, "Plan D");
+    await expect(missing.locator(".plan-match-badge")).toHaveText("worktree missing");
+    await expect(missing.locator(".plan-match-badge")).toHaveAttribute("title", 'No worktree named "gone" exists in this repository');
+    for (const row of [notStarted, missing]) {
       await expect(row.getByRole("link")).toHaveCount(0);
       await expect(row.getByRole("button", { name: "Links" })).toHaveCount(0);
     }
@@ -173,11 +382,12 @@ test.describe("repository-first portal Home", () => {
     await card.getByRole("button", { name: "Worktree details for Plan A" }).click();
     const panel = card.locator(".worktree-details");
     // The worktree is identified by its path alone; its name was the path's last segment repeated.
-    await expect(panel.locator(".worktree-detail-value")).toHaveText(["feature/a", "/private/wt/feature-a"]);
+    // The plan path points at the plan's copy inside that worktree.
+    await expect(panel.locator(".worktree-detail-value")).toHaveText(["feature/a", "/private/wt/feature-a", "/private/wt/feature-a/docs/plans/active/plan-a.md"]);
     await expect(panel.getByRole("list", { name: "Worktree status" }).getByRole("listitem")).toHaveText([
-      "dirty", "0 ahead, 3 behind origin/feature/a", "4 commits behind main",
+      "dirty · 0 ahead", "3 behind remote",
     ]);
-    for (const name of ["Copy branch name", "Copy worktree path"]) {
+    for (const name of ["Copy branch name", "Copy worktree path", "Copy plan path"]) {
       await expect(panel.getByRole("button", { name })).toHaveCount(1);
     }
     await expect(panel.getByRole("button", { name: "Copy worktree name" })).toHaveCount(0);
@@ -185,17 +395,20 @@ test.describe("repository-first portal Home", () => {
     await panel.getByRole("button", { name: "Copy worktree path" }).click();
     const row = panel.locator(".worktree-detail-row").nth(1);
     await expect(panel).toBeVisible();
-    await expect(row).toHaveText("Copied", { useInnerText: true });
-    await expect(row.getByText("/private/wt/feature-a", { exact: true })).toBeHidden();
+    // The value stays put and the button confirms with its check alone, so the panel keeps its width.
+    await expect(row.locator("portal-copy-button[copied]")).toHaveCount(1);
+    await expect(row).toHaveText("/private/wt/feature-a", { useInnerText: true });
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("/private/wt/feature-a");
-    // The shared confirmation interval (5 s), then the value returns.
-    await expect(row.getByText("/private/wt/feature-a", { exact: true })).toBeVisible({ timeout: 8_000 });
-    await expect(row).not.toContainText("Copied");
+    // The shared confirmation interval (5 s), then the button returns to idle.
+    await expect(row.locator("portal-copy-button[copied]")).toHaveCount(0, { timeout: 8_000 });
 
-    // Closing the panel mid-confirmation resets the button, so reopening shows the value, not a stuck
-    // "Copied".
+    await panel.getByRole("button", { name: "Copy plan path" }).click();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("/private/wt/feature-a/docs/plans/active/plan-a.md");
+
+    // Closing the panel mid-confirmation resets the button, so reopening shows an idle copy button,
+    // not a stuck confirmation.
     await panel.getByRole("button", { name: "Copy branch name" }).click();
-    await expect(panel.locator(".worktree-detail-row").first()).toHaveText("Copied", { useInnerText: true });
+    await expect(panel.locator(".worktree-detail-row").first().locator("portal-copy-button[copied]")).toHaveCount(1);
     await page.keyboard.press("Escape");
     await expect(panel).toHaveCount(0);
     await card.getByRole("button", { name: "Worktree details for Plan A" }).click();
@@ -204,6 +417,7 @@ test.describe("repository-first portal Home", () => {
 
     await page.keyboard.press("Escape");
     await card.getByRole("button", { name: "Worktree details for Plan B" }).click();
+    // Without a resolved worktree path there is no plan path to build, so that row is left out.
     await expect(card.locator(".worktree-details .worktree-detail-value")).toHaveText(["feature/b", "feature-b"]);
     await expect(card.locator(".worktree-details").getByRole("list", { name: "Worktree status" })).toBeHidden();
   });
@@ -222,6 +436,13 @@ test.describe("repository-first portal Home", () => {
     await expect(value).toHaveAttribute("title", longPath);
     await card.getByRole("button", { name: "Copy worktree path" }).click();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(longPath);
+
+    const planPath = `${longPath}/docs/plans/active/plan-a.md`;
+    const planValue = card.locator(".worktree-details .worktree-detail-value").nth(2);
+    await expect(planValue).toHaveText(/^.{50}$/);
+    await expect(planValue).toHaveAttribute("title", planPath);
+    await card.getByRole("button", { name: "Copy plan path" }).click();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(planPath);
   });
 
   test("without active plans, or without Plans data, linked worktrees render as before", async ({ page }) => {
@@ -247,7 +468,24 @@ test.describe("repository-first portal Home", () => {
     await page.goto("/");
     const card = roboRepoCard(page);
     await expect(cardRows(card)).toHaveText([/No known checkout/, /Plan A/, /Plan B/, /Plan C/, /Plan D/], { useInnerText: true });
-    await expect(card.locator(".plan-match-badge")).toHaveText(["worktree not running", "worktree not running", "not started", "worktree not running"]);
+    // These plans carry no worktreeState from the server, so a named worktree reads as unknown.
+    await expect(card.locator(".plan-match-badge")).toHaveText(["worktree status unknown", "worktree status unknown", "no worktree", "worktree missing"]);
+  });
+
+  test("an unmatched plan's badge names its worktree state", async ({ page }) => {
+    let state;
+    await planFixture(page, (repository) => { repository.domains.plans.data.active.find((plan) => plan.id === "d").worktreeState = state; });
+    for (const [worktreeState, text, title] of [
+      ["unlisted", "worktree not listed", 'Worktree "gone" exists, but Runtime does not list it'],
+      ["ambiguous", "worktree ambiguous", 'Worktree "gone" is claimed by another active plan or matches more than one checkout'],
+      ["unknown", "worktree status unknown", 'Home cannot tell whether worktree "gone" is running'],
+    ]) {
+      state = worktreeState;
+      await page.goto("/");
+      const badge = planRowOf(roboRepoCard(page), "Plan D").locator(".plan-match-badge");
+      await expect(badge).toHaveText(text);
+      await expect(badge).toHaveAttribute("title", title);
+    }
   });
 
   test("Home Links renders its glyph, discovers routes and closes with Escape", async ({ page }) => {
@@ -311,7 +549,10 @@ test.describe("repository-first portal Home", () => {
       telemetry: { enabled: false, captureAvailable: false },
     } }));
     await page.goto("/settings");
-    await expect(page.locator('nav a[aria-label="Settings"] portal-icon svg')).toBeVisible();
+    await expect(page.locator(".nav-more-trigger")).toHaveClass(/\bactive\b/);
+    await page.locator(".nav-more-trigger").click();
+    await expect(page.locator('#nav-more-panel a[aria-current="page"] portal-icon[name="settings"] svg')).toBeVisible();
+    await page.keyboard.press("Escape");
     await expect(page.getByRole("heading", { level: 2, name: "Repos" })).toBeVisible();
     await expect(page.getByRole("heading", { level: 2, name: "Agent Harnesses" })).toBeVisible();
     await expect(page.getByRole("heading", { level: 2, name: "Token Activity Tracking" })).toBeVisible();
@@ -423,16 +664,48 @@ test.describe("repository-first portal Home", () => {
     }
   });
 
-  test("global navigation remains the static five-item manifest", async ({ page }) => {
+  test("global navigation keeps primary pages in the bar and the rest in the ⋮ menu", async ({ page }) => {
     await page.goto("/");
-    const labels = await page.locator("#nav a").allTextContents();
-    expect(labels.map((label) => label.trim())).toEqual(NAV_ORDER);
+    await expect(page.locator("#nav > a")).toHaveText(NAV_PRIMARY);
+    const trigger = page.locator(".nav-more-trigger");
+    const panel = page.locator("#nav-more-panel");
+    await expect(panel).toBeHidden();
+    await trigger.click();
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+    await expect(panel.locator("a:visible")).toHaveText(NAV_SECONDARY);
+    // Outside click and Escape both close it; Escape hands focus back to the trigger.
+    await page.locator("main").click({ position: { x: 5, y: 5 } });
+    await expect(panel).toBeHidden();
+    await trigger.click();
+    await page.keyboard.press("Escape");
+    await expect(panel).toBeHidden();
+    await expect(trigger).toBeFocused();
+    await expect(trigger).toHaveAttribute("aria-expanded", "false");
+
     for (const { path, active } of ROUTES) {
       const response = await page.goto(path);
       expect(response.status()).toBe(200);
-      await expect(page.locator("#nav a.active")).toHaveText(active);
-      await expect(page.locator("#nav a.active")).toHaveCount(1);
+      const secondary = NAV_SECONDARY.includes(active);
+      // A primary page is current in the bar and in the menu's narrow-screen copy; a secondary page
+      // is current only in the menu, so the trigger carries the highlight in the bar.
+      await expect(page.locator("#nav a.active")).toHaveText(secondary ? [active] : [active, active]);
+      if (secondary) await expect(trigger).toHaveClass(/\bactive\b/);
+      else await expect(trigger).not.toHaveClass(/\bactive\b/);
     }
+  });
+
+  test("a narrow viewport moves every page into the ⋮ menu", async ({ page }) => {
+    await page.setViewportSize({ width: 420, height: 780 });
+    await page.goto("/");
+    await expect(page.locator("#nav > a:visible")).toHaveCount(0);
+    await page.locator(".nav-more-trigger").click();
+    const links = page.locator("#nav-more-panel a:visible");
+    await expect(links).toHaveText(NAV_ORDER);
+    const panel = await page.locator("#nav-more-panel").boundingBox();
+    expect(panel.x).toBeGreaterThanOrEqual(0);
+    expect(panel.x + panel.width).toBeLessThanOrEqual(420);
+    await links.filter({ hasText: "Plans" }).click();
+    await expect(page).toHaveURL(/\/plans$/);
   });
 
   test("the content column stays centered and the card responds at mobile width", async ({ page }) => {
@@ -454,6 +727,7 @@ test.describe("repository-first portal Home", () => {
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     await page.locator("#theme-toggle").click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await page.locator(".nav-more-trigger").click();
     await page.locator("#nav").getByRole("link", { name: "Runtime", exact: true }).click();
     await expect(page).toHaveURL(/\/runtime$/);
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
@@ -476,12 +750,17 @@ test.describe("repository-first portal Home", () => {
     const logo = await focusSummary(page);
     expect(logo.ariaLabel).toBe("roborepo home");
     expect(logo.visible).toBe(true);
-    for (const expected of NAV_ORDER) {
+    for (const expected of NAV_PRIMARY) {
       await page.keyboard.press("Tab");
       const focused = await focusSummary(page);
       expect(focused.text).toBe(expected);
       expect(focused.visible).toBe(true);
     }
+    // The closed ⋮ menu is one stop; its links stay out of the tab order until it opens.
+    await page.keyboard.press("Tab");
+    const more = await focusSummary(page);
+    expect(more.ariaLabel).toBe("More pages");
+    expect(more.visible).toBe(true);
     // The compact Enable prompt now sits above the Active Repos section, so its action comes before
     // the heading's Manage repositories action and both come before the first card.
     for (const expected of ["Auto-discover active repos", "Manage Repos"]) {
@@ -496,6 +775,9 @@ test.describe("repository-first portal Home", () => {
     const firstCardControl = await focusSummary(page);
     expect(["GitHub", "Actions"]).toContain(firstCardControl.ariaLabel);
     expect(firstCardControl.visible).toBe(true);
+    // Home's harness-banner request for /api/settings is never awaited here, so on a slow runner it
+    // can still be in flight through the patched route when the test ends.
+    await page.unrouteAll({ behavior: "ignoreErrors" });
   });
 
   test("repository row exposes the configured Home actions", async ({ page }) => {
@@ -774,10 +1056,10 @@ async function planFixture(page, adjust) {
     repository.domains.plans = { status: "available", data: {
       counts: { active: 4, backlog: 5 },
       active: [
-        { id: "a", key: "a", title: "Plan A", worktree: "feature-a", checkoutRootId: "matched", taskCounts: { total: 4, complete: 2 } },
-        { id: "b", key: "b", title: "Plan B", worktree: "feature-b", checkoutRootId: "no-app", taskCounts: { total: 3, complete: 3 } },
+        { id: "a", key: "a", title: "Plan A", worktree: "feature-a", relativePath: "docs/plans/active/plan-a.md", checkoutRootId: "matched", taskCounts: { total: 4, complete: 2 } },
+        { id: "b", key: "b", title: "Plan B", worktree: "feature-b", relativePath: "docs/plans/active/plan-b.md", checkoutRootId: "no-app", taskCounts: { total: 3, complete: 3 } },
         { id: "c", key: "c", title: "Plan C", worktree: "", taskCounts: { total: 0, complete: 0 } },
-        { id: "d", key: "d", title: "Plan D", worktree: "gone", taskCounts: { total: 2, complete: 0 } },
+        { id: "d", key: "d", title: "Plan D", worktree: "gone", worktreeState: "missing", taskCounts: { total: 2, complete: 0 } },
       ],
       recent: [],
     } };

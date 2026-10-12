@@ -10,6 +10,7 @@ related:
   - telemetry-analyze-single-pass-perf
   - nl40n9vr
 reviewed_commit: 55c2b2b50ba4872c5d891a2037ca71c97a9b3e18
+worktree: telemetry-analytics-oracle
 ---
 
 # Live confidence for telemetry analytics

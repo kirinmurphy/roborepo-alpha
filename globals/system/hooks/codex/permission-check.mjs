@@ -20,15 +20,22 @@ import { fileURLToPath } from 'node:url'
 // (or clarifies) the classified subset, mirroring the "hooks only tighten" convention already
 // documented in minimize-bash-output.mjs.
 
+// The state root resolves the way the CLI's own does. The app root the CLI records there is what an
+// npm install depends on: this file runs as a copy under the harness home, so walking back from its
+// own location only finds the manifest in a development checkout.
+const stateDir =
+  process.env.ROBOREPO_STATE_ROOT || process.env.ROBOREPO_STATE_DIR || path.join(os.homedir(), '.roborepo')
+
 function candidateRepoRoots() {
   const candidates = []
   if (process.env.REPO_ROOT) candidates.push(process.env.REPO_ROOT)
 
-  const statePath = path.join(process.env.ROBOREPO_STATE_DIR || path.join(os.homedir(), '.roborepo'), 'install-state.json')
-  try {
-    const state = JSON.parse(fs.readFileSync(statePath, 'utf8'))
-    if (typeof state.repo === 'string' && state.repo) candidates.push(state.repo)
-  } catch {}
+  for (const [file, key] of [['app-root.json', 'appRoot'], ['install-state.json', 'repo']]) {
+    try {
+      const value = JSON.parse(fs.readFileSync(path.join(stateDir, file), 'utf8'))[key]
+      if (typeof value === 'string' && value) candidates.push(value)
+    } catch {}
+  }
 
   candidates.push(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..'))
   return candidates
@@ -41,7 +48,7 @@ function hasPermissionManifest(root) {
 const candidates = candidateRepoRoots()
 const repoRoot = candidates.find(hasPermissionManifest) || candidates[candidates.length - 1]
 const manifestPath = path.join(repoRoot, 'manifests', 'inventory', 'agent-permissions.json')
-const overridesPath = path.join(os.homedir(), '.roborepo', 'command-overrides.json')
+const overridesPath = path.join(stateDir, 'command-overrides.json')
 const permissionManifestFound = hasPermissionManifest(repoRoot)
 
 function loadJson(p, fallback) {

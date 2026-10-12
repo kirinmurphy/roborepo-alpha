@@ -159,7 +159,7 @@ function sameDiscoverySource(discovery, { source, sourceId }) {
 }
 
 // Register a local on-disk root (clone or worktree) under a repository. Idempotent by rootId.
-export function registerLocalRoot(registry, id, { rootId, kind = "clone", now = new Date().toISOString() }) {
+export function registerLocalRoot(registry, id, { rootId, kind = "clone", now = new Date().toISOString(), refreshSeen = true }) {
   const record = requireRecord(registry, id, "register local root");
   const existing = record.localRoots.find((r) => r.rootId === rootId);
   if (!existing) {
@@ -169,12 +169,48 @@ export function registerLocalRoot(registry, id, { rootId, kind = "clone", now = 
     record.updatedAt = now;
     return true;
   }
-  if (Date.parse(now) - Date.parse(existing.lastSeenAt) >= LAST_SEEN_DEBOUNCE_MS) {
+  if (kind === "worktree" && existing.kind !== "worktree") {
+    existing.kind = "worktree";
+    record.updatedAt = now;
+    return true;
+  }
+  if (refreshSeen && Date.parse(now) - Date.parse(existing.lastSeenAt) >= LAST_SEEN_DEBOUNCE_MS) {
     existing.lastSeenAt = now;
     record.updatedAt = now;
     return true;
   }
   return false;
+}
+
+// Drops a linked worktree's checkout record and path once the worktree is gone. Only `worktree`
+// roots qualify: an absent clone may simply have moved, and its record is how Home says so.
+export function forgetWorktreeRoot(registry, id, rootId, { now = new Date().toISOString() } = {}) {
+  const record = requireRecord(registry, id, "forget worktree root");
+  const index = record.localRoots.findIndex((root) => root.rootId === rootId && root.kind === "worktree");
+  if (index === -1) return false;
+  record.localRoots.splice(index, 1);
+  if (registry.localRootPaths?.[rootId]?.repositoryId === id) delete registry.localRootPaths[rootId];
+  record.updatedAt = now;
+  return true;
+}
+
+// Records that Runtime saw something running in a checkout, at most once per debounce interval.
+export function markLocalRootRunning(registry, id, rootId, { now = new Date().toISOString() } = {}) {
+  const root = requireRecord(registry, id, "mark local root running").localRoots.find((item) => item.rootId === rootId);
+  if (!root) return false;
+  if (root.lastRunningAt && Date.parse(now) - Date.parse(root.lastRunningAt) < LAST_SEEN_DEBOUNCE_MS) return false;
+  root.lastRunningAt = now;
+  return true;
+}
+
+// Merges `changes` into the repository's opt-in worktree cleanup record (see schema.mjs).
+export function setWorktreeCleanup(registry, id, changes, { now = new Date().toISOString() } = {}) {
+  const record = requireRecord(registry, id, "set worktree cleanup");
+  const next = { ...(record.worktreeCleanup || {}), ...changes };
+  if (JSON.stringify(next) === JSON.stringify(record.worktreeCleanup || {})) return false;
+  record.worktreeCleanup = next;
+  record.updatedAt = now;
+  return true;
 }
 
 // Record where a rootId actually lives on disk (pljvmyh §2's private index). Separate from

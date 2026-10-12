@@ -198,24 +198,25 @@ for (const [id, { boundaryPhrases }] of Object.entries(SKILLS)) {
   }
 
   const close = normalize(fs.readFileSync(path.join(repoRoot, "globals/packages/plan-close/skills/plan-close/SKILL.md"), "utf8"));
-  const order = ["### 1. Run the tests", "### 3. Check the plan against the code", "### 5. Confirm `## Not tested` is clear", "### 6. Confirm the work landed", "### 7. Close", "### 8. Stop the worktree's servers"]
+  const order = ["### 1. Run the tests", "### 3. Check the plan against the code", "### 5. Confirm `## Not tested` is clear", "### 6. Confirm the work landed", "### 7. Close", "### 8. Stop the worktree's servers", "### 9. Remove the closed worktree"]
     .map((heading) => close.indexOf(heading));
-  assert.ok(order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1])), "plan-close: tests, verdict, Not tested, landed, close, then stop servers, in that order");
+  assert.ok(order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1])), "plan-close: tests, verdict, Not tested, landed, close, stop servers, then cleanup, in that order");
   for (const phrase of [
     "continue independent agent-resolvable work",
     "Prefer the repository's canonical CI command over a broad",
     "release-only or",
     "availability of optional tools or environment fixtures is not a closure prerequisite",
-    "content-level landed check for squash and rebase merges",
-    "report `landed: yes` even though ancestry is false",
+    "The work must be in the base branch, including after a squash or rebase merge",
+    "first-parent commits",
     "landed: unconfirmed",
     "UNCONFIRMED_NOT_TESTED",
-    "git merge-base --is-ancestor",
+    "canonical landed check",
     "never as passed",
     "add a missing regression test",
     "rerun the affected checks",
     "manual-only `## Not tested` entries",
     "canonical linked-worktree server cleanup command",
+    "canonical worktree cleanup command scoped to this plan",
     "Skip this step for an archived or refused plan",
     "## Refusal and blocker reporting",
     "report every issue explicitly",

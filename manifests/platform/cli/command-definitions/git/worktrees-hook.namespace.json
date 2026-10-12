@@ -1,0 +1,7 @@
+{
+  "path": ["git", "worktrees", "hook"],
+  "kind": "namespace",
+  "title": "Worktree hook",
+  "description": "Manage the repository's opt-in post-merge cleanup hook",
+  "order": 20
+}
