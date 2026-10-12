@@ -117,7 +117,11 @@ export async function worktreeCleanupCommand(args) {
   const options = { apply: false, confirm: false, json: false };
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    if (["--plan", "--remove", "--current"].includes(arg)) options[arg.slice(2) === "current" ? "currentPath" : arg.slice(2)] = args[++i];
+    if (["--plan", "--remove", "--current"].includes(arg)) {
+      const value = args[++i];
+      if (!value || value.startsWith("--")) throw new Error(`${arg} needs a value`);
+      options[arg === "--current" ? "currentPath" : arg.slice(2)] = value;
+    }
     else if (["--apply", "--confirm", "--json"].includes(arg)) options[arg.slice(2)] = true;
     else throw new Error(`unknown cleanup option: ${arg}`);
   }

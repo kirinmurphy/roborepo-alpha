@@ -52,8 +52,15 @@ function staleLock(file, fsApi) {
   }
 }
 
+// The tip's short SHA ends the ref, so the same branch name can be archived again at a new tip, and
+// archiving `a` never blocks a later `a/b` (Git cannot hold `abandoned/a` as a ref and a directory).
+// Seven characters matches the short SHA Home shows, so its confirmation names the exact ref.
+export function archiveRefName(branch, tip) {
+  return `refs/roborepo/abandoned/${branch}-${tip.slice(0, 7)}`;
+}
+
 export async function archiveBranchTip(mainPath, branch, tip, { runGit = runGitProcess } = {}) {
-  const ref = `refs/roborepo/abandoned/${branch}`;
+  const ref = archiveRefName(branch, tip);
   const existing = await runGit(mainPath, ["rev-parse", "--verify", ref]);
   if (existing.ok && existing.stdout.trim() !== tip) return { ok: false, reason: `archive ref already exists: ${ref}` };
   const result = await runGit(mainPath, ["update-ref", ref, tip], { timeoutMs: 10000 });

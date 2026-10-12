@@ -7,13 +7,13 @@ import { spawnSync } from "node:child_process";
 import { inspectBranchLanding } from "../../modules/repositories/worktree-landed.mjs";
 import { linkedWorktrees } from "../../modules/repositories/worktree-inventory.mjs";
 import { deriveWorktreeState, resolveWorktreeStaleDays } from "../../modules/repositories/worktree-state.mjs";
-import { cleanupWorktrees, removeRepositoryWorktree, stopRepositoryWorktreeServers } from "../cli/worktree-cleanup.mjs";
+import { cleanupWorktrees, removeRepositoryWorktree, stopRepositoryWorktreeServers, worktreeCleanupCommand } from "../cli/worktree-cleanup.mjs";
 import { activeWorktreeNames, proposedWorktreeFolder } from "../cli/worktree-policy.mjs";
 import { dismissWorktreeCleanupNotice, enableWorktreeCleanup } from "../cli/worktree-cleanup-optin.mjs";
 import { recordRepositoryDiscovery } from "../cli/repositories.mjs";
 import { loadRegistry } from "../../modules/repositories/registry.mjs";
 import { rootId } from "../../modules/repositories/identity.mjs";
-import { removalLogPath, withCleanupLock } from "../../modules/repositories/worktree-removal.mjs";
+import { archiveBranchTip, archiveRefName, removalLogPath, withCleanupLock } from "../../modules/repositories/worktree-removal.mjs";
 import { checkWorktreeRemoval } from "../../modules/repositories/worktree-guards.mjs";
 import { inspectWorktreeHook, manageWorktreeHook } from "../cli/worktree-hook.mjs";
 import { collectKnownWorktrees } from "../cli/worktree-observations.mjs";
@@ -184,10 +184,27 @@ try {
     const branchTip = git(worktree, "rev-parse", "HEAD");
     let rows = await cleanupWorktrees({ cwd: main, stateRoot, remove: "feature", confirm: true, apply: true, discover: async () => ({ instances: [] }) });
     assert.equal(rows[0].action, "removed", rows[0].reason);
-    assert.equal(git(main, "rev-parse", "refs/roborepo/abandoned/feature"), branchTip);
-    git(main, "branch", "feature", "refs/roborepo/abandoned/feature");
+    const archive = `refs/roborepo/abandoned/feature-${branchTip.slice(0, 7)}`;
+    assert.equal(rows[0].archiveRef ?? archive, archive);
+    assert.equal(git(main, "rev-parse", archive), branchTip);
+    git(main, "branch", "feature", archive);
     assert.equal(git(main, "rev-parse", "feature"), branchTip, "archive ref restores the original tip");
     assert.notEqual(tip, branchTip);
+    // The tip's short SHA ends each archive ref: the same name archives again at a new tip, a
+    // repeat of the same tip is a no-op, and archiving `feature` never blocks `feature/sub`.
+    assert.equal(archiveRefName("feature", branchTip), archive);
+    assert.deepEqual(await archiveBranchTip(main, "feature", branchTip), { ok: true, ref: archive });
+    const again = await archiveBranchTip(main, "feature", tip);
+    assert.equal(again.ok, true, again.reason);
+    assert.notEqual(again.ref, archive);
+    const nested = await archiveBranchTip(main, "feature/sub", tip);
+    assert.equal(nested.ok, true, nested.reason);
+  }
+  {
+    // A value-taking option must get a value, not the next flag.
+    for (const args of [["--remove"], ["--plan", "--apply"], ["--current", ""]]) {
+      await assert.rejects(worktreeCleanupCommand(args), /needs a value/, args.join(" "));
+    }
   }
   {
     const { main, worktree } = repository("ignored");
@@ -351,6 +368,23 @@ try {
     assert.equal(installed.action, "installed");
     assert.equal(installed.scope, "checkout");
     assert.equal(installed.checkout, fs.realpathSync(main));
+    {
+      // With --separate-git-dir the common directory's parent is not the main checkout, and Git does
+      // not record where that checkout is, so a relative hooks path is refused rather than resolved
+      // against the wrong folder.
+      const separateMain = path.join(root, "separate-main");
+      const separateGit = path.join(root, "separate-store", "repo.git");
+      fs.mkdirSync(path.dirname(separateGit), { recursive: true });
+      git(root, "init", "-q", "-b", "main", "--separate-git-dir", separateGit, separateMain);
+      commit(separateMain, "seed.txt", "seed\n");
+      const separateWork = path.join(root, "separate-work");
+      git(separateMain, "worktree", "add", "-q", "-b", "feature", separateWork);
+      git(separateMain, "config", "core.hooksPath", ".githooks");
+      const separate = await manageWorktreeHook({ cwd: separateWork, stateRoot: path.join(root, "separate-state") });
+      assert.equal(separate.action, "refused");
+      assert.match(separate.reason, /Git directory is outside/);
+      assert.equal(fs.existsSync(path.join(path.dirname(separateGit), ".githooks")), false, "nothing is written beside the Git directory");
+    }
     assert.equal(installed.hook, path.join(fs.realpathSync(main), ".githooks", "post-merge"));
     const log = path.join(stateRoot, "worktree-cleanup", "hook.log");
     git(worktree, "merge", "-q", "--no-edit", "main");

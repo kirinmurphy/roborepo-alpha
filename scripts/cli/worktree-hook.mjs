@@ -48,7 +48,11 @@ async function resolveHook(cwd) {
   const common = await runGitProcess(cwd, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
   if (!common.ok) throw new Error("Git common directory unavailable");
   const commonDir = common.stdout.trim();
-  return { commonDir, target: await hooksTarget(cwd, commonDir, path.dirname(commonDir)) };
+  // The main checkout is the common directory's parent only when that directory is its `.git`. With
+  // `--separate-git-dir` it lives elsewhere, and Git itself does not record the checkout's path
+  // (`git worktree list` names the separate directory), so the main checkout stays unknown.
+  const mainPath = path.basename(commonDir) === ".git" ? path.dirname(commonDir) : null;
+  return { commonDir, target: await hooksTarget(cwd, commonDir, mainPath) };
 }
 
 // Git runs hooks from `core.hooksPath` when set, else `<common dir>/hooks`. A relative hooksPath is
@@ -74,6 +78,7 @@ async function hooksTarget(cwd, commonDir, mainPath) {
     return { dir: path.resolve(checkout, value), scope: "checkout", checkout };
   }
   if (path.isAbsolute(value)) return { dir: value, scope: "repository", checkout: null };
+  if (!mainPath) return { refused: `core.hooksPath (${raw}) is relative to the main checkout, which cannot be found because the repository's Git directory is outside it` };
   return { dir: path.resolve(mainPath, value), scope: "checkout", checkout: mainPath };
 }
 

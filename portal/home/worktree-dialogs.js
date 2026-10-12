@@ -28,7 +28,8 @@ export function createWorktreeRemoveDialog({ onRemoved }) {
       fill(dialog, {
         branch: branch || `detached (${checkout.worktreeName})`,
         unmerged: Number.isInteger(checkout.unmergedCommits) ? String(checkout.unmergedCommits) : "unknown",
-        archive: `refs/roborepo/abandoned/${selector}`,
+        // The ref ends in the tip's short SHA (archiveRefName in worktree-removal.mjs).
+        archive: `refs/roborepo/abandoned/${selector}-${checkout.git?.shortHead || "<commit>"}`,
       });
       slot("plan").hidden = !plan;
       slot("plan").textContent = plan ? `Active plan "${plan.title}" uses this worktree. Deleting it leaves the plan active without its worktree.` : "";

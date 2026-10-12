@@ -210,7 +210,9 @@ ref that preserves its tip, and the active plan when one claims the worktree; co
 servers and removes it. Both live in the worktree dropdown on a plan's row and in the ⋮ menu on any
 other worktree row; no row shows them inline. Deletion refuses a locked or dirty worktree, a
 worktree with valuable ignored files or submodules, a server that does not stop, and the current or
-main checkout, and the confirmation shows the reason. A refused deletion stops nothing.
+main checkout, and the confirmation shows the reason. Servers stop only after those checks pass, so
+a refusal at that point stops nothing. The removal itself can still fail after the servers have
+stopped, for example when Git state changed in between; the confirmation shows that reason too.
 
 A merged row drops the Git warnings (behind, unpushed) the row shows for work in progress; the
 checkout tooltip and the worktree dropdown still carry them.
@@ -249,6 +251,7 @@ The installer writes `post-merge` into the directory Git runs hooks from:
 | unset | `<common Git dir>/hooks/` | every checkout of the repository |
 | absolute, in repository config | that directory | every checkout of the repository |
 | relative, in repository config | that path under the main checkout | the main checkout only |
+| relative, with the Git directory outside the main checkout (`--separate-git-dir`) | none; the installer refuses | — |
 | set in one worktree's config | that path in that checkout | that checkout only |
 | set in global or system config | none; the installer refuses | — |
 
@@ -265,11 +268,12 @@ worktree once it lands. After moving or upgrading `node`, run the install again 
 path; until then each run logs its failure to `hook.log`.
 
 The removal log is `<state root>/worktree-cleanup/removals.jsonl`; each line names the branch and
-commit. A confirmed removal also writes `refs/roborepo/abandoned/<branch>`. Restore its branch with
-`git branch <branch> refs/roborepo/abandoned/<branch>`, then restore a checkout with
-`git worktree add <path> <branch>`. List archive refs with
+commit. A confirmed removal also writes `refs/roborepo/abandoned/<branch>-<commit>`, where
+`<commit>` is the tip's seven-character short SHA, so archiving the same branch name again keeps the
+earlier archive. Restore its branch with `git branch <branch> refs/roborepo/abandoned/<branch>-<commit>`,
+then restore a checkout with `git worktree add <path> <branch>`. List archive refs with
 `git for-each-ref refs/roborepo/abandoned` and delete one after review with
-`git update-ref -d refs/roborepo/abandoned/<branch>`.
+`git update-ref -d refs/roborepo/abandoned/<branch>-<commit>`.
 
 Cards with more than five checkouts put the additional rows in an expandable section. An open
 section and a focused control are not rebuilt during polling, so keyboard position and expanded

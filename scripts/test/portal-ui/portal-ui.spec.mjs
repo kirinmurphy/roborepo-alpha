@@ -74,7 +74,7 @@ test.describe("repository-first portal Home", () => {
         checkouts: [
           { rootId: "main", name: "main", isWorktree: false, git: { branch: "main", provider: { ok: true } } },
           worktree("idle-tree", "feature/idle", "idle", { projectRoot: "/private/trees/a-worktree-with-a-long-name-that-fills-the-dropdown", git: { branch: "feature/idle", dirty: true, ahead: 12, behind: 0, upstream: "origin/feature/idle", ...drift, provider: { ok: true } } }),
-          worktree("stale-tree", "feature/stale", "stale", { git: { branch: "feature/stale", ...drift, provider: { ok: true } } }),
+          worktree("stale-tree", "feature/stale", "stale", { git: { branch: "feature/stale", shortHead: "abc1234", ...drift, provider: { ok: true } } }),
           worktree("landed-tree", "feature/landed", "landed", { mergedInto: "main", git: { branch: "feature/landed", ...drift, provider: { ok: true } } }),
           worktree("blocked-tree", "feature/blocked", "landed", { worktreeReason: "plan not closed" }),
           worktree("running-tree", "feature/running", "running", { worktreeRunning: true }),
@@ -121,7 +121,7 @@ test.describe("repository-first portal Home", () => {
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText("feature/stale");
     await expect(dialog).toContainText("3");
-    await expect(dialog).toContainText("refs/roborepo/abandoned/feature/stale");
+    await expect(dialog).toContainText("refs/roborepo/abandoned/feature/stale-abc1234");
     await expect(dialog.getByText("Its running servers are stopped first.")).toBeHidden();
     await dialog.getByRole("button", { name: "Cancel" }).click();
     await expect(dialog).toBeHidden();
