@@ -416,6 +416,32 @@ test.describe("repository-first portal Home", () => {
     await expect(card.locator(".worktree-details").getByRole("list", { name: "Worktree status" })).toBeHidden();
   });
 
+  test("once a plan's worktree has merged, the plan path points at the main checkout's copy", async ({ page }) => {
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await planFixture(page, (repository) => {
+      const checkouts = repository.domains.runtime.data.checkouts;
+      checkouts.find((checkout) => checkout.rootId === "main").projectRoot = "/private/repo";
+      Object.assign(checkouts.find((checkout) => checkout.rootId === "matched"), { worktreeState: "landed", mergedInto: "main" });
+    });
+    await page.goto("/");
+    const card = roboRepoCard(page);
+    await card.getByRole("button", { name: "Worktree details for Plan A" }).click();
+    const panel = card.locator(".worktree-details");
+    await expect(panel.locator(".worktree-detail-value")).toHaveText(["feature/a", "/private/wt/feature-a", "/private/repo/docs/plans/active/plan-a.md"]);
+    await panel.getByRole("button", { name: "Copy plan path" }).click();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("/private/repo/docs/plans/active/plan-a.md");
+  });
+
+  test("a merged worktree with no main checkout path shows no plan path rather than the stale worktree copy", async ({ page }) => {
+    await planFixture(page, (repository) => {
+      Object.assign(repository.domains.runtime.data.checkouts.find((checkout) => checkout.rootId === "matched"), { worktreeState: "landed", mergedInto: "main" });
+    });
+    await page.goto("/");
+    const card = roboRepoCard(page);
+    await card.getByRole("button", { name: "Worktree details for Plan A" }).click();
+    await expect(card.locator(".worktree-details .worktree-detail-value")).toHaveText(["feature/a", "/private/wt/feature-a"]);
+  });
+
   test("a long worktree path is middle-truncated to 50 characters, and copies and titles in full", async ({ page }) => {
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
     const longPath = "/Users/someone/.worktrees/roborepo/claude/a-very-long-feature-branch-worktree-name";

@@ -80,9 +80,10 @@ function cardRows(domains, actions) {
   const checkouts = domains.runtime.data?.checkouts || [];
   const hookInstalled = domains.runtime.data?.worktreeCleanup?.hook === "installed";
   const byRootId = new Map(checkouts.filter((checkout) => checkout.isWorktree && checkout.rootId).map((checkout) => [checkout.rootId, checkout]));
+  const mainCheckouts = checkouts.filter((checkout) => !checkout.isWorktree);
   const consumed = new Set();
   const rows = checkouts.length
-    ? checkouts.filter((checkout) => !checkout.isWorktree).map((checkout) => checkoutRow(checkout, actions, { hookInstalled }))
+    ? mainCheckouts.map((checkout) => checkoutRow(checkout, actions, { hookInstalled }))
     : [noCheckoutRow()];
   for (const plan of domains.plans.data?.active || []) {
     const checkout = byRootId.get(plan.checkoutRootId);
@@ -93,6 +94,7 @@ function cardRows(domains, actions) {
     consumed.add(checkout);
     const target = { repositoryId: actions.repositoryId, checkout, plan };
     const identity = matchedPlanIdentity(plan, checkout, {
+      mainCheckouts,
       onOpenPlan: actions.onOpenPlan,
       onStopServers: () => actions.onStopServers(target),
       onDelete: () => actions.onRemoveWorktree(target),
