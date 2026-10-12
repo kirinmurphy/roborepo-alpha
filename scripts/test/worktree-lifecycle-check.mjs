@@ -220,7 +220,7 @@ try {
     const item = linkedWorktrees(path.join(main, ".git"))[0];
     const base = { worktree: item, kind: "automatic", landed: true, worktreeRoot: fs.realpathSync(root), mainPath: main, currentPath: main };
     assert.equal((await checkWorktreeRemoval({ ...base, landed: false })).reason, "not landed");
-    assert.match((await checkWorktreeRemoval({ ...base, worktreeRoot: main })).reason, /not in your worktree folder/);
+    assert.match((await checkWorktreeRemoval({ ...base, worktreeRoot: main })).reason, /not in worktree folder/);
     assert.equal((await checkWorktreeRemoval({ ...base, kind: "confirmed", worktreeRoot: main })).ok, true);
     assert.equal((await checkWorktreeRemoval({ ...base, currentPath: item.path })).reason, "current or main checkout");
     assert.equal((await checkWorktreeRemoval({ ...base, kind: "confirmed", currentPath: item.path })).reason, "current or main checkout");
@@ -485,7 +485,7 @@ try {
     }
     const options = { cwd: main, stateRoot, discover: async () => ({ instances: [] }) };
     let rows = await cleanupWorktrees(options);
-    assert.match(rows.find((row) => row.branch === "inside").reason, /not in your worktree folder/, "with no folder, landed work is only suggested");
+    assert.match(rows.find((row) => row.branch === "inside").reason, /not in worktree folder/, "with no folder, landed work is only suggested");
     assert.equal((await inspectWorktreeHook({ cwd: main })).state, "absent");
     await assert.rejects(enableWorktreeCleanup({ repositoryId, folder: os.homedir(), stateRoot }), /home directory/);
     await assert.rejects(enableWorktreeCleanup({ repositoryId, folder: path.join(root, "no-such-folder"), stateRoot }), /Folder not found/);
@@ -496,7 +496,7 @@ try {
     assert.equal((await inspectWorktreeHook({ cwd: main })).state, "installed");
     rows = await cleanupWorktrees({ ...options, apply: true });
     assert.equal(rows.find((row) => row.branch === "inside").action, "removed", rows.find((row) => row.branch === "inside").reason);
-    assert.match(rows.find((row) => row.branch === "outside").reason, /not in your worktree folder/);
+    assert.match(rows.find((row) => row.branch === "outside").reason, /not in worktree folder/);
     assert.equal(fs.existsSync(inside), false);
     assert.equal(fs.existsSync(outside), true, "a landed worktree outside the confirmed folder is kept");
     dismissWorktreeCleanupNotice({ repositoryId, stateRoot });

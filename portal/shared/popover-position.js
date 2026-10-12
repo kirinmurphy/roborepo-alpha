@@ -9,16 +9,19 @@
 //
 // A fixed panel does not move when the page scrolls, so every positioned panel is followed: on any
 // scroll or resize it is re-placed against its trigger's new rect, on the side it opened on, until
-// the panel or its trigger leaves the document.
+// the panel or its trigger leaves the document. Its height is fixed when it opens and only a resize
+// re-clamps it: re-clamping on scroll grew the panel by however far its trigger had scrolled, so a
+// panel whose top had scrolled off-screen stretched to several screens tall.
 
 const GAP = 4; // px between trigger and panel
 const VIEWPORT_MARGIN = 8; // keep the panel's far edge this far inside the viewport
 
 const followed = new Map(); // panel → { trigger, openAbove }
 let frame = null;
+let resized = false; // a resize arrived since the last frame
 
 export function positionPopoverPanel(panel, trigger) {
-  const openAbove = place(panel, trigger, null);
+  const openAbove = place(panel, trigger, null, true);
   followed.set(panel, { trigger, openAbove });
   if (followed.size === 1) {
     window.addEventListener("scroll", schedule, { capture: true, passive: true });
@@ -26,13 +29,16 @@ export function positionPopoverPanel(panel, trigger) {
   }
 }
 
-function schedule() {
+function schedule(event) {
+  if (event.type === "resize") resized = true;
   if (frame !== null) return;
   frame = requestAnimationFrame(() => {
     frame = null;
+    const clamp = resized;
+    resized = false;
     for (const [panel, { trigger, openAbove }] of followed) {
       if (!panel.isConnected || !trigger.isConnected) followed.delete(panel);
-      else place(panel, trigger, openAbove);
+      else place(panel, trigger, openAbove, clamp);
     }
     if (!followed.size) {
       window.removeEventListener("scroll", schedule, { capture: true });
@@ -42,8 +48,8 @@ function schedule() {
 }
 
 // `side` is null on open, which picks the roomier side; following keeps that side so a panel never
-// flips while the page scrolls under it.
-function place(panel, trigger, side) {
+// flips while the page scrolls under it. `clamp` re-sizes the panel to the room on that side.
+function place(panel, trigger, side, clamp) {
   const rect = trigger.getBoundingClientRect();
   const vh = window.innerHeight;
   const vw = window.innerWidth;
@@ -55,9 +61,9 @@ function place(panel, trigger, side) {
   const available = Math.max(openAbove ? roomAbove : roomBelow, 0);
 
   // Clamp the panel height to the room on the chosen side so the far edge stays on-screen; the panel
-  // scrolls internally past that (CSS gives it overflow-y:auto). Recomputed on every placement, so a
+  // scrolls internally past that (CSS gives it overflow-y:auto). Recomputed on every open, so a
   // previous open on a cramped side never sticks.
-  panel.style.maxHeight = available + "px";
+  if (clamp) panel.style.maxHeight = available + "px";
 
   if (openAbove) {
     panel.style.top = "auto";

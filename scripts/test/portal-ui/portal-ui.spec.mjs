@@ -52,8 +52,10 @@ test.describe("repository-first portal Home", () => {
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
     const removals = [];
     let removal = { action: "removed" };
+    let removalHeld = null; // a promise the next removal response waits on, to observe the busy state
     await page.route("**/api/repositories/*/worktrees/remove", async (route) => {
       removals.push(route.request().postDataJSON());
+      await removalHeld;
       await route.fulfill({ json: removal });
     });
     const stops = [];
@@ -88,7 +90,7 @@ test.describe("repository-first portal Home", () => {
     // Only a worktree no plan claims has a ⋮ cell; a plan's row keeps its actions in its dropdown.
     await expect(planRowOf(card, "Idle Story").locator(".worktree-row-menu")).toBeHidden();
     await expect(checkoutRow(card, "feature/stale").locator(".worktree-row-menu")).toBeVisible();
-    await expect(checkoutRow(card, "feature/stale").getByText("suggested for removal")).toBeVisible();
+    await expect(checkoutRow(card, "feature/stale").getByText("stale", { exact: true })).toBeVisible();
     const merged = checkoutRow(card, "feature/landed").getByText("merged", { exact: true });
     await expect(merged).toBeVisible();
     await expect(merged).toHaveAttribute("title", "Merged into main");
@@ -114,6 +116,7 @@ test.describe("repository-first portal Home", () => {
 
     await card.getByRole("button", { name: "Actions for feature/stale" }).click();
     await expect(card.getByRole("button", { name: "Stop Server" })).toHaveCount(0);
+    await expect(card.getByRole("button", { name: "Delete Worktree" })).toHaveClass(/menu-item-danger/);
     await card.getByRole("button", { name: "Delete Worktree" }).click();
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText("feature/stale");
@@ -125,10 +128,23 @@ test.describe("repository-first portal Home", () => {
     expect(removals).toEqual([]);
 
     removal = { action: "kept", reason: "uncommitted or untracked changes" };
+    let release;
+    removalHeld = new Promise((resolve) => { release = resolve; });
     await card.getByRole("button", { name: "Actions for feature/stale" }).click();
     await card.getByRole("button", { name: "Delete Worktree" }).click();
-    await dialog.getByRole("button", { name: "Delete worktree" }).click();
+    const confirm = dialog.locator("[data-slot=confirm]");
+    await confirm.click();
+    // While the request runs the confirm button spins and every dialog button is disabled.
+    await expect(confirm).toBeDisabled();
+    await expect(confirm).toHaveAttribute("aria-busy", "true");
+    await expect(confirm.locator(".button-spinner")).toHaveCount(1);
+    await expect(confirm).toHaveText("Deleting…");
+    await expect(dialog.getByRole("button", { name: "Cancel" })).toBeDisabled();
+    release();
+    removalHeld = null;
     await expect(dialog).toContainText("uncommitted or untracked changes");
+    await expect(confirm).toBeEnabled();
+    await expect(confirm).toHaveText("Delete worktree");
     await dialog.getByRole("button", { name: "Cancel" }).click();
 
     removal = { action: "removed" };
@@ -137,7 +153,12 @@ test.describe("repository-first portal Home", () => {
     await card.getByRole("button", { name: "Worktree details for Idle Story" }).click();
     const details = page.locator(".worktree-details");
     await expect(details.getByText("dirty · 12 ahead · 0 behind remote", { exact: true })).toBeVisible();
-    await expect(details.locator(".git-drift")).toHaveText([rowWarning]);
+    // The row prefixes its warning with ⚠; the dropdown puts icons in a gutter instead — GitHub on the
+    // status line, a warning glyph on each warning — so every line's text shares one left edge.
+    await expect(details.locator(".git-drift")).toHaveText([rowWarning.replace(/^⚠\s*/, "")]);
+    await expect(details.locator(".worktree-detail-fact").first().locator("portal-icon")).toHaveAttribute("name", "github");
+    await expect(details.locator(".git-drift portal-icon")).toHaveAttribute("name", "warning");
+    await expect(details.getByRole("button", { name: "Delete Worktree" })).toHaveClass(/menu-item-danger/);
     // Every dropdown and menu shares one surface.
     const surfaces = await page.evaluate(() => {
       const background = (selector) => getComputedStyle(document.querySelector(selector)).backgroundColor;
@@ -299,7 +320,7 @@ test.describe("repository-first portal Home", () => {
     // The worktree is identified by its path alone; its name was the path's last segment repeated.
     await expect(panel.locator(".worktree-detail-value")).toHaveText(["feature/a", "/private/wt/feature-a"]);
     await expect(panel.getByRole("list", { name: "Worktree status" }).getByRole("listitem")).toHaveText([
-      "dirty · 0 ahead", "⚠ 3 behind remote",
+      "dirty · 0 ahead", "3 behind remote",
     ]);
     for (const name of ["Copy branch name", "Copy worktree path"]) {
       await expect(panel.getByRole("button", { name })).toHaveCount(1);

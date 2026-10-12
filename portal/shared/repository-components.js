@@ -99,6 +99,7 @@ export function mountActionMenu(host, items, { onToggle, onSelect, ariaLabel = "
       control.prepend(icon);
     }
     control.dataset.action = item.key;
+    if (item.danger) control.classList.add("menu-item-danger");
     if (item.disabled) control.disabled = true;
     if (item.hint) {
       const hint = document.createElement("span");

@@ -287,6 +287,11 @@ button:disabled,
   cursor: default;
   opacity: 0.6;
 }
+/* A button disabled because its own request is running stays at full strength: its spinner says
+ * "working", and fading it would say "unavailable". */
+[data-btn][aria-busy="true"]:disabled {
+  opacity: 1;
+}
 body {
   margin: 0;
   font-family: var(--sans);
@@ -581,6 +586,8 @@ main {
   border-top-color: var(--accent);
   animation: portal-spin 0.7s linear infinite;
 }
+/* An inline spinner inside a busy button, drawn in the button's own text color. */
+.button-spinner,
 .harness-check-spinner {
   display: inline-block;
   width: 12px;
@@ -819,7 +826,8 @@ dd {
   box-shadow: var(--popover-shadow);
 }
 /* One list item for every dropdown: full width, icon then label, and a hover or keyboard highlight
- * filled with the accent so the item under the pointer is unmistakable. */
+ * filled with the accent so the item under the pointer is unmistakable. Items run flush to the
+ * panel's edges (panels carry no padding) and are separated by a rule rather than by space. */
 .menu-panel button,
 .menu-panel a,
 .menu-button-item,
@@ -830,9 +838,9 @@ dd {
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 7px 10px;
+  padding: 8px 12px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 0;
   background: none;
   color: var(--ink);
   font: inherit;
@@ -861,9 +869,28 @@ dd {
   color: var(--dim);
   cursor: default;
 }
+/* A hidden item takes no place in the list, so the rule goes on the next visible one only. */
+.menu-panel > :is(button, a):not([hidden]) + :is(button, a),
+.menu-button-item:not([hidden]) + .menu-button-item,
+.copy-menu-item:not([hidden]) + .copy-menu-item,
+.dropdown-option:not([hidden]) + .dropdown-option,
+.worktree-details-actions button:not([hidden]) + button {
+  border-top: 1px solid var(--popover-border);
+}
 .menu-item-icon {
   flex: none;
   color: var(--dim);
+}
+/* A destructive item (Delete Worktree): red label and icon, and a red-tinted highlight. */
+.menu-item-danger,
+.menu-item-danger .menu-item-icon {
+  color: var(--danger);
+}
+.menu-panel .menu-item-danger:hover:not(:disabled),
+.menu-panel .menu-item-danger:focus-visible,
+.worktree-details-actions .menu-item-danger:hover,
+.worktree-details-actions .menu-item-danger:focus-visible {
+  background: color-mix(in srgb, var(--danger) 16%, var(--popover-bg));
 }
 /* Status pills (merged, done, plan badges) share one inset so they read as one family. */
 :root {
@@ -1034,7 +1061,6 @@ portal-copy-menu {
 .copy-menu-panel {
   position: fixed;
   z-index: 30;
-  padding: 6px;
   min-width: 180px;
   max-width: min(360px, 90vw);
   /* max-height is set inline by positionPopoverPanel — see .menu-button-panel. */
@@ -1064,7 +1090,6 @@ portal-menu-button {
 .menu-button-panel {
   position: fixed;
   z-index: 30;
-  padding: 6px;
   min-width: 220px;
   max-width: min(420px, 90vw);
   /* max-height is set inline by positionPopoverPanel (popover-position.js) so the far edge stays

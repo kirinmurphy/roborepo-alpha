@@ -10,7 +10,8 @@ export function createWorktreeRemoveDialog({ onRemoved }) {
   const slot = (name) => dialog.querySelector(`[data-slot=${name}]`);
   let target = null;
   wireClose(dialog);
-  slot("confirm").addEventListener("click", () => run(dialog, async () => {
+  const confirm = slot("confirm");
+  confirm.addEventListener("click", () => run(dialog, confirm, "Deleting…", async () => {
     const result = await api.removeWorktree(target);
     if (result.action !== "removed") throw new Error(result.reason || "The worktree was kept.");
     dialog.close();
@@ -55,7 +56,7 @@ export function createWorktreeCleanupDialog({ onChanged }) {
       onChanged();
       return;
     }
-    run(dialog, async () => {
+    run(dialog, confirm, "Turning on…", async () => {
       const result = await api.enableWorktreeCleanup({ repositoryId, folder: folder.value.trim() });
       if (result.action === "refused") throw new Error(result.reason);
       if (result.action === "foreign hook") {
@@ -105,16 +106,26 @@ function wireClose(dialog) {
   portalWireBackdropClose(dialog, () => dialog.close());
 }
 
-// Disables the dialog's buttons while a request runs, and shows its failure in the dialog.
-async function run(dialog, action) {
+// Disables the dialog's buttons while a request runs, and shows its failure in the dialog. The button
+// that started it shows a spinner and a busy label, since removing a worktree can take seconds.
+async function run(dialog, busyButton, busyLabel, action) {
   const buttons = [...dialog.querySelectorAll("button")];
   for (const button of buttons) button.disabled = true;
+  const label = [...busyButton.childNodes];
+  const spinner = document.createElement("span");
+  spinner.className = "button-spinner";
+  spinner.setAttribute("aria-hidden", "true");
+  busyButton.replaceChildren(spinner, busyLabel);
+  busyButton.setAttribute("aria-busy", "true");
   showError(dialog, null);
   try {
     await action();
   } catch (error) {
     showError(dialog, error.message || String(error));
   } finally {
+    // The action may have relabeled the button (the cleanup dialog's "Done"); keep that label.
+    if (busyButton.firstChild === spinner) busyButton.replaceChildren(...label);
+    busyButton.removeAttribute("aria-busy");
     for (const button of buttons) button.disabled = false;
   }
 }

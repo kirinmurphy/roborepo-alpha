@@ -36,7 +36,7 @@ let memberListSequence = 0;
 
 // Lifecycle badges. Idle and running need none: a running checkout shows its port, and no port says
 // nothing is running.
-const WORKTREE_BADGES = { stale: "suggested for removal", landed: "merged" };
+const WORKTREE_BADGES = { stale: "stale", landed: "merged" };
 
 // A merged worktree adds a note only when there is something to act on: the guard that keeps it, or
 // that the installed cleanup hook removes it on the next pull.

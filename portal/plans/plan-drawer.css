@@ -565,7 +565,6 @@ option-dropdown {
   position: fixed;
   z-index: 30;
   display: grid;
-  padding: 4px;
   min-width: 100px;
   /* max-height is set inline by positionPopoverPanel (popover-position.js) to keep the far edge
      on-screen; scroll internally past that instead of overflowing the viewport. */

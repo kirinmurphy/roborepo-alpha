@@ -110,7 +110,7 @@
         <ul class="worktree-details-facts" data-slot="facts" aria-label="Worktree status" hidden></ul>
         <div class="worktree-details-actions" data-slot="actions" hidden>
           <button type="button" data-action="stop-servers" hidden><portal-icon class="menu-item-icon" name="stop" size="sm" aria-hidden="true"></portal-icon>Stop Server</button>
-          <button type="button" data-action="delete-worktree"><portal-icon class="menu-item-icon" name="trash" size="sm" aria-hidden="true"></portal-icon>Delete Worktree</button>
+          <button type="button" class="menu-item-danger" data-action="delete-worktree"><portal-icon class="menu-item-icon" name="trash" size="sm" aria-hidden="true"></portal-icon>Delete Worktree</button>
         </div>
       </div>
     </template>
@@ -122,7 +122,7 @@
       </div>
     </template>
     <template id="tpl-worktree-detail-fact">
-      <li data-slot="text"></li>
+      <li class="worktree-detail-fact"><portal-icon data-slot="icon" size="sm" aria-hidden="true"></portal-icon><span data-slot="text"></span></li>
     </template>
     <template id="tpl-token-warnings">
       <ul class="token-warnings" aria-label="Token warnings"></ul>

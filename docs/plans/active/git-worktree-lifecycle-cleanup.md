@@ -324,8 +324,8 @@ Each state decides what Home shows and what may remove the worktree:
 | --- | --- | --- | --- | --- |
 | `running` | A Runtime member runs in it | today's row | none | stops its servers, then deletes; Stop Server is offered beside it |
 | `idle` | No process, recent activity, not landed | dimmed row with no port (no "idle" label: a missing port already says it); its plan attaches | none | with confirmation |
-| `stale` | Idle past the threshold, not landed | dimmed row, "suggested for removal" | none | with confirmation |
-| `landed` | Passes §3 | a purple "merged" pill (tooltip "Merged into <base>") before the Git warnings; a note only for a blocking reason ("plan not closed", "not in your worktree folder") or "removed on next pull" when the hook is installed | removed when every guard passes and a trigger runs (§8) | with confirmation |
+| `stale` | Idle past the threshold, not landed | dimmed row, a neutral "stale" pill | none | with confirmation |
+| `landed` | Passes §3 | a purple "merged" pill (tooltip "Merged into <base>") before the Git warnings; a note only for a blocking reason ("plan not closed", "not in worktree folder") or "removed on next pull" when the hook is installed | removed when every guard passes and a trigger runs (§8) | with confirmation |
 
 `landed` takes precedence over the others, but a running landed worktree is never removed (§6). No
 row shows an action inline: they live in the row's menu (§7), so the card reads as a status list. A

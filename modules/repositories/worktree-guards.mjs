@@ -7,7 +7,7 @@ const DISPOSABLE_IGNORED = ["node_modules/", "test-results/"];
 export async function checkWorktreeRemoval({ worktree, kind, landed = false, worktreeRoot = null, mainPath, currentPath, activePlan = false, running = false, runGit = runGitProcess, fsApi = fs }) {
   if (worktree.prunable) return blocked("prunable worktree");
   if (kind === "automatic" && !landed) return blocked("not landed");
-  if (kind === "automatic" && (!worktreeRoot || !inside(worktree.path, worktreeRoot))) return blocked("not in your worktree folder");
+  if (kind === "automatic" && (!worktreeRoot || !inside(worktree.path, worktreeRoot))) return blocked("not in worktree folder");
   if (kind === "automatic" && (!worktree.branch || worktree.detached)) return blocked("detached worktree; suggested for removal");
   if (worktree.locked) return blocked("worktree locked");
   if (exists(path.join(worktree.path, ".gitmodules"), fsApi)) return blocked("worktree has submodules");

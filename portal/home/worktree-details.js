@@ -83,19 +83,21 @@ function detailRow({ icon, value, title, copy, label }) {
 // One status line — checkout state, dirty, ahead and behind the remote — then every drift warning
 // the row's own Git warning is chosen from, so the dropdown and the row never disagree. Being behind
 // the remote is itself a warning, so when it applies the warning says it and the status line does
-// not repeat it. A present, clean checkout level with its upstream and base shows none.
+// not repeat it. A present, clean checkout level with its upstream and base shows none. The status
+// line carries the GitHub glyph and each warning the warning glyph, in the same gutter as the identity
+// rows' icons.
 function summaryFacts(checkout) {
   const git = checkout.git || {};
   const drift = gitDriftWarnings(git);
   const behindWarned = drift.some((warning) => warning.kind === "remote");
   const tracking = git.ahead || git.behind ? [`${git.ahead || 0} ahead`, ...(behindWarned ? [] : [`${git.behind || 0} behind remote`])] : [];
   const status = [checkoutStateText(checkout), git.dirty ? "dirty" : null, ...tracking].filter(Boolean);
-  const warnings = drift.map((warning) => ({ text: `⚠ ${warning.text}`, title: warning.title, level: warning.level }));
-  return [...(status.length ? [{ text: status.join(" · ") }] : []), ...warnings];
+  const warnings = drift.map((warning) => ({ icon: "warning", text: warning.text, title: warning.title, level: warning.level }));
+  return [...(status.length ? [{ icon: "github", text: status.join(" · ") }] : []), ...warnings];
 }
 
-function factItem({ text, title = null, level = null }) {
-  const item = fill(tpl("tpl-worktree-detail-fact"), { text });
+function factItem({ icon, text, title = null, level = null }) {
+  const item = fill(tpl("tpl-worktree-detail-fact"), { icon: { name: icon }, text });
   if (title) item.title = title;
   if (level) {
     item.classList.add("git-drift");

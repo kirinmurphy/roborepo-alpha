@@ -136,7 +136,7 @@ function mountWorktreeMenu(slot, checkout, actions) {
   const target = { repositoryId: actions.repositoryId, checkout };
   const menu = mountActionMenu(slot, [
     { key: "stop-servers", label: "Stop Server", icon: "stop", hidden: !isRunning(checkout) },
-    { key: "delete", label: "Delete Worktree", icon: "trash" },
+    { key: "delete", label: "Delete Worktree", icon: "trash", danger: true },
   ], {
     ariaLabel: `Actions for ${name}`,
     onToggle: () => actions.onToggleMenu(menu),

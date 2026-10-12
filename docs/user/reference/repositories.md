@@ -192,7 +192,7 @@ Each worktree row shows how it stands:
 | --- | --- |
 | a port in the actions column, or none | something is running in it, or nothing is |
 | **merged** (a purple pill; its tooltip names the base branch) | a commit on the base branch's first-parent history absorbed the branch's work |
-| **suggested for removal** | not merged, and no activity during the configured interval; a prompt to review, not evidence of a merge |
+| **stale** | not merged, and no activity during the configured interval; a prompt to review, not evidence of a merge |
 
 Activity is the latest of a running process Runtime saw, the branch's last commit, and the last
 agent session on the branch. The interval defaults to 7 days. Change it in Runtime's Settings under
@@ -201,7 +201,7 @@ setting. A detached worktree, such as one the desktop app creates, is named by i
 **(detached)**.
 
 A merged row adds a note only when there is something to act on: the reason a guard keeps it (such
-as **plan not closed** or **not in your worktree folder**), or **removed on next pull** when the
+as **plan not closed** or **not in worktree folder**), or **removed on next pull** when the
 cleanup hook is installed.
 
 **Stop Server** stops the dev servers listening from that worktree, as `/plan-close` does.
