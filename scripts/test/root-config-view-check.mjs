@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Unit test for buildRootConfigView (scripts/cli/root-config-view.mjs), the per-harness drift view the
-// terminal `roborepo config root inspect` report and the web /config drift chip both render from.
+// terminal `roborepo config root inspect` report and the web /agents drift chip both render from.
 // Drives a throwaway HOME so rootConfigActive/rootConfigBaseline resolve into a temp tree, then
 // exercises each user-facing state: not-installed, unwritten, in-sync, drifted, staged-pending.
 import assert from "node:assert/strict";

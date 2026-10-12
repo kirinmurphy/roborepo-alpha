@@ -19,7 +19,8 @@ Choose **Tokens** in the portal navigation. With the default port, the page is a
 `http://127.0.0.1:4317/tokens`; use the address printed by the command if your port differs.
 
 Telemetry is opt-in and stored locally. If the page asks you to **turn on telemetry**, enable
-it and run a session in an installed agent harness. Until live data is available, the page can
+it and run a session in an installed agent harness. With tracking on and an active harness, the
+page shows setup instructions until the first capture arrives. Before tracking starts, it can
 show a report labeled **simulated tracking report**. Recording changes requires live telemetry.
 
 ## Find a problem worth investigating

@@ -158,6 +158,11 @@ try {
   assert.equal(roots.length, 2);
   assert.equal(roots[0].kind, "primary", "first root promotes to primary");
   assert.equal(roots[1].kind, "worktree");
+  roots[0].lastRunningAt = now;
+  assert.doesNotThrow(() => validateRegistry(reg), "registries with checkout activity remain readable");
+  roots[0].lastRunningAt = "invalid";
+  assert.throws(() => validateRegistry(reg), /lastRunningAt/, "checkout activity must be a timestamp");
+  delete roots[0].lastRunningAt;
 
   assert.equal(setEnrollment(reg, "git:github.com/kirinmurphy/roborepo", "plans", { enabled: true, sourceId: "src1", now }), true);
   assert.equal(setEnrollment(reg, "git:github.com/kirinmurphy/roborepo", "plans", { enabled: true, sourceId: "src1", now }), false, "unchanged enrollment is a no-op");

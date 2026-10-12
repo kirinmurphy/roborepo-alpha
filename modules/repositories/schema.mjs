@@ -177,13 +177,14 @@ function validateLocalRoots(localRoots) {
   const seen = new Set();
   for (const root of localRoots) {
     if (!root || typeof root !== "object" || Array.isArray(root)) throw new Error("localRoot must be an object");
-    validateObjectKeys(root, ["rootId", "kind", "firstSeenAt", "lastSeenAt"], "localRoot");
+    validateObjectKeys(root, ["rootId", "kind", "firstSeenAt", "lastSeenAt", "lastRunningAt"], "localRoot");
     const rootId = safeOpaqueId(root.rootId, "localRoot rootId");
     if (seen.has(rootId)) throw new Error(`duplicate localRoot rootId: ${rootId}`);
     seen.add(rootId);
     if (!["primary", "clone", "worktree"].includes(root.kind)) throw new Error("localRoot kind is invalid");
     safeIsoTimestamp(root.firstSeenAt, "localRoot firstSeenAt");
     safeIsoTimestamp(root.lastSeenAt, "localRoot lastSeenAt");
+    if (root.lastRunningAt != null) safeIsoTimestamp(root.lastRunningAt, "localRoot lastRunningAt");
   }
 }
 

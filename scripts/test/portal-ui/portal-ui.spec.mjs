@@ -6,7 +6,7 @@ import { test, expect } from "@playwright/test";
 const NAV_ORDER = ["Repos", "Agents", "Plans", "Tokens", "Runtime", "Settings"];
 const ROUTES = [
   { path: "/", active: "Repos" },
-  { path: "/config", active: "Agents" },
+  { path: "/agents", active: "Agents" },
   { path: "/plans", active: "Plans" },
   { path: "/tokens", active: "Tokens" },
   { path: "/runtime", active: "Runtime" },
@@ -32,7 +32,10 @@ test.describe("Agents page", () => {
       await route.fulfill({ response, json: snapshot });
     });
 
-    await page.goto("/config");
+    await page.goto("/agents");
+    await expect(page.getByRole("heading", { name: "Available Agent Tools" })).toBeVisible();
+    await expect(page.locator(".packages-intro p")).toHaveText("Extend your harness config. Toggling a package below writes it into every active harness's configuration.");
+    await expect(page.getByText("Token Telemetry", { exact: true })).toBeVisible();
     await expect(page.getByText("The following elements have a high token use:", { exact: true })).toHaveCount(0);
     await expect(page.locator("#main [data-slot=supported]")).toHaveText("Supported Harnesses: Claude Code, Codex");
     await expect(page.getByRole("button", { name: "Check for harnesses" })).toHaveAttribute("data-btn", "cta");
@@ -42,6 +45,47 @@ test.describe("Agents page", () => {
     }));
     expect(warningButtonGrid.column).toBe("2");
     expect(warningButtonGrid.row).toBe("1");
+  });
+
+  test("puts Active Harnesses above its panel", async ({ page }) => {
+    await page.route("**/api/config", async (route) => {
+      const response = await route.fetch();
+      const snapshot = await response.json();
+      snapshot.machineHarnesses = [{ id: "claude", enabled: true, confidence: "confirmed" }];
+      await route.fulfill({ response, json: snapshot });
+    });
+    await page.goto("/agents");
+    await expect(page.locator(".config-files-section > h2")).toHaveText("Active Harnesses");
+    await expect(page.locator(".config-files-section > .panel")).toBeVisible();
+  });
+});
+
+test.describe("Tokens without captures", () => {
+  test("shows a focused empty page until the first capture", async ({ page }) => {
+    let hasCapture = false;
+    const demo = await (await page.request.get("/api/tokens/mock")).json();
+    await page.route("**/api/settings", (route) => route.fulfill({ json: {
+      telemetry: { enabled: true, captureAvailable: true },
+      harnesses: {
+        supported: [{ id: "claude", displayName: "Claude Code" }],
+        detected: [{ id: "claude", displayName: "Claude Code", confidence: "confirmed" }],
+        active: [{ id: "claude", displayName: "Claude Code", confidence: "confirmed" }],
+      },
+    } }));
+    await page.route("**/api/data", (route) => route.fulfill({
+      json: { ...demo, capture_count: hasCapture ? 1 : 0 },
+    }));
+
+    await page.goto("/tokens");
+    await expect(page.getByRole("heading", { name: "No token data yet" })).toBeVisible();
+    await expect(page.locator("#tokens-no-data p")).toContainText("Start a new session and we'll start tracking.");
+    await expect(page.locator("#tokenscontent")).toBeHidden();
+    await expect(page.locator("#tokensoff")).toBeHidden();
+
+    hasCapture = true;
+    await page.reload();
+    await expect(page.locator("#tokens-no-data")).toBeHidden();
+    await expect(page.locator("#tokenscontent")).toBeVisible();
   });
 });
 

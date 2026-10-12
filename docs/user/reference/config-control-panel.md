@@ -5,7 +5,7 @@
 `roborepo` exposes the harness configuration — what indexers, plugins, skills,
 telemetry, and permission buckets are active — as an inspectable, editable surface.
 A user can see the current state and change it from either the web dashboard
-(`/config`) or the interactive terminal flow (`roborepo package manage`), without
+(`/agents`) or the interactive terminal flow (`roborepo package manage`), without
 hand-editing `~/.claude/settings.json`, `~/.codex/config.toml`, or symlinks.
 
 ## Concept Model
@@ -80,7 +80,7 @@ The panel renders these sections:
 
 ## Happy Path
 
-1. Run `roborepo web` to open the `/config` portal (or run `roborepo package manage`
+1. Run `roborepo web` to open the `/agents` page (or run `roborepo package manage`
    in a terminal).
 2. The panel shows the current state of each section.
 3. Toggle a package, skill, or telemetry switch. The change is written to your live harness config

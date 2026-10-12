@@ -23,7 +23,7 @@ try {
   testInspectUnknownHarnessFails();
   testEnableDisableRoundTrip();
   testDetectedReflectsHomeDirOnly();
-  testDesktopRuntimeLifecycle();
+  if (process.platform === "darwin") testDesktopRuntimeLifecycle();
   console.log("harness CLI checks passed");
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });

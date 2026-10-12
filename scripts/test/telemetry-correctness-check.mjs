@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { transcriptStats } from "../harnesses/transcript-parse.mjs";
 import { analyzeTelemetry } from "../cli/telemetry-analyze.mjs";
+import { summarizeCodexTelemetryHooks } from "../cli/codex-hook-status.mjs";
 
 const FIXTURES_DIR = path.join(path.dirname(new URL(import.meta.url).pathname), "fixtures", "telemetry");
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-telemetry-correctness-"));
@@ -18,12 +19,29 @@ try {
   testClaudeTranscriptFailureText();
   testCodexTranscript();
   testCodexTranscriptTurnContextModel();
+  testCodexHookTrustStatus();
   testAnalyzerWarnings();
   testAnalyzerRateLimitPresent();
   testAnalyzerIndexedSummaries();
   console.log("telemetry correctness checks passed");
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
+}
+
+function testCodexHookTrustStatus() {
+  const events = ["SessionStart", "PreToolUse", "PostToolUse", "UserPromptSubmit", "Stop"];
+  const hooks = events.map((event) => ({
+    eventName: event[0].toLowerCase() + event.slice(1),
+    command: `roborepo telemetry capture --harness codex --event ${event}`,
+    enabled: true,
+    trustStatus: "trusted",
+  }));
+  assert.deepEqual(summarizeCodexTelemetryHooks([{ hooks }]), { state: "active", installed: 5 });
+  assert.deepEqual(summarizeCodexTelemetryHooks([{ hooks: hooks.slice(1) }]), { state: "missing", installed: 4 });
+  assert.deepEqual(summarizeCodexTelemetryHooks([{ hooks: hooks.map((hook, i) =>
+    i === 2 ? { ...hook, trustStatus: "untrusted" } : hook) }]), { state: "review_required", installed: 5 });
+  assert.deepEqual(summarizeCodexTelemetryHooks([{ hooks: hooks.map((hook, i) =>
+    i === 2 ? { ...hook, enabled: false } : hook) }]), { state: "inactive", installed: 5 });
 }
 
 function testClaudeTranscript() {
@@ -51,12 +69,23 @@ function testCodexTranscript() {
   assert.equal(stats.tokens.total, 500);
   assert.equal(stats.tokens.input, 220);
   assert.equal(stats.tokens.cache_read, 80);
+  assert.equal(stats.tokens.cache_creation, 20);
   assert.equal(stats.tokens.output, 120);
+  assert.equal(stats.details.token_schema_seen, true);
+  assert.equal(stats.tool_calls, 2);
+  assert.equal(stats.tools.exec, 1);
   assert.equal(stats.mcp_calls, 1);
   assert.equal(stats.mcp_servers.jcodemunch, 1);
   assert.equal(stats.last_result.tool, "mcp__jcodemunch__get_context_bundle");
   assert.equal(stats.details.codex_reasoning_output_tokens, 40);
+  assert.equal(stats.details.codex_rate_limits[0].name, "primary");
   assert.equal(stats.details.codex_rate_limits[0].used_percent, 12.5);
+  assert.equal(stats.details.codex_rate_limits[0].window_minutes, 300);
+  assert.equal(stats.details.codex_rate_limits[0].resets_at, new Date(1790000000 * 1000).toISOString());
+  assert.equal(stats.details.codex_rate_limits[1].name, "secondary");
+  assert.equal(stats.details.codex_rate_limits[1].used_percent, 25);
+  assert.equal(JSON.stringify(stats.details.codex_rate_limits).includes("private-account-limit"), false);
+  assert.equal(JSON.stringify(stats.details.codex_rate_limits).includes("balance"), false);
 }
 
 // Newer Codex CLI releases (verified cli_version 0.140.0 against a real transcript) omit `model`

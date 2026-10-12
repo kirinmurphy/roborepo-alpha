@@ -131,7 +131,7 @@ roborepo config rules --check
 
 ### Change permission defaults
 
-Day to day, change permissions in the `/config` page or `roborepo library`. To change the defaults
+Day to day, change permissions in the `/agents` page or `roborepo library`. To change the defaults
 every machine starts from, edit `manifests/inventory/agent-permissions.json`, then render and check:
 
 ```sh

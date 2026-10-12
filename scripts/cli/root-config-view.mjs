@@ -15,7 +15,7 @@ function rootConfigHarnesses() {
 }
 
 // One user-facing drift "state" per harness, plus the raw drift details. This is the SINGLE SOURCE
-// OF TRUTH for both the terminal `roborepo config root inspect` report and the web /config panel —
+// OF TRUTH for both the terminal `roborepo config root inspect` report and the web /agents panel —
 // the snapshot ships buildRootConfigView() under `rootConfig` so neither surface recomputes the
 // state label. States:
 //   not-installed  — no active file on disk.

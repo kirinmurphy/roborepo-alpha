@@ -93,6 +93,12 @@ try {
   fs.mkdirSync(path.join(home, ".codex"));
   assert.equal(detectHarnessProvider(codex, options).confidence, "confirmed");
   assert.equal(selectedHarnessExecutable(codex, options), path.join(codexBundle, "Contents/Resources/codex"));
+  executable(path.join(bin, "codex"), 'echo "0.140.0"\n');
+  const codexBoth = detectHarnessProvider(codex, options);
+  assert.deepEqual(new Set(codexBoth.evidence.filter((item) => item.kind === "executable").map((item) => item.source)), new Set(["cli", "desktop"]));
+  assert.equal(codexBoth.evidence.find((item) => item.source === "cli")?.version, "0.140.0");
+  assert.equal(codexBoth.evidence.find((item) => item.source === "desktop")?.version, "0.155.0");
+  assert.equal(selectedHarnessExecutable(codex, options), path.join(bin, "codex"));
   console.log("desktop runtime discovery checks passed");
 } finally {
   process.env.HOME = oldHome;

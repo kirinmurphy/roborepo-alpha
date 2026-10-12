@@ -99,7 +99,7 @@ Most users only need `list`, `inspect`, `enable`, and `disable`.
 
 | Command | What it does |
 | --- | --- |
-| `roborepo web [--no-open] [--port <n>]` | Starts the local portal on `127.0.0.1` (default port `4317`) and opens it. `/config` manages packages and permissions, `/plans` browses plan docs, `/runtime` lists local web apps, and `/tokens` shows token usage when telemetry has data. |
+| `roborepo web [--no-open] [--port <n>]` | Starts the local portal on `127.0.0.1` (default port `4317`) and opens it. `/agents` manages packages and permissions, `/plans` browses plan docs, `/runtime` lists local web apps, and `/tokens` shows token usage when telemetry has data. |
 | `roborepo web --detach [--no-open] [--port <n>]` | Starts the same portal in the background. A cold start warms its views before binding and can take ~30s. |
 | `roborepo web stop [--port <n>]` | Stops the detached portal. PID files are tracked per port, so pass the same `--port` used to start it. |
 | `roborepo runtime [--json] [--open]` | Lists active localhost HTTP apps, prints the portal snapshot as JSON, or opens `/runtime`. |

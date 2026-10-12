@@ -63,7 +63,7 @@ export async function bundleCommand(args) {
   }
 }
 
-// Interactive onboarding, organized around the four user-facing behavior sections that the /config
+// Interactive onboarding, organized around the four user-facing behavior sections that the /agents
 // web portal shows (Token Optimization, Commands, Code Conventions, Permissions) rather than the
 // internal bundle list. Each toggleable item drives the same config-mutate primitives the web POST
 // endpoints use, so terminal and web stay in lockstep. Permissions are read-only here.
@@ -135,7 +135,7 @@ function isToggleableItem(section, item) {
   return false;
 }
 
-// Translate the live /config behavior view into wizard steps, in manifest order, then add the
+// Translate the live /agents behavior view into wizard steps, in manifest order, then add the
 // Permissions panel. The wizard re-reads state after each toggle, so marks always reflect truth.
 export function buildOnboardSteps({ showWebNotice = false } = {}) {
   const view = buildBehaviorView(readConfigSnapshot());

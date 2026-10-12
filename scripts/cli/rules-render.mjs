@@ -170,7 +170,7 @@ function renderContent(harness, enabledIds) {
   return squashBlankLines(parts.join("\n")).trimEnd() + "\n";
 }
 
-// Read-only preview helpers for the /config web page. Render the same fragments renderContent uses,
+// Read-only preview helpers for the /agents web page. Render the same fragments renderContent uses,
 // but return the text instead of writing it. enabledIds defaults to the live registry so the preview
 // matches what's actually rendered into the home rules.
 function readFragmentDir(dir) {

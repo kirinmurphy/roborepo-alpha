@@ -158,7 +158,7 @@ _harness_detected_load() {
       [[ -d "$(_manifest_home_root "${id}")" ]] && present=1
       root_config_file="settings.json"
       [[ "${id}" == "codex" ]] && root_config_file="config.toml"
-      _HARNESS_DETECTED_ROWS+="${id}	$(_manifest_home_root "${id}")	${present}	${id}	$(_manifest_home_root "${id}")/${root_config_file}\tabsent
+      _HARNESS_DETECTED_ROWS+="${id}	$(_manifest_home_root "${id}")	${present}	${id}	$(_manifest_home_root "${id}")/${root_config_file}"$'\t'"absent
 "
     done
   fi

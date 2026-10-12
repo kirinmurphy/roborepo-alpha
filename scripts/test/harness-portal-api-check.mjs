@@ -13,6 +13,7 @@ function request(body) {
 
 const handlers = {
   loadConfig: () => ({ machineHarnesses: [{ id: "codex", enabled: true }] }),
+  loadCodexHookStatus: async () => ({ state: "review_required", installed: 5 }),
   refreshHarnesses: () => ({ detected: ["codex"], state: { providers: { codex: { evidence: [{ value: "/secret" }] } } } }),
   setHarnessEnabled(id, enabled) {
     if (id === "unknown") throw new Error("unsupported harness: unknown");
@@ -36,5 +37,11 @@ res = response();
 dispatchRoutes([configRoutes], { method: "POST", ...request({ enabled: true }) }, res, "/api/config/harnesses/unknown/enabled", "", handlers);
 assert.equal(res.status, 400);
 assert.match(JSON.parse(res.body).error, /unsupported harness/);
+
+res = response();
+dispatchRoutes([configRoutes], { method: "GET" }, res, "/api/config/hooks/codex/status", "", handlers);
+await new Promise(setImmediate);
+assert.equal(res.status, 200);
+assert.deepEqual(JSON.parse(res.body), { state: "review_required", installed: 5 });
 
 console.log("portal harness API checks passed");

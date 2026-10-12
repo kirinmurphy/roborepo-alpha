@@ -859,7 +859,7 @@ if node -e 'const s=require("node:net").createServer();s.once("error",()=>proces
   # respawn failed). Asserting the PID is unchanged is what catches a regression to kill-first —
   # a plain "does it serve afterwards" check passes either way, which is why the bug went unseen.
   assert "config: web --detach adopts a healthy portal instead of restarting it" adopt_check
-  cfg_token="$(curl -s "http://127.0.0.1:${cfg_port}/config" | sed -n 's/.*name="cli-portal-token" content="\([^"]*\)".*/\1/p' | head -1)"
+  cfg_token="$(curl -s "http://127.0.0.1:${cfg_port}/agents" | sed -n 's/.*name="cli-portal-token" content="\([^"]*\)".*/\1/p' | head -1)"
   assert "config: portal exposes mutation token only in served HTML" \
     bash -c "test -n '${cfg_token}'"
   # Capture the JSON to a file so the snapshot body (which contains apostrophes in skill descriptions)
@@ -876,8 +876,10 @@ if node -e 'const s=require("node:net").createServer();s.once("error",()=>proces
     bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' -X POST 'http://127.0.0.1:${cfg_port}/api/config/skills' -H 'Content-Type: application/json' -d '{\"id\":\"${cfg_skill}\",\"enabled\":false}')\" = 403 ]"
   assert "config: POST unknown skill returns ok:false" \
     bash -c "curl -s -X POST 'http://127.0.0.1:${cfg_port}/api/config/skills' -H 'Content-Type: application/json' -H 'X-Cli-Portal-Token: ${cfg_token}' -d '{\"id\":\"zzz\",\"enabled\":true}' | node -e \"let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);process.exit(j.ok===false?0:1)})\""
-  assert "config: GET /config still served" \
-    bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' 'http://127.0.0.1:${cfg_port}/config')\" = 200 ]"
+  assert "config: GET /agents served" \
+    bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' 'http://127.0.0.1:${cfg_port}/agents')\" = 200 ]"
+  assert "config: GET /config redirects to /agents" \
+    bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' 'http://127.0.0.1:${cfg_port}/config')\" = '302 http://127.0.0.1:${cfg_port}/agents' ]"
   assert "developer-runtime: GET /runtime served with token" \
     bash -c "curl -s 'http://127.0.0.1:${cfg_port}/runtime' | grep -q 'cli-portal-token'"
   assert "developer-runtime: notice template includes docs link target" \
@@ -901,10 +903,10 @@ if node -e 'const s=require("node:net").createServer();s.once("error",()=>proces
     bash -c "node -e \"const j=require('${cfg_home}/developer-runtime-project.json');process.exit(j.ok&&j.developerRuntime?.settingsRevision===${cfg_lh_rev}+1?0:1)\""
   assert "developer-runtime: Windows capability shape is explicit" \
     bash -c "node -e \"import('${repo_root}/modules/developer-runtime/index.mjs').then(m=>{const c=m.capabilityForPlatform('win32');process.exit(c.discovery==='unsupported'&&/Windows/.test(c.message)?0:1)})\""
-  # The /config page JS must parse — a syntax error there crashes the whole dashboard at load (no
+  # The /agents page JS must parse — a syntax error there crashes the whole dashboard at load (no
   # panels render) and is invisible to HTTP-status checks. Guards the template-literal trap (a literal
   # newline inside a JS string, etc.).
-  assert "config: served /config dashboard JS parses" \
+  assert "config: served /agents dashboard JS parses" \
     bash -c "dashjs=\"${cfg_home}/dash.mjs\"; curl -s 'http://127.0.0.1:${cfg_port}/portal/config/app.js' > \"\${dashjs}\" && node --check \"\${dashjs}\""
   assert "developer-runtime: served dashboard JS parses" \
     bash -c "dashjs=\"${cfg_home}/developer-runtime.mjs\"; curl -s 'http://127.0.0.1:${cfg_port}/portal/developer-runtime/app.js' > \"\${dashjs}\" && node --check \"\${dashjs}\""
@@ -1921,7 +1923,7 @@ assert "developer-runtime: metadata suggestion discovery" \
   node "${repo_root}/scripts/test/developer-runtime-metadata-check.mjs"
 
 # Root config drift VIEW (buildRootConfigView in root-config-view.mjs): the per-harness state the terminal
-# `config root inspect` report and the web /config drift chip both render from — not-installed /
+# `config root inspect` report and the web /agents drift chip both render from — not-installed /
 # unwritten / in-sync / drifted / staged-pending.
 assert "root-config-view: per-harness drift state covers every user-facing case" \
   node "${repo_root}/scripts/test/root-config-view-check.mjs"

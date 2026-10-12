@@ -4,7 +4,7 @@
 // POST is in flight; reverts + shows the error on failure. Status text renders into a sibling
 // .item-status node the caller passes as .statusSlot (the row's own status line, shared with
 // other item feedback — not owned by this element). Built from tpl-config-toggle
-// (portal/config/index.html) — page-owned, only used from /config.
+// (portal/config/index.html) — page-owned, only used from /agents.
 import { portalTpl as tpl } from "/portal/shared/api.js";
 
 class ConfigToggleElement extends HTMLElement {

@@ -115,6 +115,16 @@ export const configRoutes = defineRoutes([
     },
   },
   {
+    path: "/api/config/hooks/codex/status",
+    handler: (req, res, { handlers }) => {
+      Promise.resolve()
+        .then(() => handlers.loadCodexHookStatus())
+        .then((status) => send(res, 200, "application/json", JSON.stringify(status)))
+        .catch(() => send(res, 200, "application/json", JSON.stringify({ state: "unknown", installed: 0 })));
+      return true;
+    },
+  },
+  {
     path: "/api/config",
     handler: (req, res, { handlers }) => {
       send(res, 200, "application/json", JSON.stringify(handlers.loadConfig()));
@@ -123,7 +133,7 @@ export const configRoutes = defineRoutes([
   },
   {
     // Read-only: returns the full source that defines a tool (skill/command/rules/hooks) for the
-    // /config click-to-inspect popup. loadConfigSource whitelists kind+id against the catalog.
+    // /agents click-to-inspect popup. loadConfigSource whitelists kind+id against the catalog.
     path: "/api/config/source",
     handler: (req, res, { qs, handlers }) => {
       const params = new URLSearchParams(qs);

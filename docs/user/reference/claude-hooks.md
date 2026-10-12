@@ -2,7 +2,7 @@
 
 Hooks are commands Claude Code runs at points in a session — when it starts, before a tool call,
 after a tool call. RoboRepo installs a few that always run, and packages add more when you enable
-them. Turn a package's hooks off by disabling the package in `/config` or with
+them. Turn a package's hooks off by disabling the package in `/agents` or with
 `roborepo package disable <id>`.
 
 ## What Runs
@@ -19,7 +19,7 @@ them. Turn a package's hooks off by disabling the package in `/config` or with
 | PreToolUse `Read`, `Write`, `Edit` | Repository scope | Reads across the repository and its worktrees are quiet; writes outside the checkout in use prompt. See [Config Control Panel](config-control-panel.md#changing-path-scopes) | always |
 | PreToolUse `Write`, `Edit` | Write guard | When Claude edits under `~/.claude` or `~/.codex`, adds a reminder about which files RoboRepo manages. `settings.local.json` is exempt | always |
 | PostToolUse `Read` | Skill reference observer | Tells Claude which skill reference files it just read, for the skills-loaded line | `skill-visibility` |
-| SessionStart, PreToolUse, PostToolUse, UserPromptSubmit, Stop | Telemetry capture | Records token and tool usage locally | `telemetry`, once `roborepo telemetry enable` is run |
+| SessionStart, PreToolUse, PostToolUse, UserPromptSubmit, Stop | Telemetry capture | Records token and tool usage locally | `telemetry`, once token tracking is enabled in the portal or CLI |
 
 Caveman mode on Claude comes from the `caveman` plugin, not a hook.
 
