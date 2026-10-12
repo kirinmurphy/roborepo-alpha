@@ -11,7 +11,7 @@ related:
   - 7m4q9dx
   - a7bslb00
 reviewed_commit: 77fb0952537f9afc2aea9866f52f13ebed678b59
-worktree:
+worktree: plan-active-worktree-authority
 ---
 
 # Make Active Plan State Follow Its Assigned Worktree
