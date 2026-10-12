@@ -19,6 +19,11 @@ const ROUTES = [
 
 test.describe("Agents page", () => {
   test("keeps the high token-use banner hidden", async ({ page }) => {
+    const snapshot = await (await page.request.get("/api/config")).json();
+    const activeItem = snapshot.behaviorView.flatMap((section) => section.items || []).find((item) => item.active);
+    expect(activeItem, "fixture needs an active Agents item").toBeTruthy();
+    activeItem.contextCost = { onDemandTokens: 30000, onDemandLevel: "high" };
+    snapshot.contextCost = { ...snapshot.contextCost, onDemandThresholds: { mediumAt: 1000, highAbove: 10000 } };
     await page.route("**/api/settings", (route) => route.fulfill({ json: {
       harnesses: {
         supported: [{ id: "claude", displayName: "Claude Code" }, { id: "codex", displayName: "Codex" }],
@@ -26,15 +31,7 @@ test.describe("Agents page", () => {
         active: [],
       },
     } }));
-    await page.route("**/api/config", async (route) => {
-      const response = await route.fetch();
-      const snapshot = await response.json();
-      const activeItem = snapshot.behaviorView.flatMap((section) => section.items || []).find((item) => item.active);
-      expect(activeItem, "fixture needs an active Agents item").toBeTruthy();
-      activeItem.contextCost = { onDemandTokens: 30000, onDemandLevel: "high" };
-      snapshot.contextCost = { ...snapshot.contextCost, onDemandThresholds: { mediumAt: 1000, highAbove: 10000 } };
-      await route.fulfill({ response, json: snapshot });
-    });
+    await page.route("**/api/config", (route) => route.fulfill({ json: snapshot }));
 
     await page.goto("/agents");
     await expect(page.getByRole("heading", { name: "Available Agent Tools" })).toBeVisible();
@@ -52,12 +49,9 @@ test.describe("Agents page", () => {
   });
 
   test("puts Active Harnesses above its panel", async ({ page }) => {
-    await page.route("**/api/config", async (route) => {
-      const response = await route.fetch();
-      const snapshot = await response.json();
-      snapshot.machineHarnesses = [{ id: "claude", enabled: true, confidence: "confirmed" }];
-      await route.fulfill({ response, json: snapshot });
-    });
+    const snapshot = await (await page.request.get("/api/config")).json();
+    snapshot.machineHarnesses = [{ id: "claude", enabled: true, confidence: "confirmed" }];
+    await page.route("**/api/config", (route) => route.fulfill({ json: snapshot }));
     await page.goto("/agents");
     await expect(page.locator(".config-files-section > h2")).toHaveText("Active Harnesses");
     await expect(page.locator(".config-files-section > .panel")).toBeVisible();
