@@ -3,6 +3,7 @@ import path from "node:path";
 import os from "node:os";
 import { repoRoot } from "./paths.mjs";
 import { writeRootConfig } from "./root-config-writes.mjs";
+import { recordAppRoot } from "./state-paths.mjs";
 import { listHarnessProviders } from "../harnesses/registry.mjs";
 import { loadPermissionWorkspaceRoots as loadWorkspaceRoots } from "../harnesses/permission-workspace-roots.mjs";
 import {
@@ -131,7 +132,8 @@ export function renderPermissionsTo(
   return { touched };
 }
 
-// Back-compat shim: global-scope render into the home dir.
+// Global-scope render into the live home dir. This is the path that installs live permission hooks,
+// so it also records the app root those hooks resolve the platform manifest from.
 export function renderPermissionsToHome({
   home = os.homedir(),
   manifest = loadPermissionManifest(),
@@ -139,5 +141,6 @@ export function renderPermissionsToHome({
   workspaceRoots,
   cwd = process.cwd(),
 } = {}) {
+  recordAppRoot();
   return renderPermissionsTo(home, { manifest, overrides, workspaceRoots, cwd });
 }

@@ -4,7 +4,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { repoRoot, harnessHome } from "./paths.mjs";
 import { isMainModule } from "./roots.mjs";
-import { installStatePath, presetsStatePath } from "./state-paths.mjs";
+import { installStatePath, presetsStatePath, recordAppRoot } from "./state-paths.mjs";
 import { readConfigSnapshot, buildBehaviorView } from "./config.mjs";
 import { mutatePackage, setBehaviorBucket } from "./config-mutate.mjs";
 import { renderHomeRules, removeHomeRules, isRenderedRulesOutput } from "./rules-render.mjs";
@@ -544,6 +544,8 @@ function withDependencies(selected) {
 }
 
 function applySelection(selected, catalog, { reconcile }) {
+  // Bundles install hooks that locate the platform manifest through the recorded app root.
+  recordAppRoot();
   const rows = manifestRowsByKey();
   const policy = readInstallPolicy();
   for (const bundle of catalog.bundles) {

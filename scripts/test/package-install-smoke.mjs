@@ -108,13 +108,13 @@ function main() {
     assert.equal(hashAfter, hashBefore, "appRoot must be byte-identical before and after runtime commands");
 
     const scanTargets = [
-      { root: dirs.home, allowInstallStateExemption: true },
-      { root: dirs.workspaceRoot, allowInstallStateExemption: false },
-      { root: dirs.stateRoot, allowInstallStateExemption: true },
+      { root: dirs.home, allowStatePointers: true },
+      { root: dirs.workspaceRoot, allowStatePointers: false },
+      { root: dirs.stateRoot, allowStatePointers: true },
     ];
-    for (const { root, allowInstallStateExemption } of scanTargets) {
+    for (const { root, allowStatePointers } of scanTargets) {
       assertNoSourceCoupling(root, repoRoot);
-      assertNoVersionedPathCoupling(root, dirs.prefix, packageName, { allowInstallStateExemption });
+      assertNoVersionedPathCoupling(root, dirs.prefix, packageName, { allowStatePointers });
     }
 
     if (outputDir) {

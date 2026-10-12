@@ -40,10 +40,12 @@ function citationsIn(filePath, source) {
 
 function scannedFiles() {
   const listed = execFileSync("git", ["ls-files", "--", ...SCANNED_ROOTS], { cwd: repoRoot, encoding: "utf8" });
+  // `git ls-files` lists the index, so a tracked file deleted in the working tree still appears.
+  // It has no content left to cite anything, and reading it would crash the scan.
   return listed.split("\n").filter((file) => {
     if (!file || SKIPPED.test(file)) return false;
-    if (SOURCE_FILE.test(file)) return true;
-    return file.startsWith("bin/") && fs.existsSync(path.join(repoRoot, file));
+    if (!fs.existsSync(path.join(repoRoot, file))) return false;
+    return SOURCE_FILE.test(file) || file.startsWith("bin/");
   });
 }
 

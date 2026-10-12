@@ -489,6 +489,7 @@ remove_runtime_state() {
   # on package disable and leaves the package-runtime/ directory itself; uninstall owns the whole tree.
   remove_path "${state_dir}/package-runtime" "remove"
   remove_path "${state_dir}/install-state.json" "remove"
+  remove_path "${state_dir}/app-root.json" "remove"
   remove_path "${state_dir}/initialization.json" "remove"
   remove_path "${state_dir}/experimental.json" "remove"
 
@@ -595,6 +596,7 @@ check_no_active_remnants() {
 
   for path in \
     "${state_dir}/install-state.json" \
+    "${state_dir}/app-root.json" \
     "${state_dir}/presets" \
     "${state_dir}/rules" \
     "${state_dir}/command-overrides.json" \

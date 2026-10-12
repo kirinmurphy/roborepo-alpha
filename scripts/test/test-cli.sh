@@ -203,6 +203,26 @@ assert "codex hooks: minimize-bash-output tolerates malformed stdin" \
   bash -c "printf 'not-json' | HOME='${codex_hook_home}' node '${repo_root}/globals/system/hooks/codex/minimize-bash-output.mjs' >/dev/null"
 assert "codex hooks: installed permission-check reads repo manifest from install state" \
   bash -c "printf '%s\n' '{\"tool_name\":\"exec_command\",\"tool_input\":{\"command\":\"git push --force origin main\"}}' | HOME='${codex_hook_home}' node '${codex_hook_home}/.codex/hooks/permission-check.mjs' | grep -q '\"permissionDecision\":\"deny\"'"
+# An npm install writes no install-state.json; the CLI records the app root under the state root
+# instead, and the copied hook must find the manifest through it.
+codex_package_state="${work}/codex-package-state"
+mkdir -p "${codex_package_state}"
+printf '{ "appRoot": "%s" }\n' "${repo_root}" > "${codex_package_state}/app-root.json"
+
+assert "codex hooks: installed permission-check reads repo manifest from the recorded app root" \
+  bash -c "printf '%s\n' '{\"tool_name\":\"exec_command\",\"tool_input\":{\"command\":\"git push --force origin main\"}}' | HOME='${codex_hook_home}' ROBOREPO_STATE_ROOT='${codex_package_state}' node '${codex_hook_home}/.codex/hooks/permission-check.mjs' | grep -q '\"permissionDecision\":\"deny\"'"
+
+# The recorded app root holds the concrete install directory, which moves when npm reinstalls under
+# another Node version. Any command heals a stale record; no command but init and the permission
+# render creates one, so running roborepo after uninstall cannot bring the file back.
+app_root_stale="${work}/app-root-stale"
+mkdir -p "${app_root_stale}"
+printf '{ "appRoot": "/moved/away" }\n' > "${app_root_stale}/app-root.json"
+assert "app-root record: any command heals a stale record" \
+  bash -c "ROBOREPO_STATE_ROOT='${app_root_stale}' node '${cli}' version >/dev/null 2>&1 && grep -qF '\"appRoot\": \"${repo_root}\"' '${app_root_stale}/app-root.json'"
+app_root_absent="${work}/app-root-absent"
+assert "app-root record: an ordinary command does not create a missing record" \
+  bash -c "ROBOREPO_STATE_ROOT='${app_root_absent}' node '${cli}' version >/dev/null 2>&1; ! test -e '${app_root_absent}/app-root.json'"
 
 mk_skill() {
   local dir="$1" name="$2"
@@ -1278,6 +1298,16 @@ assert "mcp add: Claude failure does not write Codex config" \
 # roborepo lifecycle dispatch (doctor + update --dry-run, both read-only)
 # ---------------------------------------------------------------------------
 update_home="${work}/update-home"
+# Lifecycle commands below run against this fixture home and must never write into the source tree.
+# Fingerprinting globals/ (status plus diff, so files already edited in the working tree are covered
+# too) catches a write that follows a harness-home link back into the checkout.
+globals_fingerprint() {
+  ( cd "${repo_root}" && { git status --porcelain --untracked-files=all -- globals; git diff -- globals; } | shasum )
+}
+globals_before_update="$(globals_fingerprint)"
+globals_unchanged_since_fixture() {
+  [[ "$(globals_fingerprint)" == "${globals_before_update}" ]]
+}
 mkdir -p "${update_home}/.claude" "${update_home}/.codex"
 cp "${repo_root}/generated/claude/settings.json" "${update_home}/.claude/settings.json"
 cp "${repo_root}/generated/codex/config.toml" "${update_home}/.codex/config.toml"
@@ -1285,7 +1315,10 @@ node -e "const fs=require('fs');const p='${update_home}/.claude/settings.json';c
 printf '\n[projects.\"/Users/kirinmurphy/projects/activedev/roborepo\"]\ntrust_level = \"trusted\"\n' >> "${update_home}/.codex/config.toml"
 ln -s "${repo_root}/generated/claude/CLAUDE.md" "${update_home}/.claude/CLAUDE.md"
 ln -s "${repo_root}/globals/harnesses/claude/MANAGED_BY_ROBOREPO.md" "${update_home}/.claude/MANAGED_BY_ROBOREPO.md"
-ln -s "${repo_root}/globals/harnesses/claude/hooks" "${update_home}/.claude/hooks"
+# The hooks link targets a temp copy, not the checkout: update installs provider hooks under
+# ~/.claude/hooks/provider, and through a link into globals/ that copy would land in the source tree.
+cp -R "${repo_root}/globals/harnesses/claude/hooks" "${work}/legacy-claude-hooks"
+ln -s "${work}/legacy-claude-hooks" "${update_home}/.claude/hooks"
 ln -s "${repo_root}/generated/codex/AGENTS.md" "${update_home}/.codex/AGENTS.md"
 ln -s "${repo_root}/generated/codex/hooks.json" "${update_home}/.codex/hooks.json"
 ln -s "${repo_root}/globals/harnesses/codex/MANAGED_BY_ROBOREPO.md" "${update_home}/.codex/MANAGED_BY_ROBOREPO.md"
@@ -1337,6 +1370,7 @@ assert "lifecycle: roborepo update --verbose reports unchanged detail" \
   bash -c "HOME='${update_home}' node '${cli}' update --dry-run --verbose >'${update_out}.verbose' 2>&1 && grep -q '━━━ Shell & PATH' '${update_out}.verbose' && grep -q 'unchanged: .*package registry' '${update_out}.verbose'"
 assert "lifecycle: roborepo update preserves local hooks, trust, and enabled skills" \
   bash -c "HOME='${update_home}' ROBOREPO_STATE_DIR='${update_home}/.roborepo' node '${cli}' update >/dev/null 2>&1 && node -e \"const fs=require('fs');const s=JSON.parse(fs.readFileSync('${update_home}/.claude/settings.json','utf8'));process.exit((s.hooks?.PreToolUse||[]).some(e=>(e.hooks||[]).some(h=>h.command.includes('capture-dense-bash.mjs')))?0:1)\" && grep -q '\\[projects\\.\"/Users/kirinmurphy/projects/activedev/roborepo\"\\]' '${update_home}/.codex/config.toml' && test -L '${update_home}/.claude/skills/case-study' && test -L '${update_home}/.codex/skills/case-study'"
+assert "lifecycle: update writes nothing into the source tree" globals_unchanged_since_fixture
 
 update_legacy_home="${work}/update-legacy-home"
 mkdir -p "${update_legacy_home}/.claude" "${update_legacy_home}/.codex" "${update_legacy_home}/.roborepo/rules"

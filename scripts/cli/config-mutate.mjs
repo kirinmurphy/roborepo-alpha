@@ -1,5 +1,4 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { repoRoot } from "./paths.mjs";
 import { enablePackage, disablePackage, findPackage } from "./packages.mjs";
@@ -7,7 +6,7 @@ import { loadPackageCatalog, unavailablePackageMessage } from "./package-catalog
 import { listSourceSkills } from "./skill-files.mjs";
 import {
   loadPermissionManifest,
-  renderPermissionsTo,
+  renderPermissionsToHome,
   resolveBehaviors,
   resolveArbitraryCommands,
 } from "./permissions-render.mjs";
@@ -364,8 +363,7 @@ export function permissionsCommand(args = []) {
 function applyOverrides(manifest, overrides) {
   try {
     writeCommandOverrides(overrides);
-    const home = os.homedir();
-    const { touched } = renderPermissionsTo(home, { manifest, overrides, cwd: process.cwd() });
+    const { touched } = renderPermissionsToHome({ manifest, overrides, cwd: process.cwd() });
     if (touched.length === 0) {
       return { ok: false, message: "no harness config found to write" };
     }

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { STATE_ROOT } from "./roots.mjs";
+import { STATE_ROOT, appRoot } from "./roots.mjs";
 
 export const stateDir = STATE_ROOT;
 
@@ -21,6 +21,30 @@ export function writeJsonState(filePath, data) {
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + "\n");
 }
 export const installStatePath = path.join(stateDir, "install-state.json");
+// Where the running application lives, for code that runs outside it. Installed harness hooks are
+// copies under the harness home, so they cannot walk back to the manifests that ship with the app,
+// and install-state.json is written only by the development installer. Without this record an
+// npm-installed hook has no platform manifest and silently defers every decision it exists to make.
+export const appRootRecordPath = path.join(stateDir, "app-root.json");
+
+export function recordAppRoot() {
+  if (readJsonState(appRootRecordPath, {})?.appRoot === appRoot) return;
+  writeJsonState(appRootRecordPath, { appRoot });
+}
+
+// The recorded path is the concrete npm install directory, which moves when npm reinstalls under a
+// different Node version. Every CLI run calls this so a stale record heals on the next command;
+// until then hooks fall back to deferring, the same as having no record. It only refreshes an
+// existing record: creating one is init's and the permission render's job, and creating it here
+// would bring the file back after uninstall removed it.
+export function refreshAppRootRecord() {
+  try {
+    const recorded = readJsonState(appRootRecordPath, null);
+    if (recorded && recorded.appRoot !== appRoot) writeJsonState(appRootRecordPath, { appRoot });
+  } catch {
+    // An unwritable state root must not block the command the user actually ran.
+  }
+}
 // First-run lifecycle record: has `roborepo init` ever started, and did it finish. Deliberately
 // separate from installStatePath (which the shell installer owns) and from directory existence —
 // a workspace dir can exist because `setup` ran as an internal primitive without the user ever

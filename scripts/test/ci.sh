@@ -26,6 +26,12 @@ if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   run env CLEAN_MACHINE_STRICT=1 npm run --silent test:clean-machine-install-sandbox
   run env CLEAN_MACHINE_STRICT=1 npm run --silent test:clean-machine-permissions-sandbox
   run env CLEAN_MACHINE_STRICT=1 npm run --silent test:clean-machine-onboarding-sandbox
+elif [[ "${CI:-}" == "true" && "$(uname -s)" == "Linux" ]]; then
+  # The Linux CI leg is the only place these suites run in CI. Skipping there would leave the job
+  # green with no clean-machine coverage, so a missing daemon is a failure, not a skip.
+  echo "" >&2
+  echo "FAIL: clean-machine container suite cannot run: docker unavailable on a Linux CI runner" >&2
+  exit 1
 else
   echo ""
   echo "skip: clean-machine container suite (docker unavailable)"
