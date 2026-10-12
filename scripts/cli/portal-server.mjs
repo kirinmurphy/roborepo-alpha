@@ -55,13 +55,13 @@ const STATIC_TYPES = {
 // pageHtml() below, so there is nothing to hand-sync client-side.
 // Each page's HTML is just its index.html read from disk (mirrors static assets). `default: true`
 // marks the page served at "/" (what `roborepo web` opens). Home owns "/" as its canonical route;
-// Agents lives at canonical "/config". Order here is the global nav order.
+// Agents lives at canonical "/agents". Order here is the global nav order.
 // `icon` labels the page in the header's ⋮ menu. `secondary` pages are lower-priority destinations
 // that live only in that menu; the rest sit in the header bar until the viewport gets narrow, when
 // every page moves into the menu.
 export const PAGES = [
   { path: "/", id: "home", title: "Repos", icon: "home", dir: "home", default: true },
-  { path: "/config", id: "config", title: "Agents", icon: "agents", dir: "config" },
+  { path: "/agents", id: "config", title: "Agents", icon: "agents", dir: "config" },
   { path: "/plans", id: "plans", title: "Plans", icon: "plans", dir: "plans" },
   // The token report owns /tokens (id/dir keep the tokens module paths).
   { path: "/tokens", id: "tokens", title: "Tokens", icon: "tokens", dir: "tokens" },
@@ -77,6 +77,7 @@ export const PAGES = [
 ];
 export const PAGE_ROUTES = [
   ...PAGES.map((page) => ({ ...page, navId: page.id })),
+  { path: "/config", id: "agents-legacy", navId: "config", title: "Agents", dir: "config", redirect: "/agents" },
   // Parked: the detail page stays in the tree but every request redirects Home until it returns.
   { path: "/repositories/:urlKey", id: "repository-detail", navId: "home", title: "Repository", dir: "repositories", redirect: "/" },
 ].map((page) => ({ ...page, segments: page.path.split("/").filter(Boolean) }));

@@ -54,7 +54,7 @@ if command -v node >/dev/null 2>&1; then
   fi
 fi
 
-while IFS=$'\t' read -r _id home_path _present _display_name _root_config_path; do
+while IFS=$'\t' read -r _id home_path _present _display_name _root_config_path _confidence; do
   [[ -z "${home_path}" ]] && continue
   remove_skill_links "${home_path}/skills"
 done < <(harness_detected_rows)

@@ -1,4 +1,4 @@
-// Shared "install a supported harness" warning banner — the SAME banner the Agents (/config) page
+// Shared "install a supported harness" warning banner — the SAME banner the Agents (/agents) page
 // and the Tokens (/tokens) page render when no active harness is installed on this machine. Single
 // source of truth for both the message text and the rendered <portal-notice> element; pages must
 // not re-implement either.
@@ -16,10 +16,13 @@ const CHECK_LABEL = "Check for harnesses";
 export function harnessWarningSpec(snap) {
   const normalized = normalizeSetupSnapshot(snap);
   if (activePresentedHarnesses(normalized).length > 0) return null;
+  const guidance = snap?.harnesses?.guidance ?? snap?.machineHarnessGuidance ?? [];
+  const nextStep = guidance.find((entry) => entry.warnings?.length)?.warnings[0];
   return {
     variant: "warning",
     title: "",
-    body: "Install a supported harness to add agent tools and enable token tracking.",
+    body: nextStep?.replace(/then run roborepo harness refresh\.$/, `then select ${CHECK_LABEL}.`)
+      || "Install a supported harness to add agent tools and enable token tracking.",
   };
 }
 
@@ -64,7 +67,7 @@ function createHarnessNotice(snap, variant) {
 function setLinkedHarnessCopy(panel, body) {
   const copy = panel.querySelector("[data-slot=copy]");
   const links = [
-    { label: "agent tools", href: "/config" },
+    { label: "agent tools", href: "/agents" },
     { label: "token tracking", href: "/tokens" },
   ];
   const fragment = document.createDocumentFragment();

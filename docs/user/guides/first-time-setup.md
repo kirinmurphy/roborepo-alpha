@@ -57,7 +57,7 @@ them, overwrite them, or stop — see
 ## Choose Behaviors
 
 Only the baseline is applied automatically; everything else is opt-in (telemetry stays off unless
-you turn it on). Choose behaviors in the portal's `/config` page, or in the terminal chooser:
+you turn it on). Choose behaviors in the portal's `/agents` page, or in the terminal chooser:
 
 ```sh
 roborepo library

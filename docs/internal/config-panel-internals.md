@@ -1,6 +1,6 @@
 # Config Control Panel Internals
 
-How the `/config` panel and `roborepo package manage` are built, for people changing them.
+How the `/agents` panel and `roborepo package manage` are built, for people changing them.
 User-facing behavior is in [Config Control Panel](../user/reference/config-control-panel.md).
 
 ## State Snapshot
@@ -55,7 +55,7 @@ every repository under `~/.worktrees`.
 
 ## Web endpoints
 
-The loopback-only portal server (`scripts/cli/portal-server.mjs`) serves `/config`
+The loopback-only portal server (`scripts/cli/portal-server.mjs`) serves `/agents`
 and these write endpoints. Each returns the fresh snapshot so the client re-renders from
 one response.
 
@@ -162,7 +162,7 @@ tilde.
 - `scripts/cli/packages.mjs` — `enablePackage` / `disablePackage` and package dependency
   resolution.
 - `scripts/cli/permissions-render.mjs` — the permission render core.
-- `scripts/cli/config-dashboard.mjs` — the `/config` web view.
+- `scripts/cli/config-dashboard.mjs` — the `/agents` web view.
 - `scripts/cli/portal-server.mjs` — the HTTP routes.
 - `portal/config/` — the config page HTML, CSS, and browser JavaScript.
 - `globals/packages/*/package.config.json` — built-in package configs.

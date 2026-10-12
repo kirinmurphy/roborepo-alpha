@@ -9,7 +9,7 @@ behavior, not the extension mechanism.
 
 ## What a Harness Is
 
-A harness is a coding-agent CLI that reads its configuration from a directory in your home folder —
+A harness is a coding agent that reads its configuration from a directory in your home folder —
 Claude Code reading `~/.claude`, Codex reading `~/.codex`, Gemini CLI reading `~/.gemini`.
 
 Each of these tools stores broadly the same kinds of things: rules the agent should follow, skills
@@ -55,10 +55,12 @@ missing or broken.
 | `telemetry-capture` | Session cost/tool-call capture | ✅ | ✅ | — |
 | `telemetry-rate-limits` | Rate-limit windows parsed from session data | — | ✅ | — |
 | `telemetry-transcripts` | Reading past session transcripts | ✅ | ✅ | — |
-| `session-launch` | Starting a session from RoboRepo | ✅ | ✅ | — |
+| `session-launch` | Reserved for starting a session from RoboRepo; adapter pending | ⚠️ | ⚠️ | — |
 
-Gemini CLI receives every configuration capability but no telemetry, because it does not expose the
-session data telemetry needs. Only Codex reports rate-limit windows.
+Gemini CLI receives its declared configuration capabilities but no telemetry, because it does not
+expose the session data telemetry needs. Only Codex reports rate-limit windows.
+Claude and Codex declare `session-launch`, but its adapter is still a stub; discovery does not add
+a session-launch control.
 
 This matters when reading `roborepo doctor` output: a harness that lacks a capability produces no
 checks for it, and *no checks* looks the same as *all checks passing*. Compare a harness against the
@@ -69,24 +71,37 @@ capability table above, not against another harness's check count.
 RoboRepo discovers harnesses; you do not register them by hand.
 
 Discovery is narrow. For each known provider, RoboRepo checks only the locations that
-provider's own manifest declares — its executable name on `PATH`, its home directory, its config
-file. It never scans your filesystem broadly. The evidence it finds becomes a confidence level:
+provider's manifest declares: its executable name on `PATH`, its home directory, its config
+file, and supported macOS desktop app locations. It never scans your filesystem broadly. The
+evidence it finds becomes a confidence level:
 
 | Evidence found | Confidence |
 | --- | --- |
-| Executable on `PATH` (validated) **and** a home dir or config file | `confirmed` |
-| Executable on `PATH` (validated) only | `probable` |
+| Validated CLI or desktop coding runtime **and** a home dir or config file | `confirmed` |
+| Validated CLI or desktop coding runtime only | `probable` |
 | Home directory or config file only | `possible` |
 | Nothing | `absent` |
 
 Each provider declares the minimum confidence it will accept. Meeting that bar makes the harness
 eligible; RoboRepo then manages it on the next `roborepo update`.
 
-Every shipped provider requires `confirmed` — a validated executable on `PATH` **plus** a home dir
-or config file. A config directory left behind by another tool (a `~/.claude` with no `claude`
-binary, say) is not enough to make RoboRepo believe the harness is installed; it shows up as
-`possible` instead. This matters because a leftover settings file would otherwise flip the Agents
-page to "installed" with no CLI present.
+Claude Code and Codex require `confirmed` — a validated runtime **plus** a home dir or config file.
+A config directory left behind by another tool is only `possible` and does not enable a provider.
+If a runtime exists but its home does not, launch the coding agent once and run `roborepo update`.
+RoboRepo does not create an agent's home for an app that has never launched.
+
+On macOS, RoboRepo supports these desktop locations:
+
+| Product | Coding runtime location |
+| --- | --- |
+| Claude Code in Claude Desktop | `~/Library/Application Support/Claude/claude-code/<version>/[<build>/]claude.app/Contents/MacOS/claude` |
+| Codex in the desktop app | `/Applications/ChatGPT.app/Contents/Resources/codex` or `~/Applications/ChatGPT.app/Contents/Resources/codex` |
+
+Open Claude Desktop's **Code** tab if the app exists but its Code runtime has not downloaded.
+RoboRepo checks app identity and the runtime's version before counting it. An app moved outside
+the listed locations is not discovered; move it back or use its CLI on `PATH`.
+Codex's `tui.status_line` is a terminal footer setting. Discovery does not establish whether a
+desktop app renders a footer or runs hooks in a session.
 
 As a result:
 
@@ -106,6 +121,9 @@ roborepo harness disable <id>      # stop managing it, without uninstalling robo
 roborepo harness refresh           # re-run discovery
 roborepo harness withdraw <id>     # strip builtin-managed artifacts from that harness
 ```
+
+`harness list` shows whether a CLI, desktop runtime, or both were found. `harness inspect <id>`
+shows their paths, versions, and any setup warnings.
 
 `disable` and `withdraw` differ: `disable` stops future delivery and leaves existing files alone;
 `withdraw` actively removes what RoboRepo put there. Run `withdraw --dry-run` first — it prints

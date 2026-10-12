@@ -13,34 +13,37 @@
        this away on first successful load(); the dynamic behaviorView sections that follow it are
        genuinely server-computed and have no static equivalent, so they simply aren't in this
        pre-hydration shell. -->
-      <section class="panel wide">
-        <div class="config-grid" role="table" aria-label="Agent files">
-          <div class="config-grid-row" role="row">
-            <div class="config-type" role="cell">
-              <strong>Usage</strong>
-              <span>Startup context loaded automatically.</span>
+      <div class="config-files-section">
+        <h2 class="config-files-title">Active Harnesses</h2>
+        <section class="panel wide">
+          <div class="config-grid" role="table" aria-label="Agent files">
+            <div class="config-grid-row" role="row">
+              <div class="config-type" role="cell">
+                <strong>Usage</strong>
+                <span>Startup context loaded automatically.</span>
+              </div>
+            </div>
+            <div class="config-grid-row" role="row">
+              <div class="config-type" role="cell">
+                <strong>Rules</strong>
+                <span>Global context for every session.</span>
+              </div>
+            </div>
+            <div class="config-grid-row" role="row">
+              <div class="config-type" role="cell">
+                <strong>Config</strong>
+                <span>Settings, permissions, and runtime defaults.</span>
+              </div>
+            </div>
+            <div class="config-grid-row" role="row">
+              <div class="config-type" role="cell">
+                <strong>Hooks</strong>
+                <span>Automation triggered by lifecycle or tool events.</span>
+              </div>
             </div>
           </div>
-          <div class="config-grid-row" role="row">
-            <div class="config-type" role="cell">
-              <strong>Rules</strong>
-              <span>Global context for every session.</span>
-            </div>
-          </div>
-          <div class="config-grid-row" role="row">
-            <div class="config-type" role="cell">
-              <strong>Config</strong>
-              <span>Settings, permissions, and runtime defaults.</span>
-            </div>
-          </div>
-          <div class="config-grid-row" role="row">
-            <div class="config-type" role="cell">
-              <strong>Hooks</strong>
-              <span>Automation triggered by lifecycle or tool events.</span>
-            </div>
-          </div>
-        </div>
-      </section>
+        </section>
+      </div>
     </main>
     <dialog id="config-modal" aria-labelledby="modal-title">
       <div class="modal-head">
@@ -62,10 +65,7 @@
     <template id="tpl-packages-intro">
       <header class="packages-intro">
         <h2>Available Agent Tools</h2>
-        <p>
-          Extend your active harness config beyond the base setup.  <br/> Toggling a package below writes it
-          into every active harness's configuration.
-        </p>
+        <p>Extend your harness config. Toggling a package below writes it into every active harness's configuration.</p>
       </header>
     </template>
     <template id="tpl-context-warnings">
@@ -76,42 +76,53 @@
         </div>
       </portal-notice>
     </template>
+    <template id="tpl-codex-hook-status">
+      <portal-notice class="portal-notice" variant="warning" aria-live="polite">
+        <div>
+          <strong data-slot="title"></strong>
+          <p data-slot="message"></p>
+        </div>
+      </portal-notice>
+    </template>
     <!-- Config grid shell: header + 4 row skeletons, one per config-type. The row-label cell
      (strong + description) doesn't vary per harness so it's authored here; each row's per-harness
      data cells start empty and are filled by cloning the matching tpl-config-*-cell template once
      per registered provider (templates.js's configFiles/configGridColumn) — never JS-built markup. -->
     <template id="tpl-config-files">
-      <section class="panel wide">
-        <div class="config-grid" role="table" aria-label="Agent files">
-          <div class="config-grid-head" role="row" data-slot="head">
-            <div role="columnheader"></div>
-          </div>
-          <div class="config-grid-row" role="row" data-slot="row-usage">
-            <div class="config-type" role="cell">
-              <strong>Usage</strong>
-              <span>Startup context loaded automatically.</span>
+      <div class="config-files-section">
+        <h2 class="config-files-title">Active Harnesses</h2>
+        <section class="panel wide">
+          <div class="config-grid" role="table" aria-label="Agent files">
+            <div class="config-grid-head" role="row" data-slot="head">
+              <div role="columnheader"></div>
+            </div>
+            <div class="config-grid-row" role="row" data-slot="row-usage">
+              <div class="config-type" role="cell">
+                <strong>Usage</strong>
+                <span>Startup context loaded automatically.</span>
+              </div>
+            </div>
+            <div class="config-grid-row" role="row" data-slot="row-rules">
+              <div class="config-type" role="cell">
+                <strong>Rules</strong>
+                <span>Global context for every session.</span>
+              </div>
+            </div>
+            <div class="config-grid-row" role="row" data-slot="row-config">
+              <div class="config-type" role="cell">
+                <strong>Config</strong>
+                <span>Settings, permissions, and runtime defaults.</span>
+              </div>
+            </div>
+            <div class="config-grid-row" role="row" data-slot="row-hooks">
+              <div class="config-type" role="cell">
+                <strong>Hooks</strong>
+                <span>Automation triggered by lifecycle or tool events.</span>
+              </div>
             </div>
           </div>
-          <div class="config-grid-row" role="row" data-slot="row-rules">
-            <div class="config-type" role="cell">
-              <strong>Rules</strong>
-              <span>Global context for every session.</span>
-            </div>
-          </div>
-          <div class="config-grid-row" role="row" data-slot="row-config">
-            <div class="config-type" role="cell">
-              <strong>Config</strong>
-              <span>Settings, permissions, and runtime defaults.</span>
-            </div>
-          </div>
-          <div class="config-grid-row" role="row" data-slot="row-hooks">
-            <div class="config-type" role="cell">
-              <strong>Hooks</strong>
-              <span>Automation triggered by lifecycle or tool events.</span>
-            </div>
-          </div>
-        </div>
-      </section>
+        </section>
+      </div>
     </template>
     <!-- Managed cleanup. Preserve-only by construction: there is no workspace-deletion control
          here, because irreversibly removing a user's authored content should be a deliberate typed

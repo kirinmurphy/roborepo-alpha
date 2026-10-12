@@ -885,7 +885,7 @@ if node -e 'const s=require("node:net").createServer();s.once("error",()=>proces
   # respawn failed). Asserting the PID is unchanged is what catches a regression to kill-first —
   # a plain "does it serve afterwards" check passes either way, which is why the bug went unseen.
   assert "config: web --detach adopts a healthy portal instead of restarting it" adopt_check
-  cfg_token="$(curl -s "http://127.0.0.1:${cfg_port}/config" | sed -n 's/.*name="cli-portal-token" content="\([^"]*\)".*/\1/p' | head -1)"
+  cfg_token="$(curl -s "http://127.0.0.1:${cfg_port}/agents" | sed -n 's/.*name="cli-portal-token" content="\([^"]*\)".*/\1/p' | head -1)"
   assert "config: portal exposes mutation token only in served HTML" \
     bash -c "test -n '${cfg_token}'"
   # Capture the JSON to a file so the snapshot body (which contains apostrophes in skill descriptions)
@@ -902,8 +902,10 @@ if node -e 'const s=require("node:net").createServer();s.once("error",()=>proces
     bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' -X POST 'http://127.0.0.1:${cfg_port}/api/config/skills' -H 'Content-Type: application/json' -d '{\"id\":\"${cfg_skill}\",\"enabled\":false}')\" = 403 ]"
   assert "config: POST unknown skill returns ok:false" \
     bash -c "curl -s -X POST 'http://127.0.0.1:${cfg_port}/api/config/skills' -H 'Content-Type: application/json' -H 'X-Cli-Portal-Token: ${cfg_token}' -d '{\"id\":\"zzz\",\"enabled\":true}' | node -e \"let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);process.exit(j.ok===false?0:1)})\""
-  assert "config: GET /config still served" \
-    bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' 'http://127.0.0.1:${cfg_port}/config')\" = 200 ]"
+  assert "config: GET /agents served" \
+    bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' 'http://127.0.0.1:${cfg_port}/agents')\" = 200 ]"
+  assert "config: GET /config redirects to /agents" \
+    bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' 'http://127.0.0.1:${cfg_port}/config')\" = '302 http://127.0.0.1:${cfg_port}/agents' ]"
   assert "developer-runtime: GET /runtime served with token" \
     bash -c "curl -s 'http://127.0.0.1:${cfg_port}/runtime' | grep -q 'cli-portal-token'"
   assert "developer-runtime: notice template includes docs link target" \
@@ -927,10 +929,10 @@ if node -e 'const s=require("node:net").createServer();s.once("error",()=>proces
     bash -c "node -e \"const j=require('${cfg_home}/developer-runtime-project.json');process.exit(j.ok&&j.developerRuntime?.settingsRevision===${cfg_lh_rev}+1?0:1)\""
   assert "developer-runtime: Windows capability shape is explicit" \
     bash -c "node -e \"import('${repo_root}/modules/developer-runtime/index.mjs').then(m=>{const c=m.capabilityForPlatform('win32');process.exit(c.discovery==='unsupported'&&/Windows/.test(c.message)?0:1)})\""
-  # The /config page JS must parse — a syntax error there crashes the whole dashboard at load (no
+  # The /agents page JS must parse — a syntax error there crashes the whole dashboard at load (no
   # panels render) and is invisible to HTTP-status checks. Guards the template-literal trap (a literal
   # newline inside a JS string, etc.).
-  assert "config: served /config dashboard JS parses" \
+  assert "config: served /agents dashboard JS parses" \
     bash -c "dashjs=\"${cfg_home}/dash.mjs\"; curl -s 'http://127.0.0.1:${cfg_port}/portal/config/app.js' > \"\${dashjs}\" && node --check \"\${dashjs}\""
   assert "developer-runtime: served dashboard JS parses" \
     bash -c "dashjs=\"${cfg_home}/developer-runtime.mjs\"; curl -s 'http://127.0.0.1:${cfg_port}/portal/developer-runtime/app.js' > \"\${dashjs}\" && node --check \"\${dashjs}\""
@@ -1614,9 +1616,17 @@ assert "legacy: real ~/.agents/skills user dir is preserved, not reclaimed" \
 # check first. These scenarios exist specifically to keep that class of regression caught by CI
 # instead of only surfacing on a machine with zero or one harness actually installed.
 # ---------------------------------------------------------------------------
+presence_bin="${reloc_root}/presence-bin"
+mkdir -p "${presence_bin}"
+cat > "${presence_bin}/which" <<'SH'
+#!/bin/sh
+exit 1
+SH
+chmod +x "${presence_bin}/which"
+presence_path="${presence_bin}:$(dirname "$(command -v node)"):/usr/bin:/bin"
 zero_home="${reloc_root}/presence-zero/home"
 mkdir -p "${zero_home}/.local/bin"
-zero_out="$(HOME="${zero_home}" ROBOREPO_STATE_DIR="${zero_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 \
+zero_out="$(HOME="${zero_home}" PATH="${presence_path}" ROBOREPO_STATE_DIR="${zero_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 NODE_ENV=test ROBOREPO_TEST_DESKTOP_ROOTS='{}' \
   ROBOREPO_ON_CONFLICT=overwrite bash "${repo_root}/scripts/install/main.sh" 2>&1)"
 assert "install: zero harnesses present does not crash (no unbound variable)" \
   bash -c "! echo '${zero_out}' | grep -q 'unbound variable'"
@@ -1625,23 +1635,23 @@ assert "install: zero-harness summary shows both as not installed" \
 
 claude_only_home="${reloc_root}/presence-claude-only/home"
 mkdir -p "${claude_only_home}/.claude" "${claude_only_home}/.local/bin"
-claude_only_out="$(HOME="${claude_only_home}" ROBOREPO_STATE_DIR="${claude_only_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 \
+claude_only_out="$(HOME="${claude_only_home}" PATH="${presence_path}" ROBOREPO_STATE_DIR="${claude_only_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 NODE_ENV=test ROBOREPO_TEST_DESKTOP_ROOTS='{}' \
   ROBOREPO_ON_CONFLICT=overwrite bash "${repo_root}/scripts/install/main.sh" 2>&1)"
 assert "install: Claude-only presence does not crash" \
   bash -c "! echo '${claude_only_out}' | grep -q 'unbound variable'"
-assert "install: Claude-only summary shows Claude available" \
-  bash -c "echo '${claude_only_out}' | grep -q 'Claude Code.*available'"
+assert "install: Claude-only home reports unavailable runtime" \
+  bash -c "echo '${claude_only_out}' | grep -q 'Claude Code.*configuration present, runtime unavailable'"
 assert "install: Claude-only links the base skill into .claude" \
   bash -c "test -e '${claude_only_home}/.claude/skills/builtin-support'"
 
 codex_only_home="${reloc_root}/presence-codex-only/home"
 mkdir -p "${codex_only_home}/.codex" "${codex_only_home}/.local/bin"
-codex_only_out="$(HOME="${codex_only_home}" ROBOREPO_STATE_DIR="${codex_only_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 \
+codex_only_out="$(HOME="${codex_only_home}" PATH="${presence_path}" ROBOREPO_STATE_DIR="${codex_only_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 NODE_ENV=test ROBOREPO_TEST_DESKTOP_ROOTS='{}' \
   ROBOREPO_ON_CONFLICT=overwrite bash "${repo_root}/scripts/install/main.sh" 2>&1)"
 assert "install: Codex-only presence does not crash" \
   bash -c "! echo '${codex_only_out}' | grep -q 'unbound variable'"
-assert "install: Codex-only summary shows Codex available" \
-  bash -c "echo '${codex_only_out}' | grep -q 'Codex.*available'"
+assert "install: Codex-only home reports unavailable runtime" \
+  bash -c "echo '${codex_only_out}' | grep -q 'Codex.*configuration present, runtime unavailable'"
 assert "install: Codex-only links the base skill into .codex" \
   bash -c "test -e '${codex_only_home}/.codex/skills/builtin-support'"
 
@@ -1953,7 +1963,7 @@ assert "developer-runtime: metadata suggestion discovery" \
   node "${repo_root}/scripts/test/developer-runtime-metadata-check.mjs"
 
 # Root config drift VIEW (buildRootConfigView in root-config-view.mjs): the per-harness state the terminal
-# `config root inspect` report and the web /config drift chip both render from — not-installed /
+# `config root inspect` report and the web /agents drift chip both render from — not-installed /
 # unwritten / in-sync / drifted / staged-pending.
 assert "root-config-view: per-harness drift state covers every user-facing case" \
   node "${repo_root}/scripts/test/root-config-view-check.mjs"

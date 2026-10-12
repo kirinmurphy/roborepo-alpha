@@ -48,7 +48,7 @@ This never touches global `~/.claude` or `~/.codex`.
 ## Skill Inspection
 
 `roborepo skill inspect <name>` is read-only. It uses the same native-aware inventory model as the
-`/config` skill inspect popup, so CLI and portal reports agree.
+`/agents` skill inspect popup, so CLI and portal reports agree.
 
 The report distinguishes:
 

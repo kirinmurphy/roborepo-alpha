@@ -12,6 +12,26 @@
     "configCandidates": ["~/.claude/settings.json"],
     "minimumConfidence": "confirmed"
   },
+  "platforms": {
+    "darwin": {
+      "detection": {
+        "desktopCandidates": [{
+          "label": "Claude Code",
+          "roots": ["~/Library/Application Support/Claude/claude-code"],
+          "layouts": [["*", "claude.app"], ["*", "*", "claude.app"]],
+          "bundleId": "com.anthropic.claude-code",
+          "executable": "Contents/MacOS/claude",
+          "verifiedMarker": ".verified",
+          "parentApp": {
+            "label": "Claude Desktop",
+            "roots": ["/Applications", "~/Applications"],
+            "bundle": "Claude.app",
+            "bundleId": "com.anthropic.claudefordesktop"
+          }
+        }]
+      }
+    }
+  },
   "paths": {
     "home": { "path": "~/.claude", "kind": "directory" },
     "rootConfig": { "path": "~/.claude/settings.json", "kind": "file" },

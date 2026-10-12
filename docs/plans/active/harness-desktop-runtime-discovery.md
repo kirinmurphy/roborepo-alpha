@@ -1,7 +1,7 @@
 ---
 id: 3jp3yhtq
 priority: high
-next_action: Run the unchecked desktop-session checks in Not tested, then verify the results and sync this plan.
+next_action: Resolve Codex hook trust through a supported desktop review action and verify nonzero live token capture after the parser fix is installed; then review remaining macOS acceptance criteria.
 blocked_by: []
 depends_on: []
 related:
@@ -9,7 +9,7 @@ related:
   - usage-statusline-codex-hook-parity
   - windows-provider-path-schema
   - 7k3m9qd
-reviewed_commit: 731937640d7483d945ee1e21466533574d686fbf
+reviewed_commit: 7b7b70220ceb6a43748af86a51ca085e0f36dd93
 worktree: harness-desktop-runtime-discovery
 ---
 
@@ -112,7 +112,7 @@ restricts `homeCandidates`/`configCandidates` to `~/`-relative paths, which cann
   home-gated (see Decision Log).
 - Managing Claude's general chat or Cowork configuration as Claude Code configuration.
 - Separate desktop provider IDs, settings stores, or package enablement switches.
-- A custom Codex footer hook; `usage-statusline-codex-hook-parity` owns that.
+- Terminal status lines; `usage-statusline-codex-hook-parity` owns their TUI behavior.
 - Gemini, Linux, or Windows desktop discovery.
 - Migrating harness state written before this change.
 
@@ -219,8 +219,6 @@ config, not a separate provider or package switch.
 
 | Feature | Required check | User-facing outcome |
 | --- | --- | --- |
-| Claude `statusLine` (`Usage Statusline` package) | Does a local Desktop Code session run the command and show its output? | Describe the actual desktop effect; keep one shared setting |
-| Codex `tui.status_line` | Does the desktop app render anything equivalent? | Label it as a terminal footer where appropriate |
 | Hooks and telemetry | Run one session in each desktop app and check hooks fire and transcripts are captured | Report captured versus unavailable data |
 | Session launch | `session.launch` is still a `notYetMigrated` stub in both adapters | Do not expose a launch choice from discovery |
 
@@ -260,8 +258,8 @@ config, not a separate provider or package switch.
 
 ### Phase 4: Surface effects and docs
 
-- [ ] Run the feature-effect checks above in both desktop apps and correct package and portal
-      wording to match the results.
+- [ ] Run fresh desktop sessions in both apps and verify hook execution, transcript capture, and
+      available telemetry fields; correct package and portal wording if the observed behavior differs.
 - [x] Update `docs/user/guides/harnesses/supported-harnesses.md` and
       `docs/internal/harness-provider-interface.md` with the supported app locations, the
       not-launched guidance, and the moved-app limitation.
@@ -287,7 +285,7 @@ config, not a separate provider or package switch.
 - [x] A refresh run leaves native config files and app bundles unchanged (compare file bytes before
       and after).
 - [ ] Manual macOS check on the installed apps: candidate layouts, one provider per product in the
-      portal, guidance copy, and the feature-effect table. Record app versions and results in the
+      rendered portal, guidance copy, and live telemetry. Record app versions and results in the
       implementation verification report.
 - [x] Run `node scripts/test/harness-registry-check.mjs`, `node scripts/test/harness-cli-check.mjs`,
       `node scripts/test/harness-refresh-simulation-check.mjs`, the MCP checks under
@@ -304,32 +302,90 @@ config, not a separate provider or package switch.
   executable was also available through `PATH`, so desktop-only Codex is fixture-tested.
 - With a temporary home and project, Claude Desktop's `2.1.295` runtime successfully completed
   MCP add, list, and remove at `user`, `project`, and `local` scopes. No unsupported scope was
-  found. The temporary files were removed.
+  found. QA repeated all three scope round trips with the installed desktop binary and no CLI on
+  `PATH`; the temporary files were removed.
 - The refresh simulation compares native config, bundle metadata, and runtime executable bytes
   before and after a refresh on macOS. A forced non-darwin unit test covers candidate suppression;
-  the implementation was not run on a Linux host.
+  the clean-machine, install, permissions, and onboarding Docker suites now pass on Linux.
 - The targeted harness, MCP, doctor, and diff checks passed. `npm run check` passed, including the
-  12 CI unit groups, package install smoke, and clean-machine install/onboarding checks. The gate
-  skipped Windows installer parity because `pwsh` is unavailable and skipped the portal browser
-  suite because Chromium is not installed.
+  428 CLI checks, 12 CI unit groups, package install smoke, and all four Docker clean-machine
+  suites. The gate skipped Windows installer parity because `pwsh` is unavailable and skipped the
+  portal browser suite because Chromium is not installed.
 - An isolated local portal preview using fixture apps reported exactly one confirmed Claude
   provider and one confirmed Codex provider through `/api/config`. This does not establish the
   live desktop app's rendered UI or session effects.
+- In QA on macOS, a refresh with temporary home and state directories, controlled `which`, and the
+  installed app bundles returned one confirmed desktop-only provider for each product. Claude
+  Desktop was version `2.31226.1`; its Code runtimes reported `2.1.295` and `2.1.293`, with
+  `2.1.295` selected. The Codex desktop app was version `26.917.62051`; its runtime reported
+  `codex-cli 0.155.0-alpha.16.3`. No native Claude or Codex configuration was written by this QA.
+- The user observed both provider names in the real portal on this Mac. Direct browser QA of
+  `http://127.0.0.1:19089/agents` then showed exactly one Claude Code column and one Codex column
+  in the rendered Active Harnesses table. A local screenshot records this real-state view.
+- Direct browser QA of the isolated fixture preview at `http://127.0.0.1:19088/agents` showed the
+  no-launched-runtime warning: "Open Claude Desktop’s Code tab to install Claude Code, then select
+  Check for harnesses." A separate local screenshot records this fixture view. The user also saw
+  the warning in an earlier temporary preview before its wording was changed. Neither preview is
+  evidence that the warning appeared in the current real RoboRepo state; that Mac has launched
+  coding runtimes for both providers.
+- QA reproduced an install-summary defect: with a Claude home and Claude Desktop app but no Code
+  runtime, the summary said `available` and hid the Code-tab instruction. It now reports
+  `installed, setup needed` and prints that instruction. A leftover home without a runtime now
+  reports `configuration present, runtime unavailable`. Both cases have isolated installer tests.
+- In real RoboRepo state, Token Telemetry is enabled and both `~/.claude/settings.json` and
+  `~/.codex/hooks.json` contain the five telemetry hook events. A fresh Claude Desktop Code session
+  on October 12, 2026 produced `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, and
+  `Stop` records. Its captured token fields include input, output, cache creation, cache read, and
+  total; session fields include model, tool and MCP counts, assistant turns, and maximum output.
+  The capture also recorded transcript-derived details and token deltas.
+- A fresh Codex desktop task on October 12, 2026 wrote a local transcript with token-count events,
+  model and rate-limit data, and tool calls. Before the hooks were trusted, no Codex telemetry
+  spool file appeared. The Codex `hooks` feature was enabled and the hooks file had telemetry
+  commands, but the user saw no hook trust prompt. A read-only review in the
+  embedded Codex runtime subsequently showed all five user-config telemetry hooks as new, with
+  zero active and five awaiting trust. Each command is `roborepo telemetry capture --harness codex`
+  for its corresponding lifecycle event. After the user approved exactly those five commands, QA
+  trusted them through Codex's hook review screen. That screen then showed one active hook and no
+  pending review for each of the five events. A new Codex desktop task after trust produced seven
+  real spool records for the same session ID as its new local transcript: `SessionStart`,
+  `UserPromptSubmit`, two `PreToolUse`/`PostToolUse` pairs, and `Stop`. The records identify two Bash
+  calls and their durations. Their token and transcript-derived tool counts are zero because the
+  installed `~/.local/bin/roborepo` resolves to the main checkout, whose older parser does not
+  recognize the current Codex token event shape. A one-shot parse of that same transcript with the
+  main checkout returns zero tokens and tool calls; the parser in this worktree returns 89,525 total
+  tokens, two tool calls, model `gpt-6-sol`, 178 reasoning output tokens, and primary/secondary
+  rate-limit windows. This worktree parser has not been installed in real RoboRepo state. The
+  transcript exposed parser gaps in the current Codex format:
+  token events now identify their type in `payload.type`, cache-write tokens use
+  `cache_write_input_tokens`, and tool calls may be `custom_tool_call`. The parser and regression
+  fixture now cover these forms. Current Codex rate limits also use `primary` and `secondary`
+  windows with numeric reset timestamps; parsing now retains their usage, window, and reset fields
+  without retaining account or credit data. Transcript parsing succeeds against the fresh local
+  file. The new spool verifies desktop hook execution; the worktree parse verifies interpretation
+  of its transcript, while the installed capture still reports zero token usage.
+- The worktree's production `telemetry capture` command also wrote a Codex spool record with
+  nonzero counts from the current-format transcript fixture: 500 total tokens, two tool calls,
+  and the expected model. This covers hook-input parsing through spool output in isolated state;
+  live installed capture still needs checking after the parser fix lands.
+- A new read-only Agents status check asks the validated Codex runtime for its hook listing and
+  reports only whether the five RoboRepo telemetry hooks are active, awaiting review, inactive,
+  missing, or unavailable. Direct browser QA of an isolated fixture at
+  `http://127.0.0.1:19090/agents` showed the awaiting-review warning. That fixture is not a
+  real-state observation of the new warning. The real Mac's hooks are already trusted, so the
+  warning cannot be tested there without changing the user's trust state.
 
 ## Not tested
 
-- [ ] Start a Claude Desktop Code session and verify that the shared `statusLine` command runs and
-      displays its output. A fixture cannot observe the signed-in desktop session UI.
-- [ ] Start a Codex desktop session and check whether `tui.status_line` appears in the desktop UI.
-      A fixture cannot observe the signed-in desktop session UI.
-- [ ] Start a session in each desktop app and confirm hook execution and telemetry transcript
-      capture, then record which data is actually available. This needs live session events and
-      access to each app's native transcript store.
-- [ ] In the live portal, confirm one provider card per product and the warning copy for an app
-      without a launched coding runtime. API and component checks do not establish the rendered
-      browser result; this also requires a controlled not-launched app state.
-- [ ] Run the Windows installer parity suite in an environment with `pwsh`; the local completion
-      gate skipped it because PowerShell is unavailable here.
+- [ ] Confirm nonzero token and tool counts in live Codex capture after the parser fix is installed.
+      The fresh post-trust desktop task proves hook execution and transcript creation, and an
+      isolated production-capture test writes nonzero counts with the fixed parser. The installed
+      parser predates that fix and wrote zero counts.
+- [ ] Resolve hook trust through the normal Agents experience. The desktop app did not prompt for
+      review, and the five hooks stayed inactive until QA trusted them in Codex's hook review screen.
+      Codex requires explicit trust for non-managed hooks. The installed app-server schema exposes
+      `hooks/list` and its trust status but no trust mutation. Agents now warns when those hooks
+      await review, but package enablement alone does not activate Codex capture for a new user.
+      A supported desktop review entry point or an explicit scope decision is still needed.
 
 ## Risks
 
@@ -345,6 +401,12 @@ config, not a separate provider or package switch.
 
 ## Decision Log
 
+- **Warning QA uses the rendered temporary preview.** The user observed the warning before its
+  copy changed, and direct browser QA captured the final wording in the isolated `:19088` preview.
+  The installed-app check is separately grounded in real discovery and the rendered `:19089`
+  portal. No claim is made that the current real state displayed a no-runtime warning, because
+  both coding runtimes have already launched. A separate clean macOS account is not required to
+  repeat the preview warning check.
 - **Install stays home-gated.** A validated runtime with no native home is reported with guidance
   but never gets `~/.claude` or `~/.codex` created for it. This keeps CLI and desktop behavior
   identical and leaves home creation to the harness. As a result, Claude and Codex keep the

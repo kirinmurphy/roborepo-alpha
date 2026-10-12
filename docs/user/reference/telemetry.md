@@ -8,23 +8,25 @@ leaves the machine.
 
 ## Turning It On
 
-Capture takes two steps, both deliberate:
+Enable the **Token Telemetry** package on the Agents page, or turn on **Token Activity Tracking** in
+portal Settings or on the Tokens page. Either action enables the package, installs its capture
+hooks, and turns capture on. The CLI entry point, `roborepo telemetry enable`, performs the same
+action. Start a new local coding session in the desktop app after enabling it so the session loads
+the hooks.
 
-1. Enable the `telemetry` package (from `roborepo library` or `/config`). This installs the capture
-   hooks, which do nothing yet.
-2. Run `roborepo telemetry enable`. The hooks start appending records.
-
-`roborepo telemetry disable` stops capture; the portal can still browse data captured earlier. Capture
-is off by default because the spool grows with every session.
+Turning tracking off in the portal, or running `roborepo telemetry disable`, stops capture; the
+portal can still browse data captured earlier. Capture is off by default because the spool grows
+with every session.
 
 **Telemetry-only install.** `roborepo telemetry install` sets up capture without the rest of
 RoboRepo: it wires only the capture hooks into `~/.claude/settings.json` and `~/.codex/hooks.json`
 and turns capture on. Use it to measure baseline token usage before adopting the full suite; running
 the normal install later upgrades it.
 
-**Codex hook trust.** Codex runs only hooks you have trusted. After install, the next Codex session
-asks you to trust `~/.codex/hooks.json`; approve it once. Codex loads hooks at session start, so
-sessions that were already running do not capture.
+**Codex hook trust.** Codex runs only hooks you have trusted. After enabling tracking, Codex may
+ask you to trust `~/.codex/hooks.json`; approve it if prompted. Codex loads hooks at session start,
+so sessions that were already running do not capture. Start a new session in the app; a full app
+restart is not part of normal setup.
 
 ## Capture
 

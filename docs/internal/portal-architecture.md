@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The portal is the local `roborepo web` UI: Home (`/`), Config (`/config`), Plans (`/plans`),
+The portal is the local `roborepo web` UI: Home (`/`), Agents (`/agents`), Plans (`/plans`),
 Runtime (`/runtime`), Settings (`/settings`), Tokens (`/tokens`), and bookmarkable repository detail pages
 (`/repositories/<urlKey>`). It is static HTML/CSS/browser JavaScript
 served by a loopback-only Node HTTP server — no build step, no framework, no bundler. This doc
@@ -77,8 +77,8 @@ copy to hand-sync:
 
 Nothing else needs updating for a static page — the nav and `/api/portal/status` are driven by
 `PAGES`. Keep a dynamic page out of `PAGES` so navigation, sitemap, and portal status stay
-concrete. Each route is canonical; Home owns `/`, Agents owns `/config`, and repository detail
-owns `/repositories/:urlKey`.
+concrete. Each route is canonical; Home owns `/`, Agents owns `/agents`, and `/config` redirects
+there. Repository detail owns `/repositories/:urlKey`.
 
 ## Shared Browser API (`portal/shared/api.js`)
 

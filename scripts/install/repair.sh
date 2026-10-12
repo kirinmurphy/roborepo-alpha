@@ -136,12 +136,12 @@ repair_skill_links() {
 
 # Iterates every registered provider instead of a fixed Claude/Codex pair. home_path is always the resolved manifest location
 # regardless of presence, so the -d guard still decides whether repair touches this machine's copy.
-while IFS=$'\t' read -r id home_path _present _display_name _root_config_path; do
+while IFS=$'\t' read -r id home_path _present _display_name _root_config_path _confidence; do
   [[ -z "${id}" ]] && continue
   [[ -d "${home_path}" ]] && repair_cleanup_rows "${id}"
 done < <(harness_detected_rows)
 
-while IFS=$'\t' read -r id home_path _present _display_name _root_config_path; do
+while IFS=$'\t' read -r id home_path _present _display_name _root_config_path _confidence; do
   [[ -z "${id}" ]] && continue
   [[ -d "${home_path}" ]] && repair_skill_links "${home_path}/skills"
 done < <(harness_detected_rows)

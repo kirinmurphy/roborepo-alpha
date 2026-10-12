@@ -7,11 +7,12 @@ import { readJsonState, writeJsonState, harnessStatePath } from "../cli/state-pa
 import { validateHarnessState } from "./schemas.mjs";
 
 function emptyState() {
-  return { schemaVersion: 1, lastDiscoveredAt: new Date(0).toISOString(), providers: {} };
+  return { schemaVersion: 2, lastDiscoveredAt: new Date(0).toISOString(), providers: {} };
 }
 
 export function readHarnessState() {
   const state = readJsonState(harnessStatePath, emptyState());
+  if (state.schemaVersion !== 2) return emptyState();
   validateHarnessState(state);
   return state;
 }
@@ -27,7 +28,7 @@ export function writeHarnessState(state) {
 // discovered enabled/confidence/evidence, defaulting newly-detected providers to enabled.
 export function applyDiscoveryToState(previousState, discoveryResults) {
   const next = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     lastDiscoveredAt: new Date().toISOString(),
     providers: { ...previousState.providers },
   };
@@ -41,6 +42,7 @@ export function applyDiscoveryToState(previousState, discoveryResults) {
       selectionSource: userDisabled ? "user" : "discovery",
       confidence: result.confidence,
       evidence: result.evidence,
+      warnings: result.warnings,
     };
   }
 
@@ -59,6 +61,7 @@ export function setProviderEnabled(state, providerId, enabled) {
         selectionSource: "user",
         confidence: previous?.confidence ?? "absent",
         evidence: previous?.evidence ?? [],
+        warnings: previous?.warnings ?? [],
       },
     },
   };

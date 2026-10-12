@@ -28,7 +28,7 @@ file as expected, not a remnant.
 
 ## Drift View
 
-`roborepo config root inspect` (terminal) and the `/config` portal
+`roborepo config root inspect` (terminal) and the `/agents` portal
 drift chip both render from one shared producer, `config.mjs::buildRootConfigView()`, which maps each
 harness to a single state: `not-installed`, `unwritten`, `in-sync`, `drifted`, or `staged-pending` (a
 `*_update_TIMESTAMP` sibling beside the active file, which outranks plain drift because a pending
@@ -63,5 +63,5 @@ drift regression coverage:
 
 `root-config-state-check.mjs` unit-tests the hash sidecar directly; `root-config-view-check.mjs`
 unit-tests the per-harness drift *view* (`not-installed` / `unwritten` / `in-sync` / `drifted` /
-`staged-pending`) that both `roborepo config root inspect` and the `/config` portal drift chip render
+`staged-pending`) that both `roborepo config root inspect` and the `/agents` portal drift chip render
 from. Both are wired into `test-cli.sh`.

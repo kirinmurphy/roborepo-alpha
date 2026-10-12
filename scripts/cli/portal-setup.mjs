@@ -4,7 +4,7 @@ import path from "node:path";
 import { isFixtureRepository } from "../../modules/developer-runtime/snapshot.mjs";
 import { autoDiscoverySource, defaultSources, loadRegistry, loadSources, userSources } from "../../modules/repositories/index.mjs";
 import { listHarnessProviders } from "../harnesses/registry.mjs";
-import { configSnapshotMachineHarnesses } from "./config.mjs";
+import { configSnapshotMachineHarnesses, configSnapshotHarnessGuidance } from "./config.mjs";
 import { readJsonState } from "./state-paths.mjs";
 import { STATE_ROOT as defaultStateRoot } from "./paths.mjs";
 import { activePresentedHarnesses } from "../../portal/shared/harness-cohort.js";
@@ -21,6 +21,7 @@ export function loadSetupState({
       displayName: provider.manifest.displayName,
     })),
     detected: configSnapshotMachineHarnesses(),
+    guidance: configSnapshotHarnessGuidance(),
   }),
   loadTelemetry = () => readJsonState(path.join(stateRoot, "telemetry", "state.json"), { enabled: false }),
 } = {}) {
@@ -28,7 +29,7 @@ export function loadSetupState({
   return buildSetupState({ registry, sources, ...loadHarnesses(), telemetry: loadTelemetry() });
 }
 
-export function buildSetupState({ registry = {}, sources = {}, supported = [], detected = [], telemetry = {} } = {}) {
+export function buildSetupState({ registry = {}, sources = {}, supported = [], detected = [], guidance = [], telemetry = {} } = {}) {
   const records = Object.values(registry.repositories || {}).filter((record) =>
     !registry.aliases?.[record.id] && !isFixtureRepository(record.id));
   const visible = records.filter((record) => record.visibility !== "hidden");
@@ -37,6 +38,7 @@ export function buildSetupState({ registry = {}, sources = {}, supported = [], d
   const harnesses = {
     supported: supported.map(safeHarness),
     detected: detected.map(safeHarness),
+    guidance: guidance.map((entry) => ({ id: entry.id, displayName: entry.displayName, confidence: entry.confidence, warnings: entry.warnings ?? [] })),
   };
   harnesses.active = activePresentedHarnesses({
     harnesses: harnesses.supported,

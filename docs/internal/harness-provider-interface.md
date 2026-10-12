@@ -101,8 +101,19 @@ Two rules matter more than the rest:
   `resolveHarnessPath(manifest, key)`. Nothing should build `~/.${id}` by hand — that assumption
   breaks the moment a harness's directory is not named after its id.
 
-Per-platform overrides go in an optional `platforms` key (`darwin`, `linux`, `win32`), each able to
-override `detection` and `paths`.
+Per-platform overrides go in an optional `platforms` key (`darwin`, `linux`, `win32`). Detection
+keys layer over the base detection object; unmentioned executable and home candidates remain in
+force. On macOS, `platforms.darwin.detection.desktopCandidates` declares bounded app roots and
+layouts, a bundle ID, and an executable inside the bundle. Desktop roots may be absolute or
+`~/`-relative; home and config candidates remain `~/`-relative. See the Claude and Codex manifests
+for the two supported layouts. The resolver validates bundle identity and `--version`, then retains
+the newest working desktop runtime alongside any CLI observation. A moved app outside the declared
+roots is not found.
+
+Discovery persists source, path, and version for executable evidence, plus setup warnings, in
+machine-local harness state schema version 2. Older state is rebuilt on the next refresh. A
+validated runtime without a native home remains below the `confirmed` minimum and produces launch
+guidance. Installer writes still depend on home presence alone.
 
 ### 2. The adapter — `scripts/harnesses/<id>/index.mjs`
 
@@ -186,13 +197,15 @@ Install, update, doctor, and uninstall are bash, not Node, so they cannot import
 directly. They reach it through two shared helpers in `scripts/lib/manifests-data.sh`:
 
 ```bash
-harness_detected_rows      # id  homePath  present  displayName  rootConfigPath  (one row per provider)
+harness_detected_rows      # id  homePath  present  displayName  rootConfigPath  confidence
 repo_internal_skill_dirs   # project-scope skills dirs, one per skills-capable provider
 ```
 
 `harness_detected_rows` shells out to `roborepo harness detected`, so the registry stays the single
 source of truth across both languages. Iterate it instead of writing `~/.claude`/`~/.codex` literals
-— column 2 is the provider's own home path, which is not required to match its id.
+— column 2 is the provider's own home path, which is not required to match its id. Column 3 is the
+home-presence gate for writes; column 6 reports live discovery confidence for guidance. Bash
+readers must consume all six columns so confidence cannot become part of `rootConfigPath`.
 
 Two constraints worth knowing before editing these scripts:
 

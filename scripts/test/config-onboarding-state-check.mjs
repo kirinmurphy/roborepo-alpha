@@ -23,6 +23,25 @@ const catalog = [
 {
   const snap = {
     harnesses: catalog,
+    machineHarnesses: [],
+    machineHarnessGuidance: [{ id: "claude", displayName: "Claude Code", confidence: "absent", warnings: ["Open Claude Desktop’s Code tab, then refresh."] }],
+  };
+  assert.equal(configHarnessWarning(snap).body, "Open Claude Desktop’s Code tab, then refresh.");
+}
+
+{
+  const snap = {
+    harnesses: catalog,
+    machineHarnesses: [],
+    machineHarnessGuidance: [{ id: "claude", displayName: "Claude Code", confidence: "absent", warnings: ["Open Claude Desktop’s Code tab to install Claude Code, then run roborepo harness refresh."] }],
+  };
+  assert.equal(configHarnessWarning(snap).body,
+    "Open Claude Desktop’s Code tab to install Claude Code, then select Check for harnesses.");
+}
+
+{
+  const snap = {
+    harnesses: catalog,
     machineHarnesses: [{ id: "claude", displayName: "Claude Code", enabled: true }],
     onboarding: { libraryCompleted: false },
     packages: [{ id: "usage-statusline", enabled: true, defaultEnabled: true }],

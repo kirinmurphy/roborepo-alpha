@@ -686,7 +686,7 @@ main {
   animation: portal-spin 0.7s linear infinite;
 }
 /* Ordinary in-page status/meta line, scoped near the content it describes (NOT a persistent
- * top bar) — used by /config, /plans, /telemetry for their own load-scoped status text. */
+ * top bar) — used by /agents, /plans, /telemetry for their own load-scoped status text. */
 .page-meta {
   padding: 10px 20px;
   color: var(--dim);
@@ -700,7 +700,7 @@ main {
 .item-err:empty {
   display: none;
 }
-/* Shared chrome-panel shape used by /config and /telemetry (byte-identical subset of what each
+/* Shared chrome-panel shape used by /agents and /telemetry (byte-identical subset of what each
  * page's own .panel rule had). Page-specific extras (e.g. config's .panel.wide) stay in that
  * page's own styles.css. */
 .panel {
@@ -1009,7 +1009,7 @@ dialog[data-dialog-size="sm"] { max-width: min(var(--dialog-sm), 100vw); }
 dialog[data-dialog-size="md"] { max-width: min(var(--dialog-md), 100vw); }
 dialog[data-dialog-size="lg"] { max-width: min(var(--dialog-lg), 100vw); }
 dialog[data-dialog-size="xl"] { max-width: min(var(--dialog-xl), 100vw); }
-/* Shared modal chrome — used by /config's #config-modal and /plans' #skill-modal. Each dialog's
+/* Shared modal chrome — used by /agents' #config-modal and /plans' #skill-modal. Each dialog's
  * own box styling (background, backdrop) stays in that page's own styles.css keyed off its
  * id; only the reusable head/title/path/close/body classes and the width scale live here. */
 .modal-head {

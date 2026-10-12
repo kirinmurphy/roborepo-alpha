@@ -62,7 +62,7 @@ const { port, stop: stopServer } = await startHermeticPortal({
 const base = `http://127.0.0.1:${port}`;
 
 // Mutations require the per-server token; it's embedded in every served page's HTML.
-const pageHtml = await (await fetch(`${base}/config`)).text();
+const pageHtml = await (await fetch(`${base}/agents`)).text();
 const token = pageHtml.match(/cli-portal-token" content="([^"]+)"/)?.[1];
 assert.ok(token, "portal mutation token should be present in served HTML");
 

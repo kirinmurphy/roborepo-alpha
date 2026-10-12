@@ -92,7 +92,7 @@ assert_under_harness_home() {
   local target="$1"
   local resolved home_path
   resolved="$(cd "$(dirname "${target}")" 2>/dev/null && pwd)/$(basename "${target}")" || resolved="${target}"
-  while IFS=$'\t' read -r _id home_path _present _display_name _root_config_path; do
+  while IFS=$'\t' read -r _id home_path _present _display_name _root_config_path _confidence; do
     [[ -z "${home_path}" ]] && continue
     case "${resolved}" in
       "${home_path}"/*) return 0 ;;
@@ -351,7 +351,7 @@ remove_gitignore_globals() {
 
 remove_install_backups() {
   local dir file home_path
-  while IFS=$'\t' read -r _id home_path _present _display_name _root_config_path; do
+  while IFS=$'\t' read -r _id home_path _present _display_name _root_config_path _confidence; do
     [[ -z "${home_path}" ]] && continue
     dir="${home_path}"
     [[ -d "${dir}" ]] || continue
@@ -701,7 +701,7 @@ check_no_active_remnants() {
   done < <(manifest_rows)
 
   local skills_home entry home_path
-  while IFS=$'\t' read -r _id home_path _present _display_name _root_config_path; do
+  while IFS=$'\t' read -r _id home_path _present _display_name _root_config_path _confidence; do
     [[ -z "${home_path}" ]] && continue
     skills_home="${home_path}/skills"
     [[ -d "${skills_home}" ]] || continue
@@ -715,7 +715,7 @@ check_no_active_remnants() {
   done < <(harness_detected_rows)
 
   local commands_home command_file
-  while IFS=$'\t' read -r _id home_path _present _display_name _root_config_path; do
+  while IFS=$'\t' read -r _id home_path _present _display_name _root_config_path _confidence; do
     [[ -z "${home_path}" ]] && continue
     commands_home="${home_path}/commands"
     [[ -d "${commands_home}" ]] || continue

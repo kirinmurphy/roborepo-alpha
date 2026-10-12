@@ -13,20 +13,64 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 const cli = path.join(repoRoot, "scripts/cli/main.mjs");
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-harness-cli-"));
+const fakeBin = path.join(tmp, "bin");
+fs.mkdirSync(fakeBin);
+fs.writeFileSync(path.join(fakeBin, "which"), '#!/bin/sh\nif [ -x "$FAKE_HARNESS_BIN/$1" ]; then printf "%s\\n" "$FAKE_HARNESS_BIN/$1"; fi\n');
+fs.chmodSync(path.join(fakeBin, "which"), 0o755);
 try {
   testZeroStateListIsSafe();
   testRefreshDiscoversAndEnables();
   testInspectUnknownHarnessFails();
   testEnableDisableRoundTrip();
   testDetectedReflectsHomeDirOnly();
+  if (process.platform === "darwin") testDesktopRuntimeLifecycle();
   console.log("harness CLI checks passed");
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 
 function run(args) {
-  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_DIR: path.join(tmp, ".roborepo") };
+  const env = {
+    ...process.env,
+    HOME: tmp,
+    PATH: fakeBin,
+    FAKE_HARNESS_BIN: fakeBin,
+    ROBOREPO_STATE_DIR: path.join(tmp, ".roborepo"),
+    NODE_ENV: "test",
+    ROBOREPO_TEST_DESKTOP_ROOTS: JSON.stringify({
+      "/Applications": path.join(tmp, "Applications"),
+      "~/Applications": path.join(tmp, "user-Applications"),
+      "~/Library/Application Support/Claude/claude-code": path.join(tmp, "claude-code"),
+    }),
+  };
   return spawnSync(process.execPath, [cli, ...args], { cwd: repoRoot, env, encoding: "utf8" });
+}
+
+function testDesktopRuntimeLifecycle() {
+  const bundle = path.join(tmp, "Applications", "ChatGPT.app", "Contents");
+  fs.mkdirSync(path.join(bundle, "Resources"), { recursive: true });
+  fs.writeFileSync(path.join(bundle, "Info.plist"), '<?xml version="1.0"?><plist><dict><key>CFBundleIdentifier</key><string>com.openai.codex</string></dict></plist>');
+  const executable = path.join(bundle, "Resources", "codex");
+  fs.writeFileSync(executable, '#!/bin/sh\necho "codex-cli 1.0"\n');
+  fs.chmodSync(executable, 0o755);
+
+  let result = run(["harness", "refresh"]);
+  assert.match(result.stdout, /^codex\tCodex\tdisabled\tprobable\tdesktop$/m);
+  result = run(["harness", "detected"]);
+  assert.match(result.stdout, /^codex\t[^\n]*\t0\tCodex\t[^\n]*\tprobable$/m);
+
+  fs.mkdirSync(path.join(tmp, ".codex"));
+  result = run(["harness", "refresh"]);
+  assert.match(result.stdout, /^codex\tCodex\tenabled\tconfirmed\tdesktop$/m);
+  result = run(["harness", "inspect", "codex"]);
+  const inspected = JSON.parse(result.stdout);
+  assert.equal(inspected.runtimes.length, 1);
+  assert.equal(inspected.runtimes[0].source, "desktop");
+  assert.equal(inspected.runtimes[0].version, "codex-cli 1.0");
+  assert.equal(inspected.warnings.length, 0);
+  run(["harness", "disable", "codex"]);
+  result = run(["harness", "refresh"]);
+  assert.match(result.stdout, /^codex\tCodex\tdisabled\tconfirmed\tdesktop$/m);
 }
 
 function testZeroStateListIsSafe() {
@@ -81,8 +125,8 @@ function testDetectedReflectsHomeDirOnly() {
   assert.equal(result.status, 0, `detected failed:\n${result.stdout}\n${result.stderr}`);
   assert.match(result.stdout, /^claude\t.*\t0\tClaude Code\t/m, "claude must show absent (0) with no ~/.claude dir");
   assert.match(result.stdout, /^codex\t.*\t0\tCodex\t/m, "codex must show absent (0) with no ~/.codex dir");
-  assert.match(result.stdout, /^claude\t.*\t.*\.claude[/\\]settings\.json$/m, "claude row must end with its rootConfig path");
-  assert.match(result.stdout, /^codex\t.*\t.*\.codex[/\\]config\.toml$/m, "codex row must end with its rootConfig path");
+  assert.match(result.stdout, /^claude\t.*\t.*\.claude[/\\]settings\.json\t(?:absent|possible|probable|confirmed)$/m, "claude row must end with its rootConfig path");
+  assert.match(result.stdout, /^codex\t.*\t.*\.codex[/\\]config\.toml\t(?:absent|possible|probable|confirmed)$/m, "codex row must end with its rootConfig path");
 
   fs.mkdirSync(path.join(tmp, ".claude"), { recursive: true });
   result = run(["harness", "detected"]);

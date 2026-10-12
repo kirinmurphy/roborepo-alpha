@@ -11,7 +11,7 @@
 // gives every heading a stable GitHub-style slug id) — info icons throughout the host page pass
 // their section's anchor so "view docs" from any panel lands on the relevant section, not the top.
 import { portalWireBackdropClose } from "./api.js";
-// Diagram rendering now lives in portal/shared/markdown-mermaid.js so /config and /plans get it too
+// Diagram rendering now lives in portal/shared/markdown-mermaid.js so /agents and /plans get it too
 // — it was private to this modal, which is why only the Telemetry guide rendered diagrams.
 import { renderMermaidBlocks } from "./markdown-mermaid.js";
 

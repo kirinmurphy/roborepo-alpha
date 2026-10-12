@@ -101,7 +101,7 @@ composition root. The CLI command is the supported surface.
 
 ```sh
 roborepo web --no-open --port 58473
-curl -fsS http://127.0.0.1:58473/config
+curl -fsS http://127.0.0.1:58473/agents
 curl -fsS http://127.0.0.1:58473/api/config
 curl -fsS http://127.0.0.1:58473/api/maintenance/uninstall/preview
 ```
@@ -111,7 +111,7 @@ planned cleanup and `workspacePreserved`. Do not call `POST /api/maintenance/uni
 publish verification.
 
 When browser automation is available, use it for DOM-level checks: page load, console errors,
-network failures, and the visible Uninstall panel. Without browser automation, `/config`,
+network failures, and the visible Uninstall panel. Without browser automation, `/agents`,
 `/api/config`, and the uninstall preview are acceptable browser-equivalent smoke checks, but record
 that no real browser was used.
 

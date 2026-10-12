@@ -13,6 +13,7 @@ const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-harness-refresh
 const fakeBin = path.join(tempRoot, "bin");
 const fakeHome = path.join(tempRoot, "home");
 const stateRoot = path.join(tempRoot, "state");
+const desktopRoot = path.join(tempRoot, "claude-code");
 fs.mkdirSync(fakeBin, { recursive: true });
 fs.mkdirSync(fakeHome, { recursive: true });
 
@@ -38,6 +39,7 @@ const probe = `
   import { configRoutes } from "./scripts/cli/portal-routes-config.mjs";
   import { refreshHarnessState } from "./scripts/harnesses/refresh.mjs";
   import { readHarnessState, setProviderEnabled, writeHarnessState } from "./scripts/harnesses/state.mjs";
+  import { harnessStatePath } from "./scripts/cli/state-paths.mjs";
 
   function callRefresh() {
     const res = { status: null, body: null, writeHead(status) { this.status = status; }, end(body) { this.body = body; } };
@@ -82,6 +84,34 @@ const probe = `
   writeHarnessState(setProviderEnabled(current, "claude", false));
   callRefresh();
   assert.equal(readHarnessState().providers.claude.enabled, false);
+
+  // Older state has no migration path; a refresh rebuilds it from current discovery.
+  fs.writeFileSync(harnessStatePath, JSON.stringify({ schemaVersion: 1, providers: { claude: { enabled: false } } }));
+  assert.deepEqual(readHarnessState().providers, {});
+  assert.equal(callRefresh().detected.includes("claude"), true);
+
+  if (process.platform === "darwin") {
+    fs.unlinkSync(executable);
+    const bundle = path.join(process.env.FAKE_DESKTOP_ROOT, "2.1.295", "build-a", "claude.app");
+    const contents = path.join(bundle, "Contents");
+    fs.mkdirSync(path.join(contents, "MacOS"), { recursive: true });
+    fs.writeFileSync(path.join(contents, "Info.plist"), '<?xml version="1.0"?><plist><dict><key>CFBundleIdentifier</key><string>com.anthropic.claude-code</string></dict></plist>');
+    fs.writeFileSync(path.join(path.dirname(bundle), ".verified"), "ok");
+    const desktopExecutable = path.join(contents, "MacOS", "claude");
+    fs.writeFileSync(desktopExecutable, '#!/bin/sh\\necho "2.1.295 (Claude Code)"\\n');
+    fs.chmodSync(desktopExecutable, 0o755);
+    const nativeConfig = path.join(claudeHome, "settings.json");
+    const configBefore = fs.readFileSync(nativeConfig);
+    const plistBefore = fs.readFileSync(path.join(contents, "Info.plist"));
+    const executableBefore = fs.readFileSync(desktopExecutable);
+    const refreshed = callRefresh();
+    assert.deepEqual(refreshed.detected, ["claude"]);
+    const claude = readHarnessState().providers.claude;
+    assert.equal(claude.evidence.some((entry) => entry.source === "desktop"), true);
+    assert.deepEqual(fs.readFileSync(nativeConfig), configBefore);
+    assert.deepEqual(fs.readFileSync(path.join(contents, "Info.plist")), plistBefore);
+    assert.deepEqual(fs.readFileSync(desktopExecutable), executableBefore);
+  }
   process.stdout.write("harness refresh simulation: install detection, portal route, and disable preservation passed\\n");
 `;
 
@@ -93,7 +123,14 @@ try {
       HOME: fakeHome,
       PATH: fakeBin,
       FAKE_HARNESS_BIN: fakeBin,
+      FAKE_DESKTOP_ROOT: desktopRoot,
       ROBOREPO_STATE_ROOT: stateRoot,
+      NODE_ENV: "test",
+      ROBOREPO_TEST_DESKTOP_ROOTS: JSON.stringify({
+        "~/Library/Application Support/Claude/claude-code": desktopRoot,
+        "/Applications": path.join(tempRoot, "Applications"),
+        "~/Applications": path.join(tempRoot, "user-Applications"),
+      }),
     },
     encoding: "utf8",
     timeout: 30_000,

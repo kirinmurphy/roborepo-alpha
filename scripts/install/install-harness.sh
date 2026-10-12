@@ -58,7 +58,7 @@ harness_present "${harness_id}" || {
 
 # Resolve this harness's home dir from the one matching detected row.
 home_dir=""
-while IFS=$'\t' read -r id home _present _name _root_config_path; do
+while IFS=$'\t' read -r id home _present _name _root_config_path _confidence; do
   [[ "${id}" == "${harness_id}" ]] || continue
   home_dir="${home}"
 done < <(harness_detected_rows)

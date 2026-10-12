@@ -21,7 +21,7 @@ const repoRoot = path.resolve(here, "..", "..");
 // Canonical page map: order is the nav order, and each route is unique (no alias).
 const EXPECTED = [
   { path: "/", id: "home", title: "Repos", dir: "home", default: true },
-  { path: "/config", id: "config", title: "Agents", dir: "config" },
+  { path: "/agents", id: "config", title: "Agents", dir: "config" },
   { path: "/plans", id: "plans", title: "Plans", dir: "plans" },
   { path: "/tokens", id: "tokens", title: "Tokens", dir: "tokens" },
   { path: "/runtime", id: "developer-runtime", title: "Runtime", dir: "developer-runtime" },
@@ -52,8 +52,7 @@ assert.equal(defaults.length, 1, "exactly one page must be marked default");
 assert.equal(defaults[0].path, "/", "the default page must be Home at /");
 assert.equal(defaults[0].id, "home", "the default page id must be home");
 
-// No aliasing: every path is distinct, and no page id appears twice (removes the old /↔/config
-// Agents alias special case from PAGE_BY_PATH).
+// Navigable pages have distinct paths and ids; the old page URL is redirect-only.
 assert.equal(new Set(PAGES.map((p) => p.path)).size, PAGES.length, "every route must be unique");
 assert.equal(new Set(PAGES.map((p) => p.id)).size, PAGES.length, "every page id must be unique");
 
@@ -77,7 +76,11 @@ assert.deepEqual(
 );
 
 assert.equal(PAGES.length, 6, "dynamic detail must not enter the six-item navigation manifest");
-assert.equal(PAGE_ROUTES.length, 7, "page-route table adds exactly one non-navigable dynamic route");
+assert.equal(PAGE_ROUTES.length, 8, "page-route table adds the old Agents redirect and a dynamic route");
+const oldAgentsRoute = PAGE_ROUTES.find((page) => page.path === "/config");
+assert.equal(oldAgentsRoute?.redirect, "/agents", "old Agents links redirect to the canonical page");
+assert.equal(matchPortalPage("/config")?.page.redirect, "/agents");
+assert.equal(matchPortalPage("/agents")?.page.id, "config");
 const detailRoute = PAGE_ROUTES.find((page) => page.path === "/repositories/:urlKey");
 assert.ok(detailRoute, "repository detail route is registered");
 assert.equal(detailRoute.navId, "home", "repository detail belongs to Home navigation");

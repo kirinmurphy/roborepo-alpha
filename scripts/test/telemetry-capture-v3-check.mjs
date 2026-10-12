@@ -21,6 +21,7 @@ try {
   testSessionStartBuildsSnapshotReusedByLaterCaptures();
   testCallAwareDurationPairingSurvivesConcurrentCalls();
   testDerivedCallIdForHarnessWithoutToolUseId();
+  testCodexCaptureReadsCurrentTranscriptTokens();
   testOperationClassificationOnBashCommand();
   testRawCommandNeverPersisted();
   console.log("telemetry capture v3 checks passed");
@@ -96,6 +97,19 @@ function testDerivedCallIdForHarnessWithoutToolUseId() {
   assert.notEqual(posts[0].call_id, posts[1].call_id, "sequential same-tool calls must get distinct derived call ids");
   assert.equal(typeof posts[0].duration_ms, "number");
   assert.equal(typeof posts[1].duration_ms, "number");
+}
+
+function testCodexCaptureReadsCurrentTranscriptTokens() {
+  const sessionId = "codex-session";
+  capture({
+    session_id: sessionId,
+    cwd: repoRoot,
+    transcript_path: path.join(repoRoot, "scripts/test/fixtures/telemetry/codex-basic.jsonl"),
+  }, { harness: "codex", event: "Stop" });
+  const record = spoolRecords("codex").find((entry) => entry.session_id === sessionId);
+  assert.equal(record.tokens.total, 500);
+  assert.equal(record.session.tool_calls, 2);
+  assert.equal(record.session.model, "gpt-5.4");
 }
 
 function testOperationClassificationOnBashCommand() {

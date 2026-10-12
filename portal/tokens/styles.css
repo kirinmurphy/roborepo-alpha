@@ -11,6 +11,7 @@ main.inner { max-width: 1100px; margin: 0 auto; padding: 32px 20px 64px; display
    bottom margin. The head strip gets only a small padding — hierarchy comes from the
    head-to-body contrast, not from inflating the header's own spacing. */
 #tokenscontent { display: grid; }
+#tokenscontent[hidden] { display: none; }
 .t2-section { margin-bottom: 64px; }
 .t2-section:last-child { margin-bottom: 0; }
 .t2-sec-head { padding-bottom: 12px; }
@@ -28,6 +29,30 @@ main.inner { max-width: 1100px; margin: 0 auto; padding: 32px 20px 64px; display
 /* ── Banner stack: multiple banners sit closer together than page sections ── */
 .banner-stack { display: grid; gap: 12px; }
 .banner-stack:empty { display: none; }
+.banner-stack[hidden] { display: none; }
+/* The first real capture replaces this centered setup view with the report. */
+.tokens-no-data {
+  min-height: calc(100vh - 220px);
+  padding: 72px 0 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tokens-no-data[hidden] { display: none; }
+.tokens-no-data-copy { width: 100%; max-width: 660px; }
+.tokens-no-data h1 {
+  margin: 0 0 16px;
+  font-size: 34px;
+  line-height: 1.15;
+  font-weight: 600;
+  color: var(--ink);
+}
+.tokens-no-data p {
+  margin: 0;
+  font-size: var(--text-md);
+  line-height: 1.55;
+  color: var(--dim);
+}
 /* Clear break between the banner stack and the report below it. */
 hr.banner-break { border: none; border-top: 1px solid var(--line); margin: 24px 0; }
 
