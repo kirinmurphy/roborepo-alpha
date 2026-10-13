@@ -652,9 +652,18 @@ npm run check
 
 ## Not tested
 
-- [ ] On the real primary portal, an active plan whose worktree holds its copy shows the worktree's
+- [x] On the real primary portal, an active plan whose worktree holds its copy shows the worktree's
       content, the **From worktree** line, and no warning. The fixtures cover the scan; this needs
       the user's own repositories and a browser.
+      Confirmed by the user on 2026-10-13 against a portal running this branch's code (port 4339),
+      side by side with one running `main`'s earlier code (port 4317). For `6q16tocb`, 4339 shows the
+      worktree's `next_action` and progress, `read from: From worktree plan-active-worktree-authority`,
+      and no authority warning, while 4317 shows the primary copy's stale `next_action` with
+      "Differs in worktree". In the same session, `3jp3yhtq` showed its worktree's `next_action` with
+      the From worktree row and a correct `PLAN_EDITED_OUTSIDE_WORKTREE` for close-review notes left
+      uncommitted in the primary copy; the warning cleared once that plan moved to `completed/`.
+      `koww80zh` showed no From worktree row and `PLAN_WORKTREE_COPY_UNAVAILABLE` ("the worktree's copy
+      is not in active/"), because its worktree had already moved its copy to `completed/`.
 - [ ] `/plan-close` on a merged plan with a worktree runs the integration check before step 1 and
       then edits only the primary copy; on an unmerged plan it refuses with `plan: not integrated`.
       Skill prose is checked only for presence; following it needs an agent run.
