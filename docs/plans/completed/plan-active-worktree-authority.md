@@ -1,7 +1,7 @@
 ---
 id: 6q16tocb
 priority: high
-next_action: Merge the branch, run `roborepo update` so the installed /plan-close has the integration check, then run /plan-close from the primary checkout and confirm the last `## Not tested` entry during that run.
+next_action:
 blocked_by: []
 depends_on:
   - a7bslb00
@@ -10,7 +10,7 @@ related:
   - wk7p4n2
   - 7m4q9dx
   - a7bslb00
-reviewed_commit: 77fb0952537f9afc2aea9866f52f13ebed678b59
+reviewed_commit: 2d0ae02083e2ecfffdef3df408ef30552f336ecf
 worktree: plan-active-worktree-authority
 ---
 
@@ -664,9 +664,18 @@ npm run check
       uncommitted in the primary copy; the warning cleared once that plan moved to `completed/`.
       `koww80zh` showed no From worktree row and `PLAN_WORKTREE_COPY_UNAVAILABLE` ("the worktree's copy
       is not in active/"), because its worktree had already moved its copy to `completed/`.
-- [ ] `/plan-close` on a merged plan with a worktree runs the integration check before step 1 and
+- [x] `/plan-close` on a merged plan with a worktree runs the integration check before step 1 and
       then edits only the primary copy; on an unmerged plan it refuses with `plan: not integrated`.
       Skill prose is checked only for presence; following it needs an agent run.
+      Confirmed by the user on 2026-10-13 from this plan's own close, run from the primary checkout
+      and following `main`'s `plan-close/SKILL.md`, since the installed skill predated step 0. Step 0
+      ran before step 1: the worktree copy's blob `87ace20` equalled the primary copy's, and `main`
+      had produced it since the fork `c09cd62`, so the plan was integrated. Every closing edit then
+      went to the primary copy, and after the move the worktree copy was still blob `87ace20` with
+      a clean worktree. The refusal half was not run by an agent: its Git commands give
+      `not integrated` after new worktree progress in `plan-close-integration-check.mjs`, and the
+      agent scenario `worktree-not-integrated` is queued in [[0jped168]]. The user accepted that
+      split.
 - [x] `/plan-close` archiving abandoned work carries the worktree copy into the primary copy once,
       and refuses with `plan: conflicting copies` when the primary copy has an outside edit. Needs
       an agent run against a real abandoned branch.
@@ -906,3 +915,31 @@ Recorded here rather than edited into the other plans.
   integrity surfacing) would add inbound-reference reporting to it, and
   `plans-portal-live-refresh-and-static-preflight` names it as a refresh trigger. Neither depends on
   which copy is selected.
+
+## Completion Summary
+
+An active plan's content now comes from its assigned worktree. The primary portal reads the
+worktree's copy directly, `/plan-start` no longer copies progress back to `main`, and the primary
+copy only decides which lifecycle stage the plan is in. An edit to the primary copy that the
+worktree never had is reported as `PLAN_EDITED_OUTSIDE_WORKTREE`. A worktree copy that can't be used
+falls back to the primary copy with `PLAN_WORKTREE_COPY_UNAVAILABLE`. When Git can't answer, the
+plan gets `PLAN_AUTHORITY_UNCHECKED`. RoboRepo never merges, overwrites, or picks between the two
+copies. Portal lifecycle moves of a worktree-owned plan are refused with
+`LIFECYCLE_OWNED_BY_PRIMARY`. `/plan-close` starts with an integration check and carries an
+abandoned plan's worktree copy to `main` once, when archiving. The work landed through PR #33
+(squash commit `bf5733f`).
+
+## Verification
+
+| Check | Result |
+| --- | --- |
+| Integration check (`/plan-close` step 0) | Run from the primary checkout before any test. The worktree `claude/plan-active-worktree-authority` was clean. Its copy's blob was `87ace20`, byte-identical to the primary copy, and a `main` commit since fork `c09cd62` produced that blob. Result: integrated |
+| `npm run check` on `main` at `2d0ae02` | Passed (`CI checks passed`, exit 0). This covered doctor, the repository tests (including the canonical, authority, edge, `/plan-close` integration, findings, commands, and portal-state plan-suite checks), install collisions, the unit `ci` group, package install, and the four clean-machine container suites. Windows installer parity was skipped because `pwsh` is not installed |
+| `npm run test:portal-ui` on a clean export of `2d0ae02` | 72 passed, 2 skipped. Another session left uncommitted portal edits in the primary checkout while the gate's own portal UI run was in progress. Rerunning the suite against a `git archive` of `HEAD` kept those edits out of the evidence. The gate's run also passed with the same counts |
+| Focused checks | `plan-promote-plan-start-check.mjs` and `repository-overview-check.mjs` pass on their own; both are also in the unit `ci` group |
+| `roborepo plans validate 6q16tocb` | Before the close, the only finding was `UNCONFIRMED_NOT_TESTED` for the `/plan-close` entry. The user then confirmed that entry |
+| Plan against code: modules | Every file in Affected Repository Files exists on `main`. `plan-authority.mjs` exports `resolvePlanAuthority` and `checkOutsideEdits`; `repositoryCheckouts` carries `branch`; `snapshot-fingerprint.mjs` reads `HEAD`, `packed-refs`, and reftable `tables.list`; `canonical-scan.mjs` is 69 lines; `movePlanLifecycle` throws `LIFECYCLE_OWNED_BY_PRIMARY` |
+| Plan against code: portal, skills, tests | The drawer's "From worktree" row and the Delete Worktree sentence are present. `plan-start` and `start-validation.md` contain no instruction to copy plan updates to the primary checkout. The four new checks are registered in `test-cli.sh` |
+| Removed code | `PLAN_DIFFERS_IN_WORKTREE`, `divergentCheckouts`, and `markDiverged` remain only in a regression assertion that the old finding is gone |
+| Landed | `inspectBranchLanding` on `claude/plan-active-worktree-authority` (tip `4a9e53b`) found its own work starting at reflog entry `35beeac`, and `bf5733f` (#33) as the first absorbing commit, against both `main` and `origin/main` |
+| Not verified | No agent run exercised `/plan-close` refusing an unmerged plan with `plan: not integrated`. The Git commands for that refusal pass in `plan-close-integration-check.mjs`, and the agent scenario is queued in [[0jped168]]. The installed `/plan-close` predated this plan; `roborepo update` had not been run when the plan closed |
