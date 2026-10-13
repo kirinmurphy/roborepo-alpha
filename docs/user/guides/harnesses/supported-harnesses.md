@@ -87,7 +87,9 @@ eligible; RoboRepo then manages it on the next `roborepo update`.
 
 Claude Code and Codex require `confirmed` — a validated runtime **plus** a home dir or config file.
 A config directory left behind by another tool is only `possible` and does not enable a provider.
-If a runtime exists but its home does not, launch the coding agent once and run `roborepo update`.
+If a runtime exists but its home does not, launch the coding agent once. With the portal open on a
+page that shows the setup banner, RoboRepo finishes setting it up within a few seconds and confirms
+it. Otherwise run `roborepo update`.
 RoboRepo does not create an agent's home for an app that has never launched.
 
 On macOS, RoboRepo supports these desktop locations:
@@ -133,8 +135,9 @@ An explicit `disable` survives `refresh`. Re-running discovery will not silently
 you turned off.
 
 When using the portal, open **Settings → Agent Harnesses** and select **Check for harnesses** after
-installing a supported harness. This performs the same discovery without requiring a terminal
-command; the CLI commands remain available for scripted workflows.
+installing a supported harness. This runs the same discovery as `roborepo harness refresh`. For a
+harness it newly enables, it also applies RoboRepo's config, as `roborepo update` would. Files you
+have edited are kept. The CLI commands remain available for scripted workflows.
 
 ## Platform Support
 

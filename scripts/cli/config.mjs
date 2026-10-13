@@ -131,14 +131,21 @@ export function configSnapshotMachineHarnesses() {
 }
 
 export function configSnapshotHarnessGuidance() {
+  const saved = readHarnessState().providers;
   return discoverHarnessProviders(listHarnessProviders())
-    .filter((result) => result.status !== "detected" && (result.confidence === "probable" || result.warnings.length > 0))
-    .map((result) => ({
-      id: result.providerId,
-      displayName: getHarnessProvider(result.providerId).manifest.displayName,
-      confidence: result.confidence,
-      warnings: result.warnings,
-    }));
+    .map((result) => {
+      const displayName = getHarnessProvider(result.providerId).manifest.displayName;
+      // Detected now but not yet enabled by a refresh: the user has just installed or launched it.
+      // The portal finishes setup on its own when it sees `ready`. An explicit user disable is left
+      // alone.
+      const previous = saved[result.providerId];
+      const ready = result.status === "detected" && !previous?.enabled
+        && !(previous?.selectionSource === "user" && previous.enabled === false);
+      if (ready) return { id: result.providerId, displayName, confidence: result.confidence, ready: true, warnings: [] };
+      if (result.status === "detected" || (result.confidence !== "probable" && !result.warnings.length)) return null;
+      return { id: result.providerId, displayName, confidence: result.confidence, warnings: result.warnings };
+    })
+    .filter(Boolean);
 }
 
 export function readConfigSnapshot() {

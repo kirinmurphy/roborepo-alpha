@@ -23,6 +23,7 @@ import { startPortalServer } from "./portal-server.mjs";
 import { computePortalSourceHash } from "./portal-source-hash.mjs";
 import { readConfigSnapshot, loadConfigSource } from "./config.mjs";
 import { readCodexTelemetryHookStatus } from "./codex-hook-status.mjs";
+import { refreshHarnessesAndApply } from "./portal-harness-refresh.mjs";
 import { mutatePackage, setSkillInstalled, setBehaviorBucket, setCommandBucket } from "./config-mutate.mjs";
 import { loadPlansSnapshot, loadCachedPlansSnapshot, loadPlanDocument, buildPlansPrompt, updatePlanPriority, updatePlanLifecycle, refreshPlans } from "./plans.mjs";
 import { loadRepositorySources, addRepositorySource, removeRepositorySource, setRepositorySourceEnabled, refreshRepositorySources, wipeRepositoryList, autoDiscoveryEnabled } from "./repository-sources.mjs";
@@ -58,7 +59,7 @@ import { insightsSummary } from "./telemetry-insights.mjs";
 import { deriveSessionFindings } from "./telemetry-session-findings.mjs";
 import { hookFilePath, writeHooksFile } from "./hook-composition.mjs";
 import { getHarnessProvider, hasHarnessProvider, listHarnessProviders, harnessDisplayName } from "../harnesses/registry.mjs";
-import { refreshHarnessState, setHarnessEnabled } from "../harnesses/service.mjs";
+import { setHarnessEnabled } from "../harnesses/service.mjs";
 import { loadSetupState } from "./portal-setup.mjs";
 import { ensureInitialized, finalizeInitialization, describeNewerSchemaRefusal } from "./initialization-bootstrap.mjs";
 
@@ -822,7 +823,7 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     loadConfig: () => readConfigSnapshot(),
     loadCodexHookStatus: () => readCodexTelemetryHookStatus(),
     loadSetupState: () => loadSetupState(),
-    refreshHarnesses: () => refreshHarnessState(),
+    refreshHarnesses: () => refreshHarnessesAndApply(),
     setHarnessEnabled: (id, enabled) => setHarnessEnabled(id, enabled),
     loadConfigSource: (params) => loadConfigSource(params),
     loadPlans: () => loadPlansSnapshot(),

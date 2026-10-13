@@ -23,6 +23,7 @@ const handlers = {
 
 let res = response();
 dispatchRoutes([configRoutes], { method: "POST", ...request({}) }, res, "/api/config/harnesses/refresh", "", handlers);
+await new Promise(setImmediate);
 assert.equal(res.status, 200);
 const refreshed = JSON.parse(res.body);
 assert.deepEqual(refreshed.detected, ["codex"]);

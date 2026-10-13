@@ -1,4 +1,4 @@
-import { portalGetJson } from "/portal/shared/api.js";
+import { portalGetJson } from "./api.js";
 
 export function fetchSetupState() {
   return portalGetJson("/api/settings");

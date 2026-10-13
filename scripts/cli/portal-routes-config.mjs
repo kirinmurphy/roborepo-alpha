@@ -32,16 +32,16 @@ export const configRoutes = defineRoutes([
     handler: (req, res, { handlers }) => {
       readJsonBody(req, (body, err) => {
         if (err) return send(res, 400, "application/json", JSON.stringify({ error: "invalid JSON body" }));
-        try {
-          const result = handlers.refreshHarnesses();
-          send(res, 200, "application/json", JSON.stringify({
+        Promise.resolve()
+          .then(() => handlers.refreshHarnesses())
+          .then((result) => send(res, 200, "application/json", JSON.stringify({
             ok: true,
             detected: result.detected,
+            newlyEnabled: result.newlyEnabled ?? [],
+            applied: result.applied ?? null,
             config: handlers.loadConfig(),
-          }));
-        } catch (error) {
-          send(res, 400, "application/json", JSON.stringify({ error: String(error?.message || error) }));
-        }
+          })))
+          .catch((error) => send(res, 400, "application/json", JSON.stringify({ error: String(error?.message || error) })));
       });
       return true;
     },

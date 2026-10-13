@@ -7,10 +7,6 @@ import { TOGGLE_ENDPOINT } from "./state.js";
 
 export { fetchSetupState };
 
-export function refreshHarnesses() {
-  return portalPostJson("/api/config/harnesses/refresh", {});
-}
-
 export function fetchConfig() {
   return portalGetJson("/api/config");
 }

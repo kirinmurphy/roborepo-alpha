@@ -7,7 +7,7 @@
 import { portalGetJson, portalPostJson, portalHideLoading, portalHideLoadingNow, portalSetUpdatedAt, portalWireBackdropClose } from "/portal/shared/api.js";
 import { pageState } from "./page-state.js";
 import { activePresentedHarnesses, formatHarnessList } from "/portal/shared/harness-cohort.js";
-import { checkForHarnesses, harnessWarningElement } from "/portal/shared/harness-warning.js";
+import { harnessWarningElement } from "/portal/shared/harness-warning.js";
 import { fetchSetupState } from "/portal/shared/setup-api.js";
 import { createConditionsReport } from "./conditions-report.js";
 import { sessionConditionLine, capturedSessionFindings } from "./conditions-context.js";
@@ -118,7 +118,7 @@ async function applySetupState({ telemetryOn, activeHarnessCount, snap }) {
   // (portal/shared/harness-warning.js — the same portal-notice the Agents page renders);
   // it shows below the state panel whenever the machine has no active harness. When telemetry is
   // also off, the telemetry prompt remains visible above it so both setup steps are available.
-  const sharedBanner = harnessWarningElement(snap, { onCheck: async () => { await checkForHarnesses(); await init(); } });
+  const sharedBanner = harnessWarningElement(snap, { onRefreshed: init });
   if (state === "telemetry-off") {
     offPanel.style.display = "";
     const title = offPanel.querySelector("[data-slot=title]");

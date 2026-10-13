@@ -38,7 +38,13 @@ export function buildSetupState({ registry = {}, sources = {}, supported = [], d
   const harnesses = {
     supported: supported.map(safeHarness),
     detected: detected.map(safeHarness),
-    guidance: guidance.map((entry) => ({ id: entry.id, displayName: entry.displayName, confidence: entry.confidence, warnings: entry.warnings ?? [] })),
+    guidance: guidance.map((entry) => ({
+      id: entry.id,
+      displayName: entry.displayName,
+      confidence: entry.confidence,
+      ...(entry.ready ? { ready: true } : {}),
+      warnings: entry.warnings ?? [],
+    })),
   };
   harnesses.active = activePresentedHarnesses({
     harnesses: harnesses.supported,

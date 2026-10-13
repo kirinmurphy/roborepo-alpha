@@ -195,10 +195,11 @@ setInterval(refresh, POLL_MS);
 
 // The "install a supported harness" condition Agents and Tokens warn about, shown here as an info
 // prompt (Home does not need a harness to work). Harness installation is a rare, out-of-band
-// change, so it is checked once per page load rather than on every poll.
+// change, so it is not re-read on Home's poll; the banner itself watches setup state only while
+// it is waiting on the user.
 async function renderHarnessBanner() {
   try {
-    const banner = harnessSetupPromptElement(await fetchSetupState());
+    const banner = harnessSetupPromptElement(await fetchSetupState(), { onRefreshed: renderHarnessBanner });
     harnessBanner.replaceChildren(...(banner ? [banner] : []));
     harnessBanner.hidden = !banner;
   } catch {

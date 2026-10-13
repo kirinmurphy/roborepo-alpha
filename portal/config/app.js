@@ -105,7 +105,7 @@ function render(snap) {
   const otherSections = view.filter((section) => !section.categoryId);
   main.replaceChildren(
     ...[
-      tmpl.harnessWarning(lastSetup || snap, { onCheck: refreshHarnesses }),
+      tmpl.harnessWarning(lastSetup || snap, { onRefreshed: reloadSetup, watch: false }),
       ...(SHOW_CONTEXT_WARNINGS ? [tmpl.contextWarnings(snap)] : []),
       tmpl.configFiles(snap, { onInspectClick: openSourceModal }),
       tmpl.packagesIntro(),
@@ -184,8 +184,9 @@ async function load() {
   }
 }
 
-async function refreshHarnesses() {
-  await api.refreshHarnesses();
+// The banner runs the harness check itself; this only re-reads what it changed. The page's own
+// poll already re-reads setup state, so the banner does not watch it separately.
+async function reloadSetup() {
   const [snap, setup] = await Promise.all([api.fetchConfig(), api.fetchSetupState()]);
   lastSetup = setup;
   applySnapshot(snap);

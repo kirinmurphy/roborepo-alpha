@@ -209,6 +209,34 @@ shape (`:param` names are normalized away for this check, so `/api/x/:id` and `/
 as the same route and collide). A copy-pasted or malformed entry fails loudly at startup instead of
 silently shadowing another route at request time.
 
+## Harness Setup Flow
+
+Agents, Tokens, and Home share one harness setup banner (`portal/shared/harness-warning.js`). It
+decides what to say; `portal/shared/harness-setup-flow.js` runs the check and remembers the outcome.
+
+| State | When | Banner |
+| --- | --- | --- |
+| `waiting` | A harness needs one user action, such as launching it or opening Claude Desktop's Code tab | The action, then "RoboRepo will finish setting it up." with a **Check now** button |
+| `setting-up` | Discovery finds the harness and it is not yet enabled (`ready` guidance) | "Setting up …" with a spinner; the page runs the check without a click |
+| `done` | A check just enabled the harness and applied its config | "… is set up." (success) |
+| `failed` | That apply did not complete | The error's first line and a **Try again** button |
+| `generic` | No supported harness is installed | "Install a supported harness…" with **Check for harnesses** |
+
+`POST /api/config/harnesses/refresh` runs `refreshHarnessesAndApply` in
+`scripts/cli/portal-harness-refresh.mjs`. When a refresh newly enables a harness, it runs
+`roborepo config apply`. Without a TTY the installer keeps user-edited files on conflict. A failed
+apply disables that harness again, so the banner offers setup again instead of hiding the failure.
+
+Setup runs without a click because launching the app is the user's real action. A second
+confirmation would add a step without adding information. The limits on that:
+
+- The page starts setup at most once per harness per page view, and never retries a failure on its
+  own.
+- Concurrent requests (two tabs) share one server-side run.
+- Home and Tokens re-read setup state every 10 seconds only while a `waiting` banner is on the
+  page, and stop when it leaves. Agents relies on its existing poll. No page polls when no harness
+  banner is showing.
+
 ## Repository Overview Aggregation
 
 Home and repository detail share `scripts/cli/repository-overview.mjs`. The service anchors its

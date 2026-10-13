@@ -48,6 +48,35 @@ test.describe("Agents page", () => {
     expect(warningButtonGrid.row).toBe("1");
   });
 
+  test("finishes setting up a launched harness without a click", async ({ page }) => {
+    const realSnapshot = await (await page.request.get("/api/config")).json();
+    const supported = [{ id: "claude", displayName: "Claude Code" }];
+    const claude = { id: "claude", displayName: "Claude Code", confidence: "confirmed", enabled: true };
+    const ready = [{ id: "claude", displayName: "Claude Code", confidence: "confirmed", ready: true, warnings: [] }];
+    let setUp = false;
+    let checks = 0;
+    await page.route("**/api/settings", (route) => route.fulfill({ json: {
+      harnesses: setUp
+        ? { supported, detected: [claude], active: [claude], guidance: [] }
+        : { supported, detected: [], active: [], guidance: ready },
+    } }));
+    // Agents re-renders when its config snapshot changes, so the snapshot follows setup too.
+    await page.route("**/api/config", (route) => route.fulfill({ json: {
+      ...realSnapshot,
+      machineHarnesses: setUp ? [claude] : [],
+      machineHarnessGuidance: setUp ? [] : ready,
+    } }));
+    await page.route("**/api/config/harnesses/refresh", (route) => {
+      checks += 1;
+      setUp = true;
+      return route.fulfill({ json: { ok: true, detected: ["claude"], newlyEnabled: [{ id: "claude", displayName: "Claude Code" }], applied: { ok: true } } });
+    });
+
+    await page.goto("/agents");
+    await expect(page.locator("#main portal-notice [data-slot=copy]").first()).toHaveText("Claude Code is set up.");
+    expect(checks).toBe(1);
+  });
+
   test("puts Active Harnesses above its panel", async ({ page }) => {
     const snapshot = await (await page.request.get("/api/config")).json();
     snapshot.machineHarnesses = [{ id: "claude", enabled: true, confidence: "confirmed" }];
@@ -549,6 +578,111 @@ test.describe("repository-first portal Home", () => {
     }));
     expect(infoButtonGrid.column).toBe("2");
     expect(infoButtonGrid.row).toBe("1");
+  });
+
+  test("Home finishes setting up a launched harness without a click and confirms it", async ({ page }) => {
+    const supported = [{ id: "claude", displayName: "Claude Code" }, { id: "codex", displayName: "Codex" }];
+    const claude = { id: "claude", displayName: "Claude Code", confidence: "confirmed", enabled: true };
+    let setUp = false;
+    let checks = 0;
+    await page.route("**/api/settings", (route) => route.fulfill({ json: {
+      repositories: { knownCount: 1, visibleCount: 1, autoDiscoveryEnabled: false, hasConfiguredSources: false },
+      harnesses: setUp
+        ? { supported, detected: [claude], active: [claude], guidance: [] }
+        : { supported, detected: [], active: [], guidance: [{ id: "claude", displayName: "Claude Code", confidence: "confirmed", ready: true, warnings: [] }] },
+      telemetry: { enabled: false, captureAvailable: false },
+    } }));
+    let finishSetup;
+    const setupFinished = new Promise((resolve) => { finishSetup = resolve; });
+    await page.route("**/api/config/harnesses/refresh", async (route) => {
+      checks += 1;
+      await setupFinished;
+      setUp = true;
+      return route.fulfill({ json: { ok: true, detected: ["claude"], newlyEnabled: [{ id: "claude", displayName: "Claude Code" }], applied: { ok: true } } });
+    });
+    await page.goto("/");
+    const banner = page.locator("#home-harness-banner portal-notice");
+    await expect(banner.locator("[data-slot=copy]")).toHaveText("Setting up Claude Code…");
+    await expect(banner.locator(".harness-check-spinner")).toBeVisible();
+    await expect(banner.getByRole("button")).toHaveCount(0);
+    finishSetup();
+    await expect(banner).toHaveClass(/notice-success/);
+    await expect(banner.locator("[data-notice-icon] portal-icon")).toHaveAttribute("name", "check");
+    await expect(banner.locator("[data-slot=copy]")).toHaveText("Claude Code is set up.");
+    await expect(banner.getByRole("button")).toHaveCount(0);
+    expect(checks).toBe(1);
+  });
+
+  test("Home notices a launch while waiting and finishes setup without a reload", async ({ page }) => {
+    await page.clock.install();
+    const supported = [{ id: "claude", displayName: "Claude Code" }];
+    const claude = { id: "claude", displayName: "Claude Code", confidence: "confirmed", enabled: true };
+    let launched = false;
+    let setUp = false;
+    await page.route("**/api/settings", (route) => route.fulfill({ json: {
+      repositories: { knownCount: 1, visibleCount: 1, autoDiscoveryEnabled: false, hasConfiguredSources: false },
+      harnesses: setUp
+        ? { supported, detected: [claude], active: [claude], guidance: [] }
+        : { supported, detected: [], active: [], guidance: [launched
+          ? { id: "claude", displayName: "Claude Code", confidence: "confirmed", ready: true, warnings: [] }
+          : { id: "claude", displayName: "Claude Code", confidence: "probable", warnings: ["Launch Claude Code once, then run roborepo update."] }] },
+      telemetry: { enabled: false, captureAvailable: false },
+    } }));
+    await page.route("**/api/config/harnesses/refresh", (route) => {
+      setUp = true;
+      return route.fulfill({ json: { ok: true, detected: ["claude"], newlyEnabled: [{ id: "claude", displayName: "Claude Code" }], applied: { ok: true } } });
+    });
+    await page.goto("/");
+    const banner = page.locator("#home-harness-banner portal-notice");
+    await expect(banner.locator("[data-slot=copy]")).toHaveText("Launch Claude Code once. RoboRepo will finish setting it up.");
+
+    launched = true;
+    await page.clock.runFor(10_000);
+    await expect(banner.locator("[data-slot=copy]")).toHaveText("Claude Code is set up.");
+  });
+
+  test("Home reports a setup that could not finish and does not retry on its own", async ({ page }) => {
+    let checks = 0;
+    await page.route("**/api/settings", (route) => route.fulfill({ json: {
+      repositories: { knownCount: 1, visibleCount: 1, autoDiscoveryEnabled: false, hasConfiguredSources: false },
+      harnesses: {
+        supported: [{ id: "claude", displayName: "Claude Code" }],
+        detected: [],
+        active: [],
+        guidance: [{ id: "claude", displayName: "Claude Code", confidence: "confirmed", ready: true, warnings: [] }],
+      },
+      telemetry: { enabled: false, captureAvailable: false },
+    } }));
+    await page.route("**/api/config/harnesses/refresh", (route) => {
+      checks += 1;
+      return route.fulfill({ json: { ok: true, detected: ["claude"], newlyEnabled: [{ id: "claude", displayName: "Claude Code" }], applied: { ok: false, error: "installer exited 1\nstack" } } });
+    });
+    await page.goto("/");
+    const banner = page.locator("#home-harness-banner portal-notice");
+    await expect(banner.locator("[data-slot=copy]")).toHaveText("RoboRepo couldn't finish setting up Claude Code. Run roborepo update in a terminal to see why.");
+    await expect(banner.locator("[data-slot=result]")).toHaveText("installer exited 1");
+    await expect(banner.getByRole("button", { name: "Try again" })).toBeVisible();
+    expect(checks).toBe(1);
+  });
+
+  test("a harness waiting on the user names it, and a check that finds nothing says why", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: {
+      repositories: { knownCount: 1, visibleCount: 1, autoDiscoveryEnabled: false, hasConfiguredSources: false },
+      harnesses: {
+        supported: [{ id: "claude", displayName: "Claude Code" }, { id: "codex", displayName: "Codex" }],
+        detected: [],
+        active: [],
+        guidance: [{ id: "claude", displayName: "Claude Code", confidence: "probable", warnings: ["Launch Claude Code once, then run roborepo update."] }],
+      },
+      telemetry: { enabled: false, captureAvailable: false },
+    } }));
+    await page.route("**/api/config/harnesses/refresh", (route) => route.fulfill({ json: { ok: true, detected: [], newlyEnabled: [], applied: null } }));
+    await page.goto("/");
+    const banner = page.locator("#home-harness-banner portal-notice");
+    await expect(banner.locator("[data-slot=copy]")).toHaveText("Launch Claude Code once. RoboRepo will finish setting it up.");
+    await expect(banner.locator("[data-slot=supported]")).toHaveCount(0);
+    await banner.getByRole("button", { name: "Check now" }).click();
+    await expect(page.locator("#home-harness-banner [data-slot=result]")).toHaveText("Claude Code hasn't been launched yet.");
   });
 
   test("Settings renders shared setup controls and can check for harness installs", async ({ page }) => {
