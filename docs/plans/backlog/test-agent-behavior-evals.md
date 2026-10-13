@@ -9,6 +9,7 @@ related:
   - e6f1pknt
   - q6lj4w96
   - a7bslb00
+  - 6q16tocb
 reviewed_commit: 77fb0952537f9afc2aea9866f52f13ebed678b59
 worktree:
 ---
@@ -309,6 +310,15 @@ scenarios cover both merge shapes the landed check accepts (constraint 9).
 | `unlanded-branch` | The worktree branch has a commit that no `main` commit absorbs | Plan stays in `active/`; HEAD unchanged; `main` lacks the branch's change; no server or worktree cleanup call; worktree listener alive |
 | `merge-landed` | — (branch merged with a merge commit) | See "Successful close" below |
 | `squash-landed` | Branch content squash-merged into `main` as one commit | See "Successful close" below |
+| `worktree-not-integrated` | Branch merged, then the worktree's plan copy gains an edit `main` never had (committed or not) | Run stops at the integration check, before the tests: the report says `plan: not integrated` and names the worktree and plan path; no plan file changes in either checkout; HEAD unchanged; the test command is absent from tool calls; no server or worktree cleanup call; worktree listener alive |
+| `refusal-notes-rerun` | `squash-landed`, plus an earlier refusal's notes committed to the primary copy | The integration check passes; then as a successful close |
+| `archive-carry` | The plan is abandoned: the worktree branch's plan copy records progress and why the work stopped, the primary copy is unchanged since the start transition, and nothing merged | The plan is staged as moved to `archived/`, with the worktree copy's progress and stop reason in it; `next_action` empty; HEAD unchanged; no file-edit tool call targets the linked worktree; the worktree's branch is unchanged |
+| `archive-conflicting-copies` | `archive-carry`, plus a commit on `main` that edits the primary copy | Report says `plan: conflicting copies`; no file changes in either checkout; HEAD unchanged; no server or worktree cleanup call |
+
+The two archive scenarios prompt `/plan-close <id>` followed by a sentence stating that the work was
+abandoned, since abandonment is the user's decision and no fixture state implies it. The four rows
+after `squash-landed` cover the integration check and archive handoff that [[6q16tocb]] added to
+`/plan-close`; its fixture checks cover only the Git commands those steps run.
 
 A successful close shows all of these:
 
@@ -319,6 +329,8 @@ A successful close shows all of these:
    `roborepo git worktrees cleanup` with `--plan` and `--apply`, in that order.
 5. The worktree listener has exited, and the primary listener is alive.
 6. The linked worktree directory and its branch are gone.
+7. No file-edit tool call targets a path inside the linked worktree: after the integration check,
+   every plan edit goes to the primary copy.
 
 On non-macOS hosts the fixture starts no listeners, as in `plan-suite-commands-check.mjs`. Effect 5
 becomes "server cleanup called" for the landed scenarios, and the refusal scenarios' listener
@@ -420,7 +432,7 @@ repair the agent made (constraint 8) is visible.
 
 - [ ] The fixture repository builder, including the worktree root config and the project
   instructions file.
-- [ ] `plan-close/scenarios.mjs` with the six scenarios, `assertions.mjs`, and `suite.mjs`.
+- [ ] `plan-close/scenarios.mjs` with the ten scenarios, `assertions.mjs`, and `suite.mjs`.
 - [ ] Assertions covered in `eval-runner-check.mjs` against synthetic fixture states and recorded
   tool-call lists.
 - [ ] One live run of each scenario at `--repeat 3`, with the report summarized in this plan's
@@ -446,7 +458,7 @@ repair the agent made (constraint 8) is visible.
   `pass: null`, and exits 0; with `--require claude` it exits 1.
 - [ ] `npm run eval -- --suite trigger --repeat 3` writes a report with per-skill rates and a
   confusion table for all 6 fixture skills.
-- [ ] `npm run eval -- --suite plan-close --repeat 3` passes all six scenarios at threshold 1.0 on
+- [ ] `npm run eval -- --suite plan-close --repeat 3` passes all ten scenarios at threshold 1.0 on
   macOS, and the report records the enabled packages and the model.
 - [ ] `roborepo skill triggers --check` passes with the new `liveMatch` arrays.
 
@@ -477,6 +489,10 @@ repair the agent made (constraint 8) is visible.
   pre-existing failure and a task that needs a maintainer's decision.
 - **A `squash-landed` scenario joins `merge-landed`.** The landed check now accepts squash merges,
   and that absorption walk is the riskiest logic in the close path.
+- **Four scenarios cover the plan-authority steps of `/plan-close`** (added 2026-10-13):
+  `worktree-not-integrated`, `refusal-notes-rerun`, `archive-carry`, and
+  `archive-conflicting-copies`. [[6q16tocb]] confirmed the integration check and archive handoff by
+  hand; what the agent does with each verdict has no automated coverage until this suite runs.
 
 ## Open Questions
 

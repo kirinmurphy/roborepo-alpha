@@ -1,7 +1,7 @@
 ---
 id: 3jp3yhtq
 priority: high
-next_action: Resolve Codex hook trust through a supported desktop review action and verify nonzero live token capture after the parser fix is installed; then review remaining macOS acceptance criteria.
+next_action:
 blocked_by: []
 depends_on: []
 related:
@@ -9,7 +9,8 @@ related:
   - usage-statusline-codex-hook-parity
   - windows-provider-path-schema
   - 7k3m9qd
-reviewed_commit: 7b7b70220ceb6a43748af86a51ca085e0f36dd93
+  - wjlt1zvf
+reviewed_commit: 35e717d51650504ab841e24c8d1c822354c4f5fb
 worktree: harness-desktop-runtime-discovery
 ---
 
@@ -258,8 +259,10 @@ config, not a separate provider or package switch.
 
 ### Phase 4: Surface effects and docs
 
-- [ ] Run fresh desktop sessions in both apps and verify hook execution, transcript capture, and
+- [x] Run fresh desktop sessions in both apps and verify hook execution, transcript capture, and
       available telemetry fields; correct package and portal wording if the observed behavior differs.
+      Claude: hooks, transcript, and token fields verified. Codex: hook execution and transcript
+      verified; live nonzero token counts moved to `wjlt1zvf` (see Decision Log).
 - [x] Update `docs/user/guides/harnesses/supported-harnesses.md` and
       `docs/internal/harness-provider-interface.md` with the supported app locations, the
       not-launched guidance, and the moved-app limitation.
@@ -284,9 +287,10 @@ config, not a separate provider or package switch.
       `claude` on `PATH`.
 - [x] A refresh run leaves native config files and app bundles unchanged (compare file bytes before
       and after).
-- [ ] Manual macOS check on the installed apps: candidate layouts, one provider per product in the
+- [x] Manual macOS check on the installed apps: candidate layouts, one provider per product in the
       rendered portal, guidance copy, and live telemetry. Record app versions and results in the
-      implementation verification report.
+      implementation verification report. Live Codex token counts moved to `wjlt1zvf`; everything
+      else is recorded below.
 - [x] Run `node scripts/test/harness-registry-check.mjs`, `node scripts/test/harness-cli-check.mjs`,
       `node scripts/test/harness-refresh-simulation-check.mjs`, the MCP checks under
       `scripts/test/mcp-*-check.mjs`, `bash scripts/doctor.sh --quiet`, `git diff --check`, and
@@ -373,19 +377,66 @@ config, not a separate provider or package switch.
   `http://127.0.0.1:19090/agents` showed the awaiting-review warning. That fixture is not a
   real-state observation of the new warning. The real Mac's hooks are already trusted, so the
   warning cannot be tested there without changing the user's trust state.
+- Close review on October 12, 2026 (main at `f4ad03d`):
+  - The branch `codex/harness-desktop-runtime-discovery` (tip `f0e208f`) landed. The repository's
+    landed check found that main commit `cc4d97b` absorbs it, with fork point `93b1bb1`.
+  - The installed `~/.local/bin/roborepo` resolves to the main checkout, which now contains the
+    parser fix. A one-shot parse of the real Codex desktop transcript for session `01a13123` used
+    a scratch collector directory. It returned 12,425,278 total tokens, 109 tool calls, and model
+    `gpt-6-sol`.
+  - The newest live Codex spool records still report zero tokens. They are from 13:13 local time,
+    before main was fast-forwarded at 13:18. No hook-driven capture has run since then.
+  - The plan's code claims were checked:
+    - The platform detection override and the desktop runtime resolver are present.
+    - The Claude and Codex manifests declare desktop candidates.
+    - Harness state uses `schemaVersion` 2.
+    - All 18 `harness_detected_rows` readers name the sixth column.
+    - Claude MCP operations go through `selectedClaudeExecutable()`.
+    - The user guide documents the desktop app locations.
+  - `npm run check` ran the portal browser suite for the first time with Chromium installed.
+    - The harness Settings and Agents tests passed 8 of 8 serial repeats against an isolated
+      portal.
+    - Failures in other tests changed from run to run, with `EADDRNOTAVAIL` and
+      `ERR_ADDRESS_INVALID` on 127.0.0.1 while about 7,500 sockets sat in `TIME_WAIT`.
+    - `portal-ui.spec.mjs` "once a plan's worktree has merged, the plan path points at the main
+      checkout's copy" timed out in both full runs made during that socket exhaustion. Once
+      `TIME_WAIT` fell to about 55 sockets, the full portal suite passed 66 of 66 tests in each of
+      four runs (October 13, 2026). An earlier `(reading 'domains')` error came from a broken
+      repro that started the portal without the runner's RoboRepo registry entry, not from the
+      test.
 
-## Not tested
+## Completion summary
 
-- [ ] Confirm nonzero token and tool counts in live Codex capture after the parser fix is installed.
-      The fresh post-trust desktop task proves hook execution and transcript creation, and an
-      isolated production-capture test writes nonzero counts with the fixed parser. The installed
-      parser predates that fix and wrote zero counts.
-- [ ] Resolve hook trust through the normal Agents experience. The desktop app did not prompt for
-      review, and the five hooks stayed inactive until QA trusted them in Codex's hook review screen.
-      Codex requires explicit trust for non-managed hooks. The installed app-server schema exposes
-      `hooks/list` and its trust status but no trust mutation. Agents now warns when those hooks
-      await review, but package enablement alone does not activate Codex capture for a new user.
-      A supported desktop review entry point or an explicit scope decision is still needed.
+The plan's work landed in main through `cc4d97b` (PR #32). On macOS, a validated Claude Desktop
+Code runtime or Codex desktop runtime now counts as that provider's executable. A desktop-only
+machine that has launched the app shows one `confirmed` provider per product. Where a runtime is
+installed but has not been launched, every presence surface shows setup guidance: the CLI, portal,
+install summary, and `doctor`. Claude MCP add, list, and remove work through the desktop runtime
+when no CLI is on `PATH`.
+
+Two items moved to `wjlt1zvf` at the user's request; the Decision Log records why. That plan also
+owns the provider-boundary findings from the close review:
+
+- confirming live Codex token counts;
+- the Codex hook-trust design.
+
+## Verification
+
+| Check | Result |
+| --- | --- |
+| `npm run check` on main at `f4ad03d` | Failed only in the portal browser suite, during local socket exhaustion |
+| Flaky portal tests | Failures changed between runs, with `EADDRNOTAVAIL` and `ERR_ADDRESS_INVALID` on 127.0.0.1 while about 7,500 sockets sat in `TIME_WAIT` |
+| Full portal browser suite, rerun | Passed 66 of 66 in each of four runs on October 13, 2026, with `TIME_WAIT` at about 55. This includes `portal-ui.spec.mjs:419` |
+| Harness Settings and Agents portal tests | Passed 8 of 8 serial repeats against an isolated portal |
+| Other suites in the same gate | Passed: CLI checks, unit groups, telemetry correctness, and the package and Docker suites |
+| `roborepo plans validate 3jp3yhtq` | No findings after the open items moved |
+| `inspectBranchLanding` from `modules/repositories/worktree-landed.mjs` | Landed. Branch `codex/harness-desktop-runtime-discovery` at `f0e208f`, fork point `93b1bb1`, absorbed by `cc4d97b` on `origin/main` |
+| Claims checked against code | Platform detection override, desktop resolver, both manifests' desktop candidates, harness state `schemaVersion` 2, all 18 sixth-column `harness_detected_rows` readers, and `selectedClaudeExecutable()` routing confirmed in source |
+
+Not verified here:
+
+- Live Codex token counts after the parser fix. This moved to `wjlt1zvf`.
+- The Windows installer parity check did not run, because `pwsh` is not available on this machine.
 
 ## Risks
 
@@ -400,6 +451,15 @@ config, not a separate provider or package switch.
 | App moved outside supported roots | Documented limitation; no broad search |
 
 ## Decision Log
+
+- **Open items moved to `wjlt1zvf` at close (October 13, 2026, user decision).** The discovery
+  work landed in `cc4d97b`. Two items remained, and neither could be finished here:
+  - Live Codex token counts need a fresh desktop task now that the installed parser has the fix.
+  - Codex hook trust needs a design decision, because the desktop app never prompts for review.
+  The user chose to move both, with the provider-boundary findings from the close review, to
+  `harness-hook-readiness-provider-adapters` (`wjlt1zvf`). Both `## Not tested` entries and the
+  hook-trust open question were removed from this plan. That plan carries the token-count entry
+  as its own `## Not tested` item and the trust decision as an open question.
 
 - **Warning QA uses the rendered temporary preview.** The user observed the warning before its
   copy changed, and direct browser QA captured the final wording in the isolated `:19088` preview.
