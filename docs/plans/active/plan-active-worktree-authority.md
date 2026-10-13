@@ -667,9 +667,17 @@ npm run check
 - [ ] `/plan-close` on a merged plan with a worktree runs the integration check before step 1 and
       then edits only the primary copy; on an unmerged plan it refuses with `plan: not integrated`.
       Skill prose is checked only for presence; following it needs an agent run.
-- [ ] `/plan-close` archiving abandoned work carries the worktree copy into the primary copy once,
+- [x] `/plan-close` archiving abandoned work carries the worktree copy into the primary copy once,
       and refuses with `plan: conflicting copies` when the primary copy has an outside edit. Needs
       an agent run against a real abandoned branch.
+      Confirmed by the user on 2026-10-13 with two fresh agent sessions on throwaway repositories,
+      each following this branch's `plan-close/SKILL.md`, since the installed skill predated the
+      handoff. With an untouched primary copy, the run archived `demo01` as abandoned: it carried
+      the worktree's ticked task and supersession reason into the primary copy, cleared
+      `next_action`, recorded the archive reason, and staged the move to `docs/plans/archived/` by
+      path without committing; the worktree's branch and copy were unchanged. With an outside edit
+      committed on `main` (`priority: low`), the run refused with `plan: conflicting copies`, and
+      neither checkout changed.
 - [ ] `/plan-write` invoked from the primary checkout on an active, worktree-assigned plan asks for
       worktree access and edits the worktree copy. Needs an agent run.
 - [ ] Two portals started from different checkouts show the same authoritative copy for every plan.
