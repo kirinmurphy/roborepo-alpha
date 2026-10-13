@@ -198,6 +198,18 @@ dialog#skill-modal::backdrop {
   border-bottom: 1px solid var(--line);
   margin-bottom: 4px;
 }
+.status-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.status-trailing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
 .status-state-row {
   display: flex;
   align-items: flex-start;
@@ -239,70 +251,6 @@ dialog#skill-modal::backdrop {
 .status-state-row .meta-line {
   font-size: var(--text-2xs);
   min-width: 0;
-}
-.status-implementation {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-.status-implementation[hidden] {
-  display: none;
-}
-.status-progress-row {
-  display: flex;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-}
-.status-progress-row[hidden],
-.status-complete-row[hidden] {
-  display: none;
-}
-/* Replaces the progress bar once every task is checked: a full bar reads as "in progress at 100%",
-   which is a different claim than "finished". Right-aligned so it lands where the percentage label
-   would have been. */
-.status-complete-row {
-  display: flex;
-  justify-content: flex-end;
-}
-.tasks-complete-badge {
-  border: 1px solid var(--ok);
-  border-radius: 4px;
-  padding: 1px 6px;
-  font-size: var(--text-2xs);
-  font-weight: 600;
-  color: var(--ok);
-  white-space: nowrap;
-}
-.progress-bar {
-  flex: 1 1 60px;
-  min-width: 0;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--line);
-  overflow: hidden;
-}
-.progress-fill {
-  height: 100%;
-  background: var(--ok);
-  border-radius: 3px;
-}
-.progress-label {
-  font-size: var(--text-2xs);
-  color: var(--dim);
-  white-space: nowrap;
-}
-.status-section .next-line {
-  font-size: var(--text-sm);
-  color: var(--ink);
-  min-width: 0;
-}
-.status-section .next-line[hidden] {
-  display: none;
-}
-.next-label {
-  color: var(--dim);
-  font-weight: 600;
 }
 .toast {
   position: fixed;
@@ -577,3 +525,24 @@ option-dropdown {
 .dropdown-option[aria-selected="true"] {
   font-weight: 600;
 }
+/* Shared completion (plan-completion.js), used on Home's plan rows and in <plan-status>: a progress
+ * ring and percent, or the done / merged badge. A ring, not a bar: a conic sweep (green to
+ * --percent, black after) masked down to its outer band, so the unfilled remainder reads as clearly
+ * as the progress itself. */
+.plan-completion { display: inline-flex; align-items: center; gap: 5px; color: var(--dim); flex: none; font-size: var(--text-2xs); }
+.plan-progress {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: conic-gradient(var(--ok) calc(var(--percent, 0) * 1%), #000 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+}
+.plan-percent { font-variant-numeric: tabular-nums; }
+.plan-complete-badge,
+.plan-merged-badge { padding: var(--pill-padding); border-radius: 999px; color: var(--chip-ink); font-weight: 600; }
+.plan-complete-badge { background: var(--chip-low-bg); }
+/* The same GitHub merged purple as the worktree row's merged badge. */
+.plan-merged-badge { background: var(--merged); }
+.plan-complete-badge[hidden], .plan-merged-badge[hidden] { display: none; }

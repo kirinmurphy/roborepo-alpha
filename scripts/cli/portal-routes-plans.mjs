@@ -16,9 +16,9 @@ function sendDomainError(res, error) {
       message: String(error?.message || error),
       resolution: error?.resolution,
       details: error?.details,
-      // Readiness failures (LIFECYCLE_REQUIREMENTS) also carry structured findings and a
-      // server-generated repair prompt. Keys are listed explicitly here, so a new field on
-      // domainError is dropped silently unless it is added to this list and to portalPostJson.
+      // Some domain errors also carry structured findings and a server-generated repair prompt.
+      // Keys are listed explicitly here, so a new field on domainError is dropped silently unless
+      // it is added to this list and to portalPostJson.
       findings: error?.findings,
       repair: error?.repair,
     },
@@ -67,7 +67,6 @@ export const plansRoutes = defineRoutes([
   },
   postJsonRoute("/api/plans/prompt", (handlers, body) => handlers.buildPlansPrompt(body)),
   postJsonRoute("/api/plans/priority", (handlers, body) => handlers.updatePlanPriority(body), { domainError: true }),
-  postJsonRoute("/api/plans/lifecycle", (handlers, body) => handlers.updatePlanLifecycle(body), { domainError: true }),
   {
     method: "POST",
     path: "/api/plans/refresh",

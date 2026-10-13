@@ -1,9 +1,13 @@
-// <plan-status> — set .record (plan record) right after creation, then append to the DOM. Shared
-// by <plan-card> and the detail drawer so both surfaces show identical lifecycle/priority
-// controls, readiness/blocked/review chips, progress, and next-action.
+// <plan-status> — set .merge (optional, see below) and .record (plan record) right after creation,
+// then append to the DOM. Shared by <plan-card> and the detail drawer so both surfaces show the same
+// priority control, readiness/blocked chips, modified time, and completion.
 //
-// Progress display is driven by taskProgressDisplay() rather than by lifecycle alone — see that
-// function in state.js for why started work is worth showing in backlog and completed too.
+// Completion is the shared planCompletion() ring/badge, at the far right. `.merge` is the plan's
+// `{ into }` when its worktree has merged (state.js's mergedPlanBranches), which turns it into the
+// `merged` badge; leave it null otherwise.
+//
+// Lifecycle is not a control here: the plan suite's commands move plans between lifecycle folders
+// and commit those moves, and the page's tabs already say which lifecycle a card is in.
 //
 // It does not call APIs, inspect filters, render global toasts, or decide whether it remains
 // visible — those are page (app.js) responsibilities. On a dropdown select it dispatches a
@@ -14,7 +18,8 @@
 // orchestrator re-sets it either way once the mutation settles) clears it. This keeps the element
 // a pure function of its `record` prop rather than needing app.js to call back into it.
 import { portalTpl as tpl, portalFillSlots as fill } from "/portal/shared/api.js";
-import { LIFECYCLE_LABELS, taskProgressDisplay } from "/portal/plans/state.js";
+import { planCompletion } from "/portal/plans/plan-completion.js";
+import { chip } from "/portal/plans/templates.js";
 
 const PRIORITY_OPTIONS = [
   ["high", "high"],
@@ -22,9 +27,6 @@ const PRIORITY_OPTIONS = [
   ["low", "low"],
   ["none", "none"],
 ];
-
-const LIFECYCLES = ["backlog", "active", "completed", "archived"];
-const LIFECYCLE_OPTIONS = LIFECYCLES.map((value) => [value, LIFECYCLE_LABELS[value]]);
 
 // Priority no longer applies once a plan is done — completed/archived plans keep the field on
 // the record for history, but the control shouldn't offer to edit it.
@@ -66,13 +68,6 @@ function formatRelativeTime(value) {
   return "a few years ago";
 }
 
-function chip(text, cls = "") {
-  const node = tpl("tpl-chip");
-  node.textContent = text;
-  if (cls) node.classList.add(cls);
-  return node;
-}
-
 class PlanStatusElement extends HTMLElement {
   connectedCallback() {
     if (this.record) this.render();
@@ -94,19 +89,6 @@ class PlanStatusElement extends HTMLElement {
     }));
   }
 
-  renderLifecycleDropdown(record) {
-    const dropdown = document.createElement("option-dropdown");
-    dropdown.options = LIFECYCLE_OPTIONS;
-    dropdown.value = record.plan.lifecycle;
-    dropdown.onSelect = (value) => {
-      dropdown.loading = true;
-      dropdown.title = "";
-      dropdown.classList.remove("dropdown-error");
-      this.emitChange("lifecycle", value);
-    };
-    return dropdown;
-  }
-
   renderPriorityDropdown(record) {
     const dropdown = document.createElement("option-dropdown");
     dropdown.options = PRIORITY_OPTIONS;
@@ -123,22 +105,16 @@ class PlanStatusElement extends HTMLElement {
   render() {
     const record = this._record;
     const plan = record.plan;
-    const { total, remaining } = plan.taskCounts;
-    const complete = total - remaining;
-    const percentComplete = total > 0 ? Math.round((complete / total) * 100) : 0;
     const isBlocked = plan.blockers.length > 0;
-    const progress = taskProgressDisplay(plan);
 
     const node = fill(tpl("tpl-plan-status"), {
       meta: `modified ${formatRelativeTime(plan.modifiedAt)}`,
-      "progress-label": total > 0 ? `${percentComplete}%` : "no tasks",
-      next: plan.nextAction || "none set",
     });
     node.querySelector("[data-slot=meta]").title = new Date(plan.modifiedAt).toLocaleString();
     const stateBadgeSlot = node.querySelector("[data-slot=state-badge]");
-    // Read-only (a page without the Plans mutation orchestrator, e.g. Home): lifecycle and
-    // priority render as plain chips and the blocked badge is static, since nothing would handle
-    // the plan-change / blocked-click events they dispatch.
+    // Read-only (a page without the Plans mutation orchestrator, e.g. Home): priority renders as a
+    // plain chip and the blocked badge is static, since nothing would handle the plan-change /
+    // blocked-click events they dispatch.
     const readonly = this.hasAttribute("readonly");
     if (isBlocked && readonly) {
       stateBadgeSlot.textContent = `blocked by ${plan.blockers.length}`;
@@ -159,28 +135,17 @@ class PlanStatusElement extends HTMLElement {
       });
       stateBadgeSlot.replaceWith(badgeBtn);
     }
-    node.querySelector("[data-slot=implementation]").hidden = progress === "none" && !plan.nextAction;
-    node.querySelector("[data-slot=progress-row]").hidden = progress !== "bar";
-    node.querySelector("[data-slot=complete-row]").hidden = progress !== "complete";
-    // A next action alongside an "all tasks complete" badge reads as a contradiction, so the badge
-    // state suppresses it.
-    node.querySelector("[data-slot=next-row]").hidden = progress !== "bar";
-    node.querySelector("[data-slot=progress-fill]").style.width = `${percentComplete}%`;
-    node.querySelector("[data-slot=status-chips]").append(
-      // readiness (draft/ready) only distinguishes actionable-vs-not within backlog; once a plan
-      // is active it necessarily already cleared that bar, so the chip is redundant past backlog.
-      ...(plan.lifecycle === "backlog"
-        ? [chip(plan.readiness, plan.readiness === "ready" ? "ok" : "")]
-        : []),
-      chip(plan.reviewState, plan.reviewState === "possibly-stale" ? "warn" : ""),
-    );
-    const showPriority = !LIFECYCLES_WITHOUT_PRIORITY.has(plan.lifecycle);
-    if (readonly) {
-      node.querySelector("[data-slot=lifecycle]").append(chip(LIFECYCLE_LABELS[plan.lifecycle] || plan.lifecycle));
-      if (showPriority) node.querySelector("[data-slot=priority]").append(chip(`${plan.priority} priority`));
-    } else {
-      node.querySelector("[data-slot=lifecycle]").append(this.renderLifecycleDropdown(record));
-      if (showPriority) node.querySelector("[data-slot=priority]").append(this.renderPriorityDropdown(record));
+    const completion = planCompletion(plan, { merge: this.merge || null });
+    if (completion) node.querySelector("[data-slot=completion]").replaceWith(completion);
+    // readiness (draft/ready) only distinguishes actionable-vs-not within backlog; once a plan is
+    // active it necessarily already cleared that bar, so the chip is redundant past backlog.
+    if (plan.lifecycle === "backlog") {
+      node.querySelector("[data-slot=status-chips]").append(chip(plan.readiness, plan.readiness === "ready" ? "ok" : ""));
+    }
+    if (!LIFECYCLES_WITHOUT_PRIORITY.has(plan.lifecycle)) {
+      node.querySelector("[data-slot=priority]").append(
+        readonly ? chip(`${plan.priority} priority`) : this.renderPriorityDropdown(record),
+      );
     }
     this.replaceChildren(node);
   }

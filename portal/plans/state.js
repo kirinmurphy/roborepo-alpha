@@ -244,21 +244,37 @@ export function formatDate(value) {
   return Number.isNaN(date.getTime()) ? "unknown" : date.toLocaleString();
 }
 
-// How a plan's task progress should be displayed: "bar", "complete", or "none".
+// How a plan's task progress should be displayed: "progress", "complete", or "none".
 //
 // Progress is worth showing whenever it says something the lifecycle does not already imply.
-// Nothing started in backlog is the default state of everything in backlog, so a 0% bar there is
+// Nothing started in backlog is the default state of everything in backlog, so a 0% ring there is
 // noise; started work is not the default anywhere, and neither is a finished task list. Active
-// always shows a bar because progress is the point of the lifecycle, even at 0%.
+// always shows progress because progress is the point of the lifecycle, even at 0%.
 //
-// A finished list gets a badge rather than a full bar: a 100% bar reads as "in progress, at the
+// A finished list gets a badge rather than a full ring: a 100% ring reads as "in progress, at the
 // end", which is a different claim than "done".
+//
+// Reads `complete` rather than `remaining`: Home's overview plans carry only total and complete.
 export function taskProgressDisplay(plan) {
-  const { total, remaining } = plan.taskCounts;
-  if (total > 0 && remaining === 0) return "complete";
-  const started = total > 0 && remaining < total;
-  if (started) return "bar";
-  return plan.lifecycle === "active" ? "bar" : "none";
+  const { total = 0, complete = 0 } = plan.taskCounts || {};
+  if (total > 0 && complete >= total) return "complete";
+  if (complete > 0) return "progress";
+  return plan.lifecycle === "active" ? "progress" : "none";
+}
+
+// Active plans whose worktree has merged, keyed by plan key, each with the branch it merged into
+// (null when Runtime did not say). The same join Home draws from its overview: a plan matched to a
+// checkout (`checkoutRootId`) whose worktree Runtime reports as landed.
+export function mergedPlanBranches(overview) {
+  const merged = new Map();
+  for (const repository of overview?.repositories || []) {
+    const checkouts = new Map((repository.domains?.runtime?.data?.checkouts || []).map((checkout) => [checkout.rootId, checkout]));
+    for (const plan of repository.domains?.plans?.data?.active || []) {
+      const checkout = plan.checkoutRootId ? checkouts.get(plan.checkoutRootId) : null;
+      if (checkout?.worktreeState === "landed") merged.set(plan.key, { into: checkout.mergedInto || null });
+    }
+  }
+  return merged;
 }
 
 // --- lifecycle tab <-> URL state -----------------------------------------------------------
@@ -281,8 +297,8 @@ export function urlForLifecycle(lifecycle) {
 }
 
 // --- mutation orchestration helpers ---------------------------------------------------------
-// Pure functions the app.js mutation orchestrator uses to decide what a successful lifecycle or
-// priority change should do to the visible list and which outcome surface (if any) to show.
+// Pure functions the app.js mutation orchestrator uses to decide what a successful priority change
+// should do to the visible list and which outcome surface (if any) to show.
 
 // A record is visible when it's on the currently selected lifecycle tab AND matches every active
 // filter. Used both before a mutation (to know if a toast/dialog needs to explain a disappearance)
@@ -291,10 +307,9 @@ export function isVisible(record, selectedLifecycle, filters) {
   return record.plan.lifecycle === selectedLifecycle && matchesFilters(record, filters, null);
 }
 
-// Replaces the record at `oldKey` with `newRecord` in a plans array, returning a new array. A
-// lifecycle move changes `key` (it's derived from the file's path), so this can't be a simple
-// in-place field mutation — the old key must be looked up once, then the whole record swapped for
-// the server's rebuilt one.
+// Replaces the record at `oldKey` with `newRecord` in a plans array, returning a new array. The
+// server returns a whole rebuilt record (new mtime, revalidated fields), so the old one is swapped
+// out rather than patched field by field.
 export function replaceRecord(plans, oldKey, newRecord) {
   return plans.map((record) => (record.key === oldKey ? newRecord : record));
 }
@@ -304,10 +319,6 @@ export function replaceRecord(plans, oldKey, newRecord) {
 // value (i.e. the mutation is what caused the plan to leave that filtered view). Returns a
 // descriptor the toast controller can render, or null when the shortcut doesn't apply.
 export function filteredListActionFor(change, state) {
-  if (change.property === "lifecycle") {
-    if (state.selectedLifecycle !== change.previousValue) return null;
-    return { type: "lifecycle", value: change.newValue, label: `View ${LIFECYCLE_LABELS[change.newValue]} plans` };
-  }
   if (change.property === "priority") {
     if (state.filters.priority !== change.previousValue) return null;
     return { type: "priority", value: change.newValue, label: `View ${change.newValue} priority plans` };
@@ -317,7 +328,7 @@ export function filteredListActionFor(change, state) {
 
 // --- blocker/blocking resolution -------------------------------------------------------------
 // Resolved live from the current snapshot on every call (not cached on the record) so a mutation
-// that only rebuilds one record (see updatePlanPriority/movePlanLifecycle) never leaves stale
+// that only rebuilds one record (see updatePlanPriority) never leaves stale
 // blocker/blocking data behind — the next render always recomputes from state.snapshot.plans.
 // Plan ids are only unique within one repository (see modules/plan-suite/index.mjs's
 // relationshipWarnings), so matches are scoped to the same repository.id as the referencing plan.
@@ -344,26 +355,4 @@ export function resolveBlocking(record, allPlans) {
       item.repository.id === record.repository.id &&
       (item.plan.blockers || []).includes(record.plan.id))
     .map((item) => ({ id: item.plan.id, title: item.plan.title, key: item.key, resolved: true }));
-}
-
-// --- lifecycle readiness errors ---------------------------------------------------------------
-
-// Splits a rejected move's findings into what must be fixed and what is merely worth fixing, so
-// the dialog and the repair prompt present them in the same order. Falls back to the plain
-// `details` strings for any error that predates structured findings, so an older or non-plans
-// route still renders something useful.
-export function lifecycleFindingGroups(err) {
-  const findings = Array.isArray(err?.findings) && err.findings.length
-    ? err.findings
-    : (err?.details || []).map((message) => ({ message, severity: "blocking" }));
-  return {
-    blocking: findings.filter((item) => item.severity === "blocking"),
-    advisory: findings.filter((item) => item.severity !== "blocking"),
-  };
-}
-
-// Whether a repair prompt is available to copy. The descriptor is generated server-side and only
-// accompanies readiness failures, so the button stays hidden for every other error.
-export function canRepairLifecycleError(err) {
-  return typeof err?.repair?.prompt === "string" && err.repair.prompt.length > 0;
 }

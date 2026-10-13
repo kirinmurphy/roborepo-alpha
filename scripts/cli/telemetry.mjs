@@ -25,7 +25,7 @@ import { readConfigSnapshot, loadConfigSource } from "./config.mjs";
 import { readCodexTelemetryHookStatus } from "./codex-hook-status.mjs";
 import { refreshHarnessesAndApply } from "./portal-harness-refresh.mjs";
 import { mutatePackage, setSkillInstalled, setBehaviorBucket, setCommandBucket } from "./config-mutate.mjs";
-import { loadPlansSnapshot, loadCachedPlansSnapshot, loadPlanDocument, buildPlansPrompt, updatePlanPriority, updatePlanLifecycle, refreshPlans } from "./plans.mjs";
+import { loadPlansSnapshot, loadCachedPlansSnapshot, loadPlanDocument, buildPlansPrompt, updatePlanPriority, refreshPlans } from "./plans.mjs";
 import { loadRepositorySources, addRepositorySource, removeRepositorySource, setRepositorySourceEnabled, refreshRepositorySources, wipeRepositoryList, autoDiscoveryEnabled } from "./repository-sources.mjs";
 import {
   loadDeveloperRuntimeSnapshot,
@@ -830,7 +830,6 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     loadPlanDocument: (params) => loadPlanDocument(params),
     buildPlansPrompt: (params) => buildPlansPrompt(params),
     updatePlanPriority: (params) => updatePlanPriority(params),
-    updatePlanLifecycle: (params) => updatePlanLifecycle(params),
     refreshPlans: () => refreshPlans(),
     loadDeveloperRuntime: () => loadDeveloperRuntimeSnapshot(),
     refreshDeveloperRuntime: () => refreshDeveloperRuntimeSnapshot(),

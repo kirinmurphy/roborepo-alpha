@@ -3,8 +3,7 @@
  * reusing them is the plain-CSS equivalent):
  *   765px  — narrow: lifecycle tabs collapse to a dropdown selector. Set ~50px above the point
  *            tabs would wrap to 2 lines, so the dropdown swap happens before wrapping occurs.
- *   960px  — wide: drawer/filter-row go single-column below it; the plan card's status
- *            section becomes a fixed 200px right-side column at/above it.
+ *   960px  — wide: drawer/filter-row go single-column below it.
  */
 main {
   padding-top: 18px;
@@ -234,22 +233,6 @@ main {
   font-size: var(--text-2xs);
   color: var(--dim);
 }
-#lifecycle-error-modal {
-  width: min(560px, 100%);
-  max-height: 85vh;
-  overflow: auto;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  box-shadow: 0 12px 40px var(--modal-shadow);
-  padding: 26px;
-}
-#lifecycle-error-modal::backdrop {
-  background: var(--backdrop);
-}
-#lifecycle-error-modal .modalactions {
-  margin-top: 16px;
-}
 /* Onboarding empty-page mount: full-width, fills the space between the shared chrome (sticky
  * header above, footer below) so the hero sits in the true visual middle of the page. A display
  * rule here would defeat the `hidden` attribute (the attribute loses to any display value), so
@@ -451,25 +434,6 @@ plan-card {
   display: block;
   min-width: 0;
 }
-/* Wide screens: status (blocked badge / progress / next-action) moves to a fixed right column
- * instead of stacking under the card's main content — see breakpoint note at top of file.
- * Active-lifecycle cards only: progress/next-action only apply while a plan is in flight, so the
- * dedicated column is wasted space on every other lifecycle — those keep the narrow-screen
- * stacked layout regardless of viewport width. */
-@media (min-width: 960px) {
-  .plan-card.is-active {
-    grid-template-columns: 1fr 360px;
-  }
-
-  .plan-card.is-active > plan-status .status-section {
-    margin: 0;
-    border-top: none;
-    border-left: 1px solid var(--warn-line);
-    border-radius: 0 7px 7px 0;
-    height: 100%;
-    align-self: start;
-  }
-}
 .plan-card .doc-details h3 {
   margin: 0;
   font-size: var(--text-md);
@@ -516,9 +480,10 @@ plan-card {
   align-items: stretch;
 }
 .plan-card plan-status .status-section {
-  border-top: 1px solid var(--warn-line);
+  border: 1px solid var(--line);
+  border-top: none;
   border-radius: 0 0 7px 7px;
-  background: color-mix(in srgb, var(--warn) 10%, var(--panel));
+  background: color-mix(in srgb, var(--ink) 3%, var(--panel));
 }
 .card-actions {
   display: flex;
@@ -622,58 +587,4 @@ plan-card {
   .lifecycle-dropdown-mount {
     display: block;
   }
-}
-.lifecycle-error-title {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  font-size: var(--text-lg);
-  color: var(--spike);
-}
-.lifecycle-error-title portal-icon {
-  color: var(--spike);
-  flex: none;
-}
-.lifecycle-error-details {
-  margin: 0;
-  padding-left: 1.2em;
-  border-left: 3px solid var(--spike);
-  padding-block: var(--space-xs);
-}
-.lifecycle-error-details li {
-  margin-bottom: 2px;
-  padding-left: var(--space-xs);
-}
-/* Group headings for the blocked-move dialog. Only shown when both groups are present, so they
- * always appear as a contrasting pair rather than labelling a single list. */
-.lifecycle-findings-label {
-  margin: var(--space-sm) 0 var(--space-xs);
-  font-size: var(--text-2xs);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--dim);
-}
-.lifecycle-findings-label:first-of-type {
-  margin-top: 0;
-}
-.lifecycle-finding {
-  margin-bottom: var(--space-xs);
-}
-.lifecycle-finding-message {
-  margin: 0;
-}
-/* Indented and dimmed so the problem reads first and the fix reads as its follow-up. */
-.lifecycle-finding-resolution {
-  margin: 2px 0 0;
-  font-size: var(--text-2xs);
-  color: var(--dim);
-}
-/* The advisory list is deliberately quieter — these do not prevent the move. */
-[data-slot="advisory-details"] {
-  border-left-color: var(--line);
-}
-/* Copy sits left of the decision buttons: it is the alternative to deciding, not one of the
- * choices. `gap` on .modalactions already spaces the rest. */
-#lifecycle-error-modal .modalactions portal-copy-button {
-  margin-right: auto;
 }

@@ -10,7 +10,6 @@ import {
 import * as api from "./api.js";
 import * as tmpl from "./templates.js";
 import { createRepositorySourcesDialog } from "/portal/shared/repository-sources-dialog.js";
-import { createLifecycleErrorDialog } from "./lifecycle-error-dialog.js";
 import { createPlanDrawer } from "./plan-drawer.js";
 import { createBlockersPopover } from "./blockers-popover.js";
 import {
@@ -23,6 +22,7 @@ import {
   isNotStarted,
   completionRatio,
   isVisible,
+  mergedPlanBranches,
   replaceRecord,
   filteredListActionFor,
   resolveBlockers,
@@ -40,6 +40,9 @@ const state = {
   filters: { ...FILTER_DEFAULTS },
   filtersExpanded: false,
   selectedLifecycle: lifecycleFromSearchParams(new URLSearchParams(location.search)),
+  // Active plans whose worktree has merged, from the same overview Home renders (see
+  // mergedPlanBranches); keyed by plan key.
+  mergedPlans: new Map(),
 };
 
 const groupsEl = document.getElementById("groups");
@@ -77,6 +80,7 @@ const onboarding = {
 const planDrawer = createPlanDrawer({
   getPlans: () => state.snapshot.plans,
   getPlanWritePackage: () => state.snapshot.planWritePackage,
+  mergeFor: (key) => state.mergedPlans.get(key) || null,
   onEnablePackage: enablePackage,
   onError: showError,
 });
@@ -85,15 +89,12 @@ const outcomeToast = planDrawer.toast;
 const blockersPopover = createBlockersPopover(document.getElementById("blockers-popover"), {
   onOpenPlan: (key) => openPlan(key),
 });
-const lifecycleErrorDialog = createLifecycleErrorDialog(document.getElementById("lifecycle-error-modal"), {
-  onViewPlan: (key) => openPlan(key),
-});
 const allTasksModal = document.getElementById("all-tasks-modal");
 portalWireBackdropClose(allTasksModal, () => allTasksModal.close());
 
 bindStaticControls();
 load();
-void refreshRepositorySyncStatus();
+void refreshOverview();
 
 function bindStaticControls() {
   const refreshEl = document.getElementById("refresh");
@@ -103,6 +104,7 @@ function bindStaticControls() {
     refreshEl.disabled = true;
     refreshIconEl.hidden = true;
     refreshSpinnerEl.hidden = false;
+    void refreshOverview();
     api.refreshSnapshot().then(applySnapshot).catch(showError).finally(() => {
       refreshEl.disabled = false;
       refreshIconEl.hidden = false;
@@ -194,24 +196,41 @@ function setPlansSyncPending(isPending) {
     clearTimeout(syncPollTimer);
     renderRepositorySyncStatus();
   } else {
-    void refreshRepositorySyncStatus();
+    void refreshOverview();
   }
 }
 
-async function refreshRepositorySyncStatus() {
+// Home's overview carries two things Plans shows: repository sync status, and which active plans'
+// worktrees have merged (the `merged` completion badge).
+async function refreshOverview() {
   if (repositorySyncPending) return;
   try {
     const overview = await api.fetchHomeOverview();
     if (repositorySyncPending) return;
     repositoryAutoDiscoveryEnabled = overview.autoDiscovery?.enabled === true;
     repositorySyncState = overview.sync?.state || "synced";
+    applyMergedPlans(mergedPlanBranches(overview));
   } catch {
     if (repositorySyncPending) return;
     repositorySyncState = "unavailable";
   }
   renderRepositorySyncStatus();
   clearTimeout(syncPollTimer);
-  if (repositorySyncState === "syncing") syncPollTimer = setTimeout(refreshRepositorySyncStatus, 750);
+  if (repositorySyncState === "syncing") syncPollTimer = setTimeout(refreshOverview, 750);
+}
+
+// Re-renders only when the merged set actually changed, so a sync poll does not rebuild the cards
+// (and reset an in-flight priority dropdown) for nothing.
+function applyMergedPlans(merged) {
+  const signature = (map) => JSON.stringify([...map].sort(([a], [b]) => a.localeCompare(b)));
+  if (signature(merged) === signature(state.mergedPlans)) return;
+  state.mergedPlans = merged;
+  render();
+  const drawerStatus = planDrawer.isOpen ? planDrawer.statusElement : null;
+  if (drawerStatus) {
+    drawerStatus.merge = state.mergedPlans.get(drawerStatus.record.key) || null;
+    drawerStatus.record = drawerStatus.record;
+  }
 }
 
 function populateFilters(snapshot) {
@@ -285,6 +304,7 @@ function render() {
     onCopyContext: (record) => copyText(repositoryContext(record)),
     onCopyPortableContext: (key) => copyPrompt(null, [key], "portable"),
     onPlanAction: (key, command) => copyPrompt(command, [key], "repository-aware"),
+    mergeFor: (key) => state.mergedPlans.get(key) || null,
     planWriteEnabled: snapshot.planWritePackage.enabled,
     planWritePackage: snapshot.planWritePackage,
     skillModal,
@@ -342,26 +362,25 @@ window.addEventListener("popstate", () => {
   render();
 });
 
-// mutations: property -> (record, value) => Promise<{change, record}>. Both call through the
-// same shared domain mutation result contract, so handlePlanChange doesn't need to know which one ran.
+// mutations: property -> (record, value) => Promise<{change, record}>, each returning the shared
+// domain mutation result contract so handlePlanChange doesn't need to know which one ran. Lifecycle
+// is not here: the plan suite's commands move plans between lifecycle folders and commit the move.
 const mutations = {
   priority: (record, value) =>
     api.updatePlanPriority(record.plan.id, record.key, value, record.plan.priority, record.mtimeMs, record.repository.id),
-  lifecycle: (record, value, { skipDestinationValidation } = {}) =>
-    api.updatePlanLifecycle(record.plan.id, record.key, value, record.plan.lifecycle, record.mtimeMs, record.repository.id, skipDestinationValidation),
 };
 
 // Plan keys currently mid-mutation. Guards against two overlapping handlePlanChange calls for the
 // same record (e.g. the card's and the drawer's mounted <plan-status> both showing the same plan)
-// racing the server with the same expected mtimeMs/lifecycle — the loser would otherwise surface a
+// racing the server with the same expected mtimeMs — the loser would otherwise surface a
 // confusing stale-conflict recovery for what looked like a single click.
 const pendingMutationKeys = new Set();
 
 // The one page-level mutation orchestrator, shared by card dropdowns, the drawer's mounted
-// <plan-status>, and the Start/Archive/Revert/Undo shortcuts. Filesystem truth controls UI truth:
-// the snapshot is only updated after the server confirms success, and the full record it returns
-// replaces the old one outright rather than patching individual fields in place.
-async function handlePlanChange({ property, value, record }, mutationOptions) {
+// <plan-status>, and the toast's Undo. Filesystem truth controls UI truth: the snapshot is only
+// updated after the server confirms success, and the full record it returns replaces the old one
+// outright rather than patching individual fields in place.
+async function handlePlanChange({ property, value, record }) {
   if (pendingMutationKeys.has(record.key)) return null;
   pendingMutationKeys.add(record.key);
   // Captured once up front so the outcome this mutation reports (visibility, tab, filters) always
@@ -371,7 +390,7 @@ async function handlePlanChange({ property, value, record }, mutationOptions) {
   const wasVisible = isVisible(record, viewAtRequestTime.selectedLifecycle, viewAtRequestTime.filters);
   let result;
   try {
-    result = await mutations[property](record, value, mutationOptions);
+    result = await mutations[property](record, value);
   } catch (err) {
     if (err.code === "STALE_PLAN") {
       await recoverFromStaleConflict(record);
@@ -383,20 +402,7 @@ async function handlePlanChange({ property, value, record }, mutationOptions) {
     // refreshMountedStatus) rebuilds the warnings banner from snapshot data, so showError must run
     // AFTER it or its message gets immediately overwritten.
     refreshMountedStatus(record);
-    if (err.code === "LIFECYCLE_REQUIREMENTS") {
-      // Validation is a soft warning, not a hard gate (see movePlanLifecycle's comment) — offer
-      // "move anyway," which re-enters this same function with the bypass flag so the retry gets
-      // the exact same snapshot-replace/outcome handling as any other successful mutation. The
-      // dialog also offers the server-generated repair prompt carried on the error, for users who
-      // would rather fix the document than move past it.
-      //
-      // This is the single place a readiness failure surfaces. Card dropdowns, the drawer's
-      // <plan-status>, and the Start/Archive/Revert shortcuts all funnel through this function,
-      // which is what guarantees they show identical findings.
-      lifecycleErrorDialog.open(err, () => handlePlanChange({ property, value, record }, { skipDestinationValidation: true }));
-    } else {
-      showError(err);
-    }
+    showError(err);
     return null;
   } finally {
     pendingMutationKeys.delete(record.key);
@@ -407,14 +413,13 @@ async function handlePlanChange({ property, value, record }, mutationOptions) {
   render();
   // The card grid's render() mounts fresh <plan-status> instances, but the drawer isn't part of
   // that render pass — its mounted <plan-status> would otherwise sit stuck at loading:true
-  // (dropdown spinner) forever, since it never receives the new record. presentChangeOutcome may
-  // close the drawer for a lifecycle move (a stale key by then); re-set only when it's still open
-  // for this same plan.
+  // (dropdown spinner) forever, since it never receives the new record. Re-set it only when the
+  // drawer is still open for this same plan.
   if (planDrawer.isOpen && planDrawer.openKey === previousKey) {
     const drawerStatus = planDrawer.statusElement;
     if (drawerStatus) drawerStatus.record = result.record;
   }
-  presentChangeOutcome({ result, wasVisible, nowVisible, previousKey, view: viewAtRequestTime });
+  presentChangeOutcome({ result, wasVisible, nowVisible, view: viewAtRequestTime });
   return result.record;
 }
 
@@ -452,22 +457,15 @@ async function recoverFromStaleConflict(record) {
 
 // Decides whether to show the outcome toast after a successful mutation: only when the mutation
 // actually removed the record from view — an unrelated field change that keeps the record visible
-// needs no notification. Lifecycle moves here are the manual dropdown override; the suite commands
-// (`/plan-start`, `/plan-close`) make and commit their own moves, so none gets a follow-up prompt.
-function presentChangeOutcome({ result, wasVisible, nowVisible, previousKey, view }) {
+// needs no notification.
+function presentChangeOutcome({ result, wasVisible, nowVisible, view }) {
   const { change, record } = result;
-  // A lifecycle move invalidates the open drawer's key/path/actions — close it before showing
-  // either outcome surface rather than leaving a stale detail view open behind the dialog/toast.
-  if (change.property === "lifecycle" && planDrawer.isOpen && planDrawer.openKey === previousKey) {
-    planDrawer.close();
-  }
   if (!(wasVisible && !nowVisible)) return;
   // Use the tab/filters captured when the mutation started, not whatever is current now — the
   // toast must describe the view the user was actually looking at when they triggered the change.
   const filteredAction = filteredListActionFor(change, view);
-  const label = change.property === "lifecycle" ? LIFECYCLE_LABELS[change.newValue] : change.newValue;
   outcomeToast.show({
-    message: `"${record.plan.title}" ${change.property} was set to ${label}.`,
+    message: `"${record.plan.title}" ${change.property} was set to ${change.newValue}.`,
     actions: [
       { label: "Undo", run: () => handlePlanChange({ property: change.property, value: change.previousValue, record }) },
       { label: "View plan", run: () => openPlan(record.key) },
@@ -476,14 +474,11 @@ function presentChangeOutcome({ result, wasVisible, nowVisible, previousKey, vie
   });
 }
 
+// The only filtered-list shortcut is priority's (see filteredListActionFor).
 function applyFilteredListAction(action) {
-  if (action.type === "lifecycle") {
-    selectLifecycle(action.value);
-  } else if (action.type === "priority") {
-    state.filters.priority = action.value;
-    document.getElementById("priority").value = action.value;
-    render();
-  }
+  state.filters.priority = action.value;
+  document.getElementById("priority").value = action.value;
+  render();
 }
 
 function renderFilterChips(snapshot) {

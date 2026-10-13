@@ -1,4 +1,5 @@
 import { portalFillSlots as fill, portalTpl as tpl } from "/portal/shared/api.js";
+import { planCompletion } from "/portal/plans/plan-completion.js";
 import { worktreeDetailsButton } from "./worktree-details.js";
 
 // What a matched plan hands the shared checkout row (buildRootSection's `identity`): the plans glyph,
@@ -33,22 +34,13 @@ export function unmatchedPlanRow(plan, onOpenPlan) {
   return row;
 }
 
-// One active plan with its completion ring. Its title opens the read-only plan drawer.
+// One active plan with its completion ring (or done badge). Its title opens the read-only plan
+// drawer. The row's own worktree badge already says when the plan's worktree has merged, so the
+// completion here stays about tasks.
 export function planItem(plan, onOpenPlan) {
-  const total = plan.taskCounts?.total || 0;
-  const percent = total > 0 ? Math.round((plan.taskCounts.complete / total) * 100) : null;
-  const done = percent === 100;
-  const node = fill(tpl("tpl-plan-item"), { title: plan.title, percent: percent === null ? "—" : `${percent}%` });
+  const node = fill(tpl("tpl-plan-item"), { title: plan.title });
   node.querySelector("[data-slot=title]").addEventListener("click", () => onOpenPlan?.(plan));
-  node.title = percent === null ? "No checklist tasks" : `${plan.taskCounts.complete} of ${total} tasks complete`;
-  const progress = node.querySelector("[data-slot=progress]");
-  progress.hidden = percent === null || done;
-  node.querySelector("[data-slot=percent]").hidden = done;
-  node.querySelector("[data-slot=complete]").hidden = !done;
-  if (percent !== null && !done) {
-    progress.setAttribute("aria-label", `${plan.title} completion`);
-    progress.setAttribute("aria-valuenow", String(percent));
-    progress.style.setProperty("--percent", String(percent));
-  }
+  const completion = planCompletion(plan);
+  if (completion) node.append(completion);
   return node;
 }

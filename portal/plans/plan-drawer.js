@@ -3,9 +3,10 @@
 // owns filling and opening it, so the two pages cannot drift.
 //
 // The page supplies what only it knows: the plan list blockers resolve against, the plan-write
-// package state, and how to surface copies/errors. Lifecycle and priority edits are the page's
-// call too — on Plans the drawer's <plan-status> dispatches `plan-change` into the page's mutation
-// orchestrator; a page without one passes `readonly` and the status renders as plain chips.
+// package state, which plans' worktrees have merged, and how to surface copies/errors. Priority
+// edits are the page's call too — on Plans the drawer's <plan-status> dispatches `plan-change` into
+// the page's mutation orchestrator; a page without one passes `readonly` and the status renders as
+// plain chips.
 
 import { portalCopyText, portalWireBackdropClose } from "/portal/shared/api.js";
 import { createSkillDetailModal } from "/portal/shared/skill-detail-modal.js";
@@ -16,7 +17,8 @@ import { createOutcomeToast } from "./toast-controller.js";
 import { repositoryContext, resolveBlockers, resolveBlocking } from "./state.js";
 import "./elements/index.js";
 
-// deps: { getPlans, getPlanWritePackage, onEnablePackage, onError, readonly }
+// deps: { getPlans, getPlanWritePackage, mergeFor, onEnablePackage, onError, readonly }
+// mergeFor(key) returns the plan's `{ into }` when its worktree has merged, else null; optional.
 export function createPlanDrawer(deps) {
   const dialog = document.getElementById("drawer");
   const statusMount = document.getElementById("drawer-status-mount");
@@ -81,6 +83,7 @@ export function createPlanDrawer(deps) {
     renderBlockers(doc.plan);
     const statusEl = document.createElement("plan-status");
     if (deps.readonly) statusEl.setAttribute("readonly", "");
+    statusEl.merge = deps.mergeFor?.(doc.plan.key) || null;
     statusEl.record = doc.plan;
     statusMount.replaceChildren(statusEl);
     // Recommended-next CTA (hidden when there's no clear recommendation) + the unified ⋯ menu.

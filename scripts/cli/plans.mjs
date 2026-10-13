@@ -8,7 +8,6 @@ import {
   buildPlanSnapshot,
   buildPrompt,
   findPlanByKey,
-  movePlanLifecycle as movePlanLifecycleInDocs,
   planSnapshotFingerprint,
   readPlanDocument,
   updatePlanPriority as updatePlanPriorityInDocs,
@@ -77,13 +76,6 @@ export function buildPlansPrompt({ action, keys, mode }) {
 export function updatePlanPriority({ id, key, priority, expectedPriority, mtimeMs, repositoryId }) {
   const snapshot = cachedSnapshot || buildPlanSnapshot({ stateRoot, packageState: planWritePackageState() });
   const result = updatePlanPriorityInDocs(snapshot, { id, key, priority, expectedPriority, mtimeMs, repositoryId });
-  cachedSnapshot = null;
-  return publicMutationResult(result);
-}
-
-export function updatePlanLifecycle({ id, key, lifecycle, expectedLifecycle, mtimeMs, repositoryId, skipDestinationValidation }) {
-  const snapshot = cachedSnapshot || buildPlanSnapshot({ stateRoot, packageState: planWritePackageState() });
-  const result = movePlanLifecycleInDocs(snapshot, { id, key, lifecycle, expectedLifecycle, mtimeMs, repositoryId, skipDestinationValidation });
   cachedSnapshot = null;
   return publicMutationResult(result);
 }

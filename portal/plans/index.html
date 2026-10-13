@@ -130,35 +130,6 @@
         <div id="all-tasks-body" class="all-tasks-body"></div>
       </div>
     </dialog>
-    <dialog id="lifecycle-error-modal" aria-labelledby="lifecycle-error-modal-title">
-      <div class="modal-head">
-        <span class="modal-title lifecycle-error-title" id="lifecycle-error-modal-title">
-          <portal-icon name="warning" size="lg"></portal-icon>
-          <span data-slot="title"></span>
-        </span>
-        <portal-close-button
-          data-slot="close"
-          aria-label="Close"
-        ></portal-close-button>
-      </div>
-      <div class="modal-body">
-        <p class="modal-note" data-slot="resolution"></p>
-        <p class="lifecycle-findings-label" data-slot="blocking-label" hidden>Must fix before moving</p>
-        <ul class="lifecycle-error-details" data-slot="details"></ul>
-        <p class="lifecycle-findings-label" data-slot="advisory-label" hidden>Also worth fixing</p>
-        <ul class="lifecycle-error-details" data-slot="advisory-details" hidden></ul>
-        <div class="modalactions">
-          <portal-copy-button
-            data-slot="copy-prompt"
-            label="Copy prompt to resolve warnings"
-            hidden
-          ></portal-copy-button>
-          <button type="button" data-slot="view-plan">View Plan</button>
-          <button type="button" data-btn="cta" data-slot="confirm-action" hidden>Move anyway</button>
-          <button type="button" data-slot="close-action">Cancel</button>
-        </div>
-      </div>
-    </dialog>
     <!-- The enable-skill onboarding banner (tpl-package-banner) lives in plan-drawer-partial.html,
          since the drawer's menu uses it too. -->
     <!-- Generic primitives: reused across panels, no single owner -->
@@ -206,14 +177,6 @@
         data-slot="label"
       ></button>
     </template>
-    <!-- Lifecycle readiness findings (blocked-move dialog) -->
-    <template id="tpl-lifecycle-finding">
-      <li class="lifecycle-finding">
-        <p class="lifecycle-finding-message" data-slot="message"></p>
-        <p class="lifecycle-finding-resolution" data-slot="resolution"></p>
-      </li>
-    </template>
-
     <!-- Active-filter chips (control bar) -->
     <template id="tpl-filter-chip">
       <span class="filter-chip">

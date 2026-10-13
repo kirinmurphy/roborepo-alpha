@@ -58,7 +58,7 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 .domain-link { margin-left: auto; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
 .domain-link:hover { color: var(--accent); }
 .domain-details { display: grid; gap: 2px; }
-.domain-details[hidden], .plan-progress[hidden], .plan-percent[hidden], .plan-complete-badge[hidden] { display: none; }
+.domain-details[hidden] { display: none; }
 .domain-note { margin: 0; color: var(--dim); font-size: var(--text-xs); }
 .plan-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: var(--text-xs); }
 /* A plan row's title takes the place of the branch label, so it reads at the row's size, not as a
@@ -111,21 +111,6 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
   cursor: pointer;
 }
 .plan-title:hover { color: var(--accent); }
-/* Follows the title inline: a progress ring and percent, or the done badge once finished. */
-.plan-completion { display: inline-flex; align-items: center; gap: 5px; color: var(--dim); flex: none; font-size: var(--text-2xs); }
-/* A ring, not a bar: a conic sweep (green to --percent, black after) masked down to its outer band.
- * Black track, green fill: the unfilled remainder has to read as clearly as the progress itself. */
-.plan-progress {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: conic-gradient(var(--ok) calc(var(--percent, 0) * 1%), #000 0);
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
-  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
-}
-.plan-percent { font-variant-numeric: tabular-nums; }
-.plan-complete-badge { padding: var(--pill-padding); border-radius: 999px; background: var(--chip-low-bg); color: var(--chip-ink); font-weight: 600; }
 .token-warnings { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
 .token-warning { font-size: var(--text-sm); overflow-wrap: anywhere; }
 .warning-model { font-family: var(--mono); font-size: var(--text-xs); }

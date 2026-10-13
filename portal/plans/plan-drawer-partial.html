@@ -198,27 +198,25 @@
     </template>
     <template id="tpl-plan-status">
       <div class="status-section">
-        <div class="status-state-row">
-          <div class="status-state-chips" data-slot="status-chips">
-            <div class="lifecycle-slot" data-slot="lifecycle"></div>
-            <div class="priority-slot" data-slot="priority"></div>
-            <span class="state-badge" data-slot="state-badge" hidden></span>
-          </div>
-          <span class="meta-line" data-slot="meta"></span>
+        <div class="status-state-chips" data-slot="status-chips">
+          <div class="priority-slot" data-slot="priority"></div>
+          <span class="state-badge" data-slot="state-badge" hidden></span>
         </div>
-        <div class="status-implementation" data-slot="implementation">
-          <div class="status-progress-row" data-slot="progress-row">
-            <div class="progress-bar">
-              <div class="progress-fill" data-slot="progress-fill"></div>
-            </div>
-            <span class="progress-label" data-slot="progress-label"></span>
-          </div>
-          <div class="status-complete-row" data-slot="complete-row" hidden>
-            <span class="tasks-complete-badge">All tasks complete</span>
-          </div>
-          <div class="next-line" data-slot="next-row"><span class="next-label">Next up:</span> <span data-slot="next"></span></div>
+        <div class="status-trailing">
+          <span class="meta-line" data-slot="meta"></span>
+          <span data-slot="completion" hidden></span>
         </div>
       </div>
+    </template>
+    <!-- plan-completion.js: a progress ring and percent, or the done / merged badge. Shared by Home's
+         plan rows and <plan-status>. -->
+    <template id="tpl-plan-completion">
+      <span class="plan-completion">
+        <span class="plan-progress" data-slot="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"></span>
+        <span class="plan-percent" data-slot="percent"></span>
+        <span class="plan-complete-badge" data-slot="complete" hidden>done</span>
+        <span class="plan-merged-badge" data-slot="merged" hidden>merged</span>
+      </span>
     </template>
     <template id="tpl-dtdd-row">
       <div class="dtdd-row">

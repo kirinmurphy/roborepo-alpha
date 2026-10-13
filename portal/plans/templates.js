@@ -102,6 +102,14 @@ function repositoryCount(count) {
   return `${count} ${count === 1 ? "repository" : "repositories"}`;
 }
 
+// A small status chip (tpl-chip), optionally toned by a class such as "ok" or "warn".
+export function chip(text, cls = "") {
+  const node = tpl("tpl-chip");
+  node.textContent = text;
+  if (cls) node.classList.add(cls);
+  return node;
+}
+
 export function warningLine(text) {
   return fill(tpl("tpl-warning-line"), { text });
 }
@@ -290,11 +298,14 @@ export function drawerContent(doc, drawerActions) {
     title: plan.title,
     path: `${doc.plan.repository.name} / ${plan.relativePath}`,
     html: doc.html,
-    // Lifecycle, priority, next action, review, and task progress now render in the shared
-    // <plan-status> section mounted alongside this metadata list, not as static rows here.
+    // Priority, readiness, blockers, and completion render in the shared <plan-status> section
+    // mounted alongside this metadata list. The next action is the agent's own pointer into the
+    // plan, so it is shown here in the full document view and not on the card.
     meta: [
       dtdd("id", plan.id || "(missing)"),
       dtdd("repository", doc.plan.repository.name),
+      dtdd("lifecycle", LIFECYCLE_LABELS[plan.lifecycle] || plan.lifecycle),
+      ...(plan.nextAction ? [dtdd("next action", plan.nextAction)] : []),
       // An active plan's assigned worktree holds its authoritative copy; say so, since the path
       // above is the same in every checkout.
       ...(plan.authority?.source === "worktree" ? [dtdd("read from", `From worktree ${plan.authority.worktree}`)] : []),
@@ -400,16 +411,5 @@ export function allTasksProject(record, { notStarted, percent, onViewStory }) {
   node
     .querySelector("[data-slot=tasks]")
     .replaceChildren(...tasks.map((task) => fill(tpl("tpl-all-tasks-item"), { text: task.text })));
-  return node;
-}
-
-// One problem in the blocked-move dialog: what is wrong, and how to fix it. Findings that predate
-// the structured shape carry only a message, so the resolution line is dropped rather than
-// rendered empty.
-export function lifecycleFinding(item) {
-  const node = fill(tpl("tpl-lifecycle-finding"), { message: item.message });
-  const resolution = node.querySelector("[data-slot=resolution]");
-  if (item.resolution) resolution.textContent = item.resolution;
-  else resolution.remove();
   return node;
 }
