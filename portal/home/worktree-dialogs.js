@@ -40,7 +40,7 @@ export function createWorktreeRemoveDialog({ onRemoved }) {
         restore: branch ? `git branch ${branch} ${archive}\ngit worktree add ${folder} ${branch}` : `git worktree add ${folder} ${archive}`,
       });
       slot("plan").hidden = !plan;
-      slot("plan").textContent = plan ? `The active plan "${plan.title}" is still using this worktree. Deleting it can lose work the plan still needs, and the plan stays active without it.` : "";
+      slot("plan").textContent = plan ? `The active plan "${plan.title}" is still using this worktree. Deleting it can lose work the plan still needs, and the plan stays active without it. The plan's progress recorded in this worktree will no longer be shown in Plans.` : "";
       slot("running").hidden = !running;
       // Merged and stale worktrees are routine cleanup; one an active plan or a running server
       // still uses is not, so its confirmation turns red alongside the warning that says why.

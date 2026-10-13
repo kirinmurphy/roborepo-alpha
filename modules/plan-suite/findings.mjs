@@ -21,6 +21,14 @@
 // are introduced to an agent as the ones to fix first. It does NOT gate lifecycle moves — the
 // destination gate is advisory and a user can always proceed via "Move anyway".
 
+// Why the primary copy stands in for an active plan's worktree copy (resolvePlanAuthority reasons).
+const COPY_UNAVAILABLE_REASONS = {
+  "worktree-missing": "the worktree no longer exists",
+  "copy-missing": "the worktree has no readable copy of this plan",
+  "copy-not-active": "the worktree's copy is not in active/",
+  "copy-other-worktree": "the worktree's copy names a different worktree",
+};
+
 const DEFS = {
   // --- schema ---------------------------------------------------------------------------------
   MISSING_TITLE: {
@@ -244,11 +252,24 @@ const DEFS = {
     message: ({ meta }) => `Duplicate plan id: ${meta.id}.`,
     resolution: "Give one of the plans a different `id`; ids must be unique within a repository.",
   },
-  PLAN_DIFFERS_IN_WORKTREE: {
+  // The three authority findings: which copy of an active plan the portal shows (plan-authority.mjs).
+  PLAN_EDITED_OUTSIDE_WORKTREE: {
     kind: "relationship",
     severity: "advisory",
-    message: ({ meta }) => `Differs in worktree ${meta.worktree}.`,
-    resolution: "This is the main checkout's copy, which the portal shows and edits. Merge or discard the worktree's changes to this plan to reconcile them.",
+    message: ({ meta }) => `Edited outside worktree ${meta.worktree}: the primary checkout's copy has ${meta.committed ? "a committed" : "an uncommitted"} change the worktree never had.`,
+    resolution: "Merge the base branch into the worktree, or move the edit into the worktree's copy and revert it in the primary checkout. RoboRepo shows the worktree's copy and merges nothing.",
+  },
+  PLAN_WORKTREE_COPY_UNAVAILABLE: {
+    kind: "relationship",
+    severity: "advisory",
+    message: ({ meta }) => `Worktree ${meta.worktree}'s copy is unavailable: ${COPY_UNAVAILABLE_REASONS[meta.reason] || "it could not be used"}.`,
+    resolution: "Restore the worktree, land its plan changes, or clear `worktree` to release the plan to the primary checkout. Progress recorded only in the worktree is not shown.",
+  },
+  PLAN_AUTHORITY_UNCHECKED: {
+    kind: "relationship",
+    severity: "advisory",
+    message: ({ meta }) => `Outside edits not checked for worktree ${meta.worktree}: ${meta.reason}.`,
+    resolution: "Showing the worktree's copy; an outside edit to the primary checkout's copy cannot be ruled out.",
   },
   SELF_DEPENDENCY: {
     kind: "relationship",

@@ -44,20 +44,39 @@ contributes no plans. Ignored repositories are left out.
 
 For each repository, Plans reads `docs/plans/**/*.md` in every checkout: the main checkout, found
 through Git's common directory, and each linked worktree. Copies of one plan in different checkouts
-are matched by plan `id`. Only the plan's own worktree, the one its `worktree` field names, is
-compared with the main copy. Other worktrees usually hold an older copy of main, so they never mark
-a plan.
+are matched by plan `id`, and Plans shows each plan's one authoritative copy.
 
-| Plan exists in | Plans page shows | Edits (priority, lifecycle) write to | Marked as differing |
-| --- | --- | --- | --- |
-| Main checkout only | Main copy | Main checkout | No |
-| Main and the plan's own worktree, identical | One record | Main checkout | No |
-| Main and the plan's own worktree, different | Main copy | Main checkout | Yes: a **Differs in worktree `<name>`** finding on that plan |
-| Main and any other worktree | One record | Main checkout | No |
-| Worktree only | Worktree copy, labeled with the worktree name | That worktree | No |
+The main checkout's copy decides which lifecycle stage a plan is in, because `/plan-start` and
+`/plan-close` commit lifecycle changes on the base branch. While a plan is active, the worktree its
+`worktree` field names decides what the plan says: implementation records its progress there, and
+Plans reads it there, with no copy to the main checkout. The worktree's copy counts only while that
+worktree exists and its copy has the same `id`, is in `active/`, and names the same worktree.
+Whether a worktree is ahead of or behind main changes nothing.
 
-The main checkout's copy is canonical because `/plan-start` and `/plan-close` make lifecycle changes
-on the base branch.
+| Plan | Plans page shows | Priority edits write to | Lifecycle dropdown | Finding |
+| --- | --- | --- | --- | --- |
+| Backlog, completed, or archived | Main copy | Main checkout | Moves the main copy | None |
+| Active, no `worktree` | Main copy | Main checkout | Moves the main copy | None |
+| Active, its worktree holds a usable copy | Worktree copy, **From worktree `<name>`** in the drawer | That worktree | Refused: close it with `/plan-close`, or clear `worktree` first | **Edited outside worktree** when the main copy holds a version the worktree never had |
+| Active, its worktree or the worktree's copy is not usable | Main copy | Main checkout | Moves the main copy | **Worktree copy unavailable**, with the reason |
+| Only in a worktree | Worktree copy, labeled with the worktree name | That worktree | Moves the worktree copy | None |
+
+A copy in any other worktree is never shown and never produces a finding; those worktrees usually
+hold an older copy of main.
+
+The outside-edit check compares the main copy with the versions the worktree's own history already
+contains: the plan where the worktree branch forked, every plan version the branch's commits
+produced, and the worktree's current file. A squash or rebase merge that main has pulled matches
+one of those, so it is not an outside edit; an edit made on main and not yet merged into the
+worktree is. Resolve one by merging the base branch into the worktree, or by moving the edit into
+the worktree's copy and reverting it on main. Plans never merges, overwrites, or picks between the
+copies itself. When Git cannot answer (a detached `HEAD`, a missing branch, a timeout), the plan
+shows **Outside edits not checked** instead.
+
+Nothing records which copy is authoritative: every scan derives it from Git and the files on disk,
+so portals started from different checkouts, or running different RoboRepo versions, agree. A
+portal that predates this rule shows and writes the main copy, and current portals report its
+writes as outside edits.
 
 ### Scan state
 
@@ -141,7 +160,8 @@ more than one checkout, and **worktree status unknown** when Runtime is unavaila
 [Repositories](repositories.md#repository-cards).
 
 The plan row's worktree dropdown offers **Stop Server** and **Delete Worktree**; the deletion
-confirmation names the active plan that claims the worktree. Automatic worktree cleanup never
+confirmation names the active plan that claims the worktree and warns that the plan's progress
+recorded there will no longer be shown in Plans. Automatic worktree cleanup never
 removes a worktree an active plan names. `/plan-close` removes it as its last step, once the plan is
 in `completed/` and every removal guard passes. See
 [Worktree states and cleanup](repositories.md#worktree-states-and-cleanup).
@@ -164,7 +184,9 @@ Other warnings include:
 
 - unclassified root-level plan file
 - duplicate plan IDs in a repository
-- a copy in the plan's own worktree that differs from the main checkout's copy
+- an active plan's main-checkout copy edited outside its worktree
+- an active plan whose worktree, or the worktree's copy, is not usable
+- an active plan whose outside edits Git could not check
 - missing dependencies
 - self-dependency
 - completed plans with unchecked tasks, blockers, or next action

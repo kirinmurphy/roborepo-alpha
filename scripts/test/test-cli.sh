@@ -2113,6 +2113,22 @@ assert "plan-suite: validate, start, and package status commands" \
 assert "plans: portal mutation-orchestration helpers" \
   node "${repo_root}/scripts/test/plans-portal-state-check.mjs"
 
+# Which checkout's copy of a plan the snapshot returns, and the Git checks behind that choice.
+assert "plan-suite: every checkout of a repository, merged by plan id" \
+  node "${repo_root}/scripts/test/plan-suite-canonical-check.mjs"
+
+assert "plan-suite: authority resolver and outside-edit check" \
+  node "${repo_root}/scripts/test/plan-authority-check.mjs"
+
+assert "plan-suite: active plans read from their assigned worktree" \
+  node "${repo_root}/scripts/test/plan-suite-authority-scan-check.mjs"
+
+assert "plan-suite: authority edge cases (clones, unreadable, duplicates, refs)" \
+  node "${repo_root}/scripts/test/plan-suite-authority-edge-check.mjs"
+
+assert "plan-close: integration and archive commands give their documented verdicts" \
+  node "${repo_root}/scripts/test/plan-close-integration-check.mjs"
+
 # The mode/reference matrices technical-writing and plan-write declare in their own SKILL.md prose.
 # A required reference dropped from an artifact-producing mode is invisible at runtime — the work
 # still gets delivered, just without the rule that would have caught the defect.

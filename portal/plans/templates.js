@@ -295,6 +295,9 @@ export function drawerContent(doc, drawerActions) {
     meta: [
       dtdd("id", plan.id || "(missing)"),
       dtdd("repository", doc.plan.repository.name),
+      // An active plan's assigned worktree holds its authoritative copy; say so, since the path
+      // above is the same in every checkout.
+      ...(plan.authority?.source === "worktree" ? [dtdd("read from", `From worktree ${plan.authority.worktree}`)] : []),
     ],
     warnings: plan.validation.warnings,
     tasks: doc.parsed?.tasks || [],

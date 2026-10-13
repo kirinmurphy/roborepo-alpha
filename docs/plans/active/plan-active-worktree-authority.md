@@ -1,7 +1,7 @@
 ---
 id: 6q16tocb
 priority: high
-next_action: Implement Phase 1 — a pure authority resolver and the outside-edit check, with fixture tests for every row of the authority and lifecycle-transition tables.
+next_action: Merge the branch, run `roborepo update` so the installed /plan-close has the integration check, then run /plan-close from the primary checkout and confirm the last `## Not tested` entry during that run.
 blocked_by: []
 depends_on:
   - a7bslb00
@@ -110,19 +110,19 @@ and the mirror lags.
 
 ## Goals
 
-- [ ] Every plan has exactly one authoritative copy, decided by its lifecycle stage and its assigned
+- [x] Every plan has exactly one authoritative copy, decided by its lifecycle stage and its assigned
       worktree, never by which branch is ahead or behind.
-- [ ] The primary portal shows an active plan's content from its assigned worktree, with no copy to
+- [x] The primary portal shows an active plan's content from its assigned worktree, with no copy to
       `main`.
-- [ ] RoboRepo writes only to the authoritative copy: portal mutations, skills, and commands.
-- [ ] An outside edit to the non-authoritative copy is reported as a finding; nothing merges,
+- [x] RoboRepo writes only to the authoritative copy: portal mutations, skills, and commands.
+- [x] An outside edit to the non-authoritative copy is reported as a finding; nothing merges,
       overwrites, or picks between copies automatically.
-- [ ] Authority moves only at defined lifecycle transitions: `/plan-start`, integration by merge,
+- [x] Authority moves only at defined lifecycle transitions: `/plan-start`, integration by merge,
       and `/plan-close`.
-- [ ] A worktree is never removed while it holds the only copy of its plan's current state.
-- [ ] Any RoboRepo instance, of any version, running from any checkout, derives authority from the
+- [x] A worktree is never removed while it holds the only copy of its plan's current state.
+- [x] Any RoboRepo instance, of any version, running from any checkout, derives authority from the
       same repository state, with nothing persisted or shared between instances.
-- [ ] `plan-start` stops mirroring plan updates into the primary checkout.
+- [x] `plan-start` stops mirroring plan updates into the primary checkout.
 
 ## Non-goals
 
@@ -386,8 +386,14 @@ plan-to-worktree join (`repository-overview-projections.mjs#associatePlans`, whi
 `worktree` field) are unchanged. The lifecycle a plan is counted under is the primary copy's, which
 an authoritative worktree copy shares by condition 3.
 
+An unreadable plan file is a scan error reported by its repository-relative path, never a record:
+in an assigned worktree it leaves the primary copy to stand in with `PLAN_WORKTREE_COPY_UNAVAILABLE`.
+Two copies with one `id` in the assigned worktree are a genuine duplicate there, so both are returned
+with `DUPLICATE_PLAN_ID`, as in the primary checkout.
+
 Add to `planSnapshotFingerprint` the `HEAD` file of the primary checkout and of each linked
-worktree, and the loose ref or `packed-refs` stat it points to. A merge of `main` into a worktree
+worktree, the loose ref or `packed-refs` stat it points to, and, in a reftable repository, the
+shared and per-worktree `reftable/tables.list`. A merge of `main` into a worktree
 can change the outside-edit result without touching any plan file, and the fingerprint must notice.
 Move the fingerprint and its `statPlanTree` helper into `modules/plan-suite/snapshot-fingerprint.mjs`
 so `canonical-scan.mjs` stays a short orchestrator within the file-size cap.
@@ -468,50 +474,50 @@ skill applies it rather than restating it:
 
 ### Phase 1 — Authority resolver and outside-edit check
 
-- [ ] Add `modules/plan-suite/plan-authority.mjs` with `resolvePlanAuthority`, covering every row of
+- [x] Add `modules/plan-suite/plan-authority.mjs` with `resolvePlanAuthority`, covering every row of
       the "Every case" table.
-- [ ] Carry each worktree's `branch` through `repositoryCheckouts`.
-- [ ] Add `checkOutsideEdits` through the read-only Git path, covering every row of the "Outside
+- [x] Carry each worktree's `branch` through `repositoryCheckouts`.
+- [x] Add `checkOutsideEdits` through the read-only Git path, covering every row of the "Outside
       edits" table, uncommitted primary edits, a detached worktree, and the `unchecked` case.
-- [ ] Unit-test the resolver as a pure function, and the check against temporary fixture
+- [x] Unit-test the resolver as a pure function, and the check against temporary fixture
       repositories with a primary checkout and a linked worktree.
 
 ### Phase 2 — Scan and findings
 
-- [ ] Refactor `scanRepository` to collect copies and return the authoritative record, keeping one
+- [x] Refactor `scanRepository` to collect copies and return the authoritative record, keeping one
       full record per plan.
-- [ ] Add the `authority` object; remove `divergentCheckouts`, `markDiverged`, and
+- [x] Add the `authority` object; remove `divergentCheckouts`, `markDiverged`, and
       `PLAN_DIFFERS_IN_WORKTREE`.
-- [ ] Add the three findings and their messages.
-- [ ] Move `planSnapshotFingerprint` into `snapshot-fingerprint.mjs` and extend it with `HEAD` and
+- [x] Add the three findings and their messages.
+- [x] Move `planSnapshotFingerprint` into `snapshot-fingerprint.mjs` and extend it with `HEAD` and
       ref state.
-- [ ] Rewrite the main-copy-wins assertions in `plan-suite-canonical-check.mjs`.
+- [x] Rewrite the main-copy-wins assertions in `plan-suite-canonical-check.mjs`.
 
 ### Phase 3 — Writes
 
-- [ ] Add the `LIFECYCLE_OWNED_BY_PRIMARY` refusal to `movePlanLifecycle`.
-- [ ] Confirm `updatePlanField` and document reads use the authoritative copy, with fixture tests.
-- [ ] Audit `scripts/cli/plans.mjs` and `scripts/cli/portal-routes-plans.mjs`.
+- [x] Add the `LIFECYCLE_OWNED_BY_PRIMARY` refusal to `movePlanLifecycle`.
+- [x] Confirm `updatePlanField` and document reads use the authoritative copy, with fixture tests.
+- [x] Audit `scripts/cli/plans.mjs` and `scripts/cli/portal-routes-plans.mjs`.
 
 ### Phase 4 — Skills and schema
 
 [[a7bslb00]]'s rewrite of `/plan-close` steps 6 through 9 has landed, so this phase edits that
 file as it stands now.
 
-- [ ] Add "Plan authority" to `plan-schema.md`.
-- [ ] Remove mirroring from `plan-start` and `start-validation.md`.
-- [ ] Add authority resolution to `plan-write`; confirm `session-close` needs nothing.
-- [ ] Add the integration check as `plan-close`'s first action, the primary-only rule for every
+- [x] Add "Plan authority" to `plan-schema.md`.
+- [x] Remove mirroring from `plan-start` and `start-validation.md`.
+- [x] Add authority resolution to `plan-write`; confirm `session-close` needs nothing.
+- [x] Add the integration check as `plan-close`'s first action, the primary-only rule for every
       later plan edit and refusal note, and the archive handoff on step 4's archive path.
-- [ ] If a skill's frontmatter `description` changed, regenerate the rendered commands with
+- [x] If a skill's frontmatter `description` changed, regenerate the rendered commands with
       `scripts/build/render-slash-commands.mjs`.
-- [ ] Add the skill-text assertions from Validation to `scripts/test/plan-promote-plan-start-check.mjs`.
+- [x] Add the skill-text assertions from Validation to `scripts/test/plan-promote-plan-start-check.mjs`.
 
 ### Phase 5 — Portal and docs
 
-- [ ] Add the "From worktree" line to the Plans drawer and render the new findings.
-- [ ] Add the progress sentence to Home's Delete Worktree confirmation.
-- [ ] Update `docs/user/reference/plans-portal.md` and the plan-suite guide.
+- [x] Add the "From worktree" line to the Plans drawer and render the new findings.
+- [x] Add the progress sentence to Home's Delete Worktree confirmation.
+- [x] Update `docs/user/reference/plans-portal.md` and the plan-suite guide.
 
 ## Validation
 
@@ -519,6 +525,10 @@ Focused checks while iterating:
 
 ```text
 node scripts/test/plan-suite-canonical-check.mjs
+node scripts/test/plan-authority-check.mjs
+node scripts/test/plan-suite-authority-scan-check.mjs
+node scripts/test/plan-suite-authority-edge-check.mjs
+node scripts/test/plan-close-integration-check.mjs
 node scripts/test/plan-suite-check.mjs
 node scripts/test/plan-suite-commands-check.mjs
 node scripts/test/plan-suite-findings-check.mjs
@@ -531,34 +541,51 @@ npm run test:portal-ui
 Fixture coverage, each a temporary repository with a primary checkout and at least one linked
 worktree:
 
-- [ ] An active plan edited only in its assigned worktree is returned from the worktree, with
+- [x] An active plan edited only in its assigned worktree is returned from the worktree, with
       `authority.source: "worktree"` and no finding.
-- [ ] A worktree that is behind `main` and never touched the plan changes nothing: the plan is read
+- [x] A worktree that is behind `main` and never touched the plan changes nothing: the plan is read
       from the worktree, and there is no finding.
-- [ ] An uncommitted edit to the primary copy produces `PLAN_EDITED_OUTSIDE_WORKTREE`; so does a
+- [x] An uncommitted edit to the primary copy produces `PLAN_EDITED_OUTSIDE_WORKTREE`; so does a
       committed one; merging `main` into the worktree clears it.
-- [ ] After a squash merge of the branch and a pull in the primary checkout, there is no finding.
-- [ ] A missing worktree, a missing worktree copy, a worktree copy moved out of `active/`, and a
+- [x] After a squash merge of the branch and a pull in the primary checkout, there is no finding.
+- [x] A missing worktree, a missing worktree copy, a worktree copy moved out of `active/`, and a
       worktree copy naming another worktree each fall back to the primary copy with
       `PLAN_WORKTREE_COPY_UNAVAILABLE` and the matching reason.
-- [ ] A worktree that does not yet contain the start-transition commit is not authoritative.
-- [ ] A copy in an unassigned worktree is never authoritative and produces no finding.
-- [ ] An unresolvable merge base produces `PLAN_AUTHORITY_UNCHECKED`.
-- [ ] A worktree-only plan is still shown, labeled with its worktree.
-- [ ] Changing an active plan's priority from the portal writes the worktree copy and leaves the
+- [x] A worktree that does not yet contain the start-transition commit is not authoritative.
+- [x] A copy in an unassigned worktree is never authoritative and produces no finding.
+- [x] An unresolvable merge base produces `PLAN_AUTHORITY_UNCHECKED`.
+- [x] A worktree-only plan is still shown, labeled with its worktree.
+- [x] Changing an active plan's priority from the portal writes the worktree copy and leaves the
       primary copy byte-identical.
-- [ ] Changing a backlog plan's priority writes the primary copy.
-- [ ] Moving a worktree-authoritative plan out of `active/` from the portal is refused with
+- [x] Changing a backlog plan's priority writes the primary copy.
+- [x] Moving a worktree-authoritative plan out of `active/` from the portal is refused with
       `LIFECYCLE_OWNED_BY_PRIMARY`, and neither copy changes.
-- [ ] Merging `main` into a worktree without touching any plan file changes the snapshot
+- [x] Merging `main` into a worktree without touching any plan file changes the snapshot
       fingerprint.
-- [ ] `/api/plans` output contains no absolute path.
-- [ ] A worktree whose `HEAD` is detached produces `PLAN_AUTHORITY_UNCHECKED`.
-- [ ] Skill checks: `plan-start` contains no instruction to copy plan updates to the primary
+- [x] `/api/plans` output contains no absolute path.
+- [x] A worktree whose `HEAD` is detached produces `PLAN_AUTHORITY_UNCHECKED`.
+- [x] Skill checks: `plan-start` contains no instruction to copy plan updates to the primary
       checkout; `plan-close` runs the integration check before step 1, sends every later plan edit
       and refusal note to the primary copy, and describes the archive handoff.
-- [ ] Portal UI: the Delete Worktree confirmation for a plan's worktree says the plan's worktree
+- [x] Portal UI: the Delete Worktree confirmation for a plan's worktree says the plan's worktree
       progress will no longer be shown.
+- [x] A registry that knows only the worktree, or knows it before the primary checkout, still
+      returns the assigned worktree's copy.
+- [x] A second clone whose directory has the assigned worktree's name is never authoritative; a plan
+      found only in that clone is labeled with the clone's directory.
+- [x] An unreadable copy in the assigned worktree falls back to the primary copy with
+      `PLAN_WORKTREE_COPY_UNAVAILABLE` (`copy-missing`), the repository scan still succeeds, and the
+      file is listed as a scan error by its relative path.
+- [x] Two copies with one `id` in the assigned worktree are both shown with `DUPLICATE_PLAN_ID`.
+- [x] A merge into a worktree whose branch ref was packed changes the fingerprint.
+- [x] In a reftable repository, an outside edit is reported rather than left unchecked, and a commit
+      or merge in a worktree changes the fingerprint.
+- [x] Each authority finding's message names its worktree and reason, and its resolution offers the
+      documented way out.
+- [x] `/plan-close`'s step 0 and archive commands, read from the shipped skill and run against a
+      squash-merged fixture, give the documented verdicts: integrated after a squash merge and after a
+      refusal note, not integrated after new worktree progress, integrated for a plan the worktree
+      never edited, and `plan: conflicting copies` for an outside edit until `main` is merged.
 
 Because this changes shared Plans behavior, portal-visible state, and rendered skill output, finish
 with the repository gate:
@@ -599,7 +626,149 @@ npm run check
 | Two copies are edited and the user wants them combined | Git merges them when `main` is merged into the worktree; RoboRepo never does |
 | Cross-machine unpushed edits | Out of scope; Git is the transport between machines |
 
+## Implementation Notes
+
+- Copy collection and selection live in `modules/plan-suite/plan-copies.mjs`; `canonical-scan.mjs`
+  is the orchestrator, and `snapshot-fingerprint.mjs` holds the fingerprint.
+- The "From worktree" line is a meta row built in `portal/plans/templates.js#drawerContent`;
+  `plan-drawer.js` and its partial render meta rows unchanged.
+- Phase 3 audit: `scripts/cli/plans.mjs` reads, prompts, and mutations all resolve plans from the
+  snapshot, which now returns the authoritative copy, and `readPlanDocument` bounds the file by the
+  record's own checkout root. `portal-routes-plans.mjs` serializes any domain error generically.
+  Neither needed a change.
+- No skill frontmatter `description` changed, so the rendered commands were not regenerated.
+- Fixture coverage: `scripts/test/plan-authority-check.mjs` (resolver table, outside-edit check
+  including squash, rebase, unresolvable merge base, detached `HEAD`s, SHA-256),
+  `scripts/test/plan-suite-authority-scan-check.mjs` (scan, findings, writes, fingerprint,
+  `/api/plans`), `scripts/test/plan-suite-authority-edge-check.mjs` (registration order, second
+  clones, unreadable and duplicate worktree copies, packed refs, reftable),
+  `scripts/test/plan-close-integration-check.mjs` (the skill's own Git commands),
+  `testAuthorityFindingsExplainThemselves` in `plan-suite-findings-check.mjs`, and the existing
+  canonical, skill-text, and portal UI checks.
+- `npm run check` runs `test-cli.sh` and only the `ci` group of `run-checks.mjs`, so a new
+  `*-check.mjs` is not in the gate by being discovered. The canonical, authority, edge, and
+  `/plan-close` integration checks are registered in `test-cli.sh` beside the other plan-suite
+  suites.
+
+## Not tested
+
+- [x] On the real primary portal, an active plan whose worktree holds its copy shows the worktree's
+      content, the **From worktree** line, and no warning. The fixtures cover the scan; this needs
+      the user's own repositories and a browser.
+      Confirmed by the user on 2026-10-13 against a portal running this branch's code (port 4339),
+      side by side with one running `main`'s earlier code (port 4317). For `6q16tocb`, 4339 shows the
+      worktree's `next_action` and progress, `read from: From worktree plan-active-worktree-authority`,
+      and no authority warning, while 4317 shows the primary copy's stale `next_action` with
+      "Differs in worktree". In the same session, `3jp3yhtq` showed its worktree's `next_action` with
+      the From worktree row and a correct `PLAN_EDITED_OUTSIDE_WORKTREE` for close-review notes left
+      uncommitted in the primary copy; the warning cleared once that plan moved to `completed/`.
+      `koww80zh` showed no From worktree row and `PLAN_WORKTREE_COPY_UNAVAILABLE` ("the worktree's copy
+      is not in active/"), because its worktree had already moved its copy to `completed/`.
+- [ ] `/plan-close` on a merged plan with a worktree runs the integration check before step 1 and
+      then edits only the primary copy; on an unmerged plan it refuses with `plan: not integrated`.
+      Skill prose is checked only for presence; following it needs an agent run.
+- [x] `/plan-close` archiving abandoned work carries the worktree copy into the primary copy once,
+      and refuses with `plan: conflicting copies` when the primary copy has an outside edit. Needs
+      an agent run against a real abandoned branch.
+      Confirmed by the user on 2026-10-13 with two fresh agent sessions on throwaway repositories,
+      each following this branch's `plan-close/SKILL.md`, since the installed skill predated the
+      handoff. With an untouched primary copy, the run archived `demo01` as abandoned: it carried
+      the worktree's ticked task and supersession reason into the primary copy, cleared
+      `next_action`, recorded the archive reason, and staged the move to `docs/plans/archived/` by
+      path without committing; the worktree's branch and copy were unchanged. With an outside edit
+      committed on `main` (`priority: low`), the run refused with `plan: conflicting copies`, and
+      neither checkout changed.
+- [x] `/plan-write` invoked from the primary checkout on an active, worktree-assigned plan asks for
+      worktree access and edits the worktree copy. Needs an agent run.
+      Confirmed by the user on 2026-10-13 with a fresh agent session started in a throwaway
+      repository's primary checkout, following this branch's `plan-write/SKILL.md`, since the
+      installed skill predated the rule. Asked to add a task to active plan `demo02`, assigned to
+      the sibling worktree `demo-wt`, the session resolved the three authority conditions, asked for
+      and was granted write access to the worktree, and added the task to the worktree's copy. The
+      primary copy stayed byte-identical (same hash before and after), and nothing was committed.
+- [x] Two portals started from different checkouts show the same authoritative copy for every plan.
+      The scan is stateless and covered from one checkout; running two portals side by side needs a
+      manual session.
+      Confirmed by the user on 2026-10-13. One portal ran `c972c4b`'s code started from the primary
+      checkout (port 4339), the other this branch's later head started from the worktree (port
+      4340). A field-by-field comparison of both `/api/plans` responses found all 126 plans identical
+      in authority, checkout label, lifecycle, title, `next_action`, task counts, open tasks, path,
+      excerpt, `worktree`, and warnings; the same comparison against a portal running `main`'s code
+      from before this plan differed, including this plan's `next_action`. The user saw identical
+      drawers for this plan in both portals, each with `read from: From worktree
+      plan-active-worktree-authority`.
+
+## Open Questions
+
+None.
+
 ## Decision Log
+
+### 2026-10-12 — A duplicate `id` in the assigned worktree shows every copy
+
+**Decision:** When the assigned worktree holds more than one copy with the plan's `id`, the scan
+returns all of them from the worktree, each carrying `DUPLICATE_PLAN_ID`. Authority is resolved from
+the copy in `active/` that names the worktree. Confirmed by the user.
+
+**Alternatives considered:** fall back to the primary copy with a new `copy-duplicated` reason; leave
+the first file in sort order to win.
+
+**Reason:** File order silently hid the real copy behind a stray one. Reporting both matches how a
+duplicate in the primary checkout is already shown.
+
+### 2026-10-12 — In a reftable repository, Git names the worktree's branch
+
+**Decision:** When a worktree's `HEAD` file holds reftable's `refs/heads/.invalid` placeholder, the
+outside-edit check asks Git for the checked-out branch with `symbolic-ref`, one extra read-only call
+made only when the copies differ. `worktree-inventory.mjs` is unchanged. Confirmed by the user.
+
+**Alternatives considered:** fix the shared inventory so it never reports `.invalid`; record
+reftable as a known gap.
+
+**Reason:** The placeholder made every differing plan `PLAN_AUTHORITY_UNCHECKED`. The inventory
+avoids subprocesses by design and serves other callers, so the fix stays where the branch is used.
+
+### 2026-10-12 — A worktree-only plan carries no authority object
+
+**Decision:** A plan with no primary copy has `authority: null`; its `checkout` label still names
+where it was read. `movePlanLifecycle` refuses only when `authority.source` is `worktree`, so a
+worktree-only plan keeps today's manual lifecycle override.
+
+**Alternatives considered:** `{ source: "worktree" }` for worktree-only plans too, which would make
+the portal refuse their lifecycle moves; a third `source` value.
+
+**Reason:** The refusal exists because the primary copy owns the lifecycle; a worktree-only plan has
+no primary lifecycle to protect. "Present only in a worktree … as today" keeps its moves working,
+and the two-value `source` contract stays as specified.
+
+### 2026-10-12 — `/plan-close`'s integration check also accepts the plan at the fork
+
+**Decision:** The worktree copy is integrated when it equals the primary copy, the plan at the
+branch's fork, or a plan blob the base branch produced since the fork.
+
+**Alternatives considered:** only the primary copy or blobs produced since the fork, as written.
+
+**Reason:** A worktree that never edited its plan holds the fork's version, which the base branch
+already had; without it, an outside edit on the base branch would make such a plan "not
+integrated" although the worktree holds nothing new.
+
+### 2026-10-12 — The archive handoff is staged, not committed, by `/plan-close`
+
+**Decision:** The skill describes the archive handoff as one archive change staged by path on the
+base branch, rather than "one archive commit".
+
+**Reason:** `/plan-close` commits only when the user asks; the handoff keeps that rule while still
+landing the worktree content, the reason, and the move together.
+
+### 2026-10-12 — This run did not mirror the plan into the primary checkout
+
+**Decision:** The installed `/plan-start` that ran this plan still says to copy plan updates to the
+primary checkout at the end of the run. This run did not.
+
+**Reason:** This plan removes that step with the user's confirmed reversal, the new scan reads the
+worktree copy directly, and a mirrored copy would be an uncommitted outside edit on `main` under
+the new model. Until this branch merges, a portal running `main`'s code shows the primary copy as
+`/plan-start` left it.
 
 ### Use the assigned worktree as the authoritative active copy
 
@@ -728,6 +897,11 @@ Recorded here rather than edited into the other plans.
   The plan is closed, so no lifecycle cleanup is needed; this note records the supersession.
 - [[wk7p4n2]] (plan-worktree Home association) and [[7m4q9dx]] (plan-first Home hierarchy) are
   landed and completed. Home's join on the `worktree` field is unchanged.
+- [[0jped168]] (live evals for skill routing and plan closing) carries the agent-side regression
+  coverage for this plan's `/plan-close` steps. On 2026-10-13 its scenario table gained
+  `worktree-not-integrated`, `refusal-notes-rerun`, `archive-carry`, and
+  `archive-conflicting-copies`, plus a successful-close effect that no edit targets the linked
+  worktree. That edit was made in the primary checkout, where the backlog plan is authoritative.
 - Two backlog plans also touch `movePlanLifecycle` without conflict: `p3vbk03v` (reference
   integrity surfacing) would add inbound-reference reporting to it, and
   `plans-portal-live-refresh-and-static-preflight` names it as a refresh trigger. Neither depends on

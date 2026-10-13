@@ -268,6 +268,7 @@ test.describe("repository-first portal Home", () => {
     await expect(page.getByRole("button", { name: "Delete Worktree" }).locator('portal-icon[name="trash"]')).toHaveCount(1);
     await page.getByRole("button", { name: "Delete Worktree" }).click();
     await expect(dialog).toContainText('The active plan "Idle Story" is still using this worktree.');
+    await expect(dialog).toContainText("The plan's progress recorded in this worktree will no longer be shown in Plans.");
     await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "danger");
     // Details start folded each time the dialog opens.
     await expect(dialog.locator("[data-slot=restore]")).toBeHidden();
@@ -990,6 +991,24 @@ test.describe("shared plan drawer", () => {
     await expect(drawer).toBeVisible();
     await expect(drawer.locator("#drawer-title")).toHaveText("Drawer fixture plan");
     await expect(drawer.locator("plan-status option-dropdown").first()).toBeVisible();
+    await expect(drawer.locator("#drawer-meta")).not.toContainText("From worktree");
+  });
+
+  test("the drawer says when an active plan is read from its worktree", async ({ page }) => {
+    await page.route("**/api/plans", async (route) => {
+      const data = await (await route.fetch()).json();
+      data.planWritePackage = { ...data.planWritePackage, available: true, enabled: true };
+      await route.fulfill({ json: data });
+    });
+    await page.route("**/api/plans/document?*", async (route) => {
+      const doc = await (await route.fetch()).json();
+      doc.plan.plan.authority = { source: "worktree", worktree: "feature-x" };
+      await route.fulfill({ json: doc });
+    });
+    await page.goto("/plans");
+    await page.getByText("Drawer fixture plan").first().click();
+    const drawer = page.locator("dialog#drawer");
+    await expect(drawer.locator("#drawer-meta")).toContainText("From worktree feature-x");
   });
 
   test("a Home plan title opens the same drawer, read-only, without leaving Home", async ({ page }) => {

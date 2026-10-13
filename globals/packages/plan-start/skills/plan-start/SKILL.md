@@ -98,12 +98,12 @@ done or blocked by an open question or external blocker.
     - base branch;
     - starting commit.
 14. Resolve the primary checkout with `git worktree list --porcelain`. The first `worktree` entry
-    is the main checkout for the shared `.git` directory. When implementation runs from a linked
-    worktree, keep plan-status updates synchronized in the matching plan document under the primary
-    checkout, not only in the linked worktree copy. Use the same repository-relative
-    `docs/plans/...` path. If the primary checkout path cannot be resolved or the matching document
-    is absent there, record that limitation in the plan and final report instead of inventing a
-    second source of truth.
+    is the main checkout for the shared `.git` directory. The start transition runs there, and from
+    `APPROVED` on, the worktree's copy is the plan: it is the authoritative copy, the one the portal
+    shows. Every plan update after that, including Decision Log, Open Questions, and `## Not tested`
+    entries, goes to the worktree's copy and nowhere else. Never copy plan updates to the primary
+    checkout; Git carries the worktree's plan to the base branch when the branch merges, and an edit
+    to the primary copy in the meantime is reported as an outside edit.
 
 When deterministic repository commands exist for an operation, use them instead of reconstructing the mutation manually.
 
@@ -123,9 +123,9 @@ implementation:
    and never a branch name or absolute path.
 3. Run the repository's canonical plan-start transition command for `<plan>` with worktree `<name>`.
    It writes `worktree: <name>` into the
-   canonical plan's frontmatter, moves a plan still in `backlog/` from `backlog/` to `active/` with
+   primary checkout's copy of the plan, moves a plan still in `backlog/` from `backlog/` to `active/` with
    `git mv` (keeping its filename and `id`; a plan already in `active/` is edited in place), stages
-   only the old and new canonical plan paths, and commits the plan-only start transition on the base
+   only the old and new plan paths, and commits the plan-only start transition on the base
    branch. Do not push.
 4. The same command then runs the start validator against fresh disk and Git state.
 5. Enter the implementation worktree only after the validator returns `APPROVED`. Apply each failed
@@ -165,36 +165,32 @@ then the run proceeds without questions.
    - blockers;
    - completed work;
    - verification results.
-8. When the implementation worktree is linked, mirror those plan-document updates to the primary
-   checkout's copy so `/plans` reflects the active status after linked worktrees are ignored by
-   discovery. The primary checkout is outside the worktree's write scope, so copy the plan there in
-   one write at the end of the run rather than after every slice.
-9. Do not silently omit objectives.
-10. Do not expand into unrelated cleanup.
-11. Perform a final comparison between:
+8. Do not silently omit objectives.
+9. Do not expand into unrelated cleanup.
+10. Perform a final comparison between:
     - the plan;
     - the implementation diff;
     - runtime behavior;
     - acceptance criteria.
-12. Set up and start the repository-appropriate test/development environment or build that
+11. Set up and start the repository-appropriate test/development environment or build that
     exercises the delivered behavior. Determine how to do this from the repository's own
     instructions, scripts, configuration, and conventions; do not assume a universal framework,
     command, or launch rule. Keep it available for manual verification and capture the resulting
     shareable URL or link when the environment exposes one. If the repository cannot expose a
     link, record what was started and why no link is available.
-13. Run completion-level verification, including manual verification against the started
+12. Run completion-level verification, including manual verification against the started
     environment when applicable.
-14. Re-read Git status and the implementation diff in the target worktree, then commit the
-    completed implementation changes there with a descriptive message. Include the relevant
-    plan-status updates that belong to the implementation worktree. Do not leave completed code
+13. Re-read Git status and the implementation diff in the target worktree, then commit the
+    completed implementation changes there with a descriptive message, including the run's plan
+    updates in the worktree's copy. Do not leave completed code
     uncommitted. If the run made no implementation changes because the work was already complete,
     report that no implementation commit was needed. Never create this commit on the primary
     checkout or base branch.
-15. Report the final state.
+14. Report the final state.
 
 ## Not Tested
 
-Built work that no test covers goes in the canonical plan's `## Not tested` section the moment the
+Built work that no test covers goes in the worktree copy's `## Not tested` section the moment the
 gap is known: a check that was skipped, an assumption never exercised, a claim resting on indirect
 evidence. Each entry is an unchecked checkbox stating what to check and why a test cannot:
 
@@ -253,8 +249,8 @@ trivial:
 
 ### Decision Log
 
-Log every non-trivial decision made autonomously in a `## Decision Log` section of the canonical
-plan, so the user can review it later. Each entry states:
+Log every non-trivial decision made autonomously in a `## Decision Log` section of the worktree's
+copy of the plan, so the user can review it later. Each entry states:
 
 - the decision;
 - the alternatives considered;
@@ -269,7 +265,7 @@ Policy refused to make or external obstacles such as a failing dependency or a m
 
 When blocked:
 
-1. Add an entry to the `## Open Questions` section of the canonical plan:
+1. Add an entry to the `## Open Questions` section of the worktree's copy of the plan:
    - the question or obstacle, with evidence;
    - for a decision: the options, their pros and cons, and a recommendation when there is one;
    - why it was blocked rather than decided;
@@ -365,7 +361,7 @@ Also include:
 - Open Questions, asked together as the run's only question batch: each with its options, pros and
   cons, recommendation, and the tasks it blocks;
 - deferred scope;
-- the plan validator's output for the canonical plan;
+- the plan validator's output for the worktree's copy of the plan;
 - current Git status;
 - whether anything was committed, pushed, merged, or published.
 

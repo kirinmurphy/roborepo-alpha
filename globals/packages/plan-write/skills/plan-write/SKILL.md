@@ -96,6 +96,12 @@ These conditions must hold before a new plan can be called created. The full rul
 ## Common Rules
 
 - Resolve the repository root and inspect `docs/plans` before changing plan files.
+- Before editing an existing plan, resolve its authoritative copy by the "Plan authority" rule in
+  `references/plan-schema.md`, and edit only that copy. An active plan assigned to a linked worktree
+  is edited in that worktree, even when the session started in the primary checkout; ask for write
+  access to the worktree rather than editing the primary copy. When the rule falls back to the
+  primary copy because the worktree's copy is unavailable, or the primary copy already holds an
+  outside edit, report it, and still edit only the authoritative copy.
 - Use repository files, tests, config, and Git state as evidence.
 - Keep Markdown files as source of truth; do not invent a task database.
 - Never move a plan between lifecycle folders; that belongs to `/plan-start` and `/plan-close`.

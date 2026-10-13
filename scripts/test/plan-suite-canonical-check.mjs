@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Plans scans the repositories RoboRepo knows about (pljvmyh §9): every checkout of a visible
-// repository, merged by plan id with the main checkout canonical, with explicit per-repository
+// repository, merged by plan id and returned from each plan's authoritative copy, with explicit per-repository
 // scan state. Plans settings and ROBOREPO_PLAN_ROOTS no longer affect anything.
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -86,19 +86,20 @@ try {
   assert.equal(snapshot.plans.length, 4);
 
   assert.equal(byId.same111.plan.checkout, null);
-  assert.deepEqual(byId.same111.plan.divergentCheckouts, []);
-  assert.equal(byId.same111.absolutePath, path.join(fs.realpathSync(main), "docs/plans/backlog/same.md"), "the main checkout's copy is canonical");
+  assert.deepEqual(byId.same111.plan.authority, { source: "primary" });
+  assert.equal(byId.same111.absolutePath, path.join(fs.realpathSync(main), "docs/plans/backlog/same.md"), "a backlog plan is read from the main checkout");
 
-  assert.equal(byId.diff222.plan.title, "Differs", "a differing worktree copy shows the main copy");
-  assert.deepEqual(byId.diff222.plan.divergentCheckouts, ["feature-x"], "only the plan's own worktree can mark it as differing");
-  assert.deepEqual(byId.main333.plan.divergentCheckouts, [], "a worktree that is only behind main marks nothing");
-  assert.ok(byId.diff222.plan.validation.findings.some((item) => item.code === "PLAN_DIFFERS_IN_WORKTREE" && item.meta.worktree === "feature-x"), "divergence is a finding on that plan");
-  assert.ok(!byId.same111.plan.validation.findings.some((item) => item.code === "PLAN_DIFFERS_IN_WORKTREE"), "only diverging plans are marked");
+  // Active-plan authority has its own fixture in plan-suite-authority-scan-check.mjs.
+  const copyFindings = (record) => record.plan.validation.findings.filter((item) => /WORKTREE|AUTHORITY/.test(item.code));
+  assert.equal(byId.diff222.plan.title, "Differs", "a backlog plan's worktree copy never wins, even in its named worktree");
+  assert.deepEqual(copyFindings(byId.diff222), [], "a backlog plan's differing worktree copy is not a finding");
+  assert.deepEqual(copyFindings(byId.main333), [], "a worktree that is only behind main marks nothing");
 
   assert.equal(byId.new444.plan.checkout, "feature-x", "a worktree-only plan is labeled with its worktree");
+  assert.equal(byId.new444.plan.authority, null, "a worktree-only plan has no primary copy to resolve against");
   assert.equal(byId.new444.repository.id, byId.same111.repository.id, "every checkout's plans belong to one repository");
 
-  // Edits: the differing plan is written in the main checkout; the worktree-only plan in its worktree.
+  // Edits: the backlog plan is written in the main checkout; the worktree-only plan in its worktree.
   updatePlanPriority(snapshot, { id: "diff222", key: byId.diff222.key, priority: "low", expectedPriority: "high", mtimeMs: byId.diff222.mtimeMs });
   assert.match(fs.readFileSync(path.join(main, "docs/plans/backlog/differs.md"), "utf8"), /priority: low/);
   assert.match(fs.readFileSync(path.join(worktree, "docs/plans/backlog/differs.md"), "utf8"), /priority: high/, "the worktree copy is untouched");

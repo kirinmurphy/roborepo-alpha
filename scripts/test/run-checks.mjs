@@ -7,6 +7,8 @@
 // running it required an entry, and adding a new check meant remembering to add a script. This
 // runner is the single entry point: it discovers `scripts/test/*-check.mjs` by convention, so a
 // new check file is picked up automatically, and package.json stays at one `test:unit` script.
+// The CI gate is narrower: ci.sh runs only the `ci` group, so a new suite runs in CI once it is
+// listed there. orphan-test-check.mjs fails until it is, rather than counting discovery as running.
 //
 //   node scripts/test/run-checks.mjs                  # run every *-check.mjs, aggregate
 //   node scripts/test/run-checks.mjs --list           # print discovered names, run nothing
