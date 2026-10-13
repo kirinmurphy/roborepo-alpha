@@ -1,7 +1,7 @@
 ---
 id: 6q16tocb
 priority: high
-next_action: Confirm the `## Not tested` entries by hand, then merge the branch and run /plan-close.
+next_action: Merge the branch, run `roborepo update` so the installed /plan-close has the integration check, then run /plan-close from the primary checkout and confirm the last `## Not tested` entry during that run.
 blocked_by: []
 depends_on:
   - a7bslb00
@@ -686,9 +686,17 @@ npm run check
       the sibling worktree `demo-wt`, the session resolved the three authority conditions, asked for
       and was granted write access to the worktree, and added the task to the worktree's copy. The
       primary copy stayed byte-identical (same hash before and after), and nothing was committed.
-- [ ] Two portals started from different checkouts show the same authoritative copy for every plan.
+- [x] Two portals started from different checkouts show the same authoritative copy for every plan.
       The scan is stateless and covered from one checkout; running two portals side by side needs a
       manual session.
+      Confirmed by the user on 2026-10-13. One portal ran `c972c4b`'s code started from the primary
+      checkout (port 4339), the other this branch's later head started from the worktree (port
+      4340). A field-by-field comparison of both `/api/plans` responses found all 126 plans identical
+      in authority, checkout label, lifecycle, title, `next_action`, task counts, open tasks, path,
+      excerpt, `worktree`, and warnings; the same comparison against a portal running `main`'s code
+      from before this plan differed, including this plan's `next_action`. The user saw identical
+      drawers for this plan in both portals, each with `read from: From worktree
+      plan-active-worktree-authority`.
 
 ## Open Questions
 
