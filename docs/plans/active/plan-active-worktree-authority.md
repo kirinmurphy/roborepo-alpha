@@ -883,6 +883,11 @@ Recorded here rather than edited into the other plans.
   The plan is closed, so no lifecycle cleanup is needed; this note records the supersession.
 - [[wk7p4n2]] (plan-worktree Home association) and [[7m4q9dx]] (plan-first Home hierarchy) are
   landed and completed. Home's join on the `worktree` field is unchanged.
+- [[0jped168]] (live evals for skill routing and plan closing) carries the agent-side regression
+  coverage for this plan's `/plan-close` steps. On 2026-10-13 its scenario table gained
+  `worktree-not-integrated`, `refusal-notes-rerun`, `archive-carry`, and
+  `archive-conflicting-copies`, plus a successful-close effect that no edit targets the linked
+  worktree. That edit was made in the primary checkout, where the backlog plan is authoritative.
 - Two backlog plans also touch `movePlanLifecycle` without conflict: `p3vbk03v` (reference
   integrity surfacing) would add inbound-reference reporting to it, and
   `plans-portal-live-refresh-and-static-preflight` names it as a refresh trigger. Neither depends on
