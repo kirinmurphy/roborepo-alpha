@@ -2,7 +2,7 @@
 //
 // The user-facing section model is computed ONCE, server-side, in buildBehaviorView() (config.mjs)
 // and shipped in the snapshot as snap.behaviorView. Items carry web fields (toggle, inspect, urls)
-// and terminal fields (hint). Telemetry can be toggled here or from Settings and Tokens.
+// and terminal fields (hint). Token telemetry is toggled from Settings and Tokens, not here.
 //
 // Wiring only: DOM refs, event listeners, and orchestration between api.js (server calls),
 // state.js (constants/pure lookups), and templates.js (markup). No markup construction should
@@ -17,6 +17,17 @@ import { snapshotChanged, inspectChipSpecs, setBulkInFlight, isBulkInFlight } fr
 const modal = createConfigModal();
 // Keep the warning renderer/template available while the Agents-page banner is temporarily hidden.
 const SHOW_CONTEXT_WARNINGS = false;
+// Packages whose on/off control lives on another page. Settings owns token telemetry, so a second
+// toggle here would only duplicate it; the terminal `roborepo config` view still lists it.
+const PACKAGES_CONTROLLED_ELSEWHERE = new Set(["telemetry"]);
+
+function withoutPackagesControlledElsewhere(view) {
+  return view
+    .map((section) => (section.categoryId
+      ? { ...section, items: section.items.filter((item) => !PACKAGES_CONTROLLED_ELSEWHERE.has(item.id)) }
+      : section))
+    .filter((section) => !section.categoryId || section.items.length > 0);
+}
 
 function openSourceModal(inspect, itemCost = null) {
   const rules = lastSnapshot?.globals?.rules || {};
@@ -97,7 +108,7 @@ function renderSection(section, contextCost) {
 
 function render(snap) {
   const main = document.getElementById("main");
-  const view = snap.behaviorView || [];
+  const view = withoutPackagesControlledElsewhere(snap.behaviorView || []);
   // Package-category sections (everything the packages intro describes) vs the non-package
   // sections that follow. The intro sits between the harness file grid and the first package
   // section; the harness-warning notice (no active harness) stays at the top of the page.

@@ -39,9 +39,13 @@ let memberListSequence = 0;
 const WORKTREE_BADGES = { stale: "stale", landed: "merged" };
 
 // A merged worktree adds a note only when there is something to act on: the guard that keeps it, or
-// that the installed cleanup hook removes it on the next pull.
+// that the installed cleanup hook removes it on the next pull. An open plan is not worth a note: a
+// closed plan's worktree is removed, so a merged row that is still listed already says its plan is open.
+const SILENT_WORKTREE_REASONS = new Set(["plan not closed"]);
+
 function worktreeStateNote(root) {
   if (root.worktreeState !== "landed") return null;
+  if (SILENT_WORKTREE_REASONS.has(root.worktreeReason)) return null;
   if (root.worktreeReason) return root.worktreeReason;
   return root.cleanupHookInstalled ? "removed on next pull" : null;
 }

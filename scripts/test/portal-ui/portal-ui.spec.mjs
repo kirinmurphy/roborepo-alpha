@@ -36,7 +36,9 @@ test.describe("Agents page", () => {
     await page.goto("/agents");
     await expect(page.getByRole("heading", { name: "Available Agent Tools" })).toBeVisible();
     await expect(page.locator(".packages-intro p")).toHaveText("Extend your harness config. Toggling a package below writes it into every active harness's configuration.");
-    await expect(page.getByText("Token Telemetry", { exact: true })).toBeVisible();
+    // Settings owns the token telemetry toggle; the Agents page does not repeat it.
+    await expect(page.getByText("Token Telemetry", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Monitoring", { exact: true })).toHaveCount(0);
     await expect(page.getByText("The following elements have a high token use:", { exact: true })).toHaveCount(0);
     await expect(page.locator("#main [data-slot=supported]")).toHaveText("Supported Harnesses: Claude Code, Codex");
     await expect(page.getByRole("button", { name: "Check for harnesses" })).toHaveAttribute("data-btn", "cta");
@@ -148,6 +150,7 @@ test.describe("repository-first portal Home", () => {
           worktree("stale-tree", "feature/stale", "stale", { git: { branch: "feature/stale", shortHead: "abc1234", ...drift, provider: { ok: true } } }),
           worktree("landed-tree", "feature/landed", "landed", { mergedInto: "main", git: { branch: "feature/landed", ...drift, provider: { ok: true } } }),
           worktree("blocked-tree", "feature/blocked", "landed", { worktreeReason: "plan not closed" }),
+          worktree("guarded-tree", "feature/guarded", "landed", { worktreeReason: "uncommitted or untracked changes" }),
           worktree("running-tree", "feature/running", "running", { worktreeRunning: true }),
           worktree("app-tree", null, "idle", { projectRoot: "/private/app/runtime-row", git: { detached: true, shortHead: "d19c7b1", provider: { ok: true } } }),
         ],
@@ -166,7 +169,10 @@ test.describe("repository-first portal Home", () => {
     await expect(merged).toBeVisible();
     await expect(merged).toHaveAttribute("title", "Merged into main");
     await expect(checkoutRow(card, "feature/landed").locator(".worktree-state-note")).toBeHidden();
-    await expect(checkoutRow(card, "feature/blocked").getByText("plan not closed")).toBeVisible();
+    // A listed merged worktree already implies its plan is open, so that guard adds no note.
+    await expect(checkoutRow(card, "feature/blocked").getByText("merged", { exact: true })).toBeVisible();
+    await expect(checkoutRow(card, "feature/blocked").locator(".worktree-state-note")).toBeHidden();
+    await expect(checkoutRow(card, "feature/guarded").getByText("uncommitted or untracked changes")).toBeVisible();
     await expect(checkoutRow(card, "runtime-row (detached)")).toHaveCount(1);
     await expect(card.getByRole("button", { name: /^(Delete|Stop)/ })).toHaveCount(0);
     // A merged row drops the Git warning a branch in progress shows.
