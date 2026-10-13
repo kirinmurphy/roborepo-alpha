@@ -678,8 +678,14 @@ npm run check
       path without committing; the worktree's branch and copy were unchanged. With an outside edit
       committed on `main` (`priority: low`), the run refused with `plan: conflicting copies`, and
       neither checkout changed.
-- [ ] `/plan-write` invoked from the primary checkout on an active, worktree-assigned plan asks for
+- [x] `/plan-write` invoked from the primary checkout on an active, worktree-assigned plan asks for
       worktree access and edits the worktree copy. Needs an agent run.
+      Confirmed by the user on 2026-10-13 with a fresh agent session started in a throwaway
+      repository's primary checkout, following this branch's `plan-write/SKILL.md`, since the
+      installed skill predated the rule. Asked to add a task to active plan `demo02`, assigned to
+      the sibling worktree `demo-wt`, the session resolved the three authority conditions, asked for
+      and was granted write access to the worktree, and added the task to the worktree's copy. The
+      primary copy stayed byte-identical (same hash before and after), and nothing was committed.
 - [ ] Two portals started from different checkouts show the same authoritative copy for every plan.
       The scan is stateless and covered from one checkout; running two portals side by side needs a
       manual session.
