@@ -2,7 +2,7 @@
 //
 // The user-facing section model is computed ONCE, server-side, in buildBehaviorView() (config.mjs)
 // and shipped in the snapshot as snap.behaviorView. Items carry web fields (toggle, inspect, urls)
-// and terminal fields (hint). Token telemetry is toggled from Settings and Tokens, not here.
+// and terminal fields (hint). Token telemetry and its Codex hook warning live on Settings, not here.
 //
 // Wiring only: DOM refs, event listeners, and orchestration between api.js (server calls),
 // state.js (constants/pure lookups), and templates.js (markup). No markup construction should
@@ -120,7 +120,6 @@ function render(snap) {
       ...(SHOW_CONTEXT_WARNINGS ? [tmpl.contextWarnings(snap)] : []),
       tmpl.configFiles(snap, { onInspectClick: openSourceModal }),
       tmpl.packagesIntro(),
-      ...(shouldCheckCodexHooks(snap) ? [tmpl.codexHookStatusNotice(lastCodexHookStatus)] : []),
     ].filter(Boolean),
     ...packageSections.map((section) => renderSection(section, snap.contextCost)).filter(Boolean),
     ...otherSections.map((section) => renderSection(section, snap.contextCost)).filter(Boolean),
@@ -137,38 +136,6 @@ function render(snap) {
 let last = null;
 let lastSnapshot = null;
 let lastSetup = null;
-let lastCodexHookStatus = null;
-let lastCodexHookCheckAt = 0;
-let codexHookCheckPending = false;
-
-function shouldCheckCodexHooks(snap) {
-  return snap?.telemetry?.enabled === true
-    && snap.machineHarnesses?.some((harness) => harness.id === "codex" && harness.enabled);
-}
-
-async function refreshCodexHookStatus() {
-  if (!shouldCheckCodexHooks(lastSnapshot)) {
-    lastCodexHookStatus = null;
-    lastCodexHookCheckAt = 0;
-    return;
-  }
-  if (codexHookCheckPending || Date.now() - lastCodexHookCheckAt < 30000) return;
-  codexHookCheckPending = true;
-  lastCodexHookCheckAt = Date.now();
-  try {
-    const status = await api.fetchCodexHookStatus();
-    if (!shouldCheckCodexHooks(lastSnapshot)) return;
-    if (JSON.stringify(status) !== JSON.stringify(lastCodexHookStatus)) {
-      lastCodexHookStatus = status;
-      render(lastSnapshot);
-    }
-  } catch (error) {
-    console.error(error);
-  } finally {
-    codexHookCheckPending = false;
-  }
-}
-
 function applySnapshot(snap) {
   lastSnapshot = snap;
   const changed = snapshotChanged(last, snap);
@@ -176,7 +143,6 @@ function applySnapshot(snap) {
     last = changed;
     render(snap);
   }
-  void refreshCodexHookStatus();
   portalSetUpdatedAt(new Date(), { cadenceMs: POLL_INTERVAL_MS });
 }
 function showError(err) {

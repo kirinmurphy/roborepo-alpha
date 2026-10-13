@@ -118,6 +118,62 @@ test.describe("Tokens without captures", () => {
   });
 });
 
+test.describe("Codex telemetry hook warning", () => {
+  const codex = { id: "codex", displayName: "Codex", confidence: "confirmed", enabled: true };
+  const setupWith = (telemetryEnabled) => ({
+    repositories: { knownCount: 1, visibleCount: 1, autoDiscoveryEnabled: false, hasConfiguredSources: false },
+    harnesses: { supported: [codex], detected: [codex], active: [codex], guidance: [] },
+    telemetry: { enabled: telemetryEnabled, captureAvailable: telemetryEnabled },
+  });
+  const routeHookStatus = async (page, state) => {
+    const reads = [];
+    await page.route("**/api/config/hooks/codex/status", (route) => {
+      reads.push(route.request().url());
+      return route.fulfill({ json: { state, installed: 5 } });
+    });
+    return reads;
+  };
+
+  test("Settings, Tokens, and Home warn when Codex will not run the capture hooks; Agents does not", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith(true) }));
+    await routeHookStatus(page, "review_required");
+
+    await page.goto("/settings");
+    const settingsNotice = page.locator("#codex-hook-status portal-notice");
+    await expect(settingsNotice).toHaveClass(/notice-warning/);
+    await expect(settingsNotice.locator("[data-slot=title]")).toHaveText("Codex telemetry needs review");
+
+    await page.goto("/");
+    await expect(page.locator("#home-codex-hook-status [data-slot=title]")).toHaveText("Codex telemetry needs review");
+
+    await page.goto("/tokens");
+    await expect(page.locator("#tokens-codex-hook-status [data-slot=title]")).toHaveText("Codex telemetry needs review");
+
+    await page.goto("/agents");
+    await expect(page.getByRole("heading", { name: "Available Agent Tools" })).toBeVisible();
+    await expect(page.getByText("Codex telemetry needs review")).toHaveCount(0);
+  });
+
+  test("stays hidden, without asking Codex, while token tracking is off", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith(false) }));
+    const reads = await routeHookStatus(page, "review_required");
+    await page.goto("/settings");
+    await expect(page.locator("#telemetry-toggle")).toHaveText("Enable");
+    await page.goto("/");
+    await expect(page.locator("#home-harness-banner")).toBeHidden();
+    await expect(page.locator("#codex-hook-status, #home-codex-hook-status")).toBeHidden();
+    expect(reads).toHaveLength(0);
+  });
+
+  test("stays hidden when Codex runs the capture hooks", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith(true) }));
+    const reads = await routeHookStatus(page, "active");
+    await page.goto("/settings");
+    await expect.poll(() => reads.length).toBeGreaterThan(0);
+    await expect(page.locator("#codex-hook-status")).toBeHidden();
+  });
+});
+
 test.describe("repository-first portal Home", () => {
   test("worktree rows show their state; Stop Server and Delete Worktree live in row menus", async ({ page }) => {
     // Short enough that the card scrolls, so the open dropdown has a page to follow.

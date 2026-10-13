@@ -1309,6 +1309,9 @@ portal-menu-button {
 .portal-banner-copy > :first-child { margin-top: 0; }
 .portal-banner-copy > :last-child { margin-bottom: 0; }
 .portal-banner-supporting { color: var(--dim); }
+/* Codex telemetry hook warning: title and message stacked tight, no paragraph margins. */
+.codex-hook-status-copy { display: grid; gap: 2px; }
+.codex-hook-status-copy p { margin: 0; }
 .portal-banner-action {
   grid-column: 2;
   grid-row: 1;

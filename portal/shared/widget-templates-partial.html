@@ -109,6 +109,16 @@
   </span>
 </template>
 
+<!-- Codex telemetry hook warning (codex-hook-status.js), shown on Settings, Tokens, and Home. -->
+<template id="tpl-codex-hook-status">
+  <portal-notice class="portal-notice" variant="warning" aria-live="polite">
+    <div class="codex-hook-status-copy">
+      <strong data-slot="title"></strong>
+      <p data-slot="message"></p>
+    </div>
+  </portal-notice>
+</template>
+
 <!-- Shared harness setup banner. Home, Agents, and Tokens use the same copy and action; only the
      portal-notice variant changes by page context. -->
 <template id="tpl-harness-notice">

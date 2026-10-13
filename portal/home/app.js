@@ -1,4 +1,5 @@
 import { portalHideLoading, portalSetUpdatedAt } from "/portal/shared/api.js";
+import { renderCodexHookStatus } from "/portal/shared/codex-hook-status.js";
 import { harnessSetupPromptElement } from "/portal/shared/harness-warning.js";
 import { createPlanDrawer } from "/portal/plans/plan-drawer.js";
 import { fetchSnapshot as fetchPlansSnapshot } from "/portal/plans/api.js";
@@ -14,6 +15,7 @@ const POLL_MS = 10_000;
 const content = document.getElementById("home-content");
 const warning = document.getElementById("home-warning");
 const harnessBanner = document.getElementById("home-harness-banner");
+const codexHookStatus = document.getElementById("home-codex-hook-status");
 const autoDiscoveryMount = document.getElementById("home-auto-discovery");
 const mockDisclaimer = document.getElementById("home-mock-disclaimer");
 const homeHeading = document.querySelector(".home-heading");
@@ -194,16 +196,19 @@ await Promise.all([refresh(), renderHarnessBanner()]);
 setInterval(refresh, POLL_MS);
 
 // The "install a supported harness" condition Agents and Tokens warn about, shown here as an info
-// prompt (Home does not need a harness to work). Harness installation is a rare, out-of-band
-// change, so it is not re-read on Home's poll; the banner itself watches setup state only while
-// it is waiting on the user.
+// prompt (Home does not need a harness to work), plus the Codex telemetry hook warning Settings
+// shows. Harness installation is a rare, out-of-band change, so it is not re-read on Home's poll;
+// the banner itself watches setup state only while it is waiting on the user.
 async function renderHarnessBanner() {
   try {
-    const banner = harnessSetupPromptElement(await fetchSetupState(), { onRefreshed: renderHarnessBanner });
+    const setup = await fetchSetupState();
+    const banner = harnessSetupPromptElement(setup, { onRefreshed: renderHarnessBanner });
     harnessBanner.replaceChildren(...(banner ? [banner] : []));
     harnessBanner.hidden = !banner;
+    void renderCodexHookStatus(codexHookStatus, setup);
   } catch {
     harnessBanner.hidden = true;
+    codexHookStatus.hidden = true;
   }
 }
 

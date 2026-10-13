@@ -13,16 +13,6 @@ import {
   isBulkInFlight,
 } from "./state.js";
 
-export function codexHookStatusNotice(status) {
-  const messages = {
-    review_required: ["Codex telemetry needs review", "Codex has the RoboRepo telemetry hooks, but will not run them until you review and trust them."],
-    inactive: ["Codex telemetry is inactive", "The RoboRepo telemetry hooks are installed but disabled in Codex."],
-    missing: ["Codex telemetry setup is incomplete", "Some RoboRepo telemetry hooks are missing from Codex. Reapply the Token Telemetry package before using Tokens."],
-  };
-  const message = messages[status?.state];
-  return message ? fill(tpl("tpl-codex-hook-status"), { title: message[0], message: message[1] }) : null;
-}
-
 // Applies a chip spec ({ tokens, level, detail, breakdown, legend }) to a <token-chip> element;
 // hides the element when there is no spec (e.g. old snapshot without contextCost).
 export function applyTokenChip(chipEl, spec) {

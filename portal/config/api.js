@@ -11,10 +11,6 @@ export function fetchConfig() {
   return portalGetJson("/api/config");
 }
 
-export function fetchCodexHookStatus() {
-  return portalGetJson("/api/config/hooks/codex/status");
-}
-
 export function fetchSource({ kind, id, harness }) {
   const qs = new URLSearchParams({ kind, id });
   if (harness) qs.set("harness", harness);

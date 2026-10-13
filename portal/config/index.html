@@ -76,14 +76,6 @@
         </div>
       </portal-notice>
     </template>
-    <template id="tpl-codex-hook-status">
-      <portal-notice class="portal-notice" variant="warning" aria-live="polite">
-        <div>
-          <strong data-slot="title"></strong>
-          <p data-slot="message"></p>
-        </div>
-      </portal-notice>
-    </template>
     <!-- Config grid shell: header + 4 row skeletons, one per config-type. The row-label cell
      (strong + description) doesn't vary per harness so it's authored here; each row's per-harness
      data cells start empty and are filled by cloning the matching tpl-config-*-cell template once
