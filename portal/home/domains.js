@@ -4,7 +4,7 @@ import { hrefWithRepositoryScope } from "/portal/shared/repository-scope.js";
 // Repository facts below the checkout and plan rows. Plans live in those rows now (plan-rows.js), so
 // only Token Warnings remains here. Its link opens Tokens scoped to this repository, since the
 // warnings it summarizes are this repository's.
-export function appendRepositoryDomains(host, repository, { name }) {
+export function appendRepositoryDomains(host, repository) {
   const tokens = repository.domains.tokens.data;
   if (tokens?.warningCount > 0) {
     const warnings = tokens.warnings || tokens.recent || [];

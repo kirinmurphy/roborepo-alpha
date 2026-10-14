@@ -7,7 +7,7 @@ import { repositoryIdForUrlKey } from "./registry.mjs";
 // (URL_KEY_PATTERN), so this value never collides with a repository.
 export const OUTSIDE_ACTIVITY_SCOPE = "_other";
 
-// Resolves a raw `repository` parameter to one of:
+// Resolves a raw `repo` parameter to one of:
 //   { kind: "all" }                          — no parameter (or an empty one)
 //   { kind: "repository", repositoryId }     — a visible repository's urlKey
 //   { kind: "outside" }                      — OUTSIDE_ACTIVITY_SCOPE, where the page allows it

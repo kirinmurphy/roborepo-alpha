@@ -128,9 +128,10 @@ function bindStaticControls() {
       refreshSpinnerEl.hidden = true;
     });
   });
-  // The popup drafts: controls change freely, but nothing filters until Update applies them.
+  // The popup drafts: the board waits for Update, but each control's option counts follow the
+  // draft as it changes, so the other filters show what is left to pick.
   for (const id of FILTER_IDS) {
-    document.getElementById(id).addEventListener(id === "search" ? "input" : "change", updateFiltersDirty);
+    document.getElementById(id).addEventListener(id === "search" ? "input" : "change", onFilterDraftChange);
   }
   document.getElementById("search").addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !filtersUpdateEl.disabled) filtersUpdateEl.click();
@@ -169,10 +170,20 @@ function updateFiltersDirty() {
   filtersUpdateEl.disabled = !FILTER_IDS.some((id) => filterControl(id).value !== state.filters[id]);
 }
 
+function draftFilters() {
+  return Object.fromEntries(FILTER_IDS.map((id) => [id, filterControl(id).value]));
+}
+
+function onFilterDraftChange() {
+  updateFiltersDirty();
+  if (state.snapshot) refreshFilterCounts(state.snapshot);
+}
+
 // Puts every control back to the applied filters.
 function discardFilterDraft() {
   for (const id of FILTER_IDS) filterControl(id).value = state.filters[id];
   updateFiltersDirty();
+  if (state.snapshot) refreshFilterCounts(state.snapshot);
 }
 
 function applyFilterDraft() {
@@ -297,14 +308,15 @@ function setOptions(id, options) {
   updateFiltersDirty();
 }
 
-// Refreshes each select's option labels with facet counts against the current snapshot + other
-// active filters, and disables options that match nothing. Never touches `.value`, so it's safe to
-// call on every render() without disturbing the user's current selection.
-function refreshFilterCounts(snapshot) {
+// Refreshes each select's option labels with facet counts against the current snapshot + the other
+// filters (the applied ones, or the popup's draft while it is being edited), and disables options
+// that match nothing. Never touches `.value`, so it's safe to call on every render() without
+// disturbing the user's current selection.
+function refreshFilterCounts(snapshot, filters = filtersDialogEl.open ? draftFilters() : state.filters) {
   for (const id of Object.keys(FILTER_OPTION_DEFS)) {
     const select = document.getElementById(id);
     const options = FILTER_OPTION_DEFS[id](snapshot);
-    const counts = optionCounts(id, options.map(([value]) => value), snapshot.plans, state.filters);
+    const counts = optionCounts(id, options.map(([value]) => value), snapshot.plans, filters);
     for (const option of select.options) {
       const def = options.find(([value]) => value === option.value);
       if (!def) continue;

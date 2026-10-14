@@ -27,7 +27,7 @@ export function currentRepositoryScope() {
   return repositoryScopeFromSearch(location.search);
 }
 
-// `href` with only the `repository` parameter set to `scope` (removed when scope is null); every
+// `href` with only the `repo` parameter set to `scope` (removed when scope is null); every
 // other parameter and the hash stay as they were. Returns a path, never an absolute URL.
 export function hrefWithRepositoryScope(href, scope) {
   const url = new URL(href, "http://portal.invalid");

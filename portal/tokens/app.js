@@ -14,6 +14,7 @@ import { createConditionsReport } from "./conditions-report.js";
 import { sessionConditionLine, capturedSessionFindings } from "./conditions-context.js";
 import { createDocGuideModal } from "/portal/shared/doc-guide-modal.js";
 import { createTokensRepositoryScope, isRepositoryScopeUnavailable } from "./repository-scope.js";
+import { preserveViewState } from "./view-state.js";
 
 // ── State ──
 let firstLoad = true;
@@ -245,14 +246,17 @@ async function load(force) {
   if (mockBanner) mockBanner.style.display = showMockDisclaimer ? "" : "none";
   repositoryScope.markMockScope(force);
 
-  renderVerdict(data);
-  renderMeta(data);
-  renderFindings(data.insights || []);
-  renderAgentPrompt(data);
-  renderInvestigationSections(data);
-  renderTimelineStrip(data);
-  conditionsView.render(data, setupReady);
-  renderFullData(data);
+  // New report content must not undo what the user opened: expanded sections stay expanded.
+  preserveViewState(document.getElementById("tokenscontent"), () => {
+    renderVerdict(data);
+    renderMeta(data);
+    renderFindings(data.insights || []);
+    renderAgentPrompt(data);
+    renderInvestigationSections(data);
+    renderTimelineStrip(data);
+    conditionsView.render(data, setupReady);
+    renderFullData(data);
+  });
 }
 
 // The splash says the setup-level thing (the markup's own copy) until a scope is empty, then names

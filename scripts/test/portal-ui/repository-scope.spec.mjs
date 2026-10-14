@@ -323,6 +323,23 @@ test("moving between scoped pages never flashes an unavailable repo in the selec
   expect(labels.filter((label) => /unavailable/i.test(label))).toEqual([]);
 });
 
+test("Plans filter option counts follow the unapplied draft while the board waits for Update", async ({ page }) => {
+  await page.goto("/plans");
+  await expect(page.getByText("Alpha high plan")).toBeVisible();
+  const dialog = page.locator("#filters-dialog");
+  await page.getByRole("button", { name: "Filters" }).click();
+  const allPriority = dialog.locator("#priority option[value=all]");
+  await expect(allPriority).toHaveText("all priority (4)");
+  // Searching narrows the other filters' counts at once; the board itself is untouched.
+  await dialog.locator("#search").fill("Alpha");
+  await expect(allPriority).toHaveText("all priority (2)");
+  await expect(page.getByText("Beta high plan")).toBeVisible();
+  // Cancel returns the counts to the applied filters.
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("button", { name: "Filters" }).click();
+  await expect(allPriority).toHaveText("all priority (4)");
+});
+
 test("Plans filter options that match nothing are disabled, except the current choice", async ({ page }) => {
   await page.goto("/plans");
   await expect(page.getByText("Alpha high plan")).toBeVisible();

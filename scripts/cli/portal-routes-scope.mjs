@@ -12,7 +12,7 @@ export function readRepositoryScope(params, res, handlers, { allowOutside = fals
   const scope = handlers.resolveRepositoryScope(params.get("repo"), { allowOutside });
   if (scope.kind !== "unavailable") return scope;
   send(res, 404, "application/json", JSON.stringify({
-    error: { code: REPOSITORY_SCOPE_UNAVAILABLE, message: "This repository is not available." },
+    error: { code: REPOSITORY_SCOPE_UNAVAILABLE, message: "This repo is not available." },
   }));
   return null;
 }

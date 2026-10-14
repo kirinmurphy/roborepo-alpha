@@ -80,6 +80,9 @@
   --surface-band: #242b35;
   --surface-sunken: #1a212b;
   --surface-inset: #0b0f14;
+  /* The <select> up/down caret (see the select rule): an SVG can't read a CSS variable, so each
+   * theme carries its own, stroked in that theme's --dim. */
+  --select-caret: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='12' viewBox='0 0 8 12'%3E%3Cpath d='M1 4.5 4 1.5 7 4.5M1 7.5 4 10.5 7 7.5' fill='none' stroke='%23a3adb8' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   /* Soft fills: a control that opens something, and a heading band inside a tooltip. The control
    * wash is translucent so it reads the same on any of the surfaces above. */
   --wash-control: rgba(230, 237, 243, 0.1);
@@ -186,6 +189,9 @@
   --surface-band: #f3f5f7;
   --surface-sunken: #e9ecef;
   --surface-inset: #ffffff;
+  /* The <select> up/down caret (see the select rule): an SVG can't read a CSS variable, so each
+   * theme carries its own, stroked in that theme's --dim. */
+  --select-caret: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='12' viewBox='0 0 8 12'%3E%3Cpath d='M1 4.5 4 1.5 7 4.5M1 7.5 4 10.5 7 7.5' fill='none' stroke='%23656d76' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --wash-control: rgba(31, 35, 40, 0.1);
   --wash-control-strong: rgba(31, 35, 40, 0.16);
   --wash-heading: #d0d7de;
@@ -232,6 +238,15 @@ select {
   border: 1px solid var(--line);
   border-radius: 5px;
   padding: var(--space-xs) var(--space-sm);
+}
+/* The native caret sits flush against the border and ignores padding, so selects draw their own,
+ * inset .5rem from the right edge, with room reserved for it beside the text. */
+select:not([multiple]) {
+  appearance: none;
+  padding-right: calc(0.5rem + 8px + var(--space-sm));
+  background-image: var(--select-caret);
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
 }
 /* Global button system — four variants selected via data-btn (not a class) so the intent is
  * legible at the call site: data-btn="cta" | "danger" | "secondary" | "text". A bare <button> with no
@@ -340,8 +355,8 @@ samp {
 /* Shared centering wrapper — keeps content readable-width on very wide screens while the parent
  * (header/footer background, page body) stays full-bleed. Owns side padding too, so every page's
  * content column lines up at the same 1200px+20px box instead of each page inventing its own
- * max-width/padding pair. Elements that already sit inside a padded parent (e.g. .control-panel)
- * should not add another .inner layer — use .inner directly on the padded parent instead. */
+ * max-width/padding pair. Elements that already sit inside a padded parent should not add another
+ * .inner layer — use .inner directly on the padded parent instead. */
 .inner {
   width: 100%;
   max-width: 1024px;
@@ -1283,35 +1298,6 @@ portal-menu-button {
 }
 .modal-body > .markdown {
   padding: 14px 16px;
-}
-/* Control panel: a full-bleed strip that visibly reads as an active control surface (filters,
- * monitoring status, live toggles) rather than another content panel. Deliberately a neutral gray
- * tint, off the --accent/--panel blue used throughout the rest of a page, so pages with an
- * accent-tinted "editable" surface elsewhere (e.g. .settings) don't collide with this one visually.
- * Sits flush against whatever it's placed under (portal header, package banner) — no side
- * borders/radius, no outer margin — so it reads as part of the page chrome, not a floating card.
- * Originated on the Plans page's Plans/Repos/Filters row; pulled here so any page needing the same
- * "this strip is a control surface" treatment (Telemetry's filter bar, etc.) uses one definition.
- * A page's own stylesheet still owns everything INSIDE a .control-panel-row — this only owns the
- * strip's background/border/outer spacing. */
-.control-panel {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  border: none;
-  border-bottom: 1px solid var(--line);
-  background: color-mix(in srgb, var(--neutral-tint) 16%, var(--panel));
-  border-radius: 0;
-  width: 100%;
-  display: grid;
-  gap: 10px;
-  padding: 12px 0;
-}
-.control-panel-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
 }
 @media (max-width: 760px) {
   /* .portal-header {

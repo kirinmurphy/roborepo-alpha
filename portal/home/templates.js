@@ -60,7 +60,7 @@ function repositoryCard(repository, actions) {
     if (repository.lifecycle?.reason) badge.title = repository.lifecycle.reason;
   }
   node.querySelector("[data-slot=checkouts]").append(...cardRows(repository.domains, { ...actions, repositoryId: repository.repositoryId }));
-  appendRepositoryDomains(node.querySelector("[data-slot=domains]"), repository, { name: homeRepositoryName(repository) });
+  appendRepositoryDomains(node.querySelector("[data-slot=domains]"), repository);
   const notice = worktreeCleanupNotice(repository, { onEnable: actions.onEnableCleanup, onDismiss: actions.onDismissCleanup });
   if (notice) node.querySelector("[data-slot=cleanup-notice]").append(notice);
   return node;
