@@ -116,7 +116,7 @@ function render(snap) {
   if (scope) {
     const resolution = scopeResolution?.scope === scope ? scopeResolution : null;
     if (resolution?.status === "repository") {
-      main.replaceChildren(tmpl.repositorySplash(resolution.repository.displayName, clearRepositoryScope));
+      main.replaceChildren(tmpl.repositorySplash(clearRepositoryScope));
     } else if (resolution?.status === "unavailable") {
       main.replaceChildren(repositoryScopeUnavailableNotice());
     }

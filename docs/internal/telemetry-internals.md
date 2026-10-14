@@ -82,7 +82,7 @@ every 5 seconds. See `docs/internal/portal-architecture.md` for the shared porta
 
 ## API
 
-- `GET /api/data?range=&end=&harness=&model=&repository=&marker_id=` — the full analysis report,
+- `GET /api/data?range=&end=&harness=&model=&repo=&marker_id=` — the full analysis report,
   cohort-scoped. `repository` is the shared Portal scope: a `urlKey`, or `_other` for activity no
   listed repository claims; an unresolvable value answers `404 REPOSITORY_SCOPE_UNAVAILABLE`.
   Response includes `available_harnesses`/`available_models`/`available_metrics`, window-scoped

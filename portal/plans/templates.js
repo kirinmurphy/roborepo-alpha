@@ -68,25 +68,29 @@ export function plansNoRepositories(onManage) {
   return node;
 }
 
-export function plansOnboardingState(snapshot, step, onManage) {
+// `scope` is { name, onViewAll } while a repository filter is selected: the copy names that
+// repository, and the action drops the filter instead of opening Manage Repos.
+export function plansOnboardingState(snapshot, step, onManage, scope = null) {
   const scans = snapshot.repositoryScans || [];
   const scanned = scans.filter((scan) => scan.state === "scanned").length;
+  const subject = scope ? scope.name : repositoryCount(step === "not-scanned" ? scans.length : scanned);
   const fills = step === "not-scanned"
     ? {
-      title: `Not scanned yet: ${repositoryCount(scans.length)}`,
-      body: "Plans reads each known repository's checkouts. None of them has a checkout Plans can read right now.",
+      title: `Not scanned yet: ${subject}`,
+      body: "Plans reads each known repo's checkouts. None of them has a checkout Plans can read right now.",
     }
     : {
-      title: `No plans found in ${repositoryCount(scanned)}`,
-      body: "Plans looks for Markdown files under docs/plans in every checkout of each known repository.",
+      title: scope ? `No plans yet found in ${subject}` : `No plans found in ${subject}`,
+      body: "Plans looks for Markdown files under docs/plans in every checkout of each known repo.",
     };
-  const node = fill(tpl("tpl-empty-state"), { ...fills, action: "Manage Repos" });
+  const node = fill(tpl("tpl-empty-state"), { ...fills, action: scope ? "View All Repos" : "Manage Repos" });
   node.classList.add("empty-state--with-action");
+  if (scope) node.classList.add("empty-state--plain");
   const action = node.querySelector("[data-slot=action]");
   action.hidden = false;
   action.addEventListener("click", (event) => {
     event.preventDefault();
-    onManage();
+    (scope ? scope.onViewAll : onManage)();
   });
   return node;
 }
@@ -172,7 +176,7 @@ const PLAN_ACTIONS = [
   ["plan-promote", "Promote", "Review and prepare this plan for development.", "backlog"],
   ["plan-start", "Start", "Implement this plan in an isolated worktree.", "backlog"],
   ["plan-start", "Continue", "Resume implementation in this plan's worktree.", "active"],
-  ["plan-write", "Update", "Revise this plan or sync it with the repository.", "active"],
+  ["plan-write", "Update", "Revise this plan or sync it with the repo.", "active"],
   ["plan-close", "Close", "Verify the work and move the plan to completed or archived.", "active"],
 ];
 

@@ -75,7 +75,7 @@ assert.deepEqual(
   "only Runtime and Settings are secondary (menu-only) pages",
 );
 
-// The shared repository scope: exactly Plans, Tokens, and Agents read and keep ?repository=, and
+// The shared repository scope: exactly Plans, Tokens, and Agents read and keep ?repo=, and
 // only Tokens offers Activity outside listed repos. Nav composition reads these flags from the
 // browser manifest, so they must cross into it unchanged.
 assert.deepEqual(

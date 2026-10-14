@@ -1888,6 +1888,10 @@ assert "repositories: discovery recording + Plans enrollment" \
 assert "repositories: browser-safe API contracts" \
   node "${repo_root}/scripts/test/repositories-api-check.mjs"
 
+# Development fixtures stay out of every registry reader unless dev mode is on, and writers keep them.
+assert "repositories: dev fixtures hidden unless dev mode is on" \
+  node "${repo_root}/scripts/test/repositories-dev-fixtures-check.mjs"
+
 # Repository lifecycle: active/idle/stale derivation, the unreadable-vs-absent distinction (an
 # unplugged drive must never read as a deleted checkout), 30-day ageing measured from lastSeenAt,
 # and a reused directory repointing without silently merging two repositories.

@@ -59,7 +59,7 @@ const STATIC_TYPES = {
 // `icon` labels the page in the header's ⋮ menu. `secondary` pages are lower-priority destinations
 // that live only in that menu; the rest sit in the header bar until the viewport gets narrow, when
 // every page moves into the menu.
-// `repositoryScope` pages show the shared repository selector and read and keep `?repository=`;
+// `repositoryScope` pages show the shared repository selector and read and keep `?repo=`;
 // `outsideActivityScope` adds its Activity outside listed repos choice. Nav links carry the scope
 // only between repositoryScope pages (portal/shared/repository-scope.js).
 export const PAGES = [

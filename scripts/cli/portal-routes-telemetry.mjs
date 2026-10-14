@@ -41,7 +41,7 @@ export const telemetryRoutes = defineRoutes([
     // window, and an optional &end=<ms epoch> when panning to a fixed window rather than "latest".
     // ?harness=claude (or codex) scopes all panels to a single harness; omit for all harnesses.
     // ?model= and ?marker_id= (marker-relative comparison) layer on top of the existing
-    // time/harness window without changing their meaning. ?repository= is the shared Portal scope:
+    // time/harness window without changing their meaning. ?repo= is the shared Portal scope:
     // a urlKey, or _other for Activity outside listed repos, resolved here to a canonical id.
     path: "/api/data",
     handler: (req, res, { qs, handlers }) => {

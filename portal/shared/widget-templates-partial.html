@@ -24,7 +24,18 @@
   <div class="dropdown-actions" role="group"></div>
 </template>
 <template id="tpl-dropdown-action">
-  <button type="button" class="dropdown-action" data-slot="label"></button>
+  <button type="button" class="dropdown-action"><portal-icon class="dropdown-action-icon" data-slot="icon" size="sm" aria-hidden="true"></portal-icon><span data-slot="label"></span></button>
+</template>
+
+<!-- page-splash.js: the shared empty-state splash (.page-splash in base.css) -->
+<template id="tpl-page-splash">
+  <section class="page-splash" role="status">
+    <div class="page-splash-copy">
+      <h1 class="page-splash-title" data-slot="title"></h1>
+      <p class="page-splash-body" data-slot="body"></p>
+      <div class="page-splash-actions" data-slot="actions"></div>
+    </div>
+  </section>
 </template>
 
 <!-- token-chip.js -->

@@ -1,5 +1,6 @@
 import { portalFillSlots as fill, portalTpl as tpl } from "/portal/shared/api.js";
 import { mountActionMenu, mountRepositoryRow, repositoryPageUrl } from "/portal/shared/repository-components.js";
+import { hrefWithRepositoryScope } from "/portal/shared/repository-scope.js";
 import { appendRepositoryDomains } from "./domains.js";
 import { matchedPlanIdentity, unmatchedPlanRow } from "./plan-rows.js";
 import { worktreeCleanupNotice } from "./worktree-dialogs.js";
@@ -29,7 +30,7 @@ export function repositoryDirectory(repositories, actions) {
 
 export function unresolvedActivity(items) {
   const node = tpl("tpl-unresolved-activity");
-  return fill(node, { summary: `${items.length} running ${items.length === 1 ? "workspace needs" : "workspaces need"} a repository association.` });
+  return fill(node, { summary: `${items.length} running ${items.length === 1 ? "workspace needs" : "workspaces need"} a repo association.` });
 }
 
 function repositoryCard(repository, actions) {
@@ -47,7 +48,7 @@ function repositoryCard(repository, actions) {
     const badge = node.querySelector("[data-slot=mock-badge]");
     badge.hidden = false;
     badge.classList.add("repository-state-badge", "is-mock");
-    badge.title = "Mock repository used to demonstrate the Home view";
+    badge.title = "Mock repo used to demonstrate the Home view";
   }
   const lifecycleState = repository.lifecycle?.state || "active";
   if (lifecycleState !== "active") {
@@ -123,7 +124,7 @@ function checkoutRow(checkout, actions, { identity = null, hookInstalled = false
       members: [],
       composeGroups: [],
     },
-    repository: { name: "Repository" },
+    repository: { name: "Repo" },
     mode: "home",
     onMountLinks: actions.onMountLinks,
     onMountWorktreeMenu: (slot) => mountWorktreeMenu(slot, checkout, actions),
@@ -156,10 +157,16 @@ function noCheckoutRow() {
 function homeMenuItems(repository) {
   const checkouts = repository.domains.runtime.data?.checkouts || [];
   const knownCheckout = checkouts.length > 0;
+  // The page links open each page already filtered to this repo. A repo with no urlKey (a demo
+  // card) has nothing to filter by, so they are left out rather than opening an unfiltered page.
+  const filtered = (path) => hrefWithRepositoryScope(path, repository.urlKey);
   return [
-    { key: knownCheckout ? "hide" : "forget", label: knownCheckout ? "Ignore repository" : "Forget This Repo" },
-    { key: "pin", label: repository.pinned ? "Unpin" : "Pin" },
-    // Placeholder until repository-scoped agent config exists: shown, but not navigable.
-    { key: "agents", label: "Repo Agent Config", hint: "coming soon", disabled: true },
+    { key: "plans", label: "All Plans", icon: "plans", href: filtered("/plans"), hidden: !repository.urlKey },
+    { key: "agents", label: "Agent Config", icon: "agents", href: filtered("/agents"), hidden: !repository.urlKey },
+    { key: "tokens", label: "Token Activity", icon: "tokens", href: filtered("/tokens"), hidden: !repository.urlKey },
+    { key: "pin", label: repository.pinned ? "Unpin" : "Pin", icon: "pin" },
+    knownCheckout
+      ? { key: "hide", label: "Ignore Repo", icon: "eye-off" }
+      : { key: "forget", label: "Forget This Repo", icon: "trash" },
   ];
 }

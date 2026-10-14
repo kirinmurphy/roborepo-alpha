@@ -6,7 +6,7 @@ import { OUTSIDE_ACTIVITY_SCOPE } from "./repository-scope.js";
 // The selector's value for All repositories: <option-dropdown> compares values with ===, and the
 // URL has no parameter at all in that state.
 export const ALL_REPOSITORIES = "";
-export const ALL_REPOSITORIES_LABEL = "All repositories";
+export const ALL_REPOSITORIES_LABEL = "All repos";
 export const OUTSIDE_ACTIVITY_LABEL = "Activity outside listed repos";
 
 // [[value, label]] for <option-dropdown>: All, each visible repository by display name, then

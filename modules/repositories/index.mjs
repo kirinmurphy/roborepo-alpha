@@ -71,6 +71,12 @@ export {
 } from "./scope.mjs";
 
 export {
+  isFixtureRepository,
+  devFixturesEnabled,
+  setDevFixturesEnabled,
+} from "./dev-fixtures.mjs";
+
+export {
   registryPathFor,
   loadRegistry,
   writeRegistry,

@@ -77,7 +77,7 @@ try {
     return { status: response.status, json: await response.json() };
   };
   const report = async (scope) => {
-    const response = await get(`/api/data${scope ? `?repository=${scope}` : ""}`);
+    const response = await get(`/api/data${scope ? `?repo=${scope}` : ""}`);
     assert.equal(response.status, 200, `report for ${scope || "all"}`);
     return response.json;
   };
@@ -101,7 +101,7 @@ try {
   assert.notEqual(idle.event_count, sharedFirst.event_count);
 
   // Activity outside listed repos: unknown, ignored, and repository-less sessions, nothing listed,
-  // and together with every listed repository it is exactly All repositories.
+  // and together with every listed repository it is exactly All repos.
   const all = await report(null);
   const outside = await report("_other");
   assert.equal(outside.event_count, countFor((id) => id !== SHARED && id !== IDLE));
@@ -116,13 +116,13 @@ try {
   // Unavailable keys answer with the explicit status, never all activity and never a server error.
   const multiKey = registry.repositories[MULTI].urlKey;
   for (const value of [multiKey, "nope", "Bad%20Key", encodeURIComponent(SHARED)]) {
-    const response = await get(`/api/data?repository=${value}`);
-    assert.equal(response.status, 404, `/api/data?repository=${value}`);
+    const response = await get(`/api/data?repo=${value}`);
+    assert.equal(response.status, 404, `/api/data?repo=${value}`);
     assert.equal(response.json.error.code, "REPOSITORY_SCOPE_UNAVAILABLE");
-    const plans = await get(`/api/plans?repository=${value}`);
-    assert.equal(plans.status, 404, `/api/plans?repository=${value}`);
+    const plans = await get(`/api/plans?repo=${value}`);
+    assert.equal(plans.status, 404, `/api/plans?repo=${value}`);
   }
-  assert.equal((await get("/api/plans?repository=_other")).status, 404, "outside activity is Tokens-only");
+  assert.equal((await get("/api/plans?repo=_other")).status, 404, "outside activity is Tokens-only");
 
   // Once RoboRepo finds the unknown repository, its sessions leave _other with no spool change.
   const spoolBefore = fs.readdirSync(spoolDir).map((name) => fs.statSync(path.join(spoolDir, name)).mtimeMs);

@@ -13,16 +13,22 @@ export { isRepositoryScopeUnavailable };
 
 // `onChange` runs after the scope changes (selector, Clear, back/forward), so the page can drop its
 // remembered report version — two empty scopes can share a version — and refetch.
-export function createTokensRepositoryScope({ onChange }) {
+// `onResolved` runs when the selector learns what the scope names, so copy that depends on it
+// (the empty-repository splash) can follow.
+export function createTokensRepositoryScope({ onChange, onResolved }) {
   const unavailableHost = document.getElementById("tokens-scope-unavailable");
   const mockScopeNote = document.getElementById("mock-scope-note");
   onRepositoryScopeChange(onChange);
   // The demo report has no route to refuse a key, so for it the selector's own resolution decides.
   let selectorStatus = null;
-  onRepositoryScopeResolved(({ scope, status }) => {
+  let selectedRepository = null;
+  onRepositoryScopeResolved(({ scope, status, repository }) => {
     const previous = selectorStatus;
-    selectorStatus = scope === currentRepositoryScope() ? status : null;
+    const current = scope === currentRepositoryScope();
+    selectorStatus = current ? status : null;
+    selectedRepository = current ? repository ?? null : null;
     if ((previous === "unavailable") !== (selectorStatus === "unavailable")) onChange();
+    onResolved?.();
   });
 
   return {
@@ -45,6 +51,21 @@ export function createTokensRepositoryScope({ onChange }) {
       unavailableHost.hidden = true;
       unavailableHost.replaceChildren();
       return wasShowing;
+    },
+    // What the splash says when the scope has no captures: tracking is on, so the gap is about this
+    // repository (or the outside activity), not about setup.
+    emptyScopeCopy() {
+      if (selectorStatus === "outside") {
+        return {
+          title: "No activity outside listed repos yet",
+          body: "Every session captured so far belongs to a listed repo.",
+        };
+      }
+      const name = selectedRepository?.displayName;
+      return {
+        title: name ? `No token data yet for ${name}` : "No token data yet for this repo",
+        body: "Nothing has been captured in this repo so far. Start a new session there and its report will appear here.",
+      };
     },
     // Says so when the demo report is on screen while a repository is selected.
     markMockScope(showingMock) {

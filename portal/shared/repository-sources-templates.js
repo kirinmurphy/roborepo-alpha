@@ -7,7 +7,7 @@ const SOURCE_STATE_LABELS = {
   healthy: "Healthy",
   partial: "Partial",
   unavailable: "Unavailable",
-  stale: "No repository here",
+  stale: "No repo here",
   error: "Error",
 };
 
@@ -15,10 +15,10 @@ const SOURCE_STATE_LABELS = {
 // Enable is primary whenever auto-discovery is off; Add a folder is always secondary.
 export function repositoryEmptyState({ autoDiscoveryEnabled, onEnable, onAddFolder }) {
   const node = fill(tpl("tpl-repository-empty-state"), {
-    title: "No repositories yet",
+    title: "No repos yet",
     body: autoDiscoveryEnabled
-      ? "Start a dev server in any repository and it appears here."
-      : "Turn on auto-discovery and RoboRepo remembers each repository you run a dev server in. Nothing is observed until you do.",
+      ? "Start a dev server in any repo and it appears here."
+      : "Turn on auto-discovery and RoboRepo remembers each repo you run a dev server in. Nothing is observed until you do.",
   });
   const enable = node.querySelector("[data-slot=enable]");
   if (autoDiscoveryEnabled) enable.remove();
@@ -86,7 +86,7 @@ export function folderRow(source, { onRefresh, onToggle, onRemove }) {
   const counted = `${repositoryCount} ${repositoryCount === 1 ? "repo" : "repos"}`;
   const node = fill(tpl("tpl-sources-folder"), {
     state: source.enabled ? SOURCE_STATE_LABELS[state] || state : "Disabled",
-    summary: [source.kind === "repository" ? "Repository" : "Folder", counted, message].filter(Boolean).join(" · "),
+    summary: [source.kind === "repository" ? "Repo" : "Folder", counted, message].filter(Boolean).join(" · "),
     toggle: source.enabled ? "Disable" : "Enable",
   });
   fillPath(node.querySelector("[data-slot=path]"), source.displayPath);

@@ -159,7 +159,7 @@ async function refresh({ force = false } = {}) {
   } catch (error) {
     clearSyncRefresh();
     setHomeSyncStatus("failed");
-    warning.textContent = `Repository overview unavailable: ${error.message}`;
+    warning.textContent = `Repo overview unavailable: ${error.message}`;
     warning.hidden = false;
     mockDisclaimer.hidden = true;
     if (!content.hasChildNodes()) content.replaceChildren(repositoryEmptyState({ autoDiscoveryEnabled: false, ...onboarding }));
@@ -251,7 +251,7 @@ async function selectRepositoryAction(key, repository, item, event) {
     renderedVersion = null;
     await refresh({ force: true });
   } catch (error) {
-    warning.textContent = `Repository action unavailable: ${error.message}`;
+    warning.textContent = `Repo action unavailable: ${error.message}`;
     warning.hidden = false;
   }
 }

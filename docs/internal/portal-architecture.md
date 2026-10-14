@@ -86,14 +86,14 @@ compatibility routes (`/config`, the old Agents URL, is a 404). Repository detai
 ## Shared Repository Scope
 
 Plans, Tokens, and Agents share one repository scope, carried in the URL as
-`?repository=<urlKey>`. A page opts in with `repositoryScope: true` on its `PAGES` entry; Tokens
-also sets `outsideActivityScope: true` for **Activity outside listed repos** (`?repository=_other`,
+`?repo=<urlKey>`. A page opts in with `repositoryScope: true` on its `PAGES` entry; Tokens
+also sets `outsideActivityScope: true` for **Activity outside listed repos** (`?repo=_other`,
 telemetry attributed to no listed repository). Runtime, Settings, and Home stay unscoped.
 
 | Piece | Where | Owns |
 | --- | --- | --- |
-| URL state | `portal/shared/repository-scope.js` | Parsing, composing, and clearing only the `repository` parameter; `history.pushState` on change and a change event (also fired on back/forward); nav hrefs via `scopedPagePath` |
-| Selector | `portal/shared/repository-scope-selector.js`, `repository-scope-choices.js` | An `<option-dropdown>` in its own full-width sub-header row below the site header (`tpl-repository-scope-bar`, added by `theme.js` on scope-aware pages only): All repositories, each visible repository from `GET /api/repositories` (same display name told apart by provider owner, then `urlKey`), Activity outside listed repos where offered, and a **Manage repositories…** action row; resolves the current key for pages without a data route (Agents) |
+| URL state | `portal/shared/repository-scope.js` | Parsing, composing, and clearing only the `repo` parameter; `history.pushState` on change and a change event (also fired on back/forward); nav hrefs via `scopedPagePath` |
+| Selector | `portal/shared/repository-scope-selector.js`, `repository-scope-choices.js` | An `<option-dropdown>` in its own full-width sub-header row at the bottom of the sticky `.portal-header` (`tpl-repository-scope-bar`, appended by `theme.js` on scope-aware pages only, so the two pin together), labeled **Viewing** and right-aligned: All repos, each visible repo from `GET /api/repositories` (same display name told apart by provider owner, then `urlKey`), Activity outside listed repos where offered, and a **Manage Repos** action row; resolves the current key for pages without a data route (Agents). The last repo list is cached in `sessionStorage` so a page load names the current repo on first paint; only a list fetched by the page itself may call a key unavailable |
 | Route resolution | `scripts/cli/portal-routes-scope.mjs`, `modules/repositories/scope.mjs` | Each scoped data route (`/api/plans`, `/api/plans/refresh`, `/api/data`) resolves the key once and hands domain code the canonical `repositoryId` |
 
 Rules:
@@ -101,7 +101,7 @@ Rules:
 - A malformed, unknown, or hidden key is **unavailable**: the route answers `404` with
   `{ error: { code: "REPOSITORY_SCOPE_UNAVAILABLE" } }`, never unscoped data and never a 500. The
   page shows the shared unavailable notice, whose action clears only the scope.
-- Only a `urlKey` names a repository; a canonical ID in `?repository=` is unavailable.
+- Only a `urlKey` names a repository; a canonical ID in `?repo=` is unavailable; the former `?repository=` spelling is not read.
 - Changing the scope pushes the URL and refetches without a reload, so in-memory page state
   (Plans filters) survives. Page-owned parameters such as `lifecycle` stay on their page: nav links
   carry `repository` only, and only to scope-aware pages (`_other` only to Tokens).

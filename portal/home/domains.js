@@ -8,11 +8,11 @@ export function appendRepositoryDomains(host, repository, { name }) {
   const tokens = repository.domains.tokens.data;
   if (tokens?.warningCount > 0) {
     const warnings = tokens.warnings || tokens.recent || [];
-    host.append(domainRow("Token Warnings", warningSummary(tokens.warningCount, warnings), {
+    host.append(domainRow("Recent Token Warnings", warningSummary(tokens.warningCount, warnings), {
       glyph: "warning",
       warning: true,
       href: hrefWithRepositoryScope("/tokens", repository.urlKey),
-      linkLabel: `${name} activity`,
+      linkLabel: "all activity",
       details: [tokenWarnings(warnings)],
     }));
   }
@@ -20,7 +20,9 @@ export function appendRepositoryDomains(host, repository, { name }) {
 }
 
 function domainRow(label, summary, { glyph, href, linkLabel, warning = false, details }) {
-  const node = fill(tpl("tpl-domain-row"), { label, summary });
+  // The heading reads "<label> … link"; the count and date range ride along as its tooltip.
+  const node = fill(tpl("tpl-domain-row"), { label });
+  node.querySelector("[data-slot=label]").title = summary;
   const icon = node.querySelector("[data-slot=glyph]");
   icon.setAttribute("name", glyph);
   node.classList.toggle("is-warning", warning);

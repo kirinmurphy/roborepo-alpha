@@ -48,7 +48,7 @@ function postJsonRoute(path, run, { domainError = false } = {}) {
 
 export const plansRoutes = defineRoutes([
   {
-    // ?repository=<urlKey> narrows the snapshot to one repository (the shared Portal scope).
+    // ?repo=<urlKey> narrows the snapshot to one repository (the shared Portal scope).
     path: "/api/plans",
     handler: (req, res, { qs, handlers }) => {
       const scope = readRepositoryScope(new URLSearchParams(qs), res, handlers);

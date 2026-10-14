@@ -9,8 +9,9 @@
 //   .onSelect  async (value) => {}
 //   .loading   boolean — disables the trigger, shows a spinner instead of the chevron, closes menu
 //   .disabled  boolean — disables the trigger without implying an in-flight write
-//   .actions   [{ label, onSelect }] — optional rows below a divider, outside the listbox's choices:
-//              picking one runs its own handler and leaves .value unchanged
+//   .actions   [{ label, icon?, onSelect }] — optional rows below a divider, outside the listbox's
+//              choices, on their own panel color: picking one runs its own handler and leaves
+//              .value unchanged. `icon` is a portal-icon name shown before the label.
 //   .fallbackLabel string — trigger text when .value matches no option (default: the raw value)
 //   .name      string — names the trigger for assistive tech ("<name>: <current label>")
 import { positionPopoverPanel } from "/portal/shared/popover-position.js";
@@ -209,7 +210,8 @@ class OptionDropdownElement extends HTMLElement {
       if (this.actions.length) {
         const actions = tpl("tpl-dropdown-actions");
         for (const action of this.actions) {
-          const row = fill(tpl("tpl-dropdown-action"), { label: action.label });
+          const row = fill(tpl("tpl-dropdown-action"), { label: action.label, icon: action.icon ? { name: action.icon } : null });
+          if (!action.icon) row.querySelector("[data-slot=icon]").remove();
           row.addEventListener("click", (event) => {
             event.stopPropagation();
             this.runAction(action);

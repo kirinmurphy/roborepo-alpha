@@ -1,4 +1,4 @@
-// The Portal-wide repository scope in the URL: `?repository=<urlKey>`, shared by every page whose
+// The Portal-wide repository scope in the URL: `?repo=<urlKey>`, shared by every page whose
 // manifest entry sets `repositoryScope` (Plans, Tokens, Agents). This module owns parsing,
 // composing, and clearing that one parameter, and tells the page when it changes; pages keep their
 // own parameters (Plans' `lifecycle`) untouched.
@@ -10,7 +10,7 @@
 // No imports and no top-level DOM access beyond the guarded popstate listener, so the pure helpers
 // load in Node checks as well as in the browser.
 
-export const REPOSITORY_SCOPE_PARAM = "repository";
+export const REPOSITORY_SCOPE_PARAM = "repo";
 // Activity outside listed repos (Tokens only). Mirrors OUTSIDE_ACTIVITY_SCOPE in
 // modules/repositories/scope.mjs; `_` cannot appear in a urlKey, so it never names a repository.
 export const OUTSIDE_ACTIVITY_SCOPE = "_other";

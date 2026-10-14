@@ -100,18 +100,22 @@ The page shows one call to action at a time:
 | --- | --- | --- |
 | 1 | plan-write package disabled | The plan suite banner |
 | 2 | No repository has a recorded checkout | The same repository empty state as Home: **Enable auto-discovery of active repos**, then **Add a folder** |
-| 3 | Repositories known, none scanned | `Not scanned yet: N repositories`, with **Manage repositories…** |
-| 4 | Repositories scanned, no plans | `No plans found in N repositories`, with **Manage repositories…** |
-| 5 | Plans found | The plan board; the header reads `Monitoring N Plans in M Repos`, and the repository count opens **Manage repositories** |
+| 3 | Repositories known, none scanned | `Not scanned yet: N repositories`, with **Manage Repos** |
+| 4 | Repositories scanned, no plans | `No plans found in N repositories`, with **Manage Repos**; with a repo selected, `No plans yet found in <repo>` on the page itself (no panel) and **View All Repos**, which clears the repo filter |
+| 5 | Plans found | The plan board under one sticky row that pins just below the site header: the lifecycle title with **Refresh** (an icon; rescans plan files on disk, since the board does not poll), the lifecycle tabs, and **Filters** at the far right. On narrow screens the tabs collapse into a menu on the left and Refresh moves to the right of Filters. Filters in effect show as removable tags under the row |
 
 ### Repository scope
 
-The repository selector, in its own row below the portal header, narrows Plans to one repository; the choice is the
-URL's `?repository=` parameter and carries over to Tokens and Agents. Scoped, the header count and
+The repo selector (labeled **Viewing**), in its own row in the pinned portal header, narrows Plans to one repo; the choice is the
+URL's `?repo=` parameter and carries over to Tokens and Agents. Scoped, the header count and
 the onboarding steps above describe that repository alone, and a repository Plans has never read
 shows as not scanned. Search, priority, and the other filters stay as they are when the scope
-changes. A link that names a repository RoboRepo no longer lists shows **Repository unavailable**
-instead of any plans, with an action to show all repositories.
+changes. A link that names a repository RoboRepo no longer lists shows **Repo unavailable**
+instead of any plans, with an action to show all repos.
+
+**Filters** opens a popup (search, priority, blocked, readiness, review, health). Changes are drafted there and
+applied by **Update**, which stays disabled until something differs from the filters in effect; **Cancel**,
+the close button, Esc, and the backdrop discard the draft.
 
 ### Limits
 

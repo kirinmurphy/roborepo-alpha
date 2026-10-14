@@ -68,12 +68,20 @@ const PORTAL_PAGES = window.PORTAL_MANIFEST.pages;
 
   const currentPage = PORTAL_PAGES.find((p) => p.id === currentPageId);
   if (currentPage?.repositoryScope) {
-    // The repository filter gets its own sub-header row under the site header. The module is
-    // loaded only where it renders, so unscoped pages skip the selector and its dialog.
-    document.querySelector(".portal-header").after(tpl("tpl-repository-scope-bar"));
+    // The repository filter gets its own sub-header row inside the sticky site header, so the two
+    // stay pinned together. The module is loaded only where it renders, so unscoped pages skip the
+    // selector and its dialog.
+    document.querySelector(".portal-header").append(tpl("tpl-repository-scope-bar"));
     void import("/portal/shared/repository-scope-selector.js").then(({ mountRepositoryScopeSelector }) =>
       mountRepositoryScopeSelector(currentPage));
   }
+  // A page that pins its own row under the header (Plans' lifecycle row) needs the header's height,
+  // which grows when the repo row joins it.
+  const header = document.querySelector(".portal-header");
+  const publishHeaderHeight = () =>
+    document.documentElement.style.setProperty("--portal-header-height", `${header.getBoundingClientRect().height}px`);
+  new ResizeObserver(publishHeaderHeight).observe(header);
+  publishHeaderHeight();
 })();
 
 // Theme toggle: sun glyph in dark mode (click -> light), moon in light mode. Choice persists in

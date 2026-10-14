@@ -129,7 +129,7 @@ resolved via `config_snapshot_id`), `operations`, `phases`, `outcomes`, `task_ca
 the global cohort.
 
 **Repository scope** on the Tokens page comes from the portal's shared repository selector
-(`?repository=`): one repository's sessions, **All repositories**, or **Activity outside listed
+(`?repo=`): one repository's sessions, **All repos**, or **Activity outside listed
 repos** — sessions with no repository, in a repository RoboRepo has not found, or in an ignored one.
 All repositories is exactly the listed repositories plus that outside activity.
 

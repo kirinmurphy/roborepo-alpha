@@ -147,7 +147,7 @@ function createRepositorySourcesSurface({ host, info, onChange, onPending, onAut
   async function wipeRepositoryList() {
     if (!payload || (!payload.repositories.length && !payload.sources.length)) return;
     const confirmed = window.confirm(
-      "Clear all repos? This removes all known and ignored repositories and all configured repository or folder sources from RoboRepo. It does not delete files or folders. Auto-discovery stays as configured and can add repositories again later.",
+      "Clear all repos? This removes all known and ignored repos and all configured repo or folder sources from RoboRepo. It does not delete files or folders. Auto-discovery stays as configured and can add repos again later.",
     );
     if (!confirmed) return;
     const wipe = slot("wipe");

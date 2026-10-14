@@ -1,4 +1,4 @@
-// The Portal-wide repository scope: the `?repository=` value Plans, Tokens, and Agents share,
+// The Portal-wide repository scope: the `?repo=` value Plans, Tokens, and Agents share,
 // resolved once at the route into a canonical repository id. A urlKey is a browser key only; domain
 // code receives the canonical repositoryId.
 import { repositoryIdForUrlKey } from "./registry.mjs";

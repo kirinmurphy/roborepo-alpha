@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The shared Portal repository scope (`?repository=<urlKey>`): how a key resolves, how the Plans
+// The shared Portal repository scope (`?repo=<urlKey>`): how a key resolves, how the Plans
 // and Tokens data routes answer for each kind of key, how a Plans snapshot narrows, and the browser
 // helpers that compose scope URLs and selector choices. The served-portal behavior (cache keys,
 // Activity outside listed repos over a real spool) is in repository-scope-portal-check.mjs.
@@ -53,24 +53,24 @@ const UNAVAILABLE = { status: 404, code: "REPOSITORY_SCOPE_UNAVAILABLE" };
 const unavailable = (response) => ({ status: response.status, code: response.json.error?.code });
 
 assert.deepEqual(request(plansRoutes, "/api/plans", "").json, { scopedTo: null });
-assert.deepEqual(request(plansRoutes, "/api/plans", `repository=${alphaKey}`).json, { scopedTo: ALPHA });
-assert.deepEqual(request(plansRoutes, "/api/plans/refresh", `repository=${betaKey}`, "POST").json, { refreshedFor: BETA });
+assert.deepEqual(request(plansRoutes, "/api/plans", `repo=${alphaKey}`).json, { scopedTo: ALPHA });
+assert.deepEqual(request(plansRoutes, "/api/plans/refresh", `repo=${betaKey}`, "POST").json, { refreshedFor: BETA });
 for (const value of ["nope", hiddenKey, "Bad%20Key", "_other", encodeURIComponent(ALPHA)]) {
-  assert.deepEqual(unavailable(request(plansRoutes, "/api/plans", `repository=${value}`)), UNAVAILABLE, `/api/plans?repository=${value}`);
+  assert.deepEqual(unavailable(request(plansRoutes, "/api/plans", `repo=${value}`)), UNAVAILABLE, `/api/plans?repo=${value}`);
 }
 
 assert.deepEqual(request(telemetryRoutes, "/api/data", "").json.scope, { kind: "all" });
-assert.deepEqual(request(telemetryRoutes, "/api/data", `repository=${alphaKey}`).json.scope, { kind: "repository", repositoryId: ALPHA });
-assert.deepEqual(request(telemetryRoutes, "/api/data", "repository=_other").json.scope, { kind: "outside" });
-// Only a urlKey names a repository: a canonical id is unavailable, and the old ?repo= label is
+assert.deepEqual(request(telemetryRoutes, "/api/data", `repo=${alphaKey}`).json.scope, { kind: "repository", repositoryId: ALPHA });
+assert.deepEqual(request(telemetryRoutes, "/api/data", "repo=_other").json.scope, { kind: "outside" });
+// Only a urlKey names a repo: a canonical id is unavailable, and the former ?repository= spelling is
 // not a parameter at all.
-assert.deepEqual(unavailable(request(telemetryRoutes, "/api/data", `repository=${encodeURIComponent(ALPHA)}`)), UNAVAILABLE);
+assert.deepEqual(unavailable(request(telemetryRoutes, "/api/data", `repo=${encodeURIComponent(ALPHA)}`)), UNAVAILABLE);
 for (const value of ["nope", hiddenKey, "Bad%20Key"]) {
-  assert.deepEqual(unavailable(request(telemetryRoutes, "/api/data", `repository=${value}`)), UNAVAILABLE, `/api/data?repository=${value}`);
+  assert.deepEqual(unavailable(request(telemetryRoutes, "/api/data", `repo=${value}`)), UNAVAILABLE, `/api/data?repo=${value}`);
 }
-const labelOnly = request(telemetryRoutes, "/api/data", "repo=alpha").json;
-assert.deepEqual(labelOnly.scope, { kind: "all" }, "?repo= is ignored");
-assert.deepEqual(labelOnly.extraKeys, ["markerId", "model", "scope"], "no repo label reaches the analysis");
+const formerSpelling = request(telemetryRoutes, "/api/data", `repository=${alphaKey}`).json;
+assert.deepEqual(formerSpelling.scope, { kind: "all" }, "?repository= is ignored");
+assert.deepEqual(formerSpelling.extraKeys, ["markerId", "model", "scope"], "no repo label reaches the analysis");
 
 // ---- Plans snapshot: one repository's plans, scan state, and errors ----
 const snapshot = {
@@ -90,14 +90,14 @@ assert.deepEqual(alphaOnly.errors, []);
 assert.deepEqual(scopeSnapshot(snapshot, HIDDEN).repositoryScans, [{ repositoryId: HIDDEN, state: "unavailable", planCount: 0, checkoutCount: 0 }]);
 
 // ---- Browser helpers: scope URLs and nav composition ----
-assert.equal(hrefWithRepositoryScope("/plans?lifecycle=backlog#top", "alpha"), "/plans?lifecycle=backlog&repository=alpha#top");
-assert.equal(hrefWithRepositoryScope("/plans?repository=alpha&lifecycle=backlog", null), "/plans?lifecycle=backlog", "clearing keeps page parameters");
+assert.equal(hrefWithRepositoryScope("/plans?lifecycle=backlog#top", "alpha"), "/plans?lifecycle=backlog&repo=alpha#top");
+assert.equal(hrefWithRepositoryScope("/plans?repo=alpha&lifecycle=backlog", null), "/plans?lifecycle=backlog", "clearing keeps page parameters");
 const page = (path, flags = {}) => ({ path, ...flags });
-assert.equal(scopedPagePath(page("/tokens", { repositoryScope: true }), "alpha"), "/tokens?repository=alpha");
+assert.equal(scopedPagePath(page("/tokens", { repositoryScope: true }), "alpha"), "/tokens?repo=alpha");
 assert.equal(scopedPagePath(page("/runtime"), "alpha"), "/runtime", "unscoped pages drop the scope");
 assert.equal(scopedPagePath(page("/"), "alpha"), "/");
 assert.equal(scopedPagePath(page("/plans", { repositoryScope: true }), "_other"), "/plans", "outside activity stays on Tokens");
-assert.equal(scopedPagePath(page("/tokens", { repositoryScope: true, outsideActivityScope: true }), "_other"), "/tokens?repository=_other");
+assert.equal(scopedPagePath(page("/tokens", { repositoryScope: true, outsideActivityScope: true }), "_other"), "/tokens?repo=_other");
 assert.equal(scopedPagePath(page("/plans", { repositoryScope: true }), null), "/plans");
 
 // ---- Selector choices: collisions told apart by owner, then urlKey; never a path ----
@@ -108,7 +108,7 @@ const summaries = [
   { urlKey: "beta", displayName: "beta", providerUrl: null },
 ];
 assert.deepEqual(repositoryScopeChoices(summaries), [
-  ["", "All repositories"],
+  ["", "All repos"],
   ["alpha", "alpha (acme)"],
   ["alpha-local", "alpha (alpha-local)"],
   ["alpha-x1", "alpha (other)"],

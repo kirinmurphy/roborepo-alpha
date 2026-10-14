@@ -13,13 +13,13 @@ export function configureRepositoryName(node, { name, href }) {
   if (!slot) return;
   if (href) {
     slot.href = href;
-    slot.textContent = name || "Repository";
+    slot.textContent = name || "Repo";
   } else {
     // Unlinked names keep the linked name's face (mono, via .repository-name-text) so a card looks
     // the same with or without a detail page to point at.
     const text = document.createElement("span");
     text.className = "repository-name-text";
-    text.textContent = name || "Repository";
+    text.textContent = name || "Repo";
     slot.replaceWith(text);
   }
 }

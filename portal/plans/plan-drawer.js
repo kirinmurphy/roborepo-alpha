@@ -43,7 +43,7 @@ export function createPlanDrawer(deps) {
   // the command itself; a context-only prompt (no command) keeps the plain confirmation.
   async function copyPrompt(command, keys, mode = "repository-aware") {
     const text = await api.generatePrompt(command, keys, mode);
-    const message = command ? `Copied the /${command} prompt. Paste it into an agent chat in this repository.` : "copied";
+    const message = command ? `Copied the /${command} prompt. Paste it into an agent chat in this repo.` : "copied";
     await portalCopyText(text, () => toast.show({ message }));
   }
 

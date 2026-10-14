@@ -427,31 +427,43 @@ samp {
 nav {
   display: flex;
 }
-/* The repository filter's sub-header row: a full-bleed band under the site header, its content in
- * the shared .inner column. Not sticky — pages that pin a toolbar (Plans) pin it to the top. */
+/* The repository filter's sub-header row: a full-bleed band at the bottom of the sticky site header
+ * (theme.js appends it there), its content in the shared .inner column and pushed to the right. The
+ * header's own bottom border closes it. */
 .repository-scope-bar {
   background: var(--surface-band);
-  border-bottom: 1px solid var(--line);
+  border-top: 1px solid var(--line);
 }
 .repository-scope-bar .inner {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
-  min-height: 36px;
+  min-height: 48px;
+  padding-top: 10px;
+  padding-bottom: 10px;
 }
 .repository-scope-label {
   color: var(--dim);
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
 }
 .repository-scope {
   display: flex;
   align-items: center;
   min-width: 0;
 }
+/* The trigger reads as text with an underline, not as a button: no box, just a bottom rule. */
 .repository-scope .dropdown-trigger {
   max-width: 14rem;
-  font-size: var(--text-xs);
-  padding: 2px 8px;
+  font-size: var(--text-sm);
+  padding: 2px 0;
+  border: 0;
+  border-bottom: 1px solid var(--dim);
+  border-radius: 0;
+  background: none;
+}
+.repository-scope .dropdown-trigger:hover {
+  border-bottom-color: var(--accent);
 }
 .repository-scope-unavailable {
   display: grid;
@@ -1317,6 +1329,35 @@ portal-menu-button {
   } */
 }
 
+/* Shared splash for a page (or a page's scope) that has nothing to show yet: a centered, narrow
+ * column with a large title, a dim lead, and an optional action. Tokens' "No token data yet" is
+ * the model; Agents' repository view and Tokens' empty repository reuse it, and any page that needs
+ * an empty state "to be continued" should too (portal/shared/page-splash.js builds the markup). */
+.page-splash {
+  min-height: calc(80vh - 260px);
+  padding: 0 0 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.page-splash[hidden] { display: none; }
+.page-splash-copy { width: 100%; max-width: 660px; }
+.page-splash-title {
+  margin: 0 0 16px;
+  font-size: 34px;
+  line-height: 1.15;
+  font-weight: 600;
+  color: var(--ink);
+}
+.page-splash-body {
+  margin: 0;
+  font-size: var(--text-md);
+  line-height: 1.55;
+  color: var(--dim);
+}
+.page-splash-actions { margin-top: 24px; }
+.page-splash-actions:empty { display: none; }
+
 /* Shared intro banner: the one "do this first" prompt a page shows before it has anything to report
  * (Plans' "Add your first Project Folder", Tokens' "Telemetry setup required"). Title, optional
  * body, then an optional action row; callers fill the slots and never restyle spacing themselves. */
@@ -1574,6 +1615,8 @@ option-dropdown {
 }
 .dropdown-option[aria-selected="true"] {
   font-weight: 600;
+  /* The current choice is not clickable in any useful way, so it keeps the plain cursor. */
+  cursor: default;
 }
 .dropdown-options {
   display: grid;
@@ -1583,7 +1626,12 @@ option-dropdown {
 .dropdown-actions {
   display: grid;
   border-top: 2px solid var(--popover-border);
+  background: var(--surface-band);
 }
 .dropdown-action {
   font-size: var(--text-sm);
+}
+.dropdown-action-icon {
+  flex: none;
+  color: var(--dim);
 }

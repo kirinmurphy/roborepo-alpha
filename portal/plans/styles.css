@@ -5,7 +5,8 @@
  * The lifecycle row's collapse point lives in app.js, where it mounts the shared overflow nav.
  */
 main {
-  padding-top: 18px;
+  /* Matches the grid gap, so the filter tags row has the same space above and below it. */
+  padding-top: 14px;
   padding-bottom: 18px;
   display: grid;
   gap: 14px;
@@ -16,55 +17,17 @@ main {
   border-radius: 8px;
   padding: 1rem 1.5rem;
 }
-/* Whole-page sticky header block: control-bar + lifecycle tabs ride together and stay pinned for
- * the entire scroll, not just the ~2 rows of their old short wrapper. #plans-header is a direct
- * child of <body> (the page scroll container), so a sticky here tracks the full page. It pins to
- * the very top of the viewport and rides OVER the shared .portal-header (z-index above the header's
- * 10) as you scroll — same behavior as the Tokens page's control bar, not fixed to its default
- * on-page position. A solid background keeps scrolled card content from showing through. */
+/* The lifecycle row is sticky, pinned just below the site header and its repo row. theme.js
+ * publishes the header's height as --portal-header-height. One step under the header's z-index, so
+ * the header's open menus stay on top. A solid background keeps scrolled cards from showing through. */
 #plans-header {
   position: sticky;
-  top: 0;
-  z-index: 11;
+  top: var(--portal-header-height, 0px);
+  z-index: 9;
   background: var(--bg);
 }
-/* The control-bar no longer sticks on its own — #plans-header owns the stickiness now, so the
- * shared .control-panel sticky would just fight it. Neutralize position here (keeps its
- * background/border/padding from base.css). */
-#plans-header .control-panel.control-bar {
-  position: static;
-  top: auto;
-}
-/* Lifecycle-tabs row needs its own solid background + a little breathing room now that it's part of
- * the pinned block sitting over scrolling cards. */
 #plans-header > .inner {
-  background: var(--bg);
   padding-top: 8px;
-}
-/* Control bar: Plans/Repos/Filters row + persistent chips + whichever panel is open. Background/
- * border/outer spacing come from the shared .control-panel (portal/shared/base.css) — this only
- * adds what's specific to Plans: the row's items spread to the edges (space-between) rather than
- * just flowing left-to-right. */
-.control-bar-row {
-  justify-content: space-between;
-}
-
-.control-bar-row strong {
-  color: var(--ink);
-}
-.repo-count {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-/* The repository count opens Manage Repos; it reads as part of the sentence. */
-.repos-count-button {
-  font: inherit;
-  color: var(--dim);
-}
-.repos-count-button:hover {
-  color: var(--ink);
 }
 #plans-onboarding {
   margin: 0 0 16px;
@@ -79,24 +42,23 @@ main {
   gap: 16px;
 }
 .empty-state-copy { min-width: 0; }
-.control-bar-row .sync-status { margin-left: 4px; }
 .empty-state--with-action [data-slot="action"] {
   justify-self: end;
   white-space: nowrap;
 }
-/* Layout only — button chrome (border/background/padding) now comes from data-btn, not this
- * class. Groups paired icon buttons (update/refresh; Filters/Agent prompts) for consistent
- * screen positioning. */
-.control-toggle-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
+/* A repository's own empty state sits directly on the page, without the dashed panel, with its
+ * action under the copy. */
+.empty-state.empty-state--plain {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: start;
+  gap: 16px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  padding: 22px 0;
 }
-.control-item-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
+.empty-state--plain [data-slot="action"] { justify-self: start; }
 .filter-chips {
   display: flex;
   flex-wrap: wrap;
@@ -140,36 +102,29 @@ main {
   color: var(--ink);
   background: color-mix(in srgb, var(--line) 60%, transparent);
 }
-/* Expanded panel body: a slightly darker neutral gray than the row-1 strip (still off the
- * --accent/--panel blue), so opening the panel reads as its own layer, not just more row-1. */
-.filters-body {
+/* Filters popup: a modal like the plan drawer's skill dialog, one column of labelled controls with
+ * Cancel/Update along the bottom. */
+dialog#filters-dialog {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0;
+  max-height: 85vh;
+}
+dialog#filters-dialog::backdrop {
+  background: var(--backdrop);
+}
+.filters-dialog-body {
   display: grid;
-  gap: 10px;
-  margin-top: 10px;
-  padding: 10px 0 0;
+  gap: 12px;
+  padding: 16px;
+}
+.filters-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
   border-top: 1px solid var(--line);
-  background: color-mix(in srgb, var(--neutral-tint) 8%, var(--panel));
-  margin-left: -20px;
-  margin-right: -20px;
-  padding-left: 20px;
-  padding-right: 20px;
-  padding-bottom: 12px;
-}
-.filter-row-grid {
-  display: grid;
-  gap: 10px;
-}
-@media (min-width: 960px) {
-  /* Search + 6 select filters (7 items) split 4/4 across two columns: column-major auto-flow
-   * fills the left column top-to-bottom first (4 rows, starting with search), then the right
-   * column (remaining rows) — a plain grid-template-columns:1fr 1fr would instead interleave
-   * items row-by-row across both columns. */
-  .filter-row-grid {
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: repeat(4, auto);
-    grid-auto-flow: column;
-    column-gap: 20px;
-  }
 }
 .filter-row {
   display: grid;
@@ -185,15 +140,6 @@ main {
 .filter-row input,
 .filter-row select {
   width: 100%;
-  max-width: 350px;
-}
-.filter-row-actions {
-  grid-template-columns: none;
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  padding-top: 4px;
 }
 .search-field {
   position: relative;
@@ -451,7 +397,10 @@ plan-card {
   display: flex;
   align-items: center;
   border-bottom: 1px solid var(--line);
-  margin-bottom: 12px;
+}
+/* Before there is a board (no plans yet, not scanned) only Refresh stays on the row. */
+.lifecycle-bar[data-board="false"] :is(.lifecycle-title, .lifecycle-tabs, #filters-toggle) {
+  display: none;
 }
 .lifecycle-bar[hidden] {
   display: none;
@@ -461,12 +410,31 @@ plan-card {
   font-size: var(--text-md);
   font-weight: 600;
 }
+/* Wide: title, Refresh beside it, then the tabs and Filters pushed to the right edge. */
+.lifecycle-title { order: 0; }
+#refresh { order: 1; margin-left: 10px; }
 .lifecycle-tabs {
+  order: 2;
   display: flex;
   justify-content: flex-end;
   gap: 4px;
   margin-left: auto;
 }
+#filters-toggle { order: 3; margin-left: 8px; }
+/* Refresh is the bare icon, with no button chrome. */
+.icon-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--dim);
+  cursor: pointer;
+}
+.icon-action:hover:not(:disabled) { color: var(--ink); }
+.icon-action:disabled { cursor: default; }
 .lifecycle-tab {
   font: inherit;
   font-size: var(--text-sm);
@@ -515,10 +483,14 @@ plan-card {
   .lifecycle-title {
     display: none;
   }
+  /* Narrow: the tabs' menu on the left, Filters at the right edge, Refresh right of Filters. */
   .lifecycle-tabs {
+    order: 0;
     margin-left: 0;
     margin-right: auto;
   }
+  #filters-toggle { order: 1; }
+  #refresh { order: 2; margin-left: 4px; }
   .lifecycle-tabs .overflow-more-panel {
     left: 0;
     right: auto;

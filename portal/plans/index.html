@@ -5,91 +5,64 @@
     {{CHROME}}
     {{WIDGET_TEMPLATES}}
     <section id="package-banner" class="package-banner" hidden></section>
+    <!-- One sticky row under the site header: the lifecycle title with Refresh beside it, the lifecycle
+         tabs, then Filters at the far right. On narrow screens the title goes, the tabs collapse into a
+         menu on the left, and Refresh moves to the right of Filters. -->
     <div id="plans-header" hidden>
-      <section class="control-panel control-bar" id="control-bar">
-        <div class="inner">
-          <div class="control-panel-row control-bar-row">
-            <span class="repo-count">
-              Monitoring
-              <span id="plans-count-text"><strong>0</strong> Plans</span>
-              in
-              <a
-                class="repos-count-button"
-                id="repos-count-text"
-                href="#manage-repositories"
-                title="Manage Repos"
-              ><strong>0</strong> Repos</a>
-              <span class="control-toggle-group">
-                <button
-                  type="button"
-                  data-btn="secondary"
-                  class="control-item-action"
-                  id="refresh"
-                  aria-label="Refresh"
-                  title="Refresh"
-                >
-                  <portal-icon size="lg"
-                    name="refresh"
-                  ></portal-icon>
-                  <span class="spinner" hidden></span>
-                </button>
-              </span>
-            </span>
-            <div class="control-toggle-group">
-              <button
-                type="button"
-                data-btn="secondary"
-                class="control-item-action"
-                id="filters-toggle"
-              >
-                <portal-icon name="filter" size="lg"></portal-icon>
-                Filters
-              </button>
-            </div>
-          </div>
-          <div class="filter-chips" id="filter-chips"></div>
-          <div class="filters-body" id="filters-body" hidden>
-            <div class="filter-row-grid">
-              <div class="filter-row filter-row-search">
-                <label for="search">Search</label>
-                <div class="search-field">
-                  <input id="search" type="search" placeholder="search plans" />
-                </div>
-              </div>
-              <div class="filter-row">
-                <label for="priority">Priority</label>
-                <select id="priority"></select>
-              </div>
-              <div class="filter-row">
-                <label for="blocked">Blocked</label>
-                <select id="blocked"></select>
-              </div>
-              <div class="filter-row">
-                <label for="readiness">Readiness</label>
-                <select id="readiness"></select>
-              </div>
-              <div class="filter-row">
-                <label for="review">Review</label>
-                <select id="review"></select>
-              </div>
-              <div class="filter-row">
-                <label for="health">Health</label>
-                <select id="health"></select>
-              </div>
-            </div>
-            <div class="filter-row filter-row-actions">
-              <button id="filters-done" type="button">Done</button>
-            </div>
-          </div>
-        </div>
-      </section>
       <div class="inner">
-        <div class="lifecycle-bar" id="lifecycle-bar" hidden>
+        <div class="lifecycle-bar" id="lifecycle-bar">
           <h2 class="lifecycle-title" id="lifecycle-title"></h2>
+          <button type="button" class="icon-action" id="refresh" aria-label="Refresh" title="Refresh">
+            <portal-icon size="sm" name="refresh"></portal-icon>
+            <span class="spinner" hidden></span>
+          </button>
           <nav class="lifecycle-tabs" id="lifecycle-tabs" aria-label="Plan lifecycle"></nav>
+          <button type="button" class="icon-action" id="filters-toggle" aria-label="Filters" title="Filters">
+            <portal-icon name="sliders" size="md"></portal-icon>
+          </button>
         </div>
       </div>
     </div>
+    <!-- Filters: edits are drafted here and only applied by Update, which stays disabled until a
+         value differs from the filters currently applied. Cancel (or closing) throws the draft away. -->
+    <dialog id="filters-dialog" data-dialog-size="md" aria-labelledby="filters-dialog-title">
+      <div class="modal-head">
+        <h2 class="modal-title" id="filters-dialog-title">Filters</h2>
+        <portal-close-button id="filters-close" aria-label="Close"></portal-close-button>
+      </div>
+      <div class="modal-body filters-dialog-body">
+        <div class="filter-row filter-row-search">
+          <label for="search">Search</label>
+          <div class="search-field">
+            <input id="search" type="search" placeholder="search plans" />
+          </div>
+        </div>
+        <div class="filter-row">
+          <label for="priority">Priority</label>
+          <select id="priority"></select>
+        </div>
+        <div class="filter-row">
+          <label for="blocked">Blocked</label>
+          <select id="blocked"></select>
+        </div>
+        <div class="filter-row">
+          <label for="readiness">Readiness</label>
+          <select id="readiness"></select>
+        </div>
+        <div class="filter-row">
+          <label for="review">Review</label>
+          <select id="review"></select>
+        </div>
+        <div class="filter-row">
+          <label for="health">Health</label>
+          <select id="health"></select>
+        </div>
+      </div>
+      <div class="filters-dialog-actions">
+        <button id="filters-cancel" type="button" data-btn="secondary">Cancel</button>
+        <button id="filters-update" type="button" data-btn="cta" disabled>Update</button>
+      </div>
+    </dialog>
     <div id="blockers-popover" class="blockers-popover" hidden role="menu">
       <p class="blockers-popover-title" data-slot="title"></p>
       <div class="blockers-popover-list" data-slot="list"></div>
@@ -99,6 +72,8 @@
       <!-- Shown when Plans has nothing to list yet: the shared repository empty state, or the
            scanning and no-plans steps (app.js chooses; one call to action at a time). -->
       <div id="plans-onboarding" hidden></div>
+      <!-- The filters in effect, as removable tags; empty (and so hidden) when none are. -->
+      <div class="filter-chips" id="filter-chips"></div>
       <section id="warnings" class="warnings" hidden></section>
       <section id="groups" class="groups"></section>
     </main>
