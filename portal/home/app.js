@@ -3,6 +3,7 @@ import { renderCodexHookStatus } from "/portal/shared/codex-hook-status.js";
 import { harnessSetupPromptElement } from "/portal/shared/harness-warning.js";
 import { createPlanDrawer } from "/portal/plans/plan-drawer.js";
 import { fetchSnapshot as fetchPlansSnapshot } from "/portal/plans/api.js";
+import { mergedPlanBranches } from "/portal/plans/state.js";
 import * as api from "./api.js";
 import { mountHomeLinks } from "./links.js";
 import { repositoryDirectory, unresolvedActivity } from "./templates.js";
@@ -27,12 +28,15 @@ let pending = false;
 let forceQueued = false;
 let syncRetryTimer = null;
 let plansSnapshot = null;
+// Active plans whose worktree has merged, from the latest overview — the drawer shows them `merged`.
+let mergedPlans = new Map();
 
-// The same plan detail drawer the Plans page opens. Read-only here: lifecycle and priority edits
-// go through the Plans page's mutation flow, which Home does not carry.
+// The same plan detail drawer the Plans page opens. Read-only here: priority edits go through the
+// Plans page's mutation flow, which Home does not carry.
 const planDrawer = createPlanDrawer({
   getPlans: () => plansSnapshot?.plans || [],
   getPlanWritePackage: () => plansSnapshot?.planWritePackage || {},
+  mergeFor: (key) => mergedPlans.get(key) || null,
   onEnablePackage: () => { location.href = "/plans"; },
   onError: showWarning,
   readonly: true,
@@ -126,6 +130,7 @@ async function refresh({ force = false } = {}) {
   setHomeSyncStatus("syncing");
   try {
     const overview = await api.loadHomeOverview();
+    mergedPlans = mergedPlanBranches(overview);
     homeAutoDiscoveryEnabled = overview.autoDiscovery?.enabled === true;
     setHomeSyncStatus(overview.sync?.state || "synced");
     scheduleSyncRefresh(overview.sync?.state);
