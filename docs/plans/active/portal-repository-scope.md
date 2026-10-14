@@ -10,7 +10,7 @@ depends_on:
 related:
   - nl40n9vr
 reviewed_commit: 026aeb5
-worktree:
+worktree: portal-repository-scope
 ---
 
 # Shared Repository Filter Across Portal Pages
