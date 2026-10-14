@@ -26,11 +26,8 @@ const BASE = Date.parse("2026-06-15T18:00:00.000Z");
 const ts = (minutesAgo) => new Date(BASE - minutesAgo * 60_000).toISOString();
 
 function repo(label) {
-  const root = `/Users/demo/projects/${label}`;
   return {
     label,
-    git_root_hash: hash(root),
-    remote_hash: hash(`git@github.com:demo/${label}.git`),
     branch: "main",
   };
 }

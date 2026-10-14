@@ -22,6 +22,7 @@
         <div id="tokensbanner" style="display:none"></div>
         <div id="mock-disclaimer" class="mock-disclaimer" style="display:none">
           <span class="mock-text">Below is a <b>simulated tracking report</b>, track your activity after running your own agent sessions.</span>
+          <span class="mock-text" id="mock-scope-note" hidden>It is not filtered by the selected repository.</span>
         </div>
       </div>
       <!-- Outside the banner stack, which hides once tracking is on: the state this warning is for. -->
@@ -32,6 +33,7 @@
           <p>Tracking is on and your harnesses are active. Start a new session and we'll start tracking. Your report will appear when activity is captured.</p>
         </div>
       </section>
+      <div id="tokens-scope-unavailable" hidden></div>
       <div id="tokenscontent" hidden>
         <!-- Frame-of-reference meta line (v1 renderMeta contract): sessions · captures · period,
              with the Codex rate limit riding along as a dim clause when the provider reports one. -->
@@ -208,5 +210,6 @@
     <template id="condition-change-verdict-template"><div class="condition-change-verdict"><strong></strong><span></span><p></p></div></template>
     <template id="condition-session-context-template"><section class="condition-session-context"><dl class="condition-session-facts" data-facts></dl></section></template>
     <template id="condition-session-fact-template"><div><dt></dt><dd></dd></div></template>
+    {{REPOSITORY_SOURCES}}
   </body>
 </html>

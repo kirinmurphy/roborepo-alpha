@@ -62,6 +62,16 @@
     <!-- Persistent intro above the package sections: what the package manager provides. Not an
          onboarding notice — it renders on every load, whatever the onboarding state. A plain
          header, not a .panel: .panel is reserved for the package-group sections below it. -->
+    <!-- Agents scoped to one repository (?repository=<urlKey>). Repository-level agent config does
+         not exist yet, so this replaces the whole global view rather than implying any of it is
+         that repository's. -->
+    <template id="tpl-agents-repository-splash">
+      <section class="panel agents-repository-splash" role="status">
+        <h2>Repository-level agent config is coming soon</h2>
+        <p>Rules, hooks, and skills for <strong data-slot="repository"></strong>.</p>
+        <button type="button" data-btn="secondary" data-slot="remove-filter">Remove filter</button>
+      </section>
+    </template>
     <template id="tpl-packages-intro">
       <header class="packages-intro">
         <h2>Available Agent Tools</h2>
@@ -379,6 +389,7 @@
         <div data-slot="content"></div>
       </div>
     </template>
+    {{REPOSITORY_SOURCES}}
     <script src="/portal/config/elements/index.js" type="module"></script>
     <script src="/portal/shared/icon.js" type="module"></script>
     <script src="/portal/shared/notice.js" type="module"></script>

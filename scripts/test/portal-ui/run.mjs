@@ -119,7 +119,8 @@ async function main() {
   const config = path.join(here, "playwright.config.mjs");
   const result = spawnSync(
     process.execPath,
-    [pwCli, "test", "--config", config],
+    // Extra arguments pass through, e.g. `run.mjs repository-scope.spec.mjs` runs one spec.
+    [pwCli, "test", "--config", config, ...process.argv.slice(2)],
     {
       cwd: repoRoot,
       env: { ...process.env, PORTAL_BASE_URL: baseURL },

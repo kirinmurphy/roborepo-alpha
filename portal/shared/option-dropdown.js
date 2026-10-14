@@ -9,6 +9,10 @@
 //   .onSelect  async (value) => {}
 //   .loading   boolean — disables the trigger, shows a spinner instead of the chevron, closes menu
 //   .disabled  boolean — disables the trigger without implying an in-flight write
+//   .actions   [{ label, onSelect }] — optional rows below a divider, outside the listbox's choices:
+//              picking one runs its own handler and leaves .value unchanged
+//   .fallbackLabel string — trigger text when .value matches no option (default: the raw value)
+//   .name      string — names the trigger for assistive tech ("<name>: <current label>")
 import { positionPopoverPanel } from "/portal/shared/popover-position.js";
 import { portalTpl as tpl, portalFillSlots as fill } from "/portal/shared/api.js";
 
@@ -16,7 +20,7 @@ class OptionDropdownElement extends HTMLElement {
   connectedCallback() {
     // Template-cloned elements can receive property assignments before upgrade; those land as
     // own properties that shadow the class setters. Re-adopt them so the setters actually run.
-    for (const key of ["options", "value", "onSelect", "loading", "disabled"]) {
+    for (const key of ["options", "value", "onSelect", "loading", "disabled", "actions", "fallbackLabel", "name"]) {
       if (Object.prototype.hasOwnProperty.call(this, key)) {
         const v = this[key];
         delete this[key];
@@ -64,6 +68,24 @@ class OptionDropdownElement extends HTMLElement {
     this._onSelect = fn;
   }
 
+  set actions(value) {
+    this._actions = Array.isArray(value) ? value : [];
+    if (this.isConnected) this.render();
+  }
+  get actions() {
+    return this._actions || [];
+  }
+
+  set fallbackLabel(value) {
+    this._fallbackLabel = value;
+    if (this.isConnected) this.render();
+  }
+
+  set name(value) {
+    this._name = value;
+    if (this.isConnected) this.render();
+  }
+
   set loading(value) {
     this._loading = Boolean(value);
     if (this._loading) this.close();
@@ -83,11 +105,12 @@ class OptionDropdownElement extends HTMLElement {
 
   currentLabel() {
     const match = this.options.find(([v]) => v === this._value);
-    return match ? match[1] : String(this._value ?? "");
+    if (match) return match[1];
+    return this._fallbackLabel ?? String(this._value ?? "");
   }
 
   open() {
-    if (this._loading || this._disabled || this.options.length === 0) return;
+    if (this._loading || this._disabled || this.options.length + this.actions.length === 0) return;
     this._open = true;
     this._highlighted = this.options.findIndex(([v]) => v === this._value);
     this.render();
@@ -108,6 +131,11 @@ class OptionDropdownElement extends HTMLElement {
   select(value) {
     this.close();
     this._onSelect?.(value);
+  }
+
+  runAction(action) {
+    this.close();
+    action.onSelect?.();
   }
 
   positionMenu() {
@@ -131,6 +159,7 @@ class OptionDropdownElement extends HTMLElement {
     const trigger = tpl("tpl-dropdown-trigger");
     trigger.disabled = this._loading || this._disabled;
     trigger.setAttribute("aria-expanded", String(this._open));
+    if (this._name) trigger.setAttribute("aria-label", `${this._name}: ${this.currentLabel()}`);
 
     if (this._loading) {
       trigger.append(tpl("tpl-dropdown-spinner"));
@@ -166,6 +195,7 @@ class OptionDropdownElement extends HTMLElement {
 
     if (this._open) {
       const menu = tpl("tpl-dropdown-menu");
+      const listbox = menu.querySelector("[role=listbox]");
       this.options.forEach(([value, label], index) => {
         const item = fill(tpl("tpl-dropdown-option"), { label });
         item.classList.toggle("highlighted", index === this._highlighted);
@@ -174,8 +204,20 @@ class OptionDropdownElement extends HTMLElement {
           event.stopPropagation();
           this.select(value);
         });
-        menu.append(item);
+        listbox.append(item);
       });
+      if (this.actions.length) {
+        const actions = tpl("tpl-dropdown-actions");
+        for (const action of this.actions) {
+          const row = fill(tpl("tpl-dropdown-action"), { label: action.label });
+          row.addEventListener("click", (event) => {
+            event.stopPropagation();
+            this.runAction(action);
+          });
+          actions.append(row);
+        }
+        menu.append(actions);
+      }
       nodes.push(menu);
     }
 

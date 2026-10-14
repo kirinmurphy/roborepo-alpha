@@ -28,7 +28,6 @@ import {
   setAlias,
   resolveRegistryAlias,
   associateResolved,
-  associateLegacyHashes,
   removeDiscoveries,
   importDeveloperRuntimeAliases,
   canonicalizeDeveloperRuntimeIdentity,
@@ -251,14 +250,6 @@ try {
   assert.equal(aliasAssoc.repositoryId, "git:github.com/kirinmurphy/roborepo");
   assert.equal(aliasAssoc.evidence, "user-alias");
   assert.equal(aliasAssoc.confidence, "high");
-
-  // ---- Legacy hash association (remote-hash only; no root-hash tier) ----
-  const hashIndex = {
-    byNormalizedRemoteHash: new Map([["rem123", "git:github.com/kirinmurphy/roborepo"]]),
-  };
-  assert.equal(associateLegacyHashes({ normalizedRemoteHash: "rem123", hashIndex }).provenance, "legacy-remote-hash");
-  assert.equal(associateLegacyHashes({ normalizedRemoteHash: "nope", hashIndex }).provenance, "unresolved");
-  assert.equal(associateLegacyHashes({ hashIndex }).repositoryId, null);
 
   // ---- Per-source discovery provenance (pljvmyh §4) ----
   const srcReg = defaultRegistry();

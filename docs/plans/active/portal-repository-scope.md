@@ -1,7 +1,7 @@
 ---
 id: tk6s43x3
 priority: high
-next_action: Add the shared repository-scope URL helpers and a repositoryScope flag on PAGES, then the header selector on option-dropdown; resolve ?repository=<urlKey> in the /api/plans and /api/data routes
+next_action: Confirm the Not tested entries by hand, then close the plan
 blocked_by: []
 depends_on:
   - jqi1dof
@@ -124,7 +124,7 @@ Caching:
 
 ### 2. Shared selector
 
-The selector mounts in the global portal header (`chrome-partial.html`) and renders only on pages whose `PAGES` entry sets `repositoryScope: true`; Tokens also sets `outsideActivityScope: true`. The manifest exposes both flags, so the selector and nav composition (§5) read one source of truth.
+The selector lives in its own sub-header row directly below the global portal header, not in the header itself: a full-width band with a distinct background whose content sits in the page's max-width `.inner` column (`tpl-repository-scope-bar` in `chrome-partial.html`). The row renders only on pages whose `PAGES` entry sets `repositoryScope: true`; Tokens also sets `outsideActivityScope: true`. The manifest exposes both flags, so the selector and nav composition (§5) read one source of truth.
 
 It offers:
 
@@ -267,39 +267,39 @@ Events already in a spool keep the old keys; nothing reads them. On the developm
 
 ### Phase 1 — Scope infrastructure
 
-- [ ] Add `repositoryScope` to `PAGES` and the manifest; pin it in `portal-pages-check`.
-- [ ] Add shared URL helpers for `repository`: parse, compose, clear, and change notification.
-- [ ] Add optional action rows to `<option-dropdown>`.
-- [ ] Add the header selector to scope-aware pages: **All repositories**, visible repositories with collision disambiguation, and the **Manage repositories…** action row opening the existing dialog.
-- [ ] Render the unavailable state for malformed, unknown, and hidden keys, with a clear-scope action.
+- [x] Add `repositoryScope` to `PAGES` and the manifest; pin it in `portal-pages-check`.
+- [x] Add shared URL helpers for `repository`: parse, compose, clear, and change notification.
+- [x] Add optional action rows to `<option-dropdown>`.
+- [x] Add the header selector to scope-aware pages: **All repositories**, visible repositories with collision disambiguation, and the **Manage repositories…** action row opening the existing dialog.
+- [x] Render the unavailable state for malformed, unknown, and hidden keys, with a clear-scope action.
 
 ### Phase 2 — Navigation
 
-- [ ] Compose nav links so scope survives between Plans, Tokens, and Agents and drops for Runtime, Settings, and Home.
-- [ ] Restore scope on back/forward and deep link.
+- [x] Compose nav links so scope survives between Plans, Tokens, and Agents and drops for Runtime, Settings, and Home.
+- [x] Restore scope on back/forward and deep link.
 
 ### Phase 3 — Plans
 
-- [ ] Resolve `/api/plans?repository=<urlKey>` in the route and filter the cached snapshot; return the unavailable status for an unresolvable key.
-- [ ] Remove the page-local repository filter; send and re-read the shared scope, keeping in-memory filters across scope changes.
+- [x] Resolve `/api/plans?repository=<urlKey>` in the route and filter the cached snapshot; return the unavailable status for an unresolvable key.
+- [x] Remove the page-local repository filter; send and re-read the shared scope, keeping in-memory filters across scope changes.
 
 ### Phase 4 — Tokens
 
-- [ ] Resolve `/api/data?repository=<urlKey>` in the route and pass the resolved `repositoryId`.
-- [ ] Delete the legacy `repo` label: the `/api/data` and `/api/session` parameters, the cohort `repos` dimension, and the unread `--repo` report flag (§7).
-- [ ] Add **Activity outside listed repos** (§3a): the `outsideActivityScope` flag, the `_other` route handling, and the registry signature in `analysisKey`.
-- [ ] Delete the fingerprint fallback and the three fingerprint capture fields (§7).
-- [ ] Add the shared repository control in a focused module; reset the remembered report version on scope change; label the mock path as unscoped.
+- [x] Resolve `/api/data?repository=<urlKey>` in the route and pass the resolved `repositoryId`.
+- [x] Delete the legacy `repo` label: the `/api/data` and `/api/session` parameters, the cohort `repos` dimension, and the unread `--repo` report flag (§7).
+- [x] Add **Activity outside listed repos** (§3a): the `outsideActivityScope` flag, the `_other` route handling, and the registry signature in `analysisKey`.
+- [x] Delete the fingerprint fallback and the three fingerprint capture fields (§7).
+- [x] Add the shared repository control in a focused module; reset the remembered report version on scope change; label the mock path as unscoped.
 
 ### Phase 5 — Agents and Home
 
-- [ ] Render global Agents with no scope; when scoped, show the coming-soon splash with **Remove filter**.
-- [ ] Point Home's **Token Warnings** link at the repository's scoped Tokens view.
+- [x] Render global Agents with no scope; when scoped, show the coming-soon splash with **Remove filter**.
+- [x] Point Home's **Token Warnings** link at the repository's scoped Tokens view.
 
 ### Phase 6 — Docs and cleanup
 
-- [ ] Delete the legacy Agents redirect and its assertions (§7).
-- [ ] Remove duplicate selectors and helpers; update the three docs in Code Touchpoints.
+- [x] Delete the legacy Agents redirect and its assertions (§7).
+- [x] Remove duplicate selectors and helpers; update the three docs in Code Touchpoints.
 
 ## Validation
 
@@ -366,6 +366,31 @@ Decisions made while promoting this plan against `026aeb5`.
 | Scope changes use `history.pushState` plus a page refetch | A full navigation to the new URL | Matches the Plans lifecycle pattern, and keeps in-memory filters that a reload would reset |
 | Scope-aware pages are declared with a `repositoryScope` flag on `PAGES` | A hard-coded list in `theme.js` | `PAGES` is already the single source of truth for nav, and `portal-pages-check` can pin it |
 
+### Implementation decisions
+
+**User decision (during implementation):** the repository filter is not part of the site header. It has its own sub-header row below it, with a distinct full-width background (`--surface-band`) and its content contained in the page's max-width column. This replaced the first implementation, which put the selector inside the header bar.
+
+Decisions made autonomously while implementing on `claude/portal-repository-scope`.
+
+| Decision | Alternatives | Why |
+| --- | --- | --- |
+| Routes resolve the key through a `resolveRepositoryScope` handler (`modules/repositories/scope.mjs`) via one helper, `readRepositoryScope` (`scripts/cli/portal-routes-scope.mjs`) | Load the registry inside each route | Route tables stay I/O-free like every other route; one helper gives `/api/plans`, `/api/plans/refresh`, and `/api/data` the same answer |
+| Unavailable is HTTP 404 with `{ error: { code: "REPOSITORY_SCOPE_UNAVAILABLE" } }` | 200 with a status field in the payload | Cannot be mistaken for data, is not a server error, and pages branch on the code; `portalGetJson` now keeps structured error codes as `portalPostJson` already did |
+| **Activity outside listed repos** is a cohort dimension, `excluded_repository_ids` (listed IDs excluded; events with no ID pass) | A boolean `outside_listed` the cohort module resolves against the registry | Keeps the cohort module pure and registry-free; the partition (listed + outside = all) is checkable in a unit test |
+| The registry signature enters `analysisKey` only for `_other` | Always include it | Only outside activity changes when a repository is found or ignored; the default view stays cached across registry writes |
+| The Manage repositories dialog controller is one per page, with subscribers | A second controller (double-bound listeners on one `<dialog>`); passing the page's dialog into the selector | One `#repository-sources-dialog` element, many callers |
+| Tokens and Agents now include the `{{REPOSITORY_SOURCES}}` partial, and `<option-dropdown>` styles moved from `portal/plans/plan-drawer.css` to `portal/shared/base.css` | Page-specific copies | The selector and its dialog render on pages that had neither |
+| The selector module is loaded by `theme.js` only on scope-aware pages (dynamic import) | Static import on every page | Home, Runtime, and Settings skip the selector and dialog code |
+| A scoped Plans snapshot reports a repository with no recorded checkout as one `unavailable` scan | Fall through to the "no repositories" onboarding | That onboarding asks the user to add repositories, which is wrong for a known one; scan errors gained `repositoryId` so a scope keeps only its own |
+| Scoped Tokens decides the first-run empty page from unscoped data only; an empty scope renders the report with zero totals | A separate scoped empty state | "No token data yet" is about tracking, not about one repository |
+| `available_repos` is removed from `/api/data` | Keep it | It was the option list for the deleted `?repo=` label and had no reader |
+| Plans and Tokens loads carry a sequence guard | Let responses paint in arrival order | Overlapping scope changes must not paint the previous repository's data |
+| Tokens' demo report (no telemetry) uses the selector's resolution for the unavailable state | Show the demo report under any key | The demo route resolves no key, and an unknown key must never look like data |
+| The sub-header row is not sticky | Pin it with the header | Plans already pins its own toolbar to the top of the viewport; a second pinned row would fight it. Outside the header's stacking context, the open menu sits above Plans' sticky toolbar |
+| The browser spec serves setup state without "ready" harnesses | Let the page finish harness setup | On a machine with a launched harness, a real Agents or Tokens visit sets up the shared hermetic machine and broke a later spec |
+| `scripts/test/portal-ui/run.mjs` forwards extra arguments to Playwright | Run the whole suite every time | Lets one spec run while iterating; additive |
+| Home's Token Warnings link reads `<repository> activity` | "repository activity" | Names the repository the link is scoped to |
+
 ## Acceptance Criteria
 
 - Plans, Tokens, and Agents read one shared `?repository=<urlKey>` scope through one header selector.
@@ -382,3 +407,37 @@ Decisions made while promoting this plan against `026aeb5`.
 - Runtime and Settings remain global.
 - Selector data and scope URLs carry no absolute paths.
 - `npm run test:unit`, `npm run test:portal-ui`, and `npm run check` pass.
+
+## Open Questions
+
+None. No decision in this run was blocked.
+
+## Not tested
+
+- [ ] The repository sub-header row, its menu, the unavailable notice, and the Agents splash look
+      right in the light theme. Checked by eye in dark theme at desktop width and 375px only; the
+      browser spec asserts the row's geometry and that its background differs from the page, not
+      how it looks.
+- [ ] After ignoring or finding a repository from **Manage repositories…** in the selector, the
+      selector's list and Tokens' **Activity outside listed repos** update without a reload. The
+      server side is covered (`repository-scope-portal-check`); the browser flow through the dialog
+      is not.
+- [ ] A long-running Tokens session on real data stays responsive while switching scopes. Each
+      scope is a separate cached analysis (up to 32 entries), so the first visit to a scope costs
+      one analysis; this was observed on one development spool, not measured.
+
+## Verification
+
+```text
+npm run test:unit                    -> pass (139/139 suites)
+npm run check                        -> pass (ci group 34/34, clean-machine sandboxes, UI suite; Windows installer parity skipped: no pwsh)
+npm run test:portal-ui               -> pass (90 passed, 2 skipped as on main), rerun after the sub-header change
+node scripts/test/repository-scope-check.mjs         -> pass
+node scripts/test/repository-scope-portal-check.mjs  -> pass (fails if the cache key drops the scope)
+bash scripts/doctor.sh --quiet       -> pass (100 checks)
+git diff --check                     -> clean
+```
+
+`npm run check` ran before the sub-header layout change; that change touched only portal markup,
+CSS, comments, docs, and the browser spec, and the UI suite, scope checks, and doctor were rerun
+after it.

@@ -104,6 +104,15 @@ The page shows one call to action at a time:
 | 4 | Repositories scanned, no plans | `No plans found in N repositories`, with **Manage repositories…** |
 | 5 | Plans found | The plan board; the header reads `Monitoring N Plans in M Repos`, and the repository count opens **Manage repositories** |
 
+### Repository scope
+
+The repository selector, in its own row below the portal header, narrows Plans to one repository; the choice is the
+URL's `?repository=` parameter and carries over to Tokens and Agents. Scoped, the header count and
+the onboarding steps above describe that repository alone, and a repository Plans has never read
+shows as not scanned. Search, priority, and the other filters stay as they are when the scope
+changes. A link that names a repository RoboRepo no longer lists shows **Repository unavailable**
+instead of any plans, with an action to show all repositories.
+
 ### Limits
 
 - maximum document size for rendering/prompt embedding: 1 MiB

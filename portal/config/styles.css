@@ -878,3 +878,19 @@ dialog#config-modal::backdrop {
   background: var(--bg);
   width: fit-content;
 }
+
+/* Agents scoped to one repository: the coming-soon splash in place of the global view. */
+.agents-repository-splash {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  margin: 1rem 0;
+}
+.agents-repository-splash h2 {
+  margin: 0;
+  font-size: var(--text-md);
+}
+.agents-repository-splash p {
+  margin: 0;
+  color: var(--dim);
+}

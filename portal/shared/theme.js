@@ -15,6 +15,7 @@
 import { portalFillSlots as fill, portalTpl as tpl } from "/portal/shared/api.js";
 import "/portal/shared/icon.js";
 import { mountOverflowNav } from "/portal/shared/overflow-nav.js";
+import { currentRepositoryScope, onRepositoryScopeChange, scopedPagePath } from "/portal/shared/repository-scope.js";
 
 if (!window.PORTAL_MANIFEST) {
   throw new Error(
@@ -35,7 +36,7 @@ const PORTAL_PAGES = window.PORTAL_MANIFEST.pages;
   const currentPageId = window.PORTAL_MANIFEST.currentPageId;
   const navLink = (p, inMenu) => {
     const link = tpl("tpl-nav-link");
-    link.href = p.path;
+    link.href = scopedPagePath(p, currentRepositoryScope());
     fill(link, { label: p.title });
     if (p.id === currentPageId) {
       link.classList.add("active");
@@ -52,7 +53,8 @@ const PORTAL_PAGES = window.PORTAL_MANIFEST.pages;
     return link;
   };
   // Below 640px the primary links no longer fit beside the logo, so every page moves into the ⋮ menu.
-  mountOverflowNav(nav, { menuLabel: "More pages", collapseBelow: 640 }).setItems(
+  const navRow = mountOverflowNav(nav, { menuLabel: "More pages", collapseBelow: 640 });
+  const renderNav = () => navRow.setItems(
     PORTAL_PAGES.map((p) => ({
       label: p.title,
       current: p.id === currentPageId,
@@ -60,6 +62,18 @@ const PORTAL_PAGES = window.PORTAL_MANIFEST.pages;
       render: (inMenu) => navLink(p, inMenu),
     })),
   );
+  renderNav();
+  // Links carry the repository scope, so they follow it as it changes.
+  onRepositoryScopeChange(renderNav);
+
+  const currentPage = PORTAL_PAGES.find((p) => p.id === currentPageId);
+  if (currentPage?.repositoryScope) {
+    // The repository filter gets its own sub-header row under the site header. The module is
+    // loaded only where it renders, so unscoped pages skip the selector and its dialog.
+    document.querySelector(".portal-header").after(tpl("tpl-repository-scope-bar"));
+    void import("/portal/shared/repository-scope-selector.js").then(({ mountRepositoryScopeSelector }) =>
+      mountRepositoryScopeSelector(currentPage));
+  }
 })();
 
 // Theme toggle: sun glyph in dark mode (click -> light), moon in light mode. Choice persists in

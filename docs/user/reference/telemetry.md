@@ -34,7 +34,8 @@ Capture runs from the harness hooks `SessionStart`, `PreToolUse`, `PostToolUse`,
 `UserPromptSubmit`, and `Stop`. Each capture (schema v3) carries:
 
 - timestamp, harness, event, session ID;
-- hashed working directory and repository identity (root hash, remote hash, branch, short SHA);
+- hashed working directory and repository identity (the canonical repository ID, branch, short
+  SHA); an event without a repository ID belongs to no repository;
 - tool metadata (name, MCP server/tool, command hash/size, file extension/path hash — never a raw
   command or path);
 - best-effort call-paired duration (`call_id`-keyed, so concurrent/nested calls never clobber each
@@ -121,9 +122,16 @@ low-confidence. Robust summaries (trimmed mean, median, percentile) are used for
 token/duration distributions rather than plain averages.
 
 **Cohort filter** is a normalized object shared by the CLI and
-portal: `time`, `harnesses`, `models`, `repos`, `packages`/`skills` (exposure, resolved via
-`config_snapshot_id`), `operations`, `phases`, `outcomes`, `task_categories`, `snapshot_ids`. The same
-filter object scopes every panel — no panel-local filter silently redefines the global cohort.
+portal: `time`, `harnesses`, `models`, `repository_ids` (canonical repository scope),
+`excluded_repository_ids` (activity outside those repositories), `packages`/`skills` (exposure,
+resolved via `config_snapshot_id`), `operations`, `phases`, `outcomes`, `task_categories`,
+`snapshot_ids`. The same filter object scopes every panel — no panel-local filter silently redefines
+the global cohort.
+
+**Repository scope** on the Tokens page comes from the portal's shared repository selector
+(`?repository=`): one repository's sessions, **All repositories**, or **Activity outside listed
+repos** — sessions with no repository, in a repository RoboRepo has not found, or in an ignored one.
+All repositories is exactly the listed repositories plus that outside activity.
 
 **Marker-relative comparison** is the preferred way to answer "did this change something". Given a
 `change` marker, sessions are split into before and after cohorts, dropping sessions that span the

@@ -54,7 +54,7 @@ function canonicalRows(events) {
     .sort(([a], [b]) => a.localeCompare(b)).map(([, event]) => event);
 }
 
-function observation(id, rows, unit, quality, repositoryHashIndex) {
+function observation(id, rows, unit, quality) {
   const model = consensus(rows, (row) => known(row.session?.model));
   const times = unique(rows.map((row) => Number.isFinite(Date.parse(row.ts)) ? new Date(row.ts).toISOString() : null).filter(Boolean));
   // A session counter is sampled once, at the last observed timestamp. Conflicting mirrors
@@ -67,7 +67,7 @@ function observation(id, rows, unit, quality, repositoryHashIndex) {
     id, observation_unit: unit, identity_quality: quality,
     harness: consensus(rows, (row) => known(row.harness)),
     session_id: consensus(rows, (row) => known(row.session_id)),
-    repository_id: consensus(rows, (row) => repositoryRefForEvent(row, repositoryHashIndex).repositoryId),
+    repository_id: consensus(rows, (row) => repositoryRefForEvent(row).repositoryId),
     model, model_attribution: model ? "approximate" : "unknown",
     first_seen: times[0] ?? null, last_seen: latest ?? null,
     tokens: usage, token_semantics: unit === "session" ? "session_cumulative" : "unavailable",
@@ -75,7 +75,7 @@ function observation(id, rows, unit, quality, repositoryHashIndex) {
   };
 }
 
-export function normalizeObservations(events, { repositoryHashIndex = null } = {}) {
+export function normalizeObservations(events) {
   const flows = new Map();
   const sessions = new Map();
   for (const event of canonicalRows(events.filter((row) => row && (row.schema == null || row.schema === 2 || row.schema === 3) && (row.session_id || row.capture_id || row.tokens || row.tool)))) {
@@ -88,8 +88,8 @@ export function normalizeObservations(events, { repositoryHashIndex = null } = {
     sessions.get(sessionKey).push(event);
   }
   return {
-    flows: [...flows].sort(([a], [b]) => a.localeCompare(b)).map(([id, group]) => observation(id, group.rows, "flow", group.quality, repositoryHashIndex)),
-    sessions: [...sessions].filter(([id]) => !id.startsWith('["session_fallback"')).sort(([a], [b]) => a.localeCompare(b)).map(([id, rows]) => observation(id, rows, "session", "exact", repositoryHashIndex)),
+    flows: [...flows].sort(([a], [b]) => a.localeCompare(b)).map(([id, group]) => observation(id, group.rows, "flow", group.quality)),
+    sessions: [...sessions].filter(([id]) => !id.startsWith('["session_fallback"')).sort(([a], [b]) => a.localeCompare(b)).map(([id, rows]) => observation(id, rows, "session", "exact")),
     unidentified_sessions: [...sessions.keys()].filter((id) => id.startsWith('["session_fallback"')).length,
     fallback_flows: [...flows.values()].filter((group) => group.quality !== "exact").length,
   };

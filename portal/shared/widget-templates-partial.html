@@ -14,10 +14,17 @@
   <span class="dropdown-chevron" aria-hidden="true">▾</span>
 </template>
 <template id="tpl-dropdown-menu">
-  <div class="dropdown-menu" role="listbox"></div>
+  <div class="dropdown-menu"><div class="dropdown-options" role="listbox"></div></div>
 </template>
 <template id="tpl-dropdown-option">
   <button type="button" class="dropdown-option" role="option" data-slot="label"></button>
+</template>
+<!-- Optional action rows: below a divider and outside the listbox, so they are never a choice. -->
+<template id="tpl-dropdown-actions">
+  <div class="dropdown-actions" role="group"></div>
+</template>
+<template id="tpl-dropdown-action">
+  <button type="button" class="dropdown-action" data-slot="label"></button>
 </template>
 
 <!-- token-chip.js -->

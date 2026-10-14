@@ -389,6 +389,12 @@ export function packagesIntro() {
   return tpl("tpl-packages-intro");
 }
 
+export function repositorySplash(repositoryName, onRemoveFilter) {
+  const node = fill(tpl("tpl-agents-repository-splash"), { repository: repositoryName });
+  node.querySelector("[data-slot=remove-filter]").addEventListener("click", onRemoveFilter);
+  return node;
+}
+
 function wireInspectButton(btn, kind, id, harness, label, onInspectClick) {
   btn.textContent = label;
   btn.addEventListener("click", () => onInspectClick({ kind, id, harness, label }));

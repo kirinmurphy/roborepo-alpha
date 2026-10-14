@@ -82,12 +82,13 @@ every 5 seconds. See `docs/internal/portal-architecture.md` for the shared porta
 
 ## API
 
-- `GET /api/data?range=&end=&harness=&model=&repo=&marker_id=` — the full analysis report, cohort-
-  scoped. Response includes `available_harnesses`/`available_models`/`available_repos`/
-  `available_metrics`, window-scoped `markers`, `experiments`, `testing_efficiency`, `cohort`
-  (present when a model/repo filter is active), and `marker_comparison` (present when `marker_id`
-  resolves).
-- `GET /api/session?id=&harness=&finding=&repo=` — bridges a flagged event to its transcript, plus
+- `GET /api/data?range=&end=&harness=&model=&repository=&marker_id=` — the full analysis report,
+  cohort-scoped. `repository` is the shared Portal scope: a `urlKey`, or `_other` for activity no
+  listed repository claims; an unresolvable value answers `404 REPOSITORY_SCOPE_UNAVAILABLE`.
+  Response includes `available_harnesses`/`available_models`/`available_metrics`, window-scoped
+  `markers`, `experiments`, `testing_efficiency`, `cohort` (present when a model or repository scope
+  is active), and `marker_comparison` (present when `marker_id` resolves).
+- `GET /api/session?id=&harness=&finding=` — bridges a flagged event to its transcript, plus
   `spool_context` (model history, config snapshot, phase timeline, operation totals, outcome, nearby
   markers, data-quality flags) derived from the spool alone, present even when the transcript itself
   is not found on disk.

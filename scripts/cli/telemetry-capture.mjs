@@ -191,22 +191,17 @@ function repoMetadata(cwd) {
   const remote = git(cwd, ["remote", "get-url", "origin"]);
   const sha = git(cwd, ["rev-parse", "--short", "HEAD"]);
 
-  // Canonical, cross-domain repository reference. Normalizing the remote BEFORE hashing means
-  // equivalent SSH and HTTPS remotes produce the same normalized_remote_hash and the same
-  // repository_id — the correlation the legacy raw remote_hash could never provide. repository_id
-  // is credential- and path-free (git: id, or an opaque local: id derived from the root), so it is
-  // safe to store in the clear. Legacy git_root_hash/remote_hash stay for the migration window.
-  // The local: id realpaths the root so it agrees with resolveProjectIdentity (Runtime/Plans)
-  // for symlinked repos. The legacy git_root_hash below stays on the RAW toplevel for back-compat.
+  // Canonical, cross-domain repository reference: the normalized remote makes equivalent SSH and
+  // HTTPS remotes one repository_id. It is credential- and path-free (git: id, or an opaque local:
+  // id derived from the root), so it is safe to store in the clear, and it is the only repository
+  // identity an event carries. The local: id realpaths the root so it agrees with
+  // resolveProjectIdentity (Runtime/Plans) for symlinked repos.
   const normalizedRemote = remote ? normalizeGitRemote(remote) : null;
   const repositoryId = normalizedRemote || (root ? localRepositoryIdForRoot(root) : null);
 
   const result = {
     label: root ? path.basename(root) : path.basename(cwd),
     repository_id: repositoryId,
-    normalized_remote_hash: normalizedRemote ? hash(normalizedRemote) : null,
-    git_root_hash: root ? hash(root) : null,
-    remote_hash: remote ? hash(remote) : null,
     branch: branch || null,
     // Short SHA correlates a spike to the code state it happened on; safe to keep in the clear.
     sha: sha || null,

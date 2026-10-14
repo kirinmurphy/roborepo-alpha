@@ -455,7 +455,8 @@ test.describe("repository-first portal Home", () => {
       "3 token spikes and 2 repeated tool loops in gpt-5-codex",
       "3 repeated tool loops in claude-opus-4-8",
     ]);
-    await expect(card.getByRole("link", { name: "all activity", exact: true })).toHaveAttribute("href", "/tokens");
+    // The warnings are this repository's, so the link opens Tokens scoped to it.
+    await expect(card.getByRole("link", { name: "RoboRepo activity", exact: true })).toHaveAttribute("href", /^\/tokens\?repository=[a-z0-9-]+$/);
     await expect(card.locator(".home-domain-row.is-warning")).toHaveCount(1);
     await expect(card.locator(".status-dot")).toHaveCount(0);
   });

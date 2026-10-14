@@ -38,11 +38,13 @@ attribute is needed).
 ## How the Manifest Reaches the Browser
 
 `PAGES` in `scripts/cli/portal-server.mjs` is the single source of truth for the six static
-navigation entries (`id`, `path`, `title`, `dir`, optional `default`). `PAGE_ROUTES` extends that
+navigation entries (`id`, `path`, `title`, `dir`, optional `default`, `repositoryScope`, and
+`outsideActivityScope`). `PAGE_ROUTES` extends that
 table with non-navigation dynamic routes such as `/repositories/:urlKey`. There is no browser-side
 copy to hand-sync:
 
-1. `pageManifest()` derives the browser-safe `{ path, id, title }` shape from `PAGES`.
+1. `pageManifest()` derives the browser-safe `{ path, id, title }` shape from `PAGES`, plus `icon`,
+   `secondary`, and the two repository-scope flags when a page sets them.
 2. `pageHtml()` injects `window.PORTAL_MANIFEST = { token, pages: [...], currentPageId,
    routeParams }` into every served page's `<head>`, right beside the existing
    `<meta name="cli-portal-token">` tag. `currentPageId` lets a dynamic page identify the static
@@ -77,8 +79,35 @@ copy to hand-sync:
 
 Nothing else needs updating for a static page — the nav and `/api/portal/status` are driven by
 `PAGES`. Keep a dynamic page out of `PAGES` so navigation, sitemap, and portal status stay
-concrete. Each route is canonical; Home owns `/`, Agents owns `/agents`, and `/config` redirects
-there. Repository detail owns `/repositories/:urlKey`.
+concrete. Each route is canonical; Home owns `/`, Agents owns `/agents`, and there are no
+compatibility routes (`/config`, the old Agents URL, is a 404). Repository detail owns
+`/repositories/:urlKey`.
+
+## Shared Repository Scope
+
+Plans, Tokens, and Agents share one repository scope, carried in the URL as
+`?repository=<urlKey>`. A page opts in with `repositoryScope: true` on its `PAGES` entry; Tokens
+also sets `outsideActivityScope: true` for **Activity outside listed repos** (`?repository=_other`,
+telemetry attributed to no listed repository). Runtime, Settings, and Home stay unscoped.
+
+| Piece | Where | Owns |
+| --- | --- | --- |
+| URL state | `portal/shared/repository-scope.js` | Parsing, composing, and clearing only the `repository` parameter; `history.pushState` on change and a change event (also fired on back/forward); nav hrefs via `scopedPagePath` |
+| Selector | `portal/shared/repository-scope-selector.js`, `repository-scope-choices.js` | An `<option-dropdown>` in its own full-width sub-header row below the site header (`tpl-repository-scope-bar`, added by `theme.js` on scope-aware pages only): All repositories, each visible repository from `GET /api/repositories` (same display name told apart by provider owner, then `urlKey`), Activity outside listed repos where offered, and a **Manage repositories…** action row; resolves the current key for pages without a data route (Agents) |
+| Route resolution | `scripts/cli/portal-routes-scope.mjs`, `modules/repositories/scope.mjs` | Each scoped data route (`/api/plans`, `/api/plans/refresh`, `/api/data`) resolves the key once and hands domain code the canonical `repositoryId` |
+
+Rules:
+
+- A malformed, unknown, or hidden key is **unavailable**: the route answers `404` with
+  `{ error: { code: "REPOSITORY_SCOPE_UNAVAILABLE" } }`, never unscoped data and never a 500. The
+  page shows the shared unavailable notice, whose action clears only the scope.
+- Only a `urlKey` names a repository; a canonical ID in `?repository=` is unavailable.
+- Changing the scope pushes the URL and refetches without a reload, so in-memory page state
+  (Plans filters) survives. Page-owned parameters such as `lifecycle` stay on their page: nav links
+  carry `repository` only, and only to scope-aware pages (`_other` only to Tokens).
+- Plans filters its one cached snapshot per request; Tokens' analysis cache keys on the resolved
+  `repositoryId`, and on the registry signature for `_other`, whose membership changes when a
+  repository is found or ignored.
 
 ## Shared Browser API (`portal/shared/api.js`)
 
@@ -346,6 +375,9 @@ and reads portal JSON under its own origin; its requests still carry that hostna
 - `npm test` (`scripts/test/test-cli.sh`) — starts the portal server, asserts
   `/api/portal/status`, token exposure, mutating POST success/400/403 responses, and that each
   served `app.js` parses (`node --check`).
+- `node scripts/test/run-checks.mjs --filter repository-scope` — scope resolution, the scoped
+  routes, and the served portal's per-scope reports; `npm run test:portal-ui` covers the selector,
+  navigation, and history in the browser (`repository-scope.spec.mjs`).
 - `roborepo web` — click through Home → repository detail → Home → Agents → Plans → Runtime → Tokens,
   confirm nav highlighting and browser history, and
   exercise each page's mutations (Config toggles, Plans refresh/discovery-root edits, Telemetry

@@ -23,6 +23,8 @@
     "portal-surface-layers-check.mjs",
     "repositories-sources-check.mjs",
     "repository-overview-check.mjs",
+    "repository-scope-check.mjs",
+    "repository-scope-portal-check.mjs",
     "telemetry-audit-tier1-check.mjs",
     "telemetry-boundaries-check.mjs",
     "telemetry-conditions-cache-check.mjs",

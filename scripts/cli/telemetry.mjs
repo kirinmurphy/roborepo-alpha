@@ -45,15 +45,13 @@ import {
   loadRepositoryAssociations,
   patchRepository,
 } from "./repositories.mjs";
-import { loadRegistry, updateRegistry, recordDiscoveryIfKnown } from "../../modules/repositories/index.mjs";
-import { buildRepositoryHashIndex } from "./telemetry-repository.mjs";
+import { loadRegistry, updateRegistry, recordDiscoveryIfKnown, resolveRepositoryScope, listedRepositoryIds } from "../../modules/repositories/index.mjs";
 import { createRepositoryOverviewService } from "./repository-overview.mjs";
 import { MOCK_FIRST_RUN_VIEWS_ENABLED, mockHomeOverview, purgePersistedMockRepositories } from "./mock-home.mjs";
 import { buildTelemetryRepositoryProjection, fixtureTelemetryRepositories, homeTelemetryProjection } from "./telemetry-repository-overview.mjs";
 import { removeRepositoryWorktree, stopRepositoryWorktreeServers } from "./worktree-cleanup.mjs";
 import { dismissWorktreeCleanupNotice, enableWorktreeCleanup } from "./worktree-cleanup-optin.mjs";
 import { packageStatusSummary } from "./package-status.mjs";
-import { privacyHash } from "./telemetry-schemas/hash.mjs";
 import { buildAnalysisPrompt } from "../harnesses/transcript-locate.mjs";
 import { insightsSummary } from "./telemetry-insights.mjs";
 import { deriveSessionFindings } from "./telemetry-session-findings.mjs";
@@ -800,7 +798,7 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
   });
   startPortalServer({
     port: options.port,
-    // model/repo/markerId layer a normalized cohort filter on top of the
+    // model/scope/markerId layer a normalized cohort filter on top of the
     // existing time/harness window; folded into cachedAnalysisJson's cache key (see
     // cachedAnalysisEntry above) so cohort-filtered views stay cached the same way the default
     // view is. See telemetry-analyze.mjs's analyzeTelemetry() options and telemetry-cohort.mjs for
@@ -826,11 +824,12 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     refreshHarnesses: () => refreshHarnessesAndApply(),
     setHarnessEnabled: (id, enabled) => setHarnessEnabled(id, enabled),
     loadConfigSource: (params) => loadConfigSource(params),
-    loadPlans: () => loadPlansSnapshot(),
+    loadPlans: (params) => loadPlansSnapshot(params),
     loadPlanDocument: (params) => loadPlanDocument(params),
     buildPlansPrompt: (params) => buildPlansPrompt(params),
     updatePlanPriority: (params) => updatePlanPriority(params),
-    refreshPlans: () => refreshPlans(),
+    refreshPlans: (params) => refreshPlans(params),
+    resolveRepositoryScope: (value, options) => resolveRepositoryScope(loadRegistry({ stateRoot }), value, options),
     loadDeveloperRuntime: () => loadDeveloperRuntimeSnapshot(),
     refreshDeveloperRuntime: () => refreshDeveloperRuntimeSnapshot(),
     updateDeveloperRuntimeSettings: (params) => updateDeveloperRuntimeSettings(params),
@@ -1213,22 +1212,37 @@ function filterByWindow(events, window) {
 // object is discarded once stringified rather than retained as dead memory.
 const _analysisCache = new Map();
 const ANALYSIS_CACHE_MAX = 32;
-// model/repo/markerId layer a normalized cohort filter on top of the existing
+// model/scope/markerId layer a normalized cohort filter on top of the existing
 // time/harness window; folded into the cache key so a cohort-filtered view gets its own cached
 // entry instead of colliding with (or evicting) the unfiltered default view.
-function analysisKey(window, harness, { model = null, repo = null, repository = null, markerId = null } = {}) {
-  return `${spoolSignature()}|${window ? `${window.rangeMs}:${window.end ?? ""}` : "all"}|${harness || "all"}|${model || "all"}|${repo || "all"}|${repository || "all"}|${markerId || "none"}`;
+function analysisKey(window, harness, { model = null, scope = null, markerId = null } = {}) {
+  return `${spoolSignature()}|${window ? `${window.rangeMs}:${window.end ?? ""}` : "all"}|${harness || "all"}|${model || "all"}|${scopeKey(scope)}|${markerId || "none"}`;
 }
 
-// Returns the cache entry { json } for the given view, computing (and caching) it on a miss.
-// Registry-derived hash index for read-time legacy telemetry association, cached by spool signature
-// so it is rebuilt only when the spool changes (the registry is small; loading it is cheap, and a
-// missing/corrupt registry degrades to an empty index rather than throwing).
-let _repositoryHashIndex = null;
-let _repositoryHashIndexSig = null;
-// Matching capture's hash is what makes normalized_remote_hash values line up, and both sides now
-// call the same helper rather than keeping two copies aligned by hand.
-const captureRepositoryHash = privacyHash;
+// A repository scope keys on its canonical id. Activity outside listed repos also keys on the
+// registry, because finding or ignoring a repository moves sessions in or out of it with no spool
+// change.
+function scopeKey(scope) {
+  if (scope?.kind === "repository") return scope.repositoryId;
+  if (scope?.kind === "outside") return `outside@${registrySignature()}`;
+  return "all";
+}
+
+// The cohort-filter dimensions of a resolved repository scope.
+function scopeCohortFilter(scope) {
+  if (scope?.kind === "repository") return { repository_ids: [scope.repositoryId] };
+  if (scope?.kind === "outside") return { excluded_repository_ids: listedRepositoryIds(loadRegistryOrEmpty()) };
+  return {};
+}
+
+function loadRegistryOrEmpty() {
+  try {
+    return loadRegistry({ stateRoot });
+  } catch {
+    return { repositories: {} };
+  }
+}
+
 // Reconcile telemetry-observed repositories into the registry so `capabilities.telemetry` can be
 // true. Runs at portal repo-list load (NOT on the capture hot path): scans the spool's distinct
 // repository_ids and records one `telemetry` discovery each, batched into a single registry write.
@@ -1263,9 +1277,8 @@ export function reconcileTelemetryRepositories() {
   }
 }
 
-// Signature of the registry file itself (mtime+size), so the hash index is rebuilt only when the
-// REGISTRY changes — not on every spool change (the index is derived from the registry, not the
-// spool). Missing file -> "none" so a first write invalidates.
+// Signature of the registry file itself (mtime+size): what changes when a repository is found,
+// ignored, or forgotten, with no spool change. Missing file -> "none" so a first write invalidates.
 function registrySignature() {
   try {
     const st = fs.statSync(repositoriesRegistryPath);
@@ -1274,45 +1287,29 @@ function registrySignature() {
     return "none";
   }
 }
-function repositoryHashIndexCached() {
-  const sig = registrySignature();
-  if (_repositoryHashIndex && _repositoryHashIndexSig === sig) return _repositoryHashIndex;
-  let registry;
-  try {
-    registry = loadRegistry({ stateRoot });
-  } catch {
-    registry = { repositories: {} };
-  }
-  _repositoryHashIndex = buildRepositoryHashIndex(registry, captureRepositoryHash);
-  _repositoryHashIndexSig = sig;
-  return _repositoryHashIndex;
-}
-
+// Returns the cache entry { json } for the given view, computing (and caching) it on a miss.
+// `scope` is the resolved repository scope ({ kind: "repository", repositoryId } or
+// { kind: "outside" }); the route resolved it from the browser's urlKey.
 function cachedAnalysisEntry(window, harness, extra = {}) {
-  const { model = null, repo = null, repository = null, markerId = null } = extra;
-  const key = analysisKey(window, harness, { model, repo, repository, markerId });
+  const { model = null, scope = null, markerId = null } = extra;
+  const key = analysisKey(window, harness, { model, scope, markerId });
   const hit = _analysisCache.get(key);
   if (hit) return hit;
   const allEvents = readSpoolEventsCached();
   const markers = readMarkers();
-  // Filter dropdowns cascade: harness is the top-level split, so the model/repo dropdowns should
-  // only ever offer values that actually co-occur with the selected harness — picking "codex"
-  // must not still list Claude-only models. Harness itself always lists every harness in the full
-  // spool (nothing sits above it to narrow it). Model does not narrow repo, or vice versa — both
-  // sit at the same level under harness — so each is scoped by harness alone, not by each other.
+  // Filter dropdowns cascade: harness is the top-level split, so the model dropdown should only
+  // ever offer values that actually co-occur with the selected harness — picking "codex" must not
+  // still list Claude-only models. Harness itself always lists every harness in the full spool
+  // (nothing sits above it to narrow it).
   const availableHarnesses = [...new Set(allEvents.map((e) => e.harness).filter(Boolean))].sort();
   const events = harness ? allEvents.filter((e) => e.harness === harness) : allEvents;
   const availableModels = [...new Set(events.map((e) => e.session?.model).filter(Boolean))].sort();
-  const availableRepos = [...new Set(events.map((e) => e.repo?.label).filter(Boolean))].sort();
   const windowed = filterByWindow(events, window);
-  // The global repository scope (?repository=<canonical-id>) composes with the legacy per-page
-  // ?repo=<label> filter. When set, legacy events are resolved to a canonical id at read time via a
-  // registry-derived hash index (built lazily; absent/broken registry -> unresolved, never a crash).
-  const cohortFilter = (model || repo || repository)
-    ? { models: model ? [model] : [], repos: repo ? [repo] : [], repository_ids: repository ? [repository] : [] }
+  const scopeFilter = scopeCohortFilter(scope);
+  const cohortFilter = (model || Object.keys(scopeFilter).length)
+    ? { models: model ? [model] : [], ...scopeFilter }
     : null;
-  const repositoryHashIndex = repositoryHashIndexCached();
-  const report = analyzeTelemetry(windowed, { cohortFilter, markers, markerId, compareMetric: "tokens.total", repositoryHashIndex, snapshots: readSnapshots() });
+  const report = analyzeTelemetry(windowed, { cohortFilter, markers, markerId, compareMetric: "tokens.total", snapshots: readSnapshots() });
   // Backfill session titles from transcripts: the transcript always has the first user message
   // (turn 1), whereas the spool only captures prompts when hooks fired — so new sessions or
   // sessions started before telemetry was enabled may have no spool title or a mid-chat title.
@@ -1329,7 +1326,6 @@ function cachedAnalysisEntry(window, harness, extra = {}) {
     availableHarnesses.map((id) => [id, hasHarnessProvider(id) ? getHarnessProvider(id).manifest.displayName : id]),
   );
   report.available_models = availableModels;
-  report.available_repos = availableRepos;
   // Metric ids from the shared registry so the Analysis
   // explorer's metric select never hand-maintains its own list.
   report.available_metrics = listMetrics().map((m) => m.id);
@@ -1342,7 +1338,7 @@ function cachedAnalysisEntry(window, harness, extra = {}) {
   // object is discarded once stringified.
   const entry = {
     json: JSON.stringify(report),
-    repositoryProjection: buildTelemetryRepositoryProjection(allEvents, report, repositoryHashIndex),
+    repositoryProjection: buildTelemetryRepositoryProjection(allEvents, report),
   };
   // Prune the oldest entry once over the cap. Signature changes mint fresh keys on every new
   // capture, so stale-signature entries accumulate otherwise; Map preserves insertion order.
@@ -1422,7 +1418,6 @@ function loadMockAnalysisJson() {
     (report.available_harnesses || []).map((id) => [id, hasHarnessProvider(id) ? getHarnessProvider(id).manifest.displayName : id]),
   );
   report.available_models = [...new Set(evidence.events.map((e) => e.session?.model).filter(Boolean))].sort();
-  report.available_repos = [...new Set(evidence.events.map((e) => e.repo?.label).filter(Boolean))].sort();
   report.available_metrics = listMetrics().map((m) => m.id);
   report.markers = [];
   report.experiments = [];
@@ -1613,7 +1608,7 @@ function sessionReportRows({ id, harness }) {
 // read warnings) plus the report-global testing summary, so deriveSessionFindings() can emit the
 // deterministic "what happened" prose alongside the transcript facts. When a caller has no report
 // in scope, findings are simply omitted — the transcript path still works unchanged.
-function loadSessionDetail({ id, harness, finding, repo, spoolContext = null, reportRows = null }) {
+function loadSessionDetail({ id, harness, finding, spoolContext = null, reportRows = null }) {
   const adapters = getHarnessProvider(harness).adapters;
   const transcriptPath = adapters.transcripts.locate(id);
   const findings = reportRows
@@ -1624,7 +1619,7 @@ function loadSessionDetail({ id, harness, finding, repo, spoolContext = null, re
       found: false,
       session_id: id,
       harness,
-      analysis_prompt: buildAnalysisPrompt({ sessionId: id, harness, repo, finding, transcriptPath: null }),
+      analysis_prompt: buildAnalysisPrompt({ sessionId: id, harness, finding, transcriptPath: null }),
       findings,
       spool_context: spoolContext,
     };
@@ -1637,7 +1632,7 @@ function loadSessionDetail({ id, harness, finding, repo, spoolContext = null, re
     transcript_path: transcriptPath,
     title,
     heavy_turns: heavyTurns,
-    analysis_prompt: buildAnalysisPrompt({ sessionId: id, harness, repo, finding, transcriptPath }),
+    analysis_prompt: buildAnalysisPrompt({ sessionId: id, harness, finding, transcriptPath }),
     findings,
     spool_context: spoolContext,
   };
@@ -2127,7 +2122,7 @@ function rejectArgs(args) {
 }
 
 function rejectSupportedReportArgs(args) {
-  const allowed = new Set(["--since", "--repo", "--group", "--format", "--deep", "--conditions"]);
+  const allowed = new Set(["--since", "--group", "--format", "--deep", "--conditions"]);
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg.includes("=")) {

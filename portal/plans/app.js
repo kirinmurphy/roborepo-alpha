@@ -12,6 +12,8 @@ import { createRepositorySourcesDialog } from "/portal/shared/repository-sources
 import { createPlanDrawer } from "./plan-drawer.js";
 import { createBlockersPopover } from "./blockers-popover.js";
 import { mountOverflowNav } from "/portal/shared/overflow-nav.js";
+import { isRepositoryScopeUnavailable, onRepositoryScopeChange } from "/portal/shared/repository-scope.js";
+import { repositoryScopeUnavailableNotice } from "/portal/shared/repository-scope-selector.js";
 import {
   FILTER_IDS,
   FILTER_DEFAULTS,
@@ -66,6 +68,9 @@ const lifecycleNav = mountOverflowNav(lifecycleTabsEl, {
   highlightSecondarySelection: false,
 });
 let syncPollTimer = null;
+// Scope changes can overlap; only the latest load may paint, so a slow response for the previous
+// repository never replaces the current one.
+let loadSequence = 0;
 let repositorySyncPending = false;
 let repositorySyncState = "synced";
 let repositoryAutoDiscoveryEnabled = false;
@@ -74,7 +79,7 @@ let repositoryAutoDiscoveryEnabled = false;
 // shared Manage repositories dialog, and any change there re-reads the Plans snapshot.
 const sourcesDialog = createRepositorySourcesDialog({
   onPending: setPlansSyncPending,
-  onChange: () => api.refreshSnapshot().then(applySnapshot).catch(showError),
+  onChange: () => api.refreshSnapshot().then(applySnapshot).catch(showLoadError),
 });
 const onboarding = {
   onEnable: () => sourcesDialog.enableAutoDiscovery(),
@@ -99,6 +104,9 @@ const blockersPopover = createBlockersPopover(document.getElementById("blockers-
 bindStaticControls();
 load();
 void refreshOverview();
+// The shared header selector (and back/forward) changes the scope without a reload; filters and
+// the lifecycle tab are page state and stay as they are.
+onRepositoryScopeChange(() => void load());
 
 function bindStaticControls() {
   const refreshEl = document.getElementById("refresh");
@@ -109,7 +117,7 @@ function bindStaticControls() {
     refreshIconEl.hidden = true;
     refreshSpinnerEl.hidden = false;
     void refreshOverview();
-    api.refreshSnapshot().then(applySnapshot).catch(showError).finally(() => {
+    api.refreshSnapshot().then(applySnapshot).catch(showLoadError).finally(() => {
       refreshEl.disabled = false;
       refreshIconEl.hidden = false;
       refreshSpinnerEl.hidden = true;
@@ -156,13 +164,26 @@ function resetFilter(id) {
 }
 
 async function load() {
+  const sequence = ++loadSequence;
   try {
-    applySnapshot(await api.fetchSnapshot());
+    const snapshot = await api.fetchSnapshot();
+    if (sequence === loadSequence) applySnapshot(snapshot);
   } catch (err) {
-    showError(err);
+    if (sequence === loadSequence) showLoadError(err);
   } finally {
     portalHideLoading();
   }
+}
+
+// The scope names no listed repository: show that, never another repository's plans.
+function showScopeUnavailable() {
+  state.snapshot = null;
+  plansHeaderEl.hidden = true;
+  lifecycleBarEl.hidden = true;
+  onboardingEl.hidden = true;
+  warningsEl.hidden = true;
+  bannerEl.hidden = true;
+  groupsEl.replaceChildren(repositoryScopeUnavailableNotice());
 }
 
 function applySnapshot(snapshot) {
@@ -538,6 +559,11 @@ function setPluralCount(node, count, noun) {
   const strong = document.createElement("strong");
   strong.textContent = count;
   node.replaceChildren(strong, ` ${noun}${count === 1 ? "" : "s"}`);
+}
+
+function showLoadError(err) {
+  if (isRepositoryScopeUnavailable(err)) showScopeUnavailable();
+  else showError(err);
 }
 
 function showError(err) {
