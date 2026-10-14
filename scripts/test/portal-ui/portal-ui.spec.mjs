@@ -1090,7 +1090,7 @@ test.describe("shared plan drawer", () => {
     await expect(drawer.locator("#drawer-title")).toHaveText("Drawer fixture plan");
     await expect(drawer.locator("#drawer-tasks li")).toHaveCount(2);
     await expect(drawer.locator("plan-status option-dropdown")).toHaveCount(0);
-    await expect(drawer.locator("plan-status .chip").first()).toHaveText("Active");
+    await expect(drawer.getByText(`${record.plan.priority} priority`, { exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(drawer).not.toBeVisible();
   });

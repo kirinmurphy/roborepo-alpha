@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import fs from "node:fs";
 import {
   isVisible,
   replaceRecord,
@@ -8,8 +7,7 @@ import {
   matchesFilters,
   resolveBlockers,
   resolveBlocking,
-  lifecycleFindingGroups,
-  canRepairLifecycleError,
+  mergedPlanBranches,
   taskProgressDisplay,
   completionRatio,
   isNotStarted,
@@ -31,8 +29,7 @@ testPriorityChangeUnderAllKeepsVisible();
 testRecordNotPreviouslyVisibleStaysInvisible();
 testReplaceRecordSwapsOldKeyForNew();
 testReplaceRecordLeavesOtherRecordsUntouched();
-testFilteredListActionForLifecycleWhenFilterMatchesPreviousValue();
-testFilteredListActionForLifecycleNullWhenFilterDoesNotMatch();
+testFilteredListActionForLifecycleReturnsNull();
 testFilteredListActionForPriorityWhenFilterMatchesPreviousValue();
 testFilteredListActionForPriorityNullWhenFilterDoesNotMatch();
 testFilteredListActionForUnrelatedPropertyReturnsNull();
@@ -42,12 +39,7 @@ testResolveBlockersScopedToSameRepository();
 testResolveBlockingFindsReverseReferences();
 testResolveBlockingEmptyWhenNoId();
 testResolveBlockingExcludesSelf();
-testFindingGroupsPartitionWithoutLoss();
-testFindingGroupsFallBackToDetailStrings();
-testFindingGroupsHandleAnErrorWithNeither();
-testEveryDisplayedFindingAppearsInTheRepairPrompt();
-testCanRepairRequiresANonEmptyPrompt();
-testLifecycleOptionsAreNeverDisabled();
+testMergedPlanBranchesOnlyIncludesLandedActivePlans();
 testTaskProgressDisplayByLifecycleAndProgress();
 testCompletionRatioIsNullWithoutTasks();
 testNotStartedCoversNoTasksAndNoneComplete();
@@ -56,8 +48,7 @@ testActiveSortSinksUnstartedAndUntrackedToTheBottom();
 testActiveSortFallsBackToPlanSortOnTies();
 testSortForLifecycleOnlyChangesActive();
 testCompletionBadgeRampEndpointsAndBands();
-testCompleteStateSuppressesTheNextAction();
-console.log("ok: plans portal state (mutation orchestration helpers) checks passed");
+console.log("ok: plans portal state checks passed");
 
 function record({ key = "k1", lifecycle = "backlog", priority = "high", id = "plan-1", repositoryId = "r1", blockers = [], taskCounts = { total: 0, complete: 0, remaining: 0 } } = {}) {
   return {
@@ -140,19 +131,11 @@ function testReplaceRecordLeavesOtherRecordsUntouched() {
   assert.equal(replaced[0], other, "an unrelated record must be returned as the same reference, not rebuilt");
 }
 
-function testFilteredListActionForLifecycleWhenFilterMatchesPreviousValue() {
+function testFilteredListActionForLifecycleReturnsNull() {
   const change = { property: "lifecycle", previousValue: "backlog", newValue: "active" };
   const state = { selectedLifecycle: "backlog", filters: { ...FILTER_DEFAULTS } };
-  const action = filteredListActionFor(change, state);
-  assert.ok(action, "expected an action when the current lifecycle tab equals change.previousValue");
-  assert.equal(action.type, "lifecycle");
-  assert.equal(action.value, "active");
-}
-
-function testFilteredListActionForLifecycleNullWhenFilterDoesNotMatch() {
-  const change = { property: "lifecycle", previousValue: "backlog", newValue: "active" };
-  const state = { selectedLifecycle: "completed", filters: { ...FILTER_DEFAULTS } };
-  assert.equal(filteredListActionFor(change, state), null, "no action expected when the current tab does not match previousValue");
+  assert.equal(filteredListActionFor(change, state), null,
+    "lifecycle changes happen through plan-suite commands, not the page's mutation toast");
 }
 
 function testFilteredListActionForPriorityWhenFilterMatchesPreviousValue() {
@@ -228,77 +211,32 @@ function testResolveBlockingExcludesSelf() {
   assert.deepEqual(resolveBlocking(selfBlocked, [selfBlocked]), []);
 }
 
-// --- lifecycle readiness errors ---------------------------------------------------------------
-
-// The dialog renders these two groups and nothing else, so a finding that falls out of both would
-// silently never reach the user.
-function testFindingGroupsPartitionWithoutLoss() {
-  const err = {
-    findings: [
-      { code: "UNCHECKED_REQUIRED_TASKS", message: "3 remain.", severity: "blocking" },
-      { code: "MISSING_VERIFICATION", message: "No verification.", severity: "advisory" },
-      { code: "NEXT_ACTION_REMAINS", message: "Still has next_action.", severity: "blocking" },
+// The Plans page joins active plans with Runtime worktrees to show which work has landed.
+function testMergedPlanBranchesOnlyIncludesLandedActivePlans() {
+  const overview = {
+    repositories: [
+      {
+        domains: {
+          runtime: { data: { checkouts: [
+            { rootId: "landed-root", worktreeState: "landed", mergedInto: "main" },
+            { rootId: "open-root", worktreeState: "active" },
+          ] } },
+          plans: { data: {
+            active: [
+              { key: "landed-plan", checkoutRootId: "landed-root" },
+              { key: "open-plan", checkoutRootId: "open-root" },
+              { key: "unmatched-plan", checkoutRootId: "missing-root" },
+            ],
+            completed: [{ key: "completed-plan", checkoutRootId: "landed-root" }],
+          } },
+        },
+      },
     ],
   };
-  const { blocking, advisory } = lifecycleFindingGroups(err);
-  assert.equal(blocking.length + advisory.length, err.findings.length,
-    "every finding lands in exactly one group — the dialog shows nothing else");
-  assert.deepEqual(blocking.map((item) => item.code), ["UNCHECKED_REQUIRED_TASKS", "NEXT_ACTION_REMAINS"],
-    "blocking findings keep their original relative order");
-  assert.deepEqual(advisory.map((item) => item.code), ["MISSING_VERIFICATION"],
-    "advisory findings are separated out rather than dropped");
+  assert.deepEqual([...mergedPlanBranches(overview)], [["landed-plan", { into: "main" }]]);
+  assert.deepEqual([...mergedPlanBranches(null)], [], "an unavailable overview has no merged plans");
 }
 
-// Older routes and non-plans domain errors still send plain strings; those must render too.
-function testFindingGroupsFallBackToDetailStrings() {
-  const { blocking, advisory } = lifecycleFindingGroups({ details: ["Something is wrong.", "So is this."] });
-  assert.equal(blocking.length, 2, "detail strings are shown rather than discarded when findings are absent");
-  assert.equal(advisory.length, 0, "unclassified detail strings default to the must-fix group");
-  assert.equal(blocking[0].message, "Something is wrong.", "the string becomes the finding's message");
-}
-
-function testFindingGroupsHandleAnErrorWithNeither() {
-  const { blocking, advisory } = lifecycleFindingGroups({ message: "boom" });
-  assert.deepEqual([blocking, advisory], [[], []], "an error with no findings or details renders no list at all");
-}
-
-// "Copies a prompt matching the current findings" — the actual invariant behind
-// that check, testable here even though the clipboard call itself is not.
-function testEveryDisplayedFindingAppearsInTheRepairPrompt() {
-  const err = {
-    findings: [
-      { code: "UNCHECKED_REQUIRED_TASKS", message: "3 required tasks remain unchecked.", severity: "blocking" },
-      { code: "MISSING_VERIFICATION", message: "Missing Verification section.", severity: "advisory" },
-    ],
-    repair: {
-      prompt: [
-        "/plan-write",
-        "1. 3 required tasks remain unchecked.",
-        "2. Missing Verification section.",
-      ].join("\n"),
-    },
-  };
-  const { blocking, advisory } = lifecycleFindingGroups(err);
-  for (const item of [...blocking, ...advisory]) {
-    assert.ok(err.repair.prompt.includes(item.message),
-      `the copied prompt must describe every finding on screen; missing: ${item.code}`);
-  }
-}
-
-function testCanRepairRequiresANonEmptyPrompt() {
-  assert.equal(canRepairLifecycleError({ repair: { prompt: "/plan-write" } }), true,
-    "a usable prompt enables the copy button");
-  assert.equal(canRepairLifecycleError({ repair: { prompt: "" } }), false,
-    "an empty prompt must not offer a copy button that yields nothing");
-  assert.equal(canRepairLifecycleError({ details: ["x"] }), false,
-    "errors without a repair descriptor (stale, collision) offer no prompt");
-  assert.equal(canRepairLifecycleError(undefined), false, "a missing error is not repairable");
-}
-
-// Lifecycle options stay selectable until the server rejects a submitted
-// move, so a stale browser snapshot can never pre-empt the authoritative finding set. Nothing
-// disables them today; this asserts it stays that way, since the regression would be invisible
-// in every other test here.
 // Progress is shown when it says something the lifecycle does not already imply. "Nothing started"
 // is the default for backlog and for a completed plan with no task list, so it stays quiet there;
 // started work and a finished list are never the default and always show.
@@ -312,37 +250,20 @@ function testTaskProgressDisplayByLifecycleAndProgress() {
 
   assert.equal(display("backlog", none), "none", "an empty backlog plan shows nothing");
   assert.equal(display("backlog", unstarted), "none", "unstarted backlog work is the default state");
-  assert.equal(display("backlog", partial), "bar", "started work is not the default anywhere");
+  assert.equal(display("backlog", partial), "progress", "started work is not the default anywhere");
   assert.equal(display("backlog", done), "complete");
 
-  assert.equal(display("active", none), "bar", "active always shows progress, even with no tasks");
-  assert.equal(display("active", unstarted), "bar");
-  assert.equal(display("active", partial), "bar");
+  assert.equal(display("active", none), "progress", "active always shows progress, even with no tasks");
+  assert.equal(display("active", unstarted), "progress");
+  assert.equal(display("active", partial), "progress");
   assert.equal(display("active", done), "complete");
 
   assert.equal(display("completed", none), "none");
-  assert.equal(display("completed", partial), "bar", "a completed plan with open tasks must not look finished");
+  assert.equal(display("completed", partial), "progress", "a completed plan with open tasks must not look finished");
   assert.equal(display("completed", done), "complete");
 
-  assert.equal(display("archived", partial), "bar");
+  assert.equal(display("archived", partial), "progress");
   assert.equal(display("archived", none), "none");
-}
-
-// A "next up" line beside an "all tasks complete" badge is a contradiction, so the element hides
-// the next-action row in exactly the state that renders the badge.
-function testCompleteStateSuppressesTheNextAction() {
-  const source = fs.readFileSync(new URL("../../portal/plans/elements/plan-status.js", import.meta.url), "utf8");
-  assert.match(source, /\[data-slot=next-row\]"\)\.hidden = progress !== "bar"/,
-    "the next-action row must be hidden whenever progress is not the in-progress bar");
-  assert.match(source, /\[data-slot=complete-row\]"\)\.hidden = progress !== "complete"/);
-  assert.match(source, /\[data-slot=progress-row\]"\)\.hidden = progress !== "bar"/);
-}
-
-function testLifecycleOptionsAreNeverDisabled() {
-  const source = fs.readFileSync(new URL("../../portal/plans/elements/plan-status.js", import.meta.url), "utf8");
-  const dropdown = source.slice(source.indexOf("renderLifecycleDropdown"));
-  assert.ok(!/\bdisabled\b/.test(dropdown.slice(0, dropdown.indexOf("\n  }"))),
-    "the lifecycle dropdown must never disable itself from snapshot warnings — only a submitted move may be rejected");
 }
 
 // --- Active-tab completion ordering ---------------------------------------------------------
