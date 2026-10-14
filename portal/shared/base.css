@@ -192,11 +192,12 @@
    * white panel (band a touch grey, sunken greyer), and the inset layer returns to white so a
    * bordered unit inside a grey list is the strongest contrast. */
   --surface-band: #f3f5f7;
-  /* Three steps from the top: the header darkest, the repo filter row a middle grey, the page
-   * (--bg) lightest, so the chrome reads as one darker block above the content. */
-  --header-bg: #c9d0d7;
-  --scope-bar-bg: #d8dde3;
-  /* --dim reads 3.4:1 on the darker header; inside the header it steps darker to keep 4.5:1. */
+  /* A white site header over a grey repo filter row, then the page (--bg) between the two, so the
+   * repo row reads as the band that separates the chrome from the content. */
+  --header-bg: #ffffff;
+  --scope-bar-bg: #c9d0d7;
+  /* --dim reads 3.4:1 on the grey repo row, which inherits the header's tokens; inside the header
+   * it steps darker to keep 4.5:1. */
   --header-dim: #4f5760;
   --surface-sunken: #e9ecef;
   --surface-inset: #ffffff;

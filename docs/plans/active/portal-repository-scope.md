@@ -407,7 +407,7 @@ Decisions made autonomously while implementing on `claude/portal-repository-scop
 | Home's repo menu is All Plans, Agent Config, Token Activity (each a `?repo=` link with its nav icon), Pin/Unpin, and Ignore Repo; the Token Warnings row reads `Recent Token Warnings … all activity` | One place to jump to any page already filtered to the repo |
 | In the Plans filter popup, each control's option counts (and disabled options) follow the unapplied draft as it changes; the board still waits for **Update** | Picking one filter should show what is left in the others, as the inline filters did |
 | Every `<select>` draws its own up/down caret, inset `.5rem` from the right edge (`--select-caret`, one SVG per theme) | The native caret sat flush against the border and ignores padding |
-| Light theme steps the chrome down from the top: site header darkest (`--header-bg`), repo row a middle grey (`--scope-bar-bg`), page lightest; dim text inside the header steps darker (`--header-dim`) to keep 4.5:1. Dark theme is unchanged | The near-white repo row read lighter than the page; `portal-surface-layers-check` now pins the order and the contrast |
+| Light theme: a white site header (`--header-bg`) over a grey repo row (`--scope-bar-bg`, the darkest band), with the page between them; dim text in the header and repo row steps darker (`--header-dim`) to keep 4.5:1. Dark theme is unchanged. The unavailable notice sits on the page with no panel around it | The near-white repo row read lighter than the page; `portal-surface-layers-check` now pins the order and the contrast |
 | A new Tokens report version keeps the user's view state: open or closed Investigate sections and an open "+N more" list survive the re-render (`portal/tokens/view-state.js`) | Polls on real data rebuilt the sections every few seconds and collapsed whatever the user had opened |
 
 ## Acceptance Criteria
@@ -433,10 +433,9 @@ None. No decision in this run was blocked.
 
 ## Not tested
 
-- [ ] The repository sub-header row, its menu, the unavailable notice, and the Agents splash look
-      right in the light theme. Checked by eye in dark theme at desktop width and 375px only; the
-      browser spec asserts the row's geometry and that its background differs from the page, not
-      how it looks.
+- [x] The repository sub-header row, its menu, the unavailable notice, and the Agents splash look
+      right in the light theme. Confirmed by the user on 2026-10-14, after the light chrome was
+      reworked to a white header over a grey repo row and the notice lost its panel.
 - [ ] After ignoring or finding a repository from **Manage repositories…** in the selector, the
       selector's list and Tokens' **Activity outside listed repos** update without a reload. The
       server side is covered (`repository-scope-portal-check`); the browser flow through the dialog
