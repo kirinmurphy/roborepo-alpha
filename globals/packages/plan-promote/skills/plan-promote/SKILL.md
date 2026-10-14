@@ -92,7 +92,15 @@ Each row is its own optional package, so check it before loading it:
     and tests exist, current-state claims match the code, and related-plan classifications remain
     accurate. The deterministic validator does not replace this semantic reconciliation pass.
 13. Present the resulting plan, related-plan classifications, and any remaining questions to the user.
-14. Stop before implementation.
+14. After the promotion report, show the `/plan-start` instruction for the selected plan using its
+    repository-relative path, ready to paste into a new session.
+15. If promotion changed the selected plan document, show the user its changes and ask whether to
+    commit them. Wait for approval. If approved, recheck Git state, stage only the selected plan
+    path, verify the staged diff contains only the reviewed plan changes, and commit it. Do not
+    include pre-existing edits or other files without explicit approval. If the edits cannot be
+    isolated, explain that before committing. Report the commit result or the user's decision to
+    leave the changes uncommitted.
+16. Stop before implementation.
 
 ## Decision Policy
 
@@ -135,7 +143,7 @@ The promoted plan should:
 
 ## Completion Result
 
-Finish with:
+Include this in the promotion report:
 
 ```text
 Promotion result
@@ -159,6 +167,20 @@ Also report:
 - active-story conflicts and lifecycle/prose drift found, including how the selected plan reconciles them;
 - paired skills loaded, and any skipped with the reason;
 - any claims that could not be verified.
+
+After the report, show this snippet with the actual repository-relative plan path:
+
+````text
+Paste this instruction into a new session to start this plan:
+```text
+/plan-start <plan document file>
+```
+````
+
+If the plan was updated, ask for commit approval after showing the report and snippet. The
+approval request should identify the selected plan and summarize the changes to be committed.
+After the user's decision, report whether the plan was committed and include the commit hash when
+applicable.
 
 ## Boundaries
 
