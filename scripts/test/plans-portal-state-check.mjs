@@ -10,9 +10,7 @@ import {
   mergedPlanBranches,
   taskProgressDisplay,
   completionRatio,
-  isNotStarted,
   activeCompletionSort,
-  completionBadgeColor,
   sortForLifecycle,
   planSort,
   FILTER_DEFAULTS,
@@ -42,12 +40,10 @@ testResolveBlockingExcludesSelf();
 testMergedPlanBranchesOnlyIncludesLandedActivePlans();
 testTaskProgressDisplayByLifecycleAndProgress();
 testCompletionRatioIsNullWithoutTasks();
-testNotStartedCoversNoTasksAndNoneComplete();
 testActiveSortOrdersMostCompleteFirst();
 testActiveSortSinksUnstartedAndUntrackedToTheBottom();
 testActiveSortFallsBackToPlanSortOnTies();
 testSortForLifecycleOnlyChangesActive();
-testCompletionBadgeRampEndpointsAndBands();
 console.log("ok: plans portal state checks passed");
 
 function record({ key = "k1", lifecycle = "backlog", priority = "high", id = "plan-1", repositoryId = "r1", blockers = [], taskCounts = { total: 0, complete: 0, remaining: 0 } } = {}) {
@@ -285,13 +281,6 @@ function testCompletionRatioIsNullWithoutTasks() {
   assert.equal(completionRatio(record({ taskCounts: counts(9, 9) }).plan), 1);
 }
 
-function testNotStartedCoversNoTasksAndNoneComplete() {
-  assert.equal(isNotStarted(record({ taskCounts: counts(0, 0) }).plan), true, "no checklist reads as not started");
-  assert.equal(isNotStarted(record({ taskCounts: counts(0, 10) }).plan), true, "zero of ten is not started");
-  assert.equal(isNotStarted(record({ taskCounts: counts(1, 10) }).plan), false, "one done means started");
-  assert.equal(isNotStarted(record({ taskCounts: counts(10, 10) }).plan), false);
-}
-
 function order(records) {
   return [...records].sort(activeCompletionSort).map((r) => r.plan.id);
 }
@@ -325,26 +314,5 @@ function testSortForLifecycleOnlyChangesActive() {
   for (const lifecycle of ["backlog", "completed", "archived", "unclassified"]) {
     assert.equal(sortForLifecycle(lifecycle), planSort,
       `${lifecycle} must keep the shared sort — completion ordering is Active-only`);
-  }
-}
-
-function testCompletionBadgeRampEndpointsAndBands() {
-  const gray = completionBadgeColor(0);
-  const green = completionBadgeColor(1);
-  assert.equal(completionBadgeColor(null), gray, "no checklist must read as the neutral 0% badge");
-  assert.equal(completionBadgeColor(0.9), green, "90% is the first stop that looks finished");
-  assert.equal(completionBadgeColor(0.95), green);
-  assert.notEqual(completionBadgeColor(0.85), green,
-    "85% must stay distinguishable from 100% — flooring into bands is what prevents that collision");
-  assert.notEqual(completionBadgeColor(0.5), gray, "a half-done plan must not look untouched");
-  assert.match(green, /^rgb\(\d+,\d+,\d+\)$/, "the badge color must be a plain rgb() string");
-
-  // Monotonic: every 10% band must be at least as green as the one below it, never backwards.
-  let previous = -1;
-  for (let step = 0; step <= 10; step += 1) {
-    const [r, g] = completionBadgeColor(step / 10).match(/\d+/g).map(Number);
-    const greenness = g - r;
-    assert.ok(greenness >= previous, `band ${step * 10}% must not regress toward gray`);
-    previous = greenness;
   }
 }

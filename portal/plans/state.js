@@ -186,14 +186,6 @@ export function completionRatio(plan) {
   return total > 0 ? complete / total : null;
 }
 
-// True when a plan has tasks and none are done, or has no tasks at all. Both render as
-// "Project Not Started": a plan with 0/10 and a plan with no checklist are equally un-begun as far
-// as the board can tell, and the dialog offers View Story for the detail the counts cannot carry.
-export function isNotStarted(plan) {
-  const { total, complete } = plan.taskCounts;
-  return total === 0 || complete === 0;
-}
-
 // Most complete first; un-started plans (including untracked 0/0) sink to the bottom as one group.
 // Ties fall through to planSort so priority, recency, and title still break them the usual way.
 export function activeCompletionSort(a, b) {
@@ -207,32 +199,6 @@ export function activeCompletionSort(a, b) {
 // The comparator for a lifecycle: completion ordering on Active, the shared sort everywhere else.
 export function sortForLifecycle(lifecycle) {
   return lifecycle === "active" ? activeCompletionSort : planSort;
-}
-
-// Badge background for a completion ratio: gray at 0%, green from 90% up, interpolated between so
-// each 10% step is visibly further along. Computed rather than a ten-class lookup — the ramp is one
-// rule here, where a class table would be ten places to keep consistent.
-//
-// Lives in state.js, not templates.js, for the same reason harness-cohort.js exists: templates.js
-// imports /portal/shared/api.js by absolute browser URL and cannot load in Node, so a pure function
-// left there is untestable. This one is DOM-free, so it belongs on the testable side of that line.
-//
-// Snapped to 10% bands on purpose. A continuous gradient makes 63% and 67% two different colors
-// that mean the same thing; bands keep the badge readable as a category while still moving. White
-// text sits on every stop, so the ramp stays dark enough for contrast across its whole range rather
-// than passing through a pale midpoint.
-const BADGE_GRAY = [0x99, 0x9c, 0xa3];
-const BADGE_GREEN = [0x1f, 0x8a, 0x4c];
-
-export function completionBadgeColor(ratio) {
-  // No checklist reads as no progress — same neutral as 0%, matching how the sort ranks it.
-  if (ratio === null || ratio <= 0) return `rgb(${BADGE_GRAY.join(",")})`;
-  // 90%+ is "done enough to look done", so everything from there up shares the full green. Below
-  // that, floor into 10% bands: rounding would let 85% reach the final stop and become
-  // indistinguishable from 100%.
-  const t = ratio >= 0.9 ? 1 : Math.floor(ratio * 10) / 9;
-  const mix = BADGE_GRAY.map((from, i) => Math.round(from + (BADGE_GREEN[i] - from) * t));
-  return `rgb(${mix.join(",")})`;
 }
 
 export function repositoryContext(record) {

@@ -181,7 +181,11 @@ export function mockPlanDocument({ key }) {
       warnings: [],
       title: record.plan.title,
       headings: [{ depth: 1, text: record.plan.title, line: 1, hasContent: true }],
-      tasks: record.plan.openTasks,
+      tasks: Array.from({ length: record.plan.taskCounts.remaining }, (_, index) => ({
+        done: false,
+        text: `${record.plan.title} task ${index + 1}`,
+        line: index + 2,
+      })),
       notTested: { present: false, entries: [], unchecked: 0 },
       taskCounts: record.plan.taskCounts,
     },
@@ -479,7 +483,6 @@ function mockRepositoryDefinitions() {
 }
 
 function mockHomePlan(definition, checkoutRootId) {
-  const total = definition.taskCounts.total;
   return {
     id: definition.id,
     key: `mock:${definition.id}`,
@@ -492,7 +495,6 @@ function mockHomePlan(definition, checkoutRootId) {
     checkoutRootId,
     priority: definition.priority,
     nextAction: definition.nextAction,
-    openTasks: Array.from({ length: Math.max(0, total - definition.taskCounts.complete) }, (_, index) => ({ done: false, text: `${definition.title} task ${index + 1}`, line: index + 2 })),
   };
 }
 
@@ -517,7 +519,6 @@ function mockRepositorySummaries() {
 
 function mockPlanRecord(definition, repository, now) {
   const taskCounts = definition.taskCounts;
-  const openTasks = Array.from({ length: Math.max(0, taskCounts.total - taskCounts.complete) }, (_, index) => ({ done: false, text: `${definition.title} task ${index + 1}`, line: index + 2 }));
   const plan = {
     id: definition.id,
     title: definition.title,
@@ -536,7 +537,6 @@ function mockPlanRecord(definition, repository, now) {
     gitLastChangedAt: definition.changedAt,
     gitStatus: "clean",
     taskCounts: { ...taskCounts, remaining: taskCounts.total - taskCounts.complete },
-    openTasks,
     headings: [{ depth: 1, text: definition.title, line: 1, hasContent: true }],
     excerpt: definition.excerpt,
     validation: { valid: true, findings: [], warnings: [] },

@@ -88,11 +88,10 @@
         </div>
       </section>
       <div class="inner">
-        <nav class="lifecycle-tabs" id="lifecycle-tabs" role="tablist"></nav>
-        <div
-          class="lifecycle-dropdown-mount"
-          id="lifecycle-dropdown-mount"
-        ></div>
+        <div class="lifecycle-bar" id="lifecycle-bar" hidden>
+          <h2 class="lifecycle-title" id="lifecycle-title"></h2>
+          <nav class="lifecycle-tabs" id="lifecycle-tabs" aria-label="Plan lifecycle"></nav>
+        </div>
       </div>
     </div>
     <div id="blockers-popover" class="blockers-popover" hidden role="menu">
@@ -105,31 +104,8 @@
            scanning and no-plans steps (app.js chooses; one call to action at a time). -->
       <div id="plans-onboarding" hidden></div>
       <section id="warnings" class="warnings" hidden></section>
-      <!-- Active-tab only; app.js toggles `hidden` with the selected lifecycle. -->
-      <div id="active-tasks-bar" class="active-tasks-bar" hidden>
-        <button type="button" id="open-all-tasks">View All Open Tasks</button>
-      </div>
       <section id="groups" class="groups"></section>
     </main>
-    <dialog
-      id="all-tasks-modal"
-      data-dialog-size="xl"
-      aria-labelledby="all-tasks-modal-title"
-    >
-      <div class="modal-head">
-        <span class="modal-title" id="all-tasks-modal-title"
-          >All Open Tasks</span
-        >
-        <span class="modal-path" id="all-tasks-summary"></span>
-        <portal-close-button
-          id="all-tasks-close"
-          aria-label="Close"
-        ></portal-close-button>
-      </div>
-      <div class="modal-body">
-        <div id="all-tasks-body" class="all-tasks-body"></div>
-      </div>
-    </dialog>
     <!-- The enable-skill onboarding banner (tpl-package-banner) lives in plan-drawer-partial.html,
          since the drawer's menu uses it too. -->
     <!-- Generic primitives: reused across panels, no single owner -->
@@ -162,7 +138,6 @@
       <button
         type="button"
         class="lifecycle-tab"
-        role="tab"
         data-slot="label"
       ></button>
     </template>
@@ -194,26 +169,6 @@
     </template>
 
     <!-- Plan card & drawer -->
-    <template id="tpl-all-tasks-project">
-      <section class="all-tasks-project">
-        <header class="all-tasks-project-head">
-          <span class="all-tasks-percent" data-slot="percent"></span>
-          <span class="all-tasks-project-title" data-slot="title"></span>
-          <span class="all-tasks-repo" data-slot="repo"></span>
-          <span class="all-tasks-count" data-slot="count"></span>
-        </header>
-        <p class="all-tasks-notstarted" data-slot="notstarted" hidden>
-          <span>Project Not Started</span>
-          <button type="button" data-btn="text" data-slot="view-story">
-            View Story
-          </button>
-        </p>
-        <ul class="all-tasks-list" data-slot="tasks"></ul>
-      </section>
-    </template>
-    <template id="tpl-all-tasks-item">
-      <li class="all-tasks-item"><span data-slot="text"></span></li>
-    </template>
     <template id="tpl-plan-card">
       <article class="plan-card">
         <div class="doc-details">

@@ -368,19 +368,6 @@ Run targeted checks.
     assert.ok(fs.existsSync(path.join(repo, "docs", "plans", destination, "movable.md")), "destination created");
     const movedOnDisk = fs.readFileSync(path.join(repo, "docs", "plans", destination, "movable.md"), "utf8");
     assert.match(movedOnDisk, /id: movable-plan/, "frontmatter unchanged by lifecycle movement");
-    // openTasks is the list snapshot's active-only payload, feeding the portal's All Open Tasks
-    // dialog without a per-plan fetch. The tour crosses the active boundary in both directions,
-    // which is what makes it the right place to pin the scoping: carrying task text for every
-    // lifecycle would roughly triple the field's cost to serve a view that only reads active.
-    // This fixture's only task is `- [x]`, so it also pins the completed-item filter: even on
-    // active, a finished task must not appear. The open-task case is covered by
-    // testActivePlanShipsItsOpenTaskText below, against a fixture that has one.
-    const openTasks = moveResult.record.plan.openTasks;
-    assert.ok(Array.isArray(openTasks), "every plan record must carry an openTasks array");
-    assert.equal(openTasks.length, 0,
-      destination === "active"
-        ? "a completed task must be excluded from openTasks even on active"
-        : `${destination} must not carry task text — the dialog is active-only`);
     current = moveResult.record;
   }
 
@@ -965,87 +952,6 @@ Body.
   assert.match(extBlockerFindings[0].message, /ghost-plan/,
     "prefixed external blockers must be skipped, not reported as missing plans");
 
-  // The positive half of the openTasks contract: an active plan with unchecked items ships their
-  // text, in document order, with the completed ones filtered out. Its own repository and state
-  // root so it cannot disturb the plan counts the fixtures above assert on.
-  const tasksStateRoot = path.join(tempRoot, "state-tasks");
-  const tasksRepo = path.join(tempRoot, "projects-tasks", "sample");
-  fs.mkdirSync(path.join(tasksRepo, "docs", "plans", "active"), { recursive: true });
-  fs.writeFileSync(path.join(tasksRepo, ".git"), "gitdir: nowhere\n");
-  fs.writeFileSync(path.join(tasksRepo, "docs", "plans", "active", "tasks.md"), `---
-id: tasks-plan
-priority: high
-next_action: Ship the dialog
-blocked_by: []
-depends_on: []
-related: []
----
-
-# Tasks Plan
-
-## Summary
-
-Carry open task text to the portal.
-
-## Implementation plan
-
-- [x] Already done
-- [ ] First open item
-- [ ] Second open item
-
-## Validation
-
-Run targeted checks.
-`);
-  addRepositorySource({ path: path.join(tempRoot, "projects-tasks"), stateRoot: tasksStateRoot });
-  const tasksSnapshot = buildPlanSnapshot({ stateRoot: tasksStateRoot });
-  const tasksRecord = tasksSnapshot.plans.find((item) => item.plan.id === "tasks-plan");
-  assert.ok(tasksRecord, "expected the active tasks fixture in the snapshot");
-  assert.deepEqual(
-    tasksRecord.plan.openTasks.map((task) => task.text),
-    ["First open item", "Second open item"],
-    "openTasks must carry every unchecked item's text in document order, and nothing else",
-  );
-  assert.equal(tasksRecord.plan.taskCounts.complete, 1, "the completed item still counts toward progress");
-  assert.equal(tasksRecord.plan.taskCounts.total, 3);
-
-  // The scoping half, and it needs a fixture that WOULD carry tasks if the scoping were dropped:
-  // a valid backlog plan with an unchecked item. An invalid plan parses to no tasks at all, so
-  // asserting against one would pass whether or not the lifecycle check exists.
-  fs.mkdirSync(path.join(tasksRepo, "docs", "plans", "backlog"), { recursive: true });
-  fs.writeFileSync(path.join(tasksRepo, "docs", "plans", "backlog", "queued.md"), `---
-id: queued-plan
-priority: high
-next_action: Wait for the dialog
-blocked_by: []
-depends_on: []
-related: []
----
-
-# Queued Plan
-
-## Summary
-
-Sit in the backlog with open work.
-
-## Proposed design
-
-Do nothing yet.
-
-## Implementation plan
-
-- [ ] Not on the active tab
-
-## Validation
-
-Run targeted checks.
-`);
-  const scopedSnapshot = buildPlanSnapshot({ stateRoot: tasksStateRoot });
-  const queued = scopedSnapshot.plans.find((item) => item.plan.id === "queued-plan");
-  assert.equal(queued.plan.taskCounts.remaining, 1,
-    "fixture guard: this plan must really have an open task, or the next assertion proves nothing");
-  assert.deepEqual(queued.plan.openTasks, [],
-    "a non-active plan must not carry task text — the All Open Tasks dialog is active-only");
 } finally {
   fs.rmSync(tempRoot, { recursive: true, force: true });
 }

@@ -7,7 +7,7 @@ import {
   portalTpl as tpl,
   portalFillSlots as fill,
 } from "/portal/shared/api.js";
-import { FILTER_LABELS, LIFECYCLE_LABELS, formatDate, completionBadgeColor } from "./state.js";
+import { FILTER_LABELS, LIFECYCLE_LABELS, formatDate } from "./state.js";
 
 export function rootChip(root, onRemove) {
   const node = fill(tpl("tpl-root-chip"), { path: root });
@@ -142,7 +142,7 @@ export function lifecycleTab(lifecycle, count, isSelected, onSelect) {
     label: `${LIFECYCLE_LABELS[lifecycle] || lifecycle} (${count})`,
   });
   btn.classList.toggle("selected", isSelected);
-  btn.setAttribute("aria-selected", String(isSelected));
+  if (isSelected) btn.setAttribute("aria-current", "true");
   btn.addEventListener("click", () => onSelect(lifecycle));
   return btn;
 }
@@ -379,37 +379,4 @@ export function blockerLink(blocker, onOpenPlan) {
   const link = fill(tpl("tpl-blocker-link"), { title: blocker.title });
   link.addEventListener("click", () => onOpenPlan(blocker.key));
   return link;
-}
-
-// One project block in the All Open Tasks dialog: a completion header, then either the plan's open
-// tasks or the not-started line with its View Story escape hatch.
-//
-// A not-started plan still lists its open tasks when it has any. "Project Not Started" answers
-// "has anything happened here", which a 0/10 plan and a 0/0 plan answer identically; the task list
-// answers "what is left", which only the first can. Suppressing the list for 0/10 would hide ten
-// real items behind a label. View Story is the only route to detail for the 0/0 case, where there
-// is no checklist to show.
-export function allTasksProject(record, { notStarted, percent, onViewStory }) {
-  const plan = record.plan;
-  const { complete, total } = plan.taskCounts;
-  const node = fill(tpl("tpl-all-tasks-project"), {
-    title: plan.title,
-    repo: record.repository.name,
-    percent: percent === null ? "—" : `${Math.round(percent * 100)}%`,
-    count: total === 0 ? "no checklist" : `${complete}/${total}`,
-  });
-  const percentEl = node.querySelector("[data-slot=percent]");
-  percentEl.style.background = completionBadgeColor(percent);
-
-  const notStartedEl = node.querySelector("[data-slot=notstarted]");
-  notStartedEl.hidden = !notStarted;
-  const viewStoryEl = node.querySelector("[data-slot=view-story]");
-  if (notStarted) viewStoryEl.addEventListener("click", () => onViewStory(record.key));
-  else viewStoryEl.remove();
-
-  const tasks = plan.openTasks || [];
-  node
-    .querySelector("[data-slot=tasks]")
-    .replaceChildren(...tasks.map((task) => fill(tpl("tpl-all-tasks-item"), { text: task.text })));
-  return node;
 }

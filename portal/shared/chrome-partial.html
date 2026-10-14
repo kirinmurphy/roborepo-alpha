@@ -24,18 +24,17 @@
 <template id="tpl-nav-link">
   <a><span class="nav-label" data-slot="label"></span></a>
 </template>
-<!-- The ⋮ menu at the end of the header nav. Its panel lists every page; CSS shows only the
-     secondary ones while the primary pages fit in the bar, and all of them once they don't. -->
-<template id="tpl-nav-more">
-  <div class="nav-more">
-    <button
-      type="button"
-      class="nav-more-trigger"
-      aria-label="More pages"
-      title="More"
-      aria-expanded="false"
-      aria-controls="nav-more-panel"
-    ><span></span><span></span><span></span></button>
-    <div id="nav-more-panel" class="nav-more-panel" hidden></div>
+<!-- The trailing ⋮ menu of a mountOverflowNav row (portal/shared/overflow-nav.js), used by the
+     header nav and the Plans lifecycle row. The panel lists every item; CSS shows only the
+     secondary ones while the primary items fit in the bar, and all of them once they don't. The
+     current-item label and caret show only on a collapsed row mounted with collapsedFace "current". -->
+<template id="tpl-overflow-more">
+  <div class="overflow-more">
+    <button type="button" class="overflow-more-trigger" aria-expanded="false">
+      <span class="overflow-more-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+      <span class="overflow-more-current" data-slot="current"></span>
+      <portal-icon class="overflow-more-caret" name="chevron" size="sm" aria-hidden="true"></portal-icon>
+    </button>
+    <div class="overflow-more-panel" hidden></div>
   </div>
 </template>

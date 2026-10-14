@@ -766,8 +766,8 @@ test.describe("repository-first portal Home", () => {
       telemetry: { enabled: false, captureAvailable: false },
     } }));
     await page.goto("/settings");
-    await expect(page.locator(".nav-more-trigger")).toHaveClass(/\bactive\b/);
-    await page.locator(".nav-more-trigger").click();
+    await expect(page.locator("#nav .overflow-more-trigger")).toHaveClass(/\bactive\b/);
+    await page.locator("#nav .overflow-more-trigger").click();
     await expect(page.locator('#nav-more-panel a[aria-current="page"] portal-icon[name="settings"] svg')).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.getByRole("heading", { level: 2, name: "Repos" })).toBeVisible();
@@ -884,7 +884,7 @@ test.describe("repository-first portal Home", () => {
   test("global navigation keeps primary pages in the bar and the rest in the ⋮ menu", async ({ page }) => {
     await page.goto("/");
     await expect(page.locator("#nav > a")).toHaveText(NAV_PRIMARY);
-    const trigger = page.locator(".nav-more-trigger");
+    const trigger = page.locator("#nav .overflow-more-trigger");
     const panel = page.locator("#nav-more-panel");
     await expect(panel).toBeHidden();
     await trigger.click();
@@ -915,7 +915,7 @@ test.describe("repository-first portal Home", () => {
     await page.setViewportSize({ width: 420, height: 780 });
     await page.goto("/");
     await expect(page.locator("#nav > a:visible")).toHaveCount(0);
-    await page.locator(".nav-more-trigger").click();
+    await page.locator("#nav .overflow-more-trigger").click();
     const links = page.locator("#nav-more-panel a:visible");
     await expect(links).toHaveText(NAV_ORDER);
     const panel = await page.locator("#nav-more-panel").boundingBox();
@@ -944,7 +944,7 @@ test.describe("repository-first portal Home", () => {
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     await page.locator("#theme-toggle").click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-    await page.locator(".nav-more-trigger").click();
+    await page.locator("#nav .overflow-more-trigger").click();
     await page.locator("#nav").getByRole("link", { name: "Runtime", exact: true }).click();
     await expect(page).toHaveURL(/\/runtime$/);
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
@@ -1159,6 +1159,61 @@ test.describe("Plans card commands", () => {
       expect(fs.existsSync(path.join(planRoot, "docs", "plans", folder)), `${folder} stays where it was`).toBe(true);
     });
   }
+
+  test("lifecycle tabs keep Completed, Archived and Unclassified behind the ⋮ menu", async ({ page }) => {
+    await page.goto("/plans");
+    const bar = page.locator("#lifecycle-bar");
+    const title = page.locator("#lifecycle-title");
+    const row = page.locator("#lifecycle-tabs");
+    await expect(title).toHaveText("Active Plans");
+    const barBox = await bar.boundingBox();
+    const rowBox = await row.boundingBox();
+    expect(rowBox.x).toBeGreaterThan(barBox.x, "the title is a left column opposite the tabs");
+    expect(Math.abs(rowBox.x + rowBox.width - barBox.x - barBox.width)).toBeLessThanOrEqual(1);
+    await expect(row.locator(":scope > .lifecycle-tab")).toHaveText([/^Backlog \(/, /^Active \(/]);
+    const trigger = row.locator(".overflow-more-trigger");
+    await expect(trigger).toHaveAttribute("aria-label", "More lifecycles");
+    await expect(trigger).not.toHaveClass(/\bactive\b/);
+    await trigger.click();
+    await row.locator("#lifecycle-tabs-more-panel .lifecycle-tab:visible", { hasText: /^Completed \(/ }).click();
+    await expect(page).toHaveURL(/lifecycle=completed/);
+    await expect(title).toHaveText("Completed Plans");
+    await expect(trigger).not.toHaveClass(/\bactive\b/);
+    await trigger.click();
+    await row.locator("#lifecycle-tabs-more-panel .lifecycle-tab:visible", { hasText: /^Archived \(/ }).click();
+    await expect(page).toHaveURL(/lifecycle=archived/);
+    await expect(title).toHaveText("Archived Plans");
+    await expect(row.locator("#lifecycle-tabs-more-panel")).toBeHidden();
+    await expect(trigger).not.toHaveClass(/\bactive\b/);
+    await expect(page.getByRole("button", { name: "View All Open Tasks" })).toHaveCount(0);
+    await expect(page.locator("#all-tasks-modal")).toHaveCount(0);
+  });
+
+  test("a narrow viewport collapses the lifecycle tabs into a menu named for the selection", async ({ page }) => {
+    await page.setViewportSize({ width: 420, height: 780 });
+    await page.goto("/plans?lifecycle=backlog");
+    const bar = page.locator("#lifecycle-bar");
+    await expect(page.locator("#lifecycle-title")).toBeHidden();
+    const row = page.locator("#lifecycle-tabs");
+    await expect(row.locator(":scope > .lifecycle-tab:visible")).toHaveCount(0);
+    const trigger = row.locator(".overflow-more-trigger");
+    await expect(trigger).toHaveText("Backlog Plans");
+    await expect(trigger).not.toHaveAttribute("aria-label");
+    await row.locator(".overflow-more-current").click();
+    const items = row.locator("#lifecycle-tabs-more-panel .lifecycle-tab:visible");
+    // Unclassified joins only when a registered repository has such a plan, so match the fixed four.
+    await expect(items.first()).toBeVisible();
+    expect((await items.allTextContents()).slice(0, 4).map((text) => text.replace(/ \(.*/, ""))).toEqual(
+      ["Backlog", "Active", "Completed", "Archived"],
+    );
+    const barBox = await bar.boundingBox();
+    const triggerBox = await trigger.boundingBox();
+    expect(Math.abs(triggerBox.x - barBox.x),
+      "the collapsed trigger is left-aligned").toBeLessThanOrEqual(1);
+    await items.filter({ hasText: /^Active \(/ }).click();
+    await expect(page).toHaveURL(/lifecycle=active/);
+    await expect(trigger).toHaveText("Active Plans");
+  });
 });
 
 test.describe("Plans onboarding", () => {

@@ -361,13 +361,6 @@ function buildPlanRecord(repository, absolutePath, relativePath, stat, projectNa
       gitLastChangedAt: git.lastChangedAt,
       gitStatus: git.status,
       taskCounts: parsed.taskCounts,
-      // Open task text, carried in the list snapshot for active plans only. The all-open-tasks
-      // dialog needs every active plan's remaining items at once; per-plan document fetches would
-      // be one round trip per card. Scoped to active because that is the only lifecycle the dialog
-      // covers, and shipping all 47 plans' tasks would roughly triple this field's cost (~68KB vs
-      // ~23KB measured) to serve a view that never reads the rest. Completed items are excluded —
-      // taskCounts already carries the totals the progress bar needs.
-      openTasks: lifecycle === "active" ? parsed.tasks.filter((task) => !task.done) : [],
       headings: parsed.headings,
       excerpt: excerpt(markdown),
       // `warnings` is the display-string projection of `findings`, derived here so the two can

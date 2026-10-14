@@ -14,6 +14,7 @@
 // script runs.
 import { portalFillSlots as fill, portalTpl as tpl } from "/portal/shared/api.js";
 import "/portal/shared/icon.js";
+import { mountOverflowNav } from "/portal/shared/overflow-nav.js";
 
 if (!window.PORTAL_MANIFEST) {
   throw new Error(
@@ -32,7 +33,7 @@ const PORTAL_PAGES = window.PORTAL_MANIFEST.pages;
   const nav = document.getElementById("nav");
   if (!nav) return;
   const currentPageId = window.PORTAL_MANIFEST.currentPageId;
-  const navLink = (p) => {
+  const navLink = (p, inMenu) => {
     const link = tpl("tpl-nav-link");
     link.href = p.path;
     fill(link, { label: p.title });
@@ -40,50 +41,25 @@ const PORTAL_PAGES = window.PORTAL_MANIFEST.pages;
       link.classList.add("active");
       link.setAttribute("aria-current", "page");
     }
+    if (inMenu && p.icon) {
+      const icon = document.createElement("portal-icon");
+      icon.className = "menu-item-icon";
+      icon.setAttribute("name", p.icon);
+      icon.setAttribute("size", "sm");
+      icon.setAttribute("aria-hidden", "true");
+      link.prepend(icon);
+    }
     return link;
   };
-
-  const more = tpl("tpl-nav-more");
-  const trigger = more.querySelector(".nav-more-trigger");
-  const panel = more.querySelector(".nav-more-panel");
-  panel.append(
-    ...PORTAL_PAGES.map((p) => {
-      const link = navLink(p);
-      if (!p.secondary) link.classList.add("nav-more-primary");
-      if (p.icon) {
-        const icon = document.createElement("portal-icon");
-        icon.className = "menu-item-icon";
-        icon.setAttribute("name", p.icon);
-        icon.setAttribute("size", "sm");
-        icon.setAttribute("aria-hidden", "true");
-        link.prepend(icon);
-      }
-      return link;
-    }),
+  // Below 640px the primary links no longer fit beside the logo, so every page moves into the ⋮ menu.
+  mountOverflowNav(nav, { menuLabel: "More pages", collapseBelow: 640 }).setItems(
+    PORTAL_PAGES.map((p) => ({
+      label: p.title,
+      current: p.id === currentPageId,
+      secondary: Boolean(p.secondary),
+      render: (inMenu) => navLink(p, inMenu),
+    })),
   );
-  // The bar has no link to mark when the current page is one of the menu's own.
-  if (PORTAL_PAGES.some((p) => p.secondary && p.id === currentPageId)) trigger.classList.add("active");
-
-  const setOpen = (open) => {
-    panel.hidden = !open;
-    trigger.setAttribute("aria-expanded", String(open));
-  };
-  trigger.addEventListener("click", () => setOpen(panel.hidden));
-  document.addEventListener("click", (event) => {
-    if (!more.contains(event.target)) setOpen(false);
-  });
-  document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape" || panel.hidden) return;
-    const hadFocus = more.contains(document.activeElement);
-    setOpen(false);
-    if (hadFocus) trigger.focus();
-  });
-  // Tabbing out past the last item closes the menu rather than leaving it open behind the focus.
-  more.addEventListener("focusout", (event) => {
-    if (event.relatedTarget && !more.contains(event.relatedTarget)) setOpen(false);
-  });
-
-  nav.prepend(...PORTAL_PAGES.filter((p) => !p.secondary).map(navLink), more);
 })();
 
 // Theme toggle: sun glyph in dark mode (click -> light), moon in light mode. Choice persists in

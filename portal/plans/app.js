@@ -5,13 +5,13 @@
 import {
   portalSetUpdatedAt,
   portalHideLoading,
-  portalWireBackdropClose,
 } from "/portal/shared/api.js";
 import * as api from "./api.js";
 import * as tmpl from "./templates.js";
 import { createRepositorySourcesDialog } from "/portal/shared/repository-sources-dialog.js";
 import { createPlanDrawer } from "./plan-drawer.js";
 import { createBlockersPopover } from "./blockers-popover.js";
+import { mountOverflowNav } from "/portal/shared/overflow-nav.js";
 import {
   FILTER_IDS,
   FILTER_DEFAULTS,
@@ -19,8 +19,6 @@ import {
   LIFECYCLE_LABELS,
   filteredPlans,
   sortForLifecycle,
-  isNotStarted,
-  completionRatio,
   isVisible,
   mergedPlanBranches,
   replaceRecord,
@@ -34,6 +32,8 @@ import {
 } from "./state.js";
 
 const LIFECYCLE_ORDER = ["backlog", "active", "completed", "archived"];
+// Rarely-visited lifecycles sit behind the row's ⋮ menu rather than taking a tab.
+const SECONDARY_LIFECYCLES = new Set(["completed", "archived", "unclassified"]);
 
 const state = {
   snapshot: null,
@@ -52,13 +52,19 @@ const plansHeaderEl = document.getElementById("plans-header");
 const filtersToggleEl = document.getElementById("filters-toggle");
 const filtersBodyEl = document.getElementById("filters-body");
 const filterChipsEl = document.getElementById("filter-chips");
-const activeTasksBarEl = document.getElementById("active-tasks-bar");
 const plansCountTextEl = document.getElementById("plans-count-text");
 const reposCountTextEl = document.getElementById("repos-count-text");
+const lifecycleBarEl = document.getElementById("lifecycle-bar");
+const lifecycleTitleEl = document.getElementById("lifecycle-title");
 const lifecycleTabsEl = document.getElementById("lifecycle-tabs");
-const lifecycleDropdownMountEl = document.getElementById("lifecycle-dropdown-mount");
 const onboardingEl = document.getElementById("plans-onboarding");
-let lifecycleDropdownEl = null;
+// Below 640px the tabs collapse into one menu whose trigger names the selected lifecycle.
+const lifecycleNav = mountOverflowNav(lifecycleTabsEl, {
+  menuLabel: "More lifecycles",
+  collapseBelow: 640,
+  collapsedFace: "current",
+  highlightSecondarySelection: false,
+});
 let syncPollTimer = null;
 let repositorySyncPending = false;
 let repositorySyncState = "synced";
@@ -89,8 +95,6 @@ const outcomeToast = planDrawer.toast;
 const blockersPopover = createBlockersPopover(document.getElementById("blockers-popover"), {
   onOpenPlan: (key) => openPlan(key),
 });
-const allTasksModal = document.getElementById("all-tasks-modal");
-portalWireBackdropClose(allTasksModal, () => allTasksModal.close());
 
 bindStaticControls();
 load();
@@ -111,12 +115,10 @@ function bindStaticControls() {
       refreshSpinnerEl.hidden = true;
     });
   });
-  document.getElementById("open-all-tasks").addEventListener("click", openAllTasks);
   reposCountTextEl.addEventListener("click", (event) => {
     event.preventDefault();
     onboarding.onManage();
   });
-  document.getElementById("all-tasks-close").addEventListener("click", () => allTasksModal.close());
   for (const id of FILTER_IDS) {
     const node = document.getElementById(id);
     node.addEventListener(id === "search" ? "input" : "change", () => {
@@ -269,17 +271,14 @@ function render() {
   renderPackageBanner(snapshot);
   const step = tmpl.plansOnboardingStep(snapshot);
   if (!snapshot.planWritePackage.enabled || step !== "plans") {
-    lifecycleTabsEl.hidden = true;
-    lifecycleDropdownMountEl.hidden = true;
+    lifecycleBarEl.hidden = true;
     warningsEl.hidden = true;
-    activeTasksBarEl.hidden = true;
     groupsEl.replaceChildren();
     renderOnboarding(snapshot, step);
     return;
   }
   onboardingEl.hidden = true;
-  lifecycleTabsEl.hidden = false;
-  lifecycleDropdownMountEl.hidden = false;
+  lifecycleBarEl.hidden = false;
   renderWarnings(snapshot);
   renderFilterChips(snapshot);
   refreshFilterCounts(snapshot);
@@ -291,9 +290,6 @@ function render() {
   const visiblePlans = allMatchingCurrentFilters
     .filter((record) => record.plan.lifecycle === state.selectedLifecycle)
     .sort(sortForLifecycle(state.selectedLifecycle));
-  // Set before the empty-state return below, or switching to an empty Active tab would leave the
-  // previous tab's bar on screen.
-  activeTasksBarEl.hidden = state.selectedLifecycle !== "active" || visiblePlans.length === 0;
   if (visiblePlans.length === 0) {
     groupsEl.replaceChildren(tmpl.emptyState());
     return;
@@ -315,11 +311,13 @@ function render() {
 }
 
 function renderLifecycleTabs(plansMatchingOtherFilters) {
+  lifecycleTitleEl.textContent = `${LIFECYCLE_LABELS[state.selectedLifecycle] || state.selectedLifecycle} Plans`;
   const lifecycles = [...LIFECYCLE_ORDER];
   const unclassifiedCount = plansMatchingOtherFilters.filter(
     (record) => record.plan.lifecycle === "unclassified",
   ).length;
-  if (unclassifiedCount > 0) lifecycles.push("unclassified");
+  // A URL can select Unclassified while no plan is; keep it listed so the row still names it.
+  if (unclassifiedCount > 0 || state.selectedLifecycle === "unclassified") lifecycles.push("unclassified");
   const counts = new Map();
   for (const life of lifecycles) {
     counts.set(
@@ -327,26 +325,15 @@ function renderLifecycleTabs(plansMatchingOtherFilters) {
       plansMatchingOtherFilters.filter((record) => record.plan.lifecycle === life).length,
     );
   }
-  lifecycleTabsEl.replaceChildren(
-    ...lifecycles.map((life) =>
-      tmpl.lifecycleTab(life, counts.get(life) ?? 0, life === state.selectedLifecycle, selectLifecycle),
-    ),
+  lifecycleNav.setItems(
+    lifecycles.map((life) => ({
+      label: `${LIFECYCLE_LABELS[life] || life} Plans`,
+      current: life === state.selectedLifecycle,
+      secondary: SECONDARY_LIFECYCLES.has(life),
+      render: () =>
+        tmpl.lifecycleTab(life, counts.get(life) ?? 0, life === state.selectedLifecycle, selectLifecycle),
+    })),
   );
-  const dropdown = ensureLifecycleDropdown();
-  dropdown.options = lifecycles.map((life) => [
-    life,
-    `${LIFECYCLE_LABELS[life] || life} (${counts.get(life) ?? 0})`,
-  ]);
-  dropdown.value = state.selectedLifecycle;
-}
-
-function ensureLifecycleDropdown() {
-  if (!lifecycleDropdownEl) {
-    lifecycleDropdownEl = document.createElement("option-dropdown");
-    lifecycleDropdownEl.onSelect = (value) => selectLifecycle(value);
-    lifecycleDropdownMountEl.replaceChildren(lifecycleDropdownEl);
-  }
-  return lifecycleDropdownEl;
 }
 
 function selectLifecycle(life) {
@@ -537,40 +524,6 @@ async function enablePackage() {
 
 function openPlan(key) {
   return planDrawer.open(key);
-}
-
-// Every active plan's remaining work in one view, ordered the same way the Active tab is so the
-// dialog and the board never disagree about what is furthest along.
-//
-// Reads the plans already in the snapshot rather than fetching: `openTasks` ships with the list
-// payload for active plans (see modules/plan-suite/index.mjs), so this needs no round trip and
-// cannot show something staler than the cards behind it. Respects the current filters for the same
-// reason — a dialog opened from a filtered board that ignored the filter would be a different
-// answer to the question the user is looking at.
-function openAllTasks() {
-  const active = filteredPlans(state.snapshot.plans, state.filters)
-    .filter((record) => record.plan.lifecycle === "active")
-    .sort(sortForLifecycle("active"));
-
-  const openCount = active.reduce((sum, record) => sum + record.plan.taskCounts.remaining, 0);
-  document.getElementById("all-tasks-summary").textContent =
-    `${openCount} open ${openCount === 1 ? "task" : "tasks"} across ${active.length} ${active.length === 1 ? "project" : "projects"}`;
-
-  document.getElementById("all-tasks-body").replaceChildren(
-    ...active.map((record) =>
-      tmpl.allTasksProject(record, {
-        notStarted: isNotStarted(record.plan),
-        percent: completionRatio(record.plan),
-        onViewStory: (key) => {
-          // One dialog at a time: the drawer is also a modal, and leaving this one open behind it
-          // would stack two backdrops and trap focus in the wrong layer.
-          allTasksModal.close();
-          openPlan(key);
-        },
-      }),
-    ),
-  );
-  allTasksModal.showModal();
 }
 
 function copyPrompt(actionName, keys, mode = "repository-aware") {
