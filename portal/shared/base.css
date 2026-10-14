@@ -78,6 +78,11 @@
    * visibly from the one it sits on, and each deeper layer contrasts with its surroundings MORE
    * than the layer around it does — so the innermost units (inset) are always the most distinct. */
   --surface-band: #242b35;
+  /* The site header and the repo filter row under it. Dark keeps the header on the page color
+   * with a raised band beneath; light steps the other way (see the light block). */
+  --header-bg: var(--bg);
+  --scope-bar-bg: var(--surface-band);
+  --header-dim: var(--dim);
   --surface-sunken: #1a212b;
   --surface-inset: #0b0f14;
   /* The <select> up/down caret (see the select rule): an SVG can't read a CSS variable, so each
@@ -187,6 +192,12 @@
    * white panel (band a touch grey, sunken greyer), and the inset layer returns to white so a
    * bordered unit inside a grey list is the strongest contrast. */
   --surface-band: #f3f5f7;
+  /* Three steps from the top: the header darkest, the repo filter row a middle grey, the page
+   * (--bg) lightest, so the chrome reads as one darker block above the content. */
+  --header-bg: #c9d0d7;
+  --scope-bar-bg: #d8dde3;
+  /* --dim reads 3.4:1 on the darker header; inside the header it steps darker to keep 4.5:1. */
+  --header-dim: #4f5760;
   --surface-sunken: #e9ecef;
   --surface-inset: #ffffff;
   /* The <select> up/down caret (see the select rule): an SVG can't read a CSS variable, so each
@@ -348,7 +359,8 @@ samp {
   left: 0;
   right: 0;
   z-index: 10;
-  background: var(--bg);
+  background: var(--header-bg);
+  --dim: var(--header-dim);
   border-bottom: 1px solid var(--line);
 }
 
@@ -446,7 +458,7 @@ nav {
  * (theme.js appends it there), its content in the shared .inner column and pushed to the right. The
  * header's own bottom border closes it. */
 .repository-scope-bar {
-  background: var(--surface-band);
+  background: var(--scope-bar-bg);
   border-top: 1px solid var(--line);
 }
 .repository-scope-bar .inner {

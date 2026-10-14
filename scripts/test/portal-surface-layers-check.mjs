@@ -60,4 +60,22 @@ for (const [theme, palette] of [["dark", tokens(":root")], ["light", { ...tokens
   console.log(`ok  ${theme} surface layers`);
 }
 
+// Light theme's chrome steps down from the top: the site header darkest, the repo filter row a middle
+// grey, the page lightest. Dark keeps the header on the page colour, so this applies to light only.
+{
+  const palette = { ...tokens(":root"), ...tokens(':root[data-theme="light"]') };
+  const L = (name) => {
+    assert.ok(palette[name], `light: --${name} is not a hex colour in base.css`);
+    return lightness(palette[name]);
+  };
+  assert.ok(L("scope-bar-bg") - L("header-bg") >= STEP, `light: the repo row is not lighter than the header (${(L("scope-bar-bg") - L("header-bg")).toFixed(1)})`);
+  assert.ok(L("bg") - L("scope-bar-bg") >= STEP, `light: the page is not lighter than the repo row (${(L("bg") - L("scope-bar-bg")).toFixed(1)})`);
+  // Dim header text ("Synced", "Viewing") must stay readable on the darker header: WCAG AA, 4.5:1.
+  const luminance = (hex) => ((lightness(hex) + 16) / 116) ** 3;
+  const contrast = (a, b) => (Math.max(luminance(a), luminance(b)) + 0.05) / (Math.min(luminance(a), luminance(b)) + 0.05);
+  const ratio = contrast(palette["header-dim"], palette["header-bg"]);
+  assert.ok(ratio >= 4.5, `light: dim header text is ${ratio.toFixed(2)}:1 on the header`);
+  console.log("ok  light chrome steps header -> repo row -> page");
+}
+
 console.log("portal surface layers check passed");

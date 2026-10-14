@@ -407,6 +407,7 @@ Decisions made autonomously while implementing on `claude/portal-repository-scop
 | Home's repo menu is All Plans, Agent Config, Token Activity (each a `?repo=` link with its nav icon), Pin/Unpin, and Ignore Repo; the Token Warnings row reads `Recent Token Warnings … all activity` | One place to jump to any page already filtered to the repo |
 | In the Plans filter popup, each control's option counts (and disabled options) follow the unapplied draft as it changes; the board still waits for **Update** | Picking one filter should show what is left in the others, as the inline filters did |
 | Every `<select>` draws its own up/down caret, inset `.5rem` from the right edge (`--select-caret`, one SVG per theme) | The native caret sat flush against the border and ignores padding |
+| Light theme steps the chrome down from the top: site header darkest (`--header-bg`), repo row a middle grey (`--scope-bar-bg`), page lightest; dim text inside the header steps darker (`--header-dim`) to keep 4.5:1. Dark theme is unchanged | The near-white repo row read lighter than the page; `portal-surface-layers-check` now pins the order and the contrast |
 | A new Tokens report version keeps the user's view state: open or closed Investigate sections and an open "+N more" list survive the re-render (`portal/tokens/view-state.js`) | Polls on real data rebuilt the sections every few seconds and collapsed whatever the user had opened |
 
 ## Acceptance Criteria
