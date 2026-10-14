@@ -979,13 +979,16 @@ test.describe("repository-first portal Home", () => {
     expect(more.ariaLabel).toBe("More pages");
     expect(more.visible).toBe(true);
     // The compact Enable prompt now sits above the Active Repos section, so its action comes before
-    // the heading's Manage repositories action and both come before the first card.
-    for (const expected of ["Auto-discover active repos", "Manage Repos"]) {
-      await page.keyboard.press("Tab");
-      const focused = await focusSummary(page);
-      expect(focused.text).toBe(expected);
-      expect(focused.visible).toBe(true);
-    }
+    // the title's Manage repositories icon and both come before the first card.
+    await page.keyboard.press("Tab");
+    const enable = await focusSummary(page);
+    expect(enable.text).toBe("Auto-discover active repos");
+    expect(enable.visible).toBe(true);
+    // Manage Repos is an icon-only link beside the title, so it is named by its aria-label.
+    await page.keyboard.press("Tab");
+    const manage = await focusSummary(page);
+    expect(manage.ariaLabel).toBe("Manage Repos");
+    expect(manage.visible).toBe(true);
     await page.keyboard.press("Tab");
     // Repository names are plain text while the detail page is parked, so the first card control is
     // the provider link (when the repository has one) or the actions menu.
