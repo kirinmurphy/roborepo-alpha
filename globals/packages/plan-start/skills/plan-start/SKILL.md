@@ -157,7 +157,8 @@ then the run proceeds without questions.
 4. Implement one coherent slice at a time.
    Update each doc of record listed under `## Documentation impact` with the behavior it describes.
    Check the repository's doc-of-record map, when one exists, for docs newly affected by the
-   implementation and update those too. Include these doc changes in the implementation commit.
+   implementation and update those too. For an older plan without that section, derive the affected
+   docs from the implementation scope. Include these doc changes in the implementation commit.
 5. Run the smallest useful verification after each slice.
 6. Continue until every in-scope, unblocked objective has been addressed, without pausing between
    phases or milestones.

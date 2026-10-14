@@ -1,13 +1,13 @@
 ---
 id: irpw877r
 priority: high
-next_action: Review and land the implementation branch, then confirm the first post-change plan-start and plan-close reports include their required documentation evidence
+next_action: Merge the reviewed implementation branch, then confirm the first post-change plan-start and plan-close reports include their required documentation evidence
 blocked_by: []
 depends_on: []
 related:
   - p3vbk03v
   - q6lj4w96
-reviewed_commit: 026aeb535c9108e019b3c685e7db16d87495647e
+reviewed_commit: 48abc8cfc7612b47aa54ecf3095cc672529399cd
 worktree: docs-freshness-and-drift-repair
 ---
 
@@ -231,18 +231,31 @@ the current map. Additional broken heading anchors were corrected using the actu
 | Runtime | `docs/user/reference/runtime.md`, `docs/internal/developer-runtime-internals.md`, and `docs/architecture/developer-runtime-container-support.md` against `portal/developer-runtime/templates.js`, `modules/developer-runtime/snapshot.mjs`, and `modules/developer-runtime/stop.mjs` | Documented shared Compose services and member counts, Home's use of the stop module, and the completed workspace-model plan path. |
 | Onboarding and config | `docs/user/reference/config-control-panel.md`, `docs/internal/config-panel-internals.md`, and `docs/user/guides/first-time-setup.md` against `portal/settings/`, `portal/tokens/`, `scripts/cli/config-mutate.mjs`, and harness setup routes | Removed the stale `/agents` telemetry switch, located tracking in Settings and Tokens, described links into each installed harness skill directory, and corrected first-time harness refresh guidance. `docs/user/guides/setup-and-daily-use.md` also lost a nonexistent Gemini rules-file claim. |
 | Permissions and hooks | `docs/user/reference/claude-hooks.md`, `docs/user/reference/codex-hooks.md`, and `docs/internal/hooks-internals.md` against system/package hook manifests, `globals/packages-archived/jcodemunch/hooks/session-health.mjs`, and the Codex status component used by Settings, Tokens, and Home | Corrected Claude's jcodemunch health-check description and Codex telemetry warning placement. The remaining hook and permission mechanisms checked current. |
-| Telemetry and tokens | `docs/user/reference/telemetry.md`, `docs/user/guides/telemetry.md`, `docs/internal/telemetry-internals.md`, and `docs/internal/tokens-portal-review.md` against `portal/tokens/`, `scripts/cli/portal-routes-telemetry.mjs`, and telemetry capture/analysis modules | Clarified that optional `--deep` sends a computed summary to Claude, and that tracking is controlled from Settings or Tokens. The walkthrough and internals checked current; the earlier portal review is marked dated. |
+| Telemetry and tokens | `docs/user/reference/telemetry.md`, `docs/user/guides/telemetry.md`, `docs/internal/telemetry-internals.md`, and `docs/internal/tokens-portal-review.md` against `portal/tokens/`, `scripts/cli/portal-routes-telemetry.mjs`, and telemetry capture/analysis modules | Clarified that optional `--deep` passes a computed summary to the first available Claude, Codex, or Gemini CLI, and that tracking is controlled from Settings or Tokens. The walkthrough and internals checked current; the earlier portal review is marked dated. |
 | Harness and architecture | `docs/architecture/config-code-separation.md`, `docs/architecture/manifest-and-symlinks.md`, `docs/internal/harness-anatomy.md`, `docs/internal/harnesses-explained.md`, `docs/internal/skills-and-commands.md`, `docs/internal/rules-parity-and-layering.md`, `docs/internal/root-domains.md`, and `docs/internal/roborepo-command-path.md` against rule targets, generated package commands, skill cache/link code, provider manifests, and install scripts | Corrected generated-rule and skill-link paths, root-domain historical paths, slash-command materialization, and broken anchors. `roborepo-command-path.md` checked and current against the installer and wrapper. Gemini CLI requires TOML custom commands while RoboRepo emits Markdown wrappers; the docs now state that existing integration gap. |
 
 The earlier architecture audit is now a dated historical record. `docs/internal/docs-map.md`
 remains the current ownership map and links to that record; no doc was added, renamed, or retired.
 
+### QA review at `48abc8c`
+
+The reference checker treated any fence marker as a closing marker. A tilde-fenced example
+containing backticks could therefore hide a broken link after the real closing fence. It now
+matches closing markers by character and length. The link matcher also accepts a parenthesized
+segment in a relative target; seeded fixtures caught both failures before the fixes. The Plans
+reference table now has the correct separator width. The plan-start instructions explicitly derive
+affected docs for older plans without `## Documentation impact`. The telemetry reference now
+matches the `--deep` CLI selection in `scripts/cli/telemetry.mjs`.
+
 ### Verification run
 
-- `npm run check` passed: 440 CLI tests, 34/34 CI check suites, installation and clean-machine
-  checks. The portal browser suite skipped because Chromium is not installed; Windows parity and
-  the `uvx`-dependent install fixture also skipped on this machine.
-- `npm run build` passed its package dry run.
+- The QA rerun of `npm run check` passed with elevated sandbox permissions: 440 CLI tests, 34/34 CI
+  check suites, package install, and Docker clean-machine checks. The first sandboxed run could not
+  bind `127.0.0.1` in localhost-dependent tests. The portal browser suite skipped because Chromium
+  is not installed; Windows parity and the `uvx`-dependent install fixture also skipped on this
+  machine.
+- The QA rerun of `npm run build` passed its package dry run with elevated sandbox permissions.
+  `roborepo package validate` passed for all 25 packages, and `git diff --check` passed.
 - The live docs reference check, seeded fixtures, Markdown renderer check, both skill-trigger
   checks, and package validation for all five edited plan/session packages passed.
 - `roborepo plans validate irpw877r --json` reported zero blocking findings and one advisory

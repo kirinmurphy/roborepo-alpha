@@ -4,7 +4,7 @@ import { slugify } from "../cli/markdown-render.mjs";
 
 const PATH_ROOTS = "modules|portal|scripts|globals|manifests|generated|docs|bin|shell|local";
 const PATH_CODE = new RegExp(`\x60((?:${PATH_ROOTS})/[^\x60\\s]+)\x60`, "g");
-const INLINE_LINK = /!?\[[^\]]*\]\((<[^>]+>|[^)\s]+)(?:\s+\"[^\"]*\")?\)/g;
+const INLINE_LINK = /!?\[[^\]]*\]\((<[^>]+>|(?:[^()\s]|\([^()\s]*\))+)(?:\s+\"[^\"]*\")?\)/g;
 const REFERENCE_LINK = /!?\[([^\]]+)\]\[([^\]]*)\]/g;
 const REFERENCE_DEFINITION = /^\s*\[([^\]]+)\]:\s*(<[^>]+>|\S+)/;
 const HISTORICAL = /\b(?:no longer exists?|does not exist|do not exist|there is no|did not exist|never (?:existed|written)|removed|deleted|retired|previously|formerly|historical|dated|legacy|proposed|candidate|old path|before migration|was replaced|were replaced|superseded|no .+ candidate exists)\b/i;
@@ -27,20 +27,23 @@ export function scanDocs(root, files = readerDocs(root)) {
     const lines = fs.readFileSync(absolute, "utf8").split(/\r?\n/);
     const refs = referenceDefinitions(lines);
     const datedSnapshot = lines.slice(0, 5).some((line) => /^Snapshot date:/i.test(line));
-    let fenced = false;
+    let fence = null;
     let historicalFence = false;
     let precedingProse = "";
     for (let index = 0; index < lines.length; index++) {
       const line = lines[index];
-      if (/^\s*(```|~~~)/.test(line)) {
-        if (!fenced) {
-          historicalFence = HISTORICAL.test(precedingProse);
-          precedingProse = "";
-        }
-        fenced = !fenced;
+      const marker = fenceMarker(line);
+      if (!fence && marker) {
+        historicalFence = HISTORICAL.test(precedingProse);
+        precedingProse = "";
+        fence = marker;
         continue;
       }
-      if (!fenced) {
+      if (fence && marker && closesFence(marker, fence)) {
+        fence = null;
+        continue;
+      }
+      if (!fence) {
         const prose = line.replace(/\x60[^\x60]*\x60/g, "");
         for (const match of prose.matchAll(INLINE_LINK)) {
           checkLink(root, file, index + 1, match[1], findings);
@@ -58,8 +61,8 @@ export function scanDocs(root, files = readerDocs(root)) {
           }
         }
       }
-      if (!fenced && line.trim()) precedingProse = line;
-      if (!(fenced && historicalFence)) {
+      if (!fence && line.trim()) precedingProse = line;
+      if (!(fence && historicalFence)) {
         checkRemoved(file, index + 1, line, removed, findings);
       }
     }
@@ -78,10 +81,12 @@ function walk(dir, visit) {
 
 function referenceDefinitions(lines) {
   const refs = new Map();
-  let fenced = false;
+  let fence = null;
   for (const line of lines) {
-    if (/^\s*(```|~~~)/.test(line)) { fenced = !fenced; continue; }
-    if (fenced) continue;
+    const marker = fenceMarker(line);
+    if (!fence && marker) { fence = marker; continue; }
+    if (fence && marker && closesFence(marker, fence)) { fence = null; continue; }
+    if (fence) continue;
     const match = REFERENCE_DEFINITION.exec(line);
     if (match) refs.set(match[1].toLowerCase().replace(/\s+/g, " "), match[2]);
   }
@@ -114,14 +119,27 @@ function checkLink(root, file, line, rawTarget, findings) {
 function anchors(file) {
   const found = new Set();
   const seen = new Map();
-  let fenced = false;
+  let fence = null;
   for (const line of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
-    if (/^\s*(```|~~~)/.test(line)) { fenced = !fenced; continue; }
-    if (fenced) continue;
+    const marker = fenceMarker(line);
+    if (!fence && marker) { fence = marker; continue; }
+    if (fence && marker && closesFence(marker, fence)) { fence = null; continue; }
+    if (fence) continue;
     const heading = /^\s*#{1,6}\s+(.+?)\s*#*\s*$/.exec(line);
     if (heading) found.add(slugify(heading[1].replace(/[`*_]/g, ""), seen));
   }
   return found;
+}
+
+function fenceMarker(line) {
+  const match = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+  return match && { marker: match[1], rest: match[2] };
+}
+
+function closesFence(marker, opening) {
+  return marker.marker[0] === opening.marker[0]
+    && marker.marker.length >= opening.marker.length
+    && !marker.rest.trim();
 }
 
 function checkPath(root, file, line, raw, findings) {

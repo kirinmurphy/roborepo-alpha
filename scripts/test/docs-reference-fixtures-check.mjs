@@ -14,6 +14,7 @@ try {
   write("docs/dated.md", "# Dated audit\n\nSnapshot date: 2026-09-13\n\n`scripts/old-file.mjs`\n");
   for (const [markdown, reason] of [
     ["[missing](docs/missing.md)", "missing link target: docs/missing.md"],
+    ["[missing with parentheses](docs/missing-(draft).md)", "missing link target: docs/missing-(draft).md"],
     ["![missing image](docs/no-image.png)", "missing link target: docs/no-image.png"],
     ["[bad anchor](docs/target.md#absent)", "missing anchor: docs/target.md#absent"],
     ["[bad reference][gone]\n\n[gone]: docs/missing-again.md", "missing link target: docs/missing-again.md"],
@@ -22,6 +23,7 @@ try {
     ["Run `roborepo serve` to open the portal.", "removed CLI command: roborepo serve"],
     ["`scripts/old.mjs` was removed; `scripts/no-file.mjs` is current.", "missing repository path: scripts/no-file.mjs"],
     ["`roborepo serve` was removed; run `roborepo verify` now.", "removed CLI command: roborepo verify"],
+    ["~~~md\n```sh\n~~~\n[missing](docs/after-fence.md)", "missing link target: docs/after-fence.md"],
   ]) {
     write("README.md", `# Fixture\n\n${markdown}\n`);
     const failed = run();
@@ -44,6 +46,10 @@ try {
     "roborepo serve",
     "`scripts/in-example.mjs`",
     "```",
+    "~~~md",
+    "```sh",
+    "[example](docs/only-in-fence.md)",
+    "~~~",
   ].join("\n"));
   const passed = run();
   assert.equal(passed.status, 0, passed.stderr);

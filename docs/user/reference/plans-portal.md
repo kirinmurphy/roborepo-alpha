@@ -54,7 +54,7 @@ worktree exists and its copy has the same `id`, is in `active/`, and names the s
 Whether a worktree is ahead of or behind main changes nothing.
 
 | Plan | Plans page shows | Priority edits write to | Finding |
-| --- | --- | --- | --- | --- |
+| --- | --- | --- | --- |
 | Backlog, completed, or archived | Main copy | Main checkout for backlog; no priority control for completed or archived | None |
 | Active, no `worktree` | Main copy | Main checkout | None |
 | Active, its worktree holds a usable copy | Worktree copy, **From worktree `<name>`** in the drawer | That worktree | **Edited outside worktree** when the main copy holds a version the worktree never had |
