@@ -217,6 +217,11 @@ dialog#skill-modal::backdrop {
   flex-wrap: wrap;
   gap: 4px 8px;
 }
+/* Modified time steps down a size (it is the quiet half) while the completion ring and percent step
+ * up one, so progress is what the eye lands on. Scoped here so Home's plan rows keep their sizing. */
+.status-trailing .meta-line { font-size: var(--text-xs); }
+.status-trailing .plan-completion { font-size: var(--text-xs); }
+.status-trailing .plan-progress { width: var(--icon-sm); height: var(--icon-sm); }
 .status-state-chips {
   display: flex;
   align-items: center;
