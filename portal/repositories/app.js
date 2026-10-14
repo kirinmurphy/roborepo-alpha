@@ -22,7 +22,7 @@ async function refresh() {
     }
     warning.hidden = true;
     portalSetUpdatedAt(new Date(), { cadenceMs: POLL_MS });
-    document.title = `${overview.repository.displayName} · roborepo`;
+    document.title = `roborepo :: ${overview.repository.displayName}`;
   } catch (error) {
     // A 404 means the repository is genuinely gone (hidden, forgotten, unknown). Any other failure
     // after a good load is a transient poll error: keep the last detail on screen and only warn.

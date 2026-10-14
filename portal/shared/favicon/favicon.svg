@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="2.3 2.8 19.4 19.4">
+  <!-- Browser-tab icon: the header robot (robot in portal/shared/icon.js) with no tile, cropped to
+       the glyph so it fills the tab's small icon area. Strokes are heavier than the header mark so
+       it holds at 16px. Dark ink by default (light tabs); a dark colour scheme gets white. -->
+  <style>
+    .ink { stroke: #0b0f14; }
+    .fill { fill: #0b0f14; }
+    @media (prefers-color-scheme: dark) {
+      .ink { stroke: #ffffff; }
+      .fill { fill: #ffffff; }
+    }
+  </style>
+  <g class="ink" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="5.75" y="6.75" width="12.5" height="11.5" rx="3" />
+    <path d="M5.75 10.5H4.5a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h1.25M18.25 10.5h1.25a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-1.25M10 15.25h4" />
+  </g>
+  <circle class="fill" cx="9.75" cy="11.75" r="1.35" />
+  <circle class="fill" cx="14.25" cy="11.75" r="1.35" />
+</svg>
