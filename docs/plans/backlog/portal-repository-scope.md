@@ -1,6 +1,6 @@
 ---
 id: tk6s43x3
-priority: medium
+priority: high
 next_action: Add shared repository URL parse/compose helpers and the header selector built on option-dropdown, resolving ?repository=<urlKey> at the server boundary
 blocked_by: []
 depends_on:
