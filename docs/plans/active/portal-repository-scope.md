@@ -405,6 +405,9 @@ Decisions made autonomously while implementing on `claude/portal-repository-scop
 | **Refresh** stays on Plans | Plans does not poll: an edit made on disk did not appear for 12 seconds without it and did after clicking it (checked in a browser run) |
 | A repo with no plans shows plain copy, `No plans yet found in <repo>`, and **View All Repos** (clears the filter) | Replaces the panel and the **Manage Repos** action in that state |
 | Home's repo menu is All Plans, Agent Config, Token Activity (each a `?repo=` link with its nav icon), Pin/Unpin, and Ignore Repo; the Token Warnings row reads `Recent Token Warnings … all activity` | One place to jump to any page already filtered to the repo |
+| In the Plans filter popup, each control's option counts (and disabled options) follow the unapplied draft as it changes; the board still waits for **Update** | Picking one filter should show what is left in the others, as the inline filters did |
+| Every `<select>` draws its own up/down caret, inset `.5rem` from the right edge (`--select-caret`, one SVG per theme) | The native caret sat flush against the border and ignores padding |
+| A new Tokens report version keeps the user's view state: open or closed Investigate sections and an open "+N more" list survive the re-render (`portal/tokens/view-state.js`) | Polls on real data rebuilt the sections every few seconds and collapsed whatever the user had opened |
 
 ## Acceptance Criteria
 
