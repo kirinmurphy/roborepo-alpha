@@ -6,7 +6,8 @@
 // same recipe scripts/test/test-cli.sh uses around its portal HTTP block. The server is a
 // sibling process (not a Playwright webServer fixture), so the suite exercises the exact startup
 // path a user gets from `roborepo web`, and the port comes from the ready-file so nothing is
-// hard-coded.
+// hard-coded. The server also never sees the host's installed harnesses
+// (host-harness-isolation.mjs), so every machine runs the suite the way CI does.
 //
 // Skips (exit 0) with a visible `skip:` line when the Chromium browser is not installed, so a
 // machine that has never run `npx playwright install chromium` still gets a green, honest result.
@@ -18,6 +19,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
 import { guardPortal } from "../lib/portal-cleanup.mjs";
+import { hostHarnessIsolationEnv } from "./host-harness-isolation.mjs";
 import {
   defaultRegistry,
   recordDiscovery,
@@ -62,6 +64,7 @@ const server = spawn(
     cwd: repoRoot,
     env: {
       ...process.env,
+      ...hostHarnessIsolationEnv(tmp),
       HOME: tmp,
       ROBOREPO_STATE_DIR: stateDir,
       PORTAL_READY_FILE: readyFile,

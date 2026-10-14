@@ -35,17 +35,6 @@ test.beforeAll(() => {
 });
 test.afterAll(() => fs.rmSync(fixtureRoot, { recursive: true, force: true }));
 test.beforeEach(async ({ page }) => {
-  // On a machine with an installed, launched harness, a real Agents or Tokens page finishes harness
-  // setup on its own, which changes the shared hermetic machine for every later spec (Home's
-  // first-run banner, for one). These tests are about the scope, so setup state is served without
-  // harnesses that are ready to set up.
-  await page.route("**/api/settings", async (route) => {
-    if (route.request().method() !== "GET") return route.continue();
-    const response = await route.fetch();
-    const data = await response.json();
-    for (const entry of data.harnesses?.guidance ?? []) delete entry.ready;
-    await route.fulfill({ response, json: data });
-  });
   for (const name of [ALPHA, BETA]) await addRepositorySource(page, path.join(fixtureRoot, name));
   // The board only shows once plan-write is enabled; the hermetic machine has no packages. Matched
   // by path so scoped requests (?repository=) are patched too.
