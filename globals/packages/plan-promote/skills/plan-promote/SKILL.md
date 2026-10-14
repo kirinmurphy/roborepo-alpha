@@ -48,6 +48,9 @@ Each row is its own optional package, so check it before loading it:
 1. Read the entire selected plan.
 2. Inspect all repository areas materially referenced by the plan.
 3. Verify current-state claims against code, tests, configuration, documentation, and Git state.
+   Check the plan's `## Documentation impact` list against its implementation scope and the
+   repository's doc-of-record map, when one exists. Fill an obvious missing doc of record before
+   declaring the plan ready. Do not bulk-migrate older plans just for this section.
 4. Identify:
    - stale assumptions;
    - missing code touchpoints;

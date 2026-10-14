@@ -194,8 +194,9 @@ roborepo workspace import <old-checkout> --dry-run
 roborepo workspace import <old-checkout>
 ```
 
-Import reads `globals/agents/skills`, `globals/commands`, `globals/packages`, and the MCP inventory
-from the source, then prints what it copied.
+Legacy import reads `globals/agents/skills`, `globals/commands`, `globals/packages`, and the MCP
+inventory from the old checkout, then prints what it copied. The first two paths describe the
+older source layout accepted by `scripts/cli/workspace-resources.mjs`.
 
 ```mermaid
 flowchart LR

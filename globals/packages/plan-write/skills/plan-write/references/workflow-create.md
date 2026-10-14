@@ -8,7 +8,9 @@
 6. Write new plans into `docs/plans/backlog/`.
 7. Add minimal frontmatter from `plan-schema.md`, including an empty `worktree:` line. Do not fill
    it at creation; a backlog plan has no implementation worktree yet.
-8. Follow `writing-guidelines.md`.
+8. Follow `writing-guidelines.md`. Add `## Documentation impact` with the affected docs of record
+   and expected updates, or a reason no reader-facing doc is affected. Check the repository's
+   doc-of-record map when one exists.
 9. Run both validation layers. See below.
 10. Leave concrete `next_action`.
 

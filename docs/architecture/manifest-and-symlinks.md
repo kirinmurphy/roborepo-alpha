@@ -24,13 +24,17 @@ globals/packages/<package>/skills/<name>/
 globals/system/skills/builtin-support/
 ```
 
-Install copies only `builtin-support` by default. Optional skills are copied by onboarding or package toggles. Each roborepo-owned skill copy contains:
+The installer materializes package-owned skills and `builtin-support` into
+`~/.roborepo/skills/<name>`. Each enabled harness's native skills directory links each managed
+skill name to that cache entry. Package toggles control which optional skills are active. Each
+roborepo-owned cache entry contains:
 
 ```text
 .builtin-managed
 ```
 
-That marker is the ownership signal for refresh, prune, uninstall, and native-skill collision handling. A real skill directory without the marker is treated as user-owned and is left alone.
+That marker is the ownership signal for refresh, prune, uninstall, and native-skill collision
+handling. A real skill directory without the marker is treated as user-owned and is left alone.
 
 ## Rules
 
@@ -67,4 +71,5 @@ Use:
 ./scripts/doctor.sh --installed
 ```
 
-Repo doctor checks source files and tracked generated outputs. Installed doctor additionally checks home render state and base managed skill copies.
+Repo doctor checks source files and tracked generated outputs. Installed doctor additionally checks
+home render state, managed cache entries, and harness skill links.

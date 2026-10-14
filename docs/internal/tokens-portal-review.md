@@ -1,6 +1,8 @@
 # Tokens portal review
 
-Reviewed on 2026-09-21.
+Reviewed on 2026-09-21. This is a dated review of that implementation state; use
+[Telemetry Internals](telemetry-internals.md) and the [Telemetry reference](../user/reference/telemetry.md)
+for current behavior.
 
 ## Purpose
 

@@ -130,6 +130,12 @@ Check every claim against the code, not against its checkboxes:
   reported as open;
 - UI or manual checks that could not run are reported as unverified, never as passed.
 
+Check the affected reader-facing docs of record named in `## Documentation impact`, and any
+additional docs the implementation actually affects, against the landed code. Use the repository's
+doc-of-record map when one exists. Fix in-scope drift before the verdict; unresolved required drift
+prevents closure. For older plans without that section, derive the affected docs from the landed
+change instead of requiring a plan migration.
+
 You must fix agent-resolvable gaps before the verdict: correct in-scope code or plan claims, add a
 missing regression test for untested observable behavior, and perform available UI
 checks. Keep the fix within the selected plan and existing authorization. Rerun the affected checks,
@@ -193,7 +199,8 @@ The work must be in the base branch, including after a squash or rebase merge.
 
 `git mv` the plan to `docs/plans/completed/`, keeping its filename and `id`. Clear `next_action`,
 add a completion summary, and write a `## Verification` section with the evidence: the test command
-and result, what was checked against the code, and anything that could not be verified. Run
+and result, which affected docs of record were checked against the landed code, what else was
+checked, and anything that could not be verified. Run
 the repository's canonical plan validator against the moved file and resolve every finding.
 
 Stage the plan by path. Commit only when the user asks; never push.

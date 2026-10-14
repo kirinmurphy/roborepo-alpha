@@ -36,7 +36,7 @@ are merged into it. Setup is safe to re-run: once complete it reports that and e
 interrupted run resumes instead of starting over. Zero detected harnesses is fine; install or launch
 a harness later. The portal's setup banner finishes setting it up on its own, or open
 **Settings → Agent Harnesses → Check for harnesses**. The equivalent CLI command is
-`roborepo update`.
+`roborepo harness refresh`.
 
 ## Install From A Checkout
 
@@ -58,11 +58,13 @@ them, overwrite them, or stop — see
 ## Choose Behaviors
 
 Only the baseline is applied automatically; everything else is opt-in (telemetry stays off unless
-you turn it on). Choose behaviors in the portal's `/agents` page, or in the terminal chooser:
+you turn it on). Choose packages in the portal's `/agents` page, or in the terminal chooser:
 
 ```sh
 roborepo library
 ```
+
+Turn on token tracking in **Settings** or **Tokens**.
 
 The chooser walks the available package sections, then a read-only Permissions panel, one section per
 step:

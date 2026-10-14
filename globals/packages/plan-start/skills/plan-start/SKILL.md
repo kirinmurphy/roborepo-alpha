@@ -155,6 +155,9 @@ then the run proceeds without questions.
 2. Identify the plan's in-scope objectives, acceptance criteria, dependencies, and blockers.
 3. Build a working task sequence from the existing plan.
 4. Implement one coherent slice at a time.
+   Update each doc of record listed under `## Documentation impact` with the behavior it describes.
+   Check the repository's doc-of-record map, when one exists, for docs newly affected by the
+   implementation and update those too. Include these doc changes in the implementation commit.
 5. Run the smallest useful verification after each slice.
 6. Continue until every in-scope, unblocked objective has been addressed, without pausing between
    phases or milestones.
@@ -310,6 +313,8 @@ Implementation is complete when:
 - no unblocked task remains;
 - blockers and deferred scope are explicit;
 - the plan reflects implementation reality.
+- affected docs of record describe the implemented behavior, or the plan explains why none needs
+  an update;
 - a repository-appropriate test/development environment or build was started, and its shareable
   link is recorded when one exists;
 - completed implementation changes are committed in the target worktree, or the final report
@@ -344,6 +349,7 @@ Implementation result
 - Open questions: <count>
 - Not tested entries: <count>
 - Implementation commit: <commit and message, or "no implementation commit needed">
+- Docs updated: <list> | none needed (<reason>)
 - Test/development environment: <what was started>
 - Shareable link: <URL/link, or why none is available>
 - Verification passed: yes/no/partial

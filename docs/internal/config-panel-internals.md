@@ -38,7 +38,7 @@ and terminal flow share one implementation:
 
 - `mutatePackage(id, enabled)` → `enablePackage` / `disablePackage`
 - `setSkillInstalled(id, enabled)` → materializes/removes the cache entry in `~/.roborepo/skills`
-  and links/unlinks the skill in `~/.claude/skills` and `~/.codex/skills`
+  and links/unlinks the skill in each installed harness's skill directory
 - `setBehaviorBucket(behaviorId, bucket)` → writes a personal behavior override, then re-renders live global permissions
 - `setCommandBucket(tokens, bucket)` → writes a personal arbitrary-command override, then re-renders live global permissions
 

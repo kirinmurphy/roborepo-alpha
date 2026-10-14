@@ -30,10 +30,10 @@ Root-level `docs/plans/*.md` files are reported as `unclassified`.
 
 ## What The Portal Writes
 
-The portal changes plan files in two ways only: changing a plan's `priority` rewrites that
-frontmatter line, and moving a plan renames the file into another lifecycle folder. Both check that
-the file has not changed since the page loaded it. Which repositories Plans reads is RoboRepo state,
-not a property of any repository.
+The portal changes plan files only when you change a backlog or active plan's `priority`. It
+rewrites that frontmatter line after checking that the file has not changed since the page loaded
+it. The plan suite's commands move plans between lifecycle folders. Which repositories Plans
+reads is RoboRepo state, not a property of any repository.
 
 ## Which Repositories Plans Reads
 
@@ -53,13 +53,13 @@ Plans reads it there, with no copy to the main checkout. The worktree's copy cou
 worktree exists and its copy has the same `id`, is in `active/`, and names the same worktree.
 Whether a worktree is ahead of or behind main changes nothing.
 
-| Plan | Plans page shows | Priority edits write to | Lifecycle dropdown | Finding |
+| Plan | Plans page shows | Priority edits write to | Finding |
 | --- | --- | --- | --- | --- |
-| Backlog, completed, or archived | Main copy | Main checkout | Moves the main copy | None |
-| Active, no `worktree` | Main copy | Main checkout | Moves the main copy | None |
-| Active, its worktree holds a usable copy | Worktree copy, **From worktree `<name>`** in the drawer | That worktree | Refused: close it with `/plan-close`, or clear `worktree` first | **Edited outside worktree** when the main copy holds a version the worktree never had |
-| Active, its worktree or the worktree's copy is not usable | Main copy | Main checkout | Moves the main copy | **Worktree copy unavailable**, with the reason |
-| Only in a worktree | Worktree copy, labeled with the worktree name | That worktree | Moves the worktree copy | None |
+| Backlog, completed, or archived | Main copy | Main checkout for backlog; no priority control for completed or archived | None |
+| Active, no `worktree` | Main copy | Main checkout | None |
+| Active, its worktree holds a usable copy | Worktree copy, **From worktree `<name>`** in the drawer | That worktree | **Edited outside worktree** when the main copy holds a version the worktree never had |
+| Active, its worktree or the worktree's copy is not usable | Main copy | Main checkout | **Worktree copy unavailable**, with the reason |
+| Only in a worktree | Worktree copy, labeled with the worktree name | That worktree | None |
 
 A copy in any other worktree is never shown and never produces a finding; those worktrees usually
 hold an older copy of main.
@@ -197,18 +197,11 @@ Warnings are surfaced in the list view and document drawer. They do not move fil
 Section requirements are matched by heading label against a synonym list, so `Purpose` satisfies
 Summary, `Current behavior` satisfies Context, and so on.
 
-## Moving A Plan That Is Not Ready
+## Lifecycle Changes
 
-Moving a plan into a lifecycle whose requirements it does not meet is rejected, the file stays
-where it is, and the dialog lists every problem with its fix. From there you can:
-
-- **Copy prompt to resolve warnings** — a prompt that tells an agent to fix the document, leave the
-  file where it is, and keep the plan ID.
-- **View Plan** — open the document.
-- **Move anyway** — file it regardless.
-
-Readiness is advisory. Confirming **Move anyway** re-submits with validation bypassed, so a document
-that predates the schema can still be filed.
+The Plans page has lifecycle tabs for browsing. It does not offer a lifecycle dropdown or move
+dialog. Use the plan suite to start or close a plan; those commands validate and commit the
+transition. The page can still show validation findings for a plan that needs repair.
 
 ## Git Metadata
 
@@ -245,12 +238,15 @@ When `plan-write` is disabled:
 
 When enabled:
 
-- each package installs one manual skill and its generated slash-command wrappers for Claude,
-  Codex, and Gemini
+- each package installs one manual skill and generates Markdown command wrappers for Claude,
+  Codex, and Gemini. Gemini CLI requires TOML custom commands, so its generated wrappers are not
+  usable native slash commands yet
 - `/plans` shows each lifecycle's actions: Promote and Start for backlog plans; Continue, Update,
   and Close for active plans
 - each card leads with one command button: Start for backlog plans, and Close, Update, or Continue
   for active plans
+- an active plan whose worktree has merged shows a **merged** completion badge; the same status is
+  visible in the detail drawer
 - every action copies a prompt; the page never runs a command or moves a plan for one
 
 ## CLI

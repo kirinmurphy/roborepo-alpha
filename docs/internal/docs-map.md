@@ -25,7 +25,7 @@ doc of record first; supporting docs should add context, not redefine the behavi
 | Understand why harness parity uses different mechanisms per tool | [How the Harnesses Work](harnesses-explained.md) | [Harness Anatomy and Parity](harness-anatomy.md) |
 | Change a harness element | [Harness Anatomy and Parity](harness-anatomy.md) | [How It Works](../user/reference/architecture.md) |
 | Understand filesystem materialization | [How It Works](../user/reference/architecture.md) | [Manifest And Materialization](../architecture/manifest-and-symlinks.md) |
-| Understand config vs. code boundaries | [Config-Code Separation](../architecture/config-code-separation.md) | [Documentation Map And Audit](../architecture/documentation-map-and-audit.md) |
+| Understand config vs. code boundaries | [Config-Code Separation](../architecture/config-code-separation.md) | [Manifest And Materialization](../architecture/manifest-and-symlinks.md) |
 | Understand rules generation | [Rules Parity and Layering](rules-parity-and-layering.md) | [Config Collision Handling](../user/reference/config-collision-handling.md#rendered-rules) |
 
 ## Feature Areas
@@ -73,5 +73,5 @@ the only source for current behavior.
 Maintainer/developer docs for this repo live under `docs/internal/`. End-user walkthroughs
 belong under `docs/user/guides/`, and end-user technical references belong under `docs/user/reference/`.
 
-The current docs cleanup audit lives at
-[Documentation Map And Audit](../architecture/documentation-map-and-audit.md).
+The [historical documentation audit](../architecture/documentation-map-and-audit.md) records an
+earlier review. This map owns current doc assignments.

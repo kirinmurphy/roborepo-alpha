@@ -10,7 +10,7 @@ them. Turn a package's hooks off by disabling the package in `/agents` or with
 | Event | Hook | What it does | Installed by |
 | --- | --- | --- | --- |
 | SessionStart | Unmanaged skills notice | Counts skills in `~/.claude/skills` and `~/.codex/skills` that RoboRepo does not manage and suggests `roborepo skill adopt <name>` | always |
-| SessionStart | jcodemunch status | Says whether `roborepo index code --watch` is running for this directory and reminds Claude to explore code with jcodemunch tools | `jcodemunch` |
+| SessionStart | jcodemunch status | Checks whether the jcodemunch server starts and this repository is indexed; reports stale indexes or a running watcher, and reminds Claude to use jcodemunch tools | `jcodemunch` |
 | SessionStart | jdocmunch index check | If `docs/` exists but is not indexed, reminds Claude to run `roborepo index docs docs/` | `jdocmunch` |
 | PreToolUse `Grep`, `Glob` | Search redirect | Blocks the call and tells Claude to use jcodemunch search tools instead | `jcodemunch` |
 | PreToolUse `Bash` | Source-exploration block | Blocks shell commands that read source files directly (see below) | `jcodemunch` |

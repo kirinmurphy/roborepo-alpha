@@ -182,6 +182,7 @@ The renderer writes harness-specific command files, per package:
 
 - `generated/packages/<packageId>/claude/commands/*.md`
 - `generated/packages/<packageId>/codex/commands/*.md`
+- `generated/packages/<packageId>/gemini/commands/*.md` when the package targets Gemini
 
 Generated files should not be edited directly. Edit the package config or the shared source file,
 then run:

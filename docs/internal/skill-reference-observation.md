@@ -12,7 +12,9 @@ assumption it rests on, and how to re-check that assumption when the harness cha
 
 ## How it works
 
-`globals/packages/skill-visibility/hooks/skill-reference-observer.mjs` runs on `PostToolUse`. When
+The Claude and Codex hook sources at
+`globals/packages/skill-visibility/hooks/claude/skill-reference-observer.mjs` and
+`globals/packages/skill-visibility/hooks/codex/skill-reference-observer.mjs` run after a tool read. When
 the read targets a file under a harness skill root's `references/` directory, it writes
 `hookSpecificOutput.additionalContext` naming the observed `<skill>/<reference>`. That text lands
 in the agent's context mid-turn, and the agent writes the line it already writes — from what it was
