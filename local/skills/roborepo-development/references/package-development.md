@@ -50,7 +50,7 @@ Validation depth differs by type — know this before assuming everything is che
 | --- | --- | --- |
 | `skill` | Yes — slug id, `source` inside package dir, `SKILL.md` exists, valid `invocation` (`auto`/`manual`), optional `risk` (`low`/`medium`/`high`), manual invocation requires a slash-command entrypoint | `setSkillComponent`, `installPackageCommands` in `packages.mjs` |
 | `slash-command` | Yes — slug name, source path shape, source file exists on disk, harnesses array shape | rendered via `slash-commands.mjs` |
-| `rules` | Yes — source exists on disk, valid harness (`claude`/`codex`/`both`) | `renderHomeRules()` |
+| `rules` | Yes — source exists on disk; target is a registered rules-capable harness or `both` | `renderHomeRules()` |
 | `hooks` | Yes — source exists, valid harness, `scripts[]` entries exist on disk if present | `mergeHooksInto`/`unmergeHooksFrom`, `installHookScripts` |
 | `cli-command` | Minimal — just requires a `name` | `packageCommandNames` |
 | `permissions` | Yes — non-empty `.allow` array of non-empty strings | `mergePermissions(path, component.allow)` — expects `.allow: string[]` |
@@ -58,14 +58,11 @@ Validation depth differs by type — know this before assuming everything is che
 | `mcp` | Yes — non-empty `.preset` string | `installMcpPreset(component.preset)` — expects `.preset: string` matching `manifests/inventory/mcp-servers.json`/`mcp-presets.json` |
 | `plugin` | Yes — non-empty `.id`, `.marketplace.{name,source}` present | `enablePlugin` — expects `.id`, `.marketplace.{name,source}` |
 | `service` | Yes — non-empty `.id` | `setService(component.id, ...)` — expects `.id` |
-| `harness-config` | Yes — source exists inside package dir, valid harness (`claude`/`codex`) | package-managed live harness config merge/unmerge |
+| `harness-config` | Yes — source exists inside package dir; target is a registered package-config-capable harness | package-managed live harness config merge/unmerge |
 | `package-runtime-asset` | Yes — source exists inside package dir, optional relative `.target` | copied to `~/.roborepo/package-runtime/<package-id>/` and referenced by harness config |
 
-All resource types now get shape-level validation at `roborepo package validate` time, not
-just at enable-time. This closed a real gap that existed earlier in this repo's history (see
-`docs/plans/backlog/roborepo-package-development-infrastructure-plan.md`, Deliverable 5) — the
-last five types previously had no shape-checking beyond "is this a known resource type," so a
-malformed resource failed loudly at enable-time instead of validate-time. If you're extending one
+All resource types get shape-level validation at `roborepo package validate` time, not
+just at enable-time. If you're extending one
 of these checks, mirror the existing `else if (next.type === ...)` branches in `normalizeResource`
 (`scripts/cli/package-catalog.mjs`).
 
@@ -88,9 +85,8 @@ Hook merging (`scripts/cli/hook-composition.mjs`, `mergeHooksInto`/`unmergeHooks
   behavior will both persist.
 - New entries are **prepended**, not appended, so a package's hooks can run before pre-existing
   ones for the same event (deliberate, for deny-before-allow ordering).
-- This is a known, documented limitation (see the module's own header comment) — not something
-  this plan rebuilds. A full package-ID-tagged provenance system would be new infrastructure, out
-  of scope unless a real collision forces it.
+- This is a known limitation (see the module's header comment). A full package-ID-tagged
+  provenance system would be new infrastructure; address it when a concrete collision requires it.
 
 Codex tool approvals and MCP presets are keyed by server/preset name — same-name collision across
 two packages is not currently detected pre-enable (would surface as one package's approvals
@@ -98,19 +94,19 @@ silently overwriting the other's TOML block).
 
 ## Source vs. generated boundaries
 
-Already fully implemented (see completed plan
-`docs/plans/completed/roborepo-system-package-ownership-and-generated-output-plan.md`):
+Current source and generated-output boundaries:
 
 ```text
 globals/
   system/       mandatory, always-installed behavior + generic composition infra
   packages/     configurable, user-selectable package source (this doc's subject)
-  harnesses/    harness-specific resource locations
+  harnesses/    provider manifests and harness-specific source
 
 generated/
   claude/       composed native Claude artifacts (settings.json, CLAUDE.md)
   codex/        composed native Codex artifacts (config.toml, AGENTS.md, hooks.json)
-  packages/<id>/{claude,codex}/commands/   per-package generated slash-command wrappers
+  gemini/       composed native Gemini artifacts (policies, GEMINI.md)
+  packages/<id>/<provider>/commands/   per-package generated slash-command wrappers
 ```
 
 Do not invent an intermediate location. Authored package source lives under `globals/packages/`;
@@ -161,8 +157,7 @@ disable survives being still-default-enabled in the catalog.
 Token cost is **not a manifest field**. It is computed live from real content size by
 `scripts/cli/context-cost.mjs` (`ceil(chars/4)` estimator) and surfaced in the portal as chips
 (`contextCost` on every package/behavior item), tested by `scripts/test/context-cost-check.mjs`
-(`npm run test:context-cost`). See completed plan
-`docs/plans/completed/config-context-token-cost-plan.md`.
+(`npm run test:context-cost`).
 
 **Do not add a static token-cost field to `package.config.json`.** That would create a second,
 driftable source of truth for something already derived correctly from the real files — the exact
@@ -195,7 +190,7 @@ accurate `package.config.json` automatically renders a complete portal card.
 | `roborepo package adopt-live [--dry-run]` | Detects externally-installed (unmanaged) package behavior and marks it enabled in the registry without re-installing it. |
 
 Add these rows to `docs/user/reference/roborepo-cli.md` and to
-`local/skills/builtin-development/SKILL.md`'s own CLI list whenever this table changes.
+`local/skills/roborepo-development/SKILL.md`'s own CLI list whenever this table changes.
 
 ## Apply behavior (already automatic — do not reintroduce a manual step)
 
@@ -231,13 +226,15 @@ last write) — a legitimate, distinct reconciliation case, not a gap in the ena
   correctness, independent of any one package.
 - `scripts/test/package-default-enabled-check.mjs` (`npm run test:package-default-enabled`) —
   default-selection provenance precedence, independent of any one package.
+- `scripts/test/package-lifecycle-check.mjs` — enables, re-enables, and disables catalog packages
+  in a temporary home to check for stale live state.
 - `scripts/test/test-cli.sh` — broad CLI smoke test; covers package/workspace paths.
 
 Minimum test bar for a new or changed package: it must load cleanly through
 `loadPackageCatalog`/`validatePackageCatalog` (covered generically by `package-catalog-check.mjs`
 against the real catalog — no per-package test file needed for basic shape correctness), and its
-enable/disable must round-trip without leaving stale live state (covered generically once the
-lifecycle-check exists — see Deliverable 5 in the source plan).
+enable/disable must round-trip without leaving stale live state (covered generically by
+`package-lifecycle-check.mjs`).
 
 ## Package completion checklist
 
