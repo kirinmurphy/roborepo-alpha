@@ -5,9 +5,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineHarnessProvider } from "../contract.mjs";
-import { detectHarnessProvider } from "../discovery.mjs";
+import { detectHarnessProvider, selectedHarnessExecutable } from "../discovery.mjs";
+import { resolveHarnessPath } from "../paths.mjs";
 import { stubAdapterGroups } from "../stub-adapter.mjs";
 import { isHooksMap, mergeHooksMap, unmergeHooksMap } from "../hooks-merge.mjs";
+import { readCodexHooks } from "./hooks-read.mjs";
+import { shellQuote } from "../shell-quote.mjs";
 import { mergeCodexConfig, normalizeRootConfigContent } from "../../cli/root-config-merge.mjs";
 import { clearOwnedScalar, readOwnedScalar, recordOwnedScalar } from "../../cli/owned-scalars-state.mjs";
 import { resolveBehaviors, resolveArbitraryCommands, renderCodexConfig } from "../permissions-render.mjs";
@@ -193,8 +196,37 @@ function readHooksFile(hooksPath) {
 
 function hooksMerge(hooksPath, hooksFragment) {
   const { parsed, hooks } = readHooksFile(hooksPath);
-  const { hooks: nextHooks, added } = mergeHooksMap(hooks, hooksFragment);
+  // Append: Codex trust keys are positional, so new entries must not move trusted ones.
+  const { hooks: nextHooks, added } = mergeHooksMap(hooks, hooksFragment, { append: true });
   return { changed: added > 0, content: `${JSON.stringify({ ...parsed, hooks: nextHooks }, null, 2)}\n` };
+}
+
+// The executable rule matches discovery's: a Codex CLI on PATH first, then the desktop bundle's
+// own binary. Both read the same ~/.codex/config.toml trust state.
+function hooksRead({ cwd, hooksPath = resolveHarnessPath(codexManifest, "hooks"), executable, timeoutMs } = {}) {
+  return readCodexHooks({
+    executable: executable === undefined ? selectedHarnessExecutable(codexManifest) : executable,
+    cwd, hooksPath, timeoutMs,
+  });
+}
+
+// Next steps for the readiness notice. Codex trusts hooks only through the `/hooks` screen of its
+// terminal UI, which the desktop app does not show, so the command opens that UI with the binary
+// discovery selected (the desktop bundle's own `codex` when no CLI is on PATH). Trust lands in
+// ~/.codex/config.toml, which desktop sessions read too.
+function hooksGuidance() {
+  const executable = selectedHarnessExecutable(codexManifest);
+  return {
+    command: executable ? shellQuote(executable) : codexManifest.commandName,
+    review_required: "Run this command in a terminal to open Codex, enter /hooks, and trust the RoboRepo commands listed here. Then start a new Codex session.",
+    inactive: "Run this command in a terminal to open Codex, enter /hooks, and turn the listed RoboRepo hooks back on.",
+  };
+}
+
+// Core hooks: the ones RoboRepo installs for Codex whatever packages are enabled.
+function coreHooks() {
+  const corePath = path.resolve(here, "..", "..", "..", "generated", "codex", "hooks.json");
+  return JSON.parse(fs.readFileSync(corePath, "utf8")).hooks;
 }
 
 function hooksUnmerge(hooksPath, hooksFragment) {
@@ -253,7 +285,7 @@ const stubGroups = stubAdapterGroups("codex", {
   rules: ["render"],
   skills: ["link"],
   commands: ["render"],
-  hooks: ["read", "write"],
+  hooks: ["write"],
   mcp: ["add", "remove"],
   session: ["launch"],
 });
@@ -269,6 +301,9 @@ export const codexProvider = defineHarnessProvider({
     ...stubGroups,
     hooks: {
       ...stubGroups.hooks,
+      read: hooksRead,
+      core: coreHooks,
+      guidance: hooksGuidance,
       merge: hooksMerge,
       unmerge: hooksUnmerge,
     },

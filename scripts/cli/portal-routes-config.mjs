@@ -115,12 +115,18 @@ export const configRoutes = defineRoutes([
     },
   },
   {
-    path: "/api/config/hooks/codex/status",
-    handler: (req, res, { handlers }) => {
+    path: "/api/config/hooks/:harness/status",
+    handler: (req, res, { params, handlers }) => {
       Promise.resolve()
-        .then(() => handlers.loadCodexHookStatus())
+        .then(() => handlers.loadHookReadiness(params.harness))
         .then((status) => send(res, 200, "application/json", JSON.stringify(status)))
-        .catch(() => send(res, 200, "application/json", JSON.stringify({ state: "unknown", installed: 0 })));
+        .catch((error) => {
+          if (/unsupported harness/.test(String(error?.message))) {
+            return send(res, 404, "application/json", JSON.stringify({ error: String(error.message) }));
+          }
+          // Readiness is advisory: a failed read reports "unknown" so the page keeps rendering.
+          send(res, 200, "application/json", JSON.stringify({ harness: params.harness, state: "unknown", groups: [] }));
+        });
       return true;
     },
   },

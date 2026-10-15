@@ -74,6 +74,20 @@ try {
   app(path.join(appRoot, "Claude.app"), "com.anthropic.claudefordesktop");
   assert.match(detectHarnessProvider(claude, options).warnings.join(" "), /Code tab/);
 
+  // The no-runtime warning's product copy comes from the manifest's parentApp.setupHint; without
+  // one, discovery falls back to a sentence that names no product detail. Either way it keeps the
+  // ", then run roborepo harness refresh." ending the portal rewrites (harness-warning.js).
+  {
+    const withHint = structuredClone(claude);
+    const candidate = withHint.platforms.darwin.detection.desktopCandidates[0];
+    candidate.parentApp.setupHint = "Open the fixture app's Setup pane to install Claude Code";
+    assert.deepEqual(detectHarnessProvider(withHint, options).warnings,
+      ["Open the fixture app's Setup pane to install Claude Code, then run roborepo harness refresh."]);
+    delete candidate.parentApp.setupHint;
+    assert.deepEqual(detectHarnessProvider(withHint, options).warnings,
+      ["Open Claude Desktop to install Claude Code, then run roborepo harness refresh."]);
+  }
+
   const wrong = app(path.join(claudeRoot, "2.1.300", "claude.app"), "wrong.id", "Contents/MacOS/claude", "2.1.300");
   fs.writeFileSync(path.join(path.dirname(wrong), ".verified"), "ok");
   assert.equal(detectHarnessProvider(claude, options).confidence, "absent");

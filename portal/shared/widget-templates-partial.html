@@ -127,12 +127,14 @@
   </span>
 </template>
 
-<!-- Codex telemetry hook warning (codex-hook-status.js), shown on Settings, Tokens, and Home. -->
-<template id="tpl-codex-hook-status">
+<!-- Hook readiness warning (hook-readiness.js), one per harness, shown on Settings, Tokens, and Home. -->
+<template id="tpl-hook-readiness">
   <portal-notice class="portal-notice" variant="warning" aria-live="polite">
-    <div class="codex-hook-status-copy">
+    <div class="hook-readiness-copy">
       <strong data-slot="title"></strong>
       <p data-slot="message"></p>
+      <code data-slot="command" class="hook-readiness-command" hidden></code>
+      <ul data-slot="affected" class="hook-readiness-affected" hidden></ul>
     </div>
   </portal-notice>
 </template>

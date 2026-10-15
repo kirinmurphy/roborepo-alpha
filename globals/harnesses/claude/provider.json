@@ -26,7 +26,8 @@
             "label": "Claude Desktop",
             "roots": ["/Applications", "~/Applications"],
             "bundle": "Claude.app",
-            "bundleId": "com.anthropic.claudefordesktop"
+            "bundleId": "com.anthropic.claudefordesktop",
+            "setupHint": "Open Claude Desktop’s Code tab to install Claude Code"
           }
         }]
       }

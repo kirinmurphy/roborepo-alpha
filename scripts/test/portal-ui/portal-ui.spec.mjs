@@ -118,59 +118,112 @@ test.describe("Tokens without captures", () => {
   });
 });
 
-test.describe("Codex telemetry hook warning", () => {
+test.describe("hook readiness warning", () => {
   const codex = { id: "codex", displayName: "Codex", confidence: "confirmed", enabled: true };
-  const setupWith = (telemetryEnabled) => ({
+  const claude = { id: "claude", displayName: "Claude Code", confidence: "confirmed", enabled: true };
+  const setupWith = (active) => ({
     repositories: { knownCount: 1, visibleCount: 1, autoDiscoveryEnabled: false, hasConfiguredSources: false },
-    harnesses: { supported: [codex], detected: [codex], active: [codex], guidance: [] },
-    telemetry: { enabled: telemetryEnabled, captureAvailable: telemetryEnabled },
+    harnesses: { supported: [codex, claude], detected: active, active, guidance: [] },
+    telemetry: { enabled: false, captureAvailable: false },
   });
-  const routeHookStatus = async (page, state) => {
+  const hook = (event, state) => ({ event, command: `fixture ${event}`, trust: null, enabled: true, state });
+  const group = (owner, label, state, hooks) => ({ owner, label, state, hooks });
+  const reviewCommand = "/Applications/ChatGPT.app/Contents/Resources/codex";
+  const codexStatus = (state, groups) => ({
+    harness: "codex", displayName: "Codex", supported: true, state, groups,
+    guidance: {
+      command: reviewCommand,
+      review_required: "Run this command in a terminal to open Codex, enter /hooks, and trust the RoboRepo commands listed here.",
+      inactive: "Run this command in a terminal to open Codex, enter /hooks, and turn the listed RoboRepo hooks back on.",
+    },
+  });
+  const claudeActive = { harness: "claude", displayName: "Claude Code", supported: true, state: "active", groups: [], guidance: null };
+  const routeStatuses = async (page, byHarness) => {
     const reads = [];
-    await page.route("**/api/config/hooks/codex/status", (route) => {
-      reads.push(route.request().url());
-      return route.fulfill({ json: { state, installed: 5 } });
+    await page.route("**/api/config/hooks/*/status", (route) => {
+      const harness = new URL(route.request().url()).pathname.split("/")[4];
+      reads.push(harness);
+      return route.fulfill({ json: byHarness[harness] });
     });
     return reads;
   };
 
-  test("Settings, Tokens, and Home warn when Codex will not run the capture hooks; Agents does not", async ({ page }) => {
-    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith(true) }));
-    await routeHookStatus(page, "review_required");
+  test("Settings, Tokens, and Home name the hooks awaiting review and the command that opens review; Agents does not", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex, claude]) }));
+    await routeStatuses(page, {
+      claude: claudeActive,
+      codex: codexStatus("review_required", [
+        group("core", "Codex core hooks", "active", [hook("PreToolUse", "active")]),
+        group("skill-visibility", "Skill visibility", "review_required", [hook("PostToolUse", "review_required")]),
+        group("telemetry", "Token Telemetry", "review_required", [hook("SessionStart", "active"), hook("PostToolUse", "review_required")]),
+      ]),
+    });
 
     await page.goto("/settings");
-    const settingsNotice = page.locator("#codex-hook-status portal-notice");
-    await expect(settingsNotice).toHaveClass(/notice-warning/);
-    await expect(settingsNotice.locator("[data-slot=title]")).toHaveText("Codex telemetry needs review");
+    const notice = page.locator("#hook-readiness portal-notice");
+    await expect(notice).toHaveCount(1);
+    await expect(notice).toHaveClass(/notice-warning/);
+    await expect(notice.locator("[data-slot=title]")).toHaveText("Codex hooks need review");
+    await expect(notice.locator("[data-slot=command]")).toHaveText(reviewCommand);
+    await expect(notice.getByRole("listitem")).toHaveText(["Skill visibility: PostToolUse", "Token Telemetry: PostToolUse"]);
 
     await page.goto("/");
-    await expect(page.locator("#home-codex-hook-status [data-slot=title]")).toHaveText("Codex telemetry needs review");
+    await expect(page.locator("#home-hook-readiness [data-slot=title]")).toHaveText("Codex hooks need review");
 
     await page.goto("/tokens");
-    await expect(page.locator("#tokens-codex-hook-status [data-slot=title]")).toHaveText("Codex telemetry needs review");
+    await expect(page.locator("#tokens-hook-readiness [data-slot=title]")).toHaveText("Codex hooks need review");
 
     await page.goto("/agents");
     await expect(page.getByRole("heading", { name: "Available Agent Tools" })).toBeVisible();
-    await expect(page.getByText("Codex telemetry needs review")).toHaveCount(0);
+    await expect(page.getByText("Codex hooks need review")).toHaveCount(0);
   });
 
-  test("stays hidden, without asking Codex, while token tracking is off", async ({ page }) => {
-    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith(false) }));
-    const reads = await routeHookStatus(page, "review_required");
+  test("names missing package hooks and tells the user to reapply the package", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex]) }));
+    await routeStatuses(page, {
+      codex: codexStatus("missing", [group("skill-visibility", "Skill visibility", "missing", [hook("PostToolUse", "missing")])]),
+    });
+    await page.goto("/settings");
+    const notice = page.locator("#hook-readiness portal-notice");
+    await expect(notice.locator("[data-slot=title]")).toHaveText("Codex hooks are missing");
+    await expect(notice.locator("[data-slot=message]")).toContainText("Turn the package off and back on in Agents");
+    await expect(notice.locator("[data-slot=command]")).toBeHidden();
+    await expect(notice.getByRole("listitem")).toHaveText(["Skill visibility: PostToolUse"]);
+  });
+
+  test("says the state is unknown when the harness runtime cannot report", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex]) }));
+    await routeStatuses(page, {
+      codex: codexStatus("unknown", [group("telemetry", "Token Telemetry", "unknown", [hook("Stop", "unknown")])]),
+    });
+    await page.goto("/settings");
+    const notice = page.locator("#hook-readiness portal-notice");
+    await expect(notice.locator("[data-slot=title]")).toHaveText("Codex hook status is unknown");
+    await expect(notice.locator("[data-slot=message]")).toContainText("has been opened at least once");
+    await expect(notice.locator("[data-slot=affected]")).toBeHidden();
+  });
+
+  test("stays hidden when every hook is active, or only core hooks are missing", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex, claude]) }));
+    const reads = await routeStatuses(page, {
+      claude: claudeActive,
+      codex: codexStatus("missing", [
+        group("core", "Codex core hooks", "missing", [hook("PreToolUse", "missing")]),
+        group("telemetry", "Token Telemetry", "active", [hook("Stop", "active")]),
+      ]),
+    });
+    await page.goto("/settings");
+    await expect.poll(() => reads.length).toBe(2);
+    await expect(page.locator("#hook-readiness")).toBeHidden();
+  });
+
+  test("asks nothing when no harness is active", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([]) }));
+    const reads = await routeStatuses(page, {});
     await page.goto("/settings");
     await expect(page.locator("#telemetry-toggle")).toHaveText("Enable");
-    await page.goto("/");
-    await expect(page.locator("#home-harness-banner")).toBeHidden();
-    await expect(page.locator("#codex-hook-status, #home-codex-hook-status")).toBeHidden();
+    await expect(page.locator("#hook-readiness")).toBeHidden();
     expect(reads).toHaveLength(0);
-  });
-
-  test("stays hidden when Codex runs the capture hooks", async ({ page }) => {
-    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith(true) }));
-    const reads = await routeHookStatus(page, "active");
-    await page.goto("/settings");
-    await expect.poll(() => reads.length).toBeGreaterThan(0);
-    await expect(page.locator("#codex-hook-status")).toBeHidden();
   });
 });
 

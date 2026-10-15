@@ -205,6 +205,33 @@ assertThrows(
   "requireHarnessCapability must reject an undeclared capability (claude has no telemetry-rate-limits)"
 );
 
+// --- hooks.read: Claude and Codex return records for a fixture home instead of throwing the
+// placeholder error. Codex runs with no executable, so it reports the installed hooks with trust
+// "unknown" rather than spawning a real runtime. Gemini keeps the placeholder. ---
+{
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-hooks-read-"));
+  const fragment = (command) => ({ hooks: { Stop: [{ matcher: "", hooks: [{ type: "command", command }] }] } });
+  const claudeSettings = path.join(home, ".claude", "settings.json");
+  const codexHooks = path.join(home, ".codex", "hooks.json");
+  fs.mkdirSync(path.dirname(claudeSettings), { recursive: true });
+  fs.mkdirSync(path.dirname(codexHooks), { recursive: true });
+  fs.writeFileSync(claudeSettings, JSON.stringify(fragment("echo claude-stop")));
+  fs.writeFileSync(codexHooks, JSON.stringify(fragment("echo codex-stop")));
+  try {
+    const claudeRecords = await getHarnessProvider("claude").adapters.hooks.read({ hooksPath: claudeSettings });
+    assert(JSON.stringify(claudeRecords) === JSON.stringify([
+      { event: "Stop", command: "echo claude-stop", sourcePath: claudeSettings, trust: "not-required", enabled: true },
+    ]), `Claude hooks.read must report installed hooks as not requiring trust, got ${JSON.stringify(claudeRecords)}`);
+    const codexRecords = await getHarnessProvider("codex").adapters.hooks.read({ hooksPath: codexHooks, executable: null });
+    assert(JSON.stringify(codexRecords) === JSON.stringify([
+      { event: "Stop", command: "echo codex-stop", sourcePath: codexHooks, trust: "unknown", enabled: true },
+    ]), `Codex hooks.read without a runtime must report installed hooks with unknown trust, got ${JSON.stringify(codexRecords)}`);
+    assertThrows(() => getHarnessProvider("gemini").adapters.hooks.read({}), "Gemini hooks.read stays a placeholder");
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+}
+
 console.log("harness registry/discovery/state/harness-runtime: all checks passed");
 
 function withDiscoveryEnv({ home, pathPrefix }, fn) {

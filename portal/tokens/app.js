@@ -7,7 +7,7 @@
 import { portalGetJson, portalPostJson, portalHideLoading, portalHideLoadingNow, portalSetUpdatedAt, portalWireBackdropClose } from "/portal/shared/api.js";
 import { pageState } from "./page-state.js";
 import { activePresentedHarnesses, formatHarnessList } from "/portal/shared/harness-cohort.js";
-import { renderCodexHookStatus } from "/portal/shared/codex-hook-status.js";
+import { renderHookReadiness } from "/portal/shared/hook-readiness.js";
 import { harnessWarningElement } from "/portal/shared/harness-warning.js";
 import { fetchSetupState } from "/portal/shared/setup-api.js";
 import { createConditionsReport } from "./conditions-report.js";
@@ -86,7 +86,7 @@ async function init() {
   }
   const telemetryOn = setup.telemetry.enabled;
   const harnessCount = setup.harnesses.active.length;
-  void renderCodexHookStatus(document.getElementById("tokens-codex-hook-status"), setup);
+  void renderHookReadiness(document.getElementById("tokens-hook-readiness"), setup);
   // Package capability lookups (docLookupHint) read this snapshot — installed/available state
   // comes from the same /api/config the setup cascade already uses. No second fetch.
   window.__tokensConfig = cfg;

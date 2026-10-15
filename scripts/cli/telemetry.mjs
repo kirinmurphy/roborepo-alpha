@@ -22,7 +22,7 @@ import { readAppendedLines } from "./jsonl-tail.mjs";
 import { startPortalServer } from "./portal-server.mjs";
 import { computePortalSourceHash } from "./portal-source-hash.mjs";
 import { readConfigSnapshot, loadConfigSource } from "./config.mjs";
-import { readCodexTelemetryHookStatus } from "./codex-hook-status.mjs";
+import { loadHookReadiness } from "./hook-readiness-status.mjs";
 import { refreshHarnessesAndApply } from "./portal-harness-refresh.mjs";
 import { mutatePackage, setSkillInstalled, setBehaviorBucket, setCommandBucket } from "./config-mutate.mjs";
 import { loadPlansSnapshot, loadCachedPlansSnapshot, loadPlanDocument, buildPlansPrompt, updatePlanPriority, refreshPlans } from "./plans.mjs";
@@ -819,7 +819,7 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     loadTelemetryAnalysis: (body) => loadTelemetryAnalysisRequest(body),
     loadTelemetryGuide: () => loadTelemetryGuide(),
     loadConfig: () => readConfigSnapshot(),
-    loadCodexHookStatus: () => readCodexTelemetryHookStatus(),
+    loadHookReadiness: (harness) => loadHookReadiness(harness),
     loadSetupState: () => loadSetupState(),
     refreshHarnesses: () => refreshHarnessesAndApply(),
     setHarnessEnabled: (id, enabled) => setHarnessEnabled(id, enabled),

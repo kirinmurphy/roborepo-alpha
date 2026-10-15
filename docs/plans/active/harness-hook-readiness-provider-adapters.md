@@ -1,7 +1,7 @@
 ---
 id: wjlt1zvf
 priority: high
-next_action: Make the Codex hooks.merge adapter append package hooks instead of prepending them, then find why the core Codex hooks are absent from the reference Mac's ~/.codex/hooks.json.
+next_action: Answer the Open Question on how core Codex hooks reach a hook file packages already use, then implement the chosen install path.
 blocked_by: []
 depends_on:
   - 3jp3yhtq
@@ -231,73 +231,83 @@ becomes `/api/config/hooks/<harness>/status`, served by a handler outside `scrip
 
 - [x] Check whether enabling a package shifts the positions Codex trust keys depend on. It does:
       see "Observed on the reference Mac".
-- [ ] Add a `scripts/test/hook-composition-check.mjs` case proving that merging a second Codex
+- [x] Add a `scripts/test/hook-composition-check.mjs` case proving that merging a second Codex
       fragment leaves the first fragment's entries at their original indexes, and run it to see it
       fail. Then make the Codex `hooks.merge` adapter in `scripts/harnesses/codex/index.mjs` append
       entries in fragment order.
-- [ ] Find why `~/.codex/hooks.json` on the reference Mac lacks the core hooks, reproducing on a
-      clean `HOME` before changing the installer. Fix the install path if it is a defect, keeping
-      core entries ahead of package entries.
-- [ ] Remove the `jcodemunch` notice from `generated/codex/hooks.json`, and add the matching
+- [ ] **Blocked by Open Question "How should core Codex hooks reach a hook file packages already
+      use?"** Find why `~/.codex/hooks.json` on the reference Mac lacks the core hooks, reproducing
+      on a clean `HOME` before changing the installer. Fix the install path if it is a defect,
+      keeping core entries ahead of package entries. The cause is found and reproduced (see the
+      Open Question); the fix is not made.
+- [x] Remove the `jcodemunch` notice from `generated/codex/hooks.json`, and add the matching
       `doesNotMatch` assertion beside the Caveman and JDocMunch ones in
       `scripts/test/system-package-ownership-characterization-check.mjs`.
-- [ ] Confirm that the desktop bundle's `codex` binary opens a terminal UI offering `/hooks`, and
+- [x] Confirm that the desktop bundle's `codex` binary opens a terminal UI offering `/hooks`, and
       that trust recorded there makes a desktop session run the hook. Record the exact command in
       the Decision Log. If it fails, stop and bring the trust path back to the user.
-- [ ] Check whether `hooks/list` exists on a `PATH` Codex CLI of the oldest version `hooks.read`
+- [x] Check whether `hooks/list` exists on a `PATH` Codex CLI of the oldest version `hooks.read`
       must support. Pick the executable rule from the result and record it in the Decision Log.
+      No `PATH` Codex CLI exists on the reference Mac, so the check could not run; see the Decision
+      Log and `## Not tested`.
 
 ### Phase 2: Provider `hooks.read`
 
-- [ ] Implement `hooks.read` for Codex in `scripts/harnesses/codex/`, using the Phase 1 executable
+- [x] Implement `hooks.read` for Codex in `scripts/harnesses/codex/`, using the Phase 1 executable
       rule.
-- [ ] Implement `hooks.read` for Claude.
-- [ ] Add the readiness comparison in `scripts/harnesses/hook-readiness.mjs`. It builds the
+- [x] Implement `hooks.read` for Claude.
+- [x] Add the readiness comparison in `scripts/harnesses/hook-readiness.mjs`. It builds the
       expected set from core hook files and enabled packages' `hooks` resources, resolving each
       resource's harness the way `packages.mjs` does. It skips a harness whose `hooks.read` is
       still a stub. Package status, the portal route, and `doctor` all consume it, so it lives
       with the shared harness code rather than with any one of them.
-- [ ] Route `probeHooks` through `hookFilePath` and the comparison, and remove its hardcoded Codex
+- [x] Route `probeHooks` through `hookFilePath` and the comparison, and remove its hardcoded Codex
       hook file and `~/.<harness>/hooks/` paths.
-- [ ] Delete `scripts/cli/codex-hook-status.mjs` and move its `telemetry-correctness-check.mjs`
+- [x] Delete `scripts/cli/codex-hook-status.mjs` and move its `telemetry-correctness-check.mjs`
       assertions to the new comparison's tests.
 
 ### Phase 3: Surfaces
 
-- [ ] Replace the route and its `scripts/cli/telemetry.mjs` handler with the harness-parameterized
+- [x] Replace the route and its `scripts/cli/telemetry.mjs` handler with the harness-parameterized
       route, and update `scripts/test/harness-portal-api-check.mjs`.
-- [ ] Replace `portal/shared/codex-hook-status.js` and `tpl-codex-hook-status` with a generic
+- [x] Replace `portal/shared/codex-hook-status.js` and `tpl-codex-hook-status` with a generic
       notice. Update its three mounts in `portal/{settings,tokens,home}/` with their styles, and
       the specs at `scripts/test/portal-ui/portal-ui.spec.mjs` that route the old URL.
-- [ ] Add a non-failing hint helper to `scripts/doctor.sh` and report readiness through it.
-- [ ] Update `docs/user/reference/codex-hooks.md` (readiness states, review steps, the pages that
+- [x] Add a non-failing hint helper to `scripts/doctor.sh` and report readiness through it.
+- [x] Update `docs/user/reference/codex-hooks.md` (readiness states, review steps, the pages that
       show the notice) and `docs/internal/harness-provider-interface.md` (the `hooks.read`
       contract and Codex append order).
 
 ### Phase 4: Boundary moves
 
-- [ ] Add `parentApp.setupHint` and move the "Code tab" copy into
+- [x] Add `parentApp.setupHint` and move the "Code tab" copy into
       `globals/harnesses/claude/provider.json`. Keep the `, then run roborepo harness refresh.`
       ending, or update `finishesOnItsOwn` in `portal/shared/harness-warning.js`, which rewrites
       that ending into the portal's "RoboRepo will finish setting it up." copy.
-- [ ] Move `mcp-claude-cli.mjs` into `scripts/harnesses/claude/`. Update its importers
+- [x] Move `mcp-claude-cli.mjs` into `scripts/harnesses/claude/`. Update its importers
       (`scripts/cli/mcp-claude.mjs`, `scripts/cli/packages.mjs`, `scripts/harnesses/claude/mcp.mjs`),
       its relative `provider.json` URL, and the comment in `scripts/test/test-cli.sh`.
 
 ## Validation
 
-- [ ] Unit tests feed `hooks/list` fixtures to the Codex `hooks.read` and the comparison. Cover
+- [x] Unit tests feed `hooks/list` fixtures to the Codex `hooks.read` and the comparison. Cover
       every readiness state, a package other than telemetry, the core hooks, a hook from another
-      `sourcePath`, and a runtime that times out.
-- [ ] `scripts/test/hook-composition-check.mjs` proves Codex appends and Claude still prepends.
-- [ ] `scripts/test/harness-registry-check.mjs` proves the Claude and Codex `hooks.read` return
+      `sourcePath`, and a runtime that times out. `scripts/test/hook-readiness-check.mjs`, against
+      a fake `app-server` in `scripts/test/fixtures/hook-readiness/`.
+- [x] `scripts/test/hook-composition-check.mjs` proves Codex appends and Claude still prepends.
+- [x] `scripts/test/harness-registry-check.mjs` proves the Claude and Codex `hooks.read` return
       records for a fixture home instead of throwing the `notYetMigrated` error.
-- [ ] `scripts/test/harness-desktop-runtime-check.mjs` proves the no-runtime warning uses the
+- [x] `scripts/test/harness-desktop-runtime-check.mjs` proves the no-runtime warning uses the
       manifest's `parentApp.setupHint`, and the generic sentence when the hint is absent.
-- [ ] `npm run test:portal-ui` covers the generic notice for `review_required`, `missing`, and
+- [x] `npm run test:portal-ui` covers the generic notice for `review_required`, `missing`, and
       `unknown`.
-- [ ] `npm run check` passes. Hook installation and package status are cross-cutting, so the full
-      gate is required before handoff.
+- [x] `npm run check` passes. Hook installation and package status are cross-cutting, so the full
+      gate is required before handoff. Passed October 15, 2026, including the Docker clean-machine
+      legs; Windows installer parity skipped (no `pwsh`).
+- [x] Manual check against this branch's portal on the reference Mac's live state: Settings,
+      Tokens, and Home each show one Codex notice, "Codex hooks need review", listing Skill
+      visibility and Token Telemetry under `PostToolUse` with the desktop binary's command. No
+      console errors.
 
 ## Not tested
 
@@ -308,6 +318,14 @@ becomes `/api/config/hooks/<harness>/status`, served by a handler outside `scrip
 - [ ] After Phase 1, enable or disable a package on the reference Mac and confirm `hooks/list`
       still reports the earlier hooks as `trusted`. Requires a live Codex runtime and a hand
       review in `/hooks`.
+- [ ] Run `/Applications/ChatGPT.app/Contents/Resources/codex` in a terminal, enter `/hooks`,
+      trust the two RoboRepo `PostToolUse` hooks the notice lists, then confirm a new Codex desktop
+      task writes `PostToolUse` spool records again. The command's interactive UI and the trust
+      decision are the user's; earlier QA used the same embedded runtime's review screen.
+- [ ] Confirm `hooks/list` exists on the oldest Codex CLI on `PATH` that RoboRepo supports. The
+      reference Mac has no `PATH` CLI, and installing one is a download the user has not approved.
+      An older CLI that lacks the method makes readiness report `unknown`, which the fake
+      `app-server`'s method-not-found mode covers in `hook-readiness-check.mjs`.
 
 ## Risks
 
@@ -321,7 +339,29 @@ becomes `/api/config/hooks/<harness>/status`, served by a handler outside `scrip
 
 ## Open Questions
 
-None.
+- **How should core Codex hooks reach a hook file packages already use?** Blocks the Phase 1
+  core-hook task and the Goal "Core Codex hooks are installed wherever the Codex home exists".
+
+  Reproduced on a clean `HOME` with `bundle apply --default`, headless `onboard-intro`,
+  `package enable telemetry`, then `bundle apply hooks`. Two things combine:
+
+  1. Install applies only the `base` preset bundle. The core hooks ride in the `hooks` bundle
+     (`codex:hooks.json` and `codex:hooks` rows in `manifests/platform/presets.json`), which applies
+     only when chosen in onboarding or with `roborepo bundle apply hooks`.
+  2. Once any package merges into `~/.codex/hooks.json`, the `hooks` bundle's `managed_copy` of
+     `generated/codex/hooks.json` collides with it. The installer stages
+     `hooks_update_<timestamp>.json`, prints a merge-review prompt, and installs nothing. The
+     `~/.codex/hooks/` directory row collides the same way once a package copies a script there.
+     `~/.claude/hooks/` on the reference Mac shows the same gap for Claude's script directory.
+
+  | Option | What changes | Pros | Cons |
+  | --- | --- | --- | --- |
+  | A. New manifest kind for hook fragments (recommended) | `codex:hooks.json` becomes a `hook_fragment` row: install merges it through the provider's `hooks.merge` with core entries first, and uninstall unmerges it. The scripts row copies per file | Core hooks install beside package hooks; ownership stays per entry; one mechanism for install, uninstall, and doctor | Touches `install-harness.sh`, `presets.mjs`, `manifests-data.sh`, `doctor.sh`, `verify-install.sh`, uninstall, and the Windows installer. Prepending core entries moves existing package hooks once, so Codex asks for review again |
+  | B. Core hooks become a required system package | `generated/codex/hooks.json` content moves to a `hooks` resource of an always-enabled package | Reuses the package path that already merges and copies per file | Core hooks append after existing package hooks, so `permission-check.mjs` would not run first. Changes what "core" means in the package catalog |
+  | C. Keep `managed_copy`, merge only when the file exists | `copyItem` special-cases hook files | Smallest diff | A hidden exception in the copy primitive; uninstall still reclaims by whole-file match |
+
+  It was blocked rather than decided because it changes install, uninstall, and migration behavior
+  on existing machines, and the options trade core-hook order against trust churn.
 
 ## Decision Log
 
@@ -336,3 +376,48 @@ None.
 - **Live capture evidence recorded at promotion.** The spool shows nonzero token and tool counts
   since the parser fix, so Phase 1 no longer runs a separate capture task. The `## Not tested`
   entry stays until the user confirms it.
+- **The review command is the selected executable, here
+  `/Applications/ChatGPT.app/Contents/Resources/codex`.** Its `--help` says a bare invocation
+  opens the interactive CLI. `3jp3yhtq` QA trusted the five telemetry hooks through this embedded
+  runtime's review screen, and the next desktop task produced seven spool records, so trust
+  recorded there applies to desktop sessions. Alternatives: a hardcoded `codex` (fails when no CLI
+  is on `PATH`, as on the reference Mac) or no command (leaves the user without a route to
+  `/hooks`). The live `/hooks` walk is a `## Not tested` entry.
+- **`hooks.read` uses `selectedHarnessExecutable` (CLI on `PATH` first, then the desktop
+  binary).** The old status check preferred the desktop binary. No `PATH` CLI exists here to test
+  an older version, so the rule follows discovery, and a runtime without `hooks/list` (an RPC
+  error), with no output (timeout), or absent returns the file's entries with `trust: "unknown"`.
+  Alternative: keep the desktop-first picker, which disagrees with every other caller of
+  discovery for no stated reason.
+- **`hooks.read` is async for every provider.** Codex must wait on a child process; Claude
+  resolves immediately. A synchronous Codex read would block the portal server for up to the
+  8-second timeout. Package status stays synchronous: `buildPackageLiveState` takes optional
+  `hookRecords`, and without them `probeHooks` reads the hook file with `trust: "unknown"` and
+  reports installed counts only. No current surface renders a component's `detail`, so the
+  user-facing readiness is the portal notice and `doctor`.
+- **Core hook fragments and review copy come from optional provider methods, `hooks.core()` and
+  `hooks.guidance()`.** Alternatives: a manifest field (the schema says core code must not read
+  `extensions`, and a new top-level key would be a schema change for two strings), or a shared
+  map keyed by harness id (the leak this plan removes). Optional methods keep
+  `CAPABILITY_REQUIRED_METHODS` unchanged.
+- **The portal notice is not gated on Token Telemetry.** Any package's Codex hooks can need
+  review (Skill visibility did on the reference Mac), and the goal names any package. Every active
+  harness is asked; the server caches each harness's result for 30 seconds because the Codex read
+  starts a process. Gemini reports `supported: false` and shows nothing.
+- **The portal notice leaves out core hooks that are only `missing`.** Its remedy, reapplying a
+  package, does not install them while the Open Question stands, so the warning would be
+  permanent and unactionable. `doctor --installed` still reports them. Core hooks that need review
+  or are turned off still show.
+- **`shellQuote` moved to `scripts/harnesses/shell-quote.mjs`.** The Codex review command needed
+  the same quoting the Claude MCP module had; after the move into `claude/`, Codex would otherwise
+  import from another provider's directory. `scripts/maintenance/git-remote-sync.mjs` keeps its
+  own copy, outside this plan's scope.
+- **`test-cli.sh`'s update fixture now links `~/.codex/hooks.json` to a temp copy.** It linked
+  the tracked `generated/codex/hooks.json`, so its `package enable jcodemunch` rewrote the
+  baseline; that is how the `jcodemunch` notice got committed there, and with append order the
+  first gate run re-added it at the end. A new assertion compares the baseline's hash before and
+  after. The production write path has the same gap for a legacy symlinked install, which is
+  outside this plan and was raised as a separate task.
+- **Doctor reports readiness only under `--installed`.** Readiness reads live harness homes and
+  starts the Codex runtime, like the other `--installed` checks. The existing harness-warning
+  hints now print through the same `hint()` helper.

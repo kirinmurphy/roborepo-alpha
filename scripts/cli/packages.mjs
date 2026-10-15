@@ -15,7 +15,7 @@ import { installPackageRuntimeAsset, mergeHarnessConfig, removePackageRuntimeAss
 import { installPackageCommands, removePackageCommands } from "./slash-commands.mjs";
 import { cleanupPackageProjections } from "./package-projection-cleanup.mjs";
 import { getHarnessProvider } from "../harnesses/registry.mjs";
-import { hasClaudeCli } from "../harnesses/mcp-claude-cli.mjs";
+import { hasClaudeCli } from "../harnesses/claude/mcp-claude-cli.mjs";
 
 export const USER_CLAUDE_SETTINGS = rootConfigActive.claude;
 export const USER_CODEX_CONFIG = rootConfigActive.codex;

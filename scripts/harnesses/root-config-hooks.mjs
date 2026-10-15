@@ -17,6 +17,18 @@ export function readRootConfigHooks(settingsPath) {
   return { settings, hooks: isHooksMap(settings.hooks) ? settings.hooks : {} };
 }
 
+// One hooks.read record per installed handler. Codex's hooks.json sidecar keeps its map under the
+// same top-level "hooks" key, so its fallback read (no runtime to report trust) shares this too.
+// `trust` is the caller's: only the provider knows whether its harness gates hooks on trust.
+export function hookRecordsFromFile(filePath, { trust }) {
+  const { hooks } = readRootConfigHooks(filePath);
+  return Object.entries(hooks)
+    .filter(([event, groups]) => !event.startsWith("_") && Array.isArray(groups))
+    .flatMap(([event, groups]) => groups.flatMap((group) => (group.hooks || []).map((hook) => ({
+      event, command: hook.command, sourcePath: filePath, trust, enabled: true,
+    }))));
+}
+
 export function mergeRootConfigHooks(settingsPath, hooksFragment) {
   const { settings, hooks } = readRootConfigHooks(settingsPath);
   const { hooks: nextHooks, added } = mergeHooksMap(hooks, hooksFragment);

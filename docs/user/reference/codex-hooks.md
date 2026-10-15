@@ -5,15 +5,44 @@ tool call. RoboRepo installs a few that always run, and packages add more when y
 Turn a package's hooks off by disabling the package in `/agents` or with
 `roborepo package disable <id>`.
 
-Codex runs non-managed hooks only after you review and trust their exact definitions. Enabling a
-package installs its hooks but does not grant that trust. Codex CLI provides `/hooks` for review;
-the macOS desktop app did not show a review prompt during RoboRepo's October 2026 QA. Sessions
-that were already running do not pick up newly trusted hooks.
+## Trusting RoboRepo's Hooks
 
-When token tracking is enabled, Settings, Tokens, and Home check whether its five Codex capture
-hooks are active and show a warning if they are awaiting review, disabled, or missing. The warning
-does not change Codex's trust decisions. Review is currently available through Codex's `/hooks`
-screen.
+Codex runs a non-managed hook only after you review and trust its exact definition. Enabling a
+package installs its hooks but does not grant that trust, and RoboRepo never grants it for you. The
+macOS desktop app does not show a review prompt, so review happens in Codex's terminal UI:
+
+1. Run the command RoboRepo shows. It is `codex` when the Codex CLI is on your `PATH`, or the
+   desktop app's own binary, such as `/Applications/ChatGPT.app/Contents/Resources/codex`.
+2. Enter `/hooks` and trust the RoboRepo commands the notice lists.
+3. Start a new Codex session. Sessions already running do not pick up newly trusted hooks.
+
+Trust is stored in `~/.codex/config.toml`, which the desktop app reads too.
+
+Codex keys trust by a hook's position in `~/.codex/hooks.json`. RoboRepo adds a package's Codex
+hooks after the existing ones, so enabling a package leaves the hooks you already trusted where they
+were. Disabling a package moves the hooks after it at the same event, and Codex asks you to review
+those again.
+
+## Checking Hook Readiness
+
+Settings, Tokens, and Home show a warning for each harness whose RoboRepo hooks will not all run.
+`roborepo doctor --installed` prints the same findings as `hint:` lines. Neither changes Codex's
+trust decisions.
+
+| State | Meaning | What to do |
+| --- | --- | --- |
+| Active | Installed, trusted, and turned on | Nothing |
+| Needs review | Installed, but Codex has not trusted this exact definition (`untrusted` or `modified`) | Follow the review steps above |
+| Turned off | Trusted but disabled in Codex | Turn the hooks back on in `/hooks` |
+| Missing | Not in `~/.codex/hooks.json` | Turn the package off and back on in `/agents` |
+| Unknown | Codex could not be asked | Check that Codex is installed and has been opened at least once |
+
+RoboRepo asks Codex directly (through `codex app-server`), so the warning reflects what Codex will
+actually run rather than what the file contains.
+
+The core hooks marked "always" below are not installed yet on a machine where a package already
+wrote `~/.codex/hooks.json`. `doctor --installed` reports them as missing; the portal warning leaves
+them out because reapplying a package does not install them.
 
 ## What Runs
 

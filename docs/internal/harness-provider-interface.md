@@ -152,6 +152,35 @@ Each capability maps to a required adapter group and method set, defined in
 | `session-launch` | `session` | `launch` |
 | `session-resume` | `session` | `resume` |
 
+### Hooks: read, merge order, and readiness
+
+`hooks.read({ cwd, hooksPath })` returns a promise of one record per installed hook handler:
+`{ event, command, sourcePath, trust, enabled }`. `event` uses the fragment spelling (`PostToolUse`)
+so records compare directly with `hooks` resources. `trust` is one of `trusted`, `managed`,
+`untrusted`, `modified`, `not-required`, or `unknown`.
+
+| Provider | `read` | Trust source |
+| --- | --- | --- |
+| Claude | Reads the `hooks` key of `settings.json` | Always `not-required`: Claude runs every installed hook |
+| Codex | Asks `codex app-server` for `hooks/list`, using the executable `selectedHarnessExecutable` picks | Codex's own `trustStatus`; `isManaged` maps to `managed`. A missing, old, or slow runtime returns the file's entries with `trust: "unknown"` instead of throwing |
+| Gemini | Still the `notYetMigrated` stub; readiness skips it | — |
+
+Two optional `hooks` methods feed the readiness comparison: `core()` returns the hook fragment the
+harness gets whatever packages are enabled, and `guidance()` returns `{ command, review_required,
+inactive }` next-step copy for a harness that gates hooks on trust (Codex). Shared code never
+hardcodes either.
+
+`scripts/harnesses/hook-readiness.mjs` builds the expected set from `core()` plus enabled packages'
+`hooks` resources for that harness, compares it with `read()`, and reports one state per group:
+`active`, `review_required`, `inactive`, `missing`, or `unknown`. Records from another `sourcePath`
+never satisfy an expected hook. Package status (`probeHooks`), the portal route
+`/api/config/hooks/<harness>/status`, and `doctor --installed` all consume it.
+
+`hooks.merge` order differs on purpose. Claude and Gemini prepend a fragment's entries, because
+Claude treats the first decisive hook result as final. Codex appends, because Codex keys trust by
+position (`<file>:<event>:<group index>:<handler index>`) and prepending would revoke trust the
+user already granted.
+
 ### Migration state — read this before you are surprised
 
 Not every capability's logic lives in its adapter yet. Several still live in `scripts/cli/*.mjs` and

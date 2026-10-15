@@ -16,6 +16,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { resolvesIntoRepo } from "../cli/hook-composition.mjs";
+import { getHarnessProvider } from "../harnesses/registry.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const cli = path.join(repoRoot, "scripts/cli/main.mjs");
@@ -87,6 +88,38 @@ try {
     fs.symlinkSync(linkTwo, linkOne);
     assert.equal(resolvesIntoRepo(linkOne, repoRoot), true, "multi-hop symlink into repo is detected");
     assert.equal(resolvesIntoRepo(outside, repoRoot), false, "ordinary outside directory is allowed");
+  }
+
+  // --- merge order: Codex appends so trusted positions hold; Claude prepends ---
+  // Codex keys hook trust by `<file>:<event>:<group index>:<handler index>`, so a merge that moves an
+  // existing entry revokes trust the user already granted. Claude treats the first decisive hook
+  // result as final, so a package's own hooks still go first there.
+  {
+    const entry = (command) => ({ matcher: "", hooks: [{ type: "command", command }] });
+    const first = { PostToolUse: [entry("echo first-a"), entry("echo first-b")] };
+    const second = { PostToolUse: [entry("echo second-a"), entry("echo second-b")] };
+    const commandsAt = (content, key) => JSON.parse(content)[key].PostToolUse.map((e) => e.hooks[0].command);
+
+    const codexPath = path.join(tmp, "order-codex-hooks.json");
+    const codexHooks = getHarnessProvider("codex").adapters.hooks;
+    fs.writeFileSync(codexPath, codexHooks.merge(codexPath, first).content);
+    fs.writeFileSync(codexPath, codexHooks.merge(codexPath, second).content);
+    assert.deepEqual(
+      commandsAt(fs.readFileSync(codexPath, "utf8"), "hooks"),
+      ["echo first-a", "echo first-b", "echo second-a", "echo second-b"],
+      "Codex merge keeps earlier entries at their indexes and appends the new fragment in order",
+    );
+
+    const claudePath = path.join(tmp, "order-claude-settings.json");
+    fs.writeFileSync(claudePath, "{}");
+    const claudeHooks = getHarnessProvider("claude").adapters.hooks;
+    fs.writeFileSync(claudePath, claudeHooks.merge(claudePath, first).content);
+    fs.writeFileSync(claudePath, claudeHooks.merge(claudePath, second).content);
+    assert.deepEqual(
+      commandsAt(fs.readFileSync(claudePath, "utf8"), "hooks"),
+      ["echo second-a", "echo second-b", "echo first-a", "echo first-b"],
+      "Claude merge still prepends the new fragment, preserving its internal order",
+    );
   }
 
   // --- enable: both harnesses' hooks land ---

@@ -17,22 +17,24 @@ export function isHooksMap(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
-export function mergeHooksMap(hooksMap, hooksFragment) {
+// Prepends by default: a package's own hooks may need to run before pre-existing entries for the
+// same event/matcher (e.g. a deny-decision hook must execute before an allow-decision one — Claude's
+// hook model treats the first decisive result as final). `append: true` is for Codex, which keys
+// hook trust by position (`<file>:<event>:<group index>:<handler index>`), so moving an existing
+// entry would revoke trust the user already granted. Either way the fragment's own internal entry
+// order is preserved.
+export function mergeHooksMap(hooksMap, hooksFragment, { append = false } = {}) {
   const hooks = { ...hooksMap };
   let added = 0;
   for (const [event, entries] of Object.entries(hooksFragment)) {
     if (event.startsWith("_") || !Array.isArray(entries)) continue;
-    const existing = [...(hooks[event] || [])];
-    // Prepend (not append): a package's own hooks may need to run before pre-existing entries for
-    // the same event/matcher (e.g. a deny-decision hook must execute before an allow-decision one —
-    // Claude's hook model treats the first decisive result as final). Preserve the fragment's own
-    // internal entry order by prepending in reverse.
-    for (const entry of [...entries].reverse()) {
+    const existing = hooks[event] || [];
+    const fresh = entries.filter((entry) => {
       const cmd = entry.hooks?.[0]?.command;
-      const alreadyPresent = cmd && existing.some((e) => (e.hooks || []).some((h) => h.command === cmd));
-      if (!alreadyPresent) { existing.unshift(entry); added++; }
-    }
-    hooks[event] = existing;
+      return !(cmd && existing.some((e) => (e.hooks || []).some((h) => h.command === cmd)));
+    });
+    added += fresh.length;
+    hooks[event] = append ? [...existing, ...fresh] : [...fresh, ...existing];
   }
   return { hooks, added };
 }
