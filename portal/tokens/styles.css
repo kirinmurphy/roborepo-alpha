@@ -20,6 +20,12 @@ main.inner { max-width: 1100px; margin: 0 auto; padding: 32px 20px 64px; display
 #tokenscontent > .t2-section:not(:first-of-type) > .t2-sec-head {
   position: sticky; top: var(--portal-header-h, 0px); z-index: 5;
   background: var(--bg); padding-top: 8px; margin-top: -8px; }
+/* A section's info icon sits beside its heading, one step under the base icon size so it annotates
+   the heading rather than competing with it. */
+.t2-sec-head:has(portal-info-icon) { display: flex; align-items: center; gap: 8px; }
+.t2-sec-head portal-info-icon .info-icon,
+.invest-title portal-info-icon .info-icon,
+#tokenssession-modal .modal-head portal-info-icon .info-icon { width: var(--icon-sm); height: var(--icon-sm); }
 .t2-sec-head:has(.hint-toggle) { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .hint-toggle { font: inherit; font-size: var(--text-2xs); color: var(--accent); background: none;
   border: none; padding: 4px 0; cursor: pointer; }
@@ -332,8 +338,9 @@ dialog#tokenssession-modal { background: var(--panel); border: 1px solid var(--l
 dialog#tokenssession-modal::backdrop { background: var(--backdrop); }
 /* Title and the repo·agent line STACK (title on top, sub below) — side-by-side read as two
    unrelated columns when the title is a long sentence. */
-dialog#tokenssession-modal .modal-head { padding: 14px 18px; display: grid; gap: 3px; }
-dialog#tokenssession-modal .modal-head .modal-path { margin-left: 0; }
+/* Title and its info icon share the first row; the repository/harness line spans the second. */
+dialog#tokenssession-modal .modal-head { padding: 14px 18px; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 3px 8px; }
+dialog#tokenssession-modal .modal-head .modal-path { margin-left: 0; grid-column: 1 / -1; }
 dialog#tokenssession-modal .modal-head portal-close-button { position: absolute; top: 10px; right: 10px; }
 .t2-session-body { padding: 16px 18px 18px; overflow-y: auto; max-height: calc(85vh - 60px);
   display: grid; gap: 16px; }

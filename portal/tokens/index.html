@@ -41,7 +41,7 @@
              "[more]" tooltip with the full violator table. -->
         <section class="t2-section">
           <header class="t2-sec-head">
-            <h2 class="tier-head">Identifiable waste</h2>
+            <h2 class="tier-head">Identifiable waste</h2><portal-info-icon data-doc-anchor="identifiable-waste" aria-label="About Identifiable waste" title="About this section"></portal-info-icon>
           </header>
           <div class="t2-sec-body">
             <div class="waste-grid" id="waste-grid"></div>
@@ -73,13 +73,13 @@
           </div>
         </section>
         <section class="t2-section" id="condition-report" hidden>
-          <header class="t2-sec-head"><h2 class="tier-head">Do problems follow a condition?</h2><portal-info-icon data-doc-anchor="compare-conditions" aria-label="About Do problems follow a condition?" title="About this section"></portal-info-icon></header>
+          <header class="t2-sec-head"><h2 class="tier-head">Do problems follow a condition?</h2><portal-info-icon data-doc-anchor="do-problems-follow-a-condition" aria-label="About Do problems follow a condition?" title="About this section"></portal-info-icon></header>
           <div class="t2-sec-body">
             <div id="condition-cards" class="condition-grid"></div><p class="condition-ledger-note">Rates compare affected sessions with and without a condition. Unknown context is excluded; overlapping categories don't add up.</p>
           </div>
         </section>
         <section class="t2-section" id="condition-ledger-section" hidden>
-          <header class="t2-sec-head"><h2 class="tier-head">What happened, in order</h2><portal-info-icon data-doc-anchor="use-the-event-ledger" aria-label="About What happened, in order" title="About this section"></portal-info-icon></header>
+          <header class="t2-sec-head"><h2 class="tier-head">What happened, in order</h2><portal-info-icon data-doc-anchor="what-happened-in-order" aria-label="About What happened, in order" title="About this section"></portal-info-icon></header>
           <div class="t2-sec-body">
             
             <div class="panel condition-ledger-panel">
@@ -101,7 +101,7 @@
           </div>
         </section>
         <section class="t2-section" id="condition-changes-section">
-          <header class="t2-sec-head"><h2 class="tier-head">Your changes</h2><portal-info-icon data-doc-anchor="interpret-the-result-of-a-change" aria-label="About Your changes" title="About this section"></portal-info-icon></header><p class="condition-help">Record a change, then check whether problems drop.</p>
+          <header class="t2-sec-head"><h2 class="tier-head">Your changes</h2><portal-info-icon data-doc-anchor="your-changes" aria-label="About Your changes" title="About this section"></portal-info-icon></header><p class="condition-help">Record a change, then check whether problems drop.</p>
           <div class="t2-sec-body"><div id="condition-changes"></div><button type="button" id="condition-mark-change">+ Mark a change</button></div>
         </section>
         <!-- Agent-ready prompt: distilled from the Investigate evidence above -->
@@ -129,19 +129,20 @@
     <dialog id="tokenssession-modal" class="t2-session-modal" data-dialog-size="md" aria-labelledby="tokenssession-title">
       <div class="modal-head">
         <span class="modal-title" id="tokenssession-title" data-slot="title">Session</span>
+        <portal-info-icon data-doc-anchor="session-details" aria-label="About session details" title="About session details"></portal-info-icon>
         <span class="modal-path" data-slot="sub"></span>
         <portal-close-button data-slot="close"></portal-close-button>
       </div>
       <div class="t2-session-body" data-slot="body"></div>
     </dialog>
-    <!-- Doc-guide popup: server-rendered docs/user/guides/telemetry.md, shared factory. -->
-    <dialog id="tokensdocmodal" data-dialog-size="lg">
+    <!-- Doc-guide popup: one section of server-rendered docs/user/guides/telemetry.md, shared factory. -->
+    <dialog id="tokensdocmodal" data-dialog-size="md">
       <div class="modal-head">
         <span class="modal-title" data-slot="title"></span>
         <span class="modal-path" data-slot="path"></span>
         <portal-close-button data-slot="close"></portal-close-button>
       </div>
-      <div class="modal-body" data-slot="content"></div>
+      <div class="modal-body markdown" data-slot="content"></div>
     </dialog>
     <script src="/portal/shared/theme.js" type="module"></script>
     <script src="/portal/shared/api.js" type="module"></script>

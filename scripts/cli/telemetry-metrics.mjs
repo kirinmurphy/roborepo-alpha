@@ -11,6 +11,7 @@
 // what turns "captures relative to a marker" into the array a metric formula consumes.
 
 import { mcpServerOf } from "../harnesses/transcript-parse.mjs";
+import { shellOperation } from "./telemetry-classify.mjs";
 
 export const METRIC_UNITS = new Set(["count", "ratio", "percent", "tokens", "ms", "tokens_per_task"]);
 export const METRIC_DIRECTIONS_GOOD = new Set(["lower", "higher", "neutral"]);
@@ -22,7 +23,7 @@ function hasTokens(event) {
 }
 
 export function isTestOperation(event) {
-  return event?.operation?.category === "test";
+  return shellOperation(event)?.category === "test";
 }
 
 export function isFullSuite(event) {

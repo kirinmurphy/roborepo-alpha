@@ -235,6 +235,13 @@ function renderBlocks(lines) {
       continue;
     }
 
+    // An indented line under a list item continues that item — a bullet wrapped across source
+    // lines, as GitHub renders it — rather than closing the list and starting a paragraph.
+    if (list && /^\s/.test(raw)) {
+      list.items[list.items.length - 1] += ` ${trimmed}`;
+      continue;
+    }
+
     flushList(); flushQuote();
     para.push(line);
   }

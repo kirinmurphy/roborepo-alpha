@@ -30,6 +30,7 @@
     "telemetry-conditions-cache-check.mjs",
     "telemetry-conditions-check.mjs",
     "telemetry-conditions-matrix-check.mjs",
+    "telemetry-shell-groups-check.mjs",
     "telemetry-conditions-presentation-check.mjs",
     "telemetry-observations-check.mjs",
     "telemetry-repository-overview-check.mjs",

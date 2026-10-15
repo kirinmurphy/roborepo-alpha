@@ -788,7 +788,7 @@ function renderInvestigationSections(data) {
 
   // 4g: Testing efficiency — badge is the direct yes/no the question asks; the number lives in
   // the body. Threshold: ≥10% token share = yes (waste line's yellow band). Info icon → the
-  // guide's Testing Efficiency section, which describes exactly this panel (incl. the two
+  // guide's "Are you over-testing?" section, which describes exactly this panel (incl. the two
   // sub-metrics below).
   if (data.testing_efficiency) {
     const te = data.testing_efficiency;
@@ -803,7 +803,7 @@ function renderInvestigationSections(data) {
         badgeClass: overTesting ? "warn" : "ok",
         badgeTip: overTesting ? BADGE_TIPS.warn : BADGE_TIPS.ok,
         bodyEl: testingEfficiencyBody(te),
-        docAnchor: "testing-efficiency",
+        docAnchor: "are-you-over-testing",
       }));
     }
   }
@@ -1308,11 +1308,10 @@ wireHintToggle();
 
 // ── Doc-guide info icons ──
 // Same one-delegate pattern as the v1 dashboard: any <portal-info-icon data-doc-anchor> opens
-// the shared doc-guide popup pre-scrolled to that heading. The guide is server-rendered from
-// docs/user/guides/telemetry.md — the popup and the on-disk doc are always the same content.
-// Anchors are placed only where the guide section genuinely describes the tokens section
-// (testing-efficiency, session-detail); sections the guide doesn't cover get NO icon rather
-// than a mismatched one.
+// the shared doc-guide popup showing only the guide section under that heading. The guide is
+// server-rendered from docs/user/guides/telemetry.md, whose headings mirror this page's section
+// titles — the popup and the on-disk doc are always the same content. Sections the guide doesn't
+// cover get NO icon rather than a mismatched one.
 const docModal = createDocGuideModal(document.getElementById("tokensdocmodal"), async () => {
   try {
     return await portalGetJson("/api/telemetry/guide");

@@ -41,13 +41,15 @@ Capture runs from the harness hooks `SessionStart`, `PreToolUse`, `PostToolUse`,
 - best-effort call-paired duration (`call_id`-keyed, so concurrent/nested calls never clobber each
   other's start stamp);
 - a reference to the session's effective configuration snapshot (`config_snapshot_id`);
-- a semantic `operation` classification (category/runner/scope/target/exit-status/failure-signature —
-  never the raw shell command);
+- for shell commands only, a semantic `operation` classification (category — test, lint, typecheck,
+  build, format, install, git, serve, read, or other — plus runner/scope/target/exit-status/
+  failure-signature; never the raw shell command);
 - an inferred `phase` (discovery/implementation/debugging/verification/finalization/unknown, with
   confidence and classifier version);
-- `intervening`-work signals (edit-since-last-test, changed-file count/categories, diff fingerprint
-  change, targeted-test-since-last-full, failure-signature change) — all hashes/booleans/counts,
-  never diff content;
+- `intervening`-work signals (edit-since-last-test — an edit tool ran, including Codex's
+  `apply_patch`, or the working-tree diff changed since the previous test run started — plus
+  changed-file count/categories, diff fingerprint change, targeted-test-since-last-full,
+  failure-signature change) — all hashes/booleans/counts, never diff content;
 - transcript-derived token counts, prompt size/hash/preview, and the tool result size that most
   recently entered context (size only, never content).
 

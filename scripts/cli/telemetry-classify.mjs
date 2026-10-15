@@ -9,7 +9,34 @@ import { privacyHash } from "./telemetry-schemas/hash.mjs";
 // Store this version alongside every classification result so historical data stays interpretable
 // if the rules change later (plan requirement: "store a rule/version identifier with the
 // classification").
-export const CLASSIFIER_VERSION = 1;
+//
+// v2: adds the "read" category (file reads and searches through the shell), classifies each
+// `&&`/`;`/`||` segment instead of the whole string, and is applied to shell tools only. v1 matched
+// "test" anywhere in a command, so reading or grepping a test file counted as a test run.
+export const CLASSIFIER_VERSION = 2;
+
+// Hook-side names of the tools whose `command` input is a shell command line. Codex reports its
+// exec_command calls to hooks as "Bash"; other tools with a `command` field (Codex's apply_patch
+// carries the patch text there) are not shell commands and must not be classified as one.
+export const SHELL_TOOL_NAMES = new Set(["Bash", "run_shell_command"]);
+
+// Transcript-side names of the tool calls whose results are shell output. Codex's transcript names
+// the whole call "exec" (or "exec_command"/"shell" in older rollouts) even though its hooks see each
+// inner command as "Bash".
+export const SHELL_RESULT_TOOL_NAMES = new Set(["Bash", "exec", "exec_command", "shell", "run_shell_command"]);
+
+// An event's operation counts only when it came from a shell tool. Events recorded before v2 can
+// carry an operation classified from non-shell input (e.g. patch text); an event with no tool name
+// is trusted as-is.
+export function shellOperation(event) {
+  const operation = event?.operation ?? null;
+  const toolName = event?.tool?.name ?? null;
+  return operation && (!toolName || SHELL_TOOL_NAMES.has(toolName)) ? operation : null;
+}
+
+// Commands that only read or search files. Matched on a segment's first word; an in-place sed or a
+// find that executes or deletes is a mutation, not a read.
+const READ_COMMANDS = new Set(["cat", "head", "tail", "less", "nl", "wc", "ls", "tree", "stat", "du", "file", "sed", "find", "rg", "grep", "egrep", "fgrep", "fd", "jq"]);
 
 const RUNNERS = ["pnpm", "npm", "yarn", "bun", "vitest", "jest", "playwright", "pytest"];
 
@@ -22,13 +49,31 @@ export function classifyCommand(rawCommand, { packageScripts = null } = {}) {
     return unknownOperation();
   }
   const normalized = normalizeCommand(rawCommand);
-  const npmScriptName = extractNpmScriptInvocation(normalized);
+  const signature = commandSignature(normalized);
+  // `cd app && npm test` runs a test; `sed -n 1,40p x && npm test` too. The first segment that is
+  // neither a read nor unrecognized decides; otherwise a read segment makes the command a read.
+  const segments = commandSegments(normalized).map((segment) => classifySegment(segment, packageScripts, signature));
+  return segments.find((result) => result.category !== "read" && result.category !== "other")
+    ?? segments.find((result) => result.category === "read")
+    ?? unknownOperation();
+}
+
+function classifySegment(segment, packageScripts, signature) {
+  const npmScriptName = extractNpmScriptInvocation(segment);
   if (npmScriptName && packageScripts && Object.prototype.hasOwnProperty.call(packageScripts, npmScriptName)) {
     const scriptBody = packageScripts[npmScriptName];
-    const fromScript = classifyNormalized(normalizeCommand(scriptBody), { scriptName: npmScriptName });
+    const fromScript = classifyNormalized(normalizeCommand(scriptBody), { scriptName: npmScriptName, signature });
     if (fromScript.category !== "other") return fromScript;
   }
-  return classifyNormalized(normalized, { scriptName: npmScriptName });
+  return classifyNormalized(segment, { scriptName: npmScriptName, signature });
+}
+
+// Splits on the sequencing operators, not on pipes: `npm test 2>&1 | tail -30` is one test run.
+// A `cd` segment only changes directory and is dropped.
+function commandSegments(normalized) {
+  return normalized.split(/\s*(?:&&|\|\||;)\s*/)
+    .filter((segment) => segment && !/^cd(\s|$)/.test(segment))
+    .map(normalizeCommand);
 }
 
 function unknownOperation() {
@@ -89,9 +134,10 @@ function safeTarget(normalized) {
   return match ? match[1] : null;
 }
 
-function classifyNormalized(normalized, { scriptName } = {}) {
-  const signature = commandSignature(normalized);
-
+function classifyNormalized(normalized, { scriptName, signature = commandSignature(normalized) } = {}) {
+  if (isReadCommand(normalized)) {
+    return { category: "read", runner: null, scope: "unknown", target: null, signature, classifier_version: CLASSIFIER_VERSION };
+  }
   if (/\b(vitest|jest|playwright|pytest|mocha|ava)\b/.test(normalized) || /\btest(s)?\b/.test(normalized) || scriptName === "test" || /^test:/.test(scriptName || "")) {
     return {
       category: "test",
@@ -124,6 +170,14 @@ function classifyNormalized(normalized, { scriptName } = {}) {
     return { category: "serve", runner: detectRunner(normalized), scope: "unknown", target: null, signature, classifier_version: CLASSIFIER_VERSION };
   }
   return unknownOperation();
+}
+
+function isReadCommand(normalized) {
+  const [program] = normalized.split(" ");
+  if (!READ_COMMANDS.has(program)) return false;
+  if (program === "sed" && /\s-[a-zA-Z]*i/.test(normalized)) return false;
+  if (program === "find" && /\s-(exec|execdir|delete|ok)\b/.test(normalized)) return false;
+  return true;
 }
 
 function commandSignature(normalized) {
