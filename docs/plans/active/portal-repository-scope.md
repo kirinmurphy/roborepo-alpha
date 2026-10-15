@@ -436,10 +436,10 @@ None. No decision in this run was blocked.
 - [x] The repository sub-header row, its menu, the unavailable notice, and the Agents splash look
       right in the light theme. Confirmed by the user on 2026-10-14, after the light chrome was
       reworked to a white header over a grey repo row and the notice lost its panel.
-- [ ] After ignoring or finding a repository from **Manage repositories…** in the selector, the
-      selector's list and Tokens' **Activity outside listed repos** update without a reload. The
-      server side is covered (`repository-scope-portal-check`); the browser flow through the dialog
-      is not.
+- [x] After ignoring or finding a repository from **Manage repositories…** in the selector, the
+      selector's list and Tokens' **Activity outside listed repos** update without a reload.
+      Confirmed by the user on 2026-10-15 on real data: ignoring a repo removed it from the selector
+      and raised the outside counts on the next poll; restoring it reversed both.
 - [ ] A long-running Tokens session on real data stays responsive while switching scopes. Each
       scope is a separate cached analysis (up to 32 entries), so the first visit to a scope costs
       one analysis; this was observed on one development spool, not measured.
