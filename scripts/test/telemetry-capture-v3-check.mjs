@@ -24,6 +24,7 @@ try {
   testCodexCaptureReadsCurrentTranscriptTokens();
   testOperationClassificationOnBashCommand();
   testRawCommandNeverPersisted();
+  testRepositoryIdentityIsRepositoryIdOnly();
   console.log("telemetry capture v3 checks passed");
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
@@ -125,4 +126,14 @@ function testRawCommandNeverPersisted() {
   const spoolPath = path.join(tmp, ".roborepo/telemetry/spool/claude.jsonl");
   const raw = fs.readFileSync(spoolPath, "utf8");
   assert.ok(!raw.includes("super-secret-token-xyz"), "raw command text must never appear in the spool");
+}
+
+// An event names its repository by repository_id alone; the old fingerprint hashes are gone.
+function testRepositoryIdentityIsRepositoryIdOnly() {
+  capture({ session_id: "sess-repo-identity", cwd: repoRoot }, { event: "SessionStart" });
+  const [record] = spoolRecords().filter((r) => r.session_id === "sess-repo-identity");
+  assert.match(record.repo.repository_id, /^(git|local):/);
+  for (const field of ["normalized_remote_hash", "git_root_hash", "remote_hash"]) {
+    assert.equal(field in record.repo, false, `capture must not write repo.${field}`);
+  }
 }

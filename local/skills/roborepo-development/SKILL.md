@@ -1,15 +1,11 @@
 ---
-name: builtin-development
+name: roborepo-development
 description: >
-  INTERNAL to this repo. Use when developing or maintaining roborepo itself: installer/update/
-  repair/uninstall plumbing, package/apply/workspace state, symlink and skill-linking machinery,
-  rules/permissions generation, CLI modules, portal/tokens, tests, and local machine
-  lifecycle behavior. This is the mechanic's manual for the tool implementation. Triggers:
-  "how does this repo work", "roborepo development", "harness config architecture",
-  "install scripts", "add an install step", "package mode", "workspace roots", "the symlink
-  model", working on scripts/, bin/, manifests/platform/, or local/skills/. SKIP for ordinary
-  shared skill/rule content authoring — use builtin-support for that instead. This skill is
-  repo-local only; never global and never exported to client repos.
+  Repo-local guidance for developing RoboRepo itself: installer and update flows, package/apply
+  state, provider adapters, generated outputs, CLI, portal, and tests. Use for implementation or
+  architecture work inside this repository. For shared/exportable agent skills and rules, use
+  builtin-support. This skill stays in the development checkout; never install or export it to
+  client repositories.
 ---
 
 # Roborepo Development (internal)
@@ -18,8 +14,8 @@ Mechanic's manual for developing roborepo itself. Distinct from `builtin-support
 (operating shared/exportable skill, rule, hook, MCP, and parity content). This skill is
 firewalled to this repo — it loads only when an agent works inside this repo.
 
-**This file does NOT restate the docs.** The docs are the source of truth; this skill is a map
-to them plus the judgment that isn't written down. Read the doc, then apply the gotchas below.
+Use the docs below to find the relevant implementation, then verify current behavior in code.
+When a doc disagrees with code, correct the guidance as part of the change.
 
 ## Package development
 
@@ -38,28 +34,28 @@ schema, resource-type validation depth, apply/reconcile behavior, and the comple
 | Detailed CLI internals | `docs/internal/cli-internals.md` |
 | Conflict / collision behavior on install | `docs/user/reference/config-collision-handling.md` |
 | Rules generation + layering | `docs/internal/rules-parity-and-layering.md` |
+| Provider registry, capability adapters, and new harnesses | `docs/internal/harness-provider-interface.md`, `scripts/harnesses/registry.mjs` |
 | Skill/command mechanisms and trigger fixtures | `docs/internal/skills-and-commands.md`, `docs/user/reference/roborepo-skills.md` |
 | Hook behavior (Claude / Codex) | `docs/user/reference/{claude,codex}-hooks.md` |
+| Portal pages, shared browser code, API routes, and checks | `docs/internal/portal-architecture.md`, `scripts/cli/portal-server.mjs`, `scripts/test/portal-ui/` |
 | NPM release workflow and maintainer doc placement | `docs/internal/npm-release.md` |
 | Install UX + daily commands | `docs/user/guides/setup-and-daily-use.md`, `docs/user/guides/install-workflows.md` |
 | Skills, two layers, client utilities (user-facing) | `README.md` |
 
 ## Repo dir convention (the one thing to internalize first)
 
-- `globals/claude/` + `globals/codex/` + `globals/agents/` = SOURCE symlinked/linked into the user's
-  GLOBAL `~/.claude`/`~/.codex` at install time.
-- `.claude/` + `.codex/` (dotdirs) = THIS repo's own PROJECT-SCOPE skill config, NOT global.
-- `globals/packages/<package>/skills/<name>/` = canonical package-owned shared/advisory layer
-  (global + exportable). At install time, skills are materialized into
-  `~/.roborepo/skills/<name>` and each harness's native dir links to that cache entry. System skills
-  that are not package-owned can still live under `globals/agents/skills/<name>/`. No intermediate
-  `globals/claude/skills/` directory exists. `local/skills/` = internal layer (this repo only, via
-  `.claude/skills` + `.codex/skills` project-scope dotdirs). The firewall between them is structural
-  — see below.
-- Codex scans `.codex/skills` for project-scope skills.
-- Shared skills use package-owned skill resources or system `globals/agents/skills/` as canonical
-  source; repo-local skills use `local/skills/` as canonical source and symlink into project-scope
-  harness folders.
+- `globals/system/` holds required shared behavior; `globals/packages/<package>/` holds selectable
+  features; `globals/harnesses/<id>/` holds provider-specific source. `generated/<id>/` is rendered
+  install output. The provider registry determines which harnesses receive it.
+- `.claude/`, `.codex/`, and `.gemini/` in this checkout are PROJECT-SCOPE config, not the user's
+  global harness homes.
+- `globals/packages/<package>/skills/<name>/` is the canonical package-owned shared layer;
+  `globals/system/skills/<name>/` holds required system skills. Enabled shared skills are
+  materialized into `~/.roborepo/skills/<name>`, then linked into each supporting harness's
+  native global skill directory.
+- `local/skills/<name>/` is the repo-only layer. `scripts/build/link-skills.sh` links it into the
+  project-scope skill directory of every registered provider that supports skills (currently
+  Claude, Codex, and Gemini). It is not a source for global installation or client export.
 - Mutable global config files should not be direct symlinks to repo source; use a generated or
   exported active file so runtime trust, hook approval, and machine-local state stay outside the
   shared baseline.
@@ -69,19 +65,12 @@ Everything else (the two symlink levels, the layer table) lives in
 
 ## Operational judgment (not in the docs)
 
-- **Cross-harness behavior is parity in outcome, not parity in execution.** When a rule/permission
-  behavior must hold for every harness (e.g. "credential paths are unreadable," "writes are scoped
-  to the repo in use"), enforce it through `scripts/harnesses/contract.mjs`'s capability model, not
-  by porting one provider's implementation into another. `permissions` is already a required
-  capability (`adapters.permissions.render`) that Claude and Codex both implement against the same
-  shared `scripts/harnesses/permissions-render.mjs`, each in its own idiom — Claude denies on
-  structured tool arguments, Codex enforces via its own sandbox/hook mechanics. Add a new capability
-  or extend the required-methods list when a guarantee needs to be checked structurally
-  (`validateCapabilityAdapters` fails a provider that declares a capability without implementing it,
-  rather than shipping a silent gap); do not build a one-off matcher in a single provider's hook and
-  call it parity. See plan `ia1q1z9` (repo-scoped write permissions) and plan `4zyo2woj` (Codex
-  credential-read guard) for a worked example of this reasoning applied to Codex's read-scope
-  enforcement.
+- **Cross-harness behavior is parity in outcome, not parity in execution.** Put shared guarantees
+  in the capability contract and provider adapters (`scripts/harnesses/contract.mjs`), rather than
+  porting one provider's native mechanism to another. Check the registered providers before changing
+  cross-harness behavior; Claude, Codex, and Gemini can implement the same capability differently.
+  `validateCapabilityAdapters` checks that each declared capability has its required methods, but
+  it cannot prove their behavior. Add behavior checks for the providers affected by the change.
 - **Adding any skill:** prefer `roborepo skill new`. Shared skill → a package under
   `globals/packages/`, then run `roborepo skill sync-global` to refresh the machine-local cache and
   harness views. Shared command surfaces are rendered from package `slash-command` resources; run
@@ -89,21 +78,22 @@ Everything else (the two symlink levels, the layer table) lives in
   or command exposure change. Internal/
   repo-only skill → `local/skills/`, then run `scripts/build/link-skills.sh` for this repo's
   project-scope links. Never hand-write `ln`.
-- **The firewall is code, not convention.** `link-skills.sh` runs one pass per layer;
-  `roborepo` reads package/system shared skill sources. There is no code path from `local/skills/`
-  to global config or to a client export. Don't add one.
+- **The firewall is code, not convention.** `link-skills.sh` manages repo-local links;
+  installation and export read package/system shared skill sources. There is no code path from
+  `local/skills/` to global config or a client export. Don't add one.
 - **Reuse the link/conflict primitives.** Bash: `scripts/install/install-lib.sh` (`link_item`,
   `link_item_clean`, collision prompts) and `scripts/build/skill-lib.sh` (`list_source_skills`). Node:
   `scripts/cli/skill-lib.mjs` (`listSourceSkills`, `ensureSymlink`, `linkLocalSkills`, `writeZip`).
   Don't re-derive the "what is a skill" rule or hand-roll `ln`/`symlink` logic.
-- **Generated outputs are not editable.** `globals/claude/CLAUDE.md` and `globals/codex/AGENTS.md` are rendered
-  from `globals/rules/{shared,claude,codex}/` plus enabled package fragments by
-  `scripts/build/render-rules.sh`. Agent permission outputs are rendered from
+- **Generated outputs are not editable.** Baseline rules under `generated/<provider>/` come from
+  `globals/system/rules/shared/` and provider-specific fragments via
+  `scripts/build/render-rules.sh`; `scripts/cli/rules-render.mjs` adds enabled package fragments
+  when rendering live home rules. Agent permission outputs are rendered from
   `manifests/inventory/agent-permissions.json` by `scripts/build/render-agent-permissions.mjs`.
   Edit sources, re-render, then check. `doctor.sh` flags drift.
 - **`generated/` files are install baselines, not just fixtures.** `generated/<provider>/` is both the
   tracked artifact tests diff against AND `rootConfigBaseline` (`scripts/cli/paths.mjs`), which
-  install/apply merges into the user's live `~/.claude`/`~/.codex` (`scripts/cli/presets.mjs`).
+  install/apply merges into each provider's live home (`scripts/cli/presets.mjs`).
   Claude's merge UNIONS permission arrays, so anything in the tracked file is additively copied into
   every real home and cannot be removed by a later render. Never change a `generated/` file to make a
   test deterministic: a placeholder that reads as obviously fake in the repo (`/Users/you`) ships
@@ -124,7 +114,7 @@ Everything else (the two symlink levels, the layer table) lives in
   print every failure plus a one-line `… (N checks)` / `N passed, M failed` summary, exit code
   unchanged. Use the bare script + `--quiet` for a readable, permissionable check — never pipe a
   verifier through `grep`/`head` to trim output. `doctor.sh` also folds `link-skills.sh --check`,
-  so it is the single repo-health entrypoint (`--installed` adds global ~/.claude·~/.codex live
+  so it is the single repo-health entrypoint (`--installed` adds live global harness
   link checks including per-skill skill links); `test-cli.sh` stays the separate test suite.
 - **Health gate before handoff.** After a merge from main, generated-file change,
   provider/adapter change, CI/workflow change, or `scripts/test/` addition/removal, run
@@ -144,10 +134,10 @@ Everything else (the two symlink levels, the layer table) lives in
   `docs/internal/docker-test-sandboxes.md`.
 - **Cross-platform floor:** Node cores use only `node:` built-ins (no shelling to
   `zip`/`unzip`/`ln`), so the same code runs on macOS/Linux/Windows. Keep it that way.
-- **Skill discovery paths.** Project scope: `.codex/skills` (Codex) and `.claude/skills` (Claude).
-  Global scope: `~/.codex/skills/<name>` (Codex) and `~/.claude/skills/<name>` (Claude) — roborepo
-  links per-skill symlinks at install time (`link_global_skills` in install-lib.sh). Symlinked skill
-  folders are followed. No `.agents/skills` anywhere.
+- **Skill discovery paths come from provider manifests.** Currently the project-scope directories
+  are `.claude/skills`, `.codex/skills`, and `.gemini/skills`; global paths use the corresponding
+  home directories. `link_global_skills` in `scripts/install/install-lib.sh` links each enabled
+  shared skill into supporting harnesses. Do not add a hardcoded two-provider list to platform code.
 - **`internal` is VISIBILITY, not availability.** Two different axes get conflated constantly:
 
   | Axis | Mechanism | Means |
@@ -181,6 +171,12 @@ Everything else (the two symlink levels, the layer table) lives in
   thin per-service wrappers that only re-expose what a root command already does. The namespace
   carries `advanced: true` to stay out of the root menu; its children deliberately do not, because
   `includeAdvanced: false` in `help-renderer.mjs` would hide them from `roborepo help dev` too.
+- **Dev fixtures are hidden from every registry reader unless dev mode is on.** `dev start` writes the
+  `<stateRoot>/repositories/dev-fixtures-enabled` marker and `dev stop` removes it. `loadRegistry`
+  (`modules/repositories/registry.mjs`) drops fixture records (`isFixtureRepository`: a
+  `github.com/example/*-fixture` id) without the marker; `updateRegistry` reads the unfiltered file,
+  so saving never erases them. It is a marker, not a process flag, because `dev start` adopts a
+  portal that is already running. A reader that must see fixtures regardless needs its own read.
 - **`web --detach` cold starts are slow.** The portal warms telemetry/developer-runtime views before it
   binds — measured ~29s on a normal dev checkout. `waitForPortalReady` allows 60s for that; do not
   "tidy" it back down to a few seconds or every cold detached start fails while the child goes on
@@ -209,10 +205,9 @@ Subcommands, grouped by category:
   slash-command, ownership, and invocation-policy tools. They operate on the shared/client-local
   layer — never `local/skills/`.
 - `index code|docs [path]`, `index code [path] --watch`, `run <cmd>` (`cli/index.mjs`) — package-owned
-  jcodemunch/jdocmunch wrappers + the trimmed-output runner. `[path]` optional, defaults to cwd,
-  resolved to absolute. `index code --watch` writes the pidfile `/tmp/jcmwatch-<md5(absdir)>.pid` that the
-  Claude SessionStart hook reads — keep that in sync with `globals/claude/settings.json` if you
-  change it.
+  jcodemunch/jdocmunch wrappers + the trimmed-output runner. `[path]` is optional, defaults to cwd,
+  and resolves to absolute. Before changing the watch pidfile, check the jcodemunch package's
+  SessionStart hook and `docs/internal/hooks-internals.md`.
 - `mcp add <name-or-url>` / `mcp apply` (`cli/mcp.mjs`) — register/apply MCP server config with
   Claude and Codex. Presets live in `manifests/inventory/mcp-presets.json`; portable intent lives
   in `manifests/inventory/mcp-servers.json`.

@@ -7,6 +7,7 @@ import { buildConditionsReport } from "./telemetry-conditions.mjs";
 import { createHash } from "node:crypto";
 import { normalizeObservations, canonicalFlowRows } from "./telemetry-observations.mjs";
 import { mcpServerOf } from "../harnesses/transcript-parse.mjs";
+import { SHELL_TOOL_NAMES, SHELL_RESULT_TOOL_NAMES, shellOperation } from "./telemetry-classify.mjs";
 import { deriveInsights } from "./telemetry-insights.mjs";
 import { computeMetric, isFullSuite } from "./telemetry-metrics.mjs";
 import { createWasteLedger } from "./telemetry-waste.mjs";
@@ -48,11 +49,11 @@ const SOURCE_EXTS = new Set([".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".jso
 //     labeled exploratory fallback in the report.
 //   - compareMetric: metric id for the marker-relative comparison (only used when markerId is set).
 export function analyzeTelemetry(events, options = {}) {
-  const { cohortFilter = null, markers = [], repositoryHashIndex = null } = options;
+  const { cohortFilter = null, markers = [] } = options;
   const normalizedFilter = cohortFilter ? normalizeCohortFilter(cohortFilter) : null;
-  const scopedEvents = normalizedFilter ? applyCohortFilter(events, normalizedFilter, { markers, repositoryHashIndex }) : events;
+  const scopedEvents = normalizedFilter ? applyCohortFilter(events, normalizedFilter, { markers }) : events;
   // One representative row per operation, so mirrored captures never double-count.
-  const observations = normalizeObservations(scopedEvents, { repositoryHashIndex });
+  const observations = normalizeObservations(scopedEvents);
   const report = analyzeRows(canonicalFlowRows(observations), scopedEvents, events, normalizedFilter, options);
   report.conditions = buildConditionsReport(scopedEvents, report, options, observations);
   for (const [key, kind] of [["spikes", "spike"], ["loops", "loop"], ["read_warnings", "read-warning"]]) {
@@ -65,7 +66,8 @@ export function analyzeTelemetry(events, options = {}) {
 function analyzeRows(rows, scopedEvents, events, normalizedFilter, { markers = [], markerId = null, compareMetric = "tokens.total" }) {
   const scopedIndex = indexScopedEvents(rows);
   const captures = scopedIndex.captures;
-  const captureIndex = indexCaptures(captures);
+  const groupOf = resultGroupOf(rows);
+  const captureIndex = indexCaptures(captures, groupOf);
   const sessions = rollupSessions(captures);
   const spikeThreshold = deltaSpikeThreshold(captures);
   const spikeCaptures = captures.filter((event) => (event.delta_tokens || 0) >= spikeThreshold && spikeThreshold > 0);
@@ -131,14 +133,14 @@ function analyzeRows(rows, scopedEvents, events, normalizedFilter, { markers = [
     // Attribution note: per-tool cost is measured by the SIZE of the result a tool put into context
     // (last_result.chars → approx tokens), NOT by delta_tokens-by-hook (which mis-credits whichever
     // hook fired). This answers "what does a Read/Grep/MCP call put into my context".
-    tool_cost: toolCost(captures),
-    group_cost: groupCost(captures),
-    spike_anatomy: spikeAnatomy(captures, spikeCaptures),
+    tool_cost: toolCost(captures, groupOf),
+    group_cost: groupCost(captures, groupOf),
+    spike_anatomy: spikeAnatomy(captures, spikeCaptures, groupOf),
     package_cost: packageCost(captures),
     // Midpoint regression is a labeled EXPLORATORY fallback when no marker is selected —
     // marker_comparison below is the
     // PREFERRED path once a change marker exists to compare across. regression() itself is untouched.
-    regression: { ...regression(captures), exploratory: true, label: "midpoint (exploratory — not tied to any specific change)" },
+    regression: { ...regression(captures, groupOf), exploratory: true, label: "midpoint (exploratory — not tied to any specific change)" },
     loops: detectLoops(captures, sessionsById, wasteLedger),
     data_quality_warnings: dataQualityWarnings(scopedEvents),
     read_warnings: readWarnings(rows, sessionsById, wasteLedger),
@@ -203,7 +205,7 @@ function indexScopedEvents(scopedEvents) {
   return { captures, harnesses: [...harnesses].sort() };
 }
 
-function indexCaptures(captures) {
+function indexCaptures(captures, groupOf) {
   const index = {
     latestTs: captures[0]?.ts ?? new Date().toISOString(),
     latestCodexRateLimits: null,
@@ -236,7 +238,7 @@ function indexCaptures(captures) {
       cause: spikeCause(event).cause,
       // Functional group, computed server-side (with bare-MCP-name resolution) so the
       // cumulative-by-group chart doesn't re-derive it client-side and diverge.
-      group: toolGroup(event.last_result?.tool ?? event.tool?.name ?? null),
+      group: event.last_result?.tool ? groupOf(event) : toolGroup(event.tool?.name ?? null),
     });
   }
   index.timeline.sort((a, b) => a.ts.localeCompare(b.ts));
@@ -468,7 +470,7 @@ function resultToolLabel(toolName) {
 
 // Functional bucket for the native-vs-MCP comparison. Keyed off the result's tool name so it works
 // for both the live tool metadata and the transcript-attributed result.
-function toolGroup(toolName) {
+function toolGroup(toolName, shellCategory = null) {
   const server = mcpServerOf(toolName);
   // Groups named by the REAL package when the bucket is a single known server (the user reads
   // "jcodemunch", not a made-up category); generic bucket only for other/unrecognized servers.
@@ -476,8 +478,58 @@ function toolGroup(toolName) {
   if (server) return "mcp-other";
   if (toolName === "Read" || toolName === "Grep" || toolName === "Glob") return "native-read";
   if (toolName === "Edit" || toolName === "Write" || toolName === "NotebookEdit") return "edit";
-  if (toolName === "Bash") return "bash";
+  if (SHELL_RESULT_TOOL_NAMES.has(toolName)) return `shell-${shellCategory ?? "unclassified"}`;
   return "other";
+}
+
+// Group lookup for result captures. A shell tool can do any kind of work — Codex runs reads, git,
+// tests and edits all through one `exec` tool — so shell results are grouped by the classified
+// command behind them ("shell-read", "shell-test", …) rather than by tool name.
+function resultGroupOf(rows) {
+  const shellCategories = linkShellResultCategories(rows);
+  return (event) => toolGroup(event.last_result.tool, shellCategories.get(event));
+}
+
+// A shell result reaches the spool on a later row than its command. A PreToolUse row carries the
+// operation about to run but the PREVIOUS call's result; a PostToolUse row usually carries its own
+// call's result. So each session is walked in time order, collecting the categories of shell calls
+// since the last new shell result. One Codex `exec` can run several commands (its hooks see each
+// one, with no PostToolUse for the cell): one distinct category names the group, several make it
+// "mixed". A PostToolUse row means that call finished, so it replaces pending categories whose
+// results never reached the spool. Repeats of the same result (it stays the last result across later
+// rows) keep the category already linked. Best-effort: parallel calls can misattribute.
+function linkShellResultCategories(rows) {
+  const linked = new Map();
+  const bySession = new Map();
+  for (const row of rows) {
+    const key = sessionKeyOf(row);
+    if (!bySession.has(key)) bySession.set(key, []);
+    bySession.get(key).push(row);
+  }
+  for (const sessionRows of bySession.values()) {
+    sessionRows.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+    let pending = [];
+    let current = null;
+    let currentResult = null;
+    for (const row of sessionRows) {
+      const operation = SHELL_TOOL_NAMES.has(row.tool?.name) ? shellOperation(row) : null;
+      const ownResult = row.event === "PostToolUse";
+      if (operation && ownResult) pending = [operation.category];
+      const result = row.last_result;
+      if (result && SHELL_RESULT_TOOL_NAMES.has(result.tool)) {
+        const resultKey = `${result.tool}:${result.chars}:${result.is_error}`;
+        if (resultKey !== currentResult) {
+          const distinct = new Set(pending);
+          current = distinct.size === 0 ? null : distinct.size === 1 ? pending[0] : "mixed";
+          pending = [];
+          currentResult = resultKey;
+        }
+        linked.set(row, current);
+      }
+      if (operation && !ownResult) pending.push(operation.category);
+    }
+  }
+  return linked;
 }
 
 // Captures that carry an attributed result (the tool that produced it + its size). The basis for
@@ -487,16 +539,19 @@ function resultCaptures(captures) {
 }
 
 // Per-tool cost: how much context an average call of each tool drops in. The Read-vs-MCP table.
-function toolCost(captures) {
+function toolCost(captures, groupOf) {
   const byTool = new Map();
   for (const event of resultCaptures(captures)) {
     const name = event.last_result.tool;
     const chars = event.last_result.chars;
-    const cur = byTool.get(name) ?? { tool: resultToolLabel(name), group: toolGroup(name), calls: 0, total_chars: 0, max_chars: 0 };
+    // Keyed by tool AND group: a shell tool has one row per kind of command it ran.
+    const group = groupOf(event);
+    const key = `${name}\0${group}`;
+    const cur = byTool.get(key) ?? { tool: resultToolLabel(name), group, calls: 0, total_chars: 0, max_chars: 0 };
     cur.calls += 1;
     cur.total_chars += chars;
     cur.max_chars = Math.max(cur.max_chars, chars);
-    byTool.set(name, cur);
+    byTool.set(key, cur);
   }
   return [...byTool.values()]
     .map((r) => ({ tool: r.tool, group: r.group, calls: r.calls, avg_tokens: approxTokens(r.total_chars / r.calls), max_tokens: approxTokens(r.max_chars), total_tokens: approxTokens(r.total_chars) }))
@@ -505,12 +560,12 @@ function toolCost(captures) {
 
 // Per functional group: the head-to-head (native-read vs mcp-code vs …) on avg tokens per call.
 // Also tracks calls per session to make high-call-count groups comparable to high-avg groups.
-function groupCost(captures) {
+function groupCost(captures, groupOf) {
   const byGroup = new Map();
   const groupSessions = new Map();
   const totalSessions = new Set(captures.filter((e) => e.session_id).map(sessionKeyOf)).size || 1;
   for (const event of resultCaptures(captures)) {
-    const g = toolGroup(event.last_result.tool);
+    const g = groupOf(event);
     const cur = byGroup.get(g) ?? { group: g, calls: 0, total_chars: 0 };
     cur.calls += 1;
     cur.total_chars += event.last_result.chars;
@@ -540,14 +595,14 @@ function groupCost(captures) {
 
 // What is over-represented in spikes vs normal turns. Lift = group's share of spike captures ÷ its
 // share of normal captures. Lift > 1 means that group drives spikes more than its baseline rate.
-function spikeAnatomy(captures, spikeCaptures) {
+function spikeAnatomy(captures, spikeCaptures, groupOf) {
   const spikeSet = new Set(spikeCaptures);
   const spike = resultCaptures(spikeCaptures);
   const normal = resultCaptures(captures).filter((event) => !spikeSet.has(event));
   if (spike.length === 0) return { spike_count: 0, normal_count: normal.length, groups: [] };
   const shareByGroup = (rows) => {
     const m = new Map();
-    for (const e of rows) m.set(toolGroup(e.last_result.tool), (m.get(toolGroup(e.last_result.tool)) || 0) + 1);
+    for (const e of rows) m.set(groupOf(e), (m.get(groupOf(e)) || 0) + 1);
     return m;
   };
   const spikeShare = shareByGroup(spike);
@@ -556,7 +611,7 @@ function spikeAnatomy(captures, spikeCaptures) {
   for (const [group, n] of spikeShare) {
     const sFrac = n / spike.length;
     const nFrac = (normalShare.get(group) || 0) / Math.max(1, normal.length);
-    const avgChars = spike.filter((e) => toolGroup(e.last_result.tool) === group).reduce((s, e) => s + e.last_result.chars, 0) / n;
+    const avgChars = spike.filter((e) => groupOf(e) === group).reduce((s, e) => s + e.last_result.chars, 0) / n;
     groups.push({
       group,
       spike_share: Number(sFrac.toFixed(3)),
@@ -590,7 +645,7 @@ function packageCost(captures) {
 // Earlier-vs-later regression: split result captures at the time midpoint and compare avg tokens per
 // call per group. A positive delta means that group got more expensive in the later half — the
 // signal for "did the thing I changed make context heavier".
-function regression(captures) {
+function regression(captures, groupOf) {
   const rows = resultCaptures(captures).slice().sort((a, b) => a.ts.localeCompare(b.ts));
   if (rows.length < 4) return { split_ts: null, groups: [] };
   const mid = Math.floor(rows.length / 2);
@@ -598,7 +653,7 @@ function regression(captures) {
   const avgByGroup = (slice) => {
     const m = new Map();
     for (const e of slice) {
-      const g = toolGroup(e.last_result.tool);
+      const g = groupOf(e);
       const cur = m.get(g) ?? { calls: 0, chars: 0 };
       cur.calls += 1;
       cur.chars += e.last_result.chars;

@@ -3,6 +3,7 @@
 // from telemetry.mjs's wiring).
 import { send, readJsonBody } from "./portal-routes-http.mjs";
 import { defineRoutes } from "./portal-router.mjs";
+import { readRepositoryScope } from "./portal-routes-scope.mjs";
 
 // Serializes a domain error (see modules/plan-suite/index.mjs's domainError helper) into the
 // structured { error: { code, message, resolution, details } } shape the client's portalPostJson
@@ -47,9 +48,12 @@ function postJsonRoute(path, run, { domainError = false } = {}) {
 
 export const plansRoutes = defineRoutes([
   {
+    // ?repo=<urlKey> narrows the snapshot to one repository (the shared Portal scope).
     path: "/api/plans",
-    handler: (req, res, { handlers }) => {
-      send(res, 200, "application/json", JSON.stringify(handlers.loadPlans()));
+    handler: (req, res, { qs, handlers }) => {
+      const scope = readRepositoryScope(new URLSearchParams(qs), res, handlers);
+      if (!scope) return true;
+      send(res, 200, "application/json", JSON.stringify(handlers.loadPlans({ repositoryId: scope.repositoryId ?? null })));
       return true;
     },
   },
@@ -70,8 +74,10 @@ export const plansRoutes = defineRoutes([
   {
     method: "POST",
     path: "/api/plans/refresh",
-    handler: (req, res, { handlers }) => {
-      send(res, 200, "application/json", JSON.stringify(handlers.refreshPlans()));
+    handler: (req, res, { qs, handlers }) => {
+      const scope = readRepositoryScope(new URLSearchParams(qs), res, handlers);
+      if (!scope) return true;
+      send(res, 200, "application/json", JSON.stringify(handlers.refreshPlans({ repositoryId: scope.repositoryId ?? null })));
       return true;
     },
   },

@@ -2,9 +2,11 @@
 
 main.home-main { padding-top: 28px; padding-bottom: 40px; }
 .home-heading { display: flex; justify-content: space-between; gap: 24px; align-items: end; margin: 0; }
-.home-title-group { display: inline-flex; align-items: center; gap: 12px; min-width: 0; }
+.home-title-group { display: inline-flex; align-items: center; gap: 12px; min-width: 0; min-height: 36px; }
 .home-heading h1 { margin: 0; font-size: var(--text-xl); }
-.home-action-slot { min-width: 150px; min-height: 36px; display: flex; justify-content: flex-end; align-items: end; }
+.home-manage-link { display: inline-flex; align-items: center; color: var(--dim); }
+.home-manage-link:hover { color: var(--ink); }
+.home-manage-link[hidden] { display: none; }
 .repository-directory { display: grid; gap: 18px; }
 .home-harness-banner { margin-bottom: 16px; }
 .home-harness-banner[hidden] { display: none; }
@@ -52,8 +54,7 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 .domain-body { display: grid; gap: 8px; min-width: 0; }
 .domain-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .domain-heading h4 { margin: 0; color: var(--ink); font-size: var(--text-sm); font-weight: 600; }
-.domain-summary, .domain-link { font-size: var(--text-xs); }
-.domain-summary { color: var(--dim); }
+.domain-link { font-size: var(--text-xs); }
 /* Plain inline link: body ink and an underline, not the browser's blue/visited purple. */
 .domain-link { margin-left: auto; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
 .domain-link:hover { color: var(--accent); }
@@ -124,7 +125,6 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 
 @media (max-width: 760px) {
   .home-heading, .unresolved-activity { align-items: stretch; flex-direction: column; }
-  .home-action-slot { justify-content: flex-start; }
 }
 /* The panel's actions use the shared dropdown item (base.css), set off from the facts above them. */
 .worktree-details-actions { display: grid; border-top: 1px solid var(--popover-border); }

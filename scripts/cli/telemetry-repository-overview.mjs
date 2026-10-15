@@ -17,15 +17,15 @@ export function homeTelemetryProjection({ enabled, projection, fixtureRepositori
 export function fixtureTelemetryRepositories(events) {
   const fixtureEvents = events.filter((event) => isFixtureRepository(event.repo?.repository_id));
   if (!fixtureEvents.length) return {};
-  return buildTelemetryRepositoryProjection(fixtureEvents, analyzeTelemetry(fixtureEvents, {}), null).repositories;
+  return buildTelemetryRepositoryProjection(fixtureEvents, analyzeTelemetry(fixtureEvents, {})).repositories;
 }
 
-export function buildTelemetryRepositoryProjection(events, report, repositoryHashIndex) {
+export function buildTelemetryRepositoryProjection(events, report) {
   const repositoryBySession = new Map();
   let updatedAt = null;
   for (const event of events) {
     if (!updatedAt || event.ts > updatedAt) updatedAt = event.ts;
-    const repositoryId = repositoryRefForEvent(event, repositoryHashIndex).repositoryId;
+    const repositoryId = repositoryRefForEvent(event).repositoryId;
     if (repositoryId) repositoryBySession.set(sessionKey(event), repositoryId);
   }
 

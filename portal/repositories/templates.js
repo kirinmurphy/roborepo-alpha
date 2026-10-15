@@ -26,10 +26,10 @@ export function repositoryDetail(repository) {
   );
   node.querySelector("[data-slot=sections]").append(
     section("Workspace", repository.domains.runtime, "Checkouts and promoted running applications", workspaceBody(repository.domains.runtime)),
-    section("Git", repository.domains.git, "Branch state and repository warnings", gitBody(repository.domains.git)),
+    section("Git", repository.domains.git, "Branch state and repo warnings", gitBody(repository.domains.git)),
     section("Plans", repository.domains.plans, "Coverage-aware active work and recent changes", plansBody(repository.domains.plans)),
-    section("Tokens", repository.domains.tokens, "Recent repository-associated session warnings", tokensBody(repository.domains.tokens)),
-    section("Agents", repository.domains.agents, "Repository-scoped configuration", messageBody(repository.domains.agents.message || "Unavailable")),
+    section("Tokens", repository.domains.tokens, "Recent repo-associated session warnings", tokensBody(repository.domains.tokens)),
+    section("Agents", repository.domains.agents, "Repo-scoped configuration", messageBody(repository.domains.agents.message || "Unavailable")),
   );
   return node;
 }
@@ -90,7 +90,7 @@ function plansBody(envelope) {
 function tokensBody(envelope) {
   if (!envelope.data) return messageBody(envelope.message || "Token data unavailable.");
   const rows = (envelope.data.recent || []).map((finding) => ({ title: finding.kind, meta: `${finding.severity} · ${formatDate(finding.at)}` }));
-  if (!rows.length) return messageBody(`${envelope.data.sessionCount} sessions · no repository-associated warnings`);
+  if (!rows.length) return messageBody(`${envelope.data.sessionCount} sessions · no repo-associated warnings`);
   return listBody(rows);
 }
 

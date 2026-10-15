@@ -40,7 +40,23 @@ that fails if it breaks. When adding analytics, add the rule's check first.
 | A supersede names a real, active change marker | `assertSupersedable` in `telemetry-markers.mjs` | `telemetry-audit-tier1-check` |
 | Marker corrections keep packages, skills and tags, and never move the boundary silently | `conditions-change-form.js` | portal UI spec "mark change records backdated scope" |
 | Findings that cannot be tied to a session are counted, not silently dropped | `data_quality.findings_lost_to_fallback` | `telemetry-audit-tier1-check` |
+| Shell results group by the command behind them, never by shell tool name; only shell tools are classified | `linkShellResultCategories` in `telemetry-analyze.mjs`; `SHELL_TOOL_NAMES`/`shellOperation` in `telemetry-classify.mjs` | `telemetry-shell-groups-check`, `telemetry-classify-check` |
+| `edit_since_last_test` compares with the previous test run, not the previous capture; a run's Pre and Post agree | `editSinceLastTestRun` in `telemetry-capture.mjs` | `telemetry-phase4-integration-check` (edit between passing runs, Codex `apply_patch`, shell edit on a clean tree) |
 | The demo must not confound the intervention with repo or model | `telemetry-conditions-demo.mjs` | `telemetry-conditions-presentation-check` |
+
+`telemetry-conditions-matrix-check.mjs` enumerates 2,850 deterministic scenarios. It is exhaustive
+for these small input spaces, not for all telemetry records or browser states:
+
+| Cases | Space |
+| --- | --- |
+| 2,592 | Condition/event cases: all 6³ three-observation states, all six orderings, with and without duplicated observations |
+| 162 | Session token validity (valid, missing, invalid) across all small-input orderings |
+| 35 | Invalid token fields |
+| 24 | Mirrored-flow and cross-harness permutations |
+| 16 | Snapshot evaluability, including missing snapshots and v2 unavailable evidence |
+| 10 | Rate, sample, and event-floor golden cases |
+| 10 | Marker boundaries, including sequence ties and unrelated sequence domains |
+| 1 | `scripts/test/fixtures/telemetry-conditions-documentation.mjs`: independently specified cohort counts and rates (the 3/12 vs 9/12 example in the user guide) |
 
 Known limits, so they are not mistaken for bugs:
 
@@ -49,6 +65,13 @@ Known limits, so they are not mistaken for bugs:
   totals add up to the headline. The families still use different measurement bases (hook deltas vs.
   characters/4 for reads), and over-testing counts only full-suite reruns with no edit since the previous test run.
 - Token tables skip captures with no token data; the session count includes them.
+- A shell result is linked to its command by session order, because a PreToolUse row carries the
+  previous call's result. Parallel calls can misattribute, and a Codex `exec` that ran several kinds
+  of command groups as `shell-mixed`. Raw commands are never stored, so operations recorded by
+  classifier v1 cannot be reclassified: their reads stay `other`, and reads of test files stay `test`.
+- `edit_since_last_test` is stored at capture time. Rows captured before it compared with the previous
+  test run nearly always read `false` after an edit, so historical over-testing waste is overstated
+  for both harnesses; only new captures are accurate.
 - Every comparison is an association. Task mix, model and repository can differ between cohorts.
 - The bundled demo is synthetic and deterministic; it exercises the pipeline, not real usage.
 
@@ -82,12 +105,13 @@ every 5 seconds. See `docs/internal/portal-architecture.md` for the shared porta
 
 ## API
 
-- `GET /api/data?range=&end=&harness=&model=&repo=&marker_id=` — the full analysis report, cohort-
-  scoped. Response includes `available_harnesses`/`available_models`/`available_repos`/
-  `available_metrics`, window-scoped `markers`, `experiments`, `testing_efficiency`, `cohort`
-  (present when a model/repo filter is active), and `marker_comparison` (present when `marker_id`
-  resolves).
-- `GET /api/session?id=&harness=&finding=&repo=` — bridges a flagged event to its transcript, plus
+- `GET /api/data?range=&end=&harness=&model=&repo=&marker_id=` — the full analysis report,
+  cohort-scoped. `repository` is the shared Portal scope: a `urlKey`, or `_other` for activity no
+  listed repository claims; an unresolvable value answers `404 REPOSITORY_SCOPE_UNAVAILABLE`.
+  Response includes `available_harnesses`/`available_models`/`available_metrics`, window-scoped
+  `markers`, `experiments`, `testing_efficiency`, `cohort` (present when a model or repository scope
+  is active), and `marker_comparison` (present when `marker_id` resolves).
+- `GET /api/session?id=&harness=&finding=` — bridges a flagged event to its transcript, plus
   `spool_context` (model history, config snapshot, phase timeline, operation totals, outcome, nearby
   markers, data-quality flags) derived from the spool alone, present even when the transcript itself
   is not found on disk.
@@ -102,8 +126,9 @@ every 5 seconds. See `docs/internal/portal-architecture.md` for the shared porta
 - `GET /api/telemetry/guide` — server-rendered `docs/user/guides/telemetry.md`, backing the page's
   "view docs" popup (`portal/shared/doc-guide-modal.js`) so the popup and the on-disk guide are
   the same content, never a second copy. `renderMarkdown()` (`scripts/cli/markdown-render.mjs`)
-  gives every heading a stable slug `id` so a panel's info icon can deep-link straight to its
-  section; fenced ` ```mermaid ` blocks render as diagrams through the locally vendored mermaid
+  gives every heading a stable slug `id`; a panel's info icon names its heading, and the popup
+  shows only that section. Guide headings mirror the page's section titles, and
+  `telemetry-documentation.spec.mjs` fails when an icon names a heading the guide lacks; fenced ` ```mermaid ` blocks render as diagrams through the locally vendored mermaid
   runtime (`portal/shared/markdown-mermaid.js`), loaded lazily on first use.
 
 All mutating routes are POST-only and use the portal's standard loopback-origin + mutation-token

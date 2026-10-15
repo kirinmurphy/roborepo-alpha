@@ -150,6 +150,26 @@ test("polling preserves an open comparison and a change draft", async ({ page, r
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
 });
 
+test("a new report version keeps the Investigate section the user opened", async ({ page, request }) => {
+  const demo = await (await request.get("/api/tokens/mock")).json();
+  const config = await (await request.get("/api/config")).json();
+  config.telemetry = { ...config.telemetry, enabled: true };
+  config.machineHarnesses = [{ id: "claude", enabled: true, confidence: "confirmed" }];
+  await page.route("**/api/config", (route) => route.fulfill({ json: config }));
+  await routeReadySetup(page);
+  let version = 0;
+  await page.route("**/api/data", (route) => route.fulfill({ json: { ...demo, version: String(++version) } }));
+  await page.goto("/tokens");
+  const opened = page.locator("#invest-sections details[data-sec-key]").first();
+  await opened.locator("summary").click();
+  await expect(opened).toHaveAttribute("open", "");
+  // Tag the current element so the assertion below runs against the rebuilt one: each new version
+  // replaces every section, and the replacement must carry the user's state, not the default.
+  await opened.evaluate((node) => { node.dataset.beforePoll = ""; });
+  await expect(page.locator("#invest-sections details[data-before-poll]")).toHaveCount(0, { timeout: 8000 });
+  await expect(opened).toHaveAttribute("open", "");
+});
+
 
 test("a delayed session response cannot overwrite the next session", async ({ page }) => {
   let firstRoute;

@@ -22,7 +22,7 @@ Snapshot date: 2026-09-13 · branch: `rename-prep` · counts from `git ls-files`
 | Test fixtures | `codethings-roborepo-alpha` fixture dirs, `github.com/kirinmurphy/roborepo` fixture URLs | `scripts/test/*` |
 | Telemetry identity | `version` reported as `app_version`, repo label `roborepo` | telemetry modules |
 
-Non-code surfaces: `docs/user/reference/roborepo{,-cli,-skills}.md` (185 refs), README (44), docs/plans (2,868 refs, historical), skill dirs `builtin-support` / `builtin-development` / `builtin-code-style`, generated harness output, `docs/plans/backlog/roborepo-repository-plans.zip`.
+Non-code surfaces: `docs/user/reference/roborepo{,-cli,-skills}.md` (185 refs), README (44), docs/plans (2,868 refs, historical), skill dirs `builtin-support` / `roborepo-development` / `builtin-code-style`, generated harness output, `docs/plans/backlog/roborepo-repository-plans.zip`.
 
 ## Classification
 

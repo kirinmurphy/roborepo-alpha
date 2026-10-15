@@ -1,6 +1,6 @@
 <!-- Manage repositories: the one global surface for how RoboRepo finds repositories (pljvmyh §7).
-     Injected at {{REPOSITORY_SOURCES}} (scripts/cli/portal-server.mjs) on Home, Plans, Runtime, and
-     Settings. The same surface template is mounted in the Manage Repos dialog and inline Settings;
+     Injected at {{REPOSITORY_SOURCES}} (scripts/cli/portal-server.mjs) on Home, Plans, Tokens,
+     Agents, Runtime, and Settings. The same surface template is mounted in the Manage Repos dialog and inline Settings;
      both are driven by portal/shared/repository-sources-dialog.js. It also carries the repository
      empty state Home and Plans share, so their onboarding copy and actions cannot drift. -->
 <link rel="stylesheet" href="/portal/shared/repository-sources.css" />
@@ -30,14 +30,14 @@
 <span class="tree-branch">    ├── </span><span class="project-folder">git_repo2/</span>
 <span class="tree-branch">    └── </span><span class="tree-plain">notes/</span>  <span class="tree-note">(no .git or docs/plans)</span></pre>
     <ul class="tree-legend">
-      <li><span class="legend-swatch legend-repo"></span> found repository (a folder with .git or docs/plans)</li>
+      <li><span class="legend-swatch legend-repo"></span> found repo (a folder with .git or docs/plans)</li>
     </ul>
     <p class="modal-note">
-      Stops at the first repository found in each branch — folders inside a repository aren't
-      re-scanned. Looks six folders deep, for up to five seconds and 250 repositories. Skips
+      Stops at the first repo found in each branch — folders inside a repo aren't
+      re-scanned. Looks six folders deep, for up to five seconds and 250 repos. Skips
       node_modules, dist, .venv, and similar.
     </p>
-    <p class="modal-note">Plans inside every found repository are picked up automatically.</p>
+    <p class="modal-note">Plans inside every found repo are picked up automatically.</p>
   </div>
 </dialog>
 
@@ -45,9 +45,9 @@
   <div class="repository-sources-surface" data-sources-surface>
     <p class="repository-sources-error" data-slot="error" role="alert" hidden></p>
     <section class="sources-auto" data-slot="auto" aria-label="Auto-discovery"></section>
-    <section class="sources-repositories" aria-label="Repository list">
+    <section class="sources-repositories" aria-label="Repo list">
       <div class="sources-repositories-head" data-slot="repositories-head">
-        <p class="sources-muted" data-slot="repositories-empty" hidden>No repositories yet</p>
+        <p class="sources-muted" data-slot="repositories-empty" hidden>No repos yet</p>
         <button type="button" data-btn="text" data-slot="add-toggle-empty" aria-expanded="false" hidden>Find more repos</button>
       </div>
       <ul class="sources-list" data-slot="repositories"></ul>
@@ -78,7 +78,7 @@
 <template id="tpl-sources-auto-off">
   <div class="sources-auto-off">
     <p class="sources-auto-copy">
-      Auto-discovery watches the dev servers and containers you run and remembers the repositories
+      Auto-discovery watches the dev servers and containers you run and remembers the repos
       they run in.
     </p>
     <div class="sources-auto-actions">
@@ -142,7 +142,7 @@
   <portal-notice class="portal-notice auto-discovery-prompt" variant="info" icon="info">
     <div class="portal-banner-content">
       <div class="portal-banner-copy">
-        <p class="onboarding-primary">RoboRepo can observe active apps and remember the repositories they use across HTTP activity and Docker containers.</p>
+        <p class="onboarding-primary">RoboRepo can observe active apps and remember the repos they use across HTTP activity and Docker containers.</p>
       </div>
       <div class="portal-banner-action"><button type="button" data-btn="cta" data-slot="enable">Auto-discover active repos</button></div>
     </div>

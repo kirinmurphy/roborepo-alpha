@@ -17,7 +17,7 @@ export function matchedPlanIdentity(plan, checkout, { mainCheckouts = [], onOpen
 // whether the named worktree is unlisted, gone, contested, or cannot be determined.
 const WORKTREE_BADGES = {
   unlisted: { text: "worktree not listed", title: (name) => `Worktree "${name}" exists, but Runtime does not list it` },
-  missing: { text: "worktree missing", title: (name) => `No worktree named "${name}" exists in this repository` },
+  missing: { text: "worktree missing", title: (name) => `No worktree named "${name}" exists in this repo` },
   ambiguous: { text: "worktree ambiguous", title: (name) => `Worktree "${name}" is claimed by another active plan or matches more than one checkout` },
   unknown: { text: "worktree status unknown", title: (name) => `Home cannot tell whether worktree "${name}" is running` },
 };

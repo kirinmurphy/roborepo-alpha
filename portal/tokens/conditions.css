@@ -54,13 +54,6 @@
   --warn: #e0a84e;
 }
 #condition-ledger-section > .t2-sec-head h2 { font-size: 19px; }
-#condition-ledger-section > .t2-sec-head portal-info-icon .info-icon {
-  width: 17px;
-  height: 17px;
-  font-size: 10px;
-  font-style: normal;
-  font-weight: 700;
-}
 #condition-ledger-section > .t2-sec-head { padding-bottom: 0; margin-bottom: 14px; }
 #condition-ledger-section .condition-help { margin: 3px 0; font-size: 12.5px; }
 #condition-ledger { display: grid; grid-template-columns: 92px minmax(0, 1fr) auto; row-gap: 10px; }
@@ -184,8 +177,6 @@
   .condition-investigate-meta { grid-column: 2; grid-row: auto; flex-direction: row; justify-content: flex-start; }
   .condition-card-head { gap: 5px 8px; }
 }
-
-#condition-report > .t2-sec-head, #condition-ledger-section > .t2-sec-head, #condition-changes-section > .t2-sec-head { display: flex; align-items: center; gap: 8px; }
 
 .condition-ledger-panel .condition-ledger-note {
   margin-top: 12px;

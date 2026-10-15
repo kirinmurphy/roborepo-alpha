@@ -366,7 +366,7 @@ export function repositoryCard(repository, { instanceActions, composeActions, re
   if (repository.fixture) {
     const fixtureBadge = node.querySelector("[data-slot=fixture-badge]");
     fixtureBadge.hidden = false;
-    fixtureBadge.title = "Mock repository used to demonstrate the Runtime view";
+    fixtureBadge.title = "Mock repo used to demonstrate the Runtime view";
   }
   // No repository-level git badge: git is per-checkout now (see the roots loop below), and the
   // repository header itself — name, provider link — never depends on which root is running.
@@ -475,7 +475,7 @@ function repositoryMenuItems(repository, actions) {
     { key: "pin", label: repository.pinned ? "Unpin" : "Pin" },
     // Ignore is the registry-wide decision Home offers too; Hide from Runtime only tucks this
     // repository's running members away on this page (pljvmyh §8).
-    { key: "ignore", label: "Ignore repository", hidden: !repository.repositoryId || !actions?.onIgnore },
+    { key: "ignore", label: "Ignore repo", hidden: !repository.repositoryId || !actions?.onIgnore },
     { key: "hide", label: "Hide from Runtime" },
   ];
 }

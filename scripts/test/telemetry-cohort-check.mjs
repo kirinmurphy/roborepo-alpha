@@ -1,11 +1,10 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import crypto from "node:crypto";
 import {
   emptyCohortFilter, normalizeCohortFilter, applyCohortFilter, describeCohortFilter,
   activeFilterCount, filterSessionsByTaskCategory,
 } from "../cli/telemetry-cohort.mjs";
-import { buildRepositoryHashIndex, repositoryRefForEvent } from "../cli/telemetry-repository.mjs";
+import { repositoryRefForEvent } from "../cli/telemetry-repository.mjs";
 
 // The normalized cohort filter object shared by the CLI and portal, so all panels receive the same
 // globally filtered event set. Pure module over already-loaded capture/marker arrays; no fs.
@@ -22,14 +21,10 @@ testFilterSessionsByTaskCategory();
 testDescribeCohortFilter();
 testActiveFilterCount();
 testCanonicalRepositoryScope();
+testOutsideListedRepositories();
 testReadTimeRepositoryResolution();
+testLegacyRepoLabelDimensionIsGone();
 console.log("telemetry cohort checks passed");
-
-// sha256/24 — must match telemetry-capture.mjs hash() so the registry index lines up with the
-// normalized_remote_hash written at capture time.
-function captureHash(value) {
-  return crypto.createHash("sha256").update(String(value)).digest("hex").slice(0, 24);
-}
 
 function testCanonicalRepositoryScope() {
   const direct = event({ repo: { label: "roborepo", repository_id: "git:github.com/kirinmurphy/roborepo" } });
@@ -39,26 +34,46 @@ function testCanonicalRepositoryScope() {
   assert.equal(kept.length, 1);
   assert.equal(kept[0].repo.repository_id, "git:github.com/kirinmurphy/roborepo");
 
-  // Legacy event (no repository_id) matched via normalized_remote_hash against a registry index.
-  const registry = { repositories: { "git:github.com/kirinmurphy/roborepo": { id: "git:github.com/kirinmurphy/roborepo", normalizedRemote: "git:github.com/kirinmurphy/roborepo" } } };
-  const hashIndex = buildRepositoryHashIndex(registry, captureHash);
-  const legacy = event({ repo: { label: "roborepo", normalized_remote_hash: captureHash("git:github.com/kirinmurphy/roborepo") } });
-  const legacyKept = applyCohortFilter([legacy, other], filter, { repositoryHashIndex: hashIndex });
-  assert.equal(legacyKept.length, 1, "legacy event resolves via normalized-remote-hash");
+  // An event without a repository_id belongs to no repository, whatever else it carries: a label
+  // or an old fingerprint hash never matches a repository scope.
+  const unattributed = event({ repo: { label: "roborepo", normalized_remote_hash: "0123456789abcdef01234567" } });
+  assert.equal(applyCohortFilter([unattributed], filter).length, 0, "an event with no repository_id matches no repository scope");
+}
 
-  // Composes with legacy label filter (both must pass).
-  const both = { ...filter, repos: ["roborepo"] };
-  assert.equal(applyCohortFilter([direct], both).length, 1);
-  assert.equal(applyCohortFilter([event({ repo: { label: "nope", repository_id: "git:github.com/kirinmurphy/roborepo" } })], both).length, 0);
+// Activity outside listed repos: excluded_repository_ids keeps every event not attributed to a
+// listed repository, including one with no repository at all, and together with each listed
+// repository's own scope it partitions the whole set.
+function testOutsideListedRepositories() {
+  const listed = ["git:github.com/o/listed-a", "git:github.com/o/listed-b"];
+  const events = [
+    event({ session_id: "a", repo: { label: "a", repository_id: listed[0] } }),
+    event({ session_id: "b", repo: { label: "b", repository_id: listed[1] } }),
+    event({ session_id: "unknown", repo: { label: "unknown", repository_id: "git:github.com/o/not-registered" } }),
+    event({ session_id: "ignored", repo: { label: "ignored", repository_id: "local:ignored0000" } }),
+    event({ session_id: "none", repo: { label: "scratch" } }),
+    event({ session_id: "no-repo", repo: undefined }),
+  ];
+  const outside = applyCohortFilter(events, normalizeCohortFilter({ excluded_repository_ids: listed }));
+  assert.deepEqual(outside.map((e) => e.session_id), ["unknown", "ignored", "none", "no-repo"]);
+  const perRepository = listed.map((id) => applyCohortFilter(events, normalizeCohortFilter({ repository_ids: [id] })).length);
+  assert.equal(perRepository.reduce((sum, n) => sum + n, 0) + outside.length, events.length, "listed scopes plus outside equal all");
+  assert.match(describeCohortFilter(normalizeCohortFilter({ excluded_repository_ids: listed })), /outside listed repos/);
+  assert.equal(activeFilterCount(normalizeCohortFilter({ excluded_repository_ids: listed })), 1);
 }
 
 function testReadTimeRepositoryResolution() {
-  assert.equal(repositoryRefForEvent(event({ repo: { label: "x", repository_id: "git:h/o/r" } }), null).provenance, "direct");
-  const registry = { repositories: { "git:h/o/r": { id: "git:h/o/r", normalizedRemote: "git:h/o/r" } } };
-  const idx = buildRepositoryHashIndex(registry, captureHash);
-  assert.equal(repositoryRefForEvent(event({ repo: { label: "x", normalized_remote_hash: captureHash("git:h/o/r") } }), idx).provenance, "legacy-remote-hash");
-  assert.equal(repositoryRefForEvent(event({ repo: { label: "x" } }), idx).provenance, "unresolved");
-  assert.equal(repositoryRefForEvent(event({}), idx).repositoryId, null);
+  assert.equal(repositoryRefForEvent(event({ repo: { label: "x", repository_id: "git:h/o/r" } })).provenance, "direct");
+  assert.equal(repositoryRefForEvent(event({ repo: { label: "x", normalized_remote_hash: "0123456789abcdef01234567" } })).provenance, "unresolved");
+  assert.equal(repositoryRefForEvent(event({ repo: { label: "x" } })).provenance, "unresolved");
+  assert.equal(repositoryRefForEvent(event({})).repositoryId, null);
+}
+
+// The folder-name label filter was a second way to say "this repository"; it no longer exists.
+function testLegacyRepoLabelDimensionIsGone() {
+  const normalized = normalizeCohortFilter({ repos: ["roborepo"] });
+  assert.equal("repos" in normalized, false);
+  const events = [event({ repo: { label: "roborepo" } }), event({ repo: { label: "other" } })];
+  assert.equal(applyCohortFilter(events, normalized).length, 2, "a repos filter restricts nothing");
 }
 
 function event(overrides) {
@@ -98,8 +113,6 @@ function testApplyFilterByHarnessModelRepo() {
   assert.equal(byModel.length, 1);
   assert.equal(byModel[0].session.model, "gpt");
 
-  const byRepo = applyCohortFilter(events, normalizeCohortFilter({ repos: ["other"] }));
-  assert.equal(byRepo.length, 1);
 }
 
 function testApplyFilterByOperationAndPhase() {
@@ -169,7 +182,7 @@ function testFilterSessionsByTaskCategory() {
 
 function testDescribeCohortFilter() {
   assert.equal(describeCohortFilter(emptyCohortFilter()), "all data");
-  const described = describeCohortFilter(normalizeCohortFilter({ harnesses: ["claude"], repos: ["roborepo"] }));
+  const described = describeCohortFilter(normalizeCohortFilter({ harnesses: ["claude"], repository_ids: ["git:github.com/o/roborepo"] }));
   assert.match(described, /claude/);
   assert.match(described, /roborepo/);
 }

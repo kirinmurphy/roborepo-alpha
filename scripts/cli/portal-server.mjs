@@ -43,6 +43,8 @@ const APP_NAME = "roborepo";
 const SOURCE_HASH = computePortalSourceHash();
 const STATIC_TYPES = {
   ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".webmanifest": "application/manifest+json",
   ".css": "text/css; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".html": "text/html; charset=utf-8",
@@ -59,12 +61,23 @@ const STATIC_TYPES = {
 // `icon` labels the page in the header's ⋮ menu. `secondary` pages are lower-priority destinations
 // that live only in that menu; the rest sit in the header bar until the viewport gets narrow, when
 // every page moves into the menu.
+// `repositoryScope` pages show the shared repository selector and read and keep `?repo=`;
+// `outsideActivityScope` adds its Activity outside listed repos choice. Nav links carry the scope
+// only between repositoryScope pages (portal/shared/repository-scope.js).
 export const PAGES = [
   { path: "/", id: "home", title: "Repos", icon: "home", dir: "home", default: true },
-  { path: "/agents", id: "config", title: "Agents", icon: "agents", dir: "config" },
-  { path: "/plans", id: "plans", title: "Plans", icon: "plans", dir: "plans" },
+  { path: "/agents", id: "config", title: "Agents", icon: "agents", dir: "config", repositoryScope: true },
+  { path: "/plans", id: "plans", title: "Plans", icon: "plans", dir: "plans", repositoryScope: true },
   // The token report owns /tokens (id/dir keep the tokens module paths).
-  { path: "/tokens", id: "tokens", title: "Tokens", icon: "tokens", dir: "tokens" },
+  {
+    path: "/tokens",
+    id: "tokens",
+    title: "Tokens",
+    icon: "tokens",
+    dir: "tokens",
+    repositoryScope: true,
+    outsideActivityScope: true,
+  },
   {
     path: "/runtime",
     id: "developer-runtime",
@@ -77,13 +90,20 @@ export const PAGES = [
 ];
 export const PAGE_ROUTES = [
   ...PAGES.map((page) => ({ ...page, navId: page.id })),
-  { path: "/config", id: "agents-legacy", navId: "config", title: "Agents", dir: "config", redirect: "/agents" },
   // Parked: the detail page stays in the tree but every request redirects Home until it returns.
   { path: "/repositories/:urlKey", id: "repository-detail", navId: "home", title: "Repository", dir: "repositories", redirect: "/" },
 ].map((page) => ({ ...page, segments: page.path.split("/").filter(Boolean) }));
 // Shape shared by /api/portal/status and the browser-injected manifest so both can never drift.
 const pageManifest = () =>
-  PAGES.map(({ path, id, title, icon, secondary }) => ({ path, id, title, ...(icon ? { icon } : {}), ...(secondary ? { secondary } : {}) }));
+  PAGES.map(({ path, id, title, icon, secondary, repositoryScope, outsideActivityScope }) => ({
+    path,
+    id,
+    title,
+    ...(icon ? { icon } : {}),
+    ...(secondary ? { secondary } : {}),
+    ...(repositoryScope ? { repositoryScope } : {}),
+    ...(outsideActivityScope ? { outsideActivityScope } : {}),
+  }));
 
 export function serializeInlineJson(value) {
   return JSON.stringify(value)

@@ -532,7 +532,7 @@ assert "skill export-to-project: creates .codex/skills even when only .claude ex
   test -f "${claude_only_repo}/.codex/skills/test-harness/SKILL.md"
 
 assert "skill export-to-project: internal skill NOT exported (firewall)" \
-  bash -c "! test -e '${export_repo}/.claude/skills/builtin-development'"
+  bash -c "! test -e '${export_repo}/.claude/skills/roborepo-development'"
 
 assert "skill export-to-project: refuses to run in source repo" \
   bash -c "cd '${repo_root}' && ! node '${cli}' skill export-to-project --yes >/dev/null 2>&1"
@@ -904,8 +904,8 @@ if node -e 'const s=require("node:net").createServer();s.once("error",()=>proces
     bash -c "curl -s -X POST 'http://127.0.0.1:${cfg_port}/api/config/skills' -H 'Content-Type: application/json' -H 'X-Cli-Portal-Token: ${cfg_token}' -d '{\"id\":\"zzz\",\"enabled\":true}' | node -e \"let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);process.exit(j.ok===false?0:1)})\""
   assert "config: GET /agents served" \
     bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' 'http://127.0.0.1:${cfg_port}/agents')\" = 200 ]"
-  assert "config: GET /config redirects to /agents" \
-    bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' 'http://127.0.0.1:${cfg_port}/config')\" = '302 http://127.0.0.1:${cfg_port}/agents' ]"
+  assert "config: the old Agents URL /config is gone (404, no redirect)" \
+    bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' 'http://127.0.0.1:${cfg_port}/config')\" = 404 ]"
   assert "developer-runtime: GET /runtime served with token" \
     bash -c "curl -s 'http://127.0.0.1:${cfg_port}/runtime' | grep -q 'cli-portal-token'"
   assert "developer-runtime: notice template includes docs link target" \
@@ -1887,6 +1887,10 @@ assert "repositories: discovery recording + Plans enrollment" \
 # credentials; route handler dispatches list/detail/associations/patch and 404s unknown ids.
 assert "repositories: browser-safe API contracts" \
   node "${repo_root}/scripts/test/repositories-api-check.mjs"
+
+# Development fixtures stay out of every registry reader unless dev mode is on, and writers keep them.
+assert "repositories: dev fixtures hidden unless dev mode is on" \
+  node "${repo_root}/scripts/test/repositories-dev-fixtures-check.mjs"
 
 # Repository lifecycle: active/idle/stale derivation, the unreadable-vs-absent distinction (an
 # unplugged drive must never read as a deleted checkout), 30-day ageing measured from lastSeenAt,

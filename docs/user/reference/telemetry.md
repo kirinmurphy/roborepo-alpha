@@ -35,19 +35,22 @@ Capture runs from the harness hooks `SessionStart`, `PreToolUse`, `PostToolUse`,
 `UserPromptSubmit`, and `Stop`. Each capture (schema v3) carries:
 
 - timestamp, harness, event, session ID;
-- hashed working directory and repository identity (root hash, remote hash, branch, short SHA);
+- hashed working directory and repository identity (the canonical repository ID, branch, short
+  SHA); an event without a repository ID belongs to no repository;
 - tool metadata (name, MCP server/tool, command hash/size, file extension/path hash — never a raw
   command or path);
 - best-effort call-paired duration (`call_id`-keyed, so concurrent/nested calls never clobber each
   other's start stamp);
 - a reference to the session's effective configuration snapshot (`config_snapshot_id`);
-- a semantic `operation` classification (category/runner/scope/target/exit-status/failure-signature —
-  never the raw shell command);
+- for shell commands only, a semantic `operation` classification (category — test, lint, typecheck,
+  build, format, install, git, serve, read, or other — plus runner/scope/target/exit-status/
+  failure-signature; never the raw shell command);
 - an inferred `phase` (discovery/implementation/debugging/verification/finalization/unknown, with
   confidence and classifier version);
-- `intervening`-work signals (edit-since-last-test, changed-file count/categories, diff fingerprint
-  change, targeted-test-since-last-full, failure-signature change) — all hashes/booleans/counts,
-  never diff content;
+- `intervening`-work signals (edit-since-last-test — an edit tool ran, including Codex's
+  `apply_patch`, or the working-tree diff changed since the previous test run started — plus
+  changed-file count/categories, diff fingerprint change, targeted-test-since-last-full,
+  failure-signature change) — all hashes/booleans/counts, never diff content;
 - transcript-derived token counts, prompt size/hash/preview, and the tool result size that most
   recently entered context (size only, never content).
 
@@ -122,9 +125,16 @@ low-confidence. Robust summaries (trimmed mean, median, percentile) are used for
 token/duration distributions rather than plain averages.
 
 **Cohort filter** is a normalized object shared by the CLI and
-portal: `time`, `harnesses`, `models`, `repos`, `packages`/`skills` (exposure, resolved via
-`config_snapshot_id`), `operations`, `phases`, `outcomes`, `task_categories`, `snapshot_ids`. The same
-filter object scopes every panel — no panel-local filter silently redefines the global cohort.
+portal: `time`, `harnesses`, `models`, `repository_ids` (canonical repository scope),
+`excluded_repository_ids` (activity outside those repositories), `packages`/`skills` (exposure,
+resolved via `config_snapshot_id`), `operations`, `phases`, `outcomes`, `task_categories`,
+`snapshot_ids`. The same filter object scopes every panel — no panel-local filter silently redefines
+the global cohort.
+
+**Repository scope** on the Tokens page comes from the portal's shared repository selector
+(`?repo=`): one repository's sessions, **All repos**, or **Activity outside listed
+repos** — sessions with no repository, in a repository RoboRepo has not found, or in an ignored one.
+All repositories is exactly the listed repositories plus that outside activity.
 
 **Marker-relative comparison** is the preferred way to answer "did this change something". Given a
 `change` marker, sessions are split into before and after cohorts, dropping sessions that span the

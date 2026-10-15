@@ -1,0 +1,13 @@
+{
+  "name": "roborepo",
+  "short_name": "roborepo",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0f14",
+  "theme_color": "#0b0f14",
+  "icons": [
+    { "src": "/portal/shared/favicon/app-icon.svg", "type": "image/svg+xml", "sizes": "any" },
+    { "src": "/portal/shared/favicon/icon-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "/portal/shared/favicon/icon-512.png", "type": "image/png", "sizes": "512x512" }
+  ]
+}

@@ -133,9 +133,6 @@
   font-size: var(--text-2xs);
   border-bottom: 1px solid var(--accent);
 }
-.markdown tbody tr:hover {
-  background: var(--row-hover, rgba(128, 128, 128, 0.06));
-}
 /* Mermaid diagrams (markdown-render.mjs's renderMermaidFallback emits <pre class="mermaid">;
  * portal/shared/markdown-mermaid.js replaces it with the rendered SVG). The dashed-border `pre`
  * styling only ever shows if that render fails (offline, blocked script, bad diagram source) — the

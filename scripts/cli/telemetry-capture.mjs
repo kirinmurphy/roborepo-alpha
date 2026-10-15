@@ -8,7 +8,7 @@ import { measureLog } from "../../modules/retention/index.mjs";
 // config, permissions, MCP, etc.) just to append one JSONL line. The registry dispatch is for
 // on-demand callers (portal session drill-down) that already pay for a heavier import graph.
 import { mcpServerOf, transcriptStats } from "../harnesses/transcript-parse.mjs";
-import { classifyCommand, failureSignature } from "./telemetry-classify.mjs";
+import { classifyCommand, failureSignature, SHELL_TOOL_NAMES } from "./telemetry-classify.mjs";
 import { generateCaptureId } from "./telemetry-schemas/capture-schema-v3.mjs";
 import { privacyHash } from "./telemetry-schemas/hash.mjs";
 import { inferPhase } from "./telemetry-phase-infer.mjs";
@@ -45,7 +45,7 @@ export async function telemetryCaptureCommand(args) {
   // category/runner/scope/signature-hash, never the command itself, matching the same
   // hash-don't-store discipline as command_hash above.
   const rawCommand = typeof (input.tool_input || input.toolInput || {}).command === "string" ? (input.tool_input || input.toolInput).command : null;
-  let operation = rawCommand ? classifyCommand(rawCommand) : null;
+  let operation = rawCommand && SHELL_TOOL_NAMES.has(tool.name) ? classifyCommand(rawCommand) : null;
   // Exit status/failure signature are only knowable once the tool result is back (PostToolUse), and
   // only for Bash-classified operations — a passing/failing test's transcript result is this
   // operation's outcome. stats.last_result is transcript-derived and best-effort: a PostToolUse whose
@@ -59,7 +59,7 @@ export async function telemetryCaptureCommand(args) {
     };
   }
   const callId = resolveCallId(input, sessionId, tool.name, event);
-  const activity = updateSessionActivity(sessionId, event, tool, operation, cwd);
+  const activity = updateSessionActivity(sessionId, event, tool, operation, cwd, callId);
   const record = {
     schema: SCHEMA_VERSION,
     capture_id: generateCaptureId(),
@@ -191,22 +191,17 @@ function repoMetadata(cwd) {
   const remote = git(cwd, ["remote", "get-url", "origin"]);
   const sha = git(cwd, ["rev-parse", "--short", "HEAD"]);
 
-  // Canonical, cross-domain repository reference. Normalizing the remote BEFORE hashing means
-  // equivalent SSH and HTTPS remotes produce the same normalized_remote_hash and the same
-  // repository_id — the correlation the legacy raw remote_hash could never provide. repository_id
-  // is credential- and path-free (git: id, or an opaque local: id derived from the root), so it is
-  // safe to store in the clear. Legacy git_root_hash/remote_hash stay for the migration window.
-  // The local: id realpaths the root so it agrees with resolveProjectIdentity (Runtime/Plans)
-  // for symlinked repos. The legacy git_root_hash below stays on the RAW toplevel for back-compat.
+  // Canonical, cross-domain repository reference: the normalized remote makes equivalent SSH and
+  // HTTPS remotes one repository_id. It is credential- and path-free (git: id, or an opaque local:
+  // id derived from the root), so it is safe to store in the clear, and it is the only repository
+  // identity an event carries. The local: id realpaths the root so it agrees with
+  // resolveProjectIdentity (Runtime/Plans) for symlinked repos.
   const normalizedRemote = remote ? normalizeGitRemote(remote) : null;
   const repositoryId = normalizedRemote || (root ? localRepositoryIdForRoot(root) : null);
 
   const result = {
     label: root ? path.basename(root) : path.basename(cwd),
     repository_id: repositoryId,
-    normalized_remote_hash: normalizedRemote ? hash(normalizedRemote) : null,
-    git_root_hash: root ? hash(root) : null,
-    remote_hash: remote ? hash(remote) : null,
     branch: branch || null,
     // Short SHA correlates a spike to the code state it happened on; safe to keep in the clear.
     sha: sha || null,
@@ -219,7 +214,30 @@ function repoMetadata(cwd) {
 // tracking. Kept to the tools that mutate repo files —
 // Read/Grep/Glob-shaped tools are discovery signals, not edits.
 const EDIT_TOOL_NAMES = new Set(["Write", "Edit", "MultiEdit", "NotebookEdit"]);
+// Codex edits files through apply_patch and does not reliably send PostToolUse for it, so its edits
+// count when the call starts — the only hook that arrives for every patch. Counting it on one event
+// only keeps a Pre/Post pair from counting twice.
+const PRE_TOOL_EDIT_NAMES = new Set(["apply_patch"]);
 const READ_TOOL_NAMES = new Set(["Read", "Grep", "Glob", "WebFetch", "WebSearch"]);
+
+// Whether files changed since the previous test run started: an edit tool ran, or the working-tree
+// diff differs from the diff when that run started (which also catches edits made through the shell).
+// A test run's own capture compares against the PREVIOUS run, then becomes the reference for the
+// next one; its PostToolUse — same call — repeats the answer its PreToolUse got instead of comparing
+// against itself.
+function editSinceLastTestRun(activity, event, operation, diffFingerprint, callId) {
+  const diffChanged = diffFingerprint != null && activity.diffAtLastTest != null && diffFingerprint !== activity.diffAtLastTest;
+  const edited = activity.editedSinceLastTest || diffChanged;
+  if (operation?.category !== "test") return edited;
+  const sameRun = callId ? callId === activity.lastTestCallId : event === "PostToolUse" && activity.lastTestEvent === "PreToolUse";
+  if (sameRun) return activity.lastTestEditFlag;
+  activity.lastTestCallId = callId ?? null;
+  activity.lastTestEvent = event;
+  activity.lastTestEditFlag = edited;
+  activity.editedSinceLastTest = false;
+  activity.diffAtLastTest = diffFingerprint;
+  return edited;
+}
 
 function sessionActivityPath(sessionId) {
   return path.join(telemetryCollectorDir, `activity-${hash(sessionId)}.json`);
@@ -236,17 +254,24 @@ function emptySessionActivity() {
     changedFileCategories: [],
     changedFileCount: 0,
     lastDiffFingerprint: null,
+    editedSinceLastTest: false,
+    diffAtLastTest: null,
+    lastTestCallId: null,
+    lastTestEvent: null,
+    lastTestEditFlag: false,
     targetedTestRanSinceLastFull: false,
     lastFailureSignature: null,
   };
 }
 
-// Session-scoped activity state, read-modify-written on every PostToolUse (the point at which we
-// know a tool actually completed, and — for test operations — whether it passed or failed). Feeds
+// Session-scoped activity state, read-modify-written on every capture. Most signals update on
+// PostToolUse (the point at which we know a tool actually completed, and — for test operations —
+// whether it passed or failed); Codex's apply_patch edits count on PreToolUse (see
+// PRE_TOOL_EDIT_NAMES). Feeds
 // both phase inference (telemetry-phase-infer.mjs) and the per-capture `intervening` field (plan:
 // "Intervening-work analysis"). Best-effort throughout: a cursor read/write failure degrades to an
 // empty/stale activity view rather than failing the capture.
-function updateSessionActivity(sessionId, event, tool, operation, cwd) {
+function updateSessionActivity(sessionId, event, tool, operation, cwd, callId) {
   if (!sessionId) return null;
   const cursorPath = sessionActivityPath(sessionId);
   let activity = emptySessionActivity();
@@ -256,21 +281,21 @@ function updateSessionActivity(sessionId, event, tool, operation, cwd) {
     // First activity this session, or a corrupt/missing cursor — start fresh.
   }
 
-  if (event === "PostToolUse") {
-    const isEdit = EDIT_TOOL_NAMES.has(tool.name);
-    const isRead = READ_TOOL_NAMES.has(tool.name);
-    const fileTouched = isEdit && tool.file_ext != null;
-
-    if (isEdit) {
-      activity.editCount += 1;
-      activity.editSinceLastFailure = activity.testFailureStreak > 0 ? true : activity.editSinceLastFailure;
-    }
-    if (isRead) activity.readCount += 1;
-    if (fileTouched) {
+  const isEdit = event === "PostToolUse" ? EDIT_TOOL_NAMES.has(tool.name) : event === "PreToolUse" && PRE_TOOL_EDIT_NAMES.has(tool.name);
+  if (isEdit) {
+    activity.editCount += 1;
+    activity.editedSinceLastTest = true;
+    activity.editSinceLastFailure = activity.testFailureStreak > 0 ? true : activity.editSinceLastFailure;
+    if (tool.file_ext != null) {
       const category = categorizeFile(tool.file_ext);
       activity.changedFileCategories = dedupe([...activity.changedFileCategories, category]);
       activity.changedFileCount += 1;
     }
+  }
+
+  if (event === "PostToolUse") {
+    const isRead = READ_TOOL_NAMES.has(tool.name);
+    if (isRead) activity.readCount += 1;
 
     if (operation) {
       const isTestLike = operation.category === "test" || operation.category === "lint" || operation.category === "typecheck";
@@ -314,8 +339,7 @@ function updateSessionActivity(sessionId, event, tool, operation, cwd) {
   }
 
   const diffFingerprint = gitDiffFingerprint(cwd);
-  const diffChanged = diffFingerprint != null && diffFingerprint !== activity.lastDiffFingerprint;
-  const editSinceLastTest = activity.editCount > 0 && (activity.testFailureStreak > 0 || diffChanged);
+  const editSinceLastTest = editSinceLastTestRun(activity, event, operation, diffFingerprint, callId);
   const priorDiffFingerprint = activity.lastDiffFingerprint;
   activity.lastDiffFingerprint = diffFingerprint ?? activity.lastDiffFingerprint;
 
@@ -358,10 +382,12 @@ function dedupe(values) {
 // text itself. `git diff --stat` names/sizes changed
 // files without their content, which is enough to detect "something changed" without persisting any
 // source text. Returns null (not thrown) when cwd isn't a git repo or git is unavailable.
+// A clean tree has a fingerprint too (of the empty diff), so an edit after a test run on a clean tree
+// still reads as a change. Null only when git cannot answer (not a repository, no HEAD yet).
 function gitDiffFingerprint(cwd) {
-  const diffStat = git(cwd, ["diff", "--stat", "HEAD"]);
-  if (!diffStat) return null;
-  return hash(diffStat);
+  const result = spawnSync("git", ["diff", "--stat", "HEAD"], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+  if (result.status !== 0) return null;
+  return hash(result.stdout.trim());
 }
 
 function toolMetadata(input) {

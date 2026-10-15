@@ -13,6 +13,8 @@ import * as api from "./api.js";
 import * as tmpl from "./templates.js";
 import { createConfigModal } from "./panels.js";
 import { snapshotChanged, inspectChipSpecs, setBulkInFlight, isBulkInFlight } from "./state.js";
+import { clearRepositoryScope, currentRepositoryScope } from "/portal/shared/repository-scope.js";
+import { onRepositoryScopeResolved, repositoryScopeUnavailableNotice } from "/portal/shared/repository-scope-selector.js";
 
 const modal = createConfigModal();
 // Keep the warning renderer/template available while the Agents-page banner is temporarily hidden.
@@ -108,6 +110,18 @@ function renderSection(section, contextCost) {
 
 function render(snap) {
   const main = document.getElementById("main");
+  // Scoped to a repository, the page shows only what is true for it: a coming-soon splash, or the
+  // unavailable state. Until the selector has resolved the scope, nothing global is drawn either.
+  const scope = currentRepositoryScope();
+  if (scope) {
+    const resolution = scopeResolution?.scope === scope ? scopeResolution : null;
+    if (resolution?.status === "repository") {
+      main.replaceChildren(tmpl.repositorySplash(clearRepositoryScope));
+    } else if (resolution?.status === "unavailable") {
+      main.replaceChildren(repositoryScopeUnavailableNotice());
+    }
+    return;
+  }
   const view = withoutPackagesControlledElsewhere(snap.behaviorView || []);
   // Package-category sections (everything the packages intro describes) vs the non-package
   // sections that follow. The intro sits between the harness file grid and the first package
@@ -136,6 +150,13 @@ function render(snap) {
 let last = null;
 let lastSnapshot = null;
 let lastSetup = null;
+let scopeResolution = null;
+// The splash and the global view are whole-page swaps, so a scope change redraws even when the
+// config snapshot itself has not changed.
+onRepositoryScopeResolved((resolution) => {
+  scopeResolution = resolution;
+  if (lastSnapshot) render(lastSnapshot);
+});
 function applySnapshot(snap) {
   lastSnapshot = snap;
   const changed = snapshotChanged(last, snap);

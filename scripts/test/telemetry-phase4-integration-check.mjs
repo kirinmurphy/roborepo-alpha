@@ -23,6 +23,9 @@ try {
   testRerunWithUnchangedFailureSignatureIsDetected();
   testEditAfterFailureFlipsInterveningEditSinceLastTest();
   testDiscoveryPhaseFromReadOnlyActivity();
+  testEditBetweenPassingRunsIsSinceLastTest();
+  testCodexApplyPatchCountsAsEdit();
+  testShellEditOnCleanTreeIsSinceLastTest();
   console.log("telemetry phase4 integration checks passed");
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
@@ -154,4 +157,80 @@ function testDiscoveryPhaseFromReadOnlyActivity() {
   const post = spoolRecords().filter((r) => r.session_id === sessionId && r.event === "PostToolUse").pop();
   assert.equal(post.phase.name, "discovery", "read-only activity with no edits must infer discovery");
   assert.equal(post.intervening.changed_file_count, 0);
+}
+
+// A test run's own captures compare against the PREVIOUS run. Before, the flag compared the diff with
+// the immediately preceding capture (the edit itself), so a passing run after an edit read as "no
+// edit" — and counted as over-testing waste.
+function testEditBetweenPassingRunsIsSinceLastTest() {
+  const sessionId = "sess-edit-between-passing-runs";
+  const transcriptPath = path.join(tmp, `${sessionId}.jsonl`);
+  fs.writeFileSync(transcriptPath, "");
+  const base = { session_id: sessionId, cwd: repoRoot, transcript_path: transcriptPath };
+  const runTest = (id) => {
+    capture({ ...base, tool_name: "Bash", tool_use_id: id, tool_input: { command: "npm test" } }, { event: "PreToolUse" });
+    appendTranscriptTurn(transcriptPath, { toolUseId: id, toolName: "Bash", resultText: "all passed", isError: false });
+    capture({ ...base, tool_name: "Bash", tool_use_id: id, tool_input: { command: "npm test" } }, { event: "PostToolUse" });
+  };
+
+  capture(base, { event: "SessionStart" });
+  runTest("tu_p1");
+  capture({ ...base, tool_name: "Edit", tool_use_id: "tu_pe", tool_input: { file_path: "src/thing.js" } }, { event: "PreToolUse" });
+  appendTranscriptTurn(transcriptPath, { toolUseId: "tu_pe", toolName: "Edit", resultText: "ok", isError: false });
+  capture({ ...base, tool_name: "Edit", tool_use_id: "tu_pe", tool_input: { file_path: "src/thing.js" } }, { event: "PostToolUse" });
+  runTest("tu_p2");
+  runTest("tu_p3");
+
+  const tests = spoolRecords().filter((r) => r.session_id === sessionId && r.operation?.category === "test");
+  const flags = tests.map((r) => `${r.call_id}:${r.event}:${r.intervening.edit_since_last_test}`);
+  assert.deepEqual(flags, [
+    "tu_p1:PreToolUse:false", "tu_p1:PostToolUse:false",
+    // Pre and Post of one run agree; the Post does not compare the run with itself.
+    "tu_p2:PreToolUse:true", "tu_p2:PostToolUse:true",
+    "tu_p3:PreToolUse:false", "tu_p3:PostToolUse:false",
+  ]);
+}
+
+// Codex edits through apply_patch and may send only PreToolUse. The patch text in its `command` field
+// is not a shell command, so it gets no operation.
+function testCodexApplyPatchCountsAsEdit() {
+  const sessionId = "sess-codex-apply-patch";
+  const base = { session_id: sessionId, cwd: repoRoot };
+  const runTest = (id) => capture({ ...base, tool_name: "Bash", call_id: id, tool_input: { command: "npm test" } }, { harness: "codex", event: "PreToolUse" });
+
+  capture(base, { harness: "codex", event: "SessionStart" });
+  runTest("call_c1");
+  const patch = "*** Begin Patch\n*** Update File: scripts/test/a-check.mjs\n+x\n*** End Patch";
+  capture({ ...base, tool_name: "apply_patch", call_id: "call_cp", tool_input: { command: patch } }, { harness: "codex", event: "PreToolUse" });
+  runTest("call_c2");
+  runTest("call_c3");
+
+  const records = spoolRecords("codex").filter((r) => r.session_id === sessionId);
+  const patchRecord = records.find((r) => r.tool?.name === "apply_patch");
+  assert.equal(patchRecord.operation, null, "apply_patch input is patch text, not a shell command");
+  const flags = records.filter((r) => r.operation?.category === "test").map((r) => `${r.call_id}:${r.intervening.edit_since_last_test}`);
+  assert.deepEqual(flags, ["call_c1:false", "call_c2:true", "call_c3:false"]);
+}
+
+// An edit made through the shell (no edit tool) shows up as a diff change since the last run — also
+// when that run happened on a clean tree, whose empty diff has a fingerprint of its own.
+function testShellEditOnCleanTreeIsSinceLastTest() {
+  const repo = path.join(tmp, "clean-repo");
+  fs.mkdirSync(repo);
+  const git = (...args) => assert.equal(spawnSync("git", args, { cwd: repo, encoding: "utf8" }).status, 0, `git ${args.join(" ")}`);
+  git("init", "-q");
+  fs.writeFileSync(path.join(repo, "a.txt"), "one\n");
+  git("add", "a.txt");
+  git("-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-q", "-m", "init");
+
+  const sessionId = "sess-shell-edit-clean";
+  const base = { session_id: sessionId, cwd: repo };
+  const runTest = (id) => capture({ ...base, tool_name: "Bash", call_id: id, tool_input: { command: "npm test" } }, { harness: "codex", event: "PreToolUse" });
+  capture(base, { harness: "codex", event: "SessionStart" });
+  runTest("call_s1");
+  fs.writeFileSync(path.join(repo, "a.txt"), "two\n");
+  runTest("call_s2");
+
+  const flags = spoolRecords("codex").filter((r) => r.session_id === sessionId && r.operation?.category === "test").map((r) => r.intervening.edit_since_last_test);
+  assert.deepEqual(flags, [false, true]);
 }

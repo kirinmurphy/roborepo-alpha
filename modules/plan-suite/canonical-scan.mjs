@@ -27,13 +27,13 @@ export function buildPlanSnapshot({ stateRoot, packageState = null, registry = n
       const scan = scanRepository(checkouts, { repositoryId: record.id, name: record.displayName });
       repositories.push(scan.repository);
       plans.push(...scan.plans);
-      errors.push(...scan.errors.map((error) => ({ repository: record.displayName, ...error })));
+      errors.push(...scan.errors.map((error) => ({ repository: record.displayName, repositoryId: record.id, ...error })));
       // Linked worktree names straight from Git's administrative files, running or not, so Home can
       // tell a plan's idle worktree from one that no longer exists.
       const worktrees = checkouts.filter((checkout) => checkout.isWorktree).map((checkout) => checkout.label);
       repositoryScans.push({ repositoryId: record.id, state: "scanned", planCount: scan.plans.length, checkoutCount: checkouts.length, worktrees });
     } catch (err) {
-      errors.push({ repository: record.displayName, error: pathFreeError(err) });
+      errors.push({ repository: record.displayName, repositoryId: record.id, error: pathFreeError(err) });
       repositoryScans.push({ repositoryId: record.id, state: "error", planCount: 0, checkoutCount: checkouts.length });
     }
   }

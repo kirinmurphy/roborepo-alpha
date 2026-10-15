@@ -24,15 +24,33 @@ let cachedSnapshotIsMock = false;
 // planSnapshotFingerprint() as of the last real build; null whenever cachedSnapshot is not one.
 let cachedFingerprint = null;
 
-export function loadPlansSnapshot() {
+// `repositoryId` (the resolved Portal scope) filters the one cached snapshot per request; there is
+// no per-repository cache, so Home's loadCachedPlansSnapshot always sees the same build.
+export function loadPlansSnapshot({ repositoryId = null } = {}) {
   if (MOCK_FIRST_RUN_VIEWS_ENABLED && hasNoRegisteredRepositories()) {
     cachedSnapshot = mockPlansSnapshot({ packageState: planWritePackageState() });
     cachedSnapshotIsMock = true;
     cachedFingerprint = null;
-    return cachedSnapshot;
+    return scopeSnapshot(cachedSnapshot, repositoryId);
   }
   rebuildSnapshot(loadRegistry({ stateRoot }));
-  return publicSnapshot(cachedSnapshot);
+  return scopeSnapshot(publicSnapshot(cachedSnapshot), repositoryId);
+}
+
+// One repository's slice of a public snapshot: its plans, its scan state (the header count and
+// onboarding read it), and its scan errors. A repository with no recorded checkout has no scan
+// entry; scoped to it, that is "not scanned", not "no repositories known".
+export function scopeSnapshot(snapshot, repositoryId) {
+  if (!repositoryId) return snapshot;
+  const inScope = (id) => id === repositoryId;
+  const scans = (snapshot.repositoryScans || []).filter((scan) => inScope(scan.repositoryId));
+  return {
+    ...snapshot,
+    plans: snapshot.plans.filter((plan) => inScope(plan.repository?.repositoryId)),
+    repositories: snapshot.repositories.filter((repository) => inScope(repository.repositoryId)),
+    repositoryScans: scans.length ? scans : [{ repositoryId, state: "unavailable", planCount: 0, checkoutCount: 0 }],
+    errors: (snapshot.errors || []).filter((error) => inScope(error.repositoryId)),
+  };
 }
 
 // Home polls this every few seconds. A full build runs Git subprocesses per checkout, so it is
@@ -88,10 +106,10 @@ function publicMutationResult(result) {
   return { change: result.change, record: { ...plan, repository: stripRepositoryRoot(repository) } };
 }
 
-export function refreshPlans() {
+export function refreshPlans({ repositoryId = null } = {}) {
   cachedSnapshot = null;
   cachedSnapshotIsMock = false;
-  return loadPlansSnapshot();
+  return loadPlansSnapshot({ repositoryId });
 }
 
 function planWritePackageState() {

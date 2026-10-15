@@ -14,7 +14,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { repoRoot, requireDevelopmentCheckout } from "./paths.mjs";
+import { repoRoot, requireDevelopmentCheckout, stateRoot } from "./paths.mjs";
+import { setDevFixturesEnabled } from "../../modules/repositories/index.mjs";
 import { serveCommand, webStopCommand } from "./telemetry.mjs";
 
 const FIXTURE_SCRIPT = path.join("local", "dev-fixtures", "developer-runtime-test-data.mjs");
@@ -64,6 +65,8 @@ export async function devCommand(args) {
     // and a portal rendering a stack that never came up is worse than a clear failure.
     const status = runFixture("start");
     if (status !== 0) process.exit(status);
+    // Fixture repositories show in the portal only while dev mode is on; `dev stop` turns it off.
+    setDevFixturesEnabled({ stateRoot, enabled: true });
     await serveCommand([...rest, "--detach", "--no-open"]);
     return;
   }
@@ -71,6 +74,7 @@ export async function devCommand(args) {
     // Portal first: it is the process that holds a port, so stopping it before tearing down the
     // fixture avoids a window where the portal renders a stack that is already gone.
     webStopCommand(rest);
+    setDevFixturesEnabled({ stateRoot, enabled: false });
     // Unlike start, the fixture still runs even if the portal stop reported trouble — a teardown
     // should tear down as much as it can rather than stopping at the first failure.
     process.exit(runFixture("stop"));

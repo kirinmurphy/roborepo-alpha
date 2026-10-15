@@ -19,7 +19,7 @@ export function createChangeForm(getData, onSaved) {
     form.elements.effective_at.disabled = !marker;
     form.elements.intent.onchange = () => { form.elements.effective_at.disabled = form.elements.intent.value === "response"; };
     const repo = form.elements.repository;
-    repo.replaceChildren(new Option("All repositories", "all"));
+    repo.replaceChildren(new Option("All repos", "all"));
     for (const value of [...new Set((data.conditions?.comparisons ?? []).filter((row) => row.dimension === "repo").map((row) => row.value))]) repo.add(new Option(repositoryLabel(value), value));
     if (marker?.repository_id && ![...repo.options].some((option) => option.value === marker.repository_id)) repo.add(new Option(marker.repository_id, marker.repository_id));
     repo.value = marker?.repository_id ?? "all";

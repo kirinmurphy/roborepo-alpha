@@ -5,6 +5,7 @@
 import {
   portalSetUpdatedAt,
   portalHideLoading,
+  portalWireBackdropClose,
 } from "/portal/shared/api.js";
 import * as api from "./api.js";
 import * as tmpl from "./templates.js";
@@ -12,6 +13,8 @@ import { createRepositorySourcesDialog } from "/portal/shared/repository-sources
 import { createPlanDrawer } from "./plan-drawer.js";
 import { createBlockersPopover } from "./blockers-popover.js";
 import { mountOverflowNav } from "/portal/shared/overflow-nav.js";
+import { clearRepositoryScope, currentRepositoryScope, isRepositoryScopeUnavailable, onRepositoryScopeChange } from "/portal/shared/repository-scope.js";
+import { onRepositoryScopeResolved, repositoryScopeUnavailableNotice } from "/portal/shared/repository-scope-selector.js";
 import {
   FILTER_IDS,
   FILTER_DEFAULTS,
@@ -38,7 +41,6 @@ const SECONDARY_LIFECYCLES = new Set(["completed", "archived", "unclassified"]);
 const state = {
   snapshot: null,
   filters: { ...FILTER_DEFAULTS },
-  filtersExpanded: false,
   selectedLifecycle: lifecycleFromSearchParams(new URLSearchParams(location.search)),
   // Active plans whose worktree has merged, from the same overview Home renders (see
   // mergedPlanBranches); keyed by plan key.
@@ -50,10 +52,9 @@ const warningsEl = document.getElementById("warnings");
 const bannerEl = document.getElementById("package-banner");
 const plansHeaderEl = document.getElementById("plans-header");
 const filtersToggleEl = document.getElementById("filters-toggle");
-const filtersBodyEl = document.getElementById("filters-body");
+const filtersDialogEl = document.getElementById("filters-dialog");
+const filtersUpdateEl = document.getElementById("filters-update");
 const filterChipsEl = document.getElementById("filter-chips");
-const plansCountTextEl = document.getElementById("plans-count-text");
-const reposCountTextEl = document.getElementById("repos-count-text");
 const lifecycleBarEl = document.getElementById("lifecycle-bar");
 const lifecycleTitleEl = document.getElementById("lifecycle-title");
 const lifecycleTabsEl = document.getElementById("lifecycle-tabs");
@@ -66,6 +67,9 @@ const lifecycleNav = mountOverflowNav(lifecycleTabsEl, {
   highlightSecondarySelection: false,
 });
 let syncPollTimer = null;
+// Scope changes can overlap; only the latest load may paint, so a slow response for the previous
+// repository never replaces the current one.
+let loadSequence = 0;
 let repositorySyncPending = false;
 let repositorySyncState = "synced";
 let repositoryAutoDiscoveryEnabled = false;
@@ -74,7 +78,7 @@ let repositoryAutoDiscoveryEnabled = false;
 // shared Manage repositories dialog, and any change there re-reads the Plans snapshot.
 const sourcesDialog = createRepositorySourcesDialog({
   onPending: setPlansSyncPending,
-  onChange: () => api.refreshSnapshot().then(applySnapshot).catch(showError),
+  onChange: () => api.refreshSnapshot().then(applySnapshot).catch(showLoadError),
 });
 const onboarding = {
   onEnable: () => sourcesDialog.enableAutoDiscovery(),
@@ -99,6 +103,15 @@ const blockersPopover = createBlockersPopover(document.getElementById("blockers-
 bindStaticControls();
 load();
 void refreshOverview();
+// The shared header selector (and back/forward) changes the scope without a reload; filters and
+// the lifecycle tab are page state and stay as they are.
+onRepositoryScopeChange(() => void load());
+// The empty state names the selected repository, which the selector learns after the snapshot.
+let scopedRepositoryName = null;
+onRepositoryScopeResolved(({ scope, repository }) => {
+  scopedRepositoryName = scope === currentRepositoryScope() ? repository?.displayName ?? null : null;
+  if (state.snapshot && !onboardingEl.hidden) render();
+});
 
 function bindStaticControls() {
   const refreshEl = document.getElementById("refresh");
@@ -109,25 +122,30 @@ function bindStaticControls() {
     refreshIconEl.hidden = true;
     refreshSpinnerEl.hidden = false;
     void refreshOverview();
-    api.refreshSnapshot().then(applySnapshot).catch(showError).finally(() => {
+    api.refreshSnapshot().then(applySnapshot).catch(showLoadError).finally(() => {
       refreshEl.disabled = false;
       refreshIconEl.hidden = false;
       refreshSpinnerEl.hidden = true;
     });
   });
-  reposCountTextEl.addEventListener("click", (event) => {
-    event.preventDefault();
-    onboarding.onManage();
-  });
+  // The popup drafts: the board waits for Update, but each control's option counts follow the
+  // draft as it changes, so the other filters show what is left to pick.
   for (const id of FILTER_IDS) {
-    const node = document.getElementById(id);
-    node.addEventListener(id === "search" ? "input" : "change", () => {
-      state.filters[id] = node.value;
-      render();
-    });
+    document.getElementById(id).addEventListener(id === "search" ? "input" : "change", onFilterDraftChange);
   }
-  filtersToggleEl.addEventListener("click", () => setFiltersExpanded(filtersBodyEl.hidden));
-  document.getElementById("filters-done").addEventListener("click", () => setFiltersExpanded(false));
+  document.getElementById("search").addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !filtersUpdateEl.disabled) filtersUpdateEl.click();
+  });
+  filtersToggleEl.addEventListener("click", () => {
+    discardFilterDraft();
+    filtersDialogEl.showModal();
+  });
+  filtersUpdateEl.addEventListener("click", applyFilterDraft);
+  document.getElementById("filters-cancel").addEventListener("click", () => filtersDialogEl.close());
+  document.getElementById("filters-close").addEventListener("click", () => filtersDialogEl.close());
+  portalWireBackdropClose(filtersDialogEl, () => filtersDialogEl.close());
+  // Esc, Cancel, the X, and the backdrop all close the same way, and an unapplied draft goes with it.
+  filtersDialogEl.addEventListener("close", discardFilterDraft);
   filterChipsEl.addEventListener("chip-remove", (event) => resetFilter(event.detail));
   // One delegated listener each for cards (bubbles through groupsEl) and the drawer's mounted
   // <plan-status> — both dispatch the same `plan-change` event, so both route through the same
@@ -143,9 +161,35 @@ function openBlockersPopover({ record, anchor }) {
   blockersPopover.open({ blockers: resolveBlockers(record, state.snapshot.plans), anchor });
 }
 
-function setFiltersExpanded(expanded) {
-  state.filtersExpanded = expanded;
-  filtersBodyEl.hidden = !expanded;
+function filterControl(id) {
+  return document.getElementById(id);
+}
+
+// Update is only worth pressing when some control differs from the filters currently applied.
+function updateFiltersDirty() {
+  filtersUpdateEl.disabled = !FILTER_IDS.some((id) => filterControl(id).value !== state.filters[id]);
+}
+
+function draftFilters() {
+  return Object.fromEntries(FILTER_IDS.map((id) => [id, filterControl(id).value]));
+}
+
+function onFilterDraftChange() {
+  updateFiltersDirty();
+  if (state.snapshot) refreshFilterCounts(state.snapshot);
+}
+
+// Puts every control back to the applied filters.
+function discardFilterDraft() {
+  for (const id of FILTER_IDS) filterControl(id).value = state.filters[id];
+  updateFiltersDirty();
+  if (state.snapshot) refreshFilterCounts(state.snapshot);
+}
+
+function applyFilterDraft() {
+  for (const id of FILTER_IDS) state.filters[id] = filterControl(id).value;
+  filtersDialogEl.close();
+  render();
 }
 
 function resetFilter(id) {
@@ -156,24 +200,35 @@ function resetFilter(id) {
 }
 
 async function load() {
+  const sequence = ++loadSequence;
   try {
-    applySnapshot(await api.fetchSnapshot());
+    const snapshot = await api.fetchSnapshot();
+    if (sequence === loadSequence) applySnapshot(snapshot);
   } catch (err) {
-    showError(err);
+    if (sequence === loadSequence) showLoadError(err);
   } finally {
     portalHideLoading();
   }
+}
+
+// The scope names no listed repository: show that, never another repository's plans.
+function showScopeUnavailable() {
+  state.snapshot = null;
+  plansHeaderEl.hidden = true;
+  filterChipsEl.replaceChildren();
+  onboardingEl.hidden = true;
+  warningsEl.hidden = true;
+  bannerEl.hidden = true;
+  groupsEl.replaceChildren(repositoryScopeUnavailableNotice());
 }
 
 function applySnapshot(snapshot) {
   state.snapshot = snapshot;
   portalSetUpdatedAt();
   // One call to action at a time (pljvmyh §7): the package banner while plan-write is disabled,
-  // then the shared repository empty state until a repository is known; the header (and its count,
-  // which opens Manage repositories) only once there is something to monitor.
+  // then the shared repository empty state until a repository is known; the header only once there
+  // is something to monitor.
   plansHeaderEl.hidden = !snapshot.planWritePackage.enabled || tmpl.plansOnboardingStep(snapshot) === "no-repositories";
-  setPluralCount(plansCountTextEl, snapshot.plans.length, "Plan");
-  setPluralCount(reposCountTextEl, knownRepositoryCount(snapshot), "Repo");
   populateFilters(snapshot);
   render();
   renderRepositorySyncStatus();
@@ -243,24 +298,33 @@ function populateFilters(snapshot) {
 
 function setOptions(id, options) {
   const select = document.getElementById(id);
-  const previous = select.value || "all";
+  const has = (value) => options.some(([candidate]) => candidate === value);
+  // The applied filter survives a refreshed option list unless its option is gone; a draft the
+  // user is still editing in the open popup is kept the same way.
+  if (!has(state.filters[id])) state.filters[id] = "all";
+  const draft = filtersDialogEl.open ? select.value : state.filters[id];
   select.replaceChildren(...options.map(tmpl.selectOption));
-  select.value = options.some(([value]) => value === previous) ? previous : "all";
-  state.filters[id] = select.value;
+  select.value = has(draft) ? draft : state.filters[id];
+  updateFiltersDirty();
 }
 
-// Refreshes each select's option labels with facet counts against the current snapshot + other
-// active filters. Rewrites label text only — never touches `.value`, so it's safe to call on
-// every render() without disturbing the user's current selection.
-function refreshFilterCounts(snapshot) {
+// Refreshes each select's option labels with facet counts against the current snapshot + the other
+// filters (the applied ones, or the popup's draft while it is being edited), and disables options
+// that match nothing. Never touches `.value`, so it's safe to call on every render() without
+// disturbing the user's current selection.
+function refreshFilterCounts(snapshot, filters = filtersDialogEl.open ? draftFilters() : state.filters) {
   for (const id of Object.keys(FILTER_OPTION_DEFS)) {
     const select = document.getElementById(id);
     const options = FILTER_OPTION_DEFS[id](snapshot);
-    const counts = optionCounts(id, options.map(([value]) => value), snapshot.plans, state.filters);
+    const counts = optionCounts(id, options.map(([value]) => value), snapshot.plans, filters);
     for (const option of select.options) {
       const def = options.find(([value]) => value === option.value);
       if (!def) continue;
-      option.textContent = `${def[1]} (${counts.get(option.value) ?? 0})`;
+      const count = counts.get(option.value) ?? 0;
+      option.textContent = `${def[1]} (${count})`;
+      // An option that matches nothing cannot be picked; the one already chosen (applied, or in the
+      // popup's draft) stays enabled so the select never shows a disabled selection.
+      option.disabled = count === 0 && option.value !== "all" && option.value !== select.value && option.value !== state.filters[id];
     }
   }
 }
@@ -271,14 +335,15 @@ function render() {
   renderPackageBanner(snapshot);
   const step = tmpl.plansOnboardingStep(snapshot);
   if (!snapshot.planWritePackage.enabled || step !== "plans") {
-    lifecycleBarEl.hidden = true;
+    lifecycleBarEl.dataset.board = "false";
+    filterChipsEl.replaceChildren();
     warningsEl.hidden = true;
     groupsEl.replaceChildren();
     renderOnboarding(snapshot, step);
     return;
   }
   onboardingEl.hidden = true;
-  lifecycleBarEl.hidden = false;
+  lifecycleBarEl.dataset.board = "true";
   renderWarnings(snapshot);
   renderFilterChips(snapshot);
   refreshFilterCounts(snapshot);
@@ -475,26 +540,26 @@ function renderFilterChips(snapshot) {
   filterChipsEl.replaceChildren(...descriptors.map(tmpl.filterChip));
 }
 
+// Set while a repository filter is selected; its empty state offers to drop the filter.
+function scopeForEmptyState() {
+  if (!currentRepositoryScope()) return null;
+  return { name: scopedRepositoryName ?? "this repo", onViewAll: clearRepositoryScope };
+}
+
 function renderOnboarding(snapshot, step) {
   onboardingEl.hidden = !snapshot.planWritePackage.enabled;
   if (onboardingEl.hidden) return;
   const node = step === "no-repositories"
     ? tmpl.plansNoRepositories(onboarding.onManage)
-    : tmpl.plansOnboardingState(snapshot, step, onboarding.onManage);
+    : tmpl.plansOnboardingState(snapshot, step, onboarding.onManage, scopeForEmptyState());
   onboardingEl.replaceChildren(node);
   renderRepositorySyncStatus();
-}
-
-// Every known repository, scanned or not, so the header agrees with the onboarding copy, Home, and
-// the Manage repositories list; one whose checkouts cannot be read is still being monitored.
-function knownRepositoryCount(snapshot) {
-  return (snapshot.repositoryScans || []).length;
 }
 
 function renderWarnings(snapshot) {
   const warnings = [
     ...(snapshot.errors || []).map((err) => `${err.repository || "scan"}${err.checkout ? ` (${err.checkout})` : ""}: ${err.path ? `${err.path} ` : ""}${err.error}`),
-    ...(snapshot.truncated ? ["Some repositories have more plan documents than the scanner reads; the rest are not shown."] : []),
+    ...(snapshot.truncated ? ["Some repos have more plan documents than the scanner reads; the rest are not shown."] : []),
   ];
   warningsEl.hidden = warnings.length === 0;
   warningsEl.replaceChildren(...warnings.map(tmpl.warningLine));
@@ -534,10 +599,9 @@ function copyText(text) {
   return planDrawer.copyText(text);
 }
 
-function setPluralCount(node, count, noun) {
-  const strong = document.createElement("strong");
-  strong.textContent = count;
-  node.replaceChildren(strong, ` ${noun}${count === 1 ? "" : "s"}`);
+function showLoadError(err) {
+  if (isRepositoryScopeUnavailable(err)) showScopeUnavailable();
+  else showError(err);
 }
 
 function showError(err) {

@@ -121,7 +121,7 @@ export function worktreeCleanupNotice(repository, { onEnable, onDismiss }) {
   const node = fill(tpl("tpl-worktree-cleanup-notice"), {
     text: cleanup.hook === "foreign"
       ? "Automatic worktree cleanup is off; another tool's post-merge hook is installed."
-      : "Automatic worktree cleanup is off for this repository.",
+      : "Automatic worktree cleanup is off for this repo.",
   });
   node.querySelector("[data-action=enable]").addEventListener("click", () => onEnable(repository));
   node.querySelector("[data-action=dismiss]").addEventListener("click", () => onDismiss(repository));

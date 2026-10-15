@@ -7,13 +7,30 @@ const ICONS = {
     viewBox: "0 0 16 16",
     body: `<path fill="currentColor" d="M8 2.5a5.5 5.5 0 1 0 5.163 3.588.75.75 0 0 1 1.406-.526A7 7 0 1 1 8 1v-.5a.5.5 0 0 1 .82-.385l2.25 1.875a.5.5 0 0 1 0 .77L8.82 4.635A.5.5 0 0 1 8 4.25V2.5Z" />`,
   },
-  pencil: {
-    viewBox: "0 0 16 16",
-    body: `<path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round" d="M11.3 2.3a1 1 0 0 1 1.4 0l1 1a1 1 0 0 1 0 1.4L5.6 12.8l-2.9.6.6-2.9L11.3 2.3Z" /><path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" d="M9.9 3.7l2.4 2.4" />`,
+  // Edit: a pencil on a sheet. The sheet's top-right corner is left open so the pencil's eraser end
+  // sits outside it with a gap, and the tip lands inside near the bottom-left.
+  edit: {
+    viewBox: "0 0 24 24",
+    body: `<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z" />`,
   },
   filter: {
     viewBox: "0 0 16 16",
     body: `<path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" d="M2 3h12L9.5 8.2v4.3L6.5 14V8.2L2 3Z" />`,
+  },
+  // Sliders: three horizontal tracks, each with a knob, the conventional "adjust filters" glyph.
+  sliders: {
+    viewBox: "0 0 16 16",
+    body: `<path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" d="M2 4h1.4M6.6 4H14M2 8h7.4M12.6 8H14M2 12h3.4M8.6 12H14" /><circle cx="5" cy="4" r="1.6" fill="none" stroke="currentColor" stroke-width="1.3" /><circle cx="11" cy="8" r="1.6" fill="none" stroke="currentColor" stroke-width="1.3" /><circle cx="7" cy="12" r="1.6" fill="none" stroke="currentColor" stroke-width="1.3" />`,
+  },
+  // Pin: a push-pin, for pinning a repo to the top of Home.
+  pin: {
+    viewBox: "0 0 16 16",
+    body: `<path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round" d="M9.6 2.1 13.9 6.4l-1.4.6-2.4 2.4v2.5l-1 1-2.9-2.9-3.7 3.7-.7-.7 3.7-3.7L2.5 6.4l1-1h2.5l2.4-2.4.7-.9Z" />`,
+  },
+  // Eye-off: a closed eye (lid arc with lashes), for ignoring a repo.
+  "eye-off": {
+    viewBox: "0 0 16 16",
+    body: `<path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" d="M2 7.2c1.5 2.5 3.6 3.7 6 3.7s4.5-1.2 6-3.7M4.2 10l-1.3 1.8M8 10.9V13M11.8 10l1.3 1.8" />`,
   },
   "agent-prompt": {
     viewBox: "0 0 16 16",

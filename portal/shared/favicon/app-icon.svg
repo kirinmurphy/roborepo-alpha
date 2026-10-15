@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- App icon (apple-touch, web-app manifest): the header robot (robot in portal/shared/icon.js)
+       on the dark portal header colour. The browser tab uses favicon.svg instead, which drops the
+       tile so the robot fills the tab's small icon area. -->
+  <rect width="32" height="32" rx="7" fill="#0b0f14" />
+  <g transform="translate(4 4) scale(1.2) translate(-2 -2.5)" fill="none" stroke="#ffffff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="5.75" y="6.75" width="12.5" height="11.5" rx="3" />
+    <path d="M5.75 10.5H4.5a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h1.25M18.25 10.5h1.25a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-1.25M10 15.25h4" />
+    <circle cx="9.75" cy="11.75" r="1.25" fill="#ffffff" stroke="none" />
+    <circle cx="14.25" cy="11.75" r="1.25" fill="#ffffff" stroke="none" />
+  </g>
+</svg>

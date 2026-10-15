@@ -10,7 +10,6 @@ related:
   - tk6s43x3
   - jqi1dof
   - n8kw3rp2
-  - telemetry-analyze-single-pass-perf
 reviewed_commit:
 ---
 
@@ -58,7 +57,8 @@ page replaced them with fixed sections.
 
 | Capability | Backend | `/tokens` UI |
 | --- | --- | --- |
-| Time range (`range`, `end`), `harness`, `model`, legacy `repo` label, canonical `repository`, `marker_id` on `/api/data` | Present in `scripts/cli/portal-routes-telemetry.mjs`, cached per window, harness, and cohort | None. The page requests `/api/data` with no parameters |
+| Time range (`range`, `end`), `harness`, `model`, and `marker_id` on `/api/data` | Present in `scripts/cli/portal-routes-telemetry.mjs`, cached per window, harness, model, repository, and marker | None. The page requests `/api/data` with no parameters |
+| Repository scope on `/api/data` | Accepts a canonical `repository` ID and a legacy `repo` folder-name label today. [[tk6s43x3]] changes `repository` to accept only a `urlKey` and deletes `repo`, its cohort `repos` dimension, and the unread `telemetry report --repo` flag | None |
 | Marker-relative comparison of any registry metric (`POST /api/telemetry/analysis` with `marker_id`) | Present; ~28 metrics across tokens, calls, testing, outcome, reliability | None. Change cards compare spike, loop, and read-warning rates only |
 | Two-cohort metric comparison (`POST /api/telemetry/analysis` without a marker) | Present; returns one value per cohort, correlation-only | None. Condition cards cover model, repository, harness, package, and skill |
 | Experiments (`GET/POST /api/telemetry/experiments`, `POST .../:id/end`) | Present; the `roborepo telemetry experiment` CLI calls the domain functions directly | None |
@@ -113,12 +113,15 @@ From the review's remaining opportunities:
 
 - Finish moving the older investigation and session markup out of `portal/tokens/app.js` into
   HTML templates and focused modules; the file still exceeds the size guideline.
-- Show repository owner or path only when two display names collide in a selector.
+- Label repositories by registry display name in the condition cards and the change form. Today
+  `repositoryLabel` (`portal/tokens/conditions-format.js`) shows the last segment of the canonical
+  ID, so a `local:` repository reads as an opaque hash and same-named repositories from different
+  owners look identical. Add the provider owner, or the `urlKey` when there is no provider, only
+  when two names collide; never a filesystem path, matching [[tk6s43x3]]'s selector.
 - Replace broad ID and class selectors in older portal tests with role and name locators.
 - Display `data_quality.findings_lost_to_fallback`, which the report returns but the page does not.
-
-Profiling condition-payload size on large spools moved to [[telemetry-analyze-single-pass-perf]],
-which already owns analysis cost.
+- Profile condition-payload size on large spools. A separate plan was meant to own this, but it
+  was deleted, so the item is back here.
 
 ## Implementation checklist
 

@@ -11,7 +11,6 @@ export const LIFECYCLE_LABELS = {
 
 export const FILTER_IDS = [
   "search",
-  "repository",
   "priority",
   "blocked",
   "readiness",
@@ -21,7 +20,6 @@ export const FILTER_IDS = [
 
 export const FILTER_DEFAULTS = {
   search: "",
-  repository: "all",
   priority: "all",
   blocked: "all",
   readiness: "all",
@@ -30,7 +28,6 @@ export const FILTER_DEFAULTS = {
 };
 
 export const FILTER_LABELS = {
-  repository: "repo",
   priority: "priority",
   blocked: "blocked",
   readiness: "readiness",
@@ -38,22 +35,7 @@ export const FILTER_LABELS = {
   health: "health",
 };
 
-// Canonical repository key for filtering: prefer the shared canonical repositoryId (so two local
-// clones of one remote resolve to a single filter option), falling back to the legacy content-hash
-// id for any record that has no canonical id yet.
-export function repositoryFilterKey(repo) {
-  return repo.repositoryId || repo.id;
-}
-
 export const FILTER_OPTION_DEFS = {
-  repository: (snapshot) => {
-    const seen = new Map();
-    for (const repo of snapshot.repositories) {
-      const key = repositoryFilterKey(repo);
-      if (!seen.has(key)) seen.set(key, repo.name);
-    }
-    return [["all", "all repositories"], ...seen.entries()];
-  },
   priority: () => [
     ["all", "all priority"],
     ...["high", "medium", "low", "none"].map((v) => [v, v]),
@@ -86,8 +68,6 @@ export const FILTER_OPTION_DEFS = {
 // Shared by filteredPlans() (applies all fields) and optionCounts() (applies all fields except
 // the one being counted, for facet-style "N remaining if you pick this" counts).
 export const FIELD_MATCHERS = {
-  repository: (record, value) =>
-    value === "all" || repositoryFilterKey(record.repository) === value,
   priority: (record, value) =>
     value === "all" || record.plan.priority === value,
   blocked: (record, value) => {
