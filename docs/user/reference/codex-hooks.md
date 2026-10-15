@@ -10,9 +10,10 @@ package installs its hooks but does not grant that trust. Codex CLI provides `/h
 the macOS desktop app did not show a review prompt during RoboRepo's October 2026 QA. Sessions
 that were already running do not pick up newly trusted hooks.
 
-When Token Telemetry is enabled, Agents checks whether its five Codex capture hooks are active and
-shows a warning if they are awaiting review, disabled, or missing. The warning does not change
-Codex's trust decisions. Review is currently available through Codex's `/hooks` screen.
+When token tracking is enabled, Settings, Tokens, and Home check whether its five Codex capture
+hooks are active and show a warning if they are awaiting review, disabled, or missing. The warning
+does not change Codex's trust decisions. Review is currently available through Codex's `/hooks`
+screen.
 
 ## What Runs
 

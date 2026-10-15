@@ -62,7 +62,7 @@ Read the references for the situation:
   `references/workflow-validate.md` — creation ends in validation, so the work that produces the
   plan loads the checks that decide whether it is deliverable.
 - `update`: read `references/workflow-update.md` and `references/workflow-validate.md`; also read
-  `references/writing-guidelines.md` when the revision rewrites prose.
+  `references/writing-guidelines.md` when revising scope or design, or otherwise rewriting prose.
 - UI-generated prompts: read `references/prompt-contracts.md` when prompt shape matters.
 
 ## Creation Gates

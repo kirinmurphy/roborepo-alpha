@@ -6,12 +6,18 @@ Every managed harness should share the same global behavior defaults without han
 
 ## Current Behavior
 
-- Each harness that declares the `rules` capability gets a generated tracked file: `generated/claude/CLAUDE.md`, `generated/codex/AGENTS.md`, `generated/gemini/GEMINI.md`.
-- All of them express the same core behavior through shared fragments: skill loading, verification, and temp-file hygiene.
-- Live home rules are inline — each harness's rules file (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md`) contains that harness's full render inside a managed block. The path comes from the provider manifest's `rules` entry, not from a fixed table.
+- The rule targets manifest renders tracked files for Claude and Codex:
+  `generated/claude/CLAUDE.md` and `generated/codex/AGENTS.md`. Gemini has no tracked rules
+  target today.
+- The two rendered files express the same core behavior through shared fragments: skill loading,
+  verification, and temp-file hygiene.
+- Live Claude, Codex, and Gemini home rules are inline in `~/.claude/CLAUDE.md`,
+  `~/.codex/AGENTS.md`, and `~/.gemini/GEMINI.md`, inside managed blocks. Their paths come from
+  provider manifests; Gemini's live render has no tracked snapshot in `generated/`.
 - The three Chat-Time Output behaviors (skill visibility, session capture, impact awareness) are no longer base fragments. They ship as default-on rules packages under `globals/packages/<id>/rules.md` and merge into every managed harness's rules file when enabled, so they can be toggled per behavior. A package component marked `harness: "both"` is a legacy sentinel meaning *all* harnesses, not exactly two. See [config-control-panel.md](../user/reference/config-control-panel.md).
 - Harness-specific fragments hold differences that should reach one harness only.
-- Root harness config files are conditional defaults, one per provider (`~/.claude/settings.json`, `~/.codex/config.toml`, `~/.gemini/settings.json`).
+- Root harness config files are conditional defaults for providers with a baseline. Claude and
+  Codex have tracked baselines; Gemini has no tracked root-config baseline yet.
 - The installer preserves user-owned root config through the `keep`, `overwrite`, and `abort`
   collision policies documented in [Config Collision Handling](../user/reference/config-collision-handling.md).
 - Repo-local instructions still layer through project files such as `CLAUDE.md`, `AGENTS.md`, and repo instructions.
@@ -37,12 +43,11 @@ globals/packages/
     rules.md
 ```
 
-Tracked generated baseline snapshots — one per harness declaring `rules`:
+Tracked generated baseline snapshots — the current rule targets:
 
 ```text
 generated/claude/CLAUDE.md
 generated/codex/AGENTS.md
-generated/gemini/GEMINI.md
 ```
 
 Live generated outputs:
@@ -54,9 +59,10 @@ Live generated outputs:
 ~/.gemini/GEMINI.md                         # full Gemini render, inline managed block
 ```
 
-Each path above is the provider manifest's declared `rules` path (and `rulesOverride`, where a
-provider declares one — Codex is the only one today). Nothing derives a rules filename from a
-harness id.
+The live paths above are the provider manifests' declared `rules` paths. Codex also declares
+`rulesOverride`; nothing derives a rules filename from a harness id. The shell renderer's
+`manifests/platform/rule-targets.tsv` tracks only Claude and Codex snapshots, while
+`scripts/cli/rules-render.mjs` writes each installed provider's live rules file, including Gemini.
 
 Tracked generated snapshots remain in the repo because setup and drift checks should work without running a build step first. Live home files are rendered by `scripts/cli/rules-render.mjs` from the tracked fragments plus the enabled-package registry.
 

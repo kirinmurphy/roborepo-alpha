@@ -87,12 +87,10 @@ say so explicitly rather than guessing from the working tree.
 
 ### 2. Sync documentation
 
-- Check for any project-specific tracking doc implied by the session's own work — e.g.
-  an abstraction matrix, decision log, architecture doc, ADR directory, changelog. These
-  are project-defined, not skill-defined: find them by name/convention already
-  established in the repo (search for the doc, don't invent a new one) and update the
-  ones this session's changes actually affect. If a dedicated doc-refresh skill exists
-  in the current environment, load it; otherwise proceed without one.
+- Check user guides, reference docs, and project-specific tracking docs affected by this
+  session's work. Use the repository's doc-of-record map when one exists to find the owning guide
+  or reference; also inspect architecture docs, ADRs, changelogs, and other tracking docs the
+  work actually affects. Update those docs against the code, preserving their existing structure.
 - When the session worked on a repository plan under `docs/plans`, sync it with `plan-write`:
   tick only tasks the code proves done, add `## Not tested` entries for gaps the session left, and
   update `next_action`. Then run the repository's canonical plan validator for `<plan>` and report its findings.

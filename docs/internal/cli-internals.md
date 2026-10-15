@@ -20,7 +20,7 @@ thin composition root; commands are declared as JSON under
 | `scripts/cli/initialization-state.mjs` | reads/writes `<stateRoot>/initialization.json`; owns the missing / in-progress / complete distinction |
 | `scripts/cli/first-run-routing.mjs` | decides whether a bare `roborepo` enters `init`; pure function of (argv, phase, tty) |
 | `scripts/cli/telemetry.mjs` | `web`, `telemetry install\|enable\|disable\|status\|report\|export\|backup\|purge\|capture` |
-| `scripts/cli/telemetry-transcript.mjs` | parse harness transcript -> token/tool/MCP session stats + tool-result sizes |
+| `scripts/harnesses/transcript-locate.mjs`, `scripts/harnesses/transcript-parse.mjs` | locate and parse harness transcripts for telemetry capture |
 | `scripts/cli/telemetry-analyze.mjs` | sessions, spikes, spike causes, token contributors, usage windows, spike-vs-normal |
 | `scripts/cli/portal-server.mjs` + `portal/` | loopback-only web portal routes and static assets |
 | `scripts/cli/paths.mjs` | shared `repoRoot` / `sharedSkillsDir` |

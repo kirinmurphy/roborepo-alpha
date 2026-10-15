@@ -54,7 +54,7 @@ function isDroppableComment(line) {
 // GitHub-style heading slug: lowercase, strip anything that isn't a word char/space/hyphen, spaces
 // to hyphens, then dedupe repeats with a trailing -1/-2/... so deep links stay unambiguous within
 // one rendered document.
-function slugify(text, seen) {
+export function slugify(text, seen) {
   const base = String(text)
     .toLowerCase()
     .replace(/[^\w\s-]/g, "")

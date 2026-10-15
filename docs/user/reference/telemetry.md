@@ -4,12 +4,13 @@ Telemetry is RoboRepo's local, opt-in usage analysis system. It captures per-too
 Claude and Codex hooks, turns them into deterministic conclusions (token spikes, testing behavior,
 loops, cost breakdowns), and lets a user mark configuration changes and compare sessions before and
 after them. Everything lives in local JSONL/JSON files under the RoboRepo state directory; nothing
-leaves the machine.
+leaves the machine during normal capture and analysis. The optional `--deep` report passes a
+computed summary to an available AI CLI, as described below.
 
 ## Turning It On
 
-Enable the **Token Telemetry** package on the Agents page, or turn on **Token Activity Tracking** in
-portal Settings or on the Tokens page. Either action enables the package, installs its capture
+Turn on **Token Activity Tracking** in portal Settings or on the Tokens page. This enables the
+telemetry package, installs its capture
 hooks, and turns capture on. The CLI entry point, `roborepo telemetry enable`, performs the same
 action. Start a new local coding session in the desktop app after enabling it so the session loads
 the hooks.
@@ -174,16 +175,18 @@ data-quality warnings, read warnings, recent markers, experiment readiness, usag
 efficiency, cost breakdowns, the exploratory midpoint regression, loops, sessions, spikes, and raw
 contributor tables.
 
-`--deep` adds an LLM summary of those findings, run through the headless `claude -p` with your
-existing Claude auth. Only the computed summary is sent, never raw capture or transcript content.
+`--deep` adds an LLM summary of those findings. It tries the installed Claude, Codex, and Gemini
+CLIs in that order and invokes the first available one with `-p`. Only the computed summary is
+passed to that CLI, never raw capture or transcript content.
 
 The report and the portal share one analysis and metric registry, so their numbers agree for the
 same cohort.
 
 ## Portal
 
-The `/tokens` page shows the same analysis as `roborepo telemetry report`, refreshing every 5
-seconds. See the [Telemetry Walkthrough](../guides/telemetry.md) for how to read it.
+The `/tokens` page uses the same analysis data as `roborepo telemetry report`, adding interactive
+condition comparisons, event history, and change records. It refreshes every 5 seconds. See the
+[Telemetry Walkthrough](../guides/telemetry.md) for how to read it.
 
 ## Privacy
 

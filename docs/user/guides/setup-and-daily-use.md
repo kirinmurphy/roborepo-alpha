@@ -111,7 +111,10 @@ Global instruction files are generated tracked outputs:
 
 - `generated/claude/CLAUDE.md`
 - `generated/codex/AGENTS.md`
-- `generated/gemini/GEMINI.md`
+
+Gemini does not currently have a tracked generated rules file. When Gemini is installed,
+RoboRepo renders live rules into `~/.gemini/GEMINI.md`; its generated permission policy lives under
+`generated/gemini/policies/` before installation.
 
 Edit source fragments instead:
 

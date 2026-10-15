@@ -45,6 +45,7 @@ const EXEMPT = new Map([
   ["promote-npm-latest-check.mjs", "touches the real npm registry; release-only, never run in CI"],
   ["publish-npm-check.mjs", "touches the real npm registry; release-only, never run in CI"],
   ["app-root-fixture.mjs", "shared helper imported by other checks to build an isolated app root; exports no assertions of its own"],
+  ["docs-reference-scan.mjs", "scanner imported by the docs reference checker; the fixtures check its behavior"],
 ]);
 
 // Direct runners: substring matching on filename is deliberate. These files call their children in

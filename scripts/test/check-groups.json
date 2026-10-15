@@ -13,6 +13,8 @@
     "core-hook-wiring-check.mjs",
     "permission-rule-home-path-check.mjs",
     "plan-citation-comments-check.mjs",
+    "docs-reference-check.mjs",
+    "docs-reference-fixtures-check.mjs",
     "skill-trigger-fixtures-check.mjs",
     "skill-trigger-fixtures-shipping-check.mjs",
     "config-bulk-toggle-check.mjs",

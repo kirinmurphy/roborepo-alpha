@@ -103,6 +103,12 @@ a Linux VM, so container PIDs never match host-side `lsof` PIDs. A container wit
 discovered listener, never appears. Docker not installed, the daemon not running, and permission
 failures are all reported as a scan warning with zero containers — never a thrown error.
 
+Compose stacks appear as one member per project, with containers inside that member. A stack
+whose bind mounts depend on exactly one checkout appears under that checkout. A stack shared across
+checkouts, attached only to the repository root, or lacking bind-mount evidence appears in the
+repository's **Shared services** section below its checkout rows. The running repository's member
+count includes each stack once, including stacks in Shared services.
+
 **Process metrics**: RoboRepo runs `ps
 -o pid=,ppid=,pcpu=,rss=,etime=,comm= -p <pid1>,<pid2>,...`, one call for every PID discovered in the
 scan rather than one call per PID. A PID that exits between listener discovery and this `ps` call is

@@ -108,7 +108,7 @@ If a portal is already running on the port, `roborepo web` reuses it when it run
 restarts it when the code has changed since it started.
 
 See [Plan Suite Walkthrough](../guides/plan/lifecycle/plan-suite.md),
-[Telemetry Walkthrough](../guides/telemetry.md), and [Runtime](developer-runtime.md) for the pages.
+[Telemetry Walkthrough](../guides/telemetry.md), and [Runtime](runtime.md) for the pages.
 
 ## Telemetry
 

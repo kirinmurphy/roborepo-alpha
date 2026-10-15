@@ -123,7 +123,9 @@ Closes one plan, and refuses rather than closing on incomplete evidence. In orde
    worktree's copy of the plan to the main checkout once, and refuses with
    `plan: conflicting copies` when the main copy was also edited;
 7. after closing a complete plan, stops the dev servers still running in its worktree and lists
-   them.
+   them;
+8. runs the repository's worktree cleanup command for the closed plan, removing the worktree and
+   local branch when its guards pass, or reporting why they were kept.
 
 Step 7 stops only processes listening on a port whose working directory is inside the plan's
 linked worktree. It never touches the primary checkout, agent sessions, shells, or editors, and it
@@ -284,15 +286,14 @@ Every menu also copies the plan's path and a portable prompt: a self-contained s
 without repository access. Without the suite enabled, the menu offers repository-aware and portable
 prompts with no command.
 
-The lifecycle dropdown on each plan is a manual override that moves the file without committing.
-`/plan-start` refuses to run while that move is uncommitted, so prefer the Start button.
+Lifecycle tabs switch the list you are browsing. Starting and closing a plan through the suite
+changes its folder. A merged worktree shows a **merged** completion badge on its plan card and in
+the detail drawer.
 
 ## Current Limits
 
-- The portal edits plan files in only two ways: changing a plan's `priority`, and moving a plan
-  between lifecycle folders. All other plan edits happen in your editor or through the suite.
-- A move into a lifecycle whose requirements the plan does not meet is rejected with a list of
-  what is missing. **Move anyway** files it regardless.
+- The portal edits plan files only to change a backlog or active plan's `priority`. All other
+  plan edits happen in your editor or through the suite.
 - Manual refresh is the v1 update model.
 - No database, daemon, cloud sync, direct editor, or automatic LLM prioritization is included.
 
