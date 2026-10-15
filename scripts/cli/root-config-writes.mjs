@@ -3,11 +3,13 @@ import path from "node:path";
 import { checkDrift, recordWrite } from "./root-config-state.mjs";
 import { rootConfigActive, rootConfigBaseline } from "./paths.mjs";
 import { normalizeRootConfigContent } from "./root-config-merge.mjs";
+import { detachRepoLink } from "./repo-links.mjs";
 
 export function writeRootConfig(harness, filePath, content) {
   const shouldRecord = shouldRecordRootConfigWrite(harness, filePath);
   const nextContent = normalizeRootConfigContent(harness, content);
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  detachRepoLink(filePath);
   fs.writeFileSync(filePath, nextContent);
   if (shouldRecord) recordRootConfigWriteIfActive(harness, filePath);
 }

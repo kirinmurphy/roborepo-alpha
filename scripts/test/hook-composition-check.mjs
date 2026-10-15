@@ -15,7 +15,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { resolvesIntoRepo } from "../cli/hook-composition.mjs";
+import { resolvesIntoRepo } from "../cli/repo-links.mjs";
 import { getHarnessProvider } from "../harnesses/registry.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -59,8 +59,8 @@ const env = {
   SKIP_MCP: "1",
 };
 
-function run(args) {
-  const result = spawnSync(process.execPath, [cli, ...args], { env, encoding: "utf8" });
+function run(args, runEnv = env) {
+  const result = spawnSync(process.execPath, [cli, ...args], { env: runEnv, encoding: "utf8" });
   return result;
 }
 
@@ -168,6 +168,35 @@ try {
     assert.equal(redisable.status, 0, `re-disable failed: ${redisable.stderr}`);
     assert.ok(!claudeHookCommands().includes("echo hook-composition-fixture-claude"), "Claude hook stays removed after re-disable");
     assert.ok(!codexHookCommands().includes("echo hook-composition-fixture-codex"), "Codex hook stays removed after re-disable");
+  }
+
+  // --- legacy links into the checkout: a home whose hook files are symlinks into the repo (the old
+  // install layout) gets real files, and the tracked targets are never written through ---
+  {
+    const linkedHome = path.join(tmp, "linked-home");
+    fs.mkdirSync(path.join(linkedHome, ".claude"), { recursive: true });
+    fs.mkdirSync(path.join(linkedHome, ".codex"), { recursive: true });
+    fs.writeFileSync(path.join(linkedHome, ".codex", "config.toml"), "");
+    const trackedSettings = path.join(fixturePkgDir, "tracked-settings.json");
+    const trackedCodexHooks = path.join(fixturePkgDir, "tracked-codex-hooks.json");
+    fs.writeFileSync(trackedSettings, "{}\n");
+    fs.writeFileSync(trackedCodexHooks, `${JSON.stringify({ hooks: {} })}\n`);
+    const liveSettings = path.join(linkedHome, ".claude", "settings.json");
+    const liveCodexHooks = path.join(linkedHome, ".codex", "hooks.json");
+    fs.symlinkSync(trackedSettings, liveSettings);
+    fs.symlinkSync(trackedCodexHooks, liveCodexHooks);
+
+    const enable = run(["package", "enable", "hook-composition-fixture"], {
+      ...env, HOME: linkedHome, ROBOREPO_STATE_DIR: path.join(linkedHome, ".roborepo"),
+    });
+    assert.equal(enable.status, 0, `enable through legacy links failed: ${enable.stderr}`);
+    assert.equal(fs.readFileSync(trackedSettings, "utf8"), "{}\n", "tracked Claude settings target is not written through");
+    assert.equal(fs.readFileSync(trackedCodexHooks, "utf8"), `${JSON.stringify({ hooks: {} })}\n`, "tracked Codex hooks target is not written through");
+    for (const live of [liveSettings, liveCodexHooks]) {
+      assert.equal(fs.lstatSync(live).isSymbolicLink(), false, `${path.basename(live)} is replaced by a real file`);
+    }
+    assert.match(fs.readFileSync(liveSettings, "utf8"), /hook-composition-fixture-claude/, "Claude hook lands in the real settings file");
+    assert.match(fs.readFileSync(liveCodexHooks, "utf8"), /hook-composition-fixture-codex/, "Codex hook lands in the real hooks file");
   }
 
   console.log("ok: cross-harness hook composition round-trips for both Claude and Codex");

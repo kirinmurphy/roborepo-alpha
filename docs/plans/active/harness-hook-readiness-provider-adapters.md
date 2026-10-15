@@ -416,8 +416,15 @@ becomes `/api/config/hooks/<harness>/status`, served by a handler outside `scrip
   the tracked `generated/codex/hooks.json`, so its `package enable jcodemunch` rewrote the
   baseline; that is how the `jcodemunch` notice got committed there, and with append order the
   first gate run re-added it at the end. A new assertion compares the baseline's hash before and
-  after. The production write path has the same gap for a legacy symlinked install, which is
-  outside this plan and was raised as a separate task.
+  after.
+- **Hook and root-config writes replace a symlink into the checkout with a real file (user
+  request, October 15, 2026).** A legacy install could link `~/.codex/hooks.json` or a root config
+  such as `~/.claude/settings.json` into the repo, and `writeHooksFile` and `writeRootConfig`
+  wrote through it. Both now call `detachRepoLink` (`scripts/cli/repo-links.mjs`) first. The
+  alternative was refusing the write, as hook-script directories do; that would leave package hooks
+  uninstallable on such a machine, since nothing else converts the link. `bundle apply`
+  (`copyItem` in `presets.mjs`) already detaches these links, so this matches it.
+  `hook-composition-check.mjs` covers both files.
 - **Doctor reports readiness only under `--installed`.** Readiness reads live harness homes and
   starts the Codex runtime, like the other `--installed` checks. The existing harness-warning
   hints now print through the same `hint()` helper.

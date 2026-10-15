@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { codexHooksPath, harnessHome } from "./paths.mjs";
 import { writeRootConfig } from "./root-config-writes.mjs";
+import { detachRepoLink, resolvesIntoRepo } from "./repo-links.mjs";
 import { getHarnessProvider } from "../harnesses/registry.mjs";
 import { validateAdapterComputeResult } from "../harnesses/schemas.mjs";
 
@@ -21,6 +22,7 @@ import { validateAdapterComputeResult } from "../harnesses/schemas.mjs";
 export function writeHooksFile(harness, filePath, content) {
   if (harness === "codex") {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    detachRepoLink(filePath);
     fs.writeFileSync(filePath, content);
     return;
   }
@@ -53,19 +55,6 @@ export function mergeHooksInto(harness, filePath, hooksFragment, { dryRun = fals
   } else {
     console.log(`ok: hooks already present (${harness}) → ${filePath}`);
   }
-}
-
-// True when writing into destDir would resolve (via a symlink at destDir itself, or any ancestor)
-// back into the repo tree — e.g. a legacy dir-level `~/.claude/hooks -> <repo>/globals/claude/hooks`
-// symlink. fs.copyFileSync/rmSync follow symlinks silently, so without this guard a package
-// script install/remove would corrupt tracked repo source through the live symlink instead of
-// writing to the machine's real live directory. Shared with slash-commands.mjs's live command
-// install/removal, which writes into the same class of live harness directory (~/.claude/commands).
-export function resolvesIntoRepo(destDir, repoRoot) {
-  const resolvedRepoRoot = fs.realpathSync(repoRoot);
-  let real;
-  try { real = fs.realpathSync(destDir); } catch { return false; } // doesn't exist yet: safe to create
-  return real === resolvedRepoRoot || real.startsWith(`${resolvedRepoRoot}${path.sep}`);
 }
 
 // Some hook fragments reference a command that runs a script this repo owns (e.g.
