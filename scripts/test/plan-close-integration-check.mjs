@@ -4,7 +4,8 @@
 // temporary repositories and checks that they give the verdicts the skill documents: a squash
 // merge is integrated, a rerun after a refusal note still is, new worktree progress is not, a plan
 // the worktree never touched is, and archiving carries a consistent primary copy but refuses one
-// with an outside edit.
+// with an outside edit. It also runs the documented plan-only close commit with unrelated work
+// already staged, proving that the closure commit leaves that work in the index.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -24,6 +25,11 @@ assert.deepEqual(integrationCommands.map((line) => line.split(/\s+/)[1]), ["merg
 assert.match(step0, /fourth field is the blob/);
 const archiveLog = skill.match(/`(git log --raw --no-abbrev --format= <fork>\.\.<branch> -- docs\/plans)`/)?.[1];
 assert.ok(archiveLog, "step 4's archive table names the worktree branch's history command");
+const closeStep = skill.slice(skill.indexOf("### 7. Close"), skill.indexOf("### 8. Stop"));
+assert.match(closeStep, /git commit --only -m "Close plan <id>" -- <active plan path> <completed plan path>/,
+  "step 7 documents a plan-only commit with both move paths");
+assert.match(closeStep.replace(/\s+/g, " "), /If the commit fails,.*do not proceed with server or worktree cleanup/,
+  "step 7 stops cleanup after a failed commit");
 
 function git(cwd, ...args) {
   const result = spawnSync("git", ["-c", "user.email=t@example.com", "-c", "user.name=Test", ...args], { cwd, encoding: "utf8" });
@@ -143,6 +149,26 @@ try {
 
     git(repo.worktree, "merge", "-q", "--no-edit", "main");
     assert.equal(archiveHandoff(repo), "carry the worktree copy", "merging main into the worktree resolves it");
+  }
+
+  // ---- A completed plan commits alone while unrelated staged work stays staged ----
+  {
+    const repo = started("close-commit");
+    const completed = "docs/plans/completed/p.md";
+    write(path.join(repo.primary, "other.txt"), "before\n");
+    git(repo.primary, "add", "other.txt");
+    git(repo.primary, "commit", "-qm", "other baseline");
+    write(path.join(repo.primary, "other.txt"), "staged unrelated work\n");
+    git(repo.primary, "add", "other.txt");
+    edit(repo.primary, "- [ ] task", "- [x] task");
+    fs.mkdirSync(path.join(repo.primary, "docs/plans/completed"), { recursive: true });
+    git(repo.primary, "mv", PLAN, completed);
+    git(repo.primary, "commit", "--only", "-m", "Close plan p1", "--", PLAN, completed);
+    assert.deepEqual(git(repo.primary, "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD").split("\n"),
+      [PLAN, completed], "the close commit contains only the plan move");
+    assert.equal(git(repo.primary, "diff", "--cached", "--name-only"), "other.txt",
+      "unrelated staged work remains staged");
+    assert.equal(fs.readFileSync(path.join(repo.primary, "other.txt"), "utf8"), "staged unrelated work\n");
   }
 
   console.log("plan-close integration commands: ok");

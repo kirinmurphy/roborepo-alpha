@@ -24,7 +24,7 @@ Use it when you want to:
 | `/plan-write` | Create a plan, or revise an existing one, including bringing it up to date with the repository |
 | `/plan-promote` | Review and prepare a plan for development |
 | `/plan-start` | Implement a plan in an isolated worktree until no unblocked work remains |
-| `/plan-close` | Verify finished work and move the plan to `completed/` or `archived/` |
+| `/plan-close` | Verify finished work, commit a completed plan's move, or archive abandoned work |
 | `/session-close` | End a chat: review and commit the session's work, write the handoff note |
 
 No command takes a mode argument. Each one does one thing, so typing `/plan-` lists every step.
@@ -118,14 +118,18 @@ Closes one plan, and refuses rather than closing on incomplete evidence. In orde
 3. decides complete, incomplete, blocked, superseded, or abandoned;
 4. refuses while any `## Not tested` entry is unchecked;
 5. refuses until the work has landed in the base branch;
-6. moves a complete plan to `completed/` with a Verification section, or an abandoned or superseded
+6. moves a complete plan to `completed/` with a Verification section and commits only that plan's
+   move and edits, leaving other staged work untouched; or moves an abandoned or superseded
    one to `archived/` with the reason. Abandoned work never merges, so archiving carries the
    worktree's copy of the plan to the main checkout once, and refuses with
    `plan: conflicting copies` when the main copy was also edited;
-7. after closing a complete plan, stops the dev servers still running in its worktree and lists
-   them;
+7. after the completed plan's commit succeeds, stops the dev servers still running in its worktree
+   and lists them;
 8. runs the repository's worktree cleanup command for the closed plan, removing the worktree and
    local branch when removal succeeds, or reporting why a guard kept them or removal failed.
+
+If the completed plan's commit fails, `/plan-close` reports that closure is not durable and skips
+server and worktree cleanup. It never pushes the commit.
 
 Step 7 stops only processes listening on a port whose working directory is inside the plan's
 linked worktree. It never touches the primary checkout, agent sessions, shells, or editors, and it

@@ -203,11 +203,22 @@ and result, which affected docs of record were checked against the landed code, 
 checked, and anything that could not be verified. Run
 the repository's canonical plan validator against the moved file and resolve every finding.
 
-Stage the plan by path. Commit only when the user asks; never push.
+Stage only the old and new plan paths. Immediately before committing, re-read Git status and the
+staged diff to identify any unrelated work. After validation passes, commit the completed plan's
+move and edits automatically, even when other paths are staged:
+
+```text
+git commit --only -m "Close plan <id>" -- <active plan path> <completed plan path>
+```
+
+The two pathspecs are this plan's paths before and after the move; never use a wildcard, `-a`, or
+an unrestricted commit. Confirm the new commit contains only those plan paths and that unrelated
+staged or unstaged work remains in place. Never push. If the commit fails, report the failure, mark
+the closure as not durable, and do not proceed with server or worktree cleanup.
 
 ### 8. Stop the worktree's servers
 
-Only after step 7 closed a complete plan, run the repository's canonical linked-worktree server
+Only after step 7 committed a complete plan, run the repository's canonical linked-worktree server
 cleanup command for `<plan>`. It sends `SIGTERM` to the processes listening on a port from inside
 the plan's linked worktree, and nothing
 else: never the primary checkout, never agent sessions, shells, or editors. Do not ask first; the
@@ -257,6 +268,7 @@ Close result
 - Landed: yes|unconfirmed|not applicable
 - Lifecycle change: <from> -> <to>, or none
 - Closed: yes|no
+- Close commit: <hash>|failed|not applicable
 - Servers stopped: <pid :port result, ...>|none|skipped
 ```
 
