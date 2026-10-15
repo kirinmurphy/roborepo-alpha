@@ -29,7 +29,7 @@ export function sessionConditionLine(data, sessionId, harness, options = {}) {
   };
   const session = data.sessions?.find((item) => item.session_id === sessionId && (!harness || item.harness === harness));
   addFact("Next step", options.findings?.find((item) => item.hint)?.hint ?? row.detail ?? "Inspect the transcript and supporting evidence.");
-  addFact("Repository / harness", `${session?.repo ?? repositoryLabel(context.repository_id)} · ${context.harness ?? "unknown"}`);
+  addFact("Repo / harness", `${session?.repo ?? repositoryLabel(context.repository_id)} · ${context.harness ?? "unknown"}`);
   addFact("Model attribution", context.model ? `${context.model} · ${context.model_attribution}` : "Model unknown");
   addFact("Configuration", conditionResourceSummary(context));
   addFact("Observation unit", "One affected session counts once in each problem rate.");

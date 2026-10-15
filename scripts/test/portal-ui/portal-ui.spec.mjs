@@ -434,7 +434,7 @@ test.describe("repository-first portal Home", () => {
     await expect(notStarted.locator(".plan-match-badge")).toHaveAttribute("title", "This plan names no worktree");
     const missing = planRowOf(card, "Plan D");
     await expect(missing.locator(".plan-match-badge")).toHaveText("worktree missing");
-    await expect(missing.locator(".plan-match-badge")).toHaveAttribute("title", 'No worktree named "gone" exists in this repository');
+    await expect(missing.locator(".plan-match-badge")).toHaveAttribute("title", 'No worktree named "gone" exists in this repo');
     for (const row of [notStarted, missing]) {
       await expect(row.getByRole("link")).toHaveCount(0);
       await expect(row.getByRole("button", { name: "Links" })).toHaveCount(0);
@@ -449,13 +449,15 @@ test.describe("repository-first portal Home", () => {
 
     // No repository-wide plan counts row: backlog counts were noise on Home.
     await expect(card).not.toContainText("backlog");
-    await expect(card.getByRole("heading", { name: "Token Warnings" })).toBeVisible();
-    await expect(card).toContainText(/8 warnings from \d{2}\/\d{2} to \d{2}\/\d{2}/);
+    const warningsHeading = card.getByRole("heading", { name: "Recent Token Warnings" });
+    await expect(warningsHeading).toBeVisible();
+    await expect(warningsHeading).toHaveAttribute("title", /8 warnings from \d{2}\/\d{2} to \d{2}\/\d{2}/);
     await expect(card.getByRole("list", { name: "Token warnings" }).getByRole("listitem")).toHaveText([
       "3 token spikes and 2 repeated tool loops in gpt-5-codex",
       "3 repeated tool loops in claude-opus-4-8",
     ]);
-    await expect(card.getByRole("link", { name: "all activity", exact: true })).toHaveAttribute("href", "/tokens");
+    // The warnings are this repository's, so the link opens Tokens scoped to it.
+    await expect(card.getByRole("link", { name: "all activity", exact: true })).toHaveAttribute("href", /^\/tokens\?repo=[a-z0-9-]+$/);
     await expect(card.locator(".home-domain-row.is-warning")).toHaveCount(1);
     await expect(card.locator(".status-dot")).toHaveCount(0);
   });
@@ -1000,14 +1002,16 @@ test.describe("repository-first portal Home", () => {
     await page.unrouteAll({ behavior: "ignoreErrors" });
   });
 
-  test("repository row exposes the configured Home actions", async ({ page }) => {
+  test("repo row exposes the configured Home actions", async ({ page }) => {
     await page.goto("/");
     await roboRepoCard(page).getByRole("button", { name: "Actions" }).click();
     const menu = roboRepoCard(page).locator(".menu-panel");
-    await expect(menu.locator("> *")).toHaveText(["Forget This Repo", "Pin", "Repo Agent Configcoming soon"]);
-    const agents = menu.getByRole("button", { name: /Repo Agent Config/ });
-    await expect(agents).toBeDisabled();
-    await expect(agents.locator(".menu-item-hint")).toHaveText("coming soon");
+    await expect(menu.locator("> *")).toHaveText(["All Plans", "Agent Config", "Token Activity", "Pin", "Forget This Repo"]);
+    // The page links open each page already filtered to this repo.
+    for (const [name, path] of [["All Plans", "/plans"], ["Agent Config", "/agents"], ["Token Activity", "/tokens"]]) {
+      await expect(menu.getByRole("link", { name })).toHaveAttribute("href", new RegExp(`^${path}\\?repo=[a-z0-9-]+$`));
+    }
+    await expect(menu.locator("portal-icon")).toHaveCount(5);
     await expect(page.locator("#home-content").getByRole("link", { name: "Agents", exact: true })).toHaveCount(0);
   });
 });
@@ -1172,7 +1176,14 @@ test.describe("Plans card commands", () => {
     const barBox = await bar.boundingBox();
     const rowBox = await row.boundingBox();
     expect(rowBox.x).toBeGreaterThan(barBox.x, "the title is a left column opposite the tabs");
-    expect(Math.abs(rowBox.x + rowBox.width - barBox.x - barBox.width)).toBeLessThanOrEqual(1);
+    // Filters is the right-most element, just after the tabs and their ⋮ menu; Refresh sits beside the title.
+    const filtersBox = await page.locator("#filters-toggle").boundingBox();
+    const refreshBox = await page.locator("#refresh").boundingBox();
+    const titleBox = await title.boundingBox();
+    expect(Math.abs(filtersBox.x + filtersBox.width - barBox.x - barBox.width)).toBeLessThanOrEqual(1);
+    expect(rowBox.x + rowBox.width).toBeLessThanOrEqual(filtersBox.x + 1);
+    expect(refreshBox.x).toBeGreaterThanOrEqual(titleBox.x + titleBox.width);
+    expect(refreshBox.x + refreshBox.width).toBeLessThan(rowBox.x);
     await expect(row.locator(":scope > .lifecycle-tab")).toHaveText([/^Backlog \(/, /^Active \(/]);
     const trigger = row.locator(".overflow-more-trigger");
     await expect(trigger).toHaveAttribute("aria-label", "More lifecycles");
@@ -1213,6 +1224,11 @@ test.describe("Plans card commands", () => {
     const triggerBox = await trigger.boundingBox();
     expect(Math.abs(triggerBox.x - barBox.x),
       "the collapsed trigger is left-aligned").toBeLessThanOrEqual(1);
+    // Narrow: Filters at the right edge, Refresh directly to its right.
+    const filtersBox = await page.locator("#filters-toggle").boundingBox();
+    const refreshBox = await page.locator("#refresh").boundingBox();
+    expect(Math.abs(refreshBox.x + refreshBox.width - barBox.x - barBox.width)).toBeLessThanOrEqual(8);
+    expect(refreshBox.x).toBeGreaterThanOrEqual(filtersBox.x + filtersBox.width);
     await items.filter({ hasText: /^Active \(/ }).click();
     await expect(page).toHaveURL(/lifecycle=active/);
     await expect(trigger).toHaveText("Active Plans");

@@ -3,6 +3,7 @@
 // writes app state directly, and nothing here imports the modal — app.js wires callbacks in.
 
 import { portalTpl as tpl, portalFillSlots as fill } from "/portal/shared/api.js";
+import { pageSplash } from "/portal/shared/page-splash.js";
 import { presentedHarnesses } from "/portal/shared/harness-cohort.js";
 import { harnessWarningElement } from "/portal/shared/harness-warning.js";
 import {
@@ -387,6 +388,14 @@ export function harnessWarning(snap, options) {
 // banner) — it explains what the package manager provides, whatever the onboarding state.
 export function packagesIntro() {
   return tpl("tpl-packages-intro");
+}
+
+export function repositorySplash(onRemoveFilter) {
+  return pageSplash({
+    title: "Repo-level agent config coming soon",
+    body: "View per repo agent configurations for rules, skills, hooks, etc.",
+    actions: [{ label: "View Global Config", onClick: onRemoveFilter }],
+  });
 }
 
 function wireInspectButton(btn, kind, id, harness, label, onInspectClick) {

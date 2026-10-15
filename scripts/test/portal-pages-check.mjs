@@ -52,7 +52,7 @@ assert.equal(defaults.length, 1, "exactly one page must be marked default");
 assert.equal(defaults[0].path, "/", "the default page must be Home at /");
 assert.equal(defaults[0].id, "home", "the default page id must be home");
 
-// Navigable pages have distinct paths and ids; the old page URL is redirect-only.
+// Navigable pages have distinct paths and ids.
 assert.equal(new Set(PAGES.map((p) => p.path)).size, PAGES.length, "every route must be unique");
 assert.equal(new Set(PAGES.map((p) => p.id)).size, PAGES.length, "every page id must be unique");
 
@@ -75,11 +75,28 @@ assert.deepEqual(
   "only Runtime and Settings are secondary (menu-only) pages",
 );
 
+// The shared repository scope: exactly Plans, Tokens, and Agents read and keep ?repo=, and
+// only Tokens offers Activity outside listed repos. Nav composition reads these flags from the
+// browser manifest, so they must cross into it unchanged.
+assert.deepEqual(
+  PAGES.filter((p) => p.repositoryScope).map((p) => p.id),
+  ["config", "plans", "tokens"],
+  "only Agents, Plans, and Tokens are scope-aware",
+);
+assert.deepEqual(
+  PAGES.filter((p) => p.outsideActivityScope).map((p) => p.id),
+  ["tokens"],
+  "only Tokens offers Activity outside listed repos",
+);
+assert.ok(
+  PAGES.every((p) => !p.outsideActivityScope || p.repositoryScope),
+  "a page offering outside activity must be scope-aware",
+);
+
 assert.equal(PAGES.length, 6, "dynamic detail must not enter the six-item navigation manifest");
-assert.equal(PAGE_ROUTES.length, 8, "page-route table adds the old Agents redirect and a dynamic route");
-const oldAgentsRoute = PAGE_ROUTES.find((page) => page.path === "/config");
-assert.equal(oldAgentsRoute?.redirect, "/agents", "old Agents links redirect to the canonical page");
-assert.equal(matchPortalPage("/config")?.page.redirect, "/agents");
+assert.equal(PAGE_ROUTES.length, 7, "page-route table adds only the parked dynamic route");
+// No compatibility route: the old Agents URL is not a page or a redirect.
+assert.equal(matchPortalPage("/config"), null, "the old Agents URL /config is gone");
 assert.equal(matchPortalPage("/agents")?.page.id, "config");
 const detailRoute = PAGE_ROUTES.find((page) => page.path === "/repositories/:urlKey");
 assert.ok(detailRoute, "repository detail route is registered");

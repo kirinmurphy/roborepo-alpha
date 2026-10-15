@@ -55,8 +55,7 @@ The same repository found by several sources is one repository: identity comes f
 
 ### Manage repositories
 
-**Manage repositories** opens one dialog from Settings, Home's heading, the repository count in the
-Plans header, and the empty states. Top to bottom it shows:
+**Manage repositories** opens one dialog from Settings, Home's heading, the repo selector's **Manage Repos** row on Plans, Tokens, and Agents, and the empty states. Top to bottom it shows:
 
 1. **Auto-discovery** — the Enable button with a sentence explaining that it permits observation of
    active apps and automatic repository enrollment, or, when on, a status line such as
@@ -126,9 +125,15 @@ Turning a source off and removing it have the same effect on repositories:
 **Forget This Repo** on Home is offered only for a repository with no known checkout, so it never
 competes with a source that would find the repository again.
 
+### Home card menu
+
+A repo card's ⋮ menu lists **All Plans**, **Agent Config**, and **Token Activity** (each opens that page already
+filtered to the repo, as `?repo=<key>`), then **Pin**/**Unpin** and **Ignore Repo** (**Forget This Repo** for a
+repo with no known checkout).
+
 ### Ignore repository
 
-**Ignore repository** — on Home's card menu, Runtime's repository menu, and the Manage repositories
+**Ignore Repo** — on Home's card menu, Runtime's repository menu, and the Manage repositories
 list — hides a repository everywhere: Home's directory and normal Plans entries leave it out, and
 later auto-discovery does not bring it back. Restore it from the dialog's **Ignored** group, or from
 Runtime's settings.

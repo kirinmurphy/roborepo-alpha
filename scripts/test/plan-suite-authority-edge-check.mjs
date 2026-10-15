@@ -108,7 +108,8 @@ try {
       assert.deepEqual(record.plan.authority, { source: "primary" });
       assert.equal(record.plan.checkout, null);
       assert.equal(findingOf(record, "PLAN_WORKTREE_COPY_UNAVAILABLE")?.meta.reason, "copy-missing", "the fallback says the worktree has no readable copy");
-      assert.deepEqual(snapshot.errors, [{ repository: "unreadable", checkout: "wt", path: PLAN, error: "could not be read" }], "the unreadable file is reported by its repository-relative path");
+      // repositoryId lets a repository-scoped Plans view keep only its own scan errors.
+      assert.deepEqual(snapshot.errors, [{ repository: "unreadable", repositoryId: snapshot.repositoryScans[0].repositoryId, checkout: "wt", path: PLAN, error: "could not be read" }], "the unreadable file is reported by its repository-relative path");
     } finally {
       fs.chmodSync(path.join(repo.wt, PLAN), 0o644);
     }

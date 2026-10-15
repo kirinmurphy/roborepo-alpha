@@ -49,11 +49,11 @@ const SOURCE_EXTS = new Set([".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".jso
 //     labeled exploratory fallback in the report.
 //   - compareMetric: metric id for the marker-relative comparison (only used when markerId is set).
 export function analyzeTelemetry(events, options = {}) {
-  const { cohortFilter = null, markers = [], repositoryHashIndex = null } = options;
+  const { cohortFilter = null, markers = [] } = options;
   const normalizedFilter = cohortFilter ? normalizeCohortFilter(cohortFilter) : null;
-  const scopedEvents = normalizedFilter ? applyCohortFilter(events, normalizedFilter, { markers, repositoryHashIndex }) : events;
+  const scopedEvents = normalizedFilter ? applyCohortFilter(events, normalizedFilter, { markers }) : events;
   // One representative row per operation, so mirrored captures never double-count.
-  const observations = normalizeObservations(scopedEvents, { repositoryHashIndex });
+  const observations = normalizeObservations(scopedEvents);
   const report = analyzeRows(canonicalFlowRows(observations), scopedEvents, events, normalizedFilter, options);
   report.conditions = buildConditionsReport(scopedEvents, report, options, observations);
   for (const [key, kind] of [["spikes", "spike"], ["loops", "loop"], ["read_warnings", "read-warning"]]) {

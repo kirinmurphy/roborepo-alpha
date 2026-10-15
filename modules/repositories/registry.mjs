@@ -12,6 +12,7 @@ import {
 import { allocateRepositoryUrlKey, validateRepositoryUrlKey } from "./url-key.mjs";
 
 import { LAST_SEEN_DEBOUNCE_MS } from "./config.mjs";
+import { devFixturesEnabled, withoutFixtureRepositories } from "./dev-fixtures.mjs";
 
 export {
   REGISTRY_VERSION,
@@ -24,7 +25,14 @@ export function registryPathFor(stateRoot) {
   return path.join(stateRoot, "repositories", "registry.json");
 }
 
+// What every reader sees: the registry without development fixtures, unless dev mode is on.
 export function loadRegistry({ stateRoot, fsApi = fs } = {}) {
+  const registry = readRegistry({ stateRoot, fsApi });
+  return devFixturesEnabled({ stateRoot, fsApi }) ? registry : withoutFixtureRepositories(registry);
+}
+
+// The registry exactly as stored. Writers start from this so saving never drops hidden fixtures.
+function readRegistry({ stateRoot, fsApi = fs } = {}) {
   const filePath = registryPathFor(stateRoot);
   try {
     const parsed = JSON.parse(fsApi.readFileSync(filePath, "utf8"));
@@ -56,7 +64,7 @@ export function writeRegistry({ stateRoot, registry, fsApi = fs } = {}) {
 // Optimistic-concurrency mutation. `mutate(registry)` mutates a clone in place; if it returns
 // false the write is skipped (no-op / debounced), otherwise the revision is bumped and persisted.
 export function updateRegistry({ stateRoot, mutate, expectedRevision, fsApi = fs } = {}) {
-  const current = loadRegistry({ stateRoot, fsApi });
+  const current = readRegistry({ stateRoot, fsApi });
   if (expectedRevision != null && expectedRevision !== current.revision) {
     const error = new Error("repository registry revision conflict");
     error.code = "REVISION_CONFLICT";

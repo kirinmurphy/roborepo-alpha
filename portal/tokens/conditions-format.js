@@ -1,5 +1,5 @@
 export const EVENT_NAMES = { spike: "spikes", loop: "loops", "read-warning": "read warnings" };
-export const DIMENSION_NAMES = { model: "Models", repo: "Repositories", harness: "Harnesses", packages: "Configured packages", skills: "Available skills" };
+export const DIMENSION_NAMES = { model: "Models", repo: "Repos", harness: "Harnesses", packages: "Configured packages", skills: "Available skills" };
 export const PROBLEM_KINDS = Object.keys(EVENT_NAMES);
 
 export function percent(value) {
@@ -7,7 +7,7 @@ export function percent(value) {
 }
 
 export function repositoryLabel(value) {
-  return value ? value.split("/").at(-1) : "Repository unknown";
+  return value ? value.split("/").at(-1) : "Repo unknown";
 }
 
 export function conditionName(row) {

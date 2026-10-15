@@ -65,6 +65,18 @@ export {
 } from "./url-key.mjs";
 
 export {
+  OUTSIDE_ACTIVITY_SCOPE,
+  resolveRepositoryScope,
+  listedRepositoryIds,
+} from "./scope.mjs";
+
+export {
+  isFixtureRepository,
+  devFixturesEnabled,
+  setDevFixturesEnabled,
+} from "./dev-fixtures.mjs";
+
+export {
   registryPathFor,
   loadRegistry,
   writeRegistry,
@@ -102,7 +114,6 @@ export {
   EVIDENCE_POLICY,
   evidencePolicy,
   associateResolved,
-  associateLegacyHashes,
 } from "./associations.mjs";
 
 export {

@@ -171,6 +171,12 @@ Everything else (the two symlink levels, the layer table) lives in
   thin per-service wrappers that only re-expose what a root command already does. The namespace
   carries `advanced: true` to stay out of the root menu; its children deliberately do not, because
   `includeAdvanced: false` in `help-renderer.mjs` would hide them from `roborepo help dev` too.
+- **Dev fixtures are hidden from every registry reader unless dev mode is on.** `dev start` writes the
+  `<stateRoot>/repositories/dev-fixtures-enabled` marker and `dev stop` removes it. `loadRegistry`
+  (`modules/repositories/registry.mjs`) drops fixture records (`isFixtureRepository`: a
+  `github.com/example/*-fixture` id) without the marker; `updateRegistry` reads the unfiltered file,
+  so saving never erases them. It is a marker, not a process flag, because `dev start` adopts a
+  portal that is already running. A reader that must see fixtures regardless needs its own read.
 - **`web --detach` cold starts are slow.** The portal warms telemetry/developer-runtime views before it
   binds — measured ~29s on a normal dev checkout. `waitForPortalReady` allows 60s for that; do not
   "tidy" it back down to a few seconds or every cold detached start fails while the child goes on

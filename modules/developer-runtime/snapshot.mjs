@@ -3,6 +3,9 @@ import path from "node:path";
 import { defaultSettings, resolveProjectAlias } from "./settings.mjs";
 import { classifyMemberRole, createRoleComparator } from "./member-role.mjs";
 import { canonicalRepositoryId, providerUrlForRepositoryId } from "../repositories/identity.mjs";
+import { isFixtureRepository } from "../repositories/dev-fixtures.mjs";
+
+export { isFixtureRepository };
 
 export function buildDeveloperRuntimeSnapshot({
   discovery,
@@ -517,15 +520,6 @@ export function sortRepositoriesForDisplay(repositories) {
 function displayGroup(repository) {
   if (repository.fixture) return 1;
   return repository.lifecycle && repository.lifecycle.state !== "active" ? 2 : 0;
-}
-
-// The dev fixtures give their repositories deliberately unfetchable github.com/example remotes and
-// a `-fixture` repository suffix (see local/dev-fixtures). The suffix matters: the development
-// checkout itself also uses an example.com remote in tests and must remain a real repository.
-const FIXTURE_REPOSITORY_PATTERN = /^git:github\.com\/example\/.+-fixture$/;
-
-export function isFixtureRepository(repositoryId) {
-  return typeof repositoryId === "string" && FIXTURE_REPOSITORY_PATTERN.test(repositoryId);
 }
 
 // Last path segment of a git: id, or a generic label for a local: one. Only used when the registry

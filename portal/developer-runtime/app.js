@@ -228,7 +228,7 @@ function render(snapshot, { reconcile }) {
       id: "inactive",
       kind: "group",
       title: "Saved apps",
-      meta: (n) => `${n} not yet matched to a repository`,
+      meta: (n) => `${n} not yet matched to a repo`,
       cards: snapshot.inactiveProjects
         .filter((project) => !project.repositoryId)
         .map((project) => ({
@@ -924,7 +924,7 @@ function renderSettingsDialog() {
     // ageing sweep retired from the list — a different store, a different actor, and a different
     // thing to restore, so merging them would misreport who hid what.
     tmpl.settingsSection("Hidden", hiddenRows()),
-    tmpl.settingsSection("Hidden repositories", hiddenRepositoryRows()),
+    tmpl.settingsSection("Hidden repos", hiddenRepositoryRows()),
     tmpl.settingsSection("Associations", associationRows()),
     tmpl.settingsSection("Aliases", aliasRows()),
   );

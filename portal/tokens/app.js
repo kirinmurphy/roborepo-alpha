@@ -13,6 +13,8 @@ import { fetchSetupState } from "/portal/shared/setup-api.js";
 import { createConditionsReport } from "./conditions-report.js";
 import { sessionConditionLine, capturedSessionFindings } from "./conditions-context.js";
 import { createDocGuideModal } from "/portal/shared/doc-guide-modal.js";
+import { createTokensRepositoryScope, isRepositoryScopeUnavailable } from "./repository-scope.js";
+import { preserveViewState } from "./view-state.js";
 
 // ── State ──
 let firstLoad = true;
@@ -29,6 +31,11 @@ let lastSetupState = null;
 // The most recent report object — session chips and timeline marks look sessions up here at
 // click time, so a click always acts on the live report rather than a stale closure.
 let lastSessionData = null;
+// Polls and scope changes can overlap; only the latest load may paint.
+let loadSequence = 0;
+// The selected repository (or outside activity) has no captures: its empty splash stands in for
+// the report while tracking has data elsewhere.
+let scopedEmpty = false;
 
 // ── Formatting helpers (local) ──
 const fmt = (n) => Number(n || 0).toLocaleString("en-US");
@@ -47,6 +54,11 @@ const conditionsView = createConditionsReport({
   openSession: openSessionModal,
   getData: () => lastSessionData,
   onSaved: async () => { lastVersion = null; await load(); },
+});
+// A scope change forgets the remembered version: two scopes can report the same one.
+const repositoryScope = createTokensRepositoryScope({
+  onChange: () => { lastVersion = null; void load(!setupReady); },
+  onResolved: () => { if (scopedEmpty && lastSetup) void applySetupState(lastSetup); },
 });
 
 // ── Init ──
@@ -146,8 +158,12 @@ async function applySetupState({ telemetryOn, activeHarnessCount, snap }) {
   bannerHost.style.display = sharedBanner ? "" : "none";
   bannerHost.replaceChildren(...(sharedBanner ? [sharedBanner] : []));
   bannerStack.hidden = state === "no-data" || state === "full";
-  noData.hidden = state !== "no-data";
-  content.hidden = state === "no-data";
+  // An unavailable scope shows its own state in place of both the empty page and the report.
+  const scopeUnavailable = repositoryScope.isUnavailable();
+  const showNoData = (state === "no-data" || scopedEmpty) && !scopeUnavailable;
+  noData.hidden = !showNoData;
+  content.hidden = showNoData || scopeUnavailable;
+  setNoDataCopy(noData);
 
   // Wire the enable-telemetry button (same pattern as the existing page).
   const enableBtn = document.getElementById("tokensenable");
@@ -176,15 +192,24 @@ async function load(force) {
     if (firstLoad) { firstLoad = false; portalHideLoading(); }
     return;
   }
-  const endpoint = force ? "/api/tokens/mock" : "/api/data";
-  let data;
-  try {
-    data = await portalGetJson(endpoint);
-  } catch {
+  const sequence = ++loadSequence;
+  if (repositoryScope.mockScopeUnavailable(force)) {
     if (firstLoad) { firstLoad = false; portalHideLoadingNow(); }
+    showScopeUnavailable();
     return;
   }
+  let data;
+  try {
+    data = await portalGetJson(repositoryScope.reportPath(force));
+  } catch (err) {
+    if (firstLoad) { firstLoad = false; portalHideLoadingNow(); }
+    if (sequence === loadSequence && isRepositoryScopeUnavailable(err)) showScopeUnavailable();
+    return;
+  }
+  if (sequence !== loadSequence) return;
   if (firstLoad) { firstLoad = false; portalHideLoading(); }
+  // Back from an unavailable scope: let the setup cascade show the report again.
+  if (repositoryScope.clearUnavailable() && lastSetup) await applySetupState(lastSetup);
   if (document.querySelector("dialog[open]")) return;
   if (!force && data.version === lastVersion) return;
   lastVersion = data.version;
@@ -193,7 +218,14 @@ async function load(force) {
   // letting it set hasData would advance the cascade to the real-data rung (hiding the empty
   // page and the mock disclaimer) before any real telemetry exists.
   if (!force) {
-    hasData = (data.capture_count ?? 0) > 0;
+    // A scoped report can be empty while tracking has data; the first-run empty page is decided
+    // by the unscoped report only, and an empty scope renders the report with zero totals.
+    hasData = (data.capture_count ?? 0) > 0 || repositoryScope.isScoped();
+    const emptyScope = repositoryScope.isScoped() && (data.capture_count ?? 0) === 0;
+    if (emptyScope !== scopedEmpty) {
+      scopedEmpty = emptyScope;
+      if (lastSetup) await applySetupState(lastSetup);
+    }
     // Re-apply the setup cascade when the report's hasData flips the shown rung (e.g. the first
     // real captures land and the empty page should give way to the report).
     if (lastSetup) {
@@ -212,15 +244,39 @@ async function load(force) {
   const showMockDisclaimer = !setupReady;
   const mockBanner = document.getElementById("mock-disclaimer");
   if (mockBanner) mockBanner.style.display = showMockDisclaimer ? "" : "none";
+  repositoryScope.markMockScope(force);
 
-  renderVerdict(data);
-  renderMeta(data);
-  renderFindings(data.insights || []);
-  renderAgentPrompt(data);
-  renderInvestigationSections(data);
-  renderTimelineStrip(data);
-  conditionsView.render(data, setupReady);
-  renderFullData(data);
+  // New report content must not undo what the user opened: expanded sections stay expanded.
+  preserveViewState(document.getElementById("tokenscontent"), () => {
+    renderVerdict(data);
+    renderMeta(data);
+    renderFindings(data.insights || []);
+    renderAgentPrompt(data);
+    renderInvestigationSections(data);
+    renderTimelineStrip(data);
+    conditionsView.render(data, setupReady);
+    renderFullData(data);
+  });
+}
+
+// The splash says the setup-level thing (the markup's own copy) until a scope is empty, then names
+// the scope. The setup copy is read back from the markup once, so it is authored in one place.
+let setupNoDataCopy = null;
+function setNoDataCopy(noData) {
+  const title = noData.querySelector("[data-slot=title]");
+  const body = noData.querySelector("[data-slot=body]");
+  setupNoDataCopy ??= { title: title.textContent, body: body.textContent };
+  const copy = scopedEmpty ? repositoryScope.emptyScopeCopy() : setupNoDataCopy;
+  title.textContent = copy.title;
+  body.textContent = copy.body;
+}
+
+// The scope names no listed repository: show that instead of any report, never all activity.
+function showScopeUnavailable() {
+  lastVersion = null;
+  document.getElementById("tokenscontent").hidden = true;
+  document.getElementById("tokens-no-data").hidden = true;
+  repositoryScope.showUnavailable();
 }
 
 // ── Frame-of-reference meta line ──

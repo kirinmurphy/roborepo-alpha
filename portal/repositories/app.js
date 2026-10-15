@@ -13,7 +13,7 @@ async function refresh() {
   if (pending) return;
   pending = true;
   try {
-    if (!urlKey) throw new Error("Repository key is missing from this route.");
+    if (!urlKey) throw new Error("Repo key is missing from this route.");
     const overview = await loadRepositoryOverview(urlKey);
     const version = JSON.stringify(overview);
     if (version !== renderedVersion && !content.contains(document.activeElement)) {
@@ -27,11 +27,11 @@ async function refresh() {
     // A 404 means the repository is genuinely gone (hidden, forgotten, unknown). Any other failure
     // after a good load is a transient poll error: keep the last detail on screen and only warn.
     if (error.status === 404 || renderedVersion === null) {
-      content.replaceChildren(unavailableView(`This repository is unavailable. It may be hidden, removed, or unknown. ${error.message}`));
+      content.replaceChildren(unavailableView(`This repo is unavailable. It may be hidden, removed, or unknown. ${error.message}`));
       renderedVersion = null;
-      warning.textContent = "Repository detail could not be loaded.";
+      warning.textContent = "Repo detail could not be loaded.";
     } else {
-      warning.textContent = `Repository detail could not be refreshed: ${error.message}`;
+      warning.textContent = `Repo detail could not be refreshed: ${error.message}`;
     }
     warning.hidden = false;
   } finally {

@@ -54,8 +54,7 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 .domain-body { display: grid; gap: 8px; min-width: 0; }
 .domain-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .domain-heading h4 { margin: 0; color: var(--ink); font-size: var(--text-sm); font-weight: 600; }
-.domain-summary, .domain-link { font-size: var(--text-xs); }
-.domain-summary { color: var(--dim); }
+.domain-link { font-size: var(--text-xs); }
 /* Plain inline link: body ink and an underline, not the browser's blue/visited purple. */
 .domain-link { margin-left: auto; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
 .domain-link:hover { color: var(--accent); }
