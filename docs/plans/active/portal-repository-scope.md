@@ -1,7 +1,7 @@
 ---
 id: tk6s43x3
 priority: high
-next_action: Confirm the Not tested entries by hand, then close the plan
+next_action: Merge main into the branch, then close the plan with /plan-close
 blocked_by: []
 depends_on:
   - jqi1dof
@@ -440,9 +440,10 @@ None. No decision in this run was blocked.
       selector's list and Tokens' **Activity outside listed repos** update without a reload.
       Confirmed by the user on 2026-10-15 on real data: ignoring a repo removed it from the selector
       and raised the outside counts on the next poll; restoring it reversed both.
-- [ ] A long-running Tokens session on real data stays responsive while switching scopes. Each
+- [x] A long-running Tokens session on real data stays responsive while switching scopes. Each
       scope is a separate cached analysis (up to 32 entries), so the first visit to a scope costs
-      one analysis; this was observed on one development spool, not measured.
+      one analysis. Confirmed by the user on 2026-10-15 on real data: switching, revisiting, an open
+      Investigate section across polls, and back/forward all stayed responsive and correct.
 
 ## Verification
 
