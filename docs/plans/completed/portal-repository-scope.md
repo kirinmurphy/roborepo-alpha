@@ -1,7 +1,7 @@
 ---
 id: tk6s43x3
 priority: high
-next_action: Merge main into the branch, then close the plan with /plan-close
+next_action:
 blocked_by: []
 depends_on:
   - jqi1dof
@@ -9,7 +9,7 @@ depends_on:
   - pljvmyh
 related:
   - nl40n9vr
-reviewed_commit: 026aeb5
+reviewed_commit: f90d8fd48dac06b754488761c580a39f90dc0885
 worktree: portal-repository-scope
 ---
 
@@ -445,16 +445,36 @@ None. No decision in this run was blocked.
       one analysis. Confirmed by the user on 2026-10-15 on real data: switching, revisiting, an open
       Investigate section across polls, and back/forward all stayed responsive and correct.
 
+## Completion Summary
+
+Plans, Tokens, and Agents now share one repo scope, `?repo=<urlKey>`, chosen in a **Viewing**
+selector on its own row under the site header. The scope carries over between those three pages
+and drops for Runtime, Settings, and Home; back, forward, and deep links restore it. Routes
+resolve the key once, through `resolveRepositoryScope`. A malformed, unknown, hidden, or canonical
+key gets a 404 with code `REPOSITORY_SCOPE_UNAVAILABLE` instead of all data. Tokens adds
+**Activity outside listed repos** (`?repo=_other`), and together with the listed repos it adds up
+to exactly **All repos**. Scoped Agents shows a coming-soon splash. Home's Token Warnings link
+opens Tokens scoped to its repo. The legacy pieces in §7 are gone: the old Agents redirect, the
+`repo` label parameters, the cohort `repos` dimension, the unread `--repo` flag, the fingerprint
+fallback, and the three fingerprint capture fields. The work landed through PR #35 (squash commit
+`d25b89f`).
+
 ## Verification
 
-```text
-npm run test:unit                    -> pass (141/141 suites)
-npm run check                        -> pass (ci group, clean-machine sandboxes, UI suite: 96 passed, 2 skipped as on main; Windows installer parity skipped: no pwsh)
-npm run test:portal-ui               -> pass, rerun after the final style tweaks
-node scripts/test/repositories-dev-fixtures-check.mjs  -> pass
-git diff --check                     -> clean
-```
+| Check | Result |
+| --- | --- |
+| Integration check (`/plan-close` step 0) | Run from the primary checkout. The worktree `claude/portal-repository-scope` was clean. Its plan copy's blob was `b4aecd3`, byte-identical to the primary copy, and `main` produced that blob after fork `7fb5ee9`. Result: integrated |
+| `npm run test:unit` on `main` at `f90d8fd` | 144/144 suites passed |
+| `npm run check` on `main` at `f90d8fd` | Passed (`CI checks passed`, exit 0): the `ci` group (38/38), doctor, the four clean-machine container suites, and the portal UI suite (99 passed). Windows installer parity was skipped because `pwsh` is not installed |
+| `roborepo plans validate` | 0 findings before the move |
+| Focused coverage | Each item under Validation has a test. `repository-scope-check.mjs` covers resolution, route statuses, canonical-ID rejection, Plans snapshot narrowing, nav composition, and collision labels. `repository-scope-portal-check.mjs` covers path-free selector data, A → B → A with no cache leak, the `_other` partition, unavailable keys, and a found repo leaving `_other` with no spool change. `portal-pages-check.mjs` pins the scope flags, `test-cli.sh` pins the `/config` 404, and `portal-ui/repository-scope.spec.mjs` covers the browser items |
+| Plan against code | `agents-legacy`, `buildRepositoryHashIndex`, `associateLegacyHashes`, `repositoryHashIndex`, `repositoryFilterKey`, and `available_repos` appear nowhere on `main`. Fingerprint field names appear only in tests that assert they are absent. `PAGES` sets `repositoryScope` on Agents, Plans, and Tokens and `outsideActivityScope` on Tokens only. Plans `FILTER_IDS` has no `repository` |
+| Docs of record | `docs/internal/portal-architecture.md` (scope contract, manifest flags, `/config` as a 404), `docs/user/reference/plans-portal.md` (the **Viewing** selector replaces the repo filter), and `docs/user/reference/telemetry.md` (`repository_ids` and `excluded_repository_ids` replace `repos`) match `main` |
+| Not tested | All three entries confirmed by the user on 2026-10-14 and 2026-10-15 |
+| Landed | `inspectBranchLanding` on `claude/portal-repository-scope` (tip `1a013c4`) found the branch's own work starting at reflog entry `e8d005b`, and `d25b89f` (#35) as the first absorbing commit against `origin/main`. `d25b89f` is an ancestor of local `main` |
 
-After the portal tweaks (`?repo=` rename, sticky lifecycle row, filter popup, dev-fixture gate), a portal
-that was already running kept answering the old `?repository=` parameter and listing fixtures until it was
-restarted; static page changes apply on reload, server changes need a restart.
+Implementation-time evidence: `npm run test:unit` (141/141), `npm run check` (UI 96 passed, 2
+skipped), `repositories-dev-fixtures-check.mjs`, and `git diff --check` all passed on the branch.
+A portal that was already running kept answering the old `?repository=` parameter and listing
+fixtures until it was restarted. Static page changes apply on reload; server changes need a
+restart.
