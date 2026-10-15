@@ -10,7 +10,7 @@ related:
   - harness-capability-derived-resource-targeting
   - usage-statusline-codex-hook-parity
 reviewed_commit: 1a013c459527bf461fedf0809118c637a0cd1d12
-worktree:
+worktree: harness-hook-readiness-provider-adapters
 ---
 
 # Report hook readiness through harness providers and keep Codex hooks trusted
