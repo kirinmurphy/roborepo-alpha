@@ -57,9 +57,9 @@ function isDroppableComment(line) {
 export function slugify(text, seen) {
   const base = String(text)
     .toLowerCase()
-    .replace(/[^\w\s-]/g, "")
+    .replace(/[^\w -]/g, "")
     .trim()
-    .replace(/\s+/g, "-");
+    .replace(/ /g, "-");
   const count = seen.get(base) || 0;
   seen.set(base, count + 1);
   return count === 0 ? base : `${base}-${count}`;

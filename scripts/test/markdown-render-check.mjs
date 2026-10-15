@@ -33,7 +33,8 @@ function testHeadingIdsAndDedup() {
 
 function testHeadingIdSlugifiesPunctuation() {
   const html = renderMarkdown("## Package Cost & Regression (exploratory)\n");
-  assert.match(html, /<h2 id="package-cost-regression-exploratory">/);
+  assert.match(html, /<h2 id="package-cost--regression-exploratory">/);
+  assert.match(renderMarkdown("## Step 1 — When they agree\n"), /<h2 id="step-1--when-they-agree">/);
 }
 
 function testTable() {

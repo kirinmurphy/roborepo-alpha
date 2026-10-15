@@ -48,7 +48,7 @@ packages; see [rules-parity-and-layering.md](rules-parity-and-layering.md).)
 harness-only fragments under `globals/system/rules/claude/` and `globals/system/rules/codex/`.
 Claude and Codex have tracked snapshots; the live renderer also writes `~/.gemini/GEMINI.md` when
 Gemini's home exists. Edit the source fragments, not the rendered files. (Why a generator:
-[explained.md Step 2](harnesses-explained.md#step-2-bridging-a-cosmetic-gap-global-rules).)
+[explained.md Step 2](harnesses-explained.md#step-2--bridging-a-cosmetic-gap-global-rules).)
 
 **To change behavior in every harness:** edit a fragment in `globals/system/rules/shared/`, then render:
 
@@ -75,7 +75,7 @@ native-installed skills (via native harness tools or `skill-installer`) at unrec
 left untouched and shown as adoptable drift by `roborepo doctor --installed`. There is no
 intermediate skills directory between the repo and cache; harness homes do not point directly at
 the checkout. The former `globals/claude/skills/` directory does not exist. (Why a symlink, not a
-generator: [explained.md Step 4](harnesses-explained.md#step-4-when-the-files-are-identical-but-live-apart-skills).)
+generator: [explained.md Step 4](harnesses-explained.md#step-4--when-the-files-are-identical-but-live-apart-skills).)
 
 **To add or change a skill:**
 
@@ -92,7 +92,7 @@ roborepo doctor --installed   # check that live harness links are current
 Add the user-facing description to the README (`Automatic Skill Helpers` or `Commands`). Repo-only
 internal skills live under `local/skills/` and never go global or get exported. Full skill-layer
 model: [Skills And Slash Commands](skills-and-commands.md) and
-[shared-skills fan-out](../user/reference/architecture.md#shared-skills-canonical-source-machine-local-cache).
+[shared-skills fan-out](../user/reference/architecture.md#shared-skills-canonical-source--machine-local-cache).
 
 **Memory — Defer:** both harnesses have native persistent memory (Codex `~/.codex/memories/`,
 Claude `/memory` under `~/.claude/projects/*/memory/`). Memory is per-machine, per-session, and
@@ -109,7 +109,7 @@ generated dirs (`generated/packages/<package>/<harness>/commands/`). Plan-suite 
 target Claude, Codex, and Gemini. Only enabled packages' wrappers are composed into live harness
 command directories. The Gemini wrappers are `.md` files, while Gemini CLI requires `.toml` custom
 commands, so they are not usable there yet. Files in the generated dirs are generated. (Why just a
-stamped copy: [explained.md Step 1](harnesses-explained.md#step-1-when-they-already-agree-slash-commands).)
+stamped copy: [explained.md Step 1](harnesses-explained.md#step-1--when-they-already-agree-slash-commands).)
 
 **To add or change a command:** edit the owning package's `package.config.json`, then:
 
@@ -133,7 +133,7 @@ JDocMunch's Codex `SessionStart` hooks, telemetry's capture hooks, JCodeMunch's 
 authored under their owning package and composed into live hook config only when that package is
 enabled. Telemetry capture uses the same hook-composition layer when it is
 enabled, writing token-usage and context records into `~/.roborepo/telemetry`. (Why parity stops here:
-[explained.md Step 6](harnesses-explained.md#step-6-when-automation-gives-up-hooks).)
+[explained.md Step 6](harnesses-explained.md#step-6--when-automation-gives-up-hooks).)
 
 **To change a hook:** edit the script and/or the wiring (`settings.json` for Claude, `hooks.json`
 for Codex, or the owning package's hook resource), then re-apply:
@@ -158,7 +158,7 @@ stays the *catalog* ("what you can add"). `roborepo update` re-applies `mcp-serv
 machine, making the MCP set portable. No package currently declares `"gemini"` in a server's
 `harnesses` array, so `roborepo mcp apply`'s bulk sync is a real but currently-unexercised path for
 it. (Why a command, not a generator:
-[explained.md Step 5](harnesses-explained.md#step-5-when-rendering-doesnt-fit-mcp-servers).)
+[explained.md Step 5](harnesses-explained.md#step-5--when-rendering-doesnt-fit-mcp-servers).)
 
 **To register a server:**
 
@@ -181,7 +181,7 @@ Engine's rule directory, rather than a marked block inside a shared file. Codex'
 express per-command `ask`, so `globals/system/hooks/codex/permission-check.mjs` supplies that runtime
 decision from the same manifest; Gemini needs no such workaround — its Policy Engine has a native
 3-state `allow`/`deny`/`ask_user` decision at the config layer. (Why one source, per-harness output
-shapes: [explained.md Step 3](harnesses-explained.md#step-3-bridging-a-structural-gap-permissions).)
+shapes: [explained.md Step 3](harnesses-explained.md#step-3--bridging-a-structural-gap-permissions).)
 
 **To change permissions:** edit `manifests/inventory/agent-permissions.json`, then:
 
@@ -204,7 +204,7 @@ detection and the `keep` / `overwrite` / `abort` collision policy. Gemini has no
 baseline yet (no `generated/gemini/settings.json` candidate exists), so its `rootConfig.merge` runs
 with nothing to merge in — `roborepo update` still reports "updated root config gemini" but the file
 stays `{}` until a baseline is added. (Why parity isn't the goal here:
-[explained.md Step 7](harnesses-explained.md#step-7-when-parity-isnt-the-goal-root-config).)
+[explained.md Step 7](harnesses-explained.md#step-7--when-parity-isnt-the-goal-root-config).)
 
 For exact update, backup, staged-candidate, and uninstall behavior, see
 [Config Collision Handling](../user/reference/config-collision-handling.md).
