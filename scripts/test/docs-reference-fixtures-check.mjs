@@ -10,13 +10,14 @@ const root = fs.mkdtempSync(path.join(os.tmpdir(), "docs-reference-"));
 const checker = fileURLToPath(new URL("./docs-reference-check.mjs", import.meta.url));
 try {
   write("manifests/platform/cli/removed.json", JSON.stringify({ serve: { replacement: ["web"] }, verify: { replacement: ["doctor"] } }));
-  write("docs/target.md", "# First\n\n## Repeat\n\n## Repeat\n");
+  write("docs/target.md", "# First\n\n## Repeat\n\n## Repeat\n\n## Step 1 — When they agree\n");
   write("docs/dated.md", "# Dated audit\n\nSnapshot date: 2026-09-13\n\n`scripts/old-file.mjs`\n");
   for (const [markdown, reason] of [
     ["[missing](docs/missing.md)", "missing link target: docs/missing.md"],
     ["[missing with parentheses](docs/missing-(draft).md)", "missing link target: docs/missing-(draft).md"],
     ["![missing image](docs/no-image.png)", "missing link target: docs/no-image.png"],
     ["[bad anchor](docs/target.md#absent)", "missing anchor: docs/target.md#absent"],
+    ["[collapsed anchor](docs/target.md#step-1-when-they-agree)", "missing anchor: docs/target.md#step-1-when-they-agree"],
     ["[bad reference][gone]\n\n[gone]: docs/missing-again.md", "missing link target: docs/missing-again.md"],
     ["[undefined reference][gone]", "missing reference definition [gone]"],
     ["`scripts/no-file.mjs` is the current module.", "missing repository path: scripts/no-file.mjs"],
@@ -35,6 +36,7 @@ try {
   write("README.md", [
     "# Clean",
     "[duplicate](docs/target.md#repeat-1)",
+    "[GitHub heading](docs/target.md#step-1--when-they-agree)",
     "[query](docs/target.md?mode=read#first)",
     "[external](https://example.com/missing.md)",
     "`scripts/<name>.mjs` is a placeholder.",

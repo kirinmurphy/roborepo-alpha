@@ -7,7 +7,7 @@ depends_on: []
 related:
   - p3vbk03v
   - q6lj4w96
-reviewed_commit: 48abc8cfc7612b47aa54ecf3095cc672529399cd
+reviewed_commit: 7a7ef305a96406fa8b458ef1c68d4b113438f01c
 worktree: docs-freshness-and-drift-repair
 ---
 
@@ -246,6 +246,11 @@ segment in a relative target; seeded fixtures caught both failures before the fi
 reference table now has the correct separator width. The plan-start instructions explicitly derive
 affected docs for older plans without `## Documentation impact`. The telemetry reference now
 matches the `--deep` CLI selection in `scripts/cli/telemetry.mjs`.
+
+Follow-up review at `7a7ef30` confirmed that the portal renderer collapsed spaces left by removed
+punctuation, while GitHub preserves them as separate hyphens in heading anchors. The shared slug
+function and affected links now agree for those headings, and fixtures cover the difference.
+The plan-close guide and skill now report a removal failure after cleanup guards pass.
 
 ### Verification run
 

@@ -219,8 +219,9 @@ Skip this step for an archived or refused plan.
 
 After step 8, when the plan was moved to `completed/`, run the repository's canonical worktree
 cleanup command scoped to this plan with its apply flag. Report whether it removed the worktree and
-branch or which guard kept them. Do not remove the worktree by hand or bypass a guard. Skip this step
-for an archived or refused plan, and in repositories without a canonical cleanup command.
+branch, which guard kept them, or why removal failed. Do not remove the worktree by hand or bypass
+a guard. Skip this step for an archived or refused plan, and in repositories without a canonical
+cleanup command.
 
 ## Refusal and blocker reporting
 

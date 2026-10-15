@@ -125,7 +125,7 @@ Closes one plan, and refuses rather than closing on incomplete evidence. In orde
 7. after closing a complete plan, stops the dev servers still running in its worktree and lists
    them;
 8. runs the repository's worktree cleanup command for the closed plan, removing the worktree and
-   local branch when its guards pass, or reporting why they were kept.
+   local branch when removal succeeds, or reporting why a guard kept them or removal failed.
 
 Step 7 stops only processes listening on a port whose working directory is inside the plan's
 linked worktree. It never touches the primary checkout, agent sessions, shells, or editors, and it
