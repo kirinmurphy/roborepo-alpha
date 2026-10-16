@@ -1,7 +1,7 @@
 ---
 id: gqzjlzgx
 priority: high
-next_action: Fix the UNKNOWN_PLAN_NAMESPACE failure that main's agent-permissions-global-audit plan causes, decide whether `plans validate` authority is in scope, then rerun /plan-review.
+next_action: Rename main's backlog plan agent-permissions-global-audit.md to agent-config-permissions-global-audit.md so `npm run check` passes on main, then rerun /plan-review to sync base and request approval.
 blocked_by: []
 depends_on: []
 related:
@@ -726,7 +726,8 @@ the additive-fix rule for `/plan-review` (`6b74f0f1`).
       check by itself. Outside this plan's requirements, so not for `/plan-execute`: rename that plan
       to a declared namespace (or declare `agent` in `docs/plans/plans-config.json`) on `main`, then
       rerun `/plan-review`.
-- [ ] **Scope question (user decision): `roborepo plans validate` ignores authority.** Run from the
+- [x] **Scope question (user decision): `roborepo plans validate` ignores authority.** — deferred:
+      the user ruled it out of scope on 2026-10-16; tracked as a separate follow-up task. Run from the
       primary checkout it validates the primary copy of a review plan (here: 0 findings); run from
       the worktree it reports the open Not tested entry. `validateRepositoryPlans` reads only the
       checkout it runs in, as it already did for Active plans on `main`; only the portal scan and
