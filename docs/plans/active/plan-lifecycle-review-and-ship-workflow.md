@@ -1,7 +1,7 @@
 ---
 id: gqzjlzgx
 priority: high
-next_action: Add manifests/platform/plan-lifecycle.json with the ready and review states, and replace the duplicated lifecycle lists in modules/plan-suite and portal/plans with reads from it.
+next_action: Confirm the Not tested entry by running the full suite workflow on a real plan, then review the implementation independently before merging.
 blocked_by: []
 depends_on: []
 related:
@@ -424,66 +424,66 @@ them overrides this plan.
 
 ### Phase 1 — Lifecycle model and transition operation
 
-- [ ] Add `manifests/platform/plan-lifecycle.json`, its loader and validation, and a pure compiler.
+- [x] Add `manifests/platform/plan-lifecycle.json`, its loader and validation, and a pure compiler.
       Publish the projection in the plans snapshot.
-- [ ] Replace the hard-coded lifecycle lists in `modules/plan-suite/index.mjs`,
+- [x] Replace the hard-coded lifecycle lists in `modules/plan-suite/index.mjs`,
       `lifecycle-policy.mjs`, `portal/plans/state.js`, `app.js`, `elements/plan-status.js`, and
       `templates.js` with reads from the manifest.
-- [ ] Add `ready` and `review` destination validators: `ready` requires zero structural findings;
+- [x] Add `ready` and `review` destination validators: `ready` requires zero structural findings;
       `review` applies the `active` rules.
-- [ ] Extend `resolvePlanAuthority`, `/plan-close` step 0's integration check, and `plan-schema.md`'s
+- [x] Extend `resolvePlanAuthority`, `/plan-close` step 0's integration check, and `plan-schema.md`'s
       authority rule to cover `review/`.
-- [ ] Generalize `start-transition.mjs` into the shared transition operation with the plan-path
+- [x] Generalize `start-transition.mjs` into the shared transition operation with the plan-path
       precondition, scoped commit, idempotent retry, and post-commit checks. Fold or remove
       `movePlanLifecycle` and `updatePlanLifecycle`.
-- [ ] Add the completion preflight and the approval freshness check, both reading the plan's
+- [x] Add the completion preflight and the approval freshness check, both reading the plan's
       Markdown.
 
 ### Phase 2 — Commands and Git workflow
 
-- [ ] Update `/plan-promote` to commit `backlog → ready` and support reruns in `ready`. Replace its
+- [x] Update `/plan-promote` to commit `backlog → ready` and support reruns in `ready`. Replace its
       "change plan lifecycle" boundary and the matching phrase in
       `scripts/test/plan-promote-plan-start-check.mjs`.
-- [ ] Create the `plan-execute` package from `plan-start`: `ready`/`active`/`review` handling, worktree
+- [x] Create the `plan-execute` package from `plan-start`: `ready`/`active`/`review` handling, worktree
       reuse, `active → review` only after the preflight passes, and the carried-over `rules.md`.
       Retire `plan-start`.
-- [ ] Add the `plan-review` package: preflight, `sync-base`, independent QA, `## Review` findings,
+- [x] Add the `plan-review` package: preflight, `sync-base`, independent QA, `## Review` findings,
       reruns after fixes, human approval, and `review → active` on a scope change.
-- [ ] Add the `sync-base` operation with its conflict-resolution continuation.
-- [ ] Update `/plan-close` to accept only `review`, verify fresh approval for the landed branch tip,
+- [x] Add the `sync-base` operation with its conflict-resolution continuation.
+- [x] Update `/plan-close` to accept only `review`, verify fresh approval for the landed branch tip,
       commit `review → completed`, and hand superseded or abandoned plans to `/plan-archive`. Keep
       its landed check and cleanup.
-- [ ] Add the `plan-archive` package, absorbing `/plan-close` step 4's copy table and unmerged-work
+- [x] Add the `plan-archive` package, absorbing `/plan-close` step 4's copy table and unmerged-work
       guard.
-- [ ] Add `roborepo plans` subcommands and command definitions for the new operations.
+- [x] Add `roborepo plans` subcommands and command definitions for the new operations.
 
 ### Phase 3 — Portal and documentation
 
-- [ ] Update portal tabs, counts, filters, copy-prompt actions, `recommendedPlanCommand`,
+- [x] Update portal tabs, counts, filters, copy-prompt actions, `recommendedPlanCommand`,
       `PLAN_SUITE_PACKAGES`, and the readiness and freshness labels.
-- [ ] Update package manifests, `PLAN_SUITE_COMMANDS`, skill-trigger fixtures, and generated
+- [x] Update package manifests, `PLAN_SUITE_COMMANDS`, skill-trigger fixtures, and generated
       projections under `generated/packages/`; remove `plan-start` references.
-- [ ] Update every doc listed under [Documentation impact](#documentation-impact).
+- [x] Update every doc listed under [Documentation impact](#documentation-impact).
 
 ### Phase 4 — Verification
 
-- [ ] Domain tests: manifest loading and validation; valid and invalid transitions; scoped commits
+- [x] Domain tests: manifest loading and validation; valid and invalid transitions; scoped commits
       with unrelated staged work present; idempotent retries; refusals that leave no mutation; authority
       with the primary copy in `review/` and the worktree copy in `active/`; completion preflight;
       approval freshness across plan-only and code commits.
-- [ ] Git fixtures: `sync-base` clean, conflicting, and rename-conflict cases; `/plan-close` landing
+- [x] Git fixtures: `sync-base` clean, conflicting, and rename-conflict cases; `/plan-close` landing
       with normal, squash, and rebase merges (extend `scripts/test/plan-close-integration-check.mjs`
       and `worktree-lifecycle-check.mjs`); archive with integrated, unintegrated, and conflicting
       copies.
-- [ ] Package tests: `plan-start` retirement in `plan-suite-commands-check.mjs`; the new packages in
+- [x] Package tests: `plan-start` retirement in `plan-suite-commands-check.mjs`; the new packages in
       `package-catalog-check.mjs` and the skill-trigger fixtures.
-- [ ] Portal tests: `plans-portal-state-check.mjs` and the `scripts/test/portal-ui/` specs cover the
+- [x] Portal tests: `plans-portal-state-check.mjs` and the `scripts/test/portal-ui/` specs cover the
       new tabs, actions, and labels.
-- [ ] Register every new `*-check.mjs` in `scripts/test/test-cli.sh` or the `ci` group of
+- [x] Register every new `*-check.mjs` in `scripts/test/test-cli.sh` or the `ci` group of
       `scripts/test/check-groups.json`.
-- [ ] Exercise the full manual workflow once and record the result under `## Not tested` if any
+- [x] Exercise the full manual workflow once and record the result under `## Not tested` if any
       step cannot be automated.
-- [ ] Run the gates listed under [Validation](#validation) and record the results.
+- [x] Run the gates listed under [Validation](#validation) and record the results.
 
 ## Validation
 
@@ -580,7 +580,81 @@ npm run check
   branch checked out and the plan's own paths clean", matching `/plan-close`'s scoped commit. A
   fully clean primary would block every transition from a worktree session.
 
+Decisions made autonomously during implementation (2026-10-15):
+
+- **Transition names.** The `roborepo plans` subcommands are `promote`, `start`, `submit`
+  (active → review), `reopen` (review → active), `close`, and `archive`, one per manifest
+  transition, all handled by one CLI function. `start` keeps its name because it still names the
+  move, not the retired command. Alternative: one generic `plans transition <id>`; rejected as
+  less discoverable in help and skill prose.
+- **Destination gates.** The transition validates the content it will commit. `ready` and
+  `completed` tolerate no findings, as the design requires for Ready; `active` and `review`
+  tolerate only `UNCONFIRMED_NOT_TESTED`, which stays open until `/plan-close`; `archived` checks
+  only its own lifecycle rules, so retiring an old, messy plan never demands a structure repair.
+  The tolerances live in `transition.mjs`, keeping rules out of the manifest.
+- **Which transitions carry the command's own edits.** `promote` and `close` commit the plan's
+  pending edits with the rename, per the "where each transition is committed" table; every other
+  transition refuses a dirty plan path. `archive` takes `--reason` and writes the `## Archived`
+  section and empty `next_action` itself. Alternative: let `/plan-archive` edit the primary copy
+  first; rejected because those edits would make the carry decision see an outside edit and refuse.
+- **Gates enforced in code, not only in skills.** `submit` runs the completion preflight, and
+  `close` checks worktree-copy integration, approval freshness, and landing (the existing
+  `worktree-landed.mjs`) before committing. The skills still describe these steps; the command is
+  the guarantee.
+- **`movePlanLifecycle` removed.** Its validation, collision, and boundary checks moved into the
+  transition (`lifecycleMoveDestination` is shared), and `buildRepairPrompt` now rides on gate
+  refusals. Its tests were replaced by `plan-lifecycle-transitions-check.mjs`.
+- **`worktreeBound` manifest flag.** One declaration (Active and Review) drives worktree authority,
+  automatic-cleanup protection, and Home's plan-to-worktree join, instead of three hard-coded lists.
+- **Home lists Review plans with Active ones.** Its overview's `active` list now holds every
+  worktree-bound plan, and `counts` gains `ready` and `review`, so a review plan keeps its
+  worktree row and its **merged** badge, which is the cue to run `/plan-close`.
+- **Label copy.** Readiness is shown as **structure** (`structure complete` / `draft`) and
+  `reviewed_commit` freshness as **plan freshness** (`never checked`, `checked, current`,
+  `possibly stale`, `freshness unknown`); the filter ids became `structure` and `freshness`. A
+  review plan shows a QA chip (`N open findings`, `approved`, or `awaiting review`) beside its task
+  ring. Plan records gain `qa` and `notTestedOpen` for these and for the recommended command.
+- **`sync-base` details.** It refuses a local base behind its upstream (as of the last fetch)
+  instead of fetching or updating it, resolves only the plan's own modify/delete rename conflict
+  automatically (matched by `id`), and its `--continue` verifies no unmerged paths, nothing
+  unstaged, and no conflict markers. Running the repository's checks before continuing is
+  `/plan-review`'s step, since the command cannot know a repository's checks.
+- **Approval record.** `Confirmed by` must be non-empty; whether a human gave it cannot be checked
+  deterministically, so the skills carry that rule.
+- **Test file rename.** `plan-promote-plan-start-check.mjs` became `plan-suite-skills-check.mjs`,
+  since it now covers all five command skills; the shared Git fixture is
+  `scripts/test/lib/plan-git-fixture.mjs`.
+- **No new forbidden filename suffixes.** `ready` and `review` were not added to the naming rule's
+  forbidden suffixes: two existing plans legitimately end in `-review`.
+- **Post-merge fixes in `/plan-close`.** Its step 1 now says fixes made after the reviewed merge
+  stay limited to tests and evidence, and a behavior change needs `/plan-review` again, so a close
+  never lands code no human approved.
+
+## Implementation verification
+
+Run on 2026-10-15 in the plan's worktree:
+
+- `npm run check` passed: doctor (102 checks), `test-cli.sh`, install collisions, the `ci` unit
+  group (38 suites), package install, the four Docker clean-machine suites, and the portal UI
+  suite (103 specs). Windows installer parity was skipped because `pwsh` is not installed.
+- `node scripts/test/run-checks.mjs --filter plan` passed 15 suites, including the new
+  `plan-lifecycle-manifest-check.mjs`, `plan-lifecycle-transitions-check.mjs`, and
+  `plan-sync-base-check.mjs`.
+- `roborepo plans validate` on this plan reports only its open Not tested entry.
+- A portal started from this branch (`roborepo web --detach --port 4343`) shows Backlog, Ready,
+  Active, and Review as tabs, the Structure and Plan freshness filters, a **Review** button on
+  active plans whose tasks are done, and the Active actions (Continue, Review, Update, Archive) in
+  the card menu, with no console errors.
+
 ## Open questions
 
-None blocking. Exact copy for the renamed readiness and freshness labels is settled during
-implementation.
+None blocking.
+
+## Not tested
+
+- [ ] The whole suite on a real plan, in separate agent sessions: `/plan-promote`, `/plan-execute`
+      (start, resume, and completion), `/plan-review` (sync, findings, approval prompt),
+      `/plan-execute` fixing findings, a pull request merged on GitHub, then `/plan-close` and
+      `/plan-archive`. Every transition the skills call is covered by
+      `plan-lifecycle-transitions-check.mjs`, but whether agents follow the skill prose, and ask
+      for approval rather than infer it, needs live sessions and a real pull request.
