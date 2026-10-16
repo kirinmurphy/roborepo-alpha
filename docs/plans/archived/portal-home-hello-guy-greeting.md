@@ -1,7 +1,7 @@
 ---
 id: 4eis1s6s
 priority: low
-next_action: Add the home-greeting paragraph to portal/home/index.html directly before the home-heading section
+next_action:
 blocked_by: []
 depends_on: []
 related:
@@ -22,8 +22,8 @@ review, close) on work with no design risk.
 
 Home is the portal's default page, served at `/` from `portal/home/index.html`. Its `<main>` holds,
 in order: the loading placeholder, three hidden status banners (harness, Codex hook, auto-discovery),
-the "Active Repos" heading section, the mock-data disclaimer, a warning notice, and the repo list.
-Nothing on the page greets the user today.
+the greeting, the "Active Repos" heading section, the mock-data disclaimer, a warning notice, and the repo list.
+Before this change, nothing on the page greeted the user.
 
 Home is framework-less: static markup lives in `index.html`, and `portal/home/app.js` fills the
 dynamic regions at runtime. `app.js` writes only into those regions by their ids (the banner
@@ -72,14 +72,14 @@ stays above it (see the decision log).
 
 ## Implementation plan
 
-- [ ] Add the `home-greeting` paragraph to `portal/home/index.html` directly before the
+- [x] Add the `home-greeting` paragraph to `portal/home/index.html` directly before the
       `home-heading` section
-- [ ] Add the `.home-greeting` spacing rule to `portal/home/styles.css`
-- [ ] Add a test to the `repository-first portal Home` block in
+- [x] Add the `.home-greeting` spacing rule to `portal/home/styles.css`
+- [x] Add a test to the `repository-first portal Home` block in
       `scripts/test/portal-ui/portal-ui.spec.mjs` that opens `/`, finds the greeting with
       `page.getByText("hello guy!", { exact: true })`, asserts it is visible, and asserts its
       bounding box sits above the "Active Repos" heading's
-- [ ] Run the new test while iterating, then the full portal UI suite and the repository gate
+- [x] Run the new test while iterating, then the full portal UI suite and the repository gate
 
 ## Validation
 
@@ -109,6 +109,25 @@ No reader-facing doc is affected. `docs/user/reference/repositories.md` describe
 directory of known repos and documents its controls; a static greeting adds no control and
 changes no behavior that reference covers.
 
+## Verification
+
+- The focused greeting test failed before the markup was added and passed afterward.
+- `npm run test:portal-ui` passed all 100 tests after updating the existing banner-order assertion.
+- `git diff --check` passed.
+- The first `npm run check` run found an existing `UNKNOWN_PLAN_NAMESPACE` finding for
+  `backlog/agent-permissions-global-audit.md`; the same focused check failed on `main`.
+  At the user's request, that plan was renamed to
+  `backlog/agent-config-permissions-global-audit.md`, using the declared `agent-config` prefix.
+- The focused plan naming check and the full `npm run check` gate then passed. The gate ran the
+  package install and Docker clean-machine phases and all 100 portal UI tests; optional Windows
+  installer parity was skipped because PowerShell is unavailable.
+- A portal from this worktree is running at `http://127.0.0.1:57473` with isolated temporary state.
+
+## Not tested
+
+- [ ] Confirm the greeting visually on the running Home page. The browser security policy blocked
+      this agent from opening the local portal; the automated Chromium checks passed.
+
 ## Related plans
 
 Checked against `main` at `c6051ff2`.
@@ -117,12 +136,22 @@ Checked against `main` at `c6051ff2`.
 | --- | --- | --- |
 | `rtkmc8kf` Walk New Users Through Setup from the Home Page (backlog) | Unlanded, no conflict | Also adds content above the "Active Repos" heading. Neither depends on the other; whichever lands second places its markup relative to the other's |
 
-## Decision log
+## Decision Log
 
 - **2026-10-16** — The greeting goes directly above the heading and below any status banner. A
   banner asks the user to act (fix a harness, review a hook, turn on discovery), so it keeps the
   top of the page whenever it shows.
+- **2026-10-16, user decision** — Rename the unrelated permissions audit plan to use the
+  `agent-config` prefix already declared in `plans-config.json`, instead of adding a new namespace.
+  This resolved the repository gate's naming finding without changing naming policy.
+- **2026-10-16** — Removed the untested-gate entry after the complete gate passed. Its optional
+  Windows parity phase was skipped because PowerShell is unavailable and does not cover this Home
+  change; the separate visual Home check remains unconfirmed.
 
-## Open questions
+## Open Questions
 
 None.
+
+## Archived
+
+2026-10-16: Abandoned after serving as a manual QA test case for the plan lifecycle review and ship workflow.
