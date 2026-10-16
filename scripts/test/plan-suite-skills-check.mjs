@@ -59,7 +59,7 @@ const SKILLS = {
   "plan-review": {
     risk: "high",
     boundaryPhrases: [
-      "fix findings, or edit implementation code",
+      "fix a finding that changes behavior, chooses between alternatives, or changes a contract",
       "infer, assume, or record approval without the human's explicit answer",
       "merge the feature branch into the base branch, push, open or merge pull requests",
       "move a plan back to `ready/`",
@@ -156,6 +156,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
   ]);
   includesAll("plan-execute review findings", skill.slice(order[4]), [
     "nothing else is in scope",
+    "A finding marked `fixed in review` is already resolved",
     "Never edit `### Approval`",
     "never run a lifecycle transition in this mode",
     "it needs `/plan-review`",
@@ -234,16 +235,27 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
 // --- plan-review: preflight, base synchronization, independent QA, findings, and approval ---
 {
   const review = readSkill("plan-review");
-  const order = ["### 1. Confirm implementation is complete", "### 2. Synchronize the base branch", "### 3. Review independently", "### 4. Record the review", "### 5a.", "### 5b.", "### 5c."]
+  const order = ["### 1. Confirm implementation is complete", "### 2. Synchronize the base branch", "### 3. Review independently", "### 4. Record the review", "### 5. Fix additive findings", "### 6a.", "### 6b.", "### 6c."]
     .map((heading) => review.indexOf(heading));
-  assert.ok(order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1])), "plan-review: preflight, sync, review, record, then the three outcomes");
+  assert.ok(order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1])), "plan-review: preflight, sync, review, record, fix additive findings, then the three outcomes");
+  // The reviewer fixes only what cannot change the behavior it judged; the rest goes to /plan-execute.
+  includesAll("plan-review additive fixes", review.slice(order[4], order[5]), [
+    "A test that only adds coverage of behavior the code already has",
+    "Any change to what code does, including a bug fix",
+    "A choice between real alternatives",
+    "leave it for `/plan-execute`",
+    "has found a behavior defect",
+    "Commit the fix on its own, separate from the plan record",
+    "fixed in review (<short commit>)",
+  ]);
   includesAll("plan-review", review, [
     "canonical completion preflight command",
     "canonical submit transition command",
     "canonical base synchronization command",
     "never discard work and never pick a side blindly",
     "Never merge the feature branch into the base branch",
-    "Do not fix anything yourself",
+    "Do not fix anything while reviewing. Record every finding first",
+    "every commit this review made in step 5",
     "Plain checkboxes are enough for findings",
     "- Decision: approved",
     "- Reviewed implementation commit: <full commit id>",

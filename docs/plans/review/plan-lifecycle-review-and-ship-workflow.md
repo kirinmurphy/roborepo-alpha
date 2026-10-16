@@ -291,9 +291,11 @@ findings may stay for readable history.
 1. `/plan-review` starts from an `active` plan that passes the preflight, or resumes in `review`. It
    first synchronizes base into the feature branch, then inspects requirements, changes, tests, and
    evidence independently of the implementation agent.
-2. It records findings and verification in the plan and commits the plan in the worktree.
-   `/plan-execute`, run in `review` in a **separate session**, addresses those findings; no separate
-   fix command is needed.
+2. It records findings and verification in the plan and commits the plan in the worktree. It then
+   fixes **additive** findings itself, each in its own commit: tests that only add coverage, doc and
+   evidence corrections, typos. `/plan-execute`, run in `review` in a **separate session**,
+   addresses the findings that change behavior, choose between alternatives, or change a contract;
+   no separate fix command is needed.
 3. Rerun `/plan-review` after fixes. Corrections within the approved requirements stay in `review`.
 4. Once findings and required manual checks are resolved, ask the human for explicit approval and
    commit the approval record. An agent cannot infer approval from passing tests.
@@ -579,6 +581,13 @@ npm run check
 - **2026-10-15** — The transition precondition narrows from "primary checkout fully clean" to "base
   branch checked out and the plan's own paths clean", matching `/plan-close`'s scoped commit. A
   fully clean primary would block every transition from a worktree session.
+- **2026-10-15** — `/plan-review` fixes additive findings in place (tests that only add coverage,
+  doc and evidence corrections, typos), each in its own commit named in the approval request.
+  Findings that change behavior, choose between alternatives, or change a contract still go to
+  `/plan-execute` in a separate session. A separate round for every finding cost a session and a
+  full re-review even for a one-line doc fix, while independence only matters where the reviewer
+  would otherwise approve its own design. Same line as `/plan-close`'s post-merge limit to tests and
+  evidence. (User decision, during the first review round.)
 
 Decisions made autonomously during implementation (2026-10-15):
 

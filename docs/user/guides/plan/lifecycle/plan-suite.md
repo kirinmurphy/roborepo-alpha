@@ -55,8 +55,8 @@ flowchart LR
 5. Run `/plan-execute` to implement it in its own worktree. Run it again to resume in a later chat;
    if you stop mid-work, `/session-close` writes the handoff note. When the work is complete, the
    plan moves to `review/`.
-6. Run `/plan-review` in a new chat. It records findings; `/plan-execute` fixes them; rerun
-   `/plan-review` until it asks for your approval.
+6. Run `/plan-review` in a new chat. It records findings and fixes the additive ones itself;
+   `/plan-execute` fixes the rest; rerun `/plan-review` until it asks for your approval.
 7. Merge the reviewed branch yourself through a pull request.
 8. Run `/plan-close`.
 
@@ -124,7 +124,7 @@ Starts, resumes, or fixes the implementation of a plan, depending on where the p
 | --- | --- |
 | `ready/` | Creates or safely reuses a worktree under the repository's configured `worktreeRoot`, runs `roborepo plans start` (records the worktree, moves the plan to `active/`, commits, and validates), then implements |
 | `active/` | Resumes in the plan's worktree from the first open task |
-| `review/` | Fixes only the open findings `/plan-review` recorded; the plan stays in `review/` |
+| `review/` | Fixes only the open findings `/plan-review` recorded and left for it, the ones that change behavior or need a decision; the plan stays in `review/` |
 | `backlog/` | Refuses and points you to `/plan-promote` |
 
 While implementing, it works through every unblocked task without stopping for check-ins, records
@@ -158,7 +158,11 @@ Reviews finished work independently of the chat that wrote it. In order, it:
    nothing when base has nothing new; on a conflict the merge pauses for a careful resolution, and
    `roborepo plans sync-base --continue` commits it once no conflicts or conflict markers remain;
 3. reads the requirements and the full diff, and runs the repository's checks;
-4. records findings and verification in a `## Review` section of the plan.
+4. records findings and verification in a `## Review` section of the plan;
+5. fixes the additive findings itself, each in its own commit: a test that only adds coverage, a
+   wrong doc or comment, plan evidence, a typo. Anything that changes behavior, chooses between
+   alternatives, or changes a contract stays open for `/plan-execute`, so the reviewer never
+   approves its own design. A fixed finding reads `- [x] … — fixed in review (<short commit>)`.
 
 Then one of three things happens:
 
@@ -166,7 +170,7 @@ Then one of three things happens:
 | --- | --- |
 | Open findings within the requirements | The plan stays in `review/`. Run `/plan-execute` to fix them, then `/plan-review` again |
 | The requirements themselves must change | With your agreement, it revises the plan, invalidates any approval, and moves the plan back to `active/` with `roborepo plans reopen`. The worktree and branch stay |
-| No open findings | It asks you for approval of the exact commit it reviewed, and records your answer |
+| No open findings | It asks you for approval of the exact commit it reviewed, naming any commits it made itself, and records your answer |
 
 The review record looks like this:
 

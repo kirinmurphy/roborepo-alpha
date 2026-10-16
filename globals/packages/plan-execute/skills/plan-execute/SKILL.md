@@ -240,7 +240,9 @@ they are resolved before `/plan-close`.
 A plan in `review/` returns here only to fix what review recorded.
 
 1. Read `## Review` in the worktree's copy. The unchecked items under `### Findings` are the work;
-   nothing else is in scope.
+   nothing else is in scope. `/plan-review` fixes additive findings itself (tests that only add
+   coverage, doc and evidence corrections), so what reaches here changes behavior or needs a
+   decision. A finding marked `fixed in review` is already resolved; leave it as it is.
 2. Fix each finding within the plan's existing requirements, with the same verification discipline
    as the Implementation Workflow.
 3. Check each fixed finding off and add its resolution after a dash, for example

@@ -1,6 +1,6 @@
 ---
 name: plan-review
-description: Use to independently review a finished repository plan before its pull request merges. Trigger on explicit /plan-review or requests to independently review a plan or record explicit human approval for it. Accepts a plan in active, where it first runs the completion preflight and commits the move to review, or in review. It merges the base branch into the feature branch, checks the implementation against the plan's requirements independently of the implementation agent, records concise findings and verification in the plan, and asks the human to record explicit human approval for the reviewed implementation commit. Corrections within the requirements stay in review; a material scope change returns the plan to active. Rerun after fixes. Do not use for fixing review findings (plan-execute), reviewing an arbitrary diff, merging branches, or post-merge closure (plan-close).
+description: Use to independently review a finished repository plan before its pull request merges. Trigger on explicit /plan-review or requests to independently review a plan or record explicit human approval for it. Accepts a plan in active, where it first runs the completion preflight and commits the move to review, or in review. It merges the base branch into the feature branch, checks the implementation against the plan's requirements independently of the implementation agent, records concise findings and verification in the plan, fixes additive findings itself (tests that only add coverage, doc and evidence corrections), and asks the human to record explicit human approval for the reviewed implementation commit. Corrections within the requirements stay in review; a material scope change returns the plan to active. Rerun after fixes. Do not use for fixing review findings that change behavior (plan-execute), reviewing an arbitrary diff, merging branches, or post-merge closure (plan-close).
 ---
 
 # Plan Review
@@ -100,8 +100,8 @@ in the review record.
   the code.
 - Check every `## Not tested` entry: attempt the checks an agent can run, and list the manual ones
   for the human.
-- Do not fix anything yourself. Fixes belong to `/plan-execute`, so the review stays independent of
-  the work it judges.
+- Do not fix anything while reviewing. Record every finding first, so each fix answers a recorded
+  finding and the review judges the work as it was handed over. Step 5 then fixes the additive ones.
 
 ### 4. Record the review
 
@@ -126,14 +126,42 @@ findings; earlier findings may stay for readable history.
 ```
 
 Keep each finding to one line a fixer can act on: what is wrong and where. Commit the plan in the
-worktree as a plan-only commit. Then take exactly one of these outcomes.
+worktree as a plan-only commit.
 
-### 5a. Findings within the requirements
+### 5. Fix additive findings
+
+Some findings add to the work without changing what it does. Fixing those here saves a separate
+`/plan-execute` round without giving up independence, because nothing the reviewer writes changes
+the behavior it judged. Everything else goes to `/plan-execute`, so the reviewer never approves its
+own design.
+
+| Fix here | Leave for `/plan-execute` |
+| --- | --- |
+| A test that only adds coverage of behavior the code already has | Any change to what code does, including a bug fix |
+| A correction to a doc, comment, or error message that is demonstrably wrong | A choice between real alternatives |
+| Plan evidence: `### Verification`, `## Not tested` wording, checked tasks that are actually done | A change to a public interface, command, file format, or contract |
+| A typo or a broken link | Anything outside the plan's requirements |
+
+When a finding is not clearly in the first column, leave it for `/plan-execute`. A new test that
+fails has found a behavior defect: drop the test, and record the defect as a finding for
+`/plan-execute` instead.
+
+For each finding fixed here:
+
+1. Make the fix in the worktree, then run the checks it affects. After any code or test change,
+   rerun the repository's canonical completion gate.
+2. Commit the fix on its own, separate from the plan record, so the human can read exactly what the
+   reviewer changed.
+3. Check the finding off with its commit: `- [x] Missing retry test — fixed in review (<short commit>)`.
+
+Commit the updated plan in the worktree. Then take exactly one of these outcomes.
+
+### 6a. Findings within the requirements
 
 Leave the plan in `review/`. Tell the user to run `/plan-execute` on this plan in a separate session
 to fix the open findings, then `/plan-review` again. Do not invoke either command yourself.
 
-### 5b. A material change to scope or acceptance criteria
+### 6b. A material change to scope or acceptance criteria
 
 When review shows the requirements themselves must change, this is the user's decision. Present the
 proposed change and its consequences, and wait for an explicit answer.
@@ -148,19 +176,20 @@ On agreement:
    It commits the plan-only move back to `active/`. The plan keeps its worktree and branch, and
    never returns to `ready/`.
 
-### 5c. No open findings: ask for approval
+### 6c. No open findings: ask for approval
 
 When every finding is resolved and every required manual check has been confirmed by the user:
 
 1. Resolve the feature branch's current tip as a full commit id. That is the implementation being
    approved.
-2. Ask the human directly for approval, naming the plan, the commit, and the verification performed.
-   An agent cannot approve, and passing tests are not approval.
+2. Ask the human directly for approval, naming the plan, the commit, the verification performed,
+   and every commit this review made in step 5. An agent cannot approve, and passing tests are not
+   approval.
 3. **Approved:** write `### Approval` with `Decision: approved`, the full commit id, and who
    confirmed it, then commit it in the worktree. Run the repository's canonical approval check for
    `<plan>`; it must report `fresh`. Plan-only commits after approval keep it fresh; any change
    outside `docs/plans/` makes it stale.
-4. **Not approved:** record the human's reasons as findings and continue as 5a or 5b.
+4. **Not approved:** record the human's reasons as findings and continue as 6a or 6b.
 
 After approval, tell the user to open and merge the pull request themselves, then run
 `/plan-close`. If the base branch moves before that merge, the user reruns `/plan-review`;
@@ -175,7 +204,7 @@ Review result
 - Lifecycle change: active -> review | review -> active | none
 - Base synchronization: up-to-date | merged <commit> | conflicts resolved <commit> | refused (<reason>)
 - Tests: <command> -> pass|fail
-- Findings: <open count> open, <resolved count> resolved
+- Findings: <open count> open, <resolved count> resolved, <count> fixed in review (<commits>)
 - Not tested entries open: <count>
 - Approval: approved at <commit> | requested | not requested | invalidated
 - Approval freshness: fresh | stale | missing
@@ -189,7 +218,8 @@ loaded or skipped, and current Git status in the worktree and the primary checko
 
 Do not:
 
-- fix findings, or edit implementation code;
+- fix a finding that changes behavior, chooses between alternatives, or changes a contract, or edit
+  implementation code beyond what an additive fix in step 5 needs;
 - infer, assume, or record approval without the human's explicit answer;
 - merge the feature branch into the base branch, push, open or merge pull requests;
 - change lifecycle state except the submit transition from `active/` and the reopen transition
