@@ -1,7 +1,7 @@
 ---
 id: gqzjlzgx
 priority: high
-next_action: Promote this plan, reconcile overlapping Plan Suite work, and implement the shared lifecycle contract before changing skills or portal actions.
+next_action: Promote this plan against the current repository, reconcile overlapping Plan Suite work, then implement shared lifecycle operations before updating skills and portal actions.
 blocked_by: []
 depends_on: []
 related: []
@@ -13,36 +13,38 @@ worktree:
 
 ## Summary
 
-Make RoboRepo's Plan Suite a consistent, resumable lifecycle with explicit preparation, implementation, independent QA, human approval, and post-merge closeout. Introduce `ready/` and `review/`, rename the repeatable implementation command to `/plan-execute`, add `/plan-review`, `/plan-ship`, and `/plan-archive`, and move Git/file/validation mechanics into deterministic shared operations.
+Extend RoboRepo's Plan Suite with `ready/` and `review/`, repeatable implementation, independent QA, explicit human review approval, and safe archiving. Replace `/plan-start` with `/plan-execute`; add `/plan-review` and `/plan-archive`; **retain the existing `/plan-close`** as the post-merge verifier and finalizer. Preserve its working integration checks, including current handling of squash merges.
 
-Every successful lifecycle move must commit the plan's rename and related plan-only changes. The workflow stays manually initiated for now; there is **no automated session launching, queue watcher, GitHub PR integration, or automated merge into the base branch**.
+Every successful lifecycle state change must commit the plan file's move and associated plan-only edits. Move Git, validation, and transition mechanics into shared deterministic Plan Suite operations that skills invoke. The human continues to merge feature branches into the base branch through GitHub; no GitHub integration or workflow automation is introduced here.
 
 ## Goals
 
-- Model `backlog → ready → active → review → completed`, plus `archived` as an exceptional exit.
-- Allow lifecycle commands to be invoked on the state immediately preceding their usual entry state, or again within their own state, without duplicating work.
-- Let `/plan-execute` resume the same plan in a later session, and advance only when **implementation** is complete—not when independent QA has passed.
-- Use `/plan-review` for independent findings and repeatable review rounds; require explicit human approval before `/plan-ship` can finalize.
-- Keep small review fixes in `review/`; return to `active/` for substantial changes in scope, preserving implementation and history.
-- Merge the current base branch **into the feature branch** before review, and recheck/synchronize it during pre-merge shipping preparation, with safe conflict handling.
-- Leave the actual feature-branch-to-base merge to the human using a GitHub PR. `/plan-ship` must verify landed code on the base branch and finalize only afterward.
-- Give transitions, Git safeguards, approval freshness, and completion checks deterministic CLI/domain implementations shared by skills and portal consumers.
-- Preserve authoritative worktree plan content through `active` and `review`, and commit every state transition in its owning checkout.
+- Use the lifecycle `backlog → ready → active → review → completed`, with `archived` as an exceptional exit.
+- Make `/plan-promote` validate and commit `backlog → ready`.
+- Make `/plan-execute` start or resume work from `ready` or `active`, and address QA findings in `review` without a new implementation command.
+- Advance `active → review` when **implementation work is complete**; independent QA and human acceptance happen afterward.
+- Make `/plan-review` perform independent QA, retain concise findings and resolutions in the plan, and require explicit human approval before manual merge and `/plan-close`.
+- Keep corrections to existing requirements in `review`; return to `active` only when scope or acceptance criteria must materially change, preserving the current branch and worktree.
+- Merge the current base branch **into the feature branch** during review, including subsequent review rounds when needed. Never merge the feature branch into base automatically.
+- Preserve `/plan-close` as a **post-manual-merge** command that verifies landed work, checks completion/approval evidence, moves `review → completed`, commits the move, and performs existing guarded cleanup.
+- Commit each state transition in the appropriate checkout, with deterministic authority, worktree, Git, and validation safeguards.
+- Update the Plans portal, CLI, packages, documentation, and tests consistently.
 
 ## Non-goals
 
-- Backward compatibility, aliases, migration shims, preservation of obsolete commands or old schema behavior. Breaking changes are acceptable.
-- CodeRabbit, third-party reviewers, GitHub APIs, PR creation, PR comments, or automated PR merges.
-- Automatic lifecycle advancement, queue watchers, persistent orchestrators, fresh-session launchers, or configurable automation.
-- A task database or separately persisted lifecycle status; the **plan folder remains the lifecycle source of truth**.
-- Replacing the current `plan-close` landing-verification strategy merely because squash/rebase merges exist. Retain known-working behavior and add targeted regression coverage.
+- Backward compatibility, aliases for `/plan-start`, or migration support for obsolete command contracts. Breaking changes are acceptable.
+- Introducing `/plan-ship`, a chat-held merge approval/wait loop, or pre-merge shipping modes. Reconsider `/plan-ship` when GitHub PR interaction is introduced separately.
+- CodeRabbit or any other external reviewer integration; GitHub APIs, PR creation, PR comments, or automated base-branch merges.
+- Automated session launching, watchers, queues, continuous orchestration, or configurable progression.
+- A separate review database, elaborate finding IDs/round schemas, or a separately stored lifecycle field. The **plan folder remains the lifecycle source of truth**.
+- Replacing the known-working `/plan-close` merge-verification algorithm merely because squash or rebase merges exist.
 
 ## Current state
 
-- Plans are file-backed under `docs/plans/{backlog,active,completed,archived}/`; the portal derives their lifecycle from directories. Structural `readiness` and `reviewed_commit` freshness are separate derived concepts.
-- `/plan-write` creates backlog documents; `/plan-promote` validates and improves them without moving lifecycle; `/plan-start` enters `active/` and works in an associated Git worktree; `/plan-close` verifies landed work and closes or archives. `/session-close` supplies cross-session handoffs.
-- The start transition is committed on the primary/base checkout. The assigned worktree's plan copy is authoritative while active; the current authority resolver only recognizes `active/`.
-- Existing deterministic primitives include `modules/plan-suite/lifecycle-policy.mjs` and the Plan Suite parser/findings/authority/move/CLI surfaces. `plan-close` already has worktree-integrity, landed-code, cleanup, and completion behavior to reuse.
+- Plans live in `docs/plans/{backlog,active,completed,archived}/`; lifecycle is derived from folders. Structural readiness and the existing `reviewed_commit` freshness concept are separate from the proposed QA lifecycle state.
+- `/plan-write` creates the backlog plan and its initial executable checklist. `/plan-promote` reconciles and improves that plan but currently does not change state. `/plan-start` enters `active/` and implements work in an associated Git worktree. `/plan-close` verifies landed implementation and completes or archives. `/session-close` provides cross-session handoff.
+- The initial start transition is committed in the base checkout. An assigned worktree's plan is authoritative during active implementation; current portal authority rules are specialized to `active/`.
+- Existing Plan Suite policy, parser, findings, authority, move/CLI, and Git integrations should be extended rather than reimplemented inside skills. The current `/plan-close` integration and cleanup behavior is the baseline for closeout.
 - `docs/plans/plans-config.json` declares the `plan-lifecycle` namespace and worktree policy.
 
 Reference points: `globals/packages/plan-write/skills/plan-write/`, `globals/packages/plan-promote/skills/plan-promote/`, `globals/packages/plan-start/skills/plan-start/`, `globals/packages/plan-close/skills/plan-close/`, `modules/plan-suite/`, `docs/user/guides/plan/lifecycle/plan-suite.md`, and `docs/user/reference/plans-portal.md`.
@@ -53,182 +55,186 @@ Reference points: `globals/packages/plan-write/skills/plan-write/`, `globals/pac
 
 ```mermaid
 flowchart LR
-  B["backlog"] -->|"plan-promote validates and commits"| R["ready"]
-  R -->|"plan-execute starts and commits"| A["active"]
-  A -->|"plan-execute completes implementation; or plan-review checks readiness"| V["review"]
-  V -->|"material scope change; committed"| A
-  V -->|"human approval + manual PR merge; plan-ship verifies and commits"| C["completed"]
+  B["backlog"] -->|"plan-promote"| R["ready"]
+  R -->|"plan-execute starts"| A["active"]
+  A -->|"implementation complete"| V["review"]
+  V -->|"requirements change"| A
+  V -->|"human approval, manual PR merge, plan-close"| C["completed"]
   B -->|"plan-archive"| X["archived"]
   R -->|"plan-archive"| X
   A -->|"plan-archive"| X
   V -->|"plan-archive"| X
 ```
 
-| Command | Accepts | Main responsibility | State/result |
+| Command | Accepts | Responsibility | State/result |
 | --- | --- | --- | --- |
-| `/plan-write` | New plan or existing plan | Write/revise/sync requirements | Creates `backlog/`; no implicit move |
-| `/plan-promote` | `backlog`, `ready` | Validate, reconcile, resolve decisions | `backlog → ready`, or update ready plan |
-| `/plan-execute` | `ready`, `active`, `review` | Start/resume implementation; in `review`, remediate findings | `ready → active`; `active → review` **only on implementation completion**; fixes in `review` stay there |
-| `/plan-review` | `active`, `review` | Verify implementation-ready gate, synchronize base, independent QA, record findings, iterate | `active → review` if eligible; remain in `review` until HIL approval or significant scope return |
-| `/plan-ship` | `review` (and resumable after integration) | Pre-merge readiness/base synchronization; after human PR merge, verify landed work and close | `review → completed` only after integration and post-merge checks |
-| `/plan-archive` | `backlog`, `ready`, `active`, `review` | Record archive reason and protect unfinished work | Move to `archived` and commit |
-| `/session-close` | Any active agent session | Commit/handoff work without changing plan lifecycle | No lifecycle transition |
+| `/plan-write` | New or existing plan | Create or revise the plan and executable checklist | New plan in `backlog`; no implicit move |
+| `/plan-promote` | `backlog`, `ready` | Validate/reconcile requirements, tests, dependencies, and tasks | Commit `backlog → ready`, or refine an existing `ready` plan |
+| `/plan-execute` | `ready`, `active`, `review` | Start/resume implementation; in `review`, remediate recorded findings | `ready → active`; `active → review` on implementation completion; remain `review` while fixing findings |
+| `/plan-review` | `active`, `review` | Check implementation readiness, synchronize base into branch, independently review, record findings and request human approval | `active → review` if eligible; remain `review` until approved or scope changes |
+| `/plan-close` | `review` (after manual merge) | Verify landed implementation and review approval, commit completion, safely clean up | `review → completed` after integration is verified |
+| `/plan-archive` | `backlog`, `ready`, `active`, `review` | Record reason; preserve unmerged code; archive | Commit move to `archived` |
+| `/session-close` | Any agent session | Record progress and handoff for a fresh session | No lifecycle transition |
 
-**Commands do not invoke subsequent skills.** They finish their stage and return a clear result. A later user invocation or future runner may execute the next stage in an independent session. Reinvocation must use durable Git/plan evidence to resume, not rely on conversation history.
+A command may be invoked before its normal entry transition or again after that transition; it inspects current state and does not duplicate work. Commands **never invoke the next skill**. A later manual invocation starts the next phase, normally in a separate agent session. No process exit or session handoff implies stage completion.
 
-### Implementation completion versus QA
+### Implementation completion is not QA
 
-A deterministic implementation-completion preflight should verify the plan's declared required tasks, recorded blockers and unresolved decisions, applicable automated checks, code/document evidence supplied by the implementation run, and committed worktree changes. **Checklist status alone is insufficient**, and this is not an independent QA review.
+`/plan-execute` uses a shared completion preflight that deterministically checks observable requirements: required tasks are accounted for, unresolved blockers and decisions are surfaced, applicable automated tests/checks have recorded results, relevant changes are committed, and implementation evidence is present. The agent must assess whether stated requirements were implemented; **a deterministic gate cannot independently prove semantic correctness**, and should not attempt to perform QA.
 
-- Remaining work or blockers: keep `active`, write a precise `next_action`, and report the incomplete/blocked result.
-- All required implementation work satisfied: record evidence, commit pending implementation/plan updates as appropriate, move and commit `active → review`.
-- `/plan-review` invoked on an `active` plan: run the *same* implementation-completion preflight. If it passes, transition to `review` first; otherwise refuse to advance and list gaps.
-- Unconfirmed manual-only `## Not tested` entries are tracked, not automatically claimed as passed. Define which prevent QA entry versus which are explicitly left for the human review gate; **all required entries must be resolved before shipping**.
-- Ensure implementation-complete logic never confuses “the session ended,” “no unblocked work remains,” or “tests were attempted” with a fully satisfied plan.
+- **Incomplete or blocked:** keep `active`, record the remaining tasks or blockers and an actionable `next_action`; later `/plan-execute` resumes the existing worktree.
+- **Implementation complete:** commit progress as appropriate, move and commit `active → review`. QA has not yet passed.
+- **`/plan-review` invoked while `active`:** run the same implementation-readiness check. If ready, commit `active → review` and begin QA; otherwise report precisely what is incomplete without moving the plan.
+- Track genuinely unverified manual checks under the existing `## Not tested` mechanism. Do not treat them as passed. Keep the existing rule that they must be resolved before `/plan-close`; do not turn implementation completion into manual QA.
 
-### Review rounds, remediation, and approval
+### QA, remediation, and human approval
 
-`## Review` in the authoritative plan document contains ordered rounds, reviewed implementation revision, findings (with stable within-plan identifiers and disposition), verification evidence, unresolved manual checks, and human approval. Do not create a parallel review database. Keep the `reviewed_commit` frontmatter concept for plan/code freshness distinct from the new lifecycle state and the **review approval** revision.
+Keep review evidence in a **small `## Review` section of the authoritative plan**: current findings, their resolutions, automated/manual verification performed, the reviewed implementation commit, and explicit human approval. Ordinary Markdown checkboxes are sufficient for findings. Avoid stable finding-ID infrastructure, a formal review-round database, or duplicate review records; retain previous findings as needed for readable history.
 
-Define a strict, parseable review subsection contract, for example:
+For example:
 
 ```md
 ## Review
 
-### Round 1
-- Implementation commit: <full SHA>
-- QA outcome: changes-requested
-- [ ] R1-1: Missing regression coverage for the retry path
+### Findings
+- [x] Missing retry test — added and verified
+- [x] Error handling gap — corrected
+
+### Verification
+- Unit and integration tests passed
+- Manual checks confirmed
 
 ### Approval
 - Decision: approved
-- Implementation commit: <full SHA>
-- Source: explicit-human-confirmation
+- Reviewed implementation commit: <full SHA>
+- Confirmed by: human
 ```
 
-The implementation should standardize those field names/outcomes, parse them deterministically, and reject ambiguous or multiple current approval records. The approval-record mutation occurs only after explicit human confirmation; the agent cannot infer approval from a passing QA result.
+Only a human can grant approval. Record the exact reviewed implementation revision and check freshness against implementation content: code changes or newly resolved merge conflicts require another review and approval, whereas a plan-only findings/approval commit does not by itself invalidate approval. Keep the existing frontmatter `reviewed_commit` (plan freshness) concept distinct from this human-approved implementation revision. Use deterministic approval checks, but do not over-specify the prose format for findings.
 
-1. `plan-review` synchronizes the base branch into the implementation branch (see below), verifies the completion preflight, reviews requirements/code/tests independently, and records findings in a committed plan update.
-2. `plan-execute` may be invoked in `review/` solely to address review findings; the implementation agent and reviewer remain conceptually separate, and each run may use a fresh chat.
-3. Re-run `plan-review` as needed. Small changes remain in `review/`.
-4. If findings materially change requirements, update scope, tasks, decisions, and acceptance criteria, invalidate approval, commit `review → active` in the implementation worktree, and resume `/plan-execute` there. Keep existing branch/worktree/task history; do **not** return to `ready`.
-5. Only after the QA findings and required manual checks are resolved does `/plan-review` request explicit **human** approval. Capture that approval against the reviewed branch revision. No automatic approval from the agent, green tests, or session completion.
-6. Any subsequent implementation-code change, review remediation, or base merge that changes the reviewed implementation invalidates the prior approval. A plan-only review/approval-record commit may be ignored for freshness *only when Git evidence proves it changed no implementation content*.
+1. `/plan-review` may begin from a completed `active` plan or resume in `review`. Synchronize the current base branch into the assigned feature branch before QA, then inspect requirements, changes, tests, and evidence independently from the implementation agent.
+2. Record findings and verification in the plan and commit the updated plan. `/plan-execute` may then be invoked in `review` in a **separate session** to address those findings; no additional `plan-fix` skill is needed.
+3. Re-run `/plan-review` after fixes. Corrections within the approved requirements stay in `review`.
+4. If review identifies a material change to requirements or acceptance criteria, revise the plan/tasks, invalidate prior approval, commit `review → active`, and use `/plan-execute` to continue. Preserve the implementation worktree and completed work; do not return to `ready`.
+5. Once findings and required manual checks are resolved, ask the human for explicit review approval and commit the approval record. An agent cannot infer approval from passing tests.
+6. Approval must not authorize closing a different implementation revision; stale approvals cause `/plan-close` to refuse with a clear next action. Keep this conservative without inventing a new approval service.
 
-### Base-branch synchronization in both review and shipping
+### Base synchronization belongs to review
 
-Add one reusable deterministic operation (proposed CLI surface: `roborepo plans sync-base <plan>`) that merges the configured base branch **into the plan's feature/worktree branch**. It must never merge the feature branch into base.
+Use one deterministic `sync-base` operation, invoked by `/plan-review`, to merge the configured base branch **into the implementation branch**. Repeat in later review rounds when base has moved; the operation is idempotent when nothing needs merging.
 
-- Run before the first QA round and on later review rounds when the base has moved.
-- Re-run as a pre-merge check from `/plan-ship`. If already synchronized, do nothing. If base moved, synchronize and invalidate approval whenever the resulting implementation changes, requiring another `/plan-review` and human approval before the PR merge.
-- Identify the base from repository policy. Verify it is up to date with its remote-tracking ref when available; do not silently reset or rewrite the primary checkout. Report a stale or unavailable base clearly rather than pretending the merge is current.
-- Preflight must identify the exact assigned worktree/branch, refuse unexpected dirty or uncommitted changes, conflicting in-progress Git operations, detached/ambiguous branches, missing worktrees, and an unsafe target.
-- On a clean merge, record the resulting commit when created. On conflicts, list conflicting files and leave the branch in an explicit conflict-resolution workflow; do not discard local changes, use `-X ours/theirs` blindly, force-reset, or auto-resolve semantic conflicts.
-- A reviewer/implementation agent may resolve conflicts on the feature branch, but a deterministic continuation gate must verify every conflict is resolved, checks pass, and the resolution is committed before proceeding. Conflicts that require a design decision wait for the human.
-- Keep merge safety and conflict status checks in shared operations, with skills responsible for semantic resolution and reporting.
+- Verify repository, worktree, target branch, base ref, and Git safety before changing anything; surface a stale base ref or dirty worktree rather than silently rewriting local state.
+- On conflicts, pause for semantic resolution by the agent or a human; never discard changes or blindly choose one side. A deterministic continuation verifies conflicts were resolved, checks passed, and the result was committed.
+- Review findings and any approval must be refreshed if synchronization changes the reviewed implementation. Branch synchronization does not itself move the lifecycle state.
+- **Do not synchronize in `/plan-close`**: by then the user has already merged through GitHub. If `main` moves after approval but before that merge, the user can rerun `/plan-review` as needed, and GitHub's own merge protections remain independent.
 
-### Shipping is manually merged, but deterministically verified
+### Manual merge and existing plan-close
 
-`/plan-ship` must be safely repeatable and infer its next action from Git/plan evidence:
+Keep `/plan-close` a **single post-merge action**, not a two-stage `/plan-ship` replacement:
 
-1. **Before the manual PR merge:** check current review approval and revision; run or confirm base-branch sync. If changes invalidate approval, stop and request another review round. Otherwise report “ready for human PR merge” and stop. Never merge into the base branch or call GitHub APIs.
-2. **After the human merges through GitHub:** run `/plan-ship` again. Detect and verify that the branch's implementation is present on the base checkout, including the plan's authoritative `review/` content; use the existing `plan-close` landed/integrated verification as the baseline rather than replacing it with ancestry-only logic.
-3. Run required checks against the landed base revision, verify approved review evidence and `## Not tested`, record `## Verification`, clear `next_action`, move `review → completed` on the base checkout, and commit the plan-only transition automatically.
-4. Only after successful completion, run existing guarded worktree-server and branch/worktree cleanup; a refused close never deletes unmerged work. On post-merge verification failure, retain `review` as the lifecycle, record what already landed, and permit a safe retry without another merge attempt.
+1. The user manually merges the reviewed implementation into the base branch through a GitHub PR, outside RoboRepo's workflow.
+2. `/plan-close` verifies the reviewed implementation has landed in the current base checkout. Reuse its existing working integration detection (including squash-merge behavior); do not replace it with an ancestry-only requirement.
+3. Confirm a valid human review approval for the landed implementation, resolve mandatory `## Not tested` entries, run applicable existing closeout checks, and record `## Verification`.
+4. Move `review → completed` **on the base checkout** and commit the plan-only transition; then use the existing guarded worktree/branch cleanup mechanisms.
+5. If integration cannot be verified or post-merge checks fail, do not claim completion or delete unmerged work. Report the specific next action and allow retry after the issue is resolved.
 
-The final verification must not edit unmerged feature code or silently amend the user's merge. If additional fixes are needed after integration, report a separate corrective action and the evidence needed to close.
+There is no `plan-ship` command, no in-chat waiting or polling for a PR merge, and no GitHub API integration in this plan. A future PR-enabled shipping workflow may reuse the same deterministic closeout operation behind a new `/plan-ship` interface.
 
-### Deterministic mutation and commit guarantees
+### Deterministic state changes and Git commits
 
-Extract/reuse shared Plan Suite operations for plan resolution, lifecycle permission checks, authority, validation, rename, scoped staging, committing, base sync, approval freshness, integration verification, and cleanup. Skills call these capabilities instead of reconstructing Git steps in prose.
+Centralize shared operations for plan ID/authority resolution, transition permissions, validation, file moves, **scoped staging and commits**, Git safety, base synchronization, approval freshness, landed verification, and cleanup. Skills coordinate decisions and agent work; they do not each invent their own Git commands.
 
-- A transition commits **only** the moved plan file and explicitly owned metadata/rename paths in the owning checkout; never use indiscriminate `git add -A`.
-- `backlog → ready` and first `ready → active` transitions are committed on the base checkout, following the safe worktree-initialization order. Subsequent `active ↔ review` moves are committed on the authoritative implementation branch. `review → completed` is committed on the base after the human PR merge.
-- Define an explicit handoff from the initial base-branch start commit to the worktree, ensuring the worktree's plan path, stable `id`, and authoritative copy agree before implementation starts. Never silently copy divergent plan edits between checkouts.
-- `plan-archive` makes a plan-only archive commit on the appropriate safe checkout; for an unmerged active/review worktree, reuse the existing guarded plan-content handoff for archiving without merging or destroying its implementation.
-- Reject invalid transitions without mutation. A transition is successful **only after** its Git commit succeeds and fresh disk/Git validation confirms the destination and plan identity. On failure, return a recoverable diagnostic; never report success for an uncommitted move.
-- Re-running a transition already recorded must be an idempotent no-op; return the existing state/commit, not a duplicate commit. Never automatically push.
-- Do not introduce a new lifecycle field in frontmatter. Permit targeted schema changes for machine-readable approval evidence as part of this breaking-change implementation, while keeping lifecycle determined exclusively by folder.
+- Every state move commits the moved plan file and any explicitly owned plan-only edits; never stage unrelated changes with `git add -A`.
+- Commit `backlog → ready` and the initial `ready → active` handoff in the base checkout using the existing safe worktree-start pattern. Commit `active ↔ review` in the assigned implementation worktree. Commit `review → completed` in the base checkout after the manual merge.
+- Use the stable plan ID to reconcile different paths in the base checkout and authoritative worktree. Extend current worktree authority to both `active` and `review` without silently overwriting copies.
+- `plan-archive` commits its own safe transition and reason in the appropriate checkout. Do not discard unmerged implementation or delete a worktree without explicit authorization.
+- An operation reports a completed transition **only after** the commit succeeds and its new path/identity are verified. Invalid moves fail without mutation. Repeated calls are safe and do not create duplicate commits. Never push automatically.
+- Folder location remains lifecycle truth; no `lifecycle:` frontmatter field or separate tracking database.
 
-### Portal and vocabulary
+### Portal, packaging, and terminology
 
-- Add `ready` and `review` to scanners, lifecycle policy, API validation, grouping/filtering, counts, status badges, and plan actions. Extend plan authority to assigned worktree copies in **both** `active` and `review`, including the case where the base checkout still has the older `active/` path and the implementation worktree has moved to `review/`.
-- Show implementation progress and review outcome independently. Rename the existing `reviewed_commit` freshness presentation to **plan freshness** (or equivalent) so it cannot be confused with lifecycle `review` or review approval.
-- Expose copy-prompt actions for `plan-promote`, `plan-execute`, `plan-review`, `plan-ship`, and `plan-archive` as appropriate, including “continue execution,” “address findings,” “rerun review,” “awaiting manual merge,” and “verify merge/ship.” The portal remains read-only for lifecycle mutations.
-- Remove obsolete `/plan-start` and `/plan-close` packages/labels/commands; update suite enablement, manifests, package registries and cross-harness projections, CLI help, examples, and prompts. No compatibility aliases.
+- Add `ready` and `review` to scanners, lifecycle policy, validation, API/portal grouping, filters, counts, and available actions. Preserve plan authority through `active` and `review`, including divergence between base and feature worktrees.
+- Display implementation progress and QA/review outcome separately. Name existing `reviewed_commit` status **plan freshness** or equivalent, so it cannot be mistaken for the new `review` lifecycle state or human approval.
+- Provide portal copy-prompt actions for `plan-promote`, `plan-execute` (including review fixes), `plan-review`, `plan-close`, and `plan-archive`. The portal need not execute lifecycle mutations.
+- Remove obsolete `/plan-start` package/commands/examples, and update suite manifests, registries, harness projections, CLI help, and docs. **Retain `/plan-close`** and update its accepted state and review approval checks. No compatibility aliases.
 
-## Implementation plan
+## Implementation checklist
 
-### Phase 1 — Shared lifecycle contract and deterministic transitions
+The initial executable tasks belong in **`plan-write`**. `/plan-promote` must verify and refine them against the current repository before moving the plan to `ready`; it does not need to invent a checklist from scratch.
 
-- [ ] Inventory related plan-lifecycle work and current scanner, parser, authority, `movePlanLifecycle`, CLI, Git, and worktree contracts; settle the one-owner-per-operation module layout before editing.
-- [ ] Add `ready`/`review` to lifecycle policy, schema, validation/findings, namespace/location handling, allowed transition graph, and authoritative worktree resolution; keep lifecycle folder-based and stable plan IDs.
-- [ ] Centralize lifecycle move + scoped stage/commit + post-commit verification into idempotent deterministic operations with safe recovery on failure; ensure initial base-to-worktree handoff and archive handoff handle divergent paths safely.
-- [ ] Implement the shared implementation-completion preflight and review-approval freshness/readiness gates; test against real plan content and Git revisions, not just checkboxes or process exit.
+### Phase 1 — Shared lifecycle contract
 
-### Phase 2 — Skill and CLI workflow replacement
+- [ ] Inventory current Plan Suite lifecycle, authority, CLI, skill, portal, and Git operations; reconcile overlapping active plans and identify reusable implementation owners.
+- [ ] Add `ready` and `review` to lifecycle policy, folder validation, transition rules, stable-ID discovery, and primary/worktree authority resolution.
+- [ ] Implement deterministic lifecycle transition operations with scoped plan-only commits, idempotent retries, post-commit verification, and safe worktree/base handoffs.
+- [ ] Implement a practical shared implementation-completion preflight (tasks, blockers, check results, evidence) without requiring independent QA or manual review.
+- [ ] Implement lightweight review approval storage and revision freshness checks, reusing the plan's Markdown rather than creating a review database.
 
-- [ ] Change `/plan-promote` to validate and commit `backlog → ready`; make repeat invocation on `ready` safe and preserve nontrivial HIL decisions.
-- [ ] Replace `/plan-start` with repeatable `/plan-execute` for `ready`, `active`, and review remediation; preserve worktree reuse, progress synchronization, handoffs, committed implementation, and evidence-based `active → review`.
-- [ ] Add `/plan-review` with independent QA rounds, plan-owned findings, human approval, significant-scope `review → active`, and no automatic next-skill invocation.
-- [ ] Add shared `sync-base` mechanics, conflict detection/resolution continuation, and mandatory review/ship sync preflights without any automatic merge into base.
-- [ ] Replace `/plan-close` with two-pass `/plan-ship` (pre-merge readiness; post-manual-merge verification/closeout), reusing known-working integration and cleanup checks; add `/plan-archive` with safe unmerged-worktree handling.
+### Phase 2 — Lifecycle skills and Git workflow
 
-### Phase 3 — Portal, packaging, and documentation
+- [ ] Update `/plan-promote` to validate/refine the existing task checklist and commit `backlog → ready`; support reruns in `ready`.
+- [ ] Replace `/plan-start` with repeatable `/plan-execute` for `ready`, `active`, and review-fix work; reuse the existing worktree and move `active → review` only after implementation completion.
+- [ ] Add `/plan-review` for independent QA, plan-owned findings, repeated review after fixes, human approval, and scope-driven `review → active`.
+- [ ] Add one shared base-into-feature sync operation for `/plan-review`, with conflict-resolution continuation and approval invalidation when implementation changes.
+- [ ] Extend **existing `/plan-close`** to accept the approved `review` state, verify the human-managed merge and landed approval evidence, commit `review → completed`, and retain its working cleanup/landing behavior.
+- [ ] Add `/plan-archive` to commit an archive reason and protect unmerged implementation/worktrees from accidental deletion.
 
-- [ ] Update Plans portal discovery, filtering, primary/worktree authority, review/freshness terminology, lifecycle actions, and status displays for the new contract.
-- [ ] Update Plan Suite package manifests/registries, harness-rendered skills, CLI routing/help, and onboarding to expose only the new command names.
-- [ ] Update user and maintainer docs of record, including lifecycle guidance, CLI and portal references, and the repository README; remove obsolete lifecycle claims and examples.
+### Phase 3 — Portal and documentation
+
+- [ ] Update Plans portal discovery, status/grouping, primary/worktree authority, freshness vocabulary, and copy-prompt actions for the new states and commands.
+- [ ] Update package manifests, registries, CLI routing/help, and supported harness projections; remove `plan-start` references without introducing `plan-ship`.
+- [ ] Update lifecycle, CLI, portal, skill-reference, and README documentation, including task-checklist ownership and manual merge/close behavior.
 
 ### Phase 4 — Verification
 
-- [ ] Add unit/integration coverage for every transition, repeated calls, plan-only commits, destination validation, worktree ownership, partial failures, unmerged content, archive safety, and review approval tied to branch revision.
-- [ ] Add isolated Git-repository fixtures for normal base merges, merge conflicts, base movement after approval, manual merge before `plan-ship`, squash/rebase/normal landing verification, dirty worktrees, and denied/unconfirmed landing. Preserve the existing working landing behavior.
-- [ ] Exercise complete manual flows using fresh sessions: backlog → ready → active (multiple execute runs) → review (findings/remediation/approval) → manual merge → ship → completed; and review → active, plus archive from every supported state.
-- [ ] Run repository-native scoped checks and the full cross-cutting gate: `node scripts/test/plan-suite-findings-check.mjs`, `npm run test:unit`, `npm run test:portal-ui`, and `npm run check` as applicable; record exact outcomes and blockers.
+- [ ] Test valid/invalid transitions, scoped commits, idempotence, failures, worktree authority, implementation-completion checks, review approval freshness, and safe archive behavior.
+- [ ] Test base synchronization/conflicts and the existing `/plan-close` integration verification with normal, squash, and rebase merge fixtures; preserve working behavior.
+- [ ] Exercise the full manual workflow, including repeated execute sessions, review fixes, `review → active`, human approval, manual GitHub merge, closeout, and archiving.
+- [ ] Run repository-native validation and applicable suites (`node scripts/test/plan-suite-findings-check.mjs`, `npm run test:unit`, `npm run test:portal-ui`, `npm run check`); record results and any remaining gaps.
 
 ## Validation
 
-1. Files in `ready/` and `review/` are recognized as first-class lifecycle plans across CLI, validator, and portal, without adding a frontmatter lifecycle field.
-2. Every successful lifecycle state change has a corresponding **plan-scoped Git commit** in the correct checkout. A failed commit cannot leave a reported successful transition; retries do not duplicate commits.
-3. `/plan-execute` resumes incomplete work without creating a second worktree or prematurely invoking independent QA. Its completion gate checks actual requirements and evidence, and moves to review only when implementation is complete.
-4. `/plan-review` can accept a completed `active/` plan, produce independently verifiable findings, support subsequent review rounds, and record explicit human approval against a current code revision. Minor fixes remain in review; substantial requirements changes return to active.
-5. Both review and shipping can safely merge the base branch **into** the implementation branch; a conflict blocks continuation until resolved and tested. Any resulting substantive code change invalidates approval.
-6. `/plan-ship` never merges feature code into base. It refuses finalization before the user's manual PR merge, verifies landed work afterward, runs relevant checks, commits `review → completed`, and performs guarded cleanup.
-7. `/plan-archive` records its reason and commits without silently discarding unmerged implementation or worktrees.
-8. Plan authority and correct lifecycle are maintained when the primary checkout still shows an older path than the assigned worktree, and after integration transfers authority to base.
-9. All newly generated package artifacts, references, CLI help, portal copy actions, and tests use the new commands. No backward-compatibility aliases remain.
+1. Both new lifecycle folders are first-class in CLI, validator, and portal; lifecycle remains folder-derived.
+2. Every successful state transition produces the correctly scoped plan-file Git commit, with safe refusal/retry behavior when commits or moves fail.
+3. `/plan-execute` resumes incomplete work across sessions and advances to `review` only upon **implementation completion**, not independent QA success.
+4. `/plan-review` can start on a completed `active` plan, record findings, rerun after remediation, and obtain explicit human approval for a current implementation revision. Review fixes stay in `review`; requirement changes may return to `active`.
+5. `/plan-review` can safely synchronize base into the feature branch and handle conflicts without overwriting work or incorrectly preserving approval.
+6. The user merges through GitHub; `/plan-close` runs **after** that merge, retains existing landing detection, verifies approval and completion, commits `review → completed`, and performs guarded cleanup. No automatic merge into base or pre-merge `plan-ship` exists.
+7. `/plan-archive` records why the plan was retired and never silently destroys unmerged work.
+8. Portal and CLI resolve the authoritative plan correctly while base and the implementation worktree show different plan paths.
+9. Packages and documentation use `plan-execute`, `plan-review`, `plan-close`, and `plan-archive`; no `plan-start` compatibility shim or `plan-ship` command is introduced.
 
 ## Documentation impact
 
-- `docs/user/guides/plan/lifecycle/plan-suite.md`: rewrite lifecycle walkthrough, state/command table, resumption, review and HIL merge stages.
-- `docs/user/reference/plans-portal.md`: new folders, authority rules, badges, filters, actions, and terminology.
-- `docs/user/reference/roborepo-cli.md`: deterministic transition/sync/review/ship/archive commands and refusal semantics.
-- `README.md`: update lifecycle tree and high-level workflow.
-- `globals/packages/plan-write/skills/plan-write/references/{plan-schema,lifecycle,workflow-create,workflow-validate}.md`: new destination contracts, review section, authority, transition ownership, and schema rules.
-- New/replaced Plan Suite skill instructions and any maintainer doc of record located during implementation: command boundaries, HIL approval, verification, and safe Git behavior.
+- `docs/user/guides/plan/lifecycle/plan-suite.md`: lifecycle, tasks at writing/promotion, resumable implementation, review, manual merge, and `/plan-close`.
+- `docs/user/reference/plans-portal.md`: folders, authority, review/freshness distinctions, available actions.
+- `docs/user/reference/roborepo-cli.md`: deterministic transition, sync, review-approval, archive, and closeout behavior.
+- `README.md`: lifecycle stages and entry-point command names.
+- `globals/packages/plan-write/skills/plan-write/references/{plan-schema,lifecycle,workflow-create,workflow-update,workflow-validate}.md`: checklist ownership, new destinations, authority, `## Review`, and transition rules.
+- `/plan-promote`, `/plan-execute`, `/plan-review`, `/plan-close`, `/plan-archive` skill and package instructions; update other related docs of record found during promotion.
 
 ## Risks and safeguards
 
 | Risk | Safeguard |
 | --- | --- |
-| Worktree and primary checkout disagree on plan path/state | Stable-ID authority resolution across `active`/`review`; prevent automatic cross-copy overwrites |
-| Git merge changes implementation after QA | Invalidate approval from content-bearing commits and require fresh review |
-| Auto-commits accidentally capture unrelated work | Explicit path staging, staged-diff verification, clean-checkout preflight, post-commit assertion |
-| Incomplete work is mistaken for implementation-complete | Shared completion gate checks tasks **and** evidence, blockers, docs, tests, commit state |
-| Human merges after approval but base changed | Pre-merge sync/freshness gate; post-merge landed verification in `plan-ship` |
-| Squash/rebase merge is incorrectly reported unlanded | Preserve existing content-aware landed-check algorithm, add fixtures rather than simplifying to ancestry-only checks |
-| Archiving destroys unmerged work | Record/archive plan safely and retain unmerged branch/worktree unless separately authorized |
+| Base and assigned worktree disagree on the plan lifecycle/path | Stable ID and explicit authority across `active`/`review`; no blind copy-back |
+| An incomplete implementation is mistaken for ready-to-review | Check tasks, evidence, blockers, and automated results before advancing; leave QA to review |
+| Base synchronization changes code after review | Approval tied to reviewed implementation; rerun review after content changes |
+| Auto-commits include unrelated edits | Stage only explicit plan paths and verify staged contents |
+| A manual squash merge appears unlanded | Preserve `/plan-close`'s existing landed-check mechanism and regression-test its current behavior |
+| Cleanup discards unmerged feature code | Guard worktree and branch removal; refuse when landing cannot be verified |
+| Review rules grow into a second workflow engine | Simple Markdown findings and approval; no queue/session orchestrator or PR interaction |
 
 ## Decisions recorded
 
-- `plan-execute` replaces `plan-start`, `plan-ship` replaces `plan-close`, and both repeat safely across sessions.
-- `review` is a lifecycle state; human approval is a **gate**, not another lifecycle state.
-- `/plan-review` is independent QA. `/plan-execute` may fix its findings without changing `review` to `active`, unless scope materially expands.
-- The user, not RoboRepo, merges the PR. No GitHub API integration in this plan.
-- Both review and pre-merge shipping prepare the feature branch against the base branch through one shared sync primitive.
-- Every lifecycle transition is automatically committed, with no backward-compatibility support.
+- Keep **`/plan-close`**; do not introduce `/plan-ship` until a separate GitHub integration effort has a real shipping workflow to own.
+- Rename `/plan-start` to repeatable `/plan-execute`; allow execution in `review` strictly for findings remediation.
+- `plan-write` provides the initial task checklist; `plan-promote` refines, validates, and commits the promoted plan to `ready`.
+- Implementation completion advances to `review` without requiring QA. `/plan-review` is independent QA and requires explicit human approval, tied to reviewed implementation content.
+- Fixes within requirements remain in review; material requirements/acceptance-criteria changes move `review → active` and preserve the worktree.
+- `/plan-review` synchronizes base **into** feature as needed. `/plan-close` verifies the **human-managed** merge afterward; it does not perform base synchronization or wait in a chat for a merge event.
+- Every lifecycle transition is committed. Shared deterministic operations own Git/validation behavior; skills own judgment and sequencing. No backwards compatibility requirement.
 
 ## Open questions
 
-None blocking design. During promotion, confirm existing related plan owners and the exact current CLI/portal module touchpoints before assigning code files. Do not introduce new product decisions unless repository inspection finds a material conflict.
+None blocking design. During `/plan-promote`, verify related plans, current commands/module paths, and existing closeout semantics against the live repository before choosing specific file edits. Do not expand scope into GitHub automation or CodeRabbit.
