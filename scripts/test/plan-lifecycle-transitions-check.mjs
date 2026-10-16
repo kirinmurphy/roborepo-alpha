@@ -79,6 +79,7 @@ try {
     "docs/plans/backlog/test-shelved.md": planDoc({ id: "shelf001" }),
     "docs/plans/backlog/test-squash.md": planDoc({ id: "squash01" }),
     "docs/plans/backlog/test-rebase.md": planDoc({ id: "rebase01" }),
+    "docs/plans/backlog/test-gone.md": planDoc({ id: "gone0001" }),
     "docs/plans/backlog/test-carry.md": planDoc({ id: "carry001" }),
     "docs/plans/backlog/test-conflict.md": planDoc({ id: "confl001" }),
     "src/app.txt": "v1\n",
@@ -246,6 +247,29 @@ try {
     git(root, "merge", "--quiet", "--ff-only", "rebased");
     closeEdits(root, "docs/plans/review/test-rebase.md");
     assert.equal(approved(plans(root, "close", "rebase01"), "close after rebase").landing.landed, true);
+  }
+
+  // ── close after the worktree is removed: unavailable, never compared against the base branch ──
+  {
+    const gone = toReview(root, "gone0001", "test-gone.md", "feat/gone");
+    git(root, "merge", "--quiet", "--squash", "feat/gone");
+    git(root, "commit", "--quiet", "-m", "Squash feat/gone");
+    commit(root, "Unrelated work on main", { "src/unrelated.txt": "later\n" });
+    assert.equal(json(plans(root, "approval", "gone0001"), "approval with the worktree").state, "fresh");
+
+    git(root, "worktree", "remove", gone.path);
+    const unavailable = json(plans(root, "approval", "gone0001"), "approval without the worktree");
+    assert.equal(unavailable.state, "unavailable", "a later base commit is not reported as an implementation change");
+    assert.match(unavailable.reason, new RegExp(`worktree ${gone.name} is not a linked worktree`), "the reason names the missing worktree");
+
+    closeEdits(root, "docs/plans/review/test-gone.md");
+    const before = head(root);
+    refused(root, plans(root, "close", "gone0001"), "close without the worktree", new RegExp(`cannot be checked[\\s\\S]*Recreate the linked worktree named ${gone.name}`));
+    assert.equal(head(root), before, "a refused close commits nothing");
+
+    git(root, "worktree", "add", "--quiet", gone.path, "feat/gone");
+    const closed = approved(plans(root, "close", "gone0001"), "close after recreating the worktree");
+    assert.equal(closed.landing.landed, true, "landing is checked against the recreated worktree's branch");
   }
 
   // ── archive: no worktree, an unintegrated worktree copy, and conflicting copies ───────────────

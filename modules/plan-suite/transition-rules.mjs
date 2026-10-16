@@ -52,16 +52,22 @@ export const TRANSITION_RULES = {
           "Merge the reviewed branch through its pull request and update the base branch, then run /plan-close again.");
       }
       const approval = approvalFreshness({ primary, record, base });
+      if (approval.state === "unavailable") {
+        refuseWith(`The human approval cannot be checked: ${approval.reason}.`,
+          `Recreate the linked worktree named ${record.plan.worktree} on the plan's branch (for example \`git worktree add <path ending in ${record.plan.worktree}> <branch>\`), then close again.`, { approval });
+      }
       if (approval.state !== "fresh") {
         refuseWith(`The human approval is ${approval.state}: ${approval.reason}.`,
           "Run /plan-review to review the current implementation and record approval, then close again.", { approval });
       }
-      const landing = integration.worktree?.branch
-        ? await inspectBranchLanding(primary, integration.worktree.branch, { base: `refs/heads/${base}` })
-        : { landed: true, reason: record.plan.worktree ? "worktree unavailable; landing checked by the caller" : "implemented on the base branch" };
+      // A fresh approval for a plan that names a worktree means its branch resolved, so landing is
+      // always checked against that branch; only a plan built on the base branch has none to check.
+      const landing = record.plan.worktree
+        ? await inspectBranchLanding(primary, approval.branch, { base: `refs/heads/${base}` })
+        : { landed: true, reason: "implemented on the base branch" };
       if (!landing.landed) {
         refuseWith(`landed: unconfirmed (${landing.reason}).`,
-          `Merge ${integration.worktree.branch} into ${base} through its pull request and update the local ${base}, then close again.`, { landing });
+          `Merge ${approval.branch} into ${base} through its pull request and update the local ${base}, then close again.`, { landing });
       }
       return { content, evidence: { approval, landing, worktreeCopy: integration.state } };
     },

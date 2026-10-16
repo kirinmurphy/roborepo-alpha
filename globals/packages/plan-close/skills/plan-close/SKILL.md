@@ -184,6 +184,10 @@ Run the repository's canonical approval check for `<plan>`. It reads `### Approv
   before the merge. Refuse, name the changed paths, and direct the user to `/plan-review`.
 - `missing`, `not-approved`, or `invalid`: refuse and direct the user to `/plan-review`. Never write
   or repair an approval here.
+- `unavailable`: the plan names a worktree whose branch cannot be resolved (the worktree was removed,
+  or its HEAD is detached), so neither the approval nor the landing can be checked. Refuse, and ask
+  the user to recreate the linked worktree with the same name on the plan's branch. Never compare
+  against the base branch instead.
 
 ### 7. Confirm the work landed
 

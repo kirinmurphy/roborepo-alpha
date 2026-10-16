@@ -1,7 +1,7 @@
 ---
 id: gqzjlzgx
 priority: high
-next_action: Confirm the Not tested entry by running the full suite workflow on a real plan, then review the implementation independently before merging.
+next_action: Run /plan-review again in a fresh session to re-review the branch, including the approval-unavailable fix and the additive-fix rule for /plan-review.
 blocked_by: []
 depends_on: []
 related:
@@ -639,6 +639,16 @@ Decisions made autonomously during implementation (2026-10-15):
   stay limited to tests and evidence, and a behavior change needs `/plan-review` again, so a close
   never lands code no human approved.
 
+Decisions made autonomously while fixing review findings (2026-10-16):
+
+- **A missing worktree makes the approval `unavailable`, not resolved some other way.** The plan
+  records only the worktree's administrative name, so once the worktree is gone its branch cannot be
+  found deterministically. Alternatives: guess the branch from `git branch --contains <approved
+  commit>`, which can match several branches; or record the branch in frontmatter, a plan schema
+  change. Refusing with a recreate-the-worktree resolution guesses nothing. The approval check
+  reports this before reading `### Approval`, because the copy it would read is then the primary
+  one, not the authoritative one.
+
 ## Implementation verification
 
 Run on 2026-10-15 in the plan's worktree:
@@ -675,13 +685,18 @@ Independent review on 2026-10-15, in a separate session from the implementation,
 
 ### Findings
 
-- [ ] `/plan-close` refuses a fresh approval as "stale" once the plan's local worktree is removed,
+- [x] `/plan-close` refuses a fresh approval as "stale" once the plan's local worktree is removed,
       even though its branch still exists: `approvalFreshness` (`modules/plan-suite/review-gates.mjs`)
       falls back to the base tip when no worktree resolves, and the `close` rule
       (`transition-rules.mjs`) then skips the landed check as "checked by the caller", which no skill
       describes. Reproduced: squash-merge, one unrelated commit on `main`, `git worktree remove`
       → `plans approval` reports `stale` (`src/other.txt`) and `plans close` refuses. Either resolve
       the branch without the worktree or refuse with a "worktree missing" reason, and add a fixture.
+      — fixed: `approvalFreshness` reports `unavailable` when the plan names a worktree whose branch
+      cannot be resolved; `close` refuses with a recreate-the-worktree resolution and always checks
+      landing against the resolved branch. Covered in `plan-lifecycle-transitions-check.mjs`, which
+      failed on the old code and passes now. Fixed by `/plan-execute` in the same chat session as
+      this review, so the next `/plan-review` should run in a fresh session.
 
 ### Verification
 

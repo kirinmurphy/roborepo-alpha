@@ -65,9 +65,9 @@ export function completionPreflight({ primary, record, base }) {
   };
 }
 
-// Returns { state, ... } where state is "missing", "not-approved", "invalid", "stale", or "fresh".
-// `tip` is the implementation the approval must still describe: the assigned worktree's branch tip,
-// or the base branch for a plan that names no worktree.
+// Returns { state, ... } where state is "unavailable", "missing", "not-approved", "invalid", "stale",
+// or "fresh". `tip` is the implementation the approval must still describe: the assigned worktree's
+// branch tip, or the base branch for a plan that names no worktree.
 export function approvalFreshness({ primary, record, base }) {
   const resolved = authoritativeMarkdown(primary, record);
   const approval = readApproval(resolved.markdown);
@@ -75,6 +75,13 @@ export function approvalFreshness({ primary, record, base }) {
   const tipRef = branch ? `refs/heads/${branch}` : base;
   const tip = git(primary, ["rev-parse", "--verify", "-q", `${tipRef}^{commit}`]).stdout;
   const result = { plan: { id: record.plan.id, path: resolved.relativePath }, branch, tip: tip || null, approval };
+  // The plan records only its worktree's name, so without that worktree's branch neither the reviewed
+  // implementation nor the authoritative copy can be resolved. Comparing against the base branch
+  // instead would report every later base commit as an implementation change.
+  if (record.plan.worktree && !branch) {
+    const cause = resolved.worktree ? "has a detached HEAD" : "is not a linked worktree of this repository";
+    return { ...result, state: "unavailable", reason: `worktree ${record.plan.worktree} ${cause}, so the reviewed branch cannot be resolved` };
+  }
   if (!approval.present) return { ...result, state: "missing", reason: "the plan has no `### Approval` record under `## Review`" };
   if (approval.decision !== "approved") return { ...result, state: "not-approved", reason: `the recorded decision is ${approval.decision || "empty"}` };
   if (!approval.confirmedBy) return { ...result, state: "invalid", reason: "the approval does not say who confirmed it" };
