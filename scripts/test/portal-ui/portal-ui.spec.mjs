@@ -135,7 +135,7 @@ test.describe("hook readiness warning", () => {
       command: reviewCommand,
       review_required: "In the Codex app, open Settings → Hooks, review the listed RoboRepo hooks, and trust only those you want to run. Start a new Codex session afterward.",
       inactive: "In the Codex app, open Settings → Hooks and turn the listed RoboRepo hooks back on.",
-      terminalHint: "In the Codex CLI, run this command and enter /hooks.",
+      terminalHint: "Open the Codex CLI with this command. When review is needed, it shows Hooks need review automatically.",
     },
   });
   const claudeActive = { harness: "claude", displayName: "Claude Code", supported: true, state: "active", groups: [], guidance: null };

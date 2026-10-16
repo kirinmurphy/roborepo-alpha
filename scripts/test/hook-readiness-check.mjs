@@ -69,7 +69,7 @@ try {
     const guidance = getHarnessProvider("codex").adapters.hooks.guidance();
     assert.match(guidance.review_required, /Codex app.*Settings.*Hooks/);
     assert.match(guidance.inactive, /Codex app.*Settings.*Hooks/);
-    assert.match(guidance.terminalHint, /Codex CLI.*\/hooks/);
+    assert.match(guidance.terminalHint, /Codex CLI.*Hooks need review.*automatically/);
   }
 
   // --- record mapping: camelCase events, managed hooks, unrecognized trust ---

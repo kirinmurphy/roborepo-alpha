@@ -16,8 +16,11 @@ To review hooks in the Codex app:
    definitions you want to run.
 3. Start a new Codex session. Sessions already running do not pick up newly trusted hooks.
 
-If you use Codex in a terminal, enter `/hooks` there instead. The RoboRepo notice keeps the
-terminal command under **Terminal alternative** when a Codex executable is available.
+If you use Codex in a terminal, opening the CLI automatically shows **Hooks need review** when
+hooks need trust. Choose **Review hooks** and trust only the definitions you want to run; avoid
+**Trust all** if other hooks are listed. Use `/hooks` later to reopen the review. The RoboRepo
+notice keeps the terminal command under **Terminal alternative** when a Codex executable is
+available.
 
 Trust is stored in `~/.codex/config.toml`, which the desktop app reads too.
 
