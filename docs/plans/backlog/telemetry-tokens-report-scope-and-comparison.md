@@ -1,6 +1,6 @@
 ---
 id: nl40n9vr
-priority: medium
+priority: high
 next_action: Add time range, harness, and model controls to the Tokens page, wired to the existing /api/data parameters and serialized into the URL
 blocked_by: []
 depends_on: []
