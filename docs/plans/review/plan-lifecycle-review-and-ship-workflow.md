@@ -671,7 +671,7 @@ None blocking.
 
 ## Not tested
 
-- [ ] The whole suite on a real plan, in separate agent sessions: `/plan-promote`, `/plan-execute`
+- [x] The whole suite on a real plan, in separate agent sessions: `/plan-promote`, `/plan-execute`
       (start, resume, and completion), `/plan-review` (sync, findings, approval prompt),
       `/plan-execute` fixing findings, a pull request merged on GitHub, then `/plan-close` and
       `/plan-archive`. Every transition the skills call is covered by
@@ -753,7 +753,12 @@ Verification:
 - `main`'s plan-status changes (`346f9562`) merged into the files the branch also changed
   (`plan-drawer-partial.html`, `plans-status.spec.mjs`); the portal UI suite passes on the result.
 - No additive fixes were needed this round.
-- Manual (open): the Not tested entry, unchanged.
+- Manual: the Not tested entry, walked through as a 14-step script (`roborepo update` package
+  retirement, promote, interrupted and resumed execute, review with a base conflict, declined then
+  granted approval, approval staleness, close refused before merge then after a squash merge,
+  reopen, archive with unmerged work, Codex parity). Confirmed passing by the user on 2026-10-16.
+  `main` holds the promote, start, submit, and archive commits for the throwaway plan `4eis1s6s`
+  (`57fb2d55`..`38f16ab1`).
 
 ### Approval
 
