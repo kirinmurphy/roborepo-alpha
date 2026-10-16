@@ -133,8 +133,9 @@ test.describe("hook readiness warning", () => {
     harness: "codex", displayName: "Codex", supported: true, state, groups,
     guidance: {
       command: reviewCommand,
-      review_required: "Run this command in a terminal to open Codex, enter /hooks, and trust the RoboRepo commands listed here.",
-      inactive: "Run this command in a terminal to open Codex, enter /hooks, and turn the listed RoboRepo hooks back on.",
+      review_required: "In the Codex app, open Settings → Hooks, review the listed RoboRepo hooks, and trust only those you want to run. Start a new Codex session afterward.",
+      inactive: "In the Codex app, open Settings → Hooks and turn the listed RoboRepo hooks back on.",
+      terminalHint: "In the Codex CLI, run this command and enter /hooks.",
     },
   });
   const claudeActive = { harness: "claude", displayName: "Claude Code", supported: true, state: "active", groups: [], guidance: null };
@@ -148,7 +149,7 @@ test.describe("hook readiness warning", () => {
     return reads;
   };
 
-  test("Settings, Tokens, and Home name the hooks awaiting review and the command that opens review; Agents does not", async ({ page }) => {
+  test("Settings, Tokens, and Home lead with in-app review and offer a terminal alternative; Agents does not", async ({ page }) => {
     await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex, claude]) }));
     await routeStatuses(page, {
       claude: claudeActive,
@@ -164,6 +165,10 @@ test.describe("hook readiness warning", () => {
     await expect(notice).toHaveCount(1);
     await expect(notice).toHaveClass(/notice-warning/);
     await expect(notice.locator("[data-slot=title]")).toHaveText("Codex hooks need review");
+    await expect(notice.locator("[data-slot=message]")).toContainText("Codex app, open Settings → Hooks");
+    await expect(notice.getByText("Terminal alternative")).toBeVisible();
+    await expect(notice.locator("[data-slot=command]")).toBeHidden();
+    await notice.getByText("Terminal alternative").click();
     await expect(notice.locator("[data-slot=command]")).toHaveText(reviewCommand);
     await expect(notice.getByRole("listitem")).toHaveText(["Skill visibility: PostToolUse", "Token Telemetry: PostToolUse"]);
 

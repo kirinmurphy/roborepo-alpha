@@ -24,10 +24,11 @@ RoboRepo: it wires only the capture hooks into `~/.claude/settings.json` and `~/
 and turns capture on. Use it to measure baseline token usage before adopting the full suite; running
 the normal install later upgrades it.
 
-**Codex hook trust.** Codex runs only hooks you have trusted. After enabling tracking, Codex may
-ask you to trust `~/.codex/hooks.json`; approve it if prompted. Codex loads hooks at session start,
-so sessions that were already running do not capture. Start a new session in the app; a full app
-restart is not part of normal setup.
+**Codex hook trust.** Codex runs only hooks you have reviewed and trusted. After enabling tracking,
+open **Settings → Hooks** in the Codex app and review the new RoboRepo hooks. The portal's Home,
+Settings, and Tokens notice names any hooks still awaiting review. Codex loads hooks at session
+start, so sessions that were already running do not capture. Start a new session in the app; a full
+app restart is not part of normal setup.
 
 ## Capture
 

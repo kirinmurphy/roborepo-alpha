@@ -8,13 +8,16 @@ Turn a package's hooks off by disabling the package in `/agents` or with
 ## Trusting RoboRepo's Hooks
 
 Codex runs a non-managed hook only after you review and trust its exact definition. Enabling a
-package installs its hooks but does not grant that trust, and RoboRepo never grants it for you. The
-macOS desktop app does not show a review prompt, so review happens in Codex's terminal UI:
+package installs its hooks but does not grant that trust, and RoboRepo never grants it for you.
+To review hooks in the Codex app:
 
-1. Run the command RoboRepo shows. It is `codex` when the Codex CLI is on your `PATH`, or the
-   desktop app's own binary, such as `/Applications/ChatGPT.app/Contents/Resources/codex`.
-2. Enter `/hooks` and trust the RoboRepo commands the notice lists.
+1. Open **Settings → Hooks** in Codex.
+2. Review the RoboRepo hooks named in the portal's Home, Settings, or Tokens notice. Trust only the
+   definitions you want to run.
 3. Start a new Codex session. Sessions already running do not pick up newly trusted hooks.
+
+If you use Codex in a terminal, enter `/hooks` there instead. The RoboRepo notice keeps the
+terminal command under **Terminal alternative** when a Codex executable is available.
 
 Trust is stored in `~/.codex/config.toml`, which the desktop app reads too.
 
@@ -34,7 +37,7 @@ Neither changes Codex's trust decisions.
 | --- | --- | --- |
 | Active | Installed, trusted, and turned on | Nothing |
 | Needs review | Installed, but Codex has not trusted this exact definition (`untrusted` or `modified`) | Follow the review steps above |
-| Turned off | Trusted but disabled in Codex | Turn the hooks back on in `/hooks` |
+| Turned off | Trusted but disabled in Codex | Turn the hooks back on in Codex's **Settings → Hooks**, or `/hooks` in the CLI |
 | Missing | Not in `~/.codex/hooks.json` | Turn the package off and back on in `/agents` |
 | Unknown | Codex could not be asked | Check that Codex is installed and has been opened at least once |
 

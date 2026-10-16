@@ -1415,8 +1415,9 @@ portal-menu-button {
 /* Hook readiness warning: title, message, command, and affected hooks stacked tight. */
 .hook-readiness-copy { display: grid; gap: 2px; }
 .hook-readiness-copy p { margin: 0; }
-.hook-readiness-command { justify-self: start; margin-top: 4px; overflow-wrap: anywhere; }
-.hook-readiness-command[hidden], .hook-readiness-affected[hidden] { display: none; }
+.hook-readiness-command { display: block; margin-top: 4px; overflow-wrap: anywhere; }
+.hook-readiness-terminal { margin-top: 4px; }
+.hook-readiness-terminal[hidden], .hook-readiness-affected[hidden] { display: none; }
 .hook-readiness-affected { margin: 4px 0 0; padding-left: 1.2em; }
 .portal-banner-action {
   grid-column: 2;

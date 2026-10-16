@@ -210,16 +210,15 @@ function hooksRead({ cwd, hooksPath = resolveHarnessPath(codexManifest, "hooks")
   });
 }
 
-// Next steps for the readiness notice. Codex trusts hooks only through the `/hooks` screen of its
-// terminal UI, which the desktop app does not show, so the command opens that UI with the binary
-// discovery selected (the desktop bundle's own `codex` when no CLI is on PATH). Trust lands in
-// ~/.codex/config.toml, which desktop sessions read too.
+// The desktop app has a hook review screen. Keep the CLI command as a secondary route for users
+// who run Codex in a terminal; both routes record trust in ~/.codex/config.toml.
 function hooksGuidance() {
   const executable = selectedHarnessExecutable(codexManifest);
   return {
     command: executable ? shellQuote(executable) : codexManifest.commandName,
-    review_required: "Run this command in a terminal to open Codex, enter /hooks, and trust the RoboRepo commands listed here. Then start a new Codex session.",
-    inactive: "Run this command in a terminal to open Codex, enter /hooks, and turn the listed RoboRepo hooks back on.",
+    review_required: "In the Codex app, open Settings → Hooks, review the listed RoboRepo hooks, and trust only those you want to run. Start a new Codex session afterward.",
+    inactive: "In the Codex app, open Settings → Hooks and turn the listed RoboRepo hooks back on.",
+    terminalHint: "In the Codex CLI, run this command and enter /hooks.",
   };
 }
 

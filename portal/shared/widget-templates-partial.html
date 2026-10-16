@@ -133,8 +133,12 @@
     <div class="hook-readiness-copy">
       <strong data-slot="title"></strong>
       <p data-slot="message"></p>
-      <code data-slot="command" class="hook-readiness-command" hidden></code>
       <ul data-slot="affected" class="hook-readiness-affected" hidden></ul>
+      <details data-slot="terminal-option" class="hook-readiness-terminal" hidden>
+        <summary>Terminal alternative</summary>
+        <p data-slot="terminal-hint"></p>
+        <code data-slot="command" class="hook-readiness-command"></code>
+      </details>
     </div>
   </portal-notice>
 </template>

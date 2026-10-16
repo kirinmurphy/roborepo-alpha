@@ -64,6 +64,14 @@ async function codexReadiness(records, { mode = "respond", readOptions = {} } = 
 const groupState = (result, owner) => result.groups.find((g) => g.owner === owner)?.state;
 
 try {
+  // --- review guidance starts in Codex's desktop UI; terminal review is secondary ---
+  {
+    const guidance = getHarnessProvider("codex").adapters.hooks.guidance();
+    assert.match(guidance.review_required, /Codex app.*Settings.*Hooks/);
+    assert.match(guidance.inactive, /Codex app.*Settings.*Hooks/);
+    assert.match(guidance.terminalHint, /Codex CLI.*\/hooks/);
+  }
+
   // --- record mapping: camelCase events, managed hooks, unrecognized trust ---
   {
     const base = liveRecord({ event: "PostToolUse", command: observerCommand });

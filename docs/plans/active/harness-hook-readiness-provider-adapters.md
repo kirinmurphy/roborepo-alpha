@@ -9,7 +9,7 @@ related:
   - codex-cmux-hook-trust-review
   - harness-capability-derived-resource-targeting
   - usage-statusline-codex-hook-parity
-reviewed_commit: a9219c5af259c44c524acb00f50b1cf3abdaa967
+reviewed_commit: 5442ad6
 worktree: harness-hook-readiness-provider-adapters
 ---
 
@@ -18,11 +18,12 @@ worktree: harness-hook-readiness-provider-adapters
 ## Summary
 
 When a RoboRepo package installs Codex hooks, those hooks don't run yet. Codex runs a non-managed
-hook only after the user reviews and trusts its exact definition, and the macOS desktop app never
-asks. Codex also keys that trust by the hook's position in `~/.codex/hooks.json`. RoboRepo
-prepends each new package hook, so enabling one package can revoke trust from hooks the user
-already reviewed. That happened on the reference Mac: after Skill Visibility was enabled, Codex
-stopped running the telemetry `PostToolUse` hook.
+hook only after the user reviews and trusts its exact definition. The desktop app offers an in-app
+review flow, but RoboRepo must show which hooks need it. Codex also keys that trust by the hook's
+position in `~/.codex/hooks.json`. RoboRepo previously prepended each new package hook, so enabling
+one package could revoke trust from hooks the user had already reviewed. That happened on the
+reference Mac: after Skill Visibility was enabled, Codex stopped running the telemetry
+`PostToolUse` hook. Package hooks now append after existing Codex hooks.
 
 Plan `3jp3yhtq` added a read-only check for this, but only for the five telemetry hooks. That check
 lives outside the Codex provider and copies the hook list instead of reading it from the package.
@@ -33,7 +34,7 @@ This plan does five things:
 - makes Codex append package hooks, so enabling a package leaves existing trust in place;
 - moves hook readiness behind the provider `hooks.read` adapter, so every package and harness is
   covered;
-- shows one notice per harness, with the exact command that opens Codex's `/hooks` review screen;
+- shows one notice per harness, with the Codex app review path and a terminal alternative;
 - installs the core Codex hooks, or documents why they are missing;
 - moves the remaining provider-specific code and copy out of shared modules.
 
@@ -52,7 +53,7 @@ This plan does five things:
 Claude Code runs every installed hook, so for Claude, installed means active. Codex adds the trust
 step.
 
-### Current behavior
+### Behavior before this work
 
 How hooks reach a harness and how their state gets reported:
 
@@ -201,15 +202,15 @@ for the harness's core hooks:
 | State | Meaning | User-facing next step |
 | --- | --- | --- |
 | `active` | Every expected hook is installed, enabled, and trusted or exempt | none |
-| `review_required` | At least one expected hook is `untrusted` or `modified` | Run the command the notice shows, which opens Codex's terminal UI. Enter `/hooks`, trust the listed RoboRepo commands, then start a new Codex session |
-| `inactive` | Installed and trusted but disabled in the harness | Re-enable the hooks in Codex's `/hooks` screen |
+| `review_required` | At least one expected hook is `untrusted` or `modified` | In the Codex app, open Settings → Hooks, review and trust the listed RoboRepo hooks, then start a new session. The CLI's `/hooks` is an alternative |
+| `inactive` | Installed and trusted but disabled in the harness | Re-enable the hooks in Codex's Settings → Hooks, or `/hooks` in the CLI |
 | `missing` | An expected hook is absent from the hook file | Reapply the package |
 | `unknown` | The harness runtime could not report | Check that the harness runtime is installed and has been launched |
 
-The `review_required` command uses the executable discovery selected: the `codex` CLI on `PATH`,
-or the desktop bundle's own `codex` binary. Trust lives in `~/.codex/config.toml`, which the
-desktop runtime reads, so trust recorded from either binary is expected to apply to desktop
-sessions. Phase 1 confirms this before the copy is written.
+The portal leads with the Codex app's Settings → Hooks review screen. Its terminal alternative
+uses executable discovery: the `codex` CLI on `PATH`, or the desktop bundle's own `codex` binary.
+Trust lives in `~/.codex/config.toml`, which the desktop runtime reads, so trust recorded from
+either binary applies to desktop sessions. Phase 1 confirmed the terminal path as a fallback.
 
 `probeHooks` reports this state in its `detail`. The portal replaces the Codex-only notice with one
 notice per harness that names the affected packages and hooks. `/api/config/hooks/codex/status`
@@ -304,13 +305,17 @@ becomes `/api/config/hooks/<harness>/status`, served by a handler outside `scrip
 - [x] `npm run check` passes. Hook installation and package status are cross-cutting, so the full
       gate is required before handoff. Passed October 15, 2026, including the Docker clean-machine
       legs; Windows installer parity skipped (no `pwsh`).
-- [x] Manual check against this branch's portal on the reference Mac's live state: Settings,
+- [ ] Manual check against this branch's portal on the reference Mac's live state: Settings,
       Tokens, and Home each show one Codex notice, "Codex hooks need review", listing Skill
-      visibility and Token Telemetry under `PostToolUse` with the desktop binary's command. No
-      console errors.
+      visibility and Token Telemetry under `PostToolUse` with the app review step. No console
+      errors. Automated portal tests passed; live visual and browser-console checks were blocked
+      by the administrator's browser policy during QA.
 
 ## Not tested
 
+- [ ] Visually confirm the live worktree portal shows one Codex review notice on Home, Settings,
+      and Tokens, none on Agents, and no browser-console errors. Automated UI checks passed, but
+      administrator browser policy blocked the live browser inspection during QA.
 - [ ] Confirm nonzero token and tool counts in live Codex capture after the parser fix is installed.
       Carried from `3jp3yhtq`. Five sessions captured since October 13, 2026 report 1.7M to 30.5M
       tokens and 18 to 228 tool calls. This needs the user to confirm by hand that those sessions
@@ -318,10 +323,9 @@ becomes `/api/config/hooks/<harness>/status`, served by a handler outside `scrip
 - [ ] After Phase 1, enable or disable a package on the reference Mac and confirm `hooks/list`
       still reports the earlier hooks as `trusted`. Requires a live Codex runtime and a hand
       review in `/hooks`.
-- [ ] Run `/Applications/ChatGPT.app/Contents/Resources/codex` in a terminal, enter `/hooks`,
-      trust the two RoboRepo `PostToolUse` hooks the notice lists, then confirm a new Codex desktop
-      task writes `PostToolUse` spool records again. The command's interactive UI and the trust
-      decision are the user's; earlier QA used the same embedded runtime's review screen.
+- [ ] In the Codex app, open Settings → Hooks, review and trust the two RoboRepo `PostToolUse`
+      hooks the notice lists, then confirm a new Codex desktop task writes `PostToolUse` spool
+      records again. The trust decision is the user's; the CLI's `/hooks` is an alternative.
 - [ ] Confirm `hooks/list` exists on the oldest Codex CLI on `PATH` that RoboRepo supports. The
       reference Mac has no `PATH` CLI, and installing one is a download the user has not approved.
       An older CLI that lacks the method makes readiness report `unknown`, which the fake
@@ -440,3 +444,7 @@ becomes `/api/config/hooks/<harness>/status`, served by a handler outside `scrip
   `hooks` path when present, or that provider's root config path, and the writer uses the same
   distinction. This removes the hardcoded Codex path and prevents Gemini hook resources from
   targeting Claude's settings file.
+- **QA corrected end-user review guidance.** [OpenAI's app changelog](https://learn.chatgpt.com/docs/changelog)
+  documents an in-app hook trust review flow and Hooks settings. The portal and user guide now
+  lead with Settings → Hooks; the terminal `/hooks` screen remains an alternative. RoboRepo still
+  only reports readiness and never records trust for the user.

@@ -18,7 +18,10 @@ const NEXT_STEP = {
 };
 
 function providerStep(guidance, state) {
-  return guidance?.[state] ? `${guidance[state]} Command: ${guidance.command}` : null;
+  if (!guidance?.[state]) return null;
+  return guidance.command
+    ? `${guidance[state]} ${guidance.terminalHint || "Terminal command:"} ${guidance.command}`
+    : guidance[state];
 }
 const LABEL = { missing: "missing", review_required: "awaiting review", inactive: "turned off", unknown: "in an unknown state" };
 

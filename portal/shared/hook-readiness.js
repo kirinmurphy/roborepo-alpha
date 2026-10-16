@@ -32,10 +32,11 @@ export function hookReadinessNotice(status) {
   const [title, fallbackMessage] = COPY[state](name);
   const guidance = status.guidance || {};
   const node = fill(tpl("tpl-hook-readiness"), { title, message: guidance[state] || fallbackMessage });
-  const command = node.querySelector('[data-slot="command"]');
+  const terminalOption = node.querySelector('[data-slot="terminal-option"]');
   if (guidance[state] && guidance.command) {
-    command.textContent = guidance.command;
-    command.hidden = false;
+    node.querySelector('[data-slot="terminal-hint"]').textContent = guidance.terminalHint || "Run this command to review the hooks:";
+    node.querySelector('[data-slot="command"]').textContent = guidance.command;
+    terminalOption.hidden = false;
   }
   const affected = groups.filter((group) => group.state === state);
   const list = node.querySelector('[data-slot="affected"]');
