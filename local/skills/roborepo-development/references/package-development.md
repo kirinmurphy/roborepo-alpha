@@ -83,8 +83,9 @@ Hook merging (`scripts/cli/hook-composition.mjs`, `mergeHooksInto`/`unmergeHooks
   hook entry itself. Two packages that happen to install hooks with an identical command string
   will collide silently; two packages with different command strings for logically-the-same
   behavior will both persist.
-- New entries are **prepended**, not appended, so a package's hooks can run before pre-existing
-  ones for the same event (deliberate, for deny-before-allow ordering).
+- Claude and Gemini **prepend** new entries so a package's hooks can run before pre-existing
+  entries for the same event (deliberate, for deny-before-allow ordering). Codex **appends** new
+  entries because its trust keys depend on each hook's position in the file.
 - This is a known limitation (see the module's header comment). A full package-ID-tagged
   provenance system would be new infrastructure; address it when a concrete collision requires it.
 

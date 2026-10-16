@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { harnessHome, repoRoot } from "./paths.mjs";
+import { harnessHome, repoRoot, rootConfigActive } from "./paths.mjs";
 import { hookFilePath } from "./hook-composition.mjs";
 import { compareHookReadiness, fragmentHooks } from "../harnesses/hook-readiness.mjs";
 import { hookRecordsFromFile } from "../harnesses/root-config-hooks.mjs";
@@ -110,7 +110,7 @@ function probeCommand(component, desired) {
 // awaited the provider's read. Without it, the installed entries are read from the hook file and
 // trust stays "unknown": package status is synchronous and must not spawn a harness runtime.
 function probeHooks(component, desired, hookRecords) {
-  const hooksPath = hookFilePath(component.harness, { claudeSettingsPath: CLAUDE_SETTINGS });
+  const hooksPath = hookFilePath(component.harness, { rootConfigPath: rootConfigActive[component.harness] });
   const observed = hookRecords?.get(component.harness)
     ?? hookRecordsFromFile(hooksPath, { trust: "unknown" });
   const expected = fragmentHooks(readJson(path.join(repoRoot, component.source), {}));

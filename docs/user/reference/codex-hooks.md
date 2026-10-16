@@ -25,9 +25,10 @@ those again.
 
 ## Checking Hook Readiness
 
-Settings, Tokens, and Home show a warning for each harness whose RoboRepo hooks will not all run.
-`roborepo doctor --installed` prints the same findings as `hint:` lines. Neither changes Codex's
-trust decisions.
+Settings, Tokens, and Home show a warning for package hooks that need attention, and for core hooks
+that need review or are turned off.
+`roborepo doctor --installed` prints hook findings as `hint:` lines, including missing core hooks.
+Neither changes Codex's trust decisions.
 
 | State | Meaning | What to do |
 | --- | --- | --- |

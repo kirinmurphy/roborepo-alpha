@@ -15,8 +15,10 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { resolvesIntoRepo } from "../cli/repo-links.mjs";
+import { detachRepoLink, resolvesIntoRepo } from "../cli/repo-links.mjs";
+import { hookFilePath } from "../cli/hook-composition.mjs";
 import { getHarnessProvider } from "../harnesses/registry.mjs";
+import { resolveHarnessPath } from "../harnesses/paths.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const cli = path.join(repoRoot, "scripts/cli/main.mjs");
@@ -77,6 +79,18 @@ function codexHookCommands() {
 }
 
 try {
+  // --- each provider's declared storage path is used, including Gemini's root config ---
+  {
+    const claudeOverride = path.join(tmp, "claude-settings.json");
+    assert.equal(hookFilePath("claude", { rootConfigPath: claudeOverride }), claudeOverride);
+    for (const harness of ["codex", "gemini"]) {
+      const manifest = getHarnessProvider(harness).manifest;
+      const key = harness === "codex" ? "hooks" : "rootConfig";
+      assert.equal(hookFilePath(harness), resolveHarnessPath(manifest, key),
+        `${harness} hook file comes from its own manifest`);
+    }
+  }
+
   // --- symlink guard: complete chains back into the repo are refused ---
   {
     const repoTarget = path.join(repoRoot, "globals");
@@ -88,6 +102,23 @@ try {
     fs.symlinkSync(linkTwo, linkOne);
     assert.equal(resolvesIntoRepo(linkOne, repoRoot), true, "multi-hop symlink into repo is detected");
     assert.equal(resolvesIntoRepo(outside, repoRoot), false, "ordinary outside directory is allowed");
+    assert.equal(resolvesIntoRepo(path.join(linkOne, "new-hooks.json"), repoRoot), true,
+      "a new file below a repo-linked directory is still inside the checkout");
+    const dangling = path.join(tmp, "dangling-hooks.json");
+    fs.symlinkSync(path.join(repoTarget, "not-yet-created-hooks.json"), dangling);
+    assert.equal(resolvesIntoRepo(dangling, repoRoot), true,
+      "a dangling file link into the checkout is still detected before writing");
+    const fakeRepo = path.join(tmp, "fake-repo");
+    fs.mkdirSync(fakeRepo);
+    const danglingInFakeRepo = path.join(tmp, "dangling-fake-hooks.json");
+    fs.symlinkSync(path.join(fakeRepo, "new-hooks.json"), danglingInFakeRepo);
+    assert.equal(detachRepoLink(danglingInFakeRepo, fakeRepo), true,
+      "a dangling link into the checkout is detached");
+    assert.equal(fs.existsSync(danglingInFakeRepo), false);
+    const linkedDirectory = path.join(tmp, "linked-directory");
+    fs.symlinkSync(fakeRepo, linkedDirectory);
+    assert.throws(() => detachRepoLink(path.join(linkedDirectory, "new-hooks.json"), fakeRepo),
+      /resolves into the checkout/, "a linked parent directory must not carry writes into the checkout");
   }
 
   // --- merge order: Codex appends so trusted positions hold; Claude prepends ---
@@ -120,6 +151,24 @@ try {
       ["echo second-a", "echo second-b", "echo first-a", "echo first-b"],
       "Claude merge still prepends the new fragment, preserving its internal order",
     );
+  }
+
+  // --- duplicate commands within one fragment keep the old merge's last-entry winner ---
+  {
+    const entry = (matcher, command) => ({ matcher, hooks: [{ type: "command", command }] });
+    const fragment = { PostToolUse: [
+      entry("first", "echo repeated"),
+      entry("middle", "echo distinct"),
+      entry("last", "echo repeated"),
+    ] };
+    for (const harness of ["claude", "codex"]) {
+      const hooksPath = path.join(tmp, `dedupe-${harness}.json`);
+      fs.writeFileSync(hooksPath, "{}");
+      const result = getHarnessProvider(harness).adapters.hooks.merge(hooksPath, fragment);
+      const groups = JSON.parse(result.content).hooks.PostToolUse;
+      assert.deepEqual(groups.map((group) => group.matcher), ["middle", "last"],
+        `${harness} preserves the old merge's intra-fragment dedupe`);
+    }
   }
 
   // --- enable: both harnesses' hooks land ---

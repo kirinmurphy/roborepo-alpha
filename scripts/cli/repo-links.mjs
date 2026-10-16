@@ -6,11 +6,33 @@ import fs from "node:fs";
 import path from "node:path";
 import { repoRoot } from "./paths.mjs";
 
-// True when `target` (via a symlink at itself or any ancestor) resolves into `root`.
+// True when `target` (via a symlink at itself or any ancestor) resolves into `root`, even if
+// the final file does not exist yet. A write through a dangling link can create that file.
 export function resolvesIntoRepo(target, root = repoRoot) {
   const resolvedRoot = fs.realpathSync(root);
+  let current = path.resolve(target);
+  const missing = [];
+  const visited = new Set();
   let real;
-  try { real = fs.realpathSync(target); } catch { return false; } // doesn't exist yet: safe to create
+  while (true) {
+    if (visited.has(current)) return false; // invalid symlink cycle cannot be written through
+    visited.add(current);
+    try {
+      real = path.resolve(fs.realpathSync(current), ...missing);
+      break;
+    } catch {
+      try {
+        if (fs.lstatSync(current).isSymbolicLink()) {
+          current = path.resolve(path.dirname(current), fs.readlinkSync(current));
+          continue;
+        }
+      } catch {}
+      const parent = path.dirname(current);
+      if (parent === current) return false;
+      missing.unshift(path.basename(current));
+      current = parent;
+    }
+  }
   return real === resolvedRoot || real.startsWith(`${resolvedRoot}${path.sep}`);
 }
 
@@ -19,6 +41,9 @@ export function resolvesIntoRepo(target, root = repoRoot) {
 // first, so nothing it held is lost. `bundle apply` treats such links the same way
 // (copyItem in presets.mjs).
 export function detachRepoLink(filePath, root = repoRoot) {
+  if (resolvesIntoRepo(path.dirname(filePath), root)) {
+    throw new Error(`${filePath} resolves into the checkout through its parent directory`);
+  }
   try {
     if (!fs.lstatSync(filePath).isSymbolicLink()) return false;
   } catch {

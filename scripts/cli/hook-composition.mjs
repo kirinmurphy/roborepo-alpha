@@ -1,9 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
-import { codexHooksPath, harnessHome } from "./paths.mjs";
+import { harnessHome } from "./paths.mjs";
 import { writeRootConfig } from "./root-config-writes.mjs";
 import { detachRepoLink, resolvesIntoRepo } from "./repo-links.mjs";
 import { getHarnessProvider } from "../harnesses/registry.mjs";
+import { hasHarnessPath, resolveHarnessPath } from "../harnesses/paths.mjs";
 import { validateAdapterComputeResult } from "../harnesses/schemas.mjs";
 
 // Cross-harness hook merge/unmerge. Both Claude (~/.claude/settings.json, hooks nested under a
@@ -20,25 +21,22 @@ import { validateAdapterComputeResult } from "../harnesses/schemas.mjs";
 // performs the write. Claude's write goes through writeRootConfig for drift-tracking (settings.json
 // is the root config); Codex's hooks.json has no root-config equivalent, so it's a plain file write.
 export function writeHooksFile(harness, filePath, content) {
-  if (harness === "codex") {
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const provider = getHarnessProvider(harness);
+  if (hasHarnessPath(provider.manifest, "hooks")) {
     detachRepoLink(filePath);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
     fs.writeFileSync(filePath, content);
     return;
   }
   writeRootConfig(harness, filePath, content);
 }
 
-// Live hook file path for a harness: Claude's is the active root config (settings.json also holds
-// permissions etc.); Codex's is the dedicated hooks.json, never config.toml. This is a genuine
-// structural asymmetry (Claude has no separate hooks path — hooks live inside its root config),
-// not a fixable-by-registry-lookup gap, so it stays an explicit two-branch shape rather than a
-// path pulled uniformly from each provider's manifest. Still validates the harness id itself
-// rather than silently treating any non-"codex" value as Claude.
-export function hookFilePath(harness, { claudeSettingsPath } = {}) {
-  getHarnessProvider(harness); // throws "unsupported harness" for an unrecognized id
-  if (harness === "codex") return codexHooksPath;
-  return claudeSettingsPath;
+// A provider with a dedicated hooks path uses it; otherwise hooks live in its root config.
+// The optional rootConfigPath lets callers supply the active or fixture root-config location.
+export function hookFilePath(harness, { rootConfigPath } = {}) {
+  const provider = getHarnessProvider(harness); // throws for an unrecognized id
+  if (hasHarnessPath(provider.manifest, "hooks")) return resolveHarnessPath(provider.manifest, "hooks");
+  return rootConfigPath ?? resolveHarnessPath(provider.manifest, "rootConfig");
 }
 
 export function mergeHooksInto(harness, filePath, hooksFragment, { dryRun = false } = {}) {

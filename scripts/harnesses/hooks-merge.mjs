@@ -1,7 +1,7 @@
 // Pure hooks-map merge/unmerge logic, extracted from scripts/cli/hook-composition.mjs so provider
 // adapters (scripts/harnesses/{claude,codex}/index.mjs) can call it without importing paths.mjs's
-// registry-dependent half — hook-composition.mjs pulls in codexHooksPath/harnessHome and
-// writeRootConfig, both of which resolve through scripts/harnesses/registry.mjs, so a provider
+// registry-dependent half — hook-composition.mjs pulls in harnessHome, provider paths, and
+// writeRootConfig, which resolve through scripts/harnesses/registry.mjs, so a provider
 // adapter importing hook-composition.mjs directly would cycle back into itself (same class of
 // import cycle as paths.mjs/roots.mjs).
 //
@@ -29,10 +29,14 @@ export function mergeHooksMap(hooksMap, hooksFragment, { append = false } = {}) 
   for (const [event, entries] of Object.entries(hooksFragment)) {
     if (event.startsWith("_") || !Array.isArray(entries)) continue;
     const existing = hooks[event] || [];
-    const fresh = entries.filter((entry) => {
+    const seen = new Set(existing.flatMap((entry) => (entry.hooks || []).map((hook) => hook.command)).filter(Boolean));
+    const fresh = [];
+    for (const entry of [...entries].reverse()) {
       const cmd = entry.hooks?.[0]?.command;
-      return !(cmd && existing.some((e) => (e.hooks || []).some((h) => h.command === cmd)));
-    });
+      if (cmd && seen.has(cmd)) continue;
+      fresh.unshift(entry);
+      if (cmd) seen.add(cmd);
+    }
     added += fresh.length;
     hooks[event] = append ? [...existing, ...fresh] : [...fresh, ...existing];
   }

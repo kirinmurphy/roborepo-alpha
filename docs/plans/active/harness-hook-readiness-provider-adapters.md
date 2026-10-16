@@ -9,7 +9,7 @@ related:
   - codex-cmux-hook-trust-review
   - harness-capability-derived-resource-targeting
   - usage-statusline-codex-hook-parity
-reviewed_commit: 1a013c459527bf461fedf0809118c637a0cd1d12
+reviewed_commit: a9219c5af259c44c524acb00f50b1cf3abdaa967
 worktree: harness-hook-readiness-provider-adapters
 ---
 
@@ -246,7 +246,7 @@ becomes `/api/config/hooks/<harness>/status`, served by a handler outside `scrip
 - [x] Confirm that the desktop bundle's `codex` binary opens a terminal UI offering `/hooks`, and
       that trust recorded there makes a desktop session run the hook. Record the exact command in
       the Decision Log. If it fails, stop and bring the trust path back to the user.
-- [x] Check whether `hooks/list` exists on a `PATH` Codex CLI of the oldest version `hooks.read`
+- [ ] Check whether `hooks/list` exists on a `PATH` Codex CLI of the oldest version `hooks.read`
       must support. Pick the executable rule from the result and record it in the Decision Log.
       No `PATH` Codex CLI exists on the reference Mac, so the check could not run; see the Decision
       Log and `## Not tested`.
@@ -428,3 +428,15 @@ becomes `/api/config/hooks/<harness>/status`, served by a handler outside `scrip
 - **Doctor reports readiness only under `--installed`.** Readiness reads live harness homes and
   starts the Codex runtime, like the other `--installed` checks. The existing harness-warning
   hints now print through the same `hint()` helper.
+- **QA restored intra-fragment command deduplication.** The first append implementation filtered
+  each fragment entry against only the pre-existing map, so two entries with the same command in
+  one fragment both landed. The prior reverse prepend loop kept the last such entry. Both merge
+  orders now retain that behavior, with a regression in `hook-composition-check.mjs`.
+- **QA extended the checkout-link guard.** A dangling file link or a new file below a directory
+  linked into the checkout could evade `realpathSync` and write into the checkout. File links are
+  detached, while a directory link is refused before creating a file. The same test covers both.
+- **QA made hook file routing manifest-backed.** The shared `hookFilePath` used to return Claude's
+  settings path for every non-Codex harness, including Gemini. It now uses a provider's declared
+  `hooks` path when present, or that provider's root config path, and the writer uses the same
+  distinction. This removes the hardcoded Codex path and prevents Gemini hook resources from
+  targeting Claude's settings file.

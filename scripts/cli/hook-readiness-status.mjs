@@ -30,7 +30,7 @@ async function readCurrentHookReadiness(harness, cwd) {
   const catalog = loadPackageCatalog({ includeUnavailable: true });
   const enabledIds = new Set(effectiveEnabledIds(catalog));
   const packages = catalog.filter((pkg) => enabledIds.has(pkg.id));
-  const hooksPath = hookFilePath(harness, { claudeSettingsPath: rootConfigActive.claude });
+  const hooksPath = hookFilePath(harness, { rootConfigPath: rootConfigActive[harness] });
   const readiness = await readHookReadiness(harness, { packages, repoRoot, hooksPath, cwd });
   const guidance = getHarnessProvider(harness).adapters.hooks?.guidance;
   return { ...readiness, guidance: typeof guidance === "function" ? guidance() : null };

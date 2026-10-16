@@ -439,7 +439,7 @@ export async function enablePackage(rest, _seen = new Set()) {
           break;
         }
         const hooksFragment = JSON.parse(fs.readFileSync(hooksPath, "utf8"));
-        const targetPath = hookFilePath(component.harness, { claudeSettingsPath: USER_CLAUDE_SETTINGS });
+        const targetPath = hookFilePath(component.harness, { rootConfigPath: rootConfigActive[component.harness] });
         if (targetPath) mergeHooksInto(component.harness, targetPath, hooksFragment);
         if (component.scripts?.length) installHookScripts(component.harness, component.scripts, repoRoot);
         break;
@@ -638,7 +638,7 @@ export async function disablePackage(rest) {
           break;
         }
         const hooksFragment = JSON.parse(fs.readFileSync(path.join(repoRoot, component.source), "utf8"));
-        const targetPath = hookFilePath(component.harness, { claudeSettingsPath: USER_CLAUDE_SETTINGS });
+        const targetPath = hookFilePath(component.harness, { rootConfigPath: rootConfigActive[component.harness] });
         if (targetPath) unmergeHooksFrom(component.harness, targetPath, hooksFragment);
         if (component.scripts?.length) removeHookScripts(component.harness, component.scripts, repoRoot);
         break;

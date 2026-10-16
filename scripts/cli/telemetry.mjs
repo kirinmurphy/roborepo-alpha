@@ -370,7 +370,7 @@ function wireBinSymlink() {
 // uses), then writes the result through the same drift-tracked-for-Claude/plain-for-Codex path
 // hook-composition.mjs uses — never two independently-maintained hook-write implementations.
 function wireCaptureHooks(harness) {
-  const filePath = hookFilePath(harness, { claudeSettingsPath: rootConfigActive.claude });
+  const filePath = hookFilePath(harness, { rootConfigPath: rootConfigActive[harness] });
   const { changed, content } = getHarnessProvider(harness).adapters.telemetry.wireCaptureHooks(filePath);
   if (changed) {
     writeHooksFile(harness, filePath, content);
