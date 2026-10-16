@@ -1,7 +1,7 @@
 ---
 id: wjlt1zvf
 priority: high
-next_action: Run `npm run check` on the committed implementation, then run the manual macOS QA in `## Not tested` (real terminal launch, selective trust, return-to-portal refresh) before /plan-review.
+next_action: Run /plan-review; the user confirms the `## Not tested` manual macOS QA (real terminal launch, selective trust, return-to-portal refresh) before /plan-close.
 blocked_by: []
 depends_on:
   - 3jp3yhtq
@@ -470,8 +470,10 @@ approval: only a later Codex `hooks/list` result clears `review_required`.
 - [x] CLI tests (`hook-review-cli-check.mjs`) cover base-only install, headless onboarding,
       package enable, `telemetry enable` without a duplicate, the optional hooks bundle,
       CLI-only and desktop discovery, and no terminal launch.
-- [ ] Rerun `npm run check` before handoff because onboarding, package state, install/update, and
-      portal routes interact. Focused checks and `test-cli.sh` (443 passed) pass.
+- [x] Rerun `npm run check` before handoff because onboarding, package state, install/update, and
+      portal routes interact. Passed October 16, 2026 on `d18b38a0`: 41/41 check suites, 107
+      portal UI tests, and the Docker clean-machine legs. The first run caught a heavy import in
+      the readiness path (`package-default-enabled-check.mjs`), fixed in that commit.
 
 ## Documentation impact
 
