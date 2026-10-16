@@ -177,7 +177,7 @@ Shared code never hardcodes either.
 
 Core hooks are expected only once installed by choice: when a harness's core hooks arrive through a
 `hook_fragment` manifest row, readiness includes them only if the bundle holding that row is
-selected (`coreHookBundle` in `scripts/cli/presets.mjs`). Claude's core hooks ride in its root
+selected (`scripts/cli/core-hook-bundle.mjs`). Claude's core hooks ride in its root
 config, which every install applies, so they are always expected.
 
 `scripts/harnesses/hook-readiness.mjs` builds the expected set from `core()` plus enabled packages'

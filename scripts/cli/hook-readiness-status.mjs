@@ -6,7 +6,7 @@ import { repoRoot, rootConfigActive } from "./paths.mjs";
 import { hookFilePath } from "./hook-composition.mjs";
 import { loadPackageCatalog } from "./package-catalog.mjs";
 import { effectiveEnabledIds } from "./rules-render.mjs";
-import { coreHookBundle } from "./presets.mjs";
+import { coreHookBundle } from "./core-hook-bundle.mjs";
 import { readHookReadiness, readinessSupported } from "../harnesses/hook-readiness.mjs";
 import { getHarnessProvider } from "../harnesses/registry.mjs";
 

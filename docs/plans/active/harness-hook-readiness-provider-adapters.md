@@ -562,7 +562,7 @@ Log.
   the existing keep/overwrite behavior and its tests hold.
 - **Core hooks are expected only when the bundle that installs them is selected.** Before, the
   core group was always expected, so a base-only install would have reported them missing.
-  `coreHookBundle` reads the manifest and preset catalog, so no provider id is hardcoded; Claude's
+  `coreHookBundle` (`scripts/cli/core-hook-bundle.mjs`, kept apart from `presets.mjs` so status reads stay light) reads the manifest and preset catalog, so no provider id is hardcoded; Claude's
   core hooks ride in its root config and stay always expected. This replaces the earlier decision
   to hide missing core hooks: they now show with `roborepo bundle apply hooks` as the remedy.
 - **Review revision is a digest of opaque per-hook identities.** Codex's record folds its trust key

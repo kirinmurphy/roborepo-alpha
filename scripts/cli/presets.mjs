@@ -817,17 +817,6 @@ function removeRow(row, policy) {
   }
 }
 
-// The bundle that installs a harness's core hooks through a hook_fragment row, and whether the user
-// selected it. Null when the harness's core hooks arrive another way: Claude's ride in its root
-// config, which every install applies.
-export function coreHookBundle(harness) {
-  const row = readManifestRows().find((entry) => entry.harness === harness && entry.kind === "hook_fragment");
-  if (!row) return null;
-  const bundle = readPresetCatalog().bundles.find((entry) => entry.rows.includes(`${row.harness}:${row.homeSub}`));
-  if (!bundle) return null;
-  return { id: bundle.id, selected: (readPresetState().selected ?? []).includes(bundle.id) };
-}
-
 // Bundles that merge hook entries (hook_fragment rows) can leave hooks awaiting review, including
 // package hooks whose position shifted when core entries were removed.
 async function printBundleHookReviewHint(args) {
