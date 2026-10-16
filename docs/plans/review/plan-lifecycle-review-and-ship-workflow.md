@@ -658,3 +658,37 @@ None blocking.
       `/plan-archive`. Every transition the skills call is covered by
       `plan-lifecycle-transitions-check.mjs`, but whether agents follow the skill prose, and ask
       for approval rather than infer it, needs live sessions and a real pull request.
+
+## Review
+
+Independent review on 2026-10-15, in a separate session from the implementation, of
+`587dec0d46c6011ae4f3b611e9a1e3bc76559acf` (feature branch after merging `main` at `af8a3311`).
+
+### Findings
+
+- [ ] `/plan-close` refuses a fresh approval as "stale" once the plan's local worktree is removed,
+      even though its branch still exists: `approvalFreshness` (`modules/plan-suite/review-gates.mjs`)
+      falls back to the base tip when no worktree resolves, and the `close` rule
+      (`transition-rules.mjs`) then skips the landed check as "checked by the caller", which no skill
+      describes. Reproduced: squash-merge, one unrelated commit on `main`, `git worktree remove`
+      → `plans approval` reports `stale` (`src/other.txt`) and `plans close` refuses. Either resolve
+      the branch without the worktree or refuse with a "worktree missing" reason, and add a fixture.
+
+### Verification
+
+- `roborepo plans preflight gqzjlzgx` (branch CLI, primary checkout) passed; `plans submit`
+  committed `af8a3311` on `main` with only the plan's two paths, leaving four unrelated modified files untouched.
+- `roborepo plans sync-base` merged `main` cleanly at `587dec0d`; the review rename arrived through the merge.
+- `npm run check` passed at `587dec0d`: 38/38 check suites, doctor, install collisions, package
+  install, clean-machine container and sandboxes, portal UI (103 passed). Windows installer parity
+  skipped: `pwsh` unavailable.
+- `roborepo plans validate gqzjlzgx`: 0 blocking, 1 advisory (`UNCONFIRMED_NOT_TESTED`).
+- Acceptance criteria 1–9 checked against the code, the transitions, sync-base, manifest, portal
+  state, and skills checks, and the documentation-impact files; all met apart from the finding above.
+- Manual (open): the Not tested entry. This session exercised `/plan-review`'s submit and sync-base
+  live; `/plan-promote`, `/plan-execute`, a GitHub PR merge, `/plan-close`, and `/plan-archive`
+  remain for the human.
+
+### Approval
+
+- Decision: not requested (open finding)
