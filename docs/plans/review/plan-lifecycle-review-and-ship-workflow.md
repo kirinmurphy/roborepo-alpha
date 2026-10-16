@@ -1,7 +1,7 @@
 ---
 id: gqzjlzgx
 priority: high
-next_action: Run /plan-review again in a fresh session to re-review the branch, including the approval-unavailable fix and the additive-fix rule for /plan-review.
+next_action: Fix the UNKNOWN_PLAN_NAMESPACE failure that main's agent-permissions-global-audit plan causes, decide whether `plans validate` authority is in scope, then rerun /plan-review.
 blocked_by: []
 depends_on: []
 related:
@@ -713,6 +713,48 @@ Independent review on 2026-10-15, in a separate session from the implementation,
   live; `/plan-promote`, `/plan-execute`, a GitHub PR merge, `/plan-close`, and `/plan-archive`
   remain for the human.
 
+### Round 2
+
+Independent re-review on 2026-10-16, in a fresh session (neither the implementation nor the
+round-1 fix session), of `e6bac7ea2041` (feature branch after `sync-base` merged `main` at
+`c6051ff2`). Covers the full branch diff, including the `unavailable` approval fix (`b1355faa`) and
+the additive-fix rule for `/plan-review` (`6b74f0f1`).
+
+- [ ] **Base breaks the completion gate.** `npm run check` stops in `test-cli.sh`:
+      `plan-suite-findings-check.mjs` reports `backlog/agent-permissions-global-audit.md:
+      UNKNOWN_PLAN_NAMESPACE`. The plan arrived on `main` in `c6051ff2`, and `main` fails the same
+      check by itself. Outside this plan's requirements, so not for `/plan-execute`: rename that plan
+      to a declared namespace (or declare `agent` in `docs/plans/plans-config.json`) on `main`, then
+      rerun `/plan-review`.
+- [ ] **Scope question (user decision): `roborepo plans validate` ignores authority.** Run from the
+      primary checkout it validates the primary copy of a review plan (here: 0 findings); run from
+      the worktree it reports the open Not tested entry. `validateRepositoryPlans` reads only the
+      checkout it runs in, as it already did for Active plans on `main`; only the portal scan and
+      the new gates resolve the authoritative copy. Acceptance criterion 8 names "the CLI", but the
+      plan never lists `validate` among the commands it changes.
+
+Verification:
+
+- `roborepo plans sync-base` merged `main` cleanly at `e6bac7ea`. `git fetch origin` failed (no
+  access from this session), so the base is the local `main`, which reported even with
+  `origin/main`.
+- `npm run check` at `e6bac7ea`: doctor passed (102 checks); `test-cli.sh` 443 passed, 1 failed
+  (finding above). Because `ci.sh` stops at the first failure, its remaining stages were run one by
+  one and all passed: install collisions; `test:unit --group ci` 38/38 suites, including the
+  manifest, transitions, and sync-base checks; package install; the four clean-machine Docker
+  suites; portal UI 103 passed. Windows installer parity not run (`pwsh` unavailable).
+- Branch CLI against this plan: `plans preflight` → implementation complete; `plans approval` →
+  `not-approved`, as recorded; `plans validate` → see the scope question.
+- Code read against acceptance criteria 1–9: the transition orchestrator and rules, both gates,
+  authority, copy integration, `sync-base`, the manifest, the CLI, `recommendedPlanCommand`, the five
+  skills, and the documentation-impact files. The round-1 fix holds: a missing worktree yields
+  `unavailable` before `### Approval` is read, and `close` always checks landing against the
+  approval's resolved branch.
+- `main`'s plan-status changes (`346f9562`) merged into the files the branch also changed
+  (`plan-drawer-partial.html`, `plans-status.spec.mjs`); the portal UI suite passes on the result.
+- No additive fixes were needed this round.
+- Manual (open): the Not tested entry, unchanged.
+
 ### Approval
 
-- Decision: not requested (open finding)
+- Decision: not requested (open findings)
