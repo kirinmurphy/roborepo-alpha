@@ -1,20 +1,16 @@
 // Filter state, matching, sorting, and facet counts — no DOM here. app.js owns wiring DOM events
 // to this module's functions; templates.js owns turning its output into markup.
+import { isLifecycle } from "./lifecycle.js";
 
-export const LIFECYCLE_LABELS = {
-  active: "Active",
-  backlog: "Backlog",
-  completed: "Completed",
-  archived: "Archived",
-  unclassified: "Unclassified",
-};
-
+// `structure` (a plan's structural completeness) and `freshness` (whether the document was checked
+// against the code at `reviewed_commit`) are named so neither reads as the Ready or Review lifecycle,
+// or as a human's approval.
 export const FILTER_IDS = [
   "search",
   "priority",
   "blocked",
-  "readiness",
-  "review",
+  "structure",
+  "freshness",
   "health",
 ];
 
@@ -22,17 +18,26 @@ export const FILTER_DEFAULTS = {
   search: "",
   priority: "all",
   blocked: "all",
-  readiness: "all",
-  review: "all",
+  structure: "all",
+  freshness: "all",
   health: "all",
 };
 
 export const FILTER_LABELS = {
   priority: "priority",
   blocked: "blocked",
-  readiness: "readiness",
-  review: "review",
+  structure: "structure",
+  freshness: "freshness",
   health: "health",
+};
+
+// Display text for the record's structure and plan-freshness values.
+export const STRUCTURE_LABELS = { ready: "structure complete", draft: "draft" };
+export const FRESHNESS_LABELS = {
+  "never-reviewed": "never checked",
+  current: "checked, current",
+  "possibly-stale": "possibly stale",
+  unknown: "freshness unknown",
 };
 
 export const FILTER_OPTION_DEFS = {
@@ -45,17 +50,13 @@ export const FILTER_OPTION_DEFS = {
     ["blocked", "blocked"],
     ["unblocked", "unblocked"],
   ],
-  readiness: () => [
-    ["all", "all readiness"],
-    ["ready", "ready"],
-    ["draft", "draft"],
+  structure: () => [
+    ["all", "all structure"],
+    ...Object.entries(STRUCTURE_LABELS),
   ],
-  review: () => [
-    ["all", "all review"],
-    ...["never-reviewed", "current", "possibly-stale", "unknown"].map((v) => [
-      v,
-      v,
-    ]),
+  freshness: () => [
+    ["all", "all freshness"],
+    ...Object.entries(FRESHNESS_LABELS),
   ],
   health: () => [
     ["all", "all health"],
@@ -75,9 +76,9 @@ export const FIELD_MATCHERS = {
     if (value === "unblocked") return record.plan.blockers.length === 0;
     return true;
   },
-  readiness: (record, value) =>
+  structure: (record, value) =>
     value === "all" || record.plan.readiness === value,
-  review: (record, value) =>
+  freshness: (record, value) =>
     value === "all" || record.plan.reviewState === value,
   health: (record, value) => {
     if (value === "warnings") return record.plan.validation.warnings.length > 0;
@@ -229,11 +230,12 @@ export function mergedPlanBranches(overview) {
 // replaceState — lifecycle tab switches are meant to be real history stops).
 
 const LIFECYCLE_QUERY_KEY = "lifecycle";
-const VALID_LIFECYCLES = new Set([...Object.keys(LIFECYCLE_LABELS)]);
 
+// Valid lifecycles come from the snapshot's lifecycle model, so the page re-reads the URL once a
+// snapshot has set it; before then every value falls back.
 export function lifecycleFromSearchParams(params, fallback = "active") {
   const value = params.get(LIFECYCLE_QUERY_KEY);
-  return value && VALID_LIFECYCLES.has(value) ? value : fallback;
+  return value && isLifecycle(value) ? value : fallback;
 }
 
 export function urlForLifecycle(lifecycle) {

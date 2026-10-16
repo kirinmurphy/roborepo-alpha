@@ -63,10 +63,14 @@ Examples:
 - `code-style`: implicit helper skill; no slash command needed.
 - `javascript-typescript`: implicit helper skill; no slash command needed.
 - `react`: implicit helper skill; no slash command needed.
-- `plan-write`, `plan-promote`, `plan-start`, `plan-close`: the plan suite, one
-  atomic lifecycle step each, behind the matching slash command. None takes a mode
-  argument; deterministic plan rules live in `roborepo plans validate` and
-  `roborepo plans start`, which every suite skill runs.
+- `plan-write`, `plan-promote`, `plan-execute`, `plan-review`, `plan-close`,
+  `plan-archive`: the plan suite, one atomic lifecycle step each, behind the
+  matching slash command. None takes a mode argument, and none invokes the next.
+  Deterministic plan rules live in `roborepo plans validate`, the lifecycle
+  transitions (`roborepo plans promote|start|submit|reopen|close|archive`), and
+  `roborepo plans preflight|approval|sync-base`, which the suite skills run
+  instead of composing Git commands. The lifecycle itself is declared in
+  `manifests/platform/plan-lifecycle.json`.
 - `tighten`: explicit-only review/fix workflow behind `/tighten`.
 - `session-close`: explicit-only session close-out workflow (review, docs, commit,
   handoff note) behind `/session-close`.
@@ -93,8 +97,10 @@ Current generated examples:
 - `/frontend-design` -> `frontend-design`
 - `/plan-write` -> `plan-write`
 - `/plan-promote` -> `plan-promote`
-- `/plan-start` -> `plan-start`
+- `/plan-execute` -> `plan-execute`
+- `/plan-review` -> `plan-review`
 - `/plan-close` -> `plan-close`
+- `/plan-archive` -> `plan-archive`
 - `/tighten` -> `tighten`
 - `/session-close` -> `session-close`
 

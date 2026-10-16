@@ -14,7 +14,13 @@ import {
   sortForLifecycle,
   planSort,
   FILTER_DEFAULTS,
+  FILTER_IDS,
+  FILTER_OPTION_DEFS,
+  lifecycleFromSearchParams,
 } from "../../portal/plans/state.js";
+import { isLifecycle, lifecycleActions, lifecycleLabel, lifecycleTabs, setLifecycleModel, showsPriority } from "../../portal/plans/lifecycle.js";
+import { primaryPlanAction, recommendedPlanCommand } from "../../portal/plans/plan-actions.js";
+import { LIFECYCLE_MODEL, lifecycleProjection } from "../../modules/plan-suite/lifecycle-manifest.mjs";
 
 // Pure mutation-orchestration
 // helpers (isVisible, replaceRecord, filteredListActionFor) have no DOM dependency, so this test
@@ -44,7 +50,60 @@ testActiveSortOrdersMostCompleteFirst();
 testActiveSortSinksUnstartedAndUntrackedToTheBottom();
 testActiveSortFallsBackToPlanSortOnTies();
 testSortForLifecycleOnlyChangesActive();
+testLifecycleModelComesFromTheSnapshot();
+testRecommendedCommandFollowsTheLifecycle();
+testFilterNamesNeverReadAsLifecycleOrApproval();
 console.log("ok: plans portal state checks passed");
+
+// The portal holds no lifecycle list of its own: everything below comes from the projection the
+// server publishes in the plans snapshot, built from the same manifest the domain module reads.
+function testLifecycleModelComesFromTheSnapshot() {
+  setLifecycleModel(null);
+  assert.equal(lifecycleFromSearchParams(new URLSearchParams("lifecycle=review")), "active", "before a snapshot, every tab falls back");
+  assert.equal(lifecycleLabel("review"), "review", "an id stands in for its label until the model arrives");
+  assert.deepEqual(lifecycleActions("review"), []);
+
+  setLifecycleModel(JSON.parse(JSON.stringify(lifecycleProjection(LIFECYCLE_MODEL))));
+  assert.equal(lifecycleFromSearchParams(new URLSearchParams("lifecycle=review")), "review");
+  assert.equal(lifecycleFromSearchParams(new URLSearchParams("lifecycle=nonsense")), "active");
+  assert.deepEqual(lifecycleTabs().filter((tab) => !tab.secondary).map((tab) => tab.id), ["backlog", "ready", "active", "review"], "Ready and Review are primary tabs");
+  assert.deepEqual(lifecycleTabs().filter((tab) => tab.secondary).map((tab) => tab.id), ["completed", "archived", "unclassified"]);
+  assert.equal(lifecycleLabel("ready"), "Ready");
+  assert.ok(isLifecycle("unclassified"));
+  assert.equal(showsPriority("review"), true);
+  assert.equal(showsPriority("completed"), false);
+  assert.deepEqual(lifecycleActions("review").map((action) => action.label), ["Review", "Fix findings", "Close after merge", "Archive"]);
+}
+
+function testRecommendedCommandFollowsTheLifecycle() {
+  setLifecycleModel(lifecycleProjection(LIFECYCLE_MODEL));
+  const plan = (lifecycle, extra = {}) => ({ ...record({ lifecycle }).plan, ...extra });
+  const tasks = (total, complete) => ({ taskCounts: { total, complete, remaining: total - complete } });
+
+  assert.deepEqual(primaryPlanAction(plan("backlog")), { command: "plan-promote", label: "Promote" });
+  assert.deepEqual(primaryPlanAction(plan("ready")), { command: "plan-execute", label: "Start" });
+  assert.deepEqual(primaryPlanAction(plan("active", { reviewState: "current", ...tasks(3, 1) })), { command: "plan-execute", label: "Continue" }, "unfinished work continues");
+  assert.equal(recommendedPlanCommand(plan("active", tasks(3, 3))), "plan-review", "finished tasks lead to review");
+  assert.equal(recommendedPlanCommand(plan("active", { ...tasks(3, 2), notTestedOpen: 1 })), "plan-review", "an open Not tested entry does not hold back review");
+  assert.equal(recommendedPlanCommand(plan("active", { ...tasks(3, 3), blockers: ["x"] })), null, "a blocked plan has no recommendation");
+
+  assert.deepEqual(primaryPlanAction(plan("review", { qa: { openFindings: 2, decision: "" } })), { command: "plan-execute", label: "Fix findings" });
+  assert.deepEqual(primaryPlanAction(plan("review", { qa: { openFindings: 0, decision: "approved" } })), { command: "plan-close", label: "Close after merge" });
+  assert.deepEqual(primaryPlanAction(plan("review", { qa: { openFindings: 0, decision: "" } })), { command: "plan-review", label: "Review" });
+  assert.equal(primaryPlanAction(plan("completed")), null);
+  assert.equal(primaryPlanAction(plan("archived")), null);
+}
+
+// Structure and plan freshness used to be shown as "ready"/"draft" and as a "review" state, which a
+// reader would take for the Ready and Review lifecycles or for a human's approval.
+function testFilterNamesNeverReadAsLifecycleOrApproval() {
+  assert.ok(!FILTER_IDS.includes("readiness") && !FILTER_IDS.includes("review"));
+  for (const id of ["structure", "freshness"]) {
+    for (const [, label] of FILTER_OPTION_DEFS[id]()) {
+      assert.doesNotMatch(label, /\bready\b|\breview(ed)?\b|approv/i, `${id} option "${label}" must not read as a lifecycle or an approval`);
+    }
+  }
+}
 
 function record({ key = "k1", lifecycle = "backlog", priority = "high", id = "plan-1", repositoryId = "r1", blockers = [], taskCounts = { total: 0, complete: 0, remaining: 0 } } = {}) {
   return {

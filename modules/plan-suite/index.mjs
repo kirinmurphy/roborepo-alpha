@@ -6,6 +6,7 @@ import { resolveProjectIdentity, canonicalRepositoryId, providerUrlForRepository
 import { finding, messagesOf } from "./findings.mjs";
 import { validateForLifecycle } from "./lifecycle-policy.mjs";
 import { LIFECYCLE_MODEL } from "./lifecycle-manifest.mjs";
+import { reviewRecord } from "./review-record.mjs";
 import { classifyPlanId, isExternalBlocker } from "./plan-id.mjs";
 import { validatePlanNaming, readProjectNamespaces } from "./naming.mjs";
 import { renderMarkdown } from "../../scripts/cli/markdown-render.mjs";
@@ -365,6 +366,12 @@ function buildPlanRecord(repository, absolutePath, relativePath, stat, projectNa
       gitLastChangedAt: git.lastChangedAt,
       gitStatus: git.status,
       taskCounts: parsed.taskCounts,
+      // Unchecked `## Not tested` entries, which are tasks too but never block implementation
+      // completion; `taskCounts.remaining` minus this is the work still open.
+      notTestedOpen: parsed.notTested.unchecked,
+      // The QA outcome /plan-review recorded, kept apart from task progress: open findings and the
+      // recorded decision. Whether an approval is still fresh needs Git and is checked at close.
+      qa: qaSummary(parsed.review),
       headings: parsed.headings,
       excerpt: excerpt(markdown),
       // `warnings` is the display-string projection of `findings`, derived here so the two can
@@ -417,6 +424,7 @@ export function parsePlanMarkdown(markdown, context = {}) {
     headings,
     tasks,
     notTested: notTestedEntries(headings, tasks, lines.length),
+    review: reviewRecord(headings, tasks, lines),
     taskCounts: {
       total: tasks.length,
       complete: tasks.filter((task) => task.done).length,
@@ -851,6 +859,16 @@ function emptyParsed(code) {
     tasks: [],
     taskCounts: { total: 0, complete: 0, remaining: 0 },
     notTested: { present: false, entries: [], unchecked: 0 },
+    review: { present: false, findings: { open: 0, total: 0 }, approval: null },
+  };
+}
+
+function qaSummary(review) {
+  return {
+    reviewed: review.present,
+    openFindings: review.findings.open,
+    findings: review.findings.total,
+    decision: review.approval?.decision || "",
   };
 }
 

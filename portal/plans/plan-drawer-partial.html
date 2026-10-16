@@ -122,8 +122,8 @@
             <span
               >Plans move through lifecycle folders: 
               <div class="code-sample">
-                <code>backlog</code> → <code>active</code> →
-                <code>completed</code> → <code>archived</code>.
+                <code>backlog</code> → <code>ready</code> → <code>active</code> →
+                <code>review</code> → <code>completed</code>, or <code>archived</code>.
               </div>
             </span>
           </li>
@@ -136,16 +136,24 @@
                 <button type="button" data-btn="text" data-slot="details" data-skill="plan-write">Details</button>
               </li>
               <li>
-                <code>/plan-promote</code> — prepare a plan for development
+                <code>/plan-promote</code> — prepare a plan and move it to ready
                 <button type="button" data-btn="text" data-slot="details" data-skill="plan-promote">Details</button>
               </li>
               <li>
-                <code>/plan-start</code> — implement it in an isolated worktree
-                <button type="button" data-btn="text" data-slot="details" data-skill="plan-start">Details</button>
+                <code>/plan-execute</code> — implement it in an isolated worktree, across sessions
+                <button type="button" data-btn="text" data-slot="details" data-skill="plan-execute">Details</button>
               </li>
               <li>
-                <code>/plan-close</code> — verify the work and close the plan
+                <code>/plan-review</code> — review it independently and record your approval
+                <button type="button" data-btn="text" data-slot="details" data-skill="plan-review">Details</button>
+              </li>
+              <li>
+                <code>/plan-close</code> — after you merge, verify the work and close the plan
                 <button type="button" data-btn="text" data-slot="details" data-skill="plan-close">Details</button>
+              </li>
+              <li>
+                <code>/plan-archive</code> — retire a plan that will not be completed
+                <button type="button" data-btn="text" data-slot="details" data-skill="plan-archive">Details</button>
               </li>
               <li>
                 <code>/session-close</code> — commit and hand off the session

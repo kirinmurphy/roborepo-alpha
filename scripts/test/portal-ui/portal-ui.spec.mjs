@@ -1132,9 +1132,14 @@ test.describe("Plans card commands", () => {
   test.beforeAll(() => {
     planRoot = fs.mkdtempSync(path.join(os.tmpdir(), "portal-ui-commands-"));
     fs.mkdirSync(path.join(planRoot, ".git"));
-    for (const lifecycle of ["backlog", "active"]) fs.mkdirSync(path.join(planRoot, "docs", "plans", lifecycle), { recursive: true });
+    for (const lifecycle of ["backlog", "ready", "active", "review"]) fs.mkdirSync(path.join(planRoot, "docs", "plans", lifecycle), { recursive: true });
     fs.writeFileSync(path.join(planRoot, "docs", "plans", "backlog", "card-backlog.md"), plan("cardbk01", "Backlog card plan", "- [ ] Todo"));
+    fs.writeFileSync(path.join(planRoot, "docs", "plans", "ready", "card-ready.md"), plan("cardrd01", "Ready card plan", "- [ ] Todo"));
     fs.writeFileSync(path.join(planRoot, "docs", "plans", "active", "card-done.md"), plan("cardac01", "Finished card plan", "- [x] Done"));
+    fs.writeFileSync(path.join(planRoot, "docs", "plans", "review", "card-findings.md"),
+      plan("cardrv01", "Findings card plan", "- [x] Done\n\n## Review\n\n### Findings\n\n- [ ] Missing retry test"));
+    fs.writeFileSync(path.join(planRoot, "docs", "plans", "review", "card-approved.md"),
+      plan("cardrv02", "Approved card plan", "- [x] Done\n\n## Review\n\n### Approval\n\n- Decision: approved\n- Reviewed implementation commit: 0123456789abcdef0123456789abcdef01234567\n- Confirmed by: human"));
   });
   test.afterAll(() => fs.rmSync(planRoot, { recursive: true, force: true }));
   test.beforeEach(async ({ page }) => {
@@ -1147,11 +1152,14 @@ test.describe("Plans card commands", () => {
   });
   test.afterEach(async ({ page }) => removeRepositorySources(page));
 
-  // The portal copies suite commands; it never moves a plan on their behalf, since /plan-start and
-  // /plan-close make and commit those moves themselves.
+  // The portal copies suite commands; it never moves a plan on their behalf, since the suite
+  // commands make and commit those moves themselves.
   for (const [tab, title, label, command, folder] of [
-    ["Backlog", "Backlog card plan", "Start", "plan-start", "backlog/card-backlog.md"],
-    ["Active", "Finished card plan", "Close", "plan-close", "active/card-done.md"],
+    ["Backlog", "Backlog card plan", "Promote", "plan-promote", "backlog/card-backlog.md"],
+    ["Ready", "Ready card plan", "Start", "plan-execute", "ready/card-ready.md"],
+    ["Active", "Finished card plan", "Review", "plan-review", "active/card-done.md"],
+    ["Review", "Findings card plan", "Fix findings", "plan-execute", "review/card-findings.md"],
+    ["Review", "Approved card plan", "Close after merge", "plan-close", "review/card-approved.md"],
   ]) {
     test(`a ${tab.toLowerCase()} card's ${label} copies the /${command} prompt and moves nothing`, async ({ page }) => {
       await page.goto("/plans");
@@ -1184,7 +1192,7 @@ test.describe("Plans card commands", () => {
     expect(rowBox.x + rowBox.width).toBeLessThanOrEqual(filtersBox.x + 1);
     expect(refreshBox.x).toBeGreaterThanOrEqual(titleBox.x + titleBox.width);
     expect(refreshBox.x + refreshBox.width).toBeLessThan(rowBox.x);
-    await expect(row.locator(":scope > .lifecycle-tab")).toHaveText([/^Backlog \(/, /^Active \(/]);
+    await expect(row.locator(":scope > .lifecycle-tab")).toHaveText([/^Backlog \(/, /^Ready \(/, /^Active \(/, /^Review \(/]);
     const trigger = row.locator(".overflow-more-trigger");
     await expect(trigger).toHaveAttribute("aria-label", "More lifecycles");
     await expect(trigger).not.toHaveClass(/\bactive\b/);
@@ -1215,10 +1223,10 @@ test.describe("Plans card commands", () => {
     await expect(trigger).not.toHaveAttribute("aria-label");
     await row.locator(".overflow-more-current").click();
     const items = row.locator("#lifecycle-tabs-more-panel .lifecycle-tab:visible");
-    // Unclassified joins only when a registered repository has such a plan, so match the fixed four.
+    // Unclassified joins only when a registered repository has such a plan, so match the fixed six.
     await expect(items.first()).toBeVisible();
-    expect((await items.allTextContents()).slice(0, 4).map((text) => text.replace(/ \(.*/, ""))).toEqual(
-      ["Backlog", "Active", "Completed", "Archived"],
+    expect((await items.allTextContents()).slice(0, 6).map((text) => text.replace(/ \(.*/, ""))).toEqual(
+      ["Backlog", "Ready", "Active", "Review", "Completed", "Archived"],
     );
     const barBox = await bar.boundingBox();
     const triggerBox = await trigger.boundingBox();
@@ -1236,7 +1244,7 @@ test.describe("Plans card commands", () => {
 });
 
 test.describe("Plans onboarding", () => {
-  const SUITE = ["plan-write", "plan-promote", "plan-start", "plan-close", "session-close"];
+  const SUITE = ["plan-write", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive", "session-close"];
 
   test("each suite command's details button opens that command's skill", async ({ page }) => {
     await page.goto("/plans");
@@ -1253,7 +1261,7 @@ test.describe("Plans onboarding", () => {
     }
   });
 
-  test("the enable button turns on all five suite packages in one request", async ({ page }) => {
+  test("the enable button turns on all seven suite packages in one request", async ({ page }) => {
     await page.goto("/plans");
     const token = await page.locator("meta[name=cli-portal-token]").getAttribute("content");
     const bulk = page.waitForRequest((request) => request.url().endsWith("/api/config/packages/bulk") && request.method() === "POST");

@@ -63,6 +63,7 @@ testNamingFindingsCarryTheirFilename();
 testRepositoryPlansProduceNoNamingFindings();
 testAuthorityFindingsExplainThemselves();
 testReadyAndReviewDestinationRules();
+testReviewRecordParsing();
 console.log("ok: plan docs findings and lifecycle policy checks passed");
 
 // The tiered id check. Short base36 is the current convention; hyphenated slugs are accepted but
@@ -598,6 +599,54 @@ function testReadyAndReviewDestinationRules() {
   assert.deepEqual(codesFor(withNotTested, "ready"), [], "Ready has nothing built yet, so Not tested entries are not its concern");
   assert.deepEqual(codesFor(withNotTested, "review"), ["UNCONFIRMED_NOT_TESTED"]);
   assert.deepEqual(codesFor(withNotTested, "review"), codesFor(withNotTested, "active"), "Review applies the Active rules");
+}
+
+// The review record: findings are the checkboxes under `### Findings` only, and the approval is read
+// from its three fixed lines, case-insensitively and without code ticks. A fenced example is never a
+// record, and a plan without `## Review` has none.
+function testReviewRecordParsing() {
+  const parsed = parsePlanMarkdown(`---
+id: rev12345
+---
+
+# Reviewed
+
+## Implementation checklist
+
+- [x] Build it.
+
+## Review
+
+Prose before the subsections.
+
+### Findings
+
+- [x] Missing retry test — added
+- [ ] Error path untested
+
+### Verification
+
+- [ ] Not a finding: verification notes are not open work.
+
+### Approval
+
+- Decision: Approved
+- Reviewed implementation commit: \`ABCDEF0123\`
+- Confirmed by: human
+
+## Decision Log
+
+- [ ] Not a finding either.
+`, {});
+  assert.deepEqual(parsed.review, {
+    present: true,
+    findings: { open: 1, total: 2 },
+    approval: { decision: "approved", commit: "abcdef0123", confirmedBy: "human" },
+  });
+  const fenced = parsePlanMarkdown("---\nid: rev12345\n---\n\n# F\n\n```md\n## Review\n### Approval\n- Decision: approved\n```\n", {});
+  assert.deepEqual(fenced.review, { present: false, findings: { open: 0, total: 0 }, approval: null }, "a fenced example is not a review record");
+  const noApproval = parsePlanMarkdown("---\nid: rev12345\n---\n\n# N\n\n## Review\n\n### Findings\n\n- [ ] Open.\n", {});
+  assert.equal(noApproval.review.approval, null, "a review without `### Approval` has no recorded decision");
 }
 
 function testRepositoryPlansProduceNoNamingFindings() {

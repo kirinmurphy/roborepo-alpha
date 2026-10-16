@@ -6,7 +6,7 @@
 // - Approval freshness decides whether the human approval recorded in `## Review` still describes
 //   the implementation. Plan documents are not implementation content, so only the tree outside
 //   docs/plans is compared.
-import { domainError, lifecycleFindings, parseFrontmatter, parsePlanMarkdown } from "./index.mjs";
+import { domainError, lifecycleFindings, parsePlanMarkdown } from "./index.mjs";
 import { isWorktreeBound } from "./plan-authority.mjs";
 import { dirtyPaths, git } from "./plan-git.mjs";
 import { authoritativeMarkdown } from "./worktree-copy.mjs";
@@ -88,30 +88,10 @@ export function approvalFreshness({ primary, record, base }) {
   return { ...result, state: "fresh", reason: null };
 }
 
-// The `### Approval` list under `## Review`: `Decision`, `Reviewed implementation commit`, and
-// `Confirmed by`, each a `- Label: value` line. Only the format of these three lines is fixed; the
-// rest of the section is free prose.
+// The `### Approval` record under `## Review` (review-record.mjs), or { present: false }.
 export function readApproval(markdown) {
-  const parsed = parsePlanMarkdown(markdown);
-  const lines = parseFrontmatter(markdown).body.split("\n");
-  const reviewIndex = parsed.headings.findIndex((heading) => heading.depth === 2 && heading.text.toLowerCase() === "review");
-  if (reviewIndex === -1) return { present: false };
-  const reviewEnd = parsed.headings.slice(reviewIndex + 1).find((heading) => heading.depth <= 2);
-  const approvalHeading = parsed.headings.slice(reviewIndex + 1)
-    .find((heading) => heading.depth === 3 && heading.text.toLowerCase() === "approval" && (!reviewEnd || heading.line < reviewEnd.line));
-  if (!approvalHeading) return { present: false };
-  const next = parsed.headings.find((heading) => heading.line > approvalHeading.line && heading.depth <= 3);
-  const section = lines.slice(approvalHeading.line, next ? next.line - 1 : lines.length);
-  const field = (label) => {
-    const match = section.map((line) => new RegExp(`^\\s*[-*]\\s+${label}:\\s*(.*?)\\s*$`, "i").exec(line)).find(Boolean);
-    return match ? match[1].replace(/^`|`$/g, "") : "";
-  };
-  return {
-    present: true,
-    decision: field("Decision").toLowerCase(),
-    commit: field("Reviewed implementation commit").toLowerCase(),
-    confirmedBy: field("Confirmed by"),
-  };
+  const { approval } = parsePlanMarkdown(markdown).review;
+  return approval ? { present: true, ...approval } : { present: false };
 }
 
 // Unchecked tasks outside `## Not tested`. Open review findings are tasks too, so an unresolved
