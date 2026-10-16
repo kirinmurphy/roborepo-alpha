@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "states": [
+    {
+      "id": "backlog",
+      "folder": "backlog",
+      "label": "Backlog",
+      "tab": "primary",
+      "showsPriority": true,
+      "worktreeBound": false,
+      "actions": [
+        { "command": "plan-promote", "label": "Promote", "description": "Validate this plan and commit it to Ready." },
+        { "command": "plan-write", "label": "Update", "description": "Revise this plan or sync it with the repo." },
+        { "command": "plan-archive", "label": "Archive", "description": "Retire this plan with a recorded reason." }
+      ]
+    },
+    {
+      "id": "ready",
+      "folder": "ready",
+      "label": "Ready",
+      "tab": "primary",
+      "showsPriority": true,
+      "worktreeBound": false,
+      "actions": [
+        { "command": "plan-execute", "label": "Start", "description": "Implement this plan in an isolated worktree." },
+        { "command": "plan-promote", "label": "Refine", "description": "Re-check this plan against the repo and refine it in place." },
+        { "command": "plan-archive", "label": "Archive", "description": "Retire this plan with a recorded reason." }
+      ]
+    },
+    {
+      "id": "active",
+      "folder": "active",
+      "label": "Active",
+      "tab": "primary",
+      "showsPriority": true,
+      "worktreeBound": true,
+      "actions": [
+        { "command": "plan-execute", "label": "Continue", "description": "Resume implementation in this plan's worktree." },
+        { "command": "plan-review", "label": "Review", "description": "Confirm implementation is complete and begin independent QA." },
+        { "command": "plan-write", "label": "Update", "description": "Revise this plan or sync it with the repo." },
+        { "command": "plan-archive", "label": "Archive", "description": "Retire this plan without losing unmerged work." }
+      ]
+    },
+    {
+      "id": "review",
+      "folder": "review",
+      "label": "Review",
+      "tab": "primary",
+      "showsPriority": true,
+      "worktreeBound": true,
+      "actions": [
+        { "command": "plan-review", "label": "Review", "description": "Run independent QA, record findings, and request approval." },
+        { "command": "plan-execute", "label": "Fix findings", "description": "Address the review findings recorded in the plan." },
+        { "command": "plan-close", "label": "Close after merge", "description": "After you merge the PR, verify it landed and complete the plan." },
+        { "command": "plan-archive", "label": "Archive", "description": "Retire this plan without losing unmerged work." }
+      ]
+    },
+    {
+      "id": "completed",
+      "folder": "completed",
+      "label": "Completed",
+      "tab": "overflow",
+      "showsPriority": false,
+      "worktreeBound": false,
+      "actions": []
+    },
+    {
+      "id": "archived",
+      "folder": "archived",
+      "label": "Archived",
+      "tab": "overflow",
+      "showsPriority": false,
+      "worktreeBound": false,
+      "actions": []
+    },
+    {
+      "id": "unclassified",
+      "folder": null,
+      "label": "Unclassified",
+      "tab": "overflow",
+      "showsPriority": true,
+      "worktreeBound": false,
+      "actions": []
+    }
+  ],
+  "transitions": [
+    { "id": "promote", "from": ["backlog"], "to": "ready", "commands": ["plan-promote"] },
+    { "id": "start", "from": ["ready"], "to": "active", "commands": ["plan-execute"] },
+    { "id": "submit", "from": ["active"], "to": "review", "commands": ["plan-execute", "plan-review"] },
+    { "id": "reopen", "from": ["review"], "to": "active", "commands": ["plan-review"] },
+    { "id": "close", "from": ["review"], "to": "completed", "commands": ["plan-close"] },
+    { "id": "archive", "from": ["backlog", "ready", "active", "review"], "to": "archived", "commands": ["plan-archive"] }
+  ]
+}

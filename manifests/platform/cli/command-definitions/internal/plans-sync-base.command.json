@@ -1,0 +1,13 @@
+{
+  "path": ["plans", "sync-base"],
+  "kind": "internal",
+  "title": "Sync base into plan branch",
+  "description": "Merge the base branch into the current plan worktree's branch, pausing on conflicts",
+  "usage": "roborepo plans sync-base [--continue] [--base <branch>] [--json]",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/plans.mjs",
+    "export": "plansCommand",
+    "prependArgs": ["sync-base"]
+  }
+}

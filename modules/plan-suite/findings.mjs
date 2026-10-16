@@ -18,14 +18,14 @@
 //   relationship — cross-plan problems (duplicate ids, dangling dependencies)
 //
 // `severity` is display and prompt-ordering metadata only: "blocking" findings sort first and
-// are introduced to an agent as the ones to fix first. It does NOT gate lifecycle moves — the
-// destination gate is advisory and a user can always proceed via "Move anyway".
+// are introduced to an agent as the ones to fix first. It does NOT decide whether a lifecycle move
+// is allowed; each destination's gate in transition.mjs does, from the findings themselves.
 
-// Why the primary copy stands in for an active plan's worktree copy (resolvePlanAuthority reasons).
+// Why the primary copy stands in for a worktree-bound plan's worktree copy (resolvePlanAuthority reasons).
 const COPY_UNAVAILABLE_REASONS = {
   "worktree-missing": "the worktree no longer exists",
   "copy-missing": "the worktree has no readable copy of this plan",
-  "copy-not-active": "the worktree's copy is not in active/",
+  "copy-not-active": "the worktree's copy is not in active/ or review/",
   "copy-other-worktree": "the worktree's copy names a different worktree",
 };
 
@@ -55,8 +55,8 @@ const DEFS = {
     message: "Priority must be high, medium, low, or none.",
     resolution: "Replace the `priority` value with one of the four allowed values.",
   },
-  // The three naming rules below are emitted by naming.mjs, which scopes them to backlog and
-  // active. They stay advisory: a filename is safe to change while a plan is still being worked,
+  // The three naming rules below are emitted by naming.mjs, which scopes them to non-terminal
+  // lifecycles. They stay advisory: a filename is safe to change while a plan is still being worked,
   // but once it is completed or archived, inbound links outweigh the convention.
   INVALID_PLAN_FILENAME: {
     kind: "schema",
@@ -114,7 +114,7 @@ const DEFS = {
     kind: "lifecycle",
     severity: "blocking",
     message: "Plan file is unclassified; move it into a lifecycle folder.",
-    resolution: "Move the file into `docs/plans/backlog`, `active`, `completed`, or `archived`.",
+    resolution: "Move the file into `docs/plans/backlog`, `ready`, `active`, `review`, `completed`, or `archived`.",
   },
   MISSING_NEXT_ACTION: {
     kind: "lifecycle",

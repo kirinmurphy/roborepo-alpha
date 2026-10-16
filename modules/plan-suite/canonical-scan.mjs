@@ -6,6 +6,7 @@ import { checkoutRootsFor, loadRegistry } from "../repositories/index.mjs";
 import { repositoryCheckouts } from "./checkouts.mjs";
 import { scanCheckout, selectRecords } from "./plan-copies.mjs";
 import { publicPlan, publicRepository, withRelationshipFindings } from "./index.mjs";
+import { LIFECYCLE_MODEL, lifecycleProjection } from "./lifecycle-manifest.mjs";
 
 export function buildPlanSnapshot({ stateRoot, packageState = null, registry = null } = {}) {
   const known = registry || loadRegistry({ stateRoot });
@@ -45,6 +46,8 @@ export function buildPlanSnapshot({ stateRoot, packageState = null, registry = n
     errors,
     truncated: plans.some((plan) => plan.repository.truncated),
     planWritePackage: packageState || { available: false, enabled: false, status: "missing" },
+    // The portal reads states, tabs, and actions from here rather than keeping its own copy.
+    lifecycle: lifecycleProjection(LIFECYCLE_MODEL),
   };
 }
 

@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { buildPlanSnapshot, movePlanLifecycle, planSnapshotFingerprint, updatePlanPriority } from "../../modules/plan-suite/index.mjs";
+import { buildPlanSnapshot, planSnapshotFingerprint, updatePlanPriority } from "../../modules/plan-suite/index.mjs";
 import { hideRepository, loadRegistry, updateRegistry } from "../../modules/repositories/index.mjs";
 import { recordRepositoryDiscovery } from "../cli/repositories.mjs";
 import { addRepositorySource } from "../cli/repository-sources.mjs";
@@ -103,9 +103,9 @@ try {
   updatePlanPriority(snapshot, { id: "diff222", key: byId.diff222.key, priority: "low", expectedPriority: "high", mtimeMs: byId.diff222.mtimeMs });
   assert.match(fs.readFileSync(path.join(main, "docs/plans/backlog/differs.md"), "utf8"), /priority: low/);
   assert.match(fs.readFileSync(path.join(worktree, "docs/plans/backlog/differs.md"), "utf8"), /priority: high/, "the worktree copy is untouched");
-  movePlanLifecycle(snapshot, { id: "new444", key: byId.new444.key, lifecycle: "backlog", expectedLifecycle: "active", mtimeMs: byId.new444.mtimeMs, skipDestinationValidation: true });
-  assert.ok(fs.existsSync(path.join(worktree, "docs/plans/backlog/new.md")), "a worktree-only plan is edited in its worktree");
-  assert.ok(!fs.existsSync(path.join(main, "docs/plans/backlog/new.md")));
+  updatePlanPriority(snapshot, { id: "new444", key: byId.new444.key, priority: "low", expectedPriority: "high", mtimeMs: byId.new444.mtimeMs });
+  assert.match(fs.readFileSync(path.join(worktree, "docs/plans/active/new.md"), "utf8"), /priority: low/, "a worktree-only plan is edited in its worktree");
+  assert.ok(!fs.existsSync(path.join(main, "docs/plans/active/new.md")));
 
   // ---- Plans settings and ROBOREPO_PLAN_ROOTS no longer affect Plans ----
   const decoy = path.join(tempRoot, "decoy");

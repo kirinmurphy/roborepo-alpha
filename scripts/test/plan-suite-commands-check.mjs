@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // The deterministic plan-suite commands: `roborepo plans validate`, `roborepo plans start`,
-// `roborepo plans stop-servers`, and `roborepo package status`. Each runs through the real CLI entry point against a fixture Git
+// `roborepo plans stop-servers`, and `roborepo package status`. The other lifecycle transitions are
+// covered by plan-lifecycle-transitions-check.mjs. Each runs through the real CLI entry point against a fixture Git
 // repository or a hermetic HOME, so argument parsing, exit status, and output shape are covered
 // along with the domain logic behind them.
 import assert from "node:assert/strict";
@@ -95,12 +96,12 @@ ${extra}`;
 // A repository with a primary checkout on main and plans in every interesting state.
 function fixtureRepository(name) {
   const root = path.join(tmp, name);
-  for (const lifecycle of ["backlog", "active", "completed"]) fs.mkdirSync(path.join(root, "docs", "plans", lifecycle), { recursive: true });
-  fs.writeFileSync(path.join(root, "docs/plans/backlog/test-alpha.md"), planDoc({ id: "alpha001", title: "Alpha" }));
+  for (const lifecycle of ["backlog", "ready", "active", "completed"]) fs.mkdirSync(path.join(root, "docs", "plans", lifecycle), { recursive: true });
+  fs.writeFileSync(path.join(root, "docs/plans/ready/test-alpha.md"), planDoc({ id: "alpha001", title: "Alpha" }));
   fs.writeFileSync(path.join(root, "docs/plans/active/test-beta.md"), planDoc({ id: "beta0001", title: "Beta" }));
   fs.writeFileSync(path.join(root, "docs/plans/completed/test-gamma.md"), planDoc({ id: "gamma001", title: "Gamma", nextAction: "" }).replaceAll("- [ ]", "- [x]") + "\n## Verification\n\nFixture evidence.\n");
   fs.writeFileSync(path.join(root, "docs/plans/backlog/test-dangling.md"), planDoc({ id: "dangle01", title: "Dangling", dependsOn: "[nosuch01]" }));
-  fs.writeFileSync(path.join(root, "README.md"), "See docs/plans/backlog/test-alpha.md.\n");
+  fs.writeFileSync(path.join(root, "README.md"), "See docs/plans/ready/test-alpha.md.\n");
   git(tmp, "init", "--quiet", "--initial-branch=main", root);
   git(root, "add", "--", ".");
   git(root, "commit", "--quiet", "-m", "fixture");
@@ -221,18 +222,30 @@ id: fence001
   const freshName = path.basename(git(fresh, "rev-parse", "--absolute-git-dir"));
   const reusedName = path.basename(git(reused, "rev-parse", "--absolute-git-dir"));
 
-  // A backlog plan moves to active, records the worktree, and commits only the rename.
+  // Unrelated work in the primary checkout, staged or not, never blocks a transition or rides along.
+  fs.writeFileSync(path.join(root, "scratch.txt"), "someone else's edit\n");
+  fs.writeFileSync(path.join(root, "staged.txt"), "someone else's staged file\n");
+  git(root, "add", "--", "staged.txt");
+
+  // A ready plan moves to active, records the worktree, and commits only the rename.
   const before = git(root, "rev-parse", "HEAD");
   const started = roborepo(["plans", "start", "alpha001", "--worktree", freshName, "--json"], { cwd: root });
-  const result = json(started, "start backlog plan");
+  const result = json(started, "start ready plan");
   assert.equal(started.status, 0, `start approves\n${started.stdout}`);
   assert.equal(result.verdict, "APPROVED");
+  assert.equal(result.transition, "start");
   assert.equal(result.plan.path, "docs/plans/active/test-alpha.md");
+  assert.deepEqual(result.plan.lifecycle, { from: "ready", to: "active" });
   assert.ok(fs.existsSync(path.join(root, "docs/plans/active/test-alpha.md")));
-  assert.ok(!fs.existsSync(path.join(root, "docs/plans/backlog/test-alpha.md")));
+  assert.ok(!fs.existsSync(path.join(root, "docs/plans/ready/test-alpha.md")));
   assert.equal(git(root, "rev-parse", "HEAD^"), before, "exactly one transition commit");
   assert.deepEqual(git(root, "show", "--name-status", "--format=", "HEAD").split("\t").slice(1),
-    ["docs/plans/backlog/test-alpha.md", "docs/plans/active/test-alpha.md"], "the commit is the plan's rename alone");
+    ["docs/plans/ready/test-alpha.md", "docs/plans/active/test-alpha.md"], "the commit is the plan's rename alone");
+  assert.equal(git(root, "diff", "--cached", "--name-only"), "staged.txt", "unrelated staged work stays staged");
+  assert.ok(fs.existsSync(path.join(root, "scratch.txt")), "unrelated unstaged work stays in place");
+  git(root, "rm", "--quiet", "--cached", "--", "staged.txt");
+  fs.rmSync(path.join(root, "staged.txt"));
+  fs.rmSync(path.join(root, "scratch.txt"));
   assert.match(git(root, "show", "HEAD:docs/plans/active/test-alpha.md"), new RegExp(`^worktree: ${freshName}$`, "m"));
   assert.equal(result.fastForward.applied, true, "a worktree with no commits of its own is fast-forwarded");
   assert.equal(git(fresh, "rev-parse", "HEAD"), git(root, "rev-parse", "HEAD"));
@@ -257,24 +270,29 @@ id: fence001
 
   // Refusals leave the base branch untouched.
   const refusedHead = git(root, "rev-parse", "HEAD");
-  fs.writeFileSync(path.join(root, "scratch.txt"), "someone else's edit\n");
-  const dirty = roborepo(["plans", "start", "dangle01", "--worktree", freshName], { cwd: root });
-  assert.equal(dirty.status, 1, "a dirty primary checkout refuses");
-  assert.match(dirty.stderr, /uncommitted changes/);
+  const backlog = roborepo(["plans", "start", "dangle01", "--worktree", freshName], { cwd: root });
+  assert.equal(backlog.status, 1, "a backlog plan must be promoted before it can start");
+  assert.match(backlog.stderr, /from ready to active; this one is backlog/);
+  assert.match(backlog.stderr, /promote \(\/plan-promote\)/, "the refusal names the transition the plan can take");
   assert.ok(fs.existsSync(path.join(root, "docs/plans/backlog/test-dangling.md")), "a refusal moves nothing");
-  fs.rmSync(path.join(root, "scratch.txt"));
 
-  const fromWorktree = roborepo(["plans", "start", "dangle01", "--worktree", freshName], { cwd: fresh });
+  fs.appendFileSync(path.join(root, "docs/plans/active/test-alpha.md"), "\nAn edit someone else is making.\n");
+  const dirtyPlan = roborepo(["plans", "start", "alpha001", "--worktree", reusedName], { cwd: root });
+  assert.equal(dirtyPlan.status, 1, "an uncommitted edit to the plan itself refuses");
+  assert.match(dirtyPlan.stderr, /uncommitted changes/);
+  git(root, "checkout", "--", "docs/plans/active/test-alpha.md");
+
+  const fromWorktree = roborepo(["plans", "start", "alpha001", "--worktree", freshName], { cwd: fresh });
   assert.equal(fromWorktree.status, 1, "running from the linked worktree refuses");
   assert.match(fromWorktree.stderr, /primary checkout/);
 
-  const unknown = roborepo(["plans", "start", "dangle01", "--worktree", "nope"], { cwd: root });
+  const unknown = roborepo(["plans", "start", "alpha001", "--worktree", "nope"], { cwd: root });
   assert.equal(unknown.status, 1);
   assert.match(unknown.stderr, /No linked worktree is named nope/);
 
   const completed = roborepo(["plans", "start", "gamma001", "--worktree", freshName], { cwd: root });
   assert.equal(completed.status, 1, "a completed plan cannot be started");
-  assert.match(completed.stderr, /backlog or active/);
+  assert.match(completed.stderr, /A completed plan has no further transitions/);
 
   assert.equal(git(root, "rev-parse", "HEAD"), refusedHead, "no refusal committed anything");
   assert.equal(roborepo(["plans", "start", "alpha001"], { cwd: root }).status, 2, "--worktree is required");

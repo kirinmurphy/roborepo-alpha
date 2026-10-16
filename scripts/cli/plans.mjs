@@ -7,13 +7,19 @@ import { autoDiscoveryEnabled } from "./repository-sources.mjs";
 import {
   buildPlanSnapshot,
   buildPrompt,
+  buildRepositoryPlanSnapshot,
   findPlanByKey,
   planSnapshotFingerprint,
   readPlanDocument,
+  selectRepositoryPlan,
   updatePlanPriority as updatePlanPriorityInDocs,
   validateRepositoryPlans,
 } from "../../modules/plan-suite/index.mjs";
-import { startPlan } from "../../modules/plan-suite/start-transition.mjs";
+import { LIFECYCLE_MODEL } from "../../modules/plan-suite/lifecycle-manifest.mjs";
+import { primaryCheckout } from "../../modules/plan-suite/plan-git.mjs";
+import { approvalFreshness, completionPreflight } from "../../modules/plan-suite/review-gates.mjs";
+import { syncBase } from "../../modules/plan-suite/sync-base.mjs";
+import { transitionPlan } from "../../modules/plan-suite/transition.mjs";
 import { stopPlanServers } from "../../modules/plan-suite/stop-servers.mjs";
 import { repairPlansMissingFrontmatter } from "../../modules/plan-suite/repair.mjs";
 import { loadRegistry } from "../../modules/repositories/index.mjs";
@@ -140,7 +146,11 @@ function stripRepositoryRoot(repository) {
 
 const PLANS_USAGE = [
   "usage: roborepo plans validate [<plan>] [--json]",
+  "       roborepo plans promote|submit|reopen|close <plan> [--base <branch>] [--json]",
   "       roborepo plans start <plan> --worktree <name> [--base <branch>] [--json]",
+  "       roborepo plans archive <plan> --reason <text> [--base <branch>] [--json]",
+  "       roborepo plans preflight|approval <plan> [--base <branch>] [--json]",
+  "       roborepo plans sync-base [--continue] [--base <branch>] [--json]",
   "       roborepo plans stop-servers <plan> [--dry-run] [--json]",
   "       roborepo plans repair <root> [--dry-run]",
 ].join("\n");
@@ -149,7 +159,10 @@ export function plansCommand(args) {
   const [sub, ...rest] = args;
   if (sub === "repair") return plansRepairCommand(rest);
   if (sub === "validate") return plansValidateCommand(rest);
-  if (sub === "start") return plansStartCommand(rest);
+  if (LIFECYCLE_MODEL.transition(sub)) return plansTransitionCommand(sub, rest);
+  if (sub === "preflight") return plansPreflightCommand(rest);
+  if (sub === "approval") return plansApprovalCommand(rest);
+  if (sub === "sync-base") return plansSyncBaseCommand(rest);
   if (sub === "stop-servers") return plansStopServersCommand(rest);
   console.error(`unknown: roborepo plans ${sub ?? ""}`.trim());
   console.error(PLANS_USAGE);
@@ -176,7 +189,8 @@ function parseArgs(args, valued = []) {
 function failDomain(err, json) {
   if (!err?.code) throw err;
   if (json) {
-    console.log(JSON.stringify({ ok: false, error: { code: err.code, message: err.message, resolution: err.resolution, details: err.details } }, null, 2));
+    const { code, message, resolution, details, findings, repair, evidence } = err;
+    console.log(JSON.stringify({ ok: false, error: { code, message, resolution, details, findings, repair, evidence } }, null, 2));
   } else {
     console.error(`error: ${err.message}`);
     if (err.resolution) console.error(err.resolution);
@@ -208,16 +222,46 @@ function plansValidateCommand(args) {
   if (result.summary.blocking > 0) process.exit(1);
 }
 
-// Exit status: 0 when the validator approves, 1 when a precondition refuses or a check fails.
-function plansStartCommand(args) {
-  const { flags, positional } = parseArgs(args, ["worktree", "base"]);
-  if (!positional[0] || !flags.worktree) {
+// Every lifecycle transition the manifest declares. Exit status: 0 when the post-commit validator
+// approves, 1 when a precondition or gate refuses or a check fails, 2 on a usage error.
+async function plansTransitionCommand(transition, args) {
+  const { flags, positional } = parseArgs(args, ["worktree", "base", "reason"]);
+  if (!positional[0] || (transition === "start" && !flags.worktree) || (transition === "archive" && !flags.reason)) {
     console.error(PLANS_USAGE);
     process.exit(2);
   }
   let result;
   try {
-    result = startPlan({ selector: positional[0], worktree: flags.worktree, base: flags.base || "main" });
+    result = await transitionPlan({ transition, selector: positional[0], worktree: flags.worktree, reason: flags.reason, base: flags.base || "main" });
+  } catch (err) {
+    return failDomain(err, flags.json);
+  }
+  if (flags.json) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    const { lifecycle } = result.plan;
+    console.log(`plan: ${result.plan.path}${result.plan.id ? ` (${result.plan.id})` : ""}`);
+    if (result.worktree) console.log(`worktree: ${result.worktree.name}${result.worktree.branch ? ` on ${result.worktree.branch}` : ""}`);
+    console.log(`${transition}: ${lifecycle.from} -> ${lifecycle.to}, ${result.commit ? `committed ${result.commit.slice(0, 12)} on ${result.base}` : "already recorded"}`);
+    if (result.fastForward) console.log(`fast-forward: ${result.fastForward.applied ? "applied" : result.fastForward.reason}`);
+    if (result.worktreeCopy) console.log(`worktree copy: ${result.worktreeCopy}`);
+    for (const link of result.staleLinks) console.log(`stale link to ${result.plan.from}: ${link}`);
+    printFailedChecks(result.checks);
+    console.log(result.verdict);
+  }
+  if (result.verdict !== "APPROVED") process.exit(1);
+}
+
+// Exit status: 0 when implementation is complete, 1 when a check fails or the plan cannot be resolved.
+function plansPreflightCommand(args) {
+  const { flags, positional } = parseArgs(args, ["base"]);
+  if (!positional[0]) {
+    console.error(PLANS_USAGE);
+    process.exit(2);
+  }
+  let result;
+  try {
+    result = runFromPrimary(positional[0], (context) => completionPreflight({ ...context, base: flags.base || "main" }));
   } catch (err) {
     return failDomain(err, flags.json);
   }
@@ -225,17 +269,69 @@ function plansStartCommand(args) {
     console.log(JSON.stringify(result, null, 2));
   } else {
     console.log(`plan: ${result.plan.path}${result.plan.id ? ` (${result.plan.id})` : ""}`);
-    console.log(`worktree: ${result.worktree.name}${result.worktree.branch ? ` on ${result.worktree.branch}` : ""}`);
-    console.log(`transition: ${result.commit ? `committed ${result.commit.slice(0, 12)} on ${result.base}` : "already recorded"}`);
-    console.log(`fast-forward: ${result.fastForward.applied ? "applied" : result.fastForward.reason}`);
-    for (const link of result.staleLinks) console.log(`stale link to ${result.plan.from}: ${link}`);
-    for (const check of result.checks.filter((item) => !item.ok)) {
-      console.log(`check ${check.n} failed (${check.name}): ${check.observed}`);
-      console.log(`  fix: ${check.fix}`);
-    }
-    console.log(result.verdict);
+    printFailedChecks(result.checks);
+    console.log(result.ok ? "implementation complete" : "implementation incomplete");
   }
-  if (result.verdict !== "APPROVED") process.exit(1);
+  if (!result.ok) process.exit(1);
+}
+
+// Exit status: 0 when the recorded approval is fresh, 1 otherwise.
+function plansApprovalCommand(args) {
+  const { flags, positional } = parseArgs(args, ["base"]);
+  if (!positional[0]) {
+    console.error(PLANS_USAGE);
+    process.exit(2);
+  }
+  let result;
+  try {
+    result = runFromPrimary(positional[0], (context) => approvalFreshness({ ...context, base: flags.base || "main" }));
+  } catch (err) {
+    return failDomain(err, flags.json);
+  }
+  if (flags.json) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(`plan: ${result.plan.path}${result.plan.id ? ` (${result.plan.id})` : ""}`);
+    console.log(`approval: ${result.state}${result.reason ? ` (${result.reason})` : ""}`);
+    for (const changed of result.changedPaths || []) console.log(`  changed: ${changed}`);
+  }
+  if (result.state !== "fresh") process.exit(1);
+}
+
+// Exit status: 0 when the branch is up to date or merged, 1 when conflicts pause the merge or a
+// precondition refuses.
+function plansSyncBaseCommand(args) {
+  const { flags } = parseArgs(args, ["base"]);
+  let result;
+  try {
+    result = syncBase({ base: flags.base || "main", continueMerge: Boolean(flags.continue) });
+  } catch (err) {
+    return failDomain(err, flags.json);
+  }
+  if (flags.json) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(`${result.branch}: ${result.state}${result.commit ? ` at ${result.commit.slice(0, 12)}` : ""}`);
+    for (const item of result.resolved) console.log(`plan rename resolved: ${item.from} -> ${item.to}`);
+    for (const conflict of result.conflicts) console.log(`conflict: ${conflict}`);
+    if (result.state === "conflicts") console.log("Resolve the conflicts, stage them, run the checks, then run `roborepo plans sync-base --continue`.");
+  }
+  if (result.state === "conflicts") process.exit(1);
+}
+
+// Resolves a plan the way the transitions do: its stage from the primary checkout, its content from
+// whichever copy is authoritative.
+function runFromPrimary(selector, run) {
+  const primary = primaryCheckout(process.cwd());
+  const record = selectRepositoryPlan(buildRepositoryPlanSnapshot({ cwd: primary }), selector, { cwd: process.cwd() });
+  return run({ primary, record });
+}
+
+function printFailedChecks(checks) {
+  for (const check of checks.filter((item) => !item.ok)) {
+    console.log(`check ${check.n} failed (${check.name}): ${check.observed}`);
+    console.log(`  fix: ${check.fix}`);
+  }
 }
 
 // Exit status: 0 when every server stopped (or there was none), 1 when one survived SIGTERM, could

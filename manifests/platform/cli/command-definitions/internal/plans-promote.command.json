@@ -1,0 +1,13 @@
+{
+  "path": ["plans", "promote"],
+  "kind": "internal",
+  "title": "Promote plan",
+  "description": "Validate a backlog plan and commit its move to ready, or commit refinements to a ready plan",
+  "usage": "roborepo plans promote <plan> [--base <branch>] [--json]",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/plans.mjs",
+    "export": "plansCommand",
+    "prependArgs": ["promote"]
+  }
+}

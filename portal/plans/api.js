@@ -21,10 +21,6 @@ export function updatePlanPriority(id, key, priority, expectedPriority, mtimeMs,
   return portalPostJson("/api/plans/priority", { id, key, priority, expectedPriority, mtimeMs, repositoryId });
 }
 
-export function updatePlanLifecycle(id, key, lifecycle, expectedLifecycle, mtimeMs, repositoryId, skipDestinationValidation) {
-  return portalPostJson("/api/plans/lifecycle", { id, key, lifecycle, expectedLifecycle, mtimeMs, repositoryId, skipDestinationValidation });
-}
-
 export function fetchPlanDocument(key) {
   return portalGetJson(`/api/plans/document?key=${encodeURIComponent(key)}`);
 }

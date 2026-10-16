@@ -62,6 +62,7 @@ testOrdinalSeriesIsNotMistakenForAVersion();
 testNamingFindingsCarryTheirFilename();
 testRepositoryPlansProduceNoNamingFindings();
 testAuthorityFindingsExplainThemselves();
+testReadyAndReviewDestinationRules();
 console.log("ok: plan docs findings and lifecycle policy checks passed");
 
 // The tiered id check. Short base36 is the current convention; hyphenated slugs are accepted but
@@ -182,7 +183,7 @@ function testAuthorityFindingsExplainThemselves() {
   const reasons = {
     "worktree-missing": "the worktree no longer exists",
     "copy-missing": "the worktree has no readable copy of this plan",
-    "copy-not-active": "the worktree's copy is not in active/",
+    "copy-not-active": "the worktree's copy is not in active/ or review/",
     "copy-other-worktree": "the worktree's copy names a different worktree",
     "something-new": "it could not be used",
   };
@@ -486,7 +487,9 @@ function testNamingIsInertWithoutDeclaredNamespaces() {
 // break inbound links to settle a convention that no longer governs future work.
 function testNamingAppliesOnlyToNonTerminalLifecycles() {
   assert.deepEqual(namingCodes("nonsense.md", "backlog"), ["INVALID_PLAN_FILENAME"]);
+  assert.deepEqual(namingCodes("nonsense.md", "ready"), ["INVALID_PLAN_FILENAME"]);
   assert.deepEqual(namingCodes("nonsense.md", "active"), ["INVALID_PLAN_FILENAME"]);
+  assert.deepEqual(namingCodes("nonsense.md", "review"), ["INVALID_PLAN_FILENAME"]);
   assert.deepEqual(namingCodes("nonsense.md", "completed"), [], "completed names are historical records");
   assert.deepEqual(namingCodes("nonsense.md", "archived"), [], "archived names are historical records");
   assert.deepEqual(namingCodes("nonsense.md", "unclassified"), [],
@@ -579,6 +582,24 @@ function testNamingFindingsCarryTheirFilename() {
 // The regression that matters most: this repository declares eleven namespaces and has plans in
 // every lifecycle, so a rule that is subtly too strict shows up here as findings on plans that
 // were correct all along.
+// Ready promises that implementation can start without another planning pass, so it holds a plan
+// to the Active structure before any work exists; Review is still worked, so it applies the Active
+// rules unchanged, Not tested entries included.
+function testReadyAndReviewDestinationRules() {
+  const bare = parsePlanMarkdown("---\nid: abc123\npriority: low\n---\n\n# Bare\n\n## Summary\n\nx\n", {});
+  for (const lifecycle of ["ready", "active", "review"]) {
+    const codes = codesFor(bare, lifecycle);
+    for (const code of ["MISSING_NEXT_ACTION", "MISSING_IMPLEMENTATION_CONTEXT", "MISSING_SUCCESS_CRITERIA"]) {
+      assert.ok(codes.includes(code), `${lifecycle} requires ${code}`);
+    }
+  }
+  const withNotTested = parsePlanMarkdown(
+    "---\nid: abc123\npriority: low\nnext_action: Go.\n---\n\n# P\n\n## Summary\n\nx\n\n## Goals\n\nx\n\n## Context\n\nx\n\n## Proposed design\n\nx\n\n## Validation\n\nx\n\n## Not tested\n\n- [ ] A manual check.\n", {});
+  assert.deepEqual(codesFor(withNotTested, "ready"), [], "Ready has nothing built yet, so Not tested entries are not its concern");
+  assert.deepEqual(codesFor(withNotTested, "review"), ["UNCONFIRMED_NOT_TESTED"]);
+  assert.deepEqual(codesFor(withNotTested, "review"), codesFor(withNotTested, "active"), "Review applies the Active rules");
+}
+
 function testRepositoryPlansProduceNoNamingFindings() {
   const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
   const { configured, namespaces } = readProjectNamespaces(repoRoot);
@@ -586,7 +607,7 @@ function testRepositoryPlansProduceNoNamingFindings() {
   assert.ok(namespaces.length >= 10, `expected the declared vocabulary, got ${namespaces.length} namespaces`);
 
   const offenders = [];
-  for (const lifecycle of ["backlog", "active"]) {
+  for (const lifecycle of ["backlog", "ready", "active", "review"]) {
     const dir = path.join(repoRoot, "docs", "plans", lifecycle);
     if (!fs.existsSync(dir)) continue;
     for (const entry of fs.readdirSync(dir)) {
@@ -595,5 +616,5 @@ function testRepositoryPlansProduceNoNamingFindings() {
     }
   }
   assert.deepEqual(offenders, [],
-    "no existing backlog or active plan may gain a naming finding; each line is a false positive to fix in naming.mjs, not a file to rename");
+    "no existing non-terminal plan may gain a naming finding; each line is a false positive to fix in naming.mjs, not a file to rename");
 }

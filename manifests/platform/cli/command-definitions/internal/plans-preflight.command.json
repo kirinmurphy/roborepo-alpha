@@ -1,0 +1,13 @@
+{
+  "path": ["plans", "preflight"],
+  "kind": "internal",
+  "title": "Check implementation completion",
+  "description": "Report whether a plan's implementation is complete enough to move to review",
+  "usage": "roborepo plans preflight <plan> [--base <branch>] [--json]",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/plans.mjs",
+    "export": "plansCommand",
+    "prependArgs": ["preflight"]
+  }
+}
