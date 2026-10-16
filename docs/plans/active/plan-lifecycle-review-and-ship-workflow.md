@@ -14,7 +14,7 @@ related:
   - 46qth5z8
   - 0jped168
 reviewed_commit: e4ce50c4c4ac02ba4b052e77a3c8b98d5dcd4d8b
-worktree:
+worktree: plan-lifecycle-review-and-ship-workflow
 ---
 
 # A Repeatable Plan Lifecycle from Preparation Through Verified Delivery
