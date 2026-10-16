@@ -50,7 +50,7 @@ try {
   git(main, "commit", "-qm", "seed");
   git(main, "worktree", "add", "-q", "-b", "late", path.join(trees, "late"));
 
-  // Start transitions, as /plan-start commits them in the primary checkout.
+  // Start transitions, as /plan-execute commits them in the primary checkout.
   fs.mkdirSync(path.join(main, "docs/plans/active"), { recursive: true });
   git(main, "mv", "docs/plans/backlog/prestart.md", "docs/plans/active/prestart.md");
   write(active("prestart.md"), plan("pre000", { worktree: "late" }));

@@ -1,0 +1,28 @@
+{
+  "tests": [
+    {
+      "skill": "plan-review",
+      "match": [
+        "/plan-review docs/plans/review/example.md",
+        "please independently review this finished plan before I merge it",
+        "record explicit human approval for this plan's implementation"
+      ],
+      "nearMiss": [
+        "review this diff for bugs",
+        "fix the review findings on this plan",
+        "close this plan now that it has merged"
+      ],
+      "triggerPhrases": [
+        "/plan-review",
+        "independently review",
+        "record explicit human approval"
+      ],
+      "skipPhrases": [
+        "fixing review findings",
+        "reviewing an arbitrary diff",
+        "merging branches",
+        "post-merge closure"
+      ]
+    }
+  ]
+}

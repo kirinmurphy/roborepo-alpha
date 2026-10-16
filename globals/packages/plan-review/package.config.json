@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "plan-review",
+  "label": "Plan Review",
+  "description": "Independently review a finished plan: check implementation completion, merge the base branch into the feature branch, record findings, and record explicit human approval before the merge.",
+  "lifecycle": "optional",
+  "presentation": {
+    "category": "skills-dev-lifecycle",
+    "order": 35
+  },
+  "resources": [
+    {
+      "type": "skill",
+      "id": "plan-review",
+      "source": "skills/plan-review",
+      "invocation": "manual",
+      "risk": "high",
+      "entrypoints": [
+        {
+          "type": "slash-command",
+          "name": "plan-review",
+          "harnesses": [
+            "claude",
+            "codex",
+            "gemini"
+          ]
+        }
+      ]
+    }
+  ]
+}

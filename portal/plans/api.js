@@ -33,7 +33,7 @@ export function generatePrompt(action, keys, mode = "repository-aware") {
 
 // The plan suite's packages, in lifecycle order. The onboarding banner enables them as one unit
 // through the config section's bulk endpoint: one preflight, one reconcile pass.
-export const PLAN_SUITE_PACKAGES = ["plan-write", "plan-promote", "plan-start", "plan-close", "session-close"];
+export const PLAN_SUITE_PACKAGES = ["plan-write", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive", "session-close"];
 
 export function enablePlanSuitePackages() {
   return portalPostJson("/api/config/packages/bulk", {

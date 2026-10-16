@@ -3,9 +3,9 @@
     {
       "skill": "plan-close",
       "match": [
-        "/plan-close docs/plans/active/example.md",
+        "/plan-close docs/plans/review/example.md",
         "the work merged, so close this plan and move it to completed",
-        "review whether a plan is complete"
+        "the pull request merged, please close this plan now that it has merged"
       ],
       "nearMiss": [
         "sync this plan with what we just changed",
@@ -14,8 +14,7 @@
       ],
       "triggerPhrases": [
         "/plan-close",
-        "close this plan",
-        "review whether a plan is complete"
+        "close this plan"
       ],
       "skipPhrases": [
         "creating or revising plans",

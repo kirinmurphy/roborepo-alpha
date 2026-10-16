@@ -1,0 +1,3 @@
+interface:
+  display_name: "Plan Archive"
+  short_description: "Retire a plan with a recorded reason"

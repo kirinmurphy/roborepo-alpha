@@ -1,4 +1,5 @@
 import { resolveRegistryAlias } from "../../modules/repositories/index.mjs";
+import { LIFECYCLE_MODEL } from "../../modules/plan-suite/lifecycle-manifest.mjs";
 
 const RECENT_PLAN_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -73,8 +74,10 @@ export function planChangedAt(plan) {
   return plan?.gitLastChangedAt || plan?.modifiedAt || null;
 }
 
+// `active` lists every plan in a worktree-bound stage (Active or Review): both own a linked worktree,
+// so both join to its checkout row, and a Review plan's merged worktree is the cue for /plan-close.
 function planSummary(plans, now) {
-  const counts = { active: 0, backlog: 0 };
+  const counts = { backlog: 0, ready: 0, active: 0, review: 0 };
   for (const plan of plans) if (plan.lifecycle in counts) counts[plan.lifecycle] += 1;
   const recent = plans
     .map((plan) => ({ id: plan.id, title: plan.title, lifecycle: plan.lifecycle, changedAt: planChangedAt(plan) }))
@@ -85,7 +88,7 @@ function planSummary(plans, now) {
     .sort((a, b) => Date.parse(b.changedAt) - Date.parse(a.changedAt))
     .slice(0, 5);
   const active = plans
-    .filter((plan) => plan.lifecycle === "active")
+    .filter((plan) => LIFECYCLE_MODEL.worktreeBound.has(plan.lifecycle))
     .map((plan) => ({ id: plan.id, key: plan.key, title: plan.title, lifecycle: plan.lifecycle, changedAt: planChangedAt(plan), worktree: plan.worktree || "", relativePath: plan.relativePath || "", taskCounts: { total: plan.taskCounts?.total || 0, complete: plan.taskCounts?.complete || 0 } }))
     .sort((a, b) => Date.parse(b.changedAt || 0) - Date.parse(a.changedAt || 0) || a.title.localeCompare(b.title));
   return { counts, active, recent };

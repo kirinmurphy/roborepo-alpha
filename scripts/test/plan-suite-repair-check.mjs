@@ -58,7 +58,7 @@ reviewed_commit:
   assert.match(scaffold, /blocked_by: \[\]/);
   assert.match(scaffold, /depends_on: \[\]/);
   assert.match(scaffold, /related: \[\]/);
-  // New and repaired plans start unassociated; plan-start fills `worktree` when work begins.
+  // New and repaired plans start unassociated; plan-execute fills `worktree` when work begins.
   assert.match(scaffold, /reviewed_commit:\nworktree:\n---/);
   const scaffoldParsed = parseFrontmatter(scaffold + "# Title\n");
   assert.equal(scaffoldParsed.warnings.length, 0, "scaffolded frontmatter must itself parse cleanly");

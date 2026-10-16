@@ -18,7 +18,7 @@ const cli = path.join(repoRoot, "scripts/cli/main.mjs");
 // Plan Suite section members (the manifest's bulkToggle: true section), which is also the list the
 // Plans onboarding banner enables in one request. Cheap skill-only packages — fast to
 // enable/disable, no MCP/service side effects on a bare fixture HOME.
-const SECTION_IDS = ["plan-write", "plan-promote", "plan-start", "plan-close", "session-close"];
+const SECTION_IDS = ["plan-write", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive", "session-close"];
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-config-bulk-"));
 const home = tmp;
