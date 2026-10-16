@@ -1,0 +1,134 @@
+#!/usr/bin/env node
+// Core hooks share their targets with package installs: ~/.codex/hooks.json takes package hook
+// entries, and ~/.codex/hooks/ and ~/.claude/hooks/ take package scripts. These checks prove the
+// `hook_fragment` and `managed_files` manifest rows install core hooks beside package hooks without
+// moving them (Codex keys trust by position), and remove only what RoboRepo wrote.
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import crypto from "node:crypto";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const cli = path.join(repoRoot, "scripts/cli/main.mjs");
+const rowsCli = path.join(repoRoot, "scripts/cli/shared-target-rows.mjs");
+const coreCodex = JSON.parse(fs.readFileSync(path.join(repoRoot, "generated/codex/hooks.json"), "utf8")).hooks;
+const coreScripts = fs.readdirSync(path.join(repoRoot, "globals/system/hooks/codex"));
+
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-shared-target-rows-"));
+try {
+  coreHooksInstallAfterPackageHooks();
+  scriptCopiesFollowConflictPolicy();
+  console.log("shared-target-rows-check: ok");
+} finally {
+  fs.rmSync(tmp, { recursive: true, force: true });
+}
+
+function coreHooksInstallAfterPackageHooks() {
+  const { home, env } = makeHome("bundle");
+  run(env, cli, "bundle", "apply", "--default");
+  run(env, cli, "package", "enable", "telemetry");
+  const hooksPath = path.join(home, ".codex", "hooks.json");
+  const before = handlerPositions(hooksPath);
+  fs.mkdirSync(path.join(home, ".codex", "hooks"), { recursive: true });
+  fs.writeFileSync(path.join(home, ".codex", "hooks", "package-script.mjs"), "// package\n");
+
+  run(env, cli, "bundle", "apply", "hooks");
+  const after = handlerPositions(hooksPath);
+  for (const [command, position] of before) {
+    assert.equal(after.get(command), position, `package hook kept its trust position: ${command}`);
+  }
+  for (const command of commands(coreCodex)) assert.ok(after.has(command), `core hook installed: ${command}`);
+  for (const script of coreScripts) assert.ok(fs.existsSync(path.join(home, ".codex", "hooks", script)), `core script copied: ${script}`);
+  assert.equal(fs.readdirSync(path.join(home, ".codex")).some((name) => name.startsWith("hooks_update_")), false,
+    "no staged merge-review copy: the core hooks installed instead of colliding");
+  assert.match(run(env, cli, "bundle", "check", "hooks"), /ok: hooks/);
+
+  run(env, cli, "bundle", "apply", "hooks");
+  assert.deepEqual([...handlerPositions(hooksPath)], [...after], "reapplying the bundle changes nothing");
+
+  run(env, cli, "bundle", "remove", "hooks");
+  const removed = handlerPositions(hooksPath);
+  assert.deepEqual([...removed], [...before], "removal leaves exactly the package hooks, at their positions");
+  assert.ok(fs.existsSync(path.join(home, ".codex", "hooks", "package-script.mjs")), "package script survives removal");
+  for (const script of coreScripts) assert.ok(!fs.existsSync(path.join(home, ".codex", "hooks", script)), `core script removed: ${script}`);
+}
+
+function scriptCopiesFollowConflictPolicy() {
+  const { home, env } = makeHome("policy");
+  const hooksDir = path.join(home, ".codex", "hooks");
+  const row = ["managed_files", "codex", "globals/system/hooks/codex", hooksDir];
+  const [first, second] = coreScripts;
+  const statePath = path.join(env.ROBOREPO_STATE_DIR, "config-state", "managed-files.json");
+
+  // An older copy RoboRepo wrote and nobody edited is updated in place.
+  fs.mkdirSync(hooksDir, { recursive: true });
+  fs.writeFileSync(path.join(hooksDir, first), "// older roborepo copy\n");
+  fs.mkdirSync(path.dirname(statePath), { recursive: true });
+  fs.writeFileSync(statePath, JSON.stringify({ version: 1, files: { [path.join(hooksDir, first)]: sha256("// older roborepo copy\n") } }));
+  // A copy the user edited is not RoboRepo's to overwrite.
+  fs.writeFileSync(path.join(hooksDir, second), "// user edit\n");
+
+  const abort = spawnSync(process.execPath, [rowsCli, "apply", ...row], { env: { ...env, ROBOREPO_ON_CONFLICT: "abort" }, encoding: "utf8" });
+  assert.notEqual(abort.status, 0, "abort policy stops on an edited copy");
+  assert.equal(fs.readFileSync(path.join(hooksDir, second), "utf8"), "// user edit\n");
+
+  run({ ...env, ROBOREPO_ON_CONFLICT: "keep" }, rowsCli, "apply", ...row);
+  assert.equal(fs.readFileSync(path.join(hooksDir, first), "utf8"), source(first), "unedited older copy updated");
+  assert.equal(fs.readFileSync(path.join(hooksDir, second), "utf8"), "// user edit\n", "keep policy leaves the edit");
+  const stem = path.basename(second, path.extname(second));
+  assert.ok(fs.readdirSync(hooksDir).some((name) => name.startsWith(`${stem}_update_`)), "keep policy stages RoboRepo's version");
+
+  assert.match(run(env, rowsCli, "remnants", ...row), new RegExp(escape(first)), "the owned copy is reported as a remnant");
+  run(env, rowsCli, "remove", ...row);
+  assert.ok(!fs.existsSync(path.join(hooksDir, first)), "owned copy removed");
+  assert.equal(fs.readFileSync(path.join(hooksDir, second), "utf8"), "// user edit\n", "edited copy survives removal");
+  assert.equal(run(env, rowsCli, "remnants", ...row).trim(), "", "nothing RoboRepo owns is left");
+
+  run({ ...env, ROBOREPO_ON_CONFLICT: "overwrite" }, rowsCli, "apply", ...row);
+  assert.equal(fs.readFileSync(path.join(hooksDir, second), "utf8"), source(second), "overwrite policy replaces the edit");
+  assert.ok(fs.readdirSync(hooksDir).some((name) => name.startsWith(`${stem}_original_`)), "overwrite policy backs up the edit");
+}
+
+function makeHome(name) {
+  const home = path.join(tmp, name);
+  fs.mkdirSync(path.join(home, ".claude"), { recursive: true });
+  fs.mkdirSync(path.join(home, ".codex"), { recursive: true });
+  return { home, env: { ...process.env, HOME: home, ROBOREPO_STATE_DIR: path.join(home, ".roborepo"), ROBOREPO_ON_CONFLICT: "keep" } };
+}
+
+function run(env, script, ...args) {
+  const result = spawnSync(process.execPath, [script, ...args], { env, encoding: "utf8" });
+  assert.equal(result.status, 0, `${path.basename(script)} ${args.join(" ")} failed:\n${result.stdout}\n${result.stderr}`);
+  return result.stdout;
+}
+
+// Codex's trust key is "<file>:<event>:<group index>:<handler index>", so the position is the key.
+function handlerPositions(hooksPath) {
+  const hooks = JSON.parse(fs.readFileSync(hooksPath, "utf8")).hooks;
+  const positions = new Map();
+  for (const [event, groups] of Object.entries(hooks)) {
+    groups.forEach((group, groupIndex) => group.hooks.forEach((hook, handlerIndex) => {
+      positions.set(hook.command, `${event}:${groupIndex}:${handlerIndex}`);
+    }));
+  }
+  return positions;
+}
+
+function commands(fragment) {
+  return Object.values(fragment).flatMap((groups) => groups.flatMap((group) => group.hooks.map((hook) => hook.command)));
+}
+
+function source(name) {
+  return fs.readFileSync(path.join(repoRoot, "globals/system/hooks/codex", name), "utf8");
+}
+
+function sha256(text) {
+  return crypto.createHash("sha256").update(text).digest("hex");
+}
+
+function escape(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}

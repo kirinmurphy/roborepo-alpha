@@ -8,6 +8,7 @@ import { portalGetJson, portalPostJson, portalHideLoading, portalHideLoadingNow,
 import { pageState } from "./page-state.js";
 import { activePresentedHarnesses, formatHarnessList } from "/portal/shared/harness-cohort.js";
 import { renderHookReadiness } from "/portal/shared/hook-readiness.js";
+import { offerHookReview } from "/portal/shared/hook-review-offer.js";
 import { harnessWarningElement } from "/portal/shared/harness-warning.js";
 import { fetchSetupState } from "/portal/shared/setup-api.js";
 import { createConditionsReport } from "./conditions-report.js";
@@ -174,8 +175,9 @@ async function applySetupState({ telemetryOn, activeHarnessCount, snap }) {
       const errEl = document.getElementById("tokensenableerr");
       if (errEl) errEl.textContent = "";
       try {
-        await portalPostJson("/api/config/packages", { id: "telemetry", enabled: true });
+        const result = await portalPostJson("/api/config/packages", { id: "telemetry", enabled: true });
         await init();
+        void offerHookReview(result.hookHarnesses);
       } catch (err) {
         if (errEl) errEl.textContent = "failed to enable: " + ((err && err.message) || err);
         enableBtn.disabled = false;

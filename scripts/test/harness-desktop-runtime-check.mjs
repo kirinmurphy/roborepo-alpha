@@ -113,6 +113,8 @@ try {
   assert.equal(codexBoth.evidence.find((item) => item.source === "cli")?.version, "0.140.0");
   assert.equal(codexBoth.evidence.find((item) => item.source === "desktop")?.version, "0.155.0");
   assert.equal(selectedHarnessExecutable(codex, options), path.join(bin, "codex"));
+  // Opening Codex for hook review prefers the binary bundled with the desktop app.
+  assert.equal(selectedHarnessExecutable(codex, { ...options, prefer: "desktop" }), path.join(codexBundle, "Contents/Resources/codex"));
   console.log("desktop runtime discovery checks passed");
 } finally {
   process.env.HOME = oldHome;

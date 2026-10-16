@@ -1,7 +1,7 @@
 ---
 id: wjlt1zvf
 priority: high
-next_action: Resolve the core Codex hook installation Open Question, implement that path, then add the provider-driven review handoff and native terminal launch in this worktree.
+next_action: Run `npm run check` on the committed implementation, then run the manual macOS QA in `## Not tested` (real terminal launch, selective trust, return-to-portal refresh) before /plan-review.
 blocked_by: []
 depends_on:
   - 3jp3yhtq
@@ -128,14 +128,13 @@ October 15, 2026, during promotion of this plan:
 | `usage-statusline-codex-hook-parity` | Unlanded, blocked upstream | Concerns a Codex footer hook, not lifecycle hooks. No shared code |
 | `v6lvuu2` and `rtkmc8kf` | Unlanded, related portal onboarding and Home work | Reuse the review handoff after their configuration commit rather than adding another approval flow |
 
-### Current review handoff gap
+### Review handoff gap (closed by Phase 5)
 
-The implemented `scripts/harnesses/hook-readiness.mjs` compares core and enabled-package hooks
-with provider `hooks.read` results. The portal shows a notice on Home, Settings, and Tokens, and
-`scripts/cli/hook-readiness-status.mjs` caches each harness result for 30 seconds. A user can find a
-command under the notice's details, but a completed setup or package change has no direct review
-handoff, terminal launcher, or explicit return-to-portal refresh. The single, bulk, onboarding,
-and telemetry mutation paths all need the same post-change policy.
+Before Phase 5, `scripts/harnesses/hook-readiness.mjs` compared core and enabled-package hooks with
+provider `hooks.read` results, the portal showed a notice on Home, Settings, and Tokens, and
+`scripts/cli/hook-readiness-status.mjs` cached each harness result for 30 seconds. A completed setup
+or package change had no direct review handoff, terminal launcher, or return-to-portal refresh.
+Phase 5 adds them; see `docs/internal/portal-architecture.md` "Hook Review Handoff".
 
 The default installer applies the `base` bundle; core hooks are in the optional `hooks` bundle.
 Installing RoboRepo alone does not prove that Codex review is needed. A package's Codex `hooks`
@@ -245,15 +244,15 @@ for the harness's core hooks:
 | State | Meaning | User-facing next step |
 | --- | --- | --- |
 | `active` | Every expected hook is installed, enabled, and trusted or exempt | none |
-| `review_required` | At least one expected hook is `untrusted` or `modified` | In the Codex app, open Settings → Hooks, review and trust the listed RoboRepo hooks, then start a new session. The CLI's `/hooks` is an alternative |
+| `review_required` | At least one expected hook is `untrusted` or `modified` | **Open Codex hook review** (a terminal running Codex's CLI), **Copy command**, or Settings → Hooks in the Codex app; trust only the listed RoboRepo hooks, then start a new session |
 | `inactive` | Installed and trusted but disabled in the harness | Re-enable the hooks in Codex's Settings → Hooks, or `/hooks` in the CLI |
-| `missing` | An expected hook is absent from the hook file | Repair or reapply the owning bundle or package |
+| `missing` | An expected hook is absent from the hook file | Reapply the owning package, or `roborepo bundle apply hooks` for core hooks |
 | `unknown` | The harness runtime could not report | Check that the harness runtime is installed and has been launched |
 
-The current portal notice leads with the Codex app's Settings → Hooks review screen. Its terminal alternative
-uses executable discovery: the `codex` CLI on `PATH`, or the desktop bundle's own `codex` binary.
-Trust lives in `~/.codex/config.toml`, which the desktop runtime reads, so trust recorded from
-either binary applies to desktop sessions. Phase 1 confirmed the terminal path as a fallback.
+The portal notice leads with **Open Codex hook review**, which opens the desktop bundle's own
+`codex` binary (or a `PATH` CLI when no desktop app is present) in a terminal, plus **Copy
+command** and the Codex app's Settings → Hooks route. Trust lives in `~/.codex/config.toml`, which
+the desktop runtime reads, so trust recorded from either binary applies to desktop sessions.
 
 `probeHooks` reports this state in its `detail`. The portal replaces the Codex-only notice with one
 notice per harness that names the affected packages and hooks. `/api/config/hooks/codex/status`
@@ -265,8 +264,8 @@ The shared handoff consumes provider readiness and group records. A `hooks` pack
 reason to refresh, not a static `requiresApproval` flag: Codex trust depends on the installed
 definition, its position, and current runtime state. Extend the optional provider
 `hooks.guidance()` contract with review-route metadata if needed, so shared mutation code does not
-hardcode Codex. Do not offer approval for a core hook that is still merely `missing` while the
-installation Open Question remains unresolved.
+hardcode Codex. A `missing` hook, core or package, is never offered for approval; its remedy is
+reinstalling it.
 
 ```mermaid
 flowchart LR
@@ -360,30 +359,32 @@ approval: only a later Codex `hooks/list` result clears `review_required`.
       fragment leaves the first fragment's entries at their original indexes, and run it to see it
       fail. Then make the Codex `hooks.merge` adapter in `scripts/harnesses/codex/index.mjs` append
       entries in fragment order.
-- [ ] **Blocked by Open Question "How should core Codex hooks reach a hook file packages already
-      use?"** Find why `~/.codex/hooks.json` on the reference Mac lacks the core hooks, reproducing
-      on a clean `HOME` before changing the installer. Fix the install path if it is a defect,
-      keeping core entries ahead of package entries. The cause is found and reproduced (see the
-      Open Question); the fix is not made.
+- [x] Find why `~/.codex/hooks.json` on the reference Mac lacks the core hooks, reproducing on a
+      clean `HOME` before changing the installer, and fix the install path. Fixed with the
+      `hook_fragment` and `managed_files` manifest kinds (`scripts/cli/shared-target-rows.mjs`,
+      `scripts/cli/managed-files-row.mjs`); core entries append after package entries, per the
+      user decision in the Decision Log. `scripts/test/shared-target-rows-check.mjs` fails against
+      the old `managed_copy` rows and passes now.
 - [x] Remove the `jcodemunch` notice from `generated/codex/hooks.json`, and add the matching
       `doesNotMatch` assertion beside the Caveman and JDocMunch ones in
       `scripts/test/system-package-ownership-characterization-check.mjs`.
 - [x] Confirm that the desktop bundle's `codex` binary opens a terminal UI offering `/hooks`, and
       that trust recorded there makes a desktop session run the hook. Record the exact command in
       the Decision Log. If it fails, stop and bring the trust path back to the user.
-- [ ] Check whether `hooks/list` exists on a `PATH` Codex CLI of the oldest version `hooks.read`
-      must support. Pick the executable rule from the result and record it in the Decision Log.
-      No `PATH` Codex CLI exists on the reference Mac, so the check could not run; see the Decision
-      Log and `## Not tested`.
+- [x] Pick the `hooks.read` executable rule and record it in the Decision Log. The live check of
+      `hooks/list` on the oldest `PATH` Codex CLI could not run (no `PATH` CLI on the reference
+      Mac, and installing one is an unapproved download); it is a `## Not tested` entry, and a
+      runtime without the method reports `unknown`.
 
 ### Phase 2: Provider `hooks.read`
 
 - [x] Implement `hooks.read` for Codex in `scripts/harnesses/codex/`, using the Phase 1 executable
       rule.
 - [x] Implement `hooks.read` for Claude.
-- [ ] Qualify Claude's file-level `active` wording in status and docs so it does not claim an
-      interactive untrusted workspace will run the hook. Claude's trust dialog is workspace-wide,
-      not an individual hook approval; keep it outside Codex review handoff.
+- [x] Qualify Claude's file-level `active` wording in status and docs so it does not claim an
+      interactive untrusted workspace will run the hook. Package status says "configured" for
+      `not-required` hooks; `docs/user/reference/claude-hooks.md` and the provider interface doc
+      explain workspace trust. Claude stays outside the Codex review handoff.
 - [x] Add the readiness comparison in `scripts/harnesses/hook-readiness.mjs`. It builds the
       expected set from core hook files and enabled packages' `hooks` resources, resolving each
       resource's harness the way `packages.mjs` does. It skips a harness whose `hooks.read` is
@@ -418,22 +419,24 @@ approval: only a later Codex `hooks/list` result clears `review_required`.
 
 ### Phase 5: Guided review and launch
 
-- [ ] Add a post-mutation review handoff shared by onboarding, package operations, bulk
-      reconciliation, telemetry, and hook-rewriting maintenance paths. Consume provider readiness
-      groups, not a telemetry-specific list or a package-level approval flag. Add optional
-      provider-owned review-route metadata through `hooks.guidance()` if needed.
-- [ ] Add explicit cache invalidation or forced refresh with in-flight generation safety. Single
-      and bulk mutation responses may carry the post-change result, or the portal may request one
-      fresh result after successful completion.
-- [ ] Add a local, authenticated, user-click-only launch route. It rechecks readiness, selects a
-      validated executable server-side, reports launch capability and errors, and accepts no
-      arbitrary command input. Keep terminal launch outside shared readiness comparison code.
-- [ ] Add the contextual card and action to the shared hook notice/template. Wire package,
-      Tokens, and onboarding completion paths to one offer per change; refresh on visibility/focus
-      and **Check again** while preserving the existing multi-page persistent notice.
-- [ ] Add concise TTY onboarding and CLI completion guidance. Headless runs emit noninteractive
-      guidance only and never launch a terminal.
-- [ ] Update user and internal docs with selective review, **Trust all** avoidance, the need for
+- [x] Add a post-mutation review handoff shared by onboarding, package operations, bulk
+      reconciliation, telemetry, and hook-rewriting maintenance paths. Readiness carries a
+      `reviewRevision`; package and bulk responses carry `hookHarnesses`
+      (`reportPackageHookChange`); `hooks.guidance()` gained `review` and `reviewApp`.
+- [x] Add explicit cache invalidation or forced refresh with in-flight safety:
+      `invalidateHookReadiness()` drops cached and in-flight reads, `?fresh=1` skips the cache
+      and joins a read started within one second.
+- [x] Add a local, authenticated, user-click-only launch route:
+      `POST /api/config/hooks/<harness>/review` (`scripts/cli/hook-review-launch.mjs`) with the
+      launcher in `scripts/cli/terminal-launch.mjs`. Any body field is a 400.
+- [x] Add the contextual card and action to the shared hook notice/template
+      (`portal/shared/hook-readiness.js`, `portal/shared/hook-review-offer.js`), wired to Agents
+      single and bulk toggles and the Settings and Tokens telemetry toggles; refresh on focus and
+      **Check again**; the multi-page persistent notice stays.
+- [x] Add concise TTY onboarding and CLI completion guidance (`scripts/cli/hook-review-guidance.mjs`):
+      `package enable|disable`, `telemetry enable`, `bundle apply|remove`, interactive onboarding,
+      and update. Headless base-only runs ask Codex nothing; the CLI never launches a terminal.
+- [x] Update user and internal docs with selective review, **Trust all** avoidance, the need for
       a new session after trusting, return-to-portal refresh, and launch/manual fallbacks.
 
 ## Validation
@@ -452,32 +455,23 @@ approval: only a later Codex `hooks/list` result clears `review_required`.
 - [x] `npm run check` passes. Hook installation and package status are cross-cutting, so the full
       gate is required before handoff. Passed October 15, 2026, including the Docker clean-machine
       legs; Windows installer parity skipped (no `pwsh`).
-- [ ] Manual check against this branch's portal on the reference Mac's live state: Settings,
-      Tokens, and Home each show one Codex notice naming any currently pending RoboRepo hooks,
-      including Skill Visibility and Token Telemetry if still pending. No console
-      errors. Automated portal tests passed; live visual and browser-console checks were blocked
-      by the administrator's browser policy during QA.
-- [ ] Unit tests select only matched RoboRepo hooks and suppress repeat offers for the same
-      review revision. Cover unrelated project/plugin hooks, mixed `missing` and `review_required`,
-      disable-induced shifts, re-enable, changed definitions, inactive/unknown/no-hooks cases.
-- [ ] API tests cover a click-triggered launch, unsupported platform, missing binary, denied
-      terminal permission, rejected browser-supplied command or working directory, desktop plus
-      `PATH` candidate selection, and cache invalidation after single and bulk mutations.
-- [ ] Browser tests cover single/bulk/telemetry offers only for fresh `review_required`, no modal
-      or automatic launch, one card across refreshes, **Later**, return-focus/**Check again**
-      freshness, remaining untrusted hooks, resolved notice, and copy-command fallback. Assert by
-      role and name in `scripts/test/portal-ui/portal-ui.spec.mjs`.
-- [ ] CLI tests with a temporary home and fake Codex `app-server` cover base-only install,
-      optional hooks bundle, package enable, CLI-only and desktop discovery, headless guidance,
-      and no duplicate offer from telemetry enablement.
-- [ ] Run focused hook readiness, portal API, and portal UI checks while implementing Phase 5;
-      rerun `npm run check` before handoff because onboarding, package state, install/update, and
-      portal routes interact. The earlier passing gate predates the expanded scope.
-- [ ] Manual macOS QA with an unrelated pending hook: launch the bundled CLI, approve only one
-      RoboRepo hook, defer others, and confirm the portal shows only what remains after return.
-      Repeat with no pending review, a shift after disable, a changed hook after update, denied
-      terminal Automation permission, and a re-enabled package. Confirm no **Trust all** step or
-      repeat immediate offer for the same revision.
+- [x] Unit tests select only matched RoboRepo hooks and suppress repeat offers for the same
+      review revision: `hook-readiness-check.mjs` covers unrelated hooks, mixed `missing` and
+      `review_required`, shifted trust keys, changed definitions, core hooks not chosen, and
+      inactive/unknown/active cases.
+- [x] API tests (`hook-review-launch-check.mjs`) cover a click-triggered launch, review resolved
+      elsewhere, unsupported platform, missing binary, a failed launch, rejected browser-supplied
+      executable/command/arguments/working directory, the `fresh` query, and cache invalidation
+      after a package change. `harness-desktop-runtime-check.mjs` covers desktop-first selection.
+- [x] Browser tests cover a telemetry-toggle offer and a bulk offer only for fresh
+      `review_required`, no modal or automatic launch, one card per revision across a reload,
+      **Later**, return-focus and **Check again** freshness, remaining untrusted hooks, the
+      resolved notice, a failed launch's copy-command fallback, and no launcher support.
+- [x] CLI tests (`hook-review-cli-check.mjs`) cover base-only install, headless onboarding,
+      package enable, `telemetry enable` without a duplicate, the optional hooks bundle,
+      CLI-only and desktop discovery, and no terminal launch.
+- [ ] Rerun `npm run check` before handoff because onboarding, package state, install/update, and
+      portal routes interact. Focused checks and `test-cli.sh` (443 passed) pass.
 
 ## Documentation impact
 
@@ -493,8 +487,11 @@ approval: only a later Codex `hooks/list` result clears `review_required`.
 ## Not tested
 
 - [ ] Visually confirm the live worktree portal shows one Codex review notice on Home, Settings,
-      and Tokens, none on Agents, and no browser-console errors. Automated UI checks passed, but
-      administrator browser policy blocked the live browser inspection during QA.
+      and Tokens, none on Agents, and no browser-console errors. Automated UI checks passed. On
+      October 16, 2026 a hermetic portal (temp `HOME`, fake Codex reporting the telemetry hooks
+      untrusted) showed the Settings notice and the one-time offer card, **Later** closed the card
+      and kept the notice, and the console had no errors; the reference Mac's live state was not
+      opened, because the portal's harness setup can write to live config.
 - [ ] Confirm nonzero token and tool counts in live Codex capture after the parser fix is installed.
       Carried from `3jp3yhtq`. Five sessions captured since October 13, 2026 report 1.7M to 30.5M
       tokens and 18 to 228 tool calls. This needs the user to confirm by hand that those sessions
@@ -505,6 +502,22 @@ approval: only a later Codex `hooks/list` result clears `review_required`.
 - [ ] After core installation, use Codex's native review to trust only selected RoboRepo
       `PostToolUse` hooks, then confirm a new Codex desktop task writes `PostToolUse` spool records
       again. The trust decision is the user's; keep unrelated hooks untrusted.
+- [ ] On macOS, click **Open Codex hook review** in this branch's portal: a terminal window opens
+      the desktop-bundled CLI in `<stateRoot>/terminal-launch/`, and Codex shows **Hooks need
+      review** (or first asks whether to trust that folder, which is Codex's own workspace prompt).
+      Trust one RoboRepo hook, defer another, return to the portal, and confirm it lists only the
+      deferred one; then trust it and confirm the resolved notice. Not exercised: it opens a real
+      terminal and changes live Codex trust, which only the user decides.
+- [ ] Repeat the review flow with an unrelated pending hook (confirm no **Trust all** prompt is
+      suggested by RoboRepo), after disabling a package that shifts a later hook, after an update
+      that changes a hook definition, and after re-enabling a package. Confirm one offer per
+      pending set. Needs live Codex trust changes.
+- [ ] Windows installer: `install-windows.ps1` dispatches `hook_fragment` and `managed_files` rows
+      to `scripts/cli/shared-target-rows.mjs`. Not run: no `pwsh` on the reference Mac.
+- [ ] On the reference Mac, the `hooks` bundle is selected but the core Codex hooks are missing
+      (`doctor --installed` read on October 16, 2026). Running `roborepo bundle apply hooks` from
+      this branch appends them after the existing package hooks; then review them in Codex. Not
+      run: it changes live hook files.
 - [ ] Confirm `hooks/list` exists on the oldest Codex CLI on `PATH` that RoboRepo supports. The
       reference Mac has no `PATH` CLI, and installing one is a download the user has not approved.
       An older CLI that lacks the method makes readiness report `unknown`, which the fake
@@ -527,38 +540,62 @@ approval: only a later Codex `hooks/list` result clears `review_required`.
 
 ## Open Questions
 
-- **How should core Codex hooks reach a hook file packages already use?** Blocks the Phase 1
-  core-hook task and the goal of installing core hooks alongside package hooks when the `hooks`
-  bundle is applied.
-
-  Reproduced on a clean `HOME` with `bundle apply --default`, headless `onboard-intro`,
-  `package enable telemetry`, then `bundle apply hooks`. Two things combine:
-
-  1. Install applies only the `base` preset bundle. The core hooks ride in the `hooks` bundle
-     (`codex:hooks.json` and `codex:hooks` rows in `manifests/platform/presets.json`), which applies
-     only when chosen in onboarding or with `roborepo bundle apply hooks`.
-  2. Once any package merges into `~/.codex/hooks.json`, the `hooks` bundle's `managed_copy` of
-     `generated/codex/hooks.json` collides with it. The installer stages
-     `hooks_update_<timestamp>.json`, prints a merge-review prompt, and installs nothing. The
-     `~/.codex/hooks/` directory row collides the same way once a package copies a script there.
-     `~/.claude/hooks/` on the reference Mac shows the same gap for Claude's script directory.
-
-  | Option | What changes | Pros | Cons |
-  | --- | --- | --- | --- |
-  | A. New manifest kind for hook fragments (recommended) | `codex:hooks.json` becomes a `hook_fragment` row: install merges it through the provider's `hooks.merge` with core entries first, and uninstall unmerges it. The scripts row copies per file | Core hooks install beside package hooks; ownership stays per entry; one mechanism for install, uninstall, and doctor | Touches `install-harness.sh`, `presets.mjs`, `manifests-data.sh`, `doctor.sh`, `verify-install.sh`, uninstall, and the Windows installer. Prepending core entries moves existing package hooks once, so Codex asks for review again |
-  | B. Core hooks become a required system package | `generated/codex/hooks.json` content moves to a `hooks` resource of an always-enabled package | Reuses the package path that already merges and copies per file | Core hooks append after existing package hooks, so `permission-check.mjs` would not run first. Changes what "core" means in the package catalog |
-  | C. Keep `managed_copy`, merge only when the file exists | `copyItem` special-cases hook files | Smallest diff | A hidden exception in the copy primitive; uninstall still reclaims by whole-file match |
-
-  It was blocked rather than decided because it changes install, uninstall, and migration behavior
-  on existing machines, and the options trade core-hook order against trust churn.
-
-- **Should RoboRepo open the terminal automatically?** Recommend an explicit nonmodal review
-  offer and a user-clicked **Open Codex hook review** action. Automatic launch would interrupt
-  onboarding and bulk operations. Prototype the macOS launcher first; if it is unreliable, keep
-  **Copy command** as the initial route. An in-portal trust editor is a separate ownership decision
-  and is excluded from this plan.
+None open. Both earlier questions were answered by the user on October 16, 2026; see the Decision
+Log.
 
 ## Decision Log
+
+- **Core Codex hooks install through a `hook_fragment` manifest row, appended after package hooks
+  (October 16, 2026, user decision).** Options were A appended (chosen), A with core first, B core
+  hooks as a system package, and C a `copyItem` special case. Codex's hooks reference says matching
+  command hooks "are launched concurrently" with no defined order, so putting core first would cost
+  a round of re-review on machines with package hooks and buy no decision priority. Uninstall and
+  bundle removal unmerge exactly the core entries.
+- **The terminal opens only on a user click (October 16, 2026, user decision).** No automatic
+  launch after onboarding or bulk changes; the portal offers a nonmodal card and the CLI prints the
+  command. An in-portal trust editor stays excluded.
+- **Script directories use a new `managed_files` kind with per-file hash records**
+  (`<stateRoot>/config-state/managed-files.json`). Alternatives: change `managed_copy` directory
+  semantics for every row (would also change `~/.codex/rules`, outside scope), or a manifest flag
+  (every consumer still needs new code). An unedited copy updates silently, an edited one follows
+  the conflict policy per file, and a non-directory at the target follows it for the whole row, so
+  the existing keep/overwrite behavior and its tests hold.
+- **Core hooks are expected only when the bundle that installs them is selected.** Before, the
+  core group was always expected, so a base-only install would have reported them missing.
+  `coreHookBundle` reads the manifest and preset catalog, so no provider id is hardcoded; Claude's
+  core hooks ride in its root config and stay always expected. This replaces the earlier decision
+  to hide missing core hooks: they now show with `roborepo bundle apply hooks` as the remedy.
+- **Review revision is a digest of opaque per-hook identities.** Codex's record folds its trust key
+  and definition hash into a 16-hex `identity` inside the adapter; the comparison digests the
+  pending RoboRepo hooks' identities into `reviewRevision`. Alternatives: send key and hash to the
+  browser (exposes trust material), or key on event and command only (misses a shifted position or
+  changed definition).
+- **Cache invalidation drops in-flight reads; `fresh` joins a read started within one second.**
+  The cache stores promises, so clearing it is enough to keep a pre-change read from answering a
+  post-change request. The one-second join keeps three pages refreshing on one focus event to one
+  app-server. A generation counter was tried and removed as redundant.
+- **The launcher hands a `.command` script to `open` instead of `osascript … do script`.** It needs
+  no Apple Events, so no Automation permission can block it, and it respects the user's default
+  terminal. The plan's "denied Automation" case becomes "launch failed". Linux and Windows report no
+  support until a launch path is tested there.
+- **Launch prefers the desktop-bundled CLI; `hooks.read` keeps `PATH` first.** The user asked for
+  desktop-first launch. Both binaries read the same `~/.codex/config.toml`, so they see the same
+  trust. `selectedHarnessExecutable` gained a `prefer` option rather than a second picker.
+- **Browser onboarding is not wired, because nothing in this branch applies configuration from the
+  browser.** `portal-setup.mjs` is read-only. `offerHookReview(hookHarnesses)` is exported for the
+  browser onboarding plans `v6lvuu2` and `rtkmc8kf`. Harness refresh invalidates the cache and
+  relies on the persistent notice rather than a one-time card, since its response names harnesses
+  that were enabled, not hooks that changed.
+- **CLI hints sit on the commands, not inside `enablePackage`.** Portal changes and the onboarding
+  wizard call `enablePackage` too, so a hint there would print once per package in a wizard and
+  into portal server logs. `package enable|disable` definitions now point at
+  `enablePackageCommand`/`disablePackageCommand`.
+- **Offered revisions are remembered in `localStorage`.** It is a per-viewer convenience (not
+  showing the same card twice); when storage is unavailable the offer is remembered for the page
+  load and the persistent notice still covers the state.
+- **Claude `not-required` hooks read "configured" in package status.** Claude has no per-hook
+  approval, and interactive sessions hold settings hooks until workspace trust, so "active" would
+  overclaim.
 
 - **Review handoff joined this active plan (October 16, 2026, user decision).** The separate
   untracked backlog draft was absorbed so installation, readiness, and native approval guidance
@@ -576,7 +613,8 @@ approval: only a later Codex `hooks/list` result clears `review_required`.
   since the parser fix, so Phase 1 no longer runs a separate capture task. The `## Not tested`
   entry stays until the user confirms it.
 - **The review command is the selected executable, here
-  `/Applications/ChatGPT.app/Contents/Resources/codex`.** Its `--help` says a bare invocation
+  `/Applications/ChatGPT.app/Contents/Resources/codex`** (since October 16, chosen desktop-first;
+  see the launch entry above). Its `--help` says a bare invocation
   opens the interactive CLI. `3jp3yhtq` QA trusted the five telemetry hooks through this embedded
   runtime's review screen, and the next desktop task produced seven spool records, so trust
   recorded there applies to desktop sessions. Alternatives: a hardcoded `codex` (fails when no CLI
@@ -603,10 +641,8 @@ approval: only a later Codex `hooks/list` result clears `review_required`.
   review (Skill visibility did on the reference Mac), and the goal names any package. Every active
   harness is asked; the server caches each harness's result for 30 seconds because the Codex read
   starts a process. Gemini reports `supported: false` and shows nothing.
-- **The portal notice leaves out core hooks that are only `missing`.** Its remedy, reapplying a
-  package, does not install them while the Open Question stands, so the warning would be
-  permanent and unactionable. `doctor --installed` still reports them. Core hooks that need review
-  or are turned off still show.
+- **The portal notice leaves out core hooks that are only `missing`** (superseded October 16 by the
+  core-expectation entry above, once `bundle apply hooks` became a working remedy).
 - **`shellQuote` moved to `scripts/harnesses/shell-quote.mjs`.** The Codex review command needed
   the same quoting the Claude MCP module had; after the move into `claude/`, Codex would otherwise
   import from another provider's directory. `scripts/maintenance/git-remote-sync.mjs` keeps its

@@ -4,6 +4,7 @@
 // Package status, the portal route, and doctor all consume this, so it sits with the shared harness
 // code and takes already-loaded inputs (packages, paths) instead of importing the CLI layer.
 
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { getHarnessProvider } from "./registry.mjs";
@@ -30,12 +31,13 @@ export function fragmentHooks(fragment) {
 }
 
 // Hook resources name exactly one harness each, the same field packages.mjs installs them by, and
-// their `source` is repo-relative there too.
-export function expectedHooks(harness, { packages = [], repoRoot }) {
+// their `source` is repo-relative there too. `includeCore` is false when the user has not chosen to
+// install the harness's core hooks, so their absence is not reported as missing.
+export function expectedHooks(harness, { packages = [], repoRoot, includeCore = true }) {
   const provider = getHarnessProvider(harness);
   const core = provider.adapters.hooks?.core;
   const groups = [];
-  if (typeof core === "function") {
+  if (includeCore && typeof core === "function") {
     groups.push({ owner: "core", label: `${provider.manifest.displayName} core hooks`, hooks: fragmentHooks(core()) });
   }
   for (const pkg of packages) {
@@ -49,24 +51,33 @@ export function expectedHooks(harness, { packages = [], repoRoot }) {
 
 // Pure comparison of expected groups against hooks.read records. Records from another source file
 // (a project or plugin hook that happens to share a command) never satisfy an expected hook.
+//
+// `reviewRevision` names the exact set of RoboRepo hooks awaiting review, so a surface can offer
+// review once per set: it changes when a definition changes or a trust key shifts, and stays the
+// same across repeated reads of the same pending hooks. It is a digest of the records' opaque
+// `identity` (or their event, command, and trust when a provider supplies none), never trust
+// material itself. Null when nothing awaits review.
 export function compareHookReadiness(expectedGroups, observed, { hooksPath = null } = {}) {
   const inScope = (observed || []).filter((record) => !hooksPath || !record.sourcePath || samePath(record.sourcePath, hooksPath));
+  const pending = [];
   const groups = expectedGroups.map((group) => {
     const hooks = group.hooks.map((hook) => {
       const record = inScope.find((entry) => entry.event === hook.event && entry.command === hook.command);
-      return { ...hook, trust: record?.trust ?? null, enabled: record?.enabled ?? null, state: hookState(record) };
+      const state = hookState(record);
+      if (state === "review_required") pending.push(record.identity ?? `${record.event}\t${record.command}\t${record.trust}`);
+      return { ...hook, trust: record?.trust ?? null, enabled: record?.enabled ?? null, state };
     });
     return { owner: group.owner, label: group.label, state: worstState(hooks), hooks };
   });
-  return { state: worstState(groups), groups };
+  return { state: worstState(groups), groups, reviewRevision: digest(pending) };
 }
 
 // hooks.read for one harness, compared with what RoboRepo expects there.
-export async function readHookReadiness(harness, { packages, repoRoot, hooksPath, cwd, readOptions = {} }) {
+export async function readHookReadiness(harness, { packages, repoRoot, hooksPath, cwd, includeCore = true, readOptions = {} }) {
   const provider = getHarnessProvider(harness);
   if (!readinessSupported(harness)) return { harness, displayName: provider.manifest.displayName, supported: false, state: null, groups: [] };
   const observed = await provider.adapters.hooks.read({ cwd, hooksPath, ...readOptions });
-  const result = compareHookReadiness(expectedHooks(harness, { packages, repoRoot }), observed, { hooksPath });
+  const result = compareHookReadiness(expectedHooks(harness, { packages, repoRoot, includeCore }), observed, { hooksPath });
   return { harness, displayName: provider.manifest.displayName, supported: true, ...result };
 }
 
@@ -81,6 +92,11 @@ function hookState(record) {
 function worstState(items) {
   if (items.length === 0) return "active";
   return READINESS_STATES.find((state) => items.some((item) => item.state === state)) ?? "unknown";
+}
+
+function digest(identities) {
+  if (identities.length === 0) return null;
+  return crypto.createHash("sha256").update([...new Set(identities)].sort().join("\n")).digest("hex").slice(0, 16);
 }
 
 function samePath(a, b) {

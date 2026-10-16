@@ -1,66 +1,81 @@
 # Codex Hooks
 
 Hooks are commands Codex runs at points in a session — when it starts, before a tool call, after a
-tool call. RoboRepo installs a few that always run, and packages add more when you enable them.
+tool call. RoboRepo installs a few core hooks with the `hooks` bundle, and packages add more when you
+enable them.
 Turn a package's hooks off by disabling the package in `/agents` or with
 `roborepo package disable <id>`.
 
 ## Trusting RoboRepo's Hooks
 
 Codex runs a non-managed hook only after you review and trust its exact definition. Enabling a
-package installs its hooks but does not grant that trust, and RoboRepo never grants it for you.
-To review hooks in the Codex app:
+package installs its hooks but does not grant that trust, and RoboRepo never grants it for you or
+records a trust decision.
 
-1. Open **Settings → Hooks** in Codex.
-2. Review the RoboRepo hooks named in the portal's Home, Settings, or Tokens notice. Trust only the
-   definitions you want to run.
+After you change something that rewrites Codex hooks (enabling or disabling a package, a bulk
+change on `/agents`, turning on token tracking, applying the `hooks` bundle, or an update),
+RoboRepo asks Codex whether any RoboRepo hook now awaits review. If one does:
+
+- **In the portal**, a card names the hooks and offers **Open Codex hook review**, **Copy
+  command**, **Check again**, and **Later**. It appears once for that set of pending hooks; **Later**
+  closes it, and the notice on Home, Settings, and Tokens stays until the review is done.
+- **In the terminal**, the command prints the same list and the command that opens Codex's review.
+  It never opens anything itself.
+
+**Open Codex hook review** opens a terminal window running Codex's own CLI, which shows **Hooks
+need review** when it starts. It prefers the CLI bundled with the Codex desktop app, then a `codex`
+on your `PATH`. The window opens only when you click, and only on macOS for now; elsewhere, use
+**Copy command** and run it in a terminal.
+
+In Codex's review:
+
+1. Trust only the RoboRepo hooks the portal or terminal listed. If Codex also lists hooks you do
+   not recognize, leave them alone rather than choosing **Trust all**.
+2. Come back to the portal. It checks again when you return (or press **Check again**) and shows
+   only what is still pending, or that review is done.
 3. Start a new Codex session. Sessions already running do not pick up newly trusted hooks.
 
-If you use Codex in a terminal, opening the CLI automatically shows **Hooks need review** when
-hooks need trust. Choose **Review hooks** and trust only the definitions you want to run; avoid
-**Trust all** if other hooks are listed. Use `/hooks` later to reopen the review. The RoboRepo
-notice keeps the terminal command under **Terminal alternative** when a Codex executable is
-available.
-
-Trust is stored in `~/.codex/config.toml`, which the desktop app reads too.
+The Codex app has the same review under **Settings → Hooks**; there is no link that opens that
+screen directly. In the CLI, `/hooks` reopens it later. Trust is stored in `~/.codex/config.toml`,
+which the desktop app and the CLI both read, so trusting in either applies to both.
 
 Codex keys trust by a hook's position in `~/.codex/hooks.json`. RoboRepo adds a package's Codex
-hooks after the existing ones, so enabling a package leaves the hooks you already trusted where they
-were. Disabling a package moves the hooks after it at the same event, and Codex asks you to review
-those again.
+hooks, and its own core hooks, after the existing ones, so a change leaves the hooks you already
+trusted where they were. Removing hooks (disabling a package, or removing the `hooks` bundle) moves
+the hooks after them at the same event, and Codex asks you to review those again.
 
 ## Checking Hook Readiness
 
-Settings, Tokens, and Home show a warning for package hooks that need attention, and for core hooks
-that need review or are turned off.
-`roborepo doctor --installed` prints hook findings as `hint:` lines, including missing core hooks.
-Neither changes Codex's trust decisions.
+Settings, Tokens, and Home show a notice for RoboRepo hooks that need attention, one per kind of
+problem, each with its own remedy. `roborepo doctor --installed` prints the same findings as
+`hint:` lines. Neither changes Codex's trust decisions.
 
 | State | Meaning | What to do |
 | --- | --- | --- |
 | Active | Installed, trusted, and turned on | Nothing |
 | Needs review | Installed, but Codex has not trusted this exact definition (`untrusted` or `modified`) | Follow the review steps above |
 | Turned off | Trusted but disabled in Codex | Turn the hooks back on in Codex's **Settings → Hooks**, or `/hooks` in the CLI |
-| Missing | Not in `~/.codex/hooks.json` | Turn the package off and back on in `/agents` |
+| Missing | Not in `~/.codex/hooks.json`, so there is nothing to review | A package's hooks: turn the package off and back on in `/agents`. Core hooks: `roborepo bundle apply hooks` |
 | Unknown | Codex could not be asked | Check that Codex is installed and has been opened at least once |
 
-RoboRepo asks Codex directly (through `codex app-server`), so the warning reflects what Codex will
-actually run rather than what the file contains.
+RoboRepo asks Codex directly (through `codex app-server`), so the notice reflects what Codex will
+actually run rather than what the file contains. Hooks Codex lists that RoboRepo did not install
+never appear in the notice or the offer.
 
-The core hooks marked "always" below are not installed yet on a machine where a package already
-wrote `~/.codex/hooks.json`. `doctor --installed` reports them as missing; the portal warning leaves
-them out because reapplying a package does not install them.
+Core hooks come with the optional `hooks` bundle, chosen during onboarding or with
+`roborepo bundle apply hooks`. They install beside package hooks that are already there, and
+readiness expects them only once you have chosen that bundle.
 
 ## What Runs
 
 | Event | Hook | What it does | Installed by |
 | --- | --- | --- | --- |
-| SessionStart | Unmanaged skills notice | Counts skills in `~/.claude/skills` and `~/.codex/skills` that RoboRepo does not manage and suggests `roborepo skill adopt <name>` | always |
+| SessionStart | Unmanaged skills notice | Counts skills in `~/.claude/skills` and `~/.codex/skills` that RoboRepo does not manage and suggests `roborepo skill adopt <name>` | core (`hooks` bundle) |
 | SessionStart | Caveman mode | Turns on terse output; say "stop caveman" or "normal mode" to turn it off | `caveman` |
 | SessionStart | jcodemunch nudge | Reminds Codex to explore code with jcodemunch tools | `jcodemunch` |
 | SessionStart | jdocmunch index check | If `docs/` exists but is not indexed, reminds Codex to run `roborepo index docs docs/` | `jdocmunch` |
-| PreToolUse (shell) | Per-command ask | Prompts before shell commands your permission settings put in the `ask` bucket (see below) | always |
-| PreToolUse (shell) | Output minimizer | Appends `2>&1 \| tail -n 120` to noisy build, lint, and typecheck commands, forces `tsc --pretty false`, and denies `--watch`, `--verbose`, and `--debug` | always |
+| PreToolUse (shell) | Per-command ask | Prompts before shell commands your permission settings put in the `ask` bucket (see below) | core (`hooks` bundle) |
+| PreToolUse (shell) | Output minimizer | Appends `2>&1 \| tail -n 120` to noisy build, lint, and typecheck commands, forces `tsc --pretty false`, and denies `--watch`, `--verbose`, and `--debug` | core (`hooks` bundle) |
 | PostToolUse | Skill reference observer | Tells Codex which skill reference files it just read, for the skills-loaded line. Codex does not yet deliver this event after shell reads, so Codex reads are under-counted | `skill-visibility` |
 | SessionStart, PreToolUse, PostToolUse, UserPromptSubmit, Stop | Telemetry capture | Records token and tool usage locally | `telemetry`, once token tracking is enabled in the portal or CLI |
 

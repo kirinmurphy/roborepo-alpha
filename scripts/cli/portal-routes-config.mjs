@@ -115,10 +115,13 @@ export const configRoutes = defineRoutes([
     },
   },
   {
+    // `?fresh=1` skips the server's cached read: after a hook change, on Check again, and when the
+    // page regains focus, since trust can change in the harness without RoboRepo knowing.
     path: "/api/config/hooks/:harness/status",
-    handler: (req, res, { params, handlers }) => {
+    handler: (req, res, { params, qs, handlers }) => {
+      const fresh = new URLSearchParams(qs).get("fresh") === "1";
       Promise.resolve()
-        .then(() => handlers.loadHookReadiness(params.harness))
+        .then(() => handlers.loadHookReadiness(params.harness, { fresh }))
         .then((status) => send(res, 200, "application/json", JSON.stringify(status)))
         .catch((error) => {
           if (/unsupported harness/.test(String(error?.message))) {
@@ -127,6 +130,28 @@ export const configRoutes = defineRoutes([
           // Readiness is advisory: a failed read reports "unknown" so the page keeps rendering.
           send(res, 200, "application/json", JSON.stringify({ harness: params.harness, state: "unknown", groups: [] }));
         });
+      return true;
+    },
+  },
+  {
+    // Opens the harness's own hook review in a terminal, on a user click. The body must be empty:
+    // the executable, its arguments, and the working directory are the server's choice alone.
+    method: "POST",
+    path: "/api/config/hooks/:harness/review",
+    handler: (req, res, { params, handlers }) => {
+      readJsonBody(req, (body, err) => {
+        if (err) return send(res, 400, "application/json", JSON.stringify({ error: "invalid JSON body" }));
+        if (body && (typeof body !== "object" || Array.isArray(body) || Object.keys(body).length > 0)) {
+          return send(res, 400, "application/json", JSON.stringify({ error: "expected an empty body" }));
+        }
+        Promise.resolve()
+          .then(() => handlers.launchHookReview(params.harness))
+          .then((result) => send(res, 200, "application/json", JSON.stringify(result)))
+          .catch((error) => {
+            const status = /unsupported harness/.test(String(error?.message)) ? 404 : 500;
+            send(res, status, "application/json", JSON.stringify({ ok: false, error: String(error?.message || error) }));
+          });
+      });
       return true;
     },
   },

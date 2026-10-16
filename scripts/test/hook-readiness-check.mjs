@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { getHarnessProvider } from "../harnesses/registry.mjs";
 import { codexHookRecord } from "../harnesses/codex/hooks-read.mjs";
 import { compareHookReadiness, readHookReadiness, readinessSupported } from "../harnesses/hook-readiness.mjs";
+import { buildPackageLiveState } from "../cli/package-probes.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fakeServer = path.join(here, "fixtures", "hook-readiness", "fake-codex-app-server.mjs");
@@ -67,17 +68,30 @@ try {
   // --- review guidance starts in Codex's desktop UI; terminal review is secondary ---
   {
     const guidance = getHarnessProvider("codex").adapters.hooks.guidance();
-    assert.match(guidance.review_required, /Codex app.*Settings.*Hooks/);
+    assert.match(guidance.review_required, /trust only those/);
+    assert.match(guidance.review_required, /rather than choosing Trust all/);
+    assert.match(guidance.review_required, /next Codex session/);
+    assert.match(guidance.reviewApp, /Codex app.*Settings.*Hooks/);
     assert.match(guidance.inactive, /Codex app.*Settings.*Hooks/);
-    assert.match(guidance.terminalHint, /Codex CLI.*Hooks need review.*automatically/);
+    assert.match(guidance.terminalHint, /Hooks need review/);
+    // The review route names the binary to open, never a command line for the shell to parse.
+    if (guidance.review) {
+      assert.deepEqual(Object.keys(guidance.review).sort(), ["args", "executable"]);
+      assert.ok(path.isAbsolute(guidance.review.executable));
+    }
   }
 
   // --- record mapping: camelCase events, managed hooks, unrecognized trust ---
   {
     const base = liveRecord({ event: "PostToolUse", command: observerCommand });
-    assert.deepEqual(codexHookRecord(base), {
+    const { identity, ...record } = codexHookRecord(base);
+    assert.deepEqual(record, {
       event: "PostToolUse", command: observerCommand, sourcePath: hooksPath, trust: "trusted", enabled: true,
     });
+    assert.match(identity, /^[0-9a-f]{16}$/, "identity is an opaque digest");
+    assert.ok(!JSON.stringify(codexHookRecord(base)).includes("sha256:fixture"), "the trust hash never leaves the adapter");
+    assert.notEqual(codexHookRecord({ ...base, currentHash: "sha256:changed" }).identity, identity, "a changed definition is a new identity");
+    assert.notEqual(codexHookRecord({ ...base, key: `${hooksPath}:postToolUse:1:0` }).identity, identity, "a shifted trust key is a new identity");
     assert.equal(codexHookRecord({ ...base, isManaged: true, trustStatus: "untrusted" }).trust, "managed");
     assert.equal(codexHookRecord({ ...base, trustStatus: "something-new" }).trust, "unknown");
   }
@@ -141,6 +155,48 @@ try {
     assert.equal(groupState(result, "observer-fixture"), "missing");
   }
 
+  // --- review revision: one per pending set of RoboRepo hooks, stable across reads ---
+  {
+    const positioned = (hook, index, overrides = {}) => liveRecord(hook, { key: `${hooksPath}:${hook.event}:${index}:0`, ...overrides });
+    const pendingObserver = (hook, index) => positioned(hook, index, hook.command === observerCommand ? { trustStatus: "untrusted" } : {});
+    const first = await codexReadiness(allExpected.map(pendingObserver));
+    const again = await codexReadiness(allExpected.map(pendingObserver));
+    assert.match(first.reviewRevision, /^[0-9a-f]{16}$/);
+    assert.equal(again.reviewRevision, first.reviewRevision, "rereading the same pending hooks keeps the revision");
+
+    const changed = await codexReadiness(allExpected.map((hook, index) => positioned(hook, index,
+      hook.command === observerCommand ? { trustStatus: "modified", currentHash: "sha256:changed" } : {})));
+    assert.notEqual(changed.reviewRevision, first.reviewRevision, "a changed definition is a new revision");
+
+    const shifted = await codexReadiness(allExpected.map((hook, index) => pendingObserver(hook, index + 1)));
+    assert.notEqual(shifted.reviewRevision, first.reviewRevision, "a trust key shifted by a disable is a new revision");
+
+    // A pending hook RoboRepo did not install never enters the offer.
+    const unrelated = { event: "PostToolUse", command: "node unrelated-plugin.mjs" };
+    const withUnrelated = await codexReadiness([...allExpected.map(pendingObserver), positioned(unrelated, 99, { trustStatus: "untrusted" })]);
+    assert.equal(withUnrelated.reviewRevision, first.reviewRevision);
+    const onlyUnrelated = await codexReadiness([...allExpected.map((hook, index) => positioned(hook, index)), positioned(unrelated, 99, { trustStatus: "untrusted" })]);
+    assert.equal(onlyUnrelated.state, "active");
+    assert.equal(onlyUnrelated.reviewRevision, null, "nothing of RoboRepo's awaits review");
+
+    // Missing and review_required together: the aggregate is missing, but the review stays offered.
+    const mixed = await codexReadiness(allExpected.filter((hook) => !coreHooks.includes(hook)).map(pendingObserver));
+    assert.equal(mixed.state, "missing");
+    assert.equal(groupState(mixed, "observer-fixture"), "review_required");
+    assert.ok(mixed.reviewRevision);
+  }
+
+  // --- core hooks the user did not choose to install are not expected ---
+  {
+    fs.writeFileSync(hooksListFile, JSON.stringify(allExpected.filter((hook) => !coreHooks.includes(hook)).map((hook) => liveRecord(hook))));
+    const result = await readHookReadiness("codex", {
+      packages: fixturePackages, repoRoot: tmp, hooksPath, cwd: tmp, includeCore: false,
+      readOptions: { executable, timeoutMs: 3000 },
+    });
+    assert.equal(result.state, "active");
+    assert.equal(groupState(result, "core"), undefined);
+  }
+
   // --- unknown: the runtime times out, is too old for hooks/list, or is absent. The installed
   // entries still come from hooks.json, so an absent hook is still reported missing. ---
   {
@@ -175,6 +231,23 @@ try {
     const result = await readHookReadiness("claude", { packages: [], repoRoot: tmp, hooksPath: settingsPath });
     assert.equal(result.state, "active");
     assert.equal(groupState(result, "core"), "active");
+  }
+
+  // --- package status: a Claude hook is "configured" (workspace trust still applies), a trusted
+  // Codex hook is "active" ---
+  {
+    const fragment = (harness) => JSON.parse(fs.readFileSync(path.join(here, "..", "..", "globals", "packages", "telemetry", `hooks-${harness}.json`), "utf8"));
+    const records = (harness, trust) => Object.entries(fragment(harness)).filter(([event]) => !event.startsWith("_"))
+      .flatMap(([event, groups]) => groups.flatMap((g) => g.hooks.map((h) => ({ event, command: h.command, sourcePath: null, trust, enabled: true }))));
+    const pkg = { id: "telemetry", components: [
+      { type: "hooks", harness: "claude", source: "globals/packages/telemetry/hooks-claude.json" },
+      { type: "hooks", harness: "codex", source: "globals/packages/telemetry/hooks-codex.json" },
+    ] };
+    const hookRecords = new Map([["claude", records("claude", "not-required")], ["codex", records("codex", "trusted")]]);
+    const [[, summary]] = buildPackageLiveState([pkg], { hookRecords });
+    const [claudeHooks, codexHooks] = summary.components;
+    assert.match(claudeHooks.detail, /, configured$/);
+    assert.match(codexHooks.detail, /, active$/);
   }
 
   // --- Gemini keeps its hooks.read stub, and readiness skips it ---

@@ -22,9 +22,22 @@ export async function runUpdateWithReport(commandConfig, args) {
   }
   if (result.status === 0) {
     if (!installArgs.includes("--dry-run")) await refreshLivePermissions({ verbose });
-    printUpdateReport(before, snapshotInstallState(), { verbose, installOutput });
+    const after = snapshotInstallState();
+    printUpdateReport(before, after, { verbose, installOutput });
+    if (!installArgs.includes("--dry-run")) await printChangedHookReviewHint(before.hooks, after.hooks);
   }
   process.exit(result.status ?? 1);
+}
+
+// An update that rewrote a harness's hook files can leave RoboRepo hooks awaiting review.
+async function printChangedHookReviewHint(before, after) {
+  const previous = new Map(before.map((row) => [row.key, row.digest]));
+  const harnesses = after.filter((row) => previous.get(row.key) !== row.digest).map((row) => row.key.split(":")[0]);
+  if (harnesses.length === 0) return;
+  const [{ readinessSupported }, { printHookReviewHint }] = await Promise.all([
+    import("../harnesses/hook-readiness.mjs"), import("./hook-review-guidance.mjs"),
+  ]);
+  await printHookReviewHint(harnesses.filter(readinessSupported));
 }
 
 async function refreshLivePermissions({ verbose = false } = {}) {

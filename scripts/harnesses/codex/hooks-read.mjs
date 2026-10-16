@@ -6,6 +6,7 @@
 // trust "unknown" instead of an error, so callers keep working.
 
 import { spawn } from "node:child_process";
+import crypto from "node:crypto";
 import { hookRecordsFromFile } from "../root-config-hooks.mjs";
 
 const MAX_RESPONSE_BYTES = 1024 * 1024;
@@ -19,7 +20,9 @@ export async function readCodexHooks({ executable, cwd = process.cwd(), hooksPat
 }
 
 // `hooks/list` names events in camelCase (`postToolUse`); hook fragments and every other RoboRepo
-// surface use the PascalCase spelling, so records are normalized here.
+// surface use the PascalCase spelling, so records are normalized here. `identity` folds the trust
+// key (which carries the hook's position) and the definition hash into one opaque digest: it changes
+// exactly when Codex would ask for review again, and the hash itself never leaves this module.
 export function codexHookRecord(hook) {
   const eventName = String(hook.eventName || "");
   return {
@@ -28,6 +31,9 @@ export function codexHookRecord(hook) {
     sourcePath: hook.sourcePath ?? null,
     trust: hook.isManaged ? "managed" : CODEX_TRUST.has(hook.trustStatus) ? hook.trustStatus : "unknown",
     enabled: hook.enabled !== false,
+    identity: hook.key || hook.currentHash
+      ? crypto.createHash("sha256").update(`${hook.key ?? ""}\n${hook.currentHash ?? ""}`).digest("hex").slice(0, 16)
+      : null,
   };
 }
 

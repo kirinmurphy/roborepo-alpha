@@ -1988,6 +1988,11 @@ assert "ownership refactor: every confirmed leakage case stays fixed" \
 assert "ownership refactor: cross-harness hook composition round-trips" \
   node "${repo_root}/scripts/test/hook-composition-check.mjs"
 
+# Core hooks install beside package hooks (hook_fragment / managed_files manifest rows) without
+# moving them, follow the conflict policy per script, and remove only what RoboRepo wrote.
+assert "hooks bundle: core hooks install beside package hooks" \
+  node "${repo_root}/scripts/test/shared-target-rows-check.mjs"
+
 # Telemetry transcript parsing (Claude/Codex field shapes) and analyzer warning detection.
 assert "telemetry: transcript stats and analyzer warnings are correct" \
   node "${repo_root}/scripts/test/telemetry-correctness-check.mjs"

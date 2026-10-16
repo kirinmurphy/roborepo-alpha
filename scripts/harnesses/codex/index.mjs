@@ -210,15 +210,20 @@ function hooksRead({ cwd, hooksPath = resolveHarnessPath(codexManifest, "hooks")
   });
 }
 
-// The desktop app has a hook review screen. Keep the CLI command as a secondary route for users
-// who run Codex in a terminal; both routes record trust in ~/.codex/config.toml.
+// Codex reviews hooks itself: a bare interactive start of its CLI shows "Hooks need review" when
+// any are pending, and the desktop app has the same screen under Settings → Hooks. Both record
+// trust in ~/.codex/config.toml, so either route serves desktop sessions. `review` tells a caller
+// which binary opens that screen; the desktop app's bundled CLI comes first because it matches the
+// app the user installed. RoboRepo only opens the screen; every trust decision stays in Codex.
 function hooksGuidance() {
-  const executable = selectedHarnessExecutable(codexManifest);
+  const executable = selectedHarnessExecutable(codexManifest, { prefer: "desktop" });
   return {
     command: executable ? shellQuote(executable) : codexManifest.commandName,
-    review_required: "In the Codex app, open Settings → Hooks, review the listed RoboRepo hooks, and trust only those you want to run. Start a new Codex session afterward.",
-    inactive: "In the Codex app, open Settings → Hooks and turn the listed RoboRepo hooks back on.",
-    terminalHint: "Open the Codex CLI with this command. When review is needed, it shows Hooks need review automatically.",
+    review: executable ? { executable, args: [] } : null,
+    review_required: "Review the listed RoboRepo hooks in Codex and trust only those. If Codex also lists hooks you do not recognize, leave them alone rather than choosing Trust all. Newly trusted hooks run from the next Codex session.",
+    reviewApp: "In the Codex app, the same review is under Settings → Hooks.",
+    inactive: "In the Codex app, open Settings → Hooks and turn the listed RoboRepo hooks back on, or use /hooks in the Codex CLI.",
+    terminalHint: "Or run this command in a terminal. Codex shows Hooks need review when it starts:",
   };
 }
 

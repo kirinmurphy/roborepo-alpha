@@ -1,5 +1,6 @@
 import { portalHideLoading, portalSetUpdatedAt } from "/portal/shared/api.js";
 import { renderHookReadiness } from "/portal/shared/hook-readiness.js";
+import { offerHookReview } from "/portal/shared/hook-review-offer.js";
 import { runHarnessCheck } from "/portal/shared/harness-warning.js";
 import { createRepositorySourcesInline } from "/portal/shared/repository-sources-dialog.js";
 import * as api from "./api.js";
@@ -150,8 +151,9 @@ async function toggleTelemetry() {
   telemetryToggle.setAttribute("aria-busy", "true");
   telemetryToggle.textContent = "Saving…";
   try {
-    await api.setTelemetryEnabled(telemetryToggle.getAttribute("aria-pressed") !== "true");
+    const result = await api.setTelemetryEnabled(telemetryToggle.getAttribute("aria-pressed") !== "true");
     await refresh();
+    void offerHookReview(result.hookHarnesses);
   } catch (error) {
     showError(error);
   } finally {

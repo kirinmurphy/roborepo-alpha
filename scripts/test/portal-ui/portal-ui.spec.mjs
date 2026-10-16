@@ -129,48 +129,70 @@ test.describe("hook readiness warning", () => {
   const hook = (event, state) => ({ event, command: `fixture ${event}`, trust: null, enabled: true, state });
   const group = (owner, label, state, hooks) => ({ owner, label, state, hooks });
   const reviewCommand = "/Applications/ChatGPT.app/Contents/Resources/codex";
-  const codexStatus = (state, groups) => ({
-    harness: "codex", displayName: "Codex", supported: true, state, groups,
+  const codexStatus = (state, groups, { reviewRevision = null, launch = true, coreBundle = "hooks" } = {}) => ({
+    harness: "codex", displayName: "Codex", supported: true, state, groups, reviewRevision, coreBundle,
+    reviewLaunch: { supported: launch },
     guidance: {
       command: reviewCommand,
-      review_required: "In the Codex app, open Settings → Hooks, review the listed RoboRepo hooks, and trust only those you want to run. Start a new Codex session afterward.",
-      inactive: "In the Codex app, open Settings → Hooks and turn the listed RoboRepo hooks back on.",
-      terminalHint: "Open the Codex CLI with this command. When review is needed, it shows Hooks need review automatically.",
+      review: { executable: reviewCommand, args: [] },
+      review_required: "Review the listed RoboRepo hooks in Codex and trust only those. If Codex also lists hooks you do not recognize, leave them alone rather than choosing Trust all. Newly trusted hooks run from the next Codex session.",
+      reviewApp: "In the Codex app, the same review is under Settings → Hooks.",
+      inactive: "In the Codex app, open Settings → Hooks and turn the listed RoboRepo hooks back on, or use /hooks in the Codex CLI.",
+      terminalHint: "Or run this command in a terminal. Codex shows Hooks need review when it starts:",
     },
   });
+  const pendingReview = (revision = "rev-1") => codexStatus("review_required", [
+    group("core", "Codex core hooks", "active", [hook("PreToolUse", "active")]),
+    group("skill-visibility", "Skill visibility", "review_required", [hook("PostToolUse", "review_required")]),
+    group("telemetry", "Token Telemetry", "review_required", [hook("SessionStart", "active"), hook("PostToolUse", "review_required")]),
+  ], { reviewRevision: revision });
+  const allActive = () => codexStatus("active", [group("telemetry", "Token Telemetry", "active", [hook("Stop", "active")])]);
   const claudeActive = { harness: "claude", displayName: "Claude Code", supported: true, state: "active", groups: [], guidance: null };
+  // `byHarness` values may be functions, so a test can change what the next read returns.
   const routeStatuses = async (page, byHarness) => {
     const reads = [];
-    await page.route("**/api/config/hooks/*/status", (route) => {
-      const harness = new URL(route.request().url()).pathname.split("/")[4];
-      reads.push(harness);
-      return route.fulfill({ json: byHarness[harness] });
+    await page.route((url) => /\/api\/config\/hooks\/[^/]+\/status$/.test(url.pathname), (route) => {
+      const url = new URL(route.request().url());
+      const harness = url.pathname.split("/")[4];
+      reads.push({ harness, fresh: url.searchParams.get("fresh") === "1" });
+      const value = byHarness[harness];
+      return route.fulfill({ json: typeof value === "function" ? value() : value });
     });
     return reads;
   };
-
-  test("Settings, Tokens, and Home lead with in-app review and offer a terminal alternative; Agents does not", async ({ page }) => {
-    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex, claude]) }));
-    await routeStatuses(page, {
-      claude: claudeActive,
-      codex: codexStatus("review_required", [
-        group("core", "Codex core hooks", "active", [hook("PreToolUse", "active")]),
-        group("skill-visibility", "Skill visibility", "review_required", [hook("PostToolUse", "review_required")]),
-        group("telemetry", "Token Telemetry", "review_required", [hook("SessionStart", "active"), hook("PostToolUse", "review_required")]),
-      ]),
+  const routeLaunch = async (page, reply) => {
+    const launches = [];
+    await page.route("**/api/config/hooks/*/review", (route) => {
+      launches.push(route.request().postDataJSON());
+      return route.fulfill({ json: typeof reply === "function" ? reply() : reply });
     });
+    return launches;
+  };
+  const returnToPortal = (page) => page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+
+  test("Settings, Tokens, and Home offer selective review in Codex; Agents does not", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex, claude]) }));
+    await routeStatuses(page, { claude: claudeActive, codex: pendingReview() });
+    const launches = await routeLaunch(page, { launched: true });
 
     await page.goto("/settings");
     const notice = page.locator("#hook-readiness portal-notice");
     await expect(notice).toHaveCount(1);
     await expect(notice).toHaveClass(/notice-warning/);
     await expect(notice.locator("[data-slot=title]")).toHaveText("Codex hooks need review");
-    await expect(notice.locator("[data-slot=message]")).toContainText("Codex app, open Settings → Hooks");
-    await expect(notice.getByText("Terminal alternative")).toBeVisible();
-    await expect(notice.locator("[data-slot=command]")).toBeHidden();
-    await notice.getByText("Terminal alternative").click();
-    await expect(notice.locator("[data-slot=command]")).toHaveText(reviewCommand);
+    await expect(notice.locator("[data-slot=message]")).toContainText("trust only those");
+    await expect(notice.locator("[data-slot=message]")).toContainText("rather than choosing Trust all");
+    await expect(notice.getByText("In the Codex app, the same review is under Settings → Hooks.")).toBeVisible();
     await expect(notice.getByRole("listitem")).toHaveText(["Skill visibility: PostToolUse", "Token Telemetry: PostToolUse"]);
+    await expect(notice.getByRole("button", { name: "Open Codex hook review" })).toBeVisible();
+    await expect(notice.getByRole("button", { name: "Copy command" })).toBeVisible();
+    await expect(notice.getByRole("button", { name: "Check again" })).toBeVisible();
+    await expect(notice.getByRole("button", { name: "Later" })).toHaveCount(0);
+    await notice.getByText("Terminal command").click();
+    await expect(notice.locator("[data-slot=command]")).toHaveText(reviewCommand);
+    // Nothing opens on its own: no modal, no terminal launch without a click.
+    await expect(page.locator("dialog[open]")).toHaveCount(0);
+    expect(launches).toHaveLength(0);
 
     await page.goto("/");
     await expect(page.locator("#home-hook-readiness [data-slot=title]")).toHaveText("Codex hooks need review");
@@ -181,19 +203,98 @@ test.describe("hook readiness warning", () => {
     await page.goto("/agents");
     await expect(page.getByRole("heading", { name: "Available Agent Tools" })).toBeVisible();
     await expect(page.getByText("Codex hooks need review")).toHaveCount(0);
+    expect(launches).toHaveLength(0);
   });
 
-  test("names missing package hooks and tells the user to reapply the package", async ({ page }) => {
+  test("opening review sends no command, and returning to the portal shows what is left", async ({ page }) => {
     await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex]) }));
-    await routeStatuses(page, {
-      codex: codexStatus("missing", [group("skill-visibility", "Skill visibility", "missing", [hook("PostToolUse", "missing")])]),
-    });
+    let current = pendingReview();
+    const reads = await routeStatuses(page, { codex: () => current });
+    const launches = await routeLaunch(page, { launched: true });
+
+    await page.goto("/settings");
+    const mount = page.locator("#hook-readiness");
+    await mount.getByRole("button", { name: "Open Codex hook review" }).click();
+    await expect(mount.getByRole("status")).toHaveText(/Codex opened in a terminal/);
+    expect(launches).toEqual([{}]);
+
+    // The user trusted one hook in Codex and deferred the other.
+    current = codexStatus("review_required", [
+      group("skill-visibility", "Skill visibility", "active", [hook("PostToolUse", "active")]),
+      group("telemetry", "Token Telemetry", "review_required", [hook("PostToolUse", "review_required")]),
+    ], { reviewRevision: "rev-2" });
+    const before = reads.length;
+    await returnToPortal(page);
+    await expect(mount.getByRole("listitem")).toHaveText(["Token Telemetry: PostToolUse"]);
+    expect(reads.slice(before).every((read) => read.fresh)).toBe(true);
+
+    // Check again after trusting the rest: the notice says review is done and when hooks start.
+    current = allActive();
+    await mount.getByRole("button", { name: "Check again" }).click();
+    await expect(mount.locator("[data-slot=title]")).toHaveText("Codex hooks reviewed");
+    await expect(mount.locator("[data-slot=message]")).toContainText("next Codex session");
+    await expect(mount.getByRole("button", { name: "Open Codex hook review" })).toHaveCount(0);
+  });
+
+  test("a failed launch keeps the copy-command route, and a review finished elsewhere updates in place", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex]) }));
+    let current = pendingReview();
+    await routeStatuses(page, { codex: () => current });
+    let reply = { launched: false, reason: "launch_failed", error: "open exited 1" };
+    await routeLaunch(page, () => reply);
+
+    await page.goto("/settings");
+    const mount = page.locator("#hook-readiness");
+    await mount.getByRole("button", { name: "Open Codex hook review" }).click();
+    await expect(mount.getByRole("status")).toHaveText(/Copy the command below/);
+    await expect(mount.locator("[data-slot=command]")).toBeVisible();
+    await expect(mount.getByRole("button", { name: "Copy command" })).toBeVisible();
+
+    current = allActive();
+    reply = { launched: false, reason: "no_review", status: current };
+    await mount.getByRole("button", { name: "Open Codex hook review" }).click();
+    await expect(mount.locator("[data-slot=title]")).toHaveText("Codex hooks reviewed");
+  });
+
+  test("without a tested terminal launcher the notice offers only the command", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex]) }));
+    await routeStatuses(page, { codex: { ...pendingReview(), reviewLaunch: { supported: false } } });
     await page.goto("/settings");
     const notice = page.locator("#hook-readiness portal-notice");
-    await expect(notice.locator("[data-slot=title]")).toHaveText("Codex hooks are missing");
-    await expect(notice.locator("[data-slot=message]")).toContainText("Turn the package off and back on in Agents");
-    await expect(notice.locator("[data-slot=command]")).toBeHidden();
-    await expect(notice.getByRole("listitem")).toHaveText(["Skill visibility: PostToolUse"]);
+    await expect(notice.getByRole("button", { name: "Copy command" })).toBeVisible();
+    await expect(notice.getByRole("button", { name: "Open Codex hook review" })).toHaveCount(0);
+  });
+
+  test("missing hooks name their remedy and offer no review; review still shows beside them", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex]) }));
+    await routeStatuses(page, {
+      codex: codexStatus("missing", [
+        group("core", "Codex core hooks", "missing", [hook("PreToolUse", "missing")]),
+        group("skill-visibility", "Skill visibility", "missing", [hook("PostToolUse", "missing")]),
+        group("telemetry", "Token Telemetry", "review_required", [hook("PostToolUse", "review_required")]),
+      ], { reviewRevision: "rev-1" }),
+    });
+    await page.goto("/settings");
+    const notices = page.locator("#hook-readiness portal-notice");
+    await expect(notices).toHaveCount(2);
+    const review = notices.filter({ hasText: "Codex hooks need review" });
+    await expect(review.getByRole("listitem")).toHaveText(["Token Telemetry: PostToolUse"]);
+    await expect(review.getByRole("button", { name: "Open Codex hook review" })).toBeVisible();
+    const missing = notices.filter({ hasText: "Codex hooks are missing" });
+    await expect(missing.locator("[data-slot=message]")).toContainText("Turn the package off and back on in Agents");
+    await expect(missing.locator("[data-slot=message]")).toContainText("roborepo bundle apply hooks");
+    await expect(missing.getByRole("listitem")).toHaveText(["Codex core hooks: PreToolUse", "Skill visibility: PostToolUse"]);
+    await expect(missing.getByRole("button", { name: "Open Codex hook review" })).toHaveCount(0);
+  });
+
+  test("turned-off hooks point to Codex settings, not to trust review", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex]) }));
+    await routeStatuses(page, { codex: codexStatus("inactive", [group("telemetry", "Token Telemetry", "inactive", [hook("Stop", "inactive")])]) });
+    await page.goto("/settings");
+    const notice = page.locator("#hook-readiness portal-notice");
+    await expect(notice.locator("[data-slot=title]")).toHaveText("Codex hooks are turned off");
+    await expect(notice.locator("[data-slot=message]")).toContainText("turn the listed RoboRepo hooks back on");
+    await expect(notice.getByRole("button", { name: "Open Codex hook review" })).toHaveCount(0);
   });
 
   test("says the state is unknown when the harness runtime cannot report", async ({ page }) => {
@@ -206,17 +307,12 @@ test.describe("hook readiness warning", () => {
     await expect(notice.locator("[data-slot=title]")).toHaveText("Codex hook status is unknown");
     await expect(notice.locator("[data-slot=message]")).toContainText("has been opened at least once");
     await expect(notice.locator("[data-slot=affected]")).toBeHidden();
+    await expect(notice.getByRole("button", { name: "Open Codex hook review" })).toHaveCount(0);
   });
 
-  test("stays hidden when every hook is active, or only core hooks are missing", async ({ page }) => {
+  test("stays hidden when every hook is active", async ({ page }) => {
     await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex, claude]) }));
-    const reads = await routeStatuses(page, {
-      claude: claudeActive,
-      codex: codexStatus("missing", [
-        group("core", "Codex core hooks", "missing", [hook("PreToolUse", "missing")]),
-        group("telemetry", "Token Telemetry", "active", [hook("Stop", "active")]),
-      ]),
-    });
+    const reads = await routeStatuses(page, { claude: claudeActive, codex: allActive() });
     await page.goto("/settings");
     await expect.poll(() => reads.length).toBe(2);
     await expect(page.locator("#hook-readiness")).toBeHidden();
@@ -229,6 +325,57 @@ test.describe("hook readiness warning", () => {
     await expect(page.locator("#telemetry-toggle")).toHaveText("Enable");
     await expect(page.locator("#hook-readiness")).toBeHidden();
     expect(reads).toHaveLength(0);
+  });
+
+  test("a hook-changing operation offers review once per pending set, and Later leaves the notice", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex]) }));
+    let current = allActive();
+    const reads = await routeStatuses(page, { codex: () => current });
+    await page.route("**/api/config/packages", (route) => route.fulfill({ json: { ok: true, hookHarnesses: ["codex"] } }));
+    const offers = page.getByRole("region", { name: "Hook review" });
+
+    await page.goto("/settings");
+    await page.locator("#telemetry-toggle").click();
+    await expect.poll(() => reads.some((read) => read.fresh)).toBe(true);
+    await expect(offers.locator("portal-notice")).toHaveCount(0); // nothing awaits review: no offer
+
+    current = pendingReview("rev-1");
+    await page.locator("#telemetry-toggle").click();
+    const card = offers.locator("portal-notice");
+    await expect(card).toHaveCount(1);
+    await expect(card.getByRole("button", { name: "Open Codex hook review" })).toBeVisible();
+    await expect(page.locator("dialog[open]")).toHaveCount(0);
+    await card.getByRole("button", { name: "Later" }).click();
+    await expect(offers.locator("portal-notice")).toHaveCount(0);
+    await expect(page.locator("#hook-readiness [data-slot=title]")).toHaveText("Codex hooks need review");
+
+    // The same pending set is not offered again, even after a reload.
+    const freshReads = () => reads.filter((read) => read.fresh).length;
+    await page.locator("#telemetry-toggle").click();
+    await expect.poll(freshReads).toBe(3);
+    await page.reload();
+    await page.locator("#telemetry-toggle").click();
+    await expect.poll(freshReads).toBe(4);
+    await expect(offers.locator("portal-notice")).toHaveCount(0);
+
+    // A changed definition or shifted trust key is a new set, offered once.
+    current = pendingReview("rev-2");
+    await page.locator("#telemetry-toggle").click();
+    await expect(offers.locator("portal-notice")).toHaveCount(1);
+  });
+
+  test("a bulk package change on Agents reads once and shows one combined offer", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex]) }));
+    const reads = await routeStatuses(page, { codex: pendingReview("rev-bulk") });
+    const config = await (await page.request.get("/api/config")).json();
+    await page.route("**/api/config/packages/bulk", (route) => route.fulfill({ json: { ok: true, status: 200, results: [], config, hookHarnesses: ["codex"] } }));
+    const section = config.behaviorView.find((entry) => entry.bulkToggle);
+    expect(section, "fixture needs a bulk-toggle section").toBeTruthy();
+    await page.goto("/agents");
+    const escaped = section.category.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    await page.getByRole("checkbox", { name: new RegExp(`^${escaped}: (Select|Deselect) All$`) }).dispatchEvent("click");
+    await expect(page.getByRole("region", { name: "Hook review" }).locator("portal-notice")).toHaveCount(1);
+    expect(reads.filter((read) => read.fresh)).toHaveLength(1);
   });
 });
 

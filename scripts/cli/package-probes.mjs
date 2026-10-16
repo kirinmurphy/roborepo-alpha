@@ -124,16 +124,22 @@ function probeHooks(component, desired, hookRecords) {
     desired,
     observed: expected.length > 0 && found === expected.length && scriptsPresent,
     owner: desired ? "roborepo" : "external",
-    detail: hookProbeDetail({ state, found, expected: expected.length, scriptsPresent, harness: component.harness }),
+    detail: hookProbeDetail({
+      state, found, expected: expected.length, scriptsPresent, harness: component.harness,
+      perHookTrust: (groups[0]?.hooks || []).some((hook) => hook.trust !== "not-required"),
+    }),
   });
 }
 
-function hookProbeDetail({ state, found, expected, scriptsPresent, harness }) {
+// A harness without per-hook trust (Claude) reports `not-required`, which proves the hook is
+// configured, not that every session runs it: Claude holds settings hooks in an interactive
+// session until the user trusts that workspace. So such hooks read "configured", never "active".
+function hookProbeDetail({ state, found, expected, scriptsPresent, harness, perHookTrust }) {
   const counts = `${found}/${expected} hook command(s) present`;
   if (!scriptsPresent) return `${counts}, script file(s) missing`;
   if (state === "review_required") return `${counts}, awaiting review in ${harnessDisplayName(harness)}`;
   if (state === "inactive") return `${counts}, disabled in ${harnessDisplayName(harness)}`;
-  if (state === "active") return `${counts}, active`;
+  if (state === "active") return `${counts}, ${perHookTrust ? "active" : "configured"}`;
   return counts;
 }
 

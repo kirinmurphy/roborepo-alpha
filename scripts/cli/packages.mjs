@@ -47,9 +47,9 @@ export function packageCommand(args = []) {
     case "create":
       return createPackage(rest);
     case "enable":
-      return enablePackage(rest);
+      return enablePackageCommand(rest);
     case "disable":
-      return disablePackage(rest);
+      return disablePackageCommand(rest);
     case "validate":
       return validatePackages(rest);
     case "reconcile":
@@ -60,6 +60,27 @@ export function packageCommand(args = []) {
       console.error("usage: roborepo package list|inspect|status|create|enable|disable|validate|reconcile|adopt-live");
       process.exit(2);
   }
+}
+
+// `package enable|disable` from the terminal: once the change finishes, say whether any RoboRepo
+// hook it rewrote now awaits review. Portal and onboarding changes report their own way, so this
+// sits on the command, not inside enablePackage, which they also call.
+export function enablePackageCommand(rest) {
+  return withHookReviewHint(rest, () => enablePackage(rest));
+}
+
+export function disablePackageCommand(rest) {
+  return withHookReviewHint(rest, () => disablePackage(rest));
+}
+
+async function withHookReviewHint(rest, run) {
+  await run();
+  if (rest.includes("--dry-run")) return;
+  const ids = rest.filter((arg) => !arg.startsWith("--"));
+  const [{ hookHarnessesForPackages }, { printHookReviewHint }] = await Promise.all([
+    import("./hook-readiness-status.mjs"), import("./hook-review-guidance.mjs"),
+  ]);
+  await printHookReviewHint(hookHarnessesForPackages(ids));
 }
 
 function createPackage(rest) {
