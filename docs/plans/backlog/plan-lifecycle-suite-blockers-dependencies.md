@@ -5,7 +5,7 @@ next_action: Implement the blocker schema and domain mutation contract after the
 blocked_by: []
 blocked_reasons: []
 depends_on:
-  - plan-lifecycle-suite-workflow-navigation
+  - gqzjlzgx
 related:
   - plan-lifecycle-controls-and-filter-aware-toast
   - plan-lifecycle-readiness-validation-and-repair-prompts

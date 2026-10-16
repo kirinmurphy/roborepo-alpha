@@ -6,7 +6,6 @@ blocked_by: []
 depends_on:
   - a7bslb00
 related:
-  - plan-lifecycle-suite-workflow-navigation
   - skills-vs-commands-invocation-policy
 reviewed_commit: 40438eda32e957b61e0c99adfcc7a7664d623b95
 worktree: plan-suite-atomic-commands
@@ -88,7 +87,7 @@ behind CLI commands that every skill runs, not in one skill's references that th
   any later presentation change.
 - Worktree and branch cleanup, owned by [[a7bslb00]].
 - New lifecycle states. Ready, Review, and Icebox belong to
-  [[plan-lifecycle-suite-workflow-navigation]].
+  `plan-lifecycle-suite-workflow-navigation` (since deleted; superseded by [[gqzjlzgx]]).
 - Rewriting completed or archived plans that mention old names. They are history.
 
 ## Current state
@@ -153,7 +152,7 @@ When one is disabled, the pairing instruction cannot be followed, and nothing te
 
 `/integration-check <branch>` checks out an integration branch, syncs it, audits worktrees, validates
 active plans against the code, runs the test suite, and reviews every commit. The integration-branch
-workflow it serves is retired (see [[plan-lifecycle-suite-workflow-navigation]]). Its plan-validation
+workflow it serves is retired (see `plan-lifecycle-suite-workflow-navigation`). Its plan-validation
 logic is worth keeping.
 
 ## Proposed design
@@ -262,7 +261,7 @@ carries over from `integration-check`:
 - UI or manual checks that could not run are reported as unverified, never as passed.
 
 This plan targets the current lifecycle, where `/plan-close` evaluates an `active/` plan and moves
-it to `completed/` or `archived/`. [[plan-lifecycle-suite-workflow-navigation]] later inserts a
+it to `completed/` or `archived/`. `plan-lifecycle-suite-workflow-navigation` later inserts a
 Review state and changes the eligible source lifecycle to `review/`; `/plan-close` must read the
 domain lifecycle policy rather than embedding `active` as an enduring assumption.
 

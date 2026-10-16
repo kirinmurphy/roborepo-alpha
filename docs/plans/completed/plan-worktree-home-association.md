@@ -7,7 +7,6 @@ depends_on:
   - jqi1dof
 related:
   - qk4mz7t2
-  - plan-lifecycle-suite-workflow-navigation
 reviewed_commit: 14b1ed6
 worktree: plan-worktree-home-association
 ---
@@ -45,7 +44,8 @@ from that updated `main`, not from the existing in-flight worktree.
 - Requiring every active plan to have a worktree. Planning, blocked work, and manually managed work
   may legitimately remain unassociated.
 - Building the machine-local execution registry, session orchestration, `feature_branch` metadata,
-  or expanded lifecycle owned by [[plan-lifecycle-suite-workflow-navigation]].
+  or expanded lifecycle owned by `plan-lifecycle-suite-workflow-navigation` (since deleted;
+  superseded by [[gqzjlzgx]]).
 - Replacing Runtime's opaque `rootId`; it continues to identify a checkout path for Runtime and
   repository-registry purposes.
 - Changing repository lifecycle counts or showing completed plans as a fallback when no additional
@@ -134,7 +134,7 @@ changes without preserving branch commits. Verify the merged source and tests on
 
 ### Relationship to the lifecycle expansion
 
-[[plan-lifecycle-suite-workflow-navigation]] proposes a larger execution model with a portable
+`plan-lifecycle-suite-workflow-navigation` proposes a larger execution model with a portable
 `worktree_id`, feature-branch metadata, a machine-local registry, session launching, and new
 lifecycle states. This plan delivers only the narrow relationship Home and the current
 `plan-start` workflow need now. The later lifecycle plan must consume or deliberately migrate this
