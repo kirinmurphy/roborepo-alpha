@@ -216,14 +216,14 @@
         </div>
       </div>
     </template>
-    <!-- plan-completion.js: a progress ring and percent, or the done / merged badge. Shared by Home's
-         plan rows and <plan-status>. -->
+    <!-- plan-completion.js: the merged badge, then a progress ring and percent or the done badge.
+         Shared by Home's plan rows and <plan-status>. -->
     <template id="tpl-plan-completion">
       <span class="plan-completion">
+        <span class="plan-merged-badge" data-slot="merged" hidden>merged</span>
         <span class="plan-progress" data-slot="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"></span>
         <span class="plan-percent" data-slot="percent"></span>
         <span class="plan-complete-badge" data-slot="complete" hidden>done</span>
-        <span class="plan-merged-badge" data-slot="merged" hidden>merged</span>
       </span>
     </template>
     <template id="tpl-dtdd-row">
