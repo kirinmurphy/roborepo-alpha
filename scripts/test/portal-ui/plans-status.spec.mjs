@@ -1,6 +1,6 @@
 // The Plans card's status strip and the shared completion it carries: a progress ring, the `done`
-// badge once every task is checked, and the `merged` badge once the plan's worktree has landed —
-// the same join Home draws from its overview. The card keeps lifecycle, review state, and the next
+// badge once every task is checked, and beside either the `merged` badge once the plan's worktree
+// has landed — the same join Home draws from its overview. The card keeps lifecycle, review state, and the next
 // action out of the strip; the next action stays in the plan drawer.
 import fs from "node:fs";
 import os from "node:os";
@@ -79,7 +79,7 @@ test.describe("Plans card status", () => {
     await expect(card.getByRole("progressbar")).toHaveCount(0);
   });
 
-  test("a plan whose worktree has merged shows the merged badge on its card and in its drawer", async ({ page }) => {
+  test("a plan whose worktree has merged shows the merged badge beside its progress on its card and in its drawer", async ({ page }) => {
     const record = await planRecord(page, "Merged status plan");
     await patchHomeOverview(page, (overview) => {
       overview.repositories.push({ displayName: "Merged fixture", domains: landedWorktree(record) });
@@ -89,11 +89,13 @@ test.describe("Plans card status", () => {
     const badge = card.locator(".plan-merged-badge");
     await expect(badge).toHaveText("merged");
     await expect(badge).toHaveAttribute("title", "Merged into main");
-    await expect(card.getByRole("progressbar")).toHaveCount(0);
+    await expect(card.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "33");
+    await expect(card.locator(".plan-percent")).toHaveText("33%");
 
     await card.getByText("Merged status plan").click();
     const drawer = page.locator("dialog#drawer");
     await expect(drawer.locator("plan-status .plan-merged-badge")).toHaveText("merged");
+    await expect(drawer.locator("plan-status .plan-percent")).toHaveText("33%");
   });
 
   test("the drawer keeps the lifecycle and next action the card leaves out", async ({ page }) => {
