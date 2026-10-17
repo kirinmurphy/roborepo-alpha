@@ -729,7 +729,15 @@ Run on 2026-10-15 in the plan's worktree:
 
 ## Open questions
 
-None blocking.
+- **A live run of the validation loop and the new `/plan-review` flow.** The Not tested walkthrough
+  the user confirmed on 2026-10-16 predates both (`4357269e`), so no live session has exercised the
+  loop's subagent validator, its fix-and-recheck cycle, or the review packet. Options: (a) add an
+  unchecked `## Not tested` entry for a live run; honest by the plan's own rule, but approval and
+  `/plan-close` then wait on that run. (b) Record in the review that the confirmed walkthrough
+  predates the change and that only the prose checks and this review's own two validator passes
+  cover it; nothing waits, and the next real plan is the live run. Recommendation: (b), since this
+  review itself ran the loop end to end twice with real subagents. Blocks: the escalated finding in
+  `## Review`.
 
 ## Not tested
 
@@ -759,6 +767,43 @@ Independent review on 2026-10-15, in a separate session from the implementation,
       landing against the resolved branch. Covered in `plan-lifecycle-transitions-check.mjs`, which
       failed on the old code and passes now. Fixed by `/plan-execute` in the same chat session as
       this review, so the next `/plan-review` should run in a fresh session.
+
+Validator pass 1, after the validation-loop change (fresh-context subagent, full `main...HEAD` diff,
+at `302ef51a`):
+
+- [x] Portal action descriptions still say `/plan-review` runs "independent QA":
+      `manifests/platform/plan-lifecycle.json` (active and review Review actions). — fixed in review
+      (`01281500`)
+- [x] `plan-close`'s description routes "independent review or approval (plan-review)", the old
+      contract. — fixed in review (`01281500`)
+- [x] The plan's "Portal, packaging, and terminology" section still says review recommends
+      `plan-execute` while findings are open; the code and docs say `plan-review`. — fixed in review
+      (plan text)
+- [x] `plan-execute` tells a review plan whose worktree is gone to rerun `start`, which refuses a
+      review plan; only an active plan records a replacement worktree that way. — fixed in review
+      (`01281500`)
+- [x] `plan-review`'s inline rubric claims to be the same rubric but omits the paired-skill
+      constraints item. — fixed in review (`01281500`)
+- [x] `plan-review`'s report line lists three approval states of six (`not-approved`, `invalid`,
+      `unavailable` missing); `plan-close`'s omits `unavailable`. — fixed in review (`01281500`)
+- [ ] The confirmed Not tested walkthrough predates the validation loop and the new `/plan-review`
+      flow, so no live run covers them. — escalated to the user: add an unchecked Not tested entry,
+      or record that the walkthrough predates the change.
+- [x] The round-2 base finding says `712b2b21` "resolves it on `main` separately"; that commit is
+      only on `codex/portal-home-hello-guy-greeting`. — fixed in review (plan text)
+
+Validator pass 2 (fresh-context subagent, at `d676482b`):
+
+- [ ] The help list in `portal/plans/plan-drawer-partial.html` still says `/plan-review` reviews
+      "independently".
+- [ ] Validator findings sat under a custom heading, outside `### Findings`, so the portal counted
+      no open finding while the preflight saw one. Record them under `### Findings`.
+- [ ] The escalated Not tested finding has no Open Questions entry, which `validation-loop.md`
+      requires.
+- [ ] `scripts/cli/plans.mjs` grew to 390 lines, mixing the portal snapshot API with the
+      `roborepo plans` CLI handlers. Move the CLI into its own module.
+
+Round 2 and round 3 findings stay under their round headings as history; all are resolved.
 
 ### Verification
 
@@ -893,28 +938,6 @@ Verification at `e78d1313`:
   classes, the cap, and `/plan-review`'s step order. `roborepo skill render-commands --check`,
   `skill triggers --check` (8 fixtures), and `skill audit` (no unreachable references) pass.
 
-Validator pass 1 (fresh-context subagent, full `main...HEAD` diff, at `302ef51a`):
-
-- [x] Portal action descriptions still say `/plan-review` runs "independent QA":
-      `manifests/platform/plan-lifecycle.json` (active and review Review actions). — fixed in review
-      (`01281500`)
-- [x] `plan-close`'s description routes "independent review or approval (plan-review)", the old
-      contract. — fixed in review (`01281500`)
-- [x] The plan's "Portal, packaging, and terminology" section still says review recommends
-      `plan-execute` while findings are open; the code and docs say `plan-review`. — fixed in review
-      (plan text)
-- [x] `plan-execute` tells a review plan whose worktree is gone to rerun `start`, which refuses a
-      review plan; only an active plan records a replacement worktree that way. — fixed in review
-      (`01281500`)
-- [x] `plan-review`'s inline rubric claims to be the same rubric but omits the paired-skill
-      constraints item. — fixed in review (`01281500`)
-- [x] `plan-review`'s report line lists three approval states of six (`not-approved`, `invalid`,
-      `unavailable` missing); `plan-close`'s omits `unavailable`. — fixed in review (`01281500`)
-- [ ] The confirmed Not tested walkthrough predates the validation loop and the new `/plan-review`
-      flow, so no live run covers them. — escalated to the user: add an unchecked Not tested entry,
-      or record that the walkthrough predates the change.
-- [x] The round-2 base finding says `712b2b21` "resolves it on `main` separately"; that commit is
-      only on `codex/portal-home-hello-guy-greeting`. — fixed in review (plan text)
 - Base failure: `plan-suite-findings-check.mjs` (`UNKNOWN_PLAN_NAMESPACE`) fails the same way on an
   export of `main`.
 
