@@ -7,6 +7,7 @@ depends_on:
   - o9zwxuav
 related:
   - age4cm7r
+  - gqzjlzgx
   - skills-vs-commands-invocation-policy
 reviewed_commit: e43770079a37cd5f6b1b23f806280c432b756551
 worktree:
@@ -20,14 +21,14 @@ RoboRepo skills already reference other skills in prose through `## Paired Skill
 
 This plan adopts the dependency mechanism from [[o9zwxuav]] across the built-in skill catalog. It classifies existing cross-skill relationships as **required**, **recommended**, or **runtime-conditional**, updates package manifests to express the durable relationships, and keeps the skill body as the source of task-specific activation conditions.
 
-The same rollout creates the new non-selectable `implementation-review` skill and rewires `/session-close` and `/plan-close` to share it. This is the first concrete consumer of dependency-only skills, but the plan applies the model consistently across `plan-write`, `plan-promote`, `plan-start`, `technical-writing`, `javascript-typescript`, and the other built-in skills that already reference one another.
+The same rollout creates the new non-selectable `implementation-review` skill and rewires `/session-close`, `/plan-close`, `/plan-execute`'s validation loop, and `/plan-review` to share it. This is the first concrete consumer of dependency-only skills, but the plan applies the model consistently across `plan-write`, `plan-promote`, `plan-execute`, `technical-writing`, `javascript-typescript`, and the other built-in skills that already reference one another.
 
 ## Context
 
 Today the dependency model lives mostly in prose. For example:
 
 - `plan-write` and `plan-promote` always load `technical-writing`, but the package manifests do not require it;
-- `plan-write`, `plan-promote`, `plan-start`, and `technical-writing` conditionally load `code-style`, `javascript-typescript`, and `test-harness` based on the work;
+- `plan-write`, `plan-promote`, `plan-execute`, and `technical-writing` conditionally load `code-style`, `javascript-typescript`, and `test-harness` based on the work;
 - `javascript-typescript` conditionally loads `react`;
 - `session-close` conditionally loads `plan-write` when the session touched a plan;
 - `plan-close` pairs with `technical-writing` and `test-harness`;
@@ -83,9 +84,11 @@ The initial migration target is the current built-in skill catalog under `global
 | `plan-promote` | `code-style` | Plan specifies code ownership/placement | **recommends** | Conditional implementation guidance |
 | `plan-promote` | `javascript-typescript` | Plan touches JS/TS | **recommends** | Conditional implementation guidance |
 | `plan-promote` | `test-harness` | Plan proposes tests/verification | **recommends** | Conditional verification guidance |
-| `plan-start` | `code-style` | Work places/organizes code | **recommends** | Useful for implementation but not every plan contains code changes |
-| `plan-start` | `javascript-typescript` | Work touches JS/TS | **recommends** | Language-specific and conditional |
-| `plan-start` | `test-harness` | Work changes tests/verification/fixtures | **recommends** | Conditional verification guidance |
+| `plan-execute` | `implementation-review` | Every validation loop pass | **requires** | The validation loop's rubric is the shared implementation-quality rubric |
+| `plan-review` | `implementation-review` | Every review's validator pass | **requires** | The human review rechecks the synced work with the same rubric |
+| `plan-execute` | `code-style` | Work places/organizes code | **recommends** | Useful for implementation but not every plan contains code changes |
+| `plan-execute` | `javascript-typescript` | Work touches JS/TS | **recommends** | Language-specific and conditional |
+| `plan-execute` | `test-harness` | Work changes tests/verification/fixtures | **recommends** | Conditional verification guidance |
 | `technical-writing` | `plan-write` | Document lives under `docs/plans` | runtime reference only | Avoid a reciprocal package dependency with `plan-write`; `plan-write` owns plan schema/lifecycle when that document type is actually in scope |
 | `technical-writing` | `code-style` | Document specifies code ownership/placement | **recommends** | Conditional subject-matter constraint |
 | `technical-writing` | `javascript-typescript` | Document covers JS/TS | **recommends** | Conditional subject-matter constraint |
@@ -139,6 +142,8 @@ Examples:
 plan-write   -> requires technical-writing
 plan-promote -> requires technical-writing
 plan-close   -> requires implementation-review, test-harness
+plan-execute -> requires implementation-review
+plan-review  -> requires implementation-review
 session-close -> requires implementation-review
 ```
 
@@ -218,6 +223,16 @@ Use one severity model:
 
 Every finding names the concrete location, violated rule/pattern, fix, and risk. Generic cleanup advice is invalid.
 
+`/plan-execute` already carries a validator rubric in `references/validation-loop.md`, written in two
+parts so its rubric can move here unchanged: a checklist (acceptance criteria against code and
+tests, observable-outcome tests, docs of record, `## Not tested` entries, gate failures, paired-skill
+constraints) and a classification by consequence, `fix` / `escalate` / `base`, that decides who
+resolves a finding. Merge both into this skill: the checklist joins the rubric above, and the
+severity model and the consequence classes combine into one finding format, severity saying how much
+a finding matters and class saying who resolves it. The loop itself (roles, the five-pass cap, the
+`## Review` record) stays with each caller. `/plan-review` carries a short inline copy of the rubric
+until then; remove it in favor of the required dependency.
+
 ### 5. Refactor close workflows around shared contracts
 
 #### `/session-close`
@@ -228,13 +243,20 @@ Every finding names the concrete location, violated rule/pattern, fix, and risk.
 - Resolve `test-harness` as a recommendation when verification is relevant.
 - Resolve `plan-write` as a recommendation only when the session touched a plan or the user sends an open thread to backlog.
 
+#### `/plan-execute` and `/plan-review`
+
+- Require `implementation-review` for every validator pass. `/plan-execute` keeps its loop and the
+  submit gate; `/plan-review` keeps base synchronization, its fixes, the review packet, and approval.
+- Delete the rubric from `plan-execute/references/validation-loop.md` and the inline copy in
+  `plan-review`, keeping only how each caller runs and records a pass.
+
 #### `/plan-close`
 
 - Keep lifecycle validation, complete/incomplete/blocked/superseded/abandoned verdicts, `## Not tested`, landing checks, plan move, and server cleanup.
 - Require `test-harness` for repository-native completion verification.
 - Require `implementation-review` for the implementation-quality pass across the whole plan-owned implementation.
 - Recommend `technical-writing` for completion summary and `## Verification` prose.
-- A blocking/actionable implementation-review finding makes the plan incomplete; `/plan-close` reports it and leaves implementation to `/plan-start` rather than fixing missing product work itself.
+- A blocking/actionable implementation-review finding makes the plan incomplete; `/plan-close` reports it and leaves implementation to `/plan-execute` rather than fixing missing product work itself.
 
 ### 6. Keep package relationships and skill references in sync
 
@@ -273,7 +295,8 @@ For each migrated skill:
 
 ### Phase 4 — Close workflow adoption
 
-- [ ] Add `implementation-review` to `session-close.requires` and `plan-close.requires`.
+- [ ] Add `implementation-review` to `session-close.requires`, `plan-close.requires`, `plan-execute.requires`, and `plan-review.requires`.
+- [ ] Move the validator rubric out of `plan-execute/references/validation-loop.md` and `plan-review`'s inline copy into `implementation-review`.
 - [ ] Add `test-harness` to `plan-close.requires` and `session-close.recommends`.
 - [ ] Add `technical-writing` to `plan-close.recommends` and `plan-write` to `session-close.recommends`.
 - [ ] Remove the duplicated review rubric and risk-checkpoint list from `session-close`.
@@ -284,7 +307,7 @@ For each migrated skill:
 
 - [ ] `plan-write`: require `technical-writing`; recommend `code-style`, `javascript-typescript`, `test-harness`.
 - [ ] `plan-promote`: require `technical-writing`; recommend `code-style`, `javascript-typescript`, `test-harness`.
-- [ ] `plan-start`: recommend `code-style`, `javascript-typescript`, `test-harness`.
+- [ ] `plan-execute`: recommend `code-style`, `javascript-typescript`, `test-harness`.
 - [ ] `technical-writing`: recommend `code-style`, `javascript-typescript`, `test-harness`; keep `plan-write` as a runtime-only reference for `docs/plans` to avoid inverted ownership/cycles.
 - [ ] `javascript-typescript`: recommend `react`.
 - [ ] Preserve `supabase-integration-testing -> test-harness` as fallback prose, not a package dependency.
@@ -307,7 +330,7 @@ For each migrated skill:
 - [ ] Conditional recommendations do not prompt merely because a parent package is enabled.
 - [ ] A relevant disabled recommendation prompts once at workflow runtime with enable/skip choices; skipping does not block the parent.
 - [ ] `implementation-review` has no independent toggle or slash command and is inspectable through dependency presentation.
-- [ ] `session-close` and `plan-close` use the same implementation-review severity/risk contract while preserving different scope and lifecycle behavior.
+- [ ] `session-close`, `plan-close`, `plan-execute`, and `plan-review` use the same implementation-review severity/risk contract while preserving different scope and lifecycle behavior.
 - [ ] `plan-close` uses `test-harness` as required verification guidance; `session-close` can proceed after an explicit skip of its recommended verification.
 - [ ] The built-in skill audit has no remaining duplicated generic package-status prompt procedure where the shared relationship resolver applies.
 - [ ] `npm run test:unit` passes package-catalog, dependency, skill/reference, and plan-suite characterization checks.
