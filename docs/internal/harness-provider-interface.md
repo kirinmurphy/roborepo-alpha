@@ -152,6 +152,51 @@ Each capability maps to a required adapter group and method set, defined in
 | `session-launch` | `session` | `launch` |
 | `session-resume` | `session` | `resume` |
 
+### Hooks: read, merge order, and readiness
+
+`hooks.read({ cwd, hooksPath })` returns a promise of one record per installed hook handler:
+`{ event, command, sourcePath, trust, enabled, identity? }`. `event` uses the fragment spelling
+(`PostToolUse`) so records compare directly with `hooks` resources. `trust` is one of `trusted`,
+`managed`, `untrusted`, `modified`, `not-required`, or `unknown`. The optional `identity` is an
+opaque digest that changes exactly when the harness would ask for review again (Codex folds the
+trust key and definition hash into it); it is never trust material itself.
+
+| Provider | `read` | Trust source |
+| --- | --- | --- |
+| Claude | Reads the `hooks` key of `settings.json` | Always `not-required`: Claude has no per-hook approval. It is not proof a hook runs: an interactive session holds settings hooks until the user trusts the workspace, while `-p` and SDK sessions treat it as trusted. Package status says "configured" rather than "active" for these hooks |
+| Codex | Asks `codex app-server` for `hooks/list`, using the executable `selectedHarnessExecutable` picks (a `PATH` CLI first) | Codex's own `trustStatus`; `isManaged` maps to `managed`. A missing, old, or slow runtime returns the file's entries with `trust: "unknown"` instead of throwing |
+| Gemini | Still the `notYetMigrated` stub; readiness skips it | — |
+
+Two optional `hooks` methods feed the readiness comparison: `core()` returns the harness's core hook
+fragment, and `guidance()` returns next-step copy for a harness that gates hooks on trust (Codex):
+`{ command, review, review_required, reviewApp, inactive, terminalHint }`. `review` is
+`{ executable, args }`, the binary that opens the harness's own review screen, or null; Codex picks
+it with `selectedHarnessExecutable(manifest, { prefer: "desktop" })`, so the CLI bundled with the
+desktop app comes before one on `PATH`. `command` is the same binary, shell-quoted for copying.
+Shared code never hardcodes either.
+
+Core hooks are expected only once installed by choice: when a harness's core hooks arrive through a
+`hook_fragment` manifest row, readiness includes them only if the bundle holding that row is
+selected (`scripts/cli/core-hook-bundle.mjs`). Claude's core hooks ride in its root
+config, which every install applies, so they are always expected.
+
+`scripts/harnesses/hook-readiness.mjs` builds the expected set from `core()` plus enabled packages'
+`hooks` resources for that harness, compares it with `read()`, and reports one state per group:
+`active`, `review_required`, `inactive`, `missing`, or `unknown`, plus `reviewRevision`: a digest of
+the pending RoboRepo hooks' identities, or null when none await review. Surfaces offer review once
+per revision. Records from another `sourcePath` never satisfy an expected hook, and a pending hook
+RoboRepo did not install never enters the revision. Package status (`probeHooks`), the portal route
+`/api/config/hooks/<harness>/status`, `doctor --installed`, and the CLI completion hint
+(`scripts/cli/hook-review-guidance.mjs`) all consume it.
+
+`hooks.merge` order differs on purpose. Claude and Gemini prepend a fragment's entries, because
+Claude treats the first decisive hook result as final. Codex appends, because Codex keys trust by
+position (`<file>:<event>:<group index>:<handler index>`) and prepending would revoke trust the
+user already granted. Codex launches matching command hooks concurrently, so order carries no
+decision priority there. Core Codex hooks go through the same merge: the `hooks` bundle's
+`hook_fragment` row (`scripts/cli/shared-target-rows.mjs`) appends them after package hooks that
+are already installed.
+
 ### Migration state — read this before you are surprised
 
 Not every capability's logic lives in its adapter yet. Several still live in `scripts/cli/*.mjs` and

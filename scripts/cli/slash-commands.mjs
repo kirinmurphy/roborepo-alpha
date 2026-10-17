@@ -10,7 +10,7 @@ import {
   slashCommandLiveDir,
   skillFilePath,
 } from "./skill-command-config.mjs";
-import { resolvesIntoRepo } from "./hook-composition.mjs";
+import { resolvesIntoRepo } from "./repo-links.mjs";
 
 function readText(relPath) {
   return fs.readFileSync(path.join(repoRoot, relPath), "utf8").replace(/\r\n/g, "\n");

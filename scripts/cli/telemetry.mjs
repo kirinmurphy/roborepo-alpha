@@ -22,7 +22,8 @@ import { readAppendedLines } from "./jsonl-tail.mjs";
 import { startPortalServer } from "./portal-server.mjs";
 import { computePortalSourceHash } from "./portal-source-hash.mjs";
 import { readConfigSnapshot, loadConfigSource } from "./config.mjs";
-import { readCodexTelemetryHookStatus } from "./codex-hook-status.mjs";
+import { hookHarnessesForPackages, invalidateHookReadiness, reportPackageHookChange } from "./hook-readiness-status.mjs";
+import { launchHookReview, loadHookReviewStatus } from "./hook-review-launch.mjs";
 import { refreshHarnessesAndApply } from "./portal-harness-refresh.mjs";
 import { mutatePackage, setSkillInstalled, setBehaviorBucket, setCommandBucket } from "./config-mutate.mjs";
 import { loadPlansSnapshot, loadCachedPlansSnapshot, loadPlanDocument, buildPlansPrompt, updatePlanPriority, refreshPlans } from "./plans.mjs";
@@ -370,7 +371,7 @@ function wireBinSymlink() {
 // uses), then writes the result through the same drift-tracked-for-Claude/plain-for-Codex path
 // hook-composition.mjs uses — never two independently-maintained hook-write implementations.
 function wireCaptureHooks(harness) {
-  const filePath = hookFilePath(harness, { claudeSettingsPath: rootConfigActive.claude });
+  const filePath = hookFilePath(harness, { rootConfigPath: rootConfigActive[harness] });
   const { changed, content } = getHarnessProvider(harness).adapters.telemetry.wireCaptureHooks(filePath);
   if (changed) {
     writeHooksFile(harness, filePath, content);
@@ -390,6 +391,8 @@ async function telemetryEnable(args) {
   console.log("telemetry: enabled");
   console.log("note: capture adds a small amount of overhead to every tool call (reads the transcript to size the latest turn).");
   telemetryStatus([]);
+  const { printHookReviewHint } = await import("./hook-review-guidance.mjs");
+  await printHookReviewHint(hookHarnessesForPackages(["telemetry"]));
 }
 
 async function telemetryDisable(args) {
@@ -819,10 +822,14 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     loadTelemetryAnalysis: (body) => loadTelemetryAnalysisRequest(body),
     loadTelemetryGuide: () => loadTelemetryGuide(),
     loadConfig: () => readConfigSnapshot(),
-    loadCodexHookStatus: () => readCodexTelemetryHookStatus(),
+    loadHookReadiness: (harness, options) => loadHookReviewStatus(harness, options),
+    launchHookReview: (harness) => launchHookReview(harness),
     loadSetupState: () => loadSetupState(),
-    refreshHarnesses: () => refreshHarnessesAndApply(),
-    setHarnessEnabled: (id, enabled) => setHarnessEnabled(id, enabled),
+    // Both can rewrite hook files, so cached readiness is dropped once they finish.
+    refreshHarnesses: () => refreshHarnessesAndApply().finally(invalidateHookReadiness),
+    setHarnessEnabled: (id, enabled) => {
+      try { return setHarnessEnabled(id, enabled); } finally { invalidateHookReadiness(); }
+    },
     loadConfigSource: (params) => loadConfigSource(params),
     loadPlans: (params) => loadPlansSnapshot(params),
     loadPlanDocument: (params) => loadPlanDocument(params),
@@ -861,12 +868,13 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
       if (payload.autoDiscovery?.enabled) startAutoDiscoveryScan();
       return afterSourceChange(payload);
     },
-    mutatePackage: (id, enabled) => mutatePackage(id, enabled),
+    mutatePackage: async (id, enabled) => reportPackageHookChange(await mutatePackage(id, enabled), [id]),
     mutateSkill: (id, enabled) => setSkillInstalled(id, enabled),
     // Section-level bulk enable/disable (portal bulkToggle sections). Lazy import: keeps the
     // batch module (and its reconcile dependency) out of every non-portal code path.
     bulkPackageChange: (ids, enabled) =>
-      import("./config-bulk.mjs").then((m) => m.applyBulkPackageChange(ids, enabled)),
+      import("./config-bulk.mjs").then((m) => m.applyBulkPackageChange(ids, enabled))
+        .then((result) => reportPackageHookChange(result, ids)),
     mutateBehavior: (behaviorId, bucket) => setBehaviorBucket(behaviorId, bucket),
     mutateCommand: (tokens, bucket) => setCommandBucket(tokens, bucket),
     // Managed cleanup, shared with `roborepo uninstall` so both consume one implementation of what

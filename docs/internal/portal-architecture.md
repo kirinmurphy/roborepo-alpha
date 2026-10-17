@@ -266,6 +266,25 @@ confirmation would add a step without adding information. The limits on that:
   page, and stop when it leaves. Agents relies on its existing poll. No page polls when no harness
   banner is showing.
 
+## Hook Review Handoff
+
+RoboRepo reports whether its hooks will run and hands the user to the harness's own review screen.
+It never sends or stores a trust decision.
+
+| Piece | Where | Role |
+| --- | --- | --- |
+| Status read | `GET /api/config/hooks/<harness>/status[?fresh=1]`, `loadHookReviewStatus` in `scripts/cli/hook-review-launch.mjs` | Readiness from `scripts/cli/hook-readiness-status.mjs`, plus `reviewLaunch.supported` |
+| Cache | `scripts/cli/hook-readiness-status.mjs` | One read per harness for 30 seconds, because the Codex read starts an app-server. `fresh` skips it, joining a read started within the last second. `invalidateHookReadiness()` drops it, in-flight reads included |
+| Change reporting | `reportPackageHookChange` wraps `mutatePackage` and `bulkPackageChange` in `telemetry.mjs` | Invalidates the cache and adds `hookHarnesses` to the response: the harnesses whose hooks the change rewrote. Harness refresh and enable invalidate too |
+| Launch | `POST /api/config/hooks/<harness>/review`, body `{}` | Rechecks readiness fresh; if review is still pending, opens the provider's `hooks.guidance().review` binary in a terminal through `scripts/cli/terminal-launch.mjs`. Any body field is a 400: the executable, arguments, and working directory are the server's alone |
+| Notices | `portal/shared/hook-readiness.js` | Home, Settings, and Tokens: a review notice with **Open**, **Copy command**, and **Check again**, plus one notice for the worst other state with its own remedy. Re-reads fresh when the page regains focus while a review is pending |
+| One-time offer | `portal/shared/hook-review-offer.js` | After a response carrying `hookHarnesses`: one fresh read per harness, then a nonmodal card with **Later**, shown once per `reviewRevision` (remembered in `localStorage`) |
+
+The terminal launcher writes a `.command` script under `<stateRoot>/terminal-launch/` and hands it
+to `open`, so it needs no macOS Automation permission. Other platforms report no launch support,
+and the portal shows only **Copy command**. A launch is not evidence of approval; only a later read
+clears `review_required`.
+
 ## Repository Overview Aggregation
 
 Home and repository detail share `scripts/cli/repository-overview.mjs`. The service anchors its

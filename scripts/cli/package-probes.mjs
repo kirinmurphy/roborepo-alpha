@@ -1,14 +1,17 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { repoRoot } from "./paths.mjs";
+import { harnessHome, repoRoot, rootConfigActive } from "./paths.mjs";
+import { hookFilePath } from "./hook-composition.mjs";
+import { compareHookReadiness, fragmentHooks } from "../harnesses/hook-readiness.mjs";
+import { hookRecordsFromFile } from "../harnesses/root-config-hooks.mjs";
+import { getHarnessProvider } from "../harnesses/registry.mjs";
 import { stateSkillsDir, telemetryDir } from "./state-paths.mjs";
 import { codexStatusLineIncludes, readHarnessConfig, packageRuntimeAssetDestination } from "./package-harness-config.mjs";
 import { effectiveEnabledIds, knownHarnessIds } from "./rules-render.mjs";
 
 const CLAUDE_SETTINGS = path.join(os.homedir(), ".claude", "settings.json");
 const CODEX_CONFIG = path.join(os.homedir(), ".codex", "config.toml");
-const CODEX_HOOKS = path.join(os.homedir(), ".codex", "hooks.json");
 const LIVE_RULE_FILES = {
   claude: path.join(os.homedir(), ".claude", "CLAUDE.md"),
   codex: path.join(os.homedir(), ".codex", "AGENTS.md"),
@@ -103,35 +106,45 @@ function probeCommand(component, desired) {
   });
 }
 
-function probeHooks(component, desired, settings) {
-  const fragment = readJson(path.join(repoRoot, component.source), {});
-  const liveHooks = component.harness === "codex"
-    ? readJson(CODEX_HOOKS, {}).hooks || readJson(CODEX_HOOKS, {})
-    : settings.hooks || {};
-  let expected = 0;
-  let found = 0;
-  for (const [event, entries] of Object.entries(fragment)) {
-    const liveEntries = liveHooks[event] || [];
-    for (const entry of entries) {
-      const cmd = entry.hooks?.[0]?.command;
-      if (!cmd) continue;
-      expected += 1;
-      if (liveEntries.some((live) => (live.hooks || []).some((hook) => hook.command === cmd))) {
-        found += 1;
-      }
-    }
-  }
+// `hookRecords` (harness id -> hooks.read records) carries trust state from callers that already
+// awaited the provider's read. Without it, the installed entries are read from the hook file and
+// trust stays "unknown": package status is synchronous and must not spawn a harness runtime.
+function probeHooks(component, desired, hookRecords) {
+  const hooksPath = hookFilePath(component.harness, { rootConfigPath: rootConfigActive[component.harness] });
+  const observed = hookRecords?.get(component.harness)
+    ?? hookRecordsFromFile(hooksPath, { trust: "unknown" });
+  const expected = fragmentHooks(readJson(path.join(repoRoot, component.source), {}));
+  const { state, groups } = compareHookReadiness(
+    [{ owner: component.source, label: component.source, hooks: expected }], observed, { hooksPath });
+  const found = (groups[0]?.hooks || []).filter((hook) => hook.state !== "missing").length;
   const scripts = component.scripts || [];
   const scriptsPresent = scripts.every((relPath) =>
-    fs.existsSync(path.join(os.homedir(), `.${component.harness}`, "hooks", path.basename(relPath))));
+    fs.existsSync(path.join(harnessHome[component.harness], "hooks", path.basename(relPath))));
   return componentResult(component, {
     desired,
-    observed: expected > 0 && found === expected && scriptsPresent,
+    observed: expected.length > 0 && found === expected.length && scriptsPresent,
     owner: desired ? "roborepo" : "external",
-    detail: scripts.length && !scriptsPresent
-      ? `${found}/${expected} hook command(s) present, script file(s) missing`
-      : `${found}/${expected} hook command(s) present`,
+    detail: hookProbeDetail({
+      state, found, expected: expected.length, scriptsPresent, harness: component.harness,
+      perHookTrust: (groups[0]?.hooks || []).some((hook) => hook.trust !== "not-required"),
+    }),
   });
+}
+
+// A harness without per-hook trust (Claude) reports `not-required`, which proves the hook is
+// configured, not that every session runs it: Claude holds settings hooks in an interactive
+// session until the user trusts that workspace. So such hooks read "configured", never "active".
+function hookProbeDetail({ state, found, expected, scriptsPresent, harness, perHookTrust }) {
+  const counts = `${found}/${expected} hook command(s) present`;
+  if (!scriptsPresent) return `${counts}, script file(s) missing`;
+  if (state === "review_required") return `${counts}, awaiting review in ${harnessDisplayName(harness)}`;
+  if (state === "inactive") return `${counts}, disabled in ${harnessDisplayName(harness)}`;
+  if (state === "active") return `${counts}, ${perHookTrust ? "active" : "configured"}`;
+  return counts;
+}
+
+function harnessDisplayName(harness) {
+  return getHarnessProvider(harness).manifest.displayName;
 }
 
 function probePermissions(component, desired, settings) {
@@ -331,7 +344,7 @@ function packageStatus({ desired, components }) {
   return components.some((component) => component.state === "external") ? "external" : "disabled";
 }
 
-export function buildPackageLiveState(packages) {
+export function buildPackageLiveState(packages, { hookRecords = null } = {}) {
   const enabledIds = new Set(effectiveEnabledIds(packages));
   const settings = readJson(CLAUDE_SETTINGS, {});
   const telemetryState = readJson(path.join(telemetryDir, "state.json"), null);
@@ -346,7 +359,7 @@ export function buildPackageLiveState(packages) {
       const componentDesired = baseDesired;
       if (component.type === "rules") components.push(probeRules(component, componentDesired));
       else if (component.type === "command") components.push(probeCommand(component, componentDesired));
-      else if (component.type === "hooks") components.push(probeHooks(component, componentDesired, settings));
+      else if (component.type === "hooks") components.push(probeHooks(component, componentDesired, hookRecords));
       else if (component.type === "permissions") components.push(probePermissions(component, componentDesired, settings));
       else if (component.type === "codex_tool_approvals") components.push(probeCodexToolApprovals(component, componentDesired));
       else if (component.type === "plugin") components.push(probePlugin(component, componentDesired, settings));

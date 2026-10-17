@@ -6,15 +6,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo 'jcodemunch: use resolve_repo, search_symbols, get_file_outline, find_references, get_context_bundle for code exploration. Avoid native source reads/searches after jcodemunch has enough context.'"
-          }
-        ]
-      },
-      {
-        "matcher": "startup|resume",
-        "hooks": [
-          {
-            "type": "command",
             "command": "count=0; for d in \"${HOME}/.codex/skills\"/*/; do name=\"$(basename \"${d%/}\")\"; case \"${name}\" in .*) continue;; esac; [ -L \"${d%/}\" ] || count=$((count+1)); done; for d in \"${HOME}/.claude/skills\"/*/; do name=\"$(basename \"${d%/}\")\"; case \"${name}\" in .*) continue;; esac; [ -L \"${d%/}\" ] || count=$((count+1)); done; [ \"${count}\" -gt 0 ] && echo \"unmanaged skills: ${count} — run 'roborepo skill adopt <name>' to version-control\" || true"
           }
         ]

@@ -74,6 +74,20 @@ try {
   app(path.join(appRoot, "Claude.app"), "com.anthropic.claudefordesktop");
   assert.match(detectHarnessProvider(claude, options).warnings.join(" "), /Code tab/);
 
+  // The no-runtime warning's product copy comes from the manifest's parentApp.setupHint; without
+  // one, discovery falls back to a sentence that names no product detail. Either way it keeps the
+  // ", then run roborepo harness refresh." ending the portal rewrites (harness-warning.js).
+  {
+    const withHint = structuredClone(claude);
+    const candidate = withHint.platforms.darwin.detection.desktopCandidates[0];
+    candidate.parentApp.setupHint = "Open the fixture app's Setup pane to install Claude Code";
+    assert.deepEqual(detectHarnessProvider(withHint, options).warnings,
+      ["Open the fixture app's Setup pane to install Claude Code, then run roborepo harness refresh."]);
+    delete candidate.parentApp.setupHint;
+    assert.deepEqual(detectHarnessProvider(withHint, options).warnings,
+      ["Open Claude Desktop to install Claude Code, then run roborepo harness refresh."]);
+  }
+
   const wrong = app(path.join(claudeRoot, "2.1.300", "claude.app"), "wrong.id", "Contents/MacOS/claude", "2.1.300");
   fs.writeFileSync(path.join(path.dirname(wrong), ".verified"), "ok");
   assert.equal(detectHarnessProvider(claude, options).confidence, "absent");
@@ -99,6 +113,8 @@ try {
   assert.equal(codexBoth.evidence.find((item) => item.source === "cli")?.version, "0.140.0");
   assert.equal(codexBoth.evidence.find((item) => item.source === "desktop")?.version, "0.155.0");
   assert.equal(selectedHarnessExecutable(codex, options), path.join(bin, "codex"));
+  // Opening Codex for hook review prefers the binary bundled with the desktop app.
+  assert.equal(selectedHarnessExecutable(codex, { ...options, prefer: "desktop" }), path.join(codexBundle, "Contents/Resources/codex"));
   console.log("desktop runtime discovery checks passed");
 } finally {
   process.env.HOME = oldHome;

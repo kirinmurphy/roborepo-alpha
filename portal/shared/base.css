@@ -1412,9 +1412,33 @@ portal-menu-button {
 .portal-banner-copy > :first-child { margin-top: 0; }
 .portal-banner-copy > :last-child { margin-bottom: 0; }
 .portal-banner-supporting { color: var(--dim); }
-/* Codex telemetry hook warning: title and message stacked tight, no paragraph margins. */
-.codex-hook-status-copy { display: grid; gap: 2px; }
-.codex-hook-status-copy p { margin: 0; }
+/* Hook readiness warning: title, message, command, and affected hooks stacked tight. */
+.hook-readiness-copy { display: grid; gap: 2px; }
+.hook-readiness-copy p { margin: 0; }
+.hook-readiness-command { display: block; margin-top: 4px; overflow-wrap: anywhere; }
+.hook-readiness-terminal { margin-top: 4px; }
+.hook-readiness-terminal[hidden], .hook-readiness-affected[hidden], .hook-readiness-actions[hidden],
+.hook-readiness-app-route[hidden], .hook-readiness-result[hidden],
+.hook-readiness-actions [hidden] { display: none; }
+.hook-readiness-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.hook-readiness-app-route, .hook-readiness-result { color: var(--dim); }
+/* The one-time offer after a hook change: nonmodal, out of the page flow, never covering the nav. */
+.hook-review-offers {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 40;
+  display: grid;
+  gap: 8px;
+  width: min(440px, calc(100vw - 32px));
+}
+.hook-review-offers[hidden] { display: none; }
+/* The warning tint is translucent; layer it over an opaque panel so page content does not show through. */
+.hook-review-offers .portal-notice.notice-warning {
+  background: linear-gradient(var(--warn-bg), var(--warn-bg)), var(--panel);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.18);
+}
+.hook-readiness-affected { margin: 4px 0 0; padding-left: 1.2em; }
 .portal-banner-action {
   grid-column: 2;
   grid-row: 1;

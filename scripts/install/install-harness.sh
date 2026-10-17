@@ -71,6 +71,7 @@ while IFS=$'\t' read -r _h kind src_rel home_abs _flags; do
   case "${kind}" in
     root_config)    export_user_config "${harness_id}" "${src_rel}" "${home_abs}" ;;
     managed_copy)   install_copy_item "${src_rel}" "${home_abs}" "${harness_id}" ;;
+    hook_fragment|managed_files) shared_target_row apply "${kind}" "${harness_id}" "${src_rel}" "${home_abs}" ;;
     cleanup)        remove_repo_link "${home_abs}" ;;
     rendered_rules) ;;  # handled by the render step below
   esac

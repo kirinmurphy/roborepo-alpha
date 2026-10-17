@@ -1,7 +1,7 @@
 // Pure hooks-map merge/unmerge logic, extracted from scripts/cli/hook-composition.mjs so provider
 // adapters (scripts/harnesses/{claude,codex}/index.mjs) can call it without importing paths.mjs's
-// registry-dependent half — hook-composition.mjs pulls in codexHooksPath/harnessHome and
-// writeRootConfig, both of which resolve through scripts/harnesses/registry.mjs, so a provider
+// registry-dependent half — hook-composition.mjs pulls in harnessHome, provider paths, and
+// writeRootConfig, which resolve through scripts/harnesses/registry.mjs, so a provider
 // adapter importing hook-composition.mjs directly would cycle back into itself (same class of
 // import cycle as paths.mjs/roots.mjs).
 //
@@ -17,22 +17,28 @@ export function isHooksMap(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
-export function mergeHooksMap(hooksMap, hooksFragment) {
+// Prepends by default: a package's own hooks may need to run before pre-existing entries for the
+// same event/matcher (e.g. a deny-decision hook must execute before an allow-decision one — Claude's
+// hook model treats the first decisive result as final). `append: true` is for Codex, which keys
+// hook trust by position (`<file>:<event>:<group index>:<handler index>`), so moving an existing
+// entry would revoke trust the user already granted. Either way the fragment's own internal entry
+// order is preserved.
+export function mergeHooksMap(hooksMap, hooksFragment, { append = false } = {}) {
   const hooks = { ...hooksMap };
   let added = 0;
   for (const [event, entries] of Object.entries(hooksFragment)) {
     if (event.startsWith("_") || !Array.isArray(entries)) continue;
-    const existing = [...(hooks[event] || [])];
-    // Prepend (not append): a package's own hooks may need to run before pre-existing entries for
-    // the same event/matcher (e.g. a deny-decision hook must execute before an allow-decision one —
-    // Claude's hook model treats the first decisive result as final). Preserve the fragment's own
-    // internal entry order by prepending in reverse.
+    const existing = hooks[event] || [];
+    const seen = new Set(existing.flatMap((entry) => (entry.hooks || []).map((hook) => hook.command)).filter(Boolean));
+    const fresh = [];
     for (const entry of [...entries].reverse()) {
       const cmd = entry.hooks?.[0]?.command;
-      const alreadyPresent = cmd && existing.some((e) => (e.hooks || []).some((h) => h.command === cmd));
-      if (!alreadyPresent) { existing.unshift(entry); added++; }
+      if (cmd && seen.has(cmd)) continue;
+      fresh.unshift(entry);
+      if (cmd) seen.add(cmd);
     }
-    hooks[event] = existing;
+    added += fresh.length;
+    hooks[event] = append ? [...existing, ...fresh] : [...fresh, ...existing];
   }
   return { hooks, added };
 }

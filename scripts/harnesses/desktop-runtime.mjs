@@ -31,7 +31,10 @@ export function resolveDesktopRuntimes(candidates = [], { rootPath = expandRoot,
     if (!sawRuntime && candidate.parentApp) {
       const parent = candidate.parentApp;
       if (parent.roots.some((root) => bundleId(path.join(rootPath(root), parent.bundle)) === parent.bundleId)) {
-        warnings.push(`Open ${candidate.parentApp.label}’s Code tab to install ${candidate.label}, then run roborepo harness refresh.`);
+        // The manifest owns product detail (which tab or menu installs the runtime). The fixed
+        // ending is what portal/shared/harness-warning.js rewrites for the portal.
+        const setup = parent.setupHint ?? `Open ${parent.label} to install ${candidate.label}`;
+        warnings.push(`${setup}, then run roborepo harness refresh.`);
       }
     }
   }

@@ -1,5 +1,6 @@
 import { portalHideLoading, portalSetUpdatedAt } from "/portal/shared/api.js";
-import { renderCodexHookStatus } from "/portal/shared/codex-hook-status.js";
+import { renderHookReadiness } from "/portal/shared/hook-readiness.js";
+import { offerHookReview } from "/portal/shared/hook-review-offer.js";
 import { runHarnessCheck } from "/portal/shared/harness-warning.js";
 import { createRepositorySourcesInline } from "/portal/shared/repository-sources-dialog.js";
 import * as api from "./api.js";
@@ -11,7 +12,7 @@ const harnessList = document.getElementById("harness-list");
 const telemetryToggle = document.getElementById("telemetry-toggle");
 const tokenTrackingActive = document.getElementById("token-tracking-active");
 const tokenTrackingEnableCopy = document.getElementById("token-tracking-enable-copy");
-const codexHookStatus = document.getElementById("codex-hook-status");
+const hookReadiness = document.getElementById("hook-readiness");
 const checkHarnesses = document.getElementById("check-harnesses");
 const repoSyncStatus = document.getElementById("settings-repo-sync-status");
 const repoSyncStatusText = repoSyncStatus.querySelector("[data-slot=text]");
@@ -41,7 +42,7 @@ async function refresh() {
     setup = await api.fetchSetupState();
     render();
     // Re-checked on every setup read, which follows each telemetry or harness change on this page.
-    void renderCodexHookStatus(codexHookStatus, setup);
+    void renderHookReadiness(hookReadiness, setup);
     portalSetUpdatedAt(new Date());
   } catch (error) {
     showError(error);
@@ -150,8 +151,9 @@ async function toggleTelemetry() {
   telemetryToggle.setAttribute("aria-busy", "true");
   telemetryToggle.textContent = "Saving…";
   try {
-    await api.setTelemetryEnabled(telemetryToggle.getAttribute("aria-pressed") !== "true");
+    const result = await api.setTelemetryEnabled(telemetryToggle.getAttribute("aria-pressed") !== "true");
     await refresh();
+    void offerHookReview(result.hookHarnesses);
   } catch (error) {
     showError(error);
   } finally {

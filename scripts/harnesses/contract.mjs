@@ -140,6 +140,8 @@ function validateDetection(detection, label, errors, { partial = false } = {}) {
           const parent = candidate.parentApp;
           if (!parent || typeof parent !== "object" || typeof parent.label !== "string" || typeof parent.bundle !== "string" || !BUNDLE_SEGMENT_PATTERN.test(parent.bundle) || typeof parent.bundleId !== "string" || !Array.isArray(parent.roots) || parent.roots.some((root) => typeof root !== "string" || !DESKTOP_ROOT_PATTERN.test(root))) {
             fail(errors, `${name}.parentApp must identify a bounded app bundle`);
+          } else if (parent.setupHint !== undefined && (typeof parent.setupHint !== "string" || !parent.setupHint || parent.setupHint.endsWith("."))) {
+            fail(errors, `${name}.parentApp.setupHint must be a non-empty clause without a final period`);
           }
         }
       }

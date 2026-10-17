@@ -127,12 +127,27 @@
   </span>
 </template>
 
-<!-- Codex telemetry hook warning (codex-hook-status.js), shown on Settings, Tokens, and Home. -->
-<template id="tpl-codex-hook-status">
+<!-- Hook readiness notice (hook-readiness.js), one per harness: persistent on Settings, Tokens, and
+     Home, and as the one-time offer card after a hook-changing operation (with Later). -->
+<template id="tpl-hook-readiness">
   <portal-notice class="portal-notice" variant="warning" aria-live="polite">
-    <div class="codex-hook-status-copy">
+    <div class="hook-readiness-copy">
       <strong data-slot="title"></strong>
       <p data-slot="message"></p>
+      <ul data-slot="affected" class="hook-readiness-affected" hidden></ul>
+      <p data-slot="app-route" class="hook-readiness-app-route" hidden></p>
+      <div class="hook-readiness-actions" data-slot="actions" hidden>
+        <button type="button" data-btn="cta" data-slot="open" hidden></button>
+        <portal-copy-button data-slot="copy" label="Copy command" hidden></portal-copy-button>
+        <button type="button" data-btn="secondary" data-slot="check">Check again</button>
+        <button type="button" data-btn="text" data-slot="later" hidden>Later</button>
+      </div>
+      <details data-slot="terminal-option" class="hook-readiness-terminal" hidden>
+        <summary>Terminal command</summary>
+        <p data-slot="terminal-hint"></p>
+        <code data-slot="command" class="hook-readiness-command"></code>
+      </details>
+      <p data-slot="result" class="hook-readiness-result" role="status" hidden></p>
     </div>
   </portal-notice>
 </template>
