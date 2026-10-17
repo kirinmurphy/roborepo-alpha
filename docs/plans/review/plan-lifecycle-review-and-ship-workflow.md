@@ -792,9 +792,10 @@ The round-2 base finding above is still open: `main` still holds
       is the only place these numbers are shown to anyone. Report file line numbers (add the
       frontmatter's line count), and assert the reported line in
       `plan-lifecycle-transitions-check.mjs`.
-- [ ] **The round-2 scope-question entry contradicts itself.** After "— fixed", it describes the
+- [x] **The round-2 scope-question entry contradicts itself.** After "— fixed", it describes the
       pre-fix `validate` behavior in the present tense ("validates the primary copy", "reads only
-      the checkout it runs in"). Separate the finding as found from its fix.
+      the checkout it runs in"). Separate the finding as found from its fix. — fixed in review
+      (`1af8ce0c`).
 
 Verification:
 
