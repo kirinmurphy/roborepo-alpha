@@ -244,9 +244,10 @@ human accepted it.
    task outside `## Not tested` is unchecked, `blocked_by` is empty, the worktree has no
    uncommitted changes, the feature branch has a commit of its own, and the plan passes the review
    validator apart from unconfirmed Not tested entries.
-3. **Incomplete or blocked:** the plan stays in `active/`. Record the remaining tasks or blockers,
-   set an actionable `next_action`, and commit the plan in the worktree. A later `/plan-execute`
-   resumes from there.
+3. **Incomplete, blocked, or not yet validated:** the plan stays in `active/`. This includes a
+   Validation Loop that stopped at its cap or left `escalate` findings open; their unchecked
+   findings fail the preflight. Record the remaining tasks, findings, or blockers, set an actionable
+   `next_action`, and commit the plan in the worktree. A later `/plan-execute` resumes from there.
 4. **Complete:** from the primary checkout, run the repository's canonical submit transition
    command for `<plan>`. It reruns the preflight and commits the plan-only move from `active/` to
    `review/` on the base branch. Do not push. Report that the plan awaits `/plan-review`.
