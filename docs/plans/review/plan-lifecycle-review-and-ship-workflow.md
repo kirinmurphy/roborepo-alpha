@@ -738,15 +738,15 @@ the additive-fix rule for `/plan-review` (`6b74f0f1`).
       check by itself. Outside this plan's requirements, so not for `/plan-execute`: rename that plan
       to a declared namespace (or declare `agent` in `docs/plans/plans-config.json`) on `main`, then
       rerun `/plan-review`.
-- [x] **Scope question (user decision): `roborepo plans validate` ignores authority.** — fixed: the
-      user first deferred it, then brought it into scope on 2026-10-16. From the main checkout,
-      `validate` now selects each plan's copy as the portal does and names the copy it validated.
-      Built in the review session itself, so the next `/plan-review` must run in a fresh session. Run from the
-      primary checkout it validates the primary copy of a review plan (here: 0 findings); run from
-      the worktree it reports the open Not tested entry. `validateRepositoryPlans` reads only the
-      checkout it runs in, as it already did for Active plans on `main`; only the portal scan and
-      the new gates resolve the authoritative copy. Acceptance criterion 8 names "the CLI", but the
-      plan never lists `validate` among the commands it changes.
+- [x] **Scope question (user decision): `roborepo plans validate` ignores authority.** As found:
+      `validateRepositoryPlans` read only the checkout it ran in, as it already did for Active plans
+      on `main`, so from the primary checkout it validated a review plan's primary copy (here: 0
+      findings) while the worktree's copy had an open Not tested entry; only the portal scan and the
+      new gates resolved the authoritative copy. Acceptance criterion 8 names "the CLI", but the plan
+      never listed `validate` among the commands it changes. — fixed in `7986eabc`: the user first
+      deferred it, then brought it into scope on 2026-10-16. From the main checkout, `validate` now
+      selects each plan's copy as the portal does and names the copy it validated. Built in the
+      round-2 review session itself; round 3 reviewed it in a fresh session.
 
 Verification:
 
