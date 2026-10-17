@@ -838,7 +838,7 @@ function emptyParsed(code) {
     tasks: [],
     taskCounts: { total: 0, complete: 0, remaining: 0 },
     notTested: { present: false, entries: [], unchecked: 0 },
-    review: { present: false, findings: { open: 0, total: 0 }, approval: null },
+    review: { present: false, findings: { open: 0, total: 0 }, result: null, approval: null },
   };
 }
 

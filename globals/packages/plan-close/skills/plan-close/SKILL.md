@@ -1,6 +1,6 @@
 ---
 name: plan-close
-description: Use when closing one repository plan after its reviewed pull request has merged. Accepts only a plan in docs/plans/review/. Run the repository's checks, fix agent-resolvable gaps including missing tests, check claims, a fresh human approval, and landing, then commit the move to docs/plans/completed/ and clean up the plan's worktree. Refuse only for unresolved work, unconfirmed manual checks, a stale or missing approval, or unconfirmed landing; hand superseded or abandoned plans to plan-archive. Trigger on explicit /plan-close or requests such as close this plan now that it has merged. Do not use for creating or revising plans (plan-write), preparing a plan (plan-promote), implementation (plan-execute), the human review or approval (plan-review), archiving (plan-archive), ending a session (session-close), reviewing a working diff, or merging branches.
+description: Use when closing one repository plan after its reviewed pull request has merged, or rerunning closure to confirm completion or resume guarded cleanup. Close from docs/plans/review/; recognize an already committed plan in docs/plans/completed/ without repeating closure. Run the repository's checks, fix agent-resolvable gaps including missing tests, check claims, a fresh human approval, and landing, then commit completion and clean up the plan's worktree. Refuse only for unresolved work, unconfirmed manual checks, a stale or missing approval, or unconfirmed landing; hand superseded or abandoned plans to plan-archive. Trigger on explicit /plan-close or requests such as close this plan now that it has merged. Do not use for creating or revising plans (plan-write), preparing a plan (plan-promote), implementation (plan-execute), the human review or approval (plan-review), archiving (plan-archive), ending a session (session-close), reviewing a working diff, or merging branches.
 ---
 
 # Plan Close
@@ -28,9 +28,32 @@ Resolve:
 - current Git state, including the plan's `worktree` and that worktree's branch.
 
 The eligible source lifecycle is the one that precedes completion in the lifecycle manifest
-(`manifests/platform/plan-lifecycle.json`): `review/`. A plan in any other lifecycle is refused with
+(`manifests/platform/plan-lifecycle.json`): `review/`. A committed `completed/` plan takes the
+idempotent retry path below. A plan in any other lifecycle is refused with
 its current location named and the command that fits it: `/plan-execute` or `/plan-review` for an
 active plan, `/plan-archive` for work that will not be completed.
+
+### Idempotent retries
+
+Before loading paired skills or running the workflow, resolve the selected plan's current primary
+path by id. If the supplied review path no longer exists, look for the same filename in
+`completed/` and verify its id against prior evidence when available; never select a different plan.
+
+When the plan is already in `completed/`, confirm that the same completed document is committed on
+the base branch and its working copy has no pending edits. Report **already closed**, with the
+existing close commit. Do not rerun tests, seek another approval, edit the plan, or make another
+closure commit. The assigned worktree may already be gone; that is normal after successful cleanup.
+If the completed document is uncommitted or edited, report the discrepancy without overwriting it
+or claiming that closure is durable.
+
+For an already closed plan, inspect whether its named linked worktree still exists. If absent,
+report cleanup already done and stop. If present, resume only steps 9 and 10 with the canonical
+plan-scoped commands and their current guards. Do not repeat a completed cleanup action or remove
+a branch by hand. Report any guard that keeps the worktree without undoing the closed result.
+
+For a plan still in `review/`, resume verification of the remaining requirements. Reuse matching
+landing evidence as described in step 7; a previous refusal does not grant approval or make a
+failed test pass. Recheck mutable requirements against the current state.
 
 ## Paired Skills
 
@@ -54,7 +77,7 @@ Each row is its own optional package, so check it before loading it:
 
 ## Workflow
 
-Work through the steps in order. Repairs can return the run to tests and validation; decide the
+For a plan not already closed, work through the steps in order. Repairs can return the run to tests and validation; decide the
 verdict only from the resulting state. Read `references/verdict.md` before step 3.
 
 ### 0. Confirm the worktree's plan copy is integrated
@@ -193,6 +216,23 @@ Run the repository's canonical approval check for `<plan>`. It reads `### Approv
 
 The work must be in the base branch, including after a squash or rebase merge.
 
+Run the repository's canonical landed check for `<plan>`. A previous run's landing evidence is
+the absorbing commit recorded in the plan's `## Verification` as
+`- Absorbing commit: <full commit id>`. The check verifies that commit rather than trusting it:
+
+- the absorbing commit is still in the selected base branch's first-parent history after the
+  branch's fork;
+- merging the branch's current tip into it still changes no tree content, so branch work added
+  after the recorded landing is never covered by it.
+
+A verified commit is reused instead of scanning base history again. A missing, malformed, or
+failed one falls back to the full scan below. A portal badge, a remembered status, or a bare
+`landed: true` is never evidence. Report whether the evidence was reused or newly scanned. Repeated
+`/plan-close` invocations do not require a new scan when the recorded proof still holds; landing
+never stands in for tests or human approval, which remain separate gates.
+
+The full scan, which the canonical check performs and which a repository without one does by hand:
+
 - A plan with an empty `worktree` was implemented on the base branch; it has landed.
 - Otherwise resolve the worktree's branch from `git worktree list --porcelain`. If it no longer
   resolves, report `landed: unconfirmed` and refuse.
@@ -201,10 +241,9 @@ The work must be in the base branch, including after a squash or rebase merge.
   has expired, do not infer a starting point from ancestry alone; report `landed: unconfirmed`.
 - Find the branch's fork with `git merge-base <base> <branch>`. Walk the base's first-parent commits
   after that fork, oldest first, up to the repository's scan limit. A commit absorbs the branch
-  when merging the branch into that historical commit changes no tree content. Use the repository's
-  canonical landed check when available; otherwise compare the merge result's tree to the base
-  commit's tree. The first absorbing commit proves the work landed even if later base commits
-  changed those files. Record the branch, base, and absorbing commit in the completion evidence.
+  when merging the branch into that historical commit changes no tree content: compare the merge
+  result's tree to the base commit's tree. The first absorbing commit proves the work landed even
+  if later base commits changed those files.
 - If no scanned first-parent commit absorbs the branch, the scan limit is exceeded, or any required
   Git evidence is unavailable, report `landed: unconfirmed` and refuse.
 
@@ -212,8 +251,9 @@ The work must be in the base branch, including after a squash or rebase merge.
 
 In the primary copy, clear `next_action`, add a completion summary, and write a `## Verification`
 section with the evidence: the test command and result, which affected docs of record were checked
-against the landed code, the approved commit and the absorbing commit, what else was checked, and
-anything that could not be verified. Run the repository's canonical plan validator and resolve every
+against the landed code, the approved commit, the absorbing commit as
+`- Absorbing commit: <full commit id>`, what else was checked, and anything that could not be
+verified. Later landing checks verify that recorded line instead of rescanning. Run the repository's canonical plan validator and resolve every
 finding.
 
 Then run the repository's canonical close transition command for `<plan>` from the primary checkout.
@@ -223,9 +263,14 @@ plan's old and new paths, even when other paths are staged. Unrelated staged or 
 in place. It never pushes. Report the commit it made. If it refuses, report each reason; the closure
 is not durable, so do not proceed with server or worktree cleanup.
 
+The close command verifies the recorded absorbing commit itself, the same way step 7 does, rather
+than rescanning. Keep its checks; do not run another standalone landing check immediately before
+it or bypass its guards with a remembered status.
+
 ### 9. Stop the worktree's servers
 
-Only after step 8 committed a complete plan, run the repository's canonical linked-worktree server
+Only after step 8 committed a complete plan, or the retry path confirmed an existing committed
+completion, run the repository's canonical linked-worktree server
 cleanup command for `<plan>`. It sends `SIGTERM` to the processes listening on a port from inside
 the plan's linked worktree, and nothing
 else: never the primary checkout, never agent sessions, shells, or editors. Do not ask first; the
@@ -236,8 +281,9 @@ Skip this step for an archived or refused plan.
 ### 10. Remove the closed worktree
 
 After step 9, when the plan was moved to `completed/`, run the repository's canonical worktree
-cleanup command scoped to this plan with its apply flag. Report whether it removed the worktree and
-branch, which guard kept them, or why removal failed. Do not remove the worktree by hand or bypass
+cleanup command scoped to this plan with its apply flag. Scoped to the plan, it verifies the plan's
+recorded absorbing commit too. Report whether it removed the worktree and branch, whether its
+landing evidence was reused or scanned, which guard kept them, or why removal failed. Do not remove the worktree by hand or bypass
 a guard. Skip this step for an archived or refused plan, and in repositories without a canonical
 cleanup command.
 
@@ -274,7 +320,7 @@ Close result
 - Verdict: complete|incomplete|blocked|superseded|abandoned
 - Not tested entries open: <count>
 - Approval: fresh at <commit>|stale|missing|not-approved|invalid|unavailable
-- Landed: yes|unconfirmed|not applicable
+- Landed: yes (evidence reused|scanned)|unconfirmed|not applicable
 - Lifecycle change: review -> completed, or none
 - Closed: yes|no
 - Close commit: <hash>|failed|not applicable
@@ -284,6 +330,11 @@ Close result
 Also report the evidence behind the verdict, every refusal reason, unverified checks, paired skills
 loaded or skipped, the complete remaining-issues list when closure is refused, the help offer, and
 current Git status.
+
+For an already closed retry, report `Closed: yes (already closed)`, the existing close commit,
+`Lifecycle change: none`, and any resumed cleanup results. Mark tests, approval, and landing
+`not rerun (already closed)` rather than presenting historical results as fresh checks. Paired
+skills not needed by this path are `not applicable`.
 
 ## Boundaries
 

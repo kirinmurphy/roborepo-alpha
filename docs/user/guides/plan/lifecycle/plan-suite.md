@@ -165,8 +165,12 @@ there do not prompt one file at a time.
 
 ## `/plan-review`
 
-Brings finished work to your review. Any chat can run it: the validator's fresh context and your
-own review are the independent checks. In order, it:
+Brings finished work to your review and resumes at the remaining step when rerun. A completed
+review records the checked commit separately from your approval, so an interrupted chat can resume
+at your decision. An unchanged, already approved review returns **already approved**; a committed
+completed plan returns **already closed**. Neither repeats tests or asks for approval again.
+
+A new review runs these steps:
 
 1. for an `active/` plan, runs the completion preflight, and moves the plan to `review/` only if it
    passes;
@@ -180,7 +184,8 @@ own review are the independent checks. In order, it:
 5. fixes every `fix` finding in the same chat, code included, each in its own commit, and checks
    again until a pass finds nothing to fix. A fixed finding reads
    `- [x] … — fixed in review (<short commit>)`;
-6. shows you a review packet: each acceptance criterion with its evidence, what changed, the
+6. records the Result as complete once findings and required manual checks are resolved, or pending
+   while they remain open, then shows you a review packet: each acceptance criterion with its evidence, what changed, the
    validator passes, the commits it made, base failures, the manual checks waiting on you, and each
    escalated finding as a decision with options and a recommendation.
 
@@ -188,7 +193,7 @@ Then it asks for your approval of the exact commit, and acts on your answer:
 
 | Your answer | What follows |
 | --- | --- |
-| Approve | It records the approval and checks that it is fresh |
+| Approve | It immediately commits the approval for the reviewed implementation and checks that it is fresh |
 | Ask for a change, or decide an escalated question, within the requirements | It makes the change in the same chat and shows you the packet again |
 | Want the change done in a separate chat | The plan stays in `review/`. Run `/plan-execute`, then `/plan-review` again |
 | The requirements themselves must change | With your agreement, it revises the plan, invalidates any approval, and moves the plan back to `active/` with `roborepo plans reopen`. The worktree and branch stay |
@@ -207,6 +212,11 @@ The review record looks like this:
 - Unit and integration tests passed
 - Base failure: `lint` fails on `main` too
 
+### Result
+- Status: complete
+- Reviewed implementation commit: <full commit id>
+- Base commit: <full base commit id>
+
 ### Approval
 - Decision: approved
 - Reviewed implementation commit: <full commit id>
@@ -216,6 +226,24 @@ The review record looks like this:
 Only you can approve; passing tests are not approval. An approval stays **fresh** while nothing
 outside `docs/plans/` changes: recording it, or merging plan-only changes from base, keeps it
 fresh, and a code change makes it stale. Check it with `roborepo plans approval <plan>`.
+
+For machine-readable evidence, `roborepo plans approval <plan> --json` reports review freshness
+under `review` and human approval under top-level `state`. It returns exit 1 while approval is
+pending, even when the review is complete. A completed checklist or successful merge never grants
+approval automatically.
+
+If your answer was given but not recorded, `/plan-review` recovers it from an available explicit
+answer identifying the reviewed implementation, or asks one confirmation when that answer cannot
+be found. It reuses the completed review after checking implementation freshness and current
+requirements. If implementation changed, it reviews the changes and runs the gate and Validator
+before renewing the Result. Older review records can be recovered from their recorded commits and
+verification; incomplete evidence requires only the missing review work.
+
+This approval recovery also works after landing while the plan remains in review. It records
+matching plan-only evidence commits in the worktree and primary checkout, keeping close integration
+checks intact. Later base changes do not require synchronizing the old feature branch just to
+record approval. A partly committed recovery resumes its missing write and preserves independent
+plan edits. Closure still requires its own passing test gate.
 
 `/plan-review` never merges your branch into the base branch. After approval, open and merge the
 pull request yourself. If base moves again before you merge, run `/plan-review` again.
@@ -234,12 +262,21 @@ accepts only a plan in `review/`. In order, it:
    is handed to `/plan-archive`;
 4. refuses while any `## Not tested` entry is unchecked;
 5. refuses unless your approval is fresh for the landed branch tip;
-6. refuses until the work has landed in the base branch, including after a squash or rebase merge;
-7. writes the completion summary and a Verification section, then runs `roborepo plans close`, which
-   rechecks integration, approval, and landing and commits the move to `completed/`;
+6. refuses until the work has landed in the base branch, including after a squash or rebase merge,
+   with `roborepo plans landed <plan>`;
+7. writes the completion summary and a Verification section, including the absorbing commit as
+   `- Absorbing commit: <full commit id>`, then runs `roborepo plans close`, which rechecks
+   integration, approval, and landing and commits the move to `completed/`;
 8. after that commit succeeds, stops the dev servers still running in its worktree and lists them;
 9. runs the repository's worktree cleanup command for the closed plan, removing the worktree and
    local branch when removal succeeds, or reporting why a guard kept them or removal failed.
+
+Landing is scanned once. The first check walks the base branch's history for the commit that
+absorbed the branch; after that, `roborepo plans landed`, `roborepo plans close`, and the plan's
+worktree cleanup verify the recorded absorbing commit instead of scanning again. Verifying means
+the commit is still in the base branch's first-parent history and still absorbs the branch's
+current tip, so work added to the branch afterwards is never covered by it; when it fails, the full
+scan runs. Reusing landing evidence never skips the test run or your approval.
 
 If the close commit fails, `/plan-close` reports that closure is not durable and skips server and
 worktree cleanup. It never merges, never synchronizes base into the branch, and never pushes.

@@ -52,10 +52,12 @@ function recordApproval(wt, planPath) {
   return sha;
 }
 
-// What /plan-close writes into the primary copy before it asks for the move.
-function closeEdits(root, planPath) {
+// What /plan-close writes into the primary copy before it asks for the move, optionally with the
+// absorbing commit its landed check reported.
+function closeEdits(root, planPath, absorbingCommit = null) {
   const file = path.join(root, planPath);
-  fs.writeFileSync(file, `${read(file).replace(/^next_action: .*$/m, "next_action:").trimEnd()}\n\n## Verification\n\nThe fixture's checks passed.\n`);
+  const landing = absorbingCommit ? `\n- Absorbing commit: ${absorbingCommit}\n` : "";
+  fs.writeFileSync(file, `${read(file).replace(/^next_action: .*$/m, "next_action:").trimEnd()}\n\n## Verification\n\nThe fixture's checks passed.\n${landing}`);
 }
 
 // Moves one backlog plan to Review with a recorded, fresh approval, as the suite commands would.
@@ -79,6 +81,7 @@ try {
     "docs/plans/backlog/test-shelved.md": planDoc({ id: "shelf001" }),
     "docs/plans/backlog/test-squash.md": planDoc({ id: "squash01" }),
     "docs/plans/backlog/test-rebase.md": planDoc({ id: "rebase01" }),
+    "docs/plans/backlog/test-late-approval.md": planDoc({ id: "late0001" }),
     "docs/plans/backlog/test-gone.md": planDoc({ id: "gone0001" }),
     "docs/plans/backlog/test-carry.md": planDoc({ id: "carry001" }),
     "docs/plans/backlog/test-conflict.md": planDoc({ id: "confl001" }),
@@ -213,11 +216,47 @@ try {
     const missing = plans(root, "approval", "flow0001");
     assert.equal(missing.status, 1);
     assert.equal(json(missing, "missing approval").state, "missing");
+    assert.equal(json(missing, "missing review result").review.state, "missing");
 
     const synced = json(roborepo(["plans", "sync-base", "--json"], { cwd: flow.path }), "sync before review");
     assert.equal(synced.state, "merged");
     assert.ok(exists(flow.path, "docs/plans/review/test-flow.md") && !exists(flow.path, "docs/plans/active/test-flow.md"), "the rename arrives through the merge");
     assert.equal(scanned("flow0001").plan.relativePath, "docs/plans/review/test-flow.md");
+
+    const reviewPath = "docs/plans/review/test-flow.md";
+    const reviewedTip = head(flow.path);
+    const reviewedBase = head(root);
+    const reviewDoc = `${read(path.join(flow.path, reviewPath))}\n## Review\n\n### Result\n- Status: complete\n- Reviewed implementation commit: ${reviewedTip}\n- Base commit: ${reviewedBase}\n\n### Findings\n- [x] Review checks passed\n\n### Approval\n- Decision: requested\n`;
+    commit(flow.path, "Record completed review awaiting approval", { [reviewPath]: reviewDoc });
+    const pendingTip = head(flow.path);
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const pending = json(plans(root, "approval", "flow0001"), "completed review awaiting approval");
+      assert.equal(pending.review.state, "fresh", "review completion is independent of approval");
+      assert.equal(pending.state, "not-approved", "completed checks never grant human approval");
+      assert.equal(pending.review.result.commit, reviewedTip, "recording the result does not stale the implementation");
+      assert.deepEqual(pending.review.baseChangedPaths, []);
+      assert.equal(head(flow.path), pendingTip, "checking a pending review twice makes no commits");
+    }
+    fs.writeFileSync(path.join(flow.path, "src/app.txt"), "pending implementation\n");
+    assert.equal(json(plans(root, "approval", "flow0001"), "uncommitted implementation").review.state, "incomplete");
+    fs.writeFileSync(path.join(flow.path, "src/app.txt"), git(flow.path, "show", "HEAD:src/app.txt") + "\n");
+    commit(flow.path, "Leave review pending", { [reviewPath]: reviewDoc.replace("- Status: complete", "- Status: pending") });
+    assert.equal(json(plans(root, "approval", "flow0001"), "pending review result").review.state, "incomplete");
+    commit(flow.path, "Reopen a review finding", { [reviewPath]: reviewDoc.replace("- [x] Review checks passed", "- [ ] Review checks passed") });
+    assert.equal(json(plans(root, "approval", "flow0001"), "open review finding").review.state, "incomplete");
+    commit(flow.path, "Record a pending manual check", { [reviewPath]: `${reviewDoc}\n## Not tested\n- [ ] Confirm the manual workflow\n` });
+    assert.equal(json(plans(root, "approval", "flow0001"), "open manual check").review.state, "incomplete");
+    commit(flow.path, "Record an invalid review commit", { [reviewPath]: reviewDoc.replace(reviewedTip, "not-a-commit") });
+    assert.equal(json(plans(root, "approval", "flow0001"), "invalid review commit").review.state, "invalid");
+    commit(flow.path, "Restore review evidence", { [reviewPath]: reviewDoc });
+    commit(root, "Change base after review", { "src/base.txt": "new base work\n" });
+    const movedBase = json(plans(root, "approval", "flow0001"), "base moved after review");
+    assert.equal(movedBase.review.state, "fresh", "base movement does not erase the reviewed branch result");
+    assert.deepEqual(movedBase.review.baseChangedPaths, ["src/base.txt"], "the caller can decide whether base synchronization is needed");
+    commit(flow.path, "Change implementation after review", { "src/review.txt": "new work\n" });
+    const staleReview = json(plans(root, "approval", "flow0001"), "implementation changed after review");
+    assert.equal(staleReview.review.state, "stale");
+    assert.deepEqual(staleReview.review.changedPaths, ["src/review.txt"]);
 
     recordApproval(flow, "docs/plans/review/test-flow.md");
     const fresh = plans(root, "approval", "flow0001");
@@ -235,6 +274,39 @@ try {
     assert.equal(json(plans(root, "approval", "flow0001"), "re-approved").state, "fresh");
   }
 
+  // Approval recovery after a squash merge needs only evidence commits, never another base merge.
+  {
+    const late = toReview(root, "late0001", "test-late-approval.md", "feat/late");
+    const planPath = "docs/plans/review/test-late-approval.md";
+    const reviewedTip = head(late.path);
+    const reviewedBase = head(root);
+    const pendingDoc = read(path.join(late.path, planPath))
+      .replace(/### Approval[\s\S]*$/, `### Result\n- Status: complete\n- Reviewed implementation commit: ${reviewedTip}\n- Base commit: ${reviewedBase}\n\n### Approval\n- Decision: requested\n`);
+    commit(late.path, "Record reviewed implementation before approval", { [planPath]: pendingDoc });
+    git(root, "merge", "--squash", "feat/late");
+    git(root, "commit", "--quiet", "-m", "Land reviewed work with approval still pending");
+    const pending = json(plans(root, "approval", "late0001"), "landed review awaiting approval");
+    assert.equal(pending.state, "not-approved");
+    assert.equal(pending.review.state, "fresh", "landing preserves the feature's completed review");
+    const approvedDoc = pendingDoc.replace("- Decision: requested", `- Decision: approved\n- Reviewed implementation commit: ${reviewedTip}\n- Confirmed by: human`);
+    commit(late.path, "Record explicit human approval after landing", { [planPath]: approvedDoc });
+    const primaryBeforeRecovery = head(root);
+    assert.equal(read(path.join(root, planPath)), pendingDoc, "the primary still holds the version before the evidence edit");
+    commit(root, "Persist recovered approval on base", { [planPath]: approvedDoc });
+    assert.equal(git(root, "diff", "--name-only", primaryBeforeRecovery, "HEAD"), planPath, "recovery changes only the selected plan on base");
+    assert.equal(git(root, "diff", "--name-only", reviewedTip, head(late.path), "--", ".", ":(exclude)docs/plans"), "", "recovery preserves reviewed implementation");
+    const recorded = json(plans(root, "approval", "late0001"), "recovered approval");
+    assert.equal(recorded.state, "fresh");
+    assert.equal(recorded.review.state, "fresh");
+    const beforeRetry = head(root);
+    assert.equal(json(plans(root, "approval", "late0001"), "repeat recovered approval check").state, "fresh");
+    assert.equal(head(root), beforeRetry, "checking the recovered decision does not write another commit");
+    closeEdits(root, planPath);
+    const closed = approved(plans(root, "close", "late0001"), "close after approval recovery");
+    assert.equal(closed.landing.landed, true, "evidence-only recovery still passes the canonical landing gate");
+    assert.equal(closed.worktreeCopy, "integrated");
+  }
+
   // ── reopen: review → active on a scope change, keeping the worktree; then back to review ──────
   {
     const reopened = approved(plans(root, "reopen", "flow0001"), "reopen");
@@ -249,6 +321,9 @@ try {
     const before = head(root);
     refused(root, plans(root, "close", "flow0001"), "close before merge", /not integrated/);
     assert.equal(head(root), before, "a refused close commits nothing");
+    const unlanded = plans(root, "landed", "flow0001");
+    assert.equal(unlanded.status, 1, "the landed check fails before the merge");
+    assert.equal(json(unlanded, "landed before merge").landed, false);
 
     git(root, "merge", "--quiet", "--no-ff", "--no-edit", "feat/flow");
     closeEdits(root, "docs/plans/review/test-flow.md");
@@ -266,8 +341,14 @@ try {
     const squash = toReview(root, "squash01", "test-squash.md", "feat/squash");
     git(root, "merge", "--quiet", "--squash", "feat/squash");
     git(root, "commit", "--quiet", "-m", "Squash feat/squash");
-    closeEdits(root, "docs/plans/review/test-squash.md");
-    assert.equal(approved(plans(root, "close", "squash01"), "close after squash").landing.landed, true);
+    const squashCommit = head(root);
+    const landed = json(plans(root, "landed", "squash01"), "landed after squash");
+    assert.deepEqual([landed.landed, landed.absorbingCommit, landed.reused], [true, squashCommit, false], "the first landed check scans base history");
+    closeEdits(root, "docs/plans/review/test-squash.md", squashCommit);
+    const recheck = json(plans(root, "landed", "squash01"), "landed with recorded evidence");
+    assert.equal(recheck.reused, true, "a recorded absorbing commit is verified instead of rescanned");
+    const closedSquash = approved(plans(root, "close", "squash01"), "close after squash");
+    assert.deepEqual([closedSquash.landing.landed, closedSquash.landing.reused], [true, true], "close verifies the recorded absorbing commit");
     assert.ok(fs.existsSync(squash.path));
 
     toReview(root, "rebase01", "test-rebase.md", "feat/rebase");

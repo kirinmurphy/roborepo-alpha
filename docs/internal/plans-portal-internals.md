@@ -101,7 +101,8 @@ It runs from the primary checkout on the base branch and:
    the command's own edits (`promote`, `close`); unrelated work never blocks it;
 3. applies the transition's rules from `transition-rules.mjs` — `start` writes `worktree`, `submit`
    runs the completion preflight, `close` checks integration (`copy-integration.mjs`), approval
-   freshness, and landing (`modules/repositories/worktree-landed.mjs`), `archive` applies the copy
+   freshness, and landing (`landing-gate.mjs` over `modules/repositories/worktree-landed.mjs`, which
+   verifies the plan's recorded absorbing commit before scanning), `archive` applies the copy
    carry and writes the reason;
 4. validates the content it will commit against the destination (`ready` and `completed` tolerate no
    findings, `active` and `review` tolerate `UNCONFIRMED_NOT_TESTED`, `archived` checks only its

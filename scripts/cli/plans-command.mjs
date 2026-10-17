@@ -7,6 +7,7 @@ import { buildRepositoryPlanSnapshot, selectRepositoryPlan, validateRepositoryPl
 import { LIFECYCLE_MODEL } from "../../modules/plan-suite/lifecycle-manifest.mjs";
 import { primaryCheckout } from "../../modules/plan-suite/plan-git.mjs";
 import { approvalFreshness, completionPreflight } from "../../modules/plan-suite/review-gates.mjs";
+import { planLanding } from "../../modules/plan-suite/landing-gate.mjs";
 import { syncBase } from "../../modules/plan-suite/sync-base.mjs";
 import { transitionPlan } from "../../modules/plan-suite/transition.mjs";
 import { stopPlanServers } from "../../modules/plan-suite/stop-servers.mjs";
@@ -17,7 +18,7 @@ const PLANS_USAGE = [
   "       roborepo plans promote|submit|reopen|close <plan> [--base <branch>] [--json]",
   "       roborepo plans start <plan> --worktree <name> [--base <branch>] [--json]",
   "       roborepo plans archive <plan> --reason <text> [--base <branch>] [--json]",
-  "       roborepo plans preflight|approval <plan> [--base <branch>] [--json]",
+  "       roborepo plans preflight|approval|landed <plan> [--base <branch>] [--json]",
   "       roborepo plans sync-base [--continue] [--base <branch>] [--json]",
   "       roborepo plans stop-servers <plan> [--dry-run] [--json]",
   "       roborepo plans repair <root> [--dry-run]",
@@ -30,6 +31,7 @@ export function plansCommand(args) {
   if (LIFECYCLE_MODEL.transition(sub)) return plansTransitionCommand(sub, rest);
   if (sub === "preflight") return plansPreflightCommand(rest);
   if (sub === "approval") return plansApprovalCommand(rest);
+  if (sub === "landed") return plansLandedCommand(rest);
   if (sub === "sync-base") return plansSyncBaseCommand(rest);
   if (sub === "stop-servers") return plansStopServersCommand(rest);
   console.error(`unknown: roborepo plans ${sub ?? ""}`.trim());
@@ -162,9 +164,39 @@ function plansApprovalCommand(args) {
   } else {
     console.log(`plan: ${result.plan.path}${result.plan.id ? ` (${result.plan.id})` : ""}`);
     console.log(`approval: ${result.state}${result.reason ? ` (${result.reason})` : ""}`);
+    console.log(`review: ${result.review.state}${result.review.reason ? ` (${result.review.reason})` : ""}`);
+    for (const changed of result.review.changedPaths || []) console.log(`  changed since review: ${changed}`);
+    for (const changed of result.review.baseChangedPaths || []) console.log(`  changed on base: ${changed}`);
     for (const changed of result.changedPaths || []) console.log(`  changed: ${changed}`);
   }
   if (result.state !== "fresh") process.exit(1);
+}
+
+// Exit status: 0 when the plan's branch landed on the base branch, 1 otherwise. Read-only.
+async function plansLandedCommand(args) {
+  const { flags, positional } = parseArgs(args, ["base"]);
+  if (!positional[0]) {
+    console.error(PLANS_USAGE);
+    process.exit(2);
+  }
+  let result;
+  try {
+    result = await runFromPrimary(positional[0], async (context) => ({
+      plan: { id: context.record.plan.id, path: context.record.plan.relativePath },
+      ...(await planLanding({ ...context, base: flags.base || "main" })),
+    }));
+  } catch (err) {
+    return failDomain(err, flags.json);
+  }
+  if (flags.json) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(`plan: ${result.plan.path}${result.plan.id ? ` (${result.plan.id})` : ""}`);
+    console.log(result.landed
+      ? `landed: yes${result.absorbingCommit ? ` (absorbed by ${result.absorbingCommit}${result.reused ? ", recorded commit verified" : ""})` : ` (${result.reason})`}`
+      : `landed: unconfirmed (${result.reason})`);
+  }
+  if (!result.landed) process.exit(1);
 }
 
 // Exit status: 0 when the branch is up to date or merged, 1 when conflicts pause the merge or a

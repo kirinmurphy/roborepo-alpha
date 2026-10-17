@@ -226,7 +226,8 @@ A merged row drops the Git warnings (behind, unpushed) the row shows for work in
 checkout tooltip and the worktree dropdown still carry them.
 
 `roborepo git worktrees cleanup` previews candidates and reasons. Add `--apply` to remove eligible
-landed worktrees and local branches. `--plan <id>` limits it to a completed plan's worktree. The
+landed worktrees and local branches. `--plan <id>` limits it to a completed plan's worktree, and
+verifies the absorbing commit that plan's `## Verification` records instead of rescanning. The
 command also accepts `--remove <branch> --confirm --apply`. Automatic cleanup waits for an
 associated plan to leave `active`. It only removes a clean, unlocked, landed worktree beneath the
 repository's worktree folder, and never uses `git worktree remove --force`. The folder is

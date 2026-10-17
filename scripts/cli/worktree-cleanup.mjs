@@ -8,7 +8,7 @@ import { checkWorktreeRemoval } from "../../modules/repositories/worktree-guards
 import { removeLandedBranch, removeWorktree, withCleanupLock } from "../../modules/repositories/worktree-removal.mjs";
 import { runGitProcess } from "../../modules/repositories/git-exec.mjs";
 import { checkoutRootsFor, loadRegistry } from "../../modules/repositories/registry.mjs";
-import { activeWorktreeNames, findPlanWorktree, repositoryRecordFor, worktreeFolder } from "./worktree-policy.mjs";
+import { activeWorktreeNames, findPlanAbsorbingCommit, findPlanWorktree, repositoryRecordFor, worktreeFolder } from "./worktree-policy.mjs";
 import { STATE_ROOT } from "./paths.mjs";
 
 export async function cleanupWorktrees({ cwd = process.cwd(), stateRoot = STATE_ROOT, apply = false, plan = null, remove = null, confirm = false, currentPath = cwd, discover = discoverInstances } = {}) {
@@ -17,6 +17,7 @@ export async function cleanupWorktrees({ cwd = process.cwd(), stateRoot = STATE_
   const gitDir = path.join(mainPath, ".git");
   const worktreeRoot = worktreeFolder(mainPath, repositoryRecordFor(loadRegistry({ stateRoot }), mainPath));
   const scopedName = plan ? findPlanWorktree(mainPath, plan) : null;
+  const recorded = plan ? findPlanAbsorbingCommit(mainPath, plan) : null;
   if (plan && !scopedName) throw new Error(`plan not found or has no worktree: ${plan}`);
   const worktrees = linkedWorktrees(gitDir);
   const selectedBranch = remove;
@@ -31,12 +32,12 @@ export async function cleanupWorktrees({ cwd = process.cwd(), stateRoot = STATE_
       if (selectedBranch && worktree.branch !== selectedBranch && worktree.name !== selectedBranch) continue;
       const kind = remove ? "confirmed" : "automatic";
       const surveyTip = await worktreeTip(mainPath, worktree);
-      const landing = worktree.branch ? await inspectBranchLanding(mainPath, worktree.branch) : { landed: false, reason: "detached" };
+      const landing = worktree.branch ? await inspectBranchLanding(mainPath, worktree.branch, { recorded }) : { landed: false, reason: "detached" };
       const guard = await checkWorktreeRemoval({
         worktree, kind, landed: landing.landed, worktreeRoot, mainPath, currentPath,
         activePlan: activePlans.has(worktree.name), running: running.has(worktree.path),
       });
-      const row = { path: worktree.path, name: worktree.name, branch: worktree.branch, state: landing.landed ? "landed" : landing.reason === "scan unavailable" ? "unknown" : "not landed", eligible: guard.ok, reason: landing.reason === "scan unavailable" ? "landed scan unavailable" : guard.reason, warning: guard.warning, action: "kept" };
+      const row = { path: worktree.path, name: worktree.name, branch: worktree.branch, state: landing.landed ? "landed" : landing.reason === "scan unavailable" ? "unknown" : "not landed", eligible: guard.ok, reason: landing.reason === "scan unavailable" ? "landed scan unavailable" : guard.reason, warning: guard.warning, landingEvidence: landing.landed ? (landing.reused ? "reused" : "scanned") : null, action: "kept" };
       if (apply && guard.ok) {
         const fresh = linkedWorktrees(gitDir).find((item) => item.name === worktree.name);
         const freshTip = fresh ? await worktreeTip(mainPath, fresh) : null;

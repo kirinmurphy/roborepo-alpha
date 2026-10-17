@@ -13,9 +13,9 @@
 //   message(id, options)       the commit message
 import { domainError, writeFrontmatterField } from "./index.mjs";
 import { LIFECYCLE_MODEL } from "./lifecycle-manifest.mjs";
-import { inspectBranchLanding } from "../repositories/worktree-landed.mjs";
 import { archiveCarry, worktreeCopyIntegration } from "./copy-integration.mjs";
 import { approvalFreshness, completionPreflight } from "./review-gates.mjs";
+import { planLanding } from "./landing-gate.mjs";
 
 export const TRANSITION_RULES = {
   promote: {
@@ -62,9 +62,8 @@ export const TRANSITION_RULES = {
       }
       // A fresh approval for a plan that names a worktree means its branch resolved, so landing is
       // always checked against that branch; only a plan built on the base branch has none to check.
-      const landing = record.plan.worktree
-        ? await inspectBranchLanding(primary, approval.branch, { base: `refs/heads/${base}` })
-        : { landed: true, reason: "implemented on the base branch" };
+      // The absorbing commit recorded in the verification being closed is re-verified, not trusted.
+      const landing = await planLanding({ primary, record, base, branch: approval.branch, markdown: content });
       if (!landing.landed) {
         refuseWith(`landed: unconfirmed (${landing.reason}).`,
           `Merge ${approval.branch} into ${base} through its pull request and update the local ${base}, then close again.`, { landing });
