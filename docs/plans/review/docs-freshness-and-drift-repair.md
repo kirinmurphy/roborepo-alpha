@@ -1,7 +1,7 @@
 ---
 id: irpw877r
 priority: high
-next_action: Run /plan-review for the implementation, then confirm landing and run /plan-close after human approval
+next_action: Resume /plan-review to synchronize the latest base and run the full completion gate before requesting human approval
 blocked_by: []
 depends_on: []
 related:
@@ -326,19 +326,24 @@ None blocks implementation.
 ## Review
 
 ### Findings
-- [ ] Shortcut reference links and images in `scripts/test/docs-reference-scan.mjs` are not checked against their definitions — clear fix; add missing-target and anchor regression fixtures.
+- [x] Shortcut reference links and images in `scripts/test/docs-reference-scan.mjs` were not checked against their definitions — fixed in review (07a0e8cb), with missing-target and anchor regression fixtures.
 
 ### Verification
 - Completion preflight passed before submit; submit committed the move to review.
 - First fresh-context Validator pass found the shortcut-reference gap; no escalations.
-- The initial completion gate encountered localhost EPERM sandbox restrictions; an elevated run is in progress.
+- The initial `npm run check` encountered localhost EPERM sandbox restrictions. The elevated attempt overlapped base synchronization and reported one CLI surface failure plus a generated-tree mutation warning; it is not final verification. The requested stable post-fix elevated rerun was rejected by the user, so the completion gate remains unverified.
 - Live docs, seeded fixtures, Markdown renderer, both skill-trigger checks, and doctor passed before the scanner repair.
 - The implementation validation account predates the current structured Review record; this review independently checks the implementation.
 
+- Second fresh-context Validator pass found no remaining fix findings after the repair.
+- Post-fix live docs check, seeded fixtures, Markdown renderer, both skill-trigger checks, `roborepo package validate` (27 packages), `roborepo plans validate irpw877r --json` (zero findings), `bash scripts/doctor.sh --quiet` (102 checks), and `git diff --check` passed.
+- Base synchronization merged through `122d8685bd10a6e6fe0cf9ffe4118eeff98c6656` in `2ad3cbce`; main subsequently advanced to `b96e31ed40ee9213f3621a0d6dd10b114d321918`. Resume synchronization before final review.
+- No required manual checks remain. No base failure was independently established.
+
 ### Result
 - Status: pending
-- Reviewed implementation commit: 2ad3cbce296b260209b2ade081889742a2300b86
+- Reviewed implementation commit: 07a0e8cb6150c3bada1c27df8d21dd05e5e36178
 - Base commit: 122d8685bd10a6e6fe0cf9ffe4118eeff98c6656
 
 ### Approval
-- Decision: requested
+- Decision: not requested
