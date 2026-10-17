@@ -1,7 +1,7 @@
 ---
 id: gqzjlzgx
 priority: high
-next_action: Record the human approval of the branch tip, then merge the pull request and run /plan-close.
+next_action: Approved and landed; run /plan-close.
 blocked_by: []
 depends_on: []
 related:
@@ -633,14 +633,14 @@ npm run check
   to lift out unchanged into the shared `implementation-review` skill once packages can declare
   required skill dependencies (`ejsc769o`, after `o9zwxuav`). A separate optional skill today would
   need the enable-or-skip prompt for a mandatory step. (User decision.)
-- **2026-10-17** — The validation loop and the new `/plan-review` flow are accepted on the evidence of
-  the prose checks, the completion gate, and this review's three fresh-context validator passes,
-  without a separate live walkthrough. The confirmed Not tested walkthrough predates them; the user
-  will validate the flow progressively by using and refining it on real plans. (User decision.)
 - **2026-10-16** — Round 3: the reviewer fixed the preflight line-number finding itself, a code
   change the review normally sends to `/plan-execute`, and the base-only gate failure was accepted
   rather than fixed on this branch. Neither has consequence for the feature, and a separate
   `/plan-execute` session for them cost more than the fixes. (User decision.)
+- **2026-10-17** — The validation loop and the new `/plan-review` flow are accepted on the evidence of
+  the prose checks, the completion gate, and this review's three fresh-context validator passes,
+  without a separate live walkthrough. The confirmed Not tested walkthrough predates them; the user
+  will validate the flow progressively by using and refining it on real plans. (User decision.)
 
 Decisions made autonomously during implementation (2026-10-15):
 
@@ -815,6 +815,16 @@ Validator pass 3 (fresh-context subagent, at `790618ac`):
 - [x] README's "Agent workflows" row is padded one column wider than its table. — fixed in review
       (`b8880dca`)
 
+Round 4 validator pass (fresh-context subagent, at `f773aec2`, after the squash merge):
+
+- [x] Pull request #37 was squash-merged into `main` (`c29a7f18`, tree identical to `f773aec2`)
+      before an approval was recorded, so `next_action` still says to merge first. Point it at
+      recording the approval and `/plan-close`. — fixed in review (plan text)
+- [x] The "Validation loop change" record still says the escalated live-run question "stays open";
+      the 2026-10-17 Decision Log entry decided it. — fixed in review (plan text)
+- [x] The 2026-10-17 Decision Log entry sits above the 2026-10-16 Round 3 entry; move it below.
+      — fixed in review (plan text)
+
 Round 2 and round 3 findings stay under their round headings as history; all are resolved.
 
 ### Verification
@@ -953,13 +963,52 @@ Verification at `e78d1313`:
 
 - Validation: clean of code findings on pass 3 at `790618ac` (fresh-context subagents, three
   passes); pass 3's four findings were text only and were fixed without a further pass, per
-  `/plan-review` step 5. The escalated live-run question stays open for the user.
+  `/plan-review` step 5. The escalated live-run question was decided on 2026-10-17 (Decision Log).
 - After pass 2's fixes, at `071665e1`: doctor passed (102 checks); `test-cli.sh` 443 passed, 1
   failed (the base failure below); every later stage passed (`test:unit --group ci` 38/38, package
   install, four clean-machine suites, portal UI 103).
 - Base failure: `plan-suite-findings-check.mjs` (`UNKNOWN_PLAN_NAMESPACE`) fails the same way on an
   export of `main`.
 
+### Round 4
+
+Review on 2026-10-17 of `f773aec2dbc5e9c47bbfac3bbb1e28c5531d657f`, the branch tip, in a fresh
+session. Pull request #37 had already landed it on `main` as the squash commit `c29a7f18`, whose
+tree is identical to the tip. `main` changed only plan documents after that (`e5d1d771`,
+`1876fab1`), so base was not synchronized again: the approval covers the landed implementation.
+No commit after validator pass 3 (`790618ac`) had a gate run or a validator pass; this round
+covers them.
+
+Verification at `f773aec2`:
+
+- `npm run check`: doctor passed (102 checks); `test-cli.sh` 443 passed, 1 failed (the base
+  failure below). The remaining `ci.sh` stages were run one by one and all passed: install
+  collisions; `test:unit --group ci` 38/38 suites; package install; the four clean-machine Docker
+  suites; portal UI 103 passed. Windows installer parity not run (`pwsh` unavailable).
+- Base failure: `plan-suite-findings-check.mjs` (`UNKNOWN_PLAN_NAMESPACE` on
+  `backlog/agent-permissions-global-audit.md`) fails the same way on an export of the merge base
+  `38f16ab1`. `main` resolved it in `1876fab1` by renaming the plan; the check passes on an export
+  of `1876fab1`.
+- Validator pass (fresh-context subagent, the plan, base, and gate output): no code findings.
+  The diff since `790618ac` is the README row, `plan-execute`'s `agents/openai.yaml` description,
+  and plan text; pass 3's four findings hold. Acceptance criteria 1–9 met; `run-checks --filter
+  plan` 14/15 suites, the failure being the base failure; `skill render-commands --check`,
+  `skill triggers --check` (8 fixtures), and `skill audit` pass; `plans preflight` reports
+  implementation complete. Its three findings are text only, recorded under `### Findings` and
+  fixed in the plan text without a further pass.
+
+### Result
+
+- Status: complete
+- Reviewed implementation commit: f773aec2dbc5e9c47bbfac3bbb1e28c5531d657f
+- Base commit: 38f16ab1a1d5dd9a2b8fbbe101268e71fbe77041
+
 ### Approval
 
-- Decision: requested
+Approved by the user in chat on 2026-10-17, in the round 4 `/plan-review` session, answering
+"Do you approve f773aec2 (already landed as c29a7f18) as the implementation of plan gqzjlzgx?"
+with "approve". The approval was recorded after the merge, as post-merge recovery.
+
+- Decision: approved
+- Reviewed implementation commit: f773aec2dbc5e9c47bbfac3bbb1e28c5531d657f
+- Confirmed by: human
