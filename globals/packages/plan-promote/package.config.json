@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "plan-promote",
   "label": "Plan Promote",
-  "description": "Review, validate and optimize a plan before development begins.",
+  "description": "Review, validate and optimize a plan before development begins, then commit it to Ready.",
   "lifecycle": "optional",
   "presentation": {
     "category": "skills-dev-lifecycle",

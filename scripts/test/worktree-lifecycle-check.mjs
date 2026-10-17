@@ -485,6 +485,12 @@ try {
     fs.mkdirSync(path.join(main, "docs/plans/active"), { recursive: true });
     fs.writeFileSync(path.join(main, "docs/plans/active/story.md"), "---\nid: quoted\nworktree: \"quoted-plan-work\"\n---\n");
     assert.equal(activeWorktreeNames(main).has("quoted-plan-work"), true, "a quoted worktree field still protects its worktree");
+    fs.mkdirSync(path.join(main, "docs/plans/review"), { recursive: true });
+    fs.mkdirSync(path.join(main, "docs/plans/completed"), { recursive: true });
+    fs.writeFileSync(path.join(main, "docs/plans/review/awaiting.md"), "---\nid: awaiting\nworktree: under-review\n---\n");
+    fs.writeFileSync(path.join(main, "docs/plans/completed/done.md"), "---\nid: done\nworktree: finished-work\n---\n");
+    assert.equal(activeWorktreeNames(main).has("under-review"), true, "a plan under review keeps its worktree");
+    assert.equal(activeWorktreeNames(main).has("finished-work"), false, "a completed plan releases its worktree");
   }
   {
     assert.equal(proposedWorktreeFolder([

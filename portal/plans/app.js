@@ -11,6 +11,7 @@ import * as api from "./api.js";
 import * as tmpl from "./templates.js";
 import { createRepositorySourcesDialog } from "/portal/shared/repository-sources-dialog.js";
 import { createPlanDrawer } from "./plan-drawer.js";
+import { lifecycleLabel, lifecycleTabs, setLifecycleModel } from "./lifecycle.js";
 import { createBlockersPopover } from "./blockers-popover.js";
 import { mountOverflowNav } from "/portal/shared/overflow-nav.js";
 import { clearRepositoryScope, currentRepositoryScope, isRepositoryScopeUnavailable, onRepositoryScopeChange } from "/portal/shared/repository-scope.js";
@@ -19,7 +20,6 @@ import {
   FILTER_IDS,
   FILTER_DEFAULTS,
   FILTER_OPTION_DEFS,
-  LIFECYCLE_LABELS,
   filteredPlans,
   sortForLifecycle,
   isVisible,
@@ -34,9 +34,6 @@ import {
   urlForLifecycle,
 } from "./state.js";
 
-const LIFECYCLE_ORDER = ["backlog", "active", "completed", "archived"];
-// Rarely-visited lifecycles sit behind the row's ⋮ menu rather than taking a tab.
-const SECONDARY_LIFECYCLES = new Set(["completed", "archived", "unclassified"]);
 
 const state = {
   snapshot: null,
@@ -224,6 +221,9 @@ function showScopeUnavailable() {
 
 function applySnapshot(snapshot) {
   state.snapshot = snapshot;
+  setLifecycleModel(snapshot.lifecycle);
+  // The URL's tab could only be checked once the lifecycle model arrived.
+  state.selectedLifecycle = lifecycleFromSearchParams(new URLSearchParams(location.search));
   portalSetUpdatedAt();
   // One call to action at a time (pljvmyh §7): the package banner while plan-write is disabled,
   // then the shared repository empty state until a repository is known; the header only once there
@@ -376,27 +376,20 @@ function render() {
 }
 
 function renderLifecycleTabs(plansMatchingOtherFilters) {
-  lifecycleTitleEl.textContent = `${LIFECYCLE_LABELS[state.selectedLifecycle] || state.selectedLifecycle} Plans`;
-  const lifecycles = [...LIFECYCLE_ORDER];
-  const unclassifiedCount = plansMatchingOtherFilters.filter(
-    (record) => record.plan.lifecycle === "unclassified",
-  ).length;
-  // A URL can select Unclassified while no plan is; keep it listed so the row still names it.
-  if (unclassifiedCount > 0 || state.selectedLifecycle === "unclassified") lifecycles.push("unclassified");
+  lifecycleTitleEl.textContent = `${lifecycleLabel(state.selectedLifecycle)} Plans`;
   const counts = new Map();
-  for (const life of lifecycles) {
-    counts.set(
-      life,
-      plansMatchingOtherFilters.filter((record) => record.plan.lifecycle === life).length,
-    );
-  }
+  for (const record of plansMatchingOtherFilters) counts.set(record.plan.lifecycle, (counts.get(record.plan.lifecycle) || 0) + 1);
+  // Primary tabs come first and overflow states sit behind the row's ⋮ menu, in the manifest's
+  // order. Unclassified is listed only when a plan is, or the URL selects it, so the row still
+  // names it.
+  const tabs = lifecycleTabs().filter(({ id }) => id !== "unclassified" || counts.get(id) || state.selectedLifecycle === id);
   lifecycleNav.setItems(
-    lifecycles.map((life) => ({
-      label: `${LIFECYCLE_LABELS[life] || life} Plans`,
-      current: life === state.selectedLifecycle,
-      secondary: SECONDARY_LIFECYCLES.has(life),
+    tabs.map(({ id, secondary }) => ({
+      label: `${lifecycleLabel(id)} Plans`,
+      current: id === state.selectedLifecycle,
+      secondary,
       render: () =>
-        tmpl.lifecycleTab(life, counts.get(life) ?? 0, life === state.selectedLifecycle, selectLifecycle),
+        tmpl.lifecycleTab(id, counts.get(id) ?? 0, id === state.selectedLifecycle, selectLifecycle),
     })),
   );
 }

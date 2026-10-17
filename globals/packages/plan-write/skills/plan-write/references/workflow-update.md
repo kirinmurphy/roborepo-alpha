@@ -7,6 +7,7 @@
 5. Add newly discovered required work.
 6. Update `next_action`.
 7. Update blockers and dependencies.
-8. Keep the plan active unless completion criteria are verified.
+8. Leave the plan in its folder. Moving it is the job of the command that owns that transition;
+   `/plan-execute` moves an active plan to review only when its completion preflight passes.
 9. Update `reviewed_commit` only after deliberate review against repository state.
 10. Summarize plan changes.

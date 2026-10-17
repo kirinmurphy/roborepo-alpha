@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { rootId } from "../../modules/repositories/identity.mjs";
 import { parseFrontmatter } from "../../modules/plan-suite/index.mjs";
+import { LIFECYCLE_MODEL } from "../../modules/plan-suite/lifecycle-manifest.mjs";
 
 // What a repository's own files and its registry record say cleanup may touch: the worktree folder
 // automatic removal stays inside, and the worktrees active plans still claim.
@@ -75,13 +76,16 @@ function planFiles(mainPath, lifecycle) {
   catch { return []; }
 }
 
+// Worktrees a plan in a worktree-bound stage (Active or Review) still claims. A plan under review
+// keeps its worktree until /plan-close or /plan-archive releases it.
 export function activeWorktreeNames(mainPath) {
-  return new Set(planFiles(mainPath, "active").map((file) => planFields(file).worktree).filter(Boolean));
+  const folders = [...LIFECYCLE_MODEL.worktreeBound];
+  return new Set(folders.flatMap((lifecycle) => planFiles(mainPath, lifecycle)).map((file) => planFields(file).worktree).filter(Boolean));
 }
 
 // The worktree a plan names, found by id, path, or file name in any lifecycle folder.
 export function findPlanWorktree(mainPath, plan) {
-  for (const lifecycle of ["completed", "active", "backlog"]) {
+  for (const lifecycle of LIFECYCLE_MODEL.folders) {
     for (const file of planFiles(mainPath, lifecycle)) {
       const fields = planFields(file);
       if (fields.id === plan || file === path.resolve(plan) || path.basename(file) === plan) return fields.worktree || null;

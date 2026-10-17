@@ -7,7 +7,7 @@
 //
 // Pure: takes already-public data and returns a string. It reads no files and moves nothing, and
 // the prompt itself instructs the agent not to move the file either. Lifecycle changes stay with
-// the portal, which re-validates against fresh disk content on the next attempt.
+// the transition operation (transition.mjs), which re-validates fresh disk content on the next run.
 import { sortBySeverity } from "./findings.mjs";
 
 function capitalize(text) {
@@ -47,7 +47,7 @@ export function buildRepairPrompt({ repository, plan, sourceLifecycle, destinati
     "",
     "- Revise the plan with `/plan-write`.",
     `- Do not move the file. Leave it in \`docs/plans/${sourceLifecycle}/\`; the lifecycle move is`,
-    "  performed separately from the portal once the document validates.",
+    "  committed separately, by the plan command that owns it, once the document validates.",
     plan.id
       ? `- Preserve the stable plan ID \`${plan.id}\` exactly as written.`
       : "- Add a stable, lowercase-slug plan ID, and keep it unchanged from then on.",

@@ -1,12 +1,13 @@
 // Which copy of a plan is authoritative, and whether the other copy was edited out of turn.
 //
 // The primary checkout's copy decides which lifecycle stage a plan is in, because every lifecycle
-// transition is committed there. While a plan is active and its assigned worktree holds a usable
-// copy, that worktree's copy decides what the plan says. Both answers are derived from current Git
-// and filesystem state on every call; nothing is stored, so any RoboRepo instance, from any
-// checkout, reaches the same answer.
+// transition is committed there. While a plan is in a worktree-bound stage (Active or Review) and
+// its assigned worktree holds a usable copy, that worktree's copy decides what the plan says. Both
+// answers are derived from current Git and filesystem state on every call; nothing is stored, so
+// any RoboRepo instance, from any checkout, reaches the same answer.
 import crypto from "node:crypto";
 import { defaultRunGitSync } from "../repositories/git-exec.mjs";
+import { LIFECYCLE_MODEL } from "./lifecycle-manifest.mjs";
 
 // `primary` and `assigned.copy` are { lifecycle, worktree } read from each copy's path and
 // frontmatter. `assigned` is null when Git has no linked worktree by the primary copy's `worktree`
@@ -14,18 +15,25 @@ import { defaultRunGitSync } from "../repositories/git-exec.mjs";
 // Returns { source: "primary" | "worktree", reason }, where `reason` explains a fallback to the
 // primary copy that the plan should hear about, and is null otherwise.
 export function resolvePlanAuthority({ primary, assigned }) {
-  if (primary?.lifecycle !== "active" || !primary.worktree) return { source: "primary", reason: null };
+  if (!isWorktreeBound(primary?.lifecycle) || !primary.worktree) return { source: "primary", reason: null };
   if (!assigned) return { source: "primary", reason: "worktree-missing" };
   const copy = assigned.copy;
   if (!copy) return { source: "primary", reason: "copy-missing" };
-  // A worktree that does not yet contain the start-transition commit still holds the plan in
-  // backlog/ or without its worktree name, so it becomes authoritative only once it has that commit.
-  if (copy.lifecycle !== "active") return { source: "primary", reason: "copy-not-active" };
+  // A worktree that does not yet contain the start commit still holds the plan in
+  // ready/ or without its worktree name, so it becomes authoritative only once it has that commit.
+  // Its copy may sit in active/ while the primary copy is already in review/: the primary moves
+  // first, and the worktree receives the rename at its next base synchronization.
+  if (!isWorktreeBound(copy.lifecycle)) return { source: "primary", reason: "copy-not-active" };
   if (copy.worktree !== primary.worktree) return { source: "primary", reason: "copy-other-worktree" };
   return { source: "worktree", reason: null };
 }
 
-// Whether the non-authoritative primary copy of an active plan holds a version its worktree never
+// Active and Review: the stages whose assigned worktree holds the authoritative copy and is in use.
+export function isWorktreeBound(lifecycle) {
+  return LIFECYCLE_MODEL.worktreeBound.has(lifecycle);
+}
+
+// Whether the non-authoritative primary copy of a worktree-bound plan holds a version its worktree never
 // had. The primary copy is consistent when its bytes equal the plan at the merge base of the
 // primary HEAD and the worktree branch, a plan blob the branch's own commits produced, or the
 // worktree's working bytes. Matching by content needs no path tracking: an equal blob carries the
@@ -69,7 +77,7 @@ export function blobId(bytes, objectFormat = "sha1") {
 
 // `git log --raw` lines read ":<mode> <mode> <old> <new> <status>\t<path>"; the new blob is the
 // version that commit produced. An all-zero id is a deletion.
-function producedBlobs(rawLog) {
+export function producedBlobs(rawLog) {
   const blobs = new Set();
   for (const line of rawLog.split("\n")) {
     const fields = line.startsWith(":") ? line.slice(1).split(/\s+/) : [];

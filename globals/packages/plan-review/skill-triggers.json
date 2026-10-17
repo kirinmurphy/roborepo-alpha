@@ -1,0 +1,28 @@
+{
+  "tests": [
+    {
+      "skill": "plan-review",
+      "match": [
+        "/plan-review docs/plans/review/example.md",
+        "run the human review of this finished plan before I merge it",
+        "record explicit human approval for this plan's implementation"
+      ],
+      "nearMiss": [
+        "review this diff for bugs",
+        "implement the next task in this plan",
+        "close this plan now that it has merged"
+      ],
+      "triggerPhrases": [
+        "/plan-review",
+        "human review",
+        "record explicit human approval"
+      ],
+      "skipPhrases": [
+        "implementing a plan",
+        "reviewing an arbitrary diff",
+        "merging branches",
+        "post-merge closure"
+      ]
+    }
+  ]
+}

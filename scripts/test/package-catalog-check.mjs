@@ -26,7 +26,7 @@ assert(
   !catalog.some((pkg) => pkg.origin === "built-in" && pkg.defaultEnabled),
   "built-in packages should all be off by default",
 );
-for (const id of ["jcodemunch", "jdocmunch", "telemetry", "caveman", "plan-promote", "plan-start"]) {
+for (const id of ["jcodemunch", "jdocmunch", "telemetry", "caveman", "plan-promote", "plan-execute", "plan-review", "plan-archive"]) {
   assert(packageIds.has(id), `missing package: ${id}`);
 }
 for (const id of ["jcodemunch", "jdocmunch"]) {
@@ -42,7 +42,7 @@ for (const name of ["index code", "index docs", "watch code"]) {
 }
 
 const slashNames = loadSlashCommandPlan().commands.map((command) => command.name).sort();
-for (const name of ["case-study", "plan-write", "tighten", "session-close", "plan-promote", "plan-start", "plan-close"]) {
+for (const name of ["case-study", "plan-write", "tighten", "session-close", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive"]) {
   assert(slashNames.includes(name), `missing slash command: ${name}`);
 }
 
@@ -101,8 +101,8 @@ assert(snapshot.behaviorView.findIndex((section) => section.category === "Additi
 "Additional Agent Rules should follow Chat-Time Output");
 assert(snapshot.behaviorView.filter((section) => section.categoryId).at(-1)?.category === "Additional Agent Rules",
   "Additional Agent Rules should be the final package section");
-assert(sections.get("Plan Suite").items.map((item) => item.id).join(",") === "plan-write,plan-promote,plan-start,plan-close,session-close",
-  "the Plan Suite section lists the five suite commands in lifecycle order");
+assert(sections.get("Plan Suite").items.map((item) => item.id).join(",") === "plan-write,plan-promote,plan-execute,plan-review,plan-close,plan-archive,session-close",
+  "the Plan Suite section lists the seven suite commands in lifecycle order");
 
 const libraryStepTitles = new Set(buildOnboardSteps().map((step) => step.title));
 for (const section of snapshot.behaviorView) {

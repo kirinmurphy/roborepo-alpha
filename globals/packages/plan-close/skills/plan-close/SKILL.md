@@ -1,15 +1,19 @@
 ---
 name: plan-close
-description: Use when closing one repository plan whose implementation is finished or abandoned. Run the repository's checks, fix agent-resolvable gaps including missing tests, check claims and landing, and move a verified plan to docs/plans/completed/ or an abandoned one to docs/plans/archived/. Refuse only for unresolved work, unconfirmed manual checks, or unconfirmed landing. Trigger on explicit /plan-close or requests such as close this plan, archive this plan, or review whether a plan is complete. Do not use for creating or revising plans (plan-write), preparing a plan (plan-promote), beginning implementation (plan-start), ending a session (session-close), reviewing a working diff, or merging branches.
+description: Use when closing one repository plan after its reviewed pull request has merged. Accepts only a plan in docs/plans/review/. Run the repository's checks, fix agent-resolvable gaps including missing tests, check claims, a fresh human approval, and landing, then commit the move to docs/plans/completed/ and clean up the plan's worktree. Refuse only for unresolved work, unconfirmed manual checks, a stale or missing approval, or unconfirmed landing; hand superseded or abandoned plans to plan-archive. Trigger on explicit /plan-close or requests such as close this plan now that it has merged. Do not use for creating or revising plans (plan-write), preparing a plan (plan-promote), implementation (plan-execute), the human review or approval (plan-review), archiving (plan-archive), ending a session (session-close), reviewing a working diff, or merging branches.
 ---
 
 # Plan Close
 
-Close one existing plan: prove the work is done, or say exactly why it is not.
+Close one merged plan: prove the work is done and accepted, or say exactly why it is not.
 
 A closed plan is a claim the next reader trusts without checking. Resolve gaps within the selected
 plan's scope when the agent can do so, then refuse only if evidence or required work remains
 incomplete. A refusal names every remaining issue and updates the plan when required.
+
+`/plan-close` is a single post-merge action. The user merges the reviewed implementation into the
+base branch through a pull request, outside RoboRepo; this command runs afterwards. It never merges,
+never synchronizes the base branch into the feature branch, and never waits for a merge.
 
 ## Inputs
 
@@ -23,9 +27,10 @@ Resolve:
   release or publication behavior;
 - current Git state, including the plan's `worktree` and that worktree's branch.
 
-The eligible source lifecycle is the one that precedes completion in the plan lifecycle policy
-(`modules/plan-suite/lifecycle-policy.mjs`): today, `active/`. A plan in any other lifecycle is
-refused with its current location named.
+The eligible source lifecycle is the one that precedes completion in the lifecycle manifest
+(`manifests/platform/plan-lifecycle.json`): `review/`. A plan in any other lifecycle is refused with
+its current location named and the command that fits it: `/plan-execute` or `/plan-review` for an
+active plan, `/plan-archive` for work that will not be completed.
 
 ## Paired Skills
 
@@ -55,16 +60,17 @@ verdict only from the resulting state. Read `references/verdict.md` before step 
 ### 0. Confirm the worktree's plan copy is integrated
 
 Do this first, before step 1, from the primary checkout (the first `worktree` entry of
-`git worktree list --porcelain`). While a plan is active, the copy in its assigned worktree is the
-authoritative one; by the time a plan is complete its branch has merged, so the worktree has
-nothing left to contribute. This step reads the worktree's copy once, and the rest of the run works
-only in the primary checkout.
+`git worktree list --porcelain`). While a plan is in `active/` or `review/`, the copy in its assigned
+worktree is the authoritative one; by the time a plan closes its branch has merged, so the worktree
+has nothing left to contribute. This step reads the worktree's copy once, and the rest of the run
+works only in the primary checkout.
 
-The worktree's copy is usable when the primary copy is in `docs/plans/active/` and names a
-worktree, Git has a linked worktree with that administrative name, and that worktree holds a
-readable copy with the same `id`, still in `docs/plans/active/`, naming the same worktree. When the
-plan names no worktree, skip this step. When the worktree's copy is not usable, skip the check and
-state in the final report that the worktree's plan state was not available.
+The worktree's copy is usable when the primary copy is in `docs/plans/review/` and names a worktree,
+Git has a linked worktree with that administrative name, and that worktree holds a readable copy
+with the same `id`, in `docs/plans/active/` or `docs/plans/review/`, naming the same worktree. A copy
+still in `active/` is expected when the final merge did not carry the review rename. When the plan
+names no worktree, skip this step. When the worktree's copy is not usable, skip the check and state
+in the final report that the worktree's plan state was not available.
 
 Otherwise the copy is integrated when the base branch already has every plan version the worktree
 has: the worktree copy's working bytes equal the primary copy's working bytes, or its blob id is
@@ -78,19 +84,18 @@ git rev-parse <fork>:<plan path>                          # the plan at the fork
 git log --raw --no-abbrev --format= <fork>..HEAD -- docs/plans
 ```
 
-In the `--raw` lines, the fourth field is the blob each commit produced.
+In the `--raw` lines, the fourth field is the blob each commit produced. The canonical close
+transition command repeats this check before it commits.
 
-- **Not integrated:** the worktree holds a plan version the base branch never had, so its plan
-  progress has not landed. Refuse with `plan: not integrated`, naming the worktree and the plan
-  path, and make no plan edits. Never copy the worktree's version into the primary checkout. The
-  only other outcome of such a run is archiving superseded or abandoned work through the archive
-  handoff in step 4.
+- **Not integrated:** the worktree holds a plan version the base branch never had, so the pull
+  request has not merged, or the local base branch has not been updated since it did. Refuse with
+  `plan: not integrated`, naming the worktree and the plan path, and make no plan edits. Never copy
+  the worktree's version into the primary checkout.
 - **Integrated:** authority returns to the primary copy for the rest of the run. Every plan edit in
-  steps 2 through 7 — validator fixes, corrected claims, `## Not tested` evidence, verification,
-  the move to `completed/` — goes to the primary copy, including the notes of a later refusal.
-  Never edit the worktree's copy. Until the plan closes, the portal reports those notes as an
-  outside edit; a rerun of this step still passes, because the base branch has every version the
-  worktree has.
+  steps 2 through 8 — validator fixes, corrected claims, `## Not tested` evidence, verification —
+  goes to the primary copy, including the notes of a later refusal. Never edit the worktree's copy.
+  Until the plan closes, the portal reports those notes as an outside edit; a rerun of this step
+  still passes, because the base branch has every version the worktree has.
 
 ### 1. Run the tests
 
@@ -113,11 +118,14 @@ publication checks are relevant only when the
 plan owns that environment or release behavior; otherwise classify them as optional evidence rather
 than universal closure gates.
 
+A fix made here lands on the base branch after the reviewed merge, so it is outside what the human
+approved. Keep such fixes to tests and evidence; a change to behavior needs `/plan-review` again.
+
 ### 2. Validate the document
 
 Run the repository's canonical plan validator for `<plan>` with machine-readable output. Resolve
 agent-actionable findings and rerun it. Its remaining findings feed the verdict; a lifecycle finding
-such as an empty `next_action` on an active plan is reported, never invented away.
+is reported, never invented away.
 
 ### 3. Check the plan against the code
 
@@ -128,6 +136,7 @@ Check every claim against the code, not against its checkboxes:
 - requirements the code does not satisfy are reported;
 - items the plan marks deliberately deferred, with the reason written next to them, are not
   reported as open;
+- every finding under `## Review` is checked off with its resolution;
 - UI or manual checks that could not run are reported as unverified, never as passed.
 
 Check the affected reader-facing docs of record named in `## Documentation impact`, and any
@@ -148,21 +157,9 @@ dependency, or work outside this plan.
 Follow `references/verdict.md`:
 
 - **Incomplete or blocked after agent-resolvable repairs:** refuse. Name the remaining work, update
-  the plan's tasks and `next_action`, and leave it in its lifecycle folder.
-- **Superseded or abandoned:** record the reason in the plan, then `git mv` it to
-  `docs/plans/archived/`, in the primary checkout. Abandoned work never merges, so Git never
-  brings the worktree's plan copy to the base branch; archiving carries it there once, as step 0
-  left the copies:
-
-  | Copies | Archiving does |
-  | --- | --- |
-  | Worktree copy integrated, or the plan names no worktree | Records the reason in the primary copy and moves it |
-  | Worktree copy not integrated, and the primary copy equals the plan at the fork or a blob the worktree branch produced (`git log --raw --no-abbrev --format= <fork>..<branch> -- docs/plans`) | Writes the worktree copy's content into the primary copy, records the reason, and moves it, staged by path as one archive change on the base branch |
-  | Worktree copy not integrated, and the primary copy holds a version the worktree never had | Refuses with `plan: conflicting copies`, naming both; the user merges the base branch into the worktree, or moves the edit into the worktree's copy and reverts it in the primary checkout |
-  | Worktree copy unavailable | Archives the primary copy and states in the final report that the worktree's plan state was not available |
-
-  This is the only time plan content is copied between checkouts: once, one way, at the archive
-  transition. Never merge two edited copies.
+  the plan's tasks and `next_action`, and leave it in `review/`.
+- **Superseded or abandoned:** stop and direct the user to `/plan-archive`, naming the reason you
+  found. `/plan-close` never archives.
 - **Complete:** continue to step 5.
 
 ### 5. Confirm `## Not tested` is clear
@@ -176,7 +173,23 @@ without the user's confirmation. A user may instead defer an entry to another pl
 scope decision and its reason in the `## Decision Log` before removing the entry. While any
 unchecked entries remain, refuse and list them; the validator reports `UNCONFIRMED_NOT_TESTED`.
 
-### 6. Confirm the work landed
+### 6. Confirm a fresh human approval
+
+Run the repository's canonical approval check for `<plan>`. It reads `### Approval` under
+`## Review` and compares the reviewed implementation commit with the landed branch tip, outside
+`docs/plans/`.
+
+- `fresh`: continue.
+- `stale`: the implementation changed after it was approved, for example when the base branch moved
+  before the merge. Refuse, name the changed paths, and direct the user to `/plan-review`.
+- `missing`, `not-approved`, or `invalid`: refuse and direct the user to `/plan-review`. Never write
+  or repair an approval here.
+- `unavailable`: the plan names a worktree whose branch cannot be resolved (the worktree was removed,
+  or its HEAD is detached), so neither the approval nor the landing can be checked. Refuse, and ask
+  the user to recreate the linked worktree with the same name on the plan's branch. Never compare
+  against the base branch instead.
+
+### 7. Confirm the work landed
 
 The work must be in the base branch, including after a squash or rebase merge.
 
@@ -195,30 +208,24 @@ The work must be in the base branch, including after a squash or rebase merge.
 - If no scanned first-parent commit absorbs the branch, the scan limit is exceeded, or any required
   Git evidence is unavailable, report `landed: unconfirmed` and refuse.
 
-### 7. Close
+### 8. Close
 
-`git mv` the plan to `docs/plans/completed/`, keeping its filename and `id`. Clear `next_action`,
-add a completion summary, and write a `## Verification` section with the evidence: the test command
-and result, which affected docs of record were checked against the landed code, what else was
-checked, and anything that could not be verified. Run
-the repository's canonical plan validator against the moved file and resolve every finding.
+In the primary copy, clear `next_action`, add a completion summary, and write a `## Verification`
+section with the evidence: the test command and result, which affected docs of record were checked
+against the landed code, the approved commit and the absorbing commit, what else was checked, and
+anything that could not be verified. Run the repository's canonical plan validator and resolve every
+finding.
 
-Stage only the old and new plan paths. Immediately before committing, re-read Git status and the
-staged diff to identify any unrelated work. After validation passes, commit the completed plan's
-move and edits automatically, even when other paths are staged:
+Then run the repository's canonical close transition command for `<plan>` from the primary checkout.
+It re-verifies integration, approval freshness, and landing, validates the `completed/`
+requirements, moves the plan from `review/` to `completed/` with `git mv`, and commits only the
+plan's old and new paths, even when other paths are staged. Unrelated staged or unstaged work stays
+in place. It never pushes. Report the commit it made. If it refuses, report each reason; the closure
+is not durable, so do not proceed with server or worktree cleanup.
 
-```text
-git commit --only -m "Close plan <id>" -- <active plan path> <completed plan path>
-```
+### 9. Stop the worktree's servers
 
-The two pathspecs are this plan's paths before and after the move; never use a wildcard, `-a`, or
-an unrestricted commit. Confirm the new commit contains only those plan paths and that unrelated
-staged or unstaged work remains in place. Never push. If the commit fails, report the failure, mark
-the closure as not durable, and do not proceed with server or worktree cleanup.
-
-### 8. Stop the worktree's servers
-
-Only after step 7 committed a complete plan, run the repository's canonical linked-worktree server
+Only after step 8 committed a complete plan, run the repository's canonical linked-worktree server
 cleanup command for `<plan>`. It sends `SIGTERM` to the processes listening on a port from inside
 the plan's linked worktree, and nothing
 else: never the primary checkout, never agent sessions, shells, or editors. Do not ask first; the
@@ -226,9 +233,9 @@ work has landed, so these servers run stale code. Report each server with its PI
 result. A server that is `still-running` or `failed` is reported, never killed by other means.
 Skip this step for an archived or refused plan.
 
-### 9. Remove the closed worktree
+### 10. Remove the closed worktree
 
-After step 8, when the plan was moved to `completed/`, run the repository's canonical worktree
+After step 9, when the plan was moved to `completed/`, run the repository's canonical worktree
 cleanup command scoped to this plan with its apply flag. Report whether it removed the worktree and
 branch, which guard kept them, or why removal failed. Do not remove the worktree by hand or bypass
 a guard. Skip this step for an archived or refused plan, and in repositories without a canonical
@@ -245,17 +252,18 @@ codes, or Git mechanics. For each issue, include:
 - the exact plan entry, validation finding, failed check, or Git result;
 - why it prevents closure;
 - the user action that would resolve it; and
-- whether it is manual confirmation, implementation work, an external dependency, or an
-  unconfirmed landing result.
+- whether it is manual confirmation, implementation work, an approval to renew, an external
+  dependency, or an unconfirmed landing result.
 
 For unchecked `## Not tested` entries, quote or faithfully reproduce each entry so the user can
 confirm the specific behavior. For `landed: unconfirmed`, name the branch/worktree, base branch,
-exact ancestry result, and the content-level check that is still needed. Preserve all open issues
-in the plan's lifecycle folder; never check off a manual entry without user confirmation.
+exact ancestry result, and the content-level check that is still needed. For a stale approval,
+name the approved commit, the branch tip, and the changed paths. Preserve all open issues in the
+plan's lifecycle folder; never check off a manual entry without user confirmation.
 
 End every blocked or refused report with: **Would you like help resolving any of these issues?**
-If the user says yes, help with the listed issues without silently changing their confirmation or
-merge decisions.
+If the user says yes, help with the listed issues without silently changing their confirmation,
+approval, or merge decisions.
 
 ## Final Report
 
@@ -265,8 +273,9 @@ Close result
 - Tests: <command> -> pass|fail|not run
 - Verdict: complete|incomplete|blocked|superseded|abandoned
 - Not tested entries open: <count>
+- Approval: fresh at <commit>|stale|missing|not-approved|invalid|unavailable
 - Landed: yes|unconfirmed|not applicable
-- Lifecycle change: <from> -> <to>, or none
+- Lifecycle change: review -> completed, or none
 - Closed: yes|no
 - Close commit: <hash>|failed|not applicable
 - Servers stopped: <pid :port result, ...>|none|skipped
@@ -280,9 +289,12 @@ current Git status.
 
 Do not:
 
-- close a plan while tests fail, work is open, a `## Not tested` entry is unchecked, or landing is
-  unconfirmed;
+- close a plan while tests fail, work is open, a `## Not tested` entry is unchecked, the approval is
+  not fresh, or landing is unconfirmed;
 - check off manual-only `## Not tested` entries without user confirmation;
+- write, repair, or infer an approval;
+- archive a plan; that is `/plan-archive`;
+- synchronize the base branch into the feature branch, or wait for a merge;
 - expand implementation beyond the selected plan's scope or silently decide a material design tradeoff;
-- merge, push, delete branches, or remove worktrees;
+- merge, push, delete branches, or remove worktrees by hand;
 - close more than the one named plan.

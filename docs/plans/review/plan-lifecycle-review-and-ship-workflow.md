@@ -1,7 +1,7 @@
 ---
 id: gqzjlzgx
 priority: high
-next_action: Add manifests/platform/plan-lifecycle.json with the ready and review states, and replace the duplicated lifecycle lists in modules/plan-suite and portal/plans with reads from it.
+next_action: Record the human approval of the branch tip, then merge the pull request and run /plan-close.
 blocked_by: []
 depends_on: []
 related:
@@ -27,8 +27,10 @@ plan adds two lifecycle folders, `ready/` and `review/`, and the commands that m
 them:
 
 - `/plan-promote` validates a plan and commits it to `ready`;
-- `/plan-execute` replaces `/plan-start`, and can be rerun across sessions;
-- `/plan-review` performs independent QA and records explicit human approval;
+- `/plan-execute` replaces `/plan-start`, can be rerun across sessions, and ends in a validation
+  loop that checks and fixes the work before review;
+- `/plan-review` runs the human review: it rechecks and fixes in the same session, then records
+  explicit human approval;
 - `/plan-archive` retires a plan without losing unmerged work;
 - the existing **`/plan-close`** stays the post-merge verifier and finalizer.
 
@@ -49,10 +51,13 @@ This plan supersedes the former `plan-lifecycle-suite-workflow-navigation` plan,
   in `ready`.
 - `/plan-execute` starts or resumes implementation from `ready` or `active`, and fixes recorded QA
   findings while the plan is in `review`.
-- A plan moves `active → review` when **implementation is complete**. Independent QA and human
-  acceptance happen after that move.
-- `/plan-review` performs independent QA, records concise findings and resolutions in the plan, and
-  requires explicit human approval before the manual merge and `/plan-close`.
+- A plan moves `active → review` when **implementation is complete and validated**: the validation
+  loop runs before the move, and the human review and acceptance happen after it.
+- `/plan-execute` ends in a validation loop: a fresh-context validator checks the work, and the run
+  fixes what has a clear fix until a pass is clean, before the move to `review`.
+- `/plan-review` is the human review: it rechecks the synced work, fixes what has a clear fix in the
+  same session, presents a review packet, and requires explicit human approval before the manual
+  merge and `/plan-close`.
 - Fixes within the existing requirements stay in `review`. A plan returns to `active` only when
   its scope or acceptance criteria change materially, and it keeps its branch and worktree.
 - During review, merge the current base branch **into the feature branch**, again in later review
@@ -173,8 +178,8 @@ flowchart LR
 | --- | --- | --- | --- |
 | `/plan-write` | New or existing plan | Create or revise the plan and its executable checklist | New plan in `backlog`; never moves a plan |
 | `/plan-promote` | `backlog`, `ready` | Reconcile requirements, tests, dependencies, and tasks | Commit `backlog → ready`, or refine a `ready` plan in place |
-| `/plan-execute` | `ready`, `active`, `review` | Start or resume implementation; in `review`, fix recorded findings | `ready → active`; `active → review` on implementation completion; stays `review` while fixing findings |
-| `/plan-review` | `active`, `review` | Check implementation readiness, merge base into the branch, review independently, record findings, request human approval | `active → review` if eligible; stays `review` until approved, or `review → active` on a scope change |
+| `/plan-execute` | `ready`, `active`, `review` | Start or resume implementation, then run the validation loop; in `review`, fix findings sent back | `ready → active`; `active → review` after a clean validation pass and a passing preflight; stays `review` while fixing findings |
+| `/plan-review` | `active`, `review` | Check implementation readiness, merge base into the branch, recheck and fix in the same session, present the review packet, request human approval | `active → review` if eligible; stays `review` until approved, or `review → active` on a scope change |
 | `/plan-close` | `review`, after the manual merge | Verify landed implementation and approval, commit completion, clean up safely | `review → completed` |
 | `/plan-archive` | `backlog`, `ready`, `active`, `review` | Record the reason, preserve unmerged code, archive | Commit the move to `archived` |
 | `/session-close` | Any agent session | Record progress and a handoff | No lifecycle transition |
@@ -238,7 +243,17 @@ A worktree copy still in `active/` while the primary copy is in `review/` is the
 during review, not an error. The primary copy still decides the lifecycle stage. The
 outside-edit check (`checkOutsideEdits`) applies to both states unchanged.
 
-### Implementation completion is not QA
+### Implementation completion is not approval
+
+`/plan-execute` finishes with a **validation loop** (`references/validation-loop.md`). A validator
+with fresh context, a subagent where the harness has one, reads the plan, the full diff, and the
+gate output, never the implementer's account, and only reports. Each finding is classed by
+consequence: `fix` (the right fix is clear and stays within the requirements and specified
+contracts, code included) is fixed in the same run; `escalate` (a choice between real alternatives,
+a requirement or unspecified contract change, or work outside the plan) becomes an Open Questions
+entry; `base` (the base branch fails the same check) is recorded and blocks nothing. The loop repeats
+until a pass finds nothing to fix, for at most five passes, and the submit transition never runs
+before that.
 
 `/plan-execute` and `/plan-review` share one completion preflight. Its deterministic checks are:
 
@@ -289,14 +304,17 @@ findings may stay for readable history.
 ```
 
 1. `/plan-review` starts from an `active` plan that passes the preflight, or resumes in `review`. It
-   first synchronizes base into the feature branch, then inspects requirements, changes, tests, and
-   evidence independently of the implementation agent.
-2. It records findings and verification in the plan and commits the plan in the worktree.
-   `/plan-execute`, run in `review` in a **separate session**, addresses those findings; no separate
-   fix command is needed.
-3. Rerun `/plan-review` after fixes. Corrections within the approved requirements stay in `review`.
-4. Once findings and required manual checks are resolved, ask the human for explicit approval and
-   commit the approval record. An agent cannot infer approval from passing tests.
+   first synchronizes base into the feature branch, then runs the gate (a failure the base branch
+   has too is a base failure, not a finding) and one validator pass over the merged result, with the
+   same rubric as the validation loop.
+2. It records findings and verification in the plan, then fixes every `fix` finding in the **same
+   session**, code included, each in its own commit, and checks again until a pass is clean.
+3. It presents a review packet: each acceptance criterion with its evidence, what changed, the
+   validator passes, its own commits, base failures, manual checks, and each `escalate` finding as a
+   decision with a recommendation.
+4. The human approves, asks for changes it makes in the same session, decides escalations, or sends
+   the work to `/plan-execute` in a separate session. Only the human's explicit answer is approval;
+   an agent cannot infer it from passing tests.
 
 **Scope change.** If review finds that requirements or acceptance criteria must change materially,
 `/plan-review` revises the plan and its tasks in the worktree, invalidates any approval, and commits
@@ -394,8 +412,8 @@ decisions and agent work; they do not compose their own Git commands.
 
 - `recommendedPlanCommand` recommends `plan-promote` for backlog and `plan-execute` for ready. For
   an active plan with no unchecked tasks outside `## Not tested`, it recommends `plan-review`. In
-  review, it recommends `plan-execute` while findings are open and `plan-close` once approval is
-  recorded.
+  review, it recommends `plan-review`, which fixes open findings in its own session, until approval
+  is recorded, then `plan-close`.
 - Retire the `plan-start` package with the existing retired-package path, and move its `rules.md`
   ("Code Outlives Plans") to `plan-execute`. Add `plan-execute`, `plan-review`, and `plan-archive`
   packages, and update `PLAN_SUITE_PACKAGES`, `PLAN_SUITE_COMMANDS`, trigger fixtures, and generated
@@ -424,66 +442,76 @@ them overrides this plan.
 
 ### Phase 1 — Lifecycle model and transition operation
 
-- [ ] Add `manifests/platform/plan-lifecycle.json`, its loader and validation, and a pure compiler.
+- [x] Add `manifests/platform/plan-lifecycle.json`, its loader and validation, and a pure compiler.
       Publish the projection in the plans snapshot.
-- [ ] Replace the hard-coded lifecycle lists in `modules/plan-suite/index.mjs`,
+- [x] Replace the hard-coded lifecycle lists in `modules/plan-suite/index.mjs`,
       `lifecycle-policy.mjs`, `portal/plans/state.js`, `app.js`, `elements/plan-status.js`, and
       `templates.js` with reads from the manifest.
-- [ ] Add `ready` and `review` destination validators: `ready` requires zero structural findings;
+- [x] Add `ready` and `review` destination validators: `ready` requires zero structural findings;
       `review` applies the `active` rules.
-- [ ] Extend `resolvePlanAuthority`, `/plan-close` step 0's integration check, and `plan-schema.md`'s
+- [x] Extend `resolvePlanAuthority`, `/plan-close` step 0's integration check, and `plan-schema.md`'s
       authority rule to cover `review/`.
-- [ ] Generalize `start-transition.mjs` into the shared transition operation with the plan-path
+- [x] Generalize `start-transition.mjs` into the shared transition operation with the plan-path
       precondition, scoped commit, idempotent retry, and post-commit checks. Fold or remove
       `movePlanLifecycle` and `updatePlanLifecycle`.
-- [ ] Add the completion preflight and the approval freshness check, both reading the plan's
+- [x] Add the completion preflight and the approval freshness check, both reading the plan's
       Markdown.
 
 ### Phase 2 — Commands and Git workflow
 
-- [ ] Update `/plan-promote` to commit `backlog → ready` and support reruns in `ready`. Replace its
+- [x] Update `/plan-promote` to commit `backlog → ready` and support reruns in `ready`. Replace its
       "change plan lifecycle" boundary and the matching phrase in
       `scripts/test/plan-promote-plan-start-check.mjs`.
-- [ ] Create the `plan-execute` package from `plan-start`: `ready`/`active`/`review` handling, worktree
+- [x] Create the `plan-execute` package from `plan-start`: `ready`/`active`/`review` handling, worktree
       reuse, `active → review` only after the preflight passes, and the carried-over `rules.md`.
       Retire `plan-start`.
-- [ ] Add the `plan-review` package: preflight, `sync-base`, independent QA, `## Review` findings,
+- [x] Add the `plan-review` package: preflight, `sync-base`, independent QA, `## Review` findings,
       reruns after fixes, human approval, and `review → active` on a scope change.
-- [ ] Add the `sync-base` operation with its conflict-resolution continuation.
-- [ ] Update `/plan-close` to accept only `review`, verify fresh approval for the landed branch tip,
+- [x] Add the `sync-base` operation with its conflict-resolution continuation.
+- [x] Update `/plan-close` to accept only `review`, verify fresh approval for the landed branch tip,
       commit `review → completed`, and hand superseded or abandoned plans to `/plan-archive`. Keep
       its landed check and cleanup.
-- [ ] Add the `plan-archive` package, absorbing `/plan-close` step 4's copy table and unmerged-work
+- [x] Add the `plan-archive` package, absorbing `/plan-close` step 4's copy table and unmerged-work
       guard.
-- [ ] Add `roborepo plans` subcommands and command definitions for the new operations.
+- [x] Add `roborepo plans` subcommands and command definitions for the new operations.
 
 ### Phase 3 — Portal and documentation
 
-- [ ] Update portal tabs, counts, filters, copy-prompt actions, `recommendedPlanCommand`,
+- [x] Update portal tabs, counts, filters, copy-prompt actions, `recommendedPlanCommand`,
       `PLAN_SUITE_PACKAGES`, and the readiness and freshness labels.
-- [ ] Update package manifests, `PLAN_SUITE_COMMANDS`, skill-trigger fixtures, and generated
+- [x] Update package manifests, `PLAN_SUITE_COMMANDS`, skill-trigger fixtures, and generated
       projections under `generated/packages/`; remove `plan-start` references.
-- [ ] Update every doc listed under [Documentation impact](#documentation-impact).
+- [x] Update every doc listed under [Documentation impact](#documentation-impact).
 
 ### Phase 4 — Verification
 
-- [ ] Domain tests: manifest loading and validation; valid and invalid transitions; scoped commits
+- [x] Domain tests: manifest loading and validation; valid and invalid transitions; scoped commits
       with unrelated staged work present; idempotent retries; refusals that leave no mutation; authority
       with the primary copy in `review/` and the worktree copy in `active/`; completion preflight;
       approval freshness across plan-only and code commits.
-- [ ] Git fixtures: `sync-base` clean, conflicting, and rename-conflict cases; `/plan-close` landing
+- [x] Git fixtures: `sync-base` clean, conflicting, and rename-conflict cases; `/plan-close` landing
       with normal, squash, and rebase merges (extend `scripts/test/plan-close-integration-check.mjs`
       and `worktree-lifecycle-check.mjs`); archive with integrated, unintegrated, and conflicting
       copies.
-- [ ] Package tests: `plan-start` retirement in `plan-suite-commands-check.mjs`; the new packages in
+- [x] Package tests: `plan-start` retirement in `plan-suite-commands-check.mjs`; the new packages in
       `package-catalog-check.mjs` and the skill-trigger fixtures.
-- [ ] Portal tests: `plans-portal-state-check.mjs` and the `scripts/test/portal-ui/` specs cover the
+- [x] Portal tests: `plans-portal-state-check.mjs` and the `scripts/test/portal-ui/` specs cover the
       new tabs, actions, and labels.
-- [ ] Register every new `*-check.mjs` in `scripts/test/test-cli.sh` or the `ci` group of
+- [x] Register every new `*-check.mjs` in `scripts/test/test-cli.sh` or the `ci` group of
       `scripts/test/check-groups.json`.
-- [ ] Exercise the full manual workflow once and record the result under `## Not tested` if any
+- [x] Exercise the full manual workflow once and record the result under `## Not tested` if any
       step cannot be automated.
-- [ ] Run the gates listed under [Validation](#validation) and record the results.
+- [x] Run the gates listed under [Validation](#validation) and record the results.
+
+### Phase 5 — Validation loop and the human review
+
+- [x] Add the validation loop to `/plan-execute`: the gate in `SKILL.md`, the loop and rubric in
+      `references/validation-loop.md`, with `fix`, `escalate`, and `base` classes and a five-pass cap.
+- [x] Make `/plan-review` the human review: a validator pass after `sync-base`, fixes by consequence
+      in the same session, the review packet, and base failures recorded rather than raised.
+- [x] Recommend `/plan-review` for review plans with open findings in the portal.
+- [x] Update the skills' prose checks, trigger fixtures, generated commands, and every doc that
+      described the earlier review contract.
 
 ## Validation
 
@@ -494,11 +522,13 @@ them overrides this plan.
 2. Every successful transition produces one primary-checkout commit containing only the plan's
    old and new paths. Unrelated work is untouched. A refused or failed move mutates nothing, and a
    retry is safe.
-3. `/plan-execute` resumes incomplete work across sessions and moves to `review` only when the
-   completion preflight passes, not when QA passes.
-4. `/plan-review` can start from a complete `active` plan, record findings, rerun after fixes, and
-   record explicit human approval for the current implementation. Fixes stay in `review`; scope
-   changes return the plan to `active` with its worktree intact.
+3. `/plan-execute` resumes incomplete work across sessions, runs a fresh-context validation loop that
+   fixes `fix` findings until a pass is clean, and moves to `review` only after that and a passing
+   completion preflight.
+4. `/plan-review` can start from a complete `active` plan, recheck the synced work, fix `fix`
+   findings in the same session, present a review packet, and record explicit human approval for
+   the current implementation. Base-only failures are recorded, not raised. Fixes stay in `review`;
+   scope changes return the plan to `active` with its worktree intact.
 5. `sync-base` merges base into the feature branch, pauses on conflicts without losing work, and
    approval goes stale whenever implementation content changes.
 6. `/plan-close` runs only after the user's GitHub merge. It keeps the existing landed check,
@@ -544,7 +574,7 @@ npm run check
 | The primary and worktree copies disagree on path during review | Stable id plus explicit authority across `active`/`review`; never copy content between checkouts outside the one-time archive carry |
 | The `active → review` rename conflicts with the worktree's edits during `sync-base` | The continuation keeps the worktree's content at the new path; a fixture covers it |
 | Transition commits run in a primary checkout the user is working in | Precondition covers only the plan's paths and the base branch; commit with `--only`; never touch other work |
-| Incomplete work is mistaken for ready-to-review | The deterministic preflight plus the agent's requirement check; QA stays with `/plan-review` |
+| Incomplete work is mistaken for ready-to-review | The validation loop, the deterministic preflight, and the agent's requirement check before the move; the human review in `/plan-review` after it |
 | Base synchronization changes code after approval | Freshness compares the tree outside `docs/plans/`; `/plan-close` refuses stale approval |
 | A squash merge appears unlanded | Keep `worktree-landed.mjs` and its regression fixtures |
 | Cleanup discards unmerged feature code | Existing worktree and branch guards; archive refuses without explicit authorization |
@@ -579,8 +609,357 @@ npm run check
 - **2026-10-15** — The transition precondition narrows from "primary checkout fully clean" to "base
   branch checked out and the plan's own paths clean", matching `/plan-close`'s scoped commit. A
   fully clean primary would block every transition from a worktree session.
+- **2026-10-15** — `/plan-review` fixes additive findings in place (tests that only add coverage,
+  doc and evidence corrections, typos), each in its own commit named in the approval request.
+  Findings that change behavior, choose between alternatives, or change a contract still go to
+  `/plan-execute` in a separate session. A separate round for every finding cost a session and a
+  full re-review even for a one-line doc fix, while independence only matters where the reviewer
+  would otherwise approve its own design. Same line as `/plan-close`'s post-merge limit to tests and
+  evidence. (User decision, during the first review round.)
+
+- **2026-10-16** — `roborepo plans validate` resolves plan authority as part of this plan, on its
+  branch. The Review stage makes a stale primary copy routine, and acceptance criterion 8 promises
+  that the CLI shows the authoritative copy. (User decision, during the second review round, after
+  first deferring it.)
+- **2026-10-16** — `/plan-execute` ends in a validation loop, and `/plan-review` becomes the human
+  review that fixes what has a clear fix in the same session. Findings are classed by consequence
+  (`fix`, `escalate`, `base`), not by kind of change, and failures the base branch shares are never
+  findings. Supersedes the 2026-10-15 entries that made `/plan-review` the independent QA step and
+  limited it to additive fixes: running a separate session for every finding cost a round and a
+  full re-review for fixes with no consequence for the feature. Independence now comes from the
+  validator's fresh context and the human's review. The plan stays in `review/` rather than
+  reopening for this change. (User decision.)
+- **2026-10-16** — The validator's rubric stays inside `/plan-execute` as a reference for now, written
+  to lift out unchanged into the shared `implementation-review` skill once packages can declare
+  required skill dependencies (`ejsc769o`, after `o9zwxuav`). A separate optional skill today would
+  need the enable-or-skip prompt for a mandatory step. (User decision.)
+- **2026-10-17** — The validation loop and the new `/plan-review` flow are accepted on the evidence of
+  the prose checks, the completion gate, and this review's three fresh-context validator passes,
+  without a separate live walkthrough. The confirmed Not tested walkthrough predates them; the user
+  will validate the flow progressively by using and refining it on real plans. (User decision.)
+- **2026-10-16** — Round 3: the reviewer fixed the preflight line-number finding itself, a code
+  change the review normally sends to `/plan-execute`, and the base-only gate failure was accepted
+  rather than fixed on this branch. Neither has consequence for the feature, and a separate
+  `/plan-execute` session for them cost more than the fixes. (User decision.)
+
+Decisions made autonomously during implementation (2026-10-15):
+
+- **Transition names.** The `roborepo plans` subcommands are `promote`, `start`, `submit`
+  (active → review), `reopen` (review → active), `close`, and `archive`, one per manifest
+  transition, all handled by one CLI function. `start` keeps its name because it still names the
+  move, not the retired command. Alternative: one generic `plans transition <id>`; rejected as
+  less discoverable in help and skill prose.
+- **Destination gates.** The transition validates the content it will commit. `ready` and
+  `completed` tolerate no findings, as the design requires for Ready; `active` and `review`
+  tolerate only `UNCONFIRMED_NOT_TESTED`, which stays open until `/plan-close`; `archived` checks
+  only its own lifecycle rules, so retiring an old, messy plan never demands a structure repair.
+  The tolerances live in `transition.mjs`, keeping rules out of the manifest.
+- **Which transitions carry the command's own edits.** `promote` and `close` commit the plan's
+  pending edits with the rename, per the "where each transition is committed" table; every other
+  transition refuses a dirty plan path. `archive` takes `--reason` and writes the `## Archived`
+  section and empty `next_action` itself. Alternative: let `/plan-archive` edit the primary copy
+  first; rejected because those edits would make the carry decision see an outside edit and refuse.
+- **Gates enforced in code, not only in skills.** `submit` runs the completion preflight, and
+  `close` checks worktree-copy integration, approval freshness, and landing (the existing
+  `worktree-landed.mjs`) before committing. The skills still describe these steps; the command is
+  the guarantee.
+- **`movePlanLifecycle` removed.** Its validation, collision, and boundary checks moved into the
+  transition (`lifecycleMoveDestination` is shared), and `buildRepairPrompt` now rides on gate
+  refusals. Its tests were replaced by `plan-lifecycle-transitions-check.mjs`.
+- **`worktreeBound` manifest flag.** One declaration (Active and Review) drives worktree authority,
+  automatic-cleanup protection, and Home's plan-to-worktree join, instead of three hard-coded lists.
+- **Home lists Review plans with Active ones.** Its overview's `active` list now holds every
+  worktree-bound plan, and `counts` gains `ready` and `review`, so a review plan keeps its
+  worktree row and its **merged** badge, which is the cue to run `/plan-close`.
+- **Label copy.** Readiness is shown as **structure** (`structure complete` / `draft`) and
+  `reviewed_commit` freshness as **plan freshness** (`never checked`, `checked, current`,
+  `possibly stale`, `freshness unknown`); the filter ids became `structure` and `freshness`. A
+  review plan shows a QA chip (`N open findings`, `approved`, or `awaiting review`) beside its task
+  ring. Plan records gain `qa` and `notTestedOpen` for these and for the recommended command.
+- **`sync-base` details.** It refuses a local base behind its upstream (as of the last fetch)
+  instead of fetching or updating it, resolves only the plan's own modify/delete rename conflict
+  automatically (matched by `id`), and its `--continue` verifies no unmerged paths, nothing
+  unstaged, and no conflict markers. Running the repository's checks before continuing is
+  `/plan-review`'s step, since the command cannot know a repository's checks.
+- **Approval record.** `Confirmed by` must be non-empty; whether a human gave it cannot be checked
+  deterministically, so the skills carry that rule.
+- **Test file rename.** `plan-promote-plan-start-check.mjs` became `plan-suite-skills-check.mjs`,
+  since it now covers all five command skills; the shared Git fixture is
+  `scripts/test/lib/plan-git-fixture.mjs`.
+- **No new forbidden filename suffixes.** `ready` and `review` were not added to the naming rule's
+  forbidden suffixes: two existing plans legitimately end in `-review`.
+- **Validation loop details (2026-10-16).** The cap is five passes, not technical-writing's ten: a
+  code pass reruns checks and costs far more than a prose pass. The validator runs on the session's
+  own model rather than `sonnet`, since it is a judgment role, not a procedural slice. `/plan-review`
+  carries its rubric inline in a few lines, because it cannot load a reference from another package
+  that may be disabled. The portal leads a review plan with open findings with **Review**, keeping
+  **Fix findings** in the menu for work sent to a separate session.
+- **Post-merge fixes in `/plan-close`.** Its step 1 now says fixes made after the reviewed merge
+  stay limited to tests and evidence, and a behavior change needs `/plan-review` again, so a close
+  never lands code no human approved.
+
+Decisions made autonomously while fixing review findings (2026-10-16):
+
+- **A missing worktree makes the approval `unavailable`, not resolved some other way.** The plan
+  records only the worktree's administrative name, so once the worktree is gone its branch cannot be
+  found deterministically. Alternatives: guess the branch from `git branch --contains <approved
+  commit>`, which can match several branches; or record the branch in frontmatter, a plan schema
+  change. Refusing with a recreate-the-worktree resolution guesses nothing. The approval check
+  reports this before reading `### Approval`, because the copy it would read is then the primary
+  one, not the authoritative one.
+- **`plans validate` reuses the portal's copy selection, from the main checkout only.** It scans the
+  main checkout and its linked worktrees with `scanCheckout` and `selectRecords` under one
+  repository identity, so its findings match the page. Run from a linked worktree, it still
+  validates that checkout's own copies, which is what the suite skills want while working there.
+  It reports only the plans the main checkout holds, as before; a plan that exists only in a
+  worktree stays out. Each result gains `validated` (`worktree`, `primary`, or `checkout`). The
+  transitions keep `buildRepositoryPlanSnapshot`, because they move the primary copy.
+
+## Implementation verification
+
+Run on 2026-10-15 in the plan's worktree:
+
+- `npm run check` passed: doctor (102 checks), `test-cli.sh`, install collisions, the `ci` unit
+  group (38 suites), package install, the four Docker clean-machine suites, and the portal UI
+  suite (103 specs). Windows installer parity was skipped because `pwsh` is not installed.
+- `node scripts/test/run-checks.mjs --filter plan` passed 15 suites, including the new
+  `plan-lifecycle-manifest-check.mjs`, `plan-lifecycle-transitions-check.mjs`, and
+  `plan-sync-base-check.mjs`.
+- `roborepo plans validate` on this plan reports only its open Not tested entry.
+- A portal started from this branch (`roborepo web --detach --port 4343`) shows Backlog, Ready,
+  Active, and Review as tabs, the Structure and Plan freshness filters, a **Review** button on
+  active plans whose tasks are done, and the Active actions (Continue, Review, Update, Archive) in
+  the card menu, with no console errors.
 
 ## Open questions
 
-None blocking. Exact copy for the renamed readiness and freshness labels is settled during
-implementation.
+None.
+
+## Not tested
+
+- [x] The whole suite on a real plan, in separate agent sessions: `/plan-promote`, `/plan-execute`
+      (start, resume, and completion), `/plan-review` (sync, findings, approval prompt),
+      `/plan-execute` fixing findings, a pull request merged on GitHub, then `/plan-close` and
+      `/plan-archive`. Every transition the skills call is covered by
+      `plan-lifecycle-transitions-check.mjs`, but whether agents follow the skill prose, and ask
+      for approval rather than infer it, needs live sessions and a real pull request.
+
+## Review
+
+Independent review on 2026-10-15, in a separate session from the implementation, of
+`587dec0d46c6011ae4f3b611e9a1e3bc76559acf` (feature branch after merging `main` at `af8a3311`).
+
+### Findings
+
+- [x] `/plan-close` refuses a fresh approval as "stale" once the plan's local worktree is removed,
+      even though its branch still exists: `approvalFreshness` (`modules/plan-suite/review-gates.mjs`)
+      falls back to the base tip when no worktree resolves, and the `close` rule
+      (`transition-rules.mjs`) then skips the landed check as "checked by the caller", which no skill
+      describes. Reproduced: squash-merge, one unrelated commit on `main`, `git worktree remove`
+      → `plans approval` reports `stale` (`src/other.txt`) and `plans close` refuses. Either resolve
+      the branch without the worktree or refuse with a "worktree missing" reason, and add a fixture.
+      — fixed: `approvalFreshness` reports `unavailable` when the plan names a worktree whose branch
+      cannot be resolved; `close` refuses with a recreate-the-worktree resolution and always checks
+      landing against the resolved branch. Covered in `plan-lifecycle-transitions-check.mjs`, which
+      failed on the old code and passes now. Fixed by `/plan-execute` in the same chat session as
+      this review, so the next `/plan-review` should run in a fresh session.
+
+Validator pass 1, after the validation-loop change (fresh-context subagent, full `main...HEAD` diff,
+at `302ef51a`):
+
+- [x] Portal action descriptions still say `/plan-review` runs "independent QA":
+      `manifests/platform/plan-lifecycle.json` (active and review Review actions). — fixed in review
+      (`01281500`)
+- [x] `plan-close`'s description routes "independent review or approval (plan-review)", the old
+      contract. — fixed in review (`01281500`)
+- [x] The plan's "Portal, packaging, and terminology" section still says review recommends
+      `plan-execute` while findings are open; the code and docs say `plan-review`. — fixed in review
+      (plan text)
+- [x] `plan-execute` tells a review plan whose worktree is gone to rerun `start`, which refuses a
+      review plan; only an active plan records a replacement worktree that way. — fixed in review
+      (`01281500`)
+- [x] `plan-review`'s inline rubric claims to be the same rubric but omits the paired-skill
+      constraints item. — fixed in review (`01281500`)
+- [x] `plan-review`'s report line lists three approval states of six (`not-approved`, `invalid`,
+      `unavailable` missing); `plan-close`'s omits `unavailable`. — fixed in review (`01281500`)
+- [x] The confirmed Not tested walkthrough predates the validation loop and the new `/plan-review`
+      flow, so no live run covers them. — escalated to the user: add an unchecked Not tested entry,
+      or record that the walkthrough predates the change. Decided 2026-10-17: record it; the user
+      validates the new flow progressively by using it (Decision Log).
+- [x] The round-2 base finding says `712b2b21` "resolves it on `main` separately"; that commit is
+      only on `codex/portal-home-hello-guy-greeting`. — fixed in review (plan text)
+
+Validator pass 2 (fresh-context subagent, at `d676482b`):
+
+- [x] The help list in `portal/plans/plan-drawer-partial.html` still says `/plan-review` reviews
+      "independently". — fixed in review (`4b592c60`)
+- [x] Validator findings sat under a custom heading, outside `### Findings`, so the portal counted
+      no open finding while the preflight saw one. Record them under `### Findings`. — fixed in
+      review (`6c23cca3`)
+- [x] The escalated Not tested finding has no Open Questions entry, which `validation-loop.md`
+      requires. — fixed in review (`6c23cca3`)
+- [x] `scripts/cli/plans.mjs` grew to 390 lines, mixing the portal snapshot API with the
+      `roborepo plans` CLI handlers. Move the CLI into its own module. — fixed in review
+      (`071665e1`): `plans.mjs` 135 lines, `plans-command.mjs` 258
+
+Validator pass 3 (fresh-context subagent, at `790618ac`):
+
+- [x] Goals and the Risks table still say independent QA happens after the move to review and
+      "QA stays with `/plan-review`"; the validation loop now runs before the move. — fixed in
+      review (plan text)
+- [x] The "Validation loop change" record says no independent check covers the change, though
+      validator passes now do, and it lacks the `Validation: clean on pass N` line. — fixed in
+      review (plan text)
+- [x] `plan-execute`'s `agents/openai.yaml` keeps the placeholder short description carried over
+      from `plan-start`. — fixed in review (`b8880dca`)
+- [x] README's "Agent workflows" row is padded one column wider than its table. — fixed in review
+      (`b8880dca`)
+
+Round 2 and round 3 findings stay under their round headings as history; all are resolved.
+
+### Verification
+
+- `roborepo plans preflight gqzjlzgx` (branch CLI, primary checkout) passed; `plans submit`
+  committed `af8a3311` on `main` with only the plan's two paths, leaving four unrelated modified files untouched.
+- `roborepo plans sync-base` merged `main` cleanly at `587dec0d`; the review rename arrived through the merge.
+- `npm run check` passed at `587dec0d`: 38/38 check suites, doctor, install collisions, package
+  install, clean-machine container and sandboxes, portal UI (103 passed). Windows installer parity
+  skipped: `pwsh` unavailable.
+- `roborepo plans validate gqzjlzgx`: 0 blocking, 1 advisory (`UNCONFIRMED_NOT_TESTED`).
+- Acceptance criteria 1–9 checked against the code, the transitions, sync-base, manifest, portal
+  state, and skills checks, and the documentation-impact files; all met apart from the finding above.
+- Manual (open): the Not tested entry. This session exercised `/plan-review`'s submit and sync-base
+  live; `/plan-promote`, `/plan-execute`, a GitHub PR merge, `/plan-close`, and `/plan-archive`
+  remain for the human.
+
+### Round 2
+
+Independent re-review on 2026-10-16, in a fresh session (neither the implementation nor the
+round-1 fix session), of `e6bac7ea2041` (feature branch after `sync-base` merged `main` at
+`c6051ff2`). Covers the full branch diff, including the `unavailable` approval fix (`b1355faa`) and
+the additive-fix rule for `/plan-review` (`6b74f0f1`).
+
+- [x] **Base breaks the completion gate.** `npm run check` stops in `test-cli.sh`:
+      `plan-suite-findings-check.mjs` reports `backlog/agent-permissions-global-audit.md:
+      UNKNOWN_PLAN_NAMESPACE`. The plan arrived on `main` in `c6051ff2`, and `main` fails the same
+      check by itself. Outside this plan's requirements, so not for `/plan-execute`: rename that plan
+      to a declared namespace (or declare `agent` in `docs/plans/plans-config.json`) on `main`, then
+      rerun `/plan-review`. — accepted by the user on 2026-10-16: not a defect of this branch. The
+      rename (`712b2b21`) exists on `codex/portal-home-hello-guy-greeting` and has not landed on
+      `main`; the failure stays until it does.
+- [x] **Scope question (user decision): `roborepo plans validate` ignores authority.** As found:
+      `validateRepositoryPlans` read only the checkout it ran in, as it already did for Active plans
+      on `main`, so from the primary checkout it validated a review plan's primary copy (here: 0
+      findings) while the worktree's copy had an open Not tested entry; only the portal scan and the
+      new gates resolved the authoritative copy. Acceptance criterion 8 names "the CLI", but the plan
+      never listed `validate` among the commands it changes. — fixed in `7986eabc`: the user first
+      deferred it, then brought it into scope on 2026-10-16. From the main checkout, `validate` now
+      selects each plan's copy as the portal does and names the copy it validated. Built in the
+      round-2 review session itself; round 3 reviewed it in a fresh session.
+
+Verification:
+
+- `roborepo plans sync-base` merged `main` cleanly at `e6bac7ea`. `git fetch origin` failed (no
+  access from this session), so the base is the local `main`, which reported even with
+  `origin/main`.
+- `npm run check` at `e6bac7ea`: doctor passed (102 checks); `test-cli.sh` 443 passed, 1 failed
+  (finding above). Because `ci.sh` stops at the first failure, its remaining stages were run one by
+  one and all passed: install collisions; `test:unit --group ci` 38/38 suites, including the
+  manifest, transitions, and sync-base checks; package install; the four clean-machine Docker
+  suites; portal UI 103 passed. Windows installer parity not run (`pwsh` unavailable).
+- Branch CLI against this plan: `plans preflight` → implementation complete; `plans approval` →
+  `not-approved`, as recorded; `plans validate` → see the scope question.
+- Code read against acceptance criteria 1–9: the transition orchestrator and rules, both gates,
+  authority, copy integration, `sync-base`, the manifest, the CLI, `recommendedPlanCommand`, the five
+  skills, and the documentation-impact files. The round-1 fix holds: a missing worktree yields
+  `unavailable` before `### Approval` is read, and `close` always checks landing against the
+  approval's resolved branch.
+- `main`'s plan-status changes (`346f9562`) merged into the files the branch also changed
+  (`plan-drawer-partial.html`, `plans-status.spec.mjs`); the portal UI suite passes on the result.
+- No additive fixes were needed this round.
+- Manual: the Not tested entry, walked through as a 14-step script (`roborepo update` package
+  retirement, promote, interrupted and resumed execute, review with a base conflict, declined then
+  granted approval, approval staleness, close refused before merge then after a squash merge,
+  reopen, archive with unmerged work, Codex parity). Confirmed passing by the user on 2026-10-16.
+  `main` holds the promote, start, submit, and archive commits for the throwaway plan `4eis1s6s`
+  (`57fb2d55`..`38f16ab1`).
+
+### Round 3
+
+Independent re-review on 2026-10-16, in a fresh session (not the implementation, round-1 fix, or
+round-2 session), of `2224c804b534` (feature branch after `sync-base` merged `main` at `38f16ab1`).
+Covers what changed since round 2: the `plans validate` authority change (`7986eabc`) and its plan
+record (`71051dd1`). The rest of the branch was re-checked through the completion gate only; rounds
+1 and 2 read the full diff.
+
+The round-2 base finding above was still unresolved at the start of this round: `main` still held
+`backlog/agent-permissions-global-audit.md`, and the gate failed on it exactly as before.
+
+- [x] **The completion preflight's `line N` points 18 lines early.** `review-gates.mjs:39` prints
+      `parsePlanMarkdown` task lines, which count from the end of the frontmatter, so on this plan
+      it reports the open base finding at "line 717" when the file has it at line 735. The preflight
+      is the only place these numbers are shown to anyone. Report file line numbers (add the
+      frontmatter's line count), and assert the reported line in
+      `plan-lifecycle-transitions-check.mjs`. — fixed in review at the user's direction (`2417c799`);
+      the new assertion fails on the old code and passes on the fix.
+- [x] **The round-2 scope-question entry contradicts itself.** After "— fixed", it describes the
+      pre-fix `validate` behavior in the present tense ("validates the primary copy", "reads only
+      the checkout it runs in"). Separate the finding as found from its fix. — fixed in review
+      (`1af8ce0c`).
+
+Verification:
+
+- `roborepo plans sync-base` merged `main` cleanly at `2224c804`; `main` brought only the archived
+  plan `4eis1s6s`. Local `main` equals `origin/main` at `38f16ab1`.
+- `npm run check` at `2224c804`: doctor passed (102 checks); `test-cli.sh` 443 passed, 1 failed
+  (`plan-suite-findings-check.mjs`: `backlog/agent-permissions-global-audit.md:
+  UNKNOWN_PLAN_NAMESPACE`, the round-2 base finding). The remaining `ci.sh` stages were run one by
+  one and all passed: install collisions; `test:unit --group ci` 38/38 suites; package install; the
+  four clean-machine Docker suites; portal UI 103 passed. Windows installer parity not run (`pwsh`
+  unavailable).
+- `plan-lifecycle-transitions-check.mjs` run against an exported copy of the tree with
+  `7986eabc`'s code changes reverted fails on the new `validated` assertion, so the test catches the
+  old behavior.
+- Branch CLI against this plan: `plans validate gqzjlzgx` from the primary checkout →
+  `validated.source: worktree`, lifecycle `review`, 0 findings; from the worktree →
+  `validated.source: checkout`, 0 findings. `plans preflight` → incomplete, on the open base
+  finding (the expected result while a finding is open). `plans approval` → `not-approved`.
+- `7986eabc` read against acceptance criterion 8 and the Decision Log entry: a worktree-selected
+  record keeps the primary copy's lifecycle and path (`plan-copies.mjs` `stage`), the CLI and the
+  portal scan report the same findings, and run from a linked worktree it still validates that
+  checkout's own copy. The two doc changes match the code; the plan skills mention only "the
+  repository's plan validator", so none of them goes stale.
+- After `2417c799`: `test-cli.sh` 443 passed, 1 failed (the same base finding); `test:unit --group
+  ci` 38/38 suites. `plans preflight` now reports the open findings at their file lines (735, 789).
+  The install, Docker, and portal UI stages were not rerun: the fix changes only the preflight's
+  message text.
+
+### Validation loop change
+
+After round 3, at the user's direction, the review session itself added the validation loop and the
+human-review contract (`4357269e`, `e78d1313`; Decision Log 2026-10-16). That work was written in
+this session; three fresh-context validator passes then checked the full branch diff, recorded
+under `### Findings`.
+
+Verification at `e78d1313`:
+
+- Doctor passed (102 checks). `test-cli.sh` 443 passed, 1 failed (the accepted base finding). The
+  remaining stages passed: install collisions; `test:unit --group ci` 38/38 suites; package
+  install; the four clean-machine Docker suites; portal UI 103 passed. Windows installer parity not
+  run (`pwsh` unavailable).
+- `plan-suite-skills-check.mjs` passes and pins the new gate, the reference's two parts, the
+  classes, the cap, and `/plan-review`'s step order. `roborepo skill render-commands --check`,
+  `skill triggers --check` (8 fixtures), and `skill audit` (no unreachable references) pass.
+
+- Validation: clean of code findings on pass 3 at `790618ac` (fresh-context subagents, three
+  passes); pass 3's four findings were text only and were fixed without a further pass, per
+  `/plan-review` step 5. The escalated live-run question stays open for the user.
+- After pass 2's fixes, at `071665e1`: doctor passed (102 checks); `test-cli.sh` 443 passed, 1
+  failed (the base failure below); every later stage passed (`test:unit --group ci` 38/38, package
+  install, four clean-machine suites, portal UI 103).
+- Base failure: `plan-suite-findings-check.mjs` (`UNKNOWN_PLAN_NAMESPACE`) fails the same way on an
+  export of `main`.
+
+### Approval
+
+- Decision: requested

@@ -4,8 +4,8 @@
 //
 // Everything in this module is pure — it reads a parsed document descriptor and returns findings.
 // It never touches the filesystem and never mutates its input, which is what lets the same code
-// run from the scanner (deriving plan.readiness), from movePlanLifecycle (gating a move), and
-// from the tests, with no divergence between them.
+// run from the scanner (deriving plan.readiness), from the lifecycle transitions (gating a move),
+// and from the tests, with no divergence between them.
 //
 // Universal rules run for every destination. Per-destination rules run on top. Backlog and
 // Archived add almost nothing, which is the intent: they are resting states, not claims about
@@ -68,9 +68,9 @@ function validateBacklog(doc) {
   return findings;
 }
 
-// Active means someone can pick this up and work it now, so the plan needs a next step, an
-// approach, a definition of done, and blockers that actually name something.
-function validateActive(doc) {
+// What makes a plan workable: a next step, an approach, a definition of done, and blockers that
+// actually name something. Ready, Active, and Review all require it.
+function workableFindings(doc) {
   const findings = [];
   if (!doc.frontmatter.next_action) findings.push(finding("MISSING_NEXT_ACTION"));
   if (!doc.has("design")) {
@@ -82,8 +82,25 @@ function validateActive(doc) {
   const blockers = doc.frontmatter.blocked_by || [];
   const empty = blockers.filter((item) => !item || !item.trim());
   if (empty.length) findings.push(finding("EMPTY_BLOCKER_ENTRY", { count: empty.length }));
-  findings.push(...notTestedFindings(doc));
   return findings;
+}
+
+// Ready is a promise that implementation can start without another planning pass, so it requires
+// everything Active does before any work exists to leave untested.
+function validateReady(doc) {
+  return workableFindings(doc);
+}
+
+// Active means someone can pick this up and work it now. Built work no test covers may accumulate
+// here; it is reported, and resolved before completion.
+function validateActive(doc) {
+  return [...workableFindings(doc), ...notTestedFindings(doc)];
+}
+
+// Review holds finished implementation awaiting QA and approval. It is still worked — findings get
+// fixed here — so it applies the Active rules unchanged.
+function validateReview(doc) {
+  return validateActive(doc);
 }
 
 // Completed asserts the work is finished, so nothing may remain outstanding: no unchecked tasks,
@@ -113,12 +130,14 @@ function validateArchived(doc) {
   return findings;
 }
 
-// The destination-policy map. A lifecycle absent from this map (notably "unclassified") gets the
-// universal rules only — it has no destination contract of its own because it isn't a place a
-// plan is ever deliberately moved to.
+// The destination-policy map, keyed by the state ids declared in manifests/platform/plan-lifecycle.json.
+// A lifecycle absent from this map (notably "unclassified") gets the universal rules only — it has
+// no destination contract of its own because it isn't a place a plan is ever deliberately moved to.
 export const lifecyclePolicies = {
   backlog: validateBacklog,
+  ready: validateReady,
   active: validateActive,
+  review: validateReview,
   completed: validateCompleted,
   archived: validateArchived,
 };

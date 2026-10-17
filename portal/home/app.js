@@ -4,6 +4,7 @@ import { harnessSetupPromptElement } from "/portal/shared/harness-warning.js";
 import { createPlanDrawer } from "/portal/plans/plan-drawer.js";
 import { fetchSnapshot as fetchPlansSnapshot } from "/portal/plans/api.js";
 import { mergedPlanBranches } from "/portal/plans/state.js";
+import { setLifecycleModel } from "/portal/plans/lifecycle.js";
 import * as api from "./api.js";
 import { mountHomeLinks } from "./links.js";
 import { repositoryDirectory, unresolvedActivity } from "./templates.js";
@@ -100,11 +101,13 @@ async function dismissCleanupNotice(repository) {
   }
 }
 
-// The plans snapshot supplies what the drawer resolves against (blockers, plan-write package state); it is
-// fetched on open rather than polled, since Home only needs it while a drawer is showing.
+// The plans snapshot supplies what the drawer resolves against (blockers, plan-write package state, the
+// lifecycle's labels and actions); it is fetched on open rather than polled, since Home only needs it
+// while a drawer is showing.
 async function openPlan(plan) {
   try {
     plansSnapshot = await fetchPlansSnapshot();
+    setLifecycleModel(plansSnapshot.lifecycle);
   } catch (error) {
     showWarning(error);
     return;

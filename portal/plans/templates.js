@@ -7,7 +7,9 @@ import {
   portalTpl as tpl,
   portalFillSlots as fill,
 } from "/portal/shared/api.js";
-import { FILTER_LABELS, LIFECYCLE_LABELS, formatDate } from "./state.js";
+import { FILTER_LABELS, FRESHNESS_LABELS, formatDate } from "./state.js";
+import { lifecycleActions, lifecycleLabel } from "./lifecycle.js";
+import { primaryPlanAction } from "./plan-actions.js";
 
 export function rootChip(root, onRemove) {
   const node = fill(tpl("tpl-root-chip"), { path: root });
@@ -143,7 +145,7 @@ export function packageBanner(pkg, onEnable, skillModal) {
 
 export function lifecycleTab(lifecycle, count, isSelected, onSelect) {
   const btn = fill(tpl("tpl-lifecycle-tab"), {
-    label: `${LIFECYCLE_LABELS[lifecycle] || lifecycle} (${count})`,
+    label: `${lifecycleLabel(lifecycle)} (${count})`,
   });
   btn.classList.toggle("selected", isSelected);
   if (isSelected) btn.setAttribute("aria-current", "true");
@@ -166,44 +168,6 @@ function planCardElement(record, cardActions) {
   node.record = record;
   node.actions = cardActions;
   return node;
-}
-
-// The plan-suite actions offered for each lifecycle. Each is one atomic command and produces a
-// clipboard prompt — the portal never runs a command or moves a file for it; the agent does both
-// after you paste. Label is the plain, in-context verb; description is the one-line effect.
-// `/plan-start` appears twice because it both begins a backlog plan and resumes an active one.
-const PLAN_ACTIONS = [
-  ["plan-promote", "Promote", "Review and prepare this plan for development.", "backlog"],
-  ["plan-start", "Start", "Implement this plan in an isolated worktree.", "backlog"],
-  ["plan-start", "Continue", "Resume implementation in this plan's worktree.", "active"],
-  ["plan-write", "Update", "Revise this plan or sync it with the repo.", "active"],
-  ["plan-close", "Close", "Verify the work and move the plan to completed or archived.", "active"],
-];
-
-function actionsForLifecycle(lifecycle) {
-  return PLAN_ACTIONS.filter(([, , , actionLifecycle]) => actionLifecycle === lifecycle);
-}
-
-// Best-effort single recommended next command, derived from plan state. Returns null when no rule
-// clearly applies (e.g. blocked, or mid-progress with no strong signal) rather than guessing.
-export function recommendedPlanCommand(plan) {
-  if (plan.blockers.length > 0) return null;
-  if (plan.lifecycle === "backlog") return "plan-start";
-  if (plan.lifecycle !== "active") return null;
-  const { complete, total } = plan.taskCounts;
-  if (total > 0 && complete === total) return "plan-close";
-  if (plan.reviewState === "possibly-stale" || plan.reviewState === "never-reviewed") return "plan-write";
-  return null;
-}
-
-// The one command a card or drawer leads with: the recommendation when there is one, otherwise the
-// lifecycle's default way forward (Start a backlog plan, Continue an active one). Completed and
-// archived plans have none. Returns { command, label } or null.
-export function primaryPlanAction(plan) {
-  const actions = actionsForLifecycle(plan.lifecycle);
-  const command = recommendedPlanCommand(plan) || (actions.some(([item]) => item === "plan-start") ? "plan-start" : null);
-  const action = actions.find(([item]) => item === command);
-  return action ? { command, label: action[1] } : null;
 }
 
 // One clickable menu item (icon + label + optional description) that runs copyFn on click. `run`
@@ -250,7 +214,7 @@ function planMenuBody(api) {
   if (api.installed) {
     note.textContent = "Copies a prompt to run in an agent chat.";
     group.hidden = false;
-    for (const [command, label, description] of actionsForLifecycle(api.lifecycle)) {
+    for (const { command, label, description } of lifecycleActions(api.lifecycle)) {
       group.append(
         menuItem({ icon: "agent-prompt", label, description, run: run(() => api.copyPrompt(command)) }),
       );
@@ -308,11 +272,14 @@ export function drawerContent(doc, drawerActions) {
     meta: [
       dtdd("id", plan.id || "(missing)"),
       dtdd("repository", doc.plan.repository.name),
-      dtdd("lifecycle", LIFECYCLE_LABELS[plan.lifecycle] || plan.lifecycle),
+      dtdd("lifecycle", lifecycleLabel(plan.lifecycle)),
       ...(plan.nextAction ? [dtdd("next action", plan.nextAction)] : []),
-      // An active plan's assigned worktree holds its authoritative copy; say so, since the path
-      // above is the same in every checkout.
+      // An active or review plan's assigned worktree holds its authoritative copy; say so, since the
+      // path above is the same in every checkout. During review the primary copy has already moved,
+      // so the worktree's copy can sit at an older path; name the primary one too.
       ...(plan.authority?.source === "worktree" ? [dtdd("read from", `From worktree ${plan.authority.worktree}`)] : []),
+      ...(plan.primaryRelativePath ? [dtdd("primary copy", plan.primaryRelativePath)] : []),
+      dtdd("plan freshness", FRESHNESS_LABELS[plan.reviewState] || plan.reviewState),
     ],
     warnings: plan.validation.warnings,
     tasks: doc.parsed?.tasks || [],
@@ -344,8 +311,8 @@ export function cardActionMenu(record, cardActions) {
 }
 
 // The card's primary command button (see primaryPlanAction), or null. It copies that command's
-// prompt; nothing on the card moves a plan between lifecycle folders, since `/plan-start` and
-// `/plan-close` own those moves and commit them.
+// prompt; nothing on the card moves a plan between lifecycle folders, since the suite commands own
+// those moves and commit them.
 export function cardPrimaryAction(record, cardActions) {
   const action = primaryPlanAction(record.plan);
   if (!action) return null;

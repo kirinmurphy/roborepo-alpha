@@ -44,7 +44,9 @@ test.describe("Plans card status", () => {
   test.beforeAll(() => {
     planRoot = fs.mkdtempSync(path.join(os.tmpdir(), "portal-ui-status-"));
     fs.mkdirSync(path.join(planRoot, ".git"));
-    for (const lifecycle of ["backlog", "active"]) fs.mkdirSync(path.join(planRoot, "docs", "plans", lifecycle), { recursive: true });
+    for (const lifecycle of ["backlog", "active", "review"]) fs.mkdirSync(path.join(planRoot, "docs", "plans", lifecycle), { recursive: true });
+    fs.writeFileSync(path.join(planRoot, "docs", "plans", "review", "status-review.md"),
+      plan({ id: "streview", title: "Review status plan", nextAction: "Fix the finding", tasks: ["- [x] One", "", "## Review", "", "### Findings", "", "- [ ] Missing retry test"] }));
     fs.writeFileSync(path.join(planRoot, "docs", "plans", "active", "status-ring.md"),
       plan({ id: "string01", title: "Ring status plan", nextAction: "Ship the ring step", tasks: ["- [x] One", "- [ ] Two"] }));
     fs.writeFileSync(path.join(planRoot, "docs", "plans", "active", "status-merged.md"),
@@ -70,6 +72,16 @@ test.describe("Plans card status", () => {
     await expect(card).not.toContainText("never-reviewed");
     await expect(card).not.toContainText("Ship the ring step");
     await expect(card).not.toContainText("Next up");
+  });
+
+  // Implementation progress and QA outcome are separate claims: the task list says the work is built,
+  // and only the review record says whether it passed.
+  test("a review card shows its open findings apart from its task progress", async ({ page }) => {
+    await page.goto("/plans?lifecycle=review");
+    const card = page.locator("plan-card", { hasText: "Review status plan" });
+    await expect(card.locator(".chip", { hasText: "1 open finding" })).toBeVisible();
+    await expect(card.getByRole("button", { name: "Review", exact: true })).toBeVisible();
+    await expect(card).not.toContainText("approved");
   });
 
   test("a finished task list shows the done badge in place of the ring", async ({ page }) => {
