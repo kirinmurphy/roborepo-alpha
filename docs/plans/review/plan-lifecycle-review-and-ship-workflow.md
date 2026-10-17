@@ -1,7 +1,7 @@
 ---
 id: gqzjlzgx
 priority: high
-next_action: Rename main's backlog plan agent-permissions-global-audit.md to agent-config-permissions-global-audit.md so `npm run check` passes on main, then run /plan-review in a fresh session to review the plans validate change, sync base, and request approval.
+next_action: Run /plan-execute in a separate session to fix the round-3 preflight line-number finding; rename main's backlog plan agent-permissions-global-audit.md to a declared namespace so `npm run check` passes on main; then rerun /plan-review in a fresh session.
 blocked_by: []
 depends_on: []
 related:
@@ -774,6 +774,47 @@ Verification:
   reopen, archive with unmerged work, Codex parity). Confirmed passing by the user on 2026-10-16.
   `main` holds the promote, start, submit, and archive commits for the throwaway plan `4eis1s6s`
   (`57fb2d55`..`38f16ab1`).
+
+### Round 3
+
+Independent re-review on 2026-10-16, in a fresh session (not the implementation, round-1 fix, or
+round-2 session), of `2224c804b534` (feature branch after `sync-base` merged `main` at `38f16ab1`).
+Covers what changed since round 2: the `plans validate` authority change (`7986eabc`) and its plan
+record (`71051dd1`). The rest of the branch was re-checked through the completion gate only; rounds
+1 and 2 read the full diff.
+
+The round-2 base finding above is still open: `main` still holds
+`backlog/agent-permissions-global-audit.md`, and the gate fails on it exactly as before.
+
+- [ ] **The completion preflight's `line N` points 18 lines early.** `review-gates.mjs:39` prints
+      `parsePlanMarkdown` task lines, which count from the end of the frontmatter, so on this plan
+      it reports the open base finding at "line 717" when the file has it at line 735. The preflight
+      is the only place these numbers are shown to anyone. Report file line numbers (add the
+      frontmatter's line count), and assert the reported line in
+      `plan-lifecycle-transitions-check.mjs`.
+
+Verification:
+
+- `roborepo plans sync-base` merged `main` cleanly at `2224c804`; `main` brought only the archived
+  plan `4eis1s6s`. Local `main` equals `origin/main` at `38f16ab1`.
+- `npm run check` at `2224c804`: doctor passed (102 checks); `test-cli.sh` 443 passed, 1 failed
+  (`plan-suite-findings-check.mjs`: `backlog/agent-permissions-global-audit.md:
+  UNKNOWN_PLAN_NAMESPACE`, the round-2 base finding). The remaining `ci.sh` stages were run one by
+  one and all passed: install collisions; `test:unit --group ci` 38/38 suites; package install; the
+  four clean-machine Docker suites; portal UI 103 passed. Windows installer parity not run (`pwsh`
+  unavailable).
+- `plan-lifecycle-transitions-check.mjs` run against an exported copy of the tree with
+  `7986eabc`'s code changes reverted fails on the new `validated` assertion, so the test catches the
+  old behavior.
+- Branch CLI against this plan: `plans validate gqzjlzgx` from the primary checkout →
+  `validated.source: worktree`, lifecycle `review`, 0 findings; from the worktree →
+  `validated.source: checkout`, 0 findings. `plans preflight` → incomplete, on the open base
+  finding (the expected result while a finding is open). `plans approval` → `not-approved`.
+- `7986eabc` read against acceptance criterion 8 and the Decision Log entry: a worktree-selected
+  record keeps the primary copy's lifecycle and path (`plan-copies.mjs` `stage`), the CLI and the
+  portal scan report the same findings, and run from a linked worktree it still validates that
+  checkout's own copy. The two doc changes match the code; the plan skills mention only "the
+  repository's plan validator", so none of them goes stale.
 
 ### Approval
 
