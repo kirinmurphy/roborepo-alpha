@@ -102,7 +102,8 @@ of it. The human's review is the independent check; this step makes sure they re
   the gate output, never an account of the work. It applies the same rubric as `/plan-execute`'s
   Validation Loop: every acceptance criterion against the code and test evidence (a checked task is a
   claim, not evidence), tests that assert observable outcomes for new behavior, docs of record that
-  match the code, `## Not tested` entries an agent could run instead, and each gate failure.
+  match the code, `## Not tested` entries an agent could run instead, each gate failure, and the
+  constraints of every loaded paired skill where the diff falls under them.
 - Classify every finding by consequence, not size: **fix** when the right fix is clear and stays
   within the plan's requirements and specified contracts, code included; **escalate** when it
   chooses between real alternatives, changes requirements or a contract the plan did not specify,
@@ -220,7 +221,7 @@ Review result
 - Findings: <open count> open, <count> fixed in review (<commits>), <count> escalated
 - Not tested entries open: <count>
 - Approval: approved at <commit> | requested | not requested | invalidated
-- Approval freshness: fresh | stale | missing
+- Approval freshness: fresh | stale | missing | not-approved | invalid | unavailable
 - Next command: merge the pull request, then /plan-close | /plan-review | /plan-execute
 ```
 

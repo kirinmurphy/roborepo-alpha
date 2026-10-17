@@ -1,6 +1,6 @@
 ---
 name: plan-close
-description: Use when closing one repository plan after its reviewed pull request has merged. Accepts only a plan in docs/plans/review/. Run the repository's checks, fix agent-resolvable gaps including missing tests, check claims, a fresh human approval, and landing, then commit the move to docs/plans/completed/ and clean up the plan's worktree. Refuse only for unresolved work, unconfirmed manual checks, a stale or missing approval, or unconfirmed landing; hand superseded or abandoned plans to plan-archive. Trigger on explicit /plan-close or requests such as close this plan now that it has merged. Do not use for creating or revising plans (plan-write), preparing a plan (plan-promote), implementation (plan-execute), independent review or approval (plan-review), archiving (plan-archive), ending a session (session-close), reviewing a working diff, or merging branches.
+description: Use when closing one repository plan after its reviewed pull request has merged. Accepts only a plan in docs/plans/review/. Run the repository's checks, fix agent-resolvable gaps including missing tests, check claims, a fresh human approval, and landing, then commit the move to docs/plans/completed/ and clean up the plan's worktree. Refuse only for unresolved work, unconfirmed manual checks, a stale or missing approval, or unconfirmed landing; hand superseded or abandoned plans to plan-archive. Trigger on explicit /plan-close or requests such as close this plan now that it has merged. Do not use for creating or revising plans (plan-write), preparing a plan (plan-promote), implementation (plan-execute), the human review or approval (plan-review), archiving (plan-archive), ending a session (session-close), reviewing a working diff, or merging branches.
 ---
 
 # Plan Close
@@ -273,7 +273,7 @@ Close result
 - Tests: <command> -> pass|fail|not run
 - Verdict: complete|incomplete|blocked|superseded|abandoned
 - Not tested entries open: <count>
-- Approval: fresh at <commit>|stale|missing|not-approved|invalid
+- Approval: fresh at <commit>|stale|missing|not-approved|invalid|unavailable
 - Landed: yes|unconfirmed|not applicable
 - Lifecycle change: review -> completed, or none
 - Closed: yes|no

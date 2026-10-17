@@ -38,9 +38,11 @@ repeats a transition that has already happened: it continues from the state it f
 | `review/` | Fix findings: Enter the worktree the plan names, then the Review Findings workflow only. |
 | `completed/`, `archived/` | Refuse, naming the folder. |
 
-An active or review plan whose recorded worktree no longer exists is a blocker: report it, and with
-the user's agreement create a new worktree and rerun the canonical start transition command with
-the new name, which records it on an active plan in place.
+An active or review plan whose recorded worktree no longer exists is a blocker: report it. With the
+user's agreement, for an active plan, create a new worktree and rerun the canonical start transition
+command with the new name, which records it in place. A review plan cannot take a new worktree name:
+recreate the linked worktree under the recorded name on the plan's branch, so the approval check can
+resolve it.
 
 ## Paired Skills
 

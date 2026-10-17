@@ -36,7 +36,7 @@
       "worktreeBound": true,
       "actions": [
         { "command": "plan-execute", "label": "Continue", "description": "Resume implementation in this plan's worktree." },
-        { "command": "plan-review", "label": "Review", "description": "Confirm implementation is complete and begin independent QA." },
+        { "command": "plan-review", "label": "Review", "description": "Confirm implementation is complete, recheck the work, and request your approval." },
         { "command": "plan-write", "label": "Update", "description": "Revise this plan or sync it with the repo." },
         { "command": "plan-archive", "label": "Archive", "description": "Retire this plan without losing unmerged work." }
       ]
@@ -49,8 +49,8 @@
       "showsPriority": true,
       "worktreeBound": true,
       "actions": [
-        { "command": "plan-review", "label": "Review", "description": "Run independent QA, record findings, and request approval." },
-        { "command": "plan-execute", "label": "Fix findings", "description": "Address the review findings recorded in the plan." },
+        { "command": "plan-review", "label": "Review", "description": "Recheck the work, fix what has a clear fix, and request your approval." },
+        { "command": "plan-execute", "label": "Fix findings", "description": "Fix review findings in a separate session." },
         { "command": "plan-close", "label": "Close after merge", "description": "After you merge the PR, verify it landed and complete the plan." },
         { "command": "plan-archive", "label": "Archive", "description": "Retire this plan without losing unmerged work." }
       ]
