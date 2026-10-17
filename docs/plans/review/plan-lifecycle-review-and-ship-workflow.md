@@ -1,7 +1,7 @@
 ---
 id: gqzjlzgx
 priority: high
-next_action: Rename main's backlog plan agent-permissions-global-audit.md to agent-config-permissions-global-audit.md so `npm run check` passes on main, then rerun /plan-review to sync base and request approval.
+next_action: Rename main's backlog plan agent-permissions-global-audit.md to agent-config-permissions-global-audit.md so `npm run check` passes on main, then run /plan-review in a fresh session to review the plans validate change, sync base, and request approval.
 blocked_by: []
 depends_on: []
 related:
@@ -589,6 +589,11 @@ npm run check
   would otherwise approve its own design. Same line as `/plan-close`'s post-merge limit to tests and
   evidence. (User decision, during the first review round.)
 
+- **2026-10-16** — `roborepo plans validate` resolves plan authority as part of this plan, on its
+  branch. The Review stage makes a stale primary copy routine, and acceptance criterion 8 promises
+  that the CLI shows the authoritative copy. (User decision, during the second review round, after
+  first deferring it.)
+
 Decisions made autonomously during implementation (2026-10-15):
 
 - **Transition names.** The `roborepo plans` subcommands are `promote`, `start`, `submit`
@@ -648,6 +653,13 @@ Decisions made autonomously while fixing review findings (2026-10-16):
   change. Refusing with a recreate-the-worktree resolution guesses nothing. The approval check
   reports this before reading `### Approval`, because the copy it would read is then the primary
   one, not the authoritative one.
+- **`plans validate` reuses the portal's copy selection, from the main checkout only.** It scans the
+  main checkout and its linked worktrees with `scanCheckout` and `selectRecords` under one
+  repository identity, so its findings match the page. Run from a linked worktree, it still
+  validates that checkout's own copies, which is what the suite skills want while working there.
+  It reports only the plans the main checkout holds, as before; a plan that exists only in a
+  worktree stays out. Each result gains `validated` (`worktree`, `primary`, or `checkout`). The
+  transitions keep `buildRepositoryPlanSnapshot`, because they move the primary copy.
 
 ## Implementation verification
 
@@ -726,8 +738,10 @@ the additive-fix rule for `/plan-review` (`6b74f0f1`).
       check by itself. Outside this plan's requirements, so not for `/plan-execute`: rename that plan
       to a declared namespace (or declare `agent` in `docs/plans/plans-config.json`) on `main`, then
       rerun `/plan-review`.
-- [x] **Scope question (user decision): `roborepo plans validate` ignores authority.** — deferred:
-      the user ruled it out of scope on 2026-10-16; tracked as a separate follow-up task. Run from the
+- [x] **Scope question (user decision): `roborepo plans validate` ignores authority.** — fixed: the
+      user first deferred it, then brought it into scope on 2026-10-16. From the main checkout,
+      `validate` now selects each plan's copy as the portal does and names the copy it validated.
+      Built in the review session itself, so the next `/plan-review` must run in a fresh session. Run from the
       primary checkout it validates the primary copy of a review plan (here: 0 findings); run from
       the worktree it reports the open Not tested entry. `validateRepositoryPlans` reads only the
       checkout it runs in, as it already did for Active plans on `main`; only the portal scan and
