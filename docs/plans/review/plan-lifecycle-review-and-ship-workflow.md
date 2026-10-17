@@ -412,8 +412,8 @@ decisions and agent work; they do not compose their own Git commands.
 
 - `recommendedPlanCommand` recommends `plan-promote` for backlog and `plan-execute` for ready. For
   an active plan with no unchecked tasks outside `## Not tested`, it recommends `plan-review`. In
-  review, it recommends `plan-execute` while findings are open and `plan-close` once approval is
-  recorded.
+  review, it recommends `plan-review`, which fixes open findings in its own session, until approval
+  is recorded, then `plan-close`.
 - Retire the `plan-start` package with the existing retired-package path, and move its `rules.md`
   ("Code Outlives Plans") to `plan-execute`. Add `plan-execute`, `plan-review`, and `plan-archive`
   packages, and update `PLAN_SUITE_PACKAGES`, `PLAN_SUITE_COMMANDS`, trigger fixtures, and generated
@@ -787,8 +787,9 @@ the additive-fix rule for `/plan-review` (`6b74f0f1`).
       UNKNOWN_PLAN_NAMESPACE`. The plan arrived on `main` in `c6051ff2`, and `main` fails the same
       check by itself. Outside this plan's requirements, so not for `/plan-execute`: rename that plan
       to a declared namespace (or declare `agent` in `docs/plans/plans-config.json`) on `main`, then
-      rerun `/plan-review`. — accepted by the user on 2026-10-16: not a defect of this branch; the
-      rename (`712b2b21`) resolves it on `main` separately.
+      rerun `/plan-review`. — accepted by the user on 2026-10-16: not a defect of this branch. The
+      rename (`712b2b21`) exists on `codex/portal-home-hello-guy-greeting` and has not landed on
+      `main`; the failure stays until it does.
 - [x] **Scope question (user decision): `roborepo plans validate` ignores authority.** As found:
       `validateRepositoryPlans` read only the checkout it ran in, as it already did for Active plans
       on `main`, so from the primary checkout it validated a review plan's primary copy (here: 0
@@ -894,23 +895,26 @@ Verification at `e78d1313`:
 
 Validator pass 1 (fresh-context subagent, full `main...HEAD` diff, at `302ef51a`):
 
-- [ ] Portal action descriptions still say `/plan-review` runs "independent QA":
-      `manifests/platform/plan-lifecycle.json` (active and review Review actions).
-- [ ] `plan-close`'s description routes "independent review or approval (plan-review)", the old
-      contract.
-- [ ] The plan's "Portal, packaging, and terminology" section still says review recommends
-      `plan-execute` while findings are open; the code and docs say `plan-review`.
-- [ ] `plan-execute` tells a review plan whose worktree is gone to rerun `start`, which refuses a
-      review plan; only an active plan records a replacement worktree that way.
-- [ ] `plan-review`'s inline rubric claims to be the same rubric but omits the paired-skill
-      constraints item.
-- [ ] `plan-review`'s report line lists three approval states of six (`not-approved`, `invalid`,
-      `unavailable` missing); `plan-close`'s omits `unavailable`.
+- [x] Portal action descriptions still say `/plan-review` runs "independent QA":
+      `manifests/platform/plan-lifecycle.json` (active and review Review actions). — fixed in review
+      (`01281500`)
+- [x] `plan-close`'s description routes "independent review or approval (plan-review)", the old
+      contract. — fixed in review (`01281500`)
+- [x] The plan's "Portal, packaging, and terminology" section still says review recommends
+      `plan-execute` while findings are open; the code and docs say `plan-review`. — fixed in review
+      (plan text)
+- [x] `plan-execute` tells a review plan whose worktree is gone to rerun `start`, which refuses a
+      review plan; only an active plan records a replacement worktree that way. — fixed in review
+      (`01281500`)
+- [x] `plan-review`'s inline rubric claims to be the same rubric but omits the paired-skill
+      constraints item. — fixed in review (`01281500`)
+- [x] `plan-review`'s report line lists three approval states of six (`not-approved`, `invalid`,
+      `unavailable` missing); `plan-close`'s omits `unavailable`. — fixed in review (`01281500`)
 - [ ] The confirmed Not tested walkthrough predates the validation loop and the new `/plan-review`
       flow, so no live run covers them. — escalated to the user: add an unchecked Not tested entry,
       or record that the walkthrough predates the change.
-- [ ] The round-2 base finding says `712b2b21` "resolves it on `main` separately"; that commit is
-      only on `codex/portal-home-hello-guy-greeting`.
+- [x] The round-2 base finding says `712b2b21` "resolves it on `main` separately"; that commit is
+      only on `codex/portal-home-hello-guy-greeting`. — fixed in review (plan text)
 - Base failure: `plan-suite-findings-check.mjs` (`UNKNOWN_PLAN_NAMESPACE`) fails the same way on an
   export of `main`.
 
