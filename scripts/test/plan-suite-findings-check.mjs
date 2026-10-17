@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import fs from "node:fs";
 import path from "node:path";
 // package.json declares node >=20 and import.meta.dirname only landed in 20.11, so it is undefined
 // on a supported floor version. The other 48 modules in this repo derive the directory this way.
@@ -641,15 +640,43 @@ Prose before the subsections.
   assert.deepEqual(parsed.review, {
     present: true,
     findings: { open: 1, total: 2 },
+    result: null,
     approval: { decision: "approved", commit: "abcdef0123", confirmedBy: "human" },
   });
   const fenced = parsePlanMarkdown("---\nid: rev12345\n---\n\n# F\n\n```md\n## Review\n### Approval\n- Decision: approved\n```\n", {});
-  assert.deepEqual(fenced.review, { present: false, findings: { open: 0, total: 0 }, approval: null }, "a fenced example is not a review record");
+  assert.deepEqual(fenced.review, { present: false, findings: { open: 0, total: 0 }, result: null, approval: null }, "a fenced example is not a review record");
   const noApproval = parsePlanMarkdown("---\nid: rev12345\n---\n\n# N\n\n## Review\n\n### Findings\n\n- [ ] Open.\n", {});
   assert.equal(noApproval.review.approval, null, "a review without `### Approval` has no recorded decision");
 }
 
+// Real filenames from this repository's plans, frozen as fixtures. The test guards naming.mjs
+// against false positives on names people actually write (hyphenated namespaces, ordinal series,
+// milestones). It must not scan the live plans folder: naming findings are advisory, and a live scan
+// turned one oddly named plan, committed straight to main, into a failing completion gate for every
+// branch. Add a filename here when it exposes a false positive.
 function testRepositoryPlansProduceNoNamingFindings() {
+  const realPlanFilenames = Object.freeze([
+    "agent-config-codex-cmux-hook-trust.md",
+    "agent-config-permissions-global-audit.md",
+    "agent-config-skills-vs-commands-policy.md",
+    "developer-runtime-remote-branch-status.md",
+    "git-exec-consolidation.md",
+    "harness-claude-worktree-entry-and-provider-leaks.md",
+    "harness-parity.md",
+    "infra-packaging-03-npm-release.md",
+    "infra-packaging-04-homebrew.md",
+    "os-windows-provider-path-schema.md",
+    "package-add-required-and-recommended-skills-and-references.md",
+    "plan-lifecycle-review-and-ship-workflow.md",
+    "plan-lifecycle-suite-blockers-dependencies.md",
+    "plan-reference-integrity-surfacing.md",
+    "portal-plans-live-refresh.md",
+    "session-launching-milestone-1.md",
+    "telemetry-analytics-oracle-live-observer.md",
+    "test-validation-tiers-and-diff-scoping.md",
+    "usage-statusline-codex-parity.md",
+  ]);
+
   const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
   const { configured, namespaces } = readProjectNamespaces(repoRoot);
   assert.equal(configured, true, "this repository declares plans-config.json; the fixture depends on it");
@@ -657,13 +684,11 @@ function testRepositoryPlansProduceNoNamingFindings() {
 
   const offenders = [];
   for (const lifecycle of ["backlog", "ready", "active", "review"]) {
-    const dir = path.join(repoRoot, "docs", "plans", lifecycle);
-    if (!fs.existsSync(dir)) continue;
-    for (const entry of fs.readdirSync(dir)) {
-      const codes = namingCodes(entry, lifecycle, namespaces);
-      if (codes.length) offenders.push(`${lifecycle}/${entry}: ${codes.join(", ")}`);
+    for (const filename of realPlanFilenames) {
+      const codes = namingCodes(filename, lifecycle, namespaces);
+      if (codes.length) offenders.push(`${lifecycle}/${filename}: ${codes.join(", ")}`);
     }
   }
   assert.deepEqual(offenders, [],
-    "no existing non-terminal plan may gain a naming finding; each line is a false positive to fix in naming.mjs, not a file to rename");
+    "each line is a false positive to fix in naming.mjs, not a fixture to remove");
 }

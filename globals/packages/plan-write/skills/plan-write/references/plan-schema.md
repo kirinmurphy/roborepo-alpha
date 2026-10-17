@@ -279,12 +279,17 @@ plan, and `/plan-review` adds to it and records the approval:
 
 ### Findings
 - [x] Missing retry test — fixed (a1b2c3d)
-- [ ] Retry limit: configurable or fixed? — escalated, see Open Questions
+- [x] Retry limit: fixed — confirmed by the human
 
 ### Verification
 - Validation: clean on pass 2 (fresh-context subagent)
 - Unit and integration tests passed
 - Base failure: `lint` fails on `main` too
+
+### Result
+- Status: complete
+- Reviewed implementation commit: <full commit id>
+- Base commit: <full base commit id>
 
 ### Approval
 - Decision: approved
@@ -298,8 +303,18 @@ plan, and `/plan-review` adds to it and records the approval:
   may stay for readable history.
 - A check that fails on the base branch too is a base failure, recorded under `### Verification`.
   It is never a finding.
-- Only the three `### Approval` lines have a fixed format, because the approval check reads them.
-  Only a human grants approval; an agent records it after the human's explicit answer.
+- `### Result` records review completion independently of the human decision: `Status` is `pending`
+  or `complete`, `Reviewed implementation commit` identifies the checked code, and `Base commit`
+  identifies its synchronized base. Record full commit ids. Set complete only after the final
+  checks and Validator pass, with every finding and required manual check resolved. The result
+  may be committed before the human answers; that plan-only commit preserves its freshness.
+- The Result fields and the three `### Approval` lines have a fixed format read by
+  `roborepo plans approval <plan> --json`. Its `review` object reports result freshness separately
+  from top-level approval `state`, including changed base paths. An older review without Result
+  remains valid; `/plan-review` must establish its evidence before taking the approval-only path.
+- Only a human grants approval; an agent records it after the human's explicit answer and commits
+  it immediately. Pending approval uses `Decision: requested`; a complete Result never changes
+  that decision automatically. Record the answer's source in review prose so a retry can recover it.
 - An approval is fresh while the repository outside `docs/plans/` is identical at the reviewed
   commit and at the feature branch's tip. Plan-only commits after it keep it fresh; a code change,
   including one a base merge brings in, makes it stale. `/plan-close` refuses a stale approval.

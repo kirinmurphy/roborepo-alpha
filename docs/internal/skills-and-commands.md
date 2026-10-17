@@ -75,7 +75,7 @@ Examples:
   required skill dependencies.
   Deterministic plan rules live in `roborepo plans validate`, the lifecycle
   transitions (`roborepo plans promote|start|submit|reopen|close|archive`), and
-  `roborepo plans preflight|approval|sync-base`, which the suite skills run
+  `roborepo plans preflight|approval|landed|sync-base`, which the suite skills run
   instead of composing Git commands. The lifecycle itself is declared in
   `manifests/platform/plan-lifecycle.json`.
 - `tighten`: explicit-only review/fix workflow behind `/tighten`.

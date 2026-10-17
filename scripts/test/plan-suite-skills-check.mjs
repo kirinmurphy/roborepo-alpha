@@ -286,6 +286,10 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "each escalated finding as a decision",
   ]);
   includesAll("plan-review", review, [
+    "references/resume-review.md",
+    "### Result",
+    "- Status: pending",
+    "- Base commit: <full base commit id>",
     "canonical completion preflight command",
     "canonical submit transition command",
     "canonical base synchronization command",
@@ -302,6 +306,17 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "never returns to `ready/`",
     "Do not invoke either command yourself",
     "`/plan-close` never synchronizes",
+  ]);
+  const resume = readPackageFile("plan-review/skills/plan-review/references/resume-review.md");
+  includesAll("plan-review resume", resume, [
+    "roborepo plans approval <plan> --json",
+    "already approved",
+    "already closed",
+    "Approval only",
+    "review.baseChangedPaths",
+    "Record the existing answer immediately",
+    "finish only step 3",
+    "This recovery records approval; it does not close, merge, push, or waive tests",
   ]);
 }
 
@@ -336,7 +351,14 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     .map((heading) => close.indexOf(heading));
   assert.ok(order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1])), "plan-close: tests, verdict, Not tested, approval, landed, close, stop servers, then cleanup, in that order");
   for (const phrase of [
-    "Accepts only a plan in docs/plans/review/",
+    "Close from docs/plans/review/",
+    "### Idempotent retries",
+    "Do not rerun tests, seek another approval, edit the plan, or make another closure commit",
+    "`- Absorbing commit: <full commit id>`",
+    "the absorbing commit is still in the selected base branch's first-parent history",
+    "A verified commit is reused instead of scanning base history again",
+    "after the recorded landing is never covered by it",
+    "verifies the recorded absorbing commit itself",
     "single post-merge action",
     "continue independent agent-resolvable work",
     "Prefer the repository's canonical CI command over a broad",

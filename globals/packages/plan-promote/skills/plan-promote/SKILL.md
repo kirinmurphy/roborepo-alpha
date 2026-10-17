@@ -48,7 +48,14 @@ Each row is its own optional package, so check it before loading it:
 
 ## Workflow
 
-1. Read the entire selected plan.
+1. Read the entire selected plan, then run `roborepo plans validate <plan> --json` from the
+   repository root before inspecting repository areas or editing the plan. Pass the selected
+   plan's repository-relative path; never omit the selector and validate every plan for this step.
+   Use the findings as input to preparation. Document findings, including blocking findings, are
+   issues to repair during promotion preparation, not a reason to stop that preparation. If the
+   command cannot resolve the selected plan or fails to produce validation findings because of an
+   execution error, resolve that failure before continuing. A nonzero exit caused by blocking
+   findings does not prevent preparation.
 2. Inspect all repository areas materially referenced by the plan.
 3. Verify current-state claims against code, tests, configuration, documentation, and Git state.
    Check the plan's `## Documentation impact` list against its implementation scope and the
@@ -95,8 +102,9 @@ Each row is its own optional package, so check it before loading it:
     details that can safely be decided during development. `/plan-write` wrote the initial
     checklist; refine it here so `/plan-execute` can work it task by task.
 11. Ensure validation and acceptance criteria are concrete and testable.
-12. Validate the finished document with the repository's canonical plan validator and resolve its findings,
-    then confirm the repository consistency checks no command makes — referenced paths, commands,
+12. Run `roborepo plans validate <plan> --json` again for the selected plan's current path and
+    resolve its findings. The initial validation does not replace this check after edits.
+    Then confirm the repository consistency checks no command makes — referenced paths, commands,
     and tests exist, current-state claims match the code, and related-plan classifications remain
     accurate. The deterministic validator does not replace this semantic reconciliation pass.
 13. Present the resulting plan, related-plan classifications, and any remaining questions to the user.

@@ -11,6 +11,7 @@ import { domainError, lifecycleFindings, parseFrontmatter, parsePlanMarkdown } f
 import { isWorktreeBound } from "./plan-authority.mjs";
 import { dirtyPaths, git } from "./plan-git.mjs";
 import { authoritativeMarkdown } from "./worktree-copy.mjs";
+import { reviewFreshness } from "./review-freshness.mjs";
 
 const PLANS_DIR = "docs/plans";
 // Built work no test covers stays open through review; /plan-close resolves it.
@@ -75,7 +76,9 @@ export function approvalFreshness({ primary, record, base }) {
   const branch = resolved.worktree?.branch || null;
   const tipRef = branch ? `refs/heads/${branch}` : base;
   const tip = git(primary, ["rev-parse", "--verify", "-q", `${tipRef}^{commit}`]).stdout;
-  const result = { plan: { id: record.plan.id, path: resolved.relativePath }, branch, tip: tip || null, approval };
+  const review = reviewFreshness({ primary, markdown: resolved.markdown, tip, base,
+    workingPath: resolved.worktree?.path || primary, available: !record.plan.worktree || Boolean(branch) });
+  const result = { plan: { id: record.plan.id, path: resolved.relativePath }, branch, tip: tip || null, review, approval };
   // The plan records only its worktree's name, so without that worktree's branch neither the reviewed
   // implementation nor the authoritative copy can be resolved. Comparing against the base branch
   // instead would report every later base commit as an implementation change.

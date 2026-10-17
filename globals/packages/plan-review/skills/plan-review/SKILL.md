@@ -1,6 +1,6 @@
 ---
 name: plan-review
-description: Use for the human review of a finished repository plan before its pull request merges. Trigger on explicit /plan-review or requests to review a plan or record explicit human approval for it. Accepts a plan in active, where it first runs the completion preflight and commits the move to review, or in review. It merges the base branch into the feature branch, runs the repository's checks and a fresh-context validator pass over the merged result, fixes every finding whose fix is clear in the same session (code included) and checks again, presents the human a review packet, fixes what the human raises, and records explicit human approval for the reviewed implementation commit. Choices between real alternatives go to the human; a material scope change returns the plan to active. Do not use for implementing a plan (plan-execute), reviewing an arbitrary diff, merging branches, or post-merge closure (plan-close).
+description: Use for the human review of a finished repository plan, resuming a pending review, or recording explicit human approval without repeating unchanged review work. Trigger on explicit /plan-review or requests to review a plan or record explicit human approval for it, including recovery of a missing approval after merge. Accepts active or review plans; completed plans return already closed. A new review synchronizes base, checks and fixes the work, records the reviewed commit independently of approval, and presents it to the human. Reruns reuse fresh review evidence or approval and review changed implementation when needed. Choices between real alternatives go to the human; a material scope change returns the plan to active. Do not use for implementing a plan (plan-execute), reviewing an arbitrary diff, merging branches, or post-merge closure (plan-close).
 ---
 
 # Plan Review
@@ -14,6 +14,9 @@ explicit approval is the only thing that clears a plan for its merge: a determin
 prove semantic correctness, and an agent cannot infer approval from passing tests.
 
 ## Inputs
+
+Resolve the primary plan's lifecycle first. A committed completed plan returns before worktree
+resolution, test discovery, or paired-skill loading, as described in the resume reference.
 
 Resolve:
 
@@ -29,8 +32,17 @@ Resolve:
 | Folder | This run |
 | --- | --- |
 | `active/` | Step 1, then the review. |
-| `review/` | The review, from step 2. A rerun after the base moved, or after `/plan-execute` fixed findings the user sent it, starts here too. |
+| `review/` | Resolve the resume path below before synchronizing or running checks. |
+| `completed/` | Confirm committed completion, report already closed, and stop. Do not reopen review because its worktree was cleaned up. |
 | anything else | Refuse, naming the folder and the command that fits it. |
+
+## Resume before repeating work
+
+Always read [references/resume-review.md](references/resume-review.md) before starting the workflow.
+It routes fresh approvals to an unchanged success result, completed reviews to the pending approval
+step, and changed implementations to review of the changes. Review completion and human approval
+are separate records; never turn completed checklists, passing tests, or landing into approval.
+Do not synchronize base, rerun the gate, or request approval again before applying that routing.
 
 ## Paired Skills
 
@@ -128,14 +140,19 @@ findings; earlier findings may stay for readable history.
 - Base failure: `<check>` fails on the base branch too
 - Manual: the setup dialog enables every component (confirmed by the user)
 
-### Approval
-- Decision: approved
+### Result
+- Status: pending
 - Reviewed implementation commit: <full commit id>
-- Confirmed by: human
+- Base commit: <full base commit id>
+
+### Approval
+- Decision: requested
 ```
 
-Keep each finding to one line a fixer can act on: what is wrong and where. Commit the plan in the
-worktree as a plan-only commit.
+Keep each finding to one line a fixer can act on: what is wrong and where. Keep Result pending
+until step 5 finishes and all findings and required manual checks are resolved. Commit the plan in
+the worktree as a plan-only commit; leave any prior approval intact as historical evidence rather
+than replacing it with an implied new approval.
 
 ### 5. Fix what has a clear fix
 
@@ -158,7 +175,13 @@ updated plan in the worktree.
 ### 6. Present the review and ask for approval
 
 Resolve the feature branch's current tip as a full commit id: that is the implementation the human
-is asked to approve. Present a review packet:
+is asked to approve. Record `### Result` with `Status: complete`, that full reviewed implementation
+commit, and the full base commit synchronized in step 2. Commit this evidence before asking the
+human. Plan-only evidence commits do not change the reviewed implementation. If findings or
+required manual checks remain, keep Result pending and present those outstanding decisions instead
+of asking for approval.
+
+Present a review packet:
 
 - the plan, the commit, and the base it was synchronized with;
 - each acceptance criterion with the code and test evidence that meets it;
@@ -176,13 +199,26 @@ approval.
 
 Approval needs every finding resolved and every required manual check confirmed by the human.
 
-1. Write `### Approval` with `Decision: approved`, the full commit id, and who confirmed it, then
-   commit it in the worktree.
+```md
+### Approval
+- Decision: approved
+- Reviewed implementation commit: <full commit id>
+- Confirmed by: human
+```
+
+1. Recheck review freshness and the human's answer against the exact implementation they were
+   shown. Write `### Approval` with `Decision: approved`, that full reviewed commit id, and who
+   confirmed it, then commit it immediately as a plan-only change before other work or ending the
+   turn. Include a reference to the explicit answer in the review prose. If the write or commit
+   fails, report approval received but not durably recorded; resume this step on the next run.
 2. Run the repository's canonical approval check for `<plan>`; it must report `fresh`. Plan-only
    commits after approval keep it fresh; any change outside `docs/plans/` makes it stale.
 3. Tell the user to open and merge the pull request themselves, then run `/plan-close`. If the base
    branch moves before that merge, the user reruns `/plan-review`; `/plan-close` never
    synchronizes, and it refuses a stale approval.
+
+For an approval-only resumption or post-merge recovery, use the write location and verification
+procedure in `references/resume-review.md`; do not restart steps 1–5.
 
 #### 6b. The human asks for changes or decides an escalation
 
@@ -212,21 +248,26 @@ On agreement:
 ```text
 Review result
 - Plan: <id and repository-relative path>
-- Completion preflight: passed | failed with <checks> | not run (already in review)
+- Resume path: full review | changes since review | approval only | already approved | already closed
+- Completion preflight: passed | failed with <checks> | not run (<resume reason>)
 - Lifecycle change: active -> review | review -> active | none
-- Base synchronization: up-to-date | merged <commit> | conflicts resolved <commit> | refused (<reason>)
-- Tests: <command> -> pass|fail
+- Base synchronization: up-to-date | merged <commit> | conflicts resolved <commit> | refused (<reason>) | not rerun (<resume reason>)
+- Tests: <command> -> pass|fail | reused at <commit> | not rerun (already approved|already closed)
 - Base failures: <checks that fail on the base branch too, or "none">
-- Validator passes: <count>, clean | stopped at the cap with <count> open
+- Validator passes: <count>, clean | stopped at the cap with <count> open | reused at <commit> | not rerun (<resume reason>)
 - Findings: <open count> open, <count> fixed in review (<commits>), <count> escalated
 - Not tested entries open: <count>
+- Review result: complete at <commit> | pending | stale | missing
 - Approval: approved at <commit> | requested | not requested | invalidated
 - Approval freshness: fresh | stale | missing | not-approved | invalid | unavailable
-- Next command: merge the pull request, then /plan-close | /plan-review | /plan-execute
+- Next command: merge the pull request, then /plan-close | /plan-close (already landed) | /plan-review | /plan-execute | none (already closed)
 ```
 
 Also report the evidence behind each finding, the verification commands and results, paired skills
 loaded or skipped, and current Git status in the worktree and the primary checkout.
+Label historical checks as reused. Skills and checks bypassed by an unchanged success path are
+not applicable to this run; never present them as newly performed. Report unavailable worktree
+status as expected after completed cleanup.
 
 ## Boundaries
 
