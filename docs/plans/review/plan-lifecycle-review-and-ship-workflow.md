@@ -51,8 +51,8 @@ This plan supersedes the former `plan-lifecycle-suite-workflow-navigation` plan,
   in `ready`.
 - `/plan-execute` starts or resumes implementation from `ready` or `active`, and fixes recorded QA
   findings while the plan is in `review`.
-- A plan moves `active → review` when **implementation is complete**. Independent QA and human
-  acceptance happen after that move.
+- A plan moves `active → review` when **implementation is complete and validated**: the validation
+  loop runs before the move, and the human review and acceptance happen after it.
 - `/plan-execute` ends in a validation loop: a fresh-context validator checks the work, and the run
   fixes what has a clear fix until a pass is clean, before the move to `review`.
 - `/plan-review` is the human review: it rechecks the synced work, fixes what has a clear fix in the
@@ -574,7 +574,7 @@ npm run check
 | The primary and worktree copies disagree on path during review | Stable id plus explicit authority across `active`/`review`; never copy content between checkouts outside the one-time archive carry |
 | The `active → review` rename conflicts with the worktree's edits during `sync-base` | The continuation keeps the worktree's content at the new path; a fixture covers it |
 | Transition commits run in a primary checkout the user is working in | Precondition covers only the plan's paths and the base branch; commit with `--only`; never touch other work |
-| Incomplete work is mistaken for ready-to-review | The deterministic preflight plus the agent's requirement check; QA stays with `/plan-review` |
+| Incomplete work is mistaken for ready-to-review | The validation loop, the deterministic preflight, and the agent's requirement check before the move; the human review in `/plan-review` after it |
 | Base synchronization changes code after approval | Freshness compares the tree outside `docs/plans/`; `/plan-close` refuses stale approval |
 | A squash merge appears unlanded | Keep `worktree-landed.mjs` and its regression fixtures |
 | Cleanup discards unmerged feature code | Existing worktree and branch guards; archive refuses without explicit authorization |
@@ -807,13 +807,16 @@ Validator pass 2 (fresh-context subagent, at `d676482b`):
 
 Validator pass 3 (fresh-context subagent, at `790618ac`):
 
-- [ ] Goals and the Risks table still say independent QA happens after the move to review and
-      "QA stays with `/plan-review`"; the validation loop now runs before the move.
-- [ ] The "Validation loop change" record says no independent check covers the change, though
-      validator passes now do, and it lacks the `Validation: clean on pass N` line.
-- [ ] `plan-execute`'s `agents/openai.yaml` keeps the placeholder short description carried over
-      from `plan-start`.
-- [ ] README's "Agent workflows" row is padded one column wider than its table.
+- [x] Goals and the Risks table still say independent QA happens after the move to review and
+      "QA stays with `/plan-review`"; the validation loop now runs before the move. — fixed in
+      review (plan text)
+- [x] The "Validation loop change" record says no independent check covers the change, though
+      validator passes now do, and it lacks the `Validation: clean on pass N` line. — fixed in
+      review (plan text)
+- [x] `plan-execute`'s `agents/openai.yaml` keeps the placeholder short description carried over
+      from `plan-start`. — fixed in review (`b8880dca`)
+- [x] README's "Agent workflows" row is padded one column wider than its table. — fixed in review
+      (`b8880dca`)
 
 Round 2 and round 3 findings stay under their round headings as history; all are resolved.
 
@@ -938,7 +941,8 @@ Verification:
 
 After round 3, at the user's direction, the review session itself added the validation loop and the
 human-review contract (`4357269e`, `e78d1313`; Decision Log 2026-10-16). That work was written in
-this session, so no independent check covers it yet.
+this session; three fresh-context validator passes then checked the full branch diff, recorded
+under `### Findings`.
 
 Verification at `e78d1313`:
 
@@ -950,6 +954,9 @@ Verification at `e78d1313`:
   classes, the cap, and `/plan-review`'s step order. `roborepo skill render-commands --check`,
   `skill triggers --check` (8 fixtures), and `skill audit` (no unreachable references) pass.
 
+- Validation: clean of code findings on pass 3 at `790618ac` (fresh-context subagents, three
+  passes); pass 3's four findings were text only and were fixed without a further pass, per
+  `/plan-review` step 5. The escalated live-run question stays open for the user.
 - After pass 2's fixes, at `071665e1`: doctor passed (102 checks); `test-cli.sh` 443 passed, 1
   failed (the base failure below); every later stage passed (`test:unit --group ci` 38/38, package
   install, four clean-machine suites, portal UI 103).
@@ -958,4 +965,4 @@ Verification at `e78d1313`:
 
 ### Approval
 
-- Decision: not requested (validator pass pending)
+- Decision: not requested (one escalated question open)
