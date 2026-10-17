@@ -1,0 +1,27 @@
+{
+  "tests": [
+    {
+      "skill": "plan-archive",
+      "match": [
+        "/plan-archive docs/plans/backlog/example.md",
+        "archive this plan, we are not doing it anymore",
+        "this plan is superseded, retire this plan"
+      ],
+      "nearMiss": [
+        "close this plan now that it has merged",
+        "clean up old worktrees",
+        "delete this branch"
+      ],
+      "triggerPhrases": [
+        "/plan-archive",
+        "archive this plan",
+        "retire this plan"
+      ],
+      "skipPhrases": [
+        "closing finished work",
+        "cleaning up worktrees",
+        "deleting branches"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "path": ["plans", "submit"],
+  "kind": "internal",
+  "title": "Submit plan for review",
+  "description": "Run the completion preflight and commit an active plan's move to review",
+  "usage": "roborepo plans submit <plan> [--base <branch>] [--json]",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/plans-command.mjs",
+    "export": "plansCommand",
+    "prependArgs": ["submit"]
+  }
+}

@@ -1,13 +1,16 @@
 ---
 name: plan-promote
-description: Use when reviewing and preparing an existing repository implementation plan before development begins. Inspect the current repository, reconcile stale assumptions and overlapping or active stories, improve the existing plan in place, fix obvious issues, identify genuine tradeoffs, ask the user only about material decisions, validate readiness, and stop before implementation. Do not use for creating a new plan from scratch, writing feature code, creating worktrees, changing lifecycle state, or resuming active implementation.
+description: Use when reviewing and preparing an existing repository implementation plan before development begins. Accepts a plan in backlog, or in ready to refine it. Inspect the current repository, reconcile stale assumptions and overlapping or active stories, improve the existing plan in place, fix obvious issues, identify genuine tradeoffs, ask the user only about material decisions, validate readiness, commit the plan's move to ready, and stop before implementation. Do not use for creating a new plan from scratch, writing feature code, creating worktrees, or starting or resuming implementation.
 ---
 
 # Plan Promote
 
 Promote one existing implementation plan for development.
 
-The goal is to leave the plan accurate, actionable, repository-grounded, and ready for an implementation decision without beginning feature work.
+The goal is to leave the plan accurate, actionable, repository-grounded, and committed to `ready/`
+without beginning feature work. A plan already in `ready/` can be promoted again to refine it in
+place. A plan in any other folder is refused, naming the folder and the command that fits it:
+`/plan-execute` for active or review work, `/plan-write` to revise a plan elsewhere.
 
 ## Inputs
 
@@ -86,24 +89,33 @@ Each row is its own optional package, so check it before loading it:
    - explain their consequences;
    - recommend the strongest option;
    - ask the user for a decision.
-8. Update the existing plan in place.
-9. Preserve the plan ID, filename conventions, frontmatter conventions, lifecycle folder, and repository-relative paths.
-10. Convert vague implementation phases into an executable sequence without prescribing incidental details that can safely be decided during development.
+8. Update the existing plan in place, in the primary checkout.
+9. Preserve the plan ID, filename conventions, frontmatter conventions, and repository-relative paths.
+10. Convert vague implementation phases into an executable sequence without prescribing incidental
+    details that can safely be decided during development. `/plan-write` wrote the initial
+    checklist; refine it here so `/plan-execute` can work it task by task.
 11. Ensure validation and acceptance criteria are concrete and testable.
 12. Validate the finished document with the repository's canonical plan validator and resolve its findings,
     then confirm the repository consistency checks no command makes — referenced paths, commands,
     and tests exist, current-state claims match the code, and related-plan classifications remain
     accurate. The deterministic validator does not replace this semantic reconciliation pass.
 13. Present the resulting plan, related-plan classifications, and any remaining questions to the user.
-14. After the promotion report, show the `/plan-start` instruction for the selected plan using its
-    repository-relative path, ready to paste into a new session.
-15. If promotion changed the selected plan document, show the user its changes and ask whether to
-    commit them. Wait for approval. If approved, recheck Git state, stage only the selected plan
-    path, verify the staged diff contains only the reviewed plan changes, and commit it. Do not
-    include pre-existing edits or other files without explicit approval. If the edits cannot be
-    isolated, explain that before committing. Report the commit result or the user's decision to
-    leave the changes uncommitted.
-16. Stop before implementation.
+14. Promote or hold:
+    - **Ready** (no material question remains unresolved): run the repository's canonical promote
+      transition command for `<plan>` from the primary checkout. From `backlog/` it moves the plan to
+      `ready/` with `git mv` and commits the move together with this run's edits to the plan; in
+      `ready/` it commits the refinements in place. Either way the commit contains only the plan's
+      old and new paths, and unrelated staged or unstaged work stays where it is. It refuses, with
+      the findings and a repair prompt, when the plan does not meet the `ready/` requirements: fix
+      them and run it again. It refuses when the primary checkout is not on the base branch; stop and
+      ask the user. Do not push.
+    - **Not ready** (material questions remain): leave the plan where it is. If this run changed it,
+      show the user the changes and ask whether to commit them; on approval, recheck Git state and
+      commit only the selected plan path. Do not include pre-existing edits or other files without
+      explicit approval.
+15. After the promotion report, show the `/plan-execute` instruction for a promoted plan using its
+    repository-relative path in `ready/`, ready to paste into a new session.
+16. Stop before implementation. Never invoke `/plan-execute` yourself.
 
 ## Decision Policy
 
@@ -158,6 +170,8 @@ Promotion result
 - Open questions: <count>
 - Blockers: <count>
 - Promoted for implementation: yes/no
+- Lifecycle change: backlog -> ready | refined in ready | none
+- Promotion commit: <hash> | already recorded | not made (<reason>)
 ```
 
 Also report:
@@ -171,19 +185,18 @@ Also report:
 - paired skills loaded, and any skipped with the reason;
 - any claims that could not be verified.
 
-After the report, show this snippet with the actual repository-relative plan path:
+After the report of a promoted plan, show this snippet with the actual repository-relative plan path:
 
 ````text
 Paste this instruction into a new session to start this plan:
 ```text
-/plan-start <plan document file>
+/plan-execute <plan document file>
 ```
 ````
 
-If the plan was updated, ask for commit approval after showing the report and snippet. The
-approval request should identify the selected plan and summarize the changes to be committed.
-After the user's decision, report whether the plan was committed and include the commit hash when
-applicable.
+For a plan held in `backlog/` with changes, ask for commit approval after the report. The approval
+request should identify the selected plan and summarize the changes to be committed. After the
+user's decision, report whether the plan was committed and include the commit hash when applicable.
 
 ## Boundaries
 
@@ -191,7 +204,7 @@ Do not:
 
 - implement feature code;
 - create a feature branch or worktree;
-- change plan lifecycle;
+- change plan lifecycle, except the move from `backlog/` to `ready/` through the promote transition;
 - launch another agent workflow;
 - push, merge, or publish;
 - claim the plan is ready when material questions remain unresolved.

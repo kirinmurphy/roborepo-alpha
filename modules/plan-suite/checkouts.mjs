@@ -17,14 +17,7 @@ export function repositoryCheckouts(registry, repositoryId, { fsApi = fs } = {})
     .filter((root) => root && isDirectory(root, fsApi));
   if (!known.length) return [];
   const main = mainCheckoutPath(known, { fsApi }) || known.find((root) => !resolveGitDir(root, { fsApi })?.isWorktree) || null;
-  const checkouts = new Map();
-  if (main) {
-    checkouts.set(main, { path: main, isMain: true, isWorktree: false, label: null, branch: null });
-    const git = resolveGitDir(main, { fsApi });
-    if (git) for (const worktree of linkedWorktrees(git.commonDir, { fsApi })) {
-      if (!worktree.prunable) checkouts.set(worktree.path, { path: worktree.path, isMain: false, isWorktree: true, label: worktree.name, branch: worktree.branch });
-    }
-  }
+  const checkouts = new Map(main ? mainAndLinkedCheckouts(main, { fsApi }).map((checkout) => [checkout.path, checkout]) : []);
   for (const root of known) {
     if (checkouts.has(root)) continue;
     const git = resolveGitDir(root, { fsApi });
@@ -34,6 +27,17 @@ export function repositoryCheckouts(registry, repositoryId, { fsApi = fs } = {})
   return first?.isMain
     ? [first, ...rest.sort((a, b) => a.label.localeCompare(b.label))]
     : [first, ...rest].sort((a, b) => a.label.localeCompare(b.label));
+}
+
+// The main checkout at `main` followed by each of its linked worktrees that still exists, in the
+// shape repositoryCheckouts returns. Needs no registry, so a CLI run inside one repository can use it.
+export function mainAndLinkedCheckouts(main, { fsApi = fs } = {}) {
+  const checkouts = [{ path: main, isMain: true, isWorktree: false, label: null, branch: null }];
+  const git = resolveGitDir(main, { fsApi });
+  if (git) for (const worktree of linkedWorktrees(git.commonDir, { fsApi })) {
+    if (!worktree.prunable) checkouts.push({ path: worktree.path, isMain: false, isWorktree: true, label: worktree.name, branch: worktree.branch });
+  }
+  return checkouts;
 }
 
 function realpathOrNull(value, fsApi) {

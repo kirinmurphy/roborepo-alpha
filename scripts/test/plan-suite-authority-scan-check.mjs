@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { buildPlanSnapshot, movePlanLifecycle, planSnapshotFingerprint, updatePlanPriority } from "../../modules/plan-suite/index.mjs";
+import { buildPlanSnapshot, planSnapshotFingerprint, updatePlanPriority } from "../../modules/plan-suite/index.mjs";
 import { recordRepositoryDiscovery } from "../cli/repositories.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -50,7 +50,7 @@ try {
   git(main, "commit", "-qm", "seed");
   git(main, "worktree", "add", "-q", "-b", "late", path.join(trees, "late"));
 
-  // Start transitions, as /plan-start commits them in the primary checkout.
+  // Start transitions, as /plan-execute commits them in the primary checkout.
   fs.mkdirSync(path.join(main, "docs/plans/active"), { recursive: true });
   git(main, "mv", "docs/plans/backlog/prestart.md", "docs/plans/active/prestart.md");
   write(active("prestart.md"), plan("pre000", { worktree: "late" }));
@@ -158,19 +158,6 @@ try {
   assert.deepEqual(changed.record.plan.authority, { source: "worktree", worktree: "feature-x" }, "the returned record still says where it was read from");
   updatePlanPriority(snapshot, { id: "back333", key: byId.back333.key, priority: "low", expectedPriority: "high", mtimeMs: byId.back333.mtimeMs });
   assert.match(read(path.join(main, "docs/plans/backlog/backlog.md")), /priority: low/, "a backlog plan's priority is written to the primary copy");
-
-  ({ snapshot, byId } = scan());
-  const worktreeBefore = read(inFeature("worked.md"));
-  assert.throws(
-    () => movePlanLifecycle(snapshot, { id: "act222", key: byId.act222.key, lifecycle: "completed", expectedLifecycle: "active", mtimeMs: byId.act222.mtimeMs, skipDestinationValidation: true }),
-    (err) => err.code === "LIFECYCLE_OWNED_BY_PRIMARY" && err.status === 409 && /plan-close/.test(err.resolution),
-    "a worktree-authoritative plan cannot change lifecycle from the portal",
-  );
-  assert.equal(read(primaryWorked), primaryBefore, "the primary copy is unchanged");
-  assert.equal(read(inFeature("worked.md")), worktreeBefore, "the worktree copy is unchanged");
-  assert.ok(!fs.existsSync(path.join(featureX, "docs/plans/completed/worked.md")) && !fs.existsSync(path.join(main, "docs/plans/completed/worked.md")));
-  movePlanLifecycle(snapshot, { id: "gone666", key: byId.gone666.key, lifecycle: "backlog", expectedLifecycle: "active", mtimeMs: byId.gone666.mtimeMs, skipDestinationValidation: true });
-  assert.ok(fs.existsSync(path.join(main, "docs/plans/backlog/gone.md")), "a primary-authoritative plan keeps the manual override");
 
   // ---- /api/plans carries the authority object and no absolute path ----
   const portal = spawnSync(process.execPath, ["-e", "import('./scripts/cli/plans.mjs').then((m) => process.stdout.write(JSON.stringify(m.loadPlansSnapshot())))"], {

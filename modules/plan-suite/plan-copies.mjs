@@ -14,7 +14,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { finding, messagesOf } from "./findings.mjs";
-import { checkOutsideEdits, resolvePlanAuthority } from "./plan-authority.mjs";
+import { checkOutsideEdits, isWorktreeBound, resolvePlanAuthority } from "./plan-authority.mjs";
 import { lifecycleFromPath, parseFrontmatter, planFilesInRepository, readPlanRecord, repositoryRecord } from "./index.mjs";
 
 export function scanCheckout(checkout, canonical) {
@@ -56,17 +56,20 @@ export function selectRecords([primary, ...others]) {
 function authoritativeRecords(primary, copy, worktrees) {
   const assignedEntry = copy.worktree ? worktrees.get(copy.worktree) : null;
   const assignedCopies = assignedEntry?.copies.filter((candidate) => candidate.key === copy.key) || [];
-  const assignedCopy = assignedCopies.find((candidate) => candidate.lifecycle === "active" && candidate.worktree === copy.worktree) || assignedCopies[0] || null;
+  const assignedCopy = assignedCopies.find((candidate) => isWorktreeBound(candidate.lifecycle) && candidate.worktree === copy.worktree) || assignedCopies[0] || null;
   const authority = resolvePlanAuthority({ primary: copy, assigned: assignedEntry ? { copy: assignedCopy } : null });
   if (authority.source === "primary") {
     const record = fullRecord(primary, copy, { source: "primary" });
     return [authority.reason ? withFinding(record, "PLAN_WORKTREE_COPY_UNAVAILABLE", { worktree: copy.worktree, reason: authority.reason }) : record];
   }
   const worktreeAuthority = { source: "worktree", worktree: copy.worktree };
+  // The worktree's copy says what the plan is; the primary copy says which stage it is in. During
+  // review the two sit at different paths, so the record keeps both.
+  const stage = { lifecycle: copy.lifecycle, primaryRelativePath: copy.relativePath };
   // A repeated id in the authoritative checkout is a genuine duplicate, as in the primary checkout:
   // every copy stays so DUPLICATE_PLAN_ID fires, rather than file order silently picking one.
-  if (assignedCopies.length > 1) return assignedCopies.map((candidate) => fullRecord(assignedEntry, candidate, worktreeAuthority));
-  return [outsideEditChecked(primary, copy, assignedEntry, assignedCopy, fullRecord(assignedEntry, assignedCopy, worktreeAuthority))];
+  if (assignedCopies.length > 1) return assignedCopies.map((candidate) => fullRecord(assignedEntry, candidate, worktreeAuthority, stage));
+  return [outsideEditChecked(primary, copy, assignedEntry, assignedCopy, fullRecord(assignedEntry, assignedCopy, worktreeAuthority, stage))];
 }
 
 function outsideEditChecked(primary, copy, assignedEntry, assignedCopy, record) {
@@ -80,13 +83,16 @@ function outsideEditChecked(primary, copy, assignedEntry, assignedCopy, record) 
   return record;
 }
 
-function fullRecord(entry, copy, authority) {
-  const record = readPlanRecord(entry.scoped, copy.file);
+// `stage` is set only when the record is read from the assigned worktree: the lifecycle the record
+// is validated and shown under, and the primary copy's path when it differs from the worktree's.
+function fullRecord(entry, copy, authority, stage = null) {
+  const record = readPlanRecord(entry.scoped, copy.file, { lifecycle: stage?.lifecycle });
   const { checkout } = entry;
+  const primaryRelativePath = stage && stage.primaryRelativePath !== record.plan.relativePath ? { primaryRelativePath: stage.primaryRelativePath } : {};
   return {
     ...record,
     checkoutPath: checkout.path,
-    plan: { ...record.plan, checkout: checkout.isMain ? null : checkout.label, authority },
+    plan: { ...record.plan, ...primaryRelativePath, checkout: checkout.isMain ? null : checkout.label, authority },
   };
 }
 

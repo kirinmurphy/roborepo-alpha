@@ -162,7 +162,7 @@ Each card combines a compact view of several domains:
 - **Running application** — a checkout's promoted primary application is a clickable port. A host
   development server and a Compose-backed application behave the same here. Secondary ports and
   hosting diagnostics remain on Runtime.
-- **Plans** — below the main checkout, every active plan gets one row, ahead of the remaining
+- **Plans** — below the main checkout, every active or review plan gets one row, ahead of the remaining
   worktrees. The plan title opens the plan drawer, and its completion ring or **done** sits beside it.
   - A plan whose `worktree` field names a linked worktree Home shows becomes that worktree's row: the
     plan title replaces the branch label, a worktree button opens the branch, worktree name, and path
@@ -170,7 +170,7 @@ Each card combines a compact view of several domains:
     the same Git warnings the row's warning is chosen from, and the
     **Stop Server** and **Delete Worktree** actions, and the port, Links,
     and Git warning stay where the checkout row puts them. The match is exact: the plan's value must
-    equal the worktree's Git administrative name, exactly one active plan must claim it, and exactly
+    equal the worktree's Git administrative name, exactly one active or review plan must claim it, and exactly
     one known worktree must carry it. Branch names and checkout paths are never used to guess.
   - Any other plan is its own row with a badge: **no worktree** when it names none;
     otherwise **worktree not listed** (Git has it, Runtime does not list it), **worktree missing** (Git
@@ -212,7 +212,7 @@ cleanup hook is installed.
 **Stop Server** stops the dev servers listening from that worktree, as `/plan-close` does.
 **Delete Worktree** opens a confirmation that says in plain words what is deleted (the worktree's
 folder and its local branch) and what that costs: nothing for merged work, or how many commits were
-never merged and that a backup keeps them. A worktree an active plan claims, or one with something
+never merged and that a backup keeps them. A worktree an active or review plan claims, or one with something
 running, shows a warning and a red **Delete worktree** button; otherwise the button is green.
 **Details and how to restore** shows the branch, folder, archive ref, and the commands that bring it
 back. Confirming stops the worktree's servers and removes it. Both live in the worktree dropdown on a plan's row and in the ⋮ menu on any
@@ -242,8 +242,8 @@ outside `.claude/worktrees/`) and installs the hook; **Dismiss** hides the offer
 repository. If another tool's `post-merge` hook is already installed, the dialog shows the line to
 add to it.
 
-A hook installed before the plan-close package is enabled keeps working: a worktree whose active
-plan names it waits for `/plan-close`. An active plan that does not name its worktree cannot protect
+A hook installed before the plan-close package is enabled keeps working: a worktree whose active or review
+plan names it waits for `/plan-close`. A plan that does not name its worktree cannot protect
 it, so if that branch lands the hook may remove the worktree first; the removal log keeps its tip.
 
 `roborepo git worktrees hook install` enables automatic cleanup after a successful merge or pull
@@ -295,7 +295,7 @@ bookmarkable and browser Back/Forward navigation works normally. The detail page
 - browser-safe identity and discovery provenance;
 - all known checkouts, Git state, and promoted application links;
 - repository-level Git warnings;
-- active/backlog plan counts and plans changed in the last seven days;
+- backlog, ready, active, and review plan counts, and plans changed in the last seven days;
 - recent Tokens warnings and their severity;
 - the current Agents availability state;
 - links to the full Runtime, Plans, Tokens, and Agents pages.

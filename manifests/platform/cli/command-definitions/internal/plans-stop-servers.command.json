@@ -6,7 +6,7 @@
   "usage": "roborepo plans stop-servers <plan> [--dry-run] [--json]",
   "execution": {
     "adapter": "module",
-    "module": "scripts/cli/plans.mjs",
+    "module": "scripts/cli/plans-command.mjs",
     "export": "plansCommand",
     "prependArgs": ["stop-servers"]
   }

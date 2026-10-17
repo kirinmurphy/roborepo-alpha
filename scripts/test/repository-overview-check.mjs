@@ -107,7 +107,7 @@ assert.equal(active.domains.runtime.data.checkouts[0].primaryEntrypoint.port, 43
 assert.equal(active.domains.runtime.data.checkouts[0].primaryEntrypoint.opaqueKey, "secret-runtime-key", "Home reuses the promoted app key for route discovery");
 assert.equal(JSON.stringify(active).includes("9999"), false, "secondary ports are absent from the overview payload");
 assert.equal(active.domains.git.data.warnings.length, 3);
-assert.deepEqual(active.domains.plans.data.counts, { active: 1, backlog: 1 });
+assert.deepEqual(active.domains.plans.data.counts, { backlog: 1, ready: 0, active: 1, review: 0 });
 assert.equal(active.domains.plans.data.recent[0].changedAt, "2026-09-29T12:00:00.000Z", "Git last-change time wins over mtime");
 assert.deepEqual(active.domains.plans.data.recent.map((plan) => plan.id), ["active-plan", "backlog-plan"], "recent plans stay inside the trailing seven-day window");
 assert.equal(active.domains.tokens.data.warningCount, 2);
@@ -117,7 +117,7 @@ assert.equal(active.domains.plans.data.active[0].relativePath, "docs/plans/activ
 assert.equal("additionalActive" in active.domains.plans.data, false, "plans are no longer split into a leftover list");
 assert.equal(active.domains.agents.status, "unavailable");
 assert.equal(home.repositories.find((repository) => repository.repositoryId === PINNED).domains.plans.status, "unavailable", "unscanned Plans coverage is not reported as zero");
-assert.deepEqual(home.repositories.find((repository) => repository.repositoryId === IDLE_RECENT).domains.plans.data.counts, { active: 0, backlog: 0 }, "a scanned repository without plans reports zero");
+assert.deepEqual(home.repositories.find((repository) => repository.repositoryId === IDLE_RECENT).domains.plans.data.counts, { backlog: 0, ready: 0, active: 0, review: 0 }, "a scanned repository without plans reports zero");
 assert.equal(home.repositories.find((repository) => repository.repositoryId === STALE).domains.plans.status, "unavailable", "a repository Plans could not read is not reported as zero");
 assert.equal(active.domains.runtime.data.checkouts[0].projectRoot, "/private/worktrees/active-feature", "shared checkout tooltips and copy controls receive the checkout path");
 
@@ -369,7 +369,7 @@ assert.deepEqual(Object.fromEntries(activePlans.map((plan) => [plan.id, plan.wor
 }, "an unmatched named worktree says why: contested or unreferenceable, absent from Git, or present but not listed by Runtime");
 assert.equal("additionalActive" in associated.domains.plans.data, false);
 assert.equal("worktrees" in associated.domains.plans.data, false, "Git's worktree list informs matching but is not published");
-assert.deepEqual(associated.domains.plans.data.counts, { active: 10, backlog: 1 }, "repository-wide counts are unchanged by matching");
+assert.deepEqual(associated.domains.plans.data.counts, { backlog: 1, ready: 0, active: 10, review: 0 }, "repository-wide counts are unchanged by matching");
 assert.equal(associated.domains.git.data.checkouts.some((checkout) => "plan" in checkout), false, "the git domain carries no plan either");
 
 const partialAssociation = loadAssociation({ plans: { ...associationPlans, truncated: true } });
@@ -456,6 +456,23 @@ assert.equal(captureOff(SHARED_FIXTURE), undefined, "a mock repository is absent
 const captureOn = loadTokens(true);
 assert.equal(captureOn(TOKENS_REAL).data.warningCount, 2, "capture on shows the spool's warnings");
 assert.equal(captureOn(SHARED_FIXTURE), undefined, "a mock repository stays outside reporting when capture is on");
+
+// A plan under review still owns its worktree, so Home lists it beside active plans and joins it to
+// that worktree's row; its merged worktree is what tells the user to run /plan-close.
+{
+  const reviewPlans = structuredClone(plans);
+  reviewPlans.plans.push({ repository: { repositoryId: ACTIVE }, plan: { id: "review-plan", title: "Review plan", lifecycle: "review", relativePath: "docs/plans/review/review-plan.md", taskCounts: { total: 2, complete: 2 }, gitLastChangedAt: null, modifiedAt: null } });
+  const reviewService = createRepositoryOverviewService({
+    loadRegistry: () => structuredClone(registry),
+    loadRuntime: () => structuredClone(runtime),
+    loadPlans: () => structuredClone(reviewPlans),
+    loadTelemetry: () => structuredClone(telemetry),
+    now: () => NOW,
+  });
+  const reviewData = reviewService.loadHome().repositories.find((repository) => repository.repositoryId === ACTIVE).domains.plans.data;
+  assert.deepEqual(reviewData.active.map((plan) => [plan.id, plan.lifecycle]), [["active-plan", "active"], ["review-plan", "review"]], "worktree-bound plans in Active and Review are listed together");
+  assert.equal(reviewData.counts.review, 1);
+}
 
 console.log("repository-overview-check passed");
 

@@ -2,6 +2,7 @@
 // repository-registry state: it must never opt a user into Runtime observation, Plans, or telemetry.
 
 import { forgetRepository, loadRegistry, updateRegistry } from "../../modules/repositories/index.mjs";
+import { LIFECYCLE_MODEL, lifecycleProjection } from "../../modules/plan-suite/lifecycle-manifest.mjs";
 
 // Keep the first-run Home/Runtime mock data available for a later product decision, but leave the
 // mock views disabled in the current release. Plans still use their own read-only mock projection.
@@ -166,6 +167,7 @@ export function mockPlansSnapshot({ now = new Date().toISOString(), packageState
     truncated: false,
     planWritePackage: packageState || { available: false, enabled: false, status: "missing", message: "" },
     autoDiscovery: { enabled: false },
+    lifecycle: lifecycleProjection(LIFECYCLE_MODEL),
   };
 }
 
