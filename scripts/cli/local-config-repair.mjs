@@ -55,6 +55,8 @@ export function localConfigRepairCommand(args = []) {
 
   printPlan(plans, mode);
   if (mode === "apply") applyPlans(plans);
+  // Dry-run is the default, so a bare `repair local-config` also lands here; name the write step.
+  else console.log("\nNothing was written. To apply these changes, run: roborepo maintenance repair local-config --apply");
 }
 
 function parseMode(args) {

@@ -439,6 +439,7 @@ test_repair_local_config_recovers_backup_only_codex_settings() {
 
   HOME="$home_dir" node "$repo_root/scripts/cli/local-config-repair.mjs" --dry-run >"$home_dir/dry.out" 2>&1
   assert_file_contains "$home_dir/dry.out" "recover local-only settings" "local-config dry-run reports recovered backup content"
+  assert_file_contains "$home_dir/dry.out" "run: roborepo maintenance repair local-config --apply" "local-config dry-run names the apply command"
 
   HOME="$home_dir" node "$repo_root/scripts/cli/local-config-repair.mjs" --apply >"$home_dir/apply.out" 2>&1
   assert_file_contains "$home_dir/apply.out" "repair: $home_dir/.codex/config.toml" "local-config apply writes active Codex config"
