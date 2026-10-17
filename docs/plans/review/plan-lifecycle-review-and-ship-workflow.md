@@ -1,7 +1,7 @@
 ---
 id: gqzjlzgx
 priority: high
-next_action: Run /plan-execute in a separate session to fix the round-3 preflight line-number finding; rename main's backlog plan agent-permissions-global-audit.md to a declared namespace so `npm run check` passes on main; then rerun /plan-review in a fresh session.
+next_action: Record the human approval of the reviewed implementation commit, then merge the pull request and run /plan-close.
 blocked_by: []
 depends_on: []
 related:
@@ -593,6 +593,10 @@ npm run check
   branch. The Review stage makes a stale primary copy routine, and acceptance criterion 8 promises
   that the CLI shows the authoritative copy. (User decision, during the second review round, after
   first deferring it.)
+- **2026-10-16** — Round 3: the reviewer fixed the preflight line-number finding itself, a code
+  change the review normally sends to `/plan-execute`, and the base-only gate failure was accepted
+  rather than fixed on this branch. Neither has consequence for the feature, and a separate
+  `/plan-execute` session for them cost more than the fixes. (User decision.)
 
 Decisions made autonomously during implementation (2026-10-15):
 
@@ -732,12 +736,13 @@ round-1 fix session), of `e6bac7ea2041` (feature branch after `sync-base` merged
 `c6051ff2`). Covers the full branch diff, including the `unavailable` approval fix (`b1355faa`) and
 the additive-fix rule for `/plan-review` (`6b74f0f1`).
 
-- [ ] **Base breaks the completion gate.** `npm run check` stops in `test-cli.sh`:
+- [x] **Base breaks the completion gate.** `npm run check` stops in `test-cli.sh`:
       `plan-suite-findings-check.mjs` reports `backlog/agent-permissions-global-audit.md:
       UNKNOWN_PLAN_NAMESPACE`. The plan arrived on `main` in `c6051ff2`, and `main` fails the same
       check by itself. Outside this plan's requirements, so not for `/plan-execute`: rename that plan
       to a declared namespace (or declare `agent` in `docs/plans/plans-config.json`) on `main`, then
-      rerun `/plan-review`.
+      rerun `/plan-review`. — accepted by the user on 2026-10-16: not a defect of this branch; the
+      rename (`712b2b21`) resolves it on `main` separately.
 - [x] **Scope question (user decision): `roborepo plans validate` ignores authority.** As found:
       `validateRepositoryPlans` read only the checkout it ran in, as it already did for Active plans
       on `main`, so from the primary checkout it validated a review plan's primary copy (here: 0
@@ -783,15 +788,16 @@ Covers what changed since round 2: the `plans validate` authority change (`7986e
 record (`71051dd1`). The rest of the branch was re-checked through the completion gate only; rounds
 1 and 2 read the full diff.
 
-The round-2 base finding above is still open: `main` still holds
-`backlog/agent-permissions-global-audit.md`, and the gate fails on it exactly as before.
+The round-2 base finding above was still unresolved at the start of this round: `main` still held
+`backlog/agent-permissions-global-audit.md`, and the gate failed on it exactly as before.
 
-- [ ] **The completion preflight's `line N` points 18 lines early.** `review-gates.mjs:39` prints
+- [x] **The completion preflight's `line N` points 18 lines early.** `review-gates.mjs:39` prints
       `parsePlanMarkdown` task lines, which count from the end of the frontmatter, so on this plan
       it reports the open base finding at "line 717" when the file has it at line 735. The preflight
       is the only place these numbers are shown to anyone. Report file line numbers (add the
       frontmatter's line count), and assert the reported line in
-      `plan-lifecycle-transitions-check.mjs`.
+      `plan-lifecycle-transitions-check.mjs`. — fixed in review at the user's direction (`2417c799`);
+      the new assertion fails on the old code and passes on the fix.
 - [x] **The round-2 scope-question entry contradicts itself.** After "— fixed", it describes the
       pre-fix `validate` behavior in the present tense ("validates the primary copy", "reads only
       the checkout it runs in"). Separate the finding as found from its fix. — fixed in review
@@ -819,6 +825,10 @@ Verification:
   portal scan report the same findings, and run from a linked worktree it still validates that
   checkout's own copy. The two doc changes match the code; the plan skills mention only "the
   repository's plan validator", so none of them goes stale.
+- After `2417c799`: `test-cli.sh` 443 passed, 1 failed (the same base finding); `test:unit --group
+  ci` 38/38 suites. `plans preflight` now reports the open findings at their file lines (735, 789).
+  The install, Docker, and portal UI stages were not rerun: the fix changes only the preflight's
+  message text.
 
 ### Approval
 
