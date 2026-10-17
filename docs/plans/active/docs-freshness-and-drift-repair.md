@@ -1,7 +1,7 @@
 ---
 id: irpw877r
 priority: high
-next_action: Merge the reviewed implementation branch, then confirm the first post-change plan-start and plan-close reports include their required documentation evidence
+next_action: Run /plan-review for the implementation, then confirm landing and run /plan-close after human approval
 blocked_by: []
 depends_on: []
 related:
@@ -267,6 +267,14 @@ The plan-close guide and skill now report a removal failure after cleanup guards
   `UNCONFIRMED_NOT_TESTED` finding for the live agent-compliance check below.
 - Documentation Validator pass checked technical-writing rules, doc-set organization, the plan
   schema, and the applicable code-style, JavaScript, and test guidance; no violations remained.
+- Manual agent-behavior check, recorded at the user's request on 2026-10-17: a disposable RoboRepo
+  plan ran through the current `/plan-execute` instruction (the successor to `/plan-start`) and
+  included `Docs updated: docs/user-guide.md` in its execution report in this chat. Its approved
+  `/plan-close` run checked
+  `docs/user-guide.md` against the landed `src/message.mjs`, `bin/hello.mjs`, and CLI output, named
+  those comparisons in `## Verification`, and committed only plan-file changes (`f678103`). The demo
+  used a local merge rather than a hosted pull request; this confirms the documentation behavior,
+  not the real docs-freshness branch's landing.
 
 ## Validation
 
@@ -277,17 +285,16 @@ The plan-close guide and skill now report a removal failure after cleanup guards
 - `node scripts/test/skill-trigger-fixtures-check.mjs` and `node scripts/test/skill-trigger-fixtures-shipping-check.mjs` pass after the skill edits; run the repository's skill/package checks for changed package sources.
 - Each Phase 2 skill edit can be found by reading the skill: the instruction is in the step named in
   Proposed Design.
-- No automated test can show an agent following the new instructions. The first plan that runs
-  through `plan-start` and `plan-close` after Phase 2 confirms it: its final report carries the
-  `Docs updated:` line, and its `## Verification` names the docs it checked. Record that run as a
-  `## Not tested` entry until it happens.
+- Agent compliance is checked by a live run of the current `/plan-execute` and `/plan-close`
+  instructions: the execution report carries `Docs updated:`, and the completed plan's
+  `## Verification` names the docs checked against landed code.
 - The implementation report lists each Phase 3 area's docs, the current code or UI checked, and any correction made; a doc with no change gets an explicit checked-and-current result.
 
 ## Not tested
 
-- [ ] Confirm the first plan using the updated `/plan-start` and `/plan-close` instructions reports
-  `Docs updated:` and names the docs checked in its `## Verification`. Agent compliance needs a
-  later live run and cannot be established by the package and skill checks alone.
+- [x] Confirm a live plan using the updated `/plan-execute` and `/plan-close` instructions reports
+  `Docs updated:` and names the docs checked in its `## Verification` — confirmed by the
+  user-approved disposable run recorded under Verification run above.
 
 ## Risks
 
@@ -300,6 +307,9 @@ The plan-close guide and skill now report a removal failure after cleanup guards
 
 ## Decision Log
 
+- The 2026-10-17 manual check uses `/plan-execute`, the current name for the implementation step
+  originally called `/plan-start`. The user asked to record the observed disposable run as the
+  agent-compliance check. Its local merge does not establish landing for this plan.
 - Keep `documentation-map-and-audit.md` as a historical audit. Retiring its duplicate map makes
   `docs/internal/docs-map.md` the current ownership source while preserving the earlier findings.
 - Defer machine-readable code-to-doc ownership. The plan workflow and deterministic reference
