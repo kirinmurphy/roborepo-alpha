@@ -1,7 +1,7 @@
 ---
 id: gqzjlzgx
 priority: high
-next_action: Run a fresh-context validator pass over the validation-loop change, then request the human approval of the branch tip, merge the pull request, and run /plan-close.
+next_action: Record the human approval of the branch tip, then merge the pull request and run /plan-close.
 blocked_by: []
 depends_on: []
 related:
@@ -633,6 +633,10 @@ npm run check
   to lift out unchanged into the shared `implementation-review` skill once packages can declare
   required skill dependencies (`ejsc769o`, after `o9zwxuav`). A separate optional skill today would
   need the enable-or-skip prompt for a mandatory step. (User decision.)
+- **2026-10-17** — The validation loop and the new `/plan-review` flow are accepted on the evidence of
+  the prose checks, the completion gate, and this review's three fresh-context validator passes,
+  without a separate live walkthrough. The confirmed Not tested walkthrough predates them; the user
+  will validate the flow progressively by using and refining it on real plans. (User decision.)
 - **2026-10-16** — Round 3: the reviewer fixed the preflight line-number finding itself, a code
   change the review normally sends to `/plan-execute`, and the base-only gate failure was accepted
   rather than fixed on this branch. Neither has consequence for the feature, and a separate
@@ -729,15 +733,7 @@ Run on 2026-10-15 in the plan's worktree:
 
 ## Open questions
 
-- **A live run of the validation loop and the new `/plan-review` flow.** The Not tested walkthrough
-  the user confirmed on 2026-10-16 predates both (`4357269e`), so no live session has exercised the
-  loop's subagent validator, its fix-and-recheck cycle, or the review packet. Options: (a) add an
-  unchecked `## Not tested` entry for a live run; honest by the plan's own rule, but approval and
-  `/plan-close` then wait on that run. (b) Record in the review that the confirmed walkthrough
-  predates the change and that only the prose checks and this review's own two validator passes
-  cover it; nothing waits, and the next real plan is the live run. Recommendation: (b), since this
-  review itself ran the loop end to end twice with real subagents. Blocks: the escalated finding in
-  `## Review`.
+None.
 
 ## Not tested
 
@@ -786,9 +782,10 @@ at `302ef51a`):
       constraints item. — fixed in review (`01281500`)
 - [x] `plan-review`'s report line lists three approval states of six (`not-approved`, `invalid`,
       `unavailable` missing); `plan-close`'s omits `unavailable`. — fixed in review (`01281500`)
-- [ ] The confirmed Not tested walkthrough predates the validation loop and the new `/plan-review`
+- [x] The confirmed Not tested walkthrough predates the validation loop and the new `/plan-review`
       flow, so no live run covers them. — escalated to the user: add an unchecked Not tested entry,
-      or record that the walkthrough predates the change.
+      or record that the walkthrough predates the change. Decided 2026-10-17: record it; the user
+      validates the new flow progressively by using it (Decision Log).
 - [x] The round-2 base finding says `712b2b21` "resolves it on `main` separately"; that commit is
       only on `codex/portal-home-hello-guy-greeting`. — fixed in review (plan text)
 
@@ -965,4 +962,4 @@ Verification at `e78d1313`:
 
 ### Approval
 
-- Decision: not requested (one escalated question open)
+- Decision: requested
