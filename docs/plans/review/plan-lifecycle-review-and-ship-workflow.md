@@ -805,6 +805,16 @@ Validator pass 2 (fresh-context subagent, at `d676482b`):
       `roborepo plans` CLI handlers. Move the CLI into its own module. — fixed in review
       (`071665e1`): `plans.mjs` 135 lines, `plans-command.mjs` 258
 
+Validator pass 3 (fresh-context subagent, at `790618ac`):
+
+- [ ] Goals and the Risks table still say independent QA happens after the move to review and
+      "QA stays with `/plan-review`"; the validation loop now runs before the move.
+- [ ] The "Validation loop change" record says no independent check covers the change, though
+      validator passes now do, and it lacks the `Validation: clean on pass N` line.
+- [ ] `plan-execute`'s `agents/openai.yaml` keeps the placeholder short description carried over
+      from `plan-start`.
+- [ ] README's "Agent workflows" row is padded one column wider than its table.
+
 Round 2 and round 3 findings stay under their round headings as history; all are resolved.
 
 ### Verification
