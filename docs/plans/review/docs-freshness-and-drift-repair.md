@@ -1,7 +1,7 @@
 ---
 id: irpw877r
 priority: high
-next_action: Resume /plan-review to synchronize the latest base and run the full completion gate before requesting human approval
+next_action: Await human approval of the reviewed implementation, then merge the pull request and run /plan-close
 blocked_by: []
 depends_on: []
 related:
@@ -340,10 +340,16 @@ None blocks implementation.
 - Base synchronization merged through `122d8685bd10a6e6fe0cf9ffe4118eeff98c6656` in `2ad3cbce`; main subsequently advanced to `b96e31ed40ee9213f3621a0d6dd10b114d321918`. Resume synchronization before final review.
 - No required manual checks remain. No base failure was independently established.
 
+- Resumed review on 2026-10-17: synchronized the latest base `a65f47da97f092196dc4528804297186003a9ad7` in merge `ade9446ffa6a5f0179027e2c0e3048160ea8f166` without conflicts. Earlier pending-gate notes above are historical and superseded by this run.
+- `npm run check` passed at `ade9446f`: 445 CLI tests, installation collision checks, CI check suites, package installation, and Docker clean-machine, install, permissions, and onboarding sandboxes. Windows installer parity skipped because PowerShell is unavailable; browser suite skipped because Chromium is unavailable. Neither skip exercises the selected scanner or documentation-instruction change.
+- Plan-specific checks passed on the final merged result: `node scripts/test/docs-reference-check.mjs`, `node scripts/test/docs-reference-fixtures-check.mjs`, `node scripts/test/markdown-render-check.mjs`, `node scripts/test/skill-trigger-fixtures-check.mjs`, `node scripts/test/skill-trigger-fixtures-shipping-check.mjs`, `roborepo package validate` (27 packages), and `roborepo plans validate irpw877r --json` (zero findings).
+- Two resumed fresh-context Validator passes checked the synchronized implementation and final base delta; both found no fix or escalation findings. Prior shortcut-reference finding remains resolved by `07a0e8cb`. Technical-writing, plan-schema, code-style, JavaScript, and test-harness constraints were checked; React and DOM guidance do not apply.
+- No base failures, escalations, or required manual checks remain. The prior user-confirmed live agent documentation check is reused; it was not repeated.
+
 ### Result
-- Status: pending
-- Reviewed implementation commit: 07a0e8cb6150c3bada1c27df8d21dd05e5e36178
-- Base commit: 122d8685bd10a6e6fe0cf9ffe4118eeff98c6656
+- Status: complete
+- Reviewed implementation commit: ade9446ffa6a5f0179027e2c0e3048160ea8f166
+- Base commit: a65f47da97f092196dc4528804297186003a9ad7
 
 ### Approval
-- Decision: not requested
+- Decision: requested
