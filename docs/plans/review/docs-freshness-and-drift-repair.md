@@ -346,10 +346,12 @@ None blocks implementation.
 - Two resumed fresh-context Validator passes checked the synchronized implementation and final base delta; both found no fix or escalation findings. Prior shortcut-reference finding remains resolved by `07a0e8cb`. Technical-writing, plan-schema, code-style, JavaScript, and test-harness constraints were checked; React and DOM guidance do not apply.
 - No base failures, escalations, or required manual checks remain. The prior user-confirmed live agent documentation check is reused; it was not repeated.
 
+- Final freshness follow-up: merged base `8adb7fc914db3ba749f72fd089ea97a3b0bd836d` as `5462fc552d2362f3ee385ec8bee60faeb9517c97`. The configuration-repair dry-run guidance and regression assertion passed a fresh-context Validator pass with no findings. `npm run check` passed again on this exact merged result, including Docker sandboxes; only PowerShell and Chromium availability skips remained.
+
 ### Result
 - Status: complete
-- Reviewed implementation commit: ade9446ffa6a5f0179027e2c0e3048160ea8f166
-- Base commit: a65f47da97f092196dc4528804297186003a9ad7
+- Reviewed implementation commit: 5462fc552d2362f3ee385ec8bee60faeb9517c97
+- Base commit: 8adb7fc914db3ba749f72fd089ea97a3b0bd836d
 
 ### Approval
 - Decision: requested
