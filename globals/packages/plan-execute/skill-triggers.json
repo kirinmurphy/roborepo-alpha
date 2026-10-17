@@ -17,7 +17,7 @@
       ],
       "skipPhrases": [
         "preparing a backlog plan",
-        "independent QA or approval",
+        "the human review or approval",
         "post-merge closure",
         "implementation without an existing plan"
       ]

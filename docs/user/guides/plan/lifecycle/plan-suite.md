@@ -10,8 +10,8 @@ Use it when you want to:
 
 - find backlog, ready, active, review, completed, archived, or unclassified plans across local
   repositories
-- write a plan, prepare it, implement it in an isolated worktree, have it reviewed independently,
-  approve it, and close it after you merge it
+- write a plan, prepare it, implement it in an isolated worktree with its work checked by a
+  separate validator, review and approve it, and close it after you merge it
 - keep Markdown files as the source of truth instead of moving plans into a database
 
 ## What You Get
@@ -25,8 +25,8 @@ Use it when you want to:
 | --- | --- |
 | `/plan-write` | Create a plan with its initial checklist, or revise an existing one, including bringing it up to date with the repository |
 | `/plan-promote` | Review and prepare a plan for development, then move it to `ready/` |
-| `/plan-execute` | Start or resume implementation in an isolated worktree, or fix recorded review findings; move the plan to `review/` when implementation is complete |
-| `/plan-review` | Review the finished work independently, record findings, and record your approval |
+| `/plan-execute` | Start or resume implementation in an isolated worktree, check it with a validator and fix what it finds, then move the plan to `review/`; or fix findings a review sent back |
+| `/plan-review` | Recheck the finished work against the current base, fix what has a clear fix, show you a review packet, and record your approval |
 | `/plan-close` | After you merge the reviewed work, verify it and move the plan to `completed/` |
 | `/plan-archive` | Retire a plan that will not be completed, with the reason |
 | `/session-close` | End a chat: review and commit the session's work, write the handoff note |
@@ -40,7 +40,7 @@ A command never starts the next one: you run each step yourself, normally in a n
 flowchart LR
   B["backlog"] -->|"/plan-promote"| R["ready"]
   R -->|"/plan-execute"| A["active"]
-  A -->|"implementation complete"| V["review"]
+  A -->|"implemented and validated"| V["review"]
   V -->|"scope change (/plan-review)"| A
   V -->|"you merge, then /plan-close"| C["completed"]
   B & R & A & V -->|"/plan-archive"| X["archived"]
@@ -53,10 +53,12 @@ flowchart LR
 4. Run `/plan-promote` on it to check it against the repository, resolve open decisions, and move it
    to `ready/`.
 5. Run `/plan-execute` to implement it in its own worktree. Run it again to resume in a later chat;
-   if you stop mid-work, `/session-close` writes the handoff note. When the work is complete, the
+   if you stop mid-work, `/session-close` writes the handoff note. When the work is complete, a
+   validator checks it and the same run fixes what it finds; once a check comes back clean, the
    plan moves to `review/`.
-6. Run `/plan-review` in a new chat. It records findings and fixes the additive ones itself;
-   `/plan-execute` fixes the rest; rerun `/plan-review` until it asks for your approval.
+6. Run `/plan-review`. It rechecks the work against the current base, fixes anything with a clear
+   fix in the same chat, and shows you a review packet. You approve, ask for changes it makes on the
+   spot, or decide the questions it could not.
 7. Merge the reviewed branch yourself through a pull request.
 8. Run `/plan-close`.
 
@@ -124,15 +126,27 @@ Starts, resumes, or fixes the implementation of a plan, depending on where the p
 | --- | --- |
 | `ready/` | Creates or safely reuses a worktree under the repository's configured `worktreeRoot`, runs `roborepo plans start` (records the worktree, moves the plan to `active/`, commits, and validates), then implements |
 | `active/` | Resumes in the plan's worktree from the first open task |
-| `review/` | Fixes only the open findings `/plan-review` recorded and left for it, the ones that change behavior or need a decision; the plan stays in `review/` |
+| `review/` | Fixes only the open findings a review sent back, usually after you decided a question and chose a separate chat for the work; the plan stays in `review/` |
 | `backlog/` | Refuses and points you to `/plan-promote` |
 
 While implementing, it works through every unblocked task without stopping for check-ins, records
 progress, decisions, and untested work in the worktree's copy of the plan, and reports once at the
 end with every open question in one batch.
 
-When the work is finished it runs the completion preflight (`roborepo plans preflight`), which
-checks that:
+When the work is finished it runs a validation loop. A validator with fresh context, a separate
+agent where the harness has one, reads the plan, the full diff, and the check results, never the
+implementing agent's account of the work, and reports findings. It never edits anything. Each
+finding gets one of three classes, by consequence rather than size:
+
+| Class | When | What happens |
+| --- | --- | --- |
+| `fix` | The right fix is clear and stays within the plan's requirements and specified contracts, code included | The same run fixes it and checks it off with its commit |
+| `escalate` | The fix chooses between real alternatives, changes requirements or an unspecified contract, or lands outside the plan | It becomes an open question in the run's final batch |
+| `base` | The base branch fails the same check | It is recorded as verification, and blocks nothing |
+
+The loop repeats until a pass finds nothing to fix, for at most five passes. The findings and the
+passes are recorded in the plan's `## Review` section. Then it runs the completion preflight
+(`roborepo plans preflight`), which checks that:
 
 - no task outside `## Not tested` is unchecked;
 - `blocked_by` is empty;
@@ -140,9 +154,10 @@ checks that:
 - the feature branch has at least one commit of its own;
 - the plan passes the Review requirements, apart from unconfirmed `## Not tested` entries.
 
-If it passes, `/plan-execute` runs `roborepo plans submit`, which moves the plan to `review/`. That
-says implementation is complete, not that it passed review. If it fails, the plan stays in
-`active/` with a `next_action` for the next run.
+If the loop ended clean and the preflight passes, `/plan-execute` runs `roborepo plans submit`,
+which moves the plan to `review/`. That says the work is complete and checked, not that you
+accepted it. Otherwise the plan stays in `active/` with a `next_action` for the next run; an open
+`escalate` finding is an unchecked task, so it holds the plan in `active/` until you answer it.
 
 The first run in a repository asks you to confirm where worktrees go. Later runs reuse that answer.
 In Claude, each run also asks once for access to the worktree folder, then works inside it, so edits
@@ -150,27 +165,33 @@ there do not prompt one file at a time.
 
 ## `/plan-review`
 
-Reviews finished work independently of the chat that wrote it. In order, it:
+Brings finished work to your review. Any chat can run it: the validator's fresh context and your
+own review are the independent checks. In order, it:
 
 1. for an `active/` plan, runs the completion preflight, and moves the plan to `review/` only if it
    passes;
 2. merges the base branch into the feature branch with `roborepo plans sync-base`, which does
    nothing when base has nothing new; on a conflict the merge pauses for a careful resolution, and
    `roborepo plans sync-base --continue` commits it once no conflicts or conflict markers remain;
-3. reads the requirements and the full diff, and runs the repository's checks;
-4. records findings and verification in a `## Review` section of the plan;
-5. fixes the additive findings itself, each in its own commit: a test that only adds coverage, a
-   wrong doc or comment, plan evidence, a typo. Anything that changes behavior, chooses between
-   alternatives, or changes a contract stays open for `/plan-execute`, so the reviewer never
-   approves its own design. A fixed finding reads `- [x] … — fixed in review (<short commit>)`.
+3. runs the repository's checks, and reruns each failure on the base branch: a failure the base has
+   too is recorded as a base failure, not a finding;
+4. runs one validator pass over the merged result, with the same classes as `/plan-execute`, and
+   records its findings in the plan's `## Review` section;
+5. fixes every `fix` finding in the same chat, code included, each in its own commit, and checks
+   again until a pass finds nothing to fix. A fixed finding reads
+   `- [x] … — fixed in review (<short commit>)`;
+6. shows you a review packet: each acceptance criterion with its evidence, what changed, the
+   validator passes, the commits it made, base failures, the manual checks waiting on you, and each
+   escalated finding as a decision with options and a recommendation.
 
-Then one of three things happens:
+Then it asks for your approval of the exact commit, and acts on your answer:
 
-| Outcome | What follows |
+| Your answer | What follows |
 | --- | --- |
-| Open findings within the requirements | The plan stays in `review/`. Run `/plan-execute` to fix them, then `/plan-review` again |
+| Approve | It records the approval and checks that it is fresh |
+| Ask for a change, or decide an escalated question, within the requirements | It makes the change in the same chat and shows you the packet again |
+| Want the change done in a separate chat | The plan stays in `review/`. Run `/plan-execute`, then `/plan-review` again |
 | The requirements themselves must change | With your agreement, it revises the plan, invalidates any approval, and moves the plan back to `active/` with `roborepo plans reopen`. The worktree and branch stay |
-| No open findings | It asks you for approval of the exact commit it reviewed, naming any commits it made itself, and records your answer |
 
 The review record looks like this:
 
@@ -178,10 +199,13 @@ The review record looks like this:
 ## Review
 
 ### Findings
-- [x] Missing retry test — added and verified
+- [x] Missing retry test — fixed (a1b2c3d)
+- [x] Stale error message — fixed in review (d4e5f6a)
 
 ### Verification
+- Validation: clean on pass 2 (fresh-context subagent)
 - Unit and integration tests passed
+- Base failure: `lint` fails on `main` too
 
 ### Approval
 - Decision: approved
@@ -386,9 +410,8 @@ Each card leads with one command button:
 | Active, every task outside Not tested checked | **Review** | `/plan-review` |
 | Active, never checked or possibly stale | **Update** | `/plan-write` |
 | Any other active plan | **Continue** | `/plan-execute`, which resumes in the plan's worktree |
-| Review, open findings | **Fix findings** | `/plan-execute` |
 | Review, approval recorded | **Close after merge** | `/plan-close` |
-| Any other review plan | **Review** | `/plan-review` |
+| Any other review plan, open findings included | **Review** | `/plan-review`, which fixes open findings in its own chat |
 
 Each plan's menu lists every command that fits its lifecycle:
 

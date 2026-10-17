@@ -348,7 +348,7 @@ function buildPlanRecord(repository, absolutePath, relativePath, stat, projectNa
       // Unchecked `## Not tested` entries, which are tasks too but never block implementation
       // completion; `taskCounts.remaining` minus this is the work still open.
       notTestedOpen: parsed.notTested.unchecked,
-      // The QA outcome /plan-review recorded, kept apart from task progress: open findings and the
+      // The outcome recorded in `## Review`, kept apart from task progress: open findings and the
       // recorded decision. Whether an approval is still fresh needs Git and is checked at close.
       qa: qaSummary(parsed.review),
       headings: parsed.headings,

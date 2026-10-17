@@ -41,7 +41,7 @@ const SKILLS = {
     boundaryPhrases: [
       "create a second implementation plan",
       "change lifecycle state, except the start transition",
-      "perform independent review, record findings, or record approval",
+      "perform `/plan-review`'s human review, or record approval",
       "perform closeout or merge orchestration",
       "invoke another plan command",
     ],
@@ -59,7 +59,7 @@ const SKILLS = {
   "plan-review": {
     risk: "high",
     boundaryPhrases: [
-      "fix a finding that changes behavior, chooses between alternatives, or changes a contract",
+      "fix a finding that chooses between real alternatives, changes requirements, or changes a contract",
       "infer, assume, or record approval without the human's explicit answer",
       "merge the feature branch into the base branch, push, open or merge pull requests",
       "move a plan back to `ready/`",
@@ -114,8 +114,8 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
   ]);
   assert.ok(skill.includes("Read `references/start-validation.md` before"), "plan-execute: SKILL.md must load the start-validation reference");
   assert.ok(skill.includes("canonical start transition command"), "plan-execute: SKILL.md must delegate the start transition");
-  const order = ["## Start Transition", "## Enter the Worktree", "## Implementation Workflow", "## Implementation Completion", "## Review Findings"].map((heading) => skill.indexOf(heading));
-  assert.ok(order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1])), "plan-execute: start, enter, implement, complete, then review findings");
+  const order = ["## Start Transition", "## Enter the Worktree", "## Implementation Workflow", "## Validation Loop", "## Implementation Completion", "## Review Findings"].map((heading) => skill.indexOf(heading));
+  assert.ok(order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1])), "plan-execute: start, enter, implement, validate, complete, then review findings");
 
   // The transition's steps must stay in this order: metadata, lifecycle move, plan-only commit,
   // fresh validation, and only then the context switch.
@@ -147,14 +147,42 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "a `backlog/` plan is refused with a pointer to `/plan-promote`",
   ]);
 
-  const completion = skill.slice(order[3], order[4]);
+  // The Validation Loop gate lives in SKILL.md so a run that never opens the reference is visibly
+  // noncompliant; the procedure and rubric live in the reference.
+  includesAll("plan-execute validation loop", skill.slice(order[3], order[4]), [
+    "Read `references/validation-loop.md` before the first pass",
+    "never the implementer's account of the work",
+    "The Validator only reports",
+    "A finding is classed by consequence, not size",
+    "which is recorded and never blocks",
+    "Never run the submit transition until a pass reports no `fix` findings",
+    "five-pass cap",
+  ]);
+  includesAll("validation-loop.md", readPackageFile("plan-execute/skills/plan-execute/references/validation-loop.md"), [
+    "## The loop",
+    "## The rubric",
+    "never pass `isolation: \"worktree\"`",
+    "Do not give it a summary of what was built",
+    "record in the plan that the Validator ran in-session",
+    "| `fix` |",
+    "| `escalate` |",
+    "| `base` |",
+    "Size never decides the class",
+    "Cap at five passes",
+    "A silent pass is indistinguishable from a skipped one",
+    "only `/plan-review` writes `### Approval`",
+  ]);
+
+  const completion = skill.slice(order[4], order[5]);
   includesAll("plan-execute completion", completion, [
-    "Implementation completion is not QA",
+    "Implementation completion is not approval",
+    "has passed the Validation Loop",
     "canonical completion preflight command",
     "the plan stays in `active/`",
     "canonical submit transition command",
   ]);
-  includesAll("plan-execute review findings", skill.slice(order[4]), [
+  assert.ok(skill.slice(order[5]).includes("then run the Validation Loop over the result"), "plan-execute: fixes made in review mode are validated too");
+  includesAll("plan-execute review findings", skill.slice(order[5]), [
     "nothing else is in scope",
     "A finding marked `fixed in review` is already resolved",
     "Never edit `### Approval`",
@@ -232,21 +260,30 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
   ]);
 }
 
-// --- plan-review: preflight, base synchronization, independent QA, findings, and approval ---
+// --- plan-review: preflight, base synchronization, the check, fixes, the review packet, and approval ---
 {
   const review = readSkill("plan-review");
-  const order = ["### 1. Confirm implementation is complete", "### 2. Synchronize the base branch", "### 3. Review independently", "### 4. Record the review", "### 5. Fix additive findings", "### 6a.", "### 6b.", "### 6c."]
+  const order = ["### 1. Confirm implementation is complete", "### 2. Synchronize the base branch", "### 3. Check the work", "### 4. Record the review", "### 5. Fix what has a clear fix", "### 6. Present the review", "#### 6a.", "#### 6b.", "#### 6c."]
     .map((heading) => review.indexOf(heading));
-  assert.ok(order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1])), "plan-review: preflight, sync, review, record, fix additive findings, then the three outcomes");
-  // The reviewer fixes only what cannot change the behavior it judged; the rest goes to /plan-execute.
-  includesAll("plan-review additive fixes", review.slice(order[4], order[5]), [
-    "A test that only adds coverage of behavior the code already has",
-    "Any change to what code does, including a bug fix",
-    "A choice between real alternatives",
-    "leave it for `/plan-execute`",
-    "has found a behavior defect",
+  assert.ok(order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1])), "plan-review: preflight, sync, check, record, fix, present, then the three outcomes");
+  // A finding is fixed in the same session by consequence, not by kind of change; only a choice
+  // between alternatives, a requirement change, or an unspecified contract change waits for the human.
+  includesAll("plan-review check", review.slice(order[2], order[3]), [
+    "A failure the base branch has too is a **base failure**",
+    "neither a finding nor a blocker",
+    "never an account of the work",
+    "Classify every finding by consequence, not size",
+  ]);
+  includesAll("plan-review fixes", review.slice(order[4], order[5]), [
+    "Fix every finding classed **fix** in this session, code included",
     "Commit the fix on its own, separate from the plan record",
     "fixed in review (<short commit>)",
+    "run another Validator pass over the result",
+  ]);
+  includesAll("plan-review packet", review.slice(order[5], order[6]), [
+    "each acceptance criterion with the code and test evidence",
+    "every commit this review made in step 5",
+    "each escalated finding as a decision",
   ]);
   includesAll("plan-review", review, [
     "canonical completion preflight command",
@@ -254,8 +291,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "canonical base synchronization command",
     "never discard work and never pick a side blindly",
     "Never merge the feature branch into the base branch",
-    "Do not fix anything while reviewing. Record every finding first",
-    "every commit this review made in step 5",
+    "Do not fix anything while checking. Record every finding first",
     "Plain checkboxes are enough for findings",
     "- Decision: approved",
     "- Reviewed implementation commit: <full commit id>",

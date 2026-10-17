@@ -10,10 +10,8 @@ export function recommendedPlanCommand(plan) {
   if (plan.blockers.length > 0) return null;
   if (plan.lifecycle === "backlog") return "plan-promote";
   if (plan.lifecycle === "ready") return "plan-execute";
-  if (plan.lifecycle === "review") {
-    if (plan.qa?.openFindings > 0) return "plan-execute";
-    return plan.qa?.decision === "approved" ? "plan-close" : "plan-review";
-  }
+  // /plan-review fixes open findings in its own session, so a review plan leads with it until approved.
+  if (plan.lifecycle === "review") return plan.qa?.decision === "approved" ? "plan-close" : "plan-review";
   if (plan.lifecycle !== "active") return null;
   const { remaining, total } = plan.taskCounts;
   // Unconfirmed Not tested entries never hold back implementation completion.

@@ -1,6 +1,6 @@
 ---
 name: plan-execute
-description: Use when starting, resuming, or fixing the implementation of a prepared repository plan. Accepts a plan in ready, active, or review. From ready it will create or safely reuse an isolated worktree and commit the start transition; in active it resumes in the recorded worktree; in review it fixes only the recorded review findings. It implements every in-scope unblocked objective without milestone check-ins, logs autonomous decisions, queues blocked questions for the end, and moves the plan to review only when the completion preflight passes. Safe to rerun across sessions. Do not use for preparing a backlog plan (plan-promote), independent QA or approval (plan-review), post-merge closure (plan-close), archiving (plan-archive), or implementation without an existing plan.
+description: Use when starting, resuming, or fixing the implementation of a prepared repository plan. Accepts a plan in ready, active, or review. From ready it will create or safely reuse an isolated worktree and commit the start transition; in active it resumes in the recorded worktree; in review it fixes only the findings review sent back. It implements every in-scope unblocked objective without milestone check-ins, logs autonomous decisions, queues blocked questions for the end, then runs a validation loop in which a fresh-context validator checks the work and the agent fixes what it finds until a pass is clean, and moves the plan to review only after a clean pass and a passing completion preflight. Safe to rerun across sessions. Do not use for preparing a backlog plan (plan-promote), the human review or approval (plan-review), post-merge closure (plan-close), archiving (plan-archive), or implementation without an existing plan.
 ---
 
 # Plan Execute
@@ -211,13 +211,32 @@ then the run proceeds without questions.
     uncommitted. If the run made no implementation changes because the work was already complete,
     report that no implementation commit was needed. Never create this commit on the primary
     checkout or base branch.
-14. Decide implementation completion (below).
-15. Report the final state.
+14. Run the Validation Loop (below).
+15. Decide implementation completion (below).
+16. Report the final state.
+
+## Validation Loop
+
+Read `references/validation-loop.md` before the first pass. It holds the loop's steps, how to run
+the Validator, the rubric it applies, and the record it leaves in `## Review`. What decides whether
+the loop is done:
+
+- The Validator runs with fresh context, as a subagent where the environment has one, and is given
+  the plan, the diff, and the gate output, never the implementer's account of the work.
+- The Validator only reports. This session fixes every finding classed `fix`, code included, and
+  each later pass validates the revised work.
+- A finding is classed by consequence, not size: `fix` when the right fix is clear and stays within
+  the plan's requirements; `escalate`, as an Open Questions entry, when it chooses between real
+  alternatives, changes requirements or a contract, or lands outside the plan; `base` when the base
+  branch fails the same check, which is recorded and never blocks.
+- **Never run the submit transition until a pass reports no `fix` findings.** At the five-pass cap,
+  stop, leave the remaining findings open, and report them.
 
 ## Implementation Completion
 
-Implementation completion is not QA. Moving a plan to `review/` says the work is finished and ready
-for independent review; it does not say the review passed.
+Implementation completion is not approval. Moving a plan to `review/` says the work is finished and
+has passed the Validation Loop, ready for the human review in `/plan-review`; it does not say a
+human accepted it.
 
 1. Judge whether the stated requirements were implemented. A deterministic gate cannot prove that,
    so this judgment is the agent's, recorded with the checks that ran.
@@ -240,11 +259,12 @@ they are resolved before `/plan-close`.
 A plan in `review/` returns here only to fix what review recorded.
 
 1. Read `## Review` in the worktree's copy. The unchecked items under `### Findings` are the work;
-   nothing else is in scope. `/plan-review` fixes additive findings itself (tests that only add
-   coverage, doc and evidence corrections), so what reaches here changes behavior or needs a
-   decision. A finding marked `fixed in review` is already resolved; leave it as it is.
+   nothing else is in scope. `/plan-review` fixes every finding whose fix is clear in its own
+   session, so what reaches here is what the user chose to send to a separate session, usually after
+   deciding an escalated question. A finding marked `fixed in review` is already resolved; leave it
+   as it is.
 2. Fix each finding within the plan's existing requirements, with the same verification discipline
-   as the Implementation Workflow.
+   as the Implementation Workflow, then run the Validation Loop over the result.
 3. Check each fixed finding off and add its resolution after a dash, for example
    `- [x] Missing retry test — added and verified`. Never edit `### Approval`: a code change already
    makes a recorded approval stale, and only `/plan-review` records a new one.
@@ -351,7 +371,9 @@ Apply this section only when the repository's execution environment provides the
 interface; otherwise record the limitation and continue with the available interfaces.
 
 Delegate procedural slices of the plan to subagents when that clearly helps, for example
-mechanical edits across many files, bulk renames, or long test runs. Rules:
+mechanical edits across many files, bulk renames, or long test runs. The Validator is not a
+procedural slice: it runs on the session's own model, as `references/validation-loop.md` describes.
+Rules for procedural subagents:
 
 - Launch them with `model: sonnet`.
 - Run them in the target worktree. Never pass `isolation: "worktree"` or let one create a branch or
@@ -368,6 +390,7 @@ A run is complete when:
 
 - every in-scope, unblocked objective has been implemented;
 - acceptance criteria have been evaluated;
+- the Validation Loop ended on a pass with no `fix` findings, or stopped at its cap and says so;
 - targeted verification has passed or failures are explained;
 - required broader verification has been run when practical;
 - autonomous decisions are in the Decision Log;
@@ -382,7 +405,8 @@ A run is complete when:
   link is recorded when one exists;
 - completed implementation changes are committed in the target worktree, or the final report
   explicitly says that no implementation commit was needed;
-- the plan was moved to `review/` if and only if the completion preflight passed.
+- the plan was moved to `review/` if and only if the Validation Loop ended clean and the completion
+  preflight passed.
 
 Completion does not authorize:
 
@@ -411,6 +435,8 @@ Implementation result
 - Objectives completed: <count>
 - Objectives blocked: <count>
 - Findings fixed: <count, or "not applicable">
+- Validation: clean on pass <n> | stopped at the cap with <count> open | in-session (no subagent interface)
+- Base failures: <checks that fail on the base branch too, or "none">
 - Material decisions: <count>
 - Open questions: <count>
 - Not tested entries: <count>
@@ -428,6 +454,7 @@ Also include:
 
 - files changed;
 - the Decision Log: each autonomous decision, alternatives, and reasoning;
+- each Validation Loop pass's report, the clean one included;
 - tests and checks run;
 - manual verification;
 - the `## Not tested` entries, each with what to check and why no test covers it;
@@ -448,7 +475,7 @@ Do not:
 - repeat a full planning interview unless the plan is materially stale or incomplete;
 - change lifecycle state, except the start transition from `ready/` and the submit transition to
   `review/`;
-- perform independent review, record findings, or record approval;
+- perform `/plan-review`'s human review, or record approval;
 - own user-interface behavior;
 - create integration branches;
 - perform closeout or merge orchestration;

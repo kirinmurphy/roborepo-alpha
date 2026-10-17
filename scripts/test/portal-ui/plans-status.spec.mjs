@@ -80,7 +80,7 @@ test.describe("Plans card status", () => {
     await page.goto("/plans?lifecycle=review");
     const card = page.locator("plan-card", { hasText: "Review status plan" });
     await expect(card.locator(".chip", { hasText: "1 open finding" })).toBeVisible();
-    await expect(card.getByRole("button", { name: "Fix findings", exact: true })).toBeVisible();
+    await expect(card.getByRole("button", { name: "Review", exact: true })).toBeVisible();
     await expect(card).not.toContainText("approved");
   });
 

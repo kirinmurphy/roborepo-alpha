@@ -87,7 +87,7 @@ function testRecommendedCommandFollowsTheLifecycle() {
   assert.equal(recommendedPlanCommand(plan("active", { ...tasks(3, 2), notTestedOpen: 1 })), "plan-review", "an open Not tested entry does not hold back review");
   assert.equal(recommendedPlanCommand(plan("active", { ...tasks(3, 3), blockers: ["x"] })), null, "a blocked plan has no recommendation");
 
-  assert.deepEqual(primaryPlanAction(plan("review", { qa: { openFindings: 2, decision: "" } })), { command: "plan-execute", label: "Fix findings" });
+  assert.deepEqual(primaryPlanAction(plan("review", { qa: { openFindings: 2, decision: "" } })), { command: "plan-review", label: "Review" }, "open findings are fixed by /plan-review in its own session");
   assert.deepEqual(primaryPlanAction(plan("review", { qa: { openFindings: 0, decision: "approved" } })), { command: "plan-close", label: "Close after merge" });
   assert.deepEqual(primaryPlanAction(plan("review", { qa: { openFindings: 0, decision: "" } })), { command: "plan-review", label: "Review" });
   assert.equal(primaryPlanAction(plan("completed")), null);

@@ -271,17 +271,20 @@ An optional section of checkboxes for work that exists but that no test covers:
 
 ## Review
 
-`/plan-review` writes a small review record into the authoritative copy of a plan in review:
+`/plan-execute`'s validation loop starts a small review record in the authoritative copy of the
+plan, and `/plan-review` adds to it and records the approval:
 
 ```markdown
 ## Review
 
 ### Findings
-- [x] Missing retry test — added and verified
-- [ ] Error handling gap in the import path
+- [x] Missing retry test — fixed (a1b2c3d)
+- [ ] Retry limit: configurable or fixed? — escalated, see Open Questions
 
 ### Verification
+- Validation: clean on pass 2 (fresh-context subagent)
 - Unit and integration tests passed
+- Base failure: `lint` fails on `main` too
 
 ### Approval
 - Decision: approved
@@ -290,8 +293,11 @@ An optional section of checkboxes for work that exists but that no test covers:
 ```
 
 - Findings are plain checkboxes. An unchecked finding is open work: it keeps the completion preflight
-  failing, and `/plan-execute` resolves it, adding the resolution after a dash. Earlier findings may
-  stay for readable history.
+  failing until it is fixed, by the validation loop, by `/plan-review` in its own session, or by
+  `/plan-execute` when the user sends it back, with the resolution after a dash. Earlier findings
+  may stay for readable history.
+- A check that fails on the base branch too is a base failure, recorded under `### Verification`.
+  It is never a finding.
 - Only the three `### Approval` lines have a fixed format, because the approval check reads them.
   Only a human grants approval; an agent records it after the human's explicit answer.
 - An approval is fresh while the repository outside `docs/plans/` is identical at the reviewed

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "plan-review",
   "label": "Plan Review",
-  "description": "Independently review a finished plan: check implementation completion, merge the base branch into the feature branch, record findings, and record explicit human approval before the merge.",
+  "description": "Bring a finished plan to its human review: merge the base branch into the feature branch, recheck the work with a fresh-context validator, fix findings with a clear fix in the same session, present a review packet, and record explicit human approval before the merge.",
   "lifecycle": "optional",
   "presentation": {
     "category": "skills-dev-lifecycle",

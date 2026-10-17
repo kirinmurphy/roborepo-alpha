@@ -1158,7 +1158,7 @@ test.describe("Plans card commands", () => {
     ["Backlog", "Backlog card plan", "Promote", "plan-promote", "backlog/card-backlog.md"],
     ["Ready", "Ready card plan", "Start", "plan-execute", "ready/card-ready.md"],
     ["Active", "Finished card plan", "Review", "plan-review", "active/card-done.md"],
-    ["Review", "Findings card plan", "Fix findings", "plan-execute", "review/card-findings.md"],
+    ["Review", "Findings card plan", "Review", "plan-review", "review/card-findings.md"],
     ["Review", "Approved card plan", "Close after merge", "plan-close", "review/card-approved.md"],
   ]) {
     test(`a ${tab.toLowerCase()} card's ${label} copies the /${command} prompt and moves nothing`, async ({ page }) => {

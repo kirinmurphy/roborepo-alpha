@@ -2,7 +2,8 @@
 //
 // - The completion preflight decides whether implementation is finished, which is what moves a plan
 //   from Active to Review. It is not QA: a gate cannot prove the requirements were met, so the agent
-//   still judges that, and /plan-review performs the independent check afterwards.
+//   still judges that, /plan-execute's validation loop checks the work first, and /plan-review
+//   brings it to the human.
 // - Approval freshness decides whether the human approval recorded in `## Review` still describes
 //   the implementation. Plan documents are not implementation content, so only the tree outside
 //   docs/plans is compared.

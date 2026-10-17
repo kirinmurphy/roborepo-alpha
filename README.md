@@ -189,7 +189,7 @@ The Plans portal surfaces:
 
 ```mermaid
 flowchart LR
-  Backlog -->|/plan-promote| Ready -->|/plan-execute| Active -->|implementation complete| Review
+  Backlog -->|/plan-promote| Ready -->|/plan-execute| Active -->|implemented and validated| Review
   Review -->|you merge, then /plan-close| Completed
   Review -->|scope change| Active
   Backlog & Ready & Active & Review -->|/plan-archive| Archived

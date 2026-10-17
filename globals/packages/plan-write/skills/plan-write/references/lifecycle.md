@@ -14,10 +14,11 @@ every structure rule with no findings: next action, design, success criteria, an
 have remaining actionable work, next action, current implementation context, success criteria, and
 blockers when present.
 
-`review`: implementation complete, awaiting independent QA and human approval. `/plan-execute` or
-`/plan-review` commits the move from active once the completion preflight passes; it is not a claim
-that QA passed. Fixes within the requirements stay here; a material scope change returns the plan
-to active, never to ready.
+`review`: implementation complete and checked by `/plan-execute`'s validation loop, awaiting the
+human review and approval in `/plan-review`. `/plan-execute` commits the move from active after a
+clean validation pass and a passing completion preflight, or `/plan-review` commits it from a
+complete active plan; it is not a claim that a human accepted the work. Fixes within the
+requirements stay here; a material scope change returns the plan to active, never to ready.
 
 `completed`: merged and accepted. `/plan-close` commits the move from review after the user's own
 merge, once landing and a fresh human approval are verified. Must not have unresolved required

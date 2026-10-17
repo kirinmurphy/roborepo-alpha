@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "plan-execute",
   "label": "Plan Execute",
-  "description": "Start, resume, or fix the implementation of a prepared plan: worktree, in-scope objectives, verification, completion preflight, and the move to review. Adds a rule that keeps plan citations out of code.",
+  "description": "Start, resume, or fix the implementation of a prepared plan: worktree, in-scope objectives, verification, a validation loop with a fresh-context validator, the completion preflight, and the move to review. Adds a rule that keeps plan citations out of code.",
   "lifecycle": "optional",
   "presentation": {
     "category": "skills-dev-lifecycle",

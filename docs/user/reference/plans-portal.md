@@ -296,8 +296,8 @@ When enabled:
   | review | Review, Fix findings, Close after merge, Archive |
 
 - each card leads with one command button: Promote for backlog; Start for ready; Review, Update, or
-  Continue for active; and Fix findings, Close after merge, or Review for review plans, from their
-  open findings and recorded approval
+  Continue for active; and Close after merge or Review for review plans, from their recorded
+  approval (`/plan-review` fixes open findings in its own session, so open findings lead with Review)
 - a review plan shows its review outcome (open findings, **approved**, or **awaiting review**) as
   a chip beside its task progress
 - an active or review plan whose worktree has merged shows a **merged** completion badge; the same

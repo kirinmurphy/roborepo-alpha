@@ -66,6 +66,13 @@ Examples:
 - `plan-write`, `plan-promote`, `plan-execute`, `plan-review`, `plan-close`,
   `plan-archive`: the plan suite, one atomic lifecycle step each, behind the
   matching slash command. None takes a mode argument, and none invokes the next.
+  `plan-execute` ends in a validation loop (`references/validation-loop.md`): a
+  fresh-context validator applies a rubric and classifies findings `fix`,
+  `escalate`, or `base`, and the run fixes `fix` findings until a pass is clean.
+  `plan-review` applies the same rubric once more after syncing base, fixes in
+  the same session, and records human approval. The rubric is written to move
+  into a shared `implementation-review` skill once packages can declare
+  required skill dependencies.
   Deterministic plan rules live in `roborepo plans validate`, the lifecycle
   transitions (`roborepo plans promote|start|submit|reopen|close|archive`), and
   `roborepo plans preflight|approval|sync-base`, which the suite skills run
