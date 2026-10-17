@@ -1,7 +1,7 @@
 ---
 id: irpw877r
 priority: high
-next_action: Await human approval of the reviewed implementation, then merge the pull request and run /plan-close
+next_action: Merge the approved pull request, then run /plan-close
 blocked_by: []
 depends_on: []
 related:
@@ -354,4 +354,8 @@ None blocks implementation.
 - Base commit: 8adb7fc914db3ba749f72fd089ea97a3b0bd836d
 
 ### Approval
-- Decision: requested
+- Decision: approved
+- Reviewed implementation commit: 5462fc552d2362f3ee385ec8bee60faeb9517c97
+- Confirmed by: human
+
+Approval evidence: the user replied "approved" on 2026-10-17 in this chat immediately after the review packet naming the implementation commit above.
