@@ -2112,6 +2112,9 @@ assert "plan lifecycle: manifest loading, validation, and projection" \
 assert "plan lifecycle: transitions, preflight, approval, close, and archive" \
   node "${repo_root}/scripts/test/plan-lifecycle-transitions-check.mjs"
 
+assert "plan lifecycle: transition commits touch only the plan, even after heavy edits" \
+  node "${repo_root}/scripts/test/plan-transition-commit-paths-check.mjs"
+
 assert "plan lifecycle: base synchronization into a plan branch" \
   node "${repo_root}/scripts/test/plan-sync-base-check.mjs"
 

@@ -341,6 +341,8 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
   for (const id of suite) {
     const skill = readSkill(id);
     includesAll(`${id} paired skills`, skill, ["## Paired Skills", "host's skill/package manager", "Enable it, or skip it for this run?", "never describe a drifted package as loaded"]);
+    if (id !== "session-close") includesAll(`${id} plan naming`, skill, ["Name the plan by its H1 title, with its id in parentheses on first mention only"]);
+    if (!["plan-write", "session-close"].includes(id)) includesAll(`${id} report names the plan`, skill, ['- Plan: "<title>" (<id>), <repository-relative path>']);
     for (const retired of RETIRED_COMMANDS) {
       assert.ok(!skill.includes(`/${retired}`), `${id}: SKILL.md still names the retired /${retired}`);
     }

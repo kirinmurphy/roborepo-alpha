@@ -192,7 +192,7 @@ Present a review packet:
 - the manual checks that need the human, from `## Not tested`;
 - each escalated finding as a decision: the options, their consequences, and a recommendation.
 
-Then ask the human directly for approval. An agent cannot approve, and passing tests are not
+Then ask the human directly for approval, naming the plan by its title and the exact commit. An agent cannot approve, and passing tests are not
 approval.
 
 #### 6a. The human approves
@@ -245,9 +245,13 @@ On agreement:
 
 ## Final Report
 
+Name the plan by its H1 title, with its id in parentheses on first mention only. The id is the
+stable reference for commands and frontmatter, not a name a person recognizes; the same goes for
+questions, review packets, and other prose in this run.
+
 ```text
 Review result
-- Plan: <id and repository-relative path>
+- Plan: "<title>" (<id>), <repository-relative path>
 - Resume path: full review | changes since review | approval only | already approved | already closed
 - Completion preflight: passed | failed with <checks> | not run (<resume reason>)
 - Lifecycle change: active -> review | review -> active | none

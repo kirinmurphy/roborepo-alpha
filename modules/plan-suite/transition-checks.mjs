@@ -32,10 +32,13 @@ export function validateTransition({ cwd, primary, base, id, fromPath, toPath, c
     `commit ${toPath} on ${base}, or discard the uncommitted edit`);
 
   if (commit) {
-    const touched = git(primary, ["show", "--name-status", "--format=", commit]).stdout.split("\n").filter(Boolean);
-    const [status = "", ...paths] = (touched[0] || "").split("\t");
+    // Rename detection is a similarity guess: a transition that carries heavy edits, such as a
+    // promotion that rewrites most of the plan, falls below Git's threshold and reads as a delete
+    // plus an add. Compare exact paths instead, so a move is the old path deleted and the new one added.
+    const touched = git(primary, ["show", "--name-status", "--no-renames", "--format=", commit]).stdout.split("\n").filter(Boolean);
     const expected = moved ? [fromPath, toPath] : [toPath];
-    const onlyPlan = touched.length === 1 && status[0] === (moved ? "R" : "M") && paths.join("\t") === expected.join("\t");
+    const planChanges = moved ? [`D\t${fromPath}`, `A\t${toPath}`] : [`M\t${toPath}`];
+    const onlyPlan = touched.length === planChanges.length && planChanges.every((line) => touched.includes(line));
     const before = git(primary, ["show", `${commit}^:${fromPath}`]);
     const after = git(primary, ["show", `${commit}:${toPath}`]);
     const bodyOk = !bodyUnchanged || (before.ok && after.ok && parseFrontmatter(before.stdout).body === parseFrontmatter(after.stdout).body);

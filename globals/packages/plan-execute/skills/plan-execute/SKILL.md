@@ -422,11 +422,15 @@ Completion does not authorize:
 
 ## Final Report
 
+Name the plan by its H1 title, with its id in parentheses on first mention only. The id is the
+stable reference for commands and frontmatter, not a name a person recognizes; the same goes for
+questions, review packets, and other prose in this run.
+
 Report:
 
 ```text
 Implementation result
-- Plan: <id and repository-relative path>
+- Plan: "<title>" (<id>), <repository-relative path>
 - Mode: start | resume | review findings
 - Worktree: <runtime path>
 - Worktree name: <Git administrative name recorded in the plan>
