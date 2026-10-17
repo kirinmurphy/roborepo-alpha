@@ -254,6 +254,9 @@ try {
     const movedBase = json(plans(root, "approval", "flow0001"), "base moved after review");
     assert.equal(movedBase.review.state, "fresh", "base movement does not erase the reviewed branch result");
     assert.deepEqual(movedBase.review.baseChangedPaths, ["src/base.txt"], "the caller can decide whether base synchronization is needed");
+    const movedBaseText = roborepo(["plans", "approval", "flow0001"], { cwd: root }).stdout;
+    assert.match(movedBaseText, /changed on base since review: 1 path \(list with --json\)/, "text output counts base changes");
+    assert.doesNotMatch(movedBaseText, /src\/base\.txt/, "text output leaves the base path list to --json");
     commit(flow.path, "Change implementation after review", { "src/review.txt": "new work\n" });
     const staleReview = json(plans(root, "approval", "flow0001"), "implementation changed after review");
     assert.equal(staleReview.review.state, "stale");

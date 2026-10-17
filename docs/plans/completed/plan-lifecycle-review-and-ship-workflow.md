@@ -1,7 +1,7 @@
 ---
 id: gqzjlzgx
 priority: high
-next_action: Approved and landed; run /plan-close.
+next_action:
 blocked_by: []
 depends_on: []
 related:
@@ -1012,3 +1012,46 @@ with "approve". The approval was recorded after the merge, as post-merge recover
 - Decision: approved
 - Reviewed implementation commit: f773aec2dbc5e9c47bbfac3bbb1e28c5531d657f
 - Confirmed by: human
+
+## Completion summary
+
+Closed on 2026-10-17. The lifecycle is `backlog → ready → active → review → completed`, with
+`archived` as the exit from any non-terminal state, declared once in
+`manifests/platform/plan-lifecycle.json` and read by the domain module, CLI, validator, and portal.
+`/plan-promote`, `/plan-execute` (replacing `/plan-start`), `/plan-review`, `/plan-archive`, and the
+post-merge `/plan-close` move plans through it. Every move is one plan-only commit in the primary
+checkout, made by `roborepo plans promote|start|submit|reopen|close|archive`. `/plan-execute` ends in
+a fresh-context validation loop, and `/plan-review` records explicit human approval of an exact
+commit, which `/plan-close` requires fresh.
+
+The approved implementation, `f773aec2`, landed through pull request #37 as the squash commit
+`c29a7f18`. The approval was recorded after that merge (`57895178` in the worktree, `dcafa239` on
+`main`). Later work on `main` builds on this plan without changing what was approved: the separate
+review `### Result` record and review resume path, landing-evidence reuse with `roborepo plans
+landed`, naming plans by title in suite output, and the base-change count in `plans approval`.
+
+## Verification
+
+Checked on 2026-10-17 from the primary checkout, against the landed code on `main`.
+
+```text
+npm run check (at 5aea0ebe)            CI checks passed: doctor, 445 CLI tests, install collisions,
+                                       38/38 unit suites, package install, 4 clean-machine Docker
+                                       suites, portal UI 103 passed
+cli-command-catalog-check (1c2776a0)   passed, after the docs fix below
+roborepo plans validate gqzjlzgx       0 findings
+roborepo plans approval gqzjlzgx       fresh; review fresh
+roborepo plans landed gqzjlzgx         landed, newly scanned
+```
+
+- Approved commit: `f773aec2dbc5e9c47bbfac3bbb1e28c5531d657f`.
+- Absorbing commit: dcafa239c48e20b1c8ac413e20ce7f37f4bed6ff
+- The worktree's plan copy is byte-identical to the primary copy, so it is integrated.
+- Acceptance criteria 1–9 were checked against the code in review round 4. Since then, `main` has
+  extended this plan's code without contradicting any criterion. Criterion 6's landed check is the
+  same check, now verifying a recorded absorbing commit before it scans.
+- Docs of record from `## Documentation impact` were checked against the landed code. The plans
+  CLI table lacked `roborepo plans repair`, a gap older than this plan; fixed in `1c2776a0`.
+- `## Not tested`: the one entry was confirmed by the user on 2026-10-16. The user decided on
+  2026-10-17 to validate the later validation-loop flow by using it.
+- Not verified: Windows installer parity, because `pwsh` is not installed.
