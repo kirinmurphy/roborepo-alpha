@@ -6,7 +6,7 @@
 // - Approval freshness decides whether the human approval recorded in `## Review` still describes
 //   the implementation. Plan documents are not implementation content, so only the tree outside
 //   docs/plans is compared.
-import { domainError, lifecycleFindings, parsePlanMarkdown } from "./index.mjs";
+import { domainError, lifecycleFindings, parseFrontmatter, parsePlanMarkdown } from "./index.mjs";
 import { isWorktreeBound } from "./plan-authority.mjs";
 import { dirtyPaths, git } from "./plan-git.mjs";
 import { authoritativeMarkdown } from "./worktree-copy.mjs";
@@ -36,7 +36,7 @@ export function completionPreflight({ primary, record, base }) {
   const { findings, parsed } = lifecycleFindings(resolved.markdown, { lifecycle: "review" });
   const open = openTasks(parsed);
   check(2, "no unchecked task outside Not tested", open.length === 0,
-    open.length ? open.slice(0, 5).map((task) => `line ${task.line}: ${task.text}`).join("; ") : "all tasks checked",
+    open.length ? open.slice(0, 5).map((task) => `line ${task.line + frontmatterLines(resolved.markdown)}: ${task.text}`).join("; ") : "all tasks checked",
     "finish the remaining tasks, or record why each is deferred and remove it from the checklist");
 
   const blockers = parsed.frontmatter.blocked_by || [];
@@ -106,4 +106,10 @@ export function readApproval(markdown) {
 function openTasks(parsed) {
   const notTested = new Set(parsed.notTested.entries.map((task) => task.line));
   return parsed.tasks.filter((task) => !task.done && !notTested.has(task.line));
+}
+
+// Parsed task lines count from the start of the body, so a line shown to a reader needs the lines
+// the frontmatter occupies added back to match the file.
+function frontmatterLines(markdown) {
+  return markdown.split("\n").length - parseFrontmatter(markdown).body.split("\n").length;
 }

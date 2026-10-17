@@ -144,6 +144,8 @@ try {
     assert.equal(early.ok, false, "a plan with open tasks and no commits is not complete");
     const failed = early.checks.filter((check) => !check.ok).map((check) => check.n);
     assert.deepEqual(failed, [2, 5], "open tasks and a branch with no work of its own");
+    const fileLine = read(path.join(flow.path, "docs/plans/active/test-flow.md")).split("\n").findIndex((line) => /^\s*[-*]\s+\[ \]/.test(line)) + 1;
+    assert.match(early.checks.find((check) => check.n === 2).observed, new RegExp(`^line ${fileLine}: `), "an open task is reported at its line in the file, frontmatter included");
 
     const before = head(root);
     refused(root, plans(root, "submit", "flow0001"), "submit an unfinished plan", /Implementation is not complete/);
