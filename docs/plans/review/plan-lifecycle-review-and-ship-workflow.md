@@ -891,8 +891,28 @@ Verification at `e78d1313`:
 - `plan-suite-skills-check.mjs` passes and pins the new gate, the reference's two parts, the
   classes, the cap, and `/plan-review`'s step order. `roborepo skill render-commands --check`,
   `skill triggers --check` (8 fixtures), and `skill audit` (no unreachable references) pass.
-- Not yet run: a fresh-context validator pass over this change, which the new contract asks for
-  before approval.
+
+Validator pass 1 (fresh-context subagent, full `main...HEAD` diff, at `302ef51a`):
+
+- [ ] Portal action descriptions still say `/plan-review` runs "independent QA":
+      `manifests/platform/plan-lifecycle.json` (active and review Review actions).
+- [ ] `plan-close`'s description routes "independent review or approval (plan-review)", the old
+      contract.
+- [ ] The plan's "Portal, packaging, and terminology" section still says review recommends
+      `plan-execute` while findings are open; the code and docs say `plan-review`.
+- [ ] `plan-execute` tells a review plan whose worktree is gone to rerun `start`, which refuses a
+      review plan; only an active plan records a replacement worktree that way.
+- [ ] `plan-review`'s inline rubric claims to be the same rubric but omits the paired-skill
+      constraints item.
+- [ ] `plan-review`'s report line lists three approval states of six (`not-approved`, `invalid`,
+      `unavailable` missing); `plan-close`'s omits `unavailable`.
+- [ ] The confirmed Not tested walkthrough predates the validation loop and the new `/plan-review`
+      flow, so no live run covers them. — escalated to the user: add an unchecked Not tested entry,
+      or record that the walkthrough predates the change.
+- [ ] The round-2 base finding says `712b2b21` "resolves it on `main` separately"; that commit is
+      only on `codex/portal-home-hello-guy-greeting`.
+- Base failure: `plan-suite-findings-check.mjs` (`UNKNOWN_PLAN_NAMESPACE`) fails the same way on an
+  export of `main`.
 
 ### Approval
 
