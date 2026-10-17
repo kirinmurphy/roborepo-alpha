@@ -8,7 +8,7 @@ related:
   - ejsc769o
   - gqzjlzgx
 reviewed_commit:
-worktree:
+worktree: agent-config-code-quality-conventions
 ---
 
 # Make Coding Conventions Clearer and More Consistently Applied
