@@ -322,3 +322,23 @@ The plan-close guide and skill now report a removal failure after cleanup guards
 ## Open Questions
 
 None blocks implementation.
+
+## Review
+
+### Findings
+- [ ] Shortcut reference links and images in `scripts/test/docs-reference-scan.mjs` are not checked against their definitions — clear fix; add missing-target and anchor regression fixtures.
+
+### Verification
+- Completion preflight passed before submit; submit committed the move to review.
+- First fresh-context Validator pass found the shortcut-reference gap; no escalations.
+- The initial completion gate encountered localhost EPERM sandbox restrictions; an elevated run is in progress.
+- Live docs, seeded fixtures, Markdown renderer, both skill-trigger checks, and doctor passed before the scanner repair.
+- The implementation validation account predates the current structured Review record; this review independently checks the implementation.
+
+### Result
+- Status: pending
+- Reviewed implementation commit: 2ad3cbce296b260209b2ade081889742a2300b86
+- Base commit: 122d8685bd10a6e6fe0cf9ffe4118eeff98c6656
+
+### Approval
+- Decision: requested
