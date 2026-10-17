@@ -18,7 +18,7 @@ The page uses:
 - `modules/plan-suite/review-gates.mjs` for the completion preflight and approval freshness, and `sync-base.mjs` for `roborepo plans sync-base`
 - `modules/plan-suite/repository-validation.mjs` for `roborepo plans validate` (see below)
 - `modules/plan-suite/stop-servers.mjs` for `roborepo plans stop-servers`, which resolves a plan's linked worktree and hands it to `modules/developer-runtime/stop.mjs`
-- `scripts/cli/plans.mjs` for portal-facing snapshots, package-state integration, and the `roborepo plans` CLI
+- `scripts/cli/plans.mjs` for portal-facing snapshots and package-state integration, and `scripts/cli/plans-command.mjs` for the `roborepo plans` CLI
 - `portal/plans/` for static HTML/CSS/JS
 - `portal/shared/base.css` and `portal/shared/theme.js` for the uniform portal
   header, navigation, active-page state, updated-at text, theme toggle, and shared hidden-element
@@ -142,7 +142,7 @@ current snapshot and rechecks repository boundaries before reading document cont
 - `modules/plan-suite/lifecycle-manifest.mjs`
 - `modules/plan-suite/transition.mjs`, `transition-rules.mjs`, `transition-checks.mjs`
 - `modules/plan-suite/review-gates.mjs`, `review-record.mjs`, `copy-integration.mjs`, `sync-base.mjs`
-- `scripts/cli/plans.mjs`
+- `scripts/cli/plans.mjs`, `plans-command.mjs`
 - `scripts/cli/package-status.mjs`
 - `scripts/cli/portal-server.mjs`
 - `portal/shared/base.css`
