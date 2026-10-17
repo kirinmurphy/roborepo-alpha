@@ -16,6 +16,7 @@ The page uses:
 - `manifests/platform/plan-lifecycle.json` and `modules/plan-suite/lifecycle-manifest.mjs` for the lifecycle model (see below)
 - `modules/plan-suite/transition.mjs` for every committed lifecycle move (see below)
 - `modules/plan-suite/review-gates.mjs` for the completion preflight and approval freshness, and `sync-base.mjs` for `roborepo plans sync-base`
+- `modules/plan-suite/repository-validation.mjs` for `roborepo plans validate` (see below)
 - `modules/plan-suite/stop-servers.mjs` for `roborepo plans stop-servers`, which resolves a plan's linked worktree and hands it to `modules/developer-runtime/stop.mjs`
 - `scripts/cli/plans.mjs` for portal-facing snapshots, package-state integration, and the `roborepo plans` CLI
 - `portal/plans/` for static HTML/CSS/JS
@@ -51,9 +52,15 @@ becomes a section, a task, or a `## Not tested` entry. Cross-plan relationship f
 to a copy of each cached record's validation, never to the cached record itself, so a rescan reports
 each one once.
 
-`roborepo plans validate` builds the same records for the one repository containing the current
-directory (a linked worktree included) through `buildRepositoryPlanSnapshot`, so the CLI and the
-page report identical findings.
+`roborepo plans validate` (`repository-validation.mjs`) builds the same records for the one
+repository containing the current directory. From the main checkout it scans that checkout and its
+linked worktrees with `scanCheckout` and `selectRecords`, under one repository identity, so each
+Active or Review plan is validated from its authoritative copy and the CLI and the page report
+identical findings. From a linked worktree it validates that checkout's own copies through
+`buildRepositoryPlanSnapshot`, which is what a suite skill working in the worktree wants. Each result
+names the copy it validated (`validated.source`: `worktree`, `primary`, or `checkout`). The
+transitions also use `buildRepositoryPlanSnapshot`, from the primary checkout, because they move the
+primary copy.
 
 Lifecycle findings are visible in plan records and through `roborepo plans validate`. The portal has
 no lifecycle mutation route or move dialog; every move goes through the transition operation below.

@@ -178,6 +178,34 @@ try {
     assert.ok(!record.plan.validation.findings.some((item) => item.code === "PLAN_WORKTREE_COPY_UNAVAILABLE"), "the path difference is expected, not a finding");
   }
 
+  // ── validate: from the primary checkout, the authoritative copy is the one validated ──────────
+  {
+    // Only the worktree's copy gains an open Not tested entry, so the two copies' findings differ. Its
+    // link to a plan only the primary checkout holds must still resolve across the two checkouts.
+    const worktreeCopy = path.join(flow.path, "docs/plans/active/test-flow.md");
+    const linked = read(worktreeCopy).replace(/^related: \[\]$/m, "related: [weak0001]");
+    fs.writeFileSync(worktreeCopy, `${linked.trimEnd()}\n\n## Not tested\n\n- [ ] Checked by hand.\n`);
+    const codes = (plan) => plan.findings.map((item) => item.code).sort();
+
+    const fromPrimary = json(plans(root, "validate", "flow0001"), "validate from the primary checkout");
+    const [plan] = fromPrimary.plans;
+    assert.equal(plan.relativePath, "docs/plans/review/test-flow.md", "the plan is named by its primary copy, which decides the stage");
+    assert.equal(plan.lifecycle, "review");
+    assert.deepEqual(plan.validated, { source: "worktree", worktree: flow.name, relativePath: "docs/plans/active/test-flow.md" }, "and validated from its worktree's copy");
+    assert.ok(codes(plan).includes("UNCONFIRMED_NOT_TESTED"), "the worktree copy's findings are reported");
+    assert.ok(!codes(plan).includes("RELATED_NOT_FOUND"), "every checkout is one repository, so cross-plan links resolve");
+    assert.deepEqual(codes(plan), scanned("flow0001").plan.validation.findings.map((item) => item.code).sort(), "the CLI and the portal agree on the authoritative copy");
+    const all = json(plans(root, "validate"), "validate every plan from the primary checkout");
+    assert.deepEqual(all.plans.find((item) => item.id === "flow0001").validated.source, "worktree", "a full run resolves authority too");
+    assert.equal(all.plans.find((item) => item.id === "weak0001").validated.source, "primary", "a plan with no worktree is validated from the primary copy");
+
+    // Inside the worktree, the suite skills validate that checkout's own copies, as before.
+    const fromWorktree = json(plans(flow.path, "validate", "flow0001"), "validate from the worktree");
+    assert.equal(fromWorktree.plans[0].relativePath, "docs/plans/active/test-flow.md");
+    assert.deepEqual(fromWorktree.plans[0].validated, { source: "checkout" }, "a linked worktree validates its own copy");
+    git(flow.path, "checkout", "--", "docs/plans/active/test-flow.md");
+  }
+
   // ── approval freshness: plan-only commits keep it, implementation changes do not ─────────────
   {
     const missing = plans(root, "approval", "flow0001");

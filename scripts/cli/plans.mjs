@@ -214,6 +214,7 @@ function plansValidateCommand(args) {
     for (const plan of result.plans) {
       if (plan.findings.length === 0) continue;
       console.log(`${plan.relativePath}${plan.id ? ` (${plan.id})` : ""}`);
+      if (plan.validated.source === "worktree") console.log(`  validated from worktree ${plan.validated.worktree}: ${plan.validated.relativePath}`);
       for (const item of plan.findings) console.log(`  ${item.severity.padEnd(8)} ${item.code}: ${item.message}`);
     }
     const { plans, findings, blocking } = result.summary;

@@ -73,29 +73,8 @@ export function selectRepositoryPlan(snapshot, selector, { cwd = process.cwd() }
   });
 }
 
-// The deterministic document findings for one plan, or every plan, in the repository containing
-// `cwd`. This is the result `roborepo plans validate` prints; the model-driven checks a suite skill
-// runs against code and docs are separate, and a clean result here is not evidence they ran.
-export function validateRepositoryPlans({ cwd = process.cwd(), selector = null } = {}) {
-  const snapshot = buildRepositoryPlanSnapshot({ cwd });
-  const records = selector ? [selectRepositoryPlan(snapshot, selector, { cwd })] : snapshot.plans;
-  const plans = records.map((record) => ({
-    id: record.plan.id,
-    relativePath: record.plan.relativePath,
-    lifecycle: record.plan.lifecycle,
-    findings: record.plan.validation.findings,
-  }));
-  const findings = plans.flatMap((plan) => plan.findings);
-  return {
-    repository: { name: snapshot.repository.name, repositoryId: snapshot.repository.repositoryId },
-    plans,
-    summary: {
-      plans: plans.length,
-      findings: findings.length,
-      blocking: findings.filter((item) => item.severity === "blocking").length,
-    },
-  };
-}
+// `roborepo plans validate`, which resolves each plan's authoritative copy the way the scan does.
+export { validateRepositoryPlans } from "./repository-validation.mjs";
 
 function findPlansRoot(start) {
   for (let current = start; ; current = path.dirname(current)) {
