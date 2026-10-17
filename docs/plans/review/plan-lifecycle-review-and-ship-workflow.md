@@ -876,6 +876,24 @@ Verification:
   The install, Docker, and portal UI stages were not rerun: the fix changes only the preflight's
   message text.
 
+### Validation loop change
+
+After round 3, at the user's direction, the review session itself added the validation loop and the
+human-review contract (`4357269e`, `e78d1313`; Decision Log 2026-10-16). That work was written in
+this session, so no independent check covers it yet.
+
+Verification at `e78d1313`:
+
+- Doctor passed (102 checks). `test-cli.sh` 443 passed, 1 failed (the accepted base finding). The
+  remaining stages passed: install collisions; `test:unit --group ci` 38/38 suites; package
+  install; the four clean-machine Docker suites; portal UI 103 passed. Windows installer parity not
+  run (`pwsh` unavailable).
+- `plan-suite-skills-check.mjs` passes and pins the new gate, the reference's two parts, the
+  classes, the cap, and `/plan-review`'s step order. `roborepo skill render-commands --check`,
+  `skill triggers --check` (8 fixtures), and `skill audit` (no unreachable references) pass.
+- Not yet run: a fresh-context validator pass over this change, which the new contract asks for
+  before approval.
+
 ### Approval
 
-- Decision: not requested (open findings)
+- Decision: not requested (validator pass pending)
