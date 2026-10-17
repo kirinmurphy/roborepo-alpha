@@ -166,7 +166,10 @@ function plansApprovalCommand(args) {
     console.log(`approval: ${result.state}${result.reason ? ` (${result.reason})` : ""}`);
     console.log(`review: ${result.review.state}${result.review.reason ? ` (${result.review.reason})` : ""}`);
     for (const changed of result.review.changedPaths || []) console.log(`  changed since review: ${changed}`);
-    for (const changed of result.review.baseChangedPaths || []) console.log(`  changed on base: ${changed}`);
+    // Base changes are informational once the review is complete, and after a squash merge they
+    // include the whole landed branch, so the text output gives only a count.
+    const baseChanged = result.review.baseChangedPaths?.length || 0;
+    if (baseChanged) console.log(`  changed on base since review: ${baseChanged} path${baseChanged === 1 ? "" : "s"} (list with --json)`);
     for (const changed of result.changedPaths || []) console.log(`  changed: ${changed}`);
   }
   if (result.state !== "fresh") process.exit(1);
