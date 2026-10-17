@@ -1,7 +1,7 @@
 ---
 id: gqzjlzgx
 priority: high
-next_action: Record the human approval of the reviewed implementation commit, then merge the pull request and run /plan-close.
+next_action: Run a fresh-context validator pass over the validation-loop change, then request the human approval of the branch tip, merge the pull request, and run /plan-close.
 blocked_by: []
 depends_on: []
 related:
@@ -27,8 +27,10 @@ plan adds two lifecycle folders, `ready/` and `review/`, and the commands that m
 them:
 
 - `/plan-promote` validates a plan and commits it to `ready`;
-- `/plan-execute` replaces `/plan-start`, and can be rerun across sessions;
-- `/plan-review` performs independent QA and records explicit human approval;
+- `/plan-execute` replaces `/plan-start`, can be rerun across sessions, and ends in a validation
+  loop that checks and fixes the work before review;
+- `/plan-review` runs the human review: it rechecks and fixes in the same session, then records
+  explicit human approval;
 - `/plan-archive` retires a plan without losing unmerged work;
 - the existing **`/plan-close`** stays the post-merge verifier and finalizer.
 
@@ -51,8 +53,11 @@ This plan supersedes the former `plan-lifecycle-suite-workflow-navigation` plan,
   findings while the plan is in `review`.
 - A plan moves `active → review` when **implementation is complete**. Independent QA and human
   acceptance happen after that move.
-- `/plan-review` performs independent QA, records concise findings and resolutions in the plan, and
-  requires explicit human approval before the manual merge and `/plan-close`.
+- `/plan-execute` ends in a validation loop: a fresh-context validator checks the work, and the run
+  fixes what has a clear fix until a pass is clean, before the move to `review`.
+- `/plan-review` is the human review: it rechecks the synced work, fixes what has a clear fix in the
+  same session, presents a review packet, and requires explicit human approval before the manual
+  merge and `/plan-close`.
 - Fixes within the existing requirements stay in `review`. A plan returns to `active` only when
   its scope or acceptance criteria change materially, and it keeps its branch and worktree.
 - During review, merge the current base branch **into the feature branch**, again in later review
@@ -173,8 +178,8 @@ flowchart LR
 | --- | --- | --- | --- |
 | `/plan-write` | New or existing plan | Create or revise the plan and its executable checklist | New plan in `backlog`; never moves a plan |
 | `/plan-promote` | `backlog`, `ready` | Reconcile requirements, tests, dependencies, and tasks | Commit `backlog → ready`, or refine a `ready` plan in place |
-| `/plan-execute` | `ready`, `active`, `review` | Start or resume implementation; in `review`, fix recorded findings | `ready → active`; `active → review` on implementation completion; stays `review` while fixing findings |
-| `/plan-review` | `active`, `review` | Check implementation readiness, merge base into the branch, review independently, record findings, request human approval | `active → review` if eligible; stays `review` until approved, or `review → active` on a scope change |
+| `/plan-execute` | `ready`, `active`, `review` | Start or resume implementation, then run the validation loop; in `review`, fix findings sent back | `ready → active`; `active → review` after a clean validation pass and a passing preflight; stays `review` while fixing findings |
+| `/plan-review` | `active`, `review` | Check implementation readiness, merge base into the branch, recheck and fix in the same session, present the review packet, request human approval | `active → review` if eligible; stays `review` until approved, or `review → active` on a scope change |
 | `/plan-close` | `review`, after the manual merge | Verify landed implementation and approval, commit completion, clean up safely | `review → completed` |
 | `/plan-archive` | `backlog`, `ready`, `active`, `review` | Record the reason, preserve unmerged code, archive | Commit the move to `archived` |
 | `/session-close` | Any agent session | Record progress and a handoff | No lifecycle transition |
@@ -238,7 +243,17 @@ A worktree copy still in `active/` while the primary copy is in `review/` is the
 during review, not an error. The primary copy still decides the lifecycle stage. The
 outside-edit check (`checkOutsideEdits`) applies to both states unchanged.
 
-### Implementation completion is not QA
+### Implementation completion is not approval
+
+`/plan-execute` finishes with a **validation loop** (`references/validation-loop.md`). A validator
+with fresh context, a subagent where the harness has one, reads the plan, the full diff, and the
+gate output, never the implementer's account, and only reports. Each finding is classed by
+consequence: `fix` (the right fix is clear and stays within the requirements and specified
+contracts, code included) is fixed in the same run; `escalate` (a choice between real alternatives,
+a requirement or unspecified contract change, or work outside the plan) becomes an Open Questions
+entry; `base` (the base branch fails the same check) is recorded and blocks nothing. The loop repeats
+until a pass finds nothing to fix, for at most five passes, and the submit transition never runs
+before that.
 
 `/plan-execute` and `/plan-review` share one completion preflight. Its deterministic checks are:
 
@@ -289,16 +304,17 @@ findings may stay for readable history.
 ```
 
 1. `/plan-review` starts from an `active` plan that passes the preflight, or resumes in `review`. It
-   first synchronizes base into the feature branch, then inspects requirements, changes, tests, and
-   evidence independently of the implementation agent.
-2. It records findings and verification in the plan and commits the plan in the worktree. It then
-   fixes **additive** findings itself, each in its own commit: tests that only add coverage, doc and
-   evidence corrections, typos. `/plan-execute`, run in `review` in a **separate session**,
-   addresses the findings that change behavior, choose between alternatives, or change a contract;
-   no separate fix command is needed.
-3. Rerun `/plan-review` after fixes. Corrections within the approved requirements stay in `review`.
-4. Once findings and required manual checks are resolved, ask the human for explicit approval and
-   commit the approval record. An agent cannot infer approval from passing tests.
+   first synchronizes base into the feature branch, then runs the gate (a failure the base branch
+   has too is a base failure, not a finding) and one validator pass over the merged result, with the
+   same rubric as the validation loop.
+2. It records findings and verification in the plan, then fixes every `fix` finding in the **same
+   session**, code included, each in its own commit, and checks again until a pass is clean.
+3. It presents a review packet: each acceptance criterion with its evidence, what changed, the
+   validator passes, its own commits, base failures, manual checks, and each `escalate` finding as a
+   decision with a recommendation.
+4. The human approves, asks for changes it makes in the same session, decides escalations, or sends
+   the work to `/plan-execute` in a separate session. Only the human's explicit answer is approval;
+   an agent cannot infer it from passing tests.
 
 **Scope change.** If review finds that requirements or acceptance criteria must change materially,
 `/plan-review` revises the plan and its tasks in the worktree, invalidates any approval, and commits
@@ -487,6 +503,16 @@ them overrides this plan.
       step cannot be automated.
 - [x] Run the gates listed under [Validation](#validation) and record the results.
 
+### Phase 5 — Validation loop and the human review
+
+- [x] Add the validation loop to `/plan-execute`: the gate in `SKILL.md`, the loop and rubric in
+      `references/validation-loop.md`, with `fix`, `escalate`, and `base` classes and a five-pass cap.
+- [x] Make `/plan-review` the human review: a validator pass after `sync-base`, fixes by consequence
+      in the same session, the review packet, and base failures recorded rather than raised.
+- [x] Recommend `/plan-review` for review plans with open findings in the portal.
+- [x] Update the skills' prose checks, trigger fixtures, generated commands, and every doc that
+      described the earlier review contract.
+
 ## Validation
 
 ### Acceptance criteria
@@ -496,11 +522,13 @@ them overrides this plan.
 2. Every successful transition produces one primary-checkout commit containing only the plan's
    old and new paths. Unrelated work is untouched. A refused or failed move mutates nothing, and a
    retry is safe.
-3. `/plan-execute` resumes incomplete work across sessions and moves to `review` only when the
-   completion preflight passes, not when QA passes.
-4. `/plan-review` can start from a complete `active` plan, record findings, rerun after fixes, and
-   record explicit human approval for the current implementation. Fixes stay in `review`; scope
-   changes return the plan to `active` with its worktree intact.
+3. `/plan-execute` resumes incomplete work across sessions, runs a fresh-context validation loop that
+   fixes `fix` findings until a pass is clean, and moves to `review` only after that and a passing
+   completion preflight.
+4. `/plan-review` can start from a complete `active` plan, recheck the synced work, fix `fix`
+   findings in the same session, present a review packet, and record explicit human approval for
+   the current implementation. Base-only failures are recorded, not raised. Fixes stay in `review`;
+   scope changes return the plan to `active` with its worktree intact.
 5. `sync-base` merges base into the feature branch, pauses on conflicts without losing work, and
    approval goes stale whenever implementation content changes.
 6. `/plan-close` runs only after the user's GitHub merge. It keeps the existing landed check,
@@ -593,6 +621,18 @@ npm run check
   branch. The Review stage makes a stale primary copy routine, and acceptance criterion 8 promises
   that the CLI shows the authoritative copy. (User decision, during the second review round, after
   first deferring it.)
+- **2026-10-16** — `/plan-execute` ends in a validation loop, and `/plan-review` becomes the human
+  review that fixes what has a clear fix in the same session. Findings are classed by consequence
+  (`fix`, `escalate`, `base`), not by kind of change, and failures the base branch shares are never
+  findings. Supersedes the 2026-10-15 entries that made `/plan-review` the independent QA step and
+  limited it to additive fixes: running a separate session for every finding cost a round and a
+  full re-review for fixes with no consequence for the feature. Independence now comes from the
+  validator's fresh context and the human's review. The plan stays in `review/` rather than
+  reopening for this change. (User decision.)
+- **2026-10-16** — The validator's rubric stays inside `/plan-execute` as a reference for now, written
+  to lift out unchanged into the shared `implementation-review` skill once packages can declare
+  required skill dependencies (`ejsc769o`, after `o9zwxuav`). A separate optional skill today would
+  need the enable-or-skip prompt for a mandatory step. (User decision.)
 - **2026-10-16** — Round 3: the reviewer fixed the preflight line-number finding itself, a code
   change the review normally sends to `/plan-execute`, and the base-only gate failure was accepted
   rather than fixed on this branch. Neither has consequence for the feature, and a separate
@@ -644,6 +684,12 @@ Decisions made autonomously during implementation (2026-10-15):
   `scripts/test/lib/plan-git-fixture.mjs`.
 - **No new forbidden filename suffixes.** `ready` and `review` were not added to the naming rule's
   forbidden suffixes: two existing plans legitimately end in `-review`.
+- **Validation loop details (2026-10-16).** The cap is five passes, not technical-writing's ten: a
+  code pass reruns checks and costs far more than a prose pass. The validator runs on the session's
+  own model rather than `sonnet`, since it is a judgment role, not a procedural slice. `/plan-review`
+  carries its rubric inline in a few lines, because it cannot load a reference from another package
+  that may be disabled. The portal leads a review plan with open findings with **Review**, keeping
+  **Fix findings** in the menu for work sent to a separate session.
 - **Post-merge fixes in `/plan-close`.** Its step 1 now says fixes made after the reviewed merge
   stay limited to tests and evidence, and a behavior change needs `/plan-review` again, so a close
   never lands code no human approved.
