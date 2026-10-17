@@ -1,3 +1,3 @@
 interface:
   display_name: "Plan Execute"
-  short_description: "Help with Plan Execute tasks"
+  short_description: "Implement a plan in its worktree, validate it, and submit it for review"

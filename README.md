@@ -185,7 +185,7 @@ The Plans portal surfaces:
 | Dependencies    | blockers and relationships                            |
 | Plan freshness  | reviewed commit / current HEAD                        |
 | Review outcome  | open findings and your recorded approval              |
-| Agent workflows | write, promote, execute, review, close, archive        |
+| Agent workflows | write, promote, execute, review, close, archive       |
 
 ```mermaid
 flowchart LR
