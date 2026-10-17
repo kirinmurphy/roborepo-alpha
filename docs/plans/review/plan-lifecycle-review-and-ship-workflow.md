@@ -794,14 +794,16 @@ at `302ef51a`):
 
 Validator pass 2 (fresh-context subagent, at `d676482b`):
 
-- [ ] The help list in `portal/plans/plan-drawer-partial.html` still says `/plan-review` reviews
-      "independently".
-- [ ] Validator findings sat under a custom heading, outside `### Findings`, so the portal counted
-      no open finding while the preflight saw one. Record them under `### Findings`.
-- [ ] The escalated Not tested finding has no Open Questions entry, which `validation-loop.md`
-      requires.
-- [ ] `scripts/cli/plans.mjs` grew to 390 lines, mixing the portal snapshot API with the
-      `roborepo plans` CLI handlers. Move the CLI into its own module.
+- [x] The help list in `portal/plans/plan-drawer-partial.html` still says `/plan-review` reviews
+      "independently". — fixed in review (`4b592c60`)
+- [x] Validator findings sat under a custom heading, outside `### Findings`, so the portal counted
+      no open finding while the preflight saw one. Record them under `### Findings`. — fixed in
+      review (`6c23cca3`)
+- [x] The escalated Not tested finding has no Open Questions entry, which `validation-loop.md`
+      requires. — fixed in review (`6c23cca3`)
+- [x] `scripts/cli/plans.mjs` grew to 390 lines, mixing the portal snapshot API with the
+      `roborepo plans` CLI handlers. Move the CLI into its own module. — fixed in review
+      (`071665e1`): `plans.mjs` 135 lines, `plans-command.mjs` 258
 
 Round 2 and round 3 findings stay under their round headings as history; all are resolved.
 
@@ -938,6 +940,9 @@ Verification at `e78d1313`:
   classes, the cap, and `/plan-review`'s step order. `roborepo skill render-commands --check`,
   `skill triggers --check` (8 fixtures), and `skill audit` (no unreachable references) pass.
 
+- After pass 2's fixes, at `071665e1`: doctor passed (102 checks); `test-cli.sh` 443 passed, 1
+  failed (the base failure below); every later stage passed (`test:unit --group ci` 38/38, package
+  install, four clean-machine suites, portal UI 103).
 - Base failure: `plan-suite-findings-check.mjs` (`UNKNOWN_PLAN_NAMESPACE`) fails the same way on an
   export of `main`.
 
