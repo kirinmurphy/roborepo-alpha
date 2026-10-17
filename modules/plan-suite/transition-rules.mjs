@@ -10,7 +10,8 @@
 //   prepare(context)           async; refuses when the move is not allowed yet, and returns
 //                              { content, evidence }: the plan text to commit and what was checked
 //   bodyUnchanged              the post-commit check confirms the document body did not change
-//   message(id, options)       the commit message
+//   message(name, options)     the commit message; `name` is the plan's filename slug, which a
+//                              reader recognizes in git log where the opaque id says nothing
 import { domainError, writeFrontmatterField } from "./index.mjs";
 import { LIFECYCLE_MODEL } from "./lifecycle-manifest.mjs";
 import { archiveCarry, worktreeCopyIntegration } from "./copy-integration.mjs";
@@ -20,7 +21,7 @@ import { planLanding } from "./landing-gate.mjs";
 export const TRANSITION_RULES = {
   promote: {
     carriesEdits: true,
-    message: (id) => `Promote plan ${id} to ready`,
+    message: (name) => `Promote plan ${name} to ready`,
   },
   start: {
     requires: ({ worktree }) => (worktree ? null : "A worktree name is required (--worktree <name>)."),
@@ -28,7 +29,7 @@ export const TRANSITION_RULES = {
     reassigns: true,
     prepare: ({ content, options }) => ({ content: writeFrontmatterField(content, "worktree", options.worktree) }),
     bodyUnchanged: true,
-    message: (id, { worktree }) => `Start plan ${id} in worktree ${worktree}`,
+    message: (name, { worktree }) => `Start plan ${name} in worktree ${worktree}`,
   },
   submit: {
     prepare: ({ primary, record, content, base }) => {
@@ -37,11 +38,11 @@ export const TRANSITION_RULES = {
       return { content, evidence: { preflight } };
     },
     bodyUnchanged: true,
-    message: (id) => `Submit plan ${id} for review`,
+    message: (name) => `Submit plan ${name} for review`,
   },
   reopen: {
     bodyUnchanged: true,
-    message: (id) => `Reopen plan ${id} for implementation`,
+    message: (name) => `Reopen plan ${name} for implementation`,
   },
   close: {
     carriesEdits: true,
@@ -70,7 +71,7 @@ export const TRANSITION_RULES = {
       }
       return { content, evidence: { approval, landing, worktreeCopy: integration.state } };
     },
-    message: (id) => `Close plan ${id}`,
+    message: (name) => `Close plan ${name}`,
   },
   archive: {
     requires: ({ reason }) => (reason?.trim() ? null : "An archive reason is required (--reason <text>)."),
@@ -83,7 +84,7 @@ export const TRANSITION_RULES = {
       const base = writeFrontmatterField(carry.carry ?? content, "next_action", "");
       return { content: `${base.replace(/\s*$/, "")}\n\n## Archived\n\n${today}: ${options.reason.trim()}\n`, evidence: { worktreeCopy: carry.worktreeCopy } };
     },
-    message: (id) => `Archive plan ${id}`,
+    message: (name) => `Archive plan ${name}`,
   },
 };
 

@@ -88,9 +88,13 @@ cleanup command so its guards still apply. Never remove one by hand.
 
 ## Final Report
 
+Name the plan by its H1 title, with its id in parentheses on first mention only. The id is the
+stable reference for commands and frontmatter, not a name a person recognizes; the same goes for
+questions, review packets, and other prose in this run.
+
 ```text
 Archive result
-- Plan: <id and repository-relative path>
+- Plan: "<title>" (<id>), <repository-relative path>
 - Reason: superseded by <plan> | abandoned: <why>
 - Lifecycle change: <from> -> archived | none
 - Worktree copy: no-worktree | integrated | carried | unavailable | conflicting

@@ -119,6 +119,7 @@ try {
     const touched = git(root, "show", "--name-status", "--format=", "HEAD").split("\t");
     assert.match(touched[0], /^R/, "the commit is the plan's rename");
     assert.deepEqual(touched.slice(1), ["docs/plans/backlog/test-flow.md", "docs/plans/ready/test-flow.md"], "and nothing else");
+    assert.equal(git(root, "log", "-1", "--format=%s"), "Promote plan test-flow to ready", "the commit names the plan by its filename, not its id");
     assert.match(git(root, "show", "HEAD:docs/plans/ready/test-flow.md"), /Refined during promotion/, "the promotion's edits ride along");
     assert.equal(git(root, "diff", "--cached", "--name-only"), "src/app.txt", "unrelated staged work stays staged");
     assert.ok(exists(root, "notes.txt"), "unrelated unstaged work stays in place");

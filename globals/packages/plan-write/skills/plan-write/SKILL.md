@@ -111,3 +111,5 @@ These conditions must hold before a new plan can be called created. The full rul
 - Do not mark work complete from checked boxes alone; verify success criteria.
 - Do not add machine-specific absolute paths to repository docs.
 - Report changed files, verification run, and paired skills loaded or skipped.
+- Name the plan by its H1 title, with its id in parentheses on first mention only; the id is a
+  stable reference for commands, not a name a person recognizes.

@@ -88,7 +88,10 @@ roborepo package enable session-close
 Every move between lifecycle folders is one commit in the repository's main checkout, on the base
 branch, made by a `roborepo plans` command that the suite commands run. The commit contains only
 the plan's old and new paths, so other work in the main checkout, staged or not, stays where it is.
-A refused move changes nothing, running a move again after it succeeded commits nothing, and
+Its message names the plan by its filename, for example
+`Submit plan plan-lifecycle-review-and-ship-workflow for review`, so `git log` reads without
+looking up ids. The suite commands' reports and questions name a plan by its title, with its id in
+parentheses once. A refused move changes nothing, running a move again after it succeeded commits nothing, and
 nothing is ever pushed.
 
 While a plan is `active` or in `review`, its worktree's copy is the plan: every progress note,

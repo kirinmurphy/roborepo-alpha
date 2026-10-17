@@ -89,7 +89,7 @@ export async function transitionPlan(options) {
   }
   fs.writeFileSync(path.join(primary, toPath), content);
   gitOrThrow(primary, ["add", "--", toPath]);
-  gitOrThrow(primary, ["commit", "--quiet", "--only", "-m", rules.message(record.plan.id || fromPath, options), "--", ...paths]);
+  gitOrThrow(primary, ["commit", "--quiet", "--only", "-m", rules.message(path.basename(fromPath, ".md"), options), "--", ...paths]);
   const commit = git(primary, ["rev-parse", "HEAD"]).stdout;
   const fastForward = target ? fastForwardTarget(target.path, base, base0) : undefined;
   return result({ primary, cwd, base, transition, record, fromPath, toPath, commit, options, target, rules, evidence: { ...(prepared.evidence || {}), ...(fastForward ? { fastForward } : {}) } });
