@@ -69,6 +69,9 @@ Examples:
   `plan-execute` ends in a validation loop (`references/validation-loop.md`): a
   fresh-context validator applies a rubric and classifies findings `fix`,
   `escalate`, or `base`, and the run fixes `fix` findings until a pass is clean.
+  Besides acceptance criteria, tests, and docs, the rubric checks changed code
+  for flow and cohesion, data and state, and comments and abstractions; length
+  alone is never a finding.
   `plan-review` applies the same rubric once more after syncing base, fixes in
   the same session, and records human approval. The rubric is written to move
   into a shared `implementation-review` skill once packages can declare

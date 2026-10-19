@@ -1,7 +1,7 @@
 ---
 id: 7e21olcs
 priority: high
-next_action: Rewrite code-style around responsibilities and comment examples, align javascript-typescript, add the three focused checks to both rubric texts with test assertions, then run and record the authoring/review sample.
+next_action: Run the Validation Loop over the committed implementation, fix any `fix` findings, then run the completion preflight and submit transition.
 blocked_by: []
 depends_on: []
 related:
@@ -142,18 +142,18 @@ Include at least one genuine agent-authored diff, produced by a fresh agent sess
 | Plan | Relationship | Effect on this plan |
 | --- | --- | --- |
 | `[[ejsc769o]]` package required/recommended skills (backlog, depends on unlanded `o9zwxuav`) | Unlanded; overlapping scope | It will move the rubric into a new `implementation-review` skill with a `blocking`/`actionable`/`note` severity model and delete both current texts. This plan edits whichever rubric exists at execution time and owns none of the dependency, activation, or severity work |
-| `[[gqzjlzgx]]` plan lifecycle review and ship workflow (review, approved) | Landed dependency; lifecycle pending `/plan-close` | Its reviewed commit is an ancestor of `main`. It created the current rubric, the `fix`/`escalate`/`base` classes, and `plan-review`'s inline copy. This plan extends that rubric and supersedes none of its contract |
+| `[[gqzjlzgx]]` plan lifecycle review and ship workflow (completed) | Landed dependency | Its reviewed commit is an ancestor of `main`. It created the current rubric, the `fix`/`escalate`/`base` classes, and `plan-review`'s inline copy. This plan extends that rubric and supersedes none of its contract |
 
 ## Implementation plan
 
-- [ ] Rewrite `globals/packages/code-style/skills/code-style/SKILL.md`: remove the size caps (line 19), the own-file split (line 20), and the twice-duplicated extraction rule (line 16); reframe `## Orchestrators vs. Execution Functions` without the separate-file mandate; add cohesion, explicit data flow, appropriate purity, and justified-abstraction guidance; rewrite `## Review Checklist` to match. Keep the frontmatter `name` and keep the `description` covering naming, file organization, helper placement, comments, and readability.
-- [ ] Add a short comments section to `code-style` with contrasting examples from Section 2: preserve public contracts, invariants, justified navigation headings, and non-obvious rationale; discourage procedural and name-restating comments.
-- [ ] Reframe `## Functions` in `globals/packages/javascript-typescript/skills/javascript-typescript/SKILL.md` as contextual preferences. Recheck `react/SKILL.md` and `tighten/SKILL.md` against the rewritten `code-style` and edit only on a real conflict.
-- [ ] Determine whether `[[ejsc769o]]` has shipped (does `globals/packages/implementation-review/` exist?). Add the three checks and the classification rows from Section 4 to the authoritative rubric, and mirror a one-sentence summary into `plan-review`'s inline rubric bullet when both texts still exist.
-- [ ] Extend `scripts/test/plan-suite-skills-check.mjs` so each rubric text it covers asserts the three checks are present (for example "Flow and cohesion", "Data and state", "Comments and abstractions") and that length alone is never a finding.
-- [ ] Run the six sample cases from Section 5, record them under `## Convention sample`, and refine wording where authors ignored guidance or reviewers produced material false positives.
-- [ ] Update `docs/internal/skills-and-commands.md`: the plan-suite bullet's rubric description gains the three checks, and the `code-style` entry stays accurate.
-- [ ] Run the verification commands under Validation.
+- [x] Rewrite `globals/packages/code-style/skills/code-style/SKILL.md`: remove the size caps (line 19), the own-file split (line 20), and the twice-duplicated extraction rule (line 16); reframe `## Orchestrators vs. Execution Functions` without the separate-file mandate; add cohesion, explicit data flow, appropriate purity, and justified-abstraction guidance; rewrite `## Review Checklist` to match. Keep the frontmatter `name` and keep the `description` covering naming, file organization, helper placement, comments, and readability.
+- [x] Add a short comments section to `code-style` with contrasting examples from Section 2: preserve public contracts, invariants, justified navigation headings, and non-obvious rationale; discourage procedural and name-restating comments.
+- [x] Reframe `## Functions` in `globals/packages/javascript-typescript/skills/javascript-typescript/SKILL.md` as contextual preferences. Recheck `react/SKILL.md` and `tighten/SKILL.md` against the rewritten `code-style` and edit only on a real conflict.
+- [x] Determine whether `[[ejsc769o]]` has shipped (does `globals/packages/implementation-review/` exist?). Add the three checks and the classification rows from Section 4 to the authoritative rubric, and mirror a one-sentence summary into `plan-review`'s inline rubric bullet when both texts still exist.
+- [x] Extend `scripts/test/plan-suite-skills-check.mjs` so each rubric text it covers asserts the three checks are present (for example "Flow and cohesion", "Data and state", "Comments and abstractions") and that length alone is never a finding.
+- [x] Run the six sample cases from Section 5, record them under `## Convention sample`, and refine wording where authors ignored guidance or reviewers produced material false positives.
+- [x] Update `docs/internal/skills-and-commands.md`: the plan-suite bullet's rubric description gains the three checks, and the `code-style` entry stays accurate.
+- [x] Run the verification commands under Validation.
 
 ## Validation
 
@@ -184,6 +184,24 @@ git diff --check
 
 `doctor.sh` and `git diff --check` are the repository's required cleanup gate for package and test changes (`docs/internal/testing.md`). Record any command that cannot run and why.
 
+### Verification results
+
+Run on 2026-10-19 in the plan worktree after the final skill edit:
+
+```text
+node scripts/test/run-checks.mjs --filter plan-suite-skills   → 1/1 passed
+npm run test:unit                                             → 148/148 suites passed
+npm test                                                      → 445 passed, 0 failed
+bash scripts/doctor.sh --quiet                                → passed (102 checks)
+git diff --check                                              → clean
+acceptance grep (code-style, javascript-typescript)           → no matches
+roborepo plans validate 7e21olcs                              → 0 findings
+```
+
+The new `plan-suite-skills` assertions were confirmed to fail when a convention check is dropped: removing "Data and state" from `plan-review` produced `plan-review check: missing "Data and state"`.
+
+No development server or build was started: the change is skill prose and a prose test, with no served, rendered, or CLI behavior to exercise. The authoring/review sample above is the runtime check of the guidance itself.
+
 ## Documentation impact
 
 - `docs/internal/skills-and-commands.md`: the plan-suite bullet describes the validation-loop rubric; add the three checks. Revisit the `code-style` entry if its role description changes.
@@ -198,9 +216,105 @@ git diff --check
 - **Rubric drift:** two rubric texts exist until `[[ejsc769o]]` ships. Edit both in one commit, and let the new test assertions catch a later edit that drops the checks from either.
 - **Agent-behavior uncertainty:** good review examples do not prove an improvement across every agent. Treat the sample as a sanity check, not a universal AI-performance claim.
 
+## Convention sample
+
+A one-time sanity check of the revised skills, not a benchmark. For each case, a fresh agent (Sonnet subagent) got only the task prompt, the paths to the revised `code-style` and `javascript-typescript` skills, and a scratch copy of the starting code. One fresh reviewer then applied rubric checks 7 to 9 and the classification table to all six diffs, given only the rubric, `code-style`, the requests, and the before/after code. Starting snippets lived in the session scratchpad and are not committed. Cases 2 to 6 use small synthetic modules, summarized below.
+
+| # | Starting code | Prompt | Authoring result | Review result |
+| --- | --- | --- | --- | --- |
+| 1 | Copy of `modules/developer-runtime/git.mjs` (253 lines, one cohesive responsibility) | Add `stashCount` to the context `collectGitContext` returns; 0 when unreadable | Kept the module together at 264 lines; added `readStashCount` beside its siblings and into the existing `Promise.all`. Wrote an invented rationale for the 0 fallback ("only surfaced when positive"), and left the header's "null, never 0" contract unchanged | `fix`: header contract now misstates `stashCount`. `fix`: edited "rather than five" latency count is off (debatable; drift runs several sequential calls). No size-only finding. **Missed** the invented rationale (accepted it, with a follow-up note that it could not be verified) |
+| 2 | `displayName` → `buildDisplayName` → `formatUserName` → `joinParts` across three files | Fall back to `user.email` when first and last are empty | `return buildDisplayName(user) \|\| user.email;`: a one-line change at the entry point; did not restructure | No findings. Pre-existing pass-through chain reported once as a follow-up, as material indirection rather than file count |
+| 3 | `applyDiscount` with four narrating comments | Cap the discount at `cart.minimumTotal` | Inline cap; removed the narration on the changed line; added a comment explaining the under-minimum guard; left the other narration alone | No findings; the three remaining narration comments are a follow-up mention only |
+| 4 | `ledgerBalance` with a JSDoc contract and an append-only invariant comment | Exclude `status: "pending"` entries | Kept the contract and invariant; filter plus reduce. Rewrote the invariant as "every settled entry" and added "Pending entries are excluded until they settle" | `fix`: "settled" misstates a `!== "pending"` filter. `fix`: the added line restates the filter. Contract and invariant comments not flagged |
+| 5 | `categorize` with a comment claiming fallback to `"other"` while code returns `"chore"` | Add `docs` as a known category | Added `docs`; corrected the comment to `"chore"` | No findings; credited the comment correction |
+| 6 | `importOrders` mixing file I/O, a module-level `stats` mutation, and parsing in one loop | Skip rows with invalid amounts and log `skipped <id>` | Added a pure `parseAmount` with an accurate why-comment (`Number("")` is 0); log writes stay visible in the loop | No findings; exported mutable `stats` and the duplicated log path named as specific follow-ups |
+
+Trimmed diffs:
+
+```diff
+# case 1 (git.mjs)
+-  const [dirty, upstreamTipAt, drift] = await Promise.all([
++  const [dirty, stashCount, upstreamTipAt, drift] = await Promise.all([
++    readStashCount(projectRoot, runGit, timeoutMs),
++// One line per stash entry. Unlike the other subprocess facts this falls back to 0 rather than null:
++// a stash count is only surfaced when positive, so "unknown" and "none" render the same.
++async function readStashCount(cwd, runGit, timeoutMs) {
++  const result = await runGit(cwd, ["stash", "list"], { timeoutMs });
++  if (!result?.ok) return 0;
++  return result.stdout.split("\n").filter((line) => line.trim().length > 0).length;
++}
+
+# case 2 (user-name.mjs)
+-  return buildDisplayName(user);
++  return buildDisplayName(user) || user.email;
+
+# case 3 (discount.mjs)
+-  // Calculate the new total
+-  const total = cart.total * (1 - discount.rate);
++  const minimumTotal = cart.minimumTotal ?? 0;
++  // Capped so the discount never pushes the total below the minimum, nor raises a total already under it.
++  const maxDiscount = Math.max(0, cart.total - minimumTotal);
++  const total = cart.total - Math.min(cart.total * discount.rate, maxDiscount);
+
+# case 4 (ledger.mjs)
+-  // so the sum of every entry is the balance even after corrections.
+-  return entries.reduce((sum, entry) => sum + entry.amountCents, 0);
++  // so the sum of every settled entry is the balance even after corrections.
++  // Pending entries are excluded until they settle.
++  return entries
++    .filter((entry) => entry.status !== "pending")
++    .reduce((sum, entry) => sum + entry.amountCents, 0);
+
+# case 5 (categorize.mjs)
+-const KNOWN = new Set(["bug", "feature", "chore"]);
++const KNOWN = new Set(["bug", "feature", "chore", "docs"]);
+-// Unknown labels fall back to "other".
++// Unknown labels fall back to "chore".
+
+# case 6 (import-orders.mjs)
+-    const cents = Math.round(Number(amount) * 100);
+-    orders.push({ id, cents, currency: currency || "USD" });
++    const value = parseAmount(amount);
++    if (value === null) {
++      fs.appendFileSync(path + ".log", `skipped ${id}\n`);
++      continue;
++    }
++    orders.push({ id, cents: Math.round(value * 100), currency: currency || "USD" });
++// Number("") is 0, so a blank amount must be rejected explicitly.
++function parseAmount(amount) { ... }
+```
+
+### What the sample showed
+
+- **Structure guidance held.** No author split a file by size or added wrapper layers; case 1 extended a 253-line module in place, and case 6's only new helper isolates real logic.
+- **Review produced no cosmetic false positives.** Pre-existing narration and the pre-existing wrapper chain were follow-up mentions, never findings; nothing was flagged by length.
+- **Comment accuracy was the weak spot for authors.** Case 1 invented a rationale to justify a requested behavior, and case 4 wrote an almost-right claim plus a restating line. The reviewer caught case 4 but accepted case 1's invented reason.
+- **Wording change prompted:** `code-style` → `## Comments` now says a comment's claim must match the code exactly and rest on something verified, cites a requirement rather than inventing a mechanism, and names module headers among the comments a change must recheck.
+
+### Rerun after the wording change
+
+Cases 1 and 4 were rerun with fresh agents against the revised `code-style`, same prompts:
+
+- **Case 4:** wrote "the sum of every non-pending entry is the balance" and added no restating line. Both earlier findings are gone. The phrase matches the skill's own example, so this shows the example is followed, not that the principle generalizes.
+- **Case 1:** updated the module header to name `stashCount` as the 0-on-failure exception, which resolves the earlier header finding. It still supplied an invented reason for the 0 ("a missing badge would be indistinguishable from 'no stashes'") rather than citing the request. That is a remaining limitation of prose guidance, recorded rather than chased with more wording; reviewers and humans remain the check on rationale accuracy.
+
+```diff
+# case 1 rerun (git.mjs header)
+-// Every field is nullable and `dirty`/`ahead`/`behind` are null (never false/0) when the subprocess
++// Every field is nullable except `stashCount`, which is 0 when it could not be read. `dirty`/`ahead`/
++// `behind` are null (never false/0) when the subprocess could not answer. ...
+```
+
 ## Decision Log
 
 - **2026-10-17** — A comment the diff adds that only restates the code is a `fix` finding; harmless narration that was already there is not a finding. Chosen over treating all redundant comments as non-blocking, because review would otherwise never correct the most common complaint, and the rubric already says size never decides the class.
 - **2026-10-17** — Cosmetic preferences map to the rubric's existing follow-up mention, not a new non-blocking class, so this plan adds no severity scale ahead of `[[ejsc769o]]`.
 - **2026-10-17** — The authoring/review sample is recorded in this plan rather than as committed fixtures, keeping it a one-time sanity check.
 - **2026-10-17** — While both rubric texts exist, the checks go into `validation-loop.md` with a one-sentence mirror in `plan-review`'s inline copy, covered by `plan-suite-skills-check.mjs`.
+- **2026-10-17** — `[[ejsc769o]]` has not shipped (`globals/packages/implementation-review/` does not exist; the plan is in backlog), so the checks went into `validation-loop.md` → `## The rubric` with a one-sentence mirror in `plan-review` step 3.
+- **2026-10-17** — `code-style` replaces the orchestrator/execution split-into-files section with a `## Flow, Data, and State` section that keeps both roles as a reading and writing aid, and adds a cohesive-vs-over-fragmented signal table so an agent can judge a long module without a line count. Alternative: only delete the size rules and leave the rest; rejected because the goals also ask for explicit data flow, purity, and justified abstraction.
+- **2026-10-17** — `javascript-typescript` `## Functions` now says "prefer" and defers to a file's consistent existing style, and places a pure helper by consumer with a pointer to `code-style` rather than restating the rule. The wording avoids "own file" so the acceptance grep stays clean without an exemption.
+- **2026-10-17** — `react` left unchanged: "extract repeated markup into focused components" is React's unit of markup reuse, not a size or file-placement rule, and its comment line agrees with `code-style`. `tighten` left unchanged: it inherits `code-style` and its located, rule-citing finding format matches the rubric's location/cost/remedy requirement.
+- **2026-10-17** — The test keeps the four rubric phrases in one shared constant used by both rubric assertions, so the two texts cannot drift on them independently.
+- **2026-10-19** — After the sample, added one rule to `code-style` → `## Comments`: a comment's claim must match the code exactly and rest on something verified, and module headers are among the comments a change must recheck. Chosen over adding a rubric row for "unverified rationale", which would invite reviewers to demand evidence for every comment (the over-enforcement risk); the authoring guidance is where the invented reason originates.
+- **2026-10-19** — Did not iterate further on case 1's invented rationale after one rerun. More wording risks overfitting to one sample; the plan treats the sample as a sanity check, and the remaining gap is recorded under `## Convention sample`.
