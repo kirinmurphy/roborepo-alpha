@@ -1,7 +1,7 @@
 ---
 id: 7e21olcs
 priority: high
-next_action: Run the Validation Loop over the committed implementation, fix any `fix` findings, then run the completion preflight and submit transition.
+next_action: Run `/plan-review` for the human review of the implementation.
 blocked_by: []
 depends_on: []
 related:
@@ -316,6 +316,7 @@ Cases 1 and 4 were rerun with fresh agents against the revised `code-style`, sam
 ### Verification
 
 - Validation pass 1 at b9dca44 (fresh-context subagent): 3 `fix`, 0 `escalate`, 0 `base`. Follow-ups noted, not findings: `react`'s one-line comment rule could point at `code-style`; the "schema, mappers, view-model, ui" split examples carried over from the old text.
+- Validation: clean on pass 2 at dff9ce1 (fresh-context subagent). Follow-ups noted, not findings: three backlog plans still cite the old size/split rules as conventions (`test-agent-behavior-evals`, `infra-portable-user-profile-backup`, `plan-reference-integrity-surfacing`); revisit when each is promoted.
 
 ## Decision Log
 
