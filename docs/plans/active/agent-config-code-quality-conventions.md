@@ -305,6 +305,18 @@ Cases 1 and 4 were rerun with fresh agents against the revised `code-style`, sam
 +// `behind` are null (never false/0) when the subprocess could not answer. ...
 ```
 
+## Review
+
+### Findings
+
+- [x] `plan-review` inline rubric scoped the convention checks to "changed code" while `validation-loop.md` says "changed and directly affected code" — fixed (46f5567)
+- [x] `javascript-typescript` moved a shared pure helper "once several modules import it", a different threshold from `code-style`'s "when a second consumer actually needs it" — fixed (46f5567)
+- [x] Plan `### Verification results` called the sample "above" though `## Convention sample` follows it — fixed (46f5567)
+
+### Verification
+
+- Validation pass 1 at b9dca44 (fresh-context subagent): 3 `fix`, 0 `escalate`, 0 `base`. Follow-ups noted, not findings: `react`'s one-line comment rule could point at `code-style`; the "schema, mappers, view-model, ui" split examples carried over from the old text.
+
 ## Decision Log
 
 - **2026-10-17** — A comment the diff adds that only restates the code is a `fix` finding; harmless narration that was already there is not a finding. Chosen over treating all redundant comments as non-blocking, because review would otherwise never correct the most common complaint, and the rubric already says size never decides the class.
