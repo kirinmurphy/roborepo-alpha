@@ -200,7 +200,7 @@ roborepo plans validate 7e21olcs                              → 0 findings
 
 The new `plan-suite-skills` assertions were confirmed to fail when a convention check is dropped: removing "Data and state" from `plan-review` produced `plan-review check: missing "Data and state"`.
 
-No development server or build was started: the change is skill prose and a prose test, with no served, rendered, or CLI behavior to exercise. The authoring/review sample above is the runtime check of the guidance itself.
+No development server or build was started: the change is skill prose and a prose test, with no served, rendered, or CLI behavior to exercise. The authoring/review sample under `## Convention sample` is the runtime check of the guidance itself.
 
 ## Documentation impact
 

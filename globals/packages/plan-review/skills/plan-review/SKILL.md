@@ -116,9 +116,9 @@ of it. The human's review is the independent check; this step makes sure they re
   claim, not evidence), tests that assert observable outcomes for new behavior, docs of record that
   match the code, `## Not tested` entries an agent could run instead, each gate failure, and the
   constraints of every loaded paired skill where the diff falls under them. Its three convention
-  checks, Flow and cohesion, Data and state, and Comments and abstractions, apply to changed code: a
-  comment the diff adds that only restates the code is a fix, harmless narration that was already
-  there is not a finding, and length alone is never a finding.
+  checks, Flow and cohesion, Data and state, and Comments and abstractions, apply to changed and
+  directly affected code: a comment the diff adds that only restates the code is a fix, harmless
+  narration that was already there is not a finding, and length alone is never a finding.
 - Classify every finding by consequence, not size: **fix** when the right fix is clear and stays
   within the plan's requirements and specified contracts, code included; **escalate** when it
   chooses between real alternatives, changes requirements or a contract the plan did not specify,
