@@ -322,27 +322,32 @@ Cases 1 and 4 were rerun with fresh agents against the revised `code-style`, sam
 
 Findings:
 
-- [ ] Three harness comments give the removed 150-200 line guidance as the reason for their split: `scripts/harnesses/claude/index.mjs:4` (present tense, "to stay under"; now false), `mcp.mjs:2` and `hooks-withdraw.mjs:2` (history citing a rule that no longer exists). Outside the plan's named files and its no-application-code non-goal — escalated to the human
+- [x] Three harness comments give the removed 150-200 line guidance as the reason for their split: `scripts/harnesses/claude/index.mjs:4` (present tense, "to stay under"; now false), `mcp.mjs:2` and `hooks-withdraw.mjs:2` (history citing a rule that no longer exists). Escalated as outside the plan's named files; the human chose to reword them in review — fixed in review (0285b29)
+- [x] `scripts/harnesses/claude/hooks-withdraw.mjs:1` header, rewritten by 0285b29, still called the method a "blanket strip-all of RoboRepo-managed hooks"; it strips only package-injected hooks and package permission allow-entries — fixed in review (3148a25)
 
 Verification:
 
-- `roborepo plans sync-base` → up-to-date at 3a9d836 (base `main` 3f546af, matching `origin/main`)
+- `roborepo plans sync-base` → up-to-date at 3a9d836 (base `main` 3f546af, matching `origin/main`); after the fix, merged base `9da28ca` (plan-only change) at 66ea875
 - `npm run check` → passed at 3a9d836 ("CI checks passed"; 445 CLI tests, unit group, install collisions, package install, four clean-machine sandboxes). Local skips: Windows installer parity (no `pwsh`), portal UI suite (no Chromium); neither covers skill prose
 - `node scripts/test/run-checks.mjs --filter plan-suite-skills` → 1/1 passed
 - Acceptance grep over `code-style` and `javascript-typescript` → no matches
 - `git diff --check main...HEAD` → clean
 - Validator pass 1 (fresh-context subagent, merged result): 0 `fix`, 1 `escalate` (above), 0 `base`. Every acceptance criterion met; the two rubric texts agree; `[[ejsc769o]]` has not shipped and nothing of its scope was introduced. Follow-ups, not findings: `javascript-typescript` `## Types` "extract repeated values into named constants" is worth rechecking beside "repetition alone is not the benefit"; the named-exports bullet sits under `## Helpers and Abstractions` by position, not topic
+- Validator pass 2 at 66ea875: 1 `fix` (the `hooks-withdraw.mjs` header above), 0 `escalate`, 0 `base`
+- Validator pass 3 at 3148a25: clean. Follow-ups, not findings: `hooksWriteRemove` deletes all of `settings.permissions` (deny/ask included) when the last allow-entry goes, flagged as separate work; an orphaned comment block and a plan-phase citation in `scripts/harnesses/claude/index.mjs`
+- `npm run check` → passed at 3148a25 ("CI checks passed", 445 CLI tests); same two local skips (no `pwsh`, no Chromium)
+- `git diff --check main...HEAD` → clean at 3148a25
 - Base failures: none
 
 ### Result
 
-- Status: pending
-- Reviewed implementation commit: 3a9d8365c1a1223ea3ee2add3225f3fa1b448269
-- Base commit: 3f546afb59f8b01af232016ccb656faa583ae80d
+- Status: complete
+- Reviewed implementation commit: 3148a256483b9ad041e63e505a5b98d778bd340d
+- Base commit: 9da28cadac95596c25c3557403e56d16ff9fd361
 
 ### Approval
 
-- Decision: not requested (escalated finding open)
+- Decision: requested
 
 ## Decision Log
 
@@ -356,4 +361,5 @@ Verification:
 - **2026-10-17** — `react` left unchanged: "extract repeated markup into focused components" is React's unit of markup reuse, not a size or file-placement rule, and its comment line agrees with `code-style`. `tighten` left unchanged: it inherits `code-style` and its located, rule-citing finding format matches the rubric's location/cost/remedy requirement.
 - **2026-10-17** — The test keeps the four rubric phrases in one shared constant used by both rubric assertions, so the two texts cannot drift on them independently.
 - **2026-10-19** — After the sample, added one rule to `code-style` → `## Comments`: a comment's claim must match the code exactly and rest on something verified, and module headers are among the comments a change must recheck. Chosen over adding a rubric row for "unverified rationale", which would invite reviewers to demand evidence for every comment (the over-enforcement risk); the authoring guidance is where the invented reason originates.
+- **2026-10-20** — Plan review: the human chose to reword the three harness comments that cited the removed size guidance in this review ("yes pls continue" to the recommended option A), rather than leaving them as a follow-up, although the files lie outside the plan's named set.
 - **2026-10-19** — Did not iterate further on case 1's invented rationale after one rerun. More wording risks overfitting to one sample; the plan treats the sample as a sanity check, and the remaining gap is recorded under `## Convention sample`.
