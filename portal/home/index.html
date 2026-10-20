@@ -7,17 +7,18 @@
       <main id="main" class="inner home-main">
         {{LOADING}}
         <div id="home-harness-banner" class="home-harness-banner" hidden></div>
+        <div id="home-codex-hook-status" class="home-harness-banner" hidden></div>
         <div id="home-auto-discovery" class="home-auto-discovery" hidden></div>
         <section class="home-heading" aria-labelledby="home-title">
         <div class="home-title-group">
           <h1 id="home-title">Active Repos</h1>
+          <a href="#manage-repositories" id="manage-repositories" class="home-manage-link" aria-label="Manage Repos" title="Manage Repos" hidden>
+            <portal-icon name="edit" size="md"></portal-icon>
+          </a>
           <span id="home-sync-status" class="sync-status" role="status" aria-live="polite" hidden>
             <span class="sync-status-icon" aria-hidden="true"></span>
             <span data-slot="text">Synced</span>
           </span>
-        </div>
-        <div class="home-action-slot">
-          <a href="#manage-repositories" id="manage-repositories" hidden>Manage Repos</a>
         </div>
       </section>
       <div id="home-mock-disclaimer" class="home-mock-disclaimer" hidden>
@@ -49,7 +50,17 @@
         </div>
         <div class="repository-roots" data-slot="checkouts"></div>
         <div class="home-domain-rows" data-slot="domains"></div>
+        <div data-slot="cleanup-notice"></div>
       </article>
+    </template>
+    <!-- worktree-dialogs.js: the card-footer offer to turn on automatic worktree cleanup. -->
+    <template id="tpl-worktree-cleanup-notice">
+      <div class="worktree-cleanup-notice" role="note">
+        <portal-icon name="tree" size="sm" aria-hidden="true"></portal-icon>
+        <span class="worktree-cleanup-notice-text" data-slot="text"></span>
+        <button type="button" data-btn="secondary" data-action="enable">Turn on automatic cleanup</button>
+        <button type="button" data-btn="text" data-action="dismiss">Dismiss</button>
+      </div>
     </template>
     <template id="tpl-domain-row">
       <section class="home-domain-row">
@@ -57,7 +68,6 @@
         <div class="domain-body">
           <div class="domain-heading">
             <h4 data-slot="label"></h4>
-            <span class="domain-summary" data-slot="summary"></span>
             <a class="domain-link" data-slot="link"></a>
           </div>
           <div class="domain-details" data-slot="details" hidden></div>
@@ -67,11 +77,6 @@
     <template id="tpl-plan-item">
       <div class="plan-item">
         <button type="button" class="plan-title" data-slot="title"></button>
-        <span class="plan-completion">
-          <span class="plan-progress" data-slot="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"></span>
-          <span class="plan-percent" data-slot="percent"></span>
-          <span class="plan-complete-badge" data-slot="complete" hidden>done</span>
-        </span>
       </div>
     </template>
     <template id="tpl-domain-note">
@@ -98,6 +103,10 @@
       <div class="worktree-details">
         <div class="worktree-details-identity" data-slot="identity"></div>
         <ul class="worktree-details-facts" data-slot="facts" aria-label="Worktree status" hidden></ul>
+        <div class="worktree-details-actions" data-slot="actions" hidden>
+          <button type="button" data-action="stop-servers" hidden><portal-icon class="menu-item-icon" name="stop" size="sm" aria-hidden="true"></portal-icon>Stop Server</button>
+          <button type="button" class="menu-item-danger" data-action="delete-worktree"><portal-icon class="menu-item-icon" name="trash" size="sm" aria-hidden="true"></portal-icon>Delete Worktree</button>
+        </div>
       </div>
     </template>
     <template id="tpl-worktree-detail-row">
@@ -108,7 +117,7 @@
       </div>
     </template>
     <template id="tpl-worktree-detail-fact">
-      <li data-slot="text"></li>
+      <li class="worktree-detail-fact"><portal-icon data-slot="icon" size="sm" aria-hidden="true"></portal-icon><span data-slot="text"></span></li>
     </template>
     <template id="tpl-token-warnings">
       <ul class="token-warnings" aria-label="Token warnings"></ul>
@@ -122,6 +131,63 @@
         <a href="/runtime">Associate in Runtime</a>
       </aside>
     </template>
+
+    <dialog id="worktree-remove-dialog" data-dialog-size="md" aria-labelledby="worktree-remove-title">
+      <form method="dialog">
+        <div class="modal-head">
+          <h2 id="worktree-remove-title">Delete worktree</h2>
+          <portal-close-button data-close aria-label="Close"></portal-close-button>
+        </div>
+        <div class="modal-body">
+          <p class="worktree-remove-lead" data-slot="lead"></p>
+          <p class="worktree-remove-status" data-slot="status"></p>
+          <p class="worktree-remove-warning" data-slot="plan" hidden></p>
+          <p class="worktree-remove-warning" data-slot="running" hidden>Something is running in this worktree. It is stopped before the folder is deleted.</p>
+          <details class="worktree-remove-details">
+            <summary>Details and how to restore</summary>
+            <dl class="worktree-remove-facts">
+              <dt>Branch</dt><dd data-slot="branch"></dd>
+              <dt>Folder</dt><dd data-slot="folder"></dd>
+              <dt>Backup</dt><dd data-slot="archive"></dd>
+            </dl>
+            <p class="worktree-dialog-help">To bring it back, run:</p>
+            <pre class="worktree-remove-restore" data-slot="restore"></pre>
+            <p class="worktree-dialog-help">Copies of the branch on GitHub or any other remote are not touched.</p>
+          </details>
+          <div class="item-err" data-slot="error" hidden></div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" data-btn="secondary" data-close>Cancel</button>
+          <button type="button" data-btn="cta" data-slot="confirm">Delete worktree</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="worktree-cleanup-dialog" data-dialog-size="md" aria-labelledby="worktree-cleanup-title">
+      <form method="dialog">
+        <div class="modal-head">
+          <h2 id="worktree-cleanup-title">Turn on automatic cleanup</h2>
+          <portal-close-button data-close aria-label="Close"></portal-close-button>
+        </div>
+        <div class="modal-body">
+          <p class="worktree-dialog-help">After each merge or pull in <strong data-slot="repository"></strong>, RoboRepo removes worktrees whose branches have landed, when they are clean and inside this folder. Work that has not landed is never removed automatically.</p>
+          <label>
+            Worktree folder
+            <input data-slot="folder" required spellcheck="false" autocomplete="off" />
+          </label>
+          <p class="worktree-dialog-help" data-slot="folder-source" hidden>Set by <code>docs/plans/plans-config.json</code>.</p>
+          <div class="worktree-cleanup-foreign" data-slot="foreign" hidden>
+            <p>Another tool's <code>post-merge</code> hook is already installed at <code data-slot="hook"></code>. Add this line to it:</p>
+            <pre data-slot="line"></pre>
+          </div>
+          <div class="item-err" data-slot="error" hidden></div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" data-btn="secondary" data-close>Cancel</button>
+          <button type="button" data-btn="cta" data-slot="confirm">Turn on</button>
+        </div>
+      </form>
+    </dialog>
 
     {{PLAN_DRAWER}}
     {{REPOSITORY_SOURCES}}

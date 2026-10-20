@@ -4,7 +4,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { repoRoot, harnessHome } from "./paths.mjs";
 import { isMainModule } from "./roots.mjs";
-import { installStatePath, presetsStatePath } from "./state-paths.mjs";
+import { installStatePath, presetsStatePath, recordAppRoot } from "./state-paths.mjs";
 import { readConfigSnapshot, buildBehaviorView } from "./config.mjs";
 import { mutatePackage, setBehaviorBucket } from "./config-mutate.mjs";
 import { renderHomeRules, removeHomeRules, isRenderedRulesOutput } from "./rules-render.mjs";
@@ -22,7 +22,6 @@ const ANSI = process.stdout.isTTY && !process.env.ROBOREPO_NO_COLOR
 
 // The forced onboarding gate that used to live here (maybeRunPresetOnboarding) is gone: first-run
 // behavior is now `roborepo init`, routed from main.mjs via scripts/cli/first-run-routing.mjs.
-// The old gate's body is recorded in docs/plans/completed/onboarding-reinstatement.md.
 
 export async function presetsCommand(rest) {
   const [sub, ...args] = rest;
@@ -64,10 +63,10 @@ export async function bundleCommand(args) {
   }
 }
 
-// Interactive onboarding, organized around the four user-facing behavior sections that the /config
+// Interactive onboarding, organized around the four user-facing behavior sections that the /agents
 // web portal shows (Token Optimization, Commands, Code Conventions, Permissions) rather than the
 // internal bundle list. Each toggleable item drives the same config-mutate primitives the web POST
-// endpoints use, so terminal and web stay in lockstep. Permissions are read-only here (Phase 2).
+// endpoints use, so terminal and web stay in lockstep. Permissions are read-only here.
 // Non-TTY (headless) keeps applying the default configuration, the same set install wires up.
 export async function presetsOnboard(args) {
   rejectUnknownFlags(args, new Set(["--menu", "--launch-portal"]));
@@ -136,7 +135,7 @@ function isToggleableItem(section, item) {
   return false;
 }
 
-// Translate the live /config behavior view into wizard steps, in manifest order, then add the
+// Translate the live /agents behavior view into wizard steps, in manifest order, then add the
 // Permissions panel. The wizard re-reads state after each toggle, so marks always reflect truth.
 export function buildOnboardSteps({ showWebNotice = false } = {}) {
   const view = buildBehaviorView(readConfigSnapshot());
@@ -545,6 +544,8 @@ function withDependencies(selected) {
 }
 
 function applySelection(selected, catalog, { reconcile }) {
+  // Bundles install hooks that locate the platform manifest through the recorded app root.
+  recordAppRoot();
   const rows = manifestRowsByKey();
   const policy = readInstallPolicy();
   for (const bundle of catalog.bundles) {
@@ -726,7 +727,7 @@ function restorePreInstallBackup(row) {
 }
 
 function removeRenderedRulesRow(row) {
-  // Unlink a legacy repo symlink if present (pre-Phase-3 installs).
+  // Unlink a legacy repo symlink if present (older installs).
   const link = readlink(row.homeAbs);
   if (link && resolvesInsideRepo(row.homeAbs)) {
     fs.unlinkSync(row.homeAbs);

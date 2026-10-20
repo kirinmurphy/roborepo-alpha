@@ -32,16 +32,16 @@ export const configRoutes = defineRoutes([
     handler: (req, res, { handlers }) => {
       readJsonBody(req, (body, err) => {
         if (err) return send(res, 400, "application/json", JSON.stringify({ error: "invalid JSON body" }));
-        try {
-          const result = handlers.refreshHarnesses();
-          send(res, 200, "application/json", JSON.stringify({
+        Promise.resolve()
+          .then(() => handlers.refreshHarnesses())
+          .then((result) => send(res, 200, "application/json", JSON.stringify({
             ok: true,
             detected: result.detected,
+            newlyEnabled: result.newlyEnabled ?? [],
+            applied: result.applied ?? null,
             config: handlers.loadConfig(),
-          }));
-        } catch (error) {
-          send(res, 400, "application/json", JSON.stringify({ error: String(error?.message || error) }));
-        }
+          })))
+          .catch((error) => send(res, 400, "application/json", JSON.stringify({ error: String(error?.message || error) })));
       });
       return true;
     },
@@ -115,6 +115,16 @@ export const configRoutes = defineRoutes([
     },
   },
   {
+    path: "/api/config/hooks/codex/status",
+    handler: (req, res, { handlers }) => {
+      Promise.resolve()
+        .then(() => handlers.loadCodexHookStatus())
+        .then((status) => send(res, 200, "application/json", JSON.stringify(status)))
+        .catch(() => send(res, 200, "application/json", JSON.stringify({ state: "unknown", installed: 0 })));
+      return true;
+    },
+  },
+  {
     path: "/api/config",
     handler: (req, res, { handlers }) => {
       send(res, 200, "application/json", JSON.stringify(handlers.loadConfig()));
@@ -123,7 +133,7 @@ export const configRoutes = defineRoutes([
   },
   {
     // Read-only: returns the full source that defines a tool (skill/command/rules/hooks) for the
-    // /config click-to-inspect popup. loadConfigSource whitelists kind+id against the catalog.
+    // /agents click-to-inspect popup. loadConfigSource whitelists kind+id against the catalog.
     path: "/api/config/source",
     handler: (req, res, { qs, handlers }) => {
       const params = new URLSearchParams(qs);

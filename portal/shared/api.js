@@ -11,8 +11,12 @@ export async function portalGetJson(path) {
   const res = await fetch(path);
   const data = await res.json();
   if (!res.ok) {
-    const err = new Error(data.error || data.message || "request failed");
+    // Same two error shapes as portalPostJson below: a structured { code, message } (e.g.
+    // REPOSITORY_SCOPE_UNAVAILABLE from a scoped data route) or a flat string.
+    const isStructured = data.error && typeof data.error === "object";
+    const err = new Error(isStructured ? data.error.message : data.error || data.message || "request failed");
     err.status = res.status;
+    if (isStructured) err.code = data.error.code;
     throw err;
   }
   return data;

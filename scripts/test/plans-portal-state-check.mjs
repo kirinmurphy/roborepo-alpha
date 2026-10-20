@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import fs from "node:fs";
 import {
   isVisible,
   replaceRecord,
@@ -8,19 +7,22 @@ import {
   matchesFilters,
   resolveBlockers,
   resolveBlocking,
-  lifecycleFindingGroups,
-  canRepairLifecycleError,
+  mergedPlanBranches,
   taskProgressDisplay,
   completionRatio,
-  isNotStarted,
   activeCompletionSort,
-  completionBadgeColor,
   sortForLifecycle,
   planSort,
   FILTER_DEFAULTS,
+  FILTER_IDS,
+  FILTER_OPTION_DEFS,
+  lifecycleFromSearchParams,
 } from "../../portal/plans/state.js";
+import { isLifecycle, lifecycleActions, lifecycleLabel, lifecycleTabs, setLifecycleModel, showsPriority } from "../../portal/plans/lifecycle.js";
+import { primaryPlanAction, recommendedPlanCommand } from "../../portal/plans/plan-actions.js";
+import { LIFECYCLE_MODEL, lifecycleProjection } from "../../modules/plan-suite/lifecycle-manifest.mjs";
 
-// Phase 9 of docs/plans/active/plan-lifecycle-toggle-control.md: pure mutation-orchestration
+// Pure mutation-orchestration
 // helpers (isVisible, replaceRecord, filteredListActionFor) have no DOM dependency, so this test
 // drives them directly the same way telemetry-portal-state-check.mjs exercises telemetry's URL
 // state helpers — no browser needed.
@@ -31,8 +33,7 @@ testPriorityChangeUnderAllKeepsVisible();
 testRecordNotPreviouslyVisibleStaysInvisible();
 testReplaceRecordSwapsOldKeyForNew();
 testReplaceRecordLeavesOtherRecordsUntouched();
-testFilteredListActionForLifecycleWhenFilterMatchesPreviousValue();
-testFilteredListActionForLifecycleNullWhenFilterDoesNotMatch();
+testFilteredListActionForLifecycleReturnsNull();
 testFilteredListActionForPriorityWhenFilterMatchesPreviousValue();
 testFilteredListActionForPriorityNullWhenFilterDoesNotMatch();
 testFilteredListActionForUnrelatedPropertyReturnsNull();
@@ -42,22 +43,67 @@ testResolveBlockersScopedToSameRepository();
 testResolveBlockingFindsReverseReferences();
 testResolveBlockingEmptyWhenNoId();
 testResolveBlockingExcludesSelf();
-testFindingGroupsPartitionWithoutLoss();
-testFindingGroupsFallBackToDetailStrings();
-testFindingGroupsHandleAnErrorWithNeither();
-testEveryDisplayedFindingAppearsInTheRepairPrompt();
-testCanRepairRequiresANonEmptyPrompt();
-testLifecycleOptionsAreNeverDisabled();
+testMergedPlanBranchesOnlyIncludesLandedActivePlans();
 testTaskProgressDisplayByLifecycleAndProgress();
 testCompletionRatioIsNullWithoutTasks();
-testNotStartedCoversNoTasksAndNoneComplete();
 testActiveSortOrdersMostCompleteFirst();
 testActiveSortSinksUnstartedAndUntrackedToTheBottom();
 testActiveSortFallsBackToPlanSortOnTies();
 testSortForLifecycleOnlyChangesActive();
-testCompletionBadgeRampEndpointsAndBands();
-testCompleteStateSuppressesTheNextAction();
-console.log("ok: plans portal state (mutation orchestration helpers) checks passed");
+testLifecycleModelComesFromTheSnapshot();
+testRecommendedCommandFollowsTheLifecycle();
+testFilterNamesNeverReadAsLifecycleOrApproval();
+console.log("ok: plans portal state checks passed");
+
+// The portal holds no lifecycle list of its own: everything below comes from the projection the
+// server publishes in the plans snapshot, built from the same manifest the domain module reads.
+function testLifecycleModelComesFromTheSnapshot() {
+  setLifecycleModel(null);
+  assert.equal(lifecycleFromSearchParams(new URLSearchParams("lifecycle=review")), "active", "before a snapshot, every tab falls back");
+  assert.equal(lifecycleLabel("review"), "review", "an id stands in for its label until the model arrives");
+  assert.deepEqual(lifecycleActions("review"), []);
+
+  setLifecycleModel(JSON.parse(JSON.stringify(lifecycleProjection(LIFECYCLE_MODEL))));
+  assert.equal(lifecycleFromSearchParams(new URLSearchParams("lifecycle=review")), "review");
+  assert.equal(lifecycleFromSearchParams(new URLSearchParams("lifecycle=nonsense")), "active");
+  assert.deepEqual(lifecycleTabs().filter((tab) => !tab.secondary).map((tab) => tab.id), ["backlog", "ready", "active", "review"], "Ready and Review are primary tabs");
+  assert.deepEqual(lifecycleTabs().filter((tab) => tab.secondary).map((tab) => tab.id), ["completed", "archived", "unclassified"]);
+  assert.equal(lifecycleLabel("ready"), "Ready");
+  assert.ok(isLifecycle("unclassified"));
+  assert.equal(showsPriority("review"), true);
+  assert.equal(showsPriority("completed"), false);
+  assert.deepEqual(lifecycleActions("review").map((action) => action.label), ["Review", "Fix findings", "Close after merge", "Archive"]);
+}
+
+function testRecommendedCommandFollowsTheLifecycle() {
+  setLifecycleModel(lifecycleProjection(LIFECYCLE_MODEL));
+  const plan = (lifecycle, extra = {}) => ({ ...record({ lifecycle }).plan, ...extra });
+  const tasks = (total, complete) => ({ taskCounts: { total, complete, remaining: total - complete } });
+
+  assert.deepEqual(primaryPlanAction(plan("backlog")), { command: "plan-promote", label: "Promote" });
+  assert.deepEqual(primaryPlanAction(plan("ready")), { command: "plan-execute", label: "Start" });
+  assert.deepEqual(primaryPlanAction(plan("active", { reviewState: "current", ...tasks(3, 1) })), { command: "plan-execute", label: "Continue" }, "unfinished work continues");
+  assert.equal(recommendedPlanCommand(plan("active", tasks(3, 3))), "plan-review", "finished tasks lead to review");
+  assert.equal(recommendedPlanCommand(plan("active", { ...tasks(3, 2), notTestedOpen: 1 })), "plan-review", "an open Not tested entry does not hold back review");
+  assert.equal(recommendedPlanCommand(plan("active", { ...tasks(3, 3), blockers: ["x"] })), null, "a blocked plan has no recommendation");
+
+  assert.deepEqual(primaryPlanAction(plan("review", { qa: { openFindings: 2, decision: "" } })), { command: "plan-review", label: "Review" }, "open findings are fixed by /plan-review in its own session");
+  assert.deepEqual(primaryPlanAction(plan("review", { qa: { openFindings: 0, decision: "approved" } })), { command: "plan-close", label: "Close after merge" });
+  assert.deepEqual(primaryPlanAction(plan("review", { qa: { openFindings: 0, decision: "" } })), { command: "plan-review", label: "Review" });
+  assert.equal(primaryPlanAction(plan("completed")), null);
+  assert.equal(primaryPlanAction(plan("archived")), null);
+}
+
+// Structure and plan freshness used to be shown as "ready"/"draft" and as a "review" state, which a
+// reader would take for the Ready and Review lifecycles or for a human's approval.
+function testFilterNamesNeverReadAsLifecycleOrApproval() {
+  assert.ok(!FILTER_IDS.includes("readiness") && !FILTER_IDS.includes("review"));
+  for (const id of ["structure", "freshness"]) {
+    for (const [, label] of FILTER_OPTION_DEFS[id]()) {
+      assert.doesNotMatch(label, /\bready\b|\breview(ed)?\b|approv/i, `${id} option "${label}" must not read as a lifecycle or an approval`);
+    }
+  }
+}
 
 function record({ key = "k1", lifecycle = "backlog", priority = "high", id = "plan-1", repositoryId = "r1", blockers = [], taskCounts = { total: 0, complete: 0, remaining: 0 } } = {}) {
   return {
@@ -140,19 +186,11 @@ function testReplaceRecordLeavesOtherRecordsUntouched() {
   assert.equal(replaced[0], other, "an unrelated record must be returned as the same reference, not rebuilt");
 }
 
-function testFilteredListActionForLifecycleWhenFilterMatchesPreviousValue() {
+function testFilteredListActionForLifecycleReturnsNull() {
   const change = { property: "lifecycle", previousValue: "backlog", newValue: "active" };
   const state = { selectedLifecycle: "backlog", filters: { ...FILTER_DEFAULTS } };
-  const action = filteredListActionFor(change, state);
-  assert.ok(action, "expected an action when the current lifecycle tab equals change.previousValue");
-  assert.equal(action.type, "lifecycle");
-  assert.equal(action.value, "active");
-}
-
-function testFilteredListActionForLifecycleNullWhenFilterDoesNotMatch() {
-  const change = { property: "lifecycle", previousValue: "backlog", newValue: "active" };
-  const state = { selectedLifecycle: "completed", filters: { ...FILTER_DEFAULTS } };
-  assert.equal(filteredListActionFor(change, state), null, "no action expected when the current tab does not match previousValue");
+  assert.equal(filteredListActionFor(change, state), null,
+    "lifecycle changes happen through plan-suite commands, not the page's mutation toast");
 }
 
 function testFilteredListActionForPriorityWhenFilterMatchesPreviousValue() {
@@ -228,77 +266,32 @@ function testResolveBlockingExcludesSelf() {
   assert.deepEqual(resolveBlocking(selfBlocked, [selfBlocked]), []);
 }
 
-// --- lifecycle readiness errors ---------------------------------------------------------------
-
-// The dialog renders these two groups and nothing else, so a finding that falls out of both would
-// silently never reach the user.
-function testFindingGroupsPartitionWithoutLoss() {
-  const err = {
-    findings: [
-      { code: "UNCHECKED_REQUIRED_TASKS", message: "3 remain.", severity: "blocking" },
-      { code: "MISSING_VERIFICATION", message: "No verification.", severity: "advisory" },
-      { code: "NEXT_ACTION_REMAINS", message: "Still has next_action.", severity: "blocking" },
+// The Plans page joins active plans with Runtime worktrees to show which work has landed.
+function testMergedPlanBranchesOnlyIncludesLandedActivePlans() {
+  const overview = {
+    repositories: [
+      {
+        domains: {
+          runtime: { data: { checkouts: [
+            { rootId: "landed-root", worktreeState: "landed", mergedInto: "main" },
+            { rootId: "open-root", worktreeState: "active" },
+          ] } },
+          plans: { data: {
+            active: [
+              { key: "landed-plan", checkoutRootId: "landed-root" },
+              { key: "open-plan", checkoutRootId: "open-root" },
+              { key: "unmatched-plan", checkoutRootId: "missing-root" },
+            ],
+            completed: [{ key: "completed-plan", checkoutRootId: "landed-root" }],
+          } },
+        },
+      },
     ],
   };
-  const { blocking, advisory } = lifecycleFindingGroups(err);
-  assert.equal(blocking.length + advisory.length, err.findings.length,
-    "every finding lands in exactly one group — the dialog shows nothing else");
-  assert.deepEqual(blocking.map((item) => item.code), ["UNCHECKED_REQUIRED_TASKS", "NEXT_ACTION_REMAINS"],
-    "blocking findings keep their original relative order");
-  assert.deepEqual(advisory.map((item) => item.code), ["MISSING_VERIFICATION"],
-    "advisory findings are separated out rather than dropped");
+  assert.deepEqual([...mergedPlanBranches(overview)], [["landed-plan", { into: "main" }]]);
+  assert.deepEqual([...mergedPlanBranches(null)], [], "an unavailable overview has no merged plans");
 }
 
-// Older routes and non-plans domain errors still send plain strings; those must render too.
-function testFindingGroupsFallBackToDetailStrings() {
-  const { blocking, advisory } = lifecycleFindingGroups({ details: ["Something is wrong.", "So is this."] });
-  assert.equal(blocking.length, 2, "detail strings are shown rather than discarded when findings are absent");
-  assert.equal(advisory.length, 0, "unclassified detail strings default to the must-fix group");
-  assert.equal(blocking[0].message, "Something is wrong.", "the string becomes the finding's message");
-}
-
-function testFindingGroupsHandleAnErrorWithNeither() {
-  const { blocking, advisory } = lifecycleFindingGroups({ message: "boom" });
-  assert.deepEqual([blocking, advisory], [[], []], "an error with no findings or details renders no list at all");
-}
-
-// The plan doc's "copies a prompt matching the current findings" — the actual invariant behind
-// that check, testable here even though the clipboard call itself is not.
-function testEveryDisplayedFindingAppearsInTheRepairPrompt() {
-  const err = {
-    findings: [
-      { code: "UNCHECKED_REQUIRED_TASKS", message: "3 required tasks remain unchecked.", severity: "blocking" },
-      { code: "MISSING_VERIFICATION", message: "Missing Verification section.", severity: "advisory" },
-    ],
-    repair: {
-      prompt: [
-        "/plan-write",
-        "1. 3 required tasks remain unchecked.",
-        "2. Missing Verification section.",
-      ].join("\n"),
-    },
-  };
-  const { blocking, advisory } = lifecycleFindingGroups(err);
-  for (const item of [...blocking, ...advisory]) {
-    assert.ok(err.repair.prompt.includes(item.message),
-      `the copied prompt must describe every finding on screen; missing: ${item.code}`);
-  }
-}
-
-function testCanRepairRequiresANonEmptyPrompt() {
-  assert.equal(canRepairLifecycleError({ repair: { prompt: "/plan-write" } }), true,
-    "a usable prompt enables the copy button");
-  assert.equal(canRepairLifecycleError({ repair: { prompt: "" } }), false,
-    "an empty prompt must not offer a copy button that yields nothing");
-  assert.equal(canRepairLifecycleError({ details: ["x"] }), false,
-    "errors without a repair descriptor (stale, collision) offer no prompt");
-  assert.equal(canRepairLifecycleError(undefined), false, "a missing error is not repairable");
-}
-
-// The plan doc requires lifecycle options to stay selectable until the server rejects a submitted
-// move, so a stale browser snapshot can never pre-empt the authoritative finding set. Nothing
-// disables them today; this asserts it stays that way, since the regression would be invisible
-// in every other test here.
 // Progress is shown when it says something the lifecycle does not already imply. "Nothing started"
 // is the default for backlog and for a completed plan with no task list, so it stays quiet there;
 // started work and a finished list are never the default and always show.
@@ -312,37 +305,20 @@ function testTaskProgressDisplayByLifecycleAndProgress() {
 
   assert.equal(display("backlog", none), "none", "an empty backlog plan shows nothing");
   assert.equal(display("backlog", unstarted), "none", "unstarted backlog work is the default state");
-  assert.equal(display("backlog", partial), "bar", "started work is not the default anywhere");
+  assert.equal(display("backlog", partial), "progress", "started work is not the default anywhere");
   assert.equal(display("backlog", done), "complete");
 
-  assert.equal(display("active", none), "bar", "active always shows progress, even with no tasks");
-  assert.equal(display("active", unstarted), "bar");
-  assert.equal(display("active", partial), "bar");
+  assert.equal(display("active", none), "progress", "active always shows progress, even with no tasks");
+  assert.equal(display("active", unstarted), "progress");
+  assert.equal(display("active", partial), "progress");
   assert.equal(display("active", done), "complete");
 
   assert.equal(display("completed", none), "none");
-  assert.equal(display("completed", partial), "bar", "a completed plan with open tasks must not look finished");
+  assert.equal(display("completed", partial), "progress", "a completed plan with open tasks must not look finished");
   assert.equal(display("completed", done), "complete");
 
-  assert.equal(display("archived", partial), "bar");
+  assert.equal(display("archived", partial), "progress");
   assert.equal(display("archived", none), "none");
-}
-
-// A "next up" line beside an "all tasks complete" badge is a contradiction, so the element hides
-// the next-action row in exactly the state that renders the badge.
-function testCompleteStateSuppressesTheNextAction() {
-  const source = fs.readFileSync(new URL("../../portal/plans/elements/plan-status.js", import.meta.url), "utf8");
-  assert.match(source, /\[data-slot=next-row\]"\)\.hidden = progress !== "bar"/,
-    "the next-action row must be hidden whenever progress is not the in-progress bar");
-  assert.match(source, /\[data-slot=complete-row\]"\)\.hidden = progress !== "complete"/);
-  assert.match(source, /\[data-slot=progress-row\]"\)\.hidden = progress !== "bar"/);
-}
-
-function testLifecycleOptionsAreNeverDisabled() {
-  const source = fs.readFileSync(new URL("../../portal/plans/elements/plan-status.js", import.meta.url), "utf8");
-  const dropdown = source.slice(source.indexOf("renderLifecycleDropdown"));
-  assert.ok(!/\bdisabled\b/.test(dropdown.slice(0, dropdown.indexOf("\n  }"))),
-    "the lifecycle dropdown must never disable itself from snapshot warnings — only a submitted move may be rejected");
 }
 
 // --- Active-tab completion ordering ---------------------------------------------------------
@@ -362,13 +338,6 @@ function testCompletionRatioIsNullWithoutTasks() {
   assert.equal(completionRatio(record({ taskCounts: counts(0, 10) }).plan), 0);
   assert.equal(completionRatio(record({ taskCounts: counts(5, 10) }).plan), 0.5);
   assert.equal(completionRatio(record({ taskCounts: counts(9, 9) }).plan), 1);
-}
-
-function testNotStartedCoversNoTasksAndNoneComplete() {
-  assert.equal(isNotStarted(record({ taskCounts: counts(0, 0) }).plan), true, "no checklist reads as not started");
-  assert.equal(isNotStarted(record({ taskCounts: counts(0, 10) }).plan), true, "zero of ten is not started");
-  assert.equal(isNotStarted(record({ taskCounts: counts(1, 10) }).plan), false, "one done means started");
-  assert.equal(isNotStarted(record({ taskCounts: counts(10, 10) }).plan), false);
 }
 
 function order(records) {
@@ -404,26 +373,5 @@ function testSortForLifecycleOnlyChangesActive() {
   for (const lifecycle of ["backlog", "completed", "archived", "unclassified"]) {
     assert.equal(sortForLifecycle(lifecycle), planSort,
       `${lifecycle} must keep the shared sort — completion ordering is Active-only`);
-  }
-}
-
-function testCompletionBadgeRampEndpointsAndBands() {
-  const gray = completionBadgeColor(0);
-  const green = completionBadgeColor(1);
-  assert.equal(completionBadgeColor(null), gray, "no checklist must read as the neutral 0% badge");
-  assert.equal(completionBadgeColor(0.9), green, "90% is the first stop that looks finished");
-  assert.equal(completionBadgeColor(0.95), green);
-  assert.notEqual(completionBadgeColor(0.85), green,
-    "85% must stay distinguishable from 100% — flooring into bands is what prevents that collision");
-  assert.notEqual(completionBadgeColor(0.5), gray, "a half-done plan must not look untouched");
-  assert.match(green, /^rgb\(\d+,\d+,\d+\)$/, "the badge color must be a plain rgb() string");
-
-  // Monotonic: every 10% band must be at least as green as the one below it, never backwards.
-  let previous = -1;
-  for (let step = 0; step <= 10; step += 1) {
-    const [r, g] = completionBadgeColor(step / 10).match(/\d+/g).map(Number);
-    const greenness = g - r;
-    assert.ok(greenness >= previous, `band ${step * 10}% must not regress toward gray`);
-    previous = greenness;
   }
 }

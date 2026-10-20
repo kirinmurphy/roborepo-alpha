@@ -8,7 +8,6 @@ import { fileURLToPath } from "node:url";
 import {
   buildPlanSnapshot,
   buildPrompt,
-  movePlanLifecycle,
   parseFrontmatter,
   readPlanDocument,
   updatePlanPriority,
@@ -73,10 +72,8 @@ flowchart LR
 
 Run targeted checks.
 `);
-  // Fully-ready plan: satisfies backlog, active, completed, and archived destination
-  // requirements at once (all tasks checked, has a Verification section, next_action can be
-  // cleared before the archived-destination assertion) — used to exercise movePlanLifecycle
-  // across every canonical source/destination pair without hand-writing 12 fixtures.
+  // A fully-ready plan: every task checked and a Verification section, so the scanner reports no
+  // lifecycle findings for it. Lifecycle moves are covered by plan-lifecycle-transitions-check.mjs.
   fs.writeFileSync(path.join(repo, "docs", "plans", "backlog", "movable.md"), `---
 id: movable-plan
 priority: medium
@@ -99,7 +96,7 @@ Used only by plan-suite-check.mjs.
 
 ## Goals
 
-Prove movePlanLifecycle works for every canonical destination.
+Give the scanner a plan with no open work.
 
 ## Proposed design
 
@@ -190,12 +187,13 @@ Run targeted checks.
 
   // A prompt opens with one atomic suite command and never a mode argument; anything that is not a
   // suite command yields a context-only prompt rather than a slash line the agent cannot run.
-  const prompt = buildPrompt("plan-start", [ready], { mode: "repository-aware" });
-  assert.match(prompt, /^\/plan-start\n/);
+  const prompt = buildPrompt("plan-execute", [ready], { mode: "repository-aware" });
+  assert.match(prompt, /^\/plan-execute\n/);
   assert.match(prompt, /docs\/plans\/backlog\/ready.md/);
   const portablePrompt = buildPrompt(null, [ready], { mode: "portable" });
   assert.match(portablePrompt, /^Use this bounded portable plan context/);
   assert.doesNotMatch(buildPrompt("start", [ready]), /^\//m, "a retired mode name produces no slash command");
+  assert.doesNotMatch(buildPrompt("plan-start", [ready]), /^\//m, "the retired /plan-start command produces no slash command");
 
   // Both YAML list forms are accepted. Inline arrays used to be detected, reported, and discarded,
   // which silently emptied the field — so a valid reference written in valid YAML vanished from the
@@ -317,410 +315,6 @@ Run targeted checks.
   const noPriorityOnDisk = fs.readFileSync(path.join(repo, "docs", "plans", "backlog", "no-priority.md"), "utf8");
   assert.match(noPriorityOnDisk, /priority: high/);
 
-  // --- movePlanLifecycle: file movement, validation, and stale-conflict handling -----------------
-  const moveSnapshot = buildPlanSnapshot({ stateRoot, packageState: { available: true, enabled: false, status: "disabled" } });
-  const movable = moveSnapshot.plans.find((item) => item.plan.id === "movable-plan");
-  assert.equal(movable.plan.lifecycle, "backlog");
-
-  // Unclassified is never a valid destination.
-  assert.throws(() => movePlanLifecycle(moveSnapshot, {
-    id: movable.plan.id, key: movable.key, lifecycle: "unclassified", expectedLifecycle: "backlog", mtimeMs: movable.mtimeMs,
-  }), (err) => err.code === "INVALID_CHANGE");
-
-  // Same-lifecycle move is rejected rather than treated as a silent no-op.
-  assert.throws(() => movePlanLifecycle(moveSnapshot, {
-    id: movable.plan.id, key: movable.key, lifecycle: "backlog", expectedLifecycle: "backlog", mtimeMs: movable.mtimeMs,
-  }), (err) => err.code === "INVALID_CHANGE");
-
-  // Full tour: backlog -> active -> completed -> archived -> backlog. Each move rebuilds the
-  // snapshot from disk first, mirroring how the CLI layer re-resolves cachedSnapshot per request
-  // (movePlanLifecycle never mutates the snapshot object it's given — the caller is expected to
-  // treat it as a point-in-time read, exactly like a real portal request cycle).
-  let current = movable;
-  const tour = ["active", "completed", "archived", "backlog"];
-  for (const destination of tour) {
-    const before = current;
-    // Completed forbids next_action; archived forbids it too. Backlog/active require it. Patch
-    // the on-disk field immediately before each hop so the fixture satisfies whichever
-    // destination is next, mirroring a real user editing the doc between lifecycle moves.
-    const currentPath = path.join(repo, "docs", "plans", before.plan.lifecycle, "movable.md");
-    const currentMarkdown = fs.readFileSync(currentPath, "utf8");
-    const needsNextAction = destination === "active" || destination === "backlog";
-    fs.writeFileSync(currentPath, writeFrontmatterField(currentMarkdown, "next_action", needsNextAction ? "Move this plan around in tests." : ""));
-    const tourSnapshot = buildPlanSnapshot({ stateRoot, packageState: { available: true, enabled: false, status: "disabled" } });
-    const refreshedBefore = tourSnapshot.plans.find((item) => item.plan.id === "movable-plan");
-    const moveResult = movePlanLifecycle(tourSnapshot, {
-      id: refreshedBefore.plan.id,
-      key: refreshedBefore.key,
-      lifecycle: destination,
-      expectedLifecycle: refreshedBefore.plan.lifecycle,
-      mtimeMs: refreshedBefore.mtimeMs,
-      repositoryId: refreshedBefore.repository.id,
-    });
-    assert.equal(moveResult.change.property, "lifecycle");
-    assert.equal(moveResult.change.previousValue, before.plan.lifecycle);
-    assert.equal(moveResult.change.newValue, destination);
-    assert.equal(moveResult.record.plan.lifecycle, destination);
-    assert.equal(moveResult.record.plan.id, "movable-plan", "stable id unchanged after movement");
-    assert.notEqual(moveResult.record.key, before.key, "key changed after movement");
-    assert.match(moveResult.record.plan.relativePath, new RegExp(`^docs/plans/${destination}/movable\\.md$`));
-    assert.ok(!fs.existsSync(path.join(repo, "docs", "plans", before.plan.lifecycle, "movable.md")), "source removed");
-    assert.ok(fs.existsSync(path.join(repo, "docs", "plans", destination, "movable.md")), "destination created");
-    const movedOnDisk = fs.readFileSync(path.join(repo, "docs", "plans", destination, "movable.md"), "utf8");
-    assert.match(movedOnDisk, /id: movable-plan/, "frontmatter unchanged by lifecycle movement");
-    // openTasks is the list snapshot's active-only payload, feeding the portal's All Open Tasks
-    // dialog without a per-plan fetch. The tour crosses the active boundary in both directions,
-    // which is what makes it the right place to pin the scoping: carrying task text for every
-    // lifecycle would roughly triple the field's cost to serve a view that only reads active.
-    // This fixture's only task is `- [x]`, so it also pins the completed-item filter: even on
-    // active, a finished task must not appear. The open-task case is covered by
-    // testActivePlanShipsItsOpenTaskText below, against a fixture that has one.
-    const openTasks = moveResult.record.plan.openTasks;
-    assert.ok(Array.isArray(openTasks), "every plan record must carry an openTasks array");
-    assert.equal(openTasks.length, 0,
-      destination === "active"
-        ? "a completed task must be excluded from openTasks even on active"
-        : `${destination} must not carry task text — the dialog is active-only`);
-    current = moveResult.record;
-  }
-
-  // Unclassified source -> canonical destination.
-  const rootPlanBefore = moveSnapshot.plans.find((item) => item.plan.relativePath.endsWith("root.md"));
-  assert.equal(rootPlanBefore.plan.lifecycle, "unclassified");
-  const rootMoveResult = movePlanLifecycle(moveSnapshot, {
-    id: rootPlanBefore.plan.id || undefined,
-    key: rootPlanBefore.key,
-    lifecycle: "backlog",
-    expectedLifecycle: "unclassified",
-    mtimeMs: rootPlanBefore.mtimeMs,
-    skipDestinationValidation: true, // root.md has no frontmatter/headings at all
-  });
-  assert.equal(rootMoveResult.record.plan.lifecycle, "backlog");
-  assert.ok(fs.existsSync(path.join(repo, "docs", "plans", "backlog", "root.md")));
-
-  // Destination collision: pre-occupy the target path, confirm neither file moves.
-  fs.writeFileSync(path.join(repo, "docs", "plans", "backlog", "collide-active.md"), "# placeholder\n");
-  fs.mkdirSync(path.join(repo, "docs", "plans", "active"), { recursive: true });
-  fs.writeFileSync(path.join(repo, "docs", "plans", "active", "collide-active.md"), "# occupies destination\n");
-  const collisionSnapshot = buildPlanSnapshot({ stateRoot, packageState: { available: true, enabled: false, status: "disabled" } });
-  const collideSource = collisionSnapshot.plans.find((item) => item.plan.relativePath.endsWith("collide-active.md") && item.plan.lifecycle === "backlog");
-  assert.throws(() => movePlanLifecycle(collisionSnapshot, {
-    id: collideSource.plan.id || undefined,
-    key: collideSource.key,
-    lifecycle: "active",
-    expectedLifecycle: "backlog",
-    mtimeMs: collideSource.mtimeMs,
-    skipDestinationValidation: true,
-  }), (err) => err.code === "DESTINATION_EXISTS");
-  assert.ok(fs.existsSync(path.join(repo, "docs", "plans", "backlog", "collide-active.md")), "source untouched after rejected collision");
-  assert.match(fs.readFileSync(path.join(repo, "docs", "plans", "active", "collide-active.md"), "utf8"), /occupies destination/, "destination untouched after rejected collision");
-
-  // Stale conflicts: mtime, lifecycle, and key/path (via a wrong id+key combo) all rejected.
-  const staleSnapshot = buildPlanSnapshot({ stateRoot, packageState: { available: true, enabled: false, status: "disabled" } });
-  const staleSource = staleSnapshot.plans.find((item) => item.plan.id === "ready-plan");
-  assert.throws(() => movePlanLifecycle(staleSnapshot, {
-    id: staleSource.plan.id, key: staleSource.key, lifecycle: "active", expectedLifecycle: "backlog", mtimeMs: staleSource.mtimeMs - 1,
-  }), (err) => err.code === "STALE_PLAN");
-  assert.throws(() => movePlanLifecycle(staleSnapshot, {
-    id: staleSource.plan.id, key: staleSource.key, lifecycle: "active", expectedLifecycle: "active" /* wrong: it's backlog */, mtimeMs: staleSource.mtimeMs,
-  }), (err) => err.code === "STALE_PLAN");
-
-  // File moved externally (outside the portal) between snapshot build and the mutation request:
-  // the mtime/path check must catch it and report STALE_PLAN, not a generic filesystem error.
-  const externalSnapshot = buildPlanSnapshot({ stateRoot, packageState: { available: true, enabled: false, status: "disabled" } });
-  const externalSource = externalSnapshot.plans.find((item) => item.plan.id === "ready-plan");
-  fs.renameSync(
-    path.join(repo, "docs", "plans", "backlog", "ready.md"),
-    path.join(repo, "docs", "plans", "archived", "ready.md"),
-  );
-  assert.throws(() => movePlanLifecycle(externalSnapshot, {
-    id: externalSource.plan.id, key: externalSource.key, lifecycle: "active", expectedLifecycle: "backlog", mtimeMs: externalSource.mtimeMs,
-  }), (err) => err.code === "STALE_PLAN");
-  // Restore for subsequent assertions to keep fixture state predictable.
-  fs.renameSync(
-    path.join(repo, "docs", "plans", "archived", "ready.md"),
-    path.join(repo, "docs", "plans", "backlog", "ready.md"),
-  );
-
-  // Lifecycle requirement errors are returned together, not fail-fast on the first violation.
-  const requirementsSnapshot = buildPlanSnapshot({ stateRoot, packageState: { available: true, enabled: false, status: "disabled" } });
-  const requirementsSource = requirementsSnapshot.plans.find((item) => item.plan.id === "no-priority-plan");
-  assert.throws(() => {
-    try {
-      movePlanLifecycle(requirementsSnapshot, {
-        id: requirementsSource.plan.id,
-        key: requirementsSource.key,
-        lifecycle: "completed",
-        expectedLifecycle: "backlog",
-        mtimeMs: requirementsSource.mtimeMs,
-      });
-    } catch (err) {
-      assert.equal(err.code, "LIFECYCLE_REQUIREMENTS");
-      assert.equal(err.status, 422);
-      assert.ok(err.details.length > 1, `expected multiple accumulated requirement failures, got: ${JSON.stringify(err.details)}`);
-
-      // The full wire contract the portal depends on: display strings, structured findings, and
-      // the server-generated repair prompt, all from this one response.
-      assert.ok(Array.isArray(err.findings), "a readiness failure carries structured findings");
-      assert.equal(err.findings.length, err.details.length, "every display string has a matching finding");
-      assert.deepEqual(err.findings.map((item) => item.message), err.details,
-        "details is exactly the message projection of findings — the two cannot describe different problems");
-      for (const item of err.findings) {
-        assert.ok(item.code, "every finding carries a stable code the UI and tests can branch on");
-        assert.ok(item.resolution, "every finding explains how to fix it");
-      }
-
-      assert.ok(err.repair, "a readiness failure carries a repair descriptor");
-      assert.equal(typeof err.repair.prompt, "string", "the repair prompt is a ready-to-copy string");
-      assert.ok(err.repair.prompt.length > 0, "the repair prompt is not empty");
-      assert.equal(err.repair.planKey, requirementsSource.key, "the descriptor identifies which plan it describes");
-      assert.equal(err.repair.planId, requirementsSource.plan.id, "the descriptor carries the stable plan id");
-      for (const item of err.findings) {
-        assert.ok(err.repair.prompt.includes(item.message),
-          `the prompt must describe every finding shown to the user; missing: ${item.code}`);
-      }
-      assert.ok(!err.repair.prompt.includes(tempRoot),
-        "the repair prompt must not leak an absolute path — it gets pasted outside this machine");
-      throw err;
-    }
-  }, /Couldn't move/);
-  assert.ok(fs.existsSync(path.join(repo, "docs", "plans", "backlog", "no-priority.md")), "failed validation leaves source file unmoved");
-
-  // Completed's Verification requirement checks for real content, not just a bare heading. A plan
-  // that otherwise satisfies every Completed requirement (all tasks checked, no next_action, no
-  // blockers) but whose "## Verification" section has nothing under it before the next heading
-  // must still be rejected — heading presence alone used to be sufficient here.
-  fs.writeFileSync(path.join(repo, "docs", "plans", "backlog", "empty-verification.md"), `---
-id: empty-verification-plan
-priority: medium
-next_action:
-blocked_by: []
-depends_on: []
-related: []
-reviewed_commit:
----
-# Empty Verification Plan
-
-## Summary
-
-Exercises the empty-Verification-body rejection.
-
-## Context
-
-Used only by plan-suite-check.mjs.
-
-## Goals
-
-Prove an empty Verification section fails Completed validation.
-
-## Proposed design
-
-N/A.
-
-## Implementation plan
-
-- [x] Nothing left to do
-
-## Verification
-
-## Validation
-
-N/A.
-`);
-  const emptyVerificationSnapshot = buildPlanSnapshot({ stateRoot, packageState: { available: true, enabled: false, status: "disabled" } });
-  const emptyVerificationSource = emptyVerificationSnapshot.plans.find((item) => item.plan.id === "empty-verification-plan");
-  assert.throws(() => {
-    try {
-      movePlanLifecycle(emptyVerificationSnapshot, {
-        id: emptyVerificationSource.plan.id,
-        key: emptyVerificationSource.key,
-        lifecycle: "completed",
-        expectedLifecycle: "backlog",
-        mtimeMs: emptyVerificationSource.mtimeMs,
-      });
-    } catch (err) {
-      assert.equal(err.code, "LIFECYCLE_REQUIREMENTS");
-      assert.ok(err.details.some((d) => /Verification/.test(d)), `expected a Verification requirement failure, got: ${JSON.stringify(err.details)}`);
-      throw err;
-    }
-  }, /Couldn't move/);
-  assert.ok(fs.existsSync(path.join(repo, "docs", "plans", "backlog", "empty-verification.md")), "failed validation leaves source file unmoved");
-
-  // Filling in real content under the same heading is now sufficient to pass.
-  fs.writeFileSync(
-    path.join(repo, "docs", "plans", "backlog", "empty-verification.md"),
-    fs.readFileSync(path.join(repo, "docs", "plans", "backlog", "empty-verification.md"), "utf8")
-      .replace("## Verification\n\n## Validation", "## Verification\n\nVerified manually by the test itself.\n\n## Validation"),
-  );
-  const filledVerificationSnapshot = buildPlanSnapshot({ stateRoot, packageState: { available: true, enabled: false, status: "disabled" } });
-  const filledVerificationSource = filledVerificationSnapshot.plans.find((item) => item.plan.id === "empty-verification-plan");
-  const filledVerificationResult = movePlanLifecycle(filledVerificationSnapshot, {
-    id: filledVerificationSource.plan.id,
-    key: filledVerificationSource.key,
-    lifecycle: "completed",
-    expectedLifecycle: "backlog",
-    mtimeMs: filledVerificationSource.mtimeMs,
-  });
-  assert.equal(filledVerificationResult.record.plan.lifecycle, "completed");
-
-  // Readiness validation reads the file from disk, not the snapshot record. A document repaired
-  // after the page loaded must move on the next attempt without a refresh — this is what makes
-  // the repair-prompt workflow work: fix the doc, retry, done.
-  fs.writeFileSync(path.join(repo, "docs", "plans", "backlog", "stale-then-repaired.md"), `---
-id: stale-then-repaired-plan
-priority: medium
-next_action: Finish the work
-blocked_by: []
-depends_on: []
-related: []
-reviewed_commit:
----
-# Stale Then Repaired Plan
-
-## Summary
-
-Exercises validation reading fresh disk content rather than the loaded snapshot.
-
-## Context
-
-Used only by plan-suite-check.mjs.
-
-## Goals
-
-Prove a repaired document moves without rebuilding the snapshot first.
-
-## Proposed design
-
-N/A.
-
-## Implementation plan
-
-- [ ] Unfinished on purpose
-
-## Validation
-
-N/A.
-`);
-  const freshDiskSnapshot = buildPlanSnapshot({ stateRoot, packageState: { available: true, enabled: false, status: "disabled" } });
-  const freshDiskSource = freshDiskSnapshot.plans.find((item) => item.plan.id === "stale-then-repaired-plan");
-  assert.throws(() => movePlanLifecycle(freshDiskSnapshot, {
-    id: freshDiskSource.plan.id,
-    key: freshDiskSource.key,
-    lifecycle: "completed",
-    expectedLifecycle: "backlog",
-    mtimeMs: freshDiskSource.mtimeMs,
-  }), (err) => err.code === "LIFECYCLE_REQUIREMENTS", "an unfinished plan is rejected for Completed");
-
-  // Repair the document on disk while still holding the now-outdated snapshot above.
-  const repairedPath = path.join(repo, "docs", "plans", "backlog", "stale-then-repaired.md");
-  fs.writeFileSync(repairedPath, fs.readFileSync(repairedPath, "utf8")
-    .replace("next_action: Finish the work\n", "next_action:\n")
-    .replace("- [ ] Unfinished on purpose", "- [x] Now finished")
-    .replace("## Validation", "## Verification\n\nVerified by the test.\n\n## Validation"));
-  // Retry the way the portal does after an external edit: refresh, then move. The refreshed
-  // snapshot still carries the pre-repair findings on its record — buildPlanSnapshot validated
-  // against `backlog`, where unchecked tasks are not a problem — so a move that succeeds here
-  // proves the gate re-read the file rather than trusting record.plan.validation.
-  const repairedSnapshot = buildPlanSnapshot({ stateRoot, packageState: { available: true, enabled: false, status: "disabled" } });
-  const repairedSource = repairedSnapshot.plans.find((item) => item.plan.id === "stale-then-repaired-plan");
-  const repairedResult = movePlanLifecycle(repairedSnapshot, {
-    id: repairedSource.plan.id,
-    key: repairedSource.key,
-    lifecycle: "completed",
-    expectedLifecycle: "backlog",
-    mtimeMs: repairedSource.mtimeMs,
-  });
-  assert.equal(repairedResult.record.plan.lifecycle, "completed",
-    "a document repaired after the failed attempt moves on retry, with no bypass flag");
-
-  // The unambiguous direction: build a snapshot from a document that validates, then break the
-  // document on disk. The snapshot record still says it is fine, so a rejection here can only
-  // come from re-reading the file.
-  const brokenPath = path.join(repo, "docs", "plans", "backlog", "broken-after-scan.md");
-  fs.writeFileSync(brokenPath, fs.readFileSync(repairedPath.replace("backlog", "completed"), "utf8")
-    .replace("id: stale-then-repaired-plan", "id: broken-after-scan-plan"));
-  const beforeBreakSnapshot = buildPlanSnapshot({ stateRoot, packageState: { available: true, enabled: false, status: "disabled" } });
-  const beforeBreakSource = beforeBreakSnapshot.plans.find((item) => item.plan.id === "broken-after-scan-plan");
-  assert.ok(beforeBreakSource, "the fixture is present in the snapshot before it is broken");
-  // Rewrite in place, restoring mtime so the stale-state guard sees a current request and
-  // readiness validation is what decides. Without this the stale check fires first (as it should
-  // — that ordering is asserted below) and never exercises the fresh-disk read.
-  const beforeBreakStat = fs.statSync(brokenPath);
-  fs.writeFileSync(brokenPath, fs.readFileSync(brokenPath, "utf8")
-    .replace("- [x] Now finished", "- [ ] Reopened after the scan"));
-  fs.utimesSync(brokenPath, beforeBreakStat.atime, beforeBreakStat.mtime);
-  assert.throws(() => {
-    try {
-      movePlanLifecycle(beforeBreakSnapshot, {
-        id: beforeBreakSource.plan.id,
-        key: beforeBreakSource.key,
-        lifecycle: "completed",
-        expectedLifecycle: "backlog",
-        mtimeMs: beforeBreakSource.mtimeMs,
-      });
-    } catch (err) {
-      assert.equal(err.code, "LIFECYCLE_REQUIREMENTS",
-        "an edit made after the snapshot was built is caught, so findings always describe current disk content");
-      assert.ok(err.details.some((detail) => /unchecked/.test(detail)), "the reopened task is what was reported");
-      throw err;
-    }
-  }, /Couldn't move/);
-
-  // Ordering: stale-state and collision checks run before readiness validation, so a request that
-  // is stale or wrongly targeted gets that answer rather than repair guidance for a plan the user
-  // is no longer looking at. Both must therefore arrive without a repair descriptor.
-  fs.writeFileSync(path.join(repo, "docs", "plans", "backlog", "ordering.md"), `---
-id: ordering-plan
-priority: medium
-next_action: Something
-blocked_by: []
-depends_on: []
-related: []
-reviewed_commit:
----
-# Ordering Plan
-
-## Implementation plan
-
-- [ ] Deliberately unfinished
-`);
-  const orderingSnapshot = buildPlanSnapshot({ stateRoot, packageState: { available: true, enabled: false, status: "disabled" } });
-  const orderingSource = orderingSnapshot.plans.find((item) => item.plan.id === "ordering-plan");
-  assert.throws(() => {
-    try {
-      movePlanLifecycle(orderingSnapshot, {
-        id: orderingSource.plan.id,
-        key: orderingSource.key,
-        lifecycle: "completed",
-        expectedLifecycle: "backlog",
-        mtimeMs: orderingSource.mtimeMs - 1000, // stale, and the document is also invalid
-      });
-    } catch (err) {
-      assert.equal(err.code, "STALE_PLAN", "a stale request is rejected before readiness is evaluated");
-      assert.equal(err.repair, undefined, "no repair prompt is offered for a plan the user may no longer be viewing");
-      throw err;
-    }
-  }, /changed outside the portal/);
-
-  fs.mkdirSync(path.join(repo, "docs", "plans", "completed"), { recursive: true });
-  fs.writeFileSync(path.join(repo, "docs", "plans", "completed", "ordering.md"), "placeholder occupying the destination\n");
-  assert.throws(() => {
-    try {
-      movePlanLifecycle(orderingSnapshot, {
-        id: orderingSource.plan.id,
-        key: orderingSource.key,
-        lifecycle: "completed",
-        expectedLifecycle: "backlog",
-        mtimeMs: orderingSource.mtimeMs,
-      });
-    } catch (err) {
-      assert.equal(err.code, "DESTINATION_EXISTS", "a collision is reported before readiness is evaluated");
-      assert.equal(err.repair, undefined, "no repair prompt is offered when the move could not land regardless");
-      throw err;
-    }
-  }, /already exists at the destination/);
-  fs.rmSync(path.join(repo, "docs", "plans", "completed", "ordering.md"));
-
   const portalFacing = spawnSync(process.execPath, [
     "-e",
     "import('./scripts/cli/plans.mjs').then((m) => { const snap = m.loadPlansSnapshot(); process.stdout.write(JSON.stringify(snap)); })",
@@ -738,19 +332,19 @@ reviewed_commit:
   assert.equal(portalSnapshot.plans[0].absolutePath, undefined);
   assert.equal(portalSnapshot.plans[0].repository.root, undefined);
 
-  // CLI-boundary check: updatePlanLifecycle/updatePlanPriority via scripts/cli/plans.mjs (not the
-  // domain module directly) must strip absolutePath/repository.root from the returned record,
-  // exactly like a full snapshot does — the doc's "public responses do not expose absolute paths"
-  // requirement applies at this boundary, not just to buildPlanSnapshot's output.
+  // CLI-boundary check: updatePlanPriority via scripts/cli/plans.mjs (not the domain module
+  // directly) must strip absolutePath/repository.root from the returned record, exactly like a full
+  // snapshot does — the doc's "public responses do not expose absolute paths" requirement applies at
+  // this boundary, not just to buildPlanSnapshot's output.
   const noPriorityCliRecord = portalSnapshot.plans.find((item) => item.plan.id === "no-priority-plan");
-  const lifecycleCliCheck = spawnSync(process.execPath, [
+  const priorityCliCheck = spawnSync(process.execPath, [
     "-e",
     `import('./scripts/cli/plans.mjs').then(async (m) => {
-      const result = m.updatePlanLifecycle({
+      const result = m.updatePlanPriority({
         id: ${JSON.stringify(noPriorityCliRecord.plan.id)},
         key: ${JSON.stringify(noPriorityCliRecord.key)},
-        lifecycle: "active",
-        expectedLifecycle: ${JSON.stringify(noPriorityCliRecord.plan.lifecycle)},
+        priority: "low",
+        expectedPriority: ${JSON.stringify(noPriorityCliRecord.plan.priority)},
         mtimeMs: ${noPriorityCliRecord.mtimeMs},
       });
       process.stdout.write(JSON.stringify(result));
@@ -760,13 +354,12 @@ reviewed_commit:
     env: { ...process.env, ROBOREPO_STATE_ROOT: stateRoot },
     encoding: "utf8",
   });
-  assert.equal(lifecycleCliCheck.status, 0, lifecycleCliCheck.stderr);
-  const lifecycleCliResult = JSON.parse(lifecycleCliCheck.stdout);
-  assert.equal(lifecycleCliResult.change.newValue, "active");
-  assert.equal(lifecycleCliResult.record.plan.lifecycle, "active");
-  assert.equal(lifecycleCliResult.record.absolutePath, undefined, "CLI-layer lifecycle result must not expose absolutePath");
-  assert.equal(lifecycleCliResult.record.repository.root, undefined, "CLI-layer lifecycle result must not expose repository.root");
-  assert.ok(fs.existsSync(path.join(repo, "docs", "plans", "active", "no-priority.md")));
+  assert.equal(priorityCliCheck.status, 0, priorityCliCheck.stderr);
+  const priorityCliResult = JSON.parse(priorityCliCheck.stdout);
+  assert.equal(priorityCliResult.change.newValue, "low");
+  assert.equal(priorityCliResult.record.plan.priority, "low");
+  assert.equal(priorityCliResult.record.absolutePath, undefined, "CLI-layer priority result must not expose absolutePath");
+  assert.equal(priorityCliResult.record.repository.root, undefined, "CLI-layer priority result must not expose repository.root");
 
   // Regression: planWritePackage.enabled must track the package's real live-enabled state
   // (buildPackageLiveState, same source config.mjs's readConfigSnapshot uses), not the raw
@@ -966,87 +559,6 @@ Body.
   assert.match(extBlockerFindings[0].message, /ghost-plan/,
     "prefixed external blockers must be skipped, not reported as missing plans");
 
-  // The positive half of the openTasks contract: an active plan with unchecked items ships their
-  // text, in document order, with the completed ones filtered out. Its own repository and state
-  // root so it cannot disturb the plan counts the fixtures above assert on.
-  const tasksStateRoot = path.join(tempRoot, "state-tasks");
-  const tasksRepo = path.join(tempRoot, "projects-tasks", "sample");
-  fs.mkdirSync(path.join(tasksRepo, "docs", "plans", "active"), { recursive: true });
-  fs.writeFileSync(path.join(tasksRepo, ".git"), "gitdir: nowhere\n");
-  fs.writeFileSync(path.join(tasksRepo, "docs", "plans", "active", "tasks.md"), `---
-id: tasks-plan
-priority: high
-next_action: Ship the dialog
-blocked_by: []
-depends_on: []
-related: []
----
-
-# Tasks Plan
-
-## Summary
-
-Carry open task text to the portal.
-
-## Implementation plan
-
-- [x] Already done
-- [ ] First open item
-- [ ] Second open item
-
-## Validation
-
-Run targeted checks.
-`);
-  addRepositorySource({ path: path.join(tempRoot, "projects-tasks"), stateRoot: tasksStateRoot });
-  const tasksSnapshot = buildPlanSnapshot({ stateRoot: tasksStateRoot });
-  const tasksRecord = tasksSnapshot.plans.find((item) => item.plan.id === "tasks-plan");
-  assert.ok(tasksRecord, "expected the active tasks fixture in the snapshot");
-  assert.deepEqual(
-    tasksRecord.plan.openTasks.map((task) => task.text),
-    ["First open item", "Second open item"],
-    "openTasks must carry every unchecked item's text in document order, and nothing else",
-  );
-  assert.equal(tasksRecord.plan.taskCounts.complete, 1, "the completed item still counts toward progress");
-  assert.equal(tasksRecord.plan.taskCounts.total, 3);
-
-  // The scoping half, and it needs a fixture that WOULD carry tasks if the scoping were dropped:
-  // a valid backlog plan with an unchecked item. An invalid plan parses to no tasks at all, so
-  // asserting against one would pass whether or not the lifecycle check exists.
-  fs.mkdirSync(path.join(tasksRepo, "docs", "plans", "backlog"), { recursive: true });
-  fs.writeFileSync(path.join(tasksRepo, "docs", "plans", "backlog", "queued.md"), `---
-id: queued-plan
-priority: high
-next_action: Wait for the dialog
-blocked_by: []
-depends_on: []
-related: []
----
-
-# Queued Plan
-
-## Summary
-
-Sit in the backlog with open work.
-
-## Proposed design
-
-Do nothing yet.
-
-## Implementation plan
-
-- [ ] Not on the active tab
-
-## Validation
-
-Run targeted checks.
-`);
-  const scopedSnapshot = buildPlanSnapshot({ stateRoot: tasksStateRoot });
-  const queued = scopedSnapshot.plans.find((item) => item.plan.id === "queued-plan");
-  assert.equal(queued.plan.taskCounts.remaining, 1,
-    "fixture guard: this plan must really have an open task, or the next assertion proves nothing");
-  assert.deepEqual(queued.plan.openTasks, [],
-    "a non-active plan must not carry task text — the All Open Tasks dialog is active-only");
 } finally {
   fs.rmSync(tempRoot, { recursive: true, force: true });
 }

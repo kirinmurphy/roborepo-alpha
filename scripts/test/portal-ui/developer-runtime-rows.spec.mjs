@@ -1,4 +1,4 @@
-// Runtime page checkout rows (docs/plans/completed/developer-runtime-repository-row-layout.md).
+// Runtime page checkout rows.
 //
 // Drives the REAL portal server run.mjs boots, but never its discovery: the snapshot is stubbed in
 // the browser so the page renders the same repositories on every machine. The stub body is built by

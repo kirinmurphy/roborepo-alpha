@@ -12,7 +12,7 @@ thin composition root; commands are declared as JSON under
 | Module | Owns |
 | --- | --- |
 | `scripts/cli/skills.mjs` | `skill adopt`, `skill inspect`, `skill native`, `skill export-to-project`, `skill link-project` |
-| `scripts/cli/skill-inventory.mjs` | read-only skill inventory used by `skill inspect` and `/config` source popups |
+| `scripts/cli/skill-inventory.mjs` | read-only skill inventory used by `skill inspect` and `/agents` source popups |
 | `scripts/cli/index.mjs` | `index code\|docs`, `index code --watch`, `run` |
 | `scripts/cli/mcp.mjs` | `mcp add` (registration with every MCP-capable harness) |
 | `scripts/cli/presets.mjs` | `library` / `package manage` (one shared `packageLibrary` execution preset), `bundle status\|apply\|check\|remove` |
@@ -20,7 +20,7 @@ thin composition root; commands are declared as JSON under
 | `scripts/cli/initialization-state.mjs` | reads/writes `<stateRoot>/initialization.json`; owns the missing / in-progress / complete distinction |
 | `scripts/cli/first-run-routing.mjs` | decides whether a bare `roborepo` enters `init`; pure function of (argv, phase, tty) |
 | `scripts/cli/telemetry.mjs` | `web`, `telemetry install\|enable\|disable\|status\|report\|export\|backup\|purge\|capture` |
-| `scripts/cli/telemetry-transcript.mjs` | parse harness transcript -> token/tool/MCP session stats + tool-result sizes |
+| `scripts/harnesses/transcript-locate.mjs`, `scripts/harnesses/transcript-parse.mjs` | locate and parse harness transcripts for telemetry capture |
 | `scripts/cli/telemetry-analyze.mjs` | sessions, spikes, spike causes, token contributors, usage windows, spike-vs-normal |
 | `scripts/cli/portal-server.mjs` + `portal/` | loopback-only web portal routes and static assets |
 | `scripts/cli/paths.mjs` | shared `repoRoot` / `sharedSkillsDir` |
@@ -100,8 +100,9 @@ See [Portal Architecture](portal-architecture.md) for page, route, and mutation-
 
 ## Telemetry Capture Internals
 
-The capture hooks are package-owned (`globals/packages/telemetry/hooks-{claude,codex}.json`) and
-no-op until `roborepo telemetry enable` writes `~/.roborepo/telemetry/state.json {enabled:true}`.
+The capture hooks are package-owned (`globals/packages/telemetry/hooks-{claude,codex}.json`).
+Enabling the telemetry package through the portal or CLI installs the hooks and writes
+`~/.roborepo/telemetry/state.json {enabled:true}` in the same operation.
 Each `<harness>.jsonl` spool is capped at ~25 MB: when exceeded, the oldest records are dropped and
 the newest ~70% kept. Per-session token cursors live under `~/.roborepo/telemetry/collector/` and
 back the `delta_tokens` computation.

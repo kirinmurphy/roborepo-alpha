@@ -3,7 +3,7 @@
 // registry-dependent half — hook-composition.mjs pulls in codexHooksPath/harnessHome and
 // writeRootConfig, both of which resolve through scripts/harnesses/registry.mjs, so a provider
 // adapter importing hook-composition.mjs directly would cycle back into itself (same class of
-// import cycle the Phase 3 grounding notes describe for paths.mjs/roots.mjs).
+// import cycle as paths.mjs/roots.mjs).
 //
 // These functions operate on already-parsed hooks maps and content strings only — no file I/O, no
 // path resolution. hook-composition.mjs (the orchestrator-facing module, which does import

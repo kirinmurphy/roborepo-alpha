@@ -55,11 +55,12 @@ flowchart TD
     psReader["install-windows.ps1 TSV reader"]
     permissionRenderer["render-agent-permissions.mjs"]
     rulesRenderer["render-rules.sh"]
-    skillLinker["link-skills.sh"]
+    skillLinker["install-lib.sh link_global_skills"]
   end
 
   subgraph behavior["Code behavior"]
     install["install / update"]
+    skillCache["stateRoot/skills"]
     verify["verify-install.sh"]
     doctor["doctor.sh"]
     cli["roborepo CLI"]
@@ -81,7 +82,8 @@ flowchart TD
   bashReader --> doctor
   psReader --> install
   rulesRenderer --> baselines
-  skillLinker --> baselines
+  install --> skillLinker
+  skillLinker --> skillCache
   cli --> install
   cli --> doctor
 ```
@@ -143,7 +145,7 @@ sequenceDiagram
 | --- | --- | --- | --- | --- |
 | Windows-only installer details | `scripts/install/install-windows.ps1` | Existing manifests, plus small Windows-specific catalog if needed | More parity with POSIX install readers. | PowerShell filesystem behavior and Windows path handling. |
 | Long hook command bodies | `generated/claude/settings.json`, `generated/codex/hooks.json` | `manifests/platform/hooks/*.sh` or `globals/system/hooks/<harness>/` scripts | Easier testing and quoting than embedded shell strings. | Hook registration shape and harness-specific event wiring. |
-| Non-root conflict prompt text | `scripts/install/main.sh` | `manifests/platform/prompts/non-root-conflict.md` | Keeps all user-facing merge guidance together. | Conflict detection and abort behavior. |
+| Non-root conflict prompt text | `scripts/install/main.sh` | Proposed `manifests/platform/prompts/non-root-conflict.md` | Keeps all user-facing merge guidance together. | Conflict detection and abort behavior. |
 
 ## What Should Stay Code
 

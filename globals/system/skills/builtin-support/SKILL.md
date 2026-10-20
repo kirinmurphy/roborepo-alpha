@@ -7,7 +7,7 @@ description: >
   "edit global rules", "roborepo support", "harness config", "skill authoring",
   "skill triggers", "roborepo update", "roborepo doctor". SKIP for changing roborepo's
   own installer, CLI internals, package/apply engine, portal, telemetry, or local/skills/;
-  use the repo-local builtin-development skill for that.
+  use the repo-local roborepo-development skill for that.
 ---
 
 # Roborepo Support & Skill Authoring
@@ -19,7 +19,7 @@ local machine without pulling in the repo-internal platform manual.
 
 If the task changes roborepo implementation internals (`scripts/cli/`, installer
 plumbing, package/apply/workspace state, portal, telemetry, local repo-only skills), load
-the repo-local `builtin-development` skill instead.
+the repo-local `roborepo-development` skill instead.
 
 **Read these first when relevant** (they are the source of truth):
 - `README.md` — overview of what's shared and per-harness.
@@ -56,7 +56,8 @@ both harnesses in one step:
 roborepo skill new
 ```
 It can create automatic helper skills, skill-backed slash commands, or standalone slash commands.
-For medium-risk skill descriptions, add/update trigger fixtures and run:
+For medium-risk skill descriptions, add/update trigger fixtures in the package's
+`globals/packages/<package-id>/skill-triggers.json` and run:
 ```bash
 roborepo skill triggers --check
 ```

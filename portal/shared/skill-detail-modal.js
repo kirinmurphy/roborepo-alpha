@@ -1,6 +1,6 @@
 // Panel-factory for the skill-source popup (same content the Config page shows for a skill
-// card), reusable from any portal page — see docs/plans/portal-config-web-components-plan.md
-// for why this is a factory (like createInfoModal/createConfigModal) and not a custom element:
+// card), reusable from any portal page. It is a factory (like createInfoModal/createConfigModal) and not
+// a custom element:
 // the dialog is a page singleton, declared once as static markup in the host page's index.html,
 // never cloned or instantiated more than once. Caller passes the dialog element it owns;
 // this only wires behavior onto it. Depends on the shared .modal-head/<portal-close-button>/

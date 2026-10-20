@@ -4,8 +4,7 @@
 // strip_package_hooks. Pins: strips hook entries matching a claude-harness "hooks" resource's
 // commands from every event array (deleting the event key entirely once empty), strips permission
 // allow-entries matching a "permissions" resource's allow list, both in one settings.json read/
-// write pass, and leaves unrelated hooks/permissions/settings keys untouched. See
-// docs/plans/active/discoverable-harness-provider-architecture-plan.md Phase 4.
+// write pass, and leaves unrelated hooks/permissions/settings keys untouched.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";

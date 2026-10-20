@@ -1,6 +1,6 @@
 // One checkout row on a repository card: the main checkout or a linked worktree. Split out of
 // templates.js, which renders every other card kind, so the row's two-column layout and its member
-// toggle live in one place. See docs/plans/completed/developer-runtime-repository-row-layout.md.
+// toggle live in one place.
 //
 // Imports from templates.js while templates.js imports buildRootSection from here. The cycle is
 // safe because neither module calls into the other while it is being evaluated — only from inside
@@ -34,6 +34,22 @@ const HEALTH_BADGE_TONES = { starting: "warn", degraded: "warn", unhealthy: "dan
 
 let memberListSequence = 0;
 
+// Lifecycle badges. Idle and running need none: a running checkout shows its port, and no port says
+// nothing is running.
+const WORKTREE_BADGES = { stale: "stale", landed: "merged" };
+
+// A merged worktree adds a note only when there is something to act on: the guard that keeps it, or
+// that the installed cleanup hook removes it on the next pull. An open plan is not worth a note: a
+// closed plan's worktree is removed, so a merged row that is still listed already says its plan is open.
+const SILENT_WORKTREE_REASONS = new Set(["plan not closed"]);
+
+function worktreeStateNote(root) {
+  if (root.worktreeState !== "landed") return null;
+  if (SILENT_WORKTREE_REASONS.has(root.worktreeReason)) return null;
+  if (root.worktreeReason) return root.worktreeReason;
+  return root.cleanupHookInstalled ? "removed on next pull" : null;
+}
+
 // `root` is undefined for the main slot when nothing has resolved a rootId yet (no active listener
 // on the main checkout) — the row still renders, so the card never looks like it is missing a piece.
 // `identity` ({ glyph, label, node }) lets the calling page name the row itself: its glyph and
@@ -41,11 +57,26 @@ let memberListSequence = 0;
 // and copy control at the start of the identity line. Git drift and the actions column still come
 // from `root`, so the row behaves exactly like the checkout it is. Home names a worktree by the plan
 // it implements this way; the row stays agnostic about what the node holds.
-export function buildRootSection({ root, departed = [], repository, composeActions, instanceActions, mode = "runtime", onMountLinks, identity = null }) {
+export function buildRootSection({ root, departed = [], repository, composeActions, instanceActions, mode = "runtime", onMountLinks, onMountWorktreeMenu, identity = null }) {
   const section = createRepositoryCheckoutRow({ controls: mode !== "home" });
   // Lets a rebuild find "this same checkout's" row across renders (see reconcileSection in app.js)
   // to carry its open/closed state forward — rootId is stable across polls, DOM position is not.
   section.dataset.rootId = root?.rootId || "main";
+  if (root?.isWorktree && root.worktreeState) {
+    section.classList.add(`worktree-is-${root.worktreeState}`);
+    const badge = section.querySelector("[data-slot=worktree-state]");
+    if (WORKTREE_BADGES[root.worktreeState]) {
+      badge.hidden = false;
+      badge.textContent = WORKTREE_BADGES[root.worktreeState];
+      if (root.worktreeState === "landed") badge.title = `Merged into ${root.mergedInto || "the base branch"}`;
+    }
+    const note = worktreeStateNote(root);
+    if (note) {
+      const slot = section.querySelector("[data-slot=worktree-note]");
+      slot.hidden = false;
+      slot.textContent = note;
+    }
+  }
 
   const glyph = section.querySelector("[data-slot=root-glyph]");
   glyph.setAttribute("name", identity?.glyph || (root?.isWorktree ? "tree" : "home"));
@@ -57,11 +88,20 @@ export function buildRootSection({ root, departed = [], repository, composeActio
   else fillIdentity(section, root, composeGroups);
   mountCheckoutRow(section);
   if (root?.git) {
-    applyGitDrift(section, root.git);
+    // Drift is a prompt to sync work in progress; once the branch has merged it no longer applies.
+    // The checkout tooltip and the worktree dropdown still carry the Git facts.
+    if (root.worktreeState !== "landed") applyGitDrift(section, root.git);
     if (!identity) mountCopyDropdown(section, root);
   }
   fillPromotedLink(section, root);
   if (mode === "home") {
+    // A plan's row keeps its worktree actions in the worktree dropdown its identity carries, so only a
+    // worktree no plan claims takes the ⋮ cell.
+    if (root?.isWorktree && !identity && onMountWorktreeMenu) {
+      const menuSlot = section.querySelector("[data-slot=worktree-menu]");
+      menuSlot.hidden = false;
+      onMountWorktreeMenu(menuSlot, root);
+    }
     if (root?.primaryEntrypoint?.opaqueKey) onMountLinks?.(section.querySelector("[data-slot=root-links]"), root.primaryEntrypoint);
     section.querySelector("[data-slot=members]")?.remove();
     return section;
@@ -145,7 +185,7 @@ function fillIdentity(section, root, composeGroups) {
 
   const fullName = git ? fullBranchName(git) : directory;
   const label = section.querySelector("[data-slot=root-branch]");
-  label.textContent = portalMiddleEllipsis(git ? branchLabel(git) : directory, CHECKOUT_BRANCH_MAX_LENGTH);
+  label.textContent = portalMiddleEllipsis(git ? branchLabel(git, directory) : directory, CHECKOUT_BRANCH_MAX_LENGTH);
 
   tooltip.querySelector("[data-slot=root-heading]").textContent = fullName;
   // Without git the heading already IS the directory, so there is no second identity to show; and
@@ -178,9 +218,9 @@ function fillIdentity(section, root, composeGroups) {
 }
 
 // The default branch is named by its role — "main branch" reads as where you are, a bare "main" as
-// just another branch name.
-function branchLabel(git) {
-  if (git.detached) return "detached";
+// just another branch name. A detached checkout has no branch, so its directory names it.
+function branchLabel(git, directory = null) {
+  if (git.detached) return directory ? `${directory} (detached)` : "detached";
   return DEFAULT_BRANCHES.has(git.branch) ? `${git.branch} branch` : git.branch;
 }
 

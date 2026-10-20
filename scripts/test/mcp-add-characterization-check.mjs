@@ -1,12 +1,10 @@
 #!/usr/bin/env node
 // Characterizes scripts/cli/mcp.mjs's mcpAdd (the `roborepo mcp add` CLI path) through
-// getHarnessProvider(id).adapters.mcp.addServer dispatch (docs/plans/active/discoverable-harness-
-// provider-architecture-plan.md). Pins the dry-run display text (still must read "claude mcp add
+// getHarnessProvider(id).adapters.mcp.addServer dispatch. Pins the dry-run display text (still must read "claude mcp add
 // ..."), repeatable --harness <id> gating (the --only-claude/--only-codex replacement -- omitting
 // --harness means every registered harness, a given --harness always narrows to exactly the ids
 // named), a real (non-dry-run) Codex-only add's on-disk TOML output, and a real (non-dry-run)
-// Gemini-only add's on-disk mcpServers JSON output (gemini-cli-provider-integration-plan.md Phase
-// 3 -- mcpAdd previously only had Claude/Codex branches at all, a real bug this fixes: `--harness
+// Gemini-only add's on-disk mcpServers JSON output (mcpAdd previously only had Claude/Codex branches at all, a real bug this fixes: `--harness
 // gemini` used to silently do nothing). Claude's real (non-dry-run) add shells to the actual
 // `claude` CLI and calls process.exit(0), so it is not exercised here -- covered instead by
 // harness-mcp-remove-characterization-check.mjs (removal) and mcp-claude-permission-check.mjs (the

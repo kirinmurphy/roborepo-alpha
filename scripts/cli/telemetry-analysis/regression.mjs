@@ -1,6 +1,6 @@
 import { resultCaptures, toolGroup, approxTokens } from "./results.mjs";
 // Exploratory earlier/later cost comparison, split only at a distinct timestamp.
-export function regression(captures) {
+export function regression(captures, groupOf) {
   const rows = resultCaptures(captures).slice().sort((a, b) => a.ts.localeCompare(b.ts));
   if (rows.length < 4) return { split_ts: null, groups: [] };
   // Choose the closest real time boundary to the row midpoint. Splitting equal timestamps by an
@@ -14,7 +14,7 @@ export function regression(captures) {
   const avgByGroup = (slice) => {
     const m = new Map();
     for (const e of slice) {
-      const g = toolGroup(e.last_result.tool);
+      const g = groupOf(e);
       const cur = m.get(g) ?? { calls: 0, chars: 0 };
       cur.calls += 1;
       cur.chars += e.last_result.chars;

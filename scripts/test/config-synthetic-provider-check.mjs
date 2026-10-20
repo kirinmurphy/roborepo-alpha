@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
-// Phase 7 of discoverable-harness-provider-architecture-plan.md: prove the Config snapshot's
+// Prove the Config snapshot's
 // `harnesses` list (grid columns, defaults popover) and root-config baseline/active path maps do
 // not encode a two-provider assumption. Same subprocess-isolation technique as
 // telemetry-synthetic-provider-check.mjs (registry.mjs's PROVIDERS map is a static import-time
@@ -110,12 +110,12 @@ fs.mkdirSync(path.join(stateDir, "harnesses"), { recursive: true });
 fs.writeFileSync(
   path.join(stateDir, "harnesses", "state.json"),
   JSON.stringify({
-    schemaVersion: 1,
+    schemaVersion: 2,
     lastDiscoveredAt: "2026-01-01T00:00:00.000Z",
     providers: {
-      claude: { enabled: false, selectionSource: "discovery", confidence: "absent", evidence: [] },
-      codex: { enabled: false, selectionSource: "user", confidence: "confirmed", evidence: [] },
-      acme: { enabled: true, selectionSource: "discovery", confidence: "possible", evidence: [] },
+      claude: { enabled: false, selectionSource: "discovery", confidence: "absent", evidence: [], warnings: [] },
+      codex: { enabled: false, selectionSource: "user", confidence: "confirmed", evidence: [], warnings: [] },
+      acme: { enabled: true, selectionSource: "discovery", confidence: "possible", evidence: [], warnings: [] },
     },
   }, null, 2),
 );
@@ -232,10 +232,10 @@ assert.match(result.stdout, /ok/);
 fs.writeFileSync(
   path.join(stateDir, "harnesses", "state.json"),
   JSON.stringify({
-    schemaVersion: 1,
+    schemaVersion: 2,
     lastDiscoveredAt: "2026-01-01T00:00:00.000Z",
     providers: {
-      acme: { enabled: false, selectionSource: "discovery", confidence: "absent", evidence: [] },
+      acme: { enabled: false, selectionSource: "discovery", confidence: "absent", evidence: [], warnings: [] },
     },
   }, null, 2),
 );

@@ -140,7 +140,7 @@ your configuration by accident:
 roborepo uninstall --yes
 ```
 
-The portal exposes the same managed cleanup at `/config` → **Maintenance**, with a preview and an
+The portal exposes the same managed cleanup at `/agents` → **Maintenance**, with a preview and an
 explicit confirmation. The browser action is preserve-only: there is no workspace-deletion control
 there, because that is a deliberate typed choice rather than a button.
 

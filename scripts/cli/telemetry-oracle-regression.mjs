@@ -1,6 +1,7 @@
-import { hasTokens, mcpServer } from "./telemetry-oracle-observations.mjs";
+import { hasTokens, mcpServer, sessionKey } from "./telemetry-oracle-observations.mjs";
 
 export function regression(operations) {
+  const categories = shellCategories(operations);
   const rows = operations.filter(hasTokens).filter((row) => row.last_result && typeof row.last_result.chars === "number" && row.last_result.tool)
     .sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
   if (rows.length < 4) return { split_ts: null, groups: [] };
@@ -12,7 +13,7 @@ export function regression(operations) {
   const aggregate = (items) => {
     const result = new Map();
     for (const row of items) {
-      const group = toolGroup(row.last_result.tool), current = result.get(group) ?? { calls: 0, chars: 0 };
+      const group = toolGroup(row.last_result.tool, categories.get(row)), current = result.get(group) ?? { calls: 0, chars: 0 };
       current.calls++; current.chars += row.last_result.chars; result.set(group, current);
     }
     return result;
@@ -35,12 +36,42 @@ export function regression(operations) {
   return { split_ts: rows[middle].ts, groups };
 }
 
-function toolGroup(name) {
+function toolGroup(name, category) {
   const server = mcpServer(name);
   if (server === "jcodemunch" || server === "jdocmunch") return server;
   if (server) return "mcp-other";
   if (["Read", "Grep", "Glob"].includes(name)) return "native-read";
   if (["Edit", "Write", "NotebookEdit"].includes(name)) return "edit";
-  if (name === "Bash") return "bash";
+  if (["Bash", "exec", "exec_command", "shell", "run_shell_command"].includes(name)) return `shell-${category ?? "unclassified"}`;
   return "other";
+}
+
+// Independently associate each new shell result with commands since the preceding result.
+function shellCategories(operations) {
+  const groups = new Map();
+  for (const row of operations) {
+    const key = sessionKey(row);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(row);
+  }
+  const categories = new Map();
+  for (const rows of groups.values()) {
+    const pending = new Set();
+    let previous = null, category = null;
+    for (const row of rows.slice().sort((a, b) => String(a.ts).localeCompare(String(b.ts)))) {
+      const command = ["Bash", "run_shell_command"].includes(row.tool?.name) ? row.operation : null;
+      if (command && row.event === "PostToolUse") { pending.clear(); pending.add(command.category); }
+      const output = row.last_result;
+      if (output && ["Bash", "exec", "exec_command", "shell", "run_shell_command"].includes(output.tool)) {
+        const identity = `${output.tool}:${output.chars}:${output.is_error}`;
+        if (identity !== previous) {
+          category = pending.size > 1 ? "mixed" : pending.size ? [...pending][0] : null;
+          pending.clear(); previous = identity;
+        }
+        categories.set(row, category);
+      }
+      if (command && row.event !== "PostToolUse") pending.add(command.category);
+    }
+  }
+  return categories;
 }

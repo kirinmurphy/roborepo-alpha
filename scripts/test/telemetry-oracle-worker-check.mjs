@@ -52,7 +52,7 @@ try {
   const remote = "example/repo";
   write(paths.registryPath, { repositories: { repo: { id: "git:example/repo", normalizedRemote: remote } } });
   write(spoolFile, { ...event, repo: { normalized_remote_hash: createHash("sha256").update(remote).digest("hex").slice(0, 24) } });
-  assert.equal((await run()).status, "passed", "both implementations interpret the same raw registry");
+  assert.equal((await run()).status, "partial", "registry hashes do not associate legacy telemetry");
   fs.rmSync(paths.registryPath);
   assert.equal((await run()).status, "partial", "unresolved legacy identity cannot pass");
   write(spoolFile, event);

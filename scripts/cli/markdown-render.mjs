@@ -54,12 +54,12 @@ function isDroppableComment(line) {
 // GitHub-style heading slug: lowercase, strip anything that isn't a word char/space/hyphen, spaces
 // to hyphens, then dedupe repeats with a trailing -1/-2/... so deep links stay unambiguous within
 // one rendered document.
-function slugify(text, seen) {
+export function slugify(text, seen) {
   const base = String(text)
     .toLowerCase()
-    .replace(/[^\w\s-]/g, "")
+    .replace(/[^\w -]/g, "")
     .trim()
-    .replace(/\s+/g, "-");
+    .replace(/ /g, "-");
   const count = seen.get(base) || 0;
   seen.set(base, count + 1);
   return count === 0 ? base : `${base}-${count}`;
@@ -232,6 +232,13 @@ function renderBlocks(lines) {
     if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
       flushPara(); flushList(); flushQuote();
       blocks.push("<hr />");
+      continue;
+    }
+
+    // An indented line under a list item continues that item — a bullet wrapped across source
+    // lines, as GitHub renders it — rather than closing the list and starting a paragraph.
+    if (list && /^\s/.test(raw)) {
+      list.items[list.items.length - 1] += ` ${trimmed}`;
       continue;
     }
 

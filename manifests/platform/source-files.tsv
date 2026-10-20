@@ -20,7 +20,6 @@ manifests/inventory/agent-permissions.json
 manifests/inventory/package-categories.json
 manifests/platform/cli-commands.json
 manifests/platform/presets.json
-manifests/inventory/skill-trigger-tests.json
 manifests/inventory/mcp-presets.json
 manifests/inventory/mcp-servers.json
 manifests/inventory/reserved-commands.json

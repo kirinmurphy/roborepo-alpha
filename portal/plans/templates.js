@@ -7,7 +7,9 @@ import {
   portalTpl as tpl,
   portalFillSlots as fill,
 } from "/portal/shared/api.js";
-import { FILTER_LABELS, LIFECYCLE_LABELS, formatDate, completionBadgeColor } from "./state.js";
+import { FILTER_LABELS, FRESHNESS_LABELS, formatDate } from "./state.js";
+import { lifecycleActions, lifecycleLabel } from "./lifecycle.js";
+import { primaryPlanAction } from "./plan-actions.js";
 
 export function rootChip(root, onRemove) {
   const node = fill(tpl("tpl-root-chip"), { path: root });
@@ -68,25 +70,29 @@ export function plansNoRepositories(onManage) {
   return node;
 }
 
-export function plansOnboardingState(snapshot, step, onManage) {
+// `scope` is { name, onViewAll } while a repository filter is selected: the copy names that
+// repository, and the action drops the filter instead of opening Manage Repos.
+export function plansOnboardingState(snapshot, step, onManage, scope = null) {
   const scans = snapshot.repositoryScans || [];
   const scanned = scans.filter((scan) => scan.state === "scanned").length;
+  const subject = scope ? scope.name : repositoryCount(step === "not-scanned" ? scans.length : scanned);
   const fills = step === "not-scanned"
     ? {
-      title: `Not scanned yet: ${repositoryCount(scans.length)}`,
-      body: "Plans reads each known repository's checkouts. None of them has a checkout Plans can read right now.",
+      title: `Not scanned yet: ${subject}`,
+      body: "Plans reads each known repo's checkouts. None of them has a checkout Plans can read right now.",
     }
     : {
-      title: `No plans found in ${repositoryCount(scanned)}`,
-      body: "Plans looks for Markdown files under docs/plans in every checkout of each known repository.",
+      title: scope ? `No plans yet found in ${subject}` : `No plans found in ${subject}`,
+      body: "Plans looks for Markdown files under docs/plans in every checkout of each known repo.",
     };
-  const node = fill(tpl("tpl-empty-state"), { ...fills, action: "Manage Repos" });
+  const node = fill(tpl("tpl-empty-state"), { ...fills, action: scope ? "View All Repos" : "Manage Repos" });
   node.classList.add("empty-state--with-action");
+  if (scope) node.classList.add("empty-state--plain");
   const action = node.querySelector("[data-slot=action]");
   action.hidden = false;
   action.addEventListener("click", (event) => {
     event.preventDefault();
-    onManage();
+    (scope ? scope.onViewAll : onManage)();
   });
   return node;
 }
@@ -100,6 +106,14 @@ export function emptyState() {
 
 function repositoryCount(count) {
   return `${count} ${count === 1 ? "repository" : "repositories"}`;
+}
+
+// A small status chip (tpl-chip), optionally toned by a class such as "ok" or "warn".
+export function chip(text, cls = "") {
+  const node = tpl("tpl-chip");
+  node.textContent = text;
+  if (cls) node.classList.add(cls);
+  return node;
 }
 
 export function warningLine(text) {
@@ -131,10 +145,10 @@ export function packageBanner(pkg, onEnable, skillModal) {
 
 export function lifecycleTab(lifecycle, count, isSelected, onSelect) {
   const btn = fill(tpl("tpl-lifecycle-tab"), {
-    label: `${LIFECYCLE_LABELS[lifecycle] || lifecycle} (${count})`,
+    label: `${lifecycleLabel(lifecycle)} (${count})`,
   });
   btn.classList.toggle("selected", isSelected);
-  btn.setAttribute("aria-selected", String(isSelected));
+  if (isSelected) btn.setAttribute("aria-current", "true");
   btn.addEventListener("click", () => onSelect(lifecycle));
   return btn;
 }
@@ -154,45 +168,6 @@ function planCardElement(record, cardActions) {
   node.record = record;
   node.actions = cardActions;
   return node;
-}
-
-// The plan-suite actions offered for each lifecycle. Each is one atomic command and produces a
-// clipboard prompt — the portal never runs a command or moves a file for it; the agent does both
-// after you paste. Label is the plain, in-context verb; description is the one-line effect.
-// `/plan-start` appears twice because it both begins a backlog plan and resumes an active one.
-// Wording tracks docs/user/guides/plan/lifecycle/plan-suite.md.
-const PLAN_ACTIONS = [
-  ["plan-promote", "Promote", "Review and prepare this plan for development.", "backlog"],
-  ["plan-start", "Start", "Implement this plan in an isolated worktree.", "backlog"],
-  ["plan-start", "Continue", "Resume implementation in this plan's worktree.", "active"],
-  ["plan-write", "Update", "Revise this plan or sync it with the repository.", "active"],
-  ["plan-close", "Close", "Verify the work and move the plan to completed or archived.", "active"],
-];
-
-function actionsForLifecycle(lifecycle) {
-  return PLAN_ACTIONS.filter(([, , , actionLifecycle]) => actionLifecycle === lifecycle);
-}
-
-// Best-effort single recommended next command, derived from plan state. Returns null when no rule
-// clearly applies (e.g. blocked, or mid-progress with no strong signal) rather than guessing.
-export function recommendedPlanCommand(plan) {
-  if (plan.blockers.length > 0) return null;
-  if (plan.lifecycle === "backlog") return "plan-start";
-  if (plan.lifecycle !== "active") return null;
-  const { complete, total } = plan.taskCounts;
-  if (total > 0 && complete === total) return "plan-close";
-  if (plan.reviewState === "possibly-stale" || plan.reviewState === "never-reviewed") return "plan-write";
-  return null;
-}
-
-// The one command a card or drawer leads with: the recommendation when there is one, otherwise the
-// lifecycle's default way forward (Start a backlog plan, Continue an active one). Completed and
-// archived plans have none. Returns { command, label } or null.
-export function primaryPlanAction(plan) {
-  const actions = actionsForLifecycle(plan.lifecycle);
-  const command = recommendedPlanCommand(plan) || (actions.some(([item]) => item === "plan-start") ? "plan-start" : null);
-  const action = actions.find(([item]) => item === command);
-  return action ? { command, label: action[1] } : null;
 }
 
 // One clickable menu item (icon + label + optional description) that runs copyFn on click. `run`
@@ -239,7 +214,7 @@ function planMenuBody(api) {
   if (api.installed) {
     note.textContent = "Copies a prompt to run in an agent chat.";
     group.hidden = false;
-    for (const [command, label, description] of actionsForLifecycle(api.lifecycle)) {
+    for (const { command, label, description } of lifecycleActions(api.lifecycle)) {
       group.append(
         menuItem({ icon: "agent-prompt", label, description, run: run(() => api.copyPrompt(command)) }),
       );
@@ -291,11 +266,20 @@ export function drawerContent(doc, drawerActions) {
     title: plan.title,
     path: `${doc.plan.repository.name} / ${plan.relativePath}`,
     html: doc.html,
-    // Lifecycle, priority, next action, review, and task progress now render in the shared
-    // <plan-status> section mounted alongside this metadata list, not as static rows here.
+    // Priority, readiness, blockers, and completion render in the shared <plan-status> section
+    // mounted alongside this metadata list. The next action is the agent's own pointer into the
+    // plan, so it is shown here in the full document view and not on the card.
     meta: [
       dtdd("id", plan.id || "(missing)"),
       dtdd("repository", doc.plan.repository.name),
+      dtdd("lifecycle", lifecycleLabel(plan.lifecycle)),
+      ...(plan.nextAction ? [dtdd("next action", plan.nextAction)] : []),
+      // An active or review plan's assigned worktree holds its authoritative copy; say so, since the
+      // path above is the same in every checkout. During review the primary copy has already moved,
+      // so the worktree's copy can sit at an older path; name the primary one too.
+      ...(plan.authority?.source === "worktree" ? [dtdd("read from", `From worktree ${plan.authority.worktree}`)] : []),
+      ...(plan.primaryRelativePath ? [dtdd("primary copy", plan.primaryRelativePath)] : []),
+      dtdd("plan freshness", FRESHNESS_LABELS[plan.reviewState] || plan.reviewState),
     ],
     warnings: plan.validation.warnings,
     tasks: doc.parsed?.tasks || [],
@@ -327,8 +311,8 @@ export function cardActionMenu(record, cardActions) {
 }
 
 // The card's primary command button (see primaryPlanAction), or null. It copies that command's
-// prompt; nothing on the card moves a plan between lifecycle folders, since `/plan-start` and
-// `/plan-close` own those moves and commit them.
+// prompt; nothing on the card moves a plan between lifecycle folders, since the suite commands own
+// those moves and commit them.
 export function cardPrimaryAction(record, cardActions) {
   const action = primaryPlanAction(record.plan);
   if (!action) return null;
@@ -366,48 +350,4 @@ export function blockerLink(blocker, onOpenPlan) {
   const link = fill(tpl("tpl-blocker-link"), { title: blocker.title });
   link.addEventListener("click", () => onOpenPlan(blocker.key));
   return link;
-}
-
-// One project block in the All Open Tasks dialog: a completion header, then either the plan's open
-// tasks or the not-started line with its View Story escape hatch.
-//
-// A not-started plan still lists its open tasks when it has any. "Project Not Started" answers
-// "has anything happened here", which a 0/10 plan and a 0/0 plan answer identically; the task list
-// answers "what is left", which only the first can. Suppressing the list for 0/10 would hide ten
-// real items behind a label. View Story is the only route to detail for the 0/0 case, where there
-// is no checklist to show.
-export function allTasksProject(record, { notStarted, percent, onViewStory }) {
-  const plan = record.plan;
-  const { complete, total } = plan.taskCounts;
-  const node = fill(tpl("tpl-all-tasks-project"), {
-    title: plan.title,
-    repo: record.repository.name,
-    percent: percent === null ? "—" : `${Math.round(percent * 100)}%`,
-    count: total === 0 ? "no checklist" : `${complete}/${total}`,
-  });
-  const percentEl = node.querySelector("[data-slot=percent]");
-  percentEl.style.background = completionBadgeColor(percent);
-
-  const notStartedEl = node.querySelector("[data-slot=notstarted]");
-  notStartedEl.hidden = !notStarted;
-  const viewStoryEl = node.querySelector("[data-slot=view-story]");
-  if (notStarted) viewStoryEl.addEventListener("click", () => onViewStory(record.key));
-  else viewStoryEl.remove();
-
-  const tasks = plan.openTasks || [];
-  node
-    .querySelector("[data-slot=tasks]")
-    .replaceChildren(...tasks.map((task) => fill(tpl("tpl-all-tasks-item"), { text: task.text })));
-  return node;
-}
-
-// One problem in the blocked-move dialog: what is wrong, and how to fix it. Findings that predate
-// the structured shape carry only a message, so the resolution line is dropped rather than
-// rendered empty.
-export function lifecycleFinding(item) {
-  const node = fill(tpl("tpl-lifecycle-finding"), { message: item.message });
-  const resolution = node.querySelector("[data-slot=resolution]");
-  if (item.resolution) resolution.textContent = item.resolution;
-  else resolution.remove();
-  return node;
 }

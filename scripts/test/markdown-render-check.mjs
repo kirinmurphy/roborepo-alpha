@@ -16,6 +16,7 @@ testPlainCodeBlockUnaffected();
 testExistingFeaturesStillWork();
 testHtmlCommentsDropped();
 testTaskListItems();
+testWrappedListItems();
 const imageHtml = renderMarkdown('![Example "quoted" caption](../../images/tokens/conditions-light.png)');
 assert.match(imageHtml, /<img src="\.\.\/\.\.\/images\/tokens\/conditions-light.png"/);
 assert.match(imageHtml, /alt="Example &quot;quoted&quot; caption"/);
@@ -33,7 +34,8 @@ function testHeadingIdsAndDedup() {
 
 function testHeadingIdSlugifiesPunctuation() {
   const html = renderMarkdown("## Package Cost & Regression (exploratory)\n");
-  assert.match(html, /<h2 id="package-cost-regression-exploratory">/);
+  assert.match(html, /<h2 id="package-cost--regression-exploratory">/);
+  assert.match(renderMarkdown("## Step 1 — When they agree\n"), /<h2 id="step-1--when-they-agree">/);
 }
 
 function testTable() {
@@ -107,6 +109,13 @@ function testTaskListItems() {
   const inlineHtml = renderMarkdown("- [x] ship `render` and **tables**\n");
   assert.match(inlineHtml, /<code>render<\/code>/);
   assert.match(inlineHtml, /<strong>tables<\/strong>/);
+}
+
+function testWrappedListItems() {
+  const html = renderMarkdown("- **first** item wraps\n  onto a second line\n- second\nafter\n");
+  assert.match(html, /<ul><li><strong>first<\/strong> item wraps onto a second line<\/li><li>second<\/li><\/ul>/);
+  // An unindented line still ends the list.
+  assert.match(html, /<\/ul>\n<p>after<\/p>/);
 }
 
 function testExistingFeaturesStillWork() {

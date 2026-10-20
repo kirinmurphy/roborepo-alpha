@@ -14,12 +14,16 @@ import { resolveNewOptions } from "./skill-new-options.mjs";
 import { updateReadmeForCommand, updateReadmeForHelper } from "./skill-new-readme.mjs";
 import { skillTemplate, skillBackedCommandTemplate, standaloneCommandTemplate } from "./skill-new-templates.mjs";
 import { loadPackageCatalog } from "./package-catalog.mjs";
+import { SKILL_TRIGGERS_FILE } from "./skill-trigger-fixtures.mjs";
 
 const NATIVE_SKILL_CREATOR = path.join(
   os.homedir(), ".codex", "skills", ".system", "skill-creator", "scripts"
 );
 const NATIVE_INIT_SKILL = path.join(NATIVE_SKILL_CREATOR, "init_skill.py");
 const NATIVE_GEN_YAML = path.join(NATIVE_SKILL_CREATOR, "generate_openai_yaml.py");
+// Medium- and high-risk skills are the ones whose trigger wording needs a guard. No stub fixture is
+// written: an empty one passes the check and would read as coverage that does not exist.
+const TRIGGER_FIXTURE_RISKS = new Set(["medium", "high"]);
 
 function runChecked(label, command, args, opts = {}) {
   const result = spawnSync(command, args, { cwd: repoRoot, stdio: "inherit", ...opts });
@@ -212,6 +216,11 @@ export async function skillNew(args) {
   console.log(`created ${opts.kind}: ${opts.kind === "standalone" ? `/${opts.command}` : opts.name}`);
   console.log("next: edit the generated body, then run:");
   console.log("  scripts/doctor.sh --quiet");
+  if (opts.kind !== "standalone" && TRIGGER_FIXTURE_RISKS.has(opts.risk)) {
+    const fixturePath = path.relative(repoRoot, path.join(builtInPackageRoot(opts.name), SKILL_TRIGGERS_FILE));
+    console.log(`then add trigger fixtures to ${fixturePath} and run:`);
+    console.log("  roborepo skill triggers --check");
+  }
 }
 
 function writePackageConfig(packageDir, config) {

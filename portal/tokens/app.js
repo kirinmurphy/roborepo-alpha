@@ -7,12 +7,15 @@
 import { portalGetJson, portalPostJson, portalHideLoading, portalHideLoadingNow, portalSetUpdatedAt, portalWireBackdropClose } from "/portal/shared/api.js";
 import { pageState } from "./page-state.js";
 import { activePresentedHarnesses, formatHarnessList } from "/portal/shared/harness-cohort.js";
-import { checkForHarnesses, harnessWarningElement } from "/portal/shared/harness-warning.js";
+import { renderCodexHookStatus } from "/portal/shared/codex-hook-status.js";
+import { harnessWarningElement } from "/portal/shared/harness-warning.js";
 import { fetchSetupState } from "/portal/shared/setup-api.js";
 import { createConditionsReport } from "./conditions-report.js";
 import { sessionConditionLine, capturedSessionFindings } from "./conditions-context.js";
 import { createDocGuideModal } from "/portal/shared/doc-guide-modal.js";
 import { createOracleHealthPanel } from "./oracle-health.js";
+import { createTokensRepositoryScope, isRepositoryScopeUnavailable } from "./repository-scope.js";
+import { preserveViewState } from "./view-state.js";
 
 // ── State ──
 let firstLoad = true;
@@ -23,13 +26,18 @@ let pollTimer = null;
 const TOKENS_POLL_MS = 5000;
 // Last applied setup snapshot + the cascade rung it produced — load() re-applies the setup state
 // when a real-data response flips hasData (first captures land mid-poll, or a wipe empties the
-// spool), so the no-data panel and the full report follow without a config change or reload.
+// spool), so the empty page and the full report follow without a config change or reload.
 let lastSetup = null;
 let lastSetupState = null;
 // The most recent report object — session chips and timeline marks look sessions up here at
 // click time, so a click always acts on the live report rather than a stale closure.
 let lastSessionData = null;
 const oracleHealth = createOracleHealthPanel();
+// Polls and scope changes can overlap; only the latest load may paint.
+let loadSequence = 0;
+// The selected repository (or outside activity) has no captures: its empty splash stands in for
+// the report while tracking has data elsewhere.
+let scopedEmpty = false;
 
 // ── Formatting helpers (local) ──
 const fmt = (n) => Number(n || 0).toLocaleString("en-US");
@@ -49,6 +57,11 @@ const conditionsView = createConditionsReport({
   getData: () => lastSessionData,
   onSaved: async () => { lastVersion = null; await load(); },
 });
+// A scope change forgets the remembered version: two scopes can report the same one.
+const repositoryScope = createTokensRepositoryScope({
+  onChange: () => { lastVersion = null; void load(!setupReady); },
+  onResolved: () => { if (scopedEmpty && lastSetup) void applySetupState(lastSetup); },
+});
 
 // ── Init ──
 init();
@@ -59,9 +72,9 @@ async function init() {
   // from ./page-state.js. The config API returns a flat `telemetry` object
   // (cfg.telemetry.enabled), not nested under packages.
   //
-  // Mock data: when the page is NOT in the "full" state (no harness installed, or no
-  // real telemetry data), we still fetch /api/data and render the report below the
-  // banner — the demo spool (demo.jsonl) feeds the same analyzeTelemetry pipeline.
+  // Mock data: when tracking is off or no harness is active, the demo spool feeds the report
+  // below the setup notice. When tracking is active but has no captures, a focused empty page
+  // takes the report's place until the first capture arrives.
   // A mock-data disclaimer banner appears at the top of the report when this is the
   // case. Once a real harness is installed and captures real telemetry, the banner
   // disappears and the report shows real data through the same pipeline.
@@ -76,6 +89,7 @@ async function init() {
   }
   const telemetryOn = setup.telemetry.enabled;
   const harnessCount = setup.harnesses.active.length;
+  void renderCodexHookStatus(document.getElementById("tokens-codex-hook-status"), setup);
   // Package capability lookups (docLookupHint) read this snapshot — installed/available state
   // comes from the same /api/config the setup cascade already uses. No second fetch.
   window.__tokensConfig = cfg;
@@ -89,8 +103,8 @@ async function init() {
   oracleHealth.start({ live: isFullState });
   await load(!isFullState);
   // Re-apply the setup cascade after the first report load: hasData is now established from the
-  // real /api/data response, so pageState reflects actual captures — the "no telemetry data yet"
-  // panel hides when real data exists instead of persisting from the pre-load default.
+  // real /api/data response, so pageState reflects actual captures — the empty page hides when
+  // real data exists instead of persisting from the pre-load default.
   await applySetupState({ telemetryOn, activeHarnessCount: harnessCount, snap: setup });
   if (setupReady) {
     clearInterval(pollTimer);
@@ -100,7 +114,7 @@ async function init() {
 
 // ── Four-state cascade (mirrors the existing telemetry page) ──
 // The /api/data endpoint reads the spool directly; the cascade gates whether the page shows
-// the setup banner vs the report. When telemetry is off in the hermetic test env, /api/data
+// setup, an empty page, or the report. When telemetry is off in the hermetic test env, /api/data
 // still returns demo data — so we check capture_count as the real gate, falling back to
 // data if the spool has content even when the config says telemetry is off.
 async function applySetupState({ telemetryOn, activeHarnessCount, snap }) {
@@ -109,20 +123,20 @@ async function applySetupState({ telemetryOn, activeHarnessCount, snap }) {
   if (!setupReady && firstLoad) { firstLoad = false; portalHideLoadingNow(); }
 
   const offPanel = document.getElementById("tokensoff");
+  const bannerStack = document.getElementById("tokensbanner-stack");
   const bannerHost = document.getElementById("tokensbanner");
+  const noData = document.getElementById("tokens-no-data");
   const content = document.getElementById("tokenscontent");
   const state = pageState({ telemetryOn, activeHarnessCount, hasData });
   lastSetupState = state;
 
-  // The banner (telemetry-off or harness-warning) shows in every non-full state.
-  // The content (report) is ALWAYS shown — in non-full states it renders the demo
-  // spool's data below the banner, with a mock-data disclaimer. This lets the page
-  // demonstrate the full report even before a real harness is installed.
+  // Setup notices and mock report remain available before tracking starts. Once tracking is on
+  // with an active harness, show only the empty page until real captures exist.
   // The "install a supported harness" banner is the SHARED component
   // (portal/shared/harness-warning.js — the same portal-notice the Agents page renders);
   // it shows below the state panel whenever the machine has no active harness. When telemetry is
   // also off, the telemetry prompt remains visible above it so both setup steps are available.
-  const sharedBanner = harnessWarningElement(snap, { onCheck: async () => { await checkForHarnesses(); await init(); } });
+  const sharedBanner = harnessWarningElement(snap, { onRefreshed: init });
   if (state === "telemetry-off") {
     offPanel.style.display = "";
     const title = offPanel.querySelector("[data-slot=title]");
@@ -140,12 +154,6 @@ async function applySetupState({ telemetryOn, activeHarnessCount, snap }) {
       offPanel.querySelector("[data-slot=title]").textContent = "Token Activity Tracking";
       offPanel.querySelector("[data-slot=body]").textContent = "Enable token tracking to capture and visualize token usage across harnesses.";
     }
-  } else if (state === "no-data") {
-    offPanel.style.display = "";
-    const title = offPanel.querySelector("[data-slot=title]");
-    const body = offPanel.querySelector("[data-slot=body]");
-    title.textContent = "No telemetry data yet";
-    body.textContent = "Telemetry is on and a harness is active, but nothing has been captured yet. Run a session in your harness — this page fills in as usage data lands.";
   } else {
     offPanel.style.display = "none";
   }
@@ -153,9 +161,13 @@ async function applySetupState({ telemetryOn, activeHarnessCount, snap }) {
   // Banner host: the shared harness-warning notice in every state where it applies.
   bannerHost.style.display = sharedBanner ? "" : "none";
   bannerHost.replaceChildren(...(sharedBanner ? [sharedBanner] : []));
-
-  // Content is always visible — the report renders below the banner.
-  content.hidden = false;
+  bannerStack.hidden = state === "no-data" || state === "full";
+  // An unavailable scope shows its own state in place of both the empty page and the report.
+  const scopeUnavailable = repositoryScope.isUnavailable();
+  const showNoData = (state === "no-data" || scopedEmpty) && !scopeUnavailable;
+  noData.hidden = !showNoData;
+  content.hidden = showNoData || scopeUnavailable;
+  setNoDataCopy(noData);
 
   // Wire the enable-telemetry button (same pattern as the existing page).
   const enableBtn = document.getElementById("tokensenable");
@@ -184,26 +196,42 @@ async function load(force) {
     if (firstLoad) { firstLoad = false; portalHideLoading(); }
     return;
   }
-  const endpoint = force ? "/api/tokens/mock" : "/api/data";
-  let data;
-  try {
-    data = await portalGetJson(endpoint);
-  } catch {
+  const sequence = ++loadSequence;
+  if (repositoryScope.mockScopeUnavailable(force)) {
     if (firstLoad) { firstLoad = false; portalHideLoadingNow(); }
+    showScopeUnavailable();
     return;
   }
+  let data;
+  try {
+    data = await portalGetJson(repositoryScope.reportPath(force));
+  } catch (err) {
+    if (firstLoad) { firstLoad = false; portalHideLoadingNow(); }
+    if (sequence === loadSequence && isRepositoryScopeUnavailable(err)) showScopeUnavailable();
+    return;
+  }
+  if (sequence !== loadSequence) return;
   if (firstLoad) { firstLoad = false; portalHideLoading(); }
+  // Back from an unavailable scope: let the setup cascade show the report again.
+  if (repositoryScope.clearUnavailable() && lastSetup) await applySetupState(lastSetup);
   if (document.querySelector("dialog[open]")) return;
   if (!force && data.version === lastVersion) return;
   lastVersion = data.version;
   lastSessionData = data;
   // hasData reflects REAL captures only — the mock endpoint's spool always has records, and
-  // letting it set hasData would advance the cascade to the real-data rung (hiding the no-data
-  // panel and the mock disclaimer) before any real telemetry exists.
+  // letting it set hasData would advance the cascade to the real-data rung (hiding the empty
+  // page and the mock disclaimer) before any real telemetry exists.
   if (!force) {
-    hasData = (data.capture_count ?? 0) > 0;
+    // A scoped report can be empty while tracking has data; the first-run empty page is decided
+    // by the unscoped report only, and an empty scope renders the report with zero totals.
+    hasData = (data.capture_count ?? 0) > 0 || repositoryScope.isScoped();
+    const emptyScope = repositoryScope.isScoped() && (data.capture_count ?? 0) === 0;
+    if (emptyScope !== scopedEmpty) {
+      scopedEmpty = emptyScope;
+      if (lastSetup) await applySetupState(lastSetup);
+    }
     // Re-apply the setup cascade when the report's hasData flips the shown rung (e.g. the first
-    // real captures land and the "no telemetry data yet" panel should give way to the report).
+    // real captures land and the empty page should give way to the report).
     if (lastSetup) {
       const state = pageState({ telemetryOn: lastSetup.telemetryOn, activeHarnessCount: lastSetup.activeHarnessCount, hasData });
       if (state !== lastSetupState) {
@@ -220,15 +248,39 @@ async function load(force) {
   const showMockDisclaimer = !setupReady;
   const mockBanner = document.getElementById("mock-disclaimer");
   if (mockBanner) mockBanner.style.display = showMockDisclaimer ? "" : "none";
+  repositoryScope.markMockScope(force);
 
-  renderVerdict(data);
-  renderMeta(data);
-  renderFindings(data.insights || []);
-  renderAgentPrompt(data);
-  renderInvestigationSections(data);
-  renderTimelineStrip(data);
-  conditionsView.render(data, setupReady);
-  renderFullData(data);
+  // New report content must not undo what the user opened: expanded sections stay expanded.
+  preserveViewState(document.getElementById("tokenscontent"), () => {
+    renderVerdict(data);
+    renderMeta(data);
+    renderFindings(data.insights || []);
+    renderAgentPrompt(data);
+    renderInvestigationSections(data);
+    renderTimelineStrip(data);
+    conditionsView.render(data, setupReady);
+    renderFullData(data);
+  });
+}
+
+// The splash says the setup-level thing (the markup's own copy) until a scope is empty, then names
+// the scope. The setup copy is read back from the markup once, so it is authored in one place.
+let setupNoDataCopy = null;
+function setNoDataCopy(noData) {
+  const title = noData.querySelector("[data-slot=title]");
+  const body = noData.querySelector("[data-slot=body]");
+  setupNoDataCopy ??= { title: title.textContent, body: body.textContent };
+  const copy = scopedEmpty ? repositoryScope.emptyScopeCopy() : setupNoDataCopy;
+  title.textContent = copy.title;
+  body.textContent = copy.body;
+}
+
+// The scope names no listed repository: show that instead of any report, never all activity.
+function showScopeUnavailable() {
+  lastVersion = null;
+  document.getElementById("tokenscontent").hidden = true;
+  document.getElementById("tokens-no-data").hidden = true;
+  repositoryScope.showUnavailable();
 }
 
 // ── Frame-of-reference meta line ──
@@ -796,7 +848,7 @@ function renderInvestigationSections(data) {
 
   // 4g: Testing efficiency — badge is the direct yes/no the question asks; the number lives in
   // the body. Threshold: ≥10% token share = yes (waste line's yellow band). Info icon → the
-  // guide's Testing Efficiency section, which describes exactly this panel (incl. the two
+  // guide's "Are you over-testing?" section, which describes exactly this panel (incl. the two
   // sub-metrics below).
   if (data.testing_efficiency) {
     const te = data.testing_efficiency;
@@ -811,7 +863,7 @@ function renderInvestigationSections(data) {
         badgeClass: overTesting ? "warn" : "ok",
         badgeTip: overTesting ? BADGE_TIPS.warn : BADGE_TIPS.ok,
         bodyEl: testingEfficiencyBody(te),
-        docAnchor: "testing-efficiency",
+        docAnchor: "are-you-over-testing",
       }));
     }
   }
@@ -946,7 +998,7 @@ function docLookupHint(warning, type) {
   const available = pkgs[0];
   // Plain text, not an anchor: itemRow escapes the hint (and the agent prompt interpolates it as
   // raw text), so embedded HTML would render as a literal tag. The label name + install guidance
-  // are preserved; /config is one click away in the page nav.
+  // are preserved; /agents is one click away in the page nav.
   return `a doc index would serve just the section you need — ${available.label} is available but not installed`;
 }
 

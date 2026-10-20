@@ -1,7 +1,6 @@
 // Live fixture for the Runtime page's checkout rows when members are plain processes, not Docker.
 //
-// WHY THIS EXISTS: the row layout behaves differently by what a checkout runs (see
-// docs/plans/completed/developer-runtime-repository-row-layout.md), and a normal machine rarely shows
+// WHY THIS EXISTS: the row layout behaves differently by what a checkout runs, and a normal machine rarely shows
 // the interesting cases at once. A dev server that holds several ports is one process — Runtime
 // folds those into a single member — so "several members" needs several processes, and a worktree
 // running only an API, or an app answering 503, is not something anyone keeps running on purpose.

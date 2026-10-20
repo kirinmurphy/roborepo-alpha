@@ -37,9 +37,9 @@ test("oracle health exposes every text status and an accessible singleton dialog
   await dialog.getByRole("button", { name: "Read the Oracle health guide" }).click();
   await expect(dialog).not.toBeVisible();
   await expect(open).toHaveAttribute("aria-expanded", "false");
-  const guide = page.getByRole("dialog", { name: "Tokens page user guide" });
+  const guide = page.getByRole("dialog", { name: "Oracle health", exact: true });
   await expect(guide).toBeVisible();
-  await expect(guide.locator("#oracle-health")).toBeVisible();
+  await expect(guide).toContainText("The live oracle checks harness-scoped sessions");
   await guide.getByRole("button", { name: "Close" }).click();
 });
 

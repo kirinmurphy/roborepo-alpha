@@ -3,6 +3,7 @@
 // from telemetry.mjs's wiring).
 import { send, readJsonBody } from "./portal-routes-http.mjs";
 import { defineRoutes } from "./portal-router.mjs";
+import { readRepositoryScope } from "./portal-routes-scope.mjs";
 
 // Serializes a domain error (see modules/plan-suite/index.mjs's domainError helper) into the
 // structured { error: { code, message, resolution, details } } shape the client's portalPostJson
@@ -16,9 +17,9 @@ function sendDomainError(res, error) {
       message: String(error?.message || error),
       resolution: error?.resolution,
       details: error?.details,
-      // Readiness failures (LIFECYCLE_REQUIREMENTS) also carry structured findings and a
-      // server-generated repair prompt. Keys are listed explicitly here, so a new field on
-      // domainError is dropped silently unless it is added to this list and to portalPostJson.
+      // Some domain errors also carry structured findings and a server-generated repair prompt.
+      // Keys are listed explicitly here, so a new field on domainError is dropped silently unless
+      // it is added to this list and to portalPostJson.
       findings: error?.findings,
       repair: error?.repair,
     },
@@ -47,9 +48,12 @@ function postJsonRoute(path, run, { domainError = false } = {}) {
 
 export const plansRoutes = defineRoutes([
   {
+    // ?repo=<urlKey> narrows the snapshot to one repository (the shared Portal scope).
     path: "/api/plans",
-    handler: (req, res, { handlers }) => {
-      send(res, 200, "application/json", JSON.stringify(handlers.loadPlans()));
+    handler: (req, res, { qs, handlers }) => {
+      const scope = readRepositoryScope(new URLSearchParams(qs), res, handlers);
+      if (!scope) return true;
+      send(res, 200, "application/json", JSON.stringify(handlers.loadPlans({ repositoryId: scope.repositoryId ?? null })));
       return true;
     },
   },
@@ -67,12 +71,13 @@ export const plansRoutes = defineRoutes([
   },
   postJsonRoute("/api/plans/prompt", (handlers, body) => handlers.buildPlansPrompt(body)),
   postJsonRoute("/api/plans/priority", (handlers, body) => handlers.updatePlanPriority(body), { domainError: true }),
-  postJsonRoute("/api/plans/lifecycle", (handlers, body) => handlers.updatePlanLifecycle(body), { domainError: true }),
   {
     method: "POST",
     path: "/api/plans/refresh",
-    handler: (req, res, { handlers }) => {
-      send(res, 200, "application/json", JSON.stringify(handlers.refreshPlans()));
+    handler: (req, res, { qs, handlers }) => {
+      const scope = readRepositoryScope(new URLSearchParams(qs), res, handlers);
+      if (!scope) return true;
+      send(res, 200, "application/json", JSON.stringify(handlers.refreshPlans({ repositoryId: scope.repositoryId ?? null })));
       return true;
     },
   },

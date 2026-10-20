@@ -108,10 +108,13 @@ Permissions sandbox cases should assert the generated or applied files directly:
 - No tracked or projected permission rule contains a contributor's absolute home path.
 - Repo scope is represented by hook wiring, not by `~/projects/**`.
 - Codex keeps the coarse sandbox expression instead of receiving unsupported path-scope rules.
-- Gemini does not flatten `repo-scope` into an unscoped allow.
+- Gemini names the write tools in exactly one rule, the `write-files` gate. Its Policy Engine has no
+  path predicate, so `write-scope` and `repo-scope` must not add rules of their own.
 
 Hook behavior can be tested by invoking hook scripts directly with JSON payloads inside the
 container. That is still deterministic and does not require a real interactive harness session.
+Invoke the hook through the command string the harness settings wire, not the file path, so the
+assertion also covers the wiring.
 
 Keep permissions projection assertions in one installed container whenever possible. Add more grep,
 JSON, TOML, or hook-payload assertions to the existing scenario before adding another full
@@ -121,6 +124,8 @@ install/uninstall loop.
 
 Local Docker tests may skip when Docker is unavailable unless the script is in strict mode. CI must
 run important Docker sandboxes in strict mode so Docker or container failures are hard failures.
+`scripts/test/ci.sh` also fails, rather than skips, when Docker is unavailable on a Linux CI runner,
+because that leg is the only place the suites run in CI.
 
 Use clear phase output and a timeout around `docker run`. A sandbox that hangs silently is not a
 useful verifier.

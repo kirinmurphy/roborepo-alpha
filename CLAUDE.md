@@ -17,3 +17,13 @@ Everything internal that involves "runtime" carries a prefix so the bare word st
 | `harness-runtime` | Harness provider registry runtime | `scripts/harnesses/harness-runtime.mjs` |
 
 Generic English ("at runtime") and the `"runtime": "bash"|"node"` script-interpreter field in `cli-commands.json` are unrelated.
+
+## Naming: "repo"
+
+In anything the user reads in the app (portal pages, dialogs, buttons, tooltips, toasts, error and
+empty-state copy, URL parameters such as `?repo=`), say **repo** / **Repo** / **repos**, never
+"repository". "All repos", "Manage Repos", "Repo-level agent config", "Ignore Repo".
+
+Code, file names, API field names, and internal docs keep `repository` (`repositoryId`, `urlKey`,
+`modules/repositories/`, class names, `data-slot` values). Only the words a person reads change. Text
+copied for an agent (plan prompts) is not app UI and is left as written.

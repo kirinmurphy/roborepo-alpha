@@ -3,8 +3,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Zero-to-N harness presentation, per
-// docs/plans/active/infra-packaging-02-install-lifecycle.md Phase 3.
+// Zero-to-N harness presentation.
 //
 // The portal's own template modules import "/portal/shared/api.js" by absolute browser URL and
 // cannot be loaded in Node, so the cohort *policy* lives in portal/shared/harness-cohort.js —

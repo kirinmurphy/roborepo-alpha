@@ -1,4 +1,4 @@
-// Repository sources in the browser (docs/plans/active/portal-repository-sources.md §7): the
+// Repository sources in the browser: the
 // first-run states on Home, Runtime, and Plans — Enable auto-discovery primary, Add a folder
 // secondary, one call to action at a time — and the Manage repositories dialog against the real
 // hermetic server, where auto-discovery starts off.
@@ -26,7 +26,7 @@ test.describe("first-run repository states", () => {
     await routeHome(page, { repositories: [], autoDiscovery: { enabled: true } });
     await page.goto("/");
     const empty = page.locator(".repository-empty-state");
-    await expect(empty).toContainText("Start a dev server in any repository and it appears here.");
+    await expect(empty).toContainText("Start a dev server in any repo and it appears here.");
     await expect(empty.getByRole("button", { name: ENABLE })).toHaveCount(0);
     await expect(empty.getByRole("button", { name: "Add a folder" })).toBeVisible();
   });
@@ -50,7 +50,7 @@ test.describe("first-run repository states", () => {
     });
     await page.goto("/");
 
-    await expect(page.locator(".auto-discovery-prompt")).toContainText("RoboRepo can observe active apps and remember the repositories they use across HTTP activity and Docker containers.");
+    await expect(page.locator(".auto-discovery-prompt")).toContainText("RoboRepo can observe active apps and remember the repos they use across HTTP activity and Docker containers.");
     await expect(page.locator(".auto-discovery-prompt [data-notice-icon] portal-icon")).toHaveAttribute("name", "info");
     await expect(page.locator(".home-mock-disclaimer")).toContainText("These are mocked versions of what you will see");
     await expect(page.locator("#home-sync-status")).toHaveText("Synced");
@@ -114,7 +114,7 @@ test.describe("first-run repository states", () => {
         await expect(onboarding.getByRole("button", { name: "Manage Repos" })).toBeVisible();
         await expect(onboarding.getByRole("button")).toHaveCount(1);
       } else {
-        await expect(page.locator("#repos-count-text")).toContainText("1 Repo");
+        await expect(page.locator("#plans-header")).toBeVisible();
         await expect(onboarding.getByRole("button", { name: ENABLE })).toHaveCount(0);
         await onboarding.getByRole("link", { name: "Manage Repos" }).click();
         await expect(page.locator("#repository-sources-dialog")).toBeVisible();

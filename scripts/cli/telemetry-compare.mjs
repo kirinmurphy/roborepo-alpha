@@ -1,12 +1,10 @@
-// Marker-relative comparisons, confidence/data-quality gates, and the actionable finding contract
-// (plan: "Marker-relative comparisons", "Confidence and data quality", "Actionable finding contract"
-// — Phase 5). Pure module: takes captures + markers already loaded by the caller (telemetry.mjs's
+// Marker-relative comparisons, confidence/data-quality gates, and the actionable finding contract.
+// Pure module: takes captures + markers already loaded by the caller (telemetry.mjs's
 // CLI report or the portal's /api/telemetry/analysis handler) and returns structured evidence.
 //
 // This replaces telemetry-analyze.mjs's midpoint-only regression() as the PREFERRED comparison path
 // when a change marker is selected. regression() itself is untouched and still runs unconditionally
-// as the labeled exploratory fallback (plan: "Retain midpoint regression as a labeled exploratory
-// fallback when no marker is selected").
+// as the labeled exploratory fallback when no marker is selected.
 
 import { normalizeObservations, canonicalFlowRows } from "./telemetry-observations.mjs";
 import { splitObservationBoundary } from "./telemetry-boundaries.mjs";
@@ -15,7 +13,7 @@ import { applyCohortFilter, normalizeCohortFilter } from "./telemetry-cohort.mjs
 
 export const CONFIDENCE_LABELS = ["strong signal", "emerging pattern", "insufficient evidence", "data-quality warning"];
 
-// Minimum sessions per cohort before a comparison is even attempted (plan: eligibility.minimum_
+// Minimum sessions per cohort before a comparison is even attempted (eligibility.minimum_
 // sessions_per_cohort defaults to 10 for experiments; marker-relative comparisons without an
 // experiment attached use this same conservative floor unless the caller overrides it).
 const DEFAULT_MIN_SESSIONS_PER_COHORT = 10;
@@ -137,8 +135,8 @@ function trimToSessionCount(captures, count, edge) {
 }
 
 // Core marker-relative comparison. Returns a structured result even when data is insufficient — the
-// caller decides whether to surface it, per the plan's "insufficient data produces no false
-// conclusion" exit criterion; this function never throws for thin data, only for a genuinely unknown
+// caller decides whether to surface it, and insufficient data never produces a false
+// conclusion; this function never throws for thin data, only for a genuinely unknown
 // metric id or missing marker.
 export function compareAcrossMarker(allCaptures, marker, metricId, {
   markers = [],
@@ -217,8 +215,8 @@ function confidenceLabel({ beforeSessions, afterSessions, minimumSessionsPerCoho
 }
 
 // Wraps a raw comparison (compareAcrossMarker's output, or a simple cohort-A-vs-cohort-B comparison)
-// into the four-layer actionable finding contract (plan: "Actionable finding contract"). Every field
-// the plan requires a comparative finding to expose is present, even when null. `interpretation` and
+// into the four-layer actionable finding contract. Every field
+// a comparative finding exposes is present, even when null. `interpretation` and
 // `nextAction` are plain strings supplied by the caller (deterministic templates, not free LLM text)
 // — this function's job is only to assemble the contract shape consistently, never to originate
 // causal language itself.
@@ -253,7 +251,7 @@ export function buildFinding({ observation, comparison, interpretation, nextActi
 }
 
 // Deterministic template for the marker-relative finding's headline + interpretation + next action,
-// following the plan's worked example shape ("Observation: ... Evidence: ... Interpretation: ...
+// following the shape ("Observation: ... Evidence: ... Interpretation: ...
 // Next action: ..."). Never claims causation — always "correlates with" / "may" wording, and only
 // when a marker names packages/skills does the interpretation mention them (still correlation-only).
 export function describeMarkerComparison(comparison, marker) {

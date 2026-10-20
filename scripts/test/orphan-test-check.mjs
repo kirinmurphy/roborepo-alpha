@@ -14,6 +14,11 @@
 // `test:*` script counts as reachable only when a runner references its target file or invokes that
 // `test:*` name directly — never merely by existing in package.json.
 //
+// A third: run-checks.mjs can discover every *-check.mjs, but the gate runs it only with
+// `--group`, so being discoverable is not being run. Nineteen suites sat outside `npm run check`
+// while this check counted them as reachable. A *-check.mjs now counts only when a group the gate
+// names in check-groups.json lists it, or a runner names it directly.
+//
 // Files that are deliberately not suite entry points declare themselves in EXEMPT below, each with
 // a reason. An exemption is a decision on the record; an orphan is an accident.
 
@@ -31,7 +36,7 @@ const EXEMPT = new Map([
   ["naming-inventory.mjs", "naming-surface inventory utility (rename-prep); run by hand, not a check"],
   ["test-cli.sh", "the suite runner itself"],
   ["ci.sh", "the CI runner itself"],
-  ["run-checks.mjs", "the discover-and-run runner; every *-check.mjs is reachable through it (see GLOB_RUNNER below)"],
+  ["run-checks.mjs", "the discover-and-run runner; the gate runs the check-groups.json groups it names through it"],
   ["telemetry-schemas-persistence-child.mjs", "child process spawned by telemetry-schemas-check.mjs"],
   ["telemetry-spool-bench.mjs", "micro-benchmark against the live spool; run by hand, not asserted"],
   ["test-telemetry-pid.sh", "binds a real port; manual smoke, deliberately out of the automated suite"],
@@ -40,14 +45,8 @@ const EXEMPT = new Map([
   ["promote-npm-latest-check.mjs", "touches the real npm registry; release-only, never run in CI"],
   ["publish-npm-check.mjs", "touches the real npm registry; release-only, never run in CI"],
   ["app-root-fixture.mjs", "shared helper imported by other checks to build an isolated app root; exports no assertions of its own"],
+  ["docs-reference-scan.mjs", "scanner imported by the docs reference checker; the fixtures check its behavior"],
 ]);
-
-// The runner that discovers suites by convention rather than naming them. When this file exists,
-// every scripts/test/*-check.mjs is reachable — `node scripts/test/run-checks.mjs` with no args
-// runs the whole glob, so a `-check.mjs` file cannot be orphaned while the runner is present.
-// This is the deliberate replacement for the package.json `test:*` entries those files used to
-// each get; see run-checks.mjs for the rationale.
-const GLOB_RUNNER = "run-checks.mjs";
 
 // Direct runners: substring matching on filename is deliberate. These files call their children in
 // several shapes (node "${repo_root}/scripts/test/x.mjs", bash scripts/test/x.sh), and matching the
@@ -78,19 +77,23 @@ for (const [scriptName, command] of Object.entries(packageJsonScripts)) {
   if (match) targetsOfRunnerCalledScripts.add(match[1]);
 }
 
+// The check-groups.json groups a runner passes to run-checks.mjs (`--group ci` in ci.sh). Only
+// those groups' members run; a group nothing names is as orphaned as an unlisted file.
+const checkGroups = JSON.parse(readIfPresent("scripts/test/check-groups.json") || "{}");
+const groupedByRunner = new Set();
+for (const [, group] of directHaystack.matchAll(/--group\s+([A-Za-z0-9_-]+)/g)) {
+  for (const name of checkGroups[group] || []) groupedByRunner.add(name);
+}
+
 const testFiles = fs
   .readdirSync(testDir)
   .filter((name) => /\.(mjs|sh|ps1)$/.test(name))
   .sort();
 
-const globRunnerPresent = fs.existsSync(path.join(testDir, GLOB_RUNNER));
-
 const orphans = [];
 for (const name of testFiles) {
   if (EXEMPT.has(name)) continue;
-  // Any *-check.mjs is reachable through the glob runner when it exists — run-checks.mjs runs
-  // every discovered *-check.mjs with no args, so these files no longer need a per-file runner.
-  if (globRunnerPresent && /\.mjs$/.test(name) && name.endsWith("-check.mjs")) continue;
+  if (groupedByRunner.has(name)) continue;
   if (directHaystack.includes(name)) continue;
   if (targetsOfRunnerCalledScripts.has(name)) continue;
   orphans.push(name);
@@ -107,7 +110,7 @@ if (orphans.length > 0) {
   console.error(`fail: ${orphans.length} test file(s) under scripts/test/ are not run by anything:`);
   for (const name of orphans) console.error(`  ${name}`);
   console.error("");
-  console.error("Add each to scripts/test/test-cli.sh, a package.json test:* script, or a CI job.");
+  console.error("Add a *-check.mjs to the `ci` group in scripts/test/check-groups.json; add anything else to scripts/test/test-cli.sh, a package.json test:* script the gate runs, or a CI job.");
   console.error(`If it is deliberately not a suite entry point, add it to EXEMPT in ${path.relative(repoRoot, fileURLToPath(import.meta.url))} with a reason.`);
 }
 

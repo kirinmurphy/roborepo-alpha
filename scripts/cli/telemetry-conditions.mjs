@@ -5,7 +5,7 @@ import { normalizeObservations, evaluateCondition, aggregateCondition, CONDITION
 // report-wide testing warnings have no supported session denominator and stay outside.
 export const FINDING_UNITS = Object.freeze({ spike: "session", loop: "session", "read-warning": "session" });
 
-export function buildConditionsReport(events, report, options = {}, normalized = normalizeObservations(events, options)) {
+export function buildConditionsReport(events, report, options = {}, normalized = normalizeObservations(events)) {
   const snapshots = options.snapshots ?? [];
   const snapshotIndex = new Map(snapshots.map((snapshot) => [snapshot.snapshot_id, snapshot]));
   const sessionIndex = new Map(normalized.sessions.map((session) => [JSON.stringify([session.harness, session.session_id]), session]));

@@ -5,7 +5,7 @@
   "description": "Plans portal API helpers",
   "execution": {
     "adapter": "module",
-    "module": "scripts/cli/plans.mjs",
+    "module": "scripts/cli/plans-command.mjs",
     "export": "plansCommand"
   }
 }

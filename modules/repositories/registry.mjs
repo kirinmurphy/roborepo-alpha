@@ -12,6 +12,7 @@ import {
 import { allocateRepositoryUrlKey, validateRepositoryUrlKey } from "./url-key.mjs";
 
 import { LAST_SEEN_DEBOUNCE_MS } from "./config.mjs";
+import { devFixturesEnabled, withoutFixtureRepositories } from "./dev-fixtures.mjs";
 
 export {
   REGISTRY_VERSION,
@@ -24,7 +25,14 @@ export function registryPathFor(stateRoot) {
   return path.join(stateRoot, "repositories", "registry.json");
 }
 
+// What every reader sees: the registry without development fixtures, unless dev mode is on.
 export function loadRegistry({ stateRoot, fsApi = fs } = {}) {
+  const registry = readRegistry({ stateRoot, fsApi });
+  return devFixturesEnabled({ stateRoot, fsApi }) ? registry : withoutFixtureRepositories(registry);
+}
+
+// The registry exactly as stored. Writers start from this so saving never drops hidden fixtures.
+function readRegistry({ stateRoot, fsApi = fs } = {}) {
   const filePath = registryPathFor(stateRoot);
   try {
     const parsed = JSON.parse(fsApi.readFileSync(filePath, "utf8"));
@@ -56,7 +64,7 @@ export function writeRegistry({ stateRoot, registry, fsApi = fs } = {}) {
 // Optimistic-concurrency mutation. `mutate(registry)` mutates a clone in place; if it returns
 // false the write is skipped (no-op / debounced), otherwise the revision is bumped and persisted.
 export function updateRegistry({ stateRoot, mutate, expectedRevision, fsApi = fs } = {}) {
-  const current = loadRegistry({ stateRoot, fsApi });
+  const current = readRegistry({ stateRoot, fsApi });
   if (expectedRevision != null && expectedRevision !== current.revision) {
     const error = new Error("repository registry revision conflict");
     error.code = "REVISION_CONFLICT";
@@ -159,7 +167,7 @@ function sameDiscoverySource(discovery, { source, sourceId }) {
 }
 
 // Register a local on-disk root (clone or worktree) under a repository. Idempotent by rootId.
-export function registerLocalRoot(registry, id, { rootId, kind = "clone", now = new Date().toISOString() }) {
+export function registerLocalRoot(registry, id, { rootId, kind = "clone", now = new Date().toISOString(), refreshSeen = true }) {
   const record = requireRecord(registry, id, "register local root");
   const existing = record.localRoots.find((r) => r.rootId === rootId);
   if (!existing) {
@@ -169,12 +177,48 @@ export function registerLocalRoot(registry, id, { rootId, kind = "clone", now = 
     record.updatedAt = now;
     return true;
   }
-  if (Date.parse(now) - Date.parse(existing.lastSeenAt) >= LAST_SEEN_DEBOUNCE_MS) {
+  if (kind === "worktree" && existing.kind !== "worktree") {
+    existing.kind = "worktree";
+    record.updatedAt = now;
+    return true;
+  }
+  if (refreshSeen && Date.parse(now) - Date.parse(existing.lastSeenAt) >= LAST_SEEN_DEBOUNCE_MS) {
     existing.lastSeenAt = now;
     record.updatedAt = now;
     return true;
   }
   return false;
+}
+
+// Drops a linked worktree's checkout record and path once the worktree is gone. Only `worktree`
+// roots qualify: an absent clone may simply have moved, and its record is how Home says so.
+export function forgetWorktreeRoot(registry, id, rootId, { now = new Date().toISOString() } = {}) {
+  const record = requireRecord(registry, id, "forget worktree root");
+  const index = record.localRoots.findIndex((root) => root.rootId === rootId && root.kind === "worktree");
+  if (index === -1) return false;
+  record.localRoots.splice(index, 1);
+  if (registry.localRootPaths?.[rootId]?.repositoryId === id) delete registry.localRootPaths[rootId];
+  record.updatedAt = now;
+  return true;
+}
+
+// Records that Runtime saw something running in a checkout, at most once per debounce interval.
+export function markLocalRootRunning(registry, id, rootId, { now = new Date().toISOString() } = {}) {
+  const root = requireRecord(registry, id, "mark local root running").localRoots.find((item) => item.rootId === rootId);
+  if (!root) return false;
+  if (root.lastRunningAt && Date.parse(now) - Date.parse(root.lastRunningAt) < LAST_SEEN_DEBOUNCE_MS) return false;
+  root.lastRunningAt = now;
+  return true;
+}
+
+// Merges `changes` into the repository's opt-in worktree cleanup record (see schema.mjs).
+export function setWorktreeCleanup(registry, id, changes, { now = new Date().toISOString() } = {}) {
+  const record = requireRecord(registry, id, "set worktree cleanup");
+  const next = { ...(record.worktreeCleanup || {}), ...changes };
+  if (JSON.stringify(next) === JSON.stringify(record.worktreeCleanup || {})) return false;
+  record.worktreeCleanup = next;
+  record.updatedAt = now;
+  return true;
 }
 
 // Record where a rootId actually lives on disk (pljvmyh §2's private index). Separate from

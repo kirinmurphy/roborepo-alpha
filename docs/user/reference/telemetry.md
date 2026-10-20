@@ -4,27 +4,30 @@ Telemetry is RoboRepo's local, opt-in usage analysis system. It captures per-too
 Claude and Codex hooks, turns them into deterministic conclusions (token spikes, testing behavior,
 loops, cost breakdowns), and lets a user mark configuration changes and compare sessions before and
 after them. Everything lives in local JSONL/JSON files under the RoboRepo state directory; nothing
-leaves the machine.
+leaves the machine during normal capture and analysis. The optional `--deep` report passes a
+computed summary to an available AI CLI, as described below.
 
 ## Turning It On
 
-Capture takes two steps, both deliberate:
+Turn on **Token Activity Tracking** in portal Settings or on the Tokens page. This enables the
+telemetry package, installs its capture
+hooks, and turns capture on. The CLI entry point, `roborepo telemetry enable`, performs the same
+action. Start a new local coding session in the desktop app after enabling it so the session loads
+the hooks.
 
-1. Enable the `telemetry` package (from `roborepo library` or `/config`). This installs the capture
-   hooks, which do nothing yet.
-2. Run `roborepo telemetry enable`. The hooks start appending records.
-
-`roborepo telemetry disable` stops capture; the portal can still browse data captured earlier. Capture
-is off by default because the spool grows with every session.
+Turning tracking off in the portal, or running `roborepo telemetry disable`, stops capture; the
+portal can still browse data captured earlier. Capture is off by default because the spool grows
+with every session.
 
 **Telemetry-only install.** `roborepo telemetry install` sets up capture without the rest of
 RoboRepo: it wires only the capture hooks into `~/.claude/settings.json` and `~/.codex/hooks.json`
 and turns capture on. Use it to measure baseline token usage before adopting the full suite; running
 the normal install later upgrades it.
 
-**Codex hook trust.** Codex runs only hooks you have trusted. After install, the next Codex session
-asks you to trust `~/.codex/hooks.json`; approve it once. Codex loads hooks at session start, so
-sessions that were already running do not capture.
+**Codex hook trust.** Codex runs only hooks you have trusted. After enabling tracking, Codex may
+ask you to trust `~/.codex/hooks.json`; approve it if prompted. Codex loads hooks at session start,
+so sessions that were already running do not capture. Start a new session in the app; a full app
+restart is not part of normal setup.
 
 ## Capture
 
@@ -32,19 +35,22 @@ Capture runs from the harness hooks `SessionStart`, `PreToolUse`, `PostToolUse`,
 `UserPromptSubmit`, and `Stop`. Each capture (schema v3) carries:
 
 - timestamp, harness, event, session ID;
-- hashed working directory and repository identity (root hash, remote hash, branch, short SHA);
+- hashed working directory and repository identity (the canonical repository ID, branch, short
+  SHA); an event without a repository ID belongs to no repository;
 - tool metadata (name, MCP server/tool, command hash/size, file extension/path hash — never a raw
   command or path);
 - best-effort call-paired duration (`call_id`-keyed, so concurrent/nested calls never clobber each
   other's start stamp);
 - a reference to the session's effective configuration snapshot (`config_snapshot_id`);
-- a semantic `operation` classification (category/runner/scope/target/exit-status/failure-signature —
-  never the raw shell command);
+- for shell commands only, a semantic `operation` classification (category — test, lint, typecheck,
+  build, format, install, git, serve, read, or other — plus runner/scope/target/exit-status/
+  failure-signature; never the raw shell command);
 - an inferred `phase` (discovery/implementation/debugging/verification/finalization/unknown, with
   confidence and classifier version);
-- `intervening`-work signals (edit-since-last-test, changed-file count/categories, diff fingerprint
-  change, targeted-test-since-last-full, failure-signature change) — all hashes/booleans/counts,
-  never diff content;
+- `intervening`-work signals (edit-since-last-test — an edit tool ran, including Codex's
+  `apply_patch`, or the working-tree diff changed since the previous test run started — plus
+  changed-file count/categories, diff fingerprint change, targeted-test-since-last-full,
+  failure-signature change) — all hashes/booleans/counts, never diff content;
 - transcript-derived token counts, prompt size/hash/preview, and the tool result size that most
   recently entered context (size only, never content).
 
@@ -119,9 +125,16 @@ low-confidence. Robust summaries (trimmed mean, median, percentile) are used for
 token/duration distributions rather than plain averages.
 
 **Cohort filter** is a normalized object shared by the CLI and
-portal: `time`, `harnesses`, `models`, `repos`, `packages`/`skills` (exposure, resolved via
-`config_snapshot_id`), `operations`, `phases`, `outcomes`, `task_categories`, `snapshot_ids`. The same
-filter object scopes every panel — no panel-local filter silently redefines the global cohort.
+portal: `time`, `harnesses`, `models`, `repository_ids` (canonical repository scope),
+`excluded_repository_ids` (activity outside those repositories), `packages`/`skills` (exposure,
+resolved via `config_snapshot_id`), `operations`, `phases`, `outcomes`, `task_categories`,
+`snapshot_ids`. The same filter object scopes every panel — no panel-local filter silently redefines
+the global cohort.
+
+**Repository scope** on the Tokens page comes from the portal's shared repository selector
+(`?repo=`): one repository's sessions, **All repos**, or **Activity outside listed
+repos** — sessions with no repository, in a repository RoboRepo has not found, or in an ignored one.
+All repositories is exactly the listed repositories plus that outside activity.
 
 **Marker-relative comparison** is the preferred way to answer "did this change something". Given a
 `change` marker, sessions are split into before and after cohorts, dropping sessions that span the
@@ -172,16 +185,18 @@ data-quality warnings, read warnings, recent markers, experiment readiness, usag
 efficiency, cost breakdowns, the exploratory midpoint regression, loops, sessions, spikes, and raw
 contributor tables.
 
-`--deep` adds an LLM summary of those findings, run through the headless `claude -p` with your
-existing Claude auth. Only the computed summary is sent, never raw capture or transcript content.
+`--deep` adds an LLM summary of those findings. It tries the installed Claude, Codex, and Gemini
+CLIs in that order and invokes the first available one with `-p`. Only the computed summary is
+passed to that CLI, never raw capture or transcript content.
 
 The report and the portal share one analysis and metric registry, so their numbers agree for the
 same cohort.
 
 ## Portal
 
-The `/tokens` page shows the same analysis as `roborepo telemetry report`, refreshing every 5
-seconds. See the [Telemetry Walkthrough](../guides/telemetry.md) for how to read it.
+The `/tokens` page uses the same analysis data as `roborepo telemetry report`, adding interactive
+condition comparisons, event history, and change records. It refreshes every 5 seconds. See the
+[Telemetry Walkthrough](../guides/telemetry.md) for how to read it.
 
 ## Privacy
 

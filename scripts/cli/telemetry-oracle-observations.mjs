@@ -116,7 +116,7 @@ export function eventSupport(row, repositoryIndex) {
   if (names.some((name) => typeof name !== "string")) issues.push("malformed_event");
   // Bare MCP names require a separate independent attribution inventory. Never silently call
   // them "other" while production recognizes them as jcodemunch or jdocmunch.
-  else if (names.some((name) => !name.startsWith("mcp__") && !["Read", "Grep", "Glob", "Bash", "Edit", "Write", "NotebookEdit"].includes(name))) issues.push("unsupported_bare_tool");
+  else if (names.some((name) => !name.startsWith("mcp__") && !["Read", "Grep", "Glob", "Bash", "exec", "exec_command", "shell", "run_shell_command", "Edit", "Write", "NotebookEdit"].includes(name))) issues.push("unsupported_bare_tool");
   const comparable = issues.length === 0;
   if (!repositoryId(row, repositoryIndex)) issues.push("unresolved_repository");
   if (!known(row.session?.model)) issues.push("unknown_model");
@@ -128,7 +128,7 @@ export function isRecord(value) {
 }
 
 function repositoryId(row, index) {
-  return known(row.repo?.repository_id) || index.get(row.repo?.normalized_remote_hash) || null;
+  return known(row.repo?.repository_id);
 }
 
 function digest(value) {

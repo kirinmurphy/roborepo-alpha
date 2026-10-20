@@ -2,11 +2,18 @@
 
 Hooks are commands Codex runs at points in a session — when it starts, before a tool call, after a
 tool call. RoboRepo installs a few that always run, and packages add more when you enable them.
-Turn a package's hooks off by disabling the package in `/config` or with
+Turn a package's hooks off by disabling the package in `/agents` or with
 `roborepo package disable <id>`.
 
-Codex runs only hooks you have trusted. After install, the next Codex session asks you to trust
-`~/.codex/hooks.json`; approve it once. Sessions that were already running do not pick up new hooks.
+Codex runs non-managed hooks only after you review and trust their exact definitions. Enabling a
+package installs its hooks but does not grant that trust. Codex CLI provides `/hooks` for review;
+the macOS desktop app did not show a review prompt during RoboRepo's October 2026 QA. Sessions
+that were already running do not pick up newly trusted hooks.
+
+When token tracking is enabled, Settings, Tokens, and Home check whether its five Codex capture
+hooks are active and show a warning if they are awaiting review, disabled, or missing. The warning
+does not change Codex's trust decisions. Review is currently available through Codex's `/hooks`
+screen.
 
 ## What Runs
 
@@ -19,7 +26,7 @@ Codex runs only hooks you have trusted. After install, the next Codex session as
 | PreToolUse (shell) | Per-command ask | Prompts before shell commands your permission settings put in the `ask` bucket (see below) | always |
 | PreToolUse (shell) | Output minimizer | Appends `2>&1 \| tail -n 120` to noisy build, lint, and typecheck commands, forces `tsc --pretty false`, and denies `--watch`, `--verbose`, and `--debug` | always |
 | PostToolUse | Skill reference observer | Tells Codex which skill reference files it just read, for the skills-loaded line. Codex does not yet deliver this event after shell reads, so Codex reads are under-counted | `skill-visibility` |
-| SessionStart, PreToolUse, PostToolUse, UserPromptSubmit, Stop | Telemetry capture | Records token and tool usage locally | `telemetry`, once `roborepo telemetry enable` is run |
+| SessionStart, PreToolUse, PostToolUse, UserPromptSubmit, Stop | Telemetry capture | Records token and tool usage locally | `telemetry`, once token tracking is enabled in the portal or CLI |
 
 Codex has no `Grep`/`Glob` block or write guard; jcodemunch preference on Codex comes from the
 generated rules in `~/.codex/AGENTS.md` and the command rules in `~/.codex/rules/`.

@@ -5,12 +5,14 @@ import { spawnSync } from "node:child_process";
 import { resolveProjectIdentity, canonicalRepositoryId, providerUrlForRepositoryId } from "../repositories/index.mjs";
 import { finding, messagesOf } from "./findings.mjs";
 import { validateForLifecycle } from "./lifecycle-policy.mjs";
-import { buildRepairPrompt } from "./repair-prompt.mjs";
+import { LIFECYCLE_MODEL } from "./lifecycle-manifest.mjs";
+import { reviewRecord } from "./review-record.mjs";
 import { classifyPlanId, isExternalBlocker } from "./plan-id.mjs";
 import { validatePlanNaming, readProjectNamespaces } from "./naming.mjs";
 import { renderMarkdown } from "../../scripts/cli/markdown-render.mjs";
 
-export const LIFECYCLES = new Set(["backlog", "active", "completed", "archived"]);
+// The lifecycle folders a plan can live in, from manifests/platform/plan-lifecycle.json.
+export const LIFECYCLES = LIFECYCLE_MODEL.folders;
 export const PRIORITIES = new Set(["high", "medium", "low", "none"]);
 const MAX_DOC_BYTES = 1024 * 1024;
 const MAX_PLANS_PER_REPO = 500;
@@ -23,6 +25,7 @@ const planRecordCache = new Map();
 
 // Plans scans the repositories RoboRepo knows about (pljvmyh §9); the scan lives beside this module.
 export { buildPlanSnapshot } from "./canonical-scan.mjs";
+export { planSnapshotFingerprint } from "./snapshot-fingerprint.mjs";
 
 // Appends each plan's cross-plan findings to a copy of its validation. Records come from
 // planRecordCache, so mutating `plan.validation` in place would stack the same relationship
@@ -70,29 +73,8 @@ export function selectRepositoryPlan(snapshot, selector, { cwd = process.cwd() }
   });
 }
 
-// The deterministic document findings for one plan, or every plan, in the repository containing
-// `cwd`. This is the result `roborepo plans validate` prints; the model-driven checks a suite skill
-// runs against code and docs are separate, and a clean result here is not evidence they ran.
-export function validateRepositoryPlans({ cwd = process.cwd(), selector = null } = {}) {
-  const snapshot = buildRepositoryPlanSnapshot({ cwd });
-  const records = selector ? [selectRepositoryPlan(snapshot, selector, { cwd })] : snapshot.plans;
-  const plans = records.map((record) => ({
-    id: record.plan.id,
-    relativePath: record.plan.relativePath,
-    lifecycle: record.plan.lifecycle,
-    findings: record.plan.validation.findings,
-  }));
-  const findings = plans.flatMap((plan) => plan.findings);
-  return {
-    repository: { name: snapshot.repository.name, repositoryId: snapshot.repository.repositoryId },
-    plans,
-    summary: {
-      plans: plans.length,
-      findings: findings.length,
-      blocking: findings.filter((item) => item.severity === "blocking").length,
-    },
-  };
-}
+// `roborepo plans validate`, which resolves each plan's authoritative copy the way the scan does.
+export { validateRepositoryPlans } from "./repository-validation.mjs";
 
 function findPlansRoot(start) {
   for (let current = start; ; current = path.dirname(current)) {
@@ -210,9 +192,10 @@ export function readPlanDocument(snapshot, key) {
   };
 }
 
-// The suite commands a portal prompt may open with. Each takes no mode argument; anything else
-// (including no command at all) yields a context-only prompt with no slash line.
-export const PLAN_SUITE_COMMANDS = new Set(["plan-write", "plan-promote", "plan-start", "plan-close"]);
+// The suite commands a portal prompt may open with: every copy-prompt action the lifecycle manifest
+// offers. Each takes no mode argument; anything else (including no command at all) yields a
+// context-only prompt with no slash line.
+export const PLAN_SUITE_COMMANDS = new Set(LIFECYCLE_MODEL.states.flatMap((state) => state.actions.map((action) => action.command)));
 
 export function buildPrompt(command, selectedPlans, { mode = "repository-aware" } = {}) {
   const commandLines = PLAN_SUITE_COMMANDS.has(command) ? [`/${command}`, ""] : [];
@@ -296,8 +279,11 @@ function walkPlans(dir, repoRoot, files, errors) {
   }
 }
 
-export function readPlanRecord(repository, absolutePath) {
+// `lifecycle` overrides the stage derived from the file's own path. An assigned worktree's copy is
+// read under the primary copy's stage, which decides where the plan is in its lifecycle.
+export function readPlanRecord(repository, absolutePath, { lifecycle = null } = {}) {
   const relativePath = relative(repository.root, absolutePath);
+  const stage = lifecycle || lifecycleFromPath(relativePath);
   const stat = fs.statSync(absolutePath);
   // Naming findings depend on the repository's declared namespaces, not only on the plan file, so
   // a cached record built under a different namespace set is stale even when the plan itself is
@@ -310,21 +296,21 @@ export function readPlanRecord(repository, absolutePath) {
     && cached.mtimeMs === stat.mtimeMs
     && cached.repositoryRoot === repository.root
     && cached.namespaceKey === namespaceKey
+    && cached.record.plan.lifecycle === stage
   ) {
     // Repository-level fields (truncated/errors) can change between scans even when the file
     // itself hasn't, so refresh those on the cached record instead of trusting them blindly.
     return { ...cached.record, repository };
   }
-  const record = buildPlanRecord(repository, absolutePath, relativePath, stat, namespaces);
+  const record = buildPlanRecord(repository, absolutePath, relativePath, stat, namespaces, stage);
   planRecordCache.set(absolutePath, { mtimeMs: stat.mtimeMs, repositoryRoot: repository.root, namespaceKey, record });
   return record;
 }
 
-function buildPlanRecord(repository, absolutePath, relativePath, stat, projectNamespaces = []) {
+function buildPlanRecord(repository, absolutePath, relativePath, stat, projectNamespaces = [], lifecycle = lifecycleFromPath(relativePath)) {
   const tooLarge = stat.size > MAX_DOC_BYTES;
   const markdown = tooLarge ? "" : fs.readFileSync(absolutePath, "utf8");
   const parsed = tooLarge ? emptyParsed("DOCUMENT_TOO_LARGE") : parsePlanMarkdown(markdown, { repository, relativePath });
-  const lifecycle = lifecycleFromPath(relativePath);
   const git = gitFileInfo(repository.root, relativePath, parsed.frontmatter.reviewed_commit);
   const validation = validateParsedPlan(parsed, {
     lifecycle,
@@ -351,21 +337,20 @@ function buildPlanRecord(repository, absolutePath, relativePath, stat, projectNa
       dependencies: parsed.frontmatter.depends_on || [],
       related: parsed.frontmatter.related || [],
       reviewedCommit: parsed.frontmatter.reviewed_commit || "",
-      // Git's administrative name for the one linked worktree implementing this plan (see
-      // plan-schema.md). Empty means unassociated; Home joins it to Runtime's git.worktreeName.
+      // Git's administrative name for the one linked worktree implementing this plan.
+      // Empty means unassociated; Home joins it to Runtime's git.worktreeName.
       worktree: typeof parsed.frontmatter.worktree === "string" ? parsed.frontmatter.worktree.trim() : "",
       reviewState: git.reviewState,
       modifiedAt: stat.mtime.toISOString(),
       gitLastChangedAt: git.lastChangedAt,
       gitStatus: git.status,
       taskCounts: parsed.taskCounts,
-      // Open task text, carried in the list snapshot for active plans only. The all-open-tasks
-      // dialog needs every active plan's remaining items at once; per-plan document fetches would
-      // be one round trip per card. Scoped to active because that is the only lifecycle the dialog
-      // covers, and shipping all 47 plans' tasks would roughly triple this field's cost (~68KB vs
-      // ~23KB measured) to serve a view that never reads the rest. Completed items are excluded —
-      // taskCounts already carries the totals the progress bar needs.
-      openTasks: lifecycle === "active" ? parsed.tasks.filter((task) => !task.done) : [],
+      // Unchecked `## Not tested` entries, which are tasks too but never block implementation
+      // completion; `taskCounts.remaining` minus this is the work still open.
+      notTestedOpen: parsed.notTested.unchecked,
+      // The outcome recorded in `## Review`, kept apart from task progress: open findings and the
+      // recorded decision. Whether an approval is still fresh needs Git and is checked at close.
+      qa: qaSummary(parsed.review),
       headings: parsed.headings,
       excerpt: excerpt(markdown),
       // `warnings` is the display-string projection of `findings`, derived here so the two can
@@ -418,6 +403,7 @@ export function parsePlanMarkdown(markdown, context = {}) {
     headings,
     tasks,
     notTested: notTestedEntries(headings, tasks, lines.length),
+    review: reviewRecord(headings, tasks, lines),
     taskCounts: {
       total: tasks.length,
       complete: tasks.filter((task) => task.done).length,
@@ -537,15 +523,17 @@ export function writeFrontmatterField(markdown, key, value) {
   const rawLines = markdown.slice(4, end).split("\n");
   const bodyAndClose = markdown.slice(end);
   const pattern = new RegExp(`^${key}:.*$`);
+  // An empty value is written as a bare `key:`, the form plan templates use for an unset field.
+  const line = value === "" ? `${key}:` : `${key}: ${value}`;
   let found = false;
-  const updated = rawLines.map((line) => {
-    if (pattern.test(line)) {
+  const updated = rawLines.map((current) => {
+    if (pattern.test(current)) {
       found = true;
-      return `${key}: ${value}`;
+      return line;
     }
-    return line;
+    return current;
   });
-  if (!found) updated.push(`${key}: ${value}`);
+  if (!found) updated.push(line);
   return `---\n${updated.join("\n")}${bodyAndClose}`;
 }
 
@@ -556,8 +544,7 @@ function resolveDestinationPath(repositoryRoot, lifecycle, filename) {
 }
 
 // Where a lifecycle move puts a plan, refusing a destination outside the repository or one already
-// occupied. The portal's movePlanLifecycle and `roborepo plans start` both move plans through this,
-// so the two paths into `active/` cannot disagree about where a plan lands.
+// occupied. Every transition in transition.mjs moves plans through this.
 export function lifecycleMoveDestination(realRepo, realFile, lifecycle) {
   if (!inside(realRepo, realFile)) throw domainError("MOVE_FAILED", "plan file escaped repository boundary");
   const filename = path.basename(realFile);
@@ -595,12 +582,13 @@ function realpathOrStale(absolutePath) {
 // Rebuilds and caches a full public plan record for a file already on disk at `absolutePath`,
 // reusing the same buildPlanRecord/readPlanRecord path the snapshot scanner uses, so mutation
 // results have the identical shape (and warnings/readiness/etc are freshly derived) as a record
-// that came from a normal scan.
-function rebuildPlanRecordAt(repository, absolutePath) {
+// that came from a normal scan. `lifecycle` is the stage the record was shown under, which for an
+// assigned worktree's copy comes from the primary copy rather than from this file's path.
+function rebuildPlanRecordAt(repository, absolutePath, lifecycle) {
   const relativePath = relative(repository.root, absolutePath);
   const stat = fs.statSync(absolutePath);
   const namespaces = readProjectNamespaces(repository.root).namespaces;
-  const record = buildPlanRecord(repository, absolutePath, relativePath, stat, namespaces);
+  const record = buildPlanRecord(repository, absolutePath, relativePath, stat, namespaces, lifecycle || lifecycleFromPath(relativePath));
   planRecordCache.set(absolutePath, {
     mtimeMs: stat.mtimeMs,
     repositoryRoot: repository.root,
@@ -611,8 +599,8 @@ function rebuildPlanRecordAt(repository, absolutePath) {
 }
 
 // Per-field validators for the generic scalar frontmatter mutation below. Only fields meant to be
-// human-edited via the portal belong here — see plan-schema.md's field-by-field rules for which
-// frontmatter keys are UI-editable vs. author/automated-tooling-only (id and reviewed_commit are
+// human-edited via the portal belong here, not the
+// frontmatter keys reserved for authors and automated tooling (id and reviewed_commit are
 // never UI-edited; blocked_by/depends_on/related are arrays writeFrontmatterField can't touch).
 const FIELD_VALIDATORS = {
   priority: (value) => PRIORITIES.has(value),
@@ -636,7 +624,10 @@ export function updatePlanField(snapshot, { id, key, property, value, expectedVa
   const updated = writeFrontmatterField(markdown, property, value);
   fs.writeFileSync(realFile, updated);
   planRecordCache.delete(record.absolutePath);
-  const rebuilt = rebuildPlanRecordAt(record.repository, realFile);
+  const rebuilt = rebuildPlanRecordAt(record.repository, realFile, record.plan.lifecycle);
+  // A frontmatter field edit leaves where the plan was read from, and which stage it is in, unchanged.
+  const primaryPath = record.plan.primaryRelativePath ? { primaryRelativePath: record.plan.primaryRelativePath } : {};
+  rebuilt.plan = { ...rebuilt.plan, ...primaryPath, checkout: record.plan.checkout ?? null, authority: record.plan.authority ?? null };
   return {
     change: { property, previousValue: record.plan[property], newValue: value },
     record: rebuilt,
@@ -645,88 +636,6 @@ export function updatePlanField(snapshot, { id, key, property, value, expectedVa
 
 export function updatePlanPriority(snapshot, { id, key, priority, expectedPriority, mtimeMs, repositoryId }) {
   return updatePlanField(snapshot, { id, key, property: "priority", value: priority, expectedValue: expectedPriority, mtimeMs, repositoryId });
-}
-
-// Implements the doc's 11-step lifecycle-move validation order: enum check, stable-identity
-// resolution, stale-state check, repository-boundary confirmation, destination construction,
-// collision check, destination-requirement validation, then the atomic rename.
-export function movePlanLifecycle(snapshot, { id, key, lifecycle, expectedLifecycle, mtimeMs, repositoryId, skipDestinationValidation = false }) {
-  if (!LIFECYCLES.has(lifecycle)) throw domainError("INVALID_CHANGE", `invalid lifecycle: ${lifecycle}`);
-  const record = resolvePlanForMutation(snapshot, { id, key, repositoryId });
-  if (record.plan.lifecycle === lifecycle) throw domainError("INVALID_CHANGE", `plan is already ${lifecycle}`);
-  assertExpectedState(record, { key, expectedLifecycle, mtimeMs });
-  if (!record.absolutePath) throw domainError("PLAN_NOT_FOUND", "plan file path unavailable");
-
-  const repoRoot = record.repository.root;
-  const realRepo = fs.realpathSync(repoRoot);
-  const realFile = realpathOrStale(record.absolutePath);
-  if (!inside(realRepo, realFile)) throw domainError("MOVE_FAILED", "plan file escaped repository boundary");
-
-  const { filename, destination } = lifecycleMoveDestination(realRepo, realFile, lifecycle);
-
-  // Non-blocking by design: the first call always validates and, if incomplete, throws
-  // LIFECYCLE_REQUIREMENTS so the client can show what's missing. The client re-submits with
-  // skipDestinationValidation once the user confirms "move anyway" — this is a soft warning, not
-  // a hard gate, because most existing plan docs predate the plan-suite schema and can't cleanly
-  // satisfy every section/next_action/verification check without a dedicated backfill pass.
-  //
-  // Validation reads the file from disk rather than trusting the snapshot record, so the findings
-  // (and the repair prompt generated from them) always describe the document as it is right now.
-  // An edit made since the page loaded is picked up here.
-  if (!skipDestinationValidation) {
-    const markdown = fs.readFileSync(realFile, "utf8");
-    const publicRepository = stripRepositoryRoot(record.repository);
-    const parsed = parsePlanMarkdown(markdown, { repository: publicRepository, relativePath: record.plan.relativePath });
-    // The filename travels with the file, so naming is evaluated against the destination
-    // lifecycle: a name that is only reported in backlog and active stops being reported the
-    // moment the same file lands in completed or archived.
-    const destinationValidation = validateParsedPlan(parsed, {
-      lifecycle,
-      // The same `filename` the destination path was built from, taken from disk rather than the
-      // snapshot record, so validation cannot grade a name different from the one the move creates.
-      filename,
-      projectNamespaces: readProjectNamespaces(record.repository.root).namespaces,
-    });
-    if (!destinationValidation.ready) {
-      throw domainError("LIFECYCLE_REQUIREMENTS", `Couldn't move "${record.plan.title}" to ${capitalize(lifecycle)}.`, {
-        resolution: "Complete or remove the listed items, then try again — or move anyway.",
-        details: destinationValidation.warnings,
-        findings: destinationValidation.findings,
-        // Generated here, from this same fresh validation, rather than exposing a second endpoint
-        // the client could call with its own findings — the prompt can then never describe
-        // requirements different from the ones currently on screen.
-        repair: {
-          prompt: buildRepairPrompt({
-            repository: publicRepository,
-            plan: record.plan,
-            sourceLifecycle: record.plan.lifecycle,
-            destinationLifecycle: lifecycle,
-            findings: destinationValidation.findings,
-          }),
-          planKey: record.key,
-          planId: record.plan.id,
-        },
-      });
-    }
-  }
-
-  fs.mkdirSync(path.dirname(destination), { recursive: true });
-  try {
-    fs.renameSync(realFile, destination);
-  } catch {
-    throw domainError("MOVE_FAILED", "Couldn't move the plan file. Nothing was changed.");
-  }
-
-  planRecordCache.delete(realFile);
-  const rebuilt = rebuildPlanRecordAt(record.repository, destination);
-  return {
-    change: { property: "lifecycle", previousValue: record.plan.lifecycle, newValue: lifecycle },
-    record: rebuilt,
-  };
-}
-
-function capitalize(text) {
-  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function normalizeFrontmatter(frontmatter, findings) {
@@ -756,7 +665,7 @@ function normalizeFrontmatter(frontmatter, findings) {
 
 // Thin adapter over the destination-policy module — the rules themselves live in
 // lifecycle-policy.mjs, which is pure and filesystem-free so the same evaluation runs from the
-// scanner, from movePlanLifecycle, and from tests.
+// scanner, from the lifecycle transitions, and from tests.
 //
 // Naming is validated alongside it rather than inside it: lifecycle-policy reads a parsed document
 // and knows nothing about where that document sits on disk, while naming needs the filename and the
@@ -766,6 +675,16 @@ function validateParsedPlan(parsed, { lifecycle, filename = "", projectNamespace
   const { findings } = validateForLifecycle(parsed, { lifecycle, priorities: PRIORITIES, normalizeHeading });
   const all = [...findings, ...validatePlanNaming({ filename, lifecycle, projectNamespaces })];
   return { ready: all.length === 0, findings: all, warnings: messagesOf(all) };
+}
+
+// What `markdown` would be judged against in `lifecycle`: the destination policy plus any blocking
+// frontmatter parse failure. Naming and cross-plan findings are left out, since neither depends on
+// the stage a plan is moving to. Returns { parsed, findings }.
+export function lifecycleFindings(markdown, { lifecycle }) {
+  const parsed = parsePlanMarkdown(markdown);
+  const parseFailures = parsed.findings.filter((item) => item.severity === "blocking");
+  const { findings } = validateForLifecycle(parsed, { lifecycle, priorities: PRIORITIES, normalizeHeading });
+  return { parsed, findings: [...parseFailures, ...findings] };
 }
 
 // Cross-plan problems, which can only be evaluated once every plan in the snapshot is known —
@@ -887,7 +806,7 @@ function portablePlanSummary(item) {
   ].join("\n");
 }
 
-function lifecycleFromPath(relativePath) {
+export function lifecycleFromPath(relativePath) {
   const parts = relativePath.split(/[\\/]/);
   if (parts[0] !== "docs" || parts[1] !== "plans") return "unknown";
   const lifecycle = parts[2];
@@ -919,6 +838,16 @@ function emptyParsed(code) {
     tasks: [],
     taskCounts: { total: 0, complete: 0, remaining: 0 },
     notTested: { present: false, entries: [], unchecked: 0 },
+    review: { present: false, findings: { open: 0, total: 0 }, result: null, approval: null },
+  };
+}
+
+function qaSummary(review) {
+  return {
+    reviewed: review.present,
+    openFindings: review.findings.open,
+    findings: review.findings.total,
+    decision: review.approval?.decision || "",
   };
 }
 

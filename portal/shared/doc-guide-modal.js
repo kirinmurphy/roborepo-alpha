@@ -6,16 +6,14 @@
 // docs/user/guides/telemetry.md), so the popup and the on-disk guide are always the same content, never
 // a second copy that can drift.
 //
-// Deep-linking: open(anchorId) scrolls the freshly-rendered content to the heading whose slug id
-// matches anchorId once it exists in the DOM (renderMarkdown() in scripts/cli/markdown-render.mjs
-// gives every heading a stable GitHub-style slug id) — info icons throughout the host page pass
-// their section's anchor so "view docs" from any panel lands on the relevant section, not the top.
-//
-// Triggers: any element with data-doc-anchor opens the guide at that anchor, through one delegated
-// listener the factory owns. The trigger reports aria-expanded while the guide is open, and a
-// trigger inside another open dialog closes that dialog first, since the guide replaces it.
+// Section scoping: open(anchorId) shows only the guide section under the heading whose slug id
+// matches anchorId (renderMarkdown() in scripts/cli/markdown-render.mjs gives every heading a stable
+// GitHub-style slug id), titled with that heading. Info icons pass their page section's anchor, so
+// each popup explains the one thing next to it instead of the whole guide. open() with no anchor,
+// or an anchor the guide lacks, shows the full guide.
+// Triggers inside another dialog close that dialog before opening this guide.
 import { portalWireBackdropClose } from "./api.js";
-// Diagram rendering now lives in portal/shared/markdown-mermaid.js so /config and /plans get it too
+// Diagram rendering now lives in portal/shared/markdown-mermaid.js so /agents and /plans get it too
 // — it was private to this modal, which is why only the Telemetry guide rendered diagrams.
 import { renderMermaidBlocks } from "./markdown-mermaid.js";
 
@@ -40,11 +38,11 @@ export function createDocGuideModal(dialogEl, fetchGuide) {
     }
   });
 
-  let cachedHtml = null;
+  let guide = null;
 
   async function open(anchorId = null) {
     dialogEl.showModal();
-    if (cachedHtml == null) {
+    if (guide == null) {
       titleEl.textContent = "loading…";
       pathEl.textContent = "";
       contentEl.innerHTML = "";
@@ -55,32 +53,45 @@ export function createDocGuideModal(dialogEl, fetchGuide) {
           contentEl.textContent = "error: " + (data.error || "failed to load");
           return;
         }
-        titleEl.textContent = data.title || "Guide";
-        pathEl.textContent = data.path || "";
-        cachedHtml = data.html || "";
+        guide = { title: data.title || "Guide", path: data.path || "", html: data.html || "" };
       } catch (err) {
         titleEl.textContent = "docs unavailable";
         contentEl.textContent = "error: " + err.message;
         return;
       }
     }
-    // cachedHtml always holds the ORIGINAL fetched markup (unrendered <pre class="mermaid">
-    // blocks) — reassigning it here on every open, including reopens, is what makes this
-    // idempotent to re-run renderMermaidBlocks against each time, rather than trying to skip it
-    // and risk leaving a reopened guide's diagrams unrendered.
-    contentEl.innerHTML = cachedHtml;
-    scrollToAnchor(anchorId);
+    // guide.html always holds the ORIGINAL fetched markup (unrendered <pre class="mermaid">
+    // blocks) — re-parsing it on every open, including reopens, is what makes this idempotent to
+    // re-run renderMermaidBlocks against each time, rather than trying to skip it and risk leaving
+    // a reopened guide's diagrams unrendered.
+    const template = document.createElement("template");
+    template.innerHTML = guide.html;
+    const section = anchorId ? sectionUnder(template.content, anchorId) : null;
+    titleEl.textContent = section ? section.title : guide.title;
+    pathEl.textContent = guide.path;
+    contentEl.replaceChildren(...(section ? section.nodes : template.content.childNodes));
+    contentEl.scrollTop = 0;
     renderMermaidBlocks(contentEl);
   }
 
-  function scrollToAnchor(anchorId) {
-    if (!anchorId) {
-      contentEl.scrollTop = 0;
-      return;
+  // The heading's following siblings up to the next heading of the same or higher rank. The
+  // heading itself becomes the dialog title rather than repeating inside the body.
+  function sectionUnder(fragment, anchorId) {
+    const heading = fragment.querySelector(`#${CSS.escape(anchorId)}`);
+    const rank = headingRank(heading);
+    if (!rank) return null;
+    const nodes = [];
+    for (let node = heading.nextSibling; node; node = node.nextSibling) {
+      const nodeRank = headingRank(node);
+      if (nodeRank && nodeRank <= rank) break;
+      nodes.push(node);
     }
-    const target = contentEl.querySelector(`#${CSS.escape(anchorId)}`);
-    if (target) target.scrollIntoView({ block: "start" });
-    else contentEl.scrollTop = 0;
+    return { title: heading.textContent, nodes };
+  }
+
+  function headingRank(node) {
+    const match = node && /^H([1-6])$/.exec(node.nodeName);
+    return match ? Number(match[1]) : 0;
   }
 
   function close() {

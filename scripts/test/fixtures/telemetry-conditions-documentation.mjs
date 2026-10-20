@@ -1,4 +1,4 @@
-// Fictional data only. These inputs feed both unit goldens and documentation captures.
+// Fictional data only. Feeds the unit goldens, including the 3/12 vs 9/12 example in docs/user/guides/telemetry.md.
 import { analyzeTelemetry } from "../../cli/telemetry-analyze.mjs";
 export function documentationScenario() {
   const snapshots = [

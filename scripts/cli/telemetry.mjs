@@ -25,8 +25,10 @@ import { readAppendedLines } from "./jsonl-tail.mjs";
 import { startPortalServer } from "./portal-server.mjs";
 import { computePortalSourceHash } from "./portal-source-hash.mjs";
 import { readConfigSnapshot, loadConfigSource } from "./config.mjs";
+import { readCodexTelemetryHookStatus } from "./codex-hook-status.mjs";
+import { refreshHarnessesAndApply } from "./portal-harness-refresh.mjs";
 import { mutatePackage, setSkillInstalled, setBehaviorBucket, setCommandBucket } from "./config-mutate.mjs";
-import { loadPlansSnapshot, loadCachedPlansSnapshot, loadPlanDocument, buildPlansPrompt, updatePlanPriority, updatePlanLifecycle, refreshPlans } from "./plans.mjs";
+import { loadPlansSnapshot, loadCachedPlansSnapshot, loadPlanDocument, buildPlansPrompt, updatePlanPriority, refreshPlans } from "./plans.mjs";
 import { loadRepositorySources, addRepositorySource, removeRepositorySource, setRepositorySourceEnabled, refreshRepositorySources, wipeRepositoryList, autoDiscoveryEnabled } from "./repository-sources.mjs";
 import {
   loadDeveloperRuntimeSnapshot,
@@ -46,18 +48,19 @@ import {
   loadRepositoryAssociations,
   patchRepository,
 } from "./repositories.mjs";
-import { loadRegistry, updateRegistry, recordDiscoveryIfKnown } from "../../modules/repositories/index.mjs";
-import { buildRepositoryHashIndex } from "./telemetry-repository.mjs";
+import { loadRegistry, updateRegistry, recordDiscoveryIfKnown, resolveRepositoryScope, listedRepositoryIds } from "../../modules/repositories/index.mjs";
 import { createRepositoryOverviewService } from "./repository-overview.mjs";
 import { MOCK_FIRST_RUN_VIEWS_ENABLED, mockHomeOverview, purgePersistedMockRepositories } from "./mock-home.mjs";
 import { buildTelemetryRepositoryProjection, fixtureTelemetryRepositories, homeTelemetryProjection } from "./telemetry-repository-overview.mjs";
-import { privacyHash } from "./telemetry-schemas/hash.mjs";
+import { removeRepositoryWorktree, stopRepositoryWorktreeServers } from "./worktree-cleanup.mjs";
+import { dismissWorktreeCleanupNotice, enableWorktreeCleanup } from "./worktree-cleanup-optin.mjs";
+import { packageStatusSummary } from "./package-status.mjs";
 import { buildAnalysisPrompt } from "../harnesses/transcript-locate.mjs";
 import { insightsSummary } from "./telemetry-insights.mjs";
 import { deriveSessionFindings } from "./telemetry-session-findings.mjs";
 import { hookFilePath, writeHooksFile } from "./hook-composition.mjs";
 import { getHarnessProvider, hasHarnessProvider, listHarnessProviders, harnessDisplayName } from "../harnesses/registry.mjs";
-import { refreshHarnessState, setHarnessEnabled } from "../harnesses/service.mjs";
+import { setHarnessEnabled } from "../harnesses/service.mjs";
 import { loadSetupState } from "./portal-setup.mjs";
 import { ensureInitialized, finalizeInitialization, describeNewerSchemaRefusal } from "./initialization-bootstrap.mjs";
 
@@ -125,7 +128,7 @@ function parseMarkArgs(args) {
       case "--supersedes": options.supersedes = args[++i]; break;
       // Task category/scale are explicit-only through the CLI — a human or scripted caller stating
       // "this was a bug-fix touching 3 files" is task_category_source: "explicit" by construction.
-      // Inferred task classification (telemetry-task-infer.mjs) is a Phase 5+ analysis-time concern,
+      // Inferred task classification (telemetry-task-infer.mjs) is an analysis-time concern,
       // not something this command computes itself.
       case "--task-category": options.task_category = args[++i]; break;
       case "--files-touched": options.files_touched = Number(args[++i]); break;
@@ -795,6 +798,7 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     loadRuntime: () => loadDeveloperRuntimeSnapshot(),
     loadPlans: () => loadCachedPlansSnapshot(),
     loadAutoDiscoveryEnabled: () => autoDiscoveryEnabled(),
+    loadPlanCloseEnabled: () => packageStatusSummary("plan-close").enabled,
     loadMockHomeOverview: mockHomeOverview,
     mockHomeEnabled: MOCK_FIRST_RUN_VIEWS_ENABLED,
     loadTelemetry: () => homeTelemetryProjection({
@@ -805,7 +809,7 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
   });
   const server = startPortalServer({
     port: options.port,
-    // Phase 6 additions (model/repo/markerId) layer a normalized cohort filter on top of the
+    // model/scope/markerId layer a normalized cohort filter on top of the
     // existing time/harness window; folded into cachedAnalysisJson's cache key (see
     // cachedAnalysisEntry above) so cohort-filtered views stay cached the same way the default
     // view is. See telemetry-analyze.mjs's analyzeTelemetry() options and telemetry-cohort.mjs for
@@ -827,16 +831,17 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     loadTelemetryAnalysis: (body) => loadTelemetryAnalysisRequest(body),
     loadTelemetryGuide: () => loadTelemetryGuide(),
     loadConfig: () => readConfigSnapshot(),
+    loadCodexHookStatus: () => readCodexTelemetryHookStatus(),
     loadSetupState: () => loadSetupState(),
-    refreshHarnesses: () => refreshHarnessState(),
+    refreshHarnesses: () => refreshHarnessesAndApply(),
     setHarnessEnabled: (id, enabled) => setHarnessEnabled(id, enabled),
     loadConfigSource: (params) => loadConfigSource(params),
-    loadPlans: () => loadPlansSnapshot(),
+    loadPlans: (params) => loadPlansSnapshot(params),
     loadPlanDocument: (params) => loadPlanDocument(params),
     buildPlansPrompt: (params) => buildPlansPrompt(params),
     updatePlanPriority: (params) => updatePlanPriority(params),
-    updatePlanLifecycle: (params) => updatePlanLifecycle(params),
-    refreshPlans: () => refreshPlans(),
+    refreshPlans: (params) => refreshPlans(params),
+    resolveRepositoryScope: (value, options) => resolveRepositoryScope(loadRegistry({ stateRoot }), value, options),
     loadDeveloperRuntime: () => loadDeveloperRuntimeSnapshot(),
     refreshDeveloperRuntime: () => refreshDeveloperRuntimeSnapshot(),
     updateDeveloperRuntimeSettings: (params) => updateDeveloperRuntimeSettings(params),
@@ -851,6 +856,10 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     loadHomeOverview: () => repositoryOverview.loadHome(),
     loadRepositoryOverview: (params) => repositoryOverview.loadDetail(params),
     patchRepository: (params) => patchRepository(params),
+    removeRepositoryWorktree: (params) => afterWorktreeChange(removeRepositoryWorktree(params)),
+    stopRepositoryWorktreeServers: (params) => afterWorktreeChange(stopRepositoryWorktreeServers(params)),
+    enableWorktreeCleanup: (params) => afterWorktreeChange(enableWorktreeCleanup(params)),
+    dismissWorktreeCleanupNotice: (params) => afterWorktreeChange(dismissWorktreeCleanupNotice(params)),
     // Source changes alter which repositories exist, so the cached Plans snapshot is rebuilt after
     // each one; enabling auto-discovery starts the first process scan immediately.
     loadRepositorySources: () => loadRepositorySources(),
@@ -903,6 +912,14 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
 
 function startAutoDiscoveryScan() {
   refreshDeveloperRuntimeSnapshot().then(() => { try { refreshPlans(); } catch {} }).catch(() => {});
+}
+
+// A worktree removal or a cleanup opt-in changes what Home's next poll should show, so Runtime
+// re-inventories before the response returns.
+async function afterWorktreeChange(pending) {
+  const result = await pending;
+  await refreshDeveloperRuntimeSnapshot();
+  return result;
 }
 
 function afterSourceChange(payload) {
@@ -1210,20 +1227,37 @@ function filterByWindow(events, window) {
 // object is discarded once stringified rather than retained as dead memory.
 const _analysisCache = new Map();
 const ANALYSIS_CACHE_MAX = 32;
-// Phase 6 additions (model/repo/markerId) layer a normalized cohort filter on top of the existing
+// model/scope/markerId layer a normalized cohort filter on top of the existing
 // time/harness window; folded into the cache key so a cohort-filtered view gets its own cached
 // entry instead of colliding with (or evicting) the unfiltered default view.
-function analysisKey(window, harness, { model = null, repo = null, repository = null, markerId = null } = {}) {
-  return `${spoolSignature()}|${window ? `${window.rangeMs}:${window.end ?? ""}` : "all"}|${harness || "all"}|${model || "all"}|${repo || "all"}|${repository || "all"}|${markerId || "none"}`;
+function analysisKey(window, harness, { model = null, scope = null, markerId = null } = {}) {
+  return `${spoolSignature()}|${window ? `${window.rangeMs}:${window.end ?? ""}` : "all"}|${harness || "all"}|${model || "all"}|${scopeKey(scope)}|${markerId || "none"}`;
 }
 
-// Registry-derived hash index for read-time legacy telemetry association, cached by the registry's
-// file stamp. Missing/corrupt registry evidence degrades to an empty index rather than throwing.
-let _repositoryHashIndex = null;
-let _repositoryHashIndexSig = null;
-// Matching capture's hash is what makes normalized_remote_hash values line up, and both sides now
-// call the same helper rather than keeping two copies aligned by hand.
-const captureRepositoryHash = privacyHash;
+// A repository scope keys on its canonical id. Activity outside listed repos also keys on the
+// registry, because finding or ignoring a repository moves sessions in or out of it with no spool
+// change.
+function scopeKey(scope) {
+  if (scope?.kind === "repository") return scope.repositoryId;
+  if (scope?.kind === "outside") return `outside@${registrySignature()}`;
+  return "all";
+}
+
+// The cohort-filter dimensions of a resolved repository scope.
+function scopeCohortFilter(scope) {
+  if (scope?.kind === "repository") return { repository_ids: [scope.repositoryId] };
+  if (scope?.kind === "outside") return { excluded_repository_ids: listedRepositoryIds(loadRegistryOrEmpty()) };
+  return {};
+}
+
+function loadRegistryOrEmpty() {
+  try {
+    return loadRegistry({ stateRoot });
+  } catch {
+    return { repositories: {} };
+  }
+}
+
 // Reconcile telemetry-observed repositories into the registry so `capabilities.telemetry` can be
 // true. Runs at portal repo-list load (NOT on the capture hot path): scans the spool's distinct
 // repository_ids and records one `telemetry` discovery each, batched into a single registry write.
@@ -1268,45 +1302,29 @@ function registrySignature() {
     return "none";
   }
 }
-function repositoryHashIndexCached() {
-  const sig = registrySignature();
-  if (_repositoryHashIndex && _repositoryHashIndexSig === sig) return _repositoryHashIndex;
-  let registry;
-  try {
-    registry = loadRegistry({ stateRoot });
-  } catch {
-    registry = { repositories: {} };
-  }
-  _repositoryHashIndex = buildRepositoryHashIndex(registry, captureRepositoryHash);
-  _repositoryHashIndexSig = sig;
-  return _repositoryHashIndex;
-}
-
+// Returns the cache entry { json } for the given view, computing (and caching) it on a miss.
+// `scope` is the resolved repository scope ({ kind: "repository", repositoryId } or
+// { kind: "outside" }); the route resolved it from the browser's urlKey.
 function cachedAnalysisEntry(window, harness, extra = {}) {
-  const { model = null, repo = null, repository = null, markerId = null } = extra;
-  const key = analysisKey(window, harness, { model, repo, repository, markerId });
+  const { model = null, scope = null, markerId = null } = extra;
+  const key = analysisKey(window, harness, { model, scope, markerId });
   const hit = _analysisCache.get(key);
   if (hit) return hit;
   const allEvents = readSpoolEventsCached();
   const markers = readMarkers();
-  // Filter dropdowns cascade: harness is the top-level split, so the model/repo dropdowns should
-  // only ever offer values that actually co-occur with the selected harness — picking "codex"
-  // must not still list Claude-only models. Harness itself always lists every harness in the full
-  // spool (nothing sits above it to narrow it). Model does not narrow repo, or vice versa — both
-  // sit at the same level under harness — so each is scoped by harness alone, not by each other.
+  // Filter dropdowns cascade: harness is the top-level split, so the model dropdown should only
+  // ever offer values that actually co-occur with the selected harness — picking "codex" must not
+  // still list Claude-only models. Harness itself always lists every harness in the full spool
+  // (nothing sits above it to narrow it).
   const availableHarnesses = [...new Set(allEvents.map((e) => e.harness).filter(Boolean))].sort();
   const events = harness ? allEvents.filter((e) => e.harness === harness) : allEvents;
   const availableModels = [...new Set(events.map((e) => e.session?.model).filter(Boolean))].sort();
-  const availableRepos = [...new Set(events.map((e) => e.repo?.label).filter(Boolean))].sort();
   const windowed = filterByWindow(events, window);
-  // The global repository scope (?repository=<canonical-id>) composes with the legacy per-page
-  // ?repo=<label> filter. When set, legacy events are resolved to a canonical id at read time via a
-  // registry-derived hash index (built lazily; absent/broken registry -> unresolved, never a crash).
-  const cohortFilter = (model || repo || repository)
-    ? { models: model ? [model] : [], repos: repo ? [repo] : [], repository_ids: repository ? [repository] : [] }
+  const scopeFilter = scopeCohortFilter(scope);
+  const cohortFilter = (model || Object.keys(scopeFilter).length)
+    ? { models: model ? [model] : [], ...scopeFilter }
     : null;
-  const repositoryHashIndex = repositoryHashIndexCached();
-  const report = analyzeTelemetry(windowed, { cohortFilter, markers, markerId, compareMetric: "tokens.total", repositoryHashIndex, snapshots: readSnapshots() });
+  const report = analyzeTelemetry(windowed, { cohortFilter, markers, markerId, compareMetric: "tokens.total", snapshots: readSnapshots() });
   // Backfill session titles from transcripts: the transcript always has the first user message
   // (turn 1), whereas the spool only captures prompts when hooks fired — so new sessions or
   // sessions started before telemetry was enabled may have no spool title or a mid-chat title.
@@ -1323,12 +1341,10 @@ function cachedAnalysisEntry(window, harness, extra = {}) {
     availableHarnesses.map((id) => [id, hasHarnessProvider(id) ? getHarnessProvider(id).manifest.displayName : id]),
   );
   report.available_models = availableModels;
-  report.available_repos = availableRepos;
-  // Metric ids from the shared registry (plan: "available ... metric" dimension) so the Analysis
+  // Metric ids from the shared registry so the Analysis
   // explorer's metric select never hand-maintains its own list.
   report.available_metrics = listMetrics().map((m) => m.id);
-  // Window-scoped markers for the chart overlay (plan: "The server supplies window-scoped
-  // markers"). Uses the same filterByWindow the events themselves went through.
+  // Window-scoped markers for the chart overlay, supplied by the server. Uses the same filterByWindow the events themselves went through.
   report.markers = filterByWindow(markers, window);
   report.experiments = readExperiments();
   report.deepread_cli = findDeepReadCli();
@@ -1337,7 +1353,7 @@ function cachedAnalysisEntry(window, harness, extra = {}) {
   // object is discarded once stringified.
   const entry = {
     json: JSON.stringify(report),
-    repositoryProjection: buildTelemetryRepositoryProjection(allEvents, report, repositoryHashIndex),
+    repositoryProjection: buildTelemetryRepositoryProjection(allEvents, report),
   };
   // Prune the oldest entry once over the cap. Signature changes mint fresh keys on every new
   // capture, so stale-signature entries accumulate otherwise; Map preserves insertion order.
@@ -1417,7 +1433,6 @@ function loadMockAnalysisJson() {
     (report.available_harnesses || []).map((id) => [id, hasHarnessProvider(id) ? getHarnessProvider(id).manifest.displayName : id]),
   );
   report.available_models = [...new Set(evidence.events.map((e) => e.session?.model).filter(Boolean))].sort();
-  report.available_repos = [...new Set(evidence.events.map((e) => e.repo?.label).filter(Boolean))].sort();
   report.available_metrics = listMetrics().map((m) => m.id);
   report.markers = [];
   report.experiments = [];
@@ -1510,10 +1525,9 @@ function cachedTranscriptTitle(sessionId, harness) {
   return t;
 }
 
-// Phase 7 session-detail extension (plan: "Extend the current session modal with: model history,
-// configuration snapshot, active packages/skills, explicit versus inferred task category and
-// outcome, phase timeline, semantic operation totals, testing-efficiency summary, markers inside or
-// adjacent to the session, data-quality flags"). Scans the already-loaded spool for this session's
+// Session-detail extension for the session modal: model history, configuration snapshot, active
+// packages/skills, explicit versus inferred task category and outcome, phase timeline, semantic
+// operation totals, testing-efficiency summary, nearby markers, and data-quality flags. Scans the already-loaded spool for this session's
 // own captures (cheap: one session's records only, not a re-read) and pulls together everything
 // derivable without touching the transcript. Best-effort throughout — missing data reports as
 // unavailable rather than guessed.
@@ -1549,8 +1563,8 @@ function sessionSpoolContext(sessionId, markers) {
   }
 
   // Explicit outcome/task-category marker for this session, if any (kept distinguishable from any
-  // future inferred value — the plan requires "explicit versus inferred" stay separate, and today
-  // only explicit outcome markers set task_category, per Phase 4 notes).
+  // future inferred value — explicit and inferred stay separate, and today only explicit
+  // outcome markers set task_category).
   const outcomeMarker = markers.find((m) => m.type === "outcome" && m.session_id === sessionId) ?? null;
 
   // Markers "inside or adjacent to" the session: any marker whose timestamp falls within the
@@ -1609,7 +1623,7 @@ function sessionReportRows({ id, harness }) {
 // read warnings) plus the report-global testing summary, so deriveSessionFindings() can emit the
 // deterministic "what happened" prose alongside the transcript facts. When a caller has no report
 // in scope, findings are simply omitted — the transcript path still works unchanged.
-function loadSessionDetail({ id, harness, finding, repo, spoolContext = null, reportRows = null }) {
+function loadSessionDetail({ id, harness, finding, spoolContext = null, reportRows = null }) {
   const adapters = getHarnessProvider(harness).adapters;
   const transcriptPath = adapters.transcripts.locate(id);
   const findings = reportRows
@@ -1620,7 +1634,7 @@ function loadSessionDetail({ id, harness, finding, repo, spoolContext = null, re
       found: false,
       session_id: id,
       harness,
-      analysis_prompt: buildAnalysisPrompt({ sessionId: id, harness, repo, finding, transcriptPath: null }),
+      analysis_prompt: buildAnalysisPrompt({ sessionId: id, harness, finding, transcriptPath: null }),
       findings,
       spool_context: spoolContext,
     };
@@ -1633,7 +1647,7 @@ function loadSessionDetail({ id, harness, finding, repo, spoolContext = null, re
     transcript_path: transcriptPath,
     title,
     heavy_turns: heavyTurns,
-    analysis_prompt: buildAnalysisPrompt({ sessionId: id, harness, repo, finding, transcriptPath }),
+    analysis_prompt: buildAnalysisPrompt({ sessionId: id, harness, finding, transcriptPath }),
     findings,
     spool_context: spoolContext,
   };
@@ -1678,14 +1692,14 @@ function loadInsightsLlm() {
   return runDeepRead(analyzeTelemetry(readSpoolEventsCached()));
 }
 
-// --- Phase 6: portal marker/experiment/analysis request handlers ------------------------------
+// --- Portal marker/experiment/analysis request handlers ---------------------------------------
 // All three reuse the exact same domain functions the CLI calls (createMarker/startExperiment/
-// endExperiment from telemetry-markers.mjs) — no browser-side rule duplication, per the plan's
-// "Do not duplicate experiment rules in the browser." Server-side validation mirrors the CLI's own
+// endExperiment from telemetry-markers.mjs) — experiment rules are never duplicated in the
+// browser. Server-side validation mirrors the CLI's own
 // argument checks (parseMarkArgs/parseExperimentStartArgs) since a browser POST body skips that path.
 
 // Portal markers omit --session/--phase/--status conveniences the CLI supports via flags the portal
-// doesn't yet render a control for; only the fields the plan's marker-creation UI needs are accepted.
+// doesn't yet render a control for; only the fields the portal's marker-creation UI needs are accepted.
 function createMarkerFromPortalRequest(body) {
   if (typeof body.type !== "string" || !MARKER_TYPES.has(body.type)) {
     return { ok: false, error: `type must be one of: ${[...MARKER_TYPES].join(", ")}` };
@@ -1757,8 +1771,7 @@ function endExperimentFromPortalRequest(experimentId) {
 }
 
 // POST /api/telemetry/analysis: dedicated high-dimensional comparison endpoint for the Analysis
-// explorer (plan: "Add a dedicated endpoint for high-dimensional comparisons rather than inflating
-// /api/data for every explorer interaction"). Body: { cohort_a, cohort_b, metric, marker_id }.
+// explorer, so /api/data is not inflated for every explorer interaction. Body: { cohort_a, cohort_b, metric, marker_id }.
 // Validates known metric ids and cohort filter shapes server-side; never trusts client-supplied
 // formulas or cohort definitions beyond selecting from the shared registry/cohort model.
 function loadTelemetryAnalysisRequest(body) {
@@ -1769,7 +1782,7 @@ function loadTelemetryAnalysisRequest(body) {
   const allEvents = readSpoolEvents();
   const markers = readMarkers();
 
-  // marker_id (or cohort_a.marker_id) selects the marker-relative path — the plan's preferred
+  // marker_id (or cohort_a.marker_id) selects the marker-relative path — the preferred
   // comparison when a change marker exists. Falling back to a bare cohort_a-vs-cohort_b comparison
   // (two independent cohort filters, no marker) is supported for the explorer's "compare two
   // arbitrary cohorts" mode, using a simple metric-value-per-cohort comparison rather than the
@@ -2124,7 +2137,7 @@ function rejectArgs(args) {
 }
 
 function rejectSupportedReportArgs(args) {
-  const allowed = new Set(["--since", "--repo", "--group", "--format", "--deep", "--conditions"]);
+  const allowed = new Set(["--since", "--group", "--format", "--deep", "--conditions"]);
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg.includes("=")) {

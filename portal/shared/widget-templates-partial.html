@@ -14,10 +14,28 @@
   <span class="dropdown-chevron" aria-hidden="true">▾</span>
 </template>
 <template id="tpl-dropdown-menu">
-  <div class="dropdown-menu" role="listbox"></div>
+  <div class="dropdown-menu"><div class="dropdown-options" role="listbox"></div></div>
 </template>
 <template id="tpl-dropdown-option">
   <button type="button" class="dropdown-option" role="option" data-slot="label"></button>
+</template>
+<!-- Optional action rows: below a divider and outside the listbox, so they are never a choice. -->
+<template id="tpl-dropdown-actions">
+  <div class="dropdown-actions" role="group"></div>
+</template>
+<template id="tpl-dropdown-action">
+  <button type="button" class="dropdown-action"><portal-icon class="dropdown-action-icon" data-slot="icon" size="sm" aria-hidden="true"></portal-icon><span data-slot="label"></span></button>
+</template>
+
+<!-- page-splash.js: the shared empty-state splash (.page-splash in base.css) -->
+<template id="tpl-page-splash">
+  <section class="page-splash" role="status">
+    <div class="page-splash-copy">
+      <h1 class="page-splash-title" data-slot="title"></h1>
+      <p class="page-splash-body" data-slot="body"></p>
+      <div class="page-splash-actions" data-slot="actions"></div>
+    </div>
+  </section>
 </template>
 
 <!-- token-chip.js -->
@@ -109,6 +127,16 @@
   </span>
 </template>
 
+<!-- Codex telemetry hook warning (codex-hook-status.js), shown on Settings, Tokens, and Home. -->
+<template id="tpl-codex-hook-status">
+  <portal-notice class="portal-notice" variant="warning" aria-live="polite">
+    <div class="codex-hook-status-copy">
+      <strong data-slot="title"></strong>
+      <p data-slot="message"></p>
+    </div>
+  </portal-notice>
+</template>
+
 <!-- Shared harness setup banner. Home, Agents, and Tokens use the same copy and action; only the
      portal-notice variant changes by page context. -->
 <template id="tpl-harness-notice">
@@ -117,6 +145,7 @@
       <div class="portal-banner-copy">
         <span data-slot="copy"></span>
         <span class="harness-notice-supported" data-slot="supported"><strong>Supported Harnesses:</strong> <span data-slot="names"></span></span>
+        <span class="harness-notice-result" data-slot="result" role="status" hidden></span>
       </div>
       <div class="portal-banner-action"><button type="button" data-btn="cta" data-slot="check">Check for harnesses</button></div>
     </div>
@@ -151,7 +180,7 @@
         <portal-icon name="check" data-slot="saved-check" hidden></portal-icon>
         <span class="route-link-actions" data-slot="row-actions" hidden>
           <button type="button" class="route-row-action" data-action="edit-link" aria-label="Edit link">
-            <portal-icon name="pencil"></portal-icon>
+            <portal-icon name="edit"></portal-icon>
           </button>
           <!-- `close` rather than a trash glyph: the icon set has no trash, and close already reads
                as "remove this" everywhere else in the portal. Adding a one-use glyph for parity with

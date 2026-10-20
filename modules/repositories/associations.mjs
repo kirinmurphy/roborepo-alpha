@@ -44,19 +44,4 @@ function evidenceForResolved(resolved) {
   return "process-cwd";
 }
 
-// Match a legacy telemetry record to a canonical repository using the normalized-remote hash the
-// registry knows about. Never fabricates an id from a name. Returns { repositoryId, provenance }
-// where provenance is one of: legacy-remote-hash, unresolved.
-//
-// Note: there is deliberately NO legacy git-root-hash tier. The legacy raw git_root_hash is a hash
-// of an absolute path, and the registry only stores opaque, salted rootIds (never the raw path), so
-// it cannot reproduce that hash to index it. Legacy no-remote local repos therefore stay unresolved
-// until they emit a record carrying a direct repository_id. Git repos correlate via the remote hash.
-export function associateLegacyHashes({ normalizedRemoteHash = null, hashIndex }) {
-  if (normalizedRemoteHash && hashIndex.byNormalizedRemoteHash.has(normalizedRemoteHash)) {
-    return { repositoryId: hashIndex.byNormalizedRemoteHash.get(normalizedRemoteHash), provenance: "legacy-remote-hash" };
-  }
-  return { repositoryId: null, provenance: "unresolved" };
-}
-
 export { localRepositoryId };

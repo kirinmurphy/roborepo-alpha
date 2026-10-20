@@ -35,8 +35,7 @@ if (-not (Test-Path $installer)) {
 
 # --- 2. $KnownHarnessIds matches the provider manifests. ---
 # Windows does not yet DERIVE this list from the manifests (see the comment above
-# $KnownHarnessIds in the installer, and the discoverable-harness-provider-architecture plan's
-# Phase 4 follow-up). Until it does, the literal stays -- but it must stay in sync, and this check
+# $KnownHarnessIds in the installer). Until it does, the literal stays -- but it must stay in sync, and this check
 # is what forces that.
 $harnessDir = Join-Path $repoRoot "globals/harnesses"
 $manifestIds = @(

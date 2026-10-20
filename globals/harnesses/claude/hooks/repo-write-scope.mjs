@@ -30,7 +30,7 @@ import { fileURLToPath } from 'node:url'
 // express that. Rule paths are literal strings with no variable expansion, and no anchor resolves
 // to the current repository — `/path` in a user-level settings file resolves relative to that
 // settings file's own directory, not to any checkout. So the boundary has to be decided at
-// tool-call time. See docs/plans/backlog/agent-config-repo-scoped-write-permissions.md.
+// tool-call time.
 //
 // The static rules remain the coarse layer: they allow the scratch directories that are correct
 // regardless of which repository is in use. This hook narrows the repository half of that scope
@@ -63,8 +63,11 @@ try {
 // every other permission is. Reading it here is what keeps the platform the instructor and this
 // file merely the Claude-side enforcement.
 //
-// Resolution mirrors the Codex permission hook: an explicit env var, then recorded install state,
-// then this file's own location walked back to the repository root.
+// Resolution mirrors the Codex permission hook: an explicit env var, then the app root the CLI
+// records whenever it installs this hook, then the development installer's install state, then
+// this file's own location walked back to the repository root. This file runs as a copy under the
+// harness home, so the walk only finds a manifest when that copy is a link into a checkout; an npm
+// install depends on the recorded app root. The state root resolves the way the CLI's own does.
 function readJson(p, fallback) {
   try {
     return JSON.parse(fs.readFileSync(p, 'utf8'))
@@ -74,9 +77,12 @@ function readJson(p, fallback) {
 }
 
 function outsideRepoBucket() {
-  const stateDir = process.env.ROBOREPO_STATE_DIR || path.join(os.homedir(), '.roborepo')
+  const stateDir =
+    process.env.ROBOREPO_STATE_ROOT || process.env.ROBOREPO_STATE_DIR || path.join(os.homedir(), '.roborepo')
   const candidates = []
   if (process.env.REPO_ROOT) candidates.push(process.env.REPO_ROOT)
+  const recorded = readJson(path.join(stateDir, 'app-root.json'), {})
+  if (typeof recorded.appRoot === 'string' && recorded.appRoot) candidates.push(recorded.appRoot)
   const state = readJson(path.join(stateDir, 'install-state.json'), {})
   if (typeof state.repo === 'string' && state.repo) candidates.push(state.repo)
   candidates.push(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..'))

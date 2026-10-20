@@ -1,3 +1,4 @@
+import { resultGroupOf } from "./results.mjs";
 import { createWasteLedger } from "../telemetry-waste.mjs";
 import { isFullSuite } from "../telemetry-metrics.mjs";
 import { describeCohortFilter, activeFilterCount } from "../telemetry-cohort.mjs";
@@ -17,7 +18,8 @@ import { testingEfficiencySummary } from "./testing.mjs";
 export function analyzeRows(rows, scopedEvents, events, normalizedFilter, { markers = [], markerId = null, compareMetric = "tokens.total" }) {
   const scopedIndex = indexScopedEvents(rows);
   const captures = scopedIndex.captures;
-  const captureIndex = indexCaptures(captures);
+  const groupOf = resultGroupOf(rows);
+  const captureIndex = indexCaptures(captures, groupOf);
   const sessions = rollupSessions(captures);
   const spikeThreshold = deltaSpikeThreshold(captures);
   const spikeCaptures = captures.filter((event) => (event.delta_tokens || 0) >= spikeThreshold && spikeThreshold > 0);
@@ -60,11 +62,11 @@ export function analyzeRows(rows, scopedEvents, events, normalizedFilter, { mark
     usage_windows: usageWindows(captures, captureIndex.latestTs),
     codex_provider_rate_limits: captureIndex.latestCodexRateLimits,
     timeline: captureIndex.timeline,
-    tool_cost: toolCost(captures),
-    group_cost: groupCost(captures),
-    spike_anatomy: spikeAnatomy(captures, spikeCaptures),
+    tool_cost: toolCost(captures, groupOf),
+    group_cost: groupCost(captures, groupOf),
+    spike_anatomy: spikeAnatomy(captures, spikeCaptures, groupOf),
     package_cost: packageCost(captures),
-    regression: { ...regression(captures), exploratory: true, label: "midpoint (exploratory — not tied to any specific change)" },
+    regression: { ...regression(captures, groupOf), exploratory: true, label: "midpoint (exploratory — not tied to any specific change)" },
     loops: detectLoops(captures, sessionsById, wasteLedger),
     data_quality_warnings: dataQualityWarnings(scopedEvents),
     read_warnings: readWarnings(rows, sessionsById, wasteLedger),

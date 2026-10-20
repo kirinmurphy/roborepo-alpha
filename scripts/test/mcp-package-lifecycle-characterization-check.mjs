@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 // Characterizes scripts/cli/packages.mjs's installMcpPreset/removeMcpPreset (package enable/
-// disable's MCP wiring) before Phase 5 replaces their direct claude-CLI-shell-out +
-// ensureCodexMcp/removeCodexMcp calls with dispatch through
+// disable's MCP wiring), which dispatches through
 // getHarnessProvider(id).adapters.mcp.addServer/removeServer. Pins:
 //   - installMcpPreset respects SKIP_MCP (skips entirely, no Codex write either).
 //   - removeMcpPreset's --dry-run path (real removal shells to `claude`, not exercised here).

@@ -1,6 +1,6 @@
 ---
 name: plan-write
-description: Use when creating a repository plan document under docs/plans, or revising or syncing an existing one — revising follows the user's intent to change scope or design; syncing follows repository evidence to tick finished tasks and refresh next_action and reviewed_commit. Trigger on explicit /plan-write or requests to create a durable implementation plan, revise a plan, sync this plan, or update a plan after work. Do not use for preparing a plan for development (plan-promote), implementing a plan (plan-start), closing a finished plan (plan-close), ending a session (session-close), brief answers, PR descriptions, ordinary implementation without plan-document management, or casual checklists.
+description: Use when creating a repository plan document under docs/plans, or revising or syncing an existing one — revising follows the user's intent to change scope or design; syncing follows repository evidence to tick finished tasks and refresh next_action and reviewed_commit. Trigger on explicit /plan-write or requests to create a durable implementation plan, revise a plan, sync this plan, or update a plan after work. Do not use for preparing a plan for development (plan-promote), implementing a plan (plan-execute), reviewing an implementation (plan-review), closing a finished plan (plan-close), archiving a plan (plan-archive), ending a session (session-close), brief answers, PR descriptions, ordinary implementation without plan-document management, or casual checklists.
 ---
 
 # Plan Write
@@ -9,9 +9,11 @@ Use this skill to write managed repository plans stored as Markdown under `docs/
 one, or update an existing one.
 
 This skill owns plan content, frontmatter, and the required-section schema for plan documents.
-Lifecycle moves belong to other suite commands: `/plan-start` moves a plan into `active/`, and
-`/plan-close` moves it to `completed/` or `archived/`. Prose quality and implementation correctness
-come from the paired skills below.
+Lifecycle moves belong to other suite commands, each committed in the primary checkout:
+`/plan-promote` moves a plan into `ready/`, `/plan-execute` into `active/` and then `review/`,
+`/plan-review` back to `active/` on a scope change, `/plan-close` to `completed/`, and
+`/plan-archive` to `archived/`. `/plan-write` writes a new plan's initial checklist; `/plan-promote`
+refines it. Prose quality and implementation correctness come from the paired skills below.
 
 ## Paired Skills
 
@@ -62,7 +64,7 @@ Read the references for the situation:
   `references/workflow-validate.md` — creation ends in validation, so the work that produces the
   plan loads the checks that decide whether it is deliverable.
 - `update`: read `references/workflow-update.md` and `references/workflow-validate.md`; also read
-  `references/writing-guidelines.md` when the revision rewrites prose.
+  `references/writing-guidelines.md` when revising scope or design, or otherwise rewriting prose.
 - UI-generated prompts: read `references/prompt-contracts.md` when prompt shape matters.
 
 ## Creation Gates
@@ -78,7 +80,7 @@ These conditions must hold before a new plan can be called created. The full rul
 - **Generate an opaque `id`** of 6-8 lowercase base36 characters. Never derive it from the title,
   filename, or slug; it survives every rename and lifecycle move.
 - **Frontmatter carries only** `id`, `priority`, `next_action`, `blocked_by`, `depends_on`,
-  `related`, `reviewed_commit`, and `worktree`. A new plan leaves `worktree:` empty; `plan-start`
+  `related`, `reviewed_commit`, and `worktree`. A new plan leaves `worktree:` empty; `/plan-execute`
   fills it when implementation begins in a linked worktree. Do not add `status`, `validated`,
   `created_at`, `updated_at`, `owner`, `percent_complete`, `estimated_hours`, or `tags` — changing
   the schema is its own decision, made first.
@@ -90,15 +92,24 @@ These conditions must hold before a new plan can be called created. The full rul
   consistency checks no command can make; the `technical-writing` Validator covers prose quality and
   every paired skill that applied. A clean report from one does not excuse the other.
 - **Creation ends in backlog.** If the user also asked to start the work, deliver the validated
-  backlog plan and hand off to `/plan-start`, which moves the same stable `id` into
-  `docs/plans/active/`.
+  backlog plan and hand off to `/plan-promote`, which moves the same stable `id` into
+  `docs/plans/ready/` for `/plan-execute` to start.
 
 ## Common Rules
 
 - Resolve the repository root and inspect `docs/plans` before changing plan files.
+- Before editing an existing plan, resolve its authoritative copy by the "Plan authority" rule in
+  `references/plan-schema.md`, and edit only that copy. An active or review plan assigned to a linked
+  worktree is edited in that worktree, even when the session started in the primary checkout; ask for write
+  access to the worktree rather than editing the primary copy. When the rule falls back to the
+  primary copy because the worktree's copy is unavailable, or the primary copy already holds an
+  outside edit, report it, and still edit only the authoritative copy.
 - Use repository files, tests, config, and Git state as evidence.
 - Keep Markdown files as source of truth; do not invent a task database.
-- Never move a plan between lifecycle folders; that belongs to `/plan-start` and `/plan-close`.
+- Never move a plan between lifecycle folders; each move belongs to the suite command that owns it.
+- Never write or edit a plan's `### Approval` record; only `/plan-review` records a human's approval.
 - Do not mark work complete from checked boxes alone; verify success criteria.
 - Do not add machine-specific absolute paths to repository docs.
 - Report changed files, verification run, and paired skills loaded or skipped.
+- Name the plan by its H1 title, with its id in parentheses on first mention only; the id is a
+  stable reference for commands, not a name a person recognizes.

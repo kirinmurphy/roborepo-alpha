@@ -7,7 +7,7 @@ import { isMainModule } from "./roots.mjs";
 // Tracks a content hash of root config files (Claude settings.json, Codex config.toml) as of the
 // last time roborepo itself wrote them. This is a drift check, not a merge: it answers "has
 // anything touched this file since we last wrote it," never "which parts of the difference are
-// safe to keep." See docs/plans/completed/root-config-layered-inheritance.md.
+// safe to keep."
 
 export function hashContent(content) {
   return crypto.createHash("sha256").update(content).digest("hex");

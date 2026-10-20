@@ -48,8 +48,8 @@ export {
 
 // Harness home/root-config/live-store paths below are derived from each provider's manifest
 // (globals/harnesses/<id>/provider.json, resolved via scripts/harnesses/paths.mjs) rather than
-// hardcoded here — the manifest is the single source of truth for these home-relative locations
-// now (Phase 3 of discoverable-harness-provider-architecture-plan.md). This module keeps the same
+// hardcoded here — the manifest is the single source of truth for these home-relative locations.
+// This module keeps the same
 // plain-object-keyed-by-id export shape so existing consumers (presets.mjs, update-report.mjs,
 // config.mjs, and everything using Object.keys(rootConfigActive) to iterate harnesses) are
 // unaffected by the migration.

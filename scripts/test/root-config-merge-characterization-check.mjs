@@ -1,12 +1,11 @@
 #!/usr/bin/env node
 // Characterization tests for scripts/cli/root-config-merge.mjs's mergeClaudeSettings/
-// mergeCodexConfig, captured BEFORE the Phase 3 migration (discoverable-harness-provider-
-// architecture-plan.md) moves this logic into provider adapters. These assertions pin exact
+// mergeCodexConfig, captured before this logic moved into provider adapters. These assertions pin exact
 // current output for the trickiest cases (TOML comment reattachment, bracket-in-value sections,
 // permissions allow/deny dedupe, the Claude-only `model` key strip) so the refactor can be
 // verified byte-for-byte rather than by re-reading the merge logic and hoping the port is faithful.
 //
-// This file must keep passing unchanged through Phase 3 — a failure here means the provider
+// This file must keep passing unchanged — a failure here means the provider
 // adapter's merge output diverged from pre-refactor behavior, not that the old behavior was wrong.
 import assert from "node:assert/strict";
 import { mergeClaudeSettings, mergeCodexConfig, mergeRootConfig } from "../cli/root-config-merge.mjs";
@@ -95,10 +94,9 @@ function testCodexLocalOnlySectionAppended() {
 function testMergeRootConfigDispatchesByHarness() {
   assert.equal(mergeRootConfig("codex", "[a]\nx=1\n", ""), mergeCodexConfig("[a]\nx=1\n", ""), "mergeRootConfig('codex', ...) must dispatch to mergeCodexConfig");
   assert.equal(mergeRootConfig("claude", "{}", "{}"), mergeClaudeSettings("{}", "{}"), "mergeRootConfig('claude', ...) must dispatch to mergeClaudeSettings");
-  // Fixed in Phase 3: root-config-merge.mjs's dispatch used to be a bare ternary
+  // root-config-merge.mjs's dispatch used to be a bare ternary
   // (`harness === "codex" ? codex : claude`), so any value other than the literal string "codex" —
-  // including typos and future provider IDs — silently fell through to the Claude merge path. One
-  // of the default-to-Claude fallbacks named explicitly in the plan's grounding notes. Now an
+  // including typos and future provider IDs — silently fell through to the Claude merge path. Now an
   // unrecognized harness throws instead of silently mis-merging as Claude.
   assert.throws(() => mergeRootConfig("nonexistent-harness", "{}", "{}"), /unsupported harness: nonexistent-harness/, "an unknown harness must throw, not silently fall through to the Claude merge path");
 }

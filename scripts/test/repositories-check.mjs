@@ -28,7 +28,6 @@ import {
   setAlias,
   resolveRegistryAlias,
   associateResolved,
-  associateLegacyHashes,
   removeDiscoveries,
   importDeveloperRuntimeAliases,
   canonicalizeDeveloperRuntimeIdentity,
@@ -158,6 +157,11 @@ try {
   assert.equal(roots.length, 2);
   assert.equal(roots[0].kind, "primary", "first root promotes to primary");
   assert.equal(roots[1].kind, "worktree");
+  roots[0].lastRunningAt = now;
+  assert.doesNotThrow(() => validateRegistry(reg), "registries with checkout activity remain readable");
+  roots[0].lastRunningAt = "invalid";
+  assert.throws(() => validateRegistry(reg), /lastRunningAt/, "checkout activity must be a timestamp");
+  delete roots[0].lastRunningAt;
 
   assert.equal(setEnrollment(reg, "git:github.com/kirinmurphy/roborepo", "plans", { enabled: true, sourceId: "src1", now }), true);
   assert.equal(setEnrollment(reg, "git:github.com/kirinmurphy/roborepo", "plans", { enabled: true, sourceId: "src1", now }), false, "unchanged enrollment is a no-op");
@@ -246,14 +250,6 @@ try {
   assert.equal(aliasAssoc.repositoryId, "git:github.com/kirinmurphy/roborepo");
   assert.equal(aliasAssoc.evidence, "user-alias");
   assert.equal(aliasAssoc.confidence, "high");
-
-  // ---- Legacy hash association (remote-hash only; no root-hash tier) ----
-  const hashIndex = {
-    byNormalizedRemoteHash: new Map([["rem123", "git:github.com/kirinmurphy/roborepo"]]),
-  };
-  assert.equal(associateLegacyHashes({ normalizedRemoteHash: "rem123", hashIndex }).provenance, "legacy-remote-hash");
-  assert.equal(associateLegacyHashes({ normalizedRemoteHash: "nope", hashIndex }).provenance, "unresolved");
-  assert.equal(associateLegacyHashes({ hashIndex }).repositoryId, null);
 
   // ---- Per-source discovery provenance (pljvmyh §4) ----
   const srcReg = defaultRegistry();

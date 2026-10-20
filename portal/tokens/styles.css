@@ -11,6 +11,7 @@ main.inner { max-width: 1100px; margin: 0 auto; padding: 32px 20px 64px; display
    bottom margin. The head strip gets only a small padding — hierarchy comes from the
    head-to-body contrast, not from inflating the header's own spacing. */
 #tokenscontent { display: grid; }
+#tokenscontent[hidden] { display: none; }
 .t2-section { margin-bottom: 64px; }
 .t2-section:last-child { margin-bottom: 0; }
 .t2-sec-head { padding-bottom: 12px; }
@@ -19,6 +20,12 @@ main.inner { max-width: 1100px; margin: 0 auto; padding: 32px 20px 64px; display
 #tokenscontent > .t2-section:not(:first-of-type) > .t2-sec-head {
   position: sticky; top: var(--portal-header-h, 0px); z-index: 5;
   background: var(--bg); padding-top: 8px; margin-top: -8px; }
+/* A section's info icon sits beside its heading, one step under the base icon size so it annotates
+   the heading rather than competing with it. */
+.t2-sec-head:has(portal-info-icon) { display: flex; align-items: center; gap: 8px; }
+.t2-sec-head portal-info-icon .info-icon,
+.invest-title portal-info-icon .info-icon,
+#tokenssession-modal .modal-head portal-info-icon .info-icon { width: var(--icon-sm); height: var(--icon-sm); }
 .t2-sec-head:has(.hint-toggle) { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .hint-toggle { font: inherit; font-size: var(--text-2xs); color: var(--accent); background: none;
   border: none; padding: 4px 0; cursor: pointer; }
@@ -67,6 +74,9 @@ main.inner { max-width: 1100px; margin: 0 auto; padding: 32px 20px 64px; display
 /* ── Banner stack: multiple banners sit closer together than page sections ── */
 .banner-stack { display: grid; gap: 12px; }
 .banner-stack:empty { display: none; }
+.banner-stack[hidden] { display: none; }
+.tokens-codex-hook-status { margin-bottom: 16px; }
+.tokens-codex-hook-status[hidden] { display: none; }
 /* Clear break between the banner stack and the report below it. */
 hr.banner-break { border: none; border-top: 1px solid var(--line); margin: 24px 0; }
 
@@ -345,8 +355,9 @@ dialog#tokenssession-modal::backdrop, dialog#oracle-health-dialog::backdrop { ba
 dialog#oracle-health-dialog[open] { display: flex; flex-direction: column; color: var(--ink); }
 /* Title and the repo·agent line STACK (title on top, sub below) — side-by-side read as two
    unrelated columns when the title is a long sentence. */
-dialog#tokenssession-modal .modal-head { padding: 14px 18px; display: grid; gap: 3px; }
-dialog#tokenssession-modal .modal-head .modal-path { margin-left: 0; }
+/* Title and its info icon share the first row; the repository/harness line spans the second. */
+dialog#tokenssession-modal .modal-head { padding: 14px 18px; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 3px 8px; }
+dialog#tokenssession-modal .modal-head .modal-path { margin-left: 0; grid-column: 1 / -1; }
 dialog#tokenssession-modal .modal-head portal-close-button { position: absolute; top: 10px; right: 10px; }
 .t2-session-body { padding: 16px 18px 18px; overflow-y: auto; max-height: calc(85vh - 60px);
   display: grid; gap: 16px; }

@@ -1,6 +1,5 @@
-// Codex harness provider. Phase 2 wires this into the registry with real discovery and
-// placeholder capability adapters; Phases 3-6 replace the placeholders with migrated behavior
-// from scripts/cli/{root-config-merge,mcp-codex,telemetry,...}.mjs one capability at a time.
+// Codex harness provider: manifest binding and capability adapters. Methods listed in
+// stubGroups below are placeholders that throw until their behavior moves here from scripts/cli/.
 
 import fs from "node:fs";
 import path from "node:path";

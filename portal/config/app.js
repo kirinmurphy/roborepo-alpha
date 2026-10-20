@@ -2,8 +2,7 @@
 //
 // The user-facing section model is computed ONCE, server-side, in buildBehaviorView() (config.mjs)
 // and shipped in the snapshot as snap.behaviorView. Items carry web fields (toggle, inspect, urls)
-// and terminal fields (hint); this page omits the telemetry package because token tracking is
-// managed from Settings and Tokens.
+// and terminal fields (hint). Token telemetry and its Codex hook warning live on Settings, not here.
 //
 // Wiring only: DOM refs, event listeners, and orchestration between api.js (server calls),
 // state.js (constants/pure lookups), and templates.js (markup). No markup construction should
@@ -14,10 +13,23 @@ import * as api from "./api.js";
 import * as tmpl from "./templates.js";
 import { createConfigModal } from "./panels.js";
 import { snapshotChanged, inspectChipSpecs, setBulkInFlight, isBulkInFlight } from "./state.js";
+import { clearRepositoryScope, currentRepositoryScope } from "/portal/shared/repository-scope.js";
+import { onRepositoryScopeResolved, repositoryScopeUnavailableNotice } from "/portal/shared/repository-scope-selector.js";
 
 const modal = createConfigModal();
 // Keep the warning renderer/template available while the Agents-page banner is temporarily hidden.
 const SHOW_CONTEXT_WARNINGS = false;
+// Packages whose on/off control lives on another page. Settings owns token telemetry, so a second
+// toggle here would only duplicate it; the terminal `roborepo config` view still lists it.
+const PACKAGES_CONTROLLED_ELSEWHERE = new Set(["telemetry"]);
+
+function withoutPackagesControlledElsewhere(view) {
+  return view
+    .map((section) => (section.categoryId
+      ? { ...section, items: section.items.filter((item) => !PACKAGES_CONTROLLED_ELSEWHERE.has(item.id)) }
+      : section))
+    .filter((section) => !section.categoryId || section.items.length > 0);
+}
 
 function openSourceModal(inspect, itemCost = null) {
   const rules = lastSnapshot?.globals?.rules || {};
@@ -98,12 +110,19 @@ function renderSection(section, contextCost) {
 
 function render(snap) {
   const main = document.getElementById("main");
-  // Use the server-owned section model, excluding the telemetry package from the Agents surface.
-  const view = (snap.behaviorView || [])
-    .map((section) => section.categoryId
-      ? { ...section, items: section.items.filter((item) => item.id !== "telemetry") }
-      : section)
-    .filter((section) => !section.categoryId || section.items.length > 0);
+  // Scoped to a repository, the page shows only what is true for it: a coming-soon splash, or the
+  // unavailable state. Until the selector has resolved the scope, nothing global is drawn either.
+  const scope = currentRepositoryScope();
+  if (scope) {
+    const resolution = scopeResolution?.scope === scope ? scopeResolution : null;
+    if (resolution?.status === "repository") {
+      main.replaceChildren(tmpl.repositorySplash(clearRepositoryScope));
+    } else if (resolution?.status === "unavailable") {
+      main.replaceChildren(repositoryScopeUnavailableNotice());
+    }
+    return;
+  }
+  const view = withoutPackagesControlledElsewhere(snap.behaviorView || []);
   // Package-category sections (everything the packages intro describes) vs the non-package
   // sections that follow. The intro sits between the harness file grid and the first package
   // section; the harness-warning notice (no active harness) stays at the top of the page.
@@ -111,7 +130,7 @@ function render(snap) {
   const otherSections = view.filter((section) => !section.categoryId);
   main.replaceChildren(
     ...[
-      tmpl.harnessWarning(lastSetup || snap, { onCheck: refreshHarnesses }),
+      tmpl.harnessWarning(lastSetup || snap, { onRefreshed: reloadSetup, watch: false }),
       ...(SHOW_CONTEXT_WARNINGS ? [tmpl.contextWarnings(snap)] : []),
       tmpl.configFiles(snap, { onInspectClick: openSourceModal }),
       tmpl.packagesIntro(),
@@ -131,6 +150,13 @@ function render(snap) {
 let last = null;
 let lastSnapshot = null;
 let lastSetup = null;
+let scopeResolution = null;
+// The splash and the global view are whole-page swaps, so a scope change redraws even when the
+// config snapshot itself has not changed.
+onRepositoryScopeResolved((resolution) => {
+  scopeResolution = resolution;
+  if (lastSnapshot) render(lastSnapshot);
+});
 function applySnapshot(snap) {
   lastSnapshot = snap;
   const changed = snapshotChanged(last, snap);
@@ -156,8 +182,9 @@ async function load() {
   }
 }
 
-async function refreshHarnesses() {
-  await api.refreshHarnesses();
+// The banner runs the harness check itself; this only re-reads what it changed. The page's own
+// poll already re-reads setup state, so the banner does not watch it separately.
+async function reloadSetup() {
   const [snap, setup] = await Promise.all([api.fetchConfig(), api.fetchSetupState()]);
   lastSetup = setup;
   applySnapshot(snap);

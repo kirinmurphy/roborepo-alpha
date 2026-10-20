@@ -1,5 +1,4 @@
-// Claude's hooks.write adapter method (withdraw's blanket strip-all — see the "Disable vs.
-// withdraw" section of discoverable-harness-provider-architecture-plan.md). Split out of
+// Claude's hooks.write adapter method (withdraw's blanket strip-all of RoboRepo-managed hooks). Split out of
 // index.mjs, which grew past this repo's 150-200 line file-size guidance once rootConfig/mcp/
 // telemetry/transcripts were all added alongside this one large withdraw-specific function.
 
@@ -18,7 +17,7 @@ const PACKAGE_DIRS = [
 // atomic read/write pass — the bash original conflated the two for a single file write rather than
 // two, and this keeps that exact behavior rather than splitting across capability groups (the
 // permissions capability has no removal method of its own). "write" here means "removal semantics"
-// per the plan's withdraw design, not a generic hook writer.
+// for withdraw, not a generic hook writer.
 export function hooksWriteRemove({ homePath, dryRun = false } = {}) {
   const settingsPath = path.join(homePath, "settings.json");
   const paths = [];

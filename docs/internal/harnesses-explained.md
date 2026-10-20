@@ -64,10 +64,11 @@ all three harnesses — a row is ✅ only when Claude, Codex, _and_ Gemini all a
 | Root config | ❌ | ❌ | ❌ | ❌ | No parity, on purpose |
 
 ✅ = every harness agrees on this axis, ❌ = at least one differs. Slash commands drop to ❌ on
-**format** with Gemini in the picture: Claude and Codex both scan Markdown, but Gemini's are TOML —
-the first axis where adding a third harness actually changes a row's score, not just its resolution.
-(The renderer hasn't been extended to emit TOML yet — see the take on that gap in
-[Step 1](#step-1--when-they-already-agree-slash-commands) below.) Note the jump at hooks: every other
+**format** with Gemini in the picture: Claude and Codex scan Markdown, while
+[Gemini CLI loads custom commands from `.toml` files](https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/custom-commands.md).
+RoboRepo currently emits `.md` wrappers for Gemini too; the
+renderer has not been extended to emit TOML. See the integration gap in
+[Step 1](#step-1--when-they-already-agree-slash-commands) below. Note the jump at hooks: every other
 element agrees on **semantics** (a rule means the same thing on every side, only the wrapping
 differs), so a generator or a link can bridge it. Hooks are the first where the _meaning_ itself
 diverges — which is exactly why automation stops there. Root config differs on everything too, but
@@ -83,10 +84,10 @@ the tool is what it is" prose below:
 
 | Element | What Claude expects | What Codex expects | What Gemini expects |
 | --- | --- | --- | --- |
-| Rules | `~/.claude/CLAUDE.md`, one always-on markdown file | `~/.codex/AGENTS.md`, same intent, different name + house style | `~/.gemini/GEMINI.md`, same intent again — capability still stubbed, no renderer branch yet |
+| Rules | `~/.claude/CLAUDE.md`, one always-on markdown file | `~/.codex/AGENTS.md`, same intent, different name + house style | `~/.gemini/GEMINI.md` is rendered live by the common rule renderer; there is no tracked Gemini rules snapshot, and the provider's `rules.render` adapter remains stubbed |
 | Root config | `~/.claude/settings.json` — permissions, hooks, MCP, plugin toggles in one JSON object | `~/.codex/config.toml` — TOML defaults, some behavior in separate files/runtime hooks | `~/.gemini/settings.json` — plain JSON object, closely shaped like Claude's (hooks and `mcpServers` as nested keys), merges with the same recursive-object-merge rule as Claude's settings.json rather than a re-port |
 | Permissions | `permissions.allow` / `deny` / `ask` arrays in `settings.json` (real 3-state `ask`) | `approval_policy` / `sandbox_mode` / `network_access` in `config.toml` + rules-layer allow/deny; per-command `ask` only via a runtime hook | Policy Engine: a directory of `*.toml` files under `~/.gemini/policies/`, each `[[rule]]` block carrying a real native `allow`/`deny`/`ask_user` decision — no approximation or session-wide fallback needed |
-| Skills / commands | Skills + `commands/` under `~/.claude/` | Same structure under `~/.codex/` home paths | Skills stubbed; slash commands are TOML, not Markdown — the existing renderer can't target Gemini's commands directory yet |
+| Skills / commands | Skills + `commands/` under `~/.claude/` | Same structure under `~/.codex/` home paths | RoboRepo's common installer links skills under `~/.gemini/skills/` and writes Markdown wrappers under `~/.gemini/commands/`; Gemini CLI expects TOML custom commands, so those wrappers are not usable native commands. The Gemini provider's `skills.link` and `commands.render` adapters remain stubbed |
 | MCP servers | Registration in native config + tool registry, plus matching permission entries | Entries in TOML config, own native registry shape | `mcpServers` key inside `settings.json`, direct JSON read/write — no CLI shell-out needed, unlike Claude |
 | Plugins | `enabledPlugins` + `extraKnownMarketplaces` in `settings.json`, installed natively next launch | Own plugin/marketplace commands + native config; choice survives runs, harness installs later | Not yet modeled for this harness |
 | Hooks | Wiring in `settings.json`, `.mjs` bodies; JSON control output the harness _obeys_ | Wiring in `hooks.json`, `.mjs` bodies; output read as plain text to _show_ | Wiring nested under `settings.json`'s `hooks` key, same location as Claude's — bulk read/write still stubbed |
@@ -109,13 +110,10 @@ Because the gap is so small, parity barely needs a mechanism. We keep one list o
 a copy into each directory. There's nothing to reconcile — the two outputs are the same file in two
 places.
 
-Gemini breaks the "already agree" premise: its slash commands are TOML, not Markdown. The stamp-a-copy
-mechanism assumes the source and every target share one format — it has nothing to convert with.
-Rather than force a wrong-format file into Gemini's commands directory, the renderer simply doesn't
-target Gemini yet (`commands.render` stays stubbed in its adapter). This is a real scope gap, not a
-parity choice: closing it needs the renderer to gain a second output format, not just a second output
-path — different work from every other gap in this doc, all of which are name/location differences
-the existing single-format renderer already handles.
+The common package renderer now also writes Markdown wrappers into
+`generated/packages/<package>/gemini/commands/`. Gemini CLI loads `.toml` custom commands, so
+these wrappers do not provide usable native Gemini slash commands. Gemini's provider-level
+`commands.render` adapter remains stubbed; supporting native commands needs a TOML renderer.
 
 > Takeaway: when harnesses already agree on format and meaning, parity is almost free — but "already
 > agree" is an assumption to check per harness, not a property of the element itself. A third harness
@@ -155,8 +153,9 @@ Generated from `globals/system/rules/shared/` and harness-specific `globals/syst
 Do not edit this file directly; edit rule fragments and run `./scripts/build/render-rules.sh`.
 ```
 
-One fragment edit regenerates **both** files identically. That is parity by generation, and it costs
-us exactly one small generator to bridge a difference that is only skin-deep.
+One fragment edit regenerates both tracked snapshots. The common home renderer also writes a live
+Gemini rules file when its home exists, using the same fragments. That is parity by generation, and
+it costs us one small generator to bridge a difference that is only skin-deep.
 
 > Takeaway: even a trivial difference is worth a generator, because it makes "the behavior" — not the
 > per-harness file — the thing you edit.
@@ -241,16 +240,16 @@ A _skill_ is a bundle of instructions the agent loads only when a task matches i
 `code-style`, and so on). Each skill is a folder with a `SKILL.md`.
 
 Skills are interesting because the content is **byte-for-byte identical** across harnesses — the only
-thing that differs is **location**: Claude scans one directory, Codex scans another. When the files
+thing that differs is **location**: each harness scans its own directory. When the files
 are the same and only the path differs, generating a copy would be wasteful and would invite the two
 copies to drift. So instead of rendering, we **symlink**: one canonical skill folder, with each
-harness's expected directory pointed at it.
+harness's expected directory linked to a machine-local managed cache entry.
 
 This is the first time the mechanism _changes_ rather than just scaling up. Rules and permissions
 needed a renderer because the outputs genuinely differ. Skills don't — so a link, not a generator, is
-the honest tool. Gemini's skill directory (`~/.gemini/skills/`) would fit the same symlink model — the
-gap is location-only there too — but `skills.link` stays stubbed for Gemini for now, so the link isn't
-wired up yet. No new mechanism would be needed to close it; it just hasn't been done.
+the honest tool. The common installer links managed skills into `~/.gemini/skills/` too. The Gemini
+provider's `skills.link` adapter remains stubbed, so the adapter contract has not yet caught up
+with that installer behavior.
 
 > Takeaway: match the mechanism to the gap. A location-only difference wants a symlink, not a
 > renderer — same parity goal, lighter tool.

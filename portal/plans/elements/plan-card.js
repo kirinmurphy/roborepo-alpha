@@ -1,23 +1,16 @@
 // <plan-card> — set .record (plan record) and .actions (cardActions bag: onOpen, onCopyPath,
-// onCopyContext, onCopyPortableContext, onPlanAction, planWriteEnabled, planWritePackage,
+// onCopyContext, onCopyPortableContext, onPlanAction, mergeFor, planWriteEnabled, planWritePackage,
 // skillModal, onEnablePackage, onError) as properties right after creation, then append to the
 // DOM. The whole card triggers onOpen on click, except interactive widgets (the mounted
-// <plan-status>, the recommended-next CTA, and the ⋯ actions menu) inside it. Lifecycle/priority
-// controls, readiness/review chips, progress, and next-action live in the mounted <plan-status>
-// element (shared with the detail drawer) rather than being rendered here.
+// <plan-status>, the recommended-next CTA, and the ⋯ actions menu) inside it. The priority
+// control, readiness/blocked chips, and completion live in the mounted <plan-status> element
+// (shared with the detail drawer), stacked below the card's main content in every lifecycle.
 import { portalTpl as tpl, portalFillSlots as fill } from "/portal/shared/api.js";
-import { cardActionMenu, cardPrimaryAction } from "/portal/plans/templates.js";
+import { cardActionMenu, cardPrimaryAction, chip } from "/portal/plans/templates.js";
 
 // Card shows a shortened preview; full text (up to 500 chars) still lives in plan.excerpt
 // for copy-context/drawer use — only the on-card display is truncated further here.
 const EXCERPT_DISPLAY_LENGTH = 190;
-
-function chip(text, cls = "") {
-  const node = tpl("tpl-chip");
-  node.textContent = text;
-  if (cls) node.classList.add(cls);
-  return node;
-}
 
 function truncate(text, maxLength) {
   if (text.length <= maxLength) return text;
@@ -50,14 +43,12 @@ class PlanCardElement extends HTMLElement {
     const cardActions = this._actions;
     const plan = record.plan;
     const warnings = plan.validation.warnings.length;
-    const { onError } = cardActions;
-    const isActive = plan.lifecycle === "active";
 
     const node = fill(tpl("tpl-plan-card"), {
       description: truncate(plan.excerpt || "No description", EXCERPT_DISPLAY_LENGTH),
     });
-    node.classList.toggle("is-active", isActive);
     const statusEl = document.createElement("plan-status");
+    statusEl.merge = cardActions.mergeFor?.(record.key) || null;
     statusEl.record = record;
     node.querySelector("[data-slot=status-mount]").replaceWith(statusEl);
     node.querySelector("[data-slot=chips]").append(
@@ -71,8 +62,8 @@ class PlanCardElement extends HTMLElement {
       ...(primary ? [primary] : []),
       cardActionMenu(record, cardActions),
     );
-    // doc-details (title/description/footer) is the click surface — status-section (progress/
-    // next-action) sits outside it as its own sibling now, so it's naturally excluded rather than
+    // doc-details (title/description/footer) is the click surface — status-section (priority,
+    // completion) sits outside it as its own sibling, so it's naturally excluded rather than
     // needing a manual closest() exclusion. Clicks/keypresses landing on an interactive widget
     // inside doc-details (priority dropdown, action buttons) are still ignored so they only do
     // their own thing. tabindex+role make doc-details itself keyboard-reachable now that

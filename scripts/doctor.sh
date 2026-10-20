@@ -274,7 +274,7 @@ check_package_command_catalog() {
   fi
 }
 
-# Harness provider manifests (Phase 1 of the discoverable-harness-provider-architecture plan):
+# Harness provider manifests:
 # validate every globals/harnesses/<id>/provider.json against the shared contract so a malformed
 # manifest fails doctor instead of surfacing later as a confusing runtime error.
 check_harness_manifests() {
@@ -310,7 +310,7 @@ check_harness_manifests() {
   fi
 }
 
-# Harness provider registry (Phase 2): construct the real static adapter registry, which exercises
+# Harness provider registry: construct the real static adapter registry, which exercises
 # validateCapabilityAdapters against each provider's actual adapter object — catching a declared
 # capability with a missing/malformed adapter method that the manifest-only check above can't see.
 check_harness_registry() {
@@ -588,16 +588,16 @@ if [[ "${check_installed}" -eq 1 ]]; then
   check_live_permission_home
   check_portal_pids
   # Base install owns only builtin-support. Optional skills are checked through their package/toggle
-  # state, not as unconditional install payload. Provider iteration (docs/plans/active/
-  # discoverable-harness-provider-architecture-plan.md Phase 4) instead of a fixed Claude/Codex pair.
-  while IFS=$'\t' read -r doctor_harness_id doctor_home_path doctor_present _display_name _root_config_path; do
+  # state, not as unconditional install payload. Iterates every
+  # registered provider instead of a fixed Claude/Codex pair.
+  while IFS=$'\t' read -r doctor_harness_id doctor_home_path doctor_present _display_name _root_config_path _confidence; do
     [[ -z "${doctor_harness_id}" ]] && continue
     [[ "${doctor_present}" == "1" ]] || continue
     check_managed_skill "globals/system/skills/builtin-support" "${doctor_home_path}/skills/builtin-support"
   done < <(harness_detected_rows)
   # Drift report: unmanaged skills in native dirs (real dirs without our managed marker).
   drift_count=0
-  while IFS=$'\t' read -r _doctor_harness_id doctor_home_path _doctor_present _display_name _root_config_path; do
+  while IFS=$'\t' read -r _doctor_harness_id doctor_home_path _doctor_present _display_name _root_config_path _confidence; do
     [[ -z "${doctor_home_path}" ]] && continue
     skills_home="${doctor_home_path}/skills"
     [[ -d "${skills_home}" ]] || continue
@@ -658,7 +658,7 @@ if [[ "${check_installed}" -eq 1 ]]; then
   [[ "${parity_count}" -gt 0 ]] || ok "declared harness capability paths all exist"
 
   orphan_count=0
-  while IFS=$'\t' read -r _doctor_harness_id doctor_home_path _doctor_present _display_name _root_config_path; do
+  while IFS=$'\t' read -r _doctor_harness_id doctor_home_path _doctor_present _display_name _root_config_path _confidence; do
     [[ -z "${doctor_home_path}" ]] && continue
     skills_home="${doctor_home_path}/skills"
     [[ -d "${skills_home}" ]] || continue
@@ -673,6 +673,10 @@ if [[ "${check_installed}" -eq 1 ]]; then
   done < <(harness_detected_rows)
   [[ "${orphan_count}" -gt 0 ]] || ok "no orphaned skill links found in harness skill dirs"
 fi
+
+while IFS=$'\t' read -r _doctor_harness_id warning; do
+  [[ -z "${warning}" ]] || echo "hint: ${warning}"
+done < <(harness_warning_rows)
 
 if [[ "${failed}" -ne 0 ]]; then
   if [[ "${drift_detected}" -eq 1 ]]; then

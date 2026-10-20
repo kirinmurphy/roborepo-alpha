@@ -5,7 +5,7 @@ import {
   CONFIDENCE_LABELS,
 } from "../cli/telemetry-compare.mjs";
 
-// Phase 5 of docs/plans/active/roborepo-telemetry-events-experiments-plan.md: marker-relative
+// Marker-relative
 // comparisons, confidence/data-quality gates, and the actionable finding contract. This REPLACES
 // telemetry-analyze.mjs's midpoint-only regression() as the PREFERRED comparison path when a change
 // marker is selected (regression() itself is untouched — see telemetry-analyze-check additions).

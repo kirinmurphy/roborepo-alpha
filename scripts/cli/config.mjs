@@ -130,6 +130,24 @@ export function configSnapshotMachineHarnesses() {
     .filter(Boolean);
 }
 
+export function configSnapshotHarnessGuidance() {
+  const saved = readHarnessState().providers;
+  return discoverHarnessProviders(listHarnessProviders())
+    .map((result) => {
+      const displayName = getHarnessProvider(result.providerId).manifest.displayName;
+      // Detected now but not yet enabled by a refresh: the user has just installed or launched it.
+      // The portal finishes setup on its own when it sees `ready`. An explicit user disable is left
+      // alone.
+      const previous = saved[result.providerId];
+      const ready = result.status === "detected" && !previous?.enabled
+        && !(previous?.selectionSource === "user" && previous.enabled === false);
+      if (ready) return { id: result.providerId, displayName, confidence: result.confidence, ready: true, warnings: [] };
+      if (result.status === "detected" || (result.confidence !== "probable" && !result.warnings.length)) return null;
+      return { id: result.providerId, displayName, confidence: result.confidence, warnings: result.warnings };
+    })
+    .filter(Boolean);
+}
+
 export function readConfigSnapshot() {
   const allPackages = loadPackageCatalog({ includeUnavailable: true });
   const availablePackages = allPackages.filter((pkg) => isPackageAvailable(pkg));
@@ -213,6 +231,7 @@ export function readConfigSnapshot() {
     // machine actually has. Primary user-facing presentation must use the latter.
     harnesses: configSnapshotHarnesses(),
     machineHarnesses: configSnapshotMachineHarnesses(),
+    machineHarnessGuidance: configSnapshotHarnessGuidance(),
     packages,
     bundles,
     tools,
@@ -220,7 +239,7 @@ export function readConfigSnapshot() {
     plugins: {
       caveman: settings?.enabledPlugins?.["caveman@caveman"] === true,
     },
-    // Harness-agnostic rules + global settings shown in the /config "Globals" section. Each rules
+    // Harness-agnostic rules + global settings shown in the /agents "Globals" section. Each rules
     // entry carries raw markdown plus rendered HTML: shared = baseline every harness gets, one key
     // per registered provider id = that harness's rule deltas, packages = enabled package rule
     // slices. The live home files are also included so the portal can render the actual on-disk
@@ -276,7 +295,7 @@ export function readConfigSnapshot() {
 }
 
 // Maps the raw technical snapshot onto user-facing behavior categories matching README § Global
-// Behavior. SINGLE SOURCE OF TRUTH for both the terminal `roborepo config` view and the web /config
+// Behavior. SINGLE SOURCE OF TRUTH for both the terminal `roborepo config` view and the web /agents
 // page: the snapshot ships this under `behaviorView`, the web client renders it directly (no parallel
 // JS reimplementation to drift). Items carry both terminal fields (hint) and web fields (toggle,
 // inspect, urls, badges); each consumer reads what it needs and ignores the rest.
@@ -529,7 +548,7 @@ function generatedSidecarHooksPath(harness) {
   return path.join(repoRoot, "generated", harness, path.basename(manifest.paths.hooks.path));
 }
 
-// Read the full source that DEFINES a tool, for the /config click-to-inspect popup. Strictly
+// Read the full source that DEFINES a tool, for the /agents click-to-inspect popup. Strictly
 // whitelisted: kind+id are resolved against the catalogs/known dirs, never used to build a path
 // directly, so an attacker can't request arbitrary files (no traversal — ids are matched against
 // catalog entries and basenames only). Returns { ok, title, path, content } or { ok:false, error }.

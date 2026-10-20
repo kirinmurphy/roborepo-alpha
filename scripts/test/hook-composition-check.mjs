@@ -1,15 +1,14 @@
 #!/usr/bin/env node
-// Phase 2 of docs/plans/active/roborepo-system-package-ownership-and-generated-output-plan.md:
-// proves the cross-harness hook composition module (scripts/cli/hook-composition.mjs) works for
+// Proves the cross-harness hook composition module (scripts/cli/hook-composition.mjs) works for
 // both Claude (~/.claude/settings.json) and Codex (~/.codex/hooks.json) via a throwaway fixture
-// package, independent of any real package migration (Phase 3+ moves real packages onto this).
+// package, independent of any real package.
 //
 // The fixture is created under globals/packages/ (not a workspace package) because component.source
 // for "hooks"/"rules" resources is resolved via `path.join(repoRoot, component.source)` in
 // packages.mjs — a pre-existing assumption (predating this refactor) that source is repoRoot-relative,
 // which does not hold for workspace packages (their source is resolved relative to their own package
-// dir instead). That mismatch is a latent bug outside this phase's scope; using a built-in-style
-// fixture sidesteps it and matches how Phase 3+ will actually migrate real packages.
+// dir instead). That mismatch is a latent bug outside this test's scope; using a built-in-style
+// fixture sidesteps it and matches how real packages are wired.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";

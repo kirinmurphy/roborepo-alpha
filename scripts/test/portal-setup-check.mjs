@@ -28,6 +28,10 @@ const setup = buildSetupState({
     { id: "codex", displayName: "Codex", confidence: "confirmed", enabled: true },
     { id: "claude", displayName: "Claude Code", confidence: "confirmed", enabled: false },
   ],
+  guidance: [
+    { id: "claude", displayName: "Claude Code", confidence: "probable", warnings: ["Launch Claude Code once."] },
+    { id: "gemini", displayName: "Gemini CLI", confidence: "confirmed", ready: true, warnings: [] },
+  ],
   telemetry: { enabled: true },
 });
 
@@ -39,6 +43,9 @@ assert.deepEqual(setup.repositories, {
 });
 assert.deepEqual(setup.harnesses.active, [{ id: "codex", displayName: "Codex", confidence: "confirmed", enabled: true }]);
 assert.equal(setup.telemetry.captureAvailable, true);
+assert.equal(setup.harnesses.guidance[0].warnings[0], "Launch Claude Code once.");
+assert.equal(setup.harnesses.guidance[0].ready, undefined);
+assert.equal(setup.harnesses.guidance[1].ready, true, "the portal finishes setup only for guidance marked ready");
 assert.equal(JSON.stringify(setup).includes("/Users/alice"), false, "setup state must not leak source paths");
 assert.equal(JSON.stringify(setup).includes("private/projects"), false, "setup state must be recursively path-free");
 

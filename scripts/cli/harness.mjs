@@ -6,6 +6,7 @@ import { listHarnessProviders, getHarnessProvider, hasHarnessProvider } from "..
 import { refreshHarnessState, setHarnessEnabled } from "../harnesses/service.mjs";
 import { readHarnessState } from "../harnesses/state.mjs";
 import { resolveHarnessPath, hasHarnessPath } from "../harnesses/paths.mjs";
+import { detectHarnessProvider } from "../harnesses/discovery.mjs";
 import fs from "node:fs";
 
 function requireProviderId(rest, label) {
@@ -28,7 +29,8 @@ export function harnessList() {
     const entry = state.providers[provider.id];
     const status = entry?.enabled ? "enabled" : "disabled";
     const confidence = entry?.confidence ?? "absent";
-    console.log(`${provider.id}\t${provider.manifest.displayName}\t${status}\t${confidence}`);
+    const runtimes = [...new Set((entry?.evidence ?? []).filter((item) => item.kind === "executable").map((item) => item.source))].join("+") || "none";
+    console.log(`${provider.id}\t${provider.manifest.displayName}\t${status}\t${confidence}\t${runtimes}`);
   }
 }
 
@@ -36,7 +38,8 @@ export function harnessInspect(rest) {
   const id = requireProviderId(rest, "inspect");
   const provider = getHarnessProvider(id);
   const state = readHarnessState();
-  console.log(JSON.stringify({ manifest: provider.manifest, state: state.providers[id] ?? null }, null, 2));
+  const entry = state.providers[id] ?? null;
+  console.log(JSON.stringify({ manifest: provider.manifest, state: entry, runtimes: entry?.evidence.filter((item) => item.kind === "executable") ?? [], warnings: entry?.warnings ?? [] }, null, 2));
 }
 
 export function harnessRefresh() {
@@ -66,10 +69,10 @@ export function harnessDisable(rest) {
 // executable on PATH with no home dir yet as present, useful for `harness list`/`refresh` signal).
 // Shell install/uninstall/repair actions gate on home-dir existence only, matching the exact
 // semantics of the harness_present() function this replaces, so swapping the source is
-// behavior-preserving. See docs/plans/backlog/harness-presence-signal-expansion.md for
-// broadening what "present" means for install-time decisions.
+// behavior-preserving. Install-time writes stay home-gated so RoboRepo never creates a home
+// directory the harness itself has not created.
 // One row per provider: id, home path, "1"/"0" home-dir presence, display name, root-config home
-// path (empty string if the provider declares no "rootConfig" manifest path). The root-config
+// path, discovery confidence. The root-config
 // path's basename follows the same convention as this repo's generated/<id>/<basename> build
 // output, so shell installers can derive their generated-source path from it instead of
 // hardcoding a per-harness filename.
@@ -80,6 +83,7 @@ export function harnessDetected() {
     const rootConfigPath = hasHarnessPath(provider.manifest, "rootConfig")
       ? resolveHarnessPath(provider.manifest, "rootConfig")
       : "";
-    console.log(`${provider.id}\t${homePath}\t${present}\t${provider.manifest.displayName}\t${rootConfigPath}`);
+    const confidence = detectHarnessProvider(provider.manifest).confidence;
+    console.log(`${provider.id}\t${homePath}\t${present}\t${provider.manifest.displayName}\t${rootConfigPath}\t${confidence}`);
   }
 }

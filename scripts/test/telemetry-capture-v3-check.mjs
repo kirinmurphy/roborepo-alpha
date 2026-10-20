@@ -6,7 +6,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-// Phase 3 of docs/plans/active/roborepo-telemetry-events-experiments-plan.md: capture_id/call_id,
+// capture_id/call_id,
 // call-aware duration pairing, config snapshot references, and operation classification wired into
 // the real capture hot path (telemetry-capture.mjs), exercised through the actual CLI process so
 // hook-stdin parsing and the collector-dir cursor files are covered for real — not just the pure
@@ -21,8 +21,10 @@ try {
   testSessionStartBuildsSnapshotReusedByLaterCaptures();
   testCallAwareDurationPairingSurvivesConcurrentCalls();
   testDerivedCallIdForHarnessWithoutToolUseId();
+  testCodexCaptureReadsCurrentTranscriptTokens();
   testOperationClassificationOnBashCommand();
   testRawCommandNeverPersisted();
+  testRepositoryIdentityIsRepositoryIdOnly();
   console.log("telemetry capture v3 checks passed");
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
@@ -67,7 +69,7 @@ function testSessionStartBuildsSnapshotReusedByLaterCaptures() {
 }
 
 function testCallAwareDurationPairingSurvivesConcurrentCalls() {
-  // Regression fixture for the exact gap Phase 3 exists to close: two tool calls in the same
+  // Regression fixture for call-aware pairing: two tool calls in the same
   // session overlapping in time (B starts before A ends) must not clobber each other's duration.
   capture({ session_id: "sess-concurrent", cwd: repoRoot, tool_name: "Read", tool_use_id: "call_A" }, { event: "PreToolUse" });
   capture({ session_id: "sess-concurrent", cwd: repoRoot, tool_name: "Bash", tool_use_id: "call_B", tool_input: { command: "echo hi" } }, { event: "PreToolUse" });
@@ -98,6 +100,19 @@ function testDerivedCallIdForHarnessWithoutToolUseId() {
   assert.equal(typeof posts[1].duration_ms, "number");
 }
 
+function testCodexCaptureReadsCurrentTranscriptTokens() {
+  const sessionId = "codex-session";
+  capture({
+    session_id: sessionId,
+    cwd: repoRoot,
+    transcript_path: path.join(repoRoot, "scripts/test/fixtures/telemetry/codex-basic.jsonl"),
+  }, { harness: "codex", event: "Stop" });
+  const record = spoolRecords("codex").find((entry) => entry.session_id === sessionId);
+  assert.equal(record.tokens.total, 500);
+  assert.equal(record.session.tool_calls, 2);
+  assert.equal(record.session.model, "gpt-5.4");
+}
+
 function testOperationClassificationOnBashCommand() {
   capture({ session_id: "sess-op", cwd: repoRoot, tool_name: "Bash", tool_use_id: "tu_op", tool_input: { command: "npm test" } }, { event: "PreToolUse" });
   const record = spoolRecords().find((r) => r.session_id === "sess-op");
@@ -111,4 +126,14 @@ function testRawCommandNeverPersisted() {
   const spoolPath = path.join(tmp, ".roborepo/telemetry/spool/claude.jsonl");
   const raw = fs.readFileSync(spoolPath, "utf8");
   assert.ok(!raw.includes("super-secret-token-xyz"), "raw command text must never appear in the spool");
+}
+
+// An event names its repository by repository_id alone; the old fingerprint hashes are gone.
+function testRepositoryIdentityIsRepositoryIdOnly() {
+  capture({ session_id: "sess-repo-identity", cwd: repoRoot }, { event: "SessionStart" });
+  const [record] = spoolRecords().filter((r) => r.session_id === "sess-repo-identity");
+  assert.match(record.repo.repository_id, /^(git|local):/);
+  for (const field of ["normalized_remote_hash", "git_root_hash", "remote_hash"]) {
+    assert.equal(field in record.repo, false, `capture must not write repo.${field}`);
+  }
 }

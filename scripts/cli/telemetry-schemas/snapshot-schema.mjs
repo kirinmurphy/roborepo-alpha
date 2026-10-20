@@ -65,8 +65,8 @@ export function validateSnapshot(snapshot) {
 
 // Builds a snapshot from readConfigSnapshot()'s output plus session-supplied harness/model. Known
 // gaps in readConfigSnapshot (full hook command strings, MCP server registration detail, parsed
-// Codex config.toml) are recorded in `unavailable` rather than guessed — see Phase 0 notes in the
-// plan doc for why these are gaps today.
+// Codex config.toml) are recorded in `unavailable` rather than guessed; readConfigSnapshot does
+// not read them today.
 export function buildEffectiveSnapshot(configSnapshot, { harness = null, harnessVersion = null, model = null, appVersion = null } = {}) {
   const enabledPackageIds = (configSnapshot.packages || []).filter((pkg) => pkg.enabled).map((pkg) => pkg.id);
   const installedSkillIds = (configSnapshot.tools || []).filter((tool) => tool.installed).map((tool) => tool.id);

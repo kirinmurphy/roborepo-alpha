@@ -14,6 +14,8 @@
 // script runs.
 import { portalFillSlots as fill, portalTpl as tpl } from "/portal/shared/api.js";
 import "/portal/shared/icon.js";
+import { mountOverflowNav } from "/portal/shared/overflow-nav.js";
+import { currentRepositoryScope, onRepositoryScopeChange, scopedPagePath } from "/portal/shared/repository-scope.js";
 
 if (!window.PORTAL_MANIFEST) {
   throw new Error(
@@ -32,27 +34,54 @@ const PORTAL_PAGES = window.PORTAL_MANIFEST.pages;
   const nav = document.getElementById("nav");
   if (!nav) return;
   const currentPageId = window.PORTAL_MANIFEST.currentPageId;
-  nav.prepend(
-    ...PORTAL_PAGES.map((p) => {
-      const link = tpl("tpl-nav-link");
-      link.href = p.path;
-      fill(link, { label: p.title });
-      if (p.icon) {
-        const icon = document.createElement("portal-icon");
-        icon.setAttribute("name", p.icon);
-        icon.setAttribute("size", "md");
-        icon.setAttribute("aria-hidden", "true");
-        fill(link, { icon });
-        link.classList.add("nav-icon-only");
-        link.setAttribute("aria-label", p.title);
-        link.title = p.title;
-      } else {
-        link.querySelector('[data-slot="icon"]')?.remove();
-      }
-      if (p.id === currentPageId) link.classList.add("active");
-      return link;
-    }),
+  const navLink = (p, inMenu) => {
+    const link = tpl("tpl-nav-link");
+    link.href = scopedPagePath(p, currentRepositoryScope());
+    fill(link, { label: p.title });
+    if (p.id === currentPageId) {
+      link.classList.add("active");
+      link.setAttribute("aria-current", "page");
+    }
+    if (inMenu && p.icon) {
+      const icon = document.createElement("portal-icon");
+      icon.className = "menu-item-icon";
+      icon.setAttribute("name", p.icon);
+      icon.setAttribute("size", "sm");
+      icon.setAttribute("aria-hidden", "true");
+      link.prepend(icon);
+    }
+    return link;
+  };
+  // Below 640px the primary links no longer fit beside the logo, so every page moves into the ⋮ menu.
+  const navRow = mountOverflowNav(nav, { menuLabel: "More pages", collapseBelow: 640 });
+  const renderNav = () => navRow.setItems(
+    PORTAL_PAGES.map((p) => ({
+      label: p.title,
+      current: p.id === currentPageId,
+      secondary: Boolean(p.secondary),
+      render: (inMenu) => navLink(p, inMenu),
+    })),
   );
+  renderNav();
+  // Links carry the repository scope, so they follow it as it changes.
+  onRepositoryScopeChange(renderNav);
+
+  const currentPage = PORTAL_PAGES.find((p) => p.id === currentPageId);
+  if (currentPage?.repositoryScope) {
+    // The repository filter gets its own sub-header row inside the sticky site header, so the two
+    // stay pinned together. The module is loaded only where it renders, so unscoped pages skip the
+    // selector and its dialog.
+    document.querySelector(".portal-header").append(tpl("tpl-repository-scope-bar"));
+    void import("/portal/shared/repository-scope-selector.js").then(({ mountRepositoryScopeSelector }) =>
+      mountRepositoryScopeSelector(currentPage));
+  }
+  // A page that pins its own row under the header (Plans' lifecycle row) needs the header's height,
+  // which grows when the repo row joins it.
+  const header = document.querySelector(".portal-header");
+  const publishHeaderHeight = () =>
+    document.documentElement.style.setProperty("--portal-header-height", `${header.getBoundingClientRect().height}px`);
+  new ResizeObserver(publishHeaderHeight).observe(header);
+  publishHeaderHeight();
 })();
 
 // Theme toggle: sun glyph in dark mode (click -> light), moon in light mode. Choice persists in

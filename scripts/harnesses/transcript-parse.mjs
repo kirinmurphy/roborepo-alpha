@@ -230,7 +230,8 @@ function applyCodexEntry(counters, entry) {
   }
   if (entry.type !== "event_msg" && entry.type !== "response_item") return null;
   const payload = entry.payload || {};
-  if (entry.type === "event_msg" && entry.name === "token_count") {
+  const eventName = payload.type || entry.name;
+  if (entry.type === "event_msg" && eventName === "token_count") {
     const info = payload.info || {};
     const usage = info.total_token_usage || {};
     const total = numberOrNull(usage.total_tokens);
@@ -242,7 +243,9 @@ function applyCodexEntry(counters, entry) {
       counters.tokens.input = Math.max(0, input - cached);
       counters.tokens.cache_read = cached;
       counters.tokens.output = numberOrNull(usage.output_tokens) || 0;
-      counters.tokens.cache_creation = numberOrNull(usage.cache_creation_input_tokens) || 0;
+      counters.tokens.cache_creation = numberOrNull(usage.cache_creation_input_tokens)
+        ?? numberOrNull(usage.cache_write_input_tokens)
+        ?? 0;
       counters.codexReasoningOutputTokens = numberOrNull(usage.reasoning_output_tokens) || counters.codexReasoningOutputTokens;
       counters.maxOutputTokens = Math.max(counters.maxOutputTokens, counters.tokens.output);
     } else {
@@ -252,20 +255,20 @@ function applyCodexEntry(counters, entry) {
     return null;
   }
 
-  if (entry.type === "event_msg" && entry.name === "mcp_tool_call_end") {
+  if (entry.type === "event_msg" && eventName === "mcp_tool_call_end") {
     recordCodexToolCall(counters, payload.tool_name || payload.name || payload.tool);
     return null;
   }
 
   if (entry.type !== "response_item") return null;
   const item = payload.type ? payload : entry.item || {};
-  if (item.type === "function_call") {
+  if (item.type === "function_call" || item.type === "custom_tool_call") {
     recordCodexToolCall(counters, item.name || item.tool_name);
     if (typeof item.call_id === "string") counters.pendingToolNameById[item.call_id] = item.name || item.tool_name;
     if (typeof item.id === "string") counters.pendingToolNameById[item.id] = item.name || item.tool_name;
     return null;
   }
-  if (item.type === "function_call_output") {
+  if (item.type === "function_call_output" || item.type === "custom_tool_call_output") {
     const tool = counters.pendingToolNameById[item.call_id] || counters.pendingToolNameById[item.id] || null;
     delete counters.pendingToolNameById[item.call_id];
     delete counters.pendingToolNameById[item.id];
@@ -298,17 +301,26 @@ function numberOrNull(value) {
 // already calls inline via applyCodexEntry, exported here so the capability contract has a real
 // standalone method rather than a notYetMigrated stub.
 export function privacySafeRateLimits(rateLimits) {
+  if (rateLimits && typeof rateLimits === "object" && !Array.isArray(rateLimits)
+    && ("primary" in rateLimits || "secondary" in rateLimits)) {
+    return ["primary", "secondary"]
+      .filter((name) => rateLimits[name] && typeof rateLimits[name] === "object")
+      .map((name) => privacySafeRateLimit(rateLimits[name], name));
+  }
   if (!Array.isArray(rateLimits)) return rateLimits && typeof rateLimits === "object" ? privacySafeRateLimit(rateLimits) : null;
-  return rateLimits.map(privacySafeRateLimit).filter(Boolean);
+  return rateLimits.map((limit) => privacySafeRateLimit(limit)).filter(Boolean);
 }
 
-function privacySafeRateLimit(limit) {
+function privacySafeRateLimit(limit, fallbackName = null) {
   if (!limit || typeof limit !== "object") return null;
+  const reset = numberOrNull(limit.resets_at);
+  const resetDate = reset === null ? null : new Date(reset * 1000);
   return {
-    name: typeof limit.name === "string" ? limit.name : null,
+    name: typeof limit.name === "string" ? limit.name : fallbackName,
     used_percent: numberOrNull(limit.used_percent),
     window_minutes: numberOrNull(limit.window_minutes),
-    resets_at: typeof limit.resets_at === "string" ? limit.resets_at : null,
+    resets_at: typeof limit.resets_at === "string" ? limit.resets_at
+      : resetDate && !Number.isNaN(resetDate.getTime()) ? resetDate.toISOString() : null,
   };
 }
 

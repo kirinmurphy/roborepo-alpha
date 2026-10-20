@@ -1,0 +1,30 @@
+{
+  "tests": [
+    {
+      "skill": "plan-write",
+      "match": [
+        "create an implementation plan for package reconciliation",
+        "sync this plan with what we just changed",
+        "/plan-write docs/plans/backlog/example.md"
+      ],
+      "nearMiss": [
+        "write a quick PR summary",
+        "give me a brief answer about this function",
+        "implement this ordinary code change",
+        "close this plan, the work is merged"
+      ],
+      "triggerPhrases": [
+        "/plan-write",
+        "implementation plan",
+        "sync this plan",
+        "revise a plan"
+      ],
+      "skipPhrases": [
+        "brief answers",
+        "PR descriptions",
+        "ordinary implementation",
+        "closing a finished plan"
+      ]
+    }
+  ]
+}

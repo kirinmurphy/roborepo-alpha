@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The portal is the local `roborepo web` UI: Home (`/`), Config (`/config`), Plans (`/plans`),
+The portal is the local `roborepo web` UI: Home (`/`), Agents (`/agents`), Plans (`/plans`),
 Runtime (`/runtime`), Settings (`/settings`), Tokens (`/tokens`), and bookmarkable repository detail pages
 (`/repositories/<urlKey>`). It is static HTML/CSS/browser JavaScript
 served by a loopback-only Node HTTP server — no build step, no framework, no bundler. This doc
@@ -38,11 +38,13 @@ attribute is needed).
 ## How the Manifest Reaches the Browser
 
 `PAGES` in `scripts/cli/portal-server.mjs` is the single source of truth for the six static
-navigation entries (`id`, `path`, `title`, `dir`, optional `default`). `PAGE_ROUTES` extends that
+navigation entries (`id`, `path`, `title`, `dir`, optional `default`, `repositoryScope`, and
+`outsideActivityScope`). `PAGE_ROUTES` extends that
 table with non-navigation dynamic routes such as `/repositories/:urlKey`. There is no browser-side
 copy to hand-sync:
 
-1. `pageManifest()` derives the browser-safe `{ path, id, title }` shape from `PAGES`.
+1. `pageManifest()` derives the browser-safe `{ path, id, title }` shape from `PAGES`, plus `icon`,
+   `secondary`, and the two repository-scope flags when a page sets them.
 2. `pageHtml()` injects `window.PORTAL_MANIFEST = { token, pages: [...], currentPageId,
    routeParams }` into every served page's `<head>`, right beside the existing
    `<meta name="cli-portal-token">` tag. `currentPageId` lets a dynamic page identify the static
@@ -77,8 +79,35 @@ copy to hand-sync:
 
 Nothing else needs updating for a static page — the nav and `/api/portal/status` are driven by
 `PAGES`. Keep a dynamic page out of `PAGES` so navigation, sitemap, and portal status stay
-concrete. Each route is canonical; Home owns `/`, Agents owns `/config`, and repository detail
-owns `/repositories/:urlKey`.
+concrete. Each route is canonical; Home owns `/`, Agents owns `/agents`, and there are no
+compatibility routes (`/config`, the old Agents URL, is a 404). Repository detail owns
+`/repositories/:urlKey`.
+
+## Shared Repository Scope
+
+Plans, Tokens, and Agents share one repository scope, carried in the URL as
+`?repo=<urlKey>`. A page opts in with `repositoryScope: true` on its `PAGES` entry; Tokens
+also sets `outsideActivityScope: true` for **Activity outside listed repos** (`?repo=_other`,
+telemetry attributed to no listed repository). Runtime, Settings, and Home stay unscoped.
+
+| Piece | Where | Owns |
+| --- | --- | --- |
+| URL state | `portal/shared/repository-scope.js` | Parsing, composing, and clearing only the `repo` parameter; `history.pushState` on change and a change event (also fired on back/forward); nav hrefs via `scopedPagePath` |
+| Selector | `portal/shared/repository-scope-selector.js`, `repository-scope-choices.js` | An `<option-dropdown>` in its own full-width sub-header row at the bottom of the sticky `.portal-header` (`tpl-repository-scope-bar`, appended by `theme.js` on scope-aware pages only, so the two pin together), labeled **Viewing** and right-aligned: All repos, each visible repo from `GET /api/repositories` (same display name told apart by provider owner, then `urlKey`), Activity outside listed repos where offered, and a **Manage Repos** action row; resolves the current key for pages without a data route (Agents). The last repo list is cached in `sessionStorage` so a page load names the current repo on first paint; only a list fetched by the page itself may call a key unavailable |
+| Route resolution | `scripts/cli/portal-routes-scope.mjs`, `modules/repositories/scope.mjs` | Each scoped data route (`/api/plans`, `/api/plans/refresh`, `/api/data`) resolves the key once and hands domain code the canonical `repositoryId` |
+
+Rules:
+
+- A malformed, unknown, or hidden key is **unavailable**: the route answers `404` with
+  `{ error: { code: "REPOSITORY_SCOPE_UNAVAILABLE" } }`, never unscoped data and never a 500. The
+  page shows the shared unavailable notice, whose action clears only the scope.
+- Only a `urlKey` names a repository; a canonical ID in `?repo=` is unavailable; the former `?repository=` spelling is not read.
+- Changing the scope pushes the URL and refetches without a reload, so in-memory page state
+  (Plans filters) survives. Page-owned parameters such as `lifecycle` stay on their page: nav links
+  carry `repository` only, and only to scope-aware pages (`_other` only to Tokens).
+- Plans filters its one cached snapshot per request; Tokens' analysis cache keys on the resolved
+  `repositoryId`, and on the registry signature for `_other`, whose membership changes when a
+  repository is found or ignored.
 
 ## Shared Browser API (`portal/shared/api.js`)
 
@@ -103,7 +132,7 @@ templates, and stylesheet link live in `portal/plans/plan-drawer-partial.html`, 
 page places `{{PLAN_DRAWER}}`; `portal/plans/plan-drawer.js` (`createPlanDrawer`) fills and opens it.
 The page supplies the plan list blockers resolve against and the plan-write package state. Plans
 handles the drawer's `plan-change` events with its mutation orchestrator; Home passes `readonly`,
-so `<plan-status>` renders lifecycle and priority as chips.
+so `<plan-status>` renders priority as a chip and does not offer a mutation control.
 
 ### Adding a Read API
 
@@ -185,7 +214,7 @@ hand-maintained. Each domain's table:
 | --- | --- | --- |
 | `portal-routes-config.mjs` | `configRoutes` | `/api/config`, `/api/config/source`, `/api/config/packages`, `/api/config/skills`, `/api/config/permissions` |
 | `portal-routes-settings.mjs` | `settingsRoutes` | `/api/settings` — path-free derived repository, harness, and telemetry setup state |
-| `portal-routes-plans.mjs` | `plansRoutes` | `/api/plans`, `/api/plans/document`, `/api/plans/prompt`, `/api/plans/priority`, `/api/plans/lifecycle`, `/api/plans/refresh` |
+| `portal-routes-plans.mjs` | `plansRoutes` | `/api/plans`, `/api/plans/document`, `/api/plans/prompt`, `/api/plans/priority`, `/api/plans/refresh` |
 | `portal-routes-developer-runtime.mjs` | `developerRuntimeRoutes` | `/api/developer-runtime`, `/api/developer-runtime/refresh`, `/api/developer-runtime/history`, `/api/developer-runtime/metadata`, `/api/developer-runtime/links`, `/api/developer-runtime/association`, `/api/developer-runtime/project`, `/api/developer-runtime/alias`, `/api/developer-runtime/compose-project`, `/api/developer-runtime/repository-visibility`, `/api/developer-runtime/repository-pinned` |
 | `portal-routes-repositories.mjs` | `repositoriesRoutes` | `/api/home`, `/api/repositories`, `/api/repositories/sources` (GET/POST), `/api/repositories/sources/refresh` (POST), `/api/repositories/sources/:sourceId/enabled` (POST), `/api/repositories/sources/:sourceId/remove` (POST), `/api/repositories/:id`, `/api/repositories/:id/associations`, `/api/repositories/:urlKey/overview` — Home/detail use the stable browser key; management routes use encoded canonical ids. The `sources` routes are the only ones that carry configured source paths, and are listed before `:id` so `sources` is never read as a repository id |
 | `portal-routes-usage.mjs` | `usageRoutes` | `/api/usage`, `/api/usage/refresh` |
@@ -208,6 +237,34 @@ API surface stays in its own file instead of growing a shared one.
 shape (`:param` names are normalized away for this check, so `/api/x/:id` and `/api/x/:foo` count
 as the same route and collide). A copy-pasted or malformed entry fails loudly at startup instead of
 silently shadowing another route at request time.
+
+## Harness Setup Flow
+
+Agents, Tokens, and Home share one harness setup banner (`portal/shared/harness-warning.js`). It
+decides what to say; `portal/shared/harness-setup-flow.js` runs the check and remembers the outcome.
+
+| State | When | Banner |
+| --- | --- | --- |
+| `waiting` | A harness needs one user action, such as launching it or opening Claude Desktop's Code tab | The action, then "RoboRepo will finish setting it up." with a **Check now** button |
+| `setting-up` | Discovery finds the harness and it is not yet enabled (`ready` guidance) | "Setting up …" with a spinner; the page runs the check without a click |
+| `done` | A check just enabled the harness and applied its config | "… is set up." (success) |
+| `failed` | That apply did not complete | The error's first line and a **Try again** button |
+| `generic` | No supported harness is installed | "Install a supported harness…" with **Check for harnesses** |
+
+`POST /api/config/harnesses/refresh` runs `refreshHarnessesAndApply` in
+`scripts/cli/portal-harness-refresh.mjs`. When a refresh newly enables a harness, it runs
+`roborepo config apply`. Without a TTY the installer keeps user-edited files on conflict. A failed
+apply disables that harness again, so the banner offers setup again instead of hiding the failure.
+
+Setup runs without a click because launching the app is the user's real action. A second
+confirmation would add a step without adding information. The limits on that:
+
+- The page starts setup at most once per harness per page view, and never retries a failure on its
+  own.
+- Concurrent requests (two tabs) share one server-side run.
+- Home and Tokens re-read setup state every 10 seconds only while a `waiting` banner is on the
+  page, and stop when it leaves. Agents relies on its existing poll. No page polls when no harness
+  banner is showing.
 
 ## Repository Overview Aggregation
 
@@ -318,6 +375,9 @@ and reads portal JSON under its own origin; its requests still carry that hostna
 - `npm test` (`scripts/test/test-cli.sh`) — starts the portal server, asserts
   `/api/portal/status`, token exposure, mutating POST success/400/403 responses, and that each
   served `app.js` parses (`node --check`).
+- `node scripts/test/run-checks.mjs --filter repository-scope` — scope resolution, the scoped
+  routes, and the served portal's per-scope reports; `npm run test:portal-ui` covers the selector,
+  navigation, and history in the browser (`repository-scope.spec.mjs`).
 - `roborepo web` — click through Home → repository detail → Home → Agents → Plans → Runtime → Tokens,
   confirm nav highlighting and browser history, and
   exercise each page's mutations (Config toggles, Plans refresh/discovery-root edits, Telemetry

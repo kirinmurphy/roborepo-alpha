@@ -5,7 +5,7 @@ next_action: Decide the telemetry inclusion policy, then implement the root-doma
 blocked_by: []
 depends_on:
   - 46up8y7a
-  - package-registry-live-state-reconciliation
+  - o9zwxuav
   - user-managed-packages-and-add-workflows
   - pljvmyh
 related:
@@ -14,10 +14,9 @@ related:
   - qjsbhel5
   - package-cli-test-guide
   - harness-parity-todo
-  - harness-presence-signal-expansion
+  - 3jp3yhtq
   - harness-capability-derived-resource-targeting
   - plan-session-launching-milestone-1
-  - plan-lifecycle-suite-workflow-navigation
   - telemetry-analyze-single-pass-perf
   - windows-provider-path-schema
 reviewed_commit: 2a56135734a21c6c8ad9435f76f2e9e092b81201
@@ -207,7 +206,7 @@ from other plans.
 | Plan                                         | This plan consumes                                                                                   |
 | -------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | `46up8y7a` — install lifecycle               | Profile preservation and ownership behavior across install, update, repair, uninstall, and reinstall |
-| `package-registry-live-state-reconciliation` | Final versioned desired package-state schema and migration                                           |
+| `o9zwxuav` — package state model             | Final versioned desired package-state schema and migration                                           |
 | `user-managed-packages-and-add-workflows`    | Copied versus external source semantics, user package schema, and export ownership                   |
 | `pljvmyh` — repository scope                 | Portable canonical identity and private machine-local root/path boundary                             |
 

@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { classifyCommand, failureSignature, CLASSIFIER_VERSION } from "../cli/telemetry-classify.mjs";
+import { classifyCommand, failureSignature, shellOperation, CLASSIFIER_VERSION } from "../cli/telemetry-classify.mjs";
 
-// Phase 3 of docs/plans/active/roborepo-telemetry-events-experiments-plan.md: pure semantic
+// Pure semantic
 // classification of Bash commands into operation category/runner/scope. This repo's own
 // package.json (npm test -> full suite via test-cli.sh, npm run test:xxx -> targeted single
-// files) is the canonical full-vs-targeted fixture the plan doc's classification rules describe.
+// files) is the canonical full-vs-targeted fixture.
 
 testFullSuiteVsTargeted();
 testOtherCategories();
@@ -13,6 +13,8 @@ testAmbiguousStaysUnknown();
 testClassifierVersionStamped();
 testNeverStoresRawCommand();
 testFailureSignature();
+testReadsAndSegments();
+testShellOperationOnlyFromShellTools();
 console.log("telemetry classify checks passed");
 
 function testFullSuiteVsTargeted() {
@@ -42,7 +44,8 @@ function testOtherCategories() {
   assert.equal(classifyCommand("npm install").category, "install");
   assert.equal(classifyCommand("git status").category, "git");
   assert.equal(classifyCommand("npm run serve").category, "serve");
-  assert.equal(classifyCommand("cat package.json").category, "other");
+  assert.equal(classifyCommand("cat package.json").category, "read");
+  assert.equal(classifyCommand("make deploy").category, "other");
 }
 
 function testAmbiguousStaysUnknown() {
@@ -76,4 +79,32 @@ function testFailureSignature() {
   assert.notEqual(a, c);
   assert.equal(failureSignature(""), null);
   assert.equal(failureSignature(null), null);
+}
+
+function testReadsAndSegments() {
+  // Reading, grepping, or listing test files is a read, not a test run.
+  for (const command of ["sed -n 1,40p scripts/test/run.mjs", "rg -n \"test\" scripts/cli", "ls scripts/test", "cat a.test.js | head -20"]) {
+    assert.equal(classifyCommand(command).category, "read", command);
+  }
+  // In-place edits and destructive finds are not reads.
+  assert.equal(classifyCommand("sed -i '' s/a/b/ file.txt").category, "other");
+  assert.equal(classifyCommand("find . -name '*.tmp' -delete").category, "other");
+  // A test anywhere in a command sequence makes it a test run; `cd` segments are dropped.
+  const inDir = classifyCommand("cd app && npm test");
+  assert.equal(inDir.category, "test");
+  assert.equal(inDir.scope, "full");
+  assert.equal(classifyCommand("sed -n 1,4p a.mjs && node scripts/test/x-check.mjs").category, "test");
+  // Pipes stay inside one segment: this is one test run.
+  assert.equal(classifyCommand("npm run -s test:portal-ui 2>&1 | tail -30").category, "test");
+  // The signature still covers the whole command, so reruns match on the exact command.
+  assert.notEqual(classifyCommand("cd a && npm test").signature, classifyCommand("cd b && npm test").signature);
+}
+
+function testShellOperationOnlyFromShellTools() {
+  const operation = { category: "test" };
+  assert.equal(shellOperation({ tool: { name: "Bash" }, operation }), operation);
+  assert.equal(shellOperation({ tool: { name: "run_shell_command" }, operation }), operation);
+  // Codex puts patch text in apply_patch's `command` field; v1 classified it.
+  assert.equal(shellOperation({ tool: { name: "apply_patch" }, operation }), null);
+  assert.equal(shellOperation({ operation }), operation);
 }

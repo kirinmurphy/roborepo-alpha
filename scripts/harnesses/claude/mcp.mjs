@@ -10,7 +10,7 @@ import { claudeMcpArgs, runClaudeMcpAdd, hasClaudeCli, claudeMcpRemove, claudeMc
 // Mirrors scripts/cli/mcp-config.mjs's MCP_SERVERS_PATH/MCP_SCOPES, duplicated rather than
 // imported: mcp-config.mjs pulls in paths.mjs's registry-dependent half (rootConfigActive/
 // rootConfigBaseline), which would cycle back through registry.mjs into this module — the same
-// paths.mjs/roots.mjs import-cycle issue the Phase 3 grounding notes describe. roots.mjs is the
+// paths.mjs/roots.mjs import-cycle issue. roots.mjs is the
 // registry-independent leaf, safe to import directly.
 const MCP_SERVERS_PATH = path.join(repoRoot, "manifests", "inventory", "mcp-servers.json");
 const MCP_SCOPES = ["user", "local", "project"];

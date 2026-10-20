@@ -138,7 +138,7 @@ check("the record that took the root is not superseded", supersededBy(reg, RENAM
 }
 
 // --- hide / restore round trip ---
-// The contract the plan states outright: a record is hidden, returns via "Show hidden", and is never
+// The contract: a record is hidden, returns via "Show hidden", and is never
 // removed. Nothing here deletes, and every step is reversible.
 {
   const { hideRepository, validateRegistry, REGISTRY_VERSION } = await import(M);
@@ -177,7 +177,7 @@ check("the record that took the root is not superseded", supersededBy(reg, RENAM
 }
 
 // --- reused directory: a persisted path is not trusted on its own ---
-// The plan's stated risk. A checkout is deleted and a different repository cloned to the same path;
+// The reused-directory risk. A checkout is deleted and a different repository cloned to the same path;
 // the registry still records that path against the old record. Reading git from it blind prints the
 // NEW repository's branch on the OLD repository's card — a confident wrong fact, worse than the
 // missing one it replaces. A running repository cannot hit this, because its identity is resolved
@@ -207,7 +207,7 @@ check("the record that took the root is not superseded", supersededBy(reg, RENAM
 // --- an alias is the user overruling the refusal to guess ---
 // supersededBy infers from repointed checkouts and returns null whenever the evidence is short —
 // which is right, but leaves a real rename showing two cards when the roots predate the path index
-// and ownership cannot be proven. setAlias is the sanctioned fix the plan points at, and the
+// and ownership cannot be proven. setAlias is the sanctioned fix, and the
 // repository list resolves through it: an id that aliases elsewhere is not its own record any more,
 // so it is skipped and only the survivor renders.
 {
@@ -243,8 +243,8 @@ check("the record that took the root is not superseded", supersededBy(reg, RENAM
 // reads the localRoots arrays instead, which every record has always had.
 //
 // A rootId is a hash of an absolute path, so the same one on two records is direct evidence the same
-// DIRECTORY was seen under both remotes. That is the fact Phase 2 said it lacked when it declined to
-// act on a rename.
+// DIRECTORY was seen under both remotes. That is the evidence rename handling lacked when it declined
+// to act on a rename.
 {
   const { renamedInto } = await import(M);
   const stamp = new Date(nowMs).toISOString();
@@ -266,7 +266,7 @@ check("the record that took the root is not superseded", supersededBy(reg, RENAM
   check("a rename is detected from the newest shared root", renamedInto(renamed, "old"), "new");
   check("the successor is not itself renamed away", renamedInto(renamed, "new"), null);
 
-  // The case Phase 2 was worried about, and the reason the newest root is the discriminator: a
+  // The case rename handling was worried about, and the reason the newest root is the discriminator: a
   // reclone leaves the old record's current directory behind, so it is NOT on the successor.
   const recloned = reg({
     old: rec("old", [root("shared", "2026-07-01T00:00:00.000Z"), root("mine-only", "2026-07-30T00:00:00.000Z")]),

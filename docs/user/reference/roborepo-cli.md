@@ -99,7 +99,7 @@ Most users only need `list`, `inspect`, `enable`, and `disable`.
 
 | Command | What it does |
 | --- | --- |
-| `roborepo web [--no-open] [--port <n>]` | Starts the local portal on `127.0.0.1` (default port `4317`) and opens it. `/config` manages packages and permissions, `/plans` browses plan docs, `/runtime` lists local web apps, and `/tokens` shows token usage when telemetry has data. |
+| `roborepo web [--no-open] [--port <n>]` | Starts the local portal on `127.0.0.1` (default port `4317`) and opens it. `/agents` manages packages and permissions, `/plans` browses plan docs, `/runtime` lists local web apps, and `/tokens` shows token usage when telemetry has data. |
 | `roborepo web --detach [--no-open] [--port <n>]` | Starts the same portal in the background. A cold start warms its views before binding and can take ~30s. |
 | `roborepo web stop [--port <n>]` | Stops the detached portal. PID files are tracked per port, so pass the same `--port` used to start it. |
 | `roborepo runtime [--json] [--open]` | Lists active localhost HTTP apps, prints the portal snapshot as JSON, or opens `/runtime`. |
@@ -108,7 +108,7 @@ If a portal is already running on the port, `roborepo web` reuses it when it run
 restarts it when the code has changed since it started.
 
 See [Plan Suite Walkthrough](../guides/plan/lifecycle/plan-suite.md),
-[Telemetry Walkthrough](../guides/telemetry.md), and [Runtime](developer-runtime.md) for the pages.
+[Telemetry Walkthrough](../guides/telemetry.md), and [Runtime](runtime.md) for the pages.
 
 ## Telemetry
 
@@ -154,7 +154,7 @@ roborepo index code --watch
 | `roborepo skill inspect <name>` | Reports skill source, managed/unmanaged ownership, native collision state, and per-harness install state. |
 | `roborepo skill native [--full]` | Shows native Claude/Codex plugin entrypoints; `--full` prints native help output inline. |
 | `roborepo skill audit [--check]` | Renders or checks the shared skill invocation audit. |
-| `roborepo skill triggers [--check]` | Checks trigger and near-miss fixtures from `manifests/inventory/skill-trigger-tests.json`. |
+| `roborepo skill triggers [--check]` | Checks trigger and near-miss fixtures from each package's optional `globals/packages/<package-id>/skill-triggers.json`. |
 | `roborepo skill render-commands [--check]` | Renders generated slash commands from package `slash-command` resources, or verifies them. |
 
 See [RoboRepo Skills Interface](roborepo-skills.md) for the managed/native boundary and examples.

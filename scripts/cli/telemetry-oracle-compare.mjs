@@ -1,6 +1,4 @@
 import { analyzeTelemetry } from "./telemetry-analyze.mjs";
-import { buildRepositoryHashIndex } from "./telemetry-repository.mjs";
-import { privacyHash } from "./telemetry-schemas/hash.mjs";
 import { runTelemetryOracle, inspectOracleEvidence } from "./telemetry-oracle-run.mjs";
 import { stableJson } from "./telemetry-oracle-observations.mjs";
 import { POLICY, rowSort } from "./telemetry-oracle-cohorts.mjs";
@@ -17,8 +15,7 @@ export function compareTelemetryOracle(events, options = {}, { analyze = analyze
     const expected = runTelemetryOracle(events, options);
     counts.session_count = expected.session_count;
     counts.operation_count = expected.operation_count;
-    const repositoryHashIndex = buildRepositoryHashIndex(options.repositoryRegistry, privacyHash);
-    const report = analyze(events, { snapshots: options.snapshots ?? [], markers: options.markers ?? [], repositoryHashIndex });
+    const report = analyze(events, { snapshots: options.snapshots ?? [], markers: options.markers ?? [] });
     const differences = comparisonEntries(report, expected)
       .filter(({ actual, expected: value }) => stableJson(actual) !== stableJson(value)).map(({ field }) => field);
     return result(differences.length ? "failed" : coverage.complete ? "passed" : "partial", counts, coverage, differences, CHECKS);

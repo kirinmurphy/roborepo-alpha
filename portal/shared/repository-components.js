@@ -13,13 +13,13 @@ export function configureRepositoryName(node, { name, href }) {
   if (!slot) return;
   if (href) {
     slot.href = href;
-    slot.textContent = name || "Repository";
+    slot.textContent = name || "Repo";
   } else {
     // Unlinked names keep the linked name's face (mono, via .repository-name-text) so a card looks
     // the same with or without a detail page to point at.
     const text = document.createElement("span");
     text.className = "repository-name-text";
-    text.textContent = name || "Repository";
+    text.textContent = name || "Repo";
     slot.replaceWith(text);
   }
 }
@@ -90,7 +90,16 @@ export function mountActionMenu(host, items, { onToggle, onSelect, ariaLabel = "
     const control = item.href && !item.disabled ? document.createElement("a") : document.createElement("button");
     if (control.tagName === "BUTTON") control.type = "button";
     control.textContent = item.label;
+    if (item.icon) {
+      const icon = document.createElement("portal-icon");
+      icon.className = "menu-item-icon";
+      icon.setAttribute("name", item.icon);
+      icon.setAttribute("size", "sm");
+      icon.setAttribute("aria-hidden", "true");
+      control.prepend(icon);
+    }
     control.dataset.action = item.key;
+    if (item.danger) control.classList.add("menu-item-danger");
     if (item.disabled) control.disabled = true;
     if (item.hint) {
       const hint = document.createElement("span");

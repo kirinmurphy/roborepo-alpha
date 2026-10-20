@@ -8,9 +8,12 @@
 6. Write new plans into `docs/plans/backlog/`.
 7. Add minimal frontmatter from `plan-schema.md`, including an empty `worktree:` line. Do not fill
    it at creation; a backlog plan has no implementation worktree yet.
-8. Follow `writing-guidelines.md`.
+8. Follow `writing-guidelines.md`. Add `## Documentation impact` with the affected docs of record
+   and expected updates, or a reason no reader-facing doc is affected. Check the repository's
+   doc-of-record map when one exists.
 9. Run both validation layers. See below.
-10. Leave concrete `next_action`.
+10. Leave concrete `next_action`, and an initial `- [ ]` implementation checklist that
+    `/plan-promote` will refine.
 
 If the work is too vague to be implementation-ready, create a draft backlog plan and list missing decisions.
 
@@ -50,5 +53,6 @@ Ordering:
    **both** layers — a prose fix can break a required section, and a schema fix can break the prose.
 4. The plan is delivered when both layers report nothing.
 
-If the user asked for the plan to be started, hand off to `/plan-start` only after the backlog
-artifact passes both layers; it preserves the same `id` across the move into `docs/plans/active/`.
+If the user asked for the plan to be started, hand off to `/plan-promote` only after the backlog
+artifact passes both layers; it refines the initial checklist and commits the move into
+`docs/plans/ready/`, after which `/plan-execute` starts it. Both keep the same `id`.

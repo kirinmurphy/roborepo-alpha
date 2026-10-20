@@ -113,7 +113,7 @@ pkg_workspace="${work}/pkg-workspace"
 mkdir -p "${pkg_app}/manifests/platform" "${pkg_app}/scripts/build" "${pkg_app}/scripts/cli" "${pkg_app}/scripts/harnesses" "${pkg_app}/globals/harnesses"
 cp "${repo_root}/package.json" "${pkg_app}/package.json"
 cp -R "${repo_root}/scripts/cli/." "${pkg_app}/scripts/cli/"
-# scripts/cli/paths.mjs (Phase 3) derives harness paths from the provider registry, so a sandboxed
+# scripts/cli/paths.mjs derives harness paths from the provider registry, so a sandboxed
 # CLI root needs that module graph and the manifests it reads too — see the mcp_harness copy below
 # for the same requirement, first hit there.
 cp -R "${repo_root}/scripts/harnesses/." "${pkg_app}/scripts/harnesses/"
@@ -203,6 +203,26 @@ assert "codex hooks: minimize-bash-output tolerates malformed stdin" \
   bash -c "printf 'not-json' | HOME='${codex_hook_home}' node '${repo_root}/globals/system/hooks/codex/minimize-bash-output.mjs' >/dev/null"
 assert "codex hooks: installed permission-check reads repo manifest from install state" \
   bash -c "printf '%s\n' '{\"tool_name\":\"exec_command\",\"tool_input\":{\"command\":\"git push --force origin main\"}}' | HOME='${codex_hook_home}' node '${codex_hook_home}/.codex/hooks/permission-check.mjs' | grep -q '\"permissionDecision\":\"deny\"'"
+# An npm install writes no install-state.json; the CLI records the app root under the state root
+# instead, and the copied hook must find the manifest through it.
+codex_package_state="${work}/codex-package-state"
+mkdir -p "${codex_package_state}"
+printf '{ "appRoot": "%s" }\n' "${repo_root}" > "${codex_package_state}/app-root.json"
+
+assert "codex hooks: installed permission-check reads repo manifest from the recorded app root" \
+  bash -c "printf '%s\n' '{\"tool_name\":\"exec_command\",\"tool_input\":{\"command\":\"git push --force origin main\"}}' | HOME='${codex_hook_home}' ROBOREPO_STATE_ROOT='${codex_package_state}' node '${codex_hook_home}/.codex/hooks/permission-check.mjs' | grep -q '\"permissionDecision\":\"deny\"'"
+
+# The recorded app root holds the concrete install directory, which moves when npm reinstalls under
+# another Node version. Any command heals a stale record; no command but init and the permission
+# render creates one, so running roborepo after uninstall cannot bring the file back.
+app_root_stale="${work}/app-root-stale"
+mkdir -p "${app_root_stale}"
+printf '{ "appRoot": "/moved/away" }\n' > "${app_root_stale}/app-root.json"
+assert "app-root record: any command heals a stale record" \
+  bash -c "ROBOREPO_STATE_ROOT='${app_root_stale}' node '${cli}' version >/dev/null 2>&1 && grep -qF '\"appRoot\": \"${repo_root}\"' '${app_root_stale}/app-root.json'"
+app_root_absent="${work}/app-root-absent"
+assert "app-root record: an ordinary command does not create a missing record" \
+  bash -c "ROBOREPO_STATE_ROOT='${app_root_absent}' node '${cli}' version >/dev/null 2>&1; ! test -e '${app_root_absent}/app-root.json'"
 
 mk_skill() {
   local dir="$1" name="$2"
@@ -401,7 +421,7 @@ cp -R "${repo_root}/scripts/cli/." "${new_harness}/scripts/cli/"
 mkdir -p "${new_harness}/modules"
 cp -R "${repo_root}/modules/." "${new_harness}/modules/"
 # See the mcp_harness copy below for why scripts/harnesses/ and globals/harnesses/ must travel
-# with scripts/cli/ now that paths.mjs (Phase 3) derives harness paths from the provider registry.
+# with scripts/cli/ now that paths.mjs derives harness paths from the provider registry.
 cp -R "${repo_root}/scripts/harnesses/." "${new_harness}/scripts/harnesses/"
 cp -R "${repo_root}/globals/harnesses/." "${new_harness}/globals/harnesses/"
 cp "${repo_root}/scripts/build/link-skills.sh" "${new_harness}/scripts/build/link-skills.sh"
@@ -429,19 +449,25 @@ cat > "${new_harness}/README.md" <<'EOF_README'
 | --- | --- | --- |
 EOF_README
 
-( cd "${work}" && node "${new_harness}/scripts/cli/main.mjs" skill new --kind=auto --name=demo-helper --description="Demo helper workflow." --category=repo >/dev/null )
+( cd "${work}" && node "${new_harness}/scripts/cli/main.mjs" skill new --kind=auto --name=demo-helper --description="Demo helper workflow." --category=repo >"${work}/skill-new-auto.out" )
 assert "skill new: auto helper creates skill" \
   test -f "${new_harness}/globals/packages/demo-helper/skills/demo-helper/SKILL.md"
 assert "skill new: auto helper writes package policy" \
   grep -q '"invocation": "auto"' "${new_harness}/globals/packages/demo-helper/package.config.json"
 assert "skill new: auto helper updates README Automatic Helpers" \
   grep -q 'demo-helper' "${new_harness}/README.md"
+assert "skill new: low-risk skill does not prompt for trigger fixtures" \
+  bash -c "! grep -q 'skill-triggers.json' '${work}/skill-new-auto.out'"
 
-( cd "${work}" && node "${new_harness}/scripts/cli/main.mjs" skill new --kind=skill-command --name=demo-plan --command=demo-plan --description="Demo planning workflow." --risk=medium >/dev/null )
+( cd "${work}" && node "${new_harness}/scripts/cli/main.mjs" skill new --kind=skill-command --name=demo-plan --command=demo-plan --description="Demo planning workflow." --risk=medium >"${work}/skill-new-medium.out" )
 assert "skill new: skill-command creates command wrapper" \
   grep -q 'Use the `demo-plan` skill' "${new_harness}/generated/packages/demo-plan/claude/commands/demo-plan.md"
 assert "skill new: skill-command updates slash manifest" \
   grep -q '"entrypoints"' "${new_harness}/globals/packages/demo-plan/package.config.json"
+assert "skill new: medium-risk skill names its package trigger fixture file" \
+  grep -q 'globals/packages/demo-plan/skill-triggers.json' "${work}/skill-new-medium.out"
+assert "skill new: medium-risk skill does not write a stub trigger fixture" \
+  test ! -e "${new_harness}/globals/packages/demo-plan/skill-triggers.json"
 
 ( cd "${work}" && node "${new_harness}/scripts/cli/main.mjs" skill new --kind=standalone --name=demo-command --description="Demo command workflow." --harnesses=claude >/dev/null )
 assert "skill new: standalone creates shared command source" \
@@ -506,7 +532,7 @@ assert "skill export-to-project: creates .codex/skills even when only .claude ex
   test -f "${claude_only_repo}/.codex/skills/test-harness/SKILL.md"
 
 assert "skill export-to-project: internal skill NOT exported (firewall)" \
-  bash -c "! test -e '${export_repo}/.claude/skills/builtin-development'"
+  bash -c "! test -e '${export_repo}/.claude/skills/roborepo-development'"
 
 assert "skill export-to-project: refuses to run in source repo" \
   bash -c "cd '${repo_root}' && ! node '${cli}' skill export-to-project --yes >/dev/null 2>&1"
@@ -546,15 +572,15 @@ assert "telemetry enable: creates local state dirs" \
   bash -c "HOME='${presets_home}' ROBOREPO_STATE_DIR='${presets_home}/.roborepo' node '${cli}' telemetry enable >/dev/null && test -d '${presets_home}/.roborepo/telemetry/spool'"
 assert "telemetry enable: does not replace existing root hook directory" \
   bash -c "test -f '${presets_home}/.claude/hooks/local.txt' && ! compgen -G '${presets_home}/.claude/hooks_original_*' >/dev/null"
-# Phase 6: telemetry now declares hooks/codex, so `telemetry enable` wires capture hooks into this
-# file (rather than leaving it untouched, which was the pre-Phase-6 leak: hooks survived disable).
+# Telemetry declares hooks/codex, so `telemetry enable` wires capture hooks into this file
+# (rather than leaving it untouched, which leaked: hooks survived disable).
 assert "telemetry enable: wires capture hooks into existing Codex hooks config" \
   bash -c "grep -q 'roborepo telemetry capture --harness codex' '${presets_home}/.codex/hooks.json' && ! compgen -G '${presets_home}/.codex/hooks_original_*.json' >/dev/null"
 assert "telemetry enable: marks package desired state" \
   bash -c "HOME='${presets_home}' ROBOREPO_STATE_DIR='${presets_home}/.roborepo' node -e \"import('${repo_root}/scripts/cli/config.mjs').then(c=>{const p=c.readConfigSnapshot().packages.find(x=>x.id==='telemetry');process.exit(p?.enabled===true&&p?.desired===true&&p?.status==='enabled'&&p.componentStatus?.[0]?.state==='present'?0:1)})\""
 
 # ---------------------------------------------------------------------------
-# Phase 1: interactive config controls — enable/disable package round-trip,
+# Interactive config controls — enable/disable package round-trip,
 # skill install/remove into both harnesses, and the dashboard POST endpoints.
 # Runs against a throwaway harness root so it never touches the real ~/.claude.
 # ---------------------------------------------------------------------------
@@ -859,7 +885,7 @@ if node -e 'const s=require("node:net").createServer();s.once("error",()=>proces
   # respawn failed). Asserting the PID is unchanged is what catches a regression to kill-first —
   # a plain "does it serve afterwards" check passes either way, which is why the bug went unseen.
   assert "config: web --detach adopts a healthy portal instead of restarting it" adopt_check
-  cfg_token="$(curl -s "http://127.0.0.1:${cfg_port}/config" | sed -n 's/.*name="cli-portal-token" content="\([^"]*\)".*/\1/p' | head -1)"
+  cfg_token="$(curl -s "http://127.0.0.1:${cfg_port}/agents" | sed -n 's/.*name="cli-portal-token" content="\([^"]*\)".*/\1/p' | head -1)"
   assert "config: portal exposes mutation token only in served HTML" \
     bash -c "test -n '${cfg_token}'"
   # Capture the JSON to a file so the snapshot body (which contains apostrophes in skill descriptions)
@@ -876,8 +902,10 @@ if node -e 'const s=require("node:net").createServer();s.once("error",()=>proces
     bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' -X POST 'http://127.0.0.1:${cfg_port}/api/config/skills' -H 'Content-Type: application/json' -d '{\"id\":\"${cfg_skill}\",\"enabled\":false}')\" = 403 ]"
   assert "config: POST unknown skill returns ok:false" \
     bash -c "curl -s -X POST 'http://127.0.0.1:${cfg_port}/api/config/skills' -H 'Content-Type: application/json' -H 'X-Cli-Portal-Token: ${cfg_token}' -d '{\"id\":\"zzz\",\"enabled\":true}' | node -e \"let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);process.exit(j.ok===false?0:1)})\""
-  assert "config: GET /config still served" \
-    bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' 'http://127.0.0.1:${cfg_port}/config')\" = 200 ]"
+  assert "config: GET /agents served" \
+    bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' 'http://127.0.0.1:${cfg_port}/agents')\" = 200 ]"
+  assert "config: the old Agents URL /config is gone (404, no redirect)" \
+    bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' 'http://127.0.0.1:${cfg_port}/config')\" = 404 ]"
   assert "developer-runtime: GET /runtime served with token" \
     bash -c "curl -s 'http://127.0.0.1:${cfg_port}/runtime' | grep -q 'cli-portal-token'"
   assert "developer-runtime: notice template includes docs link target" \
@@ -901,10 +929,10 @@ if node -e 'const s=require("node:net").createServer();s.once("error",()=>proces
     bash -c "node -e \"const j=require('${cfg_home}/developer-runtime-project.json');process.exit(j.ok&&j.developerRuntime?.settingsRevision===${cfg_lh_rev}+1?0:1)\""
   assert "developer-runtime: Windows capability shape is explicit" \
     bash -c "node -e \"import('${repo_root}/modules/developer-runtime/index.mjs').then(m=>{const c=m.capabilityForPlatform('win32');process.exit(c.discovery==='unsupported'&&/Windows/.test(c.message)?0:1)})\""
-  # The /config page JS must parse — a syntax error there crashes the whole dashboard at load (no
+  # The /agents page JS must parse — a syntax error there crashes the whole dashboard at load (no
   # panels render) and is invisible to HTTP-status checks. Guards the template-literal trap (a literal
   # newline inside a JS string, etc.).
-  assert "config: served /config dashboard JS parses" \
+  assert "config: served /agents dashboard JS parses" \
     bash -c "dashjs=\"${cfg_home}/dash.mjs\"; curl -s 'http://127.0.0.1:${cfg_port}/portal/config/app.js' > \"\${dashjs}\" && node --check \"\${dashjs}\""
   assert "developer-runtime: served dashboard JS parses" \
     bash -c "dashjs=\"${cfg_home}/developer-runtime.mjs\"; curl -s 'http://127.0.0.1:${cfg_port}/portal/developer-runtime/app.js' > \"\${dashjs}\" && node --check \"\${dashjs}\""
@@ -912,7 +940,7 @@ else
   [[ "${quiet}" -eq 0 ]] && echo "skip: config portal HTTP tests (loopback bind unavailable)"
 fi
 
-# Phase 2: flat permission model — named behaviors (write-files, delete-files, go-online,
+# Flat permission model — named behaviors (write-files, delete-files, go-online,
 # commit-code, push-pull-prs) and arbitrary commands are each independently deny/ask/allow, with
 # personal overrides layered on top of the manifest at render time. No profile bundles, no
 # project scope (global only — see manifests/inventory/agent-permissions.json).
@@ -955,9 +983,8 @@ if [[ -n "${cfg_port:-}" ]]; then
   assert "config: POST package telemetry disable flips snapshot" \
     bash -c "curl -s -X POST 'http://127.0.0.1:${cfg_port}/api/config/packages' -H 'Content-Type: application/json' -H 'X-Cli-Portal-Token: ${cfg_token}' -d '{\"id\":\"telemetry\",\"enabled\":false}' | node -e \"let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);process.exit(j.ok&&j.config?.telemetry?.enabled===false?0:1)})\""
 
-  # Phase 6 of docs/plans/active/roborepo-telemetry-events-experiments-plan.md: portal marker/
-  # experiment/analysis endpoints. Real HTTP calls against the running loopback server (per the
-  # plan's "no Playwright" decision — verified via API status/JSON-shape checks, not a real browser).
+  # Portal marker/experiment/analysis endpoints. Real HTTP calls against the running loopback
+  # server, verified via API status/JSON-shape checks rather than a real browser.
   assert "telemetry: GET /api/telemetry/markers returns an array (empty spool ok)" \
     bash -c "curl -s 'http://127.0.0.1:${cfg_port}/api/telemetry/markers' | node -e \"let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);process.exit(Array.isArray(j.markers)?0:1)})\""
   assert "telemetry: POST /api/telemetry/markers without token returns 403" \
@@ -1001,7 +1028,7 @@ echo "{\"session_id\":\"sess-x\",\"cwd\":\"${repo_root}\",\"transcript_path\":\"
   | env "${tele_env[@]}" node "${cli}" telemetry capture --harness claude --event Stop
 assert "telemetry capture: records token totals from transcript" \
   bash -c "grep -q '\"total\":67800' '${tele_home}/.roborepo/telemetry/spool/claude.jsonl'"
-# Phase 3: capture now writes schema 3 (capture_id/call_id/config_snapshot_id/operation/phase
+# Capture writes schema 3 (capture_id/call_id/config_snapshot_id/operation/phase
 # added; schema-v2 records elsewhere in the spool remain readable — see the "legacy" assertion below).
 assert "telemetry capture: writes schema v3 records" \
   bash -c "grep -q '\"schema\":3' '${tele_home}/.roborepo/telemetry/spool/claude.jsonl'"
@@ -1016,7 +1043,7 @@ assert "telemetry report: shows token sections when token data exists" \
   bash -c "env ${tele_env[*]} node '${cli}' telemetry report | grep -q 'token spikes'"
 assert "telemetry report: legacy metadata-only records still report" \
   bash -c "printf '%s\n' '{\"ts\":\"2026-06-10T01:00:00Z\",\"harness\":\"claude\",\"event\":\"Stop\",\"repo\":{\"label\":\"legacy\"},\"tool\":{\"name\":\"Read\"}}' >> '${tele_home}/.roborepo/telemetry/spool/claude.jsonl' && env ${tele_env[*]} node '${cli}' telemetry report | grep -q 'legacy'"
-# Server-read performance guardrails (docs/plans/active/telemetry-analysis-io-performance.md): the
+# Server-read performance guardrails: the
 # shared incremental byte-tail reader and the spool store's equality with a full re-read. These are
 # self-contained (own temp dirs), so they need no tele_env.
 assert "telemetry perf: incremental byte-tail reader (readAppendedLines) edge cases" \
@@ -1071,8 +1098,8 @@ assert "bundle remove: adopt overwrite policy restores backed up item" \
   bash -c "HOME='${adopt_overwrite_home}' ROBOREPO_STATE_DIR='${adopt_overwrite_home}/.roborepo' node '${cli}' bundle remove hooks >/dev/null && grep -q 'local hooks' '${adopt_overwrite_home}/.claude/hooks' && ! test -e '${adopt_overwrite_home}/.claude/hooks_original_20260615-101500'"
 
 # Onboarding gate disabled (in-progress feature): install auto-applies defaults, so no command is
-# gated on onboarding. These two assertions are kept here, disabled, for reinstatement — see
-# docs/plans/completed/onboarding-reinstatement.md §5. They test the forced gate that no longer exists.
+# gated on onboarding. These two assertions are kept here, disabled, for reinstatement.
+# They test the forced gate that no longer exists.
 # gate_home="${work}/gate-home"
 # mkdir -p "${gate_home}/.roborepo"
 # node -e 'const fs = require("fs"); fs.writeFileSync(process.argv[1], JSON.stringify({ repo: process.argv[2], mode: "managed" }));' \
@@ -1195,7 +1222,7 @@ assert "package command: index docs preserves marker contract" \
 # scripts/cli/paths.mjs (two levels up), so copying scripts/cli/ (which holds the entry main.mjs
 # plus every module) lets us test writes without touching this repo. main.mjs imports every
 # cli/ module at load time. scripts/harnesses/ and globals/harnesses/ are copied too: paths.mjs
-# (Phase 3) now derives harnessHome/rootConfigActive/etc. from the provider registry instead of
+# derives harnessHome/rootConfigActive/etc. from the provider registry instead of
 # hardcoding them, so the registry's module graph and the provider.json manifests it reads are
 # part of this sandbox's real dependency footprint, not an implementation detail scripts/cli/ owns
 # alone anymore.
@@ -1273,6 +1300,16 @@ assert "mcp add: Claude failure does not write Codex config" \
 # roborepo lifecycle dispatch (doctor + update --dry-run, both read-only)
 # ---------------------------------------------------------------------------
 update_home="${work}/update-home"
+# Lifecycle commands below run against this fixture home and must never write into the source tree.
+# Fingerprinting globals/ (status plus diff, so files already edited in the working tree are covered
+# too) catches a write that follows a harness-home link back into the checkout.
+globals_fingerprint() {
+  ( cd "${repo_root}" && { git status --porcelain --untracked-files=all -- globals; git diff -- globals; } | shasum )
+}
+globals_before_update="$(globals_fingerprint)"
+globals_unchanged_since_fixture() {
+  [[ "$(globals_fingerprint)" == "${globals_before_update}" ]]
+}
 mkdir -p "${update_home}/.claude" "${update_home}/.codex"
 cp "${repo_root}/generated/claude/settings.json" "${update_home}/.claude/settings.json"
 cp "${repo_root}/generated/codex/config.toml" "${update_home}/.codex/config.toml"
@@ -1280,13 +1317,16 @@ node -e "const fs=require('fs');const p='${update_home}/.claude/settings.json';c
 printf '\n[projects.\"/Users/kirinmurphy/projects/activedev/roborepo\"]\ntrust_level = \"trusted\"\n' >> "${update_home}/.codex/config.toml"
 ln -s "${repo_root}/generated/claude/CLAUDE.md" "${update_home}/.claude/CLAUDE.md"
 ln -s "${repo_root}/globals/harnesses/claude/MANAGED_BY_ROBOREPO.md" "${update_home}/.claude/MANAGED_BY_ROBOREPO.md"
-ln -s "${repo_root}/globals/harnesses/claude/hooks" "${update_home}/.claude/hooks"
+# The hooks link targets a temp copy, not the checkout: update installs provider hooks under
+# ~/.claude/hooks/provider, and through a link into globals/ that copy would land in the source tree.
+cp -R "${repo_root}/globals/harnesses/claude/hooks" "${work}/legacy-claude-hooks"
+ln -s "${work}/legacy-claude-hooks" "${update_home}/.claude/hooks"
 ln -s "${repo_root}/generated/codex/AGENTS.md" "${update_home}/.codex/AGENTS.md"
 ln -s "${repo_root}/generated/codex/hooks.json" "${update_home}/.codex/hooks.json"
 ln -s "${repo_root}/globals/harnesses/codex/MANAGED_BY_ROBOREPO.md" "${update_home}/.codex/MANAGED_BY_ROBOREPO.md"
 ln -s "${repo_root}/generated/codex/rules" "${update_home}/.codex/rules"
 # Skills and commands are linked/composed per-package by the installer's enumerate-step, not as
-# dir-level links (Phase 7 of the ownership plan moved commands off the old whole-directory copy).
+# dir-level links (commands no longer use the old whole-directory copy).
 assert "lifecycle: setup package skills before update" \
   bash -c "HOME='${update_home}' ROBOREPO_STATE_DIR='${update_home}/.roborepo' SKIP_MCP=1 node '${cli}' package enable jcodemunch >/dev/null 2>&1 && HOME='${update_home}' ROBOREPO_STATE_DIR='${update_home}/.roborepo' SKIP_MCP=1 node '${cli}' package enable case-study-pack >/dev/null 2>&1 && test -L '${update_home}/.claude/skills/case-study' && test -L '${update_home}/.codex/skills/case-study'"
 
@@ -1332,6 +1372,7 @@ assert "lifecycle: roborepo update --verbose reports unchanged detail" \
   bash -c "HOME='${update_home}' node '${cli}' update --dry-run --verbose >'${update_out}.verbose' 2>&1 && grep -q '━━━ Shell & PATH' '${update_out}.verbose' && grep -q 'unchanged: .*package registry' '${update_out}.verbose'"
 assert "lifecycle: roborepo update preserves local hooks, trust, and enabled skills" \
   bash -c "HOME='${update_home}' ROBOREPO_STATE_DIR='${update_home}/.roborepo' node '${cli}' update >/dev/null 2>&1 && node -e \"const fs=require('fs');const s=JSON.parse(fs.readFileSync('${update_home}/.claude/settings.json','utf8'));process.exit((s.hooks?.PreToolUse||[]).some(e=>(e.hooks||[]).some(h=>h.command.includes('capture-dense-bash.mjs')))?0:1)\" && grep -q '\\[projects\\.\"/Users/kirinmurphy/projects/activedev/roborepo\"\\]' '${update_home}/.codex/config.toml' && test -L '${update_home}/.claude/skills/case-study' && test -L '${update_home}/.codex/skills/case-study'"
+assert "lifecycle: update writes nothing into the source tree" globals_unchanged_since_fixture
 
 update_legacy_home="${work}/update-legacy-home"
 mkdir -p "${update_legacy_home}/.claude" "${update_legacy_home}/.codex" "${update_legacy_home}/.roborepo/rules"
@@ -1566,18 +1607,26 @@ assert "legacy: real ~/.agents/skills user dir is preserved, not reclaimed" \
   bash -c "test -d '${lu_home}/.agents/skills/mine'"
 
 # ---------------------------------------------------------------------------
-# main.sh presence-scenario coverage (Phase 4 checklist's last item): zero, Claude-only, and
+# main.sh presence-scenario coverage: zero, Claude-only, and
 # Codex-only harness presence at install time, in addition to the "both" coverage every other
 # install scenario in this file already exercises. Zero-harness caught a real bash 3.2 "unbound
-# variable" crash during this Phase 4 pass (main.sh iterated `"${present_harness_rows[@]}"` /
+# variable" crash once (main.sh iterated `"${present_harness_rows[@]}"` /
 # `"${present_harness_ids[*]}"` with no length guard — empty-array expansion under `set -u` throws
 # on this repo's target bash), fixed by guarding every such expansion with a `${#arr[@]} -gt 0`
 # check first. These scenarios exist specifically to keep that class of regression caught by CI
 # instead of only surfacing on a machine with zero or one harness actually installed.
 # ---------------------------------------------------------------------------
+presence_bin="${reloc_root}/presence-bin"
+mkdir -p "${presence_bin}"
+cat > "${presence_bin}/which" <<'SH'
+#!/bin/sh
+exit 1
+SH
+chmod +x "${presence_bin}/which"
+presence_path="${presence_bin}:$(dirname "$(command -v node)"):/usr/bin:/bin"
 zero_home="${reloc_root}/presence-zero/home"
 mkdir -p "${zero_home}/.local/bin"
-zero_out="$(HOME="${zero_home}" ROBOREPO_STATE_DIR="${zero_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 \
+zero_out="$(HOME="${zero_home}" PATH="${presence_path}" ROBOREPO_STATE_DIR="${zero_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 NODE_ENV=test ROBOREPO_TEST_DESKTOP_ROOTS='{}' \
   ROBOREPO_ON_CONFLICT=overwrite bash "${repo_root}/scripts/install/main.sh" 2>&1)"
 assert "install: zero harnesses present does not crash (no unbound variable)" \
   bash -c "! echo '${zero_out}' | grep -q 'unbound variable'"
@@ -1586,28 +1635,28 @@ assert "install: zero-harness summary shows both as not installed" \
 
 claude_only_home="${reloc_root}/presence-claude-only/home"
 mkdir -p "${claude_only_home}/.claude" "${claude_only_home}/.local/bin"
-claude_only_out="$(HOME="${claude_only_home}" ROBOREPO_STATE_DIR="${claude_only_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 \
+claude_only_out="$(HOME="${claude_only_home}" PATH="${presence_path}" ROBOREPO_STATE_DIR="${claude_only_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 NODE_ENV=test ROBOREPO_TEST_DESKTOP_ROOTS='{}' \
   ROBOREPO_ON_CONFLICT=overwrite bash "${repo_root}/scripts/install/main.sh" 2>&1)"
 assert "install: Claude-only presence does not crash" \
   bash -c "! echo '${claude_only_out}' | grep -q 'unbound variable'"
-assert "install: Claude-only summary shows Claude available" \
-  bash -c "echo '${claude_only_out}' | grep -q 'Claude Code.*available'"
+assert "install: Claude-only home reports unavailable runtime" \
+  bash -c "echo '${claude_only_out}' | grep -q 'Claude Code.*configuration present, runtime unavailable'"
 assert "install: Claude-only links the base skill into .claude" \
   bash -c "test -e '${claude_only_home}/.claude/skills/builtin-support'"
 
 codex_only_home="${reloc_root}/presence-codex-only/home"
 mkdir -p "${codex_only_home}/.codex" "${codex_only_home}/.local/bin"
-codex_only_out="$(HOME="${codex_only_home}" ROBOREPO_STATE_DIR="${codex_only_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 \
+codex_only_out="$(HOME="${codex_only_home}" PATH="${presence_path}" ROBOREPO_STATE_DIR="${codex_only_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 NODE_ENV=test ROBOREPO_TEST_DESKTOP_ROOTS='{}' \
   ROBOREPO_ON_CONFLICT=overwrite bash "${repo_root}/scripts/install/main.sh" 2>&1)"
 assert "install: Codex-only presence does not crash" \
   bash -c "! echo '${codex_only_out}' | grep -q 'unbound variable'"
-assert "install: Codex-only summary shows Codex available" \
-  bash -c "echo '${codex_only_out}' | grep -q 'Codex.*available'"
+assert "install: Codex-only home reports unavailable runtime" \
+  bash -c "echo '${codex_only_out}' | grep -q 'Codex.*configuration present, runtime unavailable'"
 assert "install: Codex-only links the base skill into .codex" \
   bash -c "test -e '${codex_only_home}/.codex/skills/builtin-support'"
 
 # ---------------------------------------------------------------------------
-# `roborepo harness withdraw <id>` (Phase 4): actively unmerges RoboRepo's content from ONE
+# `roborepo harness withdraw <id>`: actively unmerges RoboRepo's content from ONE
 # provider's live config, distinct from `harness disable` (state-bit only). Verifies the sibling
 # harness is left untouched, unsupported capabilities (Codex hooks/mcp) are reported rather than
 # silently skipped, dry-run makes no change, and an unknown id is rejected.
@@ -1716,18 +1765,17 @@ assert "mcp: enabling a built-in MCP package does not record it into the workspa
 assert "workspace: built-in conflicts require a typed replace override" \
   node "${repo_root}/scripts/test/workspace-resources-check.mjs"
 
-# Harness provider contract (Phase 1): manifest schema, capability enum, discovery/state shape
-# validators. See docs/plans/active/discoverable-harness-provider-architecture-plan.md.
+# Harness provider contract: manifest schema, capability enum, discovery/state shape validators.
 assert "harness: provider manifest and schema validation" \
   node "${repo_root}/scripts/test/harness-manifest-check.mjs"
 
-# Harness provider registry, discovery, state, and harness-runtime (Phase 2): zero/one/multi enabled
+# Harness provider registry, discovery, state, and harness-runtime: zero/one/multi enabled
 # provider scenarios, explicit-disable survives refresh, synthetic third provider proves no
-# hardcoded two-provider assumption. See discoverable-harness-provider-architecture-plan.md Phase 2.
+# hardcoded two-provider assumption.
 assert "harness: registry, discovery, state, and harness-runtime" \
   node "${repo_root}/scripts/test/harness-registry-check.mjs"
 
-# Gemini CLI provider adapter (gemini-cli-provider-integration-plan.md Phase 2): the first real
+# Gemini CLI provider adapter: the first real
 # (non-synthetic) third harness provider. Pins Policy Engine TOML decision mapping (manifest "ask"
 # bucket -> Gemini's native "ask_user"), the verified Claude-tool-name -> Gemini-tool-name table
 # (write_file/replace/read_file), settings.json rootConfig merge, hooks embedded in settings.json
@@ -1735,21 +1783,21 @@ assert "harness: registry, discovery, state, and harness-runtime" \
 assert "harness: gemini adapter (Policy Engine render, rootConfig, hooks, mcp)" \
   node "${repo_root}/scripts/test/gemini-adapter-characterization-check.mjs"
 
-# Package harness validation resolves against the provider registry (Phase 5), not a hardcoded
+# Package harness validation resolves against the provider registry, not a hardcoded
 # local Set -- pins rejection of an unregistered harness id, acceptance of registered ones, and
 # rejection of a resource targeting a harness whose manifest doesn't declare the capability that
 # resource type needs (e.g. a hooks resource pointed at a harness with no "hooks" capability).
 assert "harness: package-catalog harness validation is registry-backed" \
   node "${repo_root}/scripts/test/package-catalog-harness-check.mjs"
 
-# Rules rendering through provider rule targets (Phase 5): HOME_RULES/RULE_DIRS replaced by
+# Rules rendering through provider rule targets: HOME_RULES/RULE_DIRS replaced by
 # registry-driven lookups (provider manifest "rules"/"rulesOverride" paths, globals/system/rules/
 # <id> convention). Pins Codex's AGENTS.override.md mirror and Claude's legacy-file cleanup
 # byte-for-byte across the refactor.
 assert "harness: rules rendering is registry-backed (Codex override mirror, Claude legacy cleanup)" \
   node "${repo_root}/scripts/test/rules-render-characterization-check.mjs"
 
-# Slash-command rendering through provider command adapters (Phase 5): SLASH_COMMAND_HARNESSES'
+# Slash-command rendering through provider command adapters: SLASH_COMMAND_HARNESSES'
 # genDir/liveDir/skillPath replaced by registry-driven lookups (skill-command-config.mjs). Pins the
 # runtime install/remove path's copy/refuse-to-clobber/remove/refuse-to-delete behavior; the
 # build-time render path is separately covered by doctor's `render-slash-commands.mjs --check`
@@ -1757,7 +1805,7 @@ assert "harness: rules rendering is registry-backed (Codex override mirror, Clau
 assert "harness: slash-command install/remove is registry-backed" \
   node "${repo_root}/scripts/test/slash-commands-characterization-check.mjs"
 
-# Skill linking through provider skill paths (Phase 5): config-mutate.mjs's hardcoded
+# Skill linking through provider skill paths: config-mutate.mjs's hardcoded
 # HARNESS_SKILL_DIRS ([~/.claude/skills, ~/.codex/skills]) and skill-inventory.mjs's HARNESSES
 # array both replaced by registry-driven resolveHarnessPath lookups. Pins the machine-local
 # cache + per-harness symlink round trip, present-harness-only gating, and native-skill
@@ -1765,20 +1813,20 @@ assert "harness: slash-command install/remove is registry-backed" \
 assert "harness: skill linking (machine-local cache + symlinks) is registry-backed" \
   node "${repo_root}/scripts/test/config-mutate-skill-characterization-check.mjs"
 
-# Permission rendering through provider permission adapters (Phase 5): renderPermissionsTo (the
+# Permission rendering through provider permission adapters: renderPermissionsTo (the
 # LIVE home-config path, distinct from render-agent-permissions.mjs's build-time repo SOURCE
-# render, which stays Phase 8 scope) now dispatches through getHarnessProvider(id).adapters.
+# render, which is out of scope here) now dispatches through getHarnessProvider(id).adapters.
 # permissions.render instead of two hardcoded if-blocks. Pure render core extracted into
 # scripts/harnesses/permissions-render.mjs so provider adapters can import it without cycling
 # back through the registry.
 assert "harness: live permission rendering is registry-backed" \
   node "${repo_root}/scripts/test/permissions-render-live-characterization-check.mjs"
 
-# MCP add/remove/list through provider MCP adapters (Phase 5): mcp.mjs's mcpAdd/mcpApply and
+# MCP add/remove/list through provider MCP adapters: mcp.mjs's mcpAdd/mcpApply and
 # packages.mjs's installMcpPreset/removeMcpPreset (previously three independent, duplicated
 # Claude-shell-out+Codex-TOML implementations) now dispatch through
-# getHarnessProvider(id).adapters.mcp.addServer/removeServer/list. Distinct names from Phase 4's
-# existing bulk mcp.remove (withdraw's "strip every server this package owns" sweep) -- same
+# getHarnessProvider(id).adapters.mcp.addServer/removeServer/list. Distinct names from the
+# bulk mcp.remove (withdraw's "strip every server this package owns" sweep) -- same
 # merge/unmerge-vs-write naming lesson as hooks. Pure Claude CLI-arg and Codex TOML-block logic
 # extracted into scripts/harnesses/{mcp-claude-cli,mcp-codex-toml}.mjs so provider adapters can
 # import them without cycling back through the registry.
@@ -1790,15 +1838,13 @@ assert "harness: package-lifecycle MCP wiring is registry-backed (SKIP_MCP, inde
 assert "harness: CLI list/inspect/refresh/enable/disable end to end" \
   node "${repo_root}/scripts/test/harness-cli-check.mjs"
 
-# Root-config merge characterization (Phase 3 safety net): pins mergeClaudeSettings/
-# mergeCodexConfig's exact current output (TOML comment reattachment, bracket-in-value sections,
-# permissions dedupe, the Claude-only model-key strip) BEFORE this logic moves into provider
-# adapters, so the Phase 3 refactor can be checked byte-for-byte instead of by re-reading the merge
-# logic and hoping the port is faithful. Must keep passing unchanged through Phase 3.
-assert "harness: root-config merge characterization (pre-Phase-3 baseline)" \
+# Root-config merge characterization: pins mergeClaudeSettings/mergeCodexConfig's exact output
+# (TOML comment reattachment, bracket-in-value sections, permissions dedupe, the Claude-only
+# model-key strip) byte-for-byte.
+assert "harness: root-config merge characterization" \
   node "${repo_root}/scripts/test/root-config-merge-characterization-check.mjs"
 
-# Package-harness-config characterization (Phase 3 safety net): pins mergeHarnessConfig/
+# Package-harness-config characterization: pins mergeHarnessConfig/
 # unmergeHarnessConfig's exact current behavior (Claude statusLine conflict preservation, Codex TUI
 # status_line array dedupe/table-creation-from-scratch, the color-scalar ownership-provenance
 # round-trip) BEFORE package-harness-config.mjs's orchestrator refactor. Must keep passing
@@ -1806,20 +1852,20 @@ assert "harness: root-config merge characterization (pre-Phase-3 baseline)" \
 assert "harness: package-harness-config characterization (pre-refactor baseline)" \
   node "${repo_root}/scripts/test/package-harness-config-characterization-check.mjs"
 
-# Package-config round-trip (Phase 3 checklist item): author a package config, enable it, disable
+# Package-config round-trip: author a package config, enable it, disable
 # it, re-enable it, and assert the final state matches the first-enable state byte-for-byte, for
 # both Claude and Codex, including a Codex case with an unowned neighbor entry that must survive
 # the whole cycle untouched.
 assert "harness: package-config round-trip (enable/disable/enable parity)" \
   node "${repo_root}/scripts/test/harness-package-config-roundtrip-check.mjs"
 
-# Claude mcp.remove adapter characterization (Phase 4): pins the ported behavior of
+# Claude mcp.remove adapter characterization: pins the ported behavior of
 # scripts/install/uninstall.sh's former remove_mcp_servers before uninstall.sh calls the adapter
 # instead of its own inline bash+node.
 assert "harness: Claude mcp.remove adapter characterization" \
   node "${repo_root}/scripts/test/harness-mcp-remove-characterization-check.mjs"
 
-# Claude hooks.write (removal semantics) adapter characterization (Phase 4): pins the ported
+# Claude hooks.write (removal semantics) adapter characterization: pins the ported
 # behavior of scripts/install/uninstall.sh's former strip_package_hooks before uninstall.sh calls
 # the adapter instead of its own inline bash+node.
 assert "harness: Claude hooks.write (removal) adapter characterization" \
@@ -1827,20 +1873,24 @@ assert "harness: Claude hooks.write (removal) adapter characterization" \
 
 # Canonical repository identity (modules/repositories): shared resolver extraction, normalization
 # equivalence, worktree/clone roots, versioned registry persistence, aliases, associations,
-# Plans source coverage. See docs/plans/backlog/canonical-repository-identity-plan-v2.md.
+# Plans source coverage.
 assert "repositories: canonical identity + registry + associations" \
   node "${repo_root}/scripts/test/repositories-check.mjs"
 
-# Cross-domain discovery recording + server-side Plans enrollment (Phase 3): idempotent discovery,
+# Cross-domain discovery recording + server-side Plans enrollment: idempotent discovery,
 # multiple clones/worktrees collapsing to one canonical repo, exact-root enrollment default,
 # enrollment failure leaving the repo unmonitored.
 assert "repositories: discovery recording + Plans enrollment" \
   node "${repo_root}/scripts/test/repositories-service-check.mjs"
 
-# Browser-safe repository API (Phase 4): summary/detail payloads carry no absolute paths or
+# Browser-safe repository API: summary/detail payloads carry no absolute paths or
 # credentials; route handler dispatches list/detail/associations/patch and 404s unknown ids.
 assert "repositories: browser-safe API contracts" \
   node "${repo_root}/scripts/test/repositories-api-check.mjs"
+
+# Development fixtures stay out of every registry reader unless dev mode is on, and writers keep them.
+assert "repositories: dev fixtures hidden unless dev mode is on" \
+  node "${repo_root}/scripts/test/repositories-dev-fixtures-check.mjs"
 
 # Repository lifecycle: active/idle/stale derivation, the unreadable-vs-absent distinction (an
 # unplugged drive must never read as a deleted checkout), 30-day ageing measured from lastSeenAt,
@@ -1863,7 +1913,7 @@ assert "developer-runtime: discovery, settings schema, snapshot shaping" \
 
 # Git context from existing local refs only: branch/detached/packed-refs/worktree resolution, dirty
 # reported as null (never false) when git is unavailable, and the guarantee that no network or
-# hook-invoking subcommand ever runs. See docs/plans/active/developer-runtime-git-health-history.md.
+# hook-invoking subcommand ever runs.
 assert "developer-runtime: git context from local refs only" \
   node "${repo_root}/scripts/test/developer-runtime-git-check.mjs"
 
@@ -1917,18 +1967,17 @@ assert "developer-runtime: metadata suggestion discovery" \
   node "${repo_root}/scripts/test/developer-runtime-metadata-check.mjs"
 
 # Root config drift VIEW (buildRootConfigView in root-config-view.mjs): the per-harness state the terminal
-# `config root inspect` report and the web /config drift chip both render from — not-installed /
+# `config root inspect` report and the web /agents drift chip both render from — not-installed /
 # unwritten / in-sync / drifted / staged-pending.
 assert "root-config-view: per-harness drift state covers every user-facing case" \
   node "${repo_root}/scripts/test/root-config-view-check.mjs"
 
-# Regression suite for docs/plans/active/roborepo-system-package-ownership-and-generated-output-plan.md
-# (all 8 phases complete). Originally Phase 0 characterization tests asserting the leaky behavior on
-# purpose; every assertion has since been inverted as its leak was fixed — see the file's own header.
+# Regression suite for package-owned generated output. Originally characterization tests asserting
+# the leaky behavior on purpose; every assertion has since been inverted as its leak was fixed — see the file's own header.
 assert "ownership refactor: every confirmed leakage case stays fixed" \
   node "${repo_root}/scripts/test/system-package-ownership-characterization-check.mjs"
 
-# Cross-harness hook composition module (Phase 2) round-trips for both Claude and Codex
+# Cross-harness hook composition module round-trips for both Claude and Codex
 # (install/reapply/disable/reapply, unrelated user hooks survive throughout).
 assert "ownership refactor: cross-harness hook composition round-trips" \
   node "${repo_root}/scripts/test/hook-composition-check.mjs"
@@ -1937,39 +1986,38 @@ assert "ownership refactor: cross-harness hook composition round-trips" \
 assert "telemetry: transcript stats and analyzer warnings are correct" \
   node "${repo_root}/scripts/test/telemetry-correctness-check.mjs"
 
-# Phase 1 of docs/plans/active/roborepo-telemetry-events-experiments-plan.md: marker/snapshot/
-# experiment/capture-v3 schema validation plus append-only persistence round-trips.
+# Marker/snapshot/experiment/capture-v3 schema validation plus append-only persistence round-trips.
 assert "telemetry: marker/snapshot/experiment schemas validate and persist correctly" \
   node "${repo_root}/scripts/test/telemetry-schemas-check.mjs"
 
-# Phase 2 of docs/plans/active/roborepo-telemetry-events-experiments-plan.md: `telemetry mark`
+# `telemetry mark`
 # and `telemetry experiment start|end|status` through the real CLI process.
 assert "telemetry: mark and experiment CLI commands work end to end" \
   node "${repo_root}/scripts/test/telemetry-marker-cli-check.mjs"
 
-# Phase 3 of docs/plans/active/roborepo-telemetry-events-experiments-plan.md: pure semantic
+# Pure semantic
 # command classification (test/lint/build/... + runner/scope for tests).
 assert "telemetry: semantic command classification" \
   node "${repo_root}/scripts/test/telemetry-classify-check.mjs"
 
-# Phase 3: capture v3 (capture_id/call_id/config_snapshot_id/operation) through the real capture
+# Capture v3 (capture_id/call_id/config_snapshot_id/operation) through the real capture
 # hot path, including the call-aware duration pairing fix for concurrent/nested tool calls.
 assert "telemetry: capture v3 fields and call-aware duration pairing" \
   node "${repo_root}/scripts/test/telemetry-capture-v3-check.mjs"
 
-# Phase 4 of docs/plans/active/roborepo-telemetry-events-experiments-plan.md: explainable phase
+# Explainable phase
 # inference and task category/scale inference, pure modules with no fs/session dependency.
 assert "telemetry: phase inference rules" \
   node "${repo_root}/scripts/test/telemetry-phase-infer-check.mjs"
 assert "telemetry: task category/scale inference" \
   node "${repo_root}/scripts/test/telemetry-task-infer-check.mjs"
 
-# Phase 4: inferred phase tagging, intervening-work signals (edit/diff/failure-signature
+# Inferred phase tagging, intervening-work signals (edit/diff/failure-signature
 # transitions), and failure-signature capture wired into the real capture hot path.
-assert "telemetry: phase 4 capture-time phase and intervening-work signals" \
+assert "telemetry: capture-time phase and intervening-work signals" \
   node "${repo_root}/scripts/test/telemetry-phase4-integration-check.mjs"
 
-# Phase 5 of docs/plans/active/roborepo-telemetry-events-experiments-plan.md: the declarative
+# The declarative
 # metrics registry, normalized cohort filtering, marker-relative comparisons, and package telemetry
 # policy evaluation — all pure modules, no fs/config dependency.
 assert "telemetry: metrics registry formulas" \
@@ -1991,12 +2039,12 @@ assert "portal: shared setup-state is path-free and derived" \
 assert "portal: harness refresh and enable routes" \
   node "${repo_root}/scripts/test/harness-portal-api-check.mjs"
 
-# Phase 6 of docs/plans/active/discoverable-harness-provider-architecture-plan.md: /api/session
+# /api/session
 # rejects a missing/unrecognized harness id instead of silently defaulting to Claude.
 assert "telemetry: /api/session rejects missing/unknown harness ids" \
   node "${repo_root}/scripts/test/telemetry-session-harness-check.mjs"
 
-# Phase 6 of discoverable-harness-provider-architecture-plan.md: a genuinely third registered
+# A genuinely third registered
 # provider (not just claude/codex) proves the shared telemetry analysis and capability-based
 # rate-limit check do not encode a two-provider assumption.
 assert "telemetry: synthetic third-provider analysis and rate-limit capability" \
@@ -2015,13 +2063,13 @@ assert "telemetry: waste ledger counts each turn once" \
 assert "config: onboarding notices match harness/package state" \
   node "${repo_root}/scripts/test/config-onboarding-state-check.mjs"
 
-# Phase 7 of discoverable-harness-provider-architecture-plan.md: /api/config/source rejects a
+# /api/config/source rejects a
 # missing/unrecognized harness id for harness-scoped kinds instead of silently defaulting to
 # Claude, and the Config snapshot's harnesses list stays registry-driven.
 assert "config: /api/config/source rejects missing/unknown harness ids" \
   node "${repo_root}/scripts/test/config-source-harness-check.mjs"
 
-# Phase 7 of discoverable-harness-provider-architecture-plan.md: a genuinely third registered
+# A genuinely third registered
 # provider proves the Config snapshot's harnesses list (grid columns, defaults popover) and the
 # rootConfigBaseline/Active path maps do not encode a two-provider assumption.
 assert "config: synthetic third-provider harnesses list and root-config paths" \
@@ -2051,11 +2099,24 @@ fi
 assert "markdown-render: heading ids, tables, mermaid fallback" \
   node "${repo_root}/scripts/test/markdown-render-check.mjs"
 
-# Plan docs: scanning, frontmatter parsing, guarded lifecycle moves, readiness validation, and the
-# portal's pure mutation-orchestration helpers. These have npm scripts of their own but were never
-# reachable from `npm test`, so a plans-domain regression could pass CI unnoticed.
-assert "plan-suite: scanning, frontmatter, guarded lifecycle moves" \
+# Plan docs: scanning, frontmatter parsing, readiness validation, and the portal's pure
+# mutation-orchestration helpers. These have npm scripts of their own but were never reachable from
+# `npm test`, so a plans-domain regression could pass CI unnoticed.
+assert "plan-suite: scanning, frontmatter, priority edits" \
   node "${repo_root}/scripts/test/plan-suite-check.mjs"
+
+# The lifecycle manifest and every committed move between lifecycle folders.
+assert "plan lifecycle: manifest loading, validation, and projection" \
+  node "${repo_root}/scripts/test/plan-lifecycle-manifest-check.mjs"
+
+assert "plan lifecycle: transitions, preflight, approval, close, and archive" \
+  node "${repo_root}/scripts/test/plan-lifecycle-transitions-check.mjs"
+
+assert "plan lifecycle: transition commits touch only the plan, even after heavy edits" \
+  node "${repo_root}/scripts/test/plan-transition-commit-paths-check.mjs"
+
+assert "plan lifecycle: base synchronization into a plan branch" \
+  node "${repo_root}/scripts/test/plan-sync-base-check.mjs"
 
 assert "plan-suite: findings catalog and destination policy" \
   node "${repo_root}/scripts/test/plan-suite-findings-check.mjs"
@@ -2068,6 +2129,22 @@ assert "plan-suite: validate, start, and package status commands" \
 
 assert "plans: portal mutation-orchestration helpers" \
   node "${repo_root}/scripts/test/plans-portal-state-check.mjs"
+
+# Which checkout's copy of a plan the snapshot returns, and the Git checks behind that choice.
+assert "plan-suite: every checkout of a repository, merged by plan id" \
+  node "${repo_root}/scripts/test/plan-suite-canonical-check.mjs"
+
+assert "plan-suite: authority resolver and outside-edit check" \
+  node "${repo_root}/scripts/test/plan-authority-check.mjs"
+
+assert "plan-suite: active plans read from their assigned worktree" \
+  node "${repo_root}/scripts/test/plan-suite-authority-scan-check.mjs"
+
+assert "plan-suite: authority edge cases (clones, unreadable, duplicates, refs)" \
+  node "${repo_root}/scripts/test/plan-suite-authority-edge-check.mjs"
+
+assert "plan-close: integration and archive commands give their documented verdicts" \
+  node "${repo_root}/scripts/test/plan-close-integration-check.mjs"
 
 # The mode/reference matrices technical-writing and plan-write declare in their own SKILL.md prose.
 # A required reference dropped from an artifact-producing mode is invisible at runtime — the work

@@ -1,14 +1,11 @@
-// Phase 2 only wires the registry/discovery/state/harness-runtime — it does not migrate any capability's
-// real behavior yet. This produces placeholder adapter methods that satisfy
-// validateCapabilityAdapters()'s required-method shape check so providers can be registered now,
-// while failing loudly (not silently no-opping) if anything calls them before Phases 3-6 land the
-// real implementation.
+// Placeholder adapter methods for capabilities a provider declares but does not implement yet.
+// They satisfy validateCapabilityAdapters()'s required-method shape check so the provider can be
+// registered, while failing loudly (not silently no-opping) if anything calls them.
 
 export function notYetMigrated(providerId, group, method) {
   return () => {
     throw new Error(
-      `harness provider "${providerId}" adapter "${group}.${method}" is not migrated yet ` +
-        `(tracked in discoverable-harness-provider-architecture-plan.md Phases 3-6)`
+      `harness provider "${providerId}" adapter "${group}.${method}" is not implemented yet`
     );
   };
 }

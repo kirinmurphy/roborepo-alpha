@@ -1,4 +1,4 @@
-// Declarative metrics registry (plan: "Metrics registry" — Phase 5). One place that names every
+// Declarative metrics registry. One place that names every
 // metric usable by an alert, an experiment's primary_metric/guardrails, the CLI report, and the
 // portal's Analysis explorer, so none of those four surfaces can independently invent a formula,
 // unit, or directionality. Pure module: every formula takes an already-filtered array of capture
@@ -11,6 +11,7 @@
 // what turns "captures relative to a marker" into the array a metric formula consumes.
 
 import { mcpServerOf } from "../harnesses/transcript-parse.mjs";
+import { shellOperation } from "./telemetry-classify.mjs";
 
 export const METRIC_UNITS = new Set(["count", "ratio", "percent", "tokens", "ms", "tokens_per_task"]);
 export const METRIC_DIRECTIONS_GOOD = new Set(["lower", "higher", "neutral"]);
@@ -22,7 +23,7 @@ function hasTokens(event) {
 }
 
 export function isTestOperation(event) {
-  return event?.operation?.category === "test";
+  return shellOperation(event)?.category === "test";
 }
 
 export function isFullSuite(event) {
@@ -51,7 +52,7 @@ function bySession(captures) {
 }
 
 // Counts contiguous runs where phase.name === "debugging" (inferred or explicit-overridden — this
-// registry reads whatever phase.name capture-time already resolved, per Phase 4). Each run is one
+// registry reads whatever phase.name capture-time already resolved). Each run is one
 // "debugging phase" for the purposes of "full-suite runs per debugging phase".
 function debuggingPhaseRuns(events) {
   const runs = [];
@@ -81,8 +82,8 @@ function mean(values) {
 }
 
 // Trimmed mean: drop the top/bottom `trimFraction` of sorted values before averaging. Robust to a
-// single dominant session inflating a token/duration metric (plan: "Do not rely only on
-// arithmetic means for heavy-tailed token or duration distributions").
+// single dominant session inflating a token/duration metric; heavy-tailed token and duration
+// distributions make a plain arithmetic mean misleading.
 export function trimmedMean(values, trimFraction = 0.1) {
   if (values.length === 0) return null;
   const sorted = [...values].sort((a, b) => a - b);

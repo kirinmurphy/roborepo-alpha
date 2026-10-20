@@ -6,7 +6,7 @@
     {{WIDGET_TEMPLATES}}
     <main id="main" class="inner repository-main">
       {{LOADING}}
-      <a class="back-link" href="/">← All repositories</a>
+      <a class="back-link" href="/">← All repos</a>
       <section id="repository-warning" class="notice warn" hidden></section>
       <section id="repository-content" aria-live="polite"></section>
     </main>
@@ -14,12 +14,12 @@
     <template id="tpl-repository-detail">
       <article class="repository-detail">
         <header class="detail-header">
-          <div><p class="detail-eyebrow">Repository</p><h1 data-slot="name"></h1><p data-slot="meta"></p></div>
+          <div><p class="detail-eyebrow">Repo</p><h1 data-slot="name"></h1><p data-slot="meta"></p></div>
           <span class="detail-lifecycle" data-slot="lifecycle"></span>
         </header>
         <dl class="identity-grid" data-slot="identity"></dl>
-        <nav class="domain-links" aria-label="Repository domains">
-          <a href="/runtime">Runtime</a><a href="/plans">Plans</a><a href="/tokens">Tokens</a><a href="/config">Agents</a>
+        <nav class="domain-links" aria-label="Repo domains">
+          <a href="/runtime">Runtime</a><a href="/plans">Plans</a><a href="/tokens">Tokens</a><a href="/agents">Agents</a>
         </nav>
         <div class="detail-sections" data-slot="sections"></div>
       </article>

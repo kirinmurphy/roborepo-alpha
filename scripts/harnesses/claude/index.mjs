@@ -1,6 +1,5 @@
-// Claude Code harness provider. Phase 2 wires this into the registry with real discovery and
-// placeholder capability adapters; Phases 3-6 replace the placeholders with migrated behavior
-// from scripts/cli/{root-config-merge,mcp-claude,telemetry,...}.mjs one capability at a time.
+// Claude Code harness provider: manifest binding and capability adapters. Methods listed in
+// stubGroups below are placeholders that throw until their behavior moves here from scripts/cli/.
 //
 // Split by capability group across this directory to stay under the repo's 150-200 line file-size
 // guidance: mcp.mjs (the 4 MCP methods), hooks-withdraw.mjs (the withdraw-specific bulk strip).

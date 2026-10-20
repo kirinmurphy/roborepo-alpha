@@ -79,6 +79,7 @@ Mode is detected by looking for `.git` or `local/skills` in `appRoot`. `ROBOREPO
 
 ```text
 ~/.roborepo/                 stateRoot
+├── app-root.json            where the running app lives, for installed hooks to find its manifests
 ├── config-state/            per-harness applied config
 ├── install-state.json       which install last wrote to your home dir
 ├── presets/                 onboarding answers
@@ -193,8 +194,9 @@ roborepo workspace import <old-checkout> --dry-run
 roborepo workspace import <old-checkout>
 ```
 
-Import reads `globals/agents/skills`, `globals/commands`, `globals/packages`, and the MCP inventory
-from the source, then prints what it copied.
+Legacy import reads `globals/agents/skills`, `globals/commands`, `globals/packages`, and the MCP
+inventory from the old checkout, then prints what it copied. The first two paths describe the
+older source layout accepted by `scripts/cli/workspace-resources.mjs`.
 
 ```mermaid
 flowchart LR

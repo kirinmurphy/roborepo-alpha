@@ -24,22 +24,30 @@ assert.equal(compare({ ...event, tokens: null }).status, "passed", "known absenc
 for (const schema of [undefined, null, 2, 3]) {
   assert.equal(compare({ ...event, schema, call_id: "derived_call" }).status, "passed", `capture schema ${schema}`);
 }
+const shellRows = ["read", "read", "test", "test"].map((category, index) => ({
+  ...event, call_id: `shell-${index}`, ts: `2026-09-15T00:0${index}:00.000Z`,
+  tool: { name: "Bash" }, operation: { category },
+  last_result: { tool: "exec", chars: 100 + index, is_error: false },
+}));
+assert.equal(compareTelemetryOracle(shellRows, options).status, "passed", "shell command groups agree independently");
+const brokenShellGroups = compareTelemetryOracle(shellRows, options, {
+  analyze(events, opts) {
+    const report = analyzeTelemetry(events, opts);
+    report.regression.groups[0].group = "bash";
+    return report;
+  },
+});
+assert.deepEqual(brokenShellGroups.differences, ["regression"], "oracle detects incorrect shell grouping");
+
 assert.equal(compareTelemetryOracle([], options).status, "unavailable");
 
 const remote = "example/repo";
 const remoteHash = createHash("sha256").update(remote).digest("hex").slice(0, 24);
 const repositoryRegistry = { repositories: { repo: { id: "git:example/repo", normalizedRemote: remote } } };
 const legacy = { ...event, repo: { normalized_remote_hash: remoteHash } };
-assert.equal(compare(legacy, { repositoryRegistry }).status, "passed", "legacy hash resolves independently from raw registry");
-assert.equal(runTelemetryOracle([legacy], { repositoryRegistry }).conditions.find((row) => row.dimension === "repo").value,
-  "git:example/repo", "oracle derives the expected canonical identity from the raw registry");
-const brokenResolution = compareTelemetryOracle([legacy], { ...options, repositoryRegistry }, {
-  analyze(events, opts) {
-    return analyzeTelemetry(events, { ...opts, repositoryHashIndex: { byNormalizedRemoteHash: new Map() } });
-  },
-});
-assert.equal(brokenResolution.status, "failed", "production identity resolution cannot set the oracle's expectation");
-assert.deepEqual(brokenResolution.differences, ["conditions"]);
+assert.equal(compare(legacy, { repositoryRegistry }).status, "partial", "legacy hashes remain unassociated");
+assert.ok(!runTelemetryOracle([legacy], { repositoryRegistry }).conditions.some((row) => row.dimension === "repo"),
+  "only explicit repository identities enter repository comparisons");
 assert.equal(compare({ ...legacy, repo: { ...legacy.repo, repository_id: "local:direct" } }, { repositoryRegistry }).status,
   "passed", "direct identity wins over a conflicting legacy hash");
 for (const repo of [null, {}, { label: "repo" }, { git_root_hash: "opaque" }, { remote_hash: "opaque" }, { cwd: "/private/repo" },

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Phase 3 round-trip test (discoverable-harness-provider-architecture-plan.md): authors a package
+// Round-trip test: authors a package
 // config, enables it (merge), disables it (unmerge), re-enables it, and asserts the final state
 // matches the first-enable state byte-for-byte, for both Claude and Codex. Complements the two
 // characterization suites (root-config-merge-characterization-check.mjs,

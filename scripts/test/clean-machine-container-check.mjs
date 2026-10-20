@@ -9,7 +9,6 @@ import { fileURLToPath } from "node:url";
 import { packTarball } from "./package-install-smoke/tarball.mjs";
 
 // Clean-machine install/uninstall, run inside a container.
-// Plan: docs/plans/backlog/test-clean-machine-install-sandbox.md (qk4mz7t2), Milestone B.
 //
 // WHY A CONTAINER AND NOT A REDIRECTED HOME. package-install-smoke.mjs already installs a real
 // packed tarball into a sandboxed prefix, and test-install-collisions.sh already redirects HOME.
@@ -101,7 +100,7 @@ function inContainer(script, { tarballName }) {
 
 // Stage 0: a machine with no agent harness at all, npm's default prefix.
 //
-// Confirmed on real hardware 2026-08-22 (see infra-packaging-01's Phase 4 verification): install,
+// Confirmed on real hardware 2026-08-22: install,
 // init, and doctor all succeeded with zero harnesses installed. That is the one stage a development
 // machine cannot produce, which is why it is asserted first here.
 function testDefaultPrefix(tarballName) {
@@ -171,11 +170,10 @@ function testCollidingPrefix(tarballName) {
 // rendered from the provider registry rather than from Claude/Codex assumptions.
 //
 // `harness detected` is the surface asserted for presentation. It emits one tab-separated row per
-// known provider (id, home, present, display name, root config path) straight from live filesystem
+// known provider (id, home, present, display name, root config path, confidence) straight from live filesystem
 // discovery, and it is the row source the shell install/uninstall/repair/doctor scripts consume —
-// so a regression here is a regression in every one of those. The plan's Verify column named a
-// `roborepo list` command, which does not exist; `harness list` and `harness detected` are the real
-// ones.
+// so a regression here is a regression in every one of those. There is no `roborepo list` command;
+// `harness list` and `harness detected` are the real ones.
 function testHarnessCountMatrix(tarballName) {
   const stages = [
     { name: "1 - installed, never launched", stubs: ["claude"], homes: [] },
@@ -201,7 +199,10 @@ function testHarnessCountMatrix(tarballName) {
       row="$(roborepo harness detected | awk -F'\\t' -v id=${exe} '$1 == id')"
       [ -n "$row" ] || { echo "FAIL: harness detected omitted ${exe} entirely" >&2; exit 1; }
       got="$(printf '%s' "$row" | cut -f3)"
-      [ "$got" = "${present}" ] || { echo "FAIL: ${exe} present=$got, expected ${present}" >&2; exit 1; }`;
+      [ "$got" = "${present}" ] || { echo "FAIL: ${exe} present=$got, expected ${present}" >&2; exit 1; }
+      confidence="$(printf '%s' "$row" | cut -f6)"
+      expected_confidence="${present === "1" ? "confirmed" : "probable"}"
+      [ "$confidence" = "$expected_confidence" ] || { echo "FAIL: ${exe} confidence=$confidence, expected $expected_confidence" >&2; exit 1; }`;
     }).join("\n");
 
     // Stage N is the anti-hardcoding check: every registered provider must appear, including the

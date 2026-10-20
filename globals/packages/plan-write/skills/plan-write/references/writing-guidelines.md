@@ -7,6 +7,10 @@
 - Use repository-relative paths.
 - Verify claims against source code, tests, configuration, and runtime evidence.
 - Keep TODO-style plans focused on unresolved work.
+- For a new or materially revised plan, add `## Documentation impact`. List each reader-facing
+  doc of record the change affects and the expected update. Consult the repository's doc-of-record
+  map when one exists. If no reader-facing doc is affected, state why. Existing plans without this
+  section need not be migrated solely to add it.
 - Do not document completed work as if it remains pending.
 - Preserve uncertainty as explicit open decisions.
 - Prefer concrete examples where data relationships matter.

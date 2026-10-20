@@ -12,6 +12,19 @@
     "configCandidates": ["~/.codex/config.toml"],
     "minimumConfidence": "confirmed"
   },
+  "platforms": {
+    "darwin": {
+      "detection": {
+        "desktopCandidates": [{
+          "label": "Codex",
+          "roots": ["/Applications", "~/Applications"],
+          "layouts": [["ChatGPT.app"]],
+          "bundleId": "com.openai.codex",
+          "executable": "Contents/Resources/codex"
+        }]
+      }
+    }
+  },
   "paths": {
     "home": { "path": "~/.codex", "kind": "directory" },
     "rootConfig": { "path": "~/.codex/config.toml", "kind": "file" },

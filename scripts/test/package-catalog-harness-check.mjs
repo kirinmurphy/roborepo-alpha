@@ -1,10 +1,8 @@
 #!/usr/bin/env node
 // Characterizes package-catalog.mjs's harness validation (validateHarness/validateHarnesses),
 // then pins that it now resolves against the harness-provider registry
-// (scripts/harnesses/registry.mjs) instead of a hardcoded local Set — see Phase 5 of
-// docs/plans/active/discoverable-harness-provider-architecture-plan.md and the grounding note
-// about HARNESSES/SLASH_COMMAND_HARNESSES drifting from each other as independently maintained
-// closed sets.
+// (scripts/harnesses/registry.mjs) instead of a hardcoded local Set, so
+// HARNESSES/SLASH_COMMAND_HARNESSES cannot drift apart as independently maintained closed sets.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";

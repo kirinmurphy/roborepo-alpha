@@ -1,9 +1,8 @@
 #!/usr/bin/env node
-// Harness provider registry, discovery, state, and harness-runtime (Phase 2). See
-// docs/plans/active/discoverable-harness-provider-architecture-plan.md Phase 2 validation section.
+// Harness provider registry, discovery, state, and harness-runtime.
 
 import { defineHarnessProvider } from "../harnesses/contract.mjs";
-import { detectHarnessProvider } from "../harnesses/discovery.mjs";
+import { detectHarnessProvider, effectiveDetection } from "../harnesses/discovery.mjs";
 import {
   applyDiscoveryToState,
   setProviderEnabled,
@@ -29,8 +28,7 @@ function assertThrows(fn, label) {
 }
 
 // --- Real registry: exactly claude + codex + gemini, all constructible and passing contract
-// validation. Gemini is the first real (non-synthetic) third provider — see
-// docs/plans/active/gemini-cli-provider-integration-plan.md. ---
+// validation. Gemini is the first real (non-synthetic) third provider. ---
 const providers = listHarnessProviders();
 assert(providers.length === 3, `expected 3 registered providers, got ${providers.length}`);
 assert(hasHarnessProvider("claude") && hasHarnessProvider("codex") && hasHarnessProvider("gemini"), "registry must know claude, codex, and gemini");
@@ -150,8 +148,18 @@ const thirdProvider = defineHarnessProvider({
 });
 assert(thirdProvider.id === "synthetic-third", "synthetic third provider must construct via defineHarnessProvider");
 
+const layered = {
+  ...thirdManifest,
+  detection: { executables: ["synthetic-third"], homeCandidates: ["~/.synthetic"], minimumConfidence: "confirmed" },
+  platforms: { darwin: { detection: { desktopCandidates: [], executableValidation: { timeoutMs: 500 } } } },
+};
+defineHarnessProvider({ manifest: layered, adapters: { rootConfig: { merge: () => {}, render: () => {} } } });
+assert(effectiveDetection(layered, "darwin").executables[0] === "synthetic-third", "platform detection inherits unoverridden keys");
+assert(effectiveDetection(layered, "darwin").executableValidation.timeoutMs === 500, "platform detection overrides one key");
+assert(effectiveDetection(layered, "linux").desktopCandidates === undefined, "macOS candidates do not reach Linux");
+
 // --- State: zero/one/multi enabled-provider scenarios, explicit-disable survives refresh ---
-let state = { schemaVersion: 1, lastDiscoveredAt: new Date(0).toISOString(), providers: {} };
+let state = { schemaVersion: 2, lastDiscoveredAt: new Date(0).toISOString(), providers: {} };
 
 // Zero enabled: harnessRuntime.providersFor must return empty, not throw.
 {
@@ -181,6 +189,7 @@ const rediscovered = applyDiscoveryToState(state, detected);
 assert(!isProviderEnabled(rediscovered, "codex"), "explicit disable must survive refresh");
 assert(isProviderEnabled(rediscovered, "claude"), "claude stays enabled across refresh");
 assert(rediscovered.providers.codex.selectionSource === "user", "disabled provider keeps selectionSource=user across refresh");
+assert(rediscovered.providers.codex.warnings.length === 0, "warnings persist across refresh");
 
 // Multi enabled: re-enable codex, both must appear for a shared capability.
 const bothEnabled = setProviderEnabled(rediscovered, "codex", true);

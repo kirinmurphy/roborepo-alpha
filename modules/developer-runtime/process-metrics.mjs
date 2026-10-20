@@ -1,6 +1,5 @@
 // Current-snapshot process metrics (PID, CPU%, resident memory, elapsed runtime) for discovered
-// listener PIDs. Facts only — never persisted to settings, matching the plan's "snapshot facts
-// only" boundary.
+// listener PIDs. Facts only — never persisted to settings.
 //
 // One batched `ps` call for every PID in a scan, not one call per PID: same "N things, one call"
 // discipline as git's per-root dedup and Docker's single `docker ps` pass.

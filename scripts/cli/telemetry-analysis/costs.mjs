@@ -2,27 +2,29 @@ import { mcpServerOf } from "../../harnesses/transcript-parse.mjs";
 import { approxTokens, resultToolLabel, toolGroup, resultCaptures } from "./results.mjs";
 import { sessionKeyOf, minStr, maxStr } from "./captures.mjs";
 // Cost rollups use attributed result sizes, not token deltas from whichever hook fired.
-export function toolCost(captures) {
+export function toolCost(captures, groupOf) {
   const byTool = new Map();
   for (const event of resultCaptures(captures)) {
     const name = event.last_result.tool;
     const chars = event.last_result.chars;
-    const cur = byTool.get(name) ?? { tool: resultToolLabel(name), group: toolGroup(name), calls: 0, total_chars: 0, max_chars: 0 };
+    const group = groupOf(event);
+    const key = `${name}\0${group}`;
+    const cur = byTool.get(key) ?? { tool: resultToolLabel(name), group, calls: 0, total_chars: 0, max_chars: 0 };
     cur.calls += 1;
     cur.total_chars += chars;
     cur.max_chars = Math.max(cur.max_chars, chars);
-    byTool.set(name, cur);
+    byTool.set(key, cur);
   }
   return [...byTool.values()]
     .map((r) => ({ tool: r.tool, group: r.group, calls: r.calls, avg_tokens: approxTokens(r.total_chars / r.calls), max_tokens: approxTokens(r.max_chars), total_tokens: approxTokens(r.total_chars) }))
     .sort((a, b) => b.avg_tokens - a.avg_tokens);
 }
 
-export function groupCost(captures) {
+export function groupCost(captures, groupOf) {
   const byGroup = new Map();
   const groupSessions = new Map();
   for (const event of resultCaptures(captures)) {
-    const g = toolGroup(event.last_result.tool);
+    const g = groupOf(event);
     const cur = byGroup.get(g) ?? { group: g, calls: 0, total_chars: 0 };
     cur.calls += 1;
     cur.total_chars += event.last_result.chars;

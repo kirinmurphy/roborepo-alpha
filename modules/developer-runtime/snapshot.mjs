@@ -3,6 +3,9 @@ import path from "node:path";
 import { defaultSettings, resolveProjectAlias } from "./settings.mjs";
 import { classifyMemberRole, createRoleComparator } from "./member-role.mjs";
 import { canonicalRepositoryId, providerUrlForRepositoryId } from "../repositories/identity.mjs";
+import { isFixtureRepository } from "../repositories/dev-fixtures.mjs";
+
+export { isFixtureRepository };
 
 export function buildDeveloperRuntimeSnapshot({
   discovery,
@@ -20,12 +23,15 @@ export function buildDeveloperRuntimeSnapshot({
   // lifecycle state and (for present checkouts) git context. Injected for the same reason as
   // repositoryNames: reading the registry and shelling out to git are the caller's job, so this
   // stays a pure function of its inputs. Empty means "no persistence available", which degrades to
-  // the pre-Phase-3 behaviour of listing only what is running.
+  // listing only what is running.
   persistedRepositories = [],
   // repositoryId -> { rootId, projectRoot, git, state } for the main checkout of a RUNNING repository
   // that has nothing running in it. Found and read by the caller for the same reason as
   // persistedRepositories; it fills the main row, which would otherwise render blank.
   idleMainCheckouts = new Map(),
+  knownWorktrees = new Map(),
+  // Per repository: the opt-in cleanup hook's status and worktree folder, for Home's cleanup notice.
+  worktreeCleanup = new Map(),
   // Repositories the 30-day ageing sweep has hidden. Name and last-seen only — enough for the
   // "Show hidden" affordance to offer them back, without deriving lifecycle or reading git for
   // repositories that are by construction not on the page.
@@ -150,7 +156,7 @@ export function buildDeveloperRuntimeSnapshot({
       }
       inactiveProjects.push({
         identity,
-        // Which repository this saved slot belongs to, when its identity resolves to one. Phase 3
+        // Which repository this saved slot belongs to, when its identity resolves to one. The portal
         // renders repositories from the registry instead, so a slot that HAS a repository is
         // already represented by that repository's card and must not also appear as a loose saved
         // app; only the never-resolved ones are still listed on their own.
@@ -189,7 +195,7 @@ export function buildDeveloperRuntimeSnapshot({
     // Repository-keyed view over the same instances the three collections above hold. Built
     // alongside them during the migration (developer-runtime-repository-card-merge) so existing consumers
     // keep working while the portal moves over; the legacy three are removed once nothing reads them.
-    repositories: buildRepositories({ projects, composeProjects, unmatchedInstances, repositoryNames, repositoryUrlKeys, persistedRepositories, idleMainCheckouts, pinnedRepositoryIds }),
+    repositories: buildRepositories({ projects, composeProjects, unmatchedInstances, repositoryNames, repositoryUrlKeys, persistedRepositories, idleMainCheckouts, knownWorktrees, worktreeCleanup, pinnedRepositoryIds }),
     inactiveProjects: inactiveProjects.sort(compareProjects),
     hiddenRepositories,
     hiddenCount,
@@ -239,7 +245,7 @@ function groupByContainer(instances) {
 // Only a real repositoryId groups. `process:` identities resolve to null (canonicalRepositoryId
 // returns null for them — no repository exists to be a member of) and stay unmatched, as do
 // Compose projects whose repo never resolved.
-function buildRepositories({ projects, composeProjects, unmatchedInstances, repositoryNames = new Map(), repositoryUrlKeys = new Map(), persistedRepositories = [], idleMainCheckouts = new Map(), pinnedRepositoryIds = new Set() }) {
+function buildRepositories({ projects, composeProjects, unmatchedInstances, repositoryNames = new Map(), repositoryUrlKeys = new Map(), persistedRepositories = [], idleMainCheckouts = new Map(), knownWorktrees = new Map(), worktreeCleanup = new Map(), pinnedRepositoryIds = new Set() }) {
   const byRepository = new Map();
 
   // A worktree's project-level `name` is commonly its branch or directory name (e.g.
@@ -299,7 +305,7 @@ function buildRepositories({ projects, composeProjects, unmatchedInstances, repo
 
   // rootId is per-checkout even though repositoryId is shared across a repo's worktrees — this is
   // what lets a worktree's branch stay scoped to its own section instead of leaking onto the
-  // repository-level badge (see the plan doc's "Worktree/Root Hierarchy" section).
+  // repository-level badge.
   const ensureRoot = (entry, rootId, git, projectRoot) => {
     let root = entry.roots.find((candidate) => candidate.rootId === rootId);
     if (!root) {
@@ -345,7 +351,7 @@ function buildRepositories({ projects, composeProjects, unmatchedInstances, repo
     // checkouts (`shared`), or in none of them (`repo-root`), or that has no bind mounts to read at
     // all (`unverified`), is not the main checkout's — placing it there tells the user a worktree
     // owns infrastructure that in fact backs several, and hides the sharing that is the whole point
-    // of classifying. Phase 4 sets rootId only for `owned`, so a null rootId here is the verdict,
+    // of classifying. Classification sets rootId only for `owned`, so a null rootId here is the verdict,
     // not missing data.
     if (!composeProject.rootId) {
       entry.sharedComposeGroups.push(group);
@@ -427,7 +433,7 @@ function buildRepositories({ projects, composeProjects, unmatchedInstances, repo
     // tracks their own traffic, not application load — but no field currently separates them from a
     // real dev server: on live data ngrok and a Next.js server agree on probe status, title,
     // identity, confidence, and relative cwd, differing only in process command name. Excluding them
-    // needs a real signal rather than a name list; see the plan doc's open questions.
+    // needs a real signal rather than a name list, which does not exist yet.
     entry.cpuPercentOfHost = sumValues([
       ...entry.composeGroups.map((group) => group.cpuPercentOfHost),
       ...entry.members.map((member) => member.cpuPercentOfHost),
@@ -466,6 +472,27 @@ function buildRepositories({ projects, composeProjects, unmatchedInstances, repo
     entry.cpuPercentOfHost = null;
   }
 
+  for (const [repositoryId, worktrees] of knownWorktrees) {
+    const entry = byRepository.get(repositoryId);
+    if (!entry) continue;
+    for (const worktree of worktrees) {
+      const root = ensureRoot(entry, worktree.rootId, worktree.git, worktree.projectRoot);
+      root.isWorktree = true;
+      root.worktreeState = worktree.state;
+      root.worktreeReason = worktree.reason || null;
+      root.worktreeRunning = worktree.running === true;
+      root.mergedInto = worktree.mergedInto || null;
+      root.worktreeName = worktree.name;
+      root.unmergedCommits = worktree.unmergedCommits;
+      root.checkoutState = worktree.prunable ? "absent" : "present";
+    }
+    entry.roots.sort((a, b) => a.isWorktree - b.isWorktree || (a.git?.branch || "").localeCompare(b.git?.branch || ""));
+  }
+  for (const [repositoryId, cleanup] of worktreeCleanup) {
+    const entry = byRepository.get(repositoryId);
+    if (entry) entry.worktreeCleanup = cleanup;
+  }
+
   // Applied to every entry at once, after both the running and persisted passes, because a pin is a
   // property of the repository rather than of how this scan happened to find it — resolving it in
   // one place is what makes an idle repository pinnable at all.
@@ -493,15 +520,6 @@ export function sortRepositoriesForDisplay(repositories) {
 function displayGroup(repository) {
   if (repository.fixture) return 1;
   return repository.lifecycle && repository.lifecycle.state !== "active" ? 2 : 0;
-}
-
-// The dev fixtures give their repositories deliberately unfetchable github.com/example remotes and
-// a `-fixture` repository suffix (see local/dev-fixtures). The suffix matters: the development
-// checkout itself also uses an example.com remote in tests and must remain a real repository.
-const FIXTURE_REPOSITORY_PATTERN = /^git:github\.com\/example\/.+-fixture$/;
-
-export function isFixtureRepository(repositoryId) {
-  return typeof repositoryId === "string" && FIXTURE_REPOSITORY_PATTERN.test(repositoryId);
 }
 
 // Last path segment of a git: id, or a generic label for a local: one. Only used when the registry
@@ -797,6 +815,7 @@ function settingsSummary(settings) {
   return {
     aliases: Object.entries(settings.aliases || {}).map(([from, to]) => ({ from, to })),
     associations: Object.entries(settings.associations || {}).map(([key, association]) => ({ key, ...association })),
+    worktreeStaleDays: settings.preferences?.worktreeStaleDays ?? 7,
     hidden,
   };
 }

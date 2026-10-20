@@ -1,0 +1,14 @@
+{
+  "path": ["git", "worktrees", "hook", "uninstall"],
+  "kind": "command",
+  "title": "Uninstall cleanup hook",
+  "description": "Disable automatic worktree cleanup for this repository",
+  "order": 20,
+  "usage": "roborepo git worktrees hook uninstall",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/worktree-hook.mjs",
+    "export": "worktreeHookCommand",
+    "prependArgs": ["uninstall"]
+  }
+}

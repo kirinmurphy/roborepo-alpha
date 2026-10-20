@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { STATE_ROOT } from "./roots.mjs";
+import { STATE_ROOT, appRoot } from "./roots.mjs";
 
 export const stateDir = STATE_ROOT;
 
@@ -21,6 +21,30 @@ export function writeJsonState(filePath, data) {
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + "\n");
 }
 export const installStatePath = path.join(stateDir, "install-state.json");
+// Where the running application lives, for code that runs outside it. Installed harness hooks are
+// copies under the harness home, so they cannot walk back to the manifests that ship with the app,
+// and install-state.json is written only by the development installer. Without this record an
+// npm-installed hook has no platform manifest and silently defers every decision it exists to make.
+export const appRootRecordPath = path.join(stateDir, "app-root.json");
+
+export function recordAppRoot() {
+  if (readJsonState(appRootRecordPath, {})?.appRoot === appRoot) return;
+  writeJsonState(appRootRecordPath, { appRoot });
+}
+
+// The recorded path is the concrete npm install directory, which moves when npm reinstalls under a
+// different Node version. Every CLI run calls this so a stale record heals on the next command;
+// until then hooks fall back to deferring, the same as having no record. It only refreshes an
+// existing record: creating one is init's and the permission render's job, and creating it here
+// would bring the file back after uninstall removed it.
+export function refreshAppRootRecord() {
+  try {
+    const recorded = readJsonState(appRootRecordPath, null);
+    if (recorded && recorded.appRoot !== appRoot) writeJsonState(appRootRecordPath, { appRoot });
+  } catch {
+    // An unwritable state root must not block the command the user actually ran.
+  }
+}
 // First-run lifecycle record: has `roborepo init` ever started, and did it finish. Deliberately
 // separate from installStatePath (which the shell installer owns) and from directory existence —
 // a workspace dir can exist because `setup` ran as an internal primitive without the user ever
@@ -48,8 +72,8 @@ export const usageLatestDir = path.join(usageDir, "latest");
 // record. Segmented by harness because each record already carries a harness dimension and one
 // harness's corpus should be resettable on its own.
 //
-// Machine-local, and classified Sensitive machine history / Exclude by
-// docs/plans/backlog/infra-portable-user-profile-backup.md: these logs hold real paths, hostnames,
+// Machine-local, and classified Sensitive machine history / Exclude for profile backup:
+// these logs hold real paths, hostnames,
 // and arguments, so they sit under STATE_ROOT rather than the portable profile boundary. They are
 // deliberately NOT under a harness's own directory (~/.claude/logs and the like) — that is a
 // container the user may disable or remove, and it cannot be sandboxed by ROBOREPO_STATE_ROOT.
@@ -93,11 +117,11 @@ export function portalPidPathForPort(port) {
   // piece of roborepo state.
   return path.join(stateDir, "portal", `server-${port}.pid`);
 }
-// Registry of enabled packages — source of truth for rules rendering (Phase 3+).
+// Registry of enabled packages — source of truth for rules rendering.
 export const enabledPackagesPath = path.join(stateDir, "enabled-packages.json");
 // Content hash of root config (settings.json / config.toml) as of roborepo's last write, keyed by
 // harness. Lets update/repair tell "unchanged since we last wrote it" apart from "something else
-// touched this file" without attempting to merge. See docs/plans/completed/root-config-layered-inheritance.md.
+// touched this file" without attempting to merge.
 export const rootConfigStatePath = path.join(stateDir, "config-state", "root-config.json");
 // Provenance for individual owned scalars a package sets inside a harness config (e.g. Codex's
 // tui.status_line_use_colors). Content-hash drift (rootConfigStatePath) tracks whole-file writes; a

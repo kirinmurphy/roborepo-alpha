@@ -73,12 +73,9 @@ These act on tools or output protocols that exist only on Claude.
 
 **Trigger:** every new session or resume.
 
-Checks whether the code watcher (`roborepo index code --watch`) is running for the current
-directory by looking for a pidfile at `/tmp/jcmwatch-<md5-of-pwd>.pid` and verifying
-the pid is alive. Injects a system message telling the model either:
-
-- index is current (watch is running) — no manual reindex needed
-- watch is not running — suggests `roborepo index code` if the index may be stale
+Probes the jcodemunch server for its repository index. The system message reports whether the
+server is unavailable, the repository is not indexed, or its index is stale. It also reports
+whether the watcher is running; an idle watcher alone does not prove that the index is stale.
 
 Also reminds the model to use jcodemunch tools (`resolve_repo`, `search_symbols`,
 etc.) for code exploration instead of `Grep`/`Read`. (Codex gets a jcodemunch SessionStart nudge from the same package.) The `index code` and `index code --watch`

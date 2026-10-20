@@ -78,14 +78,14 @@ export function spikeRow(event, sessionsById) {
   };
 }
 
-export function spikeAnatomy(captures, spikeCaptures) {
+export function spikeAnatomy(captures, spikeCaptures, groupOf) {
   const spikeSet = new Set(spikeCaptures);
   const spike = resultCaptures(spikeCaptures);
   const normal = resultCaptures(captures).filter((event) => !spikeSet.has(event));
   if (spike.length === 0) return { spike_count: 0, normal_count: normal.length, groups: [] };
   const shareByGroup = (rows) => {
     const m = new Map();
-    for (const e of rows) m.set(toolGroup(e.last_result.tool), (m.get(toolGroup(e.last_result.tool)) || 0) + 1);
+    for (const e of rows) m.set(groupOf(e), (m.get(groupOf(e)) || 0) + 1);
     return m;
   };
   const spikeShare = shareByGroup(spike);
@@ -94,7 +94,7 @@ export function spikeAnatomy(captures, spikeCaptures) {
   for (const [group, n] of spikeShare) {
     const sFrac = n / spike.length;
     const nFrac = (normalShare.get(group) || 0) / Math.max(1, normal.length);
-    const avgChars = spike.filter((e) => toolGroup(e.last_result.tool) === group).reduce((s, e) => s + e.last_result.chars, 0) / n;
+    const avgChars = spike.filter((e) => groupOf(e) === group).reduce((s, e) => s + e.last_result.chars, 0) / n;
     groups.push({
       group,
       spike_share: Number(sFrac.toFixed(3)),

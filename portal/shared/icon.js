@@ -7,13 +7,30 @@ const ICONS = {
     viewBox: "0 0 16 16",
     body: `<path fill="currentColor" d="M8 2.5a5.5 5.5 0 1 0 5.163 3.588.75.75 0 0 1 1.406-.526A7 7 0 1 1 8 1v-.5a.5.5 0 0 1 .82-.385l2.25 1.875a.5.5 0 0 1 0 .77L8.82 4.635A.5.5 0 0 1 8 4.25V2.5Z" />`,
   },
-  pencil: {
-    viewBox: "0 0 16 16",
-    body: `<path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round" d="M11.3 2.3a1 1 0 0 1 1.4 0l1 1a1 1 0 0 1 0 1.4L5.6 12.8l-2.9.6.6-2.9L11.3 2.3Z" /><path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" d="M9.9 3.7l2.4 2.4" />`,
+  // Edit: a pencil on a sheet. The sheet's top-right corner is left open so the pencil's eraser end
+  // sits outside it with a gap, and the tip lands inside near the bottom-left.
+  edit: {
+    viewBox: "0 0 24 24",
+    body: `<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z" />`,
   },
   filter: {
     viewBox: "0 0 16 16",
     body: `<path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" d="M2 3h12L9.5 8.2v4.3L6.5 14V8.2L2 3Z" />`,
+  },
+  // Sliders: three horizontal tracks, each with a knob, the conventional "adjust filters" glyph.
+  sliders: {
+    viewBox: "0 0 16 16",
+    body: `<path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" d="M2 4h1.4M6.6 4H14M2 8h7.4M12.6 8H14M2 12h3.4M8.6 12H14" /><circle cx="5" cy="4" r="1.6" fill="none" stroke="currentColor" stroke-width="1.3" /><circle cx="11" cy="8" r="1.6" fill="none" stroke="currentColor" stroke-width="1.3" /><circle cx="7" cy="12" r="1.6" fill="none" stroke="currentColor" stroke-width="1.3" />`,
+  },
+  // Pin: a push-pin, for pinning a repo to the top of Home.
+  pin: {
+    viewBox: "0 0 16 16",
+    body: `<path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round" d="M9.6 2.1 13.9 6.4l-1.4.6-2.4 2.4v2.5l-1 1-2.9-2.9-3.7 3.7-.7-.7 3.7-3.7L2.5 6.4l1-1h2.5l2.4-2.4.7-.9Z" />`,
+  },
+  // Eye-off: a closed eye (lid arc with lashes), for ignoring a repo.
+  "eye-off": {
+    viewBox: "0 0 16 16",
+    body: `<path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" d="M2 7.2c1.5 2.5 3.6 3.7 6 3.7s4.5-1.2 6-3.7M4.2 10l-1.3 1.8M8 10.9V13M11.8 10l1.3 1.8" />`,
   },
   "agent-prompt": {
     viewBox: "0 0 16 16",
@@ -22,6 +39,15 @@ const ICONS = {
   "external-link": {
     viewBox: "0 0 24 24",
     body: `<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="15 3 21 3 21 9" /><line stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" x1="10" y1="14" x2="21" y2="3" />`,
+  },
+  // Stop: an octagon, the stop-sign shape, for stopping a running server.
+  stop: {
+    viewBox: "0 0 16 16",
+    body: `<path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" d="M5.4 1.8h5.2l3.6 3.6v5.2l-3.6 3.6H5.4l-3.6-3.6V5.4l3.6-3.6Z" /><path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" d="M5.5 8h5" />`,
+  },
+  trash: {
+    viewBox: "0 0 16 16",
+    body: `<path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" d="M2.5 4.2h11M6.2 4.2V2.6h3.6v1.6M3.9 4.2l.7 9.2h6.8l.7-9.2M6.6 6.8v4.2M9.4 6.8v4.2" />`,
   },
   link: {
     viewBox: "0 0 16 16",
@@ -141,10 +167,11 @@ const ICONS = {
     viewBox: "0 0 16 16",
     body: `<circle cx="8" cy="8" r="5.4" fill="none" stroke="currentColor" stroke-width="1.3" /><path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" d="M6.4 6.4h3.2M8 6.4v3.2" />`,
   },
-  // Runtime: a terminal — the dev-server / local process side of the portal.
+  // Runtime: a bare `>_` prompt — the dev-server / local process side of the portal. No terminal
+  // frame, so the prompt fills the box and reads at the same weight as its neighbors.
   runtime: {
     viewBox: "0 0 16 16",
-    body: `<rect x="2.5" y="3.5" width="11" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3" /><path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" d="M5 6.5l2 2-2 2" /><path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" d="M8.5 10.5h2.5" />`,
+    body: `<path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d="M2.5 3.5 7 8l-4.5 4.5" /><path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" d="M8.5 12.5h5" />`,
   },
 };
 

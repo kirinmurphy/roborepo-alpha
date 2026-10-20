@@ -21,7 +21,7 @@
       "pattern": "^[a-z][a-z0-9-]*$",
       "description": "Key into the static, app-owned adapter registry. Not a file path or module specifier."
     },
-    "detection": { "$ref": "#/$defs/detection" },
+    "detection": { "allOf": [{ "$ref": "#/$defs/detection" }, { "required": ["minimumConfidence"] }] },
     "paths": { "$ref": "#/$defs/pathMap" },
     "capabilities": {
       "type": "array",
@@ -72,8 +72,11 @@
     "detection": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["minimumConfidence"],
       "properties": {
+        "desktopCandidates": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/desktopCandidate" }
+        },
         "executables": {
           "type": "array",
           "items": { "type": "string", "minLength": 1 },
@@ -107,6 +110,30 @@
         "minimumConfidence": {
           "type": "string",
           "enum": ["confirmed", "probable", "possible"]
+        }
+      }
+    },
+    "desktopCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "roots", "layouts", "bundleId", "executable"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "roots": { "type": "array", "minItems": 1, "items": { "type": "string", "pattern": "^(~/|/)" } },
+        "layouts": { "type": "array", "minItems": 1, "items": { "type": "array", "minItems": 1, "items": { "type": "string", "pattern": "^(\\*|[^/.][^/]*)$" } } },
+        "bundleId": { "type": "string", "minLength": 1 },
+        "executable": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+" },
+        "verifiedMarker": { "type": "string", "minLength": 1 },
+        "parentApp": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["label", "roots", "bundle", "bundleId"],
+          "properties": {
+            "label": { "type": "string", "minLength": 1 },
+            "roots": { "type": "array", "minItems": 1, "items": { "type": "string", "pattern": "^(~/|/)" } },
+            "bundle": { "type": "string", "pattern": "^[^/.][^/]*$" },
+            "bundleId": { "type": "string", "minLength": 1 }
+          }
         }
       }
     },

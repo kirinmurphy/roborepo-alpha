@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Plans scans the repositories RoboRepo knows about (pljvmyh §9): every checkout of a visible
-// repository, merged by plan id with the main checkout canonical, with explicit per-repository
+// repository, merged by plan id and returned from each plan's authoritative copy, with explicit per-repository
 // scan state. Plans settings and ROBOREPO_PLAN_ROOTS no longer affect anything.
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { buildPlanSnapshot, movePlanLifecycle, updatePlanPriority } from "../../modules/plan-suite/index.mjs";
+import { buildPlanSnapshot, planSnapshotFingerprint, updatePlanPriority } from "../../modules/plan-suite/index.mjs";
 import { hideRepository, loadRegistry, updateRegistry } from "../../modules/repositories/index.mjs";
 import { recordRepositoryDiscovery } from "../cli/repositories.mjs";
 import { addRepositorySource } from "../cli/repository-sources.mjs";
@@ -64,32 +64,48 @@ try {
   });
   assert.equal(loadRegistry({ stateRoot }).repositories[REPOSITORY_ID].localRoots[0].kind, "primary", "the registry's first root is the worktree");
 
+  // The fingerprint gates Home's rebuilds: stable while nothing changes, moved by a plan edit or a
+  // new worktree.
+  const fingerprint = planSnapshotFingerprint({ stateRoot });
+  assert.equal(planSnapshotFingerprint({ stateRoot }), fingerprint, "an unchanged tree fingerprints the same");
+  const fingerprintFile = path.join(worktree, "docs/plans/active/new.md");
+  fs.appendFileSync(fingerprintFile, "\n");
+  const afterEdit = planSnapshotFingerprint({ stateRoot });
+  assert.notEqual(afterEdit, fingerprint, "editing a plan in any checkout changes the fingerprint");
+  const extra = path.join(tempRoot, "trees", "extra");
+  git(main, "worktree", "add", "-q", "-b", "extra", extra);
+  assert.notEqual(planSnapshotFingerprint({ stateRoot }), afterEdit, "adding a worktree changes the fingerprint");
+  git(main, "worktree", "remove", "--force", extra);
+  fs.writeFileSync(fingerprintFile, plan("new444", "Worktree only"));
+
   const snapshot = snapshotFor(stateRoot);
-  assert.deepEqual(snapshot.repositoryScans, [{ repositoryId: REPOSITORY_ID, state: "scanned", planCount: 4, checkoutCount: 3 }]);
+  assert.deepEqual(snapshot.repositoryScans, [{ repositoryId: REPOSITORY_ID, state: "scanned", planCount: 4, checkoutCount: 3, worktrees: ["behind", "feature-x"] }],
+    "a scan lists every linked worktree Git knows, by administrative name");
   const byId = Object.fromEntries(snapshot.plans.map((record) => [record.plan.id, record]));
   assert.deepEqual(Object.keys(byId).sort(), ["diff222", "main333", "new444", "same111"], "identical copies collapse to one record");
   assert.equal(snapshot.plans.length, 4);
 
   assert.equal(byId.same111.plan.checkout, null);
-  assert.deepEqual(byId.same111.plan.divergentCheckouts, []);
-  assert.equal(byId.same111.absolutePath, path.join(fs.realpathSync(main), "docs/plans/backlog/same.md"), "the main checkout's copy is canonical");
+  assert.deepEqual(byId.same111.plan.authority, { source: "primary" });
+  assert.equal(byId.same111.absolutePath, path.join(fs.realpathSync(main), "docs/plans/backlog/same.md"), "a backlog plan is read from the main checkout");
 
-  assert.equal(byId.diff222.plan.title, "Differs", "a differing worktree copy shows the main copy");
-  assert.deepEqual(byId.diff222.plan.divergentCheckouts, ["feature-x"], "only the plan's own worktree can mark it as differing");
-  assert.deepEqual(byId.main333.plan.divergentCheckouts, [], "a worktree that is only behind main marks nothing");
-  assert.ok(byId.diff222.plan.validation.findings.some((item) => item.code === "PLAN_DIFFERS_IN_WORKTREE" && item.meta.worktree === "feature-x"), "divergence is a finding on that plan");
-  assert.ok(!byId.same111.plan.validation.findings.some((item) => item.code === "PLAN_DIFFERS_IN_WORKTREE"), "only diverging plans are marked");
+  // Active-plan authority has its own fixture in plan-suite-authority-scan-check.mjs.
+  const copyFindings = (record) => record.plan.validation.findings.filter((item) => /WORKTREE|AUTHORITY/.test(item.code));
+  assert.equal(byId.diff222.plan.title, "Differs", "a backlog plan's worktree copy never wins, even in its named worktree");
+  assert.deepEqual(copyFindings(byId.diff222), [], "a backlog plan's differing worktree copy is not a finding");
+  assert.deepEqual(copyFindings(byId.main333), [], "a worktree that is only behind main marks nothing");
 
   assert.equal(byId.new444.plan.checkout, "feature-x", "a worktree-only plan is labeled with its worktree");
+  assert.equal(byId.new444.plan.authority, null, "a worktree-only plan has no primary copy to resolve against");
   assert.equal(byId.new444.repository.id, byId.same111.repository.id, "every checkout's plans belong to one repository");
 
-  // Edits: the differing plan is written in the main checkout; the worktree-only plan in its worktree.
+  // Edits: the backlog plan is written in the main checkout; the worktree-only plan in its worktree.
   updatePlanPriority(snapshot, { id: "diff222", key: byId.diff222.key, priority: "low", expectedPriority: "high", mtimeMs: byId.diff222.mtimeMs });
   assert.match(fs.readFileSync(path.join(main, "docs/plans/backlog/differs.md"), "utf8"), /priority: low/);
   assert.match(fs.readFileSync(path.join(worktree, "docs/plans/backlog/differs.md"), "utf8"), /priority: high/, "the worktree copy is untouched");
-  movePlanLifecycle(snapshot, { id: "new444", key: byId.new444.key, lifecycle: "backlog", expectedLifecycle: "active", mtimeMs: byId.new444.mtimeMs, skipDestinationValidation: true });
-  assert.ok(fs.existsSync(path.join(worktree, "docs/plans/backlog/new.md")), "a worktree-only plan is edited in its worktree");
-  assert.ok(!fs.existsSync(path.join(main, "docs/plans/backlog/new.md")));
+  updatePlanPriority(snapshot, { id: "new444", key: byId.new444.key, priority: "low", expectedPriority: "high", mtimeMs: byId.new444.mtimeMs });
+  assert.match(fs.readFileSync(path.join(worktree, "docs/plans/active/new.md"), "utf8"), /priority: low/, "a worktree-only plan is edited in its worktree");
+  assert.ok(!fs.existsSync(path.join(main, "docs/plans/active/new.md")));
 
   // ---- Plans settings and ROBOREPO_PLAN_ROOTS no longer affect Plans ----
   const decoy = path.join(tempRoot, "decoy");
@@ -105,6 +121,23 @@ try {
   assert.ok(!publicSnapshot.plans.some((record) => record.plan.id === "decoy555"), "discoveryRoots and ROBOREPO_PLAN_ROOTS are ignored");
   assert.equal(publicSnapshot.settings, undefined, "/api/plans no longer returns Plans settings");
   assert.ok(!portal.stdout.includes(tempRoot), "/api/plans carries no absolute path");
+
+  // ---- Home's cached loader rebuilds when a plan changes, without anyone loading /api/plans ----
+  const cachedScript = `
+    import fs from "node:fs";
+    const plans = await import("./scripts/cli/plans.mjs");
+    const title = () => plans.loadCachedPlansSnapshot().plans.find((record) => record.plan.id === "same111").plan.title;
+    const before = title();
+    fs.writeFileSync(process.env.PLAN_FILE, fs.readFileSync(process.env.PLAN_FILE, "utf8").replace("# Same", "# Same, renamed"));
+    process.stdout.write(JSON.stringify([before, title()]));
+  `;
+  const cached = spawnSync(process.execPath, ["--input-type=module", "-e", cachedScript], {
+    cwd: repoRoot,
+    env: { ...process.env, ROBOREPO_STATE_ROOT: stateRoot, PLAN_FILE: path.join(main, "docs/plans/backlog/same.md") },
+    encoding: "utf8",
+  });
+  assert.equal(cached.status, 0, cached.stderr);
+  assert.deepEqual(JSON.parse(cached.stdout), ["Same", "Same, renamed"], "the cached snapshot is built on first use and rebuilt after a plan edit");
 
   // ---- Explicit scan state: unavailable checkouts and hidden repositories ----
   const vanishedState = path.join(tempRoot, "state-vanished");

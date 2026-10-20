@@ -14,15 +14,15 @@ export const USAGE_SEVERITY = { cautionAtLeast: 30, warningAtLeast: 50, critical
 // 85 stays warning, 86 crosses to critical. Context has the more aggressive caution/warning tiers.
 export const RATE_LIMIT_SEVERITY = { warningAbove: 70, criticalAbove: 85 };
 
-// Debt (used ahead of elapsed) severity. 5-19 points warning, >=20 critical (plan decision 6).
+// Debt (used ahead of elapsed) severity. 5-19 points warning, >=20 critical.
 export const DEBT_SEVERITY = { warningAtLeast: 5, criticalAtLeast: 20 };
 
 export function clampPercent(value) {
   return Math.min(100, Math.max(0, value));
 }
 
-// Whole-percent value for display AND classification. The plan's chosen policy is
-// "display-rounded inputs drive the UI assessment" so the visible arithmetic
+// Whole-percent value for display AND classification. Display-rounded inputs drive
+// the UI assessment, so the visible arithmetic
 // (85 used - 70 elapsed = 15 debt) always matches the label. Returns null for anything not finite.
 export function roundPercent(value) {
   if (value === null || value === undefined) return null;
@@ -63,8 +63,7 @@ function debtSeverity(magnitude) {
 }
 
 // Classify used-vs-elapsed pacing. Difference is kept for callers that want the sign; magnitude is
-// the absolute gap. Debt/surplus/balanced per plan decisions 2-4. Surplus severity is always normal
-// regardless of size (decision 9) — only debt escalates.
+// the absolute gap. Surplus severity is always normal regardless of size — only debt escalates.
 export function assessBalance({ usedPercent, elapsedPercent: elapsed }) {
   if (!Number.isFinite(usedPercent) || !Number.isFinite(elapsed)) {
     return { state: "unavailable" };

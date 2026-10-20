@@ -12,8 +12,7 @@
 # Harness presence (harness_present) is no longer TSV-backed — it shells to
 # `roborepo harness detected` (scripts/cli/harness.mjs), which reads the provider registry
 # (scripts/harnesses/), so there is one source of truth for known harnesses instead of two
-# independently-maintained enums drifting apart. See
-# docs/plans/active/discoverable-harness-provider-architecture-plan.md Phase 4.
+# independently-maintained enums drifting apart.
 #
 # manifest_path
 #   Echo the absolute path to the manifest.
@@ -135,7 +134,7 @@ shell_snippet_rows() {
 }
 
 # Cache of `roborepo harness detected` output (id<TAB>homePath<TAB>present<TAB>displayName<TAB>
-# rootConfigPath rows), loaded once per process into a plain newline-joined string (this repo's
+# rootConfigPath<TAB>confidence rows), loaded once per process into a plain newline-joined string (this repo's
 # shell targets bash 3.2 / macOS system bash, which has no associative arrays). Falls back to a
 # plain home-dir existence check (mirroring the old harnesses.tsv presence_roots semantics) if
 # node or the CLI entrypoint isn't available — matters for test sandboxes that copy only a subset
@@ -159,7 +158,7 @@ _harness_detected_load() {
       [[ -d "$(_manifest_home_root "${id}")" ]] && present=1
       root_config_file="settings.json"
       [[ "${id}" == "codex" ]] && root_config_file="config.toml"
-      _HARNESS_DETECTED_ROWS+="${id}	$(_manifest_home_root "${id}")	${present}	${id}	$(_manifest_home_root "${id}")/${root_config_file}
+      _HARNESS_DETECTED_ROWS+="${id}	$(_manifest_home_root "${id}")	${present}	${id}	$(_manifest_home_root "${id}")/${root_config_file}"$'\t'"absent
 "
     done
   fi
@@ -182,6 +181,23 @@ harness_present() {
 harness_detected_rows() {
   _harness_detected_load
   printf '%s\n' "${_HARNESS_DETECTED_ROWS}"
+}
+
+# Live setup warnings for known providers below their detection minimum. Kept separate from the
+# six-column presence report so shell write gates continue to consume a fixed row shape.
+harness_warning_rows() {
+  command -v node >/dev/null 2>&1 || return 0
+  [[ -f "${repo_root}/scripts/harnesses/discovery.mjs" ]] || return 0
+  node --input-type=module -e '
+    const [{ listHarnessProviders }, { detectHarnessProvider }] = await Promise.all([
+      import(process.argv[1]), import(process.argv[2]),
+    ]);
+    for (const provider of listHarnessProviders()) {
+      const result = detectHarnessProvider(provider.manifest);
+      if (result.status === "detected") continue;
+      for (const warning of result.warnings) console.log(`${provider.id}\t${warning}`);
+    }
+  ' "${repo_root}/scripts/harnesses/registry.mjs" "${repo_root}/scripts/harnesses/discovery.mjs"
 }
 
 # Repo-local (project-scope) skills dirs, one per provider that declares the "skills" capability —

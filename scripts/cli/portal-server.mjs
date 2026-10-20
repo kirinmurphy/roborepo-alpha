@@ -43,6 +43,8 @@ const APP_NAME = "roborepo";
 const SOURCE_HASH = computePortalSourceHash();
 const STATIC_TYPES = {
   ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".webmanifest": "application/manifest+json",
   ".css": "text/css; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".html": "text/html; charset=utf-8",
@@ -52,23 +54,39 @@ const STATIC_TYPES = {
 // Single source of truth for portal HTML pages. To add a page: (1) add an entry here, (2) create
 // portal/<dir>/{index.html,styles.css,app.js} linking /portal/shared/base.css + theme.js. The
 // browser nav (portal/shared/theme.js) reads this list from window.PORTAL_MANIFEST, injected by
-// pageHtml() below, so there is nothing to hand-sync client-side. See docs/internal/portal-architecture.md.
+// pageHtml() below, so there is nothing to hand-sync client-side.
 // Each page's HTML is just its index.html read from disk (mirrors static assets). `default: true`
 // marks the page served at "/" (what `roborepo web` opens). Home owns "/" as its canonical route;
-// Agents lives at canonical "/config". Order here is the global nav order.
+// Agents lives at canonical "/agents". Order here is the global nav order.
+// `icon` labels the page in the header's ⋮ menu. `secondary` pages are lower-priority destinations
+// that live only in that menu; the rest sit in the header bar until the viewport gets narrow, when
+// every page moves into the menu.
+// `repositoryScope` pages show the shared repository selector and read and keep `?repo=`;
+// `outsideActivityScope` adds its Activity outside listed repos choice. Nav links carry the scope
+// only between repositoryScope pages (portal/shared/repository-scope.js).
 export const PAGES = [
-  { path: "/", id: "home", title: "Repos", dir: "home", default: true },
-  { path: "/config", id: "config", title: "Agents", dir: "config" },
-  { path: "/plans", id: "plans", title: "Plans", dir: "plans" },
+  { path: "/", id: "home", title: "Repos", icon: "home", dir: "home", default: true },
+  { path: "/agents", id: "config", title: "Agents", icon: "agents", dir: "config", repositoryScope: true },
+  { path: "/plans", id: "plans", title: "Plans", icon: "plans", dir: "plans", repositoryScope: true },
   // The token report owns /tokens (id/dir keep the tokens module paths).
-  { path: "/tokens", id: "tokens", title: "Tokens", dir: "tokens" },
+  {
+    path: "/tokens",
+    id: "tokens",
+    title: "Tokens",
+    icon: "tokens",
+    dir: "tokens",
+    repositoryScope: true,
+    outsideActivityScope: true,
+  },
   {
     path: "/runtime",
     id: "developer-runtime",
     title: "Runtime",
+    icon: "runtime",
     dir: "developer-runtime",
+    secondary: true,
   },
-  { path: "/settings", id: "settings", title: "Settings", icon: "settings", dir: "settings" },
+  { path: "/settings", id: "settings", title: "Settings", icon: "settings", dir: "settings", secondary: true },
 ];
 export const PAGE_ROUTES = [
   ...PAGES.map((page) => ({ ...page, navId: page.id })),
@@ -76,7 +94,16 @@ export const PAGE_ROUTES = [
   { path: "/repositories/:urlKey", id: "repository-detail", navId: "home", title: "Repository", dir: "repositories", redirect: "/" },
 ].map((page) => ({ ...page, segments: page.path.split("/").filter(Boolean) }));
 // Shape shared by /api/portal/status and the browser-injected manifest so both can never drift.
-const pageManifest = () => PAGES.map(({ path, id, title, icon }) => ({ path, id, title, ...(icon ? { icon } : {}) }));
+const pageManifest = () =>
+  PAGES.map(({ path, id, title, icon, secondary, repositoryScope, outsideActivityScope }) => ({
+    path,
+    id,
+    title,
+    ...(icon ? { icon } : {}),
+    ...(secondary ? { secondary } : {}),
+    ...(repositoryScope ? { repositoryScope } : {}),
+    ...(outsideActivityScope ? { outsideActivityScope } : {}),
+  }));
 
 export function serializeInlineJson(value) {
   return JSON.stringify(value)
@@ -226,7 +253,7 @@ function mutationTokenAllowed(req, token) {
 }
 
 // Any non-read method mutates and must clear the origin+token guard. Today only POST endpoints
-// exist; PATCH was added with the repository API (Phase 4), so the guard covers it too.
+// exist; PATCH was added with the repository API, so the guard covers it too.
 const MUTATING_METHODS = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 function isMutation(req) {
   return MUTATING_METHODS.has(req.method);

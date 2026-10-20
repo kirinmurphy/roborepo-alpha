@@ -1,7 +1,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>roborepo {{TITLE}}</title>
+  <title>roborepo :: {{TITLE}}</title>
+  <!-- PNG first, SVG last with sizes="any": Chrome otherwise prefers the sized PNG over the SVG. -->
+  <link rel="icon" href="/portal/shared/favicon/favicon-32.png" type="image/png" sizes="32x32" />
+  <link rel="icon" href="/portal/shared/favicon/favicon.svg" type="image/svg+xml" sizes="any" />
+  <link rel="apple-touch-icon" href="/portal/shared/favicon/apple-touch-icon.png" />
+  <link rel="manifest" href="/portal/shared/favicon/site.webmanifest" />
   <script>
     (function () {
       try {

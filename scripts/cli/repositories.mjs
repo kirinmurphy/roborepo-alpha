@@ -64,7 +64,7 @@ export function recordRepositoryDiscovery({
   });
 }
 
-// ---- Browser-safe API bridge (Phase 4). Every return value is path-free by construction. ----
+// ---- Browser-safe API bridge. Every return value is path-free by construction. ----
 
 function notFound(repositoryId) {
   const e = new Error(`unknown repository: ${repositoryId}`);

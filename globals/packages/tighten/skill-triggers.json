@@ -1,0 +1,24 @@
+{
+  "tests": [
+    {
+      "skill": "tighten",
+      "match": [
+        "/tighten this module",
+        "clean this up against our patterns"
+      ],
+      "nearMiss": [
+        "make this ordinary edit",
+        "review this code for bugs"
+      ],
+      "triggerPhrases": [
+        "/tighten",
+        "tighten",
+        "clean this up against our patterns"
+      ],
+      "skipPhrases": [
+        "ordinary edits",
+        "mere presence of code"
+      ]
+    }
+  ]
+}

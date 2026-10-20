@@ -12,7 +12,7 @@ export function indexScopedEvents(scopedEvents) {
   return { captures, harnesses: [...harnesses].sort() };
 }
 
-export function indexCaptures(captures) {
+export function indexCaptures(captures, groupOf) {
   const index = {
     latestTs: captures[0]?.ts ?? new Date().toISOString(),
     latestCodexRateLimits: null,
@@ -45,7 +45,7 @@ export function indexCaptures(captures) {
       cause: spikeCause(event).cause,
       // Functional group, computed server-side (with bare-MCP-name resolution) so the
       // cumulative-by-group chart doesn't re-derive it client-side and diverge.
-      group: toolGroup(event.last_result?.tool ?? event.tool?.name ?? null),
+      group: event.last_result?.tool ? groupOf(event) : toolGroup(event.tool?.name ?? null),
     });
   }
   index.timeline.sort((a, b) => a.ts.localeCompare(b.ts));

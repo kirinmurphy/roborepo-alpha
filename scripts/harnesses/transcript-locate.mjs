@@ -163,10 +163,10 @@ function clip(str, n) {
 
 // A ready-to-paste prompt that points an agent at the transcript and tells it what telemetry flagged
 // and what to conclude. The transcript path is included so the agent can read it directly.
-export function buildAnalysisPrompt({ sessionId, harness, repo, finding, transcriptPath }) {
+export function buildAnalysisPrompt({ sessionId, harness, finding, transcriptPath }) {
   const where = transcriptPath ? ` Its transcript is at ${transcriptPath}.` : "";
   return [
-    `Investigate the ${harness || "Claude"} session ${sessionId}${repo ? ` in the ${repo} repo` : ""}.${where}`,
+    `Investigate the ${harness || "Claude"} session ${sessionId}.${where}`,
     `Telemetry flagged it: ${finding}.`,
     `Read the transcript, identify the turn(s) that drove the abnormal token use, explain what happened,`,
     `and give one concrete change to avoid it next time.`,

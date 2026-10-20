@@ -7,8 +7,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { fakeResponse } from "./lib/fake-response.mjs";
 
-// Managed uninstall workspace policy, per
-// docs/plans/active/infra-packaging-02-install-lifecycle.md Phase 4.
+// Managed uninstall workspace policy.
 //
 // The behavior under test is the one that can destroy user data, so these run the real CLI and the
 // real shell uninstall against sandboxed HOME/ROBOREPO_STATE_DIR fixtures rather than asserting on
@@ -22,7 +21,7 @@ const uninstallSh = path.join(repoRoot, "scripts/install/uninstall.sh");
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "builtin-managed-uninstall-"));
 let caseId = 0;
 
-// Resource ownership inventory (Phase 7).
+// Resource ownership inventory.
 //
 // The state root is the one place roborepo accumulates machine-local state, and
 // remove_runtime_state() enumerates what it deletes rather than removing the root wholesale (the
@@ -37,7 +36,8 @@ let caseId = 0;
 const OWNED_STATE_ENTRIES = [
   "command-overrides.json", "enabled-packages.json", "telemetry", "telemetry-backups", "backups",
   "presets", "rules", "config-state", "harnesses", "repositories", "usage", "capture", "portal",
-  "skills", "package-runtime", "install-state.json", "initialization.json", "experimental.json",
+  "skills", "package-runtime", "install-state.json", "app-root.json", "initialization.json",
+  "experimental.json",
 ];
 // User-owned content, or a pointer whose fate follows it — preserved by default.
 const PRESERVED_STATE_ENTRIES = ["workspace", "workspace-root.json"];
@@ -319,7 +319,7 @@ function testUninstallWithConfirmedHarnesses() {
   );
 }
 
-// --- Resource ownership inventory (Phase 7). See OWNED_STATE_ENTRIES near the top of this file.
+// --- Resource ownership inventory. See OWNED_STATE_ENTRIES near the top of this file.
 
 // Seeds every owned entry, runs a real managed uninstall, and asserts the state root is left holding
 // nothing but the preserved workspace. Catches a leak directly rather than via a --check-clean

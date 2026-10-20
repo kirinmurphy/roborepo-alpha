@@ -36,7 +36,7 @@ skills_capable="$(node -e '
   }).catch(() => process.exit(1));
 ' "${repo_root}" 2>/dev/null || echo " claude codex ")"
 
-while IFS=$'\t' read -r id home_path present _display_name _root_config_path; do
+while IFS=$'\t' read -r id home_path present _display_name _root_config_path _confidence; do
   [[ -n "${home_path}" && "${present}" == "1" ]] || continue
   [[ "${skills_capable}" == *" ${id} "* ]] || continue
   link_global_skills "${home_path}" || true

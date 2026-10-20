@@ -1,6 +1,6 @@
 export const SETTINGS_VERSION = 2;
 export const LEGACY_SETTINGS_VERSION = 1;
-export const DEFAULT_PREFERENCES = { showNonHttp: false, historyRetentionDays: 14 };
+export const DEFAULT_PREFERENCES = { showNonHttp: false, historyRetentionDays: 14, worktreeStaleDays: 7 };
 
 const CONTROL_CHARS = /[\x00-\x1f\x7f]/;
 
@@ -205,9 +205,8 @@ function validateAssociations(associations) {
 // to a filesystem path (identities are one-way fingerprints -- see resolveProjectIdentity), and a
 // Docker container has no cwd of its own for the normal by-cwd git resolution to run against. A
 // real path lets the exact same resolveProjectIdentity/collectGitContext path every other project
-// uses run for a manually-associated repo too. When the canonical repository registry from
-// docs/plans/backlog/portal-homepage-repository-section.md lands, this should become a
-// repositoryId reference instead -- kept to this one field so that's a rename, not a redesign.
+// uses run for a manually-associated repo too. Once compose projects key off the canonical
+// repository registry, this should become a repositoryId reference instead -- kept to this one field so that's a rename, not a redesign.
 function validateComposeProjects(composeProjects) {
   if (!composeProjects || typeof composeProjects !== "object" || Array.isArray(composeProjects)) {
     throw new Error("settings composeProjects must be an object");
@@ -258,10 +257,13 @@ function validateAliases(aliases) {
 
 function validatePreferences(preferences) {
   if (!preferences || typeof preferences !== "object" || Array.isArray(preferences)) throw new Error("settings preferences must be an object");
-  validateObjectKeys(preferences, ["historyRetentionDays", "showNonHttp"], "settings preferences");
+  validateObjectKeys(preferences, ["historyRetentionDays", "showNonHttp", "worktreeStaleDays"], "settings preferences");
   if (typeof preferences.showNonHttp !== "boolean") throw new Error("settings showNonHttp preference must be boolean");
   if (!Number.isInteger(preferences.historyRetentionDays) || preferences.historyRetentionDays < 1 || preferences.historyRetentionDays > 365) {
     throw new Error("settings historyRetentionDays preference must be between 1 and 365");
+  }
+  if (preferences.worktreeStaleDays != null && (!Number.isInteger(preferences.worktreeStaleDays) || preferences.worktreeStaleDays < 1 || preferences.worktreeStaleDays > 365)) {
+    throw new Error("settings worktreeStaleDays preference must be between 1 and 365");
   }
 }
 

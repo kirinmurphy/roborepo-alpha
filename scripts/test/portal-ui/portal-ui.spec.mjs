@@ -3,10 +3,14 @@ import os from "node:os";
 import path from "node:path";
 import { test, expect } from "@playwright/test";
 
-const NAV_ORDER = ["Repos", "Agents", "Plans", "Tokens", "Runtime", "Settings"];
+// The header bar holds the primary pages; the secondary ones live only in its ⋮ menu, and below
+// the narrow breakpoint the menu holds every page.
+const NAV_PRIMARY = ["Repos", "Agents", "Plans", "Tokens"];
+const NAV_SECONDARY = ["Runtime", "Settings"];
+const NAV_ORDER = [...NAV_PRIMARY, ...NAV_SECONDARY];
 const ROUTES = [
   { path: "/", active: "Repos" },
-  { path: "/config", active: "Agents" },
+  { path: "/agents", active: "Agents" },
   { path: "/plans", active: "Plans" },
   { path: "/tokens", active: "Tokens" },
   { path: "/runtime", active: "Runtime" },
@@ -15,6 +19,11 @@ const ROUTES = [
 
 test.describe("Agents page", () => {
   test("keeps the high token-use banner hidden", async ({ page }) => {
+    const snapshot = await (await page.request.get("/api/config")).json();
+    const activeItem = snapshot.behaviorView.flatMap((section) => section.items || []).find((item) => item.active);
+    expect(activeItem, "fixture needs an active Agents item").toBeTruthy();
+    activeItem.contextCost = { onDemandTokens: 30000, onDemandLevel: "high" };
+    snapshot.contextCost = { ...snapshot.contextCost, onDemandThresholds: { mediumAt: 1000, highAbove: 10000 } };
     await page.route("**/api/settings", (route) => route.fulfill({ json: {
       harnesses: {
         supported: [{ id: "claude", displayName: "Claude Code" }, { id: "codex", displayName: "Codex" }],
@@ -22,17 +31,14 @@ test.describe("Agents page", () => {
         active: [],
       },
     } }));
-    await page.route("**/api/config", async (route) => {
-      const response = await route.fetch();
-      const snapshot = await response.json();
-      const activeItem = snapshot.behaviorView.flatMap((section) => section.items || []).find((item) => item.active);
-      expect(activeItem, "fixture needs an active Agents item").toBeTruthy();
-      activeItem.contextCost = { onDemandTokens: 30000, onDemandLevel: "high" };
-      snapshot.contextCost = { ...snapshot.contextCost, onDemandThresholds: { mediumAt: 1000, highAbove: 10000 } };
-      await route.fulfill({ response, json: snapshot });
-    });
+    await page.route("**/api/config", (route) => route.fulfill({ json: snapshot }));
 
-    await page.goto("/config");
+    await page.goto("/agents");
+    await expect(page.getByRole("heading", { name: "Available Agent Tools" })).toBeVisible();
+    await expect(page.locator(".packages-intro p")).toHaveText("Extend your harness config. Toggling a package below writes it into every active harness's configuration.");
+    // Settings owns the token telemetry toggle; the Agents page does not repeat it.
+    await expect(page.getByText("Token Telemetry", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Monitoring", { exact: true })).toHaveCount(0);
     await expect(page.getByText("The following elements have a high token use:", { exact: true })).toHaveCount(0);
     await expect(page.locator("#main [data-slot=supported]")).toHaveText("Supported Harnesses: Claude Code, Codex");
     await expect(page.getByRole("button", { name: "Check for harnesses" })).toHaveAttribute("data-btn", "cta");
@@ -43,9 +49,342 @@ test.describe("Agents page", () => {
     expect(warningButtonGrid.column).toBe("2");
     expect(warningButtonGrid.row).toBe("1");
   });
+
+  test("finishes setting up a launched harness without a click", async ({ page }) => {
+    const realSnapshot = await (await page.request.get("/api/config")).json();
+    const supported = [{ id: "claude", displayName: "Claude Code" }];
+    const claude = { id: "claude", displayName: "Claude Code", confidence: "confirmed", enabled: true };
+    const ready = [{ id: "claude", displayName: "Claude Code", confidence: "confirmed", ready: true, warnings: [] }];
+    let setUp = false;
+    let checks = 0;
+    await page.route("**/api/settings", (route) => route.fulfill({ json: {
+      harnesses: setUp
+        ? { supported, detected: [claude], active: [claude], guidance: [] }
+        : { supported, detected: [], active: [], guidance: ready },
+    } }));
+    // Agents re-renders when its config snapshot changes, so the snapshot follows setup too.
+    await page.route("**/api/config", (route) => route.fulfill({ json: {
+      ...realSnapshot,
+      machineHarnesses: setUp ? [claude] : [],
+      machineHarnessGuidance: setUp ? [] : ready,
+    } }));
+    await page.route("**/api/config/harnesses/refresh", (route) => {
+      checks += 1;
+      setUp = true;
+      return route.fulfill({ json: { ok: true, detected: ["claude"], newlyEnabled: [{ id: "claude", displayName: "Claude Code" }], applied: { ok: true } } });
+    });
+
+    await page.goto("/agents");
+    await expect(page.locator("#main portal-notice [data-slot=copy]").first()).toHaveText("Claude Code is set up.");
+    expect(checks).toBe(1);
+  });
+
+  test("puts Active Harnesses above its panel", async ({ page }) => {
+    const snapshot = await (await page.request.get("/api/config")).json();
+    snapshot.machineHarnesses = [{ id: "claude", enabled: true, confidence: "confirmed" }];
+    await page.route("**/api/config", (route) => route.fulfill({ json: snapshot }));
+    await page.goto("/agents");
+    await expect(page.locator(".config-files-section > h2")).toHaveText("Active Harnesses");
+    await expect(page.locator(".config-files-section > .panel")).toBeVisible();
+  });
+});
+
+test.describe("Tokens without captures", () => {
+  test("shows a focused empty page until the first capture", async ({ page }) => {
+    let hasCapture = false;
+    const demo = await (await page.request.get("/api/tokens/mock")).json();
+    await page.route("**/api/settings", (route) => route.fulfill({ json: {
+      telemetry: { enabled: true, captureAvailable: true },
+      harnesses: {
+        supported: [{ id: "claude", displayName: "Claude Code" }],
+        detected: [{ id: "claude", displayName: "Claude Code", confidence: "confirmed" }],
+        active: [{ id: "claude", displayName: "Claude Code", confidence: "confirmed" }],
+      },
+    } }));
+    await page.route("**/api/data", (route) => route.fulfill({
+      json: { ...demo, capture_count: hasCapture ? 1 : 0 },
+    }));
+
+    await page.goto("/tokens");
+    await expect(page.getByRole("heading", { name: "No token data yet" })).toBeVisible();
+    await expect(page.locator("#tokens-no-data p")).toContainText("Start a new session and we'll start tracking.");
+    await expect(page.locator("#tokenscontent")).toBeHidden();
+    await expect(page.locator("#tokensoff")).toBeHidden();
+
+    hasCapture = true;
+    await page.reload();
+    await expect(page.locator("#tokens-no-data")).toBeHidden();
+    await expect(page.locator("#tokenscontent")).toBeVisible();
+  });
+});
+
+test.describe("Codex telemetry hook warning", () => {
+  const codex = { id: "codex", displayName: "Codex", confidence: "confirmed", enabled: true };
+  const setupWith = (telemetryEnabled) => ({
+    repositories: { knownCount: 1, visibleCount: 1, autoDiscoveryEnabled: false, hasConfiguredSources: false },
+    harnesses: { supported: [codex], detected: [codex], active: [codex], guidance: [] },
+    telemetry: { enabled: telemetryEnabled, captureAvailable: telemetryEnabled },
+  });
+  const routeHookStatus = async (page, state) => {
+    const reads = [];
+    await page.route("**/api/config/hooks/codex/status", (route) => {
+      reads.push(route.request().url());
+      return route.fulfill({ json: { state, installed: 5 } });
+    });
+    return reads;
+  };
+
+  test("Settings, Tokens, and Home warn when Codex will not run the capture hooks; Agents does not", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith(true) }));
+    await routeHookStatus(page, "review_required");
+
+    await page.goto("/settings");
+    const settingsNotice = page.locator("#codex-hook-status portal-notice");
+    await expect(settingsNotice).toHaveClass(/notice-warning/);
+    await expect(settingsNotice.locator("[data-slot=title]")).toHaveText("Codex telemetry needs review");
+
+    await page.goto("/");
+    await expect(page.locator("#home-codex-hook-status [data-slot=title]")).toHaveText("Codex telemetry needs review");
+
+    await page.goto("/tokens");
+    await expect(page.locator("#tokens-codex-hook-status [data-slot=title]")).toHaveText("Codex telemetry needs review");
+
+    await page.goto("/agents");
+    await expect(page.getByRole("heading", { name: "Available Agent Tools" })).toBeVisible();
+    await expect(page.getByText("Codex telemetry needs review")).toHaveCount(0);
+  });
+
+  test("stays hidden, without asking Codex, while token tracking is off", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith(false) }));
+    const reads = await routeHookStatus(page, "review_required");
+    await page.goto("/settings");
+    await expect(page.locator("#telemetry-toggle")).toHaveText("Enable");
+    await page.goto("/");
+    await expect(page.locator("#home-harness-banner")).toBeHidden();
+    await expect(page.locator("#codex-hook-status, #home-codex-hook-status")).toBeHidden();
+    expect(reads).toHaveLength(0);
+  });
+
+  test("stays hidden when Codex runs the capture hooks", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith(true) }));
+    const reads = await routeHookStatus(page, "active");
+    await page.goto("/settings");
+    await expect.poll(() => reads.length).toBeGreaterThan(0);
+    await expect(page.locator("#codex-hook-status")).toBeHidden();
+  });
 });
 
 test.describe("repository-first portal Home", () => {
+  test("worktree rows show their state; Stop Server and Delete Worktree live in row menus", async ({ page }) => {
+    // Short enough that the card scrolls, so the open dropdown has a page to follow.
+    await page.setViewportSize({ width: 1280, height: 420 });
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    const removals = [];
+    let removal = { action: "removed" };
+    let removalHeld = null; // a promise the next removal response waits on, to observe the busy state
+    await page.route("**/api/repositories/*/worktrees/remove", async (route) => {
+      removals.push(route.request().postDataJSON());
+      await removalHeld;
+      await route.fulfill({ json: removal });
+    });
+    const stops = [];
+    await page.route("**/api/repositories/*/worktrees/stop-servers", async (route) => {
+      stops.push(route.request().postDataJSON());
+      await route.fulfill({ json: { action: "stopped", stopped: 1, reason: null } });
+    });
+    await patchRoboRepo(page, (repository) => {
+      repository.domains.plans = { status: "available", data: { active: [
+        { id: "idle-plan", key: "idle-plan", title: "Idle Story", worktree: "idle-tree", checkoutRootId: "idle-tree", taskCounts: { total: 1, complete: 0 } },
+      ], counts: { active: 1, backlog: 0 }, recent: [] } };
+      // Ten days behind origin/main: a Git warning on any branch still in progress.
+      const drift = { baseBranch: "origin/main", baseBehind: 30, baseMergeBaseAt: Math.floor(Date.now() / 1000) - 10 * 24 * 60 * 60 };
+      const worktree = (rootId, branch, state, extra = {}) => ({ rootId, name: branch, worktreeName: rootId, isWorktree: true, worktreeState: state, unmergedCommits: 3, git: { branch, provider: { ok: true } }, ...extra });
+      repository.domains.runtime = { status: "available", data: {
+        checkouts: [
+          { rootId: "main", name: "main", isWorktree: false, git: { branch: "main", provider: { ok: true } } },
+          worktree("idle-tree", "feature/idle", "idle", { projectRoot: "/private/trees/a-worktree-with-a-long-name-that-fills-the-dropdown", git: { branch: "feature/idle", dirty: true, ahead: 12, behind: 0, upstream: "origin/feature/idle", ...drift, provider: { ok: true } } }),
+          worktree("stale-tree", "feature/stale", "stale", { git: { branch: "feature/stale", shortHead: "abc1234", ...drift, provider: { ok: true } } }),
+          worktree("landed-tree", "feature/landed", "landed", { mergedInto: "main", git: { branch: "feature/landed", ...drift, provider: { ok: true } } }),
+          worktree("blocked-tree", "feature/blocked", "landed", { worktreeReason: "plan not closed" }),
+          worktree("guarded-tree", "feature/guarded", "landed", { worktreeReason: "uncommitted or untracked changes" }),
+          worktree("running-tree", "feature/running", "running", { worktreeRunning: true }),
+          worktree("app-tree", null, "idle", { projectRoot: "/private/app/runtime-row", git: { detached: true, shortHead: "d19c7b1", provider: { ok: true } } }),
+        ],
+        worktreeCleanup: null,
+      } };
+    });
+    await page.goto("/");
+    const card = roboRepoCard(page);
+    // No port says nothing runs; the row does not spell out "idle".
+    await expect(card.getByText("idle", { exact: true })).toHaveCount(0);
+    // Only a worktree no plan claims has a ⋮ cell; a plan's row keeps its actions in its dropdown.
+    await expect(planRowOf(card, "Idle Story").locator(".worktree-row-menu")).toBeHidden();
+    await expect(checkoutRow(card, "feature/stale").locator(".worktree-row-menu")).toBeVisible();
+    await expect(checkoutRow(card, "feature/stale").getByText("stale", { exact: true })).toBeVisible();
+    const merged = checkoutRow(card, "feature/landed").getByText("merged", { exact: true });
+    await expect(merged).toBeVisible();
+    await expect(merged).toHaveAttribute("title", "Merged into main");
+    await expect(checkoutRow(card, "feature/landed").locator(".worktree-state-note")).toBeHidden();
+    // A listed merged worktree already implies its plan is open, so that guard adds no note.
+    await expect(checkoutRow(card, "feature/blocked").getByText("merged", { exact: true })).toBeVisible();
+    await expect(checkoutRow(card, "feature/blocked").locator(".worktree-state-note")).toBeHidden();
+    await expect(checkoutRow(card, "feature/guarded").getByText("uncommitted or untracked changes")).toBeVisible();
+    await expect(checkoutRow(card, "runtime-row (detached)")).toHaveCount(1);
+    await expect(card.getByRole("button", { name: /^(Delete|Stop)/ })).toHaveCount(0);
+    // A merged row drops the Git warning a branch in progress shows.
+    await expect(checkoutRow(card, "feature/stale").locator(".git-drift")).toBeVisible();
+    await expect(checkoutRow(card, "feature/landed").locator(".git-drift")).toBeHidden();
+
+    await card.getByRole("button", { name: "Actions for feature/running" }).click();
+    await expect(card.getByRole("button", { name: "Stop Server" }).locator('portal-icon[name="stop"]')).toHaveCount(1);
+    await expect(card.getByRole("button", { name: "Delete Worktree" }).locator('portal-icon[name="trash"]')).toHaveCount(1);
+    await card.getByRole("button", { name: "Stop Server" }).click();
+    expect(stops).toEqual([{ branch: "feature/running" }]);
+
+    const dialog = page.getByRole("dialog", { name: "Delete worktree" });
+    await card.getByRole("button", { name: "Actions for feature/running" }).click();
+    await card.getByRole("button", { name: "Delete Worktree" }).click();
+    await expect(dialog).toContainText("Something is running in this worktree.");
+    // A running worktree's deletion is not routine: the confirmation turns red.
+    await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "danger");
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+
+    await card.getByRole("button", { name: "Actions for feature/stale" }).click();
+    await expect(card.getByRole("button", { name: "Stop Server" })).toHaveCount(0);
+    await expect(card.getByRole("button", { name: "Delete Worktree" })).toHaveClass(/menu-item-danger/);
+    await card.getByRole("button", { name: "Delete Worktree" }).click();
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText("its local branch, feature/stale.");
+    await expect(dialog).toContainText("It has 3 commits that were never merged. A backup is kept so you can bring them back.");
+    // The archive ref and restore commands sit behind Details, out of the way until asked for.
+    const restore = dialog.locator("[data-slot=restore]");
+    await expect(restore).toBeHidden();
+    await dialog.getByText("Details and how to restore").click();
+    await expect(restore).toHaveText("git branch feature/stale refs/roborepo/abandoned/feature/stale-abc1234\ngit worktree add <folder> feature/stale");
+    await expect(dialog.getByText("Something is running in this worktree.")).toBeHidden();
+    // A stale worktree is routine cleanup: the confirmation stays green.
+    await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "cta");
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(dialog).toBeHidden();
+    await card.getByRole("button", { name: "Actions for feature/landed" }).click();
+    await card.getByRole("button", { name: "Delete Worktree" }).click();
+    await expect(dialog).toContainText("Its changes are already merged into main, so nothing is lost.");
+    await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "cta");
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    expect(removals).toEqual([]);
+
+    removal = { action: "kept", reason: "uncommitted or untracked changes" };
+    let release;
+    removalHeld = new Promise((resolve) => { release = resolve; });
+    await card.getByRole("button", { name: "Actions for feature/stale" }).click();
+    await card.getByRole("button", { name: "Delete Worktree" }).click();
+    const confirm = dialog.locator("[data-slot=confirm]");
+    await confirm.click();
+    // While the request runs the confirm button spins and every dialog button is disabled.
+    await expect(confirm).toBeDisabled();
+    await expect(confirm).toHaveAttribute("aria-busy", "true");
+    await expect(confirm.locator(".button-spinner")).toHaveCount(1);
+    await expect(confirm).toHaveText("Deleting…");
+    await expect(dialog.getByRole("button", { name: "Cancel" })).toBeDisabled();
+    release();
+    removalHeld = null;
+    await expect(dialog).toContainText("uncommitted or untracked changes");
+    await expect(confirm).toBeEnabled();
+    await expect(confirm).toHaveText("Delete worktree");
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+
+    removal = { action: "removed" };
+    // The plan's dropdown: one status line, then the same drift warning the row shows.
+    const rowWarning = await planRowOf(card, "Idle Story").locator(".git-drift").textContent();
+    await card.getByRole("button", { name: "Worktree details for Idle Story" }).click();
+    const details = page.locator(".worktree-details");
+    await expect(details.getByText("dirty · 12 ahead · 0 behind remote", { exact: true })).toBeVisible();
+    // The row prefixes its warning with ⚠; the dropdown puts icons in a gutter instead — GitHub on the
+    // status line, a warning glyph on each warning — so every line's text shares one left edge.
+    await expect(details.locator(".git-drift")).toHaveText([rowWarning.replace(/^⚠\s*/, "")]);
+    await expect(details.locator(".worktree-detail-fact").first().locator("portal-icon")).toHaveAttribute("name", "github");
+    await expect(details.locator(".git-drift portal-icon")).toHaveAttribute("name", "warning");
+    await expect(details.getByRole("button", { name: "Delete Worktree" })).toHaveClass(/menu-item-danger/);
+    // Every dropdown and menu shares one surface.
+    const surfaces = await page.evaluate(() => {
+      const background = (selector) => getComputedStyle(document.querySelector(selector)).backgroundColor;
+      return [background(".menu-button-panel"), getComputedStyle(document.documentElement).getPropertyValue("--popover-bg").trim()];
+    });
+    expect(surfaces[0]).not.toBe("rgba(0, 0, 0, 0)");
+    expect(await page.evaluate((color) => { const probe = document.createElement("div"); probe.style.color = color; document.body.append(probe); const value = getComputedStyle(probe).color; probe.remove(); return value; }, surfaces[1])).toBe(surfaces[0]);
+    // A copy confirms in place without changing the panel's width.
+    const panel = page.locator(".menu-button-panel");
+    const width = (await panel.boundingBox()).width;
+    await details.getByRole("button", { name: "Copy worktree path" }).click();
+    await expect(details.locator("portal-copy-button[copied]")).toHaveCount(1);
+    expect((await panel.boundingBox()).width).toBe(width);
+    // The open dropdown scrolls with the page, staying attached to its trigger.
+    const trigger = card.getByRole("button", { name: "Worktree details for Idle Story" });
+    const gap = async () => (await panel.boundingBox()).y - (await trigger.boundingBox()).y;
+    const before = await gap();
+    const triggerTop = (await trigger.boundingBox()).y;
+    await page.evaluate(() => window.scrollBy(0, 120));
+    await expect.poll(async () => Math.round((await trigger.boundingBox()).y)).toBeLessThan(Math.round(triggerTop));
+    await expect.poll(async () => Math.round(await gap())).toBe(Math.round(before));
+    await expect(page.getByRole("button", { name: "Stop Server" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Delete Worktree" }).locator('portal-icon[name="trash"]')).toHaveCount(1);
+    await page.getByRole("button", { name: "Delete Worktree" }).click();
+    await expect(dialog).toContainText('The active plan "Idle Story" is still using this worktree.');
+    await expect(dialog).toContainText("The plan's progress recorded in this worktree will no longer be shown in Plans.");
+    await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "danger");
+    // Details start folded each time the dialog opens.
+    await expect(dialog.locator("[data-slot=restore]")).toBeHidden();
+    await dialog.getByRole("button", { name: "Delete worktree" }).click();
+    await expect(dialog).toBeHidden();
+    expect(removals).toEqual([{ branch: "feature/stale" }, { branch: "feature/idle" }]);
+    // The deletion's follow-up refresh may still be in flight through the patched route.
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+  });
+
+  test("the cleanup notice confirms a folder and turns on the hook, or shows the line for another tool's hook", async ({ page }) => {
+    const requests = [];
+    let enabled = { action: "installed" };
+    let offered = true;
+    await page.route("**/api/repositories/*/worktree-cleanup/*", async (route) => {
+      const action = new URL(route.request().url()).pathname.split("/").at(-1);
+      requests.push({ action, body: route.request().postDataJSON() });
+      if (action === "dismiss") offered = false;
+      await route.fulfill({ json: action === "enable" ? enabled : { action: "dismissed" } });
+    });
+    await patchRoboRepo(page, (repository) => {
+      repository.domains.runtime = { status: "available", data: {
+        checkouts: [
+          { rootId: "main", name: "main", isWorktree: false, git: { branch: "main", provider: { ok: true } } },
+          { rootId: "tree", name: "feature/tree", worktreeName: "tree", isWorktree: true, worktreeState: "idle", git: { branch: "feature/tree", provider: { ok: true } } },
+        ],
+        worktreeCleanup: { offered, hook: "absent", hookReason: null, folder: null, folderSource: null, proposedFolder: "/private/trees", dismissed: false },
+      } };
+    });
+    await page.goto("/");
+    const card = roboRepoCard(page);
+    const notice = card.getByRole("note");
+    await expect(notice).toContainText("Automatic worktree cleanup is off");
+    const dialog = page.getByRole("dialog", { name: "Turn on automatic cleanup" });
+    await notice.getByRole("button", { name: "Turn on automatic cleanup" }).click();
+    await expect(dialog.getByRole("textbox", { name: "Worktree folder" })).toHaveValue("/private/trees");
+    await dialog.getByRole("button", { name: "Turn on" }).click();
+    await expect(dialog).toBeHidden();
+    expect(requests.at(-1)).toEqual({ action: "enable", body: { folder: "/private/trees" } });
+
+    enabled = { action: "foreign hook", hook: "/private/repo/.git/hooks/post-merge", line: "nohup roborepo-cleanup &" };
+    await notice.getByRole("button", { name: "Turn on automatic cleanup" }).click();
+    await dialog.getByRole("button", { name: "Turn on" }).click();
+    await expect(dialog).toContainText("nohup roborepo-cleanup &");
+    await dialog.getByRole("button", { name: "Done" }).click();
+    await expect(dialog).toBeHidden();
+
+    await notice.getByRole("button", { name: "Dismiss" }).click();
+    await expect(card.getByRole("note")).toHaveCount(0);
+    expect(requests.at(-1).action).toBe("dismiss");
+    // The dismissal's follow-up refresh may still be in flight through the patched route.
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+  });
+
   test("Home renders the canonical repository directory", async ({ page }) => {
     const response = await page.goto("/");
     expect(response.status()).toBe(200);
@@ -91,12 +430,12 @@ test.describe("repository-first portal Home", () => {
     await expect(noApp.getByRole("button", { name: "Links" })).toHaveCount(0);
 
     const notStarted = planRowOf(card, "Plan C");
-    await expect(notStarted.locator(".plan-match-badge")).toHaveText("not started");
-    await expect(notStarted.locator(".plan-match-badge")).toHaveAttribute("title", "No worktree is associated with this plan");
-    const notRunning = planRowOf(card, "Plan D");
-    await expect(notRunning.locator(".plan-match-badge")).toHaveText("worktree not running");
-    await expect(notRunning.locator(".plan-match-badge")).toHaveAttribute("title", 'Home has no running checkout for worktree "gone"');
-    for (const row of [notStarted, notRunning]) {
+    await expect(notStarted.locator(".plan-match-badge")).toHaveText("no worktree");
+    await expect(notStarted.locator(".plan-match-badge")).toHaveAttribute("title", "This plan names no worktree");
+    const missing = planRowOf(card, "Plan D");
+    await expect(missing.locator(".plan-match-badge")).toHaveText("worktree missing");
+    await expect(missing.locator(".plan-match-badge")).toHaveAttribute("title", 'No worktree named "gone" exists in this repo');
+    for (const row of [notStarted, missing]) {
       await expect(row.getByRole("link")).toHaveCount(0);
       await expect(row.getByRole("button", { name: "Links" })).toHaveCount(0);
     }
@@ -110,13 +449,15 @@ test.describe("repository-first portal Home", () => {
 
     // No repository-wide plan counts row: backlog counts were noise on Home.
     await expect(card).not.toContainText("backlog");
-    await expect(card.getByRole("heading", { name: "Token Warnings" })).toBeVisible();
-    await expect(card).toContainText(/8 warnings from \d{2}\/\d{2} to \d{2}\/\d{2}/);
+    const warningsHeading = card.getByRole("heading", { name: "Recent Token Warnings" });
+    await expect(warningsHeading).toBeVisible();
+    await expect(warningsHeading).toHaveAttribute("title", /8 warnings from \d{2}\/\d{2} to \d{2}\/\d{2}/);
     await expect(card.getByRole("list", { name: "Token warnings" }).getByRole("listitem")).toHaveText([
       "3 token spikes and 2 repeated tool loops in gpt-5-codex",
       "3 repeated tool loops in claude-opus-4-8",
     ]);
-    await expect(card.getByRole("link", { name: "all activity", exact: true })).toHaveAttribute("href", "/tokens");
+    // The warnings are this repository's, so the link opens Tokens scoped to it.
+    await expect(card.getByRole("link", { name: "all activity", exact: true })).toHaveAttribute("href", /^\/tokens\?repo=[a-z0-9-]+$/);
     await expect(card.locator(".home-domain-row.is-warning")).toHaveCount(1);
     await expect(card.locator(".status-dot")).toHaveCount(0);
   });
@@ -129,11 +470,12 @@ test.describe("repository-first portal Home", () => {
     await card.getByRole("button", { name: "Worktree details for Plan A" }).click();
     const panel = card.locator(".worktree-details");
     // The worktree is identified by its path alone; its name was the path's last segment repeated.
-    await expect(panel.locator(".worktree-detail-value")).toHaveText(["feature/a", "/private/wt/feature-a"]);
+    // The plan path points at the plan's copy inside that worktree.
+    await expect(panel.locator(".worktree-detail-value")).toHaveText(["feature/a", "/private/wt/feature-a", "/private/wt/feature-a/docs/plans/active/plan-a.md"]);
     await expect(panel.getByRole("list", { name: "Worktree status" }).getByRole("listitem")).toHaveText([
-      "dirty", "0 ahead, 3 behind origin/feature/a", "4 commits behind main",
+      "dirty · 0 ahead", "3 behind remote",
     ]);
-    for (const name of ["Copy branch name", "Copy worktree path"]) {
+    for (const name of ["Copy branch name", "Copy worktree path", "Copy plan path"]) {
       await expect(panel.getByRole("button", { name })).toHaveCount(1);
     }
     await expect(panel.getByRole("button", { name: "Copy worktree name" })).toHaveCount(0);
@@ -141,17 +483,20 @@ test.describe("repository-first portal Home", () => {
     await panel.getByRole("button", { name: "Copy worktree path" }).click();
     const row = panel.locator(".worktree-detail-row").nth(1);
     await expect(panel).toBeVisible();
-    await expect(row).toHaveText("Copied", { useInnerText: true });
-    await expect(row.getByText("/private/wt/feature-a", { exact: true })).toBeHidden();
+    // The value stays put and the button confirms with its check alone, so the panel keeps its width.
+    await expect(row.locator("portal-copy-button[copied]")).toHaveCount(1);
+    await expect(row).toHaveText("/private/wt/feature-a", { useInnerText: true });
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("/private/wt/feature-a");
-    // The shared confirmation interval (5 s), then the value returns.
-    await expect(row.getByText("/private/wt/feature-a", { exact: true })).toBeVisible({ timeout: 8_000 });
-    await expect(row).not.toContainText("Copied");
+    // The shared confirmation interval (5 s), then the button returns to idle.
+    await expect(row.locator("portal-copy-button[copied]")).toHaveCount(0, { timeout: 8_000 });
 
-    // Closing the panel mid-confirmation resets the button, so reopening shows the value, not a stuck
-    // "Copied".
+    await panel.getByRole("button", { name: "Copy plan path" }).click();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("/private/wt/feature-a/docs/plans/active/plan-a.md");
+
+    // Closing the panel mid-confirmation resets the button, so reopening shows an idle copy button,
+    // not a stuck confirmation.
     await panel.getByRole("button", { name: "Copy branch name" }).click();
-    await expect(panel.locator(".worktree-detail-row").first()).toHaveText("Copied", { useInnerText: true });
+    await expect(panel.locator(".worktree-detail-row").first().locator("portal-copy-button[copied]")).toHaveCount(1);
     await page.keyboard.press("Escape");
     await expect(panel).toHaveCount(0);
     await card.getByRole("button", { name: "Worktree details for Plan A" }).click();
@@ -160,8 +505,35 @@ test.describe("repository-first portal Home", () => {
 
     await page.keyboard.press("Escape");
     await card.getByRole("button", { name: "Worktree details for Plan B" }).click();
+    // Without a resolved worktree path there is no plan path to build, so that row is left out.
     await expect(card.locator(".worktree-details .worktree-detail-value")).toHaveText(["feature/b", "feature-b"]);
     await expect(card.locator(".worktree-details").getByRole("list", { name: "Worktree status" })).toBeHidden();
+  });
+
+  test("once a plan's worktree has merged, the plan path points at the main checkout's copy", async ({ page }) => {
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await planFixture(page, (repository) => {
+      const checkouts = repository.domains.runtime.data.checkouts;
+      checkouts.find((checkout) => checkout.rootId === "main").projectRoot = "/private/repo";
+      Object.assign(checkouts.find((checkout) => checkout.rootId === "matched"), { worktreeState: "landed", mergedInto: "main" });
+    });
+    await page.goto("/");
+    const card = roboRepoCard(page);
+    await card.getByRole("button", { name: "Worktree details for Plan A" }).click();
+    const panel = card.locator(".worktree-details");
+    await expect(panel.locator(".worktree-detail-value")).toHaveText(["feature/a", "/private/wt/feature-a", "/private/repo/docs/plans/active/plan-a.md"]);
+    await panel.getByRole("button", { name: "Copy plan path" }).click();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("/private/repo/docs/plans/active/plan-a.md");
+  });
+
+  test("a merged worktree with no main checkout path shows no plan path rather than the stale worktree copy", async ({ page }) => {
+    await planFixture(page, (repository) => {
+      Object.assign(repository.domains.runtime.data.checkouts.find((checkout) => checkout.rootId === "matched"), { worktreeState: "landed", mergedInto: "main" });
+    });
+    await page.goto("/");
+    const card = roboRepoCard(page);
+    await card.getByRole("button", { name: "Worktree details for Plan A" }).click();
+    await expect(card.locator(".worktree-details .worktree-detail-value")).toHaveText(["feature/a", "/private/wt/feature-a"]);
   });
 
   test("a long worktree path is middle-truncated to 50 characters, and copies and titles in full", async ({ page }) => {
@@ -178,6 +550,13 @@ test.describe("repository-first portal Home", () => {
     await expect(value).toHaveAttribute("title", longPath);
     await card.getByRole("button", { name: "Copy worktree path" }).click();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(longPath);
+
+    const planPath = `${longPath}/docs/plans/active/plan-a.md`;
+    const planValue = card.locator(".worktree-details .worktree-detail-value").nth(2);
+    await expect(planValue).toHaveText(/^.{50}$/);
+    await expect(planValue).toHaveAttribute("title", planPath);
+    await card.getByRole("button", { name: "Copy plan path" }).click();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(planPath);
   });
 
   test("without active plans, or without Plans data, linked worktrees render as before", async ({ page }) => {
@@ -203,7 +582,24 @@ test.describe("repository-first portal Home", () => {
     await page.goto("/");
     const card = roboRepoCard(page);
     await expect(cardRows(card)).toHaveText([/No known checkout/, /Plan A/, /Plan B/, /Plan C/, /Plan D/], { useInnerText: true });
-    await expect(card.locator(".plan-match-badge")).toHaveText(["worktree not running", "worktree not running", "not started", "worktree not running"]);
+    // These plans carry no worktreeState from the server, so a named worktree reads as unknown.
+    await expect(card.locator(".plan-match-badge")).toHaveText(["worktree status unknown", "worktree status unknown", "no worktree", "worktree missing"]);
+  });
+
+  test("an unmatched plan's badge names its worktree state", async ({ page }) => {
+    let state;
+    await planFixture(page, (repository) => { repository.domains.plans.data.active.find((plan) => plan.id === "d").worktreeState = state; });
+    for (const [worktreeState, text, title] of [
+      ["unlisted", "worktree not listed", 'Worktree "gone" exists, but Runtime does not list it'],
+      ["ambiguous", "worktree ambiguous", 'Worktree "gone" is claimed by another active plan or matches more than one checkout'],
+      ["unknown", "worktree status unknown", 'Home cannot tell whether worktree "gone" is running'],
+    ]) {
+      state = worktreeState;
+      await page.goto("/");
+      const badge = planRowOf(roboRepoCard(page), "Plan D").locator(".plan-match-badge");
+      await expect(badge).toHaveText(text);
+      await expect(badge).toHaveAttribute("title", title);
+    }
   });
 
   test("Home Links renders its glyph, discovers routes and closes with Escape", async ({ page }) => {
@@ -249,6 +645,111 @@ test.describe("repository-first portal Home", () => {
     expect(infoButtonGrid.row).toBe("1");
   });
 
+  test("Home finishes setting up a launched harness without a click and confirms it", async ({ page }) => {
+    const supported = [{ id: "claude", displayName: "Claude Code" }, { id: "codex", displayName: "Codex" }];
+    const claude = { id: "claude", displayName: "Claude Code", confidence: "confirmed", enabled: true };
+    let setUp = false;
+    let checks = 0;
+    await page.route("**/api/settings", (route) => route.fulfill({ json: {
+      repositories: { knownCount: 1, visibleCount: 1, autoDiscoveryEnabled: false, hasConfiguredSources: false },
+      harnesses: setUp
+        ? { supported, detected: [claude], active: [claude], guidance: [] }
+        : { supported, detected: [], active: [], guidance: [{ id: "claude", displayName: "Claude Code", confidence: "confirmed", ready: true, warnings: [] }] },
+      telemetry: { enabled: false, captureAvailable: false },
+    } }));
+    let finishSetup;
+    const setupFinished = new Promise((resolve) => { finishSetup = resolve; });
+    await page.route("**/api/config/harnesses/refresh", async (route) => {
+      checks += 1;
+      await setupFinished;
+      setUp = true;
+      return route.fulfill({ json: { ok: true, detected: ["claude"], newlyEnabled: [{ id: "claude", displayName: "Claude Code" }], applied: { ok: true } } });
+    });
+    await page.goto("/");
+    const banner = page.locator("#home-harness-banner portal-notice");
+    await expect(banner.locator("[data-slot=copy]")).toHaveText("Setting up Claude Code…");
+    await expect(banner.locator(".harness-check-spinner")).toBeVisible();
+    await expect(banner.getByRole("button")).toHaveCount(0);
+    finishSetup();
+    await expect(banner).toHaveClass(/notice-success/);
+    await expect(banner.locator("[data-notice-icon] portal-icon")).toHaveAttribute("name", "check");
+    await expect(banner.locator("[data-slot=copy]")).toHaveText("Claude Code is set up.");
+    await expect(banner.getByRole("button")).toHaveCount(0);
+    expect(checks).toBe(1);
+  });
+
+  test("Home notices a launch while waiting and finishes setup without a reload", async ({ page }) => {
+    await page.clock.install();
+    const supported = [{ id: "claude", displayName: "Claude Code" }];
+    const claude = { id: "claude", displayName: "Claude Code", confidence: "confirmed", enabled: true };
+    let launched = false;
+    let setUp = false;
+    await page.route("**/api/settings", (route) => route.fulfill({ json: {
+      repositories: { knownCount: 1, visibleCount: 1, autoDiscoveryEnabled: false, hasConfiguredSources: false },
+      harnesses: setUp
+        ? { supported, detected: [claude], active: [claude], guidance: [] }
+        : { supported, detected: [], active: [], guidance: [launched
+          ? { id: "claude", displayName: "Claude Code", confidence: "confirmed", ready: true, warnings: [] }
+          : { id: "claude", displayName: "Claude Code", confidence: "probable", warnings: ["Launch Claude Code once, then run roborepo update."] }] },
+      telemetry: { enabled: false, captureAvailable: false },
+    } }));
+    await page.route("**/api/config/harnesses/refresh", (route) => {
+      setUp = true;
+      return route.fulfill({ json: { ok: true, detected: ["claude"], newlyEnabled: [{ id: "claude", displayName: "Claude Code" }], applied: { ok: true } } });
+    });
+    await page.goto("/");
+    const banner = page.locator("#home-harness-banner portal-notice");
+    await expect(banner.locator("[data-slot=copy]")).toHaveText("Launch Claude Code once. RoboRepo will finish setting it up.");
+
+    launched = true;
+    await page.clock.runFor(10_000);
+    await expect(banner.locator("[data-slot=copy]")).toHaveText("Claude Code is set up.");
+  });
+
+  test("Home reports a setup that could not finish and does not retry on its own", async ({ page }) => {
+    let checks = 0;
+    await page.route("**/api/settings", (route) => route.fulfill({ json: {
+      repositories: { knownCount: 1, visibleCount: 1, autoDiscoveryEnabled: false, hasConfiguredSources: false },
+      harnesses: {
+        supported: [{ id: "claude", displayName: "Claude Code" }],
+        detected: [],
+        active: [],
+        guidance: [{ id: "claude", displayName: "Claude Code", confidence: "confirmed", ready: true, warnings: [] }],
+      },
+      telemetry: { enabled: false, captureAvailable: false },
+    } }));
+    await page.route("**/api/config/harnesses/refresh", (route) => {
+      checks += 1;
+      return route.fulfill({ json: { ok: true, detected: ["claude"], newlyEnabled: [{ id: "claude", displayName: "Claude Code" }], applied: { ok: false, error: "installer exited 1\nstack" } } });
+    });
+    await page.goto("/");
+    const banner = page.locator("#home-harness-banner portal-notice");
+    await expect(banner.locator("[data-slot=copy]")).toHaveText("RoboRepo couldn't finish setting up Claude Code. Run roborepo update in a terminal to see why.");
+    await expect(banner.locator("[data-slot=result]")).toHaveText("installer exited 1");
+    await expect(banner.getByRole("button", { name: "Try again" })).toBeVisible();
+    expect(checks).toBe(1);
+  });
+
+  test("a harness waiting on the user names it, and a check that finds nothing says why", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: {
+      repositories: { knownCount: 1, visibleCount: 1, autoDiscoveryEnabled: false, hasConfiguredSources: false },
+      harnesses: {
+        supported: [{ id: "claude", displayName: "Claude Code" }, { id: "codex", displayName: "Codex" }],
+        detected: [],
+        active: [],
+        guidance: [{ id: "claude", displayName: "Claude Code", confidence: "probable", warnings: ["Launch Claude Code once, then run roborepo update."] }],
+      },
+      telemetry: { enabled: false, captureAvailable: false },
+    } }));
+    await page.route("**/api/config/harnesses/refresh", (route) => route.fulfill({ json: { ok: true, detected: [], newlyEnabled: [], applied: null } }));
+    await page.goto("/");
+    const banner = page.locator("#home-harness-banner portal-notice");
+    await expect(banner.locator("[data-slot=copy]")).toHaveText("Launch Claude Code once. RoboRepo will finish setting it up.");
+    await expect(banner.locator("[data-slot=supported]")).toHaveCount(0);
+    await banner.getByRole("button", { name: "Check now" }).click();
+    await expect(page.locator("#home-harness-banner [data-slot=result]")).toHaveText("Claude Code hasn't been launched yet.");
+  });
+
   test("Settings renders shared setup controls and can check for harness installs", async ({ page }) => {
     await page.route("**/api/repositories/sources", (route) => route.fulfill({ json: {
       revision: 1,
@@ -267,7 +768,10 @@ test.describe("repository-first portal Home", () => {
       telemetry: { enabled: false, captureAvailable: false },
     } }));
     await page.goto("/settings");
-    await expect(page.locator('nav a[aria-label="Settings"] portal-icon svg')).toBeVisible();
+    await expect(page.locator("#nav .overflow-more-trigger")).toHaveClass(/\bactive\b/);
+    await page.locator("#nav .overflow-more-trigger").click();
+    await expect(page.locator('#nav-more-panel a[aria-current="page"] portal-icon[name="settings"] svg')).toBeVisible();
+    await page.keyboard.press("Escape");
     await expect(page.getByRole("heading", { level: 2, name: "Repos" })).toBeVisible();
     await expect(page.getByRole("heading", { level: 2, name: "Agent Harnesses" })).toBeVisible();
     await expect(page.getByRole("heading", { level: 2, name: "Token Activity Tracking" })).toBeVisible();
@@ -379,16 +883,48 @@ test.describe("repository-first portal Home", () => {
     }
   });
 
-  test("global navigation remains the static five-item manifest", async ({ page }) => {
+  test("global navigation keeps primary pages in the bar and the rest in the ⋮ menu", async ({ page }) => {
     await page.goto("/");
-    const labels = await page.locator("#nav a").allTextContents();
-    expect(labels.map((label) => label.trim())).toEqual(NAV_ORDER);
+    await expect(page.locator("#nav > a")).toHaveText(NAV_PRIMARY);
+    const trigger = page.locator("#nav .overflow-more-trigger");
+    const panel = page.locator("#nav-more-panel");
+    await expect(panel).toBeHidden();
+    await trigger.click();
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+    await expect(panel.locator("a:visible")).toHaveText(NAV_SECONDARY);
+    // Outside click and Escape both close it; Escape hands focus back to the trigger.
+    await page.locator("main").click({ position: { x: 5, y: 5 } });
+    await expect(panel).toBeHidden();
+    await trigger.click();
+    await page.keyboard.press("Escape");
+    await expect(panel).toBeHidden();
+    await expect(trigger).toBeFocused();
+    await expect(trigger).toHaveAttribute("aria-expanded", "false");
+
     for (const { path, active } of ROUTES) {
       const response = await page.goto(path);
       expect(response.status()).toBe(200);
-      await expect(page.locator("#nav a.active")).toHaveText(active);
-      await expect(page.locator("#nav a.active")).toHaveCount(1);
+      const secondary = NAV_SECONDARY.includes(active);
+      // A primary page is current in the bar and in the menu's narrow-screen copy; a secondary page
+      // is current only in the menu, so the trigger carries the highlight in the bar.
+      await expect(page.locator("#nav a.active")).toHaveText(secondary ? [active] : [active, active]);
+      if (secondary) await expect(trigger).toHaveClass(/\bactive\b/);
+      else await expect(trigger).not.toHaveClass(/\bactive\b/);
     }
+  });
+
+  test("a narrow viewport moves every page into the ⋮ menu", async ({ page }) => {
+    await page.setViewportSize({ width: 420, height: 780 });
+    await page.goto("/");
+    await expect(page.locator("#nav > a:visible")).toHaveCount(0);
+    await page.locator("#nav .overflow-more-trigger").click();
+    const links = page.locator("#nav-more-panel a:visible");
+    await expect(links).toHaveText(NAV_ORDER);
+    const panel = await page.locator("#nav-more-panel").boundingBox();
+    expect(panel.x).toBeGreaterThanOrEqual(0);
+    expect(panel.x + panel.width).toBeLessThanOrEqual(420);
+    await links.filter({ hasText: "Plans" }).click();
+    await expect(page).toHaveURL(/\/plans$/);
   });
 
   test("the content column stays centered and the card responds at mobile width", async ({ page }) => {
@@ -410,6 +946,7 @@ test.describe("repository-first portal Home", () => {
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     await page.locator("#theme-toggle").click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await page.locator("#nav .overflow-more-trigger").click();
     await page.locator("#nav").getByRole("link", { name: "Runtime", exact: true }).click();
     await expect(page).toHaveURL(/\/runtime$/);
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
@@ -432,36 +969,49 @@ test.describe("repository-first portal Home", () => {
     const logo = await focusSummary(page);
     expect(logo.ariaLabel).toBe("roborepo home");
     expect(logo.visible).toBe(true);
-    for (const expected of NAV_ORDER) {
+    for (const expected of NAV_PRIMARY) {
       await page.keyboard.press("Tab");
       const focused = await focusSummary(page);
       expect(focused.text).toBe(expected);
       expect(focused.visible).toBe(true);
     }
+    // The closed ⋮ menu is one stop; its links stay out of the tab order until it opens.
+    await page.keyboard.press("Tab");
+    const more = await focusSummary(page);
+    expect(more.ariaLabel).toBe("More pages");
+    expect(more.visible).toBe(true);
     // The compact Enable prompt now sits above the Active Repos section, so its action comes before
-    // the heading's Manage repositories action and both come before the first card.
-    for (const expected of ["Auto-discover active repos", "Manage Repos"]) {
-      await page.keyboard.press("Tab");
-      const focused = await focusSummary(page);
-      expect(focused.text).toBe(expected);
-      expect(focused.visible).toBe(true);
-    }
+    // the title's Manage repositories icon and both come before the first card.
+    await page.keyboard.press("Tab");
+    const enable = await focusSummary(page);
+    expect(enable.text).toBe("Auto-discover active repos");
+    expect(enable.visible).toBe(true);
+    // Manage Repos is an icon-only link beside the title, so it is named by its aria-label.
+    await page.keyboard.press("Tab");
+    const manage = await focusSummary(page);
+    expect(manage.ariaLabel).toBe("Manage Repos");
+    expect(manage.visible).toBe(true);
     await page.keyboard.press("Tab");
     // Repository names are plain text while the detail page is parked, so the first card control is
     // the provider link (when the repository has one) or the actions menu.
     const firstCardControl = await focusSummary(page);
     expect(["GitHub", "Actions"]).toContain(firstCardControl.ariaLabel);
     expect(firstCardControl.visible).toBe(true);
+    // Home's harness-banner request for /api/settings is never awaited here, so on a slow runner it
+    // can still be in flight through the patched route when the test ends.
+    await page.unrouteAll({ behavior: "ignoreErrors" });
   });
 
-  test("repository row exposes the configured Home actions", async ({ page }) => {
+  test("repo row exposes the configured Home actions", async ({ page }) => {
     await page.goto("/");
     await roboRepoCard(page).getByRole("button", { name: "Actions" }).click();
     const menu = roboRepoCard(page).locator(".menu-panel");
-    await expect(menu.locator("> *")).toHaveText(["Forget This Repo", "Pin", "Repo Agent Configcoming soon"]);
-    const agents = menu.getByRole("button", { name: /Repo Agent Config/ });
-    await expect(agents).toBeDisabled();
-    await expect(agents.locator(".menu-item-hint")).toHaveText("coming soon");
+    await expect(menu.locator("> *")).toHaveText(["All Plans", "Agent Config", "Token Activity", "Pin", "Forget This Repo"]);
+    // The page links open each page already filtered to this repo.
+    for (const [name, path] of [["All Plans", "/plans"], ["Agent Config", "/agents"], ["Token Activity", "/tokens"]]) {
+      await expect(menu.getByRole("link", { name })).toHaveAttribute("href", new RegExp(`^${path}\\?repo=[a-z0-9-]+$`));
+    }
+    await expect(menu.locator("portal-icon")).toHaveCount(5);
     await expect(page.locator("#home-content").getByRole("link", { name: "Agents", exact: true })).toHaveCount(0);
   });
 });
@@ -510,6 +1060,24 @@ test.describe("shared plan drawer", () => {
     await expect(drawer).toBeVisible();
     await expect(drawer.locator("#drawer-title")).toHaveText("Drawer fixture plan");
     await expect(drawer.locator("plan-status option-dropdown").first()).toBeVisible();
+    await expect(drawer.locator("#drawer-meta")).not.toContainText("From worktree");
+  });
+
+  test("the drawer says when an active plan is read from its worktree", async ({ page }) => {
+    await page.route("**/api/plans", async (route) => {
+      const data = await (await route.fetch()).json();
+      data.planWritePackage = { ...data.planWritePackage, available: true, enabled: true };
+      await route.fulfill({ json: data });
+    });
+    await page.route("**/api/plans/document?*", async (route) => {
+      const doc = await (await route.fetch()).json();
+      doc.plan.plan.authority = { source: "worktree", worktree: "feature-x" };
+      await route.fulfill({ json: doc });
+    });
+    await page.goto("/plans");
+    await page.getByText("Drawer fixture plan").first().click();
+    const drawer = page.locator("dialog#drawer");
+    await expect(drawer.locator("#drawer-meta")).toContainText("From worktree feature-x");
   });
 
   test("a Home plan title opens the same drawer, read-only, without leaving Home", async ({ page }) => {
@@ -529,7 +1097,7 @@ test.describe("shared plan drawer", () => {
     await expect(drawer.locator("#drawer-title")).toHaveText("Drawer fixture plan");
     await expect(drawer.locator("#drawer-tasks li")).toHaveCount(2);
     await expect(drawer.locator("plan-status option-dropdown")).toHaveCount(0);
-    await expect(drawer.locator("plan-status .chip").first()).toHaveText("Active");
+    await expect(drawer.getByText(`${record.plan.priority} priority`, { exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(drawer).not.toBeVisible();
   });
@@ -564,9 +1132,14 @@ test.describe("Plans card commands", () => {
   test.beforeAll(() => {
     planRoot = fs.mkdtempSync(path.join(os.tmpdir(), "portal-ui-commands-"));
     fs.mkdirSync(path.join(planRoot, ".git"));
-    for (const lifecycle of ["backlog", "active"]) fs.mkdirSync(path.join(planRoot, "docs", "plans", lifecycle), { recursive: true });
+    for (const lifecycle of ["backlog", "ready", "active", "review"]) fs.mkdirSync(path.join(planRoot, "docs", "plans", lifecycle), { recursive: true });
     fs.writeFileSync(path.join(planRoot, "docs", "plans", "backlog", "card-backlog.md"), plan("cardbk01", "Backlog card plan", "- [ ] Todo"));
+    fs.writeFileSync(path.join(planRoot, "docs", "plans", "ready", "card-ready.md"), plan("cardrd01", "Ready card plan", "- [ ] Todo"));
     fs.writeFileSync(path.join(planRoot, "docs", "plans", "active", "card-done.md"), plan("cardac01", "Finished card plan", "- [x] Done"));
+    fs.writeFileSync(path.join(planRoot, "docs", "plans", "review", "card-findings.md"),
+      plan("cardrv01", "Findings card plan", "- [x] Done\n\n## Review\n\n### Findings\n\n- [ ] Missing retry test"));
+    fs.writeFileSync(path.join(planRoot, "docs", "plans", "review", "card-approved.md"),
+      plan("cardrv02", "Approved card plan", "- [x] Done\n\n## Review\n\n### Approval\n\n- Decision: approved\n- Reviewed implementation commit: 0123456789abcdef0123456789abcdef01234567\n- Confirmed by: human"));
   });
   test.afterAll(() => fs.rmSync(planRoot, { recursive: true, force: true }));
   test.beforeEach(async ({ page }) => {
@@ -579,11 +1152,14 @@ test.describe("Plans card commands", () => {
   });
   test.afterEach(async ({ page }) => removeRepositorySources(page));
 
-  // The portal copies suite commands; it never moves a plan on their behalf, since /plan-start and
-  // /plan-close make and commit those moves themselves.
+  // The portal copies suite commands; it never moves a plan on their behalf, since the suite
+  // commands make and commit those moves themselves.
   for (const [tab, title, label, command, folder] of [
-    ["Backlog", "Backlog card plan", "Start", "plan-start", "backlog/card-backlog.md"],
-    ["Active", "Finished card plan", "Close", "plan-close", "active/card-done.md"],
+    ["Backlog", "Backlog card plan", "Promote", "plan-promote", "backlog/card-backlog.md"],
+    ["Ready", "Ready card plan", "Start", "plan-execute", "ready/card-ready.md"],
+    ["Active", "Finished card plan", "Review", "plan-review", "active/card-done.md"],
+    ["Review", "Findings card plan", "Review", "plan-review", "review/card-findings.md"],
+    ["Review", "Approved card plan", "Close after merge", "plan-close", "review/card-approved.md"],
   ]) {
     test(`a ${tab.toLowerCase()} card's ${label} copies the /${command} prompt and moves nothing`, async ({ page }) => {
       await page.goto("/plans");
@@ -598,10 +1174,77 @@ test.describe("Plans card commands", () => {
       expect(fs.existsSync(path.join(planRoot, "docs", "plans", folder)), `${folder} stays where it was`).toBe(true);
     });
   }
+
+  test("lifecycle tabs keep Completed, Archived and Unclassified behind the ⋮ menu", async ({ page }) => {
+    await page.goto("/plans");
+    const bar = page.locator("#lifecycle-bar");
+    const title = page.locator("#lifecycle-title");
+    const row = page.locator("#lifecycle-tabs");
+    await expect(title).toHaveText("Active Plans");
+    const barBox = await bar.boundingBox();
+    const rowBox = await row.boundingBox();
+    expect(rowBox.x).toBeGreaterThan(barBox.x, "the title is a left column opposite the tabs");
+    // Filters is the right-most element, just after the tabs and their ⋮ menu; Refresh sits beside the title.
+    const filtersBox = await page.locator("#filters-toggle").boundingBox();
+    const refreshBox = await page.locator("#refresh").boundingBox();
+    const titleBox = await title.boundingBox();
+    expect(Math.abs(filtersBox.x + filtersBox.width - barBox.x - barBox.width)).toBeLessThanOrEqual(1);
+    expect(rowBox.x + rowBox.width).toBeLessThanOrEqual(filtersBox.x + 1);
+    expect(refreshBox.x).toBeGreaterThanOrEqual(titleBox.x + titleBox.width);
+    expect(refreshBox.x + refreshBox.width).toBeLessThan(rowBox.x);
+    await expect(row.locator(":scope > .lifecycle-tab")).toHaveText([/^Backlog \(/, /^Ready \(/, /^Active \(/, /^Review \(/]);
+    const trigger = row.locator(".overflow-more-trigger");
+    await expect(trigger).toHaveAttribute("aria-label", "More lifecycles");
+    await expect(trigger).not.toHaveClass(/\bactive\b/);
+    await trigger.click();
+    await row.locator("#lifecycle-tabs-more-panel .lifecycle-tab:visible", { hasText: /^Completed \(/ }).click();
+    await expect(page).toHaveURL(/lifecycle=completed/);
+    await expect(title).toHaveText("Completed Plans");
+    await expect(trigger).not.toHaveClass(/\bactive\b/);
+    await trigger.click();
+    await row.locator("#lifecycle-tabs-more-panel .lifecycle-tab:visible", { hasText: /^Archived \(/ }).click();
+    await expect(page).toHaveURL(/lifecycle=archived/);
+    await expect(title).toHaveText("Archived Plans");
+    await expect(row.locator("#lifecycle-tabs-more-panel")).toBeHidden();
+    await expect(trigger).not.toHaveClass(/\bactive\b/);
+    await expect(page.getByRole("button", { name: "View All Open Tasks" })).toHaveCount(0);
+    await expect(page.locator("#all-tasks-modal")).toHaveCount(0);
+  });
+
+  test("a narrow viewport collapses the lifecycle tabs into a menu named for the selection", async ({ page }) => {
+    await page.setViewportSize({ width: 420, height: 780 });
+    await page.goto("/plans?lifecycle=backlog");
+    const bar = page.locator("#lifecycle-bar");
+    await expect(page.locator("#lifecycle-title")).toBeHidden();
+    const row = page.locator("#lifecycle-tabs");
+    await expect(row.locator(":scope > .lifecycle-tab:visible")).toHaveCount(0);
+    const trigger = row.locator(".overflow-more-trigger");
+    await expect(trigger).toHaveText("Backlog Plans");
+    await expect(trigger).not.toHaveAttribute("aria-label");
+    await row.locator(".overflow-more-current").click();
+    const items = row.locator("#lifecycle-tabs-more-panel .lifecycle-tab:visible");
+    // Unclassified joins only when a registered repository has such a plan, so match the fixed six.
+    await expect(items.first()).toBeVisible();
+    expect((await items.allTextContents()).slice(0, 6).map((text) => text.replace(/ \(.*/, ""))).toEqual(
+      ["Backlog", "Ready", "Active", "Review", "Completed", "Archived"],
+    );
+    const barBox = await bar.boundingBox();
+    const triggerBox = await trigger.boundingBox();
+    expect(Math.abs(triggerBox.x - barBox.x),
+      "the collapsed trigger is left-aligned").toBeLessThanOrEqual(1);
+    // Narrow: Filters at the right edge, Refresh directly to its right.
+    const filtersBox = await page.locator("#filters-toggle").boundingBox();
+    const refreshBox = await page.locator("#refresh").boundingBox();
+    expect(Math.abs(refreshBox.x + refreshBox.width - barBox.x - barBox.width)).toBeLessThanOrEqual(8);
+    expect(refreshBox.x).toBeGreaterThanOrEqual(filtersBox.x + filtersBox.width);
+    await items.filter({ hasText: /^Active \(/ }).click();
+    await expect(page).toHaveURL(/lifecycle=active/);
+    await expect(trigger).toHaveText("Active Plans");
+  });
 });
 
 test.describe("Plans onboarding", () => {
-  const SUITE = ["plan-write", "plan-promote", "plan-start", "plan-close", "session-close"];
+  const SUITE = ["plan-write", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive", "session-close"];
 
   test("each suite command's details button opens that command's skill", async ({ page }) => {
     await page.goto("/plans");
@@ -618,7 +1261,7 @@ test.describe("Plans onboarding", () => {
     }
   });
 
-  test("the enable button turns on all five suite packages in one request", async ({ page }) => {
+  test("the enable button turns on all seven suite packages in one request", async ({ page }) => {
     await page.goto("/plans");
     const token = await page.locator("meta[name=cli-portal-token]").getAttribute("content");
     const bulk = page.waitForRequest((request) => request.url().endsWith("/api/config/packages/bulk") && request.method() === "POST");
@@ -730,10 +1373,10 @@ async function planFixture(page, adjust) {
     repository.domains.plans = { status: "available", data: {
       counts: { active: 4, backlog: 5 },
       active: [
-        { id: "a", key: "a", title: "Plan A", worktree: "feature-a", checkoutRootId: "matched", taskCounts: { total: 4, complete: 2 } },
-        { id: "b", key: "b", title: "Plan B", worktree: "feature-b", checkoutRootId: "no-app", taskCounts: { total: 3, complete: 3 } },
+        { id: "a", key: "a", title: "Plan A", worktree: "feature-a", relativePath: "docs/plans/active/plan-a.md", checkoutRootId: "matched", taskCounts: { total: 4, complete: 2 } },
+        { id: "b", key: "b", title: "Plan B", worktree: "feature-b", relativePath: "docs/plans/active/plan-b.md", checkoutRootId: "no-app", taskCounts: { total: 3, complete: 3 } },
         { id: "c", key: "c", title: "Plan C", worktree: "", taskCounts: { total: 0, complete: 0 } },
-        { id: "d", key: "d", title: "Plan D", worktree: "gone", taskCounts: { total: 2, complete: 0 } },
+        { id: "d", key: "d", title: "Plan D", worktree: "gone", worktreeState: "missing", taskCounts: { total: 2, complete: 0 } },
       ],
       recent: [],
     } };

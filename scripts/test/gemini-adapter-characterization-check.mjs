@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Characterization tests for the Gemini CLI provider adapter (scripts/harnesses/gemini/index.mjs,
 // scripts/harnesses/gemini/policy-toml.mjs) — the first real (non-synthetic) third harness
-// provider. See docs/plans/active/gemini-cli-provider-integration-plan.md.
+// provider.
 //
 // Mirrors permissions-render-live-characterization-check.mjs and root-config-merge-
 // characterization-check.mjs's style: pin exact render/merge output for the cases specific to
@@ -121,7 +121,7 @@ function testHooksMergeAndUnmerge() {
 }
 
 // --- mcp: settings.json's mcpServers key, confirmed real via `gemini mcp add ... --scope user`
-// (Phase 1) -- {command, args} for stdio, direct object write, no CLI shell-out required ---
+// -- {command, args} for stdio, direct object write, no CLI shell-out required ---
 function testMcpAddListRemoveRoundTrip() {
   const { dir, filePath } = makeTmpFile("settings.json", "{}");
   try {

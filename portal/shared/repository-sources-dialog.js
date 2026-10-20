@@ -5,8 +5,21 @@ import { portalWireBackdropClose } from "/portal/shared/api.js";
 import * as api from "./repository-sources-api.js";
 import { autoDiscoveryBlock, folderRow, ignoredRow, repositoryRow } from "./repository-sources-templates.js";
 
-// `onChange` runs after every successful mutation so the host page can re-read its own data.
+// One controller per page, since every caller drives the same #repository-sources-dialog: the page
+// itself and the repository selector both open it. Each caller subscribes its own
+// `onChange`, which runs after every successful mutation so it can re-read its own data.
+let sharedDialog = null;
+
 export function createRepositorySourcesDialog({ onChange = () => {}, onPending = () => {} } = {}) {
+  sharedDialog ??= buildRepositorySourcesDialog();
+  sharedDialog.subscribers.push({ onChange, onPending });
+  return sharedDialog.controller;
+}
+
+function buildRepositorySourcesDialog() {
+  const subscribers = [];
+  const onChange = (...args) => { for (const subscriber of subscribers) subscriber.onChange(...args); };
+  const onPending = (isPending) => { for (const subscriber of subscribers) subscriber.onPending(isPending); };
   const dialog = document.getElementById("repository-sources-dialog");
   const syncStatus = dialog.querySelector("[data-repository-sync-status]");
   const info = document.getElementById("folder-scan-info");
@@ -63,10 +76,13 @@ export function createRepositorySourcesDialog({ onChange = () => {}, onPending =
   dialog.addEventListener("close", () => clearTimeout(syncPollTimer));
 
   return {
-    open,
-    close: () => dialog.close(),
-    refresh: surface.refresh,
-    enableAutoDiscovery: surface.enableAutoDiscovery,
+    subscribers,
+    controller: {
+      open,
+      close: () => dialog.close(),
+      refresh: surface.refresh,
+      enableAutoDiscovery: surface.enableAutoDiscovery,
+    },
   };
 }
 
@@ -131,7 +147,7 @@ function createRepositorySourcesSurface({ host, info, onChange, onPending, onAut
   async function wipeRepositoryList() {
     if (!payload || (!payload.repositories.length && !payload.sources.length)) return;
     const confirmed = window.confirm(
-      "Clear all repos? This removes all known and ignored repositories and all configured repository or folder sources from RoboRepo. It does not delete files or folders. Auto-discovery stays as configured and can add repositories again later.",
+      "Clear all repos? This removes all known and ignored repos and all configured repo or folder sources from RoboRepo. It does not delete files or folders. Auto-discovery stays as configured and can add repos again later.",
     );
     if (!confirmed) return;
     const wipe = slot("wipe");

@@ -2,6 +2,7 @@
 // repository-registry state: it must never opt a user into Runtime observation, Plans, or telemetry.
 
 import { forgetRepository, loadRegistry, updateRegistry } from "../../modules/repositories/index.mjs";
+import { LIFECYCLE_MODEL, lifecycleProjection } from "../../modules/plan-suite/lifecycle-manifest.mjs";
 
 // Keep the first-run Home/Runtime mock data available for a later product decision, but leave the
 // mock views disabled in the current release. Plans still use their own read-only mock projection.
@@ -166,6 +167,7 @@ export function mockPlansSnapshot({ now = new Date().toISOString(), packageState
     truncated: false,
     planWritePackage: packageState || { available: false, enabled: false, status: "missing", message: "" },
     autoDiscovery: { enabled: false },
+    lifecycle: lifecycleProjection(LIFECYCLE_MODEL),
   };
 }
 
@@ -181,7 +183,11 @@ export function mockPlanDocument({ key }) {
       warnings: [],
       title: record.plan.title,
       headings: [{ depth: 1, text: record.plan.title, line: 1, hasContent: true }],
-      tasks: record.plan.openTasks,
+      tasks: Array.from({ length: record.plan.taskCounts.remaining }, (_, index) => ({
+        done: false,
+        text: `${record.plan.title} task ${index + 1}`,
+        line: index + 2,
+      })),
       notTested: { present: false, entries: [], unchecked: 0 },
       taskCounts: record.plan.taskCounts,
     },
@@ -479,7 +485,6 @@ function mockRepositoryDefinitions() {
 }
 
 function mockHomePlan(definition, checkoutRootId) {
-  const total = definition.taskCounts.total;
   return {
     id: definition.id,
     key: `mock:${definition.id}`,
@@ -487,11 +492,11 @@ function mockHomePlan(definition, checkoutRootId) {
     lifecycle: definition.lifecycle,
     changedAt: definition.changedAt,
     worktree: definition.worktree,
+    relativePath: definition.relativePath,
     taskCounts: definition.taskCounts,
     checkoutRootId,
     priority: definition.priority,
     nextAction: definition.nextAction,
-    openTasks: Array.from({ length: Math.max(0, total - definition.taskCounts.complete) }, (_, index) => ({ done: false, text: `${definition.title} task ${index + 1}`, line: index + 2 })),
   };
 }
 
@@ -516,7 +521,6 @@ function mockRepositorySummaries() {
 
 function mockPlanRecord(definition, repository, now) {
   const taskCounts = definition.taskCounts;
-  const openTasks = Array.from({ length: Math.max(0, taskCounts.total - taskCounts.complete) }, (_, index) => ({ done: false, text: `${definition.title} task ${index + 1}`, line: index + 2 }));
   const plan = {
     id: definition.id,
     title: definition.title,
@@ -535,7 +539,6 @@ function mockPlanRecord(definition, repository, now) {
     gitLastChangedAt: definition.changedAt,
     gitStatus: "clean",
     taskCounts: { ...taskCounts, remaining: taskCounts.total - taskCounts.complete },
-    openTasks,
     headings: [{ depth: 1, text: definition.title, line: 1, hasContent: true }],
     excerpt: definition.excerpt,
     validation: { valid: true, findings: [], warnings: [] },

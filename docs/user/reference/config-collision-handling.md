@@ -69,7 +69,7 @@ still matches RoboRepo's last write, or when RoboRepo never recorded a write and
 show it is RoboRepo's. A drifted file — one you edited after RoboRepo's last write — is left in place
 and its path is reported, never deleted.
 
-**Seeing drift.** `roborepo config root inspect` and the drift chip on the `/config` page report one
+**Seeing drift.** `roborepo config root inspect` and the drift chip on the `/agents` page report one
 state per harness: `not-installed`, `unwritten`, `in-sync`, `drifted`, or `staged-pending`.
 `staged-pending` means a `*_update_TIMESTAMP` candidate is waiting beside the file; it takes
 precedence over `drifted` because it is the state you can act on.

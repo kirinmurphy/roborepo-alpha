@@ -4,7 +4,7 @@
 // final join, and only in color mode; NO_COLOR yields byte-identical text minus escapes.
 
 export const ANSI = {
-  normalPercent: "[0m", // explicit bright white — normal percentages are never left muted (plan decision 10)
+  normalPercent: "[0m", // explicit bright white — normal percentages are never left muted
   caution: "[38;5;220m", // yellow
   warning: "[38;5;208m", // orange
   critical: "[91m", // bright red
@@ -59,7 +59,7 @@ function weeklyFragments(weekly) {
   ];
 }
 
-// Five-hour and context keep the compact used-only display (plan: five-hour pacing not approved yet).
+// Five-hour and context keep the compact used-only display (five-hour pacing is intentionally not shown).
 function usedOnlyFragments(label, assessed) {
   if (!assessed.available)
     return [{ text: `${label}: —`, tone: "unavailable" }];

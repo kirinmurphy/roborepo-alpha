@@ -1,8 +1,7 @@
 // Manual probe: the shipped skill-reference observer, plus a unique token and a fire log.
 //
 // This exists to test the one thing no automated check can: whether injected additionalContext is
-// still in a live agent's context at the end of a long turn. See
-// docs/internal/skill-reference-observation.md for the procedure and the dated finding.
+// still in a live agent's context at the end of a long turn.
 //
 // Kept deliberately close to globals/packages/skill-visibility/hooks/skill-reference-observer.mjs.
 // It is not that file, because the probe adds a token and a log the shipped hook must never carry —

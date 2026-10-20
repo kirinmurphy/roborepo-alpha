@@ -439,6 +439,7 @@ test_repair_local_config_recovers_backup_only_codex_settings() {
 
   HOME="$home_dir" node "$repo_root/scripts/cli/local-config-repair.mjs" --dry-run >"$home_dir/dry.out" 2>&1
   assert_file_contains "$home_dir/dry.out" "recover local-only settings" "local-config dry-run reports recovered backup content"
+  assert_file_contains "$home_dir/dry.out" "run: roborepo maintenance repair local-config --apply" "local-config dry-run names the apply command"
 
   HOME="$home_dir" node "$repo_root/scripts/cli/local-config-repair.mjs" --apply >"$home_dir/apply.out" 2>&1
   assert_file_contains "$home_dir/apply.out" "repair: $home_dir/.codex/config.toml" "local-config apply writes active Codex config"
@@ -1022,7 +1023,7 @@ test_root_config_keep_policy_does_not_record_false_clean() {
     || fail "keep policy does not falsely clear drift status"
 }
 
-# Uninstall drift-awareness (docs/plans/completed/root-config-layered-inheritance.md, "Uninstall", step 5):
+# Uninstall drift-awareness:
 # a root_config the user hand-edited after roborepo's last write (sidecar hash no longer matches)
 # must be left in place with its path reported, not deleted — even though is_builtin_authored still
 # matches the markers underneath the edit. A clean builtin-written root_config is still removed.
@@ -1164,13 +1165,16 @@ test_repo_local_codex_skill_layer_present() {
   # link-skills.sh is the source of truth: --check must pass and both per-harness links must
   # resolve to the local source.
   "$repo_root/scripts/build/link-skills.sh" --check >/dev/null
-  local name="builtin-development"
+  local name="roborepo-development"
   [[ "$(readlink "$repo_root/.claude/skills/$name" 2>/dev/null)" == "../../local/skills/$name" ]] \
     && pass "repo-local .claude skill link resolves to local source" \
     || fail "repo-local .claude skill link resolves to local source"
   [[ "$(readlink "$repo_root/.codex/skills/$name" 2>/dev/null)" == "../../local/skills/$name" ]] \
     && pass "repo-local .codex skill link resolves to local source" \
     || fail "repo-local .codex skill link resolves to local source"
+  [[ "$(readlink "$repo_root/.gemini/skills/$name" 2>/dev/null)" == "../../local/skills/$name" ]] \
+    && pass "repo-local .gemini skill link resolves to local source" \
+    || fail "repo-local .gemini skill link resolves to local source"
 }
 
 test_write_guard_root_config_message() {

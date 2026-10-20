@@ -198,6 +198,18 @@ dialog#skill-modal::backdrop {
   border-bottom: 1px solid var(--line);
   margin-bottom: 4px;
 }
+.status-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.status-trailing {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
 .status-state-row {
   display: flex;
   align-items: flex-start;
@@ -205,6 +217,13 @@ dialog#skill-modal::backdrop {
   flex-wrap: wrap;
   gap: 4px 8px;
 }
+/* Modified time steps down a size (it is the quiet half) while the completion ring and percent step
+ * up one, so progress is what the eye lands on. Scoped here so Home's plan rows keep their sizing. */
+.status-trailing .meta-line { font-size: var(--text-xs); }
+.status-trailing .plan-completion { font-size: var(--text-xs); }
+.status-trailing .plan-percent { font-size: var(--text-sm); }
+/* Between --icon-sm and --icon-md: a step up from Home's ring without outgrowing the badges beside it. */
+.status-trailing .plan-progress { width: 18px; height: 18px; }
 .status-state-chips {
   display: flex;
   align-items: center;
@@ -239,70 +258,6 @@ dialog#skill-modal::backdrop {
 .status-state-row .meta-line {
   font-size: var(--text-2xs);
   min-width: 0;
-}
-.status-implementation {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-.status-implementation[hidden] {
-  display: none;
-}
-.status-progress-row {
-  display: flex;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-}
-.status-progress-row[hidden],
-.status-complete-row[hidden] {
-  display: none;
-}
-/* Replaces the progress bar once every task is checked: a full bar reads as "in progress at 100%",
-   which is a different claim than "finished". Right-aligned so it lands where the percentage label
-   would have been. */
-.status-complete-row {
-  display: flex;
-  justify-content: flex-end;
-}
-.tasks-complete-badge {
-  border: 1px solid var(--ok);
-  border-radius: 4px;
-  padding: 1px 6px;
-  font-size: var(--text-2xs);
-  font-weight: 600;
-  color: var(--ok);
-  white-space: nowrap;
-}
-.progress-bar {
-  flex: 1 1 60px;
-  min-width: 0;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--line);
-  overflow: hidden;
-}
-.progress-fill {
-  height: 100%;
-  background: var(--ok);
-  border-radius: 3px;
-}
-.progress-label {
-  font-size: var(--text-2xs);
-  color: var(--dim);
-  white-space: nowrap;
-}
-.status-section .next-line {
-  font-size: var(--text-sm);
-  color: var(--ink);
-  min-width: 0;
-}
-.status-section .next-line[hidden] {
-  display: none;
-}
-.next-label {
-  color: var(--dim);
-  font-weight: 600;
 }
 .toast {
   position: fixed;
@@ -469,11 +424,7 @@ dialog#drawer::backdrop {
   z-index: 30;
   min-width: 200px;
   max-width: min(320px, calc(100vw - 16px));
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
   padding: 10px 12px;
-  box-shadow: 0 8px 24px var(--modal-shadow);
   overflow-y: auto;
 }
 .blockers-popover[hidden] {
@@ -531,70 +482,25 @@ dialog#drawer::backdrop {
   margin-top: 4px;
 }
 
-/* Shared <option-dropdown> popover — used for the per-card priority picker and the mobile
-   lifecycle selector. */
-option-dropdown {
+/* Shared completion (plan-completion.js), used on Home's plan rows and in <plan-status>: a progress
+ * ring and percent or the done badge, after the merged badge. A ring, not a bar: a conic sweep (green to
+ * --percent, black after) masked down to its outer band, so the unfilled remainder reads as clearly
+ * as the progress itself. */
+.plan-completion { display: inline-flex; align-items: center; gap: 5px; color: var(--dim); flex: none; font-size: var(--text-2xs); }
+.plan-progress {
   display: inline-block;
-  position: relative;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: conic-gradient(var(--ok) calc(var(--percent, 0) * 1%), #000 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
 }
-.dropdown-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--panel);
-  color: var(--ink);
-  font: inherit;
-  font-size: var(--text-2xs);
-  padding: 1px 6px;
-  cursor: pointer;
-}
-.dropdown-trigger:hover {
-  border-color: var(--accent);
-}
-.dropdown-trigger:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-.dropdown-trigger:disabled {
-  cursor: default;
-  opacity: 0.7;
-}
-.dropdown-chevron {
-  color: var(--dim);
-  font-size: var(--text-2xs);
-}
-.dropdown-menu {
-  position: fixed;
-  z-index: 30;
-  display: grid;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  box-shadow: 0 8px 24px var(--modal-shadow);
-  padding: 4px;
-  min-width: 100px;
-  /* max-height is set inline by positionPopoverPanel (popover-position.js) to keep the far edge
-     on-screen; scroll internally past that instead of overflowing the viewport. */
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-.dropdown-option {
-  border: none;
-  background: none;
-  font: inherit;
-  font-size: var(--text-sm);
-  text-align: left;
-  color: var(--ink);
-  padding: 5px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.dropdown-option:hover,
-.dropdown-option.highlighted {
-  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
-}
-.dropdown-option[aria-selected="true"] {
-  font-weight: 600;
-}
+.plan-percent { font-variant-numeric: tabular-nums; }
+.plan-complete-badge,
+.plan-merged-badge { padding: var(--pill-padding); border-radius: 999px; color: var(--chip-ink); font-weight: 600; }
+.plan-complete-badge { background: var(--chip-low-bg); }
+/* The same GitHub merged purple as the worktree row's merged badge. The extra margin sets it apart
+ * from the progress that follows, while the ring and its percent stay at the tighter gap. */
+.plan-merged-badge { background: var(--merged); margin-right: 5px; }
+.plan-complete-badge[hidden], .plan-merged-badge[hidden] { display: none; }

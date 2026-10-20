@@ -18,7 +18,7 @@ export const USER_SOURCE_KINDS = ["repository", "directory"];
 export const SOURCE_STATES = ["pending", "healthy", "partial", "unavailable", "stale", "error"];
 
 // Auto-discovery is off until the user turns it on: RoboRepo asks before observing processes.
-// Flipping this default is the one-value change the plan's risk table refers to.
+// Flipping this default is deliberately a one-value change.
 export const AUTO_DISCOVERY_DEFAULT_ENABLED = false;
 
 export function defaultSources(now = new Date().toISOString()) {

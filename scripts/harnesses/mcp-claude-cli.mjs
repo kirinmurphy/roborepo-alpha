@@ -7,6 +7,14 @@
 // permission-grant path, so this leaf module has zero registry-touching imports.
 
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import { selectedHarnessExecutable } from "./discovery.mjs";
+
+const claudeManifest = JSON.parse(fs.readFileSync(new URL("../../globals/harnesses/claude/provider.json", import.meta.url), "utf8"));
+
+export function selectedClaudeExecutable() {
+  return selectedHarnessExecutable(claudeManifest);
+}
 
 export function shellQuote(arg) {
   if (/^[a-zA-Z0-9_./:=@%+-]+$/.test(arg)) return arg;
@@ -23,7 +31,9 @@ export function claudeMcpArgs(opts, spec) {
 }
 
 export function runClaudeMcpAdd(args) {
-  const result = spawnSync("claude", args, { stdio: "inherit" });
+  const executable = selectedClaudeExecutable();
+  if (!executable) throw new Error("Claude Code has no validated CLI or desktop runtime");
+  const result = spawnSync(executable, args, { stdio: "inherit" });
   if (result.error) {
     console.error(`failed to run claude: ${result.error.message}`);
     process.exit(1);
@@ -32,15 +42,18 @@ export function runClaudeMcpAdd(args) {
 }
 
 export function hasClaudeCli() {
-  return spawnSync("command", ["-v", "claude"], { shell: true }).status === 0;
+  return selectedClaudeExecutable() !== null;
 }
 
 export function claudeMcpRemove(name, scope) {
-  return spawnSync("claude", ["mcp", "remove", name, "--scope", scope], { stdio: "ignore" });
+  const executable = selectedClaudeExecutable();
+  return executable ? spawnSync(executable, ["mcp", "remove", name, "--scope", scope], { stdio: "ignore" }) : { status: 1 };
 }
 
 export function claudeMcpList() {
-  const result = spawnSync("claude", ["mcp", "list"], { encoding: "utf8" });
+  const executable = selectedClaudeExecutable();
+  if (!executable) return null;
+  const result = spawnSync(executable, ["mcp", "list"], { encoding: "utf8" });
   if (result.error || result.status !== 0) return null;
   return result.stdout;
 }

@@ -122,13 +122,13 @@
             <span
               >Plans move through lifecycle folders: 
               <div class="code-sample">
-                <code>backlog</code> → <code>active</code> →
-                <code>completed</code> → <code>archived</code>.
+                <code>backlog</code> → <code>ready</code> → <code>active</code> →
+                <code>review</code> → <code>completed</code>, or <code>archived</code>.
               </div>
             </span>
           </li>
           <li>
-            <portal-icon name="pencil" size="md"></portal-icon>
+            <portal-icon name="edit" size="md"></portal-icon>
             <span>Each step of the lifecycle is its own command:</span>
             <ul class="onboarding-sublist">
               <li>
@@ -136,16 +136,24 @@
                 <button type="button" data-btn="text" data-slot="details" data-skill="plan-write">Details</button>
               </li>
               <li>
-                <code>/plan-promote</code> — prepare a plan for development
+                <code>/plan-promote</code> — prepare a plan and move it to ready
                 <button type="button" data-btn="text" data-slot="details" data-skill="plan-promote">Details</button>
               </li>
               <li>
-                <code>/plan-start</code> — implement it in an isolated worktree
-                <button type="button" data-btn="text" data-slot="details" data-skill="plan-start">Details</button>
+                <code>/plan-execute</code> — implement it in an isolated worktree, across sessions
+                <button type="button" data-btn="text" data-slot="details" data-skill="plan-execute">Details</button>
               </li>
               <li>
-                <code>/plan-close</code> — verify the work and close the plan
+                <code>/plan-review</code> — recheck it, fix what has a clear fix, and record your approval
+                <button type="button" data-btn="text" data-slot="details" data-skill="plan-review">Details</button>
+              </li>
+              <li>
+                <code>/plan-close</code> — after you merge, verify the work and close the plan
                 <button type="button" data-btn="text" data-slot="details" data-skill="plan-close">Details</button>
+              </li>
+              <li>
+                <code>/plan-archive</code> — retire a plan that will not be completed
+                <button type="button" data-btn="text" data-slot="details" data-skill="plan-archive">Details</button>
               </li>
               <li>
                 <code>/session-close</code> — commit and hand off the session
@@ -198,27 +206,25 @@
     </template>
     <template id="tpl-plan-status">
       <div class="status-section">
-        <div class="status-state-row">
-          <div class="status-state-chips" data-slot="status-chips">
-            <div class="lifecycle-slot" data-slot="lifecycle"></div>
-            <div class="priority-slot" data-slot="priority"></div>
-            <span class="state-badge" data-slot="state-badge" hidden></span>
-          </div>
-          <span class="meta-line" data-slot="meta"></span>
+        <div class="status-state-chips" data-slot="status-chips">
+          <div class="priority-slot" data-slot="priority"></div>
+          <span class="state-badge" data-slot="state-badge" hidden></span>
         </div>
-        <div class="status-implementation" data-slot="implementation">
-          <div class="status-progress-row" data-slot="progress-row">
-            <div class="progress-bar">
-              <div class="progress-fill" data-slot="progress-fill"></div>
-            </div>
-            <span class="progress-label" data-slot="progress-label"></span>
-          </div>
-          <div class="status-complete-row" data-slot="complete-row" hidden>
-            <span class="tasks-complete-badge">All tasks complete</span>
-          </div>
-          <div class="next-line" data-slot="next-row"><span class="next-label">Next up:</span> <span data-slot="next"></span></div>
+        <div class="status-trailing">
+          <span class="meta-line" data-slot="meta"></span>
+          <span data-slot="completion" hidden></span>
         </div>
       </div>
+    </template>
+    <!-- plan-completion.js: the merged badge, then a progress ring and percent or the done badge.
+         Shared by Home's plan rows and <plan-status>. -->
+    <template id="tpl-plan-completion">
+      <span class="plan-completion">
+        <span class="plan-merged-badge" data-slot="merged" hidden>merged</span>
+        <span class="plan-progress" data-slot="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"></span>
+        <span class="plan-percent" data-slot="percent"></span>
+        <span class="plan-complete-badge" data-slot="complete" hidden>done</span>
+      </span>
     </template>
     <template id="tpl-dtdd-row">
       <div class="dtdd-row">

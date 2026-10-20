@@ -2,9 +2,9 @@
 import assert from "node:assert/strict";
 import { inferTaskCategory, inferTaskScale, categorizeFile, TASK_CLASSIFIER_VERSION } from "../cli/telemetry-task-infer.mjs";
 
-// Phase 4 of docs/plans/active/roborepo-telemetry-events-experiments-plan.md: explainable task
+// Explainable task
 // category/scale inference over privacy-safe file-touch signals (extension-derived categories,
-// never raw paths). Pure module — analysis-time (Phase 5+) callers build the `signals` object.
+// never raw paths). Pure module — analysis-time callers build the `signals` object.
 
 testCategorizeFileByExtension();
 testCategorizeFileGenerated();

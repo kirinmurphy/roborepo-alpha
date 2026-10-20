@@ -38,6 +38,7 @@
 import fs from "node:fs";
 import { refreshHarnessState } from "../harnesses/refresh.mjs";
 import { initializeWorkspace, STATE_ROOT } from "./roots.mjs";
+import { recordAppRoot } from "./state-paths.mjs";
 import {
   beginInitialization,
   completeInitialization,
@@ -111,6 +112,7 @@ export function ensureInitialized({ force = false, dryRun = false } = {}) {
   beginInitialization();
   initializeWorkspace();
   fs.mkdirSync(STATE_ROOT, { recursive: true });
+  recordAppRoot();
   const { detected } = refreshHarnessState();
 
   // Deliberately NOT completeInitialization() here: the record must stay `in-progress` until the

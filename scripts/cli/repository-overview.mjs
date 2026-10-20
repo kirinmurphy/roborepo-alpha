@@ -10,7 +10,7 @@ import {
 
 // `loadAutoDiscoveryEnabled` lets Home choose between its empty states and the compact Enable
 // prompt; an unreadable answer is treated as off, since off is what Runtime then does too.
-export function createRepositoryOverviewService({ loadRegistry, loadRuntime, loadPlans, loadTelemetry, loadAutoDiscoveryEnabled = () => false, now = () => new Date(), loadMockHomeOverview = null, mockHomeEnabled = false }) {
+export function createRepositoryOverviewService({ loadRegistry, loadRuntime, loadPlans, loadTelemetry, loadAutoDiscoveryEnabled = () => false, loadPlanCloseEnabled = () => true, now = () => new Date(), loadMockHomeOverview = null, mockHomeEnabled = false }) {
   function loadHome() {
     const registry = loadRegistry();
     if (mockHomeEnabled && Object.keys(registry.repositories || {}).length === 0 && loadMockHomeOverview) {
@@ -24,6 +24,7 @@ export function createRepositoryOverviewService({ loadRegistry, loadRuntime, loa
       runtimeState,
       plansState: safely(loadPlans, plansDomainState, "Plans data is unavailable"),
       telemetryState: safely(loadTelemetry, telemetryDomainState, "Tokens data is unavailable"),
+      planCloseEnabled: planCloseEnabled(),
       now: now(),
     });
     let enabled = false;
@@ -40,11 +41,18 @@ export function createRepositoryOverviewService({ loadRegistry, loadRuntime, loa
       runtimeState: safely(loadRuntime, runtimeDomainState, "Runtime data is unavailable"),
       plansState: safely(loadPlans, plansDomainState, "Plans data is unavailable"),
       telemetryState: safely(loadTelemetry, telemetryDomainState, "Tokens data is unavailable"),
+      planCloseEnabled: planCloseEnabled(),
       now: now(),
     });
     const detail = composeRepositoryDetail(registry.repositories[repositoryId], home);
     if (!detail) throw notFound(urlKey);
     return { updatedAt: home.updatedAt, repository: detail };
+  }
+
+  // An unreadable package state counts as enabled, which offers nothing; offering the hook by
+  // mistake would be the worse error.
+  function planCloseEnabled() {
+    try { return loadPlanCloseEnabled() !== false; } catch { return true; }
   }
 
   return { loadHome, loadDetail };

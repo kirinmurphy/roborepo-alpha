@@ -16,8 +16,26 @@
     {
       "name": "portal-main",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["scripts/cli/main.mjs", "web", "--no-open", "--port", "4338"],
+      "runtimeArgs": [
+        "scripts/cli/main.mjs",
+        "web",
+        "--no-open",
+        "--port",
+        "4338"
+      ],
       "port": 4338
+    },
+    {
+      "name": "portal-main-alt",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "scripts/cli/main.mjs",
+        "web",
+        "--no-open",
+        "--port",
+        "4341"
+      ],
+      "port": 4341
     }
   ]
 }

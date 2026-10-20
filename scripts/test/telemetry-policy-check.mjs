@@ -4,8 +4,7 @@ import {
   validateTelemetryPolicies, evaluatePolicy, evaluatePackagePolicies, POLICY_OPERATORS, POLICY_SEVERITIES,
 } from "../cli/telemetry-policy.mjs";
 
-// Phase 5 of docs/plans/active/roborepo-telemetry-events-experiments-plan.md: package telemetry
-// policies (plan: "Package telemetry policies" — advisory-only, never blocking). Pure module.
+// Package telemetry policies: advisory-only, never blocking. Pure module.
 
 testValidPolicyPasses();
 testUnknownMetricRejected();

@@ -14,8 +14,8 @@
 // picture, not the earliest symptom. Exit code is 1 if anything failed.
 //
 // Not covered here: whether an installed skill's CONTENT is correct (that is the repo's own suites)
-// and whether an agent OBEYS an installed rule (no test can assert that — see
-// docs/internal/skill-reference-observation.md for how that one is verified by hand).
+// and whether an agent OBEYS an installed rule (no test can assert that; it is
+// verified by hand).
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";

@@ -126,17 +126,16 @@ esac
 # Detect which harnesses are present, from the provider registry (scripts/harnesses/) via
 # `roborepo harness detected` — not a fixed two-harness enum. present_harness_ids holds the ids
 # present on this machine; present_harness_rows/all_harness_rows keep the full
-# id/home/present/displayName/rootConfigPath rows for the sections below.
-# See docs/plans/active/discoverable-harness-provider-architecture-plan.md Phase 4.
+# id/home/present/displayName/rootConfigPath/confidence rows for the sections below.
 present_harness_ids=()
 present_harness_rows=()
 all_harness_rows=()
-while IFS=$'\t' read -r id home_path present display_name root_config_path; do
+while IFS=$'\t' read -r id home_path present display_name root_config_path confidence; do
   [[ -z "${id}" ]] && continue
-  all_harness_rows+=("${id}	${home_path}	${present}	${display_name}	${root_config_path}")
+  all_harness_rows+=("${id}	${home_path}	${present}	${display_name}	${root_config_path}	${confidence}")
   if [[ "${present}" == "1" ]]; then
     present_harness_ids+=("${id}")
-    present_harness_rows+=("${id}	${home_path}	${present}	${display_name}	${root_config_path}")
+    present_harness_rows+=("${id}	${home_path}	${present}	${display_name}	${root_config_path}	${confidence}")
   fi
 done < <(harness_detected_rows)
 
@@ -171,7 +170,7 @@ write_install_state "${on_conflict}"
 install_section "Base Skill"
 if [[ $dry_run -eq 0 && "${#present_harness_rows[@]}" -gt 0 ]]; then
   for row in "${present_harness_rows[@]}"; do
-    IFS=$'\t' read -r _id home_path _present _display_name _root_config_path <<< "${row}"
+    IFS=$'\t' read -r _id home_path _present _display_name _root_config_path _confidence <<< "${row}"
     link_global_skills "${home_path}" --preserve-existing builtin-support
   done
 fi
@@ -206,12 +205,12 @@ run_post_install_onboarding() {
   node "${repo_root}/scripts/cli/main.mjs" package reconcile
   if [[ "${#present_harness_rows[@]}" -gt 0 ]]; then
     for row in "${present_harness_rows[@]}"; do
-      IFS=$'\t' read -r id _home _present _display_name root_config_path <<< "${row}"
+      IFS=$'\t' read -r id _home _present _display_name root_config_path _confidence <<< "${row}"
       [[ -z "${root_config_path}" ]] && continue  # provider declares no root-config path (e.g. a future harness that lacks the capability)
       export_user_config "${id}" "generated/${id}/$(basename "${root_config_path}")" "${root_config_path}"
     done
   fi
-  while IFS=$'\t' read -r _id home_path present _display_name _root_config_path; do
+  while IFS=$'\t' read -r _id home_path present _display_name _root_config_path _confidence; do
     [[ -z "${_id}" ]] && continue
     [[ "${present}" == "1" ]] || continue
     link_global_skills "${home_path}" --preserve-existing builtin-support
@@ -241,12 +240,18 @@ run_post_install_onboarding() {
 # Post-install summary: one line per known harness provider, from the registry rather than a
 # fixed Claude/Codex pair.
 install_section "Core Install Complete"
+warning_rows="$(harness_warning_rows)"
 if [[ "${#all_harness_rows[@]}" -gt 0 ]]; then
   for row in "${all_harness_rows[@]}"; do
-    IFS=$'\t' read -r _id _home present display_name _root_config_path <<< "${row}"
+    IFS=$'\t' read -r _id _home present display_name _root_config_path confidence <<< "${row}"
+    warning="$(printf '%s\n' "${warning_rows}" | awk -F'\t' -v id="${_id}" '$1 == id { print $2; exit }')"
     status="${RR_DIM}not installed${RR_RESET}"
-    [[ "${present}" == "1" ]] && status="${RR_GREEN}available${RR_RESET}"
+    [[ "${present}" == "1" ]] && status="${RR_DIM}configuration present, runtime unavailable${RR_RESET}"
+    [[ "${confidence}" == "confirmed" ]] && status="${RR_GREEN}available${RR_RESET}"
+    [[ "${confidence}" == "probable" ]] && status="${RR_DIM}installed, not launched yet${RR_RESET}"
+    [[ "${confidence}" != "confirmed" && "${confidence}" != "probable" && -n "${warning}" ]] && status="${RR_DIM}installed, setup needed${RR_RESET}"
     echo "  ${RR_BOLD}${display_name}${RR_RESET}  ${status}"
+    [[ -n "${warning}" ]] && echo "    ${warning}"
   done
 fi
 echo ""
@@ -262,5 +267,5 @@ if [[ "${package_mode}" == "1" ]]; then
 fi
 if [[ "${#present_harness_ids[@]}" -lt "${#all_harness_rows[@]}" ]]; then
   echo ""
-  echo "To add another harness later: install it, then run roborepo package manage again."
+  echo "To add another harness later: install or launch it, then run roborepo update."
 fi

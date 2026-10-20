@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Characterization tests for scripts/cli/package-harness-config.mjs's mergeHarnessConfig/
-// unmergeHarnessConfig — captured BEFORE the Phase 3 migration (discoverable-harness-provider-
-// architecture-plan.md) moves this into a provider-adapter orchestrator. Pins the trickiest current
+// unmergeHarnessConfig — captured before this moved into a
+// provider-adapter orchestrator. Pins the trickiest current
 // behavior: Claude statusLine conflict preservation, Codex TUI status_line array dedupe/table
 // creation from scratch, and the color-scalar ownership-provenance mechanism (first-seen value
 // preserved across repeated enables, restored exactly on disable).

@@ -1,10 +1,14 @@
 import { portalHideLoading, portalSetUpdatedAt } from "/portal/shared/api.js";
+import { renderCodexHookStatus } from "/portal/shared/codex-hook-status.js";
 import { harnessSetupPromptElement } from "/portal/shared/harness-warning.js";
 import { createPlanDrawer } from "/portal/plans/plan-drawer.js";
 import { fetchSnapshot as fetchPlansSnapshot } from "/portal/plans/api.js";
+import { mergedPlanBranches } from "/portal/plans/state.js";
+import { setLifecycleModel } from "/portal/plans/lifecycle.js";
 import * as api from "./api.js";
 import { mountHomeLinks } from "./links.js";
 import { repositoryDirectory, unresolvedActivity } from "./templates.js";
+import { createWorktreeCleanupDialog, createWorktreeRemoveDialog } from "./worktree-dialogs.js";
 import { createRepositorySourcesDialog } from "/portal/shared/repository-sources-dialog.js";
 import { autoDiscoveryPrompt, repositoryEmptyState } from "/portal/shared/repository-sources-templates.js";
 import { fetchSetupState } from "/portal/shared/setup-api.js";
@@ -13,6 +17,7 @@ const POLL_MS = 10_000;
 const content = document.getElementById("home-content");
 const warning = document.getElementById("home-warning");
 const harnessBanner = document.getElementById("home-harness-banner");
+const codexHookStatus = document.getElementById("home-codex-hook-status");
 const autoDiscoveryMount = document.getElementById("home-auto-discovery");
 const mockDisclaimer = document.getElementById("home-mock-disclaimer");
 const homeHeading = document.querySelector(".home-heading");
@@ -24,12 +29,15 @@ let pending = false;
 let forceQueued = false;
 let syncRetryTimer = null;
 let plansSnapshot = null;
+// Active plans whose worktree has merged, from the latest overview — the drawer shows them `merged`.
+let mergedPlans = new Map();
 
-// The same plan detail drawer the Plans page opens. Read-only here: lifecycle and priority edits
-// go through the Plans page's mutation flow, which Home does not carry.
+// The same plan detail drawer the Plans page opens. Read-only here: priority edits go through the
+// Plans page's mutation flow, which Home does not carry.
 const planDrawer = createPlanDrawer({
   getPlans: () => plansSnapshot?.plans || [],
   getPlanWritePackage: () => plansSnapshot?.planWritePackage || {},
+  mergeFor: (key) => mergedPlans.get(key) || null,
   onEnablePackage: () => { location.href = "/plans"; },
   onError: showWarning,
   readonly: true,
@@ -49,18 +57,57 @@ const onboarding = {
   onAddFolder: () => sourcesDialog.open({ addFolder: true }),
 };
 
+// Both dialogs change what the card lists, so Home re-reads its overview as soon as one succeeds.
+const afterWorktreeChange = () => {
+  renderedVersion = null;
+  refresh({ force: true });
+};
+const removeDialog = createWorktreeRemoveDialog({ onRemoved: afterWorktreeChange });
+const cleanupDialog = createWorktreeCleanupDialog({ onChanged: afterWorktreeChange });
+
 const menuActions = {
   onMountLinks: (slot, entrypoint) => mountHomeLinks(slot, entrypoint, { onStale: refresh }),
   onToggleMenu: toggleActionMenu,
   onSelectMenu: selectRepositoryAction,
   onOpenPlan: openPlan,
+  onRemoveWorktree: (target) => {
+    closeActionMenus();
+    removeDialog.open(target);
+  },
+  onStopServers: stopWorktreeServers,
+  onEnableCleanup: (repository) => cleanupDialog.open(repository),
+  onDismissCleanup: dismissCleanupNotice,
 };
 
-// The plans snapshot supplies what the drawer resolves against (blockers, plan-write package state); it is
-// fetched on open rather than polled, since Home only needs it while a drawer is showing.
+async function stopWorktreeServers({ repositoryId, checkout }) {
+  closeActionMenus();
+  try {
+    const result = await api.stopWorktreeServers({ repositoryId, branch: checkout.git?.branch || checkout.worktreeName });
+    if (result.action !== "stopped") throw new Error(result.reason || "the servers kept running");
+    afterWorktreeChange();
+  } catch (error) {
+    warning.textContent = `Could not stop the worktree's servers: ${error.message}`;
+    warning.hidden = false;
+  }
+}
+
+async function dismissCleanupNotice(repository) {
+  try {
+    await api.dismissWorktreeCleanupNotice({ repositoryId: repository.repositoryId });
+    afterWorktreeChange();
+  } catch (error) {
+    warning.textContent = `Could not dismiss the cleanup notice: ${error.message}`;
+    warning.hidden = false;
+  }
+}
+
+// The plans snapshot supplies what the drawer resolves against (blockers, plan-write package state, the
+// lifecycle's labels and actions); it is fetched on open rather than polled, since Home only needs it
+// while a drawer is showing.
 async function openPlan(plan) {
   try {
     plansSnapshot = await fetchPlansSnapshot();
+    setLifecycleModel(plansSnapshot.lifecycle);
   } catch (error) {
     showWarning(error);
     return;
@@ -86,6 +133,7 @@ async function refresh({ force = false } = {}) {
   setHomeSyncStatus("syncing");
   try {
     const overview = await api.loadHomeOverview();
+    mergedPlans = mergedPlanBranches(overview);
     homeAutoDiscoveryEnabled = overview.autoDiscovery?.enabled === true;
     setHomeSyncStatus(overview.sync?.state || "synced");
     scheduleSyncRefresh(overview.sync?.state);
@@ -114,7 +162,7 @@ async function refresh({ force = false } = {}) {
   } catch (error) {
     clearSyncRefresh();
     setHomeSyncStatus("failed");
-    warning.textContent = `Repository overview unavailable: ${error.message}`;
+    warning.textContent = `Repo overview unavailable: ${error.message}`;
     warning.hidden = false;
     mockDisclaimer.hidden = true;
     if (!content.hasChildNodes()) content.replaceChildren(repositoryEmptyState({ autoDiscoveryEnabled: false, ...onboarding }));
@@ -156,27 +204,33 @@ await Promise.all([refresh(), renderHarnessBanner()]);
 setInterval(refresh, POLL_MS);
 
 // The "install a supported harness" condition Agents and Tokens warn about, shown here as an info
-// prompt (Home does not need a harness to work). Harness installation is a rare, out-of-band
-// change, so it is checked once per page load rather than on every poll.
+// prompt (Home does not need a harness to work), plus the Codex telemetry hook warning Settings
+// shows. Harness installation is a rare, out-of-band change, so it is not re-read on Home's poll;
+// the banner itself watches setup state only while it is waiting on the user.
 async function renderHarnessBanner() {
   try {
-    const banner = harnessSetupPromptElement(await fetchSetupState());
+    const setup = await fetchSetupState();
+    const banner = harnessSetupPromptElement(setup, { onRefreshed: renderHarnessBanner });
     harnessBanner.replaceChildren(...(banner ? [banner] : []));
     harnessBanner.hidden = !banner;
+    void renderCodexHookStatus(codexHookStatus, setup);
   } catch {
     harnessBanner.hidden = true;
+    codexHookStatus.hidden = true;
   }
 }
 
-function toggleActionMenu(card) {
-  const menu = card.querySelector("[data-menu]");
-  const trigger = card.querySelector("[data-action=menu]");
+// `target` is a repository card, whose first menu is the repository's own, or a worktree row's
+// `.action-menu`. Either way the card is raised so the open panel overlaps the cards below it.
+function toggleActionMenu(target) {
+  const menu = target.querySelector("[data-menu]");
+  const trigger = target.querySelector("[data-action=menu]");
   if (!menu || !trigger) return;
   const willOpen = menu.hidden;
   closeActionMenus();
   menu.hidden = !willOpen;
   trigger.setAttribute("aria-expanded", String(willOpen));
-  if (willOpen) card.classList.add("has-open-menu");
+  if (willOpen) target.closest(".repository-card")?.classList.add("has-open-menu");
 }
 
 function closeActionMenus() {
@@ -200,7 +254,7 @@ async function selectRepositoryAction(key, repository, item, event) {
     renderedVersion = null;
     await refresh({ force: true });
   } catch (error) {
-    warning.textContent = `Repository action unavailable: ${error.message}`;
+    warning.textContent = `Repo action unavailable: ${error.message}`;
     warning.hidden = false;
   }
 }

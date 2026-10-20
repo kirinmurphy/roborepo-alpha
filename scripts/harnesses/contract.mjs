@@ -29,17 +29,17 @@ export const CAPABILITY_REQUIRED_METHODS = Object.freeze({
   permissions: { group: "permissions", methods: ["render"] },
   skills: { group: "skills", methods: ["link"] },
   "slash-commands": { group: "commands", methods: ["render"] },
-  // read/write: withdraw's blanket strip-all (Phase 4 — see harness withdraw <id>). merge/unmerge:
-  // one package's hooks fragment added/removed during package install/disable (Phase 5). Four
+  // read/write: withdraw's blanket strip-all (see harness withdraw <id>). merge/unmerge:
+  // one package's hooks fragment added/removed during package install/disable. Four
   // separate names on purpose — "write" was already claimed by withdraw's removal-only semantics
-  // before Phase 5, so reusing it for a generic install-time merge would make one name mean two
+  // first, so reusing it for a generic install-time merge would make one name mean two
   // different operations depending on caller.
   hooks: { group: "hooks", methods: ["read", "write", "merge", "unmerge"] },
-  // add/remove: Phase 4's bulk operations (add = not yet migrated; remove = withdraw's "strip
+  // add/remove: bulk operations (add = not yet migrated; remove = withdraw's "strip
   // every MCP server this package owns" sweep, real for Claude). addServer/removeServer/list:
-  // Phase 5's single-server operations (add one server, remove one named server, enumerate
+  // single-server operations (add one server, remove one named server, enumerate
   // configured servers) -- separate names on purpose, same lesson as hooks' merge/unmerge vs
-  // write: "remove" was already claimed by bulk-removal semantics before Phase 5, so reusing it
+  // write: "remove" was already claimed by bulk-removal semantics first, so reusing it
   // for a single-server op would make one name mean two different things depending on caller.
   mcp: { group: "mcp", methods: ["add", "remove", "addServer", "removeServer", "list"] },
   "package-config": { group: "rootConfig", methods: ["mergePackageComponent", "unmergePackageComponent"] },
@@ -55,17 +55,19 @@ const DETECTION_CONFIDENCES = new Set(["confirmed", "probable", "possible"]);
 const PATH_KINDS = new Set(["file", "directory"]);
 const ID_PATTERN = /^[a-z][a-z0-9-]*$/;
 const HOME_RELATIVE_PATTERN = /^~\//;
+const DESKTOP_ROOT_PATTERN = /^(~\/|\/)/;
+const BUNDLE_SEGMENT_PATTERN = /^[^/.][^/]*$/;
 
 function fail(errors, message) {
   errors.push(message);
 }
 
-function validateDetection(detection, label, errors) {
+function validateDetection(detection, label, errors, { partial = false } = {}) {
   if (typeof detection !== "object" || detection === null || Array.isArray(detection)) {
     fail(errors, `${label} detection must be an object`);
     return;
   }
-  if (!DETECTION_CONFIDENCES.has(detection.minimumConfidence)) {
+  if ((!partial || detection.minimumConfidence !== undefined) && !DETECTION_CONFIDENCES.has(detection.minimumConfidence)) {
     fail(errors, `${label} detection.minimumConfidence must be one of ${[...DETECTION_CONFIDENCES].join(", ")}`);
   }
   for (const key of ["executables", "homeCandidates", "configCandidates"]) {
@@ -109,6 +111,37 @@ function validateDetection(detection, label, errors) {
         && (!Number.isInteger(validation.timeoutMs) || validation.timeoutMs < 1)
       ) {
         fail(errors, `${label} detection.executableValidation.timeoutMs must be a positive integer`);
+      }
+    }
+  }
+  if (detection.desktopCandidates !== undefined) {
+    if (!Array.isArray(detection.desktopCandidates)) {
+      fail(errors, `${label} detection.desktopCandidates must be an array`);
+    } else {
+      for (const [index, candidate] of detection.desktopCandidates.entries()) {
+        const name = `${label} detection.desktopCandidates[${index}]`;
+        if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+          fail(errors, `${name} must be an object`);
+          continue;
+        }
+        for (const key of ["label", "bundleId", "executable"]) {
+          if (typeof candidate[key] !== "string" || !candidate[key].trim()) fail(errors, `${name}.${key} must be a non-empty string`);
+        }
+        if (!Array.isArray(candidate.roots) || !candidate.roots.length || candidate.roots.some((root) => typeof root !== "string" || !DESKTOP_ROOT_PATTERN.test(root))) {
+          fail(errors, `${name}.roots must contain absolute or ~/-relative paths`);
+        }
+        if (!Array.isArray(candidate.layouts) || !candidate.layouts.length || candidate.layouts.some((layout) => !Array.isArray(layout) || !layout.length || layout.some((segment) => typeof segment !== "string" || (segment !== "*" && !BUNDLE_SEGMENT_PATTERN.test(segment))))) {
+          fail(errors, `${name}.layouts must contain bounded path segments`);
+        }
+        if (typeof candidate.executable === "string" && (candidate.executable.startsWith("/") || candidate.executable.split("/").includes(".."))) {
+          fail(errors, `${name}.executable must stay inside the bundle`);
+        }
+        if (candidate.parentApp !== undefined) {
+          const parent = candidate.parentApp;
+          if (!parent || typeof parent !== "object" || typeof parent.label !== "string" || typeof parent.bundle !== "string" || !BUNDLE_SEGMENT_PATTERN.test(parent.bundle) || typeof parent.bundleId !== "string" || !Array.isArray(parent.roots) || parent.roots.some((root) => typeof root !== "string" || !DESKTOP_ROOT_PATTERN.test(root))) {
+            fail(errors, `${name}.parentApp must identify a bounded app bundle`);
+          }
+        }
       }
     }
   }
@@ -184,7 +217,7 @@ export function validateProviderManifest(manifest) {
           fail(errors, `${label} unknown platform key: ${platform}`);
           continue;
         }
-        if (override.detection !== undefined) validateDetection(override.detection, `${label} platforms.${platform}`, errors);
+        if (override.detection !== undefined) validateDetection(override.detection, `${label} platforms.${platform}`, errors, { partial: true });
         if (override.paths !== undefined) validatePathMap(override.paths, `${label} platforms.${platform}`, errors);
       }
     }

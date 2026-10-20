@@ -90,7 +90,7 @@ export function validateMarker(marker) {
   return marker;
 }
 
-// Explainable scope dimensions for a completed task (plan: "Task scale"). Never guessed beyond what
+// Explainable scope dimensions for a completed task. Never guessed beyond what
 // git/changed-file signals directly support — unknown fields stay null rather than being estimated.
 function validateTaskScale(scale) {
   if (typeof scale !== "object" || Array.isArray(scale)) throw new Error("marker task_scale must be an object");

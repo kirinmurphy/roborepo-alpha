@@ -80,7 +80,7 @@ const OWNERSHIP_EVIDENCE = {
 // getting its own top-level card — a Compose stack (app, db, proxy, mailhog...) is one logical
 // operation, not N unrelated ones. Each container is its own row (not each published port) since a
 // single container publishing several host ports (e.g. one Traefik proxy on 80/443/8080) is one
-// operational unit, not three. See docs/plans/active/developer-runtime-compose-project-grouping.md.
+// operational unit, not three.
 // `hideProviderLink` covers the shared-services case, which is neither of the two the isMember flag
 // distinguishes: the card is standalone (no owning checkout to inherit git context from, so it keeps
 // its own badge) but it is NOT top-level, so the repository header above it already carries the one
@@ -366,7 +366,7 @@ export function repositoryCard(repository, { instanceActions, composeActions, re
   if (repository.fixture) {
     const fixtureBadge = node.querySelector("[data-slot=fixture-badge]");
     fixtureBadge.hidden = false;
-    fixtureBadge.title = "Mock repository used to demonstrate the Runtime view";
+    fixtureBadge.title = "Mock repo used to demonstrate the Runtime view";
   }
   // No repository-level git badge: git is per-checkout now (see the roots loop below), and the
   // repository header itself — name, provider link — never depends on which root is running.
@@ -475,7 +475,7 @@ function repositoryMenuItems(repository, actions) {
     { key: "pin", label: repository.pinned ? "Unpin" : "Pin" },
     // Ignore is the registry-wide decision Home offers too; Hide from Runtime only tucks this
     // repository's running members away on this page (pljvmyh §8).
-    { key: "ignore", label: "Ignore repository", hidden: !repository.repositoryId || !actions?.onIgnore },
+    { key: "ignore", label: "Ignore repo", hidden: !repository.repositoryId || !actions?.onIgnore },
     { key: "hide", label: "Hide from Runtime" },
   ];
 }
@@ -631,6 +631,18 @@ export function settingsRow(title, meta, label, onClick) {
   return node;
 }
 
+export function worktreeThreshold(days, onSave) {
+  const node = tpl("tpl-worktree-threshold");
+  const input = node.querySelector("[data-field=days]");
+  input.value = String(days);
+  node.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (!node.reportValidity()) return;
+    onSave(Number(input.value));
+  });
+  return node;
+}
+
 // Render Git context, distinguishing "no uncommitted changes" from "we could not tell". A dirty
 // marker only appears for an explicit true; null means the subprocess could not answer, and drawing
 // nothing there is the honest choice — a card that implied "clean" would be acted on.
@@ -731,6 +743,7 @@ const DRIFT_RULES = [
   (git) => {
     if (!git.behind) return null;
     return {
+      kind: "remote",
       level: "danger",
       text: `${git.behind} behind remote`,
       title: `${git.upstream || "The remote branch"} has ${git.behind} commit${git.behind === 1 ? "" : "s"} you do not have locally — pull before continuing`,
@@ -772,17 +785,18 @@ const DRIFT_RULES = [
 
 export function applyGitDrift(badge, git) {
   const slot = badge.querySelector("[data-slot=git-drift]");
-  if (!slot) return;
-  const now = Date.now();
-  for (const rule of DRIFT_RULES) {
-    const hit = rule(git, now);
-    if (!hit) continue;
-    slot.hidden = false;
-    slot.textContent = `⚠ ${hit.text}`;
-    slot.title = hit.title;
-    slot.dataset.level = hit.level;
-    return;
-  }
+  const [hit] = gitDriftWarnings(git);
+  if (!slot || !hit) return;
+  slot.hidden = false;
+  slot.textContent = `⚠ ${hit.text}`;
+  slot.title = hit.title;
+  slot.dataset.level = hit.level;
+}
+
+// Every drift rule that applies, most severe first. A row shows the first; a detail view that has
+// room shows them all, so the two never disagree about what counts as drift.
+export function gitDriftWarnings(git, now = Date.now()) {
+  return DRIFT_RULES.map((rule) => rule(git, now)).filter(Boolean);
 }
 
 // Age of the branch point, or null when there is no base to compare against or it is still fresh.
@@ -1090,8 +1104,8 @@ function applyProcessMetricsBadge(tooltip, metrics) {
 // would have fired on container count rather than real load.
 //
 // CPU only earns persistent space once it is worth acting on; below the warn threshold the number
-// stays in the tooltip. Provisional fixed defaults — the plan doc's resource-threshold follow-up
-// covers spike detection and per-project overrides, which this intentionally does not attempt.
+// stays in the tooltip. Provisional fixed defaults; spike detection and per-project overrides are
+// intentionally not attempted.
 const CPU_WARN_PERCENT_OF_HOST = 25;
 const CPU_ALERT_PERCENT_OF_HOST = 60;
 

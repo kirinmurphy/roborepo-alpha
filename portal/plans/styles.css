@@ -1,13 +1,12 @@
-/* Breakpoints used on this page — kept to these two values everywhere below (no build step here,
- * so no @custom-media/var() substitution in media queries; consolidating to a fixed pair and
- * reusing them is the plain-CSS equivalent):
- *   765px  — narrow: lifecycle tabs collapse to a dropdown selector. Set ~50px above the point
- *            tabs would wrap to 2 lines, so the dropdown swap happens before wrapping occurs.
- *   960px  — wide: drawer/filter-row go single-column below it; the plan card's status
- *            section becomes a fixed 200px right-side column at/above it.
+/* Breakpoints used on this page — kept to these values everywhere below (no build step here,
+ * so no @custom-media/var() substitution in media queries; reusing fixed values is the plain-CSS
+ * equivalent):
+ *   960px  — wide: drawer/filter-row go single-column below it.
+ * The lifecycle row's collapse point lives in app.js, where it mounts the shared overflow nav.
  */
 main {
-  padding-top: 18px;
+  /* Matches the grid gap, so the filter tags row has the same space above and below it. */
+  padding-top: 14px;
   padding-bottom: 18px;
   display: grid;
   gap: 14px;
@@ -18,55 +17,17 @@ main {
   border-radius: 8px;
   padding: 1rem 1.5rem;
 }
-/* Whole-page sticky header block: control-bar + lifecycle tabs ride together and stay pinned for
- * the entire scroll, not just the ~2 rows of their old short wrapper. #plans-header is a direct
- * child of <body> (the page scroll container), so a sticky here tracks the full page. It pins to
- * the very top of the viewport and rides OVER the shared .portal-header (z-index above the header's
- * 10) as you scroll — same behavior as the Tokens page's control bar, not fixed to its default
- * on-page position. A solid background keeps scrolled card content from showing through. */
+/* The lifecycle row is sticky, pinned just below the site header and its repo row. theme.js
+ * publishes the header's height as --portal-header-height. One step under the header's z-index, so
+ * the header's open menus stay on top. A solid background keeps scrolled cards from showing through. */
 #plans-header {
   position: sticky;
-  top: 0;
-  z-index: 11;
+  top: var(--portal-header-height, 0px);
+  z-index: 9;
   background: var(--bg);
 }
-/* The control-bar no longer sticks on its own — #plans-header owns the stickiness now, so the
- * shared .control-panel sticky would just fight it. Neutralize position here (keeps its
- * background/border/padding from base.css). */
-#plans-header .control-panel.control-bar {
-  position: static;
-  top: auto;
-}
-/* Lifecycle-tabs row needs its own solid background + a little breathing room now that it's part of
- * the pinned block sitting over scrolling cards. */
 #plans-header > .inner {
-  background: var(--bg);
   padding-top: 8px;
-}
-/* Control bar: Plans/Repos/Filters row + persistent chips + whichever panel is open. Background/
- * border/outer spacing come from the shared .control-panel (portal/shared/base.css) — this only
- * adds what's specific to Plans: the row's items spread to the edges (space-between) rather than
- * just flowing left-to-right. */
-.control-bar-row {
-  justify-content: space-between;
-}
-
-.control-bar-row strong {
-  color: var(--ink);
-}
-.repo-count {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-/* The repository count opens Manage Repos; it reads as part of the sentence. */
-.repos-count-button {
-  font: inherit;
-  color: var(--dim);
-}
-.repos-count-button:hover {
-  color: var(--ink);
 }
 #plans-onboarding {
   margin: 0 0 16px;
@@ -81,24 +42,23 @@ main {
   gap: 16px;
 }
 .empty-state-copy { min-width: 0; }
-.control-bar-row .sync-status { margin-left: 4px; }
 .empty-state--with-action [data-slot="action"] {
   justify-self: end;
   white-space: nowrap;
 }
-/* Layout only — button chrome (border/background/padding) now comes from data-btn, not this
- * class. Groups paired icon buttons (update/refresh; Filters/Agent prompts) for consistent
- * screen positioning. */
-.control-toggle-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
+/* A repository's own empty state sits directly on the page, without the dashed panel, with its
+ * action under the copy. */
+.empty-state.empty-state--plain {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: start;
+  gap: 16px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  padding: 22px 0;
 }
-.control-item-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
+.empty-state--plain [data-slot="action"] { justify-self: start; }
 .filter-chips {
   display: flex;
   flex-wrap: wrap;
@@ -142,36 +102,29 @@ main {
   color: var(--ink);
   background: color-mix(in srgb, var(--line) 60%, transparent);
 }
-/* Expanded panel body: a slightly darker neutral gray than the row-1 strip (still off the
- * --accent/--panel blue), so opening the panel reads as its own layer, not just more row-1. */
-.filters-body {
+/* Filters popup: a modal like the plan drawer's skill dialog, one column of labelled controls with
+ * Cancel/Update along the bottom. */
+dialog#filters-dialog {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0;
+  max-height: 85vh;
+}
+dialog#filters-dialog::backdrop {
+  background: var(--backdrop);
+}
+.filters-dialog-body {
   display: grid;
-  gap: 10px;
-  margin-top: 10px;
-  padding: 10px 0 0;
+  gap: 12px;
+  padding: 16px;
+}
+.filters-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
   border-top: 1px solid var(--line);
-  background: color-mix(in srgb, var(--neutral-tint) 8%, var(--panel));
-  margin-left: -20px;
-  margin-right: -20px;
-  padding-left: 20px;
-  padding-right: 20px;
-  padding-bottom: 12px;
-}
-.filter-row-grid {
-  display: grid;
-  gap: 10px;
-}
-@media (min-width: 960px) {
-  /* Search + 6 select filters (7 items) split 4/4 across two columns: column-major auto-flow
-   * fills the left column top-to-bottom first (4 rows, starting with search), then the right
-   * column (remaining rows) — a plain grid-template-columns:1fr 1fr would instead interleave
-   * items row-by-row across both columns. */
-  .filter-row-grid {
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: repeat(4, auto);
-    grid-auto-flow: column;
-    column-gap: 20px;
-  }
 }
 .filter-row {
   display: grid;
@@ -187,15 +140,6 @@ main {
 .filter-row input,
 .filter-row select {
   width: 100%;
-  max-width: 350px;
-}
-.filter-row-actions {
-  grid-template-columns: none;
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  padding-top: 4px;
 }
 .search-field {
   position: relative;
@@ -234,22 +178,6 @@ main {
   font-size: var(--text-2xs);
   color: var(--dim);
 }
-#lifecycle-error-modal {
-  width: min(560px, 100%);
-  max-height: 85vh;
-  overflow: auto;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  box-shadow: 0 12px 40px var(--modal-shadow);
-  padding: 26px;
-}
-#lifecycle-error-modal::backdrop {
-  background: var(--backdrop);
-}
-#lifecycle-error-modal .modalactions {
-  margin-top: 16px;
-}
 /* Onboarding empty-page mount: full-width, fills the space between the shared chrome (sticky
  * header above, footer below) so the hero sits in the true visual middle of the page. A display
  * rule here would defeat the `hidden` attribute (the attribute loses to any display value), so
@@ -280,81 +208,6 @@ main {
 .groups {
   display: grid;
   gap: 18px;
-}
-/* All Open Tasks — the Active-tab bar and its dialog. */
-/* Scoped to this dialog rather than raising the shared .modal-title: every other modal on the page
- * uses that rule, and this is the one whose title heads a long scrollable list. */
-#all-tasks-modal .modal-title {
-  font-size: var(--text-lg);
-}
-.active-tasks-bar {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 12px;
-}
-.all-tasks-body {
-  display: grid;
-  gap: 34px;
-}
-.all-tasks-project-head {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  border-bottom: 1px solid var(--line);
-  padding-bottom: 8px;
-}
-/* Fixed width so the badges form a column the eye can scan down; the list is sorted by this
- * number, and a ragged left edge would hide the ordering it exists to show. The badge carries the
- * ramp color inline (see completionBadgeColor) — only the shape and the text treatment live here,
- * so there is one source for the color and one for the geometry. */
-.all-tasks-percent {
-  flex: none;
-  width: 3.5em;
-  padding: 2px 0;
-  border-radius: 999px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  font-size: var(--text-xs);
-  color: #fff;
-  align-self: center;
-}
-.all-tasks-project-title {
-  font-weight: 600;
-  font-size: var(--text-lg);
-}
-.all-tasks-repo,
-.all-tasks-count {
-  color: var(--dim);
-  font-size: var(--text-xs);
-}
-.all-tasks-count {
-  margin-left: auto;
-  font-variant-numeric: tabular-nums;
-}
-/* Indented to the same rail as the task list, so the not-started line and the tasks it sits above
- * read as one block belonging to the project header rather than two separate columns. */
-.all-tasks-notstarted {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 10px 0 0 4.5em;
-  color: var(--dim);
-  font-size: var(--text-xs);
-}
-/* 4.5em clears the badge column (3.5em + the header's 10px gap), so tasks hang under the project
- * name rather than under the percentage. */
-.all-tasks-list {
-  margin: 10px 0 0;
-  padding-left: 4.5em;
-  display: grid;
-  gap: 6px;
-}
-.all-tasks-list:empty {
-  display: none;
-}
-.all-tasks-item {
-  font-size: var(--text-sm);
 }
 .empty-state {
   border: 1px dashed var(--line);
@@ -451,25 +304,6 @@ plan-card {
   display: block;
   min-width: 0;
 }
-/* Wide screens: status (blocked badge / progress / next-action) moves to a fixed right column
- * instead of stacking under the card's main content — see breakpoint note at top of file.
- * Active-lifecycle cards only: progress/next-action only apply while a plan is in flight, so the
- * dedicated column is wasted space on every other lifecycle — those keep the narrow-screen
- * stacked layout regardless of viewport width. */
-@media (min-width: 960px) {
-  .plan-card.is-active {
-    grid-template-columns: 1fr 360px;
-  }
-
-  .plan-card.is-active > plan-status .status-section {
-    margin: 0;
-    border-top: none;
-    border-left: 1px solid var(--warn-line);
-    border-radius: 0 7px 7px 0;
-    height: 100%;
-    align-self: start;
-  }
-}
 .plan-card .doc-details h3 {
   margin: 0;
   font-size: var(--text-md);
@@ -516,9 +350,10 @@ plan-card {
   align-items: stretch;
 }
 .plan-card plan-status .status-section {
-  border-top: 1px solid var(--warn-line);
+  border: 1px solid var(--line);
+  border-top: none;
   border-radius: 0 0 7px 7px;
-  background: color-mix(in srgb, var(--warn) 10%, var(--panel));
+  background: color-mix(in srgb, var(--ink) 3%, var(--panel));
 }
 .card-actions {
   display: flex;
@@ -556,19 +391,50 @@ plan-card {
   vertical-align: -1px;
 }
 
-/* Lifecycle tabs (desktop) / dropdown fallback (narrow screens), replacing stacked sections. */
-.lifecycle-tabs {
+/* The current lifecycle titles the left side on wide screens; navigation sits opposite it. On
+ * narrow screens the menu trigger names the selection and aligns with the left edge. */
+.lifecycle-bar {
   display: flex;
-  gap: 4px;
+  align-items: center;
   border-bottom: 1px solid var(--line);
-  margin-bottom: 12px;
-  flex-wrap: wrap;
 }
-.lifecycle-tabs:empty {
+/* Before there is a board (no plans yet, not scanned) only Refresh stays on the row. */
+.lifecycle-bar[data-board="false"] :is(.lifecycle-title, .lifecycle-tabs, #filters-toggle) {
   display: none;
-  border-bottom: 0;
-  margin-bottom: 0;
 }
+.lifecycle-bar[hidden] {
+  display: none;
+}
+.lifecycle-title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+/* Wide: title, Refresh beside it, then the tabs and Filters pushed to the right edge. */
+.lifecycle-title { order: 0; }
+#refresh { order: 1; margin-left: 10px; }
+.lifecycle-tabs {
+  order: 2;
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-left: auto;
+}
+#filters-toggle { order: 3; margin-left: 8px; }
+/* Refresh is the bare icon, with no button chrome. */
+.icon-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--dim);
+  cursor: pointer;
+}
+.icon-action:hover:not(:disabled) { color: var(--ink); }
+.icon-action:disabled { cursor: default; }
 .lifecycle-tab {
   font: inherit;
   font-size: var(--text-sm);
@@ -587,93 +453,46 @@ plan-card {
   border-bottom-color: var(--accent);
   font-weight: 600;
 }
-.lifecycle-dropdown-mount {
-  display: none;
-  margin-bottom: 12px;
+/* The ⋮ stays neutral when its menu contains the selection. Collapsed, the labeled trigger is the
+ * selected lifecycle and carries the underline itself. */
+.lifecycle-tabs .overflow-more-trigger {
+  font-size: var(--text-sm);
+  padding: 8px 12px;
+  border-bottom: 2px solid transparent;
 }
-/* Stylized full-width trigger — this dropdown reads as the page's section title on narrow
- * screens (it replaces the lifecycle tabs entirely), so it needs to look prominent rather than
- * like a small floating control that gets lost above the card list. */
-.lifecycle-dropdown-mount option-dropdown {
-  display: block;
-  width: 100%;
-}
-.lifecycle-dropdown-mount .dropdown-trigger {
-  width: 100%;
-  justify-content: space-between;
-  font-size: var(--text-lg);
-  font-weight: 400;
-  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
-  border-color: var(--line);
-  padding: var(--space-sm) var(--space-md);
-  border-radius: 8px;
-}
-.lifecycle-dropdown-mount .dropdown-chevron {
-  font-size: var(--text-lg);
+.lifecycle-tabs[data-collapsed] .overflow-more-trigger {
   color: var(--ink);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
 }
-.lifecycle-dropdown-mount .dropdown-menu {
-  width: 100%;
+.lifecycle-tabs .overflow-more-panel {
+  left: auto;
+  right: 0;
 }
-@media (max-width: 765px) {
-  .lifecycle-tabs {
+.lifecycle-tabs .overflow-more-panel .lifecycle-tab {
+  white-space: nowrap;
+}
+.lifecycle-tabs .overflow-more-panel > :not(:last-child) {
+  border-bottom: 1px solid var(--popover-border);
+}
+.lifecycle-tabs .overflow-more-panel .lifecycle-tab.selected {
+  color: var(--active-ink);
+  background: var(--active);
+}
+@media (max-width: 640px) {
+  .lifecycle-title {
     display: none;
   }
-  .lifecycle-dropdown-mount {
-    display: block;
+  /* Narrow: the tabs' menu on the left, Filters at the right edge, Refresh right of Filters. */
+  .lifecycle-tabs {
+    order: 0;
+    margin-left: 0;
+    margin-right: auto;
   }
-}
-.lifecycle-error-title {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  font-size: var(--text-lg);
-  color: var(--spike);
-}
-.lifecycle-error-title portal-icon {
-  color: var(--spike);
-  flex: none;
-}
-.lifecycle-error-details {
-  margin: 0;
-  padding-left: 1.2em;
-  border-left: 3px solid var(--spike);
-  padding-block: var(--space-xs);
-}
-.lifecycle-error-details li {
-  margin-bottom: 2px;
-  padding-left: var(--space-xs);
-}
-/* Group headings for the blocked-move dialog. Only shown when both groups are present, so they
- * always appear as a contrasting pair rather than labelling a single list. */
-.lifecycle-findings-label {
-  margin: var(--space-sm) 0 var(--space-xs);
-  font-size: var(--text-2xs);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--dim);
-}
-.lifecycle-findings-label:first-of-type {
-  margin-top: 0;
-}
-.lifecycle-finding {
-  margin-bottom: var(--space-xs);
-}
-.lifecycle-finding-message {
-  margin: 0;
-}
-/* Indented and dimmed so the problem reads first and the fix reads as its follow-up. */
-.lifecycle-finding-resolution {
-  margin: 2px 0 0;
-  font-size: var(--text-2xs);
-  color: var(--dim);
-}
-/* The advisory list is deliberately quieter — these do not prevent the move. */
-[data-slot="advisory-details"] {
-  border-left-color: var(--line);
-}
-/* Copy sits left of the decision buttons: it is the alternative to deciding, not one of the
- * choices. `gap` on .modalactions already spaces the rest. */
-#lifecycle-error-modal .modalactions portal-copy-button {
-  margin-right: auto;
+  #filters-toggle { order: 1; }
+  #refresh { order: 2; margin-left: 4px; }
+  .lifecycle-tabs .overflow-more-panel {
+    left: 0;
+    right: auto;
+  }
 }

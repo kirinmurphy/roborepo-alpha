@@ -23,6 +23,7 @@ test command/suite.
 | Release preflight | `npm run publish:npm -- --dry-run` | npm auth, registry availability, release checks | Does not write a version or publish. |
 | Targeted Node checks | `node scripts/test/<name>.mjs` | one behavior surface | Preferred while debugging a specific regression. |
 | Hermetic rerun | `bash scripts/test/hermetic-suite.sh --quiet` | the main suite under a temp `HOME` and a PATH with no harness executables | Reproduces CI-runner conditions locally. A test that fails only here is reading ambient machine state. |
+| Portal UI suite | `npm run test:portal-ui` (`node scripts/test/portal-ui/run.mjs <spec>` for one spec) | the portal in Chromium against one hermetic server shared by every spec | The server never sees the host's harnesses: `host-harness-isolation.mjs` shadows provider executables on `PATH` with failing stubs and points macOS desktop-app discovery at a missing root. Without that, a harness installed on the developer's machine is set up mid-suite and changes what later specs see. |
 | Portal smoke | `roborepo web --no-open --port <port>` plus `curl`/browser checks | local portal routes and API snapshots | Start under direct control and stop with Ctrl-C. Do not use detached mode for test runs. |
 
 ## Required Cleanup Gate
@@ -101,7 +102,7 @@ composition root. The CLI command is the supported surface.
 
 ```sh
 roborepo web --no-open --port 58473
-curl -fsS http://127.0.0.1:58473/config
+curl -fsS http://127.0.0.1:58473/agents
 curl -fsS http://127.0.0.1:58473/api/config
 curl -fsS http://127.0.0.1:58473/api/maintenance/uninstall/preview
 ```
@@ -111,7 +112,7 @@ planned cleanup and `workspacePreserved`. Do not call `POST /api/maintenance/uni
 publish verification.
 
 When browser automation is available, use it for DOM-level checks: page load, console errors,
-network failures, and the visible Uninstall panel. Without browser automation, `/config`,
+network failures, and the visible Uninstall panel. Without browser automation, `/agents`,
 `/api/config`, and the uninstall preview are acceptable browser-equivalent smoke checks, but record
 that no real browser was used.
 

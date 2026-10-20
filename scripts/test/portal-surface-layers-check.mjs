@@ -54,8 +54,31 @@ for (const [theme, palette] of [["dark", tokens(":root")], ["light", { ...tokens
     gap("surface-sunken", "surface-inset") > gap("surface-band", "surface-sunken"),
     `${theme}: inset units are not the most distinct layer (${gap("surface-sunken", "surface-inset").toFixed(1)} vs ${gap("surface-band", "surface-sunken").toFixed(1)})`,
   );
-  assert.ok(gap("tooltip-bg", "wash-heading") >= 2 * STEP, `${theme}: tooltip heading bands do not stand out (${gap("tooltip-bg", "wash-heading").toFixed(1)})`);
+  // Dropdowns, menus, and tooltips share --popover-bg; it must not bleed into the card it opens from.
+  assert.ok(gap("popover-bg", "panel") >= 2 * STEP, `${theme}: a dropdown blends into its card (${gap("popover-bg", "panel").toFixed(1)})`);
+  assert.ok(gap("popover-bg", "wash-heading") >= 2 * STEP, `${theme}: tooltip heading bands do not stand out (${gap("popover-bg", "wash-heading").toFixed(1)})`);
   console.log(`ok  ${theme} surface layers`);
+}
+
+// Light theme's chrome: a white site header over the darkest band, the repo filter row, with the
+// page lighter than that row. Dark keeps the header on the page colour, so this applies to light only.
+{
+  const palette = { ...tokens(":root"), ...tokens(':root[data-theme="light"]') };
+  const L = (name) => {
+    assert.ok(palette[name], `light: --${name} is not a hex colour in base.css`);
+    return lightness(palette[name]);
+  };
+  assert.ok(L("header-bg") - L("scope-bar-bg") >= STEP, `light: the header is not lighter than the repo row (${(L("header-bg") - L("scope-bar-bg")).toFixed(1)})`);
+  assert.ok(L("bg") - L("scope-bar-bg") >= STEP, `light: the page is not lighter than the repo row (${(L("bg") - L("scope-bar-bg")).toFixed(1)})`);
+  // Dim text in the header and the repo row ("Synced", "Viewing") must stay readable on both
+  // backgrounds: WCAG AA, 4.5:1.
+  const luminance = (hex) => ((lightness(hex) + 16) / 116) ** 3;
+  const contrast = (a, b) => (Math.max(luminance(a), luminance(b)) + 0.05) / (Math.min(luminance(a), luminance(b)) + 0.05);
+  for (const background of ["header-bg", "scope-bar-bg"]) {
+    const ratio = contrast(palette["header-dim"], palette[background]);
+    assert.ok(ratio >= 4.5, `light: dim header text is ${ratio.toFixed(2)}:1 on --${background}`);
+  }
+  console.log("ok  light chrome: white header, grey repo row, page between");
 }
 
 console.log("portal surface layers check passed");

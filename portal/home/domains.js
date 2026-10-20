@@ -1,20 +1,28 @@
 import { portalFillSlots as fill, portalTpl as tpl } from "/portal/shared/api.js";
+import { hrefWithRepositoryScope } from "/portal/shared/repository-scope.js";
 
 // Repository facts below the checkout and plan rows. Plans live in those rows now (plan-rows.js), so
-// only Token Warnings remains here.
-export function appendRepositoryDomains(host, domains) {
-  const tokens = domains.tokens.data;
+// only Token Warnings remains here. Its link opens Tokens scoped to this repository, since the
+// warnings it summarizes are this repository's.
+export function appendRepositoryDomains(host, repository) {
+  const tokens = repository.domains.tokens.data;
   if (tokens?.warningCount > 0) {
     const warnings = tokens.warnings || tokens.recent || [];
-    host.append(domainRow("Token Warnings", warningSummary(tokens.warningCount, warnings), {
-      glyph: "warning", warning: true, href: "/tokens", linkLabel: "all activity", details: [tokenWarnings(warnings)],
+    host.append(domainRow("Recent Token Warnings", warningSummary(tokens.warningCount, warnings), {
+      glyph: "warning",
+      warning: true,
+      href: hrefWithRepositoryScope("/tokens", repository.urlKey),
+      linkLabel: "all activity",
+      details: [tokenWarnings(warnings)],
     }));
   }
   host.hidden = !host.childElementCount;
 }
 
 function domainRow(label, summary, { glyph, href, linkLabel, warning = false, details }) {
-  const node = fill(tpl("tpl-domain-row"), { label, summary });
+  // The heading reads "<label> … link"; the count and date range ride along as its tooltip.
+  const node = fill(tpl("tpl-domain-row"), { label });
+  node.querySelector("[data-slot=label]").title = summary;
   const icon = node.querySelector("[data-slot=glyph]");
   icon.setAttribute("name", glyph);
   node.classList.toggle("is-warning", warning);

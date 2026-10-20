@@ -39,6 +39,8 @@ import {
 import { createIdleGitCache } from "../../modules/repositories/idle-git-cache.mjs";
 import { MOCK_FIRST_RUN_VIEWS_ENABLED, mockRuntimeSnapshot } from "./mock-home.mjs";
 import { isFixtureRepository } from "../../modules/developer-runtime/snapshot.mjs";
+import { collectKnownWorktrees } from "./worktree-observations.mjs";
+import { loadWorktreeSessionActivity } from "./worktree-activity.mjs";
 
 const FRESHNESS_MS = 8000;
 const HISTORY_API_LIMIT = 200;
@@ -48,6 +50,8 @@ let inFlightRefresh = null;
 let refreshGeneration = 0;
 let mockSnapshotActive = false;
 let portalInfo = null;
+let lastKnownWorktrees = new Map();
+let lastWorktreeCleanup = new Map();
 // associationKeys already present in the history file, read once. Without it, the first refresh
 // after a portal restart has no previous snapshot to compare against and would emit a firstSeen for
 // every running app — every restart, forever.
@@ -56,6 +60,8 @@ let knownHistoryKeys = null;
 export function clearDeveloperRuntimeSnapshotCache() {
   lastSnapshot = null;
   mockSnapshotActive = false;
+  lastKnownWorktrees = new Map();
+  lastWorktreeCleanup = new Map();
 }
 
 // While auto-discovery is off the refresh still runs, but only over checkouts the registry already
@@ -132,9 +138,18 @@ export async function refreshDeveloperRuntimeSnapshot({
       // counted as running rather than appearing as idle on the poll that first found it.
       const runningIds = runningRepositoryIds(discovery);
       const registryNow = loadRegistrySafe();
-      const idleMainCheckouts = await collectIdleMainCheckouts(discovery, runningIds, registryNow);
+      const runningRootIds = new Set((discovery.instances || []).map((instance) => instance.project?.rootId).filter(Boolean));
+      for (const resolved of (discovery.composeProjectGit || new Map()).values()) if (resolved?.rootId) runningRootIds.add(resolved.rootId);
+      const inventory = registryNow ? await collectKnownWorktrees(registryNow, {
+        stateRoot, settings, readGit: readIdleGit, runningRootIds,
+        sessionActivity: loadWorktreeSessionActivity(stateRoot),
+      }) : { registry: null, worktrees: new Map(), cleanup: new Map(), findings: [] };
+      lastKnownWorktrees = inventory.worktrees;
+      lastWorktreeCleanup = inventory.cleanup;
+      (discovery.warnings ||= []).push(...inventory.findings);
+      const idleMainCheckouts = await collectIdleMainCheckouts(discovery, runningIds, inventory.registry);
       const { persistedRepositories, registry } = await collectPersistedRepositories(runningIds, {
-        registry: registryNow,
+        registry: inventory.registry,
         extraLiveRoots: [...idleMainCheckouts.values()].map((checkout) => checkout.projectRoot),
       });
       lastSnapshot = buildSnapshot({
@@ -208,6 +223,7 @@ export function updateDeveloperRuntimeSettings(input) {
     const settings = updateSettings({ stateRoot, input });
     const discovery = snapshotDiscovery(lastSnapshot);
     lastSnapshot = buildSnapshot({ discovery, settings });
+    if (input?.type === "preferences") scheduleRefresh();
     return { ok: true, developerRuntime: lastSnapshot };
   } catch (err) {
     if (err?.code === "REVISION_CONFLICT") {
@@ -445,7 +461,7 @@ function recordDiscoveredRepositories(instances, composeProjectGit = null) {
       });
     } catch {
       // Registry unavailable/corrupt — Runtime keeps working; the failure surfaces elsewhere
-      // (Phase 4 reports registry errors as a structured health finding).
+      // (registry errors are reported as a structured health finding).
     }
   }
 }
@@ -483,7 +499,7 @@ function scheduleRefresh() {
   if (!inFlightRefresh) refreshDeveloperRuntimeSnapshot().catch(() => {});
 }
 
-function buildSnapshot({ discovery, settings = loadSettings({ stateRoot }), refresh = { state: "idle", startedAt: null, error: null }, now = new Date(), persistedRepositories = [], idleMainCheckouts = new Map(), registry = loadRegistrySafe() }) {
+function buildSnapshot({ discovery, settings = loadSettings({ stateRoot }), refresh = { state: "idle", startedAt: null, error: null }, now = new Date(), persistedRepositories = [], idleMainCheckouts = new Map(), knownWorktrees = lastKnownWorktrees, worktreeCleanup = lastWorktreeCleanup, registry = loadRegistrySafe() }) {
   return withoutFixtureRepositories(withAutoDiscovery(buildDeveloperRuntimeSnapshot({
     discovery,
     settings,
@@ -493,6 +509,8 @@ function buildSnapshot({ discovery, settings = loadSettings({ stateRoot }), refr
     repositoryUrlKeys: registryUrlKeys(registry),
     persistedRepositories,
     idleMainCheckouts,
+    knownWorktrees,
+    worktreeCleanup,
     hiddenRepositories: collectHiddenRepositories(registry),
     pinnedRepositoryIds: registryPinnedIds(registry),
   })));
@@ -547,7 +565,7 @@ async function collectPersistedRepositories(runningRepositoryIds, { registry = l
     // which reads the registry directly rather than this snapshot field.
     if (record?.visibility === "hidden") continue;
     // A record whose every checkout has been repointed to another repository — the surviving half of
-    // a rename Phase 2 deliberately did not merge. Listing it renders two cards with the same name,
+    // a rename that was deliberately not merged. Listing it renders two cards with the same name,
     // one of which is a remote nobody uses any more. The record is untouched; it is only folded out
     // of this view, and it returns the moment any checkout resolves back to it.
     if (supersededBy(registry, id)) continue;
@@ -591,14 +609,14 @@ async function collectPersistedRepositories(runningRepositoryIds, { registry = l
 // Alias a record onto the repository that a remote rename moved it into, and return the registry as
 // it now stands.
 //
-// Phase 2 refused to act on a rename because it believed the evidence could not distinguish one from
+// Rename handling once refused to act because it assumed the evidence could not distinguish one from
 // a deleted-and-recloned directory. `renamedInto` shows it can: a rootId is a hash of an absolute
 // path, so the two records naming the same one is direct evidence the same directory was seen under
 // both remotes, and the most-recently-used root separates the two cases (see lifecycle.mjs).
 //
 // The action stays an ALIAS, never a merge, and that is what makes doing it automatically
 // defensible. An alias leaves both records intact, renders one row instead of two, and is reversed
-// by deleting one line; a wrong one costs a row until it is removed. A merge — the thing Phase 2
+// by deleting one line; a wrong one costs a row until it is removed. A merge — the thing rename handling
 // actually refused — would rewrite ownership and could hide one repository's work inside another,
 // and is still not done here.
 //
@@ -772,7 +790,7 @@ export async function collectIdleMainCheckouts(discovery, runningIds, registry) 
 // Git for a persisted checkout path, but only once that path is confirmed to still BE this
 // repository.
 //
-// The plan's "reused directory" risk: a checkout is deleted and a different repository cloned to the
+// The reused-directory risk: a checkout is deleted and a different repository cloned to the
 // same path. The registry still records the path against the old record, so reading git from it
 // blind would print the new repository's branch on the old repository's card — a wrong fact stated
 // confidently, which is worse than the missing one it replaces. A running repository never has this

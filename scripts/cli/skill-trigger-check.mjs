@@ -1,13 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { repoRoot } from "./paths.mjs";
 import { loadPackageCatalog } from "./package-catalog.mjs";
-
-const TRIGGER_TESTS_REL = "manifests/inventory/skill-trigger-tests.json";
-
-function readJson(relPath) {
-  return JSON.parse(fs.readFileSync(path.join(repoRoot, relPath), "utf8"));
-}
+import { loadSkillTriggerFixtures } from "./skill-trigger-fixtures.mjs";
 
 function parseDescription(content) {
   const match = /^---\n([\s\S]*?)\n---/.exec(content);
@@ -85,13 +79,19 @@ export function skillTriggerCheck(args = []) {
     process.exit(2);
   }
   const quiet = args.includes("--quiet") || args.includes("-q");
-  const fixture = readJson(TRIGGER_TESTS_REL);
+  let fixtures;
+  try {
+    fixtures = loadSkillTriggerFixtures();
+  } catch (error) {
+    console.error(`fail: ${error.message}`);
+    process.exit(1);
+  }
   const failures = [];
-  for (const test of fixture.tests || []) failures.push(...checkTriggerCase(test));
+  for (const test of fixtures) failures.push(...checkTriggerCase(test));
 
   if (failures.length) {
     for (const failure of failures) console.error(`fail: ${failure}`);
     process.exit(1);
   }
-  if (!quiet) console.log(`ok: ${(fixture.tests || []).length} skill trigger fixture(s)`);
+  if (!quiet) console.log(`ok: ${fixtures.length} skill trigger fixture(s)`);
 }

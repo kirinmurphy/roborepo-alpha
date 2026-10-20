@@ -10,11 +10,11 @@ export { spikeCause } from "./telemetry-analysis/spikes.mjs";
 // cohortFilter scopes every panel. markerId selects a markers entry for compareMetric (tokens.total
 // by default); repositoryHashIndex resolves legacy repository evidence before either comparison.
 export function analyzeTelemetry(events, options = {}) {
-  const { cohortFilter = null, markers = [], repositoryHashIndex = null } = options;
+  const { cohortFilter = null, markers = [] } = options;
   const normalizedFilter = cohortFilter ? normalizeCohortFilter(cohortFilter) : null;
-  const scopedEvents = normalizedFilter ? applyCohortFilter(events, normalizedFilter, { markers, repositoryHashIndex }) : events;
+  const scopedEvents = normalizedFilter ? applyCohortFilter(events, normalizedFilter, { markers }) : events;
   // One representative row per operation, so mirrored captures never double-count.
-  const observations = normalizeObservations(scopedEvents, { repositoryHashIndex });
+  const observations = normalizeObservations(scopedEvents);
   const report = analyzeRows(canonicalFlowRows(observations), scopedEvents, events, normalizedFilter, options);
   report.conditions = buildConditionsReport(scopedEvents, report, options, observations);
   for (const [key, kind] of [["spikes", "spike"], ["loops", "loop"], ["read_warnings", "read-warning"]]) {

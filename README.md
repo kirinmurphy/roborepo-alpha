@@ -160,8 +160,6 @@ flowchart LR
 Compare observed problem rates across conditions, then record a change and inspect the before/after
 session counts. These examples use fictional sample data; comparisons describe associations.
 
-![Condition detail: 3 of 12 sessions affected with the condition, versus 9 of 12 without](docs/images/tokens/comparison-detail-light.png)
-
 [Tokens page user guide →](docs/user/guides/telemetry.md) ·
 [Light and dark screenshot gallery →](docs/images/tokens/README.md)
 
@@ -175,29 +173,33 @@ RoboRepo discovers repository planning documents under:
 ```text
 docs/plans/
 ├── backlog/
+├── ready/
 ├── active/
+├── review/
 ├── completed/
 └── archived/
 ```
 
 The Plans portal surfaces:
 
-|                 |                                |
-| --------------- | ------------------------------ |
-| Readiness       | deterministic validation       |
-| Priority        | plan metadata                  |
-| Dependencies    | blockers and relationships     |
-| Git state       | reviewed commit / current HEAD |
-| Agent workflows | create, review, start, sync    |
+|                 |                                                       |
+| --------------- | ----------------------------------------------------- |
+| Structure       | deterministic validation                              |
+| Priority        | plan metadata                                         |
+| Dependencies    | blockers and relationships                            |
+| Plan freshness  | reviewed commit / current HEAD                        |
+| Review outcome  | open findings and your recorded approval              |
+| Agent workflows | write, promote, execute, review, close, archive       |
 
 ```mermaid
 flowchart LR
-  Backlog -->|start| Active -->|complete| Completed
-  Active -->|archive| Archived
-  Backlog -->|archive| Archived
+  Backlog -->|/plan-promote| Ready -->|/plan-execute| Active -->|implemented and validated| Review
+  Review -->|you merge, then /plan-close| Completed
+  Review -->|scope change| Active
+  Backlog & Ready & Active & Review -->|/plan-archive| Archived
 ```
 
-![The Plans page: lifecycle tabs and a plan card with priority, review state, and workflow actions](docs/images/plans.png)
+![The Plans page: lifecycle tabs and a plan card with priority, plan freshness, and workflow actions](docs/images/plans.png)
 
 [Plan Suite walkthrough →](docs/user/guides/plan/lifecycle/plan-suite.md)\
 [Plans reference →](docs/user/reference/plans-portal.md)

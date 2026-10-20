@@ -1,4 +1,4 @@
-// Pure, explainable phase inference (plan: "Phase detection" — inferred phase tagging). Zero fs/config
+// Pure, explainable phase inference (inferred phase tagging). Zero fs/config
 // dependency so it stays cheap enough to import from the hot capture path, same discipline as
 // telemetry-classify.mjs. Callers are responsible for building the `signals` object from whatever
 // session-scoped activity state they track (telemetry-capture.mjs keeps this in a collector-dir cursor);
@@ -10,8 +10,8 @@ export const PHASE_CLASSIFIER_VERSION = 1;
 
 export const PHASE_NAMES = ["discovery", "implementation", "debugging", "verification", "finalization", "unknown"];
 
-// Confidence below this collapses to "unknown" in comparisons per the plan's "low-confidence phases
-// collapse to unknown" rule. Exported so analysis code (Phase 5) can apply the identical threshold
+// Confidence below this collapses to "unknown" in comparisons. Exported
+// so analysis code can apply the identical threshold
 // rather than each caller picking its own number.
 export const LOW_CONFIDENCE_THRESHOLD = 0.5;
 

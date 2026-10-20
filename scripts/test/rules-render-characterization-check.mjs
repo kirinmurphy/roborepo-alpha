@@ -1,7 +1,6 @@
 #!/usr/bin/env node
-// Characterizes rules-render.mjs's per-harness behavior before Phase 5 refactors HOME_RULES /
-// RULE_DIRS through provider rule targets (docs/plans/active/discoverable-harness-provider-
-// architecture-plan.md). Pins the genuine harness-specific special cases so the refactor can be
+// Characterizes rules-render.mjs's per-harness behavior through provider rule
+// targets. Pins the genuine harness-specific special cases so the refactor can be
 // checked byte-for-byte: Codex's AGENTS.override.md mirror write, Claude's legacy rules-file
 // cleanup, and the shared+harness fragment render order for both harnesses.
 import assert from "node:assert/strict";

@@ -48,7 +48,7 @@ This never touches global `~/.claude` or `~/.codex`.
 ## Skill Inspection
 
 `roborepo skill inspect <name>` is read-only. It uses the same native-aware inventory model as the
-`/config` skill inspect popup, so CLI and portal reports agree.
+`/agents` skill inspect popup, so CLI and portal reports agree.
 
 The report distinguishes:
 
@@ -68,10 +68,30 @@ whether to edit native config, run `roborepo skill adopt <name>`, or refresh man
 
 ## Trigger Fixtures
 
-`roborepo skill triggers --check` is a deterministic guard for invocation policy. It reads
-`manifests/inventory/skill-trigger-tests.json` and checks that each fixture's expected prompts use
-declared trigger phrases, near-miss prompts avoid those phrases, and the skill description still
-contains both trigger and skip language.
+`roborepo skill triggers --check` is a deterministic guard for invocation policy. Each package
+owns the fixtures for its own skills in an optional `skill-triggers.json` at the package root,
+beside `package.config.json`:
+
+```json
+{
+  "tests": [
+    {
+      "skill": "plan-write",
+      "match": ["create an implementation plan for package reconciliation"],
+      "nearMiss": ["write a quick PR summary"],
+      "triggerPhrases": ["implementation plan"],
+      "skipPhrases": ["PR descriptions"]
+    }
+  ]
+}
+```
+
+The check reads every package in the catalog, including disabled ones and workspace packages, and
+verifies that each fixture's expected prompts use declared trigger phrases, near-miss prompts avoid
+those phrases, and the skill description still contains both trigger and skip language. A fixture
+may only name a skill its own package declares. The file sits at the package root rather than in
+`skills/<id>/` because skill directories are copied into harness homes and exported projects, and
+fixtures are test data, not agent instructions.
 
 This is not a model oracle. It catches accidental broadening or removal of trigger language before
 the repo changes skill descriptions or invocation policy.

@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { inferPhase, PHASE_CLASSIFIER_VERSION, LOW_CONFIDENCE_THRESHOLD } from "../cli/telemetry-phase-infer.mjs";
 
-// Phase 4 of docs/plans/active/roborepo-telemetry-events-experiments-plan.md: explainable phase
+// Explainable phase
 // inference over already-summarized session activity signals. Pure module, no fs/session state —
 // telemetry-capture.mjs owns building the `signals` object from its per-session activity cursor.
 

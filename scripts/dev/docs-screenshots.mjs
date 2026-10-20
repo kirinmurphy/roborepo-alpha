@@ -213,8 +213,8 @@ const SHOTS = [
     },
   },
   { file: "plans.png", page: "/plans", from: "header.portal-header", fromEdge: "bottom", to: "article.plan-card >> nth=0" },
-  { file: "agents-config.png", page: "/config", element: "section.panel:has(h2:text-is('Skills - Development Life Cycle'))" },
-  { file: "harness-files.png", page: "/config", element: "section.panel.wide >> nth=0" },
+  { file: "agents-config.png", page: "/agents", element: "section.panel:has(h2:text-is('Skills - Development Life Cycle'))" },
+  { file: "harness-files.png", page: "/agents", element: "section.panel.wide >> nth=0" },
   { file: "tokens.png", page: "/tokens", from: "#tokensmeta", to: "div.finding >> nth=0" },
 ];
 const PAD = 20;
@@ -301,7 +301,7 @@ async function openPage(pagePath) {
 }
 
 if (survey) {
-  for (const pagePath of onlyPages ?? ["/", "/runtime", "/plans", "/config", "/tokens"]) {
+  for (const pagePath of onlyPages ?? ["/", "/runtime", "/plans", "/agents", "/tokens"]) {
     await openPage(pagePath);
     await surveyPage(page, pagePath);
     if (outIndex !== -1) {

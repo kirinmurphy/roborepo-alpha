@@ -1,4 +1,5 @@
 import { resolveRegistryAlias } from "../../modules/repositories/index.mjs";
+import { LIFECYCLE_MODEL } from "../../modules/plan-suite/lifecycle-manifest.mjs";
 
 const RECENT_PLAN_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -13,23 +14,29 @@ export function runtimeByRepository(snapshot, registry) {
 
 // Coverage comes from the snapshot's per-repository scan state, so a repository Plans has not
 // scanned (or could not read) gets no entry and Home reports "not scanned" instead of zero plans.
+// Each entry is `{ summary, worktrees }`: `worktrees` is the set of linked worktree names Git knows
+// for the repository (running or not), or null when the scan did not report them.
 export function plansByRepository(snapshot, now, registry) {
   const coverage = new Map();
   for (const scan of snapshot?.repositoryScans || []) {
     if (scan.state !== "scanned") continue;
     const repositoryId = resolveRegistryAlias(registry, scan.repositoryId);
-    if (registry.repositories?.[repositoryId]) coverage.set(repositoryId, { plans: [] });
+    if (!registry.repositories?.[repositoryId]) continue;
+    const group = coverage.get(repositoryId) || { plans: [], worktrees: null };
+    // An alias scanned alongside its canonical record contributes its worktrees too.
+    if (Array.isArray(scan.worktrees)) group.worktrees = new Set([...(group.worktrees || []), ...scan.worktrees]);
+    coverage.set(repositoryId, group);
   }
   for (const record of snapshot?.plans || []) {
     const sourceId = record.repository?.repositoryId;
     const repositoryId = sourceId && resolveRegistryAlias(registry, sourceId);
     if (!repositoryId || !registry.repositories?.[repositoryId]) continue;
-    const group = coverage.get(repositoryId) || { plans: [] };
+    const group = coverage.get(repositoryId) || { plans: [], worktrees: null };
     group.plans.push({ ...record.plan, key: record.key });
     coverage.set(repositoryId, group);
   }
   const result = new Map();
-  for (const [repositoryId, group] of coverage) result.set(repositoryId, planSummary(group.plans, now));
+  for (const [repositoryId, group] of coverage) result.set(repositoryId, { summary: planSummary(group.plans, now), worktrees: group.worktrees });
   return result;
 }
 
@@ -67,8 +74,10 @@ export function planChangedAt(plan) {
   return plan?.gitLastChangedAt || plan?.modifiedAt || null;
 }
 
+// `active` lists every plan in a worktree-bound stage (Active or Review): both own a linked worktree,
+// so both join to its checkout row, and a Review plan's merged worktree is the cue for /plan-close.
 function planSummary(plans, now) {
-  const counts = { active: 0, backlog: 0 };
+  const counts = { backlog: 0, ready: 0, active: 0, review: 0 };
   for (const plan of plans) if (plan.lifecycle in counts) counts[plan.lifecycle] += 1;
   const recent = plans
     .map((plan) => ({ id: plan.id, title: plan.title, lifecycle: plan.lifecycle, changedAt: planChangedAt(plan) }))
@@ -79,8 +88,8 @@ function planSummary(plans, now) {
     .sort((a, b) => Date.parse(b.changedAt) - Date.parse(a.changedAt))
     .slice(0, 5);
   const active = plans
-    .filter((plan) => plan.lifecycle === "active")
-    .map((plan) => ({ id: plan.id, key: plan.key, title: plan.title, lifecycle: plan.lifecycle, changedAt: planChangedAt(plan), worktree: plan.worktree || "", taskCounts: { total: plan.taskCounts?.total || 0, complete: plan.taskCounts?.complete || 0 } }))
+    .filter((plan) => LIFECYCLE_MODEL.worktreeBound.has(plan.lifecycle))
+    .map((plan) => ({ id: plan.id, key: plan.key, title: plan.title, lifecycle: plan.lifecycle, changedAt: planChangedAt(plan), worktree: plan.worktree || "", relativePath: plan.relativePath || "", taskCounts: { total: plan.taskCounts?.total || 0, complete: plan.taskCounts?.complete || 0 } }))
     .sort((a, b) => Date.parse(b.changedAt || 0) - Date.parse(a.changedAt || 0) || a.title.localeCompare(b.title));
   return { counts, active, recent };
 }
@@ -89,13 +98,19 @@ function projectWorkspace(repository) {
   return {
     lifecycle: repository.lifecycle || { state: "active", reason: null },
     lastSeenAt: repository.lastSeenAt || null,
+    worktreeCleanup: repository.worktreeCleanup || null,
     checkouts: (repository.roots || []).map((root) => ({
       rootId: root.rootId || null,
       name: root.git?.branch || (root.isWorktree ? "Worktree" : "Main checkout"),
       isWorktree: root.isWorktree === true,
       // Git's administrative worktree name; the key a plan's `worktree` frontmatter joins on. Main
       // checkouts never carry one, so they can never receive a plan.
-      worktreeName: root.isWorktree === true ? root.git?.worktreeName || null : null,
+      worktreeName: root.isWorktree === true ? root.worktreeName || root.git?.worktreeName || null : null,
+      worktreeState: root.worktreeState || null,
+      worktreeReason: root.worktreeReason || null,
+      worktreeRunning: root.worktreeRunning ?? null,
+      mergedInto: root.mergedInto || null,
+      unmergedCommits: root.unmergedCommits ?? null,
       projectRoot: root.projectRoot || null,
       checkoutState: root.checkoutState || "present",
       checkoutReason: root.checkoutReason || null,

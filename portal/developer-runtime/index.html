@@ -159,7 +159,7 @@
             <input id="compose-repo-project-name" disabled />
           </label>
           <label>
-            Repository path
+            Repo path
             <input id="compose-repo-path" placeholder="/Users/you/projects/repo" />
           </label>
           <div class="item-err" id="compose-repo-error"></div>
@@ -279,7 +279,7 @@
               <span class="title-separator">-</span>
               <a data-slot="origin" target="_blank" rel="noreferrer"></a>
               <!-- The whale marks a Docker-run instance. Rendered only when the Docker provider
-                   actually observed this instance; on a repository member that is usually never,
+                   actually observed this instance; on a repo member that is usually never,
                    since docker data attaches to compose project instances. -->
               <span class="docker-badge" data-slot="docker" hidden>
                 <portal-icon name="docker"></portal-icon>
@@ -514,7 +514,7 @@
         </div>
         <p class="card-notice" data-slot="duplicate-notice" hidden></p>
         <!-- One row per checkout (main worktree first, then every linked worktree) instead of one
-             flat member list — see the plan doc's "Worktree/Root Hierarchy" section. Every row is
+             flat member list. Every row is
              always visible; each has its own independent expand/collapse for its member list. -->
         <div class="repository-roots" data-slot="roots"></div>
       </article>
@@ -524,9 +524,8 @@
          Process metrics (CPU/RSS/elapsed) are container-level facts — one PID serves every port
          a container publishes — shown once per row rather than repeated on each port. -->
     <!-- Only concern-worthy/actionable facts stay on the persistent row; image, exact RSS, and
-         other reference-only details move into the info tooltip (see the follow-up plan doc's
-         resource-threshold section for the "what counts as concerning" classification, not yet
-         built — this row shows raw values until that lands). -->
+         other reference-only details move into the info tooltip. There is no "what counts as concerning"
+         classification yet, so this row shows raw values. -->
     <template id="tpl-compose-container-row">
       <div class="compose-container-row">
         <div class="compose-container-head">
@@ -654,6 +653,16 @@
         </div>
         <button type="button" data-slot="action"></button>
       </div>
+    </template>
+    <template id="tpl-worktree-threshold">
+      <form class="settings-row" data-worktree-threshold>
+        <label for="worktree-stale-days">Suggest stale worktrees after</label>
+        <div class="settings-threshold-controls">
+          <input id="worktree-stale-days" type="number" min="1" max="365" required data-field="days" />
+          <span>days</span>
+          <button type="submit">Save</button>
+        </div>
+      </form>
     </template>
     {{REPOSITORY_SOURCES}}
     <script type="module" src="/portal/shared/info-icon.js"></script>

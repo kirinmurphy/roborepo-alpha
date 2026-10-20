@@ -32,6 +32,8 @@
   /* Muted green separates primary actions from the brighter --ok status indicators. */
   --cta: #287d3c;
   --on-cta: #ffffff;
+  /* --danger is tuned for text; white on it would be too faint, so the solid fill is darker. */
+  --cta-danger: #b62324;
   --badge-skill-ink: #79c0ff;
   --badge-skill-line: #1f6feb;
   --badge-skill-bg: #0d1b2e;
@@ -56,10 +58,12 @@
   --next-ink: #c7dbff;
   --code-bg: #010409;
   --code-ink: #d2a8ff;
+  /* GitHub's merged-pull-request purple, for a worktree whose branch has merged. */
+  --merged: #8957e5;
   --code-inline-bg: rgba(255, 255, 255, 0.04);
   --overlay: rgba(13, 17, 23, 0.7);
-  --tooltip-bg: #010409;
-  --tooltip-shadow: rgba(0, 0, 0, 0.5);
+  /* Every floating panel: dropdowns, menus, popovers, tooltips. See the shared rules below. */
+  --popover-bg: #010409;
   --row-hover: #1c2230;
   /* Surface-relative row hover, for clickable rows that sit on --panel or any other raised surface
    * rather than on the page background. --row-hover is an absolute color tuned against --bg: on a
@@ -74,8 +78,16 @@
    * visibly from the one it sits on, and each deeper layer contrasts with its surroundings MORE
    * than the layer around it does — so the innermost units (inset) are always the most distinct. */
   --surface-band: #242b35;
+  /* The site header and the repo filter row under it. Dark keeps the header on the page color
+   * with a raised band beneath; light steps the other way (see the light block). */
+  --header-bg: var(--bg);
+  --scope-bar-bg: var(--surface-band);
+  --header-dim: var(--dim);
   --surface-sunken: #1a212b;
   --surface-inset: #0b0f14;
+  /* The <select> up/down caret (see the select rule): an SVG can't read a CSS variable, so each
+   * theme carries its own, stroked in that theme's --dim. */
+  --select-caret: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='12' viewBox='0 0 8 12'%3E%3Cpath d='M1 4.5 4 1.5 7 4.5M1 7.5 4 10.5 7 7.5' fill='none' stroke='%23a3adb8' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   /* Soft fills: a control that opens something, and a heading band inside a tooltip. The control
    * wash is translucent so it reads the same on any of the surfaces above. */
   --wash-control: rgba(230, 237, 243, 0.1);
@@ -146,6 +158,7 @@
   --on-accent: #ffffff;
   --cta: #2c7a3f;
   --on-cta: #ffffff;
+  --cta-danger: #cf222e;
   --badge-skill-ink: #0550ae;
   --badge-skill-line: #b6e3ff;
   --badge-skill-bg: #ddf4ff;
@@ -166,10 +179,10 @@
   --next-ink: #0a3977;
   --code-bg: #f6f8fa;
   --code-ink: #8250df;
+  --merged: #8250df;
   --code-inline-bg: rgba(27, 31, 36, 0.05);
   --overlay: rgba(255, 255, 255, 0.7);
-  --tooltip-bg: #ffffff;
-  --tooltip-shadow: rgba(31, 35, 40, 0.12);
+  --popover-bg: #e7eaee;
   --row-hover: #eaeef2;
   /* Darkens rather than lightens: light surfaces are at or near white, so a white tint has nowhere
    * to go. Same token, inverted direction — see the dark theme's definition for why it exists. */
@@ -179,11 +192,21 @@
    * white panel (band a touch grey, sunken greyer), and the inset layer returns to white so a
    * bordered unit inside a grey list is the strongest contrast. */
   --surface-band: #f3f5f7;
+  /* A white site header over a grey repo filter row, then the page (--bg) between the two, so the
+   * repo row reads as the band that separates the chrome from the content. */
+  --header-bg: #ffffff;
+  --scope-bar-bg: #c9d0d7;
+  /* --dim reads 3.4:1 on the grey repo row, which inherits the header's tokens; inside the header
+   * it steps darker to keep 4.5:1. */
+  --header-dim: #4f5760;
   --surface-sunken: #e9ecef;
   --surface-inset: #ffffff;
+  /* The <select> up/down caret (see the select rule): an SVG can't read a CSS variable, so each
+   * theme carries its own, stroked in that theme's --dim. */
+  --select-caret: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='12' viewBox='0 0 8 12'%3E%3Cpath d='M1 4.5 4 1.5 7 4.5M1 7.5 4 10.5 7 7.5' fill='none' stroke='%23656d76' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --wash-control: rgba(31, 35, 40, 0.1);
   --wash-control-strong: rgba(31, 35, 40, 0.16);
-  --wash-heading: #e9ecef;
+  --wash-heading: #d0d7de;
   --backdrop: rgba(31, 35, 40, 0.4);
   --chip-ink: #ffffff;
   --chip-muted-bg: #d0d7de;
@@ -228,13 +251,24 @@ select {
   border-radius: 5px;
   padding: var(--space-xs) var(--space-sm);
 }
-/* Global button system — three variants selected via data-btn (not a class) so the intent is
- * legible at the call site: data-btn="cta" | "secondary" | "text". A bare <button> with no
+/* The native caret sits flush against the border and ignores padding, so selects draw their own,
+ * inset .5rem from the right edge, with room reserved for it beside the text. */
+select:not([multiple]) {
+  appearance: none;
+  padding-right: calc(0.5rem + 8px + var(--space-sm));
+  background-image: var(--select-caret);
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+}
+/* Global button system — four variants selected via data-btn (not a class) so the intent is
+ * legible at the call site: data-btn="cta" | "danger" | "secondary" | "text". A bare <button> with no
  * data-btn defaults to "secondary" (the trim-but-not-accented look), matching how most buttons in
  * the portal are default/dismiss/toggle actions rather than CTAs — CTA is the deliberate opt-in.
  *
  * cta: primary workflow-terminating actions (submit, save, add, run, enable). Solid, high-contrast
  *   fill — there should be at most one per view competing for attention.
+ * danger: a cta whose action can lose something the user still needs. Same shape, red fill; use it
+ *   in place of cta, not beside it.
  * secondary (default): everything else that still needs button chrome — cancel, close, persistent
  *   toggles that open a popup/panel, default/neutral actions. Enough contrast off the page
  *   background to read as clickable, without competing with a CTA.
@@ -268,6 +302,18 @@ button:hover,
 [data-btn="cta"]:hover {
   filter: brightness(1.08);
 }
+[data-btn="danger"] {
+  color: var(--on-cta);
+  background: var(--cta-danger);
+  border: 1px solid var(--cta-danger);
+  border-radius: 5px;
+  padding: var(--space-xs) var(--space-sm);
+  font-weight: 400;
+  cursor: pointer;
+}
+[data-btn="danger"]:hover {
+  filter: brightness(1.08);
+}
 [data-btn="text"] {
   color: var(--dim);
   background: none;
@@ -284,6 +330,11 @@ button:disabled,
 [data-btn]:disabled {
   cursor: default;
   opacity: 0.6;
+}
+/* A button disabled because its own request is running stays at full strength: its spinner says
+ * "working", and fading it would say "unavailable". */
+[data-btn][aria-busy="true"]:disabled {
+  opacity: 1;
 }
 body {
   margin: 0;
@@ -309,15 +360,16 @@ samp {
   left: 0;
   right: 0;
   z-index: 10;
-  background: var(--bg);
+  background: var(--header-bg);
+  --dim: var(--header-dim);
   border-bottom: 1px solid var(--line);
 }
 
 /* Shared centering wrapper — keeps content readable-width on very wide screens while the parent
  * (header/footer background, page body) stays full-bleed. Owns side padding too, so every page's
  * content column lines up at the same 1200px+20px box instead of each page inventing its own
- * max-width/padding pair. Elements that already sit inside a padded parent (e.g. .control-panel)
- * should not add another .inner layer — use .inner directly on the padded parent instead. */
+ * max-width/padding pair. Elements that already sit inside a padded parent should not add another
+ * .inner layer — use .inner directly on the padded parent instead. */
 .inner {
   width: 100%;
   max-width: 1024px;
@@ -403,6 +455,58 @@ samp {
 nav {
   display: flex;
 }
+/* The repository filter's sub-header row: a full-bleed band at the bottom of the sticky site header
+ * (theme.js appends it there), its content in the shared .inner column and pushed to the right. The
+ * header's own bottom border closes it. */
+.repository-scope-bar {
+  background: var(--scope-bar-bg);
+  border-top: 1px solid var(--line);
+}
+.repository-scope-bar .inner {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-height: 48px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+.repository-scope-label {
+  color: var(--dim);
+  font-size: var(--text-sm);
+}
+.repository-scope {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+/* The trigger reads as text with an underline, not as a button: no box, just a bottom rule. */
+.repository-scope .dropdown-trigger {
+  max-width: 14rem;
+  font-size: var(--text-sm);
+  padding: 2px 0;
+  border: 0;
+  border-bottom: 1px solid var(--dim);
+  border-radius: 0;
+  background: none;
+}
+.repository-scope .dropdown-trigger:hover {
+  border-bottom-color: var(--accent);
+}
+.repository-scope-unavailable {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  margin: 1rem 0;
+}
+.repository-scope-unavailable h2 {
+  margin: 0;
+  font-size: var(--text-md);
+}
+.repository-scope-unavailable p {
+  margin: 0;
+  color: var(--dim);
+}
 /* The header nav is right-aligned against the logo; that push belongs to the header chrome only,
  * not to every <nav> on a page (a content-level <nav> like Home's card grid must start at the
  * same left edge as the rest of the page). */
@@ -432,25 +536,111 @@ nav a.active {
   background: var(--active);
   border-color: var(--line);
 }
-.portal-header nav a.nav-icon-only {
+/* A mountOverflowNav row (portal/shared/overflow-nav.js): primary items in the bar, a trailing ⋮
+ * menu holding the rest, and every item in the menu once the row carries [data-collapsed]. This
+ * owns only the menu's mechanics and trigger faces; each row styles its own items and trigger look. */
+.overflow-more {
   position: relative;
-  min-width: 40px;
+  display: flex;
+}
+.overflow-more-trigger {
+  display: inline-flex;
   align-items: center;
-  padding-left: 0.7rem;
-  padding-right: 0.7rem;
-}
-.portal-header nav a.nav-icon-only .nav-label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
+  justify-content: center;
+  gap: 6px;
+  min-width: 40px;
+  padding: 0.25rem 0.7rem;
   border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--dim);
+  cursor: pointer;
 }
-.portal-header nav a.nav-icon-only portal-icon { display: inline-flex; }
+.overflow-more-dots {
+  display: inline-grid;
+  gap: 2px;
+}
+.overflow-more-dots span {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.overflow-more-trigger:hover,
+.overflow-more-trigger[aria-expanded="true"] {
+  color: var(--ink);
+  background: none;
+}
+.overflow-more-current,
+.overflow-more-caret {
+  display: none;
+}
+/* collapsedFace "current": the collapsed trigger reads as the current item's label plus a caret. */
+.overflow-nav[data-collapsed][data-collapsed-face="current"] .overflow-more-dots {
+  display: none;
+}
+.overflow-nav[data-collapsed][data-collapsed-face="current"] .overflow-more-current,
+.overflow-nav[data-collapsed][data-collapsed-face="current"] .overflow-more-caret {
+  display: inline-flex;
+}
+.overflow-more-panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  right: 0;
+  display: grid;
+  min-width: 180px;
+  /* Items run flush to the edges; this keeps their highlight inside the rounded corners. */
+  overflow: hidden;
+}
+.overflow-more-panel[hidden] {
+  display: none;
+}
+.overflow-more-panel > .overflow-primary {
+  display: none;
+}
+.overflow-nav[data-collapsed] > :not(.overflow-more) {
+  display: none;
+}
+.overflow-nav[data-collapsed] .overflow-more-panel > .overflow-primary {
+  display: flex;
+}
+/* Every item is in the menu now, so a highlighted ⋮ no longer says anything. A trigger showing the
+ * current item's label still does, so that face keeps whatever highlight its row gives it. */
+.overflow-nav[data-collapsed]:not([data-collapsed-face="current"]) .overflow-more-trigger.active {
+  color: var(--dim);
+  background: none;
+}
+/* The header's ⋮ reads as one more nav cell. */
+.portal-header .overflow-more {
+  border-left: 1px solid var(--line);
+}
+.portal-header .overflow-nav[data-collapsed] .overflow-more {
+  border-left: 0;
+}
+.portal-header .overflow-more-trigger.active {
+  color: var(--active-ink);
+  background: var(--active);
+}
+/* Page toolbars that pin over the header while scrolling (Plans' #plans-header sits at z-index 11)
+ * would cover the open panel, so the header comes forward only while its menu is open. */
+.portal-header:has(.overflow-more-panel:not([hidden])) {
+  z-index: 12;
+}
+/* Undo the bar-cell look `nav a` gives every link: menu items are rows separated by rules. */
+.portal-header .overflow-more-panel a {
+  flex-direction: row;
+  justify-content: flex-start;
+  border: 0;
+  white-space: nowrap;
+}
+.portal-header .overflow-more-panel a:not(:last-child) {
+  border-bottom: 1px solid var(--popover-border);
+}
+.portal-header .overflow-more-panel a.active {
+  color: var(--active-ink);
+  background: var(--active);
+}
 .portal-footer {
   margin-top: 24px;
   padding: 12px 0;
@@ -579,6 +769,8 @@ main {
   border-top-color: var(--accent);
   animation: portal-spin 0.7s linear infinite;
 }
+/* An inline spinner inside a busy button, drawn in the button's own text color. */
+.button-spinner,
 .harness-check-spinner {
   display: inline-block;
   width: 12px;
@@ -591,7 +783,7 @@ main {
   animation: portal-spin 0.7s linear infinite;
 }
 /* Ordinary in-page status/meta line, scoped near the content it describes (NOT a persistent
- * top bar) — used by /config, /plans, /telemetry for their own load-scoped status text. */
+ * top bar) — used by /agents, /plans, /telemetry for their own load-scoped status text. */
 .page-meta {
   padding: 10px 20px;
   color: var(--dim);
@@ -605,7 +797,7 @@ main {
 .item-err:empty {
   display: none;
 }
-/* Shared chrome-panel shape used by /config and /telemetry (byte-identical subset of what each
+/* Shared chrome-panel shape used by /agents and /telemetry (byte-identical subset of what each
  * page's own .panel rule had). Page-specific extras (e.g. config's .panel.wide) stay in that
  * page's own styles.css. */
 .panel {
@@ -734,12 +926,8 @@ dd {
   gap: 6px;
   min-width: 240px;
   padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--tooltip-bg);
   color: var(--ink);
   font-size: var(--text-2xs);
-  box-shadow: 0 10px 24px var(--tooltip-shadow);
   white-space: normal;
   cursor: default;
 }
@@ -799,6 +987,108 @@ dd {
   color: var(--dim);
   font-size: var(--text-2xs);
 }
+/* One surface for everything that floats over the page — dropdowns, menus, popovers, tooltips.
+ * --popover-bg (per theme, above) sits well apart from every card, so a panel reads as layered
+ * above the card it opened from rather than bleeding into it. */
+:root {
+  --popover-border: var(--line);
+  --popover-radius: 8px;
+  --popover-shadow: 0 14px 40px var(--modal-shadow);
+  --popover-item-hover: color-mix(in srgb, var(--accent) 18%, var(--popover-bg));
+}
+.menu-panel,
+.menu-button-panel,
+.overflow-more-panel,
+.copy-menu-panel,
+.dropdown-menu,
+.blockers-popover,
+.portal-tooltip,
+.chip-tip {
+  background: var(--popover-bg);
+  border: 1px solid var(--popover-border);
+  border-radius: var(--popover-radius);
+  box-shadow: var(--popover-shadow);
+}
+/* One list item for every dropdown: full width, icon then label, and a hover or keyboard highlight
+ * filled with the accent so the item under the pointer is unmistakable. Items run flush to the
+ * panel's edges (panels carry no padding) and are separated by a rule rather than by space. */
+.menu-panel button,
+.menu-panel a,
+.overflow-more-panel a,
+.overflow-more-panel button,
+.menu-button-item,
+.copy-menu-item,
+.dropdown-option,
+.dropdown-action,
+.worktree-details-actions button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.menu-panel button:hover:not(:disabled),
+.menu-panel a:hover,
+.overflow-more-panel a:hover,
+.overflow-more-panel button:hover,
+.menu-button-item:hover,
+.copy-menu-item:hover:not(:disabled),
+.dropdown-option:hover,
+.dropdown-option.highlighted,
+.dropdown-action:hover,
+.worktree-details-actions button:hover,
+.menu-panel button:focus-visible,
+.menu-panel a:focus-visible,
+.overflow-more-panel a:focus-visible,
+.overflow-more-panel button:focus-visible,
+.menu-button-item:focus-visible,
+.copy-menu-item:focus-visible,
+.dropdown-option:focus-visible,
+.dropdown-action:focus-visible,
+.worktree-details-actions button:focus-visible {
+  background: var(--popover-item-hover);
+  outline: none;
+}
+.menu-panel button:disabled,
+.dropdown-option:disabled {
+  color: var(--dim);
+  cursor: default;
+}
+/* A hidden item takes no place in the list, so the rule goes on the next visible one only. */
+.menu-panel > :is(button, a):not([hidden]) + :is(button, a),
+.menu-button-item:not([hidden]) + .menu-button-item,
+.copy-menu-item:not([hidden]) + .copy-menu-item,
+.dropdown-option:not([hidden]) + .dropdown-option,
+.worktree-details-actions button:not([hidden]) + button {
+  border-top: 1px solid var(--popover-border);
+}
+.menu-item-icon {
+  flex: none;
+  color: var(--dim);
+}
+/* A destructive item (Delete Worktree): red label and icon, and a red-tinted highlight. */
+.menu-item-danger,
+.menu-item-danger .menu-item-icon {
+  color: var(--danger);
+}
+.menu-panel .menu-item-danger:hover:not(:disabled),
+.menu-panel .menu-item-danger:focus-visible,
+.worktree-details-actions .menu-item-danger:hover,
+.worktree-details-actions .menu-item-danger:focus-visible {
+  background: color-mix(in srgb, var(--danger) 16%, var(--popover-bg));
+}
+/* Status pills (merged, done, plan badges) share one inset so they read as one family. */
+:root {
+  --pill-padding: 2px 9px;
+}
 /* Dialog width scale. Set `data-dialog-size` on a <dialog> to pick one instead of hardcoding a
  * max-width in the page's own styles.css:
  *
@@ -822,7 +1112,7 @@ dialog[data-dialog-size="sm"] { max-width: min(var(--dialog-sm), 100vw); }
 dialog[data-dialog-size="md"] { max-width: min(var(--dialog-md), 100vw); }
 dialog[data-dialog-size="lg"] { max-width: min(var(--dialog-lg), 100vw); }
 dialog[data-dialog-size="xl"] { max-width: min(var(--dialog-xl), 100vw); }
-/* Shared modal chrome — used by /config's #config-modal and /plans' #skill-modal. Each dialog's
+/* Shared modal chrome — used by /agents' #config-modal and /plans' #skill-modal. Each dialog's
  * own box styling (background, backdrop) stays in that page's own styles.css keyed off its
  * id; only the reusable head/title/path/close/body classes and the width scale live here. */
 .modal-head {
@@ -964,11 +1254,6 @@ portal-copy-menu {
 .copy-menu-panel {
   position: fixed;
   z-index: 30;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px var(--modal-shadow);
-  padding: 6px;
   min-width: 180px;
   max-width: min(360px, 90vw);
   /* max-height is set inline by positionPopoverPanel — see .menu-button-panel. */
@@ -976,20 +1261,7 @@ portal-copy-menu {
   overscroll-behavior: contain;
 }
 .copy-menu-item {
-  display: block;
-  width: 100%;
-  border: none;
-  background: none;
-  font: inherit;
-  text-align: left;
-  color: var(--ink);
-  padding: 7px 8px;
-  border-radius: 5px;
-  cursor: pointer;
   white-space: nowrap;
-}
-.copy-menu-item:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
 }
 /* Disabled only while showing "Copied!", so it reads as confirmation rather than as unavailable. */
 .copy-menu-item:disabled {
@@ -1011,11 +1283,6 @@ portal-menu-button {
 .menu-button-panel {
   position: fixed;
   z-index: 30;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px var(--modal-shadow);
-  padding: 6px;
   min-width: 220px;
   max-width: min(420px, 90vw);
   /* max-height is set inline by positionPopoverPanel (popover-position.js) so the far edge stays
@@ -1024,21 +1291,7 @@ portal-menu-button {
   overscroll-behavior: contain;
 }
 .menu-button-item {
-  display: flex;
   align-items: flex-start;
-  gap: 8px;
-  width: 100%;
-  border: none;
-  background: none;
-  font: inherit;
-  text-align: left;
-  color: var(--ink);
-  padding: 7px 8px;
-  border-radius: 5px;
-  cursor: pointer;
-}
-.menu-button-item:hover {
-  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
 }
 .menu-button-item-icon {
   flex-shrink: 0;
@@ -1059,35 +1312,6 @@ portal-menu-button {
 .modal-body > .markdown {
   padding: 14px 16px;
 }
-/* Control panel: a full-bleed strip that visibly reads as an active control surface (filters,
- * monitoring status, live toggles) rather than another content panel. Deliberately a neutral gray
- * tint, off the --accent/--panel blue used throughout the rest of a page, so pages with an
- * accent-tinted "editable" surface elsewhere (e.g. .settings) don't collide with this one visually.
- * Sits flush against whatever it's placed under (portal header, package banner) — no side
- * borders/radius, no outer margin — so it reads as part of the page chrome, not a floating card.
- * Originated on the Plans page's Plans/Repos/Filters row; pulled here so any page needing the same
- * "this strip is a control surface" treatment (Telemetry's filter bar, etc.) uses one definition.
- * A page's own stylesheet still owns everything INSIDE a .control-panel-row — this only owns the
- * strip's background/border/outer spacing. */
-.control-panel {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  border: none;
-  border-bottom: 1px solid var(--line);
-  background: color-mix(in srgb, var(--neutral-tint) 16%, var(--panel));
-  border-radius: 0;
-  width: 100%;
-  display: grid;
-  gap: 10px;
-  padding: 12px 0;
-}
-.control-panel-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-}
 @media (max-width: 760px) {
   /* .portal-header {
     align-items: flex-start;
@@ -1103,6 +1327,35 @@ portal-menu-button {
     margin-left: auto;
   } */
 }
+
+/* Shared splash for a page (or a page's scope) that has nothing to show yet: a centered, narrow
+ * column with a large title, a dim lead, and an optional action. Tokens' "No token data yet" is
+ * the model; Agents' repository view and Tokens' empty repository reuse it, and any page that needs
+ * an empty state "to be continued" should too (portal/shared/page-splash.js builds the markup). */
+.page-splash {
+  min-height: calc(80vh - 260px);
+  padding: 0 0 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.page-splash[hidden] { display: none; }
+.page-splash-copy { width: 100%; max-width: 660px; }
+.page-splash-title {
+  margin: 0 0 16px;
+  font-size: 34px;
+  line-height: 1.15;
+  font-weight: 600;
+  color: var(--ink);
+}
+.page-splash-body {
+  margin: 0;
+  font-size: var(--text-md);
+  line-height: 1.55;
+  color: var(--dim);
+}
+.page-splash-actions { margin-top: 24px; }
+.page-splash-actions:empty { display: none; }
 
 /* Shared intro banner: the one "do this first" prompt a page shows before it has anything to report
  * (Plans' "Add your first Project Folder", Tokens' "Telemetry setup required"). Title, optional
@@ -1159,6 +1412,9 @@ portal-menu-button {
 .portal-banner-copy > :first-child { margin-top: 0; }
 .portal-banner-copy > :last-child { margin-bottom: 0; }
 .portal-banner-supporting { color: var(--dim); }
+/* Codex telemetry hook warning: title and message stacked tight, no paragraph margins. */
+.codex-hook-status-copy { display: grid; gap: 2px; }
+.codex-hook-status-copy p { margin: 0; }
 .portal-banner-action {
   grid-column: 2;
   grid-row: 1;
@@ -1167,11 +1423,13 @@ portal-menu-button {
 .harness-notice-content [data-slot="copy"] {
   color: var(--ink);
 }
-.harness-notice-supported {
+.harness-notice-supported,
+.harness-notice-result {
   display: block;
   color: var(--dim);
   font-size: var(--text-xs);
 }
+.harness-notice-result[hidden] { display: none; }
 .auto-discovery-prompt p { margin: 0; color: var(--ink); font-size: var(--text-sm); }
 .auto-discovery-prompt > [data-notice-icon] { align-self: flex-start; }
 
@@ -1193,14 +1451,10 @@ portal-menu-button {
   position: fixed;
   z-index: 60;
   max-width: 260px;
-  background: var(--tooltip-bg);
   color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: 6px;
   padding: 8px 10px;
   font-size: var(--text-2xs);
   line-height: 1.5;
-  box-shadow: 0 4px 16px var(--tooltip-shadow);
   pointer-events: none;
 }
 /* Structured/multi-row content (key-value grids, badges) needs more room than a one-line hint. */
@@ -1308,4 +1562,75 @@ portal-menu-button {
 }
 .portal-notice.notice-success > [data-notice-icon] {
   color: var(--ok);
+}
+
+/* Shared <option-dropdown> popover — the Plans priority and lifecycle pickers and the header's
+   repository selector. */
+option-dropdown {
+  display: inline-block;
+  position: relative;
+}
+.dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-2xs);
+  padding: 1px 6px;
+  cursor: pointer;
+}
+.dropdown-trigger:hover {
+  border-color: var(--accent);
+}
+.dropdown-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.dropdown-trigger:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+.dropdown-chevron {
+  color: var(--dim);
+  font-size: var(--text-2xs);
+}
+.dropdown-menu {
+  position: fixed;
+  z-index: 30;
+  display: grid;
+  align-content: start;
+  min-width: 100px;
+  /* max-height is set inline by positionPopoverPanel (popover-position.js) to keep the far edge
+     on-screen; scroll internally past that instead of overflowing the viewport. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.dropdown-option {
+  font-size: var(--text-sm);
+}
+.dropdown-option[aria-selected="true"] {
+  font-weight: 600;
+  /* The current choice is not clickable in any useful way, so it keeps the plain cursor. */
+  cursor: default;
+}
+.dropdown-options {
+  display: grid;
+}
+/* Action rows sit below a divider: heavier than the rule between options, so they read as
+   commands on the list rather than more choices in it. */
+.dropdown-actions {
+  display: grid;
+  border-top: 2px solid var(--popover-border);
+  background: var(--surface-band);
+}
+.dropdown-action {
+  font-size: var(--text-sm);
+}
+.dropdown-action-icon {
+  flex: none;
+  color: var(--dim);
 }

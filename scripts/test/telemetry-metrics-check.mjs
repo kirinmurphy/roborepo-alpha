@@ -4,9 +4,8 @@ import {
   listMetrics, getMetric, isKnownMetric, computeMetric, trimmedMean, percentile,
 } from "../cli/telemetry-metrics.mjs";
 
-// Phase 5 of docs/plans/active/roborepo-telemetry-events-experiments-plan.md: the declarative
-// metrics registry shared by the CLI report, the portal, alerts, and experiments (plan: "Metrics
-// registry" — "Do not let UI components independently define formulas"). Pure module — every
+// The declarative metrics registry shared by the CLI report, the portal, alerts, and experiments,
+// so UI components never define formulas independently. Pure module — every
 // compute(captures) formula operates over already-filtered capture arrays, no fs/config imports.
 
 testRegistryHasRequiredGroups();
@@ -73,7 +72,7 @@ function capture({ sessionId, ts, category, scope, exitStatus, phase, editSinceL
   };
 }
 
-// Mirrors the plan's "Scenario fixture: full-suite debugging loop": four full-suite calls during
+// Full-suite debugging loop scenario: four full-suite calls during
 // debugging, three without an intervening edit or changed failure signature, one targeted repro,
 // one final successful full-suite run in finalization.
 function debugLoopSession(sessionId) {

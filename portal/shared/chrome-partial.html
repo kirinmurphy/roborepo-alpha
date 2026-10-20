@@ -9,6 +9,17 @@
     </div>
   </header>
 </template>
+<!-- The repository filter's own row at the bottom of the site header: a full-width band whose content
+     sits in the page's .inner column. theme.js adds it only on pages whose manifest entry sets
+     repositoryScope; repository-scope-selector.js mounts the selector into #repository-scope. -->
+<template id="tpl-repository-scope-bar">
+  <div class="repository-scope-bar">
+    <div class="inner">
+      <span class="repository-scope-label" aria-hidden="true">Viewing</span>
+      <div id="repository-scope" class="repository-scope"></div>
+    </div>
+  </div>
+</template>
 <template id="tpl-portal-footer">
   <footer class="portal-footer">
     <div class="inner">
@@ -22,5 +33,28 @@
   </footer>
 </template>
 <template id="tpl-nav-link">
-  <a><span data-slot="icon"></span><span class="nav-label" data-slot="label"></span></a>
+  <a><span class="nav-label" data-slot="label"></span></a>
+</template>
+<!-- The trailing ⋮ menu of a mountOverflowNav row (portal/shared/overflow-nav.js), used by the
+     header nav and the Plans lifecycle row. The panel lists every item; CSS shows only the
+     secondary ones while the primary items fit in the bar, and all of them once they don't. The
+     current-item label and caret show only on a collapsed row mounted with collapsedFace "current". -->
+<template id="tpl-overflow-more">
+  <div class="overflow-more">
+    <button type="button" class="overflow-more-trigger" aria-expanded="false">
+      <span class="overflow-more-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+      <span class="overflow-more-current" data-slot="current"></span>
+      <portal-icon class="overflow-more-caret" name="chevron" size="sm" aria-hidden="true"></portal-icon>
+    </button>
+    <div class="overflow-more-panel" hidden></div>
+  </div>
+</template>
+<!-- A scoped page's unavailable state: the `repo` value is malformed, unknown, or hidden, so
+     the page shows this instead of any data (repository-scope-selector.js). -->
+<template id="tpl-repository-scope-unavailable">
+  <section class="repository-scope-unavailable" role="status">
+    <h2>Repo unavailable</h2>
+    <p>This link names a repo RoboRepo doesn't list. It may have been ignored or removed, or the link may be mistyped.</p>
+    <button type="button" data-btn="secondary" data-action="clear-scope">Show all repos</button>
+  </section>
 </template>

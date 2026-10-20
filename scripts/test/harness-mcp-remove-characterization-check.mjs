@@ -4,7 +4,7 @@
 // declaring "claude" in their harnesses array (from manifests/inventory/mcp-servers.json) are
 // removed; top-level mcpServers and every project-scoped mcpServers map are pruned; entries not
 // matching a known server name are left untouched; a missing ~/.claude.json is a no-op, not a
-// failure. See docs/plans/active/discoverable-harness-provider-architecture-plan.md Phase 4.
+// failure.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";

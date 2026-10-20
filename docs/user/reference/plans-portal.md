@@ -3,8 +3,9 @@
 ## Purpose
 
 The Plans portal is a built-in RoboRepo portal page for local Markdown planning documents. It is
-paired with the optional plan suite: five packages that each install one agent-facing command,
-`/plan-write`, `/plan-promote`, `/plan-start`, `/plan-close`, and `/session-close`.
+paired with the optional plan suite: seven packages that each install one agent-facing command,
+`/plan-write`, `/plan-promote`, `/plan-execute`, `/plan-review`, `/plan-close`, `/plan-archive`,
+and `/session-close`.
 
 ## Concept Model
 
@@ -13,27 +14,32 @@ paired with the optional plan suite: five packages that each install one agent-f
 | Repository | A repository RoboRepo knows about, found through auto-discovery or an added folder | repository registry, managed under **Manage repositories** |
 | Checkout | The main checkout, or one of its linked worktrees | Git |
 | Plan | Markdown file under `docs/plans/**/*.md` | repository file |
-| Lifecycle | Folder under `docs/plans` | path, not frontmatter |
-| Readiness | Deterministic validation result | parser/validator |
-| Review state | Relationship between `reviewed_commit` and Git HEAD | Git metadata |
+| Lifecycle | Folder under `docs/plans` | path, not frontmatter; the folders and moves are declared in `manifests/platform/plan-lifecycle.json` |
+| Structure | Whether the plan has every required section and field for its folder | parser/validator |
+| Plan freshness | Relationship between `reviewed_commit` and Git HEAD | Git metadata |
+| Review outcome | Open findings and the recorded approval in the plan's `## Review` section | the authoritative copy of the plan |
 
-Lifecycle folders:
+Lifecycle folders, in order:
 
 ```text
 backlog
+ready
 active
+review
 completed
 archived
 ```
 
-Root-level `docs/plans/*.md` files are reported as `unclassified`.
+Root-level `docs/plans/*.md` files are reported as `unclassified`. Structure and plan freshness are
+not lifecycle stages, and neither is a human's approval.
 
 ## What The Portal Writes
 
-The portal changes plan files in two ways only: changing a plan's `priority` rewrites that
-frontmatter line, and moving a plan renames the file into another lifecycle folder. Both check that
-the file has not changed since the page loaded it. Which repositories Plans reads is RoboRepo state,
-not a property of any repository.
+The portal changes plan files only when you change the `priority` of a plan that is not completed
+or archived. It rewrites that frontmatter line after checking that the file has not changed since
+the page loaded it. The plan suite's commands move plans between lifecycle folders, each with one
+commit in the main checkout. Which repositories Plans reads is RoboRepo state, not a property of
+any repository.
 
 ## Which Repositories Plans Reads
 
@@ -44,20 +50,44 @@ contributes no plans. Ignored repositories are left out.
 
 For each repository, Plans reads `docs/plans/**/*.md` in every checkout: the main checkout, found
 through Git's common directory, and each linked worktree. Copies of one plan in different checkouts
-are matched by plan `id`. Only the plan's own worktree, the one its `worktree` field names, is
-compared with the main copy. Other worktrees usually hold an older copy of main, so they never mark
-a plan.
+are matched by plan `id`, and Plans shows each plan's one authoritative copy.
 
-| Plan exists in | Plans page shows | Edits (priority, lifecycle) write to | Marked as differing |
+The main checkout's copy decides which lifecycle stage a plan is in, because every lifecycle move
+is committed there, on the base branch. While a plan is active or in review, the worktree its
+`worktree` field names decides what the plan says: implementation and review record their progress
+there, and Plans reads it there, with no copy to the main checkout. The worktree's copy counts only
+while that worktree exists and its copy has the same `id`, is in `active/` or `review/`, and names
+the same worktree. Whether a worktree is ahead of or behind main changes nothing.
+
+The two copies can sit in different folders. The main copy moves first, so during review the
+worktree's copy is often still in `active/`. Plans shows the plan under Review, reads its content
+from the worktree, and lists the main copy's path as **primary copy** in the drawer. The next base
+synchronization brings the rename into the worktree.
+
+| Plan | Plans page shows | Priority edits write to | Finding |
 | --- | --- | --- | --- |
-| Main checkout only | Main copy | Main checkout | No |
-| Main and the plan's own worktree, identical | One record | Main checkout | No |
-| Main and the plan's own worktree, different | Main copy | Main checkout | Yes: a **Differs in worktree `<name>`** finding on that plan |
-| Main and any other worktree | One record | Main checkout | No |
-| Worktree only | Worktree copy, labeled with the worktree name | That worktree | No |
+| Backlog, ready, completed, or archived | Main copy | Main checkout for backlog and ready; no priority control for completed or archived | None |
+| Active or review, no `worktree` | Main copy | Main checkout | None |
+| Active or review, its worktree holds a usable copy | Worktree copy, **From worktree `<name>`** in the drawer | That worktree | **Edited outside worktree** when the main copy holds a version the worktree never had |
+| Active or review, its worktree or the worktree's copy is not usable | Main copy | Main checkout | **Worktree copy unavailable**, with the reason |
+| Only in a worktree | Worktree copy, labeled with the worktree name | That worktree | None |
 
-The main checkout's copy is canonical because `/plan-start` and `/plan-close` make lifecycle changes
-on the base branch.
+A copy in any other worktree is never shown and never produces a finding; those worktrees usually
+hold an older copy of main.
+
+The outside-edit check compares the main copy with the versions the worktree's own history already
+contains: the plan where the worktree branch forked, every plan version the branch's commits
+produced, and the worktree's current file. A squash or rebase merge that main has pulled matches
+one of those, so it is not an outside edit; an edit made on main and not yet merged into the
+worktree is. Resolve one by merging the base branch into the worktree, or by moving the edit into
+the worktree's copy and reverting it on main. Plans never merges, overwrites, or picks between the
+copies itself. When Git cannot answer (a detached `HEAD`, a missing branch, a timeout), the plan
+shows **Outside edits not checked** instead.
+
+Nothing records which copy is authoritative: every scan derives it from Git and the files on disk,
+so portals started from different checkouts, or running different RoboRepo versions, agree. A
+portal that predates this rule shows and writes the main copy, and current portals report its
+writes as outside edits.
 
 ### Scan state
 
@@ -81,9 +111,22 @@ The page shows one call to action at a time:
 | --- | --- | --- |
 | 1 | plan-write package disabled | The plan suite banner |
 | 2 | No repository has a recorded checkout | The same repository empty state as Home: **Enable auto-discovery of active repos**, then **Add a folder** |
-| 3 | Repositories known, none scanned | `Not scanned yet: N repositories`, with **Manage repositories…** |
-| 4 | Repositories scanned, no plans | `No plans found in N repositories`, with **Manage repositories…** |
-| 5 | Plans found | The plan board; the header reads `Monitoring N Plans in M Repos`, and the repository count opens **Manage repositories** |
+| 3 | Repositories known, none scanned | `Not scanned yet: N repositories`, with **Manage Repos** |
+| 4 | Repositories scanned, no plans | `No plans found in N repositories`, with **Manage Repos**; with a repo selected, `No plans yet found in <repo>` on the page itself (no panel) and **View All Repos**, which clears the repo filter |
+| 5 | Plans found | The plan board under one sticky row that pins just below the site header: the lifecycle title with **Refresh** (an icon; rescans plan files on disk, since the board does not poll), the lifecycle tabs, and **Filters** at the far right. On narrow screens the tabs collapse into a menu on the left and Refresh moves to the right of Filters. Filters in effect show as removable tags under the row |
+
+### Repository scope
+
+The repo selector (labeled **Viewing**), in its own row in the pinned portal header, narrows Plans to one repo; the choice is the
+URL's `?repo=` parameter and carries over to Tokens and Agents. Scoped, the header count and
+the onboarding steps above describe that repository alone, and a repository Plans has never read
+shows as not scanned. Search, priority, and the other filters stay as they are when the scope
+changes. A link that names a repository RoboRepo no longer lists shows **Repo unavailable**
+instead of any plans, with an action to show all repos.
+
+**Filters** opens a popup (search, priority, blocked, structure, plan freshness, health). Changes are drafted there and
+applied by **Update**, which stays disabled until something differs from the filters in effect; **Cancel**,
+the close button, Esc, and the backdrop discard the draft.
 
 ### Limits
 
@@ -124,23 +167,41 @@ The Markdown parser extracts:
 - headings
 - Markdown checkbox tasks
 - excerpt
+- the `## Review` record: open and total findings under `### Findings`, and the `Decision`,
+  `Reviewed implementation commit`, and `Confirmed by` lines under `### Approval`
+
+`### Result` separately records review `Status`, its `Reviewed implementation commit`, and
+`Base commit`. `roborepo plans approval <plan> --json` reports that review's freshness under
+`review`, with changed implementation or base paths, independently of the human approval state.
+The portal's approval indicator continues to reflect `### Approval`; a complete review awaiting
+your answer is not an approval.
 
 ### Worktree association
 
 `worktree` is optional. When set, it holds Git's administrative name for the linked worktree
 implementing the plan — the `<name>` in `.git/worktrees/<name>`, not the checkout directory and not
 the branch. It never holds a path. New and repaired plans get an empty `worktree:` line; older plans
-without the line stay valid. `plan-start` records the value, commits it to the plan on the base
-branch, and validates it before implementation moves into the worktree.
+without the line stay valid. `/plan-execute` records the value through `roborepo plans start`,
+which commits it to the plan on the base branch and validates it before implementation moves into
+the worktree.
 
-Home uses the value to show an active plan as its worktree's checkout row. Anything short of one
-exact match leaves the plan as its own row with a badge: **not started** for an empty value, and
-**worktree not running** for a worktree that is stopped, no longer exists, or is claimed by two
-plans. See [Repositories](repositories.md#repository-cards).
+Home uses the value to show an active or review plan as its worktree's checkout row. Anything short of one
+exact match leaves the plan as its own row with a badge: **no worktree** for an empty value,
+**worktree not listed** for a worktree Git has that Runtime does not list, **worktree missing** for
+a name Git has no worktree for, **worktree ambiguous** for a name claimed by two plans or matching
+more than one checkout, and **worktree status unknown** when Runtime is unavailable. See
+[Repositories](repositories.md#repository-cards).
+
+The plan row's worktree dropdown offers **Stop Server** and **Delete Worktree**; the deletion
+confirmation names the plan that claims the worktree and warns that the plan's progress
+recorded there will no longer be shown in Plans. Automatic worktree cleanup never
+removes a worktree an active or review plan names. `/plan-close` removes it as its last step, once the plan is
+in `completed/` and every removal guard passes. See
+[Worktree states and cleanup](repositories.md#worktree-states-and-cleanup).
 
 ## Validation
 
-Readiness requires:
+A complete structure requires:
 
 - H1 title
 - frontmatter `id`
@@ -150,13 +211,15 @@ Readiness requires:
 - Current state or Context section
 - Proposed design or Implementation plan section
 - Validation, Acceptance criteria, or Success criteria section
-- `next_action` for backlog and active plans
+- `next_action` for backlog, ready, active, and review plans
 
 Other warnings include:
 
 - unclassified root-level plan file
 - duplicate plan IDs in a repository
-- a copy in the plan's own worktree that differs from the main checkout's copy
+- an active or review plan's main-checkout copy edited outside its worktree
+- an active or review plan whose worktree, or the worktree's copy, is not usable
+- an active or review plan whose outside edits Git could not check
 - missing dependencies
 - self-dependency
 - completed plans with unchecked tasks, blockers, or next action
@@ -167,18 +230,26 @@ Warnings are surfaced in the list view and document drawer. They do not move fil
 Section requirements are matched by heading label against a synonym list, so `Purpose` satisfies
 Summary, `Current behavior` satisfies Context, and so on.
 
-## Moving A Plan That Is Not Ready
+## Lifecycle Changes
 
-Moving a plan into a lifecycle whose requirements it does not meet is rejected, the file stays
-where it is, and the dialog lists every problem with its fix. From there you can:
+The Plans page has lifecycle tabs for browsing: Backlog, Ready, Active, and Review as tabs, with
+Completed, Archived, and Unclassified behind the ⋮ menu. It does not offer a lifecycle dropdown or
+move dialog. The plan suite's commands move plans, each through one `roborepo plans` transition:
 
-- **Copy prompt to resolve warnings** — a prompt that tells an agent to fix the document, leave the
-  file where it is, and keep the plan ID.
-- **View Plan** — open the document.
-- **Move anyway** — file it regardless.
+| Move | Transition | Run by | Refused unless |
+| --- | --- | --- | --- |
+| backlog → ready | `promote` | `/plan-promote` | the plan has no findings against the Ready requirements |
+| ready → active | `start` | `/plan-execute` | a linked worktree has the given name, and the plan meets the Active requirements |
+| active → review | `submit` | `/plan-execute` or `/plan-review` | the completion preflight passes |
+| review → active | `reopen` | `/plan-review` | (none beyond the common checks) |
+| review → completed | `close` | `/plan-close` | the worktree copy is integrated, the approval is fresh, the branch landed, and the plan has no findings against the Completed requirements |
+| backlog, ready, active, or review → archived | `archive` | `/plan-archive` | a reason is given, and the worktree and main copies are not both edited |
 
-Readiness is advisory. Confirming **Move anyway** re-submits with validation bypassed, so a document
-that predates the schema can still be filed.
+Every transition runs in the main checkout on the base branch, refuses when the plan's own path has
+uncommitted changes it did not make, commits only the plan's old and new paths, and approves the
+result only after six checks read fresh from Git. Other work in the main checkout is never
+committed. A refusal changes nothing; repeating a move that already happened commits nothing. The
+page can still show validation findings for a plan that needs repair.
 
 ## Git Metadata
 
@@ -188,24 +259,26 @@ For Git repositories, the scanner attempts to collect:
 - branch
 - last commit date for each plan file
 - file status
-- review state from `reviewed_commit`
+- plan freshness from `reviewed_commit`
 
-Review states:
+Plan freshness says whether the document was checked against the code, not whether anyone
+approved the work:
 
-| State | Meaning |
-| --- | --- |
-| `never-reviewed` | no `reviewed_commit` |
-| `current` | `reviewed_commit` equals HEAD |
-| `possibly-stale` | `reviewed_commit` is an ancestor of HEAD |
-| `unknown` | commit is missing, unavailable, or not in current history |
+| Value | Shown as | Meaning |
+| --- | --- | --- |
+| `never-reviewed` | never checked | no `reviewed_commit` |
+| `current` | checked, current | `reviewed_commit` equals HEAD |
+| `possibly-stale` | possibly stale | `reviewed_commit` is an ancestor of HEAD |
+| `unknown` | freshness unknown | commit is missing, unavailable, or not in current history |
 
 Repositories without Git remain browsable.
 
 ## Package Integration
 
-The plan suite is five optional packages: `plan-write`, `plan-promote`, `plan-start`, `plan-close`,
-and `session-close`. The Plans page gates its workflow actions on `plan-write`, and its onboarding
-banner enables all five in one request through the config section's bulk endpoint.
+The plan suite is seven optional packages: `plan-write`, `plan-promote`, `plan-execute`,
+`plan-review`, `plan-close`, `plan-archive`, and `session-close`. The Plans page gates its workflow
+actions on `plan-write`, and its onboarding banner enables all seven in one request through the
+config section's bulk endpoint.
 
 When `plan-write` is disabled:
 
@@ -215,30 +288,58 @@ When `plan-write` is disabled:
 
 When enabled:
 
-- each package installs one manual skill and its generated slash-command wrappers for Claude,
-  Codex, and Gemini
-- `/plans` shows each lifecycle's actions: Promote and Start for backlog plans; Continue, Update,
-  and Close for active plans
-- each card leads with one command button: Start for backlog plans, and Close, Update, or Continue
-  for active plans
+- each package installs one manual skill and generates Markdown command wrappers for Claude,
+  Codex, and Gemini. Gemini CLI requires TOML custom commands, so its generated wrappers are not
+  usable native slash commands yet
+- `/plans` shows each lifecycle's actions, read from the lifecycle manifest the plans snapshot
+  publishes:
+
+  | Lifecycle | Actions |
+  | --- | --- |
+  | backlog | Promote, Update, Archive |
+  | ready | Start, Refine, Archive |
+  | active | Continue, Review, Update, Archive |
+  | review | Review, Fix findings, Close after merge, Archive |
+
+- each card leads with one command button: Promote for backlog; Start for ready; Review, Update, or
+  Continue for active; and Close after merge or Review for review plans, from their recorded
+  approval (`/plan-review` fixes open findings in its own session, so open findings lead with Review)
+- a review plan shows its review outcome (open findings, **approved**, or **awaiting review**) as
+  a chip beside its task progress
+- an active or review plan whose worktree has merged shows a **merged** completion badge; the same
+  status is visible in the detail drawer
 - every action copies a prompt; the page never runs a command or moves a plan for one
 
 ## CLI
 
-Suite skills run these commands rather than re-deriving the rules they implement:
+Suite skills run these commands rather than re-deriving the rules they implement. Every
+lifecycle transition (`promote`, `start`, `submit`, `reopen`, `close`, `archive`) runs from the
+primary checkout, commits only the plan's paths on the base branch, never pushes, and exits 1 when
+it refuses or a post-commit check fails:
 
 | Command | What it does |
 | --- | --- |
-| `roborepo plans validate [<plan>] [--json]` | Reports the deterministic findings the Plans page shows, for one plan (by id or path) or every plan in the current repository. Exits 1 when a blocking finding remains. |
-| `roborepo plans start <plan> --worktree <name> [--base <branch>] [--json]` | Records the worktree in the plan, moves a backlog plan to `active/`, makes one plan-only commit on the base branch, and validates the transition. Run from the primary checkout. |
+| `roborepo plans validate [<plan>] [--json]` | Reports the deterministic findings the Plans page shows, for one plan (by id or path) or every plan in the current repo. From the main checkout, an Active or Review plan is validated from its worktree's copy, as the page shows it, and the output names that copy. From a linked worktree, it validates that worktree's own copies. Exits 1 when a blocking finding remains. |
+| `roborepo plans promote <plan> [--base <branch>] [--json]` | Moves a backlog plan to `ready/` with its pending edits, or commits refinements to a ready plan in place. Refuses, with the findings and a repair prompt, a plan that does not meet the Ready requirements. |
+| `roborepo plans start <plan> --worktree <name> [--base <branch>] [--json]` | Records the worktree in the plan, moves a ready plan to `active/`, and validates the transition. On an active plan it records a replacement worktree in place. |
+| `roborepo plans submit <plan> [--base <branch>] [--json]` | Runs the completion preflight and, when it passes, moves an active plan to `review/`. |
+| `roborepo plans reopen <plan> [--base <branch>] [--json]` | Moves a review plan back to `active/` after a requirements change. |
+| `roborepo plans close <plan> [--base <branch>] [--json]` | Checks that the worktree copy is integrated, the approval is fresh, and the branch landed (including squash and rebase merges), then moves a review plan with its closing edits to `completed/`. |
+| `roborepo plans archive <plan> --reason <text> [--base <branch>] [--json]` | Records the reason under `## Archived`, clears `next_action`, carries an unintegrated worktree copy once, refuses conflicting copies, and moves the plan to `archived/`. Never removes a worktree or branch. |
+| `roborepo plans preflight <plan> [--base <branch>] [--json]` | Reports whether implementation is complete: no task outside `## Not tested` open, no blockers, a clean worktree, a branch with its own commits, and no Review findings apart from Not tested. Exits 1 when a check fails. |
+| `roborepo plans landed <plan> [--base <branch>] [--json]` | Reports whether the plan's branch landed on the base branch, including squash and rebase merges, and the commit that absorbed it. Verifies an absorbing commit recorded in the plan's `## Verification` (`- Absorbing commit: <full commit id>`) before scanning base history, and says whether it reused that evidence. Read-only. Exits 1 unless landed. |
+| `roborepo plans approval <plan> [--base <branch>] [--json]` | Reports the recorded approval as `fresh`, `stale` (with the changed paths), `missing`, `not-approved`, `invalid`, or `unavailable` (the plan's worktree is gone or detached, so its branch cannot be resolved). The text output counts base changes since the review; `--json` lists them. Exits 1 unless fresh. |
+| `roborepo plans sync-base [--continue] [--base <branch>] [--json]` | From a plan's linked worktree, merges the base branch into its branch; does nothing when up to date. Pauses on conflicts and exits 1; `--continue` refuses while conflicts or markers remain, then commits the merge. Refuses a dirty worktree or a base behind its upstream. Never merges into the base branch. |
 | `roborepo plans stop-servers <plan> [--dry-run] [--json]` | Sends `SIGTERM` to the processes listening on a port from inside the plan's linked worktree, then reports each as `stopped`, `still-running`, `gone`, `changed` (PID reused), or `failed`. A plan without a worktree stops nothing. Exits 1 when a server survives or cannot be signalled. macOS only, like Runtime discovery. |
+| `roborepo plans repair <root> [--dry-run]` | Scaffolds frontmatter (a fresh opaque `id`, `priority: none`, and a placeholder `next_action`) for plan docs missing it in every repo under `<root>`, so the portal can read and edit them. `--dry-run` lists them without writing. Exits 1 when a repo cannot be read. |
 | `roborepo package status <id> [--json]` | Prints one package's `available`, `enabled`, and live `status`, so a suite skill can tell a disabled helper skill from a drifted one. |
 
 ## Not Tested Entries
 
 A plan's `## Not tested` section lists built work that no test covers, one checkbox per entry.
-Unchecked entries on an active or completed plan produce the `UNCONFIRMED_NOT_TESTED` finding, and
-`/plan-close` refuses to close a plan while any remain. Headings and checkboxes inside fenced code
+Unchecked entries on an active, review, or completed plan produce the `UNCONFIRMED_NOT_TESTED`
+finding. They never block the move to review, and `/plan-close` refuses to close a plan while any
+remain. Headings and checkboxes inside fenced code
 blocks never count as plan structure.
 
 The Plans page uses the normalized package catalog state. It does not inspect skill symlinks directly.

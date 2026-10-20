@@ -15,6 +15,8 @@ main.settings-main {
   border-radius: 6px;
   background: var(--panel);
 }
+.settings-codex-hook-status { margin-top: var(--space-sm); }
+.settings-codex-hook-status[hidden] { display: none; }
 .settings-token-active { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); font-weight: 600; }
 .settings-token-active-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
 .settings-control-copy, .settings-list-copy { display: grid; gap: var(--space-xs); flex: 1; min-width: 0; }
