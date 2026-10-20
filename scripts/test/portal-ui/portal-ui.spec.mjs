@@ -487,8 +487,12 @@ test.describe("repository-first portal Home", () => {
     await card.getByRole("button", { name: "Actions for feature/running" }).click();
     await expect(card.getByRole("button", { name: "Stop Server" }).locator('portal-icon[name="stop"]')).toHaveCount(1);
     await expect(card.getByRole("button", { name: "Delete Worktree" }).locator('portal-icon[name="trash"]')).toHaveCount(1);
+    // A successful stop re-reads the overview and rebuilds the card with every menu closed. Mark the
+    // current card and wait for it to be replaced, or the next menu opens on a card about to vanish.
+    await card.evaluate((element) => { element.dataset.beforeStop = ""; });
     await card.getByRole("button", { name: "Stop Server" }).click();
-    expect(stops).toEqual([{ branch: "feature/running" }]);
+    await expect.poll(() => stops).toEqual([{ branch: "feature/running" }]);
+    await expect(page.locator(".repository-card[data-before-stop]")).toHaveCount(0);
 
     const dialog = page.getByRole("dialog", { name: "Delete worktree" });
     await card.getByRole("button", { name: "Actions for feature/running" }).click();
