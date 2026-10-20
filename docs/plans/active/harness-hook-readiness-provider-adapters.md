@@ -1,7 +1,7 @@
 ---
 id: wjlt1zvf
 priority: high
-next_action: Run /plan-review; the user confirms the `## Not tested` manual macOS QA (real terminal launch, selective trust, return-to-portal refresh) before /plan-close.
+next_action: Answer the matcher-identity Open Question (PR #39 finding 3), then run /plan-review; the user confirms the `## Not tested` manual macOS QA before /plan-close.
 blocked_by: []
 depends_on:
   - 3jp3yhtq
@@ -542,10 +542,43 @@ approval: only a later Codex `hooks/list` result clears `review_required`.
 
 ## Open Questions
 
-None open. Both earlier questions were answered by the user on October 16, 2026; see the Decision
-Log.
+- **Should hook identity include the matcher?** PR #39 review finding 3. Readiness matches an
+  expected hook to an installed one by event and command only, so a hook whose matcher differs
+  from the package's fragment reports `active`. The root cause is older than this plan: every
+  provider's `hooks.merge` and `hooks.unmerge` identify an entry by its command string
+  (`scripts/harnesses/hooks-merge.mjs`), so reapplying a package never repairs a changed matcher.
+  Comparing matchers in readiness alone would report a problem whose stated remedy does not fix it.
+
+  | Option | What changes | Pros | Cons |
+  | --- | --- | --- | --- |
+  | A. Separate follow-up plan (recommended) | Nothing here; a plan changes merge identity and readiness together | Keeps this PR to its scope; the contract change gets its own tests across Claude, Codex, and Gemini | The gap stays until then |
+  | B. Readiness compares matchers now | `hooks.read` carries the matcher; a mismatch reports a new state | Visible immediately | The remedy (reapply) does not work until merge changes |
+  | C. Both here | Merge updates a same-command entry's matcher in place (keeping Codex's position), unmerge stays by command, readiness compares matchers | Complete fix | Changes the hook-merge contract for every provider inside an already large PR |
+
+  Blocked rather than decided because it changes a cross-provider contract. Blocks nothing else in
+  this plan.
+
+None other open. The two earlier questions were answered by the user on October 16, 2026; see the
+Decision Log.
 
 ## Decision Log
+
+- **PR #39 review findings 1, 2, 4, and 5 fixed (October 19, 2026).** Each was confirmed in the
+  code before fixing, with a regression test that fails on the earlier commit:
+  - A per-file symlink under a `managed_files` directory that points outside the checkout is never
+    RoboRepo's: it is never recorded, updated through, or removed, and goes through the conflict
+    policy (overwrite moves the link aside and writes a regular file). Links into the checkout are
+    still detached as before. `shared-target-rows-check.mjs`.
+  - Notices, the offer card, the CLI hint, and doctor lines follow each hook's own state, so a
+    package with a missing hook and an untrusted one shows both. `hook-review-launch-check.mjs`,
+    portal spec "one package with a missing hook and an untrusted one shows both".
+  - "Reviewed" needs a successful read that finds every previously pending hook `active`. An
+    unknown read keeps the pending set; a hook that went missing ends it without a success notice.
+    The launch route opens Codex when readiness is unknown instead of answering "nothing to
+    review". Portal spec "a failed read or a hook that went missing is never reported as reviewed".
+  - Retired scripts: install and uninstall also walk the hash record, so a script an earlier
+    version installed and a later one renamed or dropped is removed when unedited, on update and
+    on uninstall. `shared-target-rows-check.mjs`.
 
 - **Core Codex hooks install through a `hook_fragment` manifest row, appended after package hooks
   (October 16, 2026, user decision).** Options were A appended (chosen), A with core first, B core

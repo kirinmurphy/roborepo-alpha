@@ -7,7 +7,9 @@
 // A changed definition or a shifted trust key is a new set and is offered once more. **Later** only
 // closes the card; the persistent notice on Home, Settings, and Tokens stays until review is done.
 
-import { hookReadinessNotices, hookReviewResolvedNotice, readHookStatus, refreshHookReadinessMounts } from "./hook-readiness.js";
+import {
+  hookReadinessNotices, hookReviewResolvedNotice, pendingReviewKeys, readHookStatus, refreshHookReadinessMounts, reviewConfirmed,
+} from "./hook-readiness.js";
 
 const OFFERED_KEY = "roborepo.hook-review-offers";
 const OFFERED_LIMIT = 50;
@@ -36,17 +38,28 @@ function showOffer(status) {
     card.remove();
     container.hidden = container.childElementCount === 0;
   };
+  // The hooks this card offered; "reviewed" needs a read confirming each one is now active.
+  let offered = pendingReviewKeys(status);
   const render = (next) => {
-    if (!next.reviewRevision) {
-      card.replaceChildren(hookReviewResolvedNotice(next, { onLater: close }));
-      return;
-    }
-    const [review] = hookReadinessNotices({ ...next, groups: (next.groups || []).filter((group) => group.state === "review_required") }, {
+    const handlers = {
       onCheck: () => readHookStatus(next.harness, { fresh: true }).then(render).catch(() => {}),
       onStatus: render,
       onLater: close,
-    });
-    card.replaceChildren(review);
+    };
+    if (next.reviewRevision) {
+      offered = new Set([...offered, ...pendingReviewKeys(next)]);
+      card.replaceChildren(hookReadinessNotices(next, handlers)[0]);
+      return;
+    }
+    if (reviewConfirmed(offered, next)) {
+      card.replaceChildren(hookReviewResolvedNotice(next, { onLater: close }));
+      return;
+    }
+    // Nothing awaits review, but the read did not confirm it (unknown, or the hooks went missing):
+    // show that state instead of claiming success.
+    const notices = hookReadinessNotices(next, handlers);
+    if (notices.length === 0) return close();
+    card.replaceChildren(notices[0]);
   };
   render(status);
   // Back from the terminal: show what is left, or that review is done.

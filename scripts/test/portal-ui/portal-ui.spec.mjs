@@ -147,6 +147,10 @@ test.describe("hook readiness warning", () => {
     group("telemetry", "Token Telemetry", "review_required", [hook("SessionStart", "active"), hook("PostToolUse", "review_required")]),
   ], { reviewRevision: revision });
   const allActive = () => codexStatus("active", [group("telemetry", "Token Telemetry", "active", [hook("Stop", "active")])]);
+  // pendingReview() after the user trusted every hook it listed.
+  const reviewed = () => codexStatus("active", pendingReview().groups.map((g) => ({
+    ...g, state: "active", hooks: g.hooks.map((h) => ({ ...h, state: "active" })),
+  })));
   const claudeActive = { harness: "claude", displayName: "Claude Code", supported: true, state: "active", groups: [], guidance: null };
   // `byHarness` values may be functions, so a test can change what the next read returns.
   const routeStatuses = async (page, byHarness) => {
@@ -229,7 +233,7 @@ test.describe("hook readiness warning", () => {
     expect(reads.slice(before).every((read) => read.fresh)).toBe(true);
 
     // Check again after trusting the rest: the notice says review is done and when hooks start.
-    current = allActive();
+    current = reviewed();
     await mount.getByRole("button", { name: "Check again" }).click();
     await expect(mount.locator("[data-slot=title]")).toHaveText("Codex hooks reviewed");
     await expect(mount.locator("[data-slot=message]")).toContainText("next Codex session");
@@ -250,7 +254,7 @@ test.describe("hook readiness warning", () => {
     await expect(mount.locator("[data-slot=command]")).toBeVisible();
     await expect(mount.getByRole("button", { name: "Copy command" })).toBeVisible();
 
-    current = allActive();
+    current = reviewed();
     reply = { launched: false, reason: "no_review", status: current };
     await mount.getByRole("button", { name: "Open Codex hook review" }).click();
     await expect(mount.locator("[data-slot=title]")).toHaveText("Codex hooks reviewed");
@@ -285,6 +289,46 @@ test.describe("hook readiness warning", () => {
     await expect(missing.locator("[data-slot=message]")).toContainText("roborepo bundle apply hooks");
     await expect(missing.getByRole("listitem")).toHaveText(["Codex core hooks: PreToolUse", "Skill visibility: PostToolUse"]);
     await expect(missing.getByRole("button", { name: "Open Codex hook review" })).toHaveCount(0);
+  });
+
+  test("one package with a missing hook and an untrusted one shows both", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex]) }));
+    await routeStatuses(page, {
+      codex: codexStatus("missing", [
+        group("telemetry", "Token Telemetry", "missing", [hook("PreToolUse", "missing"), hook("PostToolUse", "review_required")]),
+      ], { reviewRevision: "rev-mixed" }),
+    });
+    await page.goto("/settings");
+    const notices = page.locator("#hook-readiness portal-notice");
+    await expect(notices.filter({ hasText: "Codex hooks need review" }).getByRole("listitem")).toHaveText(["Token Telemetry: PostToolUse"]);
+    await expect(notices.filter({ hasText: "Codex hooks are missing" }).getByRole("listitem")).toHaveText(["Token Telemetry: PreToolUse"]);
+  });
+
+  test("a failed read or a hook that went missing is never reported as reviewed", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex]) }));
+    let current = pendingReview();
+    await routeStatuses(page, { codex: () => current });
+    await page.goto("/settings");
+    const mount = page.locator("#hook-readiness");
+    await expect(mount.locator("[data-slot=title]")).toHaveText("Codex hooks need review");
+
+    // Codex could not be asked: no claim of success, and the pending set is kept.
+    current = codexStatus("unknown", [
+      group("skill-visibility", "Skill visibility", "unknown", [hook("PostToolUse", "unknown")]),
+      group("telemetry", "Token Telemetry", "unknown", [hook("SessionStart", "unknown"), hook("PostToolUse", "unknown")]),
+    ]);
+    await mount.getByRole("button", { name: "Check again" }).click();
+    await expect(mount.locator("[data-slot=title]")).toHaveText("Codex hook status is unknown");
+    await expect(page.getByText("Codex hooks reviewed")).toHaveCount(0);
+
+    // The hooks were removed rather than trusted.
+    current = codexStatus("missing", [
+      group("skill-visibility", "Skill visibility", "missing", [hook("PostToolUse", "missing")]),
+      group("telemetry", "Token Telemetry", "missing", [hook("SessionStart", "active"), hook("PostToolUse", "missing")]),
+    ]);
+    await mount.getByRole("button", { name: "Check again" }).click();
+    await expect(mount.locator("[data-slot=title]")).toHaveText("Codex hooks are missing");
+    await expect(page.getByText("Codex hooks reviewed")).toHaveCount(0);
   });
 
   test("turned-off hooks point to Codex settings, not to trust review", async ({ page }) => {

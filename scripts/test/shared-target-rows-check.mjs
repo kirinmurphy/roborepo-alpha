@@ -21,6 +21,8 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-shared-target-rows-"
 try {
   coreHooksInstallAfterPackageHooks();
   scriptCopiesFollowConflictPolicy();
+  linksOutsideTheCheckoutAreNeverWrittenThrough();
+  retiredScriptsDoNotOutliveTheirSource();
   console.log("shared-target-rows-check: ok");
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
@@ -90,6 +92,66 @@ function scriptCopiesFollowConflictPolicy() {
   run({ ...env, ROBOREPO_ON_CONFLICT: "overwrite" }, rowsCli, "apply", ...row);
   assert.equal(fs.readFileSync(path.join(hooksDir, second), "utf8"), source(second), "overwrite policy replaces the edit");
   assert.ok(fs.readdirSync(hooksDir).some((name) => name.startsWith(`${stem}_original_`)), "overwrite policy backs up the edit");
+}
+
+// A user can link a hook script to their own copy elsewhere (a dotfiles repo). Even when that file
+// matches what RoboRepo last recorded, an update must not write into it.
+function linksOutsideTheCheckoutAreNeverWrittenThrough() {
+  const { home, env } = makeHome("links");
+  const hooksDir = path.join(home, ".codex", "hooks");
+  const row = ["managed_files", "codex", "globals/system/hooks/codex", hooksDir];
+  const [script] = coreScripts;
+  const external = path.join(tmp, "links-dotfiles", script);
+  fs.mkdirSync(path.dirname(external), { recursive: true });
+  fs.writeFileSync(external, "// my dotfiles copy\n");
+  fs.mkdirSync(hooksDir, { recursive: true });
+  fs.symlinkSync(external, path.join(hooksDir, script));
+  recordHashes(env, { [path.join(hooksDir, script)]: sha256("// my dotfiles copy\n") });
+
+  run({ ...env, ROBOREPO_ON_CONFLICT: "keep" }, rowsCli, "apply", ...row);
+  assert.equal(fs.readFileSync(external, "utf8"), "// my dotfiles copy\n", "keep: the linked file is untouched");
+  assert.ok(fs.lstatSync(path.join(hooksDir, script)).isSymbolicLink(), "keep: the link stays");
+  assert.equal(run(env, rowsCli, "remnants", ...row).includes(script), false, "a link is never reported as RoboRepo's");
+
+  run(env, rowsCli, "remove", ...row);
+  assert.ok(fs.lstatSync(path.join(hooksDir, script)).isSymbolicLink(), "removal leaves the user's link");
+
+  run({ ...env, ROBOREPO_ON_CONFLICT: "overwrite" }, rowsCli, "apply", ...row);
+  assert.equal(fs.readFileSync(external, "utf8"), "// my dotfiles copy\n", "overwrite: the linked file is untouched");
+  assert.equal(fs.lstatSync(path.join(hooksDir, script)).isSymbolicLink(), false, "overwrite: a regular file replaces the link");
+  assert.equal(fs.readFileSync(path.join(hooksDir, script), "utf8"), source(script));
+}
+
+// A script a later version renames or drops must not stay installed from an earlier one.
+function retiredScriptsDoNotOutliveTheirSource() {
+  const { home, env } = makeHome("retired");
+  const hooksDir = path.join(home, ".codex", "hooks");
+  const row = ["managed_files", "codex", "globals/system/hooks/codex", hooksDir];
+  fs.mkdirSync(hooksDir, { recursive: true });
+  const retired = path.join(hooksDir, "renamed-away.mjs");
+  const edited = path.join(hooksDir, "dropped-but-edited.mjs");
+  fs.writeFileSync(retired, "// shipped by an older version\n");
+  fs.writeFileSync(edited, "// user edit\n");
+  recordHashes(env, { [retired]: sha256("// shipped by an older version\n"), [edited]: sha256("// shipped originally\n") });
+
+  assert.match(run(env, rowsCli, "remnants", ...row), /renamed-away\.mjs/, "uninstall's remnant check sees the retired copy");
+  run(env, rowsCli, "apply", ...row);
+  assert.ok(!fs.existsSync(retired), "update removes an unedited script whose source is gone");
+  assert.equal(fs.readFileSync(edited, "utf8"), "// user edit\n", "an edited one stays with the user");
+
+  // Uninstall reaches a retired script too, from the hash record alone.
+  fs.writeFileSync(retired, "// shipped by an older version\n");
+  recordHashes(env, { [retired]: sha256("// shipped by an older version\n") });
+  run(env, rowsCli, "remove", ...row);
+  assert.ok(!fs.existsSync(retired), "uninstall removes a retired script");
+}
+
+function recordHashes(env, files) {
+  const statePath = path.join(env.ROBOREPO_STATE_DIR, "config-state", "managed-files.json");
+  let current = {};
+  try { current = JSON.parse(fs.readFileSync(statePath, "utf8")).files; } catch {}
+  fs.mkdirSync(path.dirname(statePath), { recursive: true });
+  fs.writeFileSync(statePath, JSON.stringify({ version: 1, files: { ...current, ...files } }));
 }
 
 function makeHome(name) {

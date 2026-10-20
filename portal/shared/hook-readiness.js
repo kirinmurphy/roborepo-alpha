@@ -33,20 +33,52 @@ export function readHookStatus(harness, { fresh = false } = {}) {
 // The notices one harness status needs: a review notice when any RoboRepo hook awaits review, and
 // one more for the worst other problem, each with its own remedy. `handlers` wires the buttons:
 // onCheck (Check again), onStatus (a launch reply carried a newer status), onLater (offer only).
+//
+// Notices are built from each hook's own state, not its group's: a group reports its worst hook,
+// so one package with a missing hook and an untrusted one is a `missing` group whose untrusted hook
+// still needs review.
 export function hookReadinessNotices(status, handlers = {}) {
   if (!status || status.supported === false) return [];
   const name = status.displayName || status.harness;
   const groups = status.groups || [];
   const notices = [];
-  const review = groups.filter((group) => group.state === "review_required");
+  const review = groupsWithHookState(groups, "review_required");
   if (review.length) notices.push(reviewNotice(status, name, review, handlers));
-  const other = OTHER_STATES.find((state) => groups.some((group) => group.state === state))
+  const other = OTHER_STATES.find((state) => groupsWithHookState(groups, state).length > 0)
     ?? (groups.length === 0 && status.state === "unknown" ? "unknown" : null);
-  if (other) notices.push(stateNotice(status, name, other, groups.filter((group) => group.state === other), handlers));
+  if (other) notices.push(stateNotice(status, name, other, groupsWithHookState(groups, other), handlers));
   return notices;
 }
 
-// Shown in place of the review notice once a fresh read finds nothing left to review.
+// The RoboRepo hooks this status shows awaiting review, as stable keys.
+export function pendingReviewKeys(status) {
+  return new Set((status?.groups || []).flatMap((group) => group.hooks
+    .filter((hook) => hook.state === "review_required")
+    .map((hook) => hookKey(group, hook))));
+}
+
+// Review is done only when a successful read finds every hook that was pending now active. A read
+// that failed (unknown), or a hook that went missing instead of being trusted, is not a review.
+export function reviewConfirmed(previousKeys, status) {
+  if (!previousKeys?.size || !status || status.reviewRevision) return false;
+  const now = new Map((status.groups || []).flatMap((group) => group.hooks.map((hook) => [hookKey(group, hook), hook.state])));
+  return [...previousKeys].every((key) => now.get(key) === "active");
+}
+
+// Whether this read could not see some hooks, so an earlier pending set should be kept for later.
+export function readinessIncomplete(status) {
+  return !status || status.state === "unknown" || groupsWithHookState(status.groups || [], "unknown").length > 0;
+}
+
+function groupsWithHookState(groups, state) {
+  return groups.filter((group) => group.hooks.some((hook) => hook.state === state));
+}
+
+function hookKey(group, hook) {
+  return `${group.owner}\t${hook.event}\t${hook.command}`;
+}
+
+// Shown in place of the review notice once a fresh read confirms nothing is left to review.
 export function hookReviewResolvedNotice(status, { onLater } = {}) {
   const name = status.displayName || status.harness;
   const node = fill(tpl("tpl-hook-readiness"), {
@@ -174,17 +206,23 @@ let awaitingReturn = false;
 export async function renderHookReadiness(mount, setup, { fresh = false } = {}) {
   const token = {};
   const previous = mounts.get(mount);
-  mounts.set(mount, { setup, token, pending: previous?.pending ?? new Set() });
+  mounts.set(mount, { setup, token, pending: previous?.pending ?? new Map() });
   const harnesses = setup?.harnesses?.active || [];
   const statuses = await Promise.all(harnesses.map((harness) => readHookStatus(harness.id, { fresh }).catch(() => null)));
   const entry = mounts.get(mount);
   if (entry?.token !== token) return;
   const rerender = () => renderHookReadiness(mount, setup, { fresh: true });
-  const pending = new Set();
+  // harness -> keys of the RoboRepo hooks last shown awaiting review on this mount.
+  const pending = new Map();
   const notices = statuses.filter(Boolean).flatMap((status) => {
-    if (status.reviewRevision) pending.add(status.harness);
-    else if (entry.pending.has(status.harness)) return [hookReviewResolvedNotice(status), ...hookReadinessNotices(status, { onCheck: rerender })];
-    return hookReadinessNotices(status, { onCheck: rerender, onStatus: () => rerender() });
+    const before = entry.pending.get(status.harness);
+    const now = pendingReviewKeys(status);
+    // Kept as a union, so "reviewed" also needs the hooks trusted between reads to stay active.
+    if (now.size) pending.set(status.harness, new Set([...(before ?? []), ...now]));
+    else if (before && readinessIncomplete(status)) pending.set(status.harness, before);
+    const handlers = { onCheck: rerender, onStatus: () => rerender() };
+    if (reviewConfirmed(before, status)) return [hookReviewResolvedNotice(status), ...hookReadinessNotices(status, handlers)];
+    return hookReadinessNotices(status, handlers);
   });
   entry.pending = pending;
   mount.replaceChildren(...notices);

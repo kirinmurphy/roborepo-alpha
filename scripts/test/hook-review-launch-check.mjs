@@ -8,6 +8,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { launchHookReview } from "../cli/hook-review-launch.mjs";
+import { hookReadinessLines, printHookReviewHint } from "../cli/hook-review-guidance.mjs";
 import { launchInTerminal, terminalLaunchSupported } from "../cli/terminal-launch.mjs";
 import { invalidateHookReadiness, loadHookReadiness, reportPackageHookChange } from "../cli/hook-readiness-status.mjs";
 import { configRoutes } from "../cli/portal-routes-config.mjs";
@@ -19,6 +20,7 @@ try {
   terminalLauncherHandlesPlatformsAndFailures();
   await statusCacheFollowsHookChanges();
   await reviewRouteAcceptsNoCommand();
+  await mixedGroupsStillNameHooksAwaitingReview();
   console.log("ok: hook review launch, terminal fallback, and readiness freshness");
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
@@ -44,6 +46,11 @@ async function launchOnlyWhenReviewIsPending() {
   assert.deepEqual([result.launched, result.reason, result.status], [false, "no_review", currentStatus]);
   assert.equal(launches.length, 1);
 
+  // A read that could not see the hooks is not "nothing to review": the click still opens Codex.
+  currentStatus = { harness: "codex", reviewRevision: null, state: "unknown", groups: [{ owner: "telemetry", state: "unknown", hooks: [{ event: "Stop", state: "unknown" }] }] };
+  result = await launchHookReview("codex", { platform: "darwin", launch, readStatus, routeFor: () => route });
+  assert.equal(result.launched, true);
+
   currentStatus = pending;
   result = await launchHookReview("codex", { platform: "linux", launch, readStatus, routeFor: () => route });
   assert.equal(result.reason, "unsupported_platform");
@@ -51,7 +58,26 @@ async function launchOnlyWhenReviewIsPending() {
   assert.equal(result.reason, "no_executable", "CLI missing from both PATH and the desktop bundle");
   result = await launchHookReview("codex", { platform: "darwin", launch: () => ({ ok: false, reason: "launch_failed", error: "denied" }), readStatus, routeFor: () => route });
   assert.deepEqual([result.launched, result.reason, result.error], [false, "launch_failed", "denied"]);
-  assert.equal(launches.length, 1, "no launch happened outside the one success");
+  assert.equal(launches.length, 2, "only the two launches that should happen did");
+}
+
+// A group reports its worst hook, so a package with a missing hook and an untrusted one is a
+// `missing` group. Its untrusted hook must still be named for review.
+async function mixedGroupsStillNameHooksAwaitingReview() {
+  const readiness = {
+    harness: "codex", displayName: "Codex", state: "missing", reviewRevision: "abc", coreBundle: "hooks",
+    guidance: { review_required: "Trust only those.", command: "codex" },
+    groups: [{ owner: "telemetry", label: "Token Telemetry", state: "missing", hooks: [
+      { event: "PreToolUse", command: "a", state: "missing" },
+      { event: "PostToolUse", command: "b", state: "review_required" },
+    ] }],
+  };
+  const lines = hookReadinessLines(readiness);
+  assert.ok(lines.some((line) => /hooks missing: Token Telemetry \(PreToolUse\)/.test(line)));
+  assert.ok(lines.some((line) => /hooks awaiting review: Token Telemetry \(PostToolUse\)/.test(line)));
+  const printed = [];
+  await printHookReviewHint(["codex"], { log: (line) => printed.push(line), read: async () => readiness });
+  assert.ok(printed.includes("Codex hooks need review: Token Telemetry (PostToolUse)."));
 }
 
 function terminalLauncherHandlesPlatformsAndFailures() {

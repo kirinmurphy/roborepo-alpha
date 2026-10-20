@@ -20,7 +20,7 @@ export function managedFilesInstalled(row) {
 
 export function managedFilesRemnants(row) {
   const recorded = readManagedFiles();
-  return sourceFiles(row)
+  return installedFiles(row, recorded)
     .filter(({ source, target }) => ownedCopy(target, source, recorded))
     .map(({ target }) => target);
 }
@@ -31,24 +31,29 @@ export function applyManagedFiles(row, { onConflict, dryRun }) {
   if (!resolveBlockingFile(row, { onConflict, dryRun })) return;
   const recorded = readManagedFiles();
   for (const { source, target } of sourceFiles(row)) {
+    // A legacy per-file link into the checkout is RoboRepo's own; a real file replaces it.
+    if (!dryRun) detachRepoLink(target);
+    // Any other link points at a file RoboRepo did not write, wherever it lives: comparing or
+    // writing through it would treat that file as ours. It goes through the conflict policy instead.
+    const foreignLink = isSymlink(target);
     const current = hashFile(target);
     const wanted = hashFile(source);
-    if (current === wanted) {
+    if (!foreignLink && current === wanted) {
       console.log(`ok: ${target}`);
       if (!dryRun) recorded[target] = wanted;
       continue;
     }
     // Absent, or still exactly what RoboRepo last wrote: safe to (re)write.
-    if (current === null || current === recorded[target]) {
+    if (!foreignLink && (current === null || current === recorded[target])) {
       if (!dryRun) {
         fs.mkdirSync(path.dirname(target), { recursive: true });
-        detachRepoLink(target);
         fs.copyFileSync(source, target);
         recorded[target] = wanted;
       }
       console.log(`${current === null ? "copy" : "update"}: ${target} <- ${source}`);
       continue;
     }
+    if (foreignLink) delete recorded[target];
     if (onConflict === "abort") {
       throw new SharedTargetConflictAbort(`${target} differs from ${source} and was not written by RoboRepo; it was not changed`);
     }
@@ -57,6 +62,7 @@ export function applyManagedFiles(row, { onConflict, dryRun }) {
       continue;
     }
     if (onConflict === "overwrite") {
+      // Moves a link aside as a link, so the copy below lands in a new regular file.
       console.log(`backup: ${target} -> ${backupOriginal(target)}`);
       fs.copyFileSync(source, target);
       recorded[target] = wanted;
@@ -65,7 +71,21 @@ export function applyManagedFiles(row, { onConflict, dryRun }) {
       console.log(`conflict: kept ${target}; staged RoboRepo's version at ${stageCandidate(source, target)}`);
     }
   }
+  removeRetiredFiles(row, recorded, { dryRun });
   if (!dryRun) writeManagedFiles(recorded);
+}
+
+// Files an earlier version installed under this row whose source has since been renamed or
+// removed. An unedited copy goes; an edited one stays with the user and drops out of the record.
+function removeRetiredFiles(row, recorded, { dryRun }) {
+  const current = new Set(sourceFiles(row).map(({ target }) => target));
+  for (const { target } of recordedFiles(row, recorded).filter(({ target }) => !current.has(target))) {
+    if (ownedCopy(target, null, recorded)) {
+      if (!dryRun) fs.rmSync(target);
+      console.log(`remove: ${target} (no longer shipped)`);
+    }
+    if (!dryRun) delete recorded[target];
+  }
 }
 
 // Whether the per-file copy can go ahead. Something other than a directory at the target (a user's
@@ -91,7 +111,7 @@ export function removeManagedFiles(row, { dryRun }) {
   if (refuseRepoLink(row.homeAbs, "remove")) return;
   const recorded = readManagedFiles();
   const directory = pathExists(row.homeAbs) && fs.statSync(row.homeAbs).isDirectory();
-  for (const { source, target } of directory ? sourceFiles(row) : []) {
+  for (const { source, target } of directory ? installedFiles(row, recorded) : []) {
     // Copies RoboRepo staged beside an edited file are RoboRepo's own.
     removeArtifact(findSiblingArtifact(target, "update"), { dryRun });
     // An edited copy stays with the user.
@@ -152,11 +172,30 @@ function removeEmptyDirs(dir) {
   if (fs.readdirSync(dir).length === 0) fs.rmdirSync(dir);
 }
 
-// A file RoboRepo wrote and nobody edited since. Matching the source counts too, because the hash
-// record can be gone (an earlier uninstall removes state) while the copy is still in place.
+// Every file this row may have installed: the current sources, plus files an earlier version
+// recorded under the row's directory whose source is gone (`source` null).
+function installedFiles(row, recorded) {
+  const files = sourceFiles(row);
+  const known = new Set(files.map(({ target }) => target));
+  return [...files, ...recordedFiles(row, recorded).filter(({ target }) => !known.has(target))];
+}
+
+function recordedFiles(row, recorded) {
+  const prefix = `${row.homeAbs}${path.sep}`;
+  return Object.keys(recorded).filter((target) => target.startsWith(prefix)).map((target) => ({ source: null, target }));
+}
+
+// A regular file RoboRepo wrote and nobody edited since. Matching the source counts too, because
+// the hash record can be gone (an earlier uninstall removes state) while the copy is still in place.
+// A link is never ours: removing or rewriting it would act on a file RoboRepo did not write.
 function ownedCopy(target, source, recorded) {
+  if (isSymlink(target)) return false;
   const current = hashFile(target);
-  return current !== null && (current === recorded[target] || current === hashFile(source));
+  return current !== null && (current === recorded[target] || (source !== null && current === hashFile(source)));
+}
+
+function isSymlink(target) {
+  try { return fs.lstatSync(target).isSymbolicLink(); } catch { return false; }
 }
 
 function readManagedFiles() {
