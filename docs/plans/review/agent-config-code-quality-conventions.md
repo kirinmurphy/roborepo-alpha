@@ -324,6 +324,8 @@ Findings:
 
 - [x] Three harness comments give the removed 150-200 line guidance as the reason for their split: `scripts/harnesses/claude/index.mjs:4` (present tense, "to stay under"; now false), `mcp.mjs:2` and `hooks-withdraw.mjs:2` (history citing a rule that no longer exists). Escalated as outside the plan's named files; the human chose to reword them in review — fixed in review (0285b29)
 - [x] `scripts/harnesses/claude/hooks-withdraw.mjs:1` header, rewritten by 0285b29, still called the method a "blanket strip-all of RoboRepo-managed hooks"; it strips only package-injected hooks and package permission allow-entries — fixed in review (3148a25)
+- [x] `scripts/harnesses/claude/hooks-withdraw.mjs:90` deleted all of `settings.permissions` (user `deny`/`ask`/`defaultMode` included) once the last allow-entry was package-owned. Out of scope; the human chose to fix it on this branch — fixed in review with a failing-first test (1afc011)
+- [x] The 1afc011 fix moved `allow` to the end of the user's `permissions` object, and three comments named the wrong file for the adapter or its bash caller (`hooks-withdraw.mjs:13`, the characterization test header, `uninstall-lib.sh:303`) — fixed in review (e18bf89)
 
 Verification:
 
@@ -334,20 +336,22 @@ Verification:
 - `git diff --check main...HEAD` → clean
 - Validator pass 1 (fresh-context subagent, merged result): 0 `fix`, 1 `escalate` (above), 0 `base`. Every acceptance criterion met; the two rubric texts agree; `[[ejsc769o]]` has not shipped and nothing of its scope was introduced. Follow-ups, not findings: `javascript-typescript` `## Types` "extract repeated values into named constants" is worth rechecking beside "repetition alone is not the benefit"; the named-exports bullet sits under `## Helpers and Abstractions` by position, not topic
 - Validator pass 2 at 66ea875: 1 `fix` (the `hooks-withdraw.mjs` header above), 0 `escalate`, 0 `base`
-- Validator pass 3 at 3148a25: clean. Follow-ups, not findings: `hooksWriteRemove` deletes all of `settings.permissions` (deny/ask included) when the last allow-entry goes, flagged as separate work; an orphaned comment block and a plan-phase citation in `scripts/harnesses/claude/index.mjs`
+- Validator pass 3 at 3148a25: clean. Follow-ups, not findings: `hooksWriteRemove` deletes all of `settings.permissions` (deny/ask included) when the last allow-entry goes, flagged as separate work; an orphaned comment block and a plan-phase citation in `scripts/harnesses/claude/index.mjs`. The permissions follow-up was then pulled into this review (below)
+- Validator pass 4 at 1afc011: 2 `fix` (key order and location comments, above; the missing Decision Log entry), 0 `escalate`, 0 `base`. Follow-up, not a finding: a non-array `permissions.allow` makes `.filter` throw, as it did before
+- `node scripts/test/harness-hooks-write-remove-characterization-check.mjs` → failed before 1afc011 ("must keep the user's deny rules"), passes at e18bf89
 - `npm run check` → passed at 3148a25 ("CI checks passed", 445 CLI tests); same two local skips (no `pwsh`, no Chromium)
 - `git diff --check main...HEAD` → clean at 3148a25
 - Base failures: none
 
 ### Result
 
-- Status: complete
+- Status: pending (implementation changed after the complete review at 3148a25; gate and Validator pass 5 pending)
 - Reviewed implementation commit: 3148a256483b9ad041e63e505a5b98d778bd340d
 - Base commit: 9da28cadac95596c25c3557403e56d16ff9fd361
 
 ### Approval
 
-- Decision: requested
+- Decision: not requested (review pending)
 
 ## Decision Log
 
@@ -362,4 +366,5 @@ Verification:
 - **2026-10-17** — The test keeps the four rubric phrases in one shared constant used by both rubric assertions, so the two texts cannot drift on them independently.
 - **2026-10-19** — After the sample, added one rule to `code-style` → `## Comments`: a comment's claim must match the code exactly and rest on something verified, and module headers are among the comments a change must recheck. Chosen over adding a rubric row for "unverified rationale", which would invite reviewers to demand evidence for every comment (the over-enforcement risk); the authoring guidance is where the invented reason originates.
 - **2026-10-20** — Plan review: the human chose to reword the three harness comments that cited the removed size guidance in this review ("yes pls continue" to the recommended option A), rather than leaving them as a follow-up, although the files lie outside the plan's named set.
+- **2026-10-20** — Plan review: the human asked for the withdraw permissions bug (found as a pass-3 follow-up) to be fixed in this session, and chose this plan branch over a new branch off `main` or a direct commit to `main`, accepting that the complete review at 3148a25 goes stale and the plan's PR carries an unrelated fix.
 - **2026-10-19** — Did not iterate further on case 1's invented rationale after one rerun. More wording risks overfitting to one sample; the plan treats the sample as a sanity check, and the remaining gap is recorded under `## Convention sample`.
