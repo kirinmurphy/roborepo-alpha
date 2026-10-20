@@ -10,7 +10,7 @@ const PACKAGE_DIRS = [
   path.join(repoRoot, "globals", "packages-archived"),
 ];
 
-// Ported from scripts/install/uninstall.sh's strip_package_hooks (characterization test:
+// Ported from scripts/install/uninstall-lib.sh's strip_package_hooks (characterization test:
 // scripts/test/harness-hooks-write-remove-characterization-check.mjs). Strips BOTH package-
 // injected hooks AND package-injected permission allow-entries from ~/.claude/settings.json in one
 // atomic read/write pass — the bash original conflated the two for a single file write rather than
@@ -89,7 +89,7 @@ export function hooksWriteRemove({ homePath, dryRun = false } = {}) {
   if (nextAllow.length !== existingAllow.length) {
     // Only the allow list is package-owned; deny, ask, and defaultMode stay with the user.
     const { allow, ...otherPermissions } = settings.permissions;
-    if (nextAllow.length > 0) settings.permissions = { ...otherPermissions, allow: nextAllow };
+    if (nextAllow.length > 0) settings.permissions = { ...settings.permissions, allow: nextAllow };
     else if (Object.keys(otherPermissions).length > 0) settings.permissions = otherPermissions;
     else delete settings.permissions;
     changed = true;

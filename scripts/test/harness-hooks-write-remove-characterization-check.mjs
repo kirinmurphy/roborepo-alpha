@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Characterization test for the Claude provider's hooks.write (removal semantics) adapter
-// (scripts/harnesses/claude/index.mjs), ported from scripts/install/uninstall.sh's
+// (scripts/harnesses/claude/hooks-withdraw.mjs), ported from scripts/install/uninstall-lib.sh's
 // strip_package_hooks. Pins: strips hook entries matching a claude-harness "hooks" resource's
 // commands from every event array (deleting the event key entirely once empty), strips permission
 // allow-entries matching a "permissions" resource's allow list, both in one settings.json read/

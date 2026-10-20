@@ -300,7 +300,7 @@ import(process.argv[1] + "/scripts/harnesses/claude/index.mjs").then(async ({ cl
 # package enablers put in, leaving only the user's genuine pre-install content.
 #
 # Delegates to the Claude provider's hooks.write adapter (removal semantics — scripts/harnesses/
-# claude/index.mjs), ported from this function's own former inline bash+node — see
+# claude/hooks-withdraw.mjs), ported from this function's own former inline bash+node — see
 # scripts/test/harness-hooks-write-remove-characterization-check.mjs for the pinned behavior.
 # Claude-only: hooks.write has no Codex implementation (Codex hooks live in a separate hooks.json
 # sidecar, not migrated to a provider adapter).
