@@ -1,7 +1,7 @@
 ---
 id: 7e21olcs
 priority: high
-next_action: Run `/plan-review` for the human review of the implementation.
+next_action:
 blocked_by: []
 depends_on: []
 related:
@@ -305,6 +305,72 @@ Cases 1 and 4 were rerun with fresh agents against the revised `code-style`, sam
 +// `behind` are null (never false/0) when the subprocess could not answer. ...
 ```
 
+### Comparison with the previous skills (2026-10-20, at closure)
+
+The sample above shows only the revised skills. At closure, the same six cases were run against both versions to compare before and after:
+
+- **Inputs:** the original starting code and the exact authoring prompts, recovered from the implementation session.
+- **Skill versions:** `code-style` and `javascript-typescript` as of `9da28cad` (before this plan) and as of `eafd8e25` (merged).
+- **Authoring:** 12 fresh Sonnet agents, one per case per version, with neutral folder names.
+- **Review:** one fresh reviewer saw each case's two results as X and Y in random order. It got the starting code, both results, rubric checks 7 to 9 with their classification table, and the expected behavior from the Section 5 table. It never saw either skill text. The X/Y mapping was revealed only after the report.
+
+| # | Previous skills | Revised skills | Reviewer's pick |
+| --- | --- | --- | --- |
+| 1 | Header still said "every field is nullable" (`fix`). Comment gave an unsupported reason for the 0 fallback (`fix`) | Header names `stashCount` as the 0-on-failure exception. No findings | Revised |
+| 2 | `\|\| user.email` inside the `buildDisplayName` wrapper | `\|\| user.email` at the `displayName` entry point | Tie |
+| 3 | Same cap, plus a `discountedTotal` helper and a `DEFAULT_MINIMUM_TOTAL = 0` constant | Inline cap with one edge-case comment | Tie (the extra helper judged neutral) |
+| 4 | Invariant comment rewritten as "every settled entry", which misstates a `!== "pending"` filter (`fix`). Single-use `PENDING_STATUS` constant | "every non-pending entry". No findings | Revised |
+| 5 | Left the comment that says unknown labels fall back to "other" (code returns "chore"). The agent noticed and said so, but left it (`fix`) | Corrected the comment to "chore" | Revised |
+| 6 | One `parseAmountCents` that validates and converts, returning `null` when the amount is invalid | `isValidAmount` validates, then the loop converts again with `Number(amount)`, so the parsing rule lives in two places (`fix`) | Previous |
+
+Totals: correctness problems 0 in both versions. `fix` findings: 4 with the previous skills, 1 with the revised skills. The revised skills were better in 3 cases, the previous skills in 1, and 2 were ties.
+
+What this shows:
+
+- **Comment accuracy improved the most.** The `fix` findings for the previous skills (cases 1, 4, 5) are all comments that misstate behavior or invent a reason. With the previous skills, one agent saw a wrong comment beside its edit and left it.
+- **The case 6 result runs against the original sample.** The original revised-skill run of case 6 produced a single `parseAmount`. This run split validation from conversion, so the skill text does not reliably prevent duplicated parsing. One run is not enough to call this a regression. It is recorded as a follow-up: if it recurs, `code-style` → `## Helpers and Abstractions` could say that one rule should be parsed in one place.
+- **The reviewer missed one problem.** The revised-skill case 1 comment says "by requirement: consumers treat 'no stashes' and 'unreadable' the same". The requirement part is accurate, but the claim about consumers is not something the request said. Invented rationale remains the known gap recorded above.
+- **The sample is small.** It is one run per case per version, so this is a sanity check, not a measurement. Results vary between runs of the same prompt, as cases 1 and 6 show across the two samples.
+
+## Verification
+
+Closure check on 2026-10-20 against primary checkout commit
+`eafd8e2535b9e8a618fddab55e6e070b8f31eaf3` (`main`, matching `origin/main`). The coding skills
+now steer toward cohesive modules and accurate, sparing comments without size caps. The rubric
+and its inline copy carry the three convention checks, under test. Every task, acceptance
+criterion, and review finding is resolved, the work landed through PR #40, and the full
+completion gate passed without a waiver.
+
+- The primary plan and the worktree copy had the identical blob
+  `a954da3c00c5b0cefb4c89f2d479ac62c8b88df4`, so the worktree's plan state is integrated.
+- Approved implementation commit: `70305151909213286f8b094abbfa62b9945db56a`.
+  `bin/roborepo plans approval 7e21olcs --json` returned `fresh`.
+- Absorbing commit: eafd8e2535b9e8a618fddab55e6e070b8f31eaf3
+- `bin/roborepo plans landed 7e21olcs --json` confirmed landing with a new scan (`ownWork: true`).
+- `npm run check` on `main` at `eafd8e25` passed ("CI checks passed"). That covers 445 CLI tests,
+  the CI check groups, the installation-collision checks, package installation, the
+  clean-machine sandboxes, and 103 portal UI browser tests. Windows installer parity skipped
+  because `pwsh` is unavailable; this plan does not touch the Windows installer.
+- Focused checks passed on `main`: `node scripts/test/run-checks.mjs --filter plan-suite-skills`
+  (1/1), `node scripts/test/harness-hooks-write-remove-characterization-check.mjs`,
+  `bash scripts/doctor.sh --quiet` (102 checks), and `git diff --check 9da28cad..eafd8e25`.
+- Acceptance criteria rechecked against `main`: the size and file-split grep over `code-style`
+  and `javascript-typescript` prints nothing. "Flow and cohesion", "Data and state", and
+  "Comments and abstractions" appear in `validation-loop.md`, `plan-review`'s inline rubric,
+  and `plan-suite-skills-check.mjs`. `globals/packages/implementation-review/` does not exist,
+  so nothing of `[[ejsc769o]]`'s scope was introduced.
+- The three harness comments reworded in review no longer cite the removed size guidance.
+  `hooks-withdraw.mjs`'s header describes its narrower strip.
+- Doc of record: `docs/internal/skills-and-commands.md` describes the rubric's flow and
+  cohesion, data and state, and comments and abstractions checks, and lists `code-style` as an
+  implicit helper skill. Both match the landed code. `docs/internal/docs-map.md` needed no change.
+- The before/after comparison under `## Convention sample` found that the revised skills
+  produced fewer misstating comments (1 `fix` against 4) with no correctness problems in either
+  version. It also found one case where the revised skills did worse (case 6, duplicated parsing),
+  which is recorded as a follow-up.
+- Not verified: the guidance's effect beyond the six sampled cases. The sample is one run per
+  case per version.
+
 ## Review
 
 ### Findings
@@ -376,3 +442,4 @@ The human answered "approved" in the plan-review chat on 2026-10-20, replying to
 - **2026-10-19** — Did not iterate further on case 1's invented rationale after one rerun. More wording risks overfitting to one sample; the plan treats the sample as a sanity check, and the remaining gap is recorded under `## Convention sample`.
 - **2026-10-20** — Plan review: the human chose to reword the three harness comments that cited the removed size guidance in this review ("yes pls continue" to the recommended option A), rather than leaving them as a follow-up, although the files lie outside the plan's named set.
 - **2026-10-20** — Plan review: the human asked for the withdraw permissions bug (found as a pass-3 follow-up) to be fixed in this session, and chose this plan branch over a new branch off `main` or a direct commit to `main`, accepting that the complete review at 3148a25 goes stale and the plan's PR carries an unrelated fix.
+- **2026-10-20** — At closure, the human asked for a before/after comparison of the six sample cases against the previous and revised skills, beyond the acceptance criterion's revised-only sample. Recorded under `## Convention sample` as evidence; it changed no skill text.
