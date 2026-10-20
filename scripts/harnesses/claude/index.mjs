@@ -1,8 +1,8 @@
 // Claude Code harness provider: manifest binding and capability adapters. Methods listed in
 // stubGroups below are placeholders that throw until their behavior moves here from scripts/cli/.
 //
-// Split by capability group across this directory to stay under the repo's 150-200 line file-size
-// guidance: mcp.mjs (the 4 MCP methods), hooks-withdraw.mjs (the withdraw-specific bulk strip).
+// Split by capability group across this directory: mcp.mjs (the 4 MCP methods), hooks-withdraw.mjs
+// (the withdraw-specific bulk strip).
 // This file is the composition root: rootConfig/package-component merge, hooks merge/unmerge,
 // telemetry, transcripts, and the final defineHarnessProvider wiring.
 

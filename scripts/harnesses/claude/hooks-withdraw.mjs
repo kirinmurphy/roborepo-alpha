@@ -1,6 +1,5 @@
-// Claude's hooks.write adapter method (withdraw's blanket strip-all of RoboRepo-managed hooks). Split out of
-// index.mjs, which grew past this repo's 150-200 line file-size guidance once rootConfig/mcp/
-// telemetry/transcripts were all added alongside this one large withdraw-specific function.
+// Claude's hooks.write adapter method (withdraw's blanket strip-all of RoboRepo-managed hooks), kept out
+// of index.mjs as a single-purpose module for one withdraw-specific capability.
 
 import fs from "node:fs";
 import path from "node:path";
