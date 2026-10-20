@@ -1,5 +1,5 @@
-// Claude's hooks.write adapter method (withdraw's blanket strip-all of RoboRepo-managed hooks), kept out
-// of index.mjs as a single-purpose module for one withdraw-specific capability.
+// Claude's hooks.write adapter method (withdraw's strip of package-injected hooks and permission
+// allow-entries), kept out of index.mjs as a single-purpose module for one withdraw-specific capability.
 
 import fs from "node:fs";
 import path from "node:path";
