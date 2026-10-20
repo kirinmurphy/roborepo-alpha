@@ -1,7 +1,7 @@
 ---
 id: irpw877r
 priority: high
-next_action: Merge the reviewed implementation branch, then confirm the first post-change plan-start and plan-close reports include their required documentation evidence
+next_action: Merge the approved pull request, then run /plan-close
 blocked_by: []
 depends_on: []
 related:
@@ -267,6 +267,14 @@ The plan-close guide and skill now report a removal failure after cleanup guards
   `UNCONFIRMED_NOT_TESTED` finding for the live agent-compliance check below.
 - Documentation Validator pass checked technical-writing rules, doc-set organization, the plan
   schema, and the applicable code-style, JavaScript, and test guidance; no violations remained.
+- Manual agent-behavior check, recorded at the user's request on 2026-10-17: a disposable RoboRepo
+  plan ran through the current `/plan-execute` instruction (the successor to `/plan-start`) and
+  included `Docs updated: docs/user-guide.md` in its execution report in this chat. Its approved
+  `/plan-close` run checked
+  `docs/user-guide.md` against the landed `src/message.mjs`, `bin/hello.mjs`, and CLI output, named
+  those comparisons in `## Verification`, and committed only plan-file changes (`f678103`). The demo
+  used a local merge rather than a hosted pull request; this confirms the documentation behavior,
+  not the real docs-freshness branch's landing.
 
 ## Validation
 
@@ -277,17 +285,16 @@ The plan-close guide and skill now report a removal failure after cleanup guards
 - `node scripts/test/skill-trigger-fixtures-check.mjs` and `node scripts/test/skill-trigger-fixtures-shipping-check.mjs` pass after the skill edits; run the repository's skill/package checks for changed package sources.
 - Each Phase 2 skill edit can be found by reading the skill: the instruction is in the step named in
   Proposed Design.
-- No automated test can show an agent following the new instructions. The first plan that runs
-  through `plan-start` and `plan-close` after Phase 2 confirms it: its final report carries the
-  `Docs updated:` line, and its `## Verification` names the docs it checked. Record that run as a
-  `## Not tested` entry until it happens.
+- Agent compliance is checked by a live run of the current `/plan-execute` and `/plan-close`
+  instructions: the execution report carries `Docs updated:`, and the completed plan's
+  `## Verification` names the docs checked against landed code.
 - The implementation report lists each Phase 3 area's docs, the current code or UI checked, and any correction made; a doc with no change gets an explicit checked-and-current result.
 
 ## Not tested
 
-- [ ] Confirm the first plan using the updated `/plan-start` and `/plan-close` instructions reports
-  `Docs updated:` and names the docs checked in its `## Verification`. Agent compliance needs a
-  later live run and cannot be established by the package and skill checks alone.
+- [x] Confirm a live plan using the updated `/plan-execute` and `/plan-close` instructions reports
+  `Docs updated:` and names the docs checked in its `## Verification` — confirmed by the
+  user-approved disposable run recorded under Verification run above.
 
 ## Risks
 
@@ -300,6 +307,9 @@ The plan-close guide and skill now report a removal failure after cleanup guards
 
 ## Decision Log
 
+- The 2026-10-17 manual check uses `/plan-execute`, the current name for the implementation step
+  originally called `/plan-start`. The user asked to record the observed disposable run as the
+  agent-compliance check. Its local merge does not establish landing for this plan.
 - Keep `documentation-map-and-audit.md` as a historical audit. Retiring its duplicate map makes
   `docs/internal/docs-map.md` the current ownership source while preserving the earlier findings.
 - Defer machine-readable code-to-doc ownership. The plan workflow and deterministic reference
@@ -312,3 +322,40 @@ The plan-close guide and skill now report a removal failure after cleanup guards
 ## Open Questions
 
 None blocks implementation.
+
+## Review
+
+### Findings
+- [x] Shortcut reference links and images in `scripts/test/docs-reference-scan.mjs` were not checked against their definitions — fixed in review (07a0e8cb), with missing-target and anchor regression fixtures.
+
+### Verification
+- Completion preflight passed before submit; submit committed the move to review.
+- First fresh-context Validator pass found the shortcut-reference gap; no escalations.
+- The initial `npm run check` encountered localhost EPERM sandbox restrictions. The elevated attempt overlapped base synchronization and reported one CLI surface failure plus a generated-tree mutation warning; it is not final verification. The requested stable post-fix elevated rerun was rejected by the user, so the completion gate remains unverified.
+- Live docs, seeded fixtures, Markdown renderer, both skill-trigger checks, and doctor passed before the scanner repair.
+- The implementation validation account predates the current structured Review record; this review independently checks the implementation.
+
+- Second fresh-context Validator pass found no remaining fix findings after the repair.
+- Post-fix live docs check, seeded fixtures, Markdown renderer, both skill-trigger checks, `roborepo package validate` (27 packages), `roborepo plans validate irpw877r --json` (zero findings), `bash scripts/doctor.sh --quiet` (102 checks), and `git diff --check` passed.
+- Base synchronization merged through `122d8685bd10a6e6fe0cf9ffe4118eeff98c6656` in `2ad3cbce`; main subsequently advanced to `b96e31ed40ee9213f3621a0d6dd10b114d321918`. Resume synchronization before final review.
+- No required manual checks remain. No base failure was independently established.
+
+- Resumed review on 2026-10-17: synchronized the latest base `a65f47da97f092196dc4528804297186003a9ad7` in merge `ade9446ffa6a5f0179027e2c0e3048160ea8f166` without conflicts. Earlier pending-gate notes above are historical and superseded by this run.
+- `npm run check` passed at `ade9446f`: 445 CLI tests, installation collision checks, CI check suites, package installation, and Docker clean-machine, install, permissions, and onboarding sandboxes. Windows installer parity skipped because PowerShell is unavailable; browser suite skipped because Chromium is unavailable. Neither skip exercises the selected scanner or documentation-instruction change.
+- Plan-specific checks passed on the final merged result: `node scripts/test/docs-reference-check.mjs`, `node scripts/test/docs-reference-fixtures-check.mjs`, `node scripts/test/markdown-render-check.mjs`, `node scripts/test/skill-trigger-fixtures-check.mjs`, `node scripts/test/skill-trigger-fixtures-shipping-check.mjs`, `roborepo package validate` (27 packages), and `roborepo plans validate irpw877r --json` (zero findings).
+- Two resumed fresh-context Validator passes checked the synchronized implementation and final base delta; both found no fix or escalation findings. Prior shortcut-reference finding remains resolved by `07a0e8cb`. Technical-writing, plan-schema, code-style, JavaScript, and test-harness constraints were checked; React and DOM guidance do not apply.
+- No base failures, escalations, or required manual checks remain. The prior user-confirmed live agent documentation check is reused; it was not repeated.
+
+- Final freshness follow-up: merged base `8adb7fc914db3ba749f72fd089ea97a3b0bd836d` as `5462fc552d2362f3ee385ec8bee60faeb9517c97`. The configuration-repair dry-run guidance and regression assertion passed a fresh-context Validator pass with no findings. `npm run check` passed again on this exact merged result, including Docker sandboxes; only PowerShell and Chromium availability skips remained.
+
+### Result
+- Status: complete
+- Reviewed implementation commit: 5462fc552d2362f3ee385ec8bee60faeb9517c97
+- Base commit: 8adb7fc914db3ba749f72fd089ea97a3b0bd836d
+
+### Approval
+- Decision: approved
+- Reviewed implementation commit: 5462fc552d2362f3ee385ec8bee60faeb9517c97
+- Confirmed by: human
+
+Approval evidence: the user replied "approved" on 2026-10-17 in this chat immediately after the review packet naming the implementation commit above.
