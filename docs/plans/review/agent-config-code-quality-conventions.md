@@ -342,13 +342,14 @@ Verification:
 - Validator pass 5 at e18bf89: clean. Follow-ups, not findings: `scripts/test/test-cli.sh:1868` still calls `strip_package_hooks` uninstall.sh's former function; a non-array `permissions.allow` still throws
 - `npm run check` → passed at e18bf89 ("CI checks passed", 445 CLI tests); same two local skips (no `pwsh`, no Chromium)
 - `roborepo plans sync-base` → up-to-date at 7030515 (base `9da28ca`, matching `origin/main`)
+- This Result supersedes the complete review at 3148a25, which the permissions fix made stale
 - `npm run check` → passed at 3148a25 ("CI checks passed", 445 CLI tests); same two local skips (no `pwsh`, no Chromium)
 - `git diff --check main...HEAD` → clean at 3148a25
 - Base failures: none
 
 ### Result
 
-- Status: complete (supersedes the complete review at 3148a25, which the permissions fix made stale)
+- Status: complete
 - Reviewed implementation commit: 70305151909213286f8b094abbfa62b9945db56a
 - Base commit: 9da28cadac95596c25c3557403e56d16ff9fd361
 
