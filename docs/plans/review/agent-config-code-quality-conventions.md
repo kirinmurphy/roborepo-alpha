@@ -339,19 +339,22 @@ Verification:
 - Validator pass 3 at 3148a25: clean. Follow-ups, not findings: `hooksWriteRemove` deletes all of `settings.permissions` (deny/ask included) when the last allow-entry goes, flagged as separate work; an orphaned comment block and a plan-phase citation in `scripts/harnesses/claude/index.mjs`. The permissions follow-up was then pulled into this review (below)
 - Validator pass 4 at 1afc011: 2 `fix` (key order and location comments, above; the missing Decision Log entry), 0 `escalate`, 0 `base`. Follow-up, not a finding: a non-array `permissions.allow` makes `.filter` throw, as it did before
 - `node scripts/test/harness-hooks-write-remove-characterization-check.mjs` → failed before 1afc011 ("must keep the user's deny rules"), passes at e18bf89
+- Validator pass 5 at e18bf89: clean. Follow-ups, not findings: `scripts/test/test-cli.sh:1868` still calls `strip_package_hooks` uninstall.sh's former function; a non-array `permissions.allow` still throws
+- `npm run check` → passed at e18bf89 ("CI checks passed", 445 CLI tests); same two local skips (no `pwsh`, no Chromium)
+- `roborepo plans sync-base` → up-to-date at 7030515 (base `9da28ca`, matching `origin/main`)
 - `npm run check` → passed at 3148a25 ("CI checks passed", 445 CLI tests); same two local skips (no `pwsh`, no Chromium)
 - `git diff --check main...HEAD` → clean at 3148a25
 - Base failures: none
 
 ### Result
 
-- Status: pending (implementation changed after the complete review at 3148a25; gate and Validator pass 5 pending)
-- Reviewed implementation commit: 3148a256483b9ad041e63e505a5b98d778bd340d
+- Status: complete (supersedes the complete review at 3148a25, which the permissions fix made stale)
+- Reviewed implementation commit: 70305151909213286f8b094abbfa62b9945db56a
 - Base commit: 9da28cadac95596c25c3557403e56d16ff9fd361
 
 ### Approval
 
-- Decision: not requested (review pending)
+- Decision: requested
 
 ## Decision Log
 
@@ -365,6 +368,6 @@ Verification:
 - **2026-10-17** — `react` left unchanged: "extract repeated markup into focused components" is React's unit of markup reuse, not a size or file-placement rule, and its comment line agrees with `code-style`. `tighten` left unchanged: it inherits `code-style` and its located, rule-citing finding format matches the rubric's location/cost/remedy requirement.
 - **2026-10-17** — The test keeps the four rubric phrases in one shared constant used by both rubric assertions, so the two texts cannot drift on them independently.
 - **2026-10-19** — After the sample, added one rule to `code-style` → `## Comments`: a comment's claim must match the code exactly and rest on something verified, and module headers are among the comments a change must recheck. Chosen over adding a rubric row for "unverified rationale", which would invite reviewers to demand evidence for every comment (the over-enforcement risk); the authoring guidance is where the invented reason originates.
+- **2026-10-19** — Did not iterate further on case 1's invented rationale after one rerun. More wording risks overfitting to one sample; the plan treats the sample as a sanity check, and the remaining gap is recorded under `## Convention sample`.
 - **2026-10-20** — Plan review: the human chose to reword the three harness comments that cited the removed size guidance in this review ("yes pls continue" to the recommended option A), rather than leaving them as a follow-up, although the files lie outside the plan's named set.
 - **2026-10-20** — Plan review: the human asked for the withdraw permissions bug (found as a pass-3 follow-up) to be fixed in this session, and chose this plan branch over a new branch off `main` or a direct commit to `main`, accepting that the complete review at 3148a25 goes stale and the plan's PR carries an unrelated fix.
-- **2026-10-19** — Did not iterate further on case 1's invented rationale after one rerun. More wording risks overfitting to one sample; the plan treats the sample as a sanity check, and the remaining gap is recorded under `## Convention sample`.
