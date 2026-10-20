@@ -20,9 +20,11 @@ same otherwise.
 
 ## Functions
 
-- Use `function` declarations for context-agnostic utilities, especially exported helpers.
-- Use arrow functions for callbacks, inline handlers, closures, and functions that intentionally capture local state or props.
-- Keep reusable pure functions in their own file when shared across modules.
+These are defaults; a file that consistently does otherwise keeps its own style.
+
+- Prefer `function` declarations for context-agnostic utilities, especially exported helpers.
+- Prefer arrow functions for callbacks, inline handlers, closures, and functions that intentionally capture local state or props.
+- Place a pure helper by who uses it, as `code-style` describes: next to its only consumer, in a shared module once a second module needs it. Being pure does not by itself earn a separate module.
 - Small local helpers can live below the main function/export and rely on hoisting.
 
 ## Types
