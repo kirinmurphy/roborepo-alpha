@@ -87,8 +87,11 @@ export function hooksWriteRemove({ homePath, dryRun = false } = {}) {
   const existingAllow = settings.permissions?.allow || [];
   const nextAllow = existingAllow.filter((p) => !toRemove.has(p));
   if (nextAllow.length !== existingAllow.length) {
-    if (nextAllow.length === 0) delete settings.permissions;
-    else settings.permissions = { ...settings.permissions, allow: nextAllow };
+    // Only the allow list is package-owned; deny, ask, and defaultMode stay with the user.
+    const { allow, ...otherPermissions } = settings.permissions;
+    if (nextAllow.length > 0) settings.permissions = { ...otherPermissions, allow: nextAllow };
+    else if (Object.keys(otherPermissions).length > 0) settings.permissions = otherPermissions;
+    else delete settings.permissions;
     changed = true;
   }
 
