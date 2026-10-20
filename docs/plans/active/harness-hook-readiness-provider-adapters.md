@@ -1,11 +1,12 @@
 ---
 id: wjlt1zvf
 priority: high
-next_action: Answer the matcher-identity Open Question (PR #39 finding 3), then run /plan-review; the user confirms the `## Not tested` manual macOS QA before /plan-close.
+next_action: Run /plan-review on the PR head; the user confirms the `## Not tested` manual macOS QA before /plan-close.
 blocked_by: []
 depends_on:
   - 3jp3yhtq
 related:
+  - e97a44qa
   - codex-cmux-hook-trust-review
   - harness-capability-derived-resource-targeting
   - usage-statusline-codex-hook-parity
@@ -542,26 +543,16 @@ approval: only a later Codex `hooks/list` result clears `review_required`.
 
 ## Open Questions
 
-- **Should hook identity include the matcher?** PR #39 review finding 3. Readiness matches an
-  expected hook to an installed one by event and command only, so a hook whose matcher differs
-  from the package's fragment reports `active`. The root cause is older than this plan: every
-  provider's `hooks.merge` and `hooks.unmerge` identify an entry by its command string
-  (`scripts/harnesses/hooks-merge.mjs`), so reapplying a package never repairs a changed matcher.
-  Comparing matchers in readiness alone would report a problem whose stated remedy does not fix it.
-
-  | Option | What changes | Pros | Cons |
-  | --- | --- | --- | --- |
-  | A. Separate follow-up plan (recommended) | Nothing here; a plan changes merge identity and readiness together | Keeps this PR to its scope; the contract change gets its own tests across Claude, Codex, and Gemini | The gap stays until then |
-  | B. Readiness compares matchers now | `hooks.read` carries the matcher; a mismatch reports a new state | Visible immediately | The remedy (reapply) does not work until merge changes |
-  | C. Both here | Merge updates a same-command entry's matcher in place (keeping Codex's position), unmerge stays by command, readiness compares matchers | Complete fix | Changes the hook-merge contract for every provider inside an already large PR |
-
-  Blocked rather than decided because it changes a cross-provider contract. Blocks nothing else in
-  this plan.
-
-None other open. The two earlier questions were answered by the user on October 16, 2026; see the
-Decision Log.
+None open. Every question was answered by the user; see the Decision Log.
 
 ## Decision Log
+
+- **Hook matcher identity moves to its own plan (October 20, 2026, user decision on PR #39 finding
+  3).** Readiness matches hooks by event and command, but so does every provider's hook merge,
+  so reapplying a package never repairs a changed matcher and comparing matchers here alone would
+  report a problem with no working remedy. Keep installed hook matchers in step with their packages
+  (`e97a44qa`, `docs/plans/backlog/agent-config-hook-matcher-identity.md`) changes merge and
+  readiness together. Options B (readiness only) and C (both in this PR) were declined.
 
 - **PR #39 review findings 1, 2, 4, and 5 fixed (October 19, 2026).** Each was confirmed in the
   code before fixing, with a regression test that fails on the earlier commit:
