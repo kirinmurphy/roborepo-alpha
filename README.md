@@ -169,29 +169,33 @@ RoboRepo discovers repository planning documents under:
 ```text
 docs/plans/
 ├── backlog/
+├── ready/
 ├── active/
+├── review/
 ├── completed/
 └── archived/
 ```
 
 The Plans portal surfaces:
 
-|                 |                                |
-| --------------- | ------------------------------ |
-| Readiness       | deterministic validation       |
-| Priority        | plan metadata                  |
-| Dependencies    | blockers and relationships     |
-| Git state       | reviewed commit / current HEAD |
-| Agent workflows | create, review, start, sync    |
+|                 |                                                       |
+| --------------- | ----------------------------------------------------- |
+| Structure       | deterministic validation                              |
+| Priority        | plan metadata                                         |
+| Dependencies    | blockers and relationships                            |
+| Plan freshness  | reviewed commit / current HEAD                        |
+| Review outcome  | open findings and your recorded approval              |
+| Agent workflows | write, promote, execute, review, close, archive       |
 
 ```mermaid
 flowchart LR
-  Backlog -->|start| Active -->|complete| Completed
-  Active -->|archive| Archived
-  Backlog -->|archive| Archived
+  Backlog -->|/plan-promote| Ready -->|/plan-execute| Active -->|implemented and validated| Review
+  Review -->|you merge, then /plan-close| Completed
+  Review -->|scope change| Active
+  Backlog & Ready & Active & Review -->|/plan-archive| Archived
 ```
 
-![The Plans page: lifecycle tabs and a plan card with priority, review state, and workflow actions](docs/images/plans.png)
+![The Plans page: lifecycle tabs and a plan card with priority, plan freshness, and workflow actions](docs/images/plans.png)
 
 [Plan Suite walkthrough →](docs/user/guides/plan/lifecycle/plan-suite.md)\
 [Plans reference →](docs/user/reference/plans-portal.md)

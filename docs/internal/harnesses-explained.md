@@ -68,7 +68,7 @@ all three harnesses — a row is ✅ only when Claude, Codex, _and_ Gemini all a
 [Gemini CLI loads custom commands from `.toml` files](https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/custom-commands.md).
 RoboRepo currently emits `.md` wrappers for Gemini too; the
 renderer has not been extended to emit TOML. See the integration gap in
-[Step 1](#step-1-when-they-already-agree-slash-commands) below. Note the jump at hooks: every other
+[Step 1](#step-1--when-they-already-agree-slash-commands) below. Note the jump at hooks: every other
 element agrees on **semantics** (a rule means the same thing on every side, only the wrapping
 differs), so a generator or a link can bridge it. Hooks are the first where the _meaning_ itself
 diverges — which is exactly why automation stops there. Root config differs on everything too, but

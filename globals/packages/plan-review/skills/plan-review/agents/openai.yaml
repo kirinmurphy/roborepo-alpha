@@ -1,0 +1,3 @@
+interface:
+  display_name: "Plan Review"
+  short_description: "Run the human review of a plan and record approval"

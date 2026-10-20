@@ -6,6 +6,7 @@ const PATH_ROOTS = "modules|portal|scripts|globals|manifests|generated|docs|bin|
 const PATH_CODE = new RegExp(`\x60((?:${PATH_ROOTS})/[^\x60\\s]+)\x60`, "g");
 const INLINE_LINK = /!?\[[^\]]*\]\((<[^>]+>|(?:[^()\s]|\([^()\s]*\))+)(?:\s+\"[^\"]*\")?\)/g;
 const REFERENCE_LINK = /!?\[([^\]]+)\]\[([^\]]*)\]/g;
+const SHORTCUT_LINK = /(?<!\\)\[([^\]]+)\]/g;
 const REFERENCE_DEFINITION = /^\s*\[([^\]]+)\]:\s*(<[^>]+>|\S+)/;
 const HISTORICAL = /\b(?:no longer exists?|does not exist|do not exist|there is no|did not exist|never (?:existed|written)|removed|deleted|retired|previously|formerly|historical|dated|legacy|proposed|candidate|old path|before migration|was replaced|were replaced|superseded|no .+ candidate exists)\b/i;
 const GENERATED_OUTPUT = /^(?:docs\/\.jdm-indexed(?:\/|$)|docs\/\.jcm-indexed(?:\/|$))/;
@@ -53,6 +54,11 @@ export function scanDocs(root, files = readerDocs(root)) {
             const id = (match[2] || match[1]).toLowerCase().replace(/\s+/g, " ");
             if (refs.has(id)) checkLink(root, file, index + 1, refs.get(id), findings);
             else findings.push({ file, line: index + 1, reason: `missing reference definition [${id}]` });
+          }
+          const shortcuts = prose.replace(INLINE_LINK, "").replace(REFERENCE_LINK, "");
+          for (const match of shortcuts.matchAll(SHORTCUT_LINK)) {
+            const id = match[1].toLowerCase().replace(/\s+/g, " ");
+            if (refs.has(id)) checkLink(root, file, index + 1, refs.get(id), findings);
           }
         }
         if (!datedSnapshot) {

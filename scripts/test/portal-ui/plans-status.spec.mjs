@@ -1,6 +1,6 @@
 // The Plans card's status strip and the shared completion it carries: a progress ring, the `done`
-// badge once every task is checked, and the `merged` badge once the plan's worktree has landed —
-// the same join Home draws from its overview. The card keeps lifecycle, review state, and the next
+// badge once every task is checked, and beside either the `merged` badge once the plan's worktree
+// has landed — the same join Home draws from its overview. The card keeps lifecycle, review state, and the next
 // action out of the strip; the next action stays in the plan drawer.
 import fs from "node:fs";
 import os from "node:os";
@@ -44,7 +44,9 @@ test.describe("Plans card status", () => {
   test.beforeAll(() => {
     planRoot = fs.mkdtempSync(path.join(os.tmpdir(), "portal-ui-status-"));
     fs.mkdirSync(path.join(planRoot, ".git"));
-    for (const lifecycle of ["backlog", "active"]) fs.mkdirSync(path.join(planRoot, "docs", "plans", lifecycle), { recursive: true });
+    for (const lifecycle of ["backlog", "active", "review"]) fs.mkdirSync(path.join(planRoot, "docs", "plans", lifecycle), { recursive: true });
+    fs.writeFileSync(path.join(planRoot, "docs", "plans", "review", "status-review.md"),
+      plan({ id: "streview", title: "Review status plan", nextAction: "Fix the finding", tasks: ["- [x] One", "", "## Review", "", "### Findings", "", "- [ ] Missing retry test"] }));
     fs.writeFileSync(path.join(planRoot, "docs", "plans", "active", "status-ring.md"),
       plan({ id: "string01", title: "Ring status plan", nextAction: "Ship the ring step", tasks: ["- [x] One", "- [ ] Two"] }));
     fs.writeFileSync(path.join(planRoot, "docs", "plans", "active", "status-merged.md"),
@@ -72,6 +74,16 @@ test.describe("Plans card status", () => {
     await expect(card).not.toContainText("Next up");
   });
 
+  // Implementation progress and QA outcome are separate claims: the task list says the work is built,
+  // and only the review record says whether it passed.
+  test("a review card shows its open findings apart from its task progress", async ({ page }) => {
+    await page.goto("/plans?lifecycle=review");
+    const card = page.locator("plan-card", { hasText: "Review status plan" });
+    await expect(card.locator(".chip", { hasText: "1 open finding" })).toBeVisible();
+    await expect(card.getByRole("button", { name: "Review", exact: true })).toBeVisible();
+    await expect(card).not.toContainText("approved");
+  });
+
   test("a finished task list shows the done badge in place of the ring", async ({ page }) => {
     await page.goto("/plans?lifecycle=backlog");
     const card = page.locator("plan-card", { hasText: "Done status plan" });
@@ -79,7 +91,7 @@ test.describe("Plans card status", () => {
     await expect(card.getByRole("progressbar")).toHaveCount(0);
   });
 
-  test("a plan whose worktree has merged shows the merged badge on its card and in its drawer", async ({ page }) => {
+  test("a plan whose worktree has merged shows the merged badge beside its progress on its card and in its drawer", async ({ page }) => {
     const record = await planRecord(page, "Merged status plan");
     await patchHomeOverview(page, (overview) => {
       overview.repositories.push({ displayName: "Merged fixture", domains: landedWorktree(record) });
@@ -89,11 +101,13 @@ test.describe("Plans card status", () => {
     const badge = card.locator(".plan-merged-badge");
     await expect(badge).toHaveText("merged");
     await expect(badge).toHaveAttribute("title", "Merged into main");
-    await expect(card.getByRole("progressbar")).toHaveCount(0);
+    await expect(card.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "33");
+    await expect(card.locator(".plan-percent")).toHaveText("33%");
 
     await card.getByText("Merged status plan").click();
     const drawer = page.locator("dialog#drawer");
     await expect(drawer.locator("plan-status .plan-merged-badge")).toHaveText("merged");
+    await expect(drawer.locator("plan-status .plan-percent")).toHaveText("33%");
   });
 
   test("the drawer keeps the lifecycle and next action the card leaves out", async ({ page }) => {

@@ -2110,11 +2110,24 @@ fi
 assert "markdown-render: heading ids, tables, mermaid fallback" \
   node "${repo_root}/scripts/test/markdown-render-check.mjs"
 
-# Plan docs: scanning, frontmatter parsing, guarded lifecycle moves, readiness validation, and the
-# portal's pure mutation-orchestration helpers. These have npm scripts of their own but were never
-# reachable from `npm test`, so a plans-domain regression could pass CI unnoticed.
-assert "plan-suite: scanning, frontmatter, guarded lifecycle moves" \
+# Plan docs: scanning, frontmatter parsing, readiness validation, and the portal's pure
+# mutation-orchestration helpers. These have npm scripts of their own but were never reachable from
+# `npm test`, so a plans-domain regression could pass CI unnoticed.
+assert "plan-suite: scanning, frontmatter, priority edits" \
   node "${repo_root}/scripts/test/plan-suite-check.mjs"
+
+# The lifecycle manifest and every committed move between lifecycle folders.
+assert "plan lifecycle: manifest loading, validation, and projection" \
+  node "${repo_root}/scripts/test/plan-lifecycle-manifest-check.mjs"
+
+assert "plan lifecycle: transitions, preflight, approval, close, and archive" \
+  node "${repo_root}/scripts/test/plan-lifecycle-transitions-check.mjs"
+
+assert "plan lifecycle: transition commits touch only the plan, even after heavy edits" \
+  node "${repo_root}/scripts/test/plan-transition-commit-paths-check.mjs"
+
+assert "plan lifecycle: base synchronization into a plan branch" \
+  node "${repo_root}/scripts/test/plan-sync-base-check.mjs"
 
 assert "plan-suite: findings catalog and destination policy" \
   node "${repo_root}/scripts/test/plan-suite-findings-check.mjs"

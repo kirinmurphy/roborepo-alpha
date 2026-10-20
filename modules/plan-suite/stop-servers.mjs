@@ -6,7 +6,7 @@
 // findLinkedWorktree only matches linked worktrees, so the primary checkout is unreachable here.
 import { stopCheckoutServers } from "../developer-runtime/stop.mjs";
 import { buildRepositoryPlanSnapshot, domainError, selectRepositoryPlan } from "./index.mjs";
-import { findLinkedWorktree, primaryCheckout } from "./start-transition.mjs";
+import { findLinkedWorktree, primaryCheckout } from "./plan-git.mjs";
 
 export async function stopPlanServers({ cwd = process.cwd(), selector, dryRun = false, stop = stopCheckoutServers } = {}) {
   if (!selector) throw domainError("INVALID_CHANGE", "A plan id or path is required.");

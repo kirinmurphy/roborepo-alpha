@@ -2,10 +2,13 @@
 
 Managed plans live under `docs/plans`.
 
-Lifecycle is derived from folders, not frontmatter:
+Lifecycle is derived from folders, not frontmatter. The folders, and the moves between them, are
+declared in `manifests/platform/plan-lifecycle.json`:
 
 - `docs/plans/backlog`
+- `docs/plans/ready`
 - `docs/plans/active`
+- `docs/plans/review`
 - `docs/plans/completed`
 - `docs/plans/archived`
 
@@ -31,7 +34,7 @@ Rules:
 - `id`: a short opaque base36 string, 6-8 lowercase alphanumerics, unique within the repository and
   never changed once written. See "Plan ids" below.
 - `priority`: `high`, `medium`, `low`, or `none`.
-- `next_action`: required for ready backlog plans and active plans; empty for completed and archived plans.
+- `next_action`: required in backlog, ready, active, and review; empty for completed and archived plans.
 - `blocked_by`, `depends_on`, and `related`: arrays.
 - `reviewed_commit`: commit intentionally reviewed against repository state; empty means never reviewed.
 - `worktree`: optional. Git's administrative name for the one linked worktree implementing this plan
@@ -40,23 +43,24 @@ Rules:
   or `git rev-parse --git-dir`. Never an absolute path and never a branch name: the value is
   repository-local and survives branch switches. Empty or absent means unassociated, which is valid
   in every lifecycle — planning, blocked, and manually managed work need no worktree. Main
-  checkouts have no administrative name and cannot be named here. `plan-start` records it when
-  implementation begins in a linked worktree; see "Worktree association" below.
+  checkouts have no administrative name and cannot be named here. `/plan-execute` records it with
+  the start transition when implementation begins in a linked worktree; see "Worktree association"
+  below.
 
 ## Worktree association
 
 New plans and repaired frontmatter carry an empty `worktree:` line. Historical plans without the
 line remain valid and are not bulk-migrated.
 
-The field is an exact join key, not a hint. A plan/worktree integration joins an active plan to its
-linked worktree's row only when exactly one active plan and exactly one linked worktree in the same
-repository share the name. A stale name (the worktree was removed), a duplicate claim, or an empty
+The field is an exact join key, not a hint. A plan/worktree integration joins an active or review
+plan to its linked worktree's row only when exactly one such plan and exactly one linked worktree in
+the same repository share the name. A stale name (the worktree was removed), a duplicate claim, or an empty
 value leaves the plan as its own row with a **not started** or **worktree not running** badge; nothing
 is inferred from branch names or plan prose.
 
 Write a value only when live Git state proves the relationship — the worktree exists now and this
 plan's implementation runs there. A value left behind after the worktree is removed is harmless: it
-matches nothing, and only active plans are joined at all.
+matches nothing, and only active and review plans are joined at all.
 
 ## Plan authority
 
@@ -68,19 +72,24 @@ The primary checkout is the first `worktree` entry of `git worktree list --porce
 copy decides which lifecycle stage a plan is in, because every lifecycle transition is committed
 there. The assigned worktree's copy is authoritative only when all of these hold:
 
-1. the primary copy is in `docs/plans/active/` and names a worktree;
+1. the primary copy is in `docs/plans/active/` or `docs/plans/review/` and names a worktree;
 2. Git has a linked worktree with that administrative name;
-3. that worktree holds a readable copy with the same `id`, still in `docs/plans/active/`, naming the
+3. that worktree holds a readable copy with the same `id`, in `active/` or `review/`, naming the
    same worktree.
 
 Otherwise the primary copy is authoritative.
 
+The two copies can sit in different folders. The primary copy moves first, because every transition
+is committed there, so during review the worktree's copy is often still in `active/` while the
+primary copy is in `review/`. That is expected, not an error: the stage is the primary copy's, and
+the next base synchronization brings the rename into the worktree.
+
 | Plan condition | Authoritative copy |
 | --- | --- |
-| Backlog, completed, or archived in the primary checkout | Primary |
-| Active, with no `worktree` | Primary |
-| Active, and the assigned worktree holds a usable copy | Worktree |
-| Active, but the assigned worktree or its copy is not usable | Primary, with `PLAN_WORKTREE_COPY_UNAVAILABLE` |
+| Backlog, ready, completed, or archived in the primary checkout | Primary |
+| Active or review, with no `worktree` | Primary |
+| Active or review, and the assigned worktree holds a usable copy | Worktree |
+| Active or review, but the assigned worktree or its copy is not usable | Primary, with `PLAN_WORKTREE_COPY_UNAVAILABLE` |
 | Present only in a worktree | That worktree |
 | A copy in any worktree the plan is not assigned to | Never |
 
@@ -91,7 +100,8 @@ An edit to the primary copy of a plan whose worktree copy is authoritative is an
 the portal reports it as `PLAN_EDITED_OUTSIDE_WORKTREE`. Resolve it with Git: merge the base branch
 into the worktree, or move the edit into the worktree's copy and revert it in the primary checkout.
 Lifecycle moves of such a plan happen only through the lifecycle commands, which run in the primary
-checkout.
+checkout. The one exception to "never copy" is archiving abandoned work: `/plan-archive` carries the
+worktree copy's content into the primary copy once, and refuses when both copies were edited.
 
 Do not add `status`, `validated`, `updated_at`, `created_at`, `owner`, `percent_complete`, `estimated_hours`, or `tags` unless a later plan explicitly adds them.
 
@@ -229,7 +239,7 @@ Section headings are matched by label against a synonym list, so several common 
 
 Completed plans additionally need a `Verification` section with real content under it — evidence the work was checked, or an explicit statement of what was not verified. A bare heading does not satisfy it.
 
-Validation reports each problem as a finding with a stable code, a plain-language message, and a resolution. Findings are advisory by default: moving a plan into a lifecycle whose requirements it does not meet raises `LIFECYCLE_REQUIREMENTS` (422) listing every problem at once, along with a generated repair prompt, but the move can still be confirmed. Nothing here blocks a move outright.
+Validation reports each problem as a finding with a stable code, a plain-language message, and a resolution. In place, findings are advisory: a plan can sit in any folder with findings, and the portal reports them. A lifecycle transition is stricter: moving a plan into a folder whose requirements it does not meet is refused with `LIFECYCLE_REQUIREMENTS`, listing every problem at once along with a generated repair prompt, and nothing moves. Moves into `ready/` and `completed/` require no findings at all; moves into `active/` and `review/` tolerate unconfirmed `## Not tested` entries; a move into `archived/` checks only the archived rules.
 
 Use Markdown checkboxes for executable work:
 
@@ -249,11 +259,64 @@ An optional section of checkboxes for work that exists but that no test covers:
 ```
 
 - Write an entry the moment a gap is known: a check skipped, an assumption not exercised, a claim
-  resting on indirect evidence. `plan-start` writes them during its run; a sync adds them.
+  resting on indirect evidence. `/plan-execute` writes them during its run; a sync adds them.
 - Each entry states what to check and why a test cannot.
 - Only the user clears an entry: by confirming it by hand and checking it off, or by deleting it
   with the reason recorded in the plan's `## Decision Log`.
-- Unchecked entries on an active or completed plan are a finding (`UNCONFIRMED_NOT_TESTED`), and
-  `/plan-close` refuses to close a plan while any remain.
+- Unchecked entries on an active, review, or completed plan are a finding (`UNCONFIRMED_NOT_TESTED`).
+  They never block implementation completion, and `/plan-close` refuses to close a plan while any
+  remain.
 - The heading must be exactly `## Not tested`. Headings and checkboxes inside fenced code blocks,
   like the example above, are never plan structure.
+
+## Review
+
+`/plan-execute`'s validation loop starts a small review record in the authoritative copy of the
+plan, and `/plan-review` adds to it and records the approval:
+
+```markdown
+## Review
+
+### Findings
+- [x] Missing retry test — fixed (a1b2c3d)
+- [x] Retry limit: fixed — confirmed by the human
+
+### Verification
+- Validation: clean on pass 2 (fresh-context subagent)
+- Unit and integration tests passed
+- Base failure: `lint` fails on `main` too
+
+### Result
+- Status: complete
+- Reviewed implementation commit: <full commit id>
+- Base commit: <full base commit id>
+
+### Approval
+- Decision: approved
+- Reviewed implementation commit: <full commit id>
+- Confirmed by: human
+```
+
+- Findings are plain checkboxes. An unchecked finding is open work: it keeps the completion preflight
+  failing until it is fixed, by the validation loop, by `/plan-review` in its own session, or by
+  `/plan-execute` when the user sends it back, with the resolution after a dash. Earlier findings
+  may stay for readable history.
+- A check that fails on the base branch too is a base failure, recorded under `### Verification`.
+  It is never a finding.
+- `### Result` records review completion independently of the human decision: `Status` is `pending`
+  or `complete`, `Reviewed implementation commit` identifies the checked code, and `Base commit`
+  identifies its synchronized base. Record full commit ids. Set complete only after the final
+  checks and Validator pass, with every finding and required manual check resolved. The result
+  may be committed before the human answers; that plan-only commit preserves its freshness.
+- The Result fields and the three `### Approval` lines have a fixed format read by
+  `roborepo plans approval <plan> --json`. Its `review` object reports result freshness separately
+  from top-level approval `state`, including changed base paths. An older review without Result
+  remains valid; `/plan-review` must establish its evidence before taking the approval-only path.
+- Only a human grants approval; an agent records it after the human's explicit answer and commits
+  it immediately. Pending approval uses `Decision: requested`; a complete Result never changes
+  that decision automatically. Record the answer's source in review prose so a retry can recover it.
+- An approval is fresh while the repository outside `docs/plans/` is identical at the reviewed
+  commit and at the feature branch's tip. Plan-only commits after it keep it fresh; a code change,
+  including one a base merge brings in, makes it stale. `/plan-close` refuses a stale approval.
+- `reviewed_commit` in the frontmatter is unrelated: it records when the plan document was last
+  checked against the repository, not what a human accepted.

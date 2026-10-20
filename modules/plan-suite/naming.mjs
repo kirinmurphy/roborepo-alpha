@@ -9,7 +9,7 @@
 //
 // Scope is deliberately narrow, along two axes:
 //
-//   - Lifecycle. Findings apply to `backlog` and `active` only. Every non-conforming filename in
+//   - Lifecycle. Findings apply to non-terminal stages only. Every non-conforming filename in
 //     this repository sits in `completed/`, and a plan in a terminal lifecycle is a historical
 //     record: renaming it would break inbound links to settle a convention that no longer governs
 //     any future work.
@@ -21,14 +21,16 @@
 import fs from "node:fs";
 import path from "node:path";
 import { finding } from "./findings.mjs";
+import { LIFECYCLE_MODEL } from "./lifecycle-manifest.mjs";
 
 // Namespaces that apply to most software projects and need no per-repository declaration.
 export const UNIVERSAL_NAMESPACES = Object.freeze([
   "cli", "git", "infra", "os", "test", "docs", "security", "perf",
 ]);
 
-// Lifecycles whose filenames are still governed by the convention. Terminal lifecycles are exempt.
-const VALIDATED_LIFECYCLES = new Set(["backlog", "active"]);
+// Lifecycles whose filenames are still governed by the convention: every stage a plan can still
+// leave. Terminal lifecycles (no outgoing transition in the lifecycle manifest) are exempt.
+const VALIDATED_LIFECYCLES = new Set([...LIFECYCLE_MODEL.folders].filter((id) => LIFECYCLE_MODEL.transitionsFrom(id).length > 0));
 
 // Suffixes that encode something already tracked elsewhere: lifecycle is the folder, priority and
 // blockers are frontmatter, and a version belongs in the plan body if it matters at all. A filename

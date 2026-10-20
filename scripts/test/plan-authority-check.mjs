@@ -11,6 +11,7 @@ import { blobId, checkOutsideEdits, resolvePlanAuthority } from "../../modules/p
 
 // ---- resolvePlanAuthority: every row of the authority table ----
 const active = (worktree) => ({ lifecycle: "active", worktree });
+const review = (worktree) => ({ lifecycle: "review", worktree });
 const cases = [
   ["backlog in the primary", { lifecycle: "backlog", worktree: "wt" }, { copy: active("wt") }, "primary", null],
   ["completed in the primary", { lifecycle: "completed", worktree: "wt" }, { copy: active("wt") }, "primary", null],
@@ -22,6 +23,13 @@ const cases = [
   ["active, copy left active/", active("wt"), { copy: { lifecycle: "completed", worktree: "wt" } }, "primary", "copy-not-active"],
   ["active, copy predates the start transition", active("wt"), { copy: { lifecycle: "backlog", worktree: "" } }, "primary", "copy-not-active"],
   ["active, copy names another worktree", active("wt"), { copy: active("other") }, "primary", "copy-other-worktree"],
+  ["ready in the primary", { lifecycle: "ready", worktree: "wt" }, { copy: active("wt") }, "primary", null],
+  ["active, copy predates the start transition in ready/", active("wt"), { copy: { lifecycle: "ready", worktree: "" } }, "primary", "copy-not-active"],
+  ["review, copy still in active/ before base sync", review("wt"), { copy: active("wt") }, "worktree", null],
+  ["review, copy synced into review/", review("wt"), { copy: review("wt") }, "worktree", null],
+  ["active after reopening, copy still in review/", active("wt"), { copy: review("wt") }, "worktree", null],
+  ["review, worktree missing", review("wt"), null, "primary", "worktree-missing"],
+  ["review, copy names another worktree", review("wt"), { copy: review("other") }, "primary", "copy-other-worktree"],
 ];
 for (const [name, primary, assigned, source, reason] of cases) {
   assert.deepEqual(resolvePlanAuthority({ primary, assigned }), { source, reason }, name);

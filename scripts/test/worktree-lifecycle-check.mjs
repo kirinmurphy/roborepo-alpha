@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { inspectBranchLanding } from "../../modules/repositories/worktree-landed.mjs";
+import { runGitProcess } from "../../modules/repositories/git-exec.mjs";
 import { linkedWorktrees } from "../../modules/repositories/worktree-inventory.mjs";
 import { deriveWorktreeState, resolveWorktreeStaleDays } from "../../modules/repositories/worktree-state.mjs";
 import { cleanupWorktrees, removeRepositoryWorktree, stopRepositoryWorktreeServers, worktreeCleanupCommand } from "../cli/worktree-cleanup.mjs";
@@ -115,6 +116,39 @@ try {
     assert.equal((await inspectBranchLanding(main, "feature")).landed, true, "a cherry-picked branch is landed");
   }
   {
+    const { main, worktree } = repository("recorded");
+    commit(worktree, "feature.txt", "feature\n");
+    commit(main, "base.txt", "base moved\n");
+    const beforeLanding = git(main, "rev-parse", "HEAD");
+    git(main, "merge", "--squash", "feature");
+    git(main, "commit", "-qm", "squash feature");
+    const squash = git(main, "rev-parse", "HEAD");
+    commit(main, "later.txt", "later base work\n");
+    let mergeChecks = 0;
+    const counting = (cwd, args, options) => {
+      if (args[0] === "merge-tree") mergeChecks += 1;
+      return runGitProcess(cwd, args, options);
+    };
+
+    const scanned = await inspectBranchLanding(main, "feature");
+    assert.equal(scanned.absorbingCommit, squash);
+    assert.equal(scanned.reused, false, "without a recorded commit the scan finds the absorbing commit");
+
+    const verified = await inspectBranchLanding(main, "feature", { recorded: squash, runGit: counting });
+    assert.equal(verified.landed, true);
+    assert.equal(verified.absorbingCommit, squash);
+    assert.equal(verified.reused, true, "a recorded commit that still absorbs the branch is reused");
+    assert.equal(mergeChecks, 1, "verifying the recorded commit replaces the first-parent scan");
+
+    const wrong = await inspectBranchLanding(main, "feature", { recorded: beforeLanding });
+    assert.deepEqual([wrong.landed, wrong.absorbingCommit, wrong.reused], [true, squash, false], "a recorded commit that does not absorb the branch falls back to the scan");
+    const outside = await inspectBranchLanding(main, "feature", { recorded: git(main, "rev-list", "--max-parents=0", "HEAD") });
+    assert.deepEqual([outside.absorbingCommit, outside.reused], [squash, false], "a recorded commit before the fork is never reused");
+
+    commit(worktree, "extra.txt", "new branch work\n");
+    assert.equal((await inspectBranchLanding(main, "feature", { recorded: squash })).landed, false, "a recorded commit never vouches for later branch work");
+  }
+  {
     const { main, worktree } = repository("merge");
     commit(worktree, "feature.txt", "feature\n");
     git(main, "merge", "--no-ff", "-qm", "merge feature", "feature");
@@ -166,8 +200,11 @@ try {
     assert.equal(rows.find((row) => row.branch === "feature").reason, "plan not closed");
     fs.mkdirSync(path.join(main, "docs/plans/completed"), { recursive: true });
     fs.renameSync(path.join(main, "docs/plans/active/story.md"), path.join(main, "docs/plans/completed/story.md"));
+    assert.equal(rows.find((row) => row.branch === "feature").landingEvidence, "scanned");
+    fs.appendFileSync(path.join(main, "docs/plans/completed/story.md"), `\n## Verification\n\n- Absorbing commit: ${git(main, "rev-parse", "HEAD")}\n`);
     rows = await cleanupWorktrees({ ...options, plan: "story1", apply: true });
     assert.equal(rows[0].action, "removed", rows[0].reason);
+    assert.equal(rows[0].landingEvidence, "reused", "plan-scoped cleanup verifies the plan's recorded absorbing commit");
     assert.equal(fs.existsSync(worktree), false);
     assert.equal(git(main, "branch", "--list", "feature"), "");
     const log = fs.readFileSync(removalLogPath(stateRoot), "utf8").trim().split("\n").map(JSON.parse);
@@ -485,6 +522,12 @@ try {
     fs.mkdirSync(path.join(main, "docs/plans/active"), { recursive: true });
     fs.writeFileSync(path.join(main, "docs/plans/active/story.md"), "---\nid: quoted\nworktree: \"quoted-plan-work\"\n---\n");
     assert.equal(activeWorktreeNames(main).has("quoted-plan-work"), true, "a quoted worktree field still protects its worktree");
+    fs.mkdirSync(path.join(main, "docs/plans/review"), { recursive: true });
+    fs.mkdirSync(path.join(main, "docs/plans/completed"), { recursive: true });
+    fs.writeFileSync(path.join(main, "docs/plans/review/awaiting.md"), "---\nid: awaiting\nworktree: under-review\n---\n");
+    fs.writeFileSync(path.join(main, "docs/plans/completed/done.md"), "---\nid: done\nworktree: finished-work\n---\n");
+    assert.equal(activeWorktreeNames(main).has("under-review"), true, "a plan under review keeps its worktree");
+    assert.equal(activeWorktreeNames(main).has("finished-work"), false, "a completed plan releases its worktree");
   }
   {
     assert.equal(proposedWorktreeFolder([

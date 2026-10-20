@@ -15,7 +15,7 @@
     {
       "id": "skills-dev-lifecycle",
       "label": "Plan Suite",
-      "description": "One command for each step of a plan's life: write, promote, start, close, and close out the session.",
+      "description": "One command for each step of a plan's life: write, promote, execute, review, close or archive, and close out the session.",
       "bulkToggle": true,
       "order": 20
     },

@@ -5,7 +5,12 @@ const GIT_TIMEOUT_MS = 10000;
 
 // A branch is landed only after it carried a commit of its own and some first-parent base commit
 // absorbed its current tree. Keeping the absorbing commit makes the answer stable as base moves on.
-export async function inspectBranchLanding(cwd, branch, { base = null, scanLimit = FIRST_PARENT_SCAN_LIMIT, runGit = runGitProcess } = {}) {
+//
+// `recorded` is an absorbing commit an earlier check reported. It is evidence to verify, not a
+// result to trust: when it is still a first-parent base commit after the fork and still absorbs the
+// branch's current tip, that one merge check replaces the scan (`reused: true`). Otherwise the full
+// scan runs as if nothing had been recorded.
+export async function inspectBranchLanding(cwd, branch, { base = null, recorded = null, scanLimit = FIRST_PARENT_SCAN_LIMIT, runGit = runGitProcess } = {}) {
   const git = (args) => runGit(cwd, args, { timeoutMs: GIT_TIMEOUT_MS });
   const baseRef = base || await defaultBase(git);
   if (!baseRef) return verdict("base unavailable");
@@ -31,18 +36,21 @@ export async function inspectBranchLanding(cwd, branch, { base = null, scanLimit
   const candidatesResult = await git(["rev-list", "--first-parent", "--reverse", `${fork}..${baseRef}`]);
   if (!candidatesResult.ok) return verdict("history unavailable", { base: baseRef, tip, fork, start, ownWork });
   const candidates = lines(candidatesResult.stdout);
-  if (candidates.length > scanLimit) return verdict("scan limit exceeded", { base: baseRef, tip, fork, start, ownWork });
-  for (const commit of candidates) {
+  const absorbs = async (commit) => {
     const [merged, tree] = await Promise.all([
       git(["merge-tree", "--write-tree", commit, tip]),
       git(["rev-parse", `${commit}^{tree}`]),
     ]);
-    if (!tree.ok || (!merged.ok && merged.code !== 1)) {
-      return verdict("scan unavailable", { base: baseRef, tip, fork, start, ownWork });
-    }
-    if (merged.ok && tree.ok && lines(merged.stdout)[0] === tree.stdout.trim()) {
-      return verdict("landed", { landed: true, absorbingCommit: commit, base: baseRef, tip, fork, start, ownWork });
-    }
+    if (!tree.ok || (!merged.ok && merged.code !== 1)) return null;
+    return merged.ok && lines(merged.stdout)[0] === tree.stdout.trim();
+  };
+  const landed = (commit, reused) => verdict("landed", { landed: true, absorbingCommit: commit, reused, base: baseRef, tip, fork, start, ownWork });
+  if (recorded && candidates.includes(recorded) && await absorbs(recorded)) return landed(recorded, true);
+  if (candidates.length > scanLimit) return verdict("scan limit exceeded", { base: baseRef, tip, fork, start, ownWork });
+  for (const commit of candidates) {
+    const absorbed = await absorbs(commit);
+    if (absorbed === null) return verdict("scan unavailable", { base: baseRef, tip, fork, start, ownWork });
+    if (absorbed) return landed(commit, false);
   }
   return verdict("not absorbed", { base: baseRef, tip, fork, start, ownWork });
 }

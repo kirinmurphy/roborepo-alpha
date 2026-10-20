@@ -1,6 +1,6 @@
 // <plan-status> — set .merge (optional, see below) and .record (plan record) right after creation,
 // then append to the DOM. Shared by <plan-card> and the detail drawer so both surfaces show the same
-// priority control, readiness/blocked chips, modified time, and completion.
+// priority control, structure/QA/blocked chips, modified time, and completion.
 //
 // Completion is the shared planCompletion() ring/badge, at the far right. `.merge` is the plan's
 // `{ into }` when its worktree has merged (state.js's mergedPlanBranches), which turns it into the
@@ -19,6 +19,8 @@
 // a pure function of its `record` prop rather than needing app.js to call back into it.
 import { portalTpl as tpl, portalFillSlots as fill } from "/portal/shared/api.js";
 import { planCompletion } from "/portal/plans/plan-completion.js";
+import { showsPriority } from "/portal/plans/lifecycle.js";
+import { STRUCTURE_LABELS } from "/portal/plans/state.js";
 import { chip } from "/portal/plans/templates.js";
 
 const PRIORITY_OPTIONS = [
@@ -28,9 +30,14 @@ const PRIORITY_OPTIONS = [
   ["none", "none"],
 ];
 
-// Priority no longer applies once a plan is done — completed/archived plans keep the field on
-// the record for history, but the control shouldn't offer to edit it.
-const LIFECYCLES_WITHOUT_PRIORITY = new Set(["completed", "archived"]);
+// The QA outcome of a plan under review, kept apart from its task progress (the completion ring):
+// finishing the tasks moved it here, and only review findings and a human's approval move it on.
+function qaChip(plan) {
+  const open = plan.qa?.openFindings || 0;
+  if (open > 0) return chip(`${open} open finding${open === 1 ? "" : "s"}`, "warn");
+  if (plan.qa?.decision === "approved") return chip("approved", "ok");
+  return chip("awaiting review");
+}
 
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
@@ -137,12 +144,16 @@ class PlanStatusElement extends HTMLElement {
     }
     const completion = planCompletion(plan, { merge: this.merge || null });
     if (completion) node.querySelector("[data-slot=completion]").replaceWith(completion);
-    // readiness (draft/ready) only distinguishes actionable-vs-not within backlog; once a plan is
-    // active it necessarily already cleared that bar, so the chip is redundant past backlog.
+    // Structure (complete/draft) only distinguishes actionable-vs-not within backlog; promotion to
+    // Ready requires a complete structure, so the chip is redundant past backlog.
+    const chips = node.querySelector("[data-slot=status-chips]");
     if (plan.lifecycle === "backlog") {
-      node.querySelector("[data-slot=status-chips]").append(chip(plan.readiness, plan.readiness === "ready" ? "ok" : ""));
+      chips.append(chip(STRUCTURE_LABELS[plan.readiness] || plan.readiness, plan.readiness === "ready" ? "ok" : ""));
     }
-    if (!LIFECYCLES_WITHOUT_PRIORITY.has(plan.lifecycle)) {
+    if (plan.lifecycle === "review") chips.append(qaChip(plan));
+    // Priority no longer applies once a plan is done; those plans keep the field for history, but
+    // the control does not offer to edit it.
+    if (showsPriority(plan.lifecycle)) {
       node.querySelector("[data-slot=priority]").append(
         readonly ? chip(`${plan.priority} priority`) : this.renderPriorityDropdown(record),
       );

@@ -205,13 +205,13 @@ function testPlanWriteCreateRunsBothValidationLayers() {
     "the create workflow must invoke deterministic plan-write validation");
   assert.match(create, /both layers/,
     "the create workflow must state that a revision is rechecked by both layers, not just the one that reported");
-  assert.match(create, /hand off to `\/plan-start` only after the backlog artifact passes both layers/,
-    "a requested start must be sequenced after the backlog artifact passes, and must name the command that performs it");
+  assert.match(create, /hand off to `\/plan-promote` only after the backlog artifact passes both layers/,
+    "a requested start must be sequenced after the backlog artifact passes, and must name the command that performs the next move");
 
   const validate = flat(`${PLAN_WRITE}/references/workflow-validate.md`);
   assert.match(validate, /Naming:/, "the validate workflow must list the naming checks the domain now enforces");
   assert.match(validate, /plans-config\.json/, "naming validation reads declared namespaces from the config");
-  assert.match(validate, /backlog. and .active/,
+  assert.match(validate, /backlog., .ready., .active., and .review. only/,
     "the validate workflow must state that naming findings are scoped to non-terminal lifecycles");
   assert.match(validate, /canonical plan validator/, "deterministic findings are delegated to the repository's validator, not prose the skill re-derives");
   assert.match(validate, /machine-readable output mode/, "the validator runs with structured output for deterministic findings");

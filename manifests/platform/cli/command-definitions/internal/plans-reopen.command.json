@@ -1,0 +1,13 @@
+{
+  "path": ["plans", "reopen"],
+  "kind": "internal",
+  "title": "Reopen plan",
+  "description": "Commit a review plan's move back to active after a requirements change",
+  "usage": "roborepo plans reopen <plan> [--base <branch>] [--json]",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/plans-command.mjs",
+    "export": "plansCommand",
+    "prependArgs": ["reopen"]
+  }
+}

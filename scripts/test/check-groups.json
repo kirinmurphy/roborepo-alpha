@@ -8,7 +8,7 @@
     "harness-desktop-runtime-check.mjs",
     "harness-install-desktop-check.mjs",
     "managed-uninstall-check.mjs",
-    "plan-promote-plan-start-check.mjs",
+    "plan-suite-skills-check.mjs",
     "worktree-lifecycle-check.mjs",
     "core-hook-wiring-check.mjs",
     "hook-readiness-check.mjs",

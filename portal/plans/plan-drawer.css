@@ -207,7 +207,7 @@ dialog#skill-modal::backdrop {
 .status-trailing {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   margin-left: auto;
 }
 .status-state-row {
@@ -221,7 +221,9 @@ dialog#skill-modal::backdrop {
  * up one, so progress is what the eye lands on. Scoped here so Home's plan rows keep their sizing. */
 .status-trailing .meta-line { font-size: var(--text-xs); }
 .status-trailing .plan-completion { font-size: var(--text-xs); }
-.status-trailing .plan-progress { width: var(--icon-sm); height: var(--icon-sm); }
+.status-trailing .plan-percent { font-size: var(--text-sm); }
+/* Between --icon-sm and --icon-md: a step up from Home's ring without outgrowing the badges beside it. */
+.status-trailing .plan-progress { width: 18px; height: 18px; }
 .status-state-chips {
   display: flex;
   align-items: center;
@@ -481,7 +483,7 @@ dialog#drawer::backdrop {
 }
 
 /* Shared completion (plan-completion.js), used on Home's plan rows and in <plan-status>: a progress
- * ring and percent, or the done / merged badge. A ring, not a bar: a conic sweep (green to
+ * ring and percent or the done badge, after the merged badge. A ring, not a bar: a conic sweep (green to
  * --percent, black after) masked down to its outer band, so the unfilled remainder reads as clearly
  * as the progress itself. */
 .plan-completion { display: inline-flex; align-items: center; gap: 5px; color: var(--dim); flex: none; font-size: var(--text-2xs); }
@@ -498,6 +500,7 @@ dialog#drawer::backdrop {
 .plan-complete-badge,
 .plan-merged-badge { padding: var(--pill-padding); border-radius: 999px; color: var(--chip-ink); font-weight: 600; }
 .plan-complete-badge { background: var(--chip-low-bg); }
-/* The same GitHub merged purple as the worktree row's merged badge. */
-.plan-merged-badge { background: var(--merged); }
+/* The same GitHub merged purple as the worktree row's merged badge. The extra margin sets it apart
+ * from the progress that follows, while the ring and its percent stay at the tighter gap. */
+.plan-merged-badge { background: var(--merged); margin-right: 5px; }
 .plan-complete-badge[hidden], .plan-merged-badge[hidden] { display: none; }
