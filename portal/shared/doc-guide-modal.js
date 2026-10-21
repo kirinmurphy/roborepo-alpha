@@ -11,7 +11,6 @@
 // GitHub-style slug id), titled with that heading. Info icons pass their page section's anchor, so
 // each popup explains the one thing next to it instead of the whole guide. open() with no anchor,
 // or an anchor the guide lacks, shows the full guide.
-// Triggers inside another dialog close that dialog before opening this guide.
 import { portalWireBackdropClose } from "./api.js";
 // Diagram rendering now lives in portal/shared/markdown-mermaid.js so /agents and /plans get it too
 // — it was private to this modal, which is why only the Telemetry guide rendered diagrams.
@@ -27,8 +26,6 @@ export function createDocGuideModal(dialogEl, fetchGuide) {
   document.addEventListener("click", (event) => {
     const trigger = event.target.closest("[data-doc-anchor]");
     if (!trigger) return;
-    const host = trigger.closest("dialog");
-    if (host && host !== dialogEl && host.open) host.close();
     trigger.setAttribute("aria-expanded", "true");
     open(trigger.dataset.docAnchor);
   });

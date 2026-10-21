@@ -29,6 +29,17 @@ for (const status of ["partial", "failed", "unavailable"]) {
   assert.equal("error_category" in result, false, `${status} carries no error category of its own`);
 }
 
+// The comparison boundary marks empty input comparable; a check that never ran must not say so.
+const noEvidence = createOracleResult({ ...comparison, status: "unavailable", event_count: 0, session_count: 0,
+  operation_count: 0, coverage: { ...comparison.coverage, supported_events: 0, checks: [] } }, metadata);
+assert.equal(noEvidence.status, "unavailable");
+assert.equal(noEvidence.coverage.comparable, false, "zero events are never comparable");
+assert.equal(noEvidence.coverage.complete, false, "zero events are never complete");
+const unsupported = createOracleResult({ ...comparison, status: "unavailable", event_count: 2, session_count: 0,
+  operation_count: 0, coverage: { ...comparison.coverage, supported_events: 1, unsupported_events: 1, comparable: false,
+    complete: false, issues: [{ category: "malformed_event", count: 1 }], checks: [] } }, metadata);
+assert.deepEqual([unsupported.coverage.comparable, unsupported.coverage.complete], [false, false]);
+
 const readError = createOracleResult(emptyOracleResult("evidence_read_error"), metadata);
 assert.equal(readError.status, "unavailable");
 assert.equal(readError.error_category, "evidence_read_error");

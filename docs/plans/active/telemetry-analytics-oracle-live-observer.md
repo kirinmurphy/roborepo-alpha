@@ -1,7 +1,7 @@
 ---
 id: koww80zh
 priority: high
-next_action: Get the user's answers on the two pass-5 questions in Open questions, apply them and the two pass-5 plan-text fixes, then rerun /plan-execute for a fresh Validation Loop
+next_action: Run a fresh Validation Loop over the pass-5 resolutions, then the completion preflight and submit transition
 blocked_by: []
 depends_on: []
 related:
@@ -115,9 +115,10 @@ The oracle recomputes these values without importing production analysis helpers
 | Screenshots | `docs/images/tokens/oracle-health{,-detail}-{light,dark}.png`; the Oracle captures and the "Oracle guide screenshots are served" test in `scripts/test/portal-ui/telemetry-documentation.spec.mjs` |
 
 Two shared portal changes made while building the badge stay, because other code uses them: the
-`[data-doc-anchor]` delegate in `portal/shared/doc-guide-modal.js` also serves the Tokens section
-info icons, and the `aria-controls` attribute in `portal/shared/info-icon.js` is a general
-accessibility fix.
+`[data-doc-anchor]` delegate in `portal/shared/doc-guide-modal.js` also serves the Tokens info
+icons, and the `aria-controls` attribute in `portal/shared/info-icon.js` is a general
+accessibility fix. The delegate's line that closed a host dialog before opening the guide served
+only the Oracle dialog and is removed, so the guide opens over the session drill-down as on main.
 
 The branch also extended the report cache signature to cover markers, snapshots, and the repository
 registry (`telemetryReportEvidenceSignature` in `scripts/cli/telemetry.mjs`). That fixes a stale
@@ -232,8 +233,9 @@ The result schema drops the fields that only served the observer: `evidence_sign
 
 `coverage.issues` lists `{ category, count }` pairs: the machine-readable cause behind `partial`
 and behind an `unavailable` caused by uninterpretable evidence. An `unavailable` with no events has
-`event_count: 0`, and one caused by a read or comparison failure carries `error_category`. `error_category` appears only on `unavailable`. Schema version 1 never shipped outside this branch,
-so it is not bumped.
+`event_count: 0` and `coverage.comparable` and `coverage.complete` both `false`, and one caused by
+a read or comparison failure carries `error_category`. `error_category` appears only on
+`unavailable`. Schema version 1 never shipped outside this branch, so it is not bumped.
 
 ### Module ownership
 
@@ -377,7 +379,7 @@ Expected: no matches.
 ```bash
 bash scripts/doctor.sh --quiet
 npm run check
-git diff --check
+git diff --check main...HEAD
 ```
 
 This phase changes CI check groups, the CLI command surface, shared server wiring, and browser UI,
@@ -497,6 +499,18 @@ Phase 8, 2026-10-21:
   nowhere. Deleted the README and both PNGs, removed the root README sentence, and dropped the
   scratch page's link. Alternative: keep the rewritten fixture README as a new doc; rejected by the
   user in favor of matching main.
+- 2026-10-21 — User decision: the Tokens doc guide opens over the session drill-down, as on main.
+  Removed the line in `portal/shared/doc-guide-modal.js` that closed a host dialog before opening
+  the guide; it existed only for the removed Oracle dialog's guide button. A browser test in
+  `telemetry-documentation.spec.mjs` failed before the change and passes after it. Alternative:
+  keep closing the host dialog as deliberate UX; rejected by the user.
+- 2026-10-21 — User decision: an `unavailable` result with zero events projects
+  `coverage.comparable` and `coverage.complete` as `false`, in `oracle-result-schema.mjs`. The
+  unchanged comparison boundary reports empty input as comparable and complete, so `--json` said
+  "complete" for zero evidence. The result and command checks failed before the change and pass
+  after it. Alternatives: change the comparison boundary's early return (the plan keeps that module
+  unchanged and CI reads it), or document the fields as meaningless on `unavailable`; both rejected
+  by the user.
 
 ## Open questions
 
@@ -511,32 +525,6 @@ or `unavailable`. Treating such rows as `passed` would be a product decision tha
   not-comparable to `partial` (compares the rest, but the production analyzer still sees the rows,
   so totals may disagree); or leave it (the command stays honest but inconclusive here).
   Recommendation: investigate the bare-tool shape in a follow-up plan. Blocks no Phase 8 task.
-- Blocking: should the Tokens doc guide still close the session drill-down? The shared delegate in
-  `portal/shared/doc-guide-modal.js` closes any open dialog that holds a `[data-doc-anchor]`
-  trigger before opening the guide. That line was added for the removed Oracle dialog's guide
-  button. The only trigger inside a dialog now is main's `session-details` icon in
-  `#tokenssession-modal`: on main the guide opened on top of the drill-down; on this branch
-  clicking it closes the drill-down, so the session view is gone when the guide closes. No browser
-  test covers either behavior. Options:
-  1. Restore main's stacking (recommended): drop the host-close line and its header comment, and add
-     a browser test that the drill-down stays open. Matches main; the reason for the line is gone.
-  2. Keep closing the host as deliberate UX and record why.
-  Why blocked: it changes existing user-facing behavior on main's session flow, which the plan never
-  weighed. Blocks: the pass-5 Review finding on the doc-guide delegate.
-- Blocking: what should `coverage.comparable` and `coverage.complete` say on an `unavailable`
-  result with no events? `roborepo telemetry oracle --json` on an empty spool prints
-  `status: "unavailable"` with `comparable: true` and `complete: true`, from the unchanged early
-  return in `compareTelemetryOracle`/`inspectOracleEvidence`; `emptyOracleResult` uses `false` for
-  the same "never ran" case, and the Result contract does not say. A script reading `complete`
-  sees "complete" for zero evidence. Options:
-  1. Normalize in the result-schema projection (recommended): an `unavailable` with zero events
-     projects `comparable: false, complete: false`. Touches only the command's output contract;
-     CI's comparison boundary is unchanged.
-  2. Change the comparison boundary's early return. Fixes it at the source, but the plan calls that
-     module unchanged, and the CI and live checks read it.
-  3. Document that `comparable` and `complete` carry no meaning on `unavailable`.
-  Why blocked: it chooses a public output contract the plan did not specify. Blocks: the pass-5
-  Review finding on empty-spool coverage.
 
 ## Not tested
 
@@ -569,18 +557,18 @@ or `unavailable`. Treating such rows as `passed` would be a product decision tha
 - [x] The Result contract says `coverage.issues` explains every `unavailable`; an empty spool and a
       read error both leave it empty. — fixed (259fa943)
 - [x] `docs/images/tokens/model-metrics-{light,dark}.png` are unreferenced and absent on main.
-      Blocked: see Open questions. — fixed (79d785d5)
+      Resolved by the user decision in the Decision Log. — fixed (79d785d5)
 - [x] `docs/images/tokens/README.md`, the root README's Tokens sentence, and the scratch link to it
-      were deleted on main in 23e15c3e and came back through the merge 3483f83d. Escalated: see
-      Open questions. — fixed (79d785d5)
+      were deleted on main in 23e15c3e and came back through the merge 3483f83d. Resolved by
+      the user decision in the Decision Log. — fixed (79d785d5)
 - [ ] The two pass-4 findings and the pass-4 Verification line still point at Open questions; the
       user decision (Decision Log, 2026-10-21) resolved those entries.
 - [ ] `## Validation > Repository completion gate` lists `git diff --check`; the repository gate is
       `git diff --check main...HEAD`, and the bare form checks nothing on a clean tree.
 - [ ] The doc-guide delegate closes the session drill-down before opening the guide, changing
-      main's session flow. Escalated: see Open questions.
+      main's session flow. Escalated; resolved by user decision (Decision Log).
 - [ ] `--json` on an empty spool reports `comparable: true` and `complete: true` with `unavailable`.
-      Escalated: see Open questions.
+      Escalated; resolved by user decision (Decision Log).
 
 ### Verification
 
@@ -593,8 +581,8 @@ or `unavailable`. Treating such rows as `passed` would be a product decision tha
   `npm run check` passed (445 CLI tests, 46/46 suites, 103 browser tests; Windows installer parity
   skipped, `pwsh` unavailable).
 - Validation pass 4 at 18f3422e (fresh-context subagent): 1 `fix` and 1 `escalate` finding, no
-  `base`. Both concern files a merge restored from before main deleted them; both wait on the
-  user (see Open questions). Agent-runnable checks all passed at this commit.
+  `base`. Both concern files a merge restored from before main deleted them; both were resolved
+  by the user decision in the Decision Log. Agent-runnable checks all passed at this commit.
 - Validation pass 5 at 88e0c7e3 (fresh-context subagent): 2 `fix` and 2 `escalate` findings, no
   `base`. Pass 5 is the cap, so the loop stopped with all four open and the plan was not submitted.
 - Full gate at 88e0c7e3: doctor passed, `git diff --check main...HEAD` clean, `npm run check`

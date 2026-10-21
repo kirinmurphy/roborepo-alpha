@@ -145,7 +145,7 @@ flowchart TD
 | --- | --- |
 | `telemetry-oracle-evidence.mjs` | `readEvidenceSnapshot()`: reads spool JSONL files, the marker file, snapshot JSON files, and the raw repository registry from explicit paths. Parsed evidence keeps non-enumerable spool provenance; malformed JSON adds to per-store skipped counts. It avoids the production readers, which normalize or discard evidence the oracle must account for. |
 | `telemetry-oracle-command.mjs` | Argument parsing, store paths from `state-paths.mjs`, timing, output formatting, and the status-to-exit-code mapping. Read failures produce `unavailable` with `evidence_read_error`. |
-| `telemetry-schemas/oracle-result-schema.mjs` | Result schema version `1`: the four statuses, aggregate counts, coverage, checked time, duration, fixed summaries, and allowlisted error categories (`comparison_error`, `evidence_read_error`). A comparison that breaks its own shape rules projects to `unavailable` with `comparison_error`. |
+| `telemetry-schemas/oracle-result-schema.mjs` | Result schema version `1`: the four statuses, aggregate counts, coverage, checked time, duration, fixed summaries, and allowlisted error categories (`comparison_error`, `evidence_read_error`). A comparison that breaks its own shape rules projects to `unavailable` with `comparison_error`, and an `unavailable` result with zero events projects `comparable` and `complete` as `false`. |
 | `telemetry.mjs` | Dispatches `telemetry oracle` with a lazy import, so other subcommands and the portal never load the oracle. |
 
 Exit code 2 means inconclusive: the check neither passed nor found a disagreement. Earlier

@@ -60,6 +60,9 @@ try {
   let result = run();
   assert.equal(result.status, 2, `empty spool is inconclusive:\n${result.stdout}\n${result.stderr}`);
   assert.match(result.stdout, /^Oracle check: Unavailable$/m);
+  const empty = JSON.parse(run(["--json"]).stdout);
+  assert.deepEqual([empty.status, empty.event_count, empty.coverage.comparable, empty.coverage.complete],
+    ["unavailable", 0, false, false], "an empty spool never reports comparable or complete coverage");
 
   fs.mkdirSync(snapshotsDir, { recursive: true });
   fs.writeFileSync(path.join(spoolDir, "capture.jsonl"), `${JSON.stringify(event)}\n`);

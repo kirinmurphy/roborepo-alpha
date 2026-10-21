@@ -1362,7 +1362,7 @@ wireSessionChips();
 wireHintToggle();
 
 // ── Doc-guide triggers ──
-// Every [data-doc-anchor] trigger (the section info icons) opens the shared popup at its anchor;
+// Every [data-doc-anchor] trigger (the info icons) opens the shared popup at its anchor;
 // the factory owns that delegate. The guide is server-rendered from docs/user/guides/telemetry.md.
 createDocGuideModal(document.getElementById("tokensdocmodal"), async () => {
   try {

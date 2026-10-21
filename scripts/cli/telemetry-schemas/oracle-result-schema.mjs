@@ -41,11 +41,14 @@ export function emptyOracleResult(errorCategory = null) {
 function projectResult(source, metadata) {
   const coverage = source.coverage;
   const { checked_at, duration_ms } = validMetadata(metadata) ? metadata : { checked_at: null, duration_ms: null };
+  // The comparison boundary reports empty input as comparable and complete before returning
+  // unavailable. Zero events were never checked, so the output must not say they were.
+  const checked = !(source.status === "unavailable" && source.event_count === 0);
   return {
     schema: ORACLE_RESULT_SCHEMA_VERSION, status: source.status, checked_at, duration_ms,
     event_count: source.event_count, session_count: source.session_count, operation_count: source.operation_count,
     coverage: { supported_events: coverage.supported_events, unsupported_events: coverage.unsupported_events,
-      comparable: coverage.comparable, complete: coverage.complete,
+      comparable: checked && coverage.comparable, complete: checked && coverage.complete,
       issues: coverage.issues.map(({ category, count }) => ({ category, count })), checks: [...coverage.checks] },
     differences: [...source.differences], summary: SUMMARIES[source.status],
     ...(source.status === "unavailable" && source.error_category ? { error_category: source.error_category } : {}),
