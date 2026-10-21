@@ -445,14 +445,14 @@ how to open it, and what capture does **not** prove.
 
 ### Findings
 
-- [x] `--serve` that backgrounds its server left it running: the stop skipped the process group once the shell exited — fixed (pending commit)
-- [x] Scenario load, browser launch, or capture errors printed a stack trace instead of a `blocked` result — fixed (pending commit)
-- [x] Probe reported Chromium available without the headless shell a headless launch needs — fixed (pending commit)
-- [x] `--timeout` above Node's 32-bit timer range fired after 1ms — fixed (pending commit)
-- [x] The never-allowlisted check skipped the rendered Gemini policy file — fixed (pending commit)
-- [x] The no-ffmpeg branch was never asserted on a machine that has ffmpeg — fixed with partial browser caches (pending commit)
-- [x] `next_action` named a gate run that had already passed — fixed (pending commit)
-- [x] Shared `Verified:` line has no value for an `unverified` run — classed escalate by the Validator; resolved in the skill without changing the shared format (see Decision Log) (pending commit)
+- [x] `--serve` that backgrounds its server left it running: the stop skipped the process group once the shell exited — fixed (58871592)
+- [x] Scenario load, browser launch, or capture errors printed a stack trace instead of a `blocked` result — fixed (58871592)
+- [x] Probe reported Chromium available without the headless shell a headless launch needs — fixed (58871592)
+- [x] `--timeout` above Node's 32-bit timer range fired after 1ms — fixed (58871592)
+- [x] The never-allowlisted check skipped the rendered Gemini policy file — fixed (58871592)
+- [x] The no-ffmpeg branch was never asserted on a machine that has ffmpeg — fixed with partial browser caches (58871592)
+- [x] `next_action` named a gate run that had already passed — fixed (58871592)
+- [x] Shared `Verified:` line has no value for an `unverified` run — classed escalate by the Validator; resolved in the skill without changing the shared format (see Decision Log) (58871592)
 
 ### Verification
 
