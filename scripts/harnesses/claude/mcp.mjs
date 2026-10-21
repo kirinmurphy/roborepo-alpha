@@ -1,6 +1,5 @@
-// Claude's MCP capability adapter methods. Split out of index.mjs (which grew past this repo's
-// 150-200 line file-size guidance once rootConfig/hooks-withdraw/telemetry/transcripts were all
-// added alongside these four MCP methods) — a single-purpose module for one capability group.
+// Claude's MCP capability adapter methods, kept out of index.mjs as a single-purpose module for one
+// capability group.
 
 import fs from "node:fs";
 import path from "node:path";

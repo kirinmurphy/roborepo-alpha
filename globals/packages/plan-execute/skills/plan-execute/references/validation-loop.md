@@ -78,9 +78,31 @@ Each pass checks:
 4. Every `## Not tested` entry is a real gap: a check an agent can run is run, not listed.
 5. Every gate failure, classified below.
 6. The constraints of every loaded paired skill, where the diff falls under them.
+7. **Flow and cohesion:** the main execution path of changed code can be followed, and
+   responsibilities are divided at meaningful boundaries rather than by length.
+8. **Data and state:** dependencies, side effects, and state transitions in changed code are
+   explicit enough to trace and test.
+9. **Comments and abstractions:** comments the diff adds or affects carry information the code
+   cannot, and helpers and shared abstractions lower the cost of understanding the code rather than
+   raise it.
 
 Issues outside the diff that the plan did not cause are not findings. Mention them once as possible
 follow-ups.
+
+Checks 7 to 9 apply to changed and directly affected code, and use the same classes as every other
+finding:
+
+| What the check finds | Class |
+| --- | --- |
+| A hidden dependency, tangled responsibilities, or an unjustified abstraction with a concrete comprehension or reliability cost and a clear remedy | `fix` |
+| The same, but the remedy chooses between real designs or reshapes an interface the plan did not specify | `escalate` |
+| A comment that misstates behavior | `fix` |
+| A comment the diff adds that only restates the code | `fix`: remove it |
+| Harmless redundant narration that was already there, or any other cosmetic preference | Not a finding; at most one follow-up mention |
+| A file judged by its length, or a request for more functions or files without an identified benefit | Never reported |
+
+Each `fix` or `escalate` from these checks names its location, the concrete cost, and a
+proportionate remedy; length alone is never a finding.
 
 ### Classifying a finding
 

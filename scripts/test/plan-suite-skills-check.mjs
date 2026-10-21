@@ -26,6 +26,9 @@ const readPackageFile = (relative) => normalize(fs.readFileSync(path.join(repoRo
 const includesAll = (label, text, phrases) => {
   for (const phrase of phrases) assert.ok(text.includes(phrase), `${label}: missing "${phrase}"`);
 };
+// The rubric exists as two texts (validation-loop.md and plan-review's inline copy); both must carry
+// the convention checks so an edit to one cannot silently drop them.
+const CONVENTION_CHECK_PHRASES = ["Flow and cohesion", "Data and state", "Comments and abstractions", "length alone is never a finding"];
 
 const SKILLS = {
   "plan-promote": {
@@ -171,6 +174,8 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "Cap at five passes",
     "A silent pass is indistinguishable from a skipped one",
     "only `/plan-review` writes `### Approval`",
+    ...CONVENTION_CHECK_PHRASES,
+    "A comment the diff adds that only restates the code | `fix`",
   ]);
 
   const completion = skill.slice(order[4], order[5]);
@@ -273,6 +278,8 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "neither a finding nor a blocker",
     "never an account of the work",
     "Classify every finding by consequence, not size",
+    ...CONVENTION_CHECK_PHRASES,
+    "a comment the diff adds that only restates the code is a fix",
   ]);
   includesAll("plan-review fixes", review.slice(order[4], order[5]), [
     "Fix every finding classed **fix** in this session, code included",
