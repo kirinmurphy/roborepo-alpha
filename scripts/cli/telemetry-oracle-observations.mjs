@@ -101,6 +101,23 @@ export function repositoryEvidence(registry) {
   return { index, issues };
 }
 
+// Bare jcodemunch and jdocmunch tool names that Codex logs without the mcp__ prefix. Production
+// attributes these to an MCP server; every other bare name is a native tool on both sides. Kept as
+// the oracle's own copy rather than imported, so the oracle stays independent of production
+// attribution. A name production adds later reads as native here, and the comparison surfaces any
+// covered field that attribution changes.
+const BARE_MCP_TOOL_NAMES = new Set([
+  "resolve_repo", "search_text", "search_symbols", "find_references", "get_file_content",
+  "get_file_outline", "get_file_tree", "get_repo_outline", "get_context_bundle", "get_ranked_context",
+  "get_symbol_source", "get_symbol_importance", "get_related_symbols", "get_changed_symbols",
+  "get_project_intel", "get_session_context", "get_watch_status", "get_pr_risk_profile",
+  "index_file", "index_folder", "index_repo", "register_edit", "plan_turn", "list_repos",
+  "audit_agent_config", "link_code_to_symbols", "load_workspace_dependencies",
+  "search_sections", "get_section", "get_sections", "get_section_context", "get_toc", "get_toc_tree",
+  "get_document_outline", "get_doc_coverage", "get_broken_links", "doc_list_repos", "list_docs",
+  "list_repo_groups", "index_local", "delete_index",
+]);
+
 export function eventSupport(row, repositoryIndex) {
   if (!isRecord(row)) return { issues: ["malformed_event"], comparable: false };
   const issues = [];
@@ -114,9 +131,11 @@ export function eventSupport(row, repositoryIndex) {
   if ([row.delta_tokens, row.last_result?.chars, row.tool?.command_chars].some((value) => value != null && (!Number.isFinite(value) || value < 0))) issues.push("malformed_event");
   const names = [row.tool?.name, row.tool?.mcp_tool, row.last_result?.tool].filter((name) => name != null);
   if (names.some((name) => typeof name !== "string")) issues.push("malformed_event");
-  // Bare MCP names require a separate independent attribution inventory. Never silently call
-  // them "other" while production recognizes them as jcodemunch or jdocmunch.
-  else if (names.some((name) => !name.startsWith("mcp__") && !["Read", "Grep", "Glob", "Bash", "exec", "exec_command", "shell", "run_shell_command", "Edit", "Write", "NotebookEdit"].includes(name))) issues.push("unsupported_bare_tool");
+  // Bare MCP names need an independent attribution the oracle does not have. Never silently call
+  // them "other" while production recognizes them as jcodemunch or jdocmunch. Only the tool name
+  // and result tool are attributed to a server; `tool.mcp_tool` is the bare suffix of a prefixed
+  // name whose server is already known.
+  else if ([row.tool?.name, row.last_result?.tool].some((name) => BARE_MCP_TOOL_NAMES.has(name))) issues.push("unsupported_bare_tool");
   const comparable = issues.length === 0;
   if (!repositoryId(row, repositoryIndex)) issues.push("unresolved_repository");
   if (!known(row.session?.model)) issues.push("unknown_model");

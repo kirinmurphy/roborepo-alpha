@@ -71,11 +71,23 @@ for (const [row, category] of [
   [{ ...event, tokens: { input: Number.MAX_SAFE_INTEGER, output: 1, total: Number.MAX_SAFE_INTEGER } }, "malformed_tokens"],
   [{ ...event, repo: { repository_id: "unknown" } }, "malformed_repository"],
   [{ ...event, last_result: { tool: "search_symbols", chars: 10 } }, "unsupported_bare_tool"],
+  [{ ...event, tool: { name: "get_section" }, last_result: { tool: "get_section", chars: 10 } }, "unsupported_bare_tool"],
 ]) {
   const result = compare(row);
   assert.equal(result.status, "unavailable");
   hasIssue(result, category);
 }
+// Bare names outside the jcodemunch/jdocmunch inventory are native tools on both sides, so ordinary
+// harness tools must not make real evidence incomparable.
+const nativeToolRows = ["Skill", "Agent", "ToolSearch", "browser_batch", "apply_patch", "wait"].map((name, index) => ({
+  ...event, capture_id: `native-${index}`, call_id: `native-${index}`, ts: `2026-09-15T12:0${index}:00.000Z`,
+  tool: { name }, last_result: { tool: name, chars: 10 + index },
+}));
+assert.equal(compareTelemetryOracle(nativeToolRows, options).status, "passed", "ordinary bare tool names stay comparable");
+// A prefixed name already names its server, even when its bare suffix matches a jcodemunch tool.
+const prefixedRow = { ...event, tool: { name: "mcp__codex_app__load_workspace_dependencies", is_mcp: true,
+  mcp_server: "codex_app", mcp_tool: "load_workspace_dependencies" } };
+assert.equal(compare(prefixedRow).status, "passed", "a prefixed MCP name with a colliding suffix stays comparable");
 const mixed = compareTelemetryOracle([event, { ...event, schema: 99 }], options);
 assert.equal(mixed.coverage.supported_events, 1);
 assert.equal(mixed.coverage.unsupported_events, 1);
