@@ -15,6 +15,8 @@ import { createEvidenceRun, pruneEvidence } from "./browser/evidence.mjs";
 import { ensureLocalService } from "./browser/local-service.mjs";
 
 const DEFAULT_TIMEOUT_SECONDS = 120;
+// Node timers hold a signed 32-bit millisecond count; anything larger fires after 1ms.
+const MAX_TIMEOUT_SECONDS = Math.floor((2 ** 31 - 1) / 1000);
 const PROBE_USAGE = "usage: roborepo browser probe [--dir <path>] [--provider <id>] [--json]";
 const RUN_USAGE = "usage: roborepo browser run --scenario <path> [--capture screenshot,video,trace] [--url <url>] [--serve <command>] [--timeout <seconds>] [--provider <id>] [--json]";
 
@@ -46,7 +48,9 @@ export async function browserRun(args = []) {
   const capture = parseCapture(options["--capture"]);
   if (capture.error) return usage(capture.error, RUN_USAGE);
   const timeoutSeconds = Number(options["--timeout"] ?? DEFAULT_TIMEOUT_SECONDS);
-  if (!(timeoutSeconds > 0)) return usage("--timeout must be a positive number of seconds", RUN_USAGE);
+  if (!(timeoutSeconds > 0) || timeoutSeconds > MAX_TIMEOUT_SECONDS) {
+    return usage(`--timeout must be between 0 and ${MAX_TIMEOUT_SECONDS} seconds`, RUN_USAGE);
+  }
   const timeoutMs = timeoutSeconds * 1000;
 
   pruneEvidence(STATE_ROOT);
@@ -57,6 +61,10 @@ export async function browserRun(args = []) {
     result = service.blocked
       ? blockedResult([service.blocked])
       : await provider.run({ scenarioPath, capture: capture.types, url: options["--url"], evidence, stateRoot: STATE_ROOT, timeoutMs });
+  } catch (error) {
+    // A scenario that does not load, a browser that will not launch, a capture that fails to
+    // write: the run could not execute, which the contract reports as `blocked`, not a stack trace.
+    result = blockedResult([`run could not execute: ${firstLine(error)}`], { artifacts: evidence.written() });
   } finally {
     service.stop();
   }
@@ -98,6 +106,10 @@ function parseCapture(value) {
   const unknown = types.filter((type) => !CAPTURE_TYPES.includes(type));
   if (unknown.length) return { error: `unknown capture type(s): ${unknown.join(", ")} (use ${CAPTURE_TYPES.join(", ")})` };
   return { types };
+}
+
+function firstLine(error) {
+  return String(error?.message || error).split("\n")[0];
 }
 
 function usage(message, line) {

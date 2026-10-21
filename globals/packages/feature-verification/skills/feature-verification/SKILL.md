@@ -62,7 +62,10 @@ roborepo browser run --scenario <path> [--capture screenshot,video,trace] [--url
 
   A script earns `passed` only through `check()`. Without one the run is `unverified`.
 - Results: `status` (`passed`, `failed`, `unverified`, `blocked`), `checks`, `artifacts` (real file
-  paths), and `limitations`. Report the status exactly; never upgrade `unverified` to passed.
+  paths), and `limitations`. Report the status exactly; never upgrade `unverified` to passed. A
+  `passed`, `failed`, or `blocked` run gets a `Verified: roborepo browser run … -> pass|fail|blocked`
+  line. An `unverified` run asserted nothing, so it gets no `Verified:` line: report what it
+  showed as observed.
 - For test files, screenshots and video follow the project's Playwright config; ask for `trace`
   only to diagnose a failure, since traces hold page and network state.
 - Plan capture before running: a recording must be requested up front, and finalizes only when the

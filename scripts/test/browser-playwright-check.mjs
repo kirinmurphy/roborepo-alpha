@@ -10,6 +10,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import http from "node:http";
+import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
 import { STATUS, validateRunResult } from "../cli/browser/result.mjs";
@@ -76,11 +77,35 @@ try {
   const recorded = writeScript(path.join(project, "scripts"), "record.mjs", `  await check("heading renders", async () => {
     if ((await page.getByRole("heading").textContent()) !== "Fixture") throw new Error("wrong heading");
   });`);
+  const canRecord = (await playwrightProvider.probe({ dir: project, stateRoot: toolState })).capabilities.video;
   const video = await run({ scenarioPath: recorded, capture: ["video"], stateRoot: toolState });
   assert.equal(video.status, STATUS.PASSED);
-  const hasVideo = video.artifacts.some((artifact) => artifact.type === "video" && fs.statSync(artifact.path).size > 0);
-  const videoLimited = video.limitations.some((limitation) => limitation.includes("video capture unavailable"));
-  assert.ok(hasVideo || videoLimited, "video is either delivered or reported as unavailable, never silently dropped");
+  if (canRecord) {
+    assert.ok(video.artifacts.some((artifact) => artifact.type === "video" && fs.statSync(artifact.path).size > 0), "a finalized video is returned");
+  }
+
+  // ---- Partial browser caches, through the CLI: what probe promises, run can deliver ----
+  const cacheRoot = browserCacheRoot(chromium.executablePath());
+  const cliHome = path.join(tempRoot, "cli-home");
+  fs.mkdirSync(path.join(cliHome, ".claude"), { recursive: true });
+  fs.mkdirSync(path.join(cliHome, ".codex"), { recursive: true });
+  assert.equal((await cli(cliHome, null, ["package", "enable", "feature-verification"])).code, 0);
+
+  // Full Chromium without the headless shell cannot launch headless, so it is not "available".
+  const fullOnly = partialCache(cacheRoot, (name) => /^chromium-\d+$/.test(name));
+  const noShell = JSON.parse((await cli(cliHome, fullOnly, ["browser", "probe", "--dir", project, "--json"])).stdout);
+  assert.equal(noShell.available, false, "Chromium without its headless shell is not available");
+  assert.match(noShell.limitations.join("\n"), /install chromium/, "the limitation names the browser install command");
+
+  // Without ffmpeg, video is reported unavailable and a run says so instead of dropping it.
+  const noFfmpeg = partialCache(cacheRoot, (name) => /^chromium(_headless_shell)?-\d+$/.test(name));
+  const probed = JSON.parse((await cli(cliHome, noFfmpeg, ["browser", "probe", "--dir", project, "--json"])).stdout);
+  assert.deepEqual(probed.capabilities, { screenshot: true, video: false, trace: true });
+  assert.match(probed.limitations.join("\n"), /install ffmpeg/, "missing video support names the ffmpeg install command");
+  const noVideo = JSON.parse((await cli(cliHome, noFfmpeg, ["browser", "run", "--scenario", recorded, "--url", app.url, "--capture", "video", "--json"])).stdout);
+  assert.equal(noVideo.status, STATUS.PASSED);
+  assert.ok(!noVideo.artifacts.some((artifact) => artifact.type === "video"), "no video is fabricated");
+  assert.match(noVideo.limitations.join("\n"), /video capture unavailable/);
 
   console.log("ok: browser playwright provider (resolution, spec runs, no project mutation, recording)");
 } finally {
@@ -99,6 +124,39 @@ function writeScript(dir, name, body) {
   const file = path.join(dir, name);
   fs.writeFileSync(file, `export default async function ({ page, url, check }) {\n  await page.goto(url);\n${body}\n}\n`);
   return file;
+}
+
+// A browser cache holding only some of the real one's entries, linked rather than copied.
+function partialCache(root, keep) {
+  const dir = fs.mkdtempSync(path.join(tempRoot, "cache-"));
+  for (const name of fs.readdirSync(root).filter(keep)) {
+    fs.symlinkSync(path.join(root, name), path.join(dir, name), "junction");
+  }
+  return dir;
+}
+
+function browserCacheRoot(executable) {
+  let dir = path.dirname(executable);
+  while (!/^chromium(_headless_shell)?-\d+$/.test(path.basename(dir))) dir = path.dirname(dir);
+  return path.dirname(dir);
+}
+
+// Asynchronous, because the fixture app is served from this process.
+function cli(home, browsersPath, args) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [path.join(repoRoot, "scripts", "cli", "main.mjs"), ...args], {
+      env: {
+        ...process.env,
+        HOME: home,
+        ROBOREPO_STATE_DIR: path.join(home, ".roborepo"),
+        SKIP_MCP: "1",
+        ...(browsersPath ? { PLAYWRIGHT_BROWSERS_PATH: browsersPath } : {}),
+      },
+    });
+    let stdout = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.on("close", (code) => resolve({ code, stdout }));
+  });
 }
 
 function snapshot(dir, names) {

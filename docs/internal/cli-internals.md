@@ -76,17 +76,18 @@ the feature: `scripts/cli/browser/gate.mjs` refuses both commands unless `featur
 effective (`effectiveEnabledIds`).
 
 `scripts/cli/browser.mjs` only orchestrates: gate, parse, prune evidence, start or reuse the local
-service, call the provider, validate, print. The pieces it calls:
+service, call the provider, validate, print. A provider that throws (a scenario that does not load,
+a browser that does not launch) becomes a `blocked` result, so `--json` output is always a result. The pieces it calls:
 
 | Module | Role |
 | --- | --- |
 | `browser/result.mjs` | The contract: status values, `statusFromChecks`, and validators. `passed` requires at least one executed check and no failed one; every artifact path must exist. The CLI validates every provider result before printing it. |
 | `browser/providers.mjs` | Static map of providers. `playwright` is the default; `stub` answers from a JSON fixture and is selectable only with `ROBOREPO_BROWSER_STUB=1`, for tests. |
-| `browser/playwright-resolve.mjs` | Finds Playwright: the scenario's project first, then `<stateRoot>/browser/tools/`. Builds the install command (version pinned to this repo's `@playwright/test` devDependency) and checks the Chromium and ffmpeg files in Playwright's browser cache without launching. |
+| `browser/playwright-resolve.mjs` | Finds Playwright: the scenario's project first, then `<stateRoot>/browser/tools/`. Builds the install command (version pinned to this repo's `@playwright/test` devDependency) and checks Playwright's browser cache for the Chromium headless shell (what a headless launch actually uses) and ffmpeg, without launching. |
 | `browser/playwright-spec.mjs` | Runs a project test file with the project's runner and config (`--reporter=json`, `--trace=on` when asked), maps tests to checks, and adopts attachments as evidence. |
 | `browser/playwright-script.mjs` | Runs a script scenario in one browser context, with recording and tracing configured before the script starts. |
 | `browser/evidence.mjs` | Flat per-run file names in the `browser-evidence` retention store; prunes by the store's policy before a run writes. |
-| `browser/local-service.mjs` | Reuses a URL that already responds; otherwise starts `--serve` in its own process group and stops only that group. |
+| `browser/local-service.mjs` | Reuses a URL that already responds; otherwise starts `--serve` in its own process group and stops only that group, even after the shell that led it has exited. |
 
 A second real provider is another entry in `providers.mjs` returning the same shapes; it must pass
 `scripts/test/browser-contract-check.mjs` unchanged. Scenario files are provider-specific and are

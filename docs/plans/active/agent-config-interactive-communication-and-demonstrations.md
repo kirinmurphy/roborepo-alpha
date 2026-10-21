@@ -1,7 +1,7 @@
 ---
 id: o93hile
 priority: high
-next_action: Run the full gate (`npm run check`; the earlier `test-cli.sh` failures were the stale skill audit doc and the browser namespace missing from agent-run-coverage-check, both fixed but not yet rerun), then the Validation Loop, then the completion preflight and submit.
+next_action: Run Validation Loop pass 2 over the pass-1 fixes, then the completion preflight and submit for /plan-review.
 blocked_by: []
 depends_on: []
 related:
@@ -429,10 +429,35 @@ how to open it, and what capture does **not** prove.
 - 2026-10-21 (implementation): The pinned install version is read from this repo's
   `@playwright/test` devDependency, so the browser suite and the provisioned tool share one
   version.
+- 2026-10-21 (implementation): An `unverified` browser run gets no `Verified:` line; it is
+  reported as observed evidence, the way `response-output` already treats unasserted behavior.
+  `passed`, `failed`, and `blocked` map onto `pass`, `fail`, and `blocked`. Validation pass 1
+  classed this `escalate` because the shared line has no `unverified` value; resolved without
+  changing that shared format (which `test-harness` also uses), so no contract changes.
+  Alternative: add `unverified` to the shared line, which would change the `test-harness` contract
+  outside this plan.
 - 2026-10-21 (implementation): The real-workflow comprehension sample moved to `## Not tested`.
   Running it here would mean enabling the renamed packages in the user's live harness homes, and
   the criterion asks a reviewer to judge comprehension, which the implementing agent cannot do for
   its own responses.
+
+## Review
+
+### Findings
+
+- [x] `--serve` that backgrounds its server left it running: the stop skipped the process group once the shell exited — fixed (pending commit)
+- [x] Scenario load, browser launch, or capture errors printed a stack trace instead of a `blocked` result — fixed (pending commit)
+- [x] Probe reported Chromium available without the headless shell a headless launch needs — fixed (pending commit)
+- [x] `--timeout` above Node's 32-bit timer range fired after 1ms — fixed (pending commit)
+- [x] The never-allowlisted check skipped the rendered Gemini policy file — fixed (pending commit)
+- [x] The no-ffmpeg branch was never asserted on a machine that has ffmpeg — fixed with partial browser caches (pending commit)
+- [x] `next_action` named a gate run that had already passed — fixed (pending commit)
+- [x] Shared `Verified:` line has no value for an `unverified` run — classed escalate by the Validator; resolved in the skill without changing the shared format (see Decision Log) (pending commit)
+
+### Verification
+
+- Gate: `npm run check` passed at f7528de4 (447 CLI tests, 42/42 check suites, Docker clean-machine suites, 103 portal UI specs; Windows installer parity skipped, no `pwsh`).
+- Validation pass 1 at f7528de4 (fresh-context subagent): 7 fix, 1 escalate.
 
 ## Not tested
 

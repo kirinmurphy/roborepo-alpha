@@ -23,7 +23,12 @@ export async function ensureLocalService({ url, serve, timeoutMs }) {
   const stop = () => stopProcessTree(child);
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (child.exitCode !== null) return { blocked: `--serve command exited (${child.exitCode}) before ${url} responded`, stop };
+    // A command that backgrounds its server (`npm run dev &`) exits 0 while the server keeps
+    // starting in the same process group, so only a failing exit ends the wait early.
+    if (child.exitCode !== null && child.exitCode !== 0) {
+      stop();
+      return { blocked: `--serve command exited (${child.exitCode}) before ${url} responded`, stop: noop };
+    }
     if (await responds(url)) return { started: child.pid, stop };
     await new Promise((resolve) => setTimeout(resolve, POLL_MS));
   }
@@ -40,8 +45,9 @@ async function responds(url) {
   }
 }
 
+// Signals the whole group even when the shell that led it has exited: a backgrounded server
+// outlives its shell and is still in the group.
 function stopProcessTree(child) {
-  if (child.exitCode !== null || child.signalCode !== null) return;
   if (process.platform === "win32") {
     spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
     return;
@@ -49,7 +55,7 @@ function stopProcessTree(child) {
   try {
     process.kill(-child.pid, "SIGTERM");
   } catch {
-    // Already gone.
+    // The whole group is already gone.
   }
 }
 

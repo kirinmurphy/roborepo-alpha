@@ -160,13 +160,15 @@ assertion; a script that only navigates and captures reports `unverified`.
 
 `--url` is the app to check. If something already answers there, the run uses it and never stops
 it. Otherwise `--serve` names the dev command to start it; the run waits for the URL, then stops
-that process when it finishes. Test files read the URL from `ROBOREPO_BROWSER_URL`.
+that command's whole process group when it finishes, including a server the command put in the
+background. Test files read the URL from `ROBOREPO_BROWSER_URL`. `--timeout` (default 120 seconds)
+bounds both the wait for the app and the scenario itself.
 
 The result has four fields:
 
 | Field | Meaning |
 | --- | --- |
-| `status` | `passed` (executed checks passed), `failed` (a check or the run failed), `unverified` (ran, but nothing was asserted), or `blocked` (could not run: no Playwright, no browser, no app). |
+| `status` | `passed` (executed checks passed), `failed` (a check or the run failed), `unverified` (ran, but nothing was asserted), or `blocked` (could not run: no Playwright, no browser, no app, or a scenario that does not load). |
 | `checks` | One entry per test or `check()`, each `passed` or `failed`, with the failure message. |
 | `artifacts` | Files that exist on disk, each with its type. |
 | `limitations` | What was not captured or checked, and why, including the exact install command when something is missing. |

@@ -9,9 +9,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import net from "node:net";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { freePort, responds, waitFor } from "./lib/local-http.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const cli = path.join(repoRoot, "scripts", "cli", "main.mjs");
@@ -68,6 +68,7 @@ try {
   assert.equal(run(["browser", "run"]).status, 2, "--scenario is required");
   assert.equal(run(["browser", "run", "--scenario", path.join(fixtures, "absent.mjs")]).status, 2, "a missing scenario is a usage error");
   assert.equal(stub(["--scenario", passing, "--capture", "gif"]).status, 2, "an unknown capture type is rejected");
+  assert.equal(stub(["--scenario", passing, "--timeout", "3000000"]).status, 2, "a timeout beyond Node's timer range is rejected");
   const noStub = run(["browser", "run", "--provider", "stub", "--scenario", passing]);
   assert.equal(noStub.status, 2, "the stub provider is unavailable without its test switch");
   assert.match(noStub.stderr, /contract tests only/);
@@ -93,6 +94,11 @@ try {
   assert.ok(!fs.existsSync(stale), "evidence past its age bound is pruned when a run starts");
   assert.ok(fs.existsSync(recent), "evidence within its age bound is kept");
 
+  // A scenario the provider cannot even load is a blocked result, not a stack trace.
+  const broken = stub(["--scenario", writeRaw("broken.json", "{"), "--json"]);
+  assert.equal(broken.status, 1);
+  assert.equal(JSON.parse(broken.stdout).status, "blocked", "a provider failure is reported as blocked");
+
   const failed = stub(["--scenario", failing, "--json"]);
   assert.equal(failed.status, 1, "a non-passing run exits 1");
   assert.equal(JSON.parse(failed.stdout).status, "failed");
@@ -108,6 +114,12 @@ try {
   assert.equal(JSON.parse(started.stdout).status, "passed", "the run waits for the service it started");
   assert.equal(await responds(startedPort), false, "a service the run started is gone afterward");
 
+  // A dev command that backgrounds its server exits 0 at once; the server is still the run's to stop.
+  const backgroundPort = await freePort();
+  const backgrounded = stub(["--scenario", passing, "--url", `http://127.0.0.1:${backgroundPort}/`, "--serve", `node ${JSON.stringify(server)} ${backgroundPort} &`, "--json"]);
+  assert.equal(JSON.parse(backgrounded.stdout).status, "passed", "a backgrounding --serve still serves the run");
+  assert.equal(await responds(backgroundPort), false, "a backgrounded server the run started is gone afterward");
+
   const existingPort = await freePort();
   const existing = spawn(process.execPath, [server, String(existingPort)], { stdio: "ignore" });
   children.push(existing);
@@ -121,7 +133,12 @@ try {
   assert.equal(serveWithoutUrl.status, "blocked", "--serve without --url cannot tell when the service is ready");
 
   // ---- `browser run` is never allowlisted for agents ----
-  for (const file of ["manifests/inventory/agent-permissions.json", "generated/claude/settings.json", "generated/codex/config.toml"]) {
+  for (const file of [
+    "manifests/inventory/agent-permissions.json",
+    "generated/claude/settings.json",
+    "generated/codex/config.toml",
+    "generated/gemini/policies/generated-permissions.toml",
+  ]) {
     const text = fs.readFileSync(path.join(repoRoot, file), "utf8");
     assert.ok(!/roborepo",\s*"browser"|roborepo browser/.test(text), `${file} does not allowlist roborepo browser`);
   }
@@ -149,34 +166,11 @@ function enabled() {
 }
 
 function writeJson(name, value) {
+  return writeRaw(name, JSON.stringify(value));
+}
+
+function writeRaw(name, text) {
   const file = path.join(fixtures, name);
-  fs.writeFileSync(file, JSON.stringify(value));
+  fs.writeFileSync(file, text);
   return file;
-}
-
-function freePort() {
-  return new Promise((resolve) => {
-    const probe = net.createServer().listen(0, "127.0.0.1", () => {
-      const { port } = probe.address();
-      probe.close(() => resolve(port));
-    });
-  });
-}
-
-async function responds(port) {
-  try {
-    await fetch(`http://127.0.0.1:${port}/`, { signal: AbortSignal.timeout(1000) });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function waitFor(predicate, timeoutMs = 5000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (await predicate()) return;
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  throw new Error("timed out waiting for fixture server");
 }

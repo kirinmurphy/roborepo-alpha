@@ -60,14 +60,16 @@ export function browserInstallCommand(playwright) {
 }
 
 // Chromium and ffmpeg live in Playwright's machine-wide browser cache, not in node_modules. Checking
-// for the files answers "can this capture" without launching or downloading anything.
+// for the files answers "can this capture" without launching or downloading anything. Headless
+// launches use the separate headless shell build, so Chromium counts as present only with both.
 export function browserBinaries(chromium) {
   const executable = chromium.executablePath();
-  const hasChromium = Boolean(executable) && fs.existsSync(executable);
-  const cacheRoot = hasChromium ? browserCacheRoot(executable) : null;
-  const hasFfmpeg = cacheRoot !== null
-    && fs.readdirSync(cacheRoot).some((name) => name.startsWith("ffmpeg"));
-  return { hasChromium, hasFfmpeg };
+  const cacheRoot = executable && fs.existsSync(executable) ? browserCacheRoot(executable) : null;
+  const entries = cacheRoot === null ? [] : fs.readdirSync(cacheRoot);
+  return {
+    hasChromium: entries.some((name) => name.startsWith("chromium_headless_shell-")),
+    hasFfmpeg: entries.some((name) => name.startsWith("ffmpeg")),
+  };
 }
 
 function browserCacheRoot(executable) {
