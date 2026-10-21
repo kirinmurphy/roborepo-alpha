@@ -1,7 +1,7 @@
 ---
 id: koww80zh
 priority: high
-next_action: Get the human's approval of the reviewed implementation, then merge the pull request and run /plan-close
+next_action:
 blocked_by: []
 depends_on: []
 related:
@@ -199,19 +199,21 @@ roborepo telemetry oracle [--json]
 3. Add `checked_at` and `duration_ms`, then project the result through the result schema.
 4. Print the result and exit with the status's code.
 
-Default output is a few readable lines. The shape below is illustrative; real counts come from the
-snapshot:
+Default output is a few readable lines. This capture is from the real developer evidence checked
+during closure on 2026-10-21:
 
 ```text
-Oracle check: Passed
-Evidence: 1,845 events · 7 sessions · 912 operations
-Coverage: 1,845 supported · 0 unsupported
+Oracle check: Partial
+Evidence: 16,454 events · 85 sessions · 9,562 operations
+Coverage: 16,236 supported · 218 unsupported
+Issues: changing_session_snapshot (4), unknown_model (218), unknown_session_condition (57), unresolved_repository (6)
 Checked: sessions, operations, conditions, boundaries, gating, regression, loops
-Duration: 292 ms
+Duration: 6,767 ms
 ```
 
-`failed` adds a `Differences:` line listing differing field names. `unavailable` adds the error
-category. `--json` prints the projected result object instead, for scripts.
+`failed` adds a `Differences:` line listing differing field names. Operational failures add an
+`Error:` line with a fixed error category; other `unavailable` results are explained by the evidence
+count or `Issues:` line. `--json` prints the projected result object instead, for scripts.
 
 | Status | Exit code | Meaning |
 | --- | ---: | --- |
@@ -416,6 +418,34 @@ rather than substituting a narrower check.
 
 ## Verification
 
+Closure verification, 2026-10-21, on main at 4866e8f522ca11a2af6d5ed794e90eff6291297f:
+
+- `npm run check` passed: doctor (102 checks), 445 CLI tests, installer collisions, 46/46 CI
+  suites, packed-package installation, all four Linux clean-machine scenario families, and 104
+  browser tests. Windows installer parity was skipped because PowerShell is unavailable; this plan
+  does not own Windows installation behavior. The first sandboxed attempt failed on localhost
+  listener `EPERM`; the full gate passed when rerun outside the sandbox.
+- `node scripts/test/run-checks.mjs --filter telemetry` passed 35/35 suites outside the sandbox,
+  including all seven oracle suites and report-signature coverage. Its first sandboxed attempt
+  passed 34/35, with the portal cache test blocked by localhost listener `EPERM`.
+- `git diff --check main...HEAD` passed. The observer-symbol removal search returned no matches
+  outside `docs/plans`.
+- Checked `docs/user/guides/telemetry.md`, `docs/user/reference/roborepo-cli.md`,
+  `docs/internal/telemetry-internals.md`, and `scratch/telemetry-analytics-oracle/README.md` against
+  the landed command, evidence reader, result projection, and CI checks. The removed Tokens image
+  gallery remains absent. Corrected the plan's error-line description and replaced illustrative
+  terminal output with the captured closure run.
+- Fresh real-data `--json` run: `partial`, exit 2, 16,426 events, 85 sessions, 9,548 operations,
+  6,183 ms, no differences. A subsequent readable run is captured in Command behavior. These are
+  separate evidence snapshots; neither result claims complete evidence coverage.
+- All Review findings and the real-machine Not tested entry are resolved. No unchecked entries
+  remain. Historical performance measurements and the 213-case refactor comparison were not rerun.
+- Approved implementation commit: 80e10022fcd9ebc61e72199d43dffa8c8ce89926. The canonical approval
+  check reports `fresh` at branch tip d1f79ccb7d7adc611a1beddb23efaa069078257e.
+- Landing evidence was newly scanned by the canonical landed check; the linked worktree's plan
+  bytes matched the primary copy before closure edits.
+- Absorbing commit: 4866e8f522ca11a2af6d5ed794e90eff6291297f
+
 Evidence from completed phases that still applies after Phase 8:
 
 - `npm run test:telemetry-oracle` passes all nine cases: 879 raw events, 204 condition rows, 21
@@ -463,6 +493,15 @@ Phase 8, 2026-10-21:
   machine `roborepo telemetry oracle` printed `Partial` with exit 2 in 7,170 ms over 15,968 events,
   82 sessions, and 9,299 operations, with no `Differences:` line. Issues: `unknown_model` 213,
   `unknown_session_condition` 56, `unresolved_repository` 6, `changing_session_snapshot` 4.
+
+## Completion summary
+
+The independent CI oracle and the on-demand `roborepo telemetry oracle [--json]` command are
+implemented, approved, and landed on main. The command compares covered analytics over one local
+evidence snapshot and prints aggregate results with explicit coverage and exit codes. The live
+observer, endpoint, Tokens badge, and their dedicated tests and captures are removed. Required
+documentation matches the landed behavior, and the completion gate passes with no open review or
+manual-check entries.
 
 ## Risks
 
