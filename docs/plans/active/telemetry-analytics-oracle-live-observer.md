@@ -504,3 +504,22 @@ or `unavailable`. Treating such rows as `passed` would be a product decision tha
 - [ ] `roborepo telemetry oracle` reaches `Passed` on a real developer machine. The only real
       spool available during implementation was `unavailable` (see Verification), and the
       `Passed` path is covered only by the command check's synthetic spool.
+
+## Review
+
+### Findings
+
+- [ ] `telemetry oracle --help` omits `--json`: the command definition has no `usage` field.
+- [ ] No test covers the conditional `Differences:`, `Error:`, and `Issues:` output lines.
+- [ ] The user guide's `Unavailable` row implies waiting fixes it, but uninterpretable shapes also
+      cause it.
+- [ ] `scratch/telemetry-analytics-oracle/README.md` still points at a screenshot gallery and
+      reproduction command that no longer exist, and its three image links are broken.
+- [ ] Two assertion messages in `telemetry-oracle-result-check.mjs` name the removed observer.
+- [ ] `scripts/cli/telemetry-oracle-findings.mjs` ends with a blank line, which
+      `git diff --check main...HEAD` reports.
+
+### Verification
+
+- Validation pass 1 at 272baded (fresh-context subagent): 6 `fix` findings, no `escalate` or
+  `base`.

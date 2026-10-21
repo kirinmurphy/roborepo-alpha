@@ -8,9 +8,9 @@ const comparison = { status: "passed", event_count: 2, session_count: 1, operati
 const RESULT_KEYS = ["schema", "status", "checked_at", "duration_ms", "event_count", "session_count", "operation_count",
   "coverage", "differences", "summary"];
 
-assert.deepEqual(ORACLE_STATUSES, ["passed", "partial", "unavailable", "failed"], "observer-only statuses are gone");
+assert.deepEqual(ORACLE_STATUSES, ["passed", "partial", "unavailable", "failed"], "only the four result statuses exist");
 const passed = createOracleResult(comparison, metadata);
-assert.deepEqual(Object.keys(passed), RESULT_KEYS, "no evidence signature or other observer field");
+assert.deepEqual(Object.keys(passed), RESULT_KEYS, "the result carries only allowlisted fields");
 assert.equal(passed.schema, 1);
 assert.equal(passed.status, "passed");
 assert.equal(passed.checked_at, metadata.checked_at);

@@ -5,5 +5,6 @@
   "description": "Verify the report against an independent calculation",
   "order": 65,
   "menuSection": "Monitoring",
+  "usage": "roborepo telemetry oracle [--json]",
   "execution": { "adapter": "module", "module": "scripts/cli/telemetry.mjs", "export": "telemetryCommand", "prependArgs": ["oracle"] }
 }

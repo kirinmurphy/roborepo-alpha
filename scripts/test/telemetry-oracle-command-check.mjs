@@ -4,7 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { oracleExitCode } from "../cli/telemetry-oracle-command.mjs";
+import { formatOracleResult, oracleExitCode } from "../cli/telemetry-oracle-command.mjs";
+import { createOracleResult, emptyOracleResult } from "../cli/telemetry-schemas/oracle-result-schema.mjs";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const cli = path.join(repoRoot, "scripts", "cli", "main.mjs");
@@ -19,6 +20,32 @@ const event = { schema: 3, capture_id: "capture", call_id: "call", harness: "cla
   last_result: { tool: "Read", chars: 100 }, tokens: { input: 100, output: 10, total: 110 }, prompt: { preview: secret } };
 const RAW_FIELDS = ["capture_id", "call_id", "session_id", "harness", "prompt", "preview", "tool", "file_path", "repository_id", "tokens"];
 
+// The readable output adds a line only when it has something to explain.
+function checkConditionalLines() {
+  const metadata = { checked_at: "2026-10-01T18:22:31.000Z", duration_ms: 1234 };
+  const checks = ["sessions", "operations", "conditions", "boundaries", "gating", "regression", "loops"];
+  const base = { event_count: 1200, session_count: 3, operation_count: 900,
+    coverage: { supported_events: 1200, unsupported_events: 0, comparable: true, complete: true, issues: [], checks } };
+  const failed = formatOracleResult(createOracleResult({ ...base, status: "failed", differences: ["conditions", "regression"] }, metadata));
+  assert.match(failed, /^Oracle check: Failed$/m);
+  assert.match(failed, /^Evidence: 1,200 events · 3 sessions · 900 operations$/m);
+  assert.match(failed, /^Differences: conditions, regression$/m);
+  assert.match(failed, /^Duration: 1,234 ms$/m);
+  assert.doesNotMatch(failed, /^(Issues|Error):/m);
+
+  const partial = formatOracleResult(createOracleResult({ ...base, status: "partial", differences: [], event_count: 1200,
+    coverage: { ...base.coverage, supported_events: 1190, unsupported_events: 10, complete: false,
+      issues: [{ category: "unknown_model", count: 7 }, { category: "skipped_evidence", count: 2 }] } }, metadata));
+  assert.match(partial, /^Oracle check: Partial$/m);
+  assert.match(partial, /^Issues: unknown_model \(7\), skipped_evidence \(2\)$/m);
+  assert.doesNotMatch(partial, /^(Differences|Error):/m);
+
+  const readError = formatOracleResult(createOracleResult(emptyOracleResult("evidence_read_error"), metadata));
+  assert.match(readError, /^Oracle check: Unavailable$/m);
+  assert.match(readError, /^Error: evidence_read_error$/m);
+  assert.doesNotMatch(readError, /^(Checked|Differences|Issues):/m, "a check that never ran lists nothing it checked");
+}
+
 function run(args = []) {
   const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_DIR: stateDir };
   return spawnSync(process.execPath, [cli, "telemetry", "oracle", ...args], { cwd: repoRoot, env, encoding: "utf8" });
@@ -27,6 +54,7 @@ function run(args = []) {
 try {
   assert.deepEqual(["passed", "failed", "partial", "unavailable"].map(oracleExitCode), [0, 1, 2, 2]);
   assert.equal(oracleExitCode("unknown"), 2, "an unrecognized status is inconclusive, never a pass");
+  checkConditionalLines();
 
   fs.mkdirSync(spoolDir, { recursive: true });
   let result = run();
