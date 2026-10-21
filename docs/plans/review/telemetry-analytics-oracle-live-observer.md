@@ -610,6 +610,22 @@ Human review, 2026-10-21, at bd5372a6 (after the base sync):
 - [x] `scripts/test/lib/fake-response.mjs` and its four importers are a test-helper refactor
       (c283fca1) the plan does not mention. — escalated; user chose to keep it, recorded in review (6126f79a)
 
+Validator pass 2 of the human review, at 7e43b329:
+
+- [ ] Current state says the branch extended the report signature to cover markers, snapshots, and
+      the registry; main already covered markers, experiments, and snapshots. The branch adds the
+      registry, per-file stamps (device, inode, ctime, names), and a stable fallback for unreadable
+      entries.
+- [ ] Current state does not record three branch changes: the production analyzer split into
+      `scripts/cli/telemetry-analysis/` (a6defd13), the split of `telemetry-schemas-check.mjs` into
+      `scripts/test/telemetry-schemas/` (a6defd13), and `aria-labelledby` on the Tokens doc dialog
+      in `portal/tokens/index.html` (55c2b2b5).
+- [ ] The first Removal task still points at the heading "To remove: live observer", renamed
+      "Removed: live observer" in 6126f79a.
+- [ ] The Decision Log and the Review findings say 95c784cc added the screenshot rule to
+      session-close; it changed the wrap-up skill, and a later merge carried the rule into
+      session-close.
+
 ### Verification
 
 - Validation pass 1 at 272baded (fresh-context subagent): 6 `fix` findings, no `escalate` or
@@ -653,6 +669,13 @@ Human review, 2026-10-21:
 - Validator pass at bd5372a6 (fresh-context subagent): 5 `fix` and 3 `escalate` findings, no
   `base`. `run-checks --filter telemetry-oracle` passed 7/7 suites (9 cases, 879 events); the
   removal check returned no matches; the real-data run is still `Unavailable`, exit 2.
+- Base sync merged main at 18c664ce as 48145e83, with no conflicts.
+- Gate at 7e43b329: doctor passed (102 checks), `git diff --check main...HEAD` clean,
+  `npm run check` passed (445 CLI tests, 46/46 suites, 104 browser tests; Windows installer parity
+  skipped, `pwsh` unavailable).
+- Validator pass 2 at 7e43b329 (fresh-context subagent): 4 `fix` findings, all plan prose; no
+  `escalate` or `base`. `run-checks --filter telemetry-oracle` passed 7/7 suites; every commit the
+  Review and Decision Log cite exists and matches its line.
 
 ### Result
 
