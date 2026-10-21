@@ -1,7 +1,7 @@
 ---
 id: koww80zh
 priority: high
-next_action: Run a fresh Validation Loop over the pass-5 resolutions, then the completion preflight and submit transition
+next_action: Human review with /plan-review; before /plan-close, confirm the Not tested entry on real telemetry
 blocked_by: []
 depends_on: []
 related:
@@ -595,3 +595,6 @@ or `unavailable`. Treating such rows as `passed` would be a product decision tha
 - Full gate at 7b667863: doctor passed, `git diff --check main...HEAD` clean, `npm run check`
   passed (445 CLI tests, 46/46 suites, 104 browser tests; Windows installer parity skipped, `pwsh`
   unavailable).
+- Fresh Validation Loop pass 2 at d4b082e8 (fresh-context subagent): no findings. Validation is
+  clean on this pass; commits after 7b667863 change only this plan, so the 7b667863 full gate
+  stands.
