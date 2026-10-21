@@ -1216,6 +1216,11 @@ test.describe("repository-first portal Home", () => {
       setup.harnesses.active = [{ id: "claude", displayName: "Claude Code", enabled: true, confidence: "confirmed" }];
       await route.fulfill({ json: setup });
     });
+    // The real hook status depends on the machine's Claude install; a runner without RoboRepo's hooks
+    // would put a readiness notice (and its Check again button) ahead of the Enable prompt.
+    await page.route("**/api/config/hooks/*/status*", (route) => route.fulfill({
+      json: { harness: "claude", displayName: "Claude Code", supported: true, state: "active", groups: [], guidance: null },
+    }));
     await page.goto("/");
     await expect(roboRepoCard(page)).toBeVisible();
     await page.keyboard.press("Tab");
