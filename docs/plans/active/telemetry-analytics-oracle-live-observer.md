@@ -1,7 +1,7 @@
 ---
 id: koww80zh
 priority: high
-next_action:
+next_action: Get the user's answer on the submit refusal in Open questions, then submit the plan for review
 blocked_by: []
 depends_on: []
 related:
