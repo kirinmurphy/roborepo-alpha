@@ -128,16 +128,18 @@ The branch also carries changes made alongside the oracle that are not observer 
 | Change | Commit | Evidence |
 | --- | --- | --- |
 | Production analyzer split from `scripts/cli/telemetry-analyze.mjs` into `scripts/cli/telemetry-analysis/` | a6defd13 | Complete reports matched the pre-refactor analyzer across 213 fixture and option cases (Verification). |
-| `scripts/test/telemetry-schemas-check.mjs` split into `scripts/test/telemetry-schemas/{capture,persistence,privacy}-checks.mjs` | a6defd13 | 51 assertions, up from 48. |
+| `scripts/test/telemetry-schemas-check.mjs` split into `scripts/test/telemetry-schemas/{capture,persistence,privacy}-checks.mjs` | a6defd13 | 47 assertion calls before and after. |
 | `aria-labelledby="tokensdocmodal-title"` on the Tokens doc dialog in `portal/tokens/index.html` | 55c2b2b5 | Names the dialog for assistive technology. |
 | `scripts/test/lib/fake-response.mjs` shares one fake `ServerResponse` across four route-table checks | c283fca1 | Test-only; no product behavior. |
 
 The branch also strengthened the report cache signature (`telemetryReportEvidenceSignature` in
 `scripts/cli/telemetry.mjs`). Main's signature already covered markers, experiments, and
-snapshots, but stamped only snapshots per file. The branch adds the repository registry, per-file
-stamps for the spool, markers, registry, and experiments, device and inode in every stamp, and a
-stable fallback for unreadable entries. That fixes a stale report cache independently of the
-oracle and stays. Its stamp helpers were first shared with the strict oracle signature, which is
+snapshots, but summarized the spool and experiments as a file count, newest mtime, and total size,
+and returned early when the spool directory could not be read, which hid marker, experiment, and
+snapshot changes. The branch adds the repository registry, stamps each spool and experiment file
+individually as main already did for snapshots, adds device, inode, and nanosecond times to every
+stamp, records unreadable entries one at a time, and no longer stops at a missing spool. That
+fixes a stale report cache independently of the oracle and stays. Its stamp helpers were first shared with the strict oracle signature, which is
 now removed.
 
 ### Disagreements found
@@ -464,7 +466,7 @@ Phase 8, 2026-10-21:
 | --- | --- |
 | Nobody runs the command, so real-data shape drift goes unnoticed. | CI remains the guardrail for committed behavior. The user guide and CLI reference document the command for developers changing analytics. |
 | The command is slow on a near-cap spool. | Measured at about 1–2 seconds at 24 MiB. Acceptable for an explicit diagnostic; it never runs on a request path. |
-| Removing the badge strands shared portal code. | The removal check greps for every observer symbol. The doc-guide delegate and `aria-controls` change stay, because other triggers use them. |
+| Removing the badge strands shared portal code. | The removal check greps for every observer symbol. The doc-guide delegate and `aria-controls` forwarding stay as general shared-portal behavior; see Current state. |
 | Output exposes sensitive telemetry. | Output passes through the result-schema projection; the command check asserts no raw fields, prompt text, or paths in `--json` output. |
 | The oracle becomes production logic in disguise. | The import-boundary assertion is unchanged. |
 
