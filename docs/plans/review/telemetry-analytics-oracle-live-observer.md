@@ -8,7 +8,7 @@ related:
   - k8mngttv
   - telemetry-analysis-io-performance
   - nl40n9vr
-reviewed_commit: 3483f83d6782894a87800b379a41a528cb13af23
+reviewed_commit: 9ad26ff35337816de9a3ceac07ee3862f1980614
 worktree: telemetry-analytics-oracle
 ---
 
@@ -133,14 +133,14 @@ The branch also carries changes made alongside the oracle that are not observer 
 | `scripts/test/lib/fake-response.mjs` shares one fake `ServerResponse` across four route-table checks | c283fca1 | Test-only; no product behavior. |
 
 The branch also strengthened the report cache signature (`telemetryReportEvidenceSignature` in
-`scripts/cli/telemetry.mjs`). Main's signature already covered markers, experiments, and
-snapshots, but summarized the spool as a file count, newest mtime, and total size, summarized
-experiments as a file count and newest mtime, and returned early when the spool directory could not be read, which hid marker, experiment, and
-snapshot changes. The branch adds the repository registry, stamps each spool and experiment file
-individually as main already did for snapshots, adds device, inode, and nanosecond times to every
-stamp, records unreadable entries one at a time, and no longer stops at a missing spool. That
-fixes a stale report cache independently of the oracle and stays. Its stamp helpers were first shared with the strict oracle signature, which is
-now removed.
+`scripts/cli/telemetry.mjs`). Main's signature already covered markers, experiments, and snapshots,
+but summarized the spool as a file count, newest mtime, and total size, summarized experiments as a
+file count and newest mtime, and returned early when the spool directory could not be read, which
+hid marker, experiment, and snapshot changes. The branch adds the repository registry, stamps each
+spool and experiment file individually as main already did for snapshots, adds device, inode, and
+nanosecond times to every stamp, records unreadable entries one at a time, and no longer stops at a
+missing spool. That fixes a stale report cache independently of the oracle and stays. Its stamp
+helpers were first shared with the strict oracle signature, which is now removed.
 
 ### Disagreements found
 
@@ -662,8 +662,8 @@ Validator pass 4 of the human review, at 923bcb8e:
 
 Validator pass 5 of the human review, at ce81b8ea:
 
-- [ ] The report-signature paragraph says main summarized experiments with a total size; main
-      stamped experiments as file count and newest mtime only.
+- [x] The report-signature paragraph says main summarized experiments with a total size; main
+      stamped experiments as file count and newest mtime only. — fixed in review (9ad26ff3)
 
 ### Verification
 
@@ -727,9 +727,10 @@ Human review, 2026-10-21:
 
 ### Result
 
-- Status: pending
-- Base commit: 257fcea89f82624175423e33f1aadc6221825912
+- Status: complete
+- Reviewed implementation commit: 9ad26ff35337816de9a3ceac07ee3862f1980614
+- Base commit: 18c664ce4a870e8d012cf52867edb3f8787dd830
 
 ### Approval
 
-- Decision: not requested
+- Decision: requested
