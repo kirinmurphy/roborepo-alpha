@@ -1,7 +1,7 @@
 ---
 id: koww80zh
 priority: high
-next_action: Human review with /plan-review; before /plan-close, confirm the Not tested entry on real telemetry
+next_action: Get the user's answer on the submit refusal in Open questions, then submit the plan for review
 blocked_by: []
 depends_on: []
 related:
@@ -526,6 +526,20 @@ or `unavailable`. Treating such rows as `passed` would be a product decision tha
   not-comparable to `partial` (compares the rest, but the production analyzer still sees the rows,
   so totals may disagree); or leave it (the command stays honest but inconclusive here).
   Recommendation: investigate the bare-tool shape in a follow-up plan. Blocks no Phase 8 task.
+- Blocking (external): the submit transition refuses. `roborepo plans submit` passed the completion
+  preflight, then refused with `MISSING_NEXT_ACTION`, because it checks the review requirements
+  against the primary checkout's copy of this plan, which is the copy committed at the start
+  transition (`next_action:` empty, title "Live confidence for telemetry analytics"). This
+  worktree copy, the authoritative one, passes the same checks. Options:
+  1. Run `/plan-review` on the plan while it is in `active/` (recommended): the review skill accepts
+     active plans, so the human review proceeds without editing the primary copy. Once the branch
+     merges, the primary copy becomes this copy and later transitions see it.
+  2. Allow a one-time edit setting `next_action` in the primary copy, then submit again. Smallest
+     change, but it breaks the rule that only this worktree copy receives plan updates.
+  3. Change the transition to check the worktree copy for submit. Fixes it for every plan, but it is
+     plan-suite tooling outside this plan.
+  Why blocked: every option either edits the primary copy, changes lifecycle tooling, or changes
+  which command moves the plan. Blocks: the submit transition only; no implementation task.
 
 ## Not tested
 
