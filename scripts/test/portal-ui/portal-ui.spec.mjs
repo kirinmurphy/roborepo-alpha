@@ -410,7 +410,8 @@ test.describe("hook readiness warning", () => {
 
   test("a bulk package change on Agents reads once and shows one combined offer", async ({ page }) => {
     await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex]) }));
-    const reads = await routeStatuses(page, { codex: pendingReview("rev-bulk") });
+    let current = pendingReview("rev-bulk");
+    const reads = await routeStatuses(page, { codex: () => current });
     const config = await (await page.request.get("/api/config")).json();
     await page.route("**/api/config/packages/bulk", (route) => route.fulfill({ json: { ok: true, status: 200, results: [], config, hookHarnesses: ["codex"] } }));
     const section = config.behaviorView.find((entry) => entry.bulkToggle);
@@ -420,6 +421,12 @@ test.describe("hook readiness warning", () => {
     await page.getByRole("checkbox", { name: new RegExp(`^${escaped}: (Select|Deselect) All$`) }).dispatchEvent("click");
     await expect(page.getByRole("region", { name: "Hook review" }).locator("portal-notice")).toHaveCount(1);
     expect(reads.filter((read) => read.fresh)).toHaveLength(1);
+
+    // Review in Codex Settings or a copied terminal command, without using the launcher.
+    current = reviewed();
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(page.getByRole("region", { name: "Hook review" }).getByText("Codex hooks reviewed", { exact: true })).toBeVisible();
+    expect(reads.filter((read) => read.fresh)).toHaveLength(2);
   });
 });
 

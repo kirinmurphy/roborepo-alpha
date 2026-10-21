@@ -8,7 +8,7 @@
 // closes the card; the persistent notice on Home, Settings, and Tokens stays until review is done.
 
 import {
-  hookReadinessNotices, hookReviewResolvedNotice, pendingReviewKeys, readHookStatus, refreshHookReadinessMounts, reviewConfirmed,
+  hookReadinessNotices, hookReviewResolvedNotice, onHookReviewReturn, pendingReviewKeys, readHookStatus, refreshHookReadinessMounts, reviewConfirmed,
 } from "./hook-readiness.js";
 
 const OFFERED_KEY = "roborepo.hook-review-offers";
@@ -34,7 +34,9 @@ function showOffer(status) {
   const container = offersContainer();
   const card = document.createElement("div");
   card.dataset.harness = status.harness;
+  let stopWatching = () => {};
   const close = () => {
+    stopWatching();
     card.remove();
     container.hidden = container.childElementCount === 0;
   };
@@ -52,6 +54,7 @@ function showOffer(status) {
       return;
     }
     if (reviewConfirmed(offered, next)) {
+      stopWatching();
       card.replaceChildren(hookReviewResolvedNotice(next, { onLater: close }));
       return;
     }
@@ -63,7 +66,7 @@ function showOffer(status) {
   };
   render(status);
   // Back from the terminal: show what is left, or that review is done.
-  document.addEventListener("hook-readiness:return", () => {
+  stopWatching = onHookReviewReturn(() => {
     if (card.isConnected) readHookStatus(status.harness, { fresh: true }).then(render).catch(() => {});
   });
   container.append(card);

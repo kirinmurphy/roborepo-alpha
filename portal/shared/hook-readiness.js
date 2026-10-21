@@ -199,7 +199,15 @@ function reveal(node, slot) {
 // Latest render per mount, so a slow status read cannot overwrite a newer one; and which harnesses
 // each mount last showed as awaiting review, so a later read can say the review is done.
 const mounts = new Map();
+const returnListeners = new Set();
 let awaitingReturn = false;
+
+// Offers also appear on pages without persistent mounts. Keep their return refresh subscribed
+// until review is resolved or the card is dismissed, including review done outside the launcher.
+export function onHookReviewReturn(listener) {
+  returnListeners.add(listener);
+  return () => returnListeners.delete(listener);
+}
 
 // `setup` is the /api/settings read model. A failed read for one harness drops only that harness's
 // notice: the warning is advisory, and each page has its own error surface.
@@ -243,12 +251,12 @@ const FOCUS_THROTTLE_MS = 2_000;
 let lastFocusRefresh = 0;
 function refreshOnReturn() {
   if (document.visibilityState !== "visible") return;
-  const anyPending = awaitingReturn || [...mounts.values()].some((entry) => entry.pending.size > 0);
+  const anyPending = awaitingReturn || returnListeners.size > 0 || [...mounts.values()].some((entry) => entry.pending.size > 0);
   if (!anyPending || Date.now() - lastFocusRefresh < FOCUS_THROTTLE_MS) return;
   lastFocusRefresh = Date.now();
   awaitingReturn = false;
   refreshHookReadinessMounts({ fresh: true });
-  document.dispatchEvent(new CustomEvent("hook-readiness:return"));
+  for (const listener of returnListeners) listener();
 }
 document.addEventListener("visibilitychange", refreshOnReturn);
 window.addEventListener("focus", refreshOnReturn);
