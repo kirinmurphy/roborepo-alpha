@@ -122,13 +122,21 @@ general accessibility fix that no current `portal-info-icon` sets. The delegate'
 a host dialog before opening the guide served only the Oracle dialog and is removed, so the guide
 opens over the session drill-down as on main.
 
-The branch also carries one incidental test refactor: `scripts/test/lib/fake-response.mjs` (c283fca1)
-shares one fake `ServerResponse` across four route-table checks. It changes no product behavior.
+The branch also carries changes made alongside the oracle that are not observer work:
 
-The branch also extended the report cache signature to cover markers, snapshots, and the repository
-registry (`telemetryReportEvidenceSignature` in `scripts/cli/telemetry.mjs`). That fixes a stale
-report cache independently of the oracle and stays. It shares stamp helpers with the strict oracle
-signature, which is removed.
+| Change | Commit | Evidence |
+| --- | --- | --- |
+| Production analyzer split from `scripts/cli/telemetry-analyze.mjs` into `scripts/cli/telemetry-analysis/` | a6defd13 | Complete reports matched the pre-refactor analyzer across 213 fixture and option cases (Verification). |
+| `scripts/test/telemetry-schemas-check.mjs` split into `scripts/test/telemetry-schemas/{capture,persistence,privacy}-checks.mjs` | a6defd13 | 51 assertions, up from 48. |
+| `aria-labelledby="tokensdocmodal-title"` on the Tokens doc dialog in `portal/tokens/index.html` | 55c2b2b5 | Names the dialog for assistive technology. |
+| `scripts/test/lib/fake-response.mjs` shares one fake `ServerResponse` across four route-table checks | c283fca1 | Test-only; no product behavior. |
+
+The branch also strengthened the report cache signature (`telemetryReportEvidenceSignature` in
+`scripts/cli/telemetry.mjs`). Main's signature already covered markers, experiments, and
+snapshots; the branch adds the repository registry, per-file stamps (device, inode, ctime, and
+file names), and a stable fallback for unreadable entries. That fixes a stale report cache
+independently of the oracle and stays. It shares stamp helpers with the strict oracle signature,
+which is removed.
 
 ### Disagreements found
 
@@ -302,8 +310,8 @@ Command:
 
 Removal:
 
-- [x] Delete the observer, worker, route, runtime-check, and Tokens badge files listed in "To
-      remove: live observer", and their entries in `scripts/test/check-groups.json`.
+- [x] Delete the observer, worker, route, runtime-check, and Tokens badge files listed in
+      "Removed: live observer", and their entries in `scripts/test/check-groups.json`.
 - [x] Remove observer wiring, `loadOracleHealth`, the `Worker` import, and
       `telemetryOracleEvidenceSignature` from `scripts/cli/telemetry.mjs`; rename the shared
       evidence helpers as described in Module ownership.
@@ -523,7 +531,8 @@ Phase 8, 2026-10-21:
   stays in `active/` (rejected: `/plan-close` closes only from `review/`); change submit to validate
   the worktree copy (rejected for this plan: plan-suite tooling outside its scope).
 - 2026-10-21 — User decision: restore main's session-close skill and its three generated commands
-  on this branch (b0765686). A branch-only commit, 95c784cc, had added a screenshot-refresh rule
+  on this branch (b0765686). A branch-only commit, 95c784cc, had added a screenshot-refresh rule to the
+  wrap-up skill, and a later merge carried it into session-close. The rule is
   unrelated to the oracle. It can land on its own.
 - 2026-10-21 — User decision: move the unrelated backlog plan `os-windows-lifecycle-coverage.md`
   to main as its own commit (18c664ce); the base sync 48145e83 removed it from this branch's diff.
@@ -603,7 +612,7 @@ Human review, 2026-10-21, at bd5372a6 (after the base sync):
 - [x] Module ownership calls `telemetry-oracle-compare.mjs` "Unchanged", but a Phase 8 task reworded
       its comments; the "To remove: live observer" heading describes completed work in future tense. — fixed in review (6126f79a)
 - [x] `globals/packages/session-close/skills/session-close/SKILL.md` and its three generated
-      commands add a "refresh documentation screenshots" rule (branch-only, 95c784cc) outside this
+      commands add a "refresh documentation screenshots" rule (95c784cc on wrap-up, carried in by a merge) outside this
       plan. — escalated; user chose to drop it, fixed in review (b0765686)
 - [x] `docs/plans/backlog/os-windows-lifecycle-coverage.md` is an unrelated backlog plan that exists
       only on this branch (530eb39b). — escalated; user chose to move it to main (18c664ce, synced in 48145e83)
