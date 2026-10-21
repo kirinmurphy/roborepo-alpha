@@ -160,6 +160,7 @@ command will take, because the command does the same read and both calculations.
 | Synthetic 4 MiB spool, 1,905 events | 189 ms |
 | Synthetic 24 MiB spool, 11,405 events | 1,016 ms |
 | Synthetic 24 MB spool, 11,070 events (oracle only) | about 2.2 seconds and about 28 MB temporary heap growth |
+| Developer's real spool, 15,968 events, 82 sessions (command, after 2e9fae86) | 7,170 ms |
 
 Cost grows roughly `N log N` in event volume, plus sessions × condition cardinality and sessions ×
 watched markers.
@@ -457,15 +458,18 @@ Phase 8, 2026-10-21:
   `Unavailable` with exit 2 in 148 ms, and `--json` printed the same status in 120 ms over 18,075
   events: 15,160 supported, 2,915 unsupported. Issues: `unsupported_bare_tool` 2,456,
   `unknown_model` 251, `missing_snapshot` 228, `unresolved_repository` 14. The unsupported bare-tool
-  rows make the input not comparable, so the comparison did not run. This is a finding about live
-  event shapes, recorded in Open questions, not a defect in the command.
+  rows make the input not comparable, so the comparison did not run.
+- Superseded in review by 2e9fae86, which narrows `unsupported_bare_tool` (Decision Log): on the same
+  machine `roborepo telemetry oracle` printed `Partial` with exit 2 in 7,170 ms over 15,968 events,
+  82 sessions, and 9,299 operations, with no `Differences:` line. Issues: `unknown_model` 213,
+  `unknown_session_condition` 56, `unresolved_repository` 6, `changing_session_snapshot` 4.
 
 ## Risks
 
 | Risk | Mitigation |
 | --- | --- |
 | Nobody runs the command, so real-data shape drift goes unnoticed. | CI remains the guardrail for committed behavior. The user guide and CLI reference document the command for developers changing analytics. |
-| The command is slow on a near-cap spool. | Measured at about 1–2 seconds at 24 MiB. Acceptable for an explicit diagnostic; it never runs on a request path. |
+| The command is slow on a near-cap spool. | About 1–2 seconds on synthetic 24 MiB spools and about 7 seconds on the developer's real 15,968-event spool. Acceptable for an explicit diagnostic; it never runs on a request path. |
 | Removing the badge strands shared portal code. | The removal check greps for every observer symbol. The doc-guide delegate and `aria-controls` forwarding stay as general shared-portal behavior; see Current state. |
 | Output exposes sensitive telemetry. | Output passes through the result-schema projection; the command check asserts no raw fields, prompt text, or paths in `--json` output. |
 | The oracle becomes production logic in disguise. | The import-boundary assertion is unchanged. |
@@ -549,27 +553,27 @@ Phase 8, 2026-10-21:
   sessions and 9,228 operations with no differences (`partial`, because of 213 rows with no
   model). Alternatives: fix it in a separate `/plan-execute` session, or ship as is and defer to
   a follow-up plan; both rejected by the user. This supersedes the Open question recommending a
-  follow-up plan.
+  follow-up plan. The fix also checks only `tool.name` and `last_result.tool`, the fields
+  production attributes to a server: two Codex rows named `mcp__codex_app__load_workspace_dependencies`
+  carry the bare suffix `load_workspace_dependencies` in `tool.mcp_tool`, which collides with a
+  jcodemunch name although the prefixed name already identifies the server. The user also chose to
+  reword the Not tested entry to a comparison with no differences.
 
 ## Open questions
 
 None block Phase 8. Any live event shape that cannot be interpreted independently stays `partial`
 or `unavailable`. Treating such rows as `passed` would be a product decision that needs review.
 
-- Not blocking: on the developer's real telemetry the command reports `unavailable`, because 2,456
-  of 18,075 events are `unsupported_bare_tool` rows, which make the whole input not comparable
-  rather than `partial`. Until the oracle can interpret those rows, or excludes them as `partial`,
-  the command cannot compare this machine's evidence at all. Options: teach the oracle the bare-tool
-  shape (most faithful, more independent code to maintain); downgrade the category from
-  not-comparable to `partial` (compares the rest, but the production analyzer still sees the rows,
-  so totals may disagree); or leave it (the command stays honest but inconclusive here).
-  Recommendation: investigate the bare-tool shape in a follow-up plan. Blocks no Phase 8 task.
+The earlier question about `unsupported_bare_tool` making real evidence unavailable was resolved in
+review by a user decision (Decision Log, 2026-10-21) and 2e9fae86. No questions remain open.
 
 ## Not tested
 
-- [ ] `roborepo telemetry oracle` reaches `Passed` on a real developer machine. The only real
-      spool available during implementation was `unavailable` (see Verification), and the
-      `Passed` path is covered only by the command check's synthetic spool.
+- [x] `roborepo telemetry oracle` reaches a comparison with no differences on a real developer
+      machine. Reworded from "reaches `Passed`" by user decision: real spools carry rows with no
+      model, which keep an agreeing result `partial`. Run in review on the developer's machine
+      after 2e9fae86: `Partial`, 82 sessions, 9,299 operations, no differences (see Verification).
+      The `Passed` path is covered by the command check's synthetic spool.
 
 ## Review
 
@@ -679,7 +683,7 @@ Raised by the human at the approval request, at 91e35bb9:
       `scripts/cli/telemetry-oracle-observations.mjs` marks any bare tool name outside an 11-name
       native allowlist `unsupported_bare_tool` and not comparable, and one such row makes the
       whole input unavailable. The developer's spool has 2,230 such rows from ordinary tools such
-      as `Skill`, `apply_patch`, `Agent`, and `browser_batch`. — escalated; the user chose to fix it in this review
+      as `Skill`, `apply_patch`, `Agent`, and `browser_batch`. — escalated; the user chose to fix it in this review; fixed in review (2e9fae86)
 
 ### Verification
 
@@ -740,6 +744,13 @@ Human review, 2026-10-21:
   `escalate` or `base`. `--filter telemetry-oracle` passed 7/7 suites, `--filter telemetry`
   35/35, and the CLI catalog and surface checks passed. Pass 5 is the cap. The one-line fix was
   checked against `git show main:scripts/cli/telemetry.mjs` directly; no validator pass ran after it.
+- After the human raised the bare-tool finding at the approval request: the new live-check cases
+  failed before 2e9fae86 (`ordinary bare tool names stay comparable`, and `a prefixed MCP name with a
+  colliding suffix stays comparable` against the first narrowing) and pass after it.
+  `run-checks --filter telemetry` passed 35/35 suites.
+- Gate at 2e9fae86: doctor passed (102 checks), `git diff --check main...HEAD` clean,
+  `npm run check` passed (445 CLI tests, 46/46 suites, 104 browser tests; Windows installer parity
+  skipped, `pwsh` unavailable).
 
 ### Result
 
