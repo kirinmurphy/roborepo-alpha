@@ -97,10 +97,10 @@ The oracle recomputes these values without importing production analysis helpers
 
 | Area | Files | State |
 | --- | --- | --- |
-| Independent core | `scripts/cli/telemetry-oracle-{observations,findings,cohorts,regression,run}.mjs` | Kept unchanged. An import-boundary assertion in `scripts/test/telemetry-oracle-core-check.mjs` rejects production helper imports. |
+| Independent core | `scripts/cli/telemetry-oracle-{observations,findings,cohorts,regression,run}.mjs` | Kept, except that review narrowed `unsupported_bare_tool` in `eventSupport` (2e9fae86; Decision Log). An import-boundary assertion in `scripts/test/telemetry-oracle-core-check.mjs` rejects production helper imports. |
 | Comparison boundary | `scripts/cli/telemetry-oracle-compare.mjs` | Kept. Returns `passed`, `partial`, `failed`, or `unavailable` with sanitized differences. |
 | CI comparator | `scripts/test/telemetry-oracle-check.mjs`, `scripts/test/fixtures/telemetry-oracle-cases.mjs` | Kept. Nine cases (one bundled demo, two fixed regressions, six seeded spools), 879 events. Exits nonzero on disagreement and appends a summary to `GITHUB_STEP_SUMMARY`. |
-| Live coverage accounting | `scripts/test/telemetry-oracle-live-check.mjs` | Kept. Covers legacy repository hashes staying unresolved, unsupported shapes, skipped evidence, and privacy of injected disagreements. |
+| Live coverage accounting | `scripts/test/telemetry-oracle-live-check.mjs` | Kept. Covers legacy repository hashes staying unresolved, unsupported shapes, ordinary bare tool names staying comparable, skipped evidence, and privacy of injected disagreements. |
 
 ### Removed: live observer
 
@@ -469,7 +469,7 @@ Phase 8, 2026-10-21:
 | Risk | Mitigation |
 | --- | --- |
 | Nobody runs the command, so real-data shape drift goes unnoticed. | CI remains the guardrail for committed behavior. The user guide and CLI reference document the command for developers changing analytics. |
-| The command is slow on a near-cap spool. | About 1–2 seconds on synthetic 24 MiB spools and about 7 seconds on the developer's real 15,968-event spool. Acceptable for an explicit diagnostic; it never runs on a request path. |
+| The command is slow on a near-cap spool. | About 1–2 seconds on synthetic 24 MiB spools and about 7–9 seconds on the developer's real spool of about 16,000 events. Acceptable for an explicit diagnostic; it never runs on a request path. |
 | Removing the badge strands shared portal code. | The removal check greps for every observer symbol. The doc-guide delegate and `aria-controls` forwarding stay as general shared-portal behavior; see Current state. |
 | Output exposes sensitive telemetry. | Output passes through the result-schema projection; the command check asserts no raw fields, prompt text, or paths in `--json` output. |
 | The oracle becomes production logic in disguise. | The import-boundary assertion is unchanged. |
@@ -679,7 +679,7 @@ Validator pass 5 of the human review, at ce81b8ea:
 
 Raised by the human at the approval request, at 91e35bb9:
 
-- [ ] `roborepo telemetry oracle` is `unavailable` on almost any real machine. `eventSupport` in
+- [x] `roborepo telemetry oracle` is `unavailable` on almost any real machine. `eventSupport` in
       `scripts/cli/telemetry-oracle-observations.mjs` marks any bare tool name outside an 11-name
       native allowlist `unsupported_bare_tool` and not comparable, and one such row makes the
       whole input unavailable. The developer's spool has 2,230 such rows from ordinary tools such
