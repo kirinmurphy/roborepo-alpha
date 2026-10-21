@@ -1,7 +1,7 @@
 ---
 id: koww80zh
 priority: high
-next_action: Get the user's answer on the submit refusal in Open questions, then submit the plan for review
+next_action: Get the human's approval of the reviewed implementation, then merge the pull request and run /plan-close
 blocked_by: []
 depends_on: []
 related:
@@ -102,7 +102,7 @@ The oracle recomputes these values without importing production analysis helpers
 | CI comparator | `scripts/test/telemetry-oracle-check.mjs`, `scripts/test/fixtures/telemetry-oracle-cases.mjs` | Kept. Nine cases (one bundled demo, two fixed regressions, six seeded spools), 879 events. Exits nonzero on disagreement and appends a summary to `GITHUB_STEP_SUMMARY`. |
 | Live coverage accounting | `scripts/test/telemetry-oracle-live-check.mjs` | Kept. Covers legacy repository hashes staying unresolved, unsupported shapes, skipped evidence, and privacy of injected disagreements. |
 
-### To remove: live observer
+### Removed: live observer
 
 | Area | Files |
 | --- | --- |
@@ -114,11 +114,16 @@ The oracle recomputes these values without importing production analysis helpers
 | Tokens badge | `portal/tokens/oracle-health.js`; its import and `start()` calls in `portal/tokens/app.js`; badge and dialog markup in `portal/tokens/index.html`; badge and dialog styles in `portal/tokens/styles.css`; `scripts/test/portal-ui/telemetry-oracle-health.spec.mjs` |
 | Screenshots | `docs/images/tokens/oracle-health{,-detail}-{light,dark}.png`; the Oracle captures and the "Oracle guide screenshots are served" test in `scripts/test/portal-ui/telemetry-documentation.spec.mjs` |
 
-Two shared portal changes made while building the badge stay, because other code uses them: the
-`[data-doc-anchor]` delegate in `portal/shared/doc-guide-modal.js` also serves the Tokens info
-icons, and the `aria-controls` attribute in `portal/shared/info-icon.js` is a general
-accessibility fix. The delegate's line that closed a host dialog before opening the guide served
-only the Oracle dialog and is removed, so the guide opens over the session drill-down as on main.
+Two shared portal changes made while building the badge stay. The `[data-doc-anchor]` click
+delegate moved from `portal/tokens/app.js` into the shared factory in
+`portal/shared/doc-guide-modal.js`, so any page that creates a doc guide gets it; Tokens is its only
+user today. `portal/shared/info-icon.js` now forwards `aria-controls` to its inner button, a
+general accessibility fix that no current `portal-info-icon` sets. The delegate's line that closed
+a host dialog before opening the guide served only the Oracle dialog and is removed, so the guide
+opens over the session drill-down as on main.
+
+The branch also carries one incidental test refactor: `scripts/test/lib/fake-response.mjs` (c283fca1)
+shares one fake `ServerResponse` across four route-table checks. It changes no product behavior.
 
 The branch also extended the report cache signature to cover markers, snapshots, and the repository
 registry (`telemetryReportEvidenceSignature` in `scripts/cli/telemetry.mjs`). That fixes a stale
@@ -243,7 +248,7 @@ a read or comparison failure carries `error_category`. `error_category` appears 
 | --- | --- |
 | `scripts/cli/telemetry-oracle-evidence.mjs` (new) | Read one raw evidence snapshot from explicit paths and count skipped records. Moved from `readEvidenceSnapshot` in the worker, behavior unchanged. |
 | `scripts/cli/telemetry-oracle-command.mjs` (new) | Parse `--json`, resolve evidence paths from `scripts/cli/state-paths.mjs`, run the read and comparison, time it, format output, and map status to exit code. Only orchestration and formatting live here. |
-| `scripts/cli/telemetry-oracle-compare.mjs` | Unchanged. The only runtime module that knows both implementations. |
+| `scripts/cli/telemetry-oracle-compare.mjs` | Logic unchanged; comments reworded to describe the command. The only runtime module that knows both implementations. |
 | `scripts/cli/telemetry-schemas/oracle-result-schema.mjs` | Renamed from `oracle-health-schema.mjs`. The four statuses, the projection, error categories, and status summaries. |
 | `scripts/cli/telemetry.mjs` | Add `case "oracle"` to `telemetryCommand`, delegating to the command module. No oracle logic. |
 | `manifests/platform/cli/command-definitions/telemetry/oracle.command.json` (new) | Command definition beside `report.command.json`, in the `Monitoring` menu section. |
@@ -512,6 +517,18 @@ Phase 8, 2026-10-21:
   after it. Alternatives: change the comparison boundary's early return (the plan keeps that module
   unchanged and CI reads it), or document the fields as meaningless on `unavailable`; both rejected
   by the user.
+- 2026-10-21 — User decision: unblock the submit transition with a one-time `next_action` edit to
+  main's copy of this plan (517cca6c), then submit (257fcea8). Submit validated main's copy, which
+  still had the empty `next_action` from the start transition. Alternatives: review while the plan
+  stays in `active/` (rejected: `/plan-close` closes only from `review/`); change submit to validate
+  the worktree copy (rejected for this plan: plan-suite tooling outside its scope).
+- 2026-10-21 — User decision: restore main's session-close skill and its three generated commands
+  on this branch (b0765686). A branch-only commit, 95c784cc, had added a screenshot-refresh rule
+  unrelated to the oracle. It can land on its own.
+- 2026-10-21 — User decision: move the unrelated backlog plan `os-windows-lifecycle-coverage.md`
+  to main as its own commit (18c664ce); the base sync 48145e83 removed it from this branch's diff.
+- 2026-10-21 — User decision: keep the `scripts/test/lib/fake-response.mjs` test refactor
+  (c283fca1) and record it in Current state.
 
 ## Open questions
 
@@ -526,20 +543,6 @@ or `unavailable`. Treating such rows as `passed` would be a product decision tha
   not-comparable to `partial` (compares the rest, but the production analyzer still sees the rows,
   so totals may disagree); or leave it (the command stays honest but inconclusive here).
   Recommendation: investigate the bare-tool shape in a follow-up plan. Blocks no Phase 8 task.
-- Blocking (external): the submit transition refuses. `roborepo plans submit` passed the completion
-  preflight, then refused with `MISSING_NEXT_ACTION`, because it checks the review requirements
-  against the primary checkout's copy of this plan, which is the copy committed at the start
-  transition (`next_action:` empty, title "Live confidence for telemetry analytics"). This
-  worktree copy, the authoritative one, passes the same checks. Options:
-  1. Run `/plan-review` on the plan while it is in `active/` (recommended): the review skill accepts
-     active plans, so the human review proceeds without editing the primary copy. Once the branch
-     merges, the primary copy becomes this copy and later transitions see it.
-  2. Allow a one-time edit setting `next_action` in the primary copy, then submit again. Smallest
-     change, but it breaks the rule that only this worktree copy receives plan updates.
-  3. Change the transition to check the worktree copy for submit. Fixes it for every plan, but it is
-     plan-suite tooling outside this plan.
-  Why blocked: every option either edits the primary copy, changes lifecycle tooling, or changes
-  which command moves the plan. Blocks: the submit transition only; no implementation task.
 
 ## Not tested
 
@@ -632,7 +635,8 @@ Human review, 2026-10-21, at bd5372a6 (after the base sync):
   unavailable).
 - Fresh Validation Loop pass 2 at d4b082e8 (fresh-context subagent): no findings. Validation is
   clean on this pass; commits after 7b667863 change only this plan, so the 7b667863 full gate
-  stands.
+  stands. Superseded by the human review below: the base merge bd5372a6 brought implementation
+  changes, and the gate ran again.
 
 Human review, 2026-10-21:
 
