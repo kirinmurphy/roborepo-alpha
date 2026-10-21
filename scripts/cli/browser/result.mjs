@@ -25,6 +25,10 @@ export function statusFromChecks(checks) {
   return checks.every((check) => check.status === CHECK_STATUS.PASSED) ? STATUS.PASSED : STATUS.FAILED;
 }
 
+export function unavailableProbe(limitations) {
+  return { available: false, capabilities: Object.fromEntries(CAPTURE_TYPES.map((type) => [type, false])), limitations };
+}
+
 export function blockedResult(limitations, { artifacts = [], checks = [] } = {}) {
   return { status: STATUS.BLOCKED, checks, artifacts, limitations };
 }

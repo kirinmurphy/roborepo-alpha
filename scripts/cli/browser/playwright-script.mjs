@@ -24,8 +24,8 @@ export async function runScriptScenario({ playwright, scenarioPath, capture, url
   const { chromium } = await playwright.load();
   const checks = [];
   const limitations = [];
-  const videoDir = capture.includes("video") ? fs.mkdtempSync(path.join(os.tmpdir(), "rr-browser-video-")) : null;
   const browser = await chromium.launch();
+  const videoDir = capture.includes("video") ? fs.mkdtempSync(path.join(os.tmpdir(), "rr-browser-video-")) : null;
   try {
     // Recording is configured on the context before anything runs: a video cannot be added to a
     // context after the fact, and it is only written once the context closes.

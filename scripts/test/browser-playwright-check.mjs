@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // The Playwright provider against real Chromium: where it finds Playwright (project first, then
 // RoboRepo's tool directory, otherwise blocked with the install command), project test files run by
-// the project's own runner without touching its manifest or lockfile, and recording.
+// the project's own runner without touching its manifest or lockfile, timeouts that stop the
+// runner's webServer, and recording. Partial browser caches are browser-playwright-cache-check.mjs.
 //
 // Skips with a visible `skip:` line when Chromium is not installed, matching
 // scripts/test/portal-ui/run.mjs.
@@ -9,14 +10,13 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import http from "node:http";
-import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
 import { STATUS, validateRunResult } from "../cli/browser/result.mjs";
 import { createEvidenceRun } from "../cli/browser/evidence.mjs";
 import { playwrightProvider } from "../cli/browser/playwright-provider.mjs";
 import { toolsDir } from "../cli/browser/playwright-resolve.mjs";
+import { freePort, responds, startFixtureApp, waitFor } from "./lib/local-http.mjs";
 
 if (!fs.existsSync(chromium.executablePath())) {
   console.log("skip: browser playwright provider (chromium not installed; run `npx playwright install chromium`)");
@@ -84,28 +84,19 @@ try {
     assert.ok(video.artifacts.some((artifact) => artifact.type === "video" && fs.statSync(artifact.path).size > 0), "a finalized video is returned");
   }
 
-  // ---- Partial browser caches, through the CLI: what probe promises, run can deliver ----
-  const cacheRoot = browserCacheRoot(chromium.executablePath());
-  const cliHome = path.join(tempRoot, "cli-home");
-  fs.mkdirSync(path.join(cliHome, ".claude"), { recursive: true });
-  fs.mkdirSync(path.join(cliHome, ".codex"), { recursive: true });
-  assert.equal((await cli(cliHome, null, ["package", "enable", "feature-verification"])).code, 0);
-
-  // Full Chromium without the headless shell cannot launch headless, so it is not "available".
-  const fullOnly = partialCache(cacheRoot, (name) => /^chromium-\d+$/.test(name));
-  const noShell = JSON.parse((await cli(cliHome, fullOnly, ["browser", "probe", "--dir", project, "--json"])).stdout);
-  assert.equal(noShell.available, false, "Chromium without its headless shell is not available");
-  assert.match(noShell.limitations.join("\n"), /install chromium/, "the limitation names the browser install command");
-
-  // Without ffmpeg, video is reported unavailable and a run says so instead of dropping it.
-  const noFfmpeg = partialCache(cacheRoot, (name) => /^chromium(_headless_shell)?-\d+$/.test(name));
-  const probed = JSON.parse((await cli(cliHome, noFfmpeg, ["browser", "probe", "--dir", project, "--json"])).stdout);
-  assert.deepEqual(probed.capabilities, { screenshot: true, video: false, trace: true });
-  assert.match(probed.limitations.join("\n"), /install ffmpeg/, "missing video support names the ffmpeg install command");
-  const noVideo = JSON.parse((await cli(cliHome, noFfmpeg, ["browser", "run", "--scenario", recorded, "--url", app.url, "--capture", "video", "--json"])).stdout);
-  assert.equal(noVideo.status, STATUS.PASSED);
-  assert.ok(!noVideo.artifacts.some((artifact) => artifact.type === "video"), "no video is fabricated");
-  assert.match(noVideo.limitations.join("\n"), /video capture unavailable/);
+  // ---- A spec that outlives --timeout fails, and the runner's webServer is shut down with it ----
+  const slow = path.join(tempRoot, "slow-project");
+  const serverPort = await freePort();
+  fs.mkdirSync(path.join(slow, "tests"), { recursive: true });
+  fs.symlinkSync(modules, path.join(slow, "node_modules"), "junction");
+  fs.writeFileSync(path.join(slow, "package.json"), '{ "name": "slow", "private": true, "type": "module" }\n');
+  fs.writeFileSync(path.join(slow, "srv.mjs"), 'import http from "node:http";\nhttp.createServer((q, r) => r.end("ok")).listen(Number(process.argv[2]), "127.0.0.1");\n');
+  fs.writeFileSync(path.join(slow, "playwright.config.mjs"), `export default { testDir: "./tests", webServer: { command: "node srv.mjs ${serverPort}", url: "http://127.0.0.1:${serverPort}/" } };\n`);
+  fs.writeFileSync(path.join(slow, "tests", "slow.spec.mjs"), 'import { test } from "@playwright/test";\ntest("never finishes in time", async () => { await new Promise((r) => setTimeout(r, 60_000)); });\n');
+  const timedOut = await run({ scenarioPath: path.join(slow, "tests", "slow.spec.mjs"), stateRoot: toolState, timeoutMs: 8_000 });
+  assert.equal(timedOut.status, STATUS.FAILED, "a spec that runs past --timeout failed; it did execute");
+  assert.match(timedOut.checks[0].message, /timed out/);
+  await waitFor(async () => !(await responds(serverPort)), 15_000);
 
   console.log("ok: browser playwright provider (resolution, spec runs, no project mutation, recording)");
 } finally {
@@ -113,9 +104,9 @@ try {
   fs.rmSync(tempRoot, { recursive: true, force: true });
 }
 
-async function run({ scenarioPath, capture = [], stateRoot }) {
+async function run({ scenarioPath, capture = [], stateRoot, timeoutMs = 60_000 }) {
   const evidence = createEvidenceRun(stateRoot);
-  const result = await playwrightProvider.run({ scenarioPath, capture, url: app.url, evidence, stateRoot, timeoutMs: 60_000 });
+  const result = await playwrightProvider.run({ scenarioPath, capture, url: app.url, evidence, stateRoot, timeoutMs });
   return validateRunResult(result);
 }
 
@@ -126,51 +117,7 @@ function writeScript(dir, name, body) {
   return file;
 }
 
-// A browser cache holding only some of the real one's entries, linked rather than copied.
-function partialCache(root, keep) {
-  const dir = fs.mkdtempSync(path.join(tempRoot, "cache-"));
-  for (const name of fs.readdirSync(root).filter(keep)) {
-    fs.symlinkSync(path.join(root, name), path.join(dir, name), "junction");
-  }
-  return dir;
-}
-
-function browserCacheRoot(executable) {
-  let dir = path.dirname(executable);
-  while (!/^chromium(_headless_shell)?-\d+$/.test(path.basename(dir))) dir = path.dirname(dir);
-  return path.dirname(dir);
-}
-
-// Asynchronous, because the fixture app is served from this process.
-function cli(home, browsersPath, args) {
-  return new Promise((resolve) => {
-    const child = spawn(process.execPath, [path.join(repoRoot, "scripts", "cli", "main.mjs"), ...args], {
-      env: {
-        ...process.env,
-        HOME: home,
-        ROBOREPO_STATE_DIR: path.join(home, ".roborepo"),
-        SKIP_MCP: "1",
-        ...(browsersPath ? { PLAYWRIGHT_BROWSERS_PATH: browsersPath } : {}),
-      },
-    });
-    let stdout = "";
-    child.stdout.on("data", (chunk) => { stdout += chunk; });
-    child.on("close", (code) => resolve({ code, stdout }));
-  });
-}
-
 function snapshot(dir, names) {
   return names.map((name) => fs.readFileSync(path.join(dir, name)).toString("base64"));
 }
 
-function startFixtureApp() {
-  const server = http.createServer((req, res) => {
-    res.setHeader("content-type", "text/html");
-    res.end("<!doctype html><title>Fixture</title><h1>Fixture</h1>");
-  });
-  return new Promise((resolve) => {
-    server.listen(0, "127.0.0.1", () => {
-      resolve({ url: `http://127.0.0.1:${server.address().port}/`, close: () => server.close() });
-    });
-  });
-}

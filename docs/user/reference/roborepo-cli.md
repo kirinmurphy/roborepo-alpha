@@ -158,11 +158,13 @@ project's own test runner and config, or a JavaScript module whose default expor
 `{ page, context, url, check, screenshot }`. In a script, only `check(name, fn)` produces an
 assertion; a script that only navigates and captures reports `unverified`.
 
-`--url` is the app to check. If something already answers there, the run uses it and never stops
-it. Otherwise `--serve` names the dev command to start it; the run waits for the URL, then stops
-that command's whole process group when it finishes, including a server the command put in the
-background. Test files read the URL from `ROBOREPO_BROWSER_URL`. `--timeout` (default 120 seconds)
-bounds both the wait for the app and the scenario itself.
+`--url` is the app to check, as an `http://` or `https://` URL. If something already answers
+there, the run uses it and never stops it. Otherwise `--serve` names the dev command to start it;
+the run waits for the URL, then stops that command's whole process group when it finishes, when it
+is interrupted (Ctrl-C, or a harness ending a long command), and including a server the command
+put in the background. Test files read the URL from `ROBOREPO_BROWSER_URL`. `--timeout` (default
+120 seconds) bounds both the wait for the app and the scenario itself; a scenario that runs past it
+is `failed`, and a test file's runner is shut down gracefully so its config's `webServer` stops too.
 
 The result has four fields:
 

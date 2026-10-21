@@ -10,13 +10,13 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import http from "node:http";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
 import { STATUS, statusFromChecks, validateProbeResult, validateRunResult } from "../cli/browser/result.mjs";
 import { createEvidenceRun } from "../cli/browser/evidence.mjs";
 import { stubProvider } from "../cli/browser/stub-provider.mjs";
 import { playwrightProvider } from "../cli/browser/playwright-provider.mjs";
+import { startFixtureApp } from "./lib/local-http.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-browser-contract-"));
@@ -124,14 +124,3 @@ function playwrightScenarios() {
   };
 }
 
-function startFixtureApp() {
-  const server = http.createServer((req, res) => {
-    res.setHeader("content-type", "text/html");
-    res.end("<!doctype html><title>Fixture</title><h1>Fixture</h1>");
-  });
-  return new Promise((resolve) => {
-    server.listen(0, "127.0.0.1", () => {
-      resolve({ url: `http://127.0.0.1:${server.address().port}/`, close: () => server.close() });
-    });
-  });
-}

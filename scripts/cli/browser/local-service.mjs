@@ -3,6 +3,7 @@
 // and nothing answers yet, and only that process (with its children) is stopped afterward.
 
 import { spawn, spawnSync } from "node:child_process";
+import { own } from "./owned-processes.mjs";
 
 const POLL_MS = 250;
 
@@ -20,7 +21,11 @@ export async function ensureLocalService({ url, serve, timeoutMs }) {
   // Its own process group (POSIX), so stop() reaches the dev server the shell spawned, not just
   // the shell.
   const child = spawn(serve, { shell: true, detached: process.platform !== "win32", stdio: "ignore" });
-  const stop = () => stopProcessTree(child);
+  const release = own(() => stopProcessTree(child));
+  const stop = () => {
+    release();
+    stopProcessTree(child);
+  };
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     // A command that backgrounds its server (`npm run dev &`) exits 0 while the server keeps

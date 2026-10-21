@@ -41,6 +41,8 @@
     "browser-contract-check.mjs",
     "browser-cli-check.mjs",
     "browser-playwright-check.mjs",
-    "response-output-rules-check.mjs"
+    "response-output-rules-check.mjs",
+    "browser-lifecycle-check.mjs",
+    "browser-playwright-cache-check.mjs"
   ]
 }

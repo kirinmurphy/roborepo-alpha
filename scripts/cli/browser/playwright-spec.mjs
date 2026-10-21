@@ -10,7 +10,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
-import { CHECK_STATUS, blockedResult, statusFromChecks } from "./result.mjs";
+import { CHECK_STATUS, STATUS, blockedResult, statusFromChecks } from "./result.mjs";
+import { own } from "./owned-processes.mjs";
+
+// After an interrupt, how long the runner gets to shut down its browsers and any `webServer` its
+// config started before it is killed outright.
+const SHUTDOWN_GRACE_MS = 10_000;
 
 const CONFIG_NAMES = ["playwright.config.ts", "playwright.config.js", "playwright.config.mjs", "playwright.config.cjs"];
 const ATTACHMENT_TYPES = [
@@ -40,7 +45,11 @@ export async function runSpecScenario({ playwright, scenarioPath, capture, url, 
         ...(url ? { ROBOREPO_BROWSER_URL: url } : {}),
       },
     });
-    if (child.timedOut) return blockedResult([`test run timed out after ${timeoutMs}ms`]);
+    if (child.timedOut) {
+      // The tests ran and did not finish in time: that is a failed run, not one that could not start.
+      const check = { name: "test run", status: CHECK_STATUS.FAILED, message: `timed out after ${timeoutMs}ms` };
+      return { status: STATUS.FAILED, checks: [check], artifacts: evidence.written(), limitations: [] };
+    }
     if (!fs.existsSync(reportPath)) {
       return blockedResult([`Playwright produced no report: ${lastLine(child.output) || `exit ${child.code}`}`]);
     }
@@ -99,19 +108,31 @@ function* walkTests(suites, titles) {
 
 // Asynchronous on purpose: a synchronous spawn would freeze this process's event loop for the whole
 // test run, starving anything the run depends on that shares it.
+//
+// Stopping uses SIGINT, which the Playwright runner treats as a graceful shutdown: it closes its
+// browsers and stops the `webServer` its config started. SIGTERM would kill only the runner and
+// orphan that server. SIGKILL follows only if the runner ignores the interrupt.
 function runRunner(args, { cwd, env, timeoutMs }) {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
     let output = "";
     child.stdout.on("data", (chunk) => { output += chunk; });
     child.stderr.on("data", (chunk) => { output += chunk; });
+    let killTimer = null;
+    const interrupt = () => {
+      child.kill("SIGINT");
+      killTimer = setTimeout(() => child.kill("SIGKILL"), SHUTDOWN_GRACE_MS);
+    };
+    const release = own(interrupt);
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill("SIGTERM");
+      interrupt();
     }, timeoutMs);
     child.on("close", (code) => {
+      release();
       clearTimeout(timer);
+      clearTimeout(killTimer);
       resolve({ code, output, timedOut });
     });
   });

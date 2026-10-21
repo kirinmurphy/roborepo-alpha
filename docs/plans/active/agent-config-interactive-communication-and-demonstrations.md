@@ -1,7 +1,7 @@
 ---
 id: o93hile
 priority: high
-next_action: Run Validation Loop pass 2 over the pass-1 fixes, then the completion preflight and submit for /plan-review.
+next_action: Answer the open question on the "Rename complete" criterion; then rerun the completion preflight and submit for /plan-review (Validation pass 3 is recorded under ## Review).
 blocked_by: []
 depends_on: []
 related:
@@ -453,11 +453,35 @@ how to open it, and what capture does **not** prove.
 - [x] The no-ffmpeg branch was never asserted on a machine that has ffmpeg — fixed with partial browser caches (58871592)
 - [x] `next_action` named a gate run that had already passed — fixed (58871592)
 - [x] Shared `Verified:` line has no value for an `unverified` run — classed escalate by the Validator; resolved in the skill without changing the shared format (see Decision Log) (58871592)
+- [x] Interrupting `browser run` (SIGINT/SIGTERM) left a `--serve` server running — fixed (pending commit)
+- [x] A spec run timeout killed only the runner, orphaning the config's `webServer` — fixed (pending commit)
+- [x] Probe matched any headless shell revision and required the full browser to exist — fixed (pending commit)
+- [x] `browser probe` printed a stack trace when an installed Playwright failed to load — fixed (pending commit)
+- [x] `--url` without an http(s) scheme waited the full timeout instead of failing as usage — fixed (pending commit)
+- [x] A spec timeout was `blocked` while a script timeout was `failed` — fixed, both `failed` (pending commit)
+- [x] A failed browser launch with `--capture video` leaked a temp directory — fixed (pending commit)
+- [ ] The "Rename complete" row excludes only `completed/` and `archived/`, but this plan and backlog o9zwxuav must name the old id — escalated, see Open Questions
 
 ### Verification
 
 - Gate: `npm run check` passed at f7528de4 (447 CLI tests, 42/42 check suites, Docker clean-machine suites, 103 portal UI specs; Windows installer parity skipped, no `pwsh`).
 - Validation pass 1 at f7528de4 (fresh-context subagent): 7 fix, 1 escalate.
+- Gate: `npm run check` passed at 018c8f67 (447 CLI tests, 42/42 check suites, Docker clean-machine suites, portal UI).
+- Validation pass 2 at 018c8f67 (fresh-context subagent): 7 fix, 1 escalate.
+
+## Open Questions
+
+- **Amend the "Rename complete" acceptance criterion?** The row requires no live `response-shape`
+  reference outside `docs/plans/completed/` and `docs/plans/archived/`. This active plan, and the
+  backlog plan o9zwxuav (which this plan does not edit), must name the old id to describe the
+  change, so the row cannot be met as written. `scripts/test/response-output-rules-check.mjs`
+  excludes all of `docs/plans/`.
+  - Option A (recommended): amend the row to exclude all of `docs/plans/`. Plans are history and
+    reasoning, not live configuration; matches the check as built.
+  - Option B: keep the row and edit o9zwxuav and this plan to avoid the literal id. Rewrites
+    another plan's reasoning and obscures what was renamed.
+  - Blocked rather than decided: it changes an acceptance criterion, which is the human's call.
+  - Blocks: closing the escalated Review finding, and therefore the submit transition.
 
 ## Not tested
 

@@ -60,22 +60,27 @@ export function browserInstallCommand(playwright) {
 }
 
 // Chromium and ffmpeg live in Playwright's machine-wide browser cache, not in node_modules. Checking
-// for the files answers "can this capture" without launching or downloading anything. Headless
-// launches use the separate headless shell build, so Chromium counts as present only with both.
+// for the files answers "can this capture" without launching or downloading anything.
+//
+// A headless launch runs the headless shell build of the same revision as the full browser, and
+// only that. So the full browser's path is read just for its location and revision (it need not be
+// installed), and Chromium counts as present when the matching headless shell is.
 export function browserBinaries(chromium) {
-  const executable = chromium.executablePath();
-  const cacheRoot = executable && fs.existsSync(executable) ? browserCacheRoot(executable) : null;
-  const entries = cacheRoot === null ? [] : fs.readdirSync(cacheRoot);
+  const location = chromiumLocation(chromium.executablePath());
+  if (!location) return { hasChromium: false, hasFfmpeg: false };
+  const entries = fs.existsSync(location.cacheRoot) ? fs.readdirSync(location.cacheRoot) : [];
   return {
-    hasChromium: entries.some((name) => name.startsWith("chromium_headless_shell-")),
+    hasChromium: entries.includes(`chromium_headless_shell-${location.revision}`),
     hasFfmpeg: entries.some((name) => name.startsWith("ffmpeg")),
   };
 }
 
-function browserCacheRoot(executable) {
+function chromiumLocation(executable) {
+  if (!executable) return null;
   let dir = path.dirname(executable);
   while (dir !== path.dirname(dir)) {
-    if (/^chromium(_headless_shell)?-\d+$/.test(path.basename(dir))) return path.dirname(dir);
+    const match = /^chromium-(\d+)$/.exec(path.basename(dir));
+    if (match) return { cacheRoot: path.dirname(dir), revision: match[1] };
     dir = path.dirname(dir);
   }
   return null;

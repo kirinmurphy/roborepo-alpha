@@ -2,7 +2,7 @@
 // can capture without launching anything, and runs either a project test file or an ad hoc script.
 
 import path from "node:path";
-import { CAPTURE_TYPES, blockedResult } from "./result.mjs";
+import { blockedResult, unavailableProbe } from "./result.mjs";
 import { browserBinaries, browserInstallCommand, installCommand, resolvePlaywright } from "./playwright-resolve.mjs";
 import { isSpecScenario, runSpecScenario } from "./playwright-spec.mjs";
 import { runScriptScenario } from "./playwright-script.mjs";
@@ -11,7 +11,7 @@ export const playwrightProvider = { id: "playwright", probe, run };
 
 async function probe({ dir, stateRoot }) {
   const located = await locate({ fromDir: dir, stateRoot });
-  if (located.blocked) return { available: false, capabilities: noCapabilities(), limitations: located.blocked, playwright: located.playwright };
+  if (located.blocked) return { ...unavailableProbe(located.blocked), playwright: located.playwright };
   const { binaries, playwright } = located;
   const limitations = binaries.hasFfmpeg ? [] : [videoLimitation(playwright)];
   return {
@@ -67,10 +67,6 @@ async function locate({ fromDir, stateRoot }) {
 
 function videoLimitation(playwright) {
   return `video capture unavailable: ffmpeg is not installed. Install it (needs approval): node ${JSON.stringify(playwright.cliPath)} install ffmpeg`;
-}
-
-function noCapabilities() {
-  return Object.fromEntries(CAPTURE_TYPES.map((type) => [type, false]));
 }
 
 function describe(playwright) {

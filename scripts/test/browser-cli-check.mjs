@@ -1,39 +1,27 @@
 #!/usr/bin/env node
 // `roborepo browser` through the real CLI: the feature-verification gate, package independence from
 // response-output, lazy availability (nothing installed or created until a run needs it), usage
-// errors, evidence placement and retention, the local-service lifecycle, and the agent allowlist.
+// errors, evidence placement and retention, provider failures as results, and the agent allowlist.
 //
-// Runs drive the stub provider, so this check needs no browser. The provider contract itself is
-// browser-contract-check.mjs; real Chromium runs are browser-playwright-check.mjs.
+// Runs drive the stub provider, so this check needs no browser. The provider contract is
+// browser-contract-check.mjs, the app lifecycle browser-lifecycle-check.mjs, and real Chromium runs
+// browser-playwright-check.mjs.
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { freePort, responds, waitFor } from "./lib/local-http.mjs";
+import { createBrowserCliHome } from "./lib/browser-cli-home.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const cli = path.join(repoRoot, "scripts", "cli", "main.mjs");
-const home = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-browser-cli-"));
-const stateRoot = path.join(home, ".roborepo");
+const cli = createBrowserCliHome("roborepo-browser-cli-");
+const { home, stateRoot, run, stub } = cli;
 const evidenceDir = path.join(stateRoot, "browser", "evidence");
 const fixtures = path.join(home, "fixtures");
 const DAY = 24 * 60 * 60 * 1000;
-const children = [];
 
-fs.mkdirSync(path.join(home, ".claude"), { recursive: true });
-fs.mkdirSync(path.join(home, ".codex"), { recursive: true });
 fs.mkdirSync(fixtures, { recursive: true });
 const passing = writeJson("passing.json", { checks: [{ name: "renders", status: "passed" }] });
 const failing = writeJson("failing.json", { checks: [{ name: "renders", status: "failed" }] });
-const server = path.join(fixtures, "server.mjs");
-fs.writeFileSync(server, [
-  'import http from "node:http";',
-  'import fs from "node:fs";',
-  "if (process.argv[3]) fs.writeFileSync(process.argv[3], String(process.pid));",
-  'http.createServer((req, res) => res.end("ok")).listen(Number(process.argv[2]), "127.0.0.1");',
-].join("\n"));
 
 try {
   // ---- Gate: both commands refuse until feature-verification is enabled ----
@@ -63,6 +51,15 @@ try {
   assert.deepEqual(probed.capabilities, { screenshot: false, video: false, trace: false });
   assert.match(probed.limitations.join("\n"), /npm install --prefix .*browser.tools playwright@/, "the limitation carries the exact install command");
   assert.ok(!fs.existsSync(path.join(stateRoot, "browser")), "probe creates nothing under the state root");
+
+  // An installed Playwright that fails to load is reported unavailable, not as a stack trace.
+  const brokenInstall = path.join(home, "broken-playwright", "node_modules", "playwright");
+  fs.mkdirSync(brokenInstall, { recursive: true });
+  fs.writeFileSync(path.join(brokenInstall, "package.json"), JSON.stringify({ name: "playwright", version: "0.0.0", main: "index.js" }));
+  fs.writeFileSync(path.join(brokenInstall, "index.js"), 'throw new Error("broken install");\n');
+  const brokenProbe = run(["browser", "probe", "--dir", path.dirname(path.dirname(brokenInstall)), "--json"]);
+  assert.equal(brokenProbe.status, 0);
+  assert.match(JSON.parse(brokenProbe.stdout).limitations.join("\n"), /could not load: broken install/);
 
   // ---- Usage errors exit 2 ----
   assert.equal(run(["browser", "run"]).status, 2, "--scenario is required");
@@ -103,35 +100,6 @@ try {
   assert.equal(failed.status, 1, "a non-passing run exits 1");
   assert.equal(JSON.parse(failed.stdout).status, "failed");
 
-  // ---- Local services: an unavailable one blocks; a started one is stopped; a running one is left alone ----
-  const deadPort = await freePort();
-  const unavailable = JSON.parse(stub(["--scenario", passing, "--url", `http://127.0.0.1:${deadPort}/`, "--json"]).stdout);
-  assert.equal(unavailable.status, "blocked");
-  assert.match(unavailable.limitations.join("\n"), /no local service responded/, "an unavailable service is an actionable limitation");
-
-  const startedPort = await freePort();
-  const started = stub(["--scenario", passing, "--url", `http://127.0.0.1:${startedPort}/`, "--serve", `node ${JSON.stringify(server)} ${startedPort}`, "--json"]);
-  assert.equal(JSON.parse(started.stdout).status, "passed", "the run waits for the service it started");
-  assert.equal(await responds(startedPort), false, "a service the run started is gone afterward");
-
-  // A dev command that backgrounds its server exits 0 at once; the server is still the run's to stop.
-  const backgroundPort = await freePort();
-  const backgrounded = stub(["--scenario", passing, "--url", `http://127.0.0.1:${backgroundPort}/`, "--serve", `node ${JSON.stringify(server)} ${backgroundPort} &`, "--json"]);
-  assert.equal(JSON.parse(backgrounded.stdout).status, "passed", "a backgrounding --serve still serves the run");
-  assert.equal(await responds(backgroundPort), false, "a backgrounded server the run started is gone afterward");
-
-  const existingPort = await freePort();
-  const existing = spawn(process.execPath, [server, String(existingPort)], { stdio: "ignore" });
-  children.push(existing);
-  await waitFor(() => responds(existingPort));
-  const marker = path.join(fixtures, "serve-ran");
-  stub(["--scenario", passing, "--url", `http://127.0.0.1:${existingPort}/`, "--serve", `node ${JSON.stringify(server)} ${existingPort} ${JSON.stringify(marker)}`]);
-  assert.equal(await responds(existingPort), true, "a service that was already running is still running");
-  assert.ok(!fs.existsSync(marker), "--serve is not run when the URL already responds");
-
-  const serveWithoutUrl = JSON.parse(stub(["--scenario", passing, "--serve", "true", "--json"]).stdout);
-  assert.equal(serveWithoutUrl.status, "blocked", "--serve without --url cannot tell when the service is ready");
-
   // ---- `browser run` is never allowlisted for agents ----
   for (const file of [
     "manifests/inventory/agent-permissions.json",
@@ -143,22 +111,9 @@ try {
     assert.ok(!/roborepo",\s*"browser"|roborepo browser/.test(text), `${file} does not allowlist roborepo browser`);
   }
 
-  console.log("ok: browser CLI (gate, independence, lazy availability, evidence, lifecycle, permissions)");
+  console.log("ok: browser CLI (gate, independence, lazy availability, evidence, failures, permissions)");
 } finally {
-  for (const child of children) child.kill();
-  fs.rmSync(home, { recursive: true, force: true });
-}
-
-function run(args, env = {}) {
-  return spawnSync(process.execPath, [cli, ...args], {
-    cwd: home,
-    encoding: "utf8",
-    env: { ...process.env, HOME: home, ROBOREPO_STATE_DIR: stateRoot, SKIP_MCP: "1", ...env },
-  });
-}
-
-function stub(args) {
-  return run(["browser", "run", "--provider", "stub", ...args], { ROBOREPO_BROWSER_STUB: "1" });
+  cli.cleanup();
 }
 
 function enabled() {

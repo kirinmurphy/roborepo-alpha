@@ -10,9 +10,10 @@ import path from "node:path";
 import { STATE_ROOT } from "./roots.mjs";
 import { browserGateMessage } from "./browser/gate.mjs";
 import { selectProvider } from "./browser/providers.mjs";
-import { CAPTURE_TYPES, STATUS, blockedResult, validateProbeResult, validateRunResult } from "./browser/result.mjs";
+import { CAPTURE_TYPES, STATUS, blockedResult, unavailableProbe, validateProbeResult, validateRunResult } from "./browser/result.mjs";
 import { createEvidenceRun, pruneEvidence } from "./browser/evidence.mjs";
 import { ensureLocalService } from "./browser/local-service.mjs";
+import { stopOwned } from "./browser/owned-processes.mjs";
 
 const DEFAULT_TIMEOUT_SECONDS = 120;
 // Node timers hold a signed 32-bit millisecond count; anything larger fires after 1ms.
@@ -28,7 +29,14 @@ export async function browserProbe(args = []) {
   if (error) return usage(error, PROBE_USAGE);
 
   const dir = path.resolve(options["--dir"] || process.cwd());
-  const result = validateProbeResult(await provider.probe({ dir, stateRoot: STATE_ROOT }));
+  let result;
+  try {
+    result = await provider.probe({ dir, stateRoot: STATE_ROOT });
+  } catch (error) {
+    // An installed provider that fails to load is unavailable, which probe reports rather than crashes on.
+    result = unavailableProbe([`provider could not load: ${firstLine(error)}`]);
+  }
+  validateProbeResult(result);
   print({ provider: provider.id, ...result }, options["--json"], printProbe);
 }
 
@@ -52,12 +60,22 @@ export async function browserRun(args = []) {
     return usage(`--timeout must be between 0 and ${MAX_TIMEOUT_SECONDS} seconds`, RUN_USAGE);
   }
   const timeoutMs = timeoutSeconds * 1000;
+  if (options["--url"] && !isHttpUrl(options["--url"])) return usage(`--url must be an http(s) URL: ${options["--url"]}`, RUN_USAGE);
 
   pruneEvidence(STATE_ROOT);
   const evidence = createEvidenceRun(STATE_ROOT);
-  const service = await ensureLocalService({ url: options["--url"], serve: options["--serve"], timeoutMs });
+  // Ctrl-C, or a harness killing a long command, must not strand a dev server or test runner this
+  // run started.
+  const interrupted = (signal) => {
+    stopOwned();
+    process.exit(signal === "SIGINT" ? 130 : 143);
+  };
+  process.once("SIGINT", interrupted);
+  process.once("SIGTERM", interrupted);
+  let service = null;
   let result;
   try {
+    service = await ensureLocalService({ url: options["--url"], serve: options["--serve"], timeoutMs });
     result = service.blocked
       ? blockedResult([service.blocked])
       : await provider.run({ scenarioPath, capture: capture.types, url: options["--url"], evidence, stateRoot: STATE_ROOT, timeoutMs });
@@ -66,7 +84,9 @@ export async function browserRun(args = []) {
     // write: the run could not execute, which the contract reports as `blocked`, not a stack trace.
     result = blockedResult([`run could not execute: ${firstLine(error)}`], { artifacts: evidence.written() });
   } finally {
-    service.stop();
+    service?.stop();
+    process.off("SIGINT", interrupted);
+    process.off("SIGTERM", interrupted);
   }
 
   validateRunResult(result);
@@ -106,6 +126,14 @@ function parseCapture(value) {
   const unknown = types.filter((type) => !CAPTURE_TYPES.includes(type));
   if (unknown.length) return { error: `unknown capture type(s): ${unknown.join(", ")} (use ${CAPTURE_TYPES.join(", ")})` };
   return { types };
+}
+
+function isHttpUrl(value) {
+  try {
+    return ["http:", "https:"].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
 }
 
 function firstLine(error) {
