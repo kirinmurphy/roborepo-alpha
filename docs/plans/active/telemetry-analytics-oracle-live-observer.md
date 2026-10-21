@@ -529,11 +529,11 @@ or `unavailable`. Treating such rows as `passed` would be a product decision tha
       registry through, and unresolved legacy identity stays `partial`. — fixed (2ebeae7f)
 - [x] The Result contract example omits `coverage.comparable`, `complete`, and `issues`, which
       `--json` prints. — fixed (2ebeae7f)
-- [ ] The internals doc says the oracle resolves `repo.normalized_remote_hash` through the registry
+- [x] The internals doc says the oracle resolves `repo.normalized_remote_hash` through the registry
       and credits observations with identity resolution; the code and checks prove legacy hashes stay
-      unresolved. The plan repeated "legacy repository resolution" in three places.
-- [ ] The Result contract says `coverage.issues` explains every `unavailable`; an empty spool and a
-      read error both leave it empty.
+      unresolved. The plan repeated "legacy repository resolution" in three places. — fixed (259fa943)
+- [x] The Result contract says `coverage.issues` explains every `unavailable`; an empty spool and a
+      read error both leave it empty. — fixed (259fa943)
 
 ### Verification
 
