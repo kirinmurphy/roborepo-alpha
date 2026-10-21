@@ -570,7 +570,7 @@ or `unavailable`. Treating such rows as `passed` would be a product decision tha
       main's session flow. Escalated; resolved by user decision (Decision Log). — fixed (571abb26)
 - [x] `--json` on an empty spool reports `comparable: true` and `complete: true` with `unavailable`.
       Escalated; resolved by user decision (Decision Log). — fixed (571abb26)
-- [x] Verification still reports 103 browser tests; the drill-down test makes it 104. — fixed (PENDING)
+- [x] Verification still reports 103 browser tests; the drill-down test makes it 104. — fixed (9bedca3e)
 
 ### Verification
 
