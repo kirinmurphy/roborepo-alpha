@@ -424,8 +424,10 @@ how to open it, and what capture does **not** prove.
   selectable only with `ROBOREPO_BROWSER_STUB=1`, so the CLI-level checks run without a browser
   while an agent cannot pick a provider that reports fixture results as evidence.
 - 2026-10-21 (implementation): Exit codes: 0 when probe reports or a run passes; 1 for the package
-  gate or any non-passing run; 2 for usage. Set through `process.exitCode`, because `main.mjs`
-  ignores values returned by module commands.
+  gate or any non-passing run; 2 for usage. Probe, usage, and gate paths set `process.exitCode`,
+  because `main.mjs` ignores values returned by module commands; `browser run` calls
+  `process.exit` once its result is printed, so a timed-out script scenario still holding its own
+  timers cannot keep the command alive.
 - 2026-10-21 (implementation): The pinned install version is read from this repo's
   `@playwright/test` devDependency, so the browser suite and the provisioned tool share one
   version.
@@ -464,6 +466,9 @@ how to open it, and what capture does **not** prove.
 - [x] A script scenario cut off by `--timeout` kept the CLI alive until its own timers fired — fixed: exit once the result is printed (a670c945)
 - [x] An interrupted run skipped providers' `finally`, leaking `rr-browser-*` temp dirs — fixed: temp dirs registered as owned resources (a670c945)
 - [x] The skill lacked the architecture and progress before/after examples Section 3 asks for — fixed (a670c945)
+- [x] Probe accepted an ffmpeg of any revision, so `video: true` could precede a run that fails to record — fixed: headless shell and ffmpeg matched to the revisions `playwright-core`'s `browsers.json` pins (pending commit)
+- [x] An interrupted traced script left Playwright's `playwright-tracing-*` scratch dir — fixed: one owned work dir holds `tracesDir` and video (pending commit)
+- [x] The Decision Log's exit-code entry still said `process.exitCode` for `browser run` — fixed (pending commit)
 - [ ] The "Rename complete" row excludes only `completed/` and `archived/`, but this plan and backlog o9zwxuav must name the old id — escalated, see Open Questions
 
 ### Verification
@@ -474,6 +479,8 @@ how to open it, and what capture does **not** prove.
 - Validation pass 2 at 018c8f67 (fresh-context subagent): 7 fix, 1 escalate.
 - Gate: `npm run check` passed at 6f4cbb6b (447 CLI tests, 44/44 check suites, Docker clean-machine suites, portal UI).
 - Validation pass 3 at 6f4cbb6b (fresh-context subagent): 4 fix.
+- Gate: `npm run check` passed at 6ae939ac.
+- Validation pass 4 at 6ae939ac (fresh-context subagent): 3 fix.
 
 ## Open Questions
 

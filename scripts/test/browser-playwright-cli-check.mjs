@@ -3,7 +3,8 @@
 //
 // - `--timeout` bounds the command, not just the result: a script scenario still holding its own
 //   timers does not keep `roborepo browser run` alive after the result is printed;
-// - an interrupted spec run leaves none of its temp directories behind.
+// - an interrupted spec or script run leaves none of its temp directories behind, including the
+//   scratch Playwright itself writes while tracing.
 //
 // Each run gets its own TMPDIR so leftovers are attributable. Skips with a visible `skip:` line
 // when Chromium is not installed, matching scripts/test/portal-ui/run.mjs.
@@ -62,6 +63,20 @@ try {
   run.child.kill("SIGTERM");
   assert.equal((await run.done).status, 143);
   await waitFor(() => ownTempDirs(interruptedTmp).length === 0, 15_000);
+
+  // ---- An interrupted traced, recorded script leaves neither its own nor Playwright's scratch ----
+  const sleeper = path.join(project, "sleeper.mjs");
+  fs.writeFileSync(sleeper, "export default async function ({ page, url }) {\n  await page.goto(url);\n  await new Promise((r) => setTimeout(r, 60_000));\n}\n");
+  const tracedTmp = tmpDir("traced");
+  const traced = cli.start(
+    ["browser", "run", "--scenario", sleeper, "--url", app.url, "--capture", "trace,video"],
+    { TMPDIR: tracedTmp, PLAYWRIGHT_BROWSERS_PATH: browsersPath },
+  );
+  await waitFor(() => ownTempDirs(tracedTmp).length > 0, 15_000);
+  await new Promise((resolve) => setTimeout(resolve, 2_000));
+  traced.child.kill("SIGINT");
+  assert.equal((await traced.done).status, 130);
+  await waitFor(() => fs.readdirSync(tracedTmp).filter((name) => /^(rr-browser-|playwright-)/.test(name)).length === 0, 15_000);
 
   console.log("ok: browser playwright CLI (timeout ends the command, interrupt cleans temp dirs)");
 } finally {

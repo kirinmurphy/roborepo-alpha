@@ -5,7 +5,7 @@
 // - the full browser alone, or a headless shell of the wrong revision: not available, because a
 //   headless launch needs the matching headless shell;
 // - the matching headless shell alone: available, and a run passes;
-// - no ffmpeg: video is reported unavailable, and a run asked to record says so rather than
+// - no ffmpeg, or one of the wrong revision: video is reported unavailable, and a run asked to record says so rather than
 //   returning nothing.
 //
 // Skips with a visible `skip:` line when Chromium is not installed, matching
@@ -61,6 +61,10 @@ try {
   assert.equal(probed.available, true, "the matching headless shell alone is available");
   assert.deepEqual(probed.capabilities, { screenshot: true, video: false, trace: true });
   assert.match(probed.limitations.join("\n"), /install ffmpeg/, "missing video support names the ffmpeg install command");
+
+  const staleFfmpeg = partialCache("stale-ffmpeg", [shell]);
+  fs.mkdirSync(path.join(staleFfmpeg, "ffmpeg-1"));
+  assert.equal((await probe(staleFfmpeg)).capabilities.video, false, "an ffmpeg of another revision does not count");
 
   const recorded = await browser(shellOnly, ["run", "--scenario", scenario, "--url", app.url, "--capture", "video", "--json"]);
   assert.equal(recorded.status, "passed", "what probe reported available actually runs");

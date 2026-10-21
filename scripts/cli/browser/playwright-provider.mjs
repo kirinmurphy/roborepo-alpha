@@ -55,7 +55,7 @@ async function locate({ fromDir, stateRoot }) {
     };
   }
   const { chromium } = await playwright.load();
-  const binaries = browserBinaries(chromium);
+  const binaries = browserBinaries(chromium, playwright);
   if (!binaries.hasChromium) {
     return {
       blocked: [`Playwright ${playwright.version} (${playwright.source}) has no Chromium browser. Install it (needs approval): ${browserInstallCommand(playwright)}`],

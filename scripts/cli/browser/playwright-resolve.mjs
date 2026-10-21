@@ -62,28 +62,40 @@ export function browserInstallCommand(playwright) {
 // Chromium and ffmpeg live in Playwright's machine-wide browser cache, not in node_modules. Checking
 // for the files answers "can this capture" without launching or downloading anything.
 //
-// A headless launch runs the headless shell build of the same revision as the full browser, and
-// only that. So the full browser's path is read just for its location and revision (it need not be
-// installed), and Chromium counts as present when the matching headless shell is.
-export function browserBinaries(chromium) {
-  const location = chromiumLocation(chromium.executablePath());
-  if (!location) return { hasChromium: false, hasFfmpeg: false };
-  const entries = fs.existsSync(location.cacheRoot) ? fs.readdirSync(location.cacheRoot) : [];
+// A headless launch runs the headless shell, and recording runs ffmpeg, each at the exact revision
+// that this playwright-core's browsers.json pins; a cached build of another revision does not
+// count. The full browser's path is read only to locate the cache (it need not be installed).
+export function browserBinaries(chromium, playwright) {
+  const cacheRoot = cacheRootOf(chromium.executablePath());
+  const pinned = pinnedRevisions(playwright.packageDir);
+  const entries = cacheRoot && fs.existsSync(cacheRoot) ? fs.readdirSync(cacheRoot) : [];
   return {
-    hasChromium: entries.includes(`chromium_headless_shell-${location.revision}`),
-    hasFfmpeg: entries.some((name) => name.startsWith("ffmpeg")),
+    hasChromium: entries.includes(`chromium_headless_shell-${pinned["chromium-headless-shell"]}`),
+    hasFfmpeg: entries.includes(`ffmpeg-${pinned.ffmpeg}`),
   };
 }
 
-function chromiumLocation(executable) {
+function cacheRootOf(executable) {
   if (!executable) return null;
-  let dir = path.dirname(executable);
-  while (dir !== path.dirname(dir)) {
-    const match = /^chromium-(\d+)$/.exec(path.basename(dir));
-    if (match) return { cacheRoot: path.dirname(dir), revision: match[1] };
-    dir = path.dirname(dir);
+  for (let dir = path.dirname(executable); dir !== path.dirname(dir); dir = path.dirname(dir)) {
+    if (/^chromium-\d+$/.test(path.basename(dir))) return path.dirname(dir);
   }
   return null;
+}
+
+// playwright-core sits beside the resolved package, or inside `playwright` when the project
+// installed `@playwright/test`.
+function pinnedRevisions(packageDir) {
+  const requireFrom = (dir) => createRequire(path.join(dir, "noop.js"));
+  let coreManifest;
+  try {
+    coreManifest = requireFrom(packageDir).resolve("playwright-core/package.json");
+  } catch {
+    const playwrightDir = path.dirname(requireFrom(packageDir).resolve("playwright/package.json"));
+    coreManifest = requireFrom(playwrightDir).resolve("playwright-core/package.json");
+  }
+  const { browsers } = JSON.parse(fs.readFileSync(path.join(path.dirname(coreManifest), "browsers.json"), "utf8"));
+  return Object.fromEntries(browsers.map((browser) => [browser.name, browser.revision]));
 }
 
 // The packages are CommonJS. Node's named-export detection does not see through their re-exports,

@@ -25,13 +25,18 @@ export async function runScriptScenario({ playwright, scenarioPath, capture, url
   const { chromium } = await playwright.load();
   const checks = [];
   const limitations = [];
-  const browser = await chromium.launch();
-  const videoDir = capture.includes("video") ? fs.mkdtempSync(path.join(os.tmpdir(), "rr-browser-video-")) : null;
-  const releaseVideoDir = videoDir ? own(() => fs.rmSync(videoDir, { recursive: true, force: true })) : () => {};
+  // Everything the browser writes for this run (recordings, trace scratch files) goes under one
+  // owned directory, so an interrupted run that skips this function's `finally` still removes it.
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "rr-browser-script-"));
+  const removeWorkDir = () => fs.rmSync(workDir, { recursive: true, force: true });
+  const releaseWorkDir = own(removeWorkDir);
+  let browser = null;
   try {
+    browser = await chromium.launch({ tracesDir: path.join(workDir, "traces") });
     // Recording is configured on the context before anything runs: a video cannot be added to a
     // context after the fact, and it is only written once the context closes.
-    const context = await browser.newContext(videoDir ? { recordVideo: { dir: videoDir } } : {});
+    const recordVideo = capture.includes("video") ? { recordVideo: { dir: path.join(workDir, "video") } } : {};
+    const context = await browser.newContext(recordVideo);
     if (capture.includes("trace")) await context.tracing.start({ screenshots: true, snapshots: true });
     const page = await context.newPage();
     let screenshots = 0;
@@ -65,9 +70,9 @@ export async function runScriptScenario({ playwright, scenarioPath, capture, url
     await context.close();
     if (video) evidence.adopt(await video.path(), "video");
   } finally {
-    await browser.close();
-    releaseVideoDir();
-    if (videoDir) fs.rmSync(videoDir, { recursive: true, force: true });
+    await browser?.close();
+    releaseWorkDir();
+    removeWorkDir();
   }
 
   return { status: statusFromChecks(checks), checks, artifacts: evidence.written(), limitations };
