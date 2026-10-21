@@ -509,15 +509,15 @@ or `unavailable`. Treating such rows as `passed` would be a product decision tha
 
 ### Findings
 
-- [ ] `telemetry oracle --help` omits `--json`: the command definition has no `usage` field.
-- [ ] No test covers the conditional `Differences:`, `Error:`, and `Issues:` output lines.
-- [ ] The user guide's `Unavailable` row implies waiting fixes it, but uninterpretable shapes also
-      cause it.
-- [ ] `scratch/telemetry-analytics-oracle/README.md` still points at a screenshot gallery and
-      reproduction command that no longer exist, and its three image links are broken.
-- [ ] Two assertion messages in `telemetry-oracle-result-check.mjs` name the removed observer.
-- [ ] `scripts/cli/telemetry-oracle-findings.mjs` ends with a blank line, which
-      `git diff --check main...HEAD` reports.
+- [x] `telemetry oracle --help` omits `--json`: the command definition has no `usage` field. — fixed (fd4582cd)
+- [x] No test covers the conditional `Differences:`, `Error:`, and `Issues:` output lines. — fixed (fd4582cd)
+- [x] The user guide's `Unavailable` row implies waiting fixes it, but uninterpretable shapes also
+      cause it. — fixed (fd4582cd)
+- [x] `scratch/telemetry-analytics-oracle/README.md` still points at a screenshot gallery and
+      reproduction command that no longer exist, and its three image links are broken. — fixed (fd4582cd)
+- [x] Two assertion messages in `telemetry-oracle-result-check.mjs` name the removed observer. — fixed (fd4582cd)
+- [x] `scripts/cli/telemetry-oracle-findings.mjs` ends with a blank line, which
+      `git diff --check main...HEAD` reports. — fixed (fd4582cd)
 
 ### Verification
 
