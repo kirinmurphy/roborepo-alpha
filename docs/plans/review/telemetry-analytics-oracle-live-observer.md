@@ -660,6 +660,11 @@ Validator pass 4 of the human review, at 923bcb8e:
 - [x] Risks says the doc-guide delegate and `aria-controls` change stay "because other triggers
       use them", contradicting Current state. — fixed in review (b02d31d6)
 
+Validator pass 5 of the human review, at ce81b8ea:
+
+- [ ] The report-signature paragraph says main summarized experiments with a total size; main
+      stamped experiments as file count and newest mtime only.
+
 ### Verification
 
 - Validation pass 1 at 272baded (fresh-context subagent): 6 `fix` findings, no `escalate` or
@@ -715,6 +720,10 @@ Human review, 2026-10-21:
 - Validator pass 4 at 923bcb8e (fresh-context subagent): 3 `fix` findings, all plan prose; no
   `escalate` or `base`. It also noted the pending Result and the pre-Phase-8 `reviewed_commit`,
   which the review sets when it records the Result.
+- Validator pass 5 at ce81b8ea (fresh-context subagent): 1 `fix` finding, plan prose; no
+  `escalate` or `base`. `--filter telemetry-oracle` passed 7/7 suites, `--filter telemetry`
+  35/35, and the CLI catalog and surface checks passed. Pass 5 is the cap. The one-line fix was
+  checked against `git show main:scripts/cli/telemetry.mjs` directly; no validator pass ran after it.
 
 ### Result
 
