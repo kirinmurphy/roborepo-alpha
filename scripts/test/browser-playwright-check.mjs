@@ -23,6 +23,10 @@ if (!fs.existsSync(chromium.executablePath())) {
   process.exit(0);
 }
 
+const ONE_PIXEL_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const modules = path.join(repoRoot, "node_modules");
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-browser-playwright-"));
@@ -72,6 +76,30 @@ try {
   assert.ok(spec.artifacts.some((artifact) => artifact.type === "screenshot"), "the config's screenshots are adopted as evidence");
   assert.match(spec.limitations.join("\n"), /video not captured/, "a capture the config does not produce is a limitation");
   assert.deepEqual(snapshot(project, ["package.json", "package-lock.json"]), before, "package.json and lockfile are byte-identical");
+
+  // A screenshot assertion against a committed baseline: the mismatch is evidence, but the baseline
+  // stays in the project, and a missing baseline is not written into it.
+  const baselines = path.join(project, "tests", "snap.spec.mjs-snapshots");
+  fs.mkdirSync(baselines);
+  fs.writeFileSync(path.join(baselines, `home-${process.platform}.png`), ONE_PIXEL_PNG);
+  fs.writeFileSync(path.join(project, "tests", "snap.spec.mjs"), [
+    'import { test, expect } from "@playwright/test";',
+    'test("matches baseline", async ({ page }) => {',
+    "  await page.goto(process.env.ROBOREPO_BROWSER_URL);",
+    '  await expect(page).toHaveScreenshot("home.png");',
+    "});",
+    'test("has no baseline", async ({ page }) => {',
+    "  await page.goto(process.env.ROBOREPO_BROWSER_URL);",
+    '  await expect(page).toHaveScreenshot("missing.png");',
+    "});",
+    "",
+  ].join("\n"));
+  const baselinesBefore = snapshot(baselines, fs.readdirSync(baselines));
+  const visual = await run({ scenarioPath: path.join(project, "tests", "snap.spec.mjs"), stateRoot: toolState });
+  assert.equal(visual.status, STATUS.FAILED);
+  assert.ok(visual.artifacts.some((artifact) => artifact.type === "screenshot"), "the mismatch images are evidence");
+  assert.deepEqual(fs.readdirSync(baselines), [`home-${process.platform}.png`], "no baseline is added or removed");
+  assert.deepEqual(snapshot(baselines, fs.readdirSync(baselines)), baselinesBefore, "the committed baseline is unchanged");
 
   // ---- Recording is set up before the run and finalized after the context closes ----
   const recorded = writeScript(path.join(project, "scripts"), "record.mjs", `  await check("heading renders", async () => {

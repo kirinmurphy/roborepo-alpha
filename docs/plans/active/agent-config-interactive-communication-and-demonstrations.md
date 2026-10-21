@@ -460,6 +460,10 @@ how to open it, and what capture does **not** prove.
 - [x] `--url` without an http(s) scheme waited the full timeout instead of failing as usage — fixed (1f03f1ab)
 - [x] A spec timeout was `blocked` while a script timeout was `failed` — fixed, both `failed` (1f03f1ab)
 - [x] A failed browser launch with `--capture video` leaked a temp directory — fixed (1f03f1ab)
+- [x] Spec runs moved a project's committed screenshot baseline (attached on a mismatch) into the evidence store — fixed: copy anything outside the run's output, and `--update-snapshots=none` (pending commit)
+- [x] A script scenario cut off by `--timeout` kept the CLI alive until its own timers fired — fixed: exit once the result is printed (pending commit)
+- [x] An interrupted run skipped providers' `finally`, leaking `rr-browser-*` temp dirs — fixed: temp dirs registered as owned resources (pending commit)
+- [x] The skill lacked the architecture and progress before/after examples Section 3 asks for — fixed (pending commit)
 - [ ] The "Rename complete" row excludes only `completed/` and `archived/`, but this plan and backlog o9zwxuav must name the old id — escalated, see Open Questions
 
 ### Verification
@@ -468,6 +472,8 @@ how to open it, and what capture does **not** prove.
 - Validation pass 1 at f7528de4 (fresh-context subagent): 7 fix, 1 escalate.
 - Gate: `npm run check` passed at 018c8f67 (447 CLI tests, 42/42 check suites, Docker clean-machine suites, portal UI).
 - Validation pass 2 at 018c8f67 (fresh-context subagent): 7 fix, 1 escalate.
+- Gate: `npm run check` passed at 6f4cbb6b (447 CLI tests, 44/44 check suites, Docker clean-machine suites, portal UI).
+- Validation pass 3 at 6f4cbb6b (fresh-context subagent): 4 fix.
 
 ## Open Questions
 

@@ -11,7 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { CHECK_STATUS, STATUS, blockedResult, statusFromChecks } from "./result.mjs";
-import { own } from "./owned-processes.mjs";
+import { own } from "./owned-resources.mjs";
 
 // After an interrupt, how long the runner gets to shut down its browsers and any `webServer` its
 // config started before it is killed outright.
@@ -31,9 +31,14 @@ export function isSpecScenario(scenarioPath) {
 export async function runSpecScenario({ playwright, scenarioPath, capture, url, evidence, timeoutMs }) {
   const projectRoot = findProjectRoot(path.dirname(scenarioPath));
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "rr-browser-spec-"));
+  const releaseWorkDir = own(() => fs.rmSync(workDir, { recursive: true, force: true }));
   const reportPath = path.join(workDir, "report.json");
   try {
-    const args = [playwright.cliPath, "test", escapeRegExp(scenarioPath), "--reporter=json", `--output=${path.join(workDir, "out")}`];
+    // --update-snapshots=none: verifying must not write a missing screenshot baseline into the project.
+    const args = [
+      playwright.cliPath, "test", escapeRegExp(scenarioPath),
+      "--reporter=json", `--output=${path.join(workDir, "out")}`, "--update-snapshots=none",
+    ];
     if (capture.includes("trace")) args.push("--trace=on");
     const child = await runRunner(args, {
       cwd: projectRoot,
@@ -60,13 +65,19 @@ export async function runSpecScenario({ playwright, scenarioPath, capture, url, 
     const limitations = [...notes];
     for (const { type, test } of ATTACHMENT_TYPES) {
       const found = attachments.filter((attachment) => test(attachment) && attachment.path && fs.existsSync(attachment.path));
-      for (const attachment of found) evidence.adopt(attachment.path, type);
+      // Runner output under workDir is the run's to move; anything else (a snapshot baseline) is
+      // the project's and is only copied.
+      for (const attachment of found) {
+        if (isInside(attachment.path, workDir)) evidence.adopt(attachment.path, type);
+        else evidence.copyIn(attachment.path, type);
+      }
       if (capture.includes(type) && found.length === 0) {
         limitations.push(`${type} not captured: spec scenarios capture what the project's Playwright config enables (use.${type})`);
       }
     }
     return { status: statusFromChecks(checks), checks, artifacts: evidence.written(), limitations };
   } finally {
+    releaseWorkDir();
     fs.rmSync(workDir, { recursive: true, force: true });
   }
 }
@@ -145,6 +156,11 @@ function findProjectRoot(startDir) {
     if (!packageRoot && fs.existsSync(path.join(dir, "package.json"))) packageRoot = dir;
   }
   return packageRoot || startDir;
+}
+
+function isInside(filePath, dir) {
+  const relative = path.relative(dir, filePath);
+  return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
 }
 
 // The runner treats file arguments as regular expressions.

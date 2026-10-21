@@ -177,7 +177,9 @@ The result has four fields:
 
 A screenshot or recording shows what the browser displayed. It does not prove the behavior is
 correct; only checks do. For test files, screenshots and video come from the project's Playwright
-config (`use.screenshot`, `use.video`), and `trace` is passed to the runner.
+config (`use.screenshot`, `use.video`), and `trace` is passed to the runner. A test file never
+changes the project: missing screenshot baselines are not written (`--update-snapshots=none`), and
+a committed baseline Playwright attaches to a failure is copied into the evidence, not moved.
 
 **Playwright is installed only when needed.** RoboRepo does not ship it, and enabling the package
 downloads nothing. A run uses the project's own `playwright` or `@playwright/test` when it has one.

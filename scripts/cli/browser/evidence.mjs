@@ -45,11 +45,19 @@ export function createEvidenceRun(stateRoot, { now = new Date() } = {}) {
     return target;
   }
 
+  // For a file the run does not own, such as a test's committed screenshot baseline that Playwright
+  // attaches on a mismatch: the evidence store gets a copy and the project keeps its file.
+  function copyIn(sourcePath, type) {
+    const target = reserve(type);
+    fs.copyFileSync(sourcePath, target);
+    return target;
+  }
+
   // Only files that actually landed are reported. A capture that failed after its path was reserved
   // leaves nothing to cite, and citing it anyway would be fabricated evidence.
   function written() {
     return artifacts.filter((artifact) => fs.existsSync(artifact.path));
   }
 
-  return { runId, dir, reserve, adopt, written };
+  return { runId, dir, reserve, adopt, copyIn, written };
 }

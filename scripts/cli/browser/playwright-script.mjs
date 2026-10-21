@@ -14,6 +14,7 @@ import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { CHECK_STATUS, blockedResult, statusFromChecks } from "./result.mjs";
+import { own } from "./owned-resources.mjs";
 
 export async function runScriptScenario({ playwright, scenarioPath, capture, url, evidence, timeoutMs }) {
   const scenario = await import(pathToFileURL(scenarioPath).href);
@@ -26,6 +27,7 @@ export async function runScriptScenario({ playwright, scenarioPath, capture, url
   const limitations = [];
   const browser = await chromium.launch();
   const videoDir = capture.includes("video") ? fs.mkdtempSync(path.join(os.tmpdir(), "rr-browser-video-")) : null;
+  const releaseVideoDir = videoDir ? own(() => fs.rmSync(videoDir, { recursive: true, force: true })) : () => {};
   try {
     // Recording is configured on the context before anything runs: a video cannot be added to a
     // context after the fact, and it is only written once the context closes.
@@ -64,6 +66,7 @@ export async function runScriptScenario({ playwright, scenarioPath, capture, url
     if (video) evidence.adopt(await video.path(), "video");
   } finally {
     await browser.close();
+    releaseVideoDir();
     if (videoDir) fs.rmSync(videoDir, { recursive: true, force: true });
   }
 

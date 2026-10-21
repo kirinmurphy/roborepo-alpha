@@ -13,7 +13,7 @@ import { selectProvider } from "./browser/providers.mjs";
 import { CAPTURE_TYPES, STATUS, blockedResult, unavailableProbe, validateProbeResult, validateRunResult } from "./browser/result.mjs";
 import { createEvidenceRun, pruneEvidence } from "./browser/evidence.mjs";
 import { ensureLocalService } from "./browser/local-service.mjs";
-import { stopOwned } from "./browser/owned-processes.mjs";
+import { stopOwned } from "./browser/owned-resources.mjs";
 
 const DEFAULT_TIMEOUT_SECONDS = 120;
 // Node timers hold a signed 32-bit millisecond count; anything larger fires after 1ms.
@@ -91,7 +91,10 @@ export async function browserRun(args = []) {
 
   validateRunResult(result);
   print({ provider: provider.id, runId: evidence.runId, scenario: scenarioPath, ...result }, options["--json"], printRun);
-  if (result.status !== STATUS.PASSED) process.exitCode = 1;
+  // The run ends when its result is printed. A script scenario cut off by --timeout can still hold
+  // timers or sockets of its own, which would otherwise keep this process alive past the timeout.
+  await new Promise((resolve) => process.stdout.write("", resolve));
+  process.exit(result.status === STATUS.PASSED ? 0 : 1);
 }
 
 function refuseWithoutPackage() {

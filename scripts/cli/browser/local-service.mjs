@@ -3,7 +3,7 @@
 // and nothing answers yet, and only that process (with its children) is stopped afterward.
 
 import { spawn, spawnSync } from "node:child_process";
-import { own } from "./owned-processes.mjs";
+import { own } from "./owned-resources.mjs";
 
 const POLL_MS = 250;
 
