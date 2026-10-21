@@ -692,6 +692,12 @@ assert "config: existing Codex override also gets managed rules without losing u
   bash -c "grep -q 'Impact Awareness' '${cfg_home}/.codex/AGENTS.override.md' && grep -q 'override custom' '${cfg_home}/.codex/AGENTS.override.md'"
 assert "config: rules pkg reports enabled in snapshot" \
   bash -c "${cfg_env} node -e \"import('${repo_root}/scripts/cli/config.mjs').then(c=>{const p=c.readConfigSnapshot().packages.find(x=>x.id==='impact-awareness');process.exit(p&&p.enabled?0:1)})\""
+# Marker packages stand alone: enabling one no longer pulls in response-output, and the marker
+# rule carries its own placement line instead of pointing at that package.
+assert "config: marker pkg leaves response-output disabled" \
+  bash -c "${cfg_env} node -e \"import('${repo_root}/scripts/cli/config.mjs').then(c=>{const p=c.readConfigSnapshot().packages.find(x=>x.id==='response-output');process.exit(p&&!p.enabled?0:1)})\" && ! grep -q 'Response Output' '${cfg_home}/.claude/CLAUDE.md'"
+assert "config: marker rule renders its own placement line" \
+  bash -c "grep -q 'on its own line at the end of the response' '${cfg_home}/.claude/CLAUDE.md'"
 # Independence: enabling a second behavior must not disturb the first; disabling the first must leave
 # the second in place in both harnesses.
 bash -c "${cfg_env} node '${cli}' package enable skill-visibility >/dev/null 2>&1" || true

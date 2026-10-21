@@ -1,0 +1,28 @@
+{
+  "tests": [
+    {
+      "skill": "feature-verification",
+      "match": [
+        "show me it works in the browser",
+        "prove it before you call it done",
+        "grab a screenshot of the new page",
+        "demo the change for me"
+      ],
+      "nearMiss": [
+        "which tests should I add for this module",
+        "explain how the cache layer is structured"
+      ],
+      "triggerPhrases": [
+        "show me it works",
+        "prove it",
+        "screenshot",
+        "recording",
+        "demo the change"
+      ],
+      "skipPhrases": [
+        "test-harness",
+        "nothing was built"
+      ]
+    }
+  ]
+}

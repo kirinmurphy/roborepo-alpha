@@ -37,6 +37,10 @@
     "telemetry-conditions-presentation-check.mjs",
     "telemetry-observations-check.mjs",
     "telemetry-repository-overview-check.mjs",
-    "telemetry-repository-reconcile-check.mjs"
+    "telemetry-repository-reconcile-check.mjs",
+    "browser-contract-check.mjs",
+    "browser-cli-check.mjs",
+    "browser-playwright-check.mjs",
+    "response-output-rules-check.mjs"
   ]
 }

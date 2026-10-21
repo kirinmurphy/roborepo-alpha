@@ -4,7 +4,6 @@
   "label": "Skill visibility",
   "description": "Agents report which skills shaped a response so behavior changes are traceable. A PostToolUse hook observes skill reference reads and injects them into the turn, so the reported line is written from observation rather than recall.",
   "lifecycle": "optional",
-  "requires": ["response-shape"],
   "presentation": {
     "category": "chat-time-output",
     "order": 30

@@ -14,6 +14,7 @@ thin composition root; commands are declared as JSON under
 | `scripts/cli/skills.mjs` | `skill adopt`, `skill inspect`, `skill native`, `skill export-to-project`, `skill link-project` |
 | `scripts/cli/skill-inventory.mjs` | read-only skill inventory used by `skill inspect` and `/agents` source popups |
 | `scripts/cli/index.mjs` | `index code\|docs`, `index code --watch`, `run` |
+| `scripts/cli/browser.mjs` + `scripts/cli/browser/` | `browser probe\|run`: package gate, provider contract and validation, Playwright and stub providers, evidence store, local-service lifecycle |
 | `scripts/cli/mcp.mjs` | `mcp add` (registration with every MCP-capable harness) |
 | `scripts/cli/presets.mjs` | `library` / `package manage` (one shared `packageLibrary` execution preset), `bundle status\|apply\|check\|remove` |
 | `scripts/cli/initialize.mjs` | `init` — orchestrates setup, harness discovery, the Package Library handoff, and apply |
@@ -66,6 +67,30 @@ Lifecycle:
   because the command registry is path-independent runtime state.
 - `roborepo uninstall` removes `~/.roborepo/enabled-packages.json`, so no package command ownership
   survives uninstall.
+
+## Browser Commands
+
+`roborepo browser` is a core namespace rather than a package `cli-command`, because a package
+command can only wrap one external process and cannot register a namespace. The package still owns
+the feature: `scripts/cli/browser/gate.mjs` refuses both commands unless `feature-verification` is
+effective (`effectiveEnabledIds`).
+
+`scripts/cli/browser.mjs` only orchestrates: gate, parse, prune evidence, start or reuse the local
+service, call the provider, validate, print. The pieces it calls:
+
+| Module | Role |
+| --- | --- |
+| `browser/result.mjs` | The contract: status values, `statusFromChecks`, and validators. `passed` requires at least one executed check and no failed one; every artifact path must exist. The CLI validates every provider result before printing it. |
+| `browser/providers.mjs` | Static map of providers. `playwright` is the default; `stub` answers from a JSON fixture and is selectable only with `ROBOREPO_BROWSER_STUB=1`, for tests. |
+| `browser/playwright-resolve.mjs` | Finds Playwright: the scenario's project first, then `<stateRoot>/browser/tools/`. Builds the install command (version pinned to this repo's `@playwright/test` devDependency) and checks the Chromium and ffmpeg files in Playwright's browser cache without launching. |
+| `browser/playwright-spec.mjs` | Runs a project test file with the project's runner and config (`--reporter=json`, `--trace=on` when asked), maps tests to checks, and adopts attachments as evidence. |
+| `browser/playwright-script.mjs` | Runs a script scenario in one browser context, with recording and tracing configured before the script starts. |
+| `browser/evidence.mjs` | Flat per-run file names in the `browser-evidence` retention store; prunes by the store's policy before a run writes. |
+| `browser/local-service.mjs` | Reuses a URL that already responds; otherwise starts `--serve` in its own process group and stops only that group. |
+
+A second real provider is another entry in `providers.mjs` returning the same shapes; it must pass
+`scripts/test/browser-contract-check.mjs` unchanged. Scenario files are provider-specific and are
+not expected to port.
 
 ## First-Run State
 

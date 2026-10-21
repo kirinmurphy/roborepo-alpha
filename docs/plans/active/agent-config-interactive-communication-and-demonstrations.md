@@ -1,7 +1,7 @@
 ---
 id: o93hile
 priority: high
-next_action: Rename globals/packages/response-shape to response-output, consolidate its rules while adding the missing communication items, and drop the marker packages' requires; then add the feature-verification package with its evidence skill and the `roborepo browser probe|run` namespace, a stub provider, and contract tests.
+next_action: Run the full gate (`npm run check`; the earlier `test-cli.sh` failures were the stale skill audit doc and the browser namespace missing from agent-run-coverage-check, both fixed but not yet rerun), then the Validation Loop, then the completion preflight and submit.
 blocked_by: []
 depends_on: []
 related:
@@ -284,19 +284,35 @@ Example (illustrative; not an actual verification claim):
 
 ## Implementation checklist
 
-- [ ] Rename `globals/packages/response-shape/` to `globals/packages/response-output/` and update every reference listed in Current state.
-- [ ] Rewrite `rules.md` per Section 1: consolidate while adding, remove namespaced findings, end near or below 78 lines, and avoid duplicating `04-claims-and-evidence.md` or `07-decide-dont-ask.md`. Align the verification-line format with `test-harness`.
-- [ ] Remove `requires` from the three marker packages and give each its own one-line placement rule (Section 2).
-- [ ] Regenerate tracked snapshots with `scripts/build/render-rules.sh` (`--check` verifies) and confirm Claude, Codex, and Gemini outputs match.
-- [ ] Create `globals/packages/feature-verification/` with the evidence skill and trigger fixtures (Section 3); pick or add a category.
-- [ ] Add the `browser` namespace under `manifests/platform/cli/command-definitions/browser/` and its `scripts/cli/` module; gate both commands on `feature-verification`.
-- [ ] Implement the provider contract, result-shape validation, and a stub provider; status values `passed` / `failed` / `unverified` / `blocked`.
-- [ ] Implement the Playwright provider with the Section 5 resolution order, independent capability probing, and recording lifecycle.
-- [ ] Implement evidence paths under the state root and register a bounded retention store (Section 7).
-- [ ] Keep `browser run` out of `manifests/inventory/agent-permissions.json`; decide whether `browser probe` is allowlisted.
-- [ ] Add tests (see Validation) and register each new check in `scripts/test/check-groups.json`.
-- [ ] Run a small set of real workflows in Claude Code and Codex, including one with `caveman` enabled; compare comprehension and extra agent time, and record findings in this plan.
-- [ ] Update documentation of record (see Documentation impact).
+- [x] Rename `globals/packages/response-shape/` to `globals/packages/response-output/` and update every reference listed in Current state.
+- [x] Rewrite `rules.md` per Section 1: consolidate while adding, remove namespaced findings, end near or below 78 lines, and avoid duplicating `04-claims-and-evidence.md` or `07-decide-dont-ask.md`. Align the verification-line format with `test-harness`.
+- [x] Remove `requires` from the three marker packages and give each its own one-line placement rule (Section 2).
+- [x] Regenerate tracked snapshots with `scripts/build/render-rules.sh` (`--check` verifies) and confirm Claude, Codex, and Gemini outputs match.
+- [x] Create `globals/packages/feature-verification/` with the evidence skill and trigger fixtures (Section 3); pick or add a category.
+- [x] Add the `browser` namespace under `manifests/platform/cli/command-definitions/browser/` and its `scripts/cli/` module; gate both commands on `feature-verification`.
+- [x] Implement the provider contract, result-shape validation, and a stub provider; status values `passed` / `failed` / `unverified` / `blocked`.
+- [x] Implement the Playwright provider with the Section 5 resolution order, independent capability probing, and recording lifecycle.
+- [x] Implement evidence paths under the state root and register a bounded retention store (Section 7).
+- [x] Keep `browser run` out of `manifests/inventory/agent-permissions.json`; decide whether `browser probe` is allowlisted.
+- [x] Add tests (see Validation) and register each new check in `scripts/test/check-groups.json`.
+- [x] Run a small set of real workflows in Claude Code and Codex, including one with `caveman` enabled; compare comprehension and extra agent time, and record findings in this plan. — Moved to `## Not tested`: judging comprehension needs a human reviewer (see Decision Log).
+- [x] Update documentation of record (see Documentation impact).
+
+### Implementation notes
+
+- `globals/packages/response-output/rules.md` is 70 lines (budget 78). Generated snapshots carry
+  only shared fragments, so `scripts/build/render-rules.sh --check` reports them current with no
+  diff; package rules render through `scripts/cli/rules-render.mjs`, which
+  `scripts/test/response-output-rules-check.mjs` checks for Claude, Codex, and Gemini.
+- The rename check excludes all of `docs/plans/`, not only `completed/` and `archived/`: this plan
+  and the backlog plan [[o9zwxuav]] describe the old id as history, and this plan does not edit
+  o9zwxuav.
+- Real-environment runs done by hand: a script scenario against a throwaway server (passed, with a
+  real screenshot of the filtered list), a capture-only scenario (`unverified`), a project spec
+  file with one failing test (`failed`, screenshots and traces adopted, video reported as not
+  enabled by the config, a pre-existing server left running), and the exact `npm install --prefix
+  … playwright@1.62.1` command from a `blocked` result followed by a passing run from that tool
+  directory.
 
 ## Validation
 
@@ -381,6 +397,54 @@ how to open it, and what capture does **not** prove.
 - 2026-10-21: `roborepo browser` is a core namespace gated on `feature-verification`, because package `cli-command` resources cannot register namespaces.
 - 2026-10-21: Playwright is provisioned on first browser use, after a harness permission prompt, never at RoboRepo install or package enable.
 - 2026-10-21: `browser run` is never prefix-allowlisted for agents.
+- 2026-10-21 (implementation): `feature-verification` uses the existing `code-conventions` category
+  ("skills auto-loaded when relevant"), beside `test-harness`. Alternatives: a new verification
+  category (one package would sit alone in it) or `chat-time-output` (that category is rules that
+  load every turn, which this package deliberately is not).
+- 2026-10-21 (implementation): Evidence retention is flat: `<run-id>-<n>-<type>.<ext>` in one
+  directory, with a per-store `filter` (`isBrowserEvidenceFile`) that `maintenance stores` now
+  passes to the file-set measurement. Alternative: a directory-aware measurement, which would add a
+  third store shape for no gain. Bounds: 14 days / 250 MB; pruned when a run starts so a run never
+  deletes what it reports. The engine's never-empty guard keeps the newest file even when stale.
+- 2026-10-21 (implementation): `browser probe` is not added to the agent allowlist. It stays under
+  the default prompt, which changes no permission; adding it later is one manifest entry. `browser` is listed in `INTENTIONALLY_UNCLASSIFIED` in `scripts/test/agent-run-coverage-check.mjs`, which now asserts it is never bucketed.
+  Alternative: allowlist it as read-only, which the plan allowed but which widens agent
+  permissions without a request to.
+- 2026-10-21 (implementation): Two scenario kinds. A project test file (`*.spec.*`, `*.test.*`)
+  runs under the project's own runner and config; screenshot and video then follow the project's
+  config, and a requested capture it does not produce is a limitation (trace is a runner flag).
+  Alternative: generate a wrapper config that forces capture, which would rewrite relative paths
+  in the project's config and change what its tests do. A JavaScript script scenario receives
+  `{ page, context, url, check, screenshot }`; only `check()` earns `passed`.
+- 2026-10-21 (implementation): Service lifecycle is in the command: `--url` reuses anything that
+  already answers and never stops it; `--serve` starts a dev command in its own process group only
+  when nothing answers, and stops that group afterward. Alternative: leave starting to the agent,
+  which would leave the "owned process is gone afterward" guarantee untestable.
+- 2026-10-21 (implementation): The stub provider ships in the static provider map but is
+  selectable only with `ROBOREPO_BROWSER_STUB=1`, so the CLI-level checks run without a browser
+  while an agent cannot pick a provider that reports fixture results as evidence.
+- 2026-10-21 (implementation): Exit codes: 0 when probe reports or a run passes; 1 for the package
+  gate or any non-passing run; 2 for usage. Set through `process.exitCode`, because `main.mjs`
+  ignores values returned by module commands.
+- 2026-10-21 (implementation): The pinned install version is read from this repo's
+  `@playwright/test` devDependency, so the browser suite and the provisioned tool share one
+  version.
+- 2026-10-21 (implementation): The real-workflow comprehension sample moved to `## Not tested`.
+  Running it here would mean enabling the renamed packages in the user's live harness homes, and
+  the criterion asks a reviewer to judge comprehension, which the implementing agent cannot do for
+  its own responses.
+
+## Not tested
+
+- [ ] Clarity and caveman sample: in real Claude Code and Codex sessions with `response-output`
+      enabled (and once with `caveman` too), a reviewer can find the outcome, next action,
+      uncertainty, and consequential choices, technical depth is still available, and unverified
+      claims stay marked. Record extra agent time separately. Needs a human judging real
+      responses; automated scoring belongs to [[0jped168]].
+- [ ] In a real session with `feature-verification` enabled, the agent picks proportionate
+      evidence, asks before running the Playwright install command through the harness prompt,
+      and falls back to a text summary when it cannot show an artifact. Skill behavior in a live
+      model session; no deterministic check covers model choices.
 
 ## Implementation-time choices
 

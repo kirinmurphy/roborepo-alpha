@@ -4,7 +4,7 @@ When a convention, architectural decision, or behavior is confirmed by explicit 
 
 `> 📌 **Capture candidate:** [one-line description]`
 
-Exact format every time. Placement: see `response-shape`. Do not write to any file automatically —
+Exact format every time. Put it on its own line at the end of the response, never inside a paragraph. Do not write to any file automatically —
 flagging only; the user triggers capture when ready.
 
 Only flag what still needs a home in a skill, rule, hook, doc, or config not currently open.
@@ -25,7 +25,7 @@ When a repeatable task is being done by agent reasoning that a script, helper, l
 
 `> ⚙️ **Determinism opportunity:** [one-line description] — [what would implement it]`
 
-Exact format. Placement: see `response-shape`.
+Exact format. Put it on its own line at the end of the response, never inside a paragraph.
 
 The test is whether the task has a checkable right answer that does not need judgment about the current change. Flag when:
 

@@ -4,7 +4,6 @@
   "label": "Impact awareness",
   "description": "When you propose a change, agents flag how it collides with or duplicates existing functionality.",
   "lifecycle": "optional",
-  "requires": ["response-shape"],
   "presentation": {
     "category": "chat-time-output",
     "order": 20

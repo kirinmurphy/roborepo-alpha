@@ -1,0 +1,7 @@
+{
+  "path": ["browser"],
+  "kind": "namespace",
+  "title": "Browser evidence",
+  "description": "Check a local web app in a browser and capture evidence (needs the feature-verification package)",
+  "order": 420
+}

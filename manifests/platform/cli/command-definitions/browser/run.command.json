@@ -1,0 +1,13 @@
+{
+  "path": ["browser", "run"],
+  "kind": "command",
+  "title": "Run browser scenario",
+  "description": "Run a Playwright test file or script against a local app and report checks, artifacts, and limitations",
+  "order": 20,
+  "usage": "roborepo browser run --scenario <path> [--capture screenshot,video,trace] [--url <url>] [--serve <command>] [--timeout <seconds>] [--provider <id>] [--json]",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/browser.mjs",
+    "export": "browserRun"
+  }
+}
