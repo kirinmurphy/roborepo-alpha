@@ -685,6 +685,12 @@ Raised by the human at the approval request, at 91e35bb9:
       whole input unavailable. The developer's spool has 2,230 such rows from ordinary tools such
       as `Skill`, `apply_patch`, `Agent`, and `browser_batch`. — escalated; the user chose to fix it in this review; fixed in review (2e9fae86)
 
+Validator pass at 8e9b5428, after the bare-tool fix:
+
+- [ ] The bare-tool finding above keeps an open box although it cites its fix.
+- [ ] Current state calls the independent core "Kept unchanged" and the live coverage check does
+      not mention native bare tool names, but 2e9fae86 changed `eventSupport` and added those cases.
+
 ### Verification
 
 - Validation pass 1 at 272baded (fresh-context subagent): 6 `fix` findings, no `escalate` or
@@ -751,6 +757,11 @@ Human review, 2026-10-21:
 - Gate at 2e9fae86: doctor passed (102 checks), `git diff --check main...HEAD` clean,
   `npm run check` passed (445 CLI tests, 46/46 suites, 104 browser tests; Windows installer parity
   skipped, `pwsh` unavailable).
+- Validator pass at 8e9b5428 (fresh-context subagent): 2 `fix` findings, plan prose; no `escalate`
+  or `base`. It confirmed the oracle's 41 bare names equal production's jcodemunch and jdocmunch
+  sets, that every production `mcpServerOf` call passes only `tool.name` or `last_result.tool`,
+  and that no covered field attributes a now-native row differently. A real-data run printed
+  `Partial` with no differences over 16,140 events in 9,379 ms.
 
 ### Result
 
