@@ -1,7 +1,7 @@
 ---
 id: wjlt1zvf
 priority: high
-next_action: Run /plan-review on the PR head; the user confirms the `## Not tested` manual macOS QA before /plan-close.
+next_action: Confirm the ten open Not tested checks, then rerun /plan-review for approval of the checked implementation.
 blocked_by: []
 depends_on:
   - 3jp3yhtq
@@ -12,7 +12,7 @@ related:
   - usage-statusline-codex-hook-parity
   - v6lvuu2
   - rtkmc8kf
-reviewed_commit: 1ddaa94
+reviewed_commit: 61b7752d0c516d0217a7bbb660899f19956c1768
 worktree: harness-hook-readiness-provider-adapters
 ---
 
@@ -704,8 +704,8 @@ None open. Every question was answered by the user; see the Decision Log.
 ## Review
 
 ### Findings
-- [ ] Refresh an Agents review offer on return from manual Codex review; the focus guard currently sees only persistent mounts or a terminal launched by RoboRepo.
-- [x] Correct the stable-trust design and risk table: core fragments append and preserve existing package positions — corrected during review.
+- [x] Refresh an Agents review offer on return from manual Codex review — fixed in review (`61b7752d`), with a browser regression that fails under the original focus guard.
+- [x] Correct the stable-trust design and risk table: core fragments append and preserve existing package positions — fixed in review (`cbf4f2b8`).
 
 ### Verification
 - October 21, 2026: the submitted plan had no prior `## Review` validation record. Checked tasks and historical test reports were not treated as independent validation.
@@ -713,11 +713,30 @@ None open. Every question was answered by the user; see the Decision Log.
 - Base synchronization merged main at `434ab4d0b7b52a198fa30a2287da25cf6e7068e0` in `ed4be4d9b0e8a31ed9165aad8bdba38866883a65`.
 - Fresh-context Validator pass 1 found the two findings above; ten required manual or unavailable-platform checks remain under `## Not tested`.
 - Focused checks passed: `node scripts/test/hook-readiness-check.mjs`, `node scripts/test/hook-review-launch-check.mjs`, `node scripts/test/shared-target-rows-check.mjs`, and `node scripts/test/hook-composition-check.mjs`.
-- Initial `npm run check` was blocked by sandbox `listen EPERM` errors on loopback tests; an unrestricted rerun is required. This is not recorded as a base failure.
+- Initial `npm run check` was blocked by sandbox `listen EPERM` errors on loopback tests; the unrestricted rerun below resolved that environment block. This is not recorded as a base failure.
+
+- Final `npm run check` passed on the implementation committed as `61b7752d0c516d0217a7bbb660899f19956c1768`: 447 CLI assertions, 41/41 check suites, all four Docker legs, and 113 browser tests. Windows installer parity was skipped because `pwsh` is unavailable.
+- `npm run test:portal-ui -- --grep 'hook readiness warning'` passed all 13 tests. The corrected Agents regression fails with the original focus guard and passes with the fix. An earlier run used a fixture that removed pending hooks; it was corrected to report those same hooks trusted before final verification.
+- Fresh-context Validator pass 2 found no further code or prose fixes and flagged the then-failing fixture; pass 3 found no fix findings or escalations after the fixture correction.
+- `git diff --check` passed. Base failures: none found in the final gate.
+- Current main advanced during review through plan-only changes; comparison from the synchronized base found no implementation changes.
+- Review remains pending because the ten `## Not tested` entries have not been confirmed by the human. No live trust, hook configuration, or capture state was changed during this review.
+
+### Acceptance evidence
+
+| Requirement | Implementation | Verification |
+| --- | --- | --- |
+| Codex additions preserve existing positions; Claude retains prepend behavior | `scripts/harnesses/codex/index.mjs`, `scripts/harnesses/hooks-merge.mjs` | `hook-composition-check.mjs` checks append order, deduplication, and cross-provider behavior |
+| Readiness derives from providers, core selection, and enabled package resources | `scripts/harnesses/codex/hooks-read.mjs`, `scripts/harnesses/hook-readiness.mjs`, `scripts/cli/core-hook-bundle.mjs` | `hook-readiness-check.mjs`, `harness-registry-check.mjs`: all states, timeout/old RPC fallback, source filtering, core and non-telemetry packages |
+| Core hooks install alongside package hooks and scripts retain ownership protection | `manifests/platform/manifest.tsv`, `scripts/cli/shared-target-rows.mjs`, `scripts/cli/managed-files-row.mjs` | `shared-target-rows-check.mjs`, install-collision and Docker clean-machine legs; Windows remains unverified |
+| Portal and terminal report readiness and selective review remedies | `portal/shared/hook-readiness.js`, `scripts/cli/hook-review-guidance.mjs`, `scripts/cli/hook-readiness-doctor.mjs` | Browser notice tests, `hook-review-cli-check.mjs`, `harness-portal-api-check.mjs`; live desktop checks remain open |
+| Launch is authenticated, user-triggered, and refreshes status after review | `scripts/cli/portal-routes-config.mjs`, `scripts/cli/hook-review-launch.mjs`, `portal/shared/hook-review-offer.js` | `hook-review-launch-check.mjs` and browser tests cover routes, cache refresh, partial review, failed reads, manual return on Agents, and no automatic launch |
+| Provider-specific discovery copy and Claude MCP code stay provider-owned | `globals/harnesses/claude/provider.json`, `scripts/harnesses/desktop-runtime.mjs`, `scripts/harnesses/claude/mcp-claude-cli.mjs` | `harness-desktop-runtime-check.mjs`, manifest/registry and CLI suites |
+| User and internal docs describe the implemented flow | `docs/user/reference/codex-hooks.md`, setup/install guides, `docs/internal/harness-provider-interface.md`, `docs/internal/portal-architecture.md` | Read against the implementation; obsolete core-order claims corrected in this plan |
 
 ### Result
 - Status: pending
-- Reviewed implementation commit: ed4be4d9b0e8a31ed9165aad8bdba38866883a65
+- Reviewed implementation commit: 61b7752d0c516d0217a7bbb660899f19956c1768
 - Base commit: 434ab4d0b7b52a198fa30a2287da25cf6e7068e0
 
 ### Approval
