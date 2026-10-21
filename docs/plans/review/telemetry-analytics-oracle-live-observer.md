@@ -542,6 +542,14 @@ Phase 8, 2026-10-21:
   to main as its own commit (18c664ce); the base sync 48145e83 removed it from this branch's diff.
 - 2026-10-21 — User decision: keep the `scripts/test/lib/fake-response.mjs` test refactor
   (c283fca1) and record it in Current state.
+- 2026-10-21 — User decision, at the approval request: narrow `unsupported_bare_tool` to the bare
+  jcodemunch and jdocmunch tool names that production attributes to an MCP server, using a list
+  the oracle owns instead of importing production's. Every other bare name is a native tool on
+  both sides. In a scratch run over the developer's real evidence, the narrowed rule compared 82
+  sessions and 9,228 operations with no differences (`partial`, because of 213 rows with no
+  model). Alternatives: fix it in a separate `/plan-execute` session, or ship as is and defer to
+  a follow-up plan; both rejected by the user. This supersedes the Open question recommending a
+  follow-up plan.
 
 ## Open questions
 
@@ -665,6 +673,14 @@ Validator pass 5 of the human review, at ce81b8ea:
 - [x] The report-signature paragraph says main summarized experiments with a total size; main
       stamped experiments as file count and newest mtime only. — fixed in review (9ad26ff3)
 
+Raised by the human at the approval request, at 91e35bb9:
+
+- [ ] `roborepo telemetry oracle` is `unavailable` on almost any real machine. `eventSupport` in
+      `scripts/cli/telemetry-oracle-observations.mjs` marks any bare tool name outside an 11-name
+      native allowlist `unsupported_bare_tool` and not comparable, and one such row makes the
+      whole input unavailable. The developer's spool has 2,230 such rows from ordinary tools such
+      as `Skill`, `apply_patch`, `Agent`, and `browser_batch`. — escalated; the user chose to fix it in this review
+
 ### Verification
 
 - Validation pass 1 at 272baded (fresh-context subagent): 6 `fix` findings, no `escalate` or
@@ -727,7 +743,7 @@ Human review, 2026-10-21:
 
 ### Result
 
-- Status: complete
+- Status: pending
 - Reviewed implementation commit: 9ad26ff35337816de9a3ceac07ee3862f1980614
 - Base commit: 18c664ce4a870e8d012cf52867edb3f8787dd830
 
