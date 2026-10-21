@@ -635,6 +635,16 @@ Validator pass 2 of the human review, at 7e43b329:
       session-close; it changed the wrap-up skill, and a later merge carried the rule into
       session-close. — fixed in review (61cb94f7)
 
+Validator pass 3 of the human review, at f7c3f2d8:
+
+- [ ] The report-signature paragraph says the helpers are shared with the removed strict oracle
+      signature, and credits the branch with file-name and ctime stamps main already had for
+      snapshots. The branch adds per-file stamps for the spool, markers, registry, and experiments,
+      plus device and inode.
+- [ ] Current state says the `[data-doc-anchor]` delegate "moved"; it also widened from
+      `portal-info-icon[data-doc-anchor]` to any `[data-doc-anchor]` element. Behavior is the same
+      today, because only info icons carry the attribute.
+
 ### Verification
 
 - Validation pass 1 at 272baded (fresh-context subagent): 6 `fix` findings, no `escalate` or
@@ -685,6 +695,8 @@ Human review, 2026-10-21:
 - Validator pass 2 at 7e43b329 (fresh-context subagent): 4 `fix` findings, all plan prose; no
   `escalate` or `base`. `run-checks --filter telemetry-oracle` passed 7/7 suites; every commit the
   Review and Decision Log cite exists and matches its line.
+- Validator pass 3 at f7c3f2d8 (fresh-context subagent): 2 `fix` findings, both plan prose; no
+  `escalate` or `base`. Commits after 7e43b329 touch only this plan, so the 7e43b329 gate stands.
 
 ### Result
 
