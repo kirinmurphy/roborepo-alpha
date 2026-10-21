@@ -9,7 +9,7 @@ related:
   - 0jped168
   - package-cli-test-guide
 reviewed_commit: 8ec0adb7
-worktree:
+worktree: agent-config-interactive-communication-and-demonstrations
 ---
 
 # Make Agent Conversations Easier to Understand and Results Easier to Verify
