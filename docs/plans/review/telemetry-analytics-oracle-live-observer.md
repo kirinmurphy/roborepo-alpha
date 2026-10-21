@@ -134,8 +134,8 @@ The branch also carries changes made alongside the oracle that are not observer 
 
 The branch also strengthened the report cache signature (`telemetryReportEvidenceSignature` in
 `scripts/cli/telemetry.mjs`). Main's signature already covered markers, experiments, and
-snapshots, but summarized the spool and experiments as a file count, newest mtime, and total size,
-and returned early when the spool directory could not be read, which hid marker, experiment, and
+snapshots, but summarized the spool as a file count, newest mtime, and total size, summarized
+experiments as a file count and newest mtime, and returned early when the spool directory could not be read, which hid marker, experiment, and
 snapshot changes. The branch adds the repository registry, stamps each spool and experiment file
 individually as main already did for snapshots, adds device, inode, and nanosecond times to every
 stamp, records unreadable entries one at a time, and no longer stops at a missing spool. That
