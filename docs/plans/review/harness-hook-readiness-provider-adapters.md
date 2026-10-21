@@ -12,7 +12,7 @@ related:
   - usage-statusline-codex-hook-parity
   - v6lvuu2
   - rtkmc8kf
-reviewed_commit: 61b7752d0c516d0217a7bbb660899f19956c1768
+reviewed_commit: 7d72487f8461f0243f6ba98e716c8713dba7bd32
 worktree: harness-hook-readiness-provider-adapters
 ---
 
@@ -542,6 +542,14 @@ None open. Every question was answered by the user; see the Decision Log.
 
 ## Decision Log
 
+- **Browser remediation and Settings placement (October 21, 2026, user review feedback).** The
+  missing-core notice offers **Install core hooks**, backed by the existing bundle installer and
+  an authenticated empty-body route. It applies the bundle for all available harnesses, refreshes
+  readiness, and offers native review separately when needed. Missing-hook copy describes only
+  the absent hooks rather than claiming nothing needs review. The Settings notice sits below the
+  token tracking heading and above its toggle. A temporary home and hidden command-line/desktop
+  discovery exercise the missing-Codex path without removing the installed app.
+
 - **Hook matcher identity moves to its own plan (October 20, 2026, user decision on PR #39 finding
   3).** Readiness matches hooks by event and command, but so does every provider's hook merge,
   so reapplying a package never repairs a changed matcher and comparing matchers here alone would
@@ -704,6 +712,7 @@ None open. Every question was answered by the user; see the Decision Log.
 ## Review
 
 ### Findings
+- [x] Clarify missing-hook messaging, offer browser installation, and move the Settings notice above the tracking row — fixed from October 21 user feedback (`7d72487f`), with passing API, real isolated installation, and browser checks.
 - [x] Refresh an Agents review offer on return from manual Codex review — fixed in review (`61b7752d`), with a browser regression that fails under the original focus guard.
 - [x] Correct the stable-trust design and risk table: core fragments append and preserve existing package positions — fixed in review (`cbf4f2b8`).
 
@@ -715,12 +724,21 @@ None open. Every question was answered by the user; see the Decision Log.
 - Focused checks passed: `node scripts/test/hook-readiness-check.mjs`, `node scripts/test/hook-review-launch-check.mjs`, `node scripts/test/shared-target-rows-check.mjs`, and `node scripts/test/hook-composition-check.mjs`.
 - Initial `npm run check` was blocked by sandbox `listen EPERM` errors on loopback tests; the unrestricted rerun below resolved that environment block. This is not recorded as a base failure.
 
-- Final `npm run check` passed on the implementation committed as `61b7752d0c516d0217a7bbb660899f19956c1768`: 447 CLI assertions, 41/41 check suites, all four Docker legs, and 113 browser tests. Windows installer parity was skipped because `pwsh` is unavailable.
+- Initial review’s final `npm run check` passed on the implementation committed as `61b7752d0c516d0217a7bbb660899f19956c1768`: 447 CLI assertions, 41/41 check suites, all four Docker legs, and 113 browser tests. Windows installer parity was skipped because `pwsh` is unavailable.
 - `npm run test:portal-ui -- --grep 'hook readiness warning'` passed all 13 tests. The corrected Agents regression fails with the original focus guard and passes with the fix. An earlier run used a fixture that removed pending hooks; it was corrected to report those same hooks trusted before final verification.
 - Fresh-context Validator pass 2 found no further code or prose fixes and flagged the then-failing fixture; pass 3 found no fix findings or escalations after the fixture correction.
 - `git diff --check` passed. Base failures: none found in the final gate.
-- Current main advanced during review through plan-only changes; comparison from the synchronized base found no implementation changes.
+- During the initial review, main advanced through plan-only changes; comparison from the synchronized base found no implementation changes.
 - Review remains pending because the ten `## Not tested` entries have not been confirmed by the human. No live trust, hook configuration, or capture state was changed during this review.
+
+#### October 21 browser-install follow-up
+
+- `npm run check` passed for implementation `7d72487f8461f0243f6ba98e716c8713dba7bd32`: 447 CLI assertions, 41/41 check suites, four Docker legs, and 115 browser tests. Windows parity was skipped because `pwsh` is unavailable.
+- The three new browser regressions failed before implementation. Afterward, all 15 hook-readiness browser tests passed, including the installation-to-review transition, failure recovery, and Settings notice placement.
+- `shared-target-rows-check.mjs` exercises the real portal installation helper with a temporary home, command-line stubs, and hidden desktop discovery: core hooks install without shifting package positions, readiness remains unknown without Codex, and no terminal launcher is offered. The host app is not removed or changed.
+- An isolated Settings screenshot confirmed the notice sits between the heading and Token Tracking Active; no JavaScript page errors were reported. This adds hermetic evidence, not confirmation of the remaining live page checks.
+- Fresh-context implementation and documentation validation found no remaining findings after updating the guide’s missing-state table. `git diff --check` passed.
+- The ten required `## Not tested` entries remain open; Result stays pending and approval is not requested.
 
 ### Acceptance evidence
 
@@ -736,7 +754,7 @@ None open. Every question was answered by the user; see the Decision Log.
 
 ### Result
 - Status: pending
-- Reviewed implementation commit: 61b7752d0c516d0217a7bbb660899f19956c1768
+- Reviewed implementation commit: 7d72487f8461f0243f6ba98e716c8713dba7bd32
 - Base commit: 434ab4d0b7b52a198fa30a2287da25cf6e7068e0
 
 ### Approval

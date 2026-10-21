@@ -55,7 +55,7 @@ problem, each with its own remedy. `roborepo doctor --installed` prints the same
 | Active | Installed, trusted, and turned on | Nothing |
 | Needs review | Installed, but Codex has not trusted this exact definition (`untrusted` or `modified`) | Follow the review steps above |
 | Turned off | Trusted but disabled in Codex | Turn the hooks back on in Codex's **Settings → Hooks**, or `/hooks` in the CLI |
-| Missing | Not in `~/.codex/hooks.json`, so there is nothing to review | A package's hooks: turn the package off and back on in `/agents`. Core hooks: `roborepo bundle apply hooks` |
+| Missing | These hooks are absent from `~/.codex/hooks.json`; install them before reviewing them | A package's hooks: turn the package off and back on in `/agents`. Core hooks: **Install core hooks**, or `roborepo bundle apply hooks` |
 | Unknown | Codex could not be asked | Check that Codex is installed and has been opened at least once |
 
 RoboRepo asks Codex directly (through `codex app-server`), so the notice reflects what Codex will
@@ -65,6 +65,13 @@ never appear in the notice or the offer.
 Core hooks come with the optional `hooks` bundle, chosen during onboarding or with
 `roborepo bundle apply hooks`. They install beside package hooks that are already there, and
 readiness expects them only once you have chosen that bundle.
+
+If core hooks are missing, click **Install core hooks** in the notice. The local portal server
+runs the same bundle installer as the terminal command, for all available harnesses, then refreshes
+the status. If Codex asks for trust, click **Open Codex hook review** and select the hooks there.
+Installation does not open Codex automatically or grant trust. If installation fails, the notice
+keeps the terminal command available for diagnosis. On Settings, the notice sits below the token
+tracking heading and above the tracking toggle.
 
 ## What Runs
 
