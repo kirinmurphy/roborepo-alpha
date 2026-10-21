@@ -542,11 +542,11 @@ or `unavailable`. Treating such rows as `passed` would be a product decision tha
       unresolved. The plan repeated "legacy repository resolution" in three places. — fixed (259fa943)
 - [x] The Result contract says `coverage.issues` explains every `unavailable`; an empty spool and a
       read error both leave it empty. — fixed (259fa943)
-- [ ] `docs/images/tokens/model-metrics-{light,dark}.png` are unreferenced and absent on main.
-      Blocked: see Open questions. — fixed (PENDING)
-- [ ] `docs/images/tokens/README.md`, the root README's Tokens sentence, and the scratch link to it
+- [x] `docs/images/tokens/model-metrics-{light,dark}.png` are unreferenced and absent on main.
+      Blocked: see Open questions. — fixed (79d785d5)
+- [x] `docs/images/tokens/README.md`, the root README's Tokens sentence, and the scratch link to it
       were deleted on main in 23e15c3e and came back through the merge 3483f83d. Escalated: see
-      Open questions. — fixed (PENDING)
+      Open questions. — fixed (79d785d5)
 
 ### Verification
 
