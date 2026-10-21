@@ -193,15 +193,10 @@ The Codex `hooks.merge` adapter appends a fragment's entries after the existing 
 order, instead of calling the prepending `mergeHooksMap`. Enabling a package then adds new
 positions without moving trusted ones. Claude and Gemini keep prepending.
 
-Prepending exists for Claude's rule that the first decisive hook result wins. The only Codex hook
-RoboRepo installs that makes a permission decision is core `permission-check.mjs`, and it stays
-ahead of package hooks once core hooks are installed.
-
-Two moves still shift positions, and the readiness notice names every affected hook for both:
-
-- disabling a package moves every later hook at the same event;
-- installing core hooks into a file that already holds package hooks moves those package hooks
-  once.
+Core fragments also append, so installing core hooks into a file that already holds package hooks
+preserves those package hooks' positions. Codex hook execution does not rely on core hooks having
+an earlier position. Disabling a package still moves every later hook at the same event; the
+readiness notice identifies hooks that need review afterward.
 
 ### Readiness flow
 
@@ -535,7 +530,7 @@ approval: only a later Codex `hooks/list` result clears `review_required`.
 | --- | --- |
 | Codex changes `app-server` or `hooks/list` | `read` degrades to `unknown`; fixtures pin the observed shape |
 | Spawning `app-server` on each portal load adds latency | Keep the existing timeout; cache the result for the portal refresh interval |
-| Installing the missing core hooks on the reference Mac moves its package hooks once | The notice names each hook that needs review again |
+| Removing a package shifts later hooks at the same event | The notice names each hook that needs review again |
 | Claude's file-level readiness is mistaken for permission to run hooks in every workspace | Qualify the status wording; [Claude's hooks reference](https://code.claude.com/docs/en/hooks#workspace-trust) says interactive settings hooks wait for workspace trust, while `-p`/SDK sessions treat the folder as trusted |
 | A terminal launch fails or macOS denies Automation permission | Keep a copyable command and manual Settings → Hooks guidance; do not lose the portal's current state |
 | Codex changes its startup review screen or moves the bundled CLI | Resolve candidates at click time and retain `/hooks` guidance; never encode a machine-specific bundle path in product code |
@@ -705,3 +700,25 @@ None open. Every question was answered by the user; see the Decision Log.
   documents an in-app hook trust review flow and Hooks settings. The portal and user guide now
   lead with Settings → Hooks; the terminal `/hooks` screen remains an alternative. RoboRepo still
   only reports readiness and never records trust for the user.
+
+## Review
+
+### Findings
+- [ ] Refresh an Agents review offer on return from manual Codex review; the focus guard currently sees only persistent mounts or a terminal launched by RoboRepo.
+- [x] Correct the stable-trust design and risk table: core fragments append and preserve existing package positions — corrected during review.
+
+### Verification
+- October 21, 2026: the submitted plan had no prior `## Review` validation record. Checked tasks and historical test reports were not treated as independent validation.
+- Completion preflight passed; submit committed as `434ab4d0b7b52a198fa30a2287da25cf6e7068e0`.
+- Base synchronization merged main at `434ab4d0b7b52a198fa30a2287da25cf6e7068e0` in `ed4be4d9b0e8a31ed9165aad8bdba38866883a65`.
+- Fresh-context Validator pass 1 found the two findings above; ten required manual or unavailable-platform checks remain under `## Not tested`.
+- Focused checks passed: `node scripts/test/hook-readiness-check.mjs`, `node scripts/test/hook-review-launch-check.mjs`, `node scripts/test/shared-target-rows-check.mjs`, and `node scripts/test/hook-composition-check.mjs`.
+- Initial `npm run check` was blocked by sandbox `listen EPERM` errors on loopback tests; an unrestricted rerun is required. This is not recorded as a base failure.
+
+### Result
+- Status: pending
+- Reviewed implementation commit: ed4be4d9b0e8a31ed9165aad8bdba38866883a65
+- Base commit: 434ab4d0b7b52a198fa30a2287da25cf6e7068e0
+
+### Approval
+- Decision: not requested
