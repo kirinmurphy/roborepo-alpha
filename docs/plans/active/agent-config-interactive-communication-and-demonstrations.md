@@ -1,7 +1,7 @@
 ---
 id: o93hile
 priority: high
-next_action: Answer the open question on the "Rename complete" criterion; then rerun the completion preflight and submit for /plan-review (Validation pass 3 is recorded under ## Review).
+next_action: Answer the two Open Questions (Rename-complete criterion; Playwright browser install location), fix the two open pass-5 findings (unnamed check() crashes the run; stale next_action), then rerun the Validation Loop, the completion preflight, and submit for /plan-review.
 blocked_by: []
 depends_on: []
 related:
@@ -469,6 +469,9 @@ how to open it, and what capture does **not** prove.
 - [x] Probe accepted an ffmpeg of any revision, so `video: true` could precede a run that fails to record — fixed: headless shell and ffmpeg matched to the revisions `playwright-core`'s `browsers.json` pins (ea628104)
 - [x] An interrupted traced script left Playwright's `playwright-tracing-*` scratch dir — fixed: one owned work dir holds `tracesDir` and video (ea628104)
 - [x] The Decision Log's exit-code entry still said `process.exitCode` for `browser run` — fixed (ea628104)
+- [ ] A script `check()` called without a string name (or a spec test whose title path is empty) makes `validateRunResult` throw outside the run's try, so `browser run` prints a stack trace instead of a result — open (pass 5, cap reached)
+- [ ] `next_action` named only pass 3 as recorded under ## Review — open (pass 5, cap reached; superseded by this update)
+- [ ] The install command puts Chromium, the headless shell, and ffmpeg in Playwright's per-user cache, not RoboRepo's tool directory as the plan (Section 5) and the user doc say — escalated, see Open Questions
 - [ ] The "Rename complete" row excludes only `completed/` and `archived/`, but this plan and backlog o9zwxuav must name the old id — escalated, see Open Questions
 
 ### Verification
@@ -481,6 +484,8 @@ how to open it, and what capture does **not** prove.
 - Validation pass 3 at 6f4cbb6b (fresh-context subagent): 4 fix.
 - Gate: `npm run check` passed at 6ae939ac.
 - Validation pass 4 at 6ae939ac (fresh-context subagent): 3 fix.
+- Gate: `npm run check` passed at fbc26524 (447 CLI tests, 45/45 check suites, Docker clean-machine suites, 103 portal UI specs; Windows installer parity skipped, no `pwsh`).
+- Validation pass 5 at fbc26524 (fresh-context subagent): 2 fix, 1 escalate. **Stopped at the five-pass cap**; the open findings above are not yet fixed, and the plan was not submitted.
 
 ## Open Questions
 
@@ -495,6 +500,23 @@ how to open it, and what capture does **not** prove.
     another plan's reasoning and obscures what was renamed.
   - Blocked rather than decided: it changes an acceptance criterion, which is the human's call.
   - Blocks: closing the escalated Review finding, and therefore the submit transition.
+
+- **Where does the approved install put the browsers?** The `blocked` result's install command
+  (`npm install --prefix <stateRoot>/browser/tools playwright@… && node …/cli.js install chromium`)
+  sets no `PLAYWRIGHT_BROWSERS_PATH`, so Chromium, the headless shell, and ffmpeg land in
+  Playwright's per-user cache (for example `~/Library/Caches/ms-playwright`), while the npm package
+  lands in the tool directory. Section 5 says both go to the tool directory, and
+  `docs/user/reference/roborepo-cli.md` says the same.
+  - Option A (recommended): keep the shared per-user cache. Reuses browsers other projects already
+    downloaded (often hundreds of MB), and is what probe already checks. Correct the user doc and
+    skill, and record the change to Section 5.
+  - Option B: install browsers under `<stateRoot>/browser/tools` by setting
+    `PLAYWRIGHT_BROWSERS_PATH` for the install, for probe, and for every run that uses the
+    tool-directory Playwright. Fully self-contained and removable with RoboRepo, but downloads a
+    second copy of browsers the machine may already have.
+  - Blocked rather than decided: it changes where RoboRepo writes large downloads on the user's
+    machine, which Section 5 specified.
+  - Blocks: the escalated Review finding, the user-doc wording, and the submit transition.
 
 ## Not tested
 
