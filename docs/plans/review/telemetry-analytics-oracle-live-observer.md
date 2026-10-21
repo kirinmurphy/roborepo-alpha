@@ -591,24 +591,24 @@ or `unavailable`. Treating such rows as `passed` would be a product decision tha
 
 Human review, 2026-10-21, at bd5372a6 (after the base sync):
 
-- [ ] Frontmatter `next_action` still asks for the submit-refusal answer; the plan is now in review.
-- [ ] Open questions keeps the "Blocking (external): the submit transition refuses" entry; the
+- [x] Frontmatter `next_action` still asks for the submit-refusal answer; the plan is now in review. — fixed in review (6126f79a)
+- [x] Open questions keeps the "Blocking (external): the submit transition refuses" entry; the
       user chose the one-time `next_action` edit on main's copy (517cca6c) and submit succeeded
-      (257fcea8). The decision is not in the Decision Log.
-- [ ] Review > Verification says commits after 7b667863 change only this plan, so its gate stands;
-      the base merge bd5372a6 brought implementation changes from main.
-- [ ] Current state says the doc-guide delegate and `aria-controls` stay "because other code uses
+      (257fcea8). The decision is not in the Decision Log. — fixed in review (6126f79a)
+- [x] Review > Verification says commits after 7b667863 change only this plan, so its gate stands;
+      the base merge bd5372a6 brought implementation changes from main. — fixed in review (6126f79a)
+- [x] Current state says the doc-guide delegate and `aria-controls` stay "because other code uses
       them"; the delegate moved from `portal/tokens/app.js` into the shared factory and Tokens is its
-      only user, and no `portal-info-icon` sets `aria-controls`.
-- [ ] Module ownership calls `telemetry-oracle-compare.mjs` "Unchanged", but a Phase 8 task reworded
-      its comments; the "To remove: live observer" heading describes completed work in future tense.
-- [ ] `globals/packages/session-close/skills/session-close/SKILL.md` and its three generated
+      only user, and no `portal-info-icon` sets `aria-controls`. — fixed in review (6126f79a)
+- [x] Module ownership calls `telemetry-oracle-compare.mjs` "Unchanged", but a Phase 8 task reworded
+      its comments; the "To remove: live observer" heading describes completed work in future tense. — fixed in review (6126f79a)
+- [x] `globals/packages/session-close/skills/session-close/SKILL.md` and its three generated
       commands add a "refresh documentation screenshots" rule (branch-only, 95c784cc) outside this
-      plan. — escalated to the human
-- [ ] `docs/plans/backlog/os-windows-lifecycle-coverage.md` is an unrelated backlog plan that exists
-      only on this branch (530eb39b). — escalated to the human
-- [ ] `scripts/test/lib/fake-response.mjs` and its four importers are a test-helper refactor
-      (c283fca1) the plan does not mention. — escalated to the human
+      plan. — escalated; user chose to drop it, fixed in review (b0765686)
+- [x] `docs/plans/backlog/os-windows-lifecycle-coverage.md` is an unrelated backlog plan that exists
+      only on this branch (530eb39b). — escalated; user chose to move it to main (18c664ce, synced in 48145e83)
+- [x] `scripts/test/lib/fake-response.mjs` and its four importers are a test-helper refactor
+      (c283fca1) the plan does not mention. — escalated; user chose to keep it, recorded in review (6126f79a)
 
 ### Verification
 
