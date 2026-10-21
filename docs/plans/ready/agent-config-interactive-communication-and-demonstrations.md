@@ -1,7 +1,7 @@
 ---
 id: o93hile
 priority: high
-next_action: Rename globals/packages/response-shape to explain-and-show, consolidate its rules while adding the missing communication items, and drop the marker packages' requires; then add the evidence skill and the `roborepo browser probe|run` namespace with a stub provider and contract tests.
+next_action: Rename globals/packages/response-shape to response-output, consolidate its rules while adding the missing communication items, and drop the marker packages' requires; then add the feature-verification package with its evidence skill and the `roborepo browser probe|run` namespace, a stub provider, and contract tests.
 blocked_by: []
 depends_on: []
 related:
@@ -22,20 +22,18 @@ task, surface consequential architectural decisions, and show real evidence that
 behaves as claimed. Agents should perform safe verification themselves instead of routinely
 assigning it to the user.
 
-Everything ships in **one optional package, `explain-and-show`** (label "Explain and show"), which
-replaces today's `response-shape`. A user turns on one thing and gets both halves: the agent
-explains clearly, and it shows proof.
+The work is two layers, shipped as two independent optional packages:
 
-| Part | Loaded | Holds |
-| --- | --- | --- |
-| `rules.md` | Every turn while enabled | `response-shape`'s current rules, consolidated, plus a few short additions: adaptive depth, meaningful progress updates, evidence by kind, caveman precedence |
-| Evidence skill | Only when the agent decides proof is worth showing | How to show that any change works (server and API output, `curl`, tests, measured numbers, screenshots) and when the browser is worth using |
-| `roborepo browser probe` / `browser run` | Only when called | Core CLI namespace that drives a local web app through a provider (Playwright first) and returns check results plus artifact paths; refuses unless the package is enabled |
+| Package | Answers | Loaded | Holds |
+| --- | --- | --- | --- |
+| `response-output` (renames today's `response-shape`) | How does the agent write to me? | Every turn while enabled | The current response rules, consolidated, plus short additions: adaptive depth, meaningful progress updates, evidence by kind, caveman precedence |
+| `feature-verification` (new) | How does the agent prove the work is right? | Only when the agent decides proof is worth showing | An evidence skill (server and API output, `curl`, tests, measured numbers, screenshots) and the `roborepo browser probe` / `browser run` command, which drives a local web app through a provider (Playwright first) |
 
-Only the browser gets a dedicated command: server output, API calls, and tests already run through
-the agent's normal shell, and a browser is the one place an agent cannot observe results without
-extra tooling. Optimize **total time to understanding**: agent execution time plus human
-comprehension time.
+Each works without the other: verification evidence without `response-output` is just reported in
+plainer prose, and `response-output` without verification still reports evidence honestly. Only the
+browser gets a dedicated command: server output, API calls, and tests already run through the
+agent's normal shell, and a browser is the one place an agent cannot observe results without extra
+tooling. Optimize **total time to understanding**: agent execution time plus human comprehension time.
 
 ## Goals
 
@@ -46,7 +44,7 @@ comprehension time.
 - Prefer concrete examples and visual representations when they communicate faster than dense prose.
 - Verify behavior autonomously when safe and feasible; present **actual, accessible evidence**, not just verification instructions.
 - Support Claude Code, Codex, and Gemini CLI through the same rendered rules and one portable browser command.
-- Make the feature one obvious toggle; keep tooling optional, startup lazy, and implementation maintainable.
+- Give each layer a name that says what it does; keep tooling optional, startup lazy, and implementation maintainable.
 
 ## Non-goals
 
@@ -56,9 +54,10 @@ comprehension time.
 - Treating screenshots, videos, or conceptual diagrams as substitutes for executed assertions/tests.
 - Requiring individual projects to install Playwright or alter their dependency/test configuration to obtain ad hoc evidence.
 - Wrapping shell, API, or test evidence in a RoboRepo command; the agent runs those directly.
+- Folding verification into `test-harness`. That skill chooses and runs a repo's tests; `feature-verification` shows the human the result. They share only the verification-line format.
 - Forking conversational policy by harness, adopting one harness's native output style as the common standard, or adding a second harness adapter hierarchy.
 - Storing full transcripts or sensitive user data for evaluation, or automating production/destructive actions to capture evidence.
-- Turning the package on by default (`defaultEnabled`), or folding it into the Plan Suite category.
+- Turning either package on by default (`defaultEnabled`), or folding either into the Plan Suite category.
 - Changing how Plan Suite packages are toggled; that question belongs to [[o9zwxuav]].
 - Migrating existing installs across the `response-shape` rename. RoboRepo is unreleased, so the breaking rename is accepted.
 
@@ -70,21 +69,21 @@ Verified on `main` at `8ec0adb7`.
 | --- | --- | --- |
 | Rule rendering | `scripts/cli/rules-render.mjs` renders `globals/system/rules/shared/` + `globals/system/rules/<harness>/` + enabled packages' `rules.md` into each harness's global file (Claude, Codex, Gemini); `scripts/build/render-rules.sh` regenerates tracked snapshots | None; reuse as is |
 | Answer-first and form | `globals/packages/response-shape/rules.md` (optional, category `chat-time-output`, 78 lines: intro 8, Opening 11, Form 15, Separators 19, example 7, Close 12) requires re-orientation, answer first, corrections up front, tables/code/Mermaid over prose, namespaced findings, bolded load-bearing claims, `━`/`┈` separators, and a DONE/DEFERRED/NEXT STEPS close | Adaptive depth, explaining unfamiliar terms, meaningful progress updates, choosing visual evidence, and evidence categories are missing; the Separators section and intro carry more rationale than instruction |
-| Name | `response-shape` describes a mechanism, not the benefit, and will not cover evidence | Rename |
+| Name | `response-shape` describes a mechanism, not what the user gets | Rename to `response-output` |
 | Evidence honesty | Shared `04-claims-and-evidence.md` requires verified causes and marking unverified reasoning ("likely", "I have not checked") | Does not separate *passed* checks from *observed but unasserted* behavior or conceptual illustrations |
-| Verification line format | `response-shape` asks for verification results in a fenced block; `test-harness`'s SKILL.md asks for `Verified: <command> -> <pass\|fail\|blocked>` | Two formats for one thing |
+| Verification line format | `response-shape` asks for verification results in a fenced block; `test-harness`'s SKILL.md asks for `Verified: <command> -> <pass\|fail\|blocked>` and already recommends Playwright when unit tests mock away behavior | Two formats for one thing |
 | Surfacing decisions | Shared `07-decide-dont-ask.md` defines when to decide vs. escalate and forbids narrating settled decisions; `impact-awareness` flags collisions | None; the new rules defer to these rather than restate them |
 | Shared communication baseline | Deliberately absent: an earlier rules audit deleted the shared `00-communication.md` fragment and moved chat-output behavior into toggleable packages (`docs/internal/rules-parity-and-layering.md`) | None; this plan follows that convention |
 | Marker packages | `impact-awareness`, `convention-capture`, and `skill-visibility` each declare `requires: ["response-shape"]` and say "Placement: see `response-shape`". Commit `9115323f` added this solely to share one placement rule ("own line, never mid-paragraph, together at the end") | Turning on any marker forces the whole formatting package on, and the sticky-dependency bug keeps it on. These are the only live `requires` users |
 | Terse mode | Optional `caveman`: rule "terse, no filler, fragments OK"; Codex SessionStart hook "Drop articles/filler/pleasantries/hedging"; on Claude, an external plugin (`JuliusBrussee/caveman`) whose instructions are not in this repo | No precedence with these rules; "drop hedging" already conflicts with `04-claims-and-evidence.md`'s required uncertainty markers |
 | CLI routing | Core commands are JSON definitions under `manifests/platform/cli/command-definitions/<namespace>/` (`namespace.json` + `<name>.command.json` with a `module`/`export` execution). No `browser` namespace or reserved-name collision (`manifests/inventory/reserved-commands.json`) | Add `browser` |
-| Package CLI commands | Package `cli-command` resources (`scripts/cli/package-commands.mjs`) only wrap an external process (`commandOrUrl` + `args`) that a core command such as `index code` spawns; they cannot register a namespace | `browser` is a core namespace gated on the package, the way `index code` resolves its enabled owning package |
-| Playwright | `@playwright/test` is a **devDependency** only; `package.json` `files` does not ship it. The repo's own browser suite in `scripts/test/portal-ui/` shows screenshot capture (`capture.mjs`) and a clean skip when Chromium is absent (`run.mjs`) | The shipped CLI cannot import Playwright; the provider resolves it from the target project or a RoboRepo-managed tool directory |
+| Package CLI commands | Package `cli-command` resources (`scripts/cli/package-commands.mjs`) only wrap an external process (`commandOrUrl` + `args`) that a core command such as `index code` spawns; they cannot register a namespace | `browser` is a core namespace gated on `feature-verification`, the way `index code` resolves its enabled owning package |
+| Playwright | `@playwright/test` is a **devDependency** only, so `npm install -g` of RoboRepo never installs it, and `package.json` `files` does not ship it. The repo's own browser suite in `scripts/test/portal-ui/` shows screenshot capture (`capture.mjs`) and a clean skip when Chromium is absent (`run.mjs`) | The shipped CLI cannot import Playwright; the provider resolves it from the target project or a RoboRepo-managed tool directory |
 | Optional-tool provisioning | No general facility. `scripts/cli/index.mjs` `requireUvx()` probes for a binary and exits with an install hint | Smallest equivalent: probe, report, install only with permission |
 | Running local apps | `roborepo runtime --json` reports discovered local HTTP apps and origins while the user's auto-discovery consent is on (`modules/developer-runtime/`) | One source of already-running URLs; never a source of processes to stop |
 | Bounded storage | `modules/retention/registry.mjs` `retentionStores(stateRoot)` lists every bounded store; `roborepo maintenance stores` and doctor read it; `assertBounded` enforces a bound. `measureFileSet` measures flat directories of files (default filter `.json`) | Evidence needs a registered store; per-run grouping needs flat naming or a directory-aware measurement |
 | Agent command permissions | `manifests/inventory/agent-permissions.json` + `scripts/cli/agent-run-policy.mjs`: a prefix allowlist entry authorizes every payload behind the prefix | `browser run` executes scripts and must never be prefix-allowlisted |
-| References to rename | `globals/packages/response-shape/`, the three marker packages' `package.config.json` and `rules.md`, `docs/user/reference/config-control-panel.md` (line 68), `scripts/dev/docs-screenshots.mjs` (line 44) | Update all |
+| References to rename | `globals/packages/response-shape/`, the three marker packages' `package.config.json` and `rules.md`, `docs/user/reference/config-control-panel.md` (lines 68-70), `scripts/dev/docs-screenshots.mjs` (line 44) | Update all |
 
 Reported friction includes walls of prose, unexplained jargon, buried conclusions, implementation
 details presented without meaning, incomplete context, and verification delegated to the human.
@@ -92,12 +91,12 @@ These are observed user problems, not a measured baseline.
 
 ## Proposed design
 
-### 1. Rename and consolidate the rules
+### 1. `response-output`: rename and consolidate the rules
 
-Rename `globals/packages/response-shape/` to `globals/packages/explain-and-show/` (id, label
-"Explain and show", description naming both halves). Keep it optional and in `chat-time-output`.
-Rewrite `rules.md` by **consolidating while adding**, so the file ends near or below its current
-78 lines; it loads every turn.
+Rename `globals/packages/response-shape/` to `globals/packages/response-output/` (id, label
+"Response output", description saying how the agent structures and words every response). Keep it
+optional and in `chat-time-output`. Rewrite `rules.md` by **consolidating while adding**, so the
+file ends near or below its current 78 lines; it loads every turn.
 
 | Existing content | Change |
 | --- | --- |
@@ -105,17 +104,17 @@ Rewrite `rules.md` by **consolidating while adding**, so the file ends near or b
 | Opening › Re-orient | Merge with the new "provide sufficient context": explain unfamiliar terms and reconnect to the user's goal without repeating the conversation |
 | Opening › Answer first, correction up front | Keep |
 | Form › Match form to content | Merge with "choose the clearest medium": add examples, screenshots, recordings, and actual output to the existing tables/code/Mermaid list |
-| Form › Namespace mixed-domain findings | Keep (added from explicit user feedback in `9115323f`) |
+| Form › Namespace mixed-domain findings | Remove; headers for distinct parts already cover long responses |
 | Separators (19 lines + example) | Keep the `━`/`┈` rule; cut to the instruction and a one-clause reason |
 | Close › Verification in a fenced block | Align with `test-harness`'s `Verified: <command> -> <result>` line so there is one format |
 | Close › DONE / DEFERRED / NEXT STEPS | Fold in the completion priorities: result, best available evidence, what needs attention |
-| Close › Fixed-format lines together | Keep; it now refines the marker packages' own placement line (Section 2) |
+| Close › Fixed-format lines together | Keep; it refines the marker packages' own placement line (Section 2) |
 
 New items, each a bullet or two:
 
 - **Adapt detail:** default to outcomes; explain architecture/tradeoffs when material and code-level mechanics when necessary or requested.
 - **Use meaningful updates:** report changed understanding, actual progress, or blockers rather than narrating each tool call.
-- **Report evidence by kind:** distinguish passed checks, observed but unasserted behavior, conceptual illustrations, and unavailable verification. Extends `04-claims-and-evidence.md`; does not restate it.
+- **Report evidence by kind:** distinguish passed checks, observed but unasserted behavior, conceptual illustrations, and unavailable verification. Extends `04-claims-and-evidence.md`; does not restate it. This lives here, not in `feature-verification`, because it governs how any result is worded, with or without verification tooling.
 - **Precedence:** an explicit user request for more or less detail wins, and enabling `caveman` counts as one, so caveman governs length and style. Even then, keep the outcome, decisions the human must make, material uncertainty, and whether a check passed or was only observed. Marking something unverified is required evidence status, not hedging.
 
 Surfacing consequential choices stays with `07-decide-dont-ask.md` and `impact-awareness`; the new
@@ -137,16 +136,20 @@ These are selection cues for the rules, not modes or sections.
 Remove `requires: ["response-shape"]` from `impact-awareness`, `convention-capture`, and
 `skill-visibility`. Replace each "Placement: see `response-shape`" with one self-contained line:
 the marker goes on its own line at the end of the response, never inside a paragraph. When
-`explain-and-show` is also enabled, its "fixed-format lines together after the separator" rule
+`response-output` is also enabled, its "fixed-format lines together after the separator" rule
 applies on top without conflict. The `requires` mechanism itself stays; [[o9zwxuav]] and the
 `implementation-review` dependency it serves still need it.
 
-### 3. Progressive evidence (the skill)
+### 3. `feature-verification`: the evidence skill
 
-The evidence skill holds the operational guidance that should not load every turn. Choose the
-**fastest sufficient** form of evidence, reuse artifacts already produced by relevant testing, plan
-capture before verification when a recording is needed, and don't rerun work just to improve
-presentation.
+New optional package `globals/packages/feature-verification/` (`lifecycle: "optional"`, no
+`defaultEnabled`, no `requires`) with one auto-invoked skill and trigger fixtures following existing
+skill-package conventions. Choose a category in `manifests/inventory/package-categories.json` that
+fits verification rather than chat-time output; add one only if none fits.
+
+The skill holds the operational guidance that should not load every turn. Choose the **fastest
+sufficient** form of evidence, reuse artifacts already produced by relevant testing, plan capture
+before verification when a recording is needed, and don't rerun work just to improve presentation.
 
 | Change or question | Default evidence | Use more when |
 | --- | --- | --- |
@@ -162,19 +165,20 @@ A diagram is **explanatory**, not proof that code ran. A screenshot or recording
 behavior, not necessarily correctness. Only executed checks support a claim that behavior
 **passed**. Trace capture is for diagnostics and is not enabled indiscriminately. The skill also
 carries the safety rules (Section 6), presentation guidance (Section 7), and short before/after
-examples for architecture, investigation, debugging, progress, and completion responses.
+examples for architecture, investigation, debugging, progress, and completion responses. It reports
+results with the shared `Verified:` line format rather than defining its own.
 
 ### 4. `roborepo browser` namespace and provider contract
 
 ```mermaid
 flowchart TB
-  Rules[explain-and-show rules] --> Agent[Agent session]
-  Skill[Evidence skill<br/>loaded on demand] -.-> Agent
+  Rules[response-output rules] --> Agent[Agent session]
+  Skill[feature-verification skill<br/>loaded on demand] -.-> Agent
   Agent --> Choice{Evidence worth showing?}
   Choice -->|No| Report[Concise result and available checks]
   Choice -->|Shell / API / tests| Direct[Run directly, report output]
   Choice -->|Web UI| CLI[roborepo browser probe / run]
-  CLI --> Gate{explain-and-show enabled?}
+  CLI --> Gate{feature-verification enabled?}
   Gate -->|No| Refuse[Refuse: name the enable command]
   Gate -->|Yes| Adapter[Provider contract]
   Adapter --> Playwright[Playwright provider]
@@ -184,11 +188,10 @@ flowchart TB
   Result --> Report
 ```
 
-The package adds the skill (auto-invoked, with trigger fixtures following existing skill-package
-conventions). The command is a core namespace at
-`manifests/platform/cli/command-definitions/browser/` (`namespace.json`, `probe.command.json`,
-`run.command.json`) executing a module under `scripts/cli/`; it checks that `explain-and-show` is
-effective and otherwise exits non-zero with `roborepo package enable explain-and-show` in the message.
+The command is a core namespace at `manifests/platform/cli/command-definitions/browser/`
+(`namespace.json`, `probe.command.json`, `run.command.json`) executing a module under
+`scripts/cli/`; it checks that `feature-verification` is effective and otherwise exits non-zero with
+`roborepo package enable feature-verification` in the message.
 
 ```sh
 roborepo browser probe --json
@@ -215,11 +218,12 @@ print); provider execution, result validation, and artifact/retention helpers ar
 
 ### 5. Playwright provider and lazy provisioning
 
-The shipped CLI does not contain Playwright, so the provider resolves it at run time:
+Installing RoboRepo never installs Playwright, and enabling `feature-verification` does not either.
+The provider resolves it the first time a browser run needs it:
 
-1. The target project's own installed `playwright` or `@playwright/test`, resolved from the scenario's directory. Prefer the project's existing tests.
-2. Otherwise a RoboRepo-managed tool directory under the state root (for example `<stateRoot>/browser/tools/`). Installing into it, and downloading browser binaries, happens only after the agent gets the user's permission through the harness's normal approval. Never write to the target project's manifest or lockfile.
-3. Otherwise `blocked`, with the exact install command in `limitations`.
+1. The target project's own installed `playwright` or `@playwright/test`, resolved from the scenario's directory. No prompt. Prefer the project's existing tests.
+2. Otherwise `blocked`, with the exact install command in `limitations`. The agent asks to run it through the harness's normal permission prompt, and on approval installs the npm package and the browser binary into a RoboRepo-managed tool directory under the state root (for example `<stateRoot>/browser/tools/`). Never write to the target project's manifest or lockfile.
+3. If the user declines, the result stays `blocked` and the agent falls back to other evidence.
 
 - `probe` reports availability and each capture capability independently, without launching a browser or downloading anything.
 - Never initialize Playwright, start a browser, or download binaries for unrelated conversations.
@@ -261,7 +265,7 @@ because they can include page and network state.
 ### 8. Completion responses
 
 The default is short and outcome-oriented: the **result**, the **best available evidence**, and
-**what needs attention**, within the package's close. Include architecture details when a
+**what needs attention**, within `response-output`'s close. Include architecture details when a
 consequential decision, uncertainty, or risk needs the human's judgment. Do not block a useful
 response for decorative captures.
 
@@ -280,12 +284,12 @@ Example (illustrative; not an actual verification claim):
 
 ## Implementation checklist
 
-- [ ] Rename `globals/packages/response-shape/` to `globals/packages/explain-and-show/` and update every reference listed in Current state.
-- [ ] Rewrite `rules.md` per Section 1: consolidate while adding, ending near or below 78 lines, with no duplicates of `04-claims-and-evidence.md` or `07-decide-dont-ask.md`. Align the verification-line format with `test-harness`.
+- [ ] Rename `globals/packages/response-shape/` to `globals/packages/response-output/` and update every reference listed in Current state.
+- [ ] Rewrite `rules.md` per Section 1: consolidate while adding, remove namespaced findings, end near or below 78 lines, and avoid duplicating `04-claims-and-evidence.md` or `07-decide-dont-ask.md`. Align the verification-line format with `test-harness`.
 - [ ] Remove `requires` from the three marker packages and give each its own one-line placement rule (Section 2).
 - [ ] Regenerate tracked snapshots with `scripts/build/render-rules.sh` (`--check` verifies) and confirm Claude, Codex, and Gemini outputs match.
-- [ ] Add the evidence skill to the package with trigger fixtures, including the Section 3 table, safety rules, presentation guidance, and before/after examples.
-- [ ] Add the `browser` namespace under `manifests/platform/cli/command-definitions/browser/` and its `scripts/cli/` module; gate both commands on the package.
+- [ ] Create `globals/packages/feature-verification/` with the evidence skill and trigger fixtures (Section 3); pick or add a category.
+- [ ] Add the `browser` namespace under `manifests/platform/cli/command-definitions/browser/` and its `scripts/cli/` module; gate both commands on `feature-verification`.
 - [ ] Implement the provider contract, result-shape validation, and a stub provider; status values `passed` / `failed` / `unverified` / `blocked`.
 - [ ] Implement the Playwright provider with the Section 5 resolution order, independent capability probing, and recording lifecycle.
 - [ ] Implement evidence paths under the state root and register a bounded retention store (Section 7).
@@ -299,15 +303,16 @@ Example (illustrative; not an actual verification claim):
 | Criterion | Acceptance evidence |
 | --- | --- |
 | Rename complete | No live reference to `response-shape` outside `docs/plans/completed/` and `docs/plans/archived/`; `scripts/test/package-catalog-check.mjs` passes |
-| Shared policy | Rendered rules for Claude, Codex, and Gemini contain the same `explain-and-show` text when enabled and none of it when disabled; no sentence duplicates a shared fragment |
-| Rules size | `globals/packages/explain-and-show/rules.md` is no longer than today's 78-line `response-shape/rules.md`, or the plan records why |
-| Marker independence | Enabling `impact-awareness`, `convention-capture`, or `skill-visibility` alone leaves `explain-and-show` disabled, and each rendered marker rule carries its own placement line |
-| Caveman coexistence | With `caveman` and `explain-and-show` enabled, the rendered file contains the precedence sentence; in real sample responses, outcome, decisions, and evidence status survive and unverified claims are still marked |
-| Package gate | With `explain-and-show` disabled, `roborepo browser probe` and `browser run` exit non-zero with the enable command in the message |
+| Shared policy | Rendered rules for Claude, Codex, and Gemini contain the same `response-output` text when enabled and none of it when disabled; no sentence duplicates a shared fragment |
+| Rules size | `globals/packages/response-output/rules.md` is no longer than today's 78-line `response-shape/rules.md`, or the plan records why |
+| Package independence | Enabling `feature-verification` alone leaves `response-output` disabled and vice versa; `browser run` works with `response-output` off |
+| Marker independence | Enabling `impact-awareness`, `convention-capture`, or `skill-visibility` alone leaves `response-output` disabled, and each rendered marker rule carries its own placement line |
+| Caveman coexistence | With `caveman` and `response-output` enabled, the rendered file contains the precedence sentence; in real sample responses, outcome, decisions, and evidence status survive and unverified claims are still marked |
+| Package gate | With `feature-verification` disabled, `roborepo browser probe` and `browser run` exit non-zero with the enable command in the message |
 | Portable invocation | Both harnesses invoke the same `roborepo browser` commands; no harness-specific browser code |
 | Provider replaceability | The stub provider passes the same probe/run contract tests as Playwright without changes to the result shape |
 | Proof integrity | `passed` requires executed assertions; a capture-only run is `unverified`; failures and blocked runs never report `passed` |
-| Lazy availability | `browser probe` with no Playwright reachable reports unavailable without installing or launching anything; missing video support and an unavailable local service return actionable `limitations` |
+| Lazy availability | Enabling `feature-verification` downloads nothing; `browser probe` with no Playwright reachable reports unavailable without installing or launching anything; missing video support and an unavailable local service return actionable `limitations` |
 | No target mutation | A `browser run` against a fixture project leaves its `package.json` and lockfile byte-identical |
 | Safe lifecycle | A process started by the run is gone afterward; a pre-existing fixture server is still running |
 | Accessible evidence | Every artifact path in a result exists on disk; the response falls back to text when the session cannot open it |
@@ -331,23 +336,25 @@ is where automated scoring would go.
 
 | Risk | Safeguard |
 | --- | --- |
-| Rules grow; they load every turn | Consolidate while adding; size criterion in Validation; operational guidance lives in the skill |
+| Rules grow; they load every turn | Consolidate while adding; size criterion in Validation; verification guidance lives in the on-demand skill |
 | Concision obscures decisions, especially under caveman | Precedence sentence keeps outcome, decisions, uncertainty, and evidence status; real caveman sample |
-| Marker placement drifts without the shared rule | One explicit placement line per marker; `explain-and-show` refines, never contradicts |
+| Marker placement drifts without the shared rule | One explicit placement line per marker; `response-output` refines, never contradicts |
+| `feature-verification` and `test-harness` drift into duplicate guidance | One shared `Verified:` line format; the skill shows results, `test-harness` chooses and runs tests |
 | Provider abstraction grows into a browser platform | Two operations, provider-native scenarios, one real provider plus a stub |
 | Extra evidence work slows answers | Prefer existing evidence, combine verify/capture, no decorative reruns |
 | Capture mistaken for passed verification | Explicit `unverified`, `failed`, and `blocked` states |
 | `browser run` becomes an unprompted code-execution path | Never prefix-allowlisted; stays under harness approval |
+| First browser run pauses for an install approval | Accepted: nothing downloads until a run needs it, and the project's own Playwright is used when present |
 | Browser capture exposes secrets | Local fixtures, narrow capture, minimal traces, permission boundaries |
 | Artifacts inaccessible or removed early | Check deliverability; registered bounded store; never delete referenced evidence |
 | Existing installs lose `response-shape` on update | Accepted: unreleased, breaking rename allowed |
 
 ## Documentation impact
 
-- `docs/user/reference/config-control-panel.md`: replace the response-shape description (line 68) with `explain-and-show`, and note that marker packages no longer pull it in.
-- `docs/user/reference/roborepo-cli.md` and `docs/internal/cli-internals.md`: `browser probe` / `browser run`, the package gate, optional Playwright prerequisites, and result fields.
+- `docs/user/reference/config-control-panel.md`: replace the response-shape description (lines 68-70) with `response-output`, note that marker packages no longer pull it in, and add `feature-verification`.
+- `docs/user/reference/roborepo-cli.md` and `docs/internal/cli-internals.md`: `browser probe` / `browser run`, the package gate, how Playwright is provisioned on first use, and result fields.
 - `docs/user/reference/roborepo-cli.md` maintenance-stores rows and `docs/user/reference/architecture.md`: the evidence store, its location, and retention.
-- `docs/internal/docs-map.md`: a Feature Areas row for `explain-and-show`.
+- `docs/internal/docs-map.md`: a Feature Areas row for `feature-verification`.
 - `docs/internal/rules-parity-and-layering.md`: only if the caveman precedence needs a layering note.
 
 Each doc explains what agents show, how optional browser prerequisites work, where evidence lives,
@@ -355,7 +362,7 @@ how to open it, and what capture does **not** prove.
 
 ## Decision log
 
-- Applies to RoboRepo-managed sessions with `explain-and-show` enabled, across projects and harnesses.
+- Applies to RoboRepo-managed sessions with the relevant package enabled, across projects and harnesses.
 - Optimize **total time to understanding**, not short responses or polished reports in isolation.
 - Preserve architectural tradeoffs and human decision ownership while reducing cognitive effort.
 - Use progressive evidence; visual artifacts are optional, not mandatory.
@@ -364,19 +371,21 @@ how to open it, and what capture does **not** prove.
 - Prefer external, optional tooling; never require target repositories to add Playwright.
 - Reuse existing runtime-storage and retention machinery; keep evidence truthful, temporary, and privacy-conscious.
 - 2026-10-21: The communication policy lives in a package, not a shared fragment, keeping the earlier audit's decision that chat-output behavior is toggleable.
-- 2026-10-21: Formatting rules and evidence tooling ship as **one** package so the user makes one intuitive choice; the cost (an inert command and one skill entry for users who never need the browser) is accepted.
-- 2026-10-21: `response-shape` is renamed `explain-and-show`; no install migration, because RoboRepo is unreleased.
+- 2026-10-21: Response format and verification are separate packages, `response-output` and `feature-verification`, because they answer different questions, load at different times, and each works without the other; a combined package could not be named clearly.
+- 2026-10-21: `response-shape` is renamed `response-output`; no install migration, because RoboRepo is unreleased.
+- 2026-10-21: The namespaced-findings rule is removed from the response rules.
 - 2026-10-21: `impact-awareness`, `convention-capture`, and `skill-visibility` drop `requires`; each states its own placement.
-- 2026-10-21: The package is not default-enabled and does not join Plan Suite.
+- 2026-10-21: Neither package is default-enabled, and neither joins Plan Suite.
 - 2026-10-21: Caveman, when enabled, governs length; outcome, required decisions, uncertainty, and evidence status are never dropped, and marking something unverified is not hedging.
 - 2026-10-21: Only the browser gets a RoboRepo command (`roborepo browser`); shell, API, and test evidence run directly.
-- 2026-10-21: `roborepo browser` is a core namespace gated on the package, because package `cli-command` resources cannot register namespaces.
+- 2026-10-21: `roborepo browser` is a core namespace gated on `feature-verification`, because package `cli-command` resources cannot register namespaces.
+- 2026-10-21: Playwright is provisioned on first browser use, after a harness permission prompt, never at RoboRepo install or package enable.
 - 2026-10-21: `browser run` is never prefix-allowlisted for agents.
 
 ## Implementation-time choices
 
 - Exact module file names and CLI flags, preserving the `browser probe` / `browser run` contract.
-- Evidence skill id and its trigger phrasing.
+- Evidence skill id, its trigger phrasing, and the `feature-verification` category.
 - Flat vs. directory-aware evidence retention (Section 7).
 - Whether `browser probe` joins the agent allowlist.
 - Which existing local browser tests and real responses to use for the acceptance sample.
