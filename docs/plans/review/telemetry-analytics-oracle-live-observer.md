@@ -651,14 +651,14 @@ Validator pass 3 of the human review, at f7c3f2d8:
 
 Validator pass 4 of the human review, at 923bcb8e:
 
-- [ ] The non-observer changes table says the schema-check split has 51 assertions, up from 48;
-      both sides have 47 assertion calls, and the extra three were `import assert` lines.
-- [ ] The report-signature paragraph credits the branch with a stable fallback for unreadable
+- [x] The non-observer changes table says the schema-check split has 51 assertions, up from 48;
+      both sides have 47 assertion calls, and the extra three were `import assert` lines. — fixed in review (b02d31d6)
+- [x] The report-signature paragraph credits the branch with a stable fallback for unreadable
       entries and says main stamped only snapshots per file; main had constant fallbacks and a
       single-file markers stamp. The branch records unreadable entries one at a time and no longer
-      returns early on a missing spool, which hid marker, experiment, and snapshot changes.
-- [ ] Risks says the doc-guide delegate and `aria-controls` change stay "because other triggers
-      use them", contradicting Current state.
+      returns early on a missing spool, which hid marker, experiment, and snapshot changes. — fixed in review (b02d31d6)
+- [x] Risks says the doc-guide delegate and `aria-controls` change stay "because other triggers
+      use them", contradicting Current state. — fixed in review (b02d31d6)
 
 ### Verification
 
