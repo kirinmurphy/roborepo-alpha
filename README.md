@@ -157,9 +157,6 @@ flowchart LR
 
 ![The Tokens page: identifiable waste this week and all time, and a ranked action item](docs/images/tokens.png)
 
-Compare observed problem rates across conditions, then record a change and inspect the before/after
-session counts. These examples use fictional sample data; comparisons describe associations.
-
 [Tokens page user guide →](docs/user/guides/telemetry.md)
 
 ---

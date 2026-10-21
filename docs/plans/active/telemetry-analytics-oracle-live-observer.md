@@ -1,7 +1,7 @@
 ---
 id: koww80zh
 priority: high
-next_action: Get the user's answer on the docs/images/tokens question in Open questions, apply it, rerun the Validation Loop, then the completion preflight and submit transition
+next_action: Run the Validation Loop over the docs/images/tokens restoration, then the completion preflight and submit transition
 blocked_by: []
 depends_on: []
 related:
@@ -391,7 +391,7 @@ rather than substituting a narrower check.
 | `docs/user/guides/telemetry.md` | Replace the "Oracle health" section and its two screenshots with a short section on `roborepo telemetry oracle`: what it checks, the status and exit-code table, what it does not verify, and that output contains only aggregate counts and field names. |
 | `docs/user/reference/roborepo-cli.md` | Add a `roborepo telemetry oracle [--json]` row to the telemetry command table. |
 | `docs/internal/telemetry-internals.md` | Replace the runtime observer, cached endpoint, and stale-signature diagram with the command flow; keep the CI confidence diagram and the independent oracle section. |
-| `docs/images/tokens/README.md` | Remove the two Oracle health rows. |
+| `docs/images/tokens/README.md` | Delete it and the directory's remaining images, to match main, which removed them in 23e15c3e; this branch's merge 3483f83d had brought them back. |
 | `scratch/telemetry-analytics-oracle/README.md` | Remove the Oracle health section and the sentence describing the live observer and badge. |
 
 ## Verification
@@ -489,6 +489,14 @@ Phase 8, 2026-10-21:
   "screenshot gallery" link. The Oracle captures were the loop's only captures and the gallery's
   only rows, so removing just those (as the plan states) would leave a test that captures nothing
   and a gallery with no images. The fixture and its matrix check are unchanged.
+- 2026-10-21 — User decision: restore main's `docs/images/tokens/` state, superseding the README
+  part of the previous entry. Main deliberately deleted `docs/images/tokens/README.md`, its images,
+  and the root README sentence "Compare observed problem rates… fictional sample data…" in
+  23e15c3e; this branch's merge 3483f83d brought the README and sentence back for the Oracle
+  gallery, along with `model-metrics-{light,dark}.png`, which were never on main and referenced
+  nowhere. Deleted the README and both PNGs, removed the root README sentence, and dropped the
+  scratch page's link. Alternative: keep the rewritten fixture README as a new doc; rejected by the
+  user in favor of matching main.
 
 ## Open questions
 
@@ -503,21 +511,6 @@ or `unavailable`. Treating such rows as `passed` would be a product decision tha
   not-comparable to `partial` (compares the rest, but the production analyzer still sees the rows,
   so totals may disagree); or leave it (the command stays honest but inconclusive here).
   Recommendation: investigate the bare-tool shape in a follow-up plan. Blocks no Phase 8 task.
-- Blocking: should the branch restore main's `docs/images/tokens/` state? Main deliberately
-  deleted `docs/images/tokens/README.md`, its images, and the root README sentence "Compare observed
-  problem rates… These examples use fictional sample data…" in 23e15c3e. This branch's merge
-  3483f83d brought the README and the sentence back because the Oracle gallery still used them, and
-  `docs/images/tokens/model-metrics-{light,dark}.png` came back too (never on main, referenced
-  nowhere). Phase 8 then rewrote the README as a fixture page and linked it from the scratch review
-  page, on the false premise that it was base content. Options:
-  1. Restore main (recommended): delete the README and both PNGs, restore the root README's Tokens
-     block from main, drop the scratch link. Matches a deliberate decision on main; no reader loses
-     anything the plan names.
-  2. Keep the rewritten fixture README as a new doc and delete only the PNGs. Keeps a short pointer
-     to the documentation fixture, but reverses main's deletion.
-  Why blocked: the change deletes files and restores a file from main, and the attempt to do so in
-  this run was declined, so it needs an explicit answer. Blocks: the two unchecked Review findings
-  and the submit transition.
 
 ## Not tested
 
@@ -550,10 +543,10 @@ or `unavailable`. Treating such rows as `passed` would be a product decision tha
 - [x] The Result contract says `coverage.issues` explains every `unavailable`; an empty spool and a
       read error both leave it empty. — fixed (259fa943)
 - [ ] `docs/images/tokens/model-metrics-{light,dark}.png` are unreferenced and absent on main.
-      Blocked: see Open questions.
+      Blocked: see Open questions. — fixed (PENDING)
 - [ ] `docs/images/tokens/README.md`, the root README's Tokens sentence, and the scratch link to it
       were deleted on main in 23e15c3e and came back through the merge 3483f83d. Escalated: see
-      Open questions.
+      Open questions. — fixed (PENDING)
 
 ### Verification
 
