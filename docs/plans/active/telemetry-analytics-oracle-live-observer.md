@@ -561,14 +561,14 @@ or `unavailable`. Treating such rows as `passed` would be a product decision tha
 - [x] `docs/images/tokens/README.md`, the root README's Tokens sentence, and the scratch link to it
       were deleted on main in 23e15c3e and came back through the merge 3483f83d. Resolved by
       the user decision in the Decision Log. — fixed (79d785d5)
-- [ ] The two pass-4 findings and the pass-4 Verification line still point at Open questions; the
-      user decision (Decision Log, 2026-10-21) resolved those entries.
-- [ ] `## Validation > Repository completion gate` lists `git diff --check`; the repository gate is
-      `git diff --check main...HEAD`, and the bare form checks nothing on a clean tree.
-- [ ] The doc-guide delegate closes the session drill-down before opening the guide, changing
-      main's session flow. Escalated; resolved by user decision (Decision Log).
-- [ ] `--json` on an empty spool reports `comparable: true` and `complete: true` with `unavailable`.
-      Escalated; resolved by user decision (Decision Log).
+- [x] The two pass-4 findings and the pass-4 Verification line still point at Open questions; the
+      user decision (Decision Log, 2026-10-21) resolved those entries. — fixed (571abb26)
+- [x] `## Validation > Repository completion gate` lists `git diff --check`; the repository gate is
+      `git diff --check main...HEAD`, and the bare form checks nothing on a clean tree. — fixed (571abb26)
+- [x] The doc-guide delegate closes the session drill-down before opening the guide, changing
+      main's session flow. Escalated; resolved by user decision (Decision Log). — fixed (571abb26)
+- [x] `--json` on an empty spool reports `comparable: true` and `complete: true` with `unavailable`.
+      Escalated; resolved by user decision (Decision Log). — fixed (571abb26)
 
 ### Verification
 
