@@ -1,4 +1,4 @@
-export const ORACLE_HEALTH_SCHEMA_VERSION = 1;
+export const ORACLE_RESULT_SCHEMA_VERSION = 1;
 
 const CHECKS = ["sessions", "operations", "conditions", "boundaries", "gating", "regression", "loops"];
 const FIELDS = ["policy", "session_count", "token_session_count", "operation_count", "token_operation_count", "conditions", "changes", "regression"];
@@ -9,87 +9,57 @@ const ISSUES = ["malformed_evidence", "unsupported_analysis_options", "duplicate
   "unresolved_repository", "unknown_model", "malformed_snapshot", "unsupported_snapshot_schema", "unknown_snapshot_condition",
   "malformed_marker", "unsupported_marker_schema", "unsupported_marker_type", "missing_marker_kinds", "unsupported_marker_kind",
   "unknown_marker_scope", "unknown_session_condition", "changing_session_snapshot"];
-const ERRORS = ["comparison_error", "evidence_read_error", "worker_start_error", "worker_crash", "worker_timeout",
-  "invalid_worker_result", "invalid_cached_health", "signature_error"];
+const ERRORS = ["comparison_error", "evidence_read_error"];
 const SUMMARIES = {
   passed: "Production and oracle calculations agree for the checked supported evidence.",
-  checking: "An independent comparison is in progress.",
-  stale: "Evidence changed; the last comparison is not current.",
   partial: "Covered calculations agree, but required evidence is incomplete or unresolved.",
   unavailable: "A complete comparable input could not be evaluated.",
   failed: "Production and oracle calculations disagree on covered fields.",
 };
 
-const STATUSES = Object.keys(SUMMARIES);
+export const ORACLE_STATUSES = Object.freeze(Object.keys(SUMMARIES));
 
-// Construct an explicit wire projection: never spread comparison data or exception text into it.
-// A worker result describes checked evidence; only the observer can establish current freshness.
-export function createOracleHealthResult(comparison, metadata) {
+// Construct an explicit output projection: never spread comparison data or exception text into it.
+// A comparison that breaks its own shape rules cannot claim agreement, so it reports unavailable.
+export function createOracleResult(comparison, metadata) {
   if (!validComparison(comparison) || !validMetadata(metadata)) {
-    return emptyOracleHealth("unavailable", "invalid_worker_result");
+    return projectResult(emptyOracleResult("comparison_error"), metadata);
   }
-  return projectHealth(comparison, metadata);
+  return projectResult(comparison, metadata);
 }
 
-export function emptyOracleHealth(status = "checking", errorCategory = null) {
-  const safeStatus = status === "checking" ? "checking" : "unavailable";
-  return { schema: ORACLE_HEALTH_SCHEMA_VERSION, status: safeStatus,
-    checked_at: null, duration_ms: null, evidence_signature: null,
+export function emptyOracleResult(errorCategory = null) {
+  return { schema: ORACLE_RESULT_SCHEMA_VERSION, status: "unavailable", checked_at: null, duration_ms: null,
     event_count: 0, session_count: 0, operation_count: 0,
     coverage: { supported_events: 0, unsupported_events: 0, comparable: false, complete: false, issues: [], checks: [] },
-    differences: [], summary: SUMMARIES[safeStatus],
-    ...(errorCategory ? { error_category: ERRORS.includes(errorCategory) ? errorCategory : "invalid_worker_result" } : {}),
+    differences: [], summary: SUMMARIES.unavailable,
+    ...(errorCategory ? { error_category: ERRORS.includes(errorCategory) ? errorCategory : "comparison_error" } : {}),
   };
 }
 
-export function staleOracleHealth(result) {
-  return { ...result, status: "stale", summary: SUMMARIES.stale };
-}
-
-// Re-project cached state at the HTTP boundary. The observer already stores this schema, but an
-// explicit allowlist here prevents a future cache/debug field from becoming a public response.
-export function projectOracleHealthResult(value) {
-  if (!validHealthResult(value)) return emptyOracleHealth("unavailable", "invalid_cached_health");
-  return projectHealth(value, value);
-}
-
-// The single public field allowlist shared by worker results and the HTTP boundary.
-function projectHealth(source, metadata) {
+// The single public field allowlist for every printed result.
+function projectResult(source, metadata) {
   const coverage = source.coverage;
+  const { checked_at, duration_ms } = validMetadata(metadata) ? metadata : { checked_at: null, duration_ms: null };
   return {
-    schema: ORACLE_HEALTH_SCHEMA_VERSION, status: source.status,
-    checked_at: metadata.checked_at, duration_ms: metadata.duration_ms, evidence_signature: metadata.evidence_signature,
+    schema: ORACLE_RESULT_SCHEMA_VERSION, status: source.status, checked_at, duration_ms,
     event_count: source.event_count, session_count: source.session_count, operation_count: source.operation_count,
     coverage: { supported_events: coverage.supported_events, unsupported_events: coverage.unsupported_events,
       comparable: coverage.comparable, complete: coverage.complete,
       issues: coverage.issues.map(({ category, count }) => ({ category, count })), checks: [...coverage.checks] },
     differences: [...source.differences], summary: SUMMARIES[source.status],
-    ...(source.error_category ? { error_category: source.error_category } : {}),
+    ...(source.status === "unavailable" && source.error_category ? { error_category: source.error_category } : {}),
   };
 }
 
-export function isOracleEvidenceSignature(value) {
-  return typeof value === "string" && /^sha256:[a-f0-9]{64}$/.test(value);
-}
-
 function validMetadata(value) {
-  return value && isOracleEvidenceSignature(value.evidence_signature) && count(value.duration_ms)
+  return Boolean(value) && count(value.duration_ms)
     && typeof value.checked_at === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(value.checked_at)
     && Number.isFinite(Date.parse(value.checked_at)) && new Date(value.checked_at).toISOString() === value.checked_at;
 }
 
-function validHealthResult(value) {
-  if (!value || value.schema !== ORACLE_HEALTH_SCHEMA_VERSION || !STATUSES.includes(value.status)) return false;
-  if (!validCountsAndCoverage(value)) return false;
-  if (value.checked_at !== null && !validMetadata(value)) return false;
-  if (value.checked_at === null && (value.duration_ms !== null || value.evidence_signature !== null)) return false;
-  if (["passed", "partial", "failed"].includes(value.status) && value.checked_at === null) return false;
-  if (value.status === "checking" && value.checked_at !== null) return false;
-  return value.summary === SUMMARIES[value.status];
-}
-
 function validComparison(value) {
-  if (!value || !["passed", "partial", "failed", "unavailable"].includes(value.status)) return false;
+  if (!value || !ORACLE_STATUSES.includes(value.status)) return false;
   if (!validCountsAndCoverage(value)) return false;
   const coverage = value.coverage;
   if (value.status === "unavailable") return value.differences.length === 0;
@@ -100,7 +70,6 @@ function validComparison(value) {
   return value.status === "passed" ? coverage.complete && complete : !coverage.complete && !complete;
 }
 
-// Shape rules common to worker comparisons and cached health results.
 function validCountsAndCoverage(value) {
   if (![value.event_count, value.session_count, value.operation_count].every(count)) return false;
   if (value.session_count > value.event_count || value.operation_count > value.event_count) return false;

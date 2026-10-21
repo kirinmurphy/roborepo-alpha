@@ -5,8 +5,9 @@ import { POLICY, rowSort } from "./telemetry-oracle-cohorts.mjs";
 
 const CHECKS = ["sessions", "operations", "conditions", "boundaries", "gating", "regression", "loops"];
 
-// This boundary alone knows both implementations. It never returns raw projections or errors
-// to a live caller; the CI runner separately uses comparisonEntries for synthetic replay output.
+// This boundary alone knows both implementations. It never returns raw projections or errors to
+// `roborepo telemetry oracle`; the CI runner separately uses comparisonEntries for synthetic replay
+// output.
 export function compareTelemetryOracle(events, options = {}, { analyze = analyzeTelemetry } = {}) {
   const coverage = inspectOracleEvidence(events, options);
   const counts = { event_count: Array.isArray(events) ? events.length : 0, session_count: 0, operation_count: 0 };
@@ -21,7 +22,7 @@ export function compareTelemetryOracle(events, options = {}, { analyze = analyze
     return result(differences.length ? "failed" : coverage.complete ? "passed" : "partial", counts, coverage, differences, CHECKS);
   } catch {
     // Exceptions can contain local paths, raw values, or prompt text. A fixed category is enough
-    // for the observer; operational failure is not evidence of an analytics disagreement.
+    // for the command; operational failure is not evidence of an analytics disagreement.
     return { ...result("unavailable", counts, coverage, [], []), error_category: "comparison_error" };
   }
 }

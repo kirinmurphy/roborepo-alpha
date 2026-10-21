@@ -1,32 +1,12 @@
-# Tokens page screenshots
+# Tokens page documentation fixture
 
-These images show the real Tokens UI using **fictional, deterministic sample data**.
-They contain no personal telemetry. Both light and dark versions are provided.
-Dates use UTC and formatting uses `en-US`.
-
-## Gallery
-
-Click an image to inspect it at full size. Each row shows the same sample in both themes.
-
-| View | Light | Dark |
-| --- | --- | --- |
-| Oracle health: the live comparison badge beside the report period | ![Oracle health badge in light mode](oracle-health-light.png) | ![Oracle health badge in dark mode](oracle-health-dark.png) |
-| Oracle health details: freshness, aggregate counts, coverage, checked invariants, and limits | ![Oracle health details in light mode](oracle-health-detail-light.png) | ![Oracle health details in dark mode](oracle-health-detail-dark.png) |
-
-## Reproduce
-
-From the feature checkout:
+The user guide's condition example (3/12 vs 9/12) comes from **fictional, deterministic sample data**
+in `scripts/test/fixtures/telemetry-conditions-documentation.mjs`. It contains no personal
+telemetry, and the isolated unit matrix checks it against fixed numerical expectations:
 
 ```sh
 node scripts/test/telemetry-conditions-matrix-check.mjs
-TELEMETRY_DOC_SCREENSHOTS="$PWD/docs/images/tokens" npm run test:portal-ui
 ```
-
-The screenshot tests are opt-in; ordinary browser runs do not overwrite documentation assets.
-Fixture: `scripts/test/fixtures/telemetry-conditions-documentation.mjs`.
-Capture script: `scripts/test/portal-ui/telemetry-documentation.spec.mjs`.
-The same fixture is checked against fixed numerical expectations by the isolated unit matrix.
-Screenshots capture actual rendered sections/dialogs; they are not generated illustrations.
 
 ## Test coverage
 

@@ -13,7 +13,6 @@ import { fetchSetupState } from "/portal/shared/setup-api.js";
 import { createConditionsReport } from "./conditions-report.js";
 import { sessionConditionLine, capturedSessionFindings } from "./conditions-context.js";
 import { createDocGuideModal } from "/portal/shared/doc-guide-modal.js";
-import { createOracleHealthPanel } from "./oracle-health.js";
 import { createTokensRepositoryScope, isRepositoryScopeUnavailable } from "./repository-scope.js";
 import { preserveViewState } from "./view-state.js";
 
@@ -32,7 +31,6 @@ let lastSetupState = null;
 // The most recent report object — session chips and timeline marks look sessions up here at
 // click time, so a click always acts on the live report rather than a stale closure.
 let lastSessionData = null;
-const oracleHealth = createOracleHealthPanel();
 // Polls and scope changes can overlap; only the latest load may paint.
 let loadSequence = 0;
 // The selected repository (or outside activity) has no captures: its empty splash stands in for
@@ -83,7 +81,6 @@ async function init() {
   try {
     [cfg, setup] = await Promise.all([portalGetJson("/api/config"), fetchSetupState()]);
   } catch {
-    oracleHealth.start({ live: false });
     if (firstLoad) { firstLoad = false; portalHideLoadingNow(); }
     return;
   }
@@ -100,7 +97,6 @@ async function init() {
   // reads the bundled mock-spool.jsonl through the same analyzeTelemetry pipeline.
   // In the full state, we fetch from /api/data (the real spool).
   const isFullState = setupReady;
-  oracleHealth.start({ live: isFullState });
   await load(!isFullState);
   // Re-apply the setup cascade after the first report load: hasData is now established from the
   // real /api/data response, so pageState reflects actual captures — the empty page hides when
@@ -1366,9 +1362,8 @@ wireSessionChips();
 wireHintToggle();
 
 // ── Doc-guide triggers ──
-// Every [data-doc-anchor] trigger (section info icons, the Oracle health guide button) opens the
-// shared popup at its anchor; the factory owns that delegate. The guide is server-rendered from
-// docs/user/guides/telemetry.md.
+// Every [data-doc-anchor] trigger (the section info icons) opens the shared popup at its anchor;
+// the factory owns that delegate. The guide is server-rendered from docs/user/guides/telemetry.md.
 createDocGuideModal(document.getElementById("tokensdocmodal"), async () => {
   try {
     return await portalGetJson("/api/telemetry/guide");

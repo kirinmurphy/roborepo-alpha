@@ -20,36 +20,6 @@ from sample data. Recording changes requires live telemetry.
 A typical visit: start at **Action items**, open the evidence behind one, and record a change under
 **Your changes** if you act on it. Later sessions show whether problems became less frequent.
 
-## Oracle health
-
-The **Oracle health** badge beside the report period compares selected analytics with an
-independent recomputation over the same current local evidence. Open **Oracle health details** for
-freshness, duration, aggregate evidence counts, coverage, checked invariants, and the latest
-privacy-safe result.
-
-![Oracle health badge reading Passed beside the report period, with its details button.](../../images/tokens/oracle-health-light.png)
-
-![Oracle health details showing a passed status, current evidence, aggregate counts, coverage, checked invariants, and limits.](../../images/tokens/oracle-health-detail-light.png)
-
-| Status | Meaning |
-| --- | --- |
-| **Passed** | The production analyzer and independent oracle agree for every supported checked row, and the result matches the current evidence. |
-| **Checking** | A comparison is running and no current result is available yet. |
-| **Stale** | Evidence changed after the last comparison. The prior result remains visible in the details but is not current. |
-| **Partial** | Covered values agree, but some required evidence could not be interpreted independently. |
-| **Unavailable** | No complete comparable input could be evaluated, or the isolated comparison could not run. |
-| **Failed** | The two implementations disagree on at least one covered field for the current evidence. |
-
-The live oracle checks harness-scoped sessions, mirrored operation deduplication, condition
-comparisons, change boundaries and exclusions, evidence gates, per-call regression, and
-harness-local loop detection. It does not prove that capture is complete, verify every dashboard
-metric, or show that a condition caused an outcome. The badge reports the local runtime comparison;
-the deterministic CI oracle remains a separate build-time guardrail.
-
-The details contain only aggregate counts and allowlisted status categories. They do not expose raw
-events, prompts, transcripts, file paths, command output, or replayable JSONL. The Tokens report
-continues working when oracle health is unavailable.
-
 ## Identifiable waste
 
 Each card shows the share of tokens spent on patterns the page recognizes as avoidable. When several
@@ -174,3 +144,31 @@ roborepo telemetry report --conditions
 
 See the [Telemetry Service Reference](../reference/telemetry.md) for capture, retention, schemas,
 and CLI details.
+
+## Independent check
+
+To confirm that the report's calculations hold for your own telemetry, run:
+
+```sh
+roborepo telemetry oracle
+```
+
+It recomputes selected analytics with a separate, deliberately simple implementation over the same
+local evidence and compares the two. The checked calculations are harness-scoped sessions, mirrored
+operation deduplication, condition comparisons, change boundaries and exclusions, evidence gates,
+per-call regression, and harness-local loop detection. Add `--json` for a machine-readable result.
+
+| Status | Exit code | Meaning |
+| --- | ---: | --- |
+| **Passed** | 0 | Both implementations agree, and every required row could be interpreted independently. |
+| **Failed** | 1 | The two implementations disagree on at least one checked calculation. |
+| **Partial** | 2 | Checked values agree, but some evidence could not be interpreted independently. |
+| **Unavailable** | 2 | There is no comparable evidence yet, or the evidence could not be read. |
+
+Exit code 2 means the check was inconclusive: it neither passed nor found a disagreement.
+
+The check does not prove that capture is complete, verify every number on the page, or show that a
+condition caused an outcome. Its output contains only aggregate counts, coverage categories, and the
+names of fields that differ: never raw events, prompts, file paths, or command output. The same
+comparison runs in CI against fixed sample data, so a disagreement on your machine points at
+evidence the sample data does not cover.

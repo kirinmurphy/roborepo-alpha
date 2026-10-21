@@ -160,8 +160,7 @@ flowchart LR
 Compare observed problem rates across conditions, then record a change and inspect the before/after
 session counts. These examples use fictional sample data; comparisons describe associations.
 
-[Tokens page user guide →](docs/user/guides/telemetry.md) ·
-[Light and dark screenshot gallery →](docs/images/tokens/README.md)
+[Tokens page user guide →](docs/user/guides/telemetry.md)
 
 ---
 

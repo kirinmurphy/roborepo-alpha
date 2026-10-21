@@ -1,28 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
-import { isMainThread, parentPort, workerData } from "node:worker_threads";
-import { compareTelemetryOracle } from "./telemetry-oracle-compare.mjs";
-import { createOracleHealthResult, emptyOracleHealth } from "./telemetry-schemas/oracle-health-schema.mjs";
 
-// Explicit paths avoid importing portal orchestration or a reader that silently normalizes or
-// discards evidence. Only this isolated thread retains the full raw snapshot during comparison.
-if (!isMainThread && parentPort) {
-  const started = performance.now();
-  let comparison;
-  try {
-    const { events, options } = readEvidenceSnapshot(workerData.paths);
-    comparison = compareTelemetryOracle(events, options);
-  } catch {
-    comparison = emptyOracleHealth("unavailable", "evidence_read_error");
-  }
-  parentPort.postMessage(createOracleHealthResult(comparison, {
-    evidence_signature: workerData.evidence_signature,
-    checked_at: new Date().toISOString(), duration_ms: Math.round(performance.now() - started),
-  }));
-  parentPort.close();
-}
-
-function readEvidenceSnapshot(paths) {
+// Reads one raw evidence snapshot from explicit paths. It deliberately avoids the production spool
+// and persistence readers, which normalize or silently discard evidence the oracle must account for:
+// every unparseable record is counted per store instead.
+export function readEvidenceSnapshot(paths) {
   const skippedEvidence = { malformed_events: 0, malformed_markers: 0, malformed_snapshots: 0, malformed_repository_registry: 0 };
   const events = filesIn(paths.spoolDir, ".jsonl").flatMap((file) =>
     readJsonl(path.join(paths.spoolDir, file), skippedEvidence, "malformed_events", file));

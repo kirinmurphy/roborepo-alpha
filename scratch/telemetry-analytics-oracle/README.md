@@ -1,14 +1,7 @@
 # Telemetry review screenshots
 
 A visual entry point for reviewing this branch. The images show the current Tokens page with
-fictional sample data. The independent oracle comparison, live observer, and Oracle health badge
-are implemented.
-
-## Oracle health
-
-![Oracle health badge in light mode](../../docs/images/tokens/oracle-health-light.png)
-
-![Oracle health details in light mode](../../docs/images/tokens/oracle-health-detail-light.png)
+fictional sample data.
 
 ## Condition comparison
 

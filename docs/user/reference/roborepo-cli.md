@@ -119,6 +119,7 @@ Telemetry is local and opt-in. See [Telemetry](telemetry.md) for what is capture
 | `roborepo telemetry enable` / `disable` | Turns capture on or off. |
 | `roborepo telemetry status` | Shows capture state. |
 | `roborepo telemetry report [--deep]` | Prints findings, spikes, sessions, and cost breakdowns. `--deep` adds an LLM summary of the computed findings. |
+| `roborepo telemetry oracle [--json]` | Checks the report's calculations against an independent implementation over local telemetry. Exits 0 when they agree, 1 on a disagreement, and 2 when the check is inconclusive. |
 | `roborepo telemetry mark --type <type> --title <title> [...]` | Records a marker, such as a change you want to measure. |
 | `roborepo telemetry experiment start\|end\|status [<id>]` | Starts, ends, or inspects an experiment. |
 | `roborepo telemetry export` | Prints the raw capture data as JSON. |

@@ -5,7 +5,6 @@
 import { send, readJsonBody } from "./portal-routes-http.mjs";
 import { hasHarnessProvider } from "../harnesses/registry.mjs";
 import { defineRoutes } from "./portal-router.mjs";
-import { projectOracleHealthResult } from "./telemetry-schemas/oracle-health-schema.mjs";
 import { readRepositoryScope } from "./portal-routes-scope.mjs";
 
 export const telemetryRoutes = defineRoutes([
@@ -17,14 +16,6 @@ export const telemetryRoutes = defineRoutes([
     path: "/api/tokens/mock",
     handler: (req, res, { handlers }) => {
       send(res, 200, "application/json", handlers.loadMockAnalysisJson());
-      return true;
-    },
-  },
-  {
-    method: "GET",
-    path: "/api/telemetry/oracle-health",
-    handler: (req, res, { handlers }) => {
-      send(res, 200, "application/json", JSON.stringify(projectOracleHealthResult(handlers.loadOracleHealth())));
       return true;
     },
   },

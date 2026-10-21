@@ -1,7 +1,7 @@
 ---
 id: koww80zh
 priority: high
-next_action: Implement Phase 8 — add `roborepo telemetry oracle` and remove the live observer, health endpoint, and Tokens badge
+next_action: Run the Validation Loop over the Phase 8 commit, then the completion preflight and submit transition
 blocked_by: []
 depends_on: []
 related:
@@ -272,9 +272,9 @@ The last commit containing the full observer is `3483f83d`.
 
 Command:
 
-- [ ] Move `readEvidenceSnapshot` and its helpers from `scripts/cli/telemetry-oracle-worker.mjs`
+- [x] Move `readEvidenceSnapshot` and its helpers from `scripts/cli/telemetry-oracle-worker.mjs`
       into `scripts/cli/telemetry-oracle-evidence.mjs` without changing behavior.
-- [ ] Rename `scripts/cli/telemetry-schemas/oracle-health-schema.mjs` to
+- [x] Rename `scripts/cli/telemetry-schemas/oracle-health-schema.mjs` to
       `oracle-result-schema.mjs`. Remove `evidence_signature`, `checking`, `stale`,
       `staleOracleHealth`, and the observer-only error categories (`signature_error`,
       `worker_start_error`, `worker_crash`, `worker_timeout`, `invalid_worker_result`,
@@ -283,51 +283,51 @@ Command:
       `createOracleHealthResult` to `createOracleResult`, `emptyOracleHealth` to
       `emptyOracleResult`, and `ORACLE_HEALTH_SCHEMA_VERSION` to `ORACLE_RESULT_SCHEMA_VERSION`.
       Update every importer.
-- [ ] Add `scripts/cli/telemetry-oracle-command.mjs` with the behavior, output, and exit codes in
+- [x] Add `scripts/cli/telemetry-oracle-command.mjs` with the behavior, output, and exit codes in
       Command behavior.
-- [ ] Add `case "oracle"` to `telemetryCommand` in `scripts/cli/telemetry.mjs` and the command
+- [x] Add `case "oracle"` to `telemetryCommand` in `scripts/cli/telemetry.mjs` and the command
       definition `manifests/platform/cli/command-definitions/telemetry/oracle.command.json`.
 
 Removal:
 
-- [ ] Delete the observer, worker, route, runtime-check, and Tokens badge files listed in "To
+- [x] Delete the observer, worker, route, runtime-check, and Tokens badge files listed in "To
       remove: live observer", and their entries in `scripts/test/check-groups.json`.
-- [ ] Remove observer wiring, `loadOracleHealth`, the `Worker` import, and
+- [x] Remove observer wiring, `loadOracleHealth`, the `Worker` import, and
       `telemetryOracleEvidenceSignature` from `scripts/cli/telemetry.mjs`; rename the shared
       evidence helpers as described in Module ownership.
-- [ ] Remove the route entry and schema import from `scripts/cli/portal-routes-telemetry.mjs`.
-- [ ] Reword the comments in `scripts/cli/telemetry-oracle-compare.mjs` that name the observer or
+- [x] Remove the route entry and schema import from `scripts/cli/portal-routes-telemetry.mjs`.
+- [x] Reword the comments in `scripts/cli/telemetry-oracle-compare.mjs` that name the observer or
       a live caller so they describe the command.
-- [ ] Remove the badge import and `start()` calls from `portal/tokens/app.js`, and drop "the
+- [x] Remove the badge import and `start()` calls from `portal/tokens/app.js`, and drop "the
       Oracle health guide button" from the doc-guide comment there.
-- [ ] Remove the badge and dialog markup from `portal/tokens/index.html` and their styles from
+- [x] Remove the badge and dialog markup from `portal/tokens/index.html` and their styles from
       `portal/tokens/styles.css`.
-- [ ] Remove the Oracle captures, `oracleHealthSample`, and the "Oracle guide screenshots are
+- [x] Remove the Oracle captures, `oracleHealthSample`, and the "Oracle guide screenshots are
       served" test from `scripts/test/portal-ui/telemetry-documentation.spec.mjs`; delete the four
       `oracle-health*` PNGs.
 
 Tests:
 
-- [ ] Retarget `scripts/test/telemetry-oracle-health-check.mjs` to the result schema, renamed
+- [x] Retarget `scripts/test/telemetry-oracle-health-check.mjs` to the result schema, renamed
       `telemetry-oracle-result-check.mjs`: the four statuses, privacy-safe projection, removal of
       unexpected fields, and `error_category` only on `unavailable`.
-- [ ] Retarget `scripts/test/telemetry-oracle-signature-check.mjs` to
+- [x] Retarget `scripts/test/telemetry-oracle-signature-check.mjs` to
       `telemetryReportEvidenceSignature` only, keeping its marker, snapshot, registry, rename, and
       same-size-edit cases.
-- [ ] Add `scripts/test/telemetry-oracle-evidence-check.mjs` carrying the evidence-reader cases
+- [x] Add `scripts/test/telemetry-oracle-evidence-check.mjs` carrying the evidence-reader cases
       from the deleted worker check: legacy repository resolution, per-store skipped counts,
       unsafe parsed rows, and I/O failure.
-- [ ] Add `scripts/test/telemetry-oracle-command-check.mjs`. Run the real command against a
+- [x] Add `scripts/test/telemetry-oracle-command-check.mjs`. Run the real command against a
       disposable `ROBOREPO_STATE_DIR` and assert, for a supported spool: `Passed`, exit 0, and
       readable counts; with `--json`: a schema-valid object with no raw event fields, prompt text,
       or paths; for an empty spool: `unavailable` and exit 2. Unit-test the status-to-exit-code
       mapping for all four statuses. Disagreement detection stays covered by
       `telemetry-oracle-live-check.mjs`.
-- [ ] Register the new and renamed checks in `scripts/test/check-groups.json`.
+- [x] Register the new and renamed checks in `scripts/test/check-groups.json`.
 
 Documentation:
 
-- [ ] Apply every update in Documentation impact.
+- [x] Apply every update in Documentation impact.
 
 ## Validation
 
@@ -409,7 +409,31 @@ Evidence from completed phases that still applies after Phase 8:
   families, and 34 browser tests. Windows parity was skipped because PowerShell was unavailable.
 
 Observer, endpoint, and badge evidence from Phases 5–7 no longer applies; those components are
-removed in Phase 8. Phase 8 evidence is recorded here when that phase completes.
+removed in Phase 8.
+
+Phase 8, 2026-10-21:
+
+- `node scripts/test/run-checks.mjs --filter telemetry` passes 35 suites, including the new
+  `telemetry-oracle-result-check`, `telemetry-oracle-evidence-check`,
+  `telemetry-oracle-command-check`, and `telemetry-report-signature-check`, and the unchanged
+  deterministic suite and job-summary check (nine cases, 879 events).
+- The command check runs the real CLI against a disposable `ROBOREPO_STATE_DIR`: `Passed` and exit 0
+  for a supported spool, `Unavailable` and exit 2 for an empty spool, `--json` free of raw fields,
+  prompt text, and paths, and exit codes for all four statuses.
+- `node scripts/test/portal-ui/run.mjs` passes 103 browser tests with the Oracle health spec and
+  captures removed.
+- `node scripts/test/cli-command-catalog-check.mjs` and
+  `node scripts/test/cli-surface-integration-check.mjs` pass with the new command definition.
+- The removal check `git grep` returns no matches outside `docs/plans`.
+- Portal started from this worktree on port 4341: `/tokens` renders the report with no Oracle badge
+  or dialog, makes no oracle request, and has no failing resource after a reload;
+  `GET /api/telemetry/oracle-health` returns 404.
+- Manual check against real local telemetry (31 MB spool): `roborepo telemetry oracle` printed
+  `Unavailable` with exit 2 in 148 ms, and `--json` printed the same status in 120 ms over 18,075
+  events: 15,160 supported, 2,915 unsupported. Issues: `unsupported_bare_tool` 2,456,
+  `unknown_model` 251, `missing_snapshot` 228, `unresolved_repository` 14. The unsupported bare-tool
+  rows make the input not comparable, so the comparison did not run. This is a finding about live
+  event shapes, recorded in Open questions, not a defect in the command.
 
 ## Risks
 
@@ -432,8 +456,51 @@ removed in Phase 8. Phase 8 evidence is recorded here when that phase completes.
   badge is also not something a portal user can act on. The CI oracle and the comparison boundary
   are kept; the command keeps the one capability CI lacks, checking real local evidence. Decided by
   the user.
+- 2026-10-21 — Restore `serveCommand` in `scripts/cli/telemetry.mjs` to main's shutdown shape (a
+  synchronous SIGTERM handler, no SIGINT hook, no returned server, a plain warm-up timer). The async
+  stop, SIGINT hook, close listener, and `closing` guard existed only to await worker exit.
+  Alternative: keep them as general lifecycle hardening; rejected because nothing else uses them
+  and the plan removes all observer wiring.
+- 2026-10-21 — Load the command module with a dynamic import from `telemetryCommand`, as the
+  `capture` case does. Alternative: a static import; rejected because it would load the oracle and
+  comparison modules on every portal start and every other telemetry subcommand.
+- 2026-10-21 — Rename `telemetry-oracle-signature-check.mjs` to
+  `telemetry-report-signature-check.mjs`. After the strict oracle signature is removed, the check
+  covers only the report cache key, so the old name would misdirect. The plan said "retarget";
+  the rename follows from it.
+- 2026-10-21 — Fold the shared `oracleEvidence` helper into `telemetryReportEvidenceSignature`,
+  with `REPORT_EVIDENCE_PATHS` replacing `ORACLE_EVIDENCE_PATHS` and including experiments. Its one
+  remaining caller made a separate helper indirection with no reuse. `evidenceDirectoryStamp` drops
+  its `strict` parameter because only non-strict callers remain; `evidenceFileStamp` keeps its
+  strict default, which `registrySignature` relies on.
+- 2026-10-21 — The readable output adds an `Issues:` line listing coverage categories and counts
+  when any exist. Without it, `partial` and `unavailable` give no reason. It prints only fixed
+  category names and counts, so it stays within the privacy contract.
+- 2026-10-21 — A comparison that fails the schema's shape rules projects to `unavailable` with
+  `comparison_error`, replacing the removed `invalid_worker_result`, matching the plan's rule for
+  unrecognized categories.
+- 2026-10-21 — Remove the screenshot loop from `telemetry-documentation.spec.mjs` entirely, rewrite
+  `docs/images/tokens/README.md` to describe the documentation fixture, and drop the root README's
+  "screenshot gallery" link. The Oracle captures were the loop's only captures and the gallery's
+  only rows, so removing just those (as the plan states) would leave a test that captures nothing
+  and a gallery with no images. The fixture and its matrix check are unchanged.
 
 ## Open questions
 
 None block Phase 8. Any live event shape that cannot be interpreted independently stays `partial`
 or `unavailable`. Treating such rows as `passed` would be a product decision that needs review.
+
+- Not blocking: on the developer's real telemetry the command reports `unavailable`, because 2,456
+  of 18,075 events are `unsupported_bare_tool` rows, which make the whole input not comparable
+  rather than `partial`. Until the oracle can interpret those rows, or excludes them as `partial`,
+  the command cannot compare this machine's evidence at all. Options: teach the oracle the bare-tool
+  shape (most faithful, more independent code to maintain); downgrade the category from
+  not-comparable to `partial` (compares the rest, but the production analyzer still sees the rows,
+  so totals may disagree); or leave it (the command stays honest but inconclusive here).
+  Recommendation: investigate the bare-tool shape in a follow-up plan. Blocks no Phase 8 task.
+
+## Not tested
+
+- [ ] `roborepo telemetry oracle` reaches `Passed` on a real developer machine. The only real
+      spool available during implementation was `unavailable` (see Verification), and the
+      `Passed` path is covered only by the command check's synthetic spool.
