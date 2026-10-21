@@ -117,7 +117,8 @@ The oracle recomputes these values without importing production analysis helpers
 Two shared portal changes made while building the badge stay. The `[data-doc-anchor]` click
 delegate moved from `portal/tokens/app.js` into the shared factory in
 `portal/shared/doc-guide-modal.js`, so any page that creates a doc guide gets it; Tokens is its only
-user today. `portal/shared/info-icon.js` now forwards `aria-controls` to its inner button, a
+user today. It also widened from `portal-info-icon[data-doc-anchor]` to any `[data-doc-anchor]`
+element, which changes nothing today because only info icons carry the attribute. `portal/shared/info-icon.js` now forwards `aria-controls` to its inner button, a
 general accessibility fix that no current `portal-info-icon` sets. The delegate's line that closed
 a host dialog before opening the guide served only the Oracle dialog and is removed, so the guide
 opens over the session drill-down as on main.
@@ -133,10 +134,11 @@ The branch also carries changes made alongside the oracle that are not observer 
 
 The branch also strengthened the report cache signature (`telemetryReportEvidenceSignature` in
 `scripts/cli/telemetry.mjs`). Main's signature already covered markers, experiments, and
-snapshots; the branch adds the repository registry, per-file stamps (device, inode, ctime, and
-file names), and a stable fallback for unreadable entries. That fixes a stale report cache
-independently of the oracle and stays. It shares stamp helpers with the strict oracle signature,
-which is removed.
+snapshots, but stamped only snapshots per file. The branch adds the repository registry, per-file
+stamps for the spool, markers, registry, and experiments, device and inode in every stamp, and a
+stable fallback for unreadable entries. That fixes a stale report cache independently of the
+oracle and stays. Its stamp helpers were first shared with the strict oracle signature, which is
+now removed.
 
 ### Disagreements found
 
