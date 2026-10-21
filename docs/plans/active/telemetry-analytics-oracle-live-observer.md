@@ -522,12 +522,12 @@ or `unavailable`. Treating such rows as `passed` would be a product decision tha
 - [x] Two assertion messages in `telemetry-oracle-result-check.mjs` name the removed observer. — fixed (fd4582cd)
 - [x] `scripts/cli/telemetry-oracle-findings.mjs` ends with a blank line, which
       `git diff --check main...HEAD` reports. — fixed (fd4582cd)
-- [ ] The user guide's `Unavailable` row says the `Issues:` line names every cause, but a read
-      error is on the `Error:` line and an empty spool shows only `Evidence: 0 events`.
-- [ ] The internals doc says the evidence reader resolves legacy repository identity; it passes the
-      registry through, and unresolved legacy identity stays `partial`.
-- [ ] The Result contract example omits `coverage.comparable`, `complete`, and `issues`, which
-      `--json` prints.
+- [x] The user guide's `Unavailable` row says the `Issues:` line names every cause, but a read
+      error is on the `Error:` line and an empty spool shows only `Evidence: 0 events`. — fixed (2ebeae7f)
+- [x] The internals doc says the evidence reader resolves legacy repository identity; it passes the
+      registry through, and unresolved legacy identity stays `partial`. — fixed (2ebeae7f)
+- [x] The Result contract example omits `coverage.comparable`, `complete`, and `issues`, which
+      `--json` prints. — fixed (2ebeae7f)
 
 ### Verification
 
