@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Characterization test for the Claude provider's hooks.write (removal semantics) adapter
-// (scripts/harnesses/claude/index.mjs), ported from scripts/install/uninstall.sh's
+// (scripts/harnesses/claude/hooks-withdraw.mjs), ported from scripts/install/uninstall-lib.sh's
 // strip_package_hooks. Pins: strips hook entries matching a claude-harness "hooks" resource's
 // commands from every event array (deleting the event key entirely once empty), strips permission
 // allow-entries matching a "permissions" resource's allow list, both in one settings.json read/
@@ -49,6 +49,34 @@ function testStripsRealPackageHooksAndPermissions() {
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 
+function testStrippingEveryAllowEntryKeepsOtherPermissionKeys() {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-hooks-write-remove-perm-keys-"));
+  const homePath = path.join(tmp, ".claude");
+  fs.mkdirSync(homePath, { recursive: true });
+  const settingsPath = path.join(homePath, "settings.json");
+
+  const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+  const pkgConfig = JSON.parse(fs.readFileSync(path.join(repoRoot, "globals", "packages-archived", "jcodemunch", "package.config.json"), "utf8"));
+  const permissionsResource = pkgConfig.resources.find((r) => r.type === "permissions");
+
+  fs.writeFileSync(settingsPath, JSON.stringify({
+    permissions: { allow: [...permissionsResource.allow], deny: ["Bash(rm -rf:*)"], ask: ["Bash(git push:*)"], defaultMode: "acceptEdits" },
+  }));
+  const result = claudeProvider.adapters.hooks.write({ homePath });
+  assert.equal(result.changed, true);
+  const after = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+  assert.equal(after.permissions?.allow, undefined, "must drop the emptied allow list");
+  assert.deepEqual(after.permissions?.deny, ["Bash(rm -rf:*)"], "must keep the user's deny rules");
+  assert.deepEqual(after.permissions?.ask, ["Bash(git push:*)"], "must keep the user's ask rules");
+  assert.equal(after.permissions?.defaultMode, "acceptEdits", "must keep the user's defaultMode");
+
+  fs.writeFileSync(settingsPath, JSON.stringify({ permissions: { allow: [...permissionsResource.allow] } }));
+  claudeProvider.adapters.hooks.write({ homePath });
+  assert.equal(JSON.parse(fs.readFileSync(settingsPath, "utf8")).permissions, undefined, "must drop permissions once nothing is left in it");
+
+  fs.rmSync(tmp, { recursive: true, force: true });
+}
+
 function testNoPackagesMatchIsNoop() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-hooks-write-remove-noop-"));
   const homePath = path.join(tmp, ".claude");
@@ -77,6 +105,7 @@ function testMissingSettingsIsNoop() {
 }
 
 testStripsRealPackageHooksAndPermissions();
+testStrippingEveryAllowEntryKeepsOtherPermissionKeys();
 testNoPackagesMatchIsNoop();
 testMissingSettingsIsNoop();
 

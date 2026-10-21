@@ -1,7 +1,7 @@
 ---
 id: irpw877r
 priority: high
-next_action: Merge the approved pull request, then run /plan-close
+next_action:
 blocked_by: []
 depends_on: []
 related:
@@ -25,7 +25,10 @@ anyone to update them. This plan does two things:
 
 ## Context
 
-### Who owns doc upkeep today
+### Doc upkeep before implementation
+
+This subsection records the pre-implementation state that motivated the repair. The
+implementation notes and closure verification describe the resulting behavior.
 
 [`docs/internal/docs-map.md`](../../internal/docs-map.md) names a **doc of record** for each feature
 area: the one doc that owns the current behavior, which supporting docs link to instead of restating
@@ -209,8 +212,8 @@ to each area so they can be reviewed independently.
 
 ## Implementation Notes
 
-The reference checker scans 54 current reader-facing Markdown files. It shares the portal renderer's
-heading slug function, resolves relative links and reference definitions, checks literal current
+At implementation time, the reference checker scanned 54 reader-facing Markdown files. It shares
+the portal renderer's heading slug function, resolves relative links and reference definitions, checks literal current
 repository paths, and reads the removed-command catalog. Its fixture runs each seeded failure alone
 and verifies that documented exclusions stay silent. The orphan-test registry names the scanner as
 a helper; both executable checks are in the `ci` group.
@@ -295,6 +298,58 @@ The plan-close guide and skill now report a removal failure after cleanup guards
 - [x] Confirm a live plan using the updated `/plan-execute` and `/plan-close` instructions reports
   `Docs updated:` and names the docs checked in its `## Verification` — confirmed by the
   user-approved disposable run recorded under Verification run above.
+
+## Verification
+
+Closure check on 2026-10-19 against primary checkout commit
+`3f546afb59f8b01af232016ccb656faa583ae80d`: the documentation repair and freshness
+instructions are implemented and landed. All required work and manual confirmation
+are resolved. The fresh full completion gate passed without a waiver.
+
+- The primary plan and assigned worktree copy initially had identical blob
+  `387820128f6d55f1e83d973dda1ca5a172135a7b`; the worktree's plan state is integrated.
+- Approved implementation commit: `5462fc552d2362f3ee385ec8bee60faeb9517c97`.
+  `bin/roborepo plans approval irpw877r --json` returned `fresh`.
+- Absorbing commit: f4ca587744df503dd4bc1ad39c787dc91f590db9
+- `bin/roborepo plans landed irpw877r --json` confirmed landing with a new historical
+  scan after allowing temporary Git object writes. The recorded absorbing commit can
+  be verified on a subsequent run.
+- The first elevated `npm run check` failed: 444 CLI tests passed and one failed,
+  `lifecycle: CLI surface help/menu/removed routes work in sandbox`. The remote-sync
+  menu assertion expected the selected `./sync-work-extra` row but captured the
+  unpushed-commit detail screen ending in `Press Enter to continue`. The gate stopped
+  before installation-collision, CI-group, package-install, Docker, Windows, and
+  browser stages. The initial restricted attempt also hit localhost `listen EPERM`;
+  the 444/1 result is from the elevated rerun. `docs/internal/testing.md` documents
+  this PTY test as load-sensitive; that classification alone does not waive the gate.
+- `node scripts/test/cli-surface-integration-check.mjs` passed when rerun in isolation.
+  The human explicitly required a fresh full-gate pass, rather than a waiver.
+- The second elevated `npm run check` passed: 445 CLI tests, installation-collision
+  checks, 38/38 CI check suites, package installation, Docker clean-machine,
+  installation, permission, and onboarding sandboxes, and 103 browser tests.
+  Windows installer parity skipped because PowerShell is unavailable; this plan does
+  not change the Windows installer. This passing run supersedes the earlier failure.
+- Focused checks passed: `node scripts/test/docs-reference-check.mjs`,
+  `node scripts/test/docs-reference-fixtures-check.mjs`,
+  `node scripts/test/markdown-render-check.mjs`,
+  `node scripts/test/skill-trigger-fixtures-check.mjs`,
+  `node scripts/test/skill-trigger-fixtures-shipping-check.mjs`, and
+  `bin/roborepo package validate` (27 packages).
+- The current scanner covers 53 reader-facing documents. Source and fixtures confirm
+  link, anchor, literal-path, removed-command, fence, historical-context, and shortcut
+  reference checks; both executable checks remain in the CI group.
+- Documentation comparisons checked the corrections recorded in the semantic-audit
+  table: Plans references and internals against portal routes and lifecycle commands;
+  repositories and portal architecture against Home worktree actions; Runtime docs
+  against shared Compose placement, member counts, and server stopping; setup and
+  config docs against Settings tracking and provider skill links; hook docs against
+  the archived jcodemunch health hook and shared Codex hook-status component;
+  telemetry docs against the CLI's summary-only deep-read selection; harness and
+  architecture docs against rule targets, live rules rendering, and skill-cache
+  materialization. The historical audit points to `docs/internal/docs-map.md`, which
+  retains current ownership. No additional product behavior was changed in closure.
+- The existing user-confirmed live agent-compliance check remains recorded under
+  `## Not tested`; it was not repeated.
 
 ## Risks
 
