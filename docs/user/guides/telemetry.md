@@ -163,7 +163,7 @@ per-call regression, and harness-local loop detection. Add `--json` for a machin
 | **Passed** | 0 | Both implementations agree, and every required row could be interpreted independently. |
 | **Failed** | 1 | The two implementations disagree on at least one checked calculation. |
 | **Partial** | 2 | Checked values agree, but some evidence could not be interpreted independently. |
-| **Unavailable** | 2 | There is no evidence, the evidence includes shapes the check cannot interpret, or the evidence could not be read. The output's `Issues:` line names the cause. |
+| **Unavailable** | 2 | There is no evidence (`Evidence: 0 events`), the evidence includes shapes the check cannot interpret (named on the `Issues:` line), or the evidence could not be read (named on the `Error:` line). |
 
 Exit code 2 means the check was inconclusive: it neither passed nor found a disagreement.
 

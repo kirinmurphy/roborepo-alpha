@@ -162,7 +162,7 @@ volume, plus sessions × condition cardinality and sessions × watched markers.
 | Oracle independence | `telemetry-oracle-core-check` | Imports respect the core boundary; calculations preserve inputs and evidence-policy behavior. |
 | Live comparison contract | `telemetry-oracle-live-check` | Unsupported evidence prevents a pass; injected disagreements fail; output excludes raw values and exception text. |
 | Result contract | `telemetry-oracle-result-check` | The four statuses project through an explicit allowlist; malformed output and unknown error categories cannot claim agreement. |
-| Evidence reading | `telemetry-oracle-evidence-check` | The reader counts skipped records per store, preserves raw evidence for support checks, resolves legacy repository identity, and reports I/O failure as `unavailable`. |
+| Evidence reading | `telemetry-oracle-evidence-check` | The reader counts skipped records per store and preserves raw evidence for support checks; unresolved legacy repository identity keeps the result `partial`, never `passed`; I/O failure reports `unavailable`. |
 | Command | `telemetry-oracle-command-check` | The real command exits 0 on a supported spool and 2 on an empty one, maps all four statuses to exit codes, and prints `--json` without raw fields, prompt text, or paths. |
 | Report cache freshness | `telemetry-report-signature-check` | All consumed stores participate in a metadata-only report signature, including replacements and same-size edits; an unreadable entry degrades instead of throwing. |
 | Presentation rules | conditions presentation checks | Thin evidence, neutral bands, and correlation-only language are presented honestly. |

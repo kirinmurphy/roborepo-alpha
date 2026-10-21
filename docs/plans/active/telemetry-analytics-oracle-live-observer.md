@@ -220,6 +220,9 @@ The result schema drops the fields that only served the observer: `evidence_sign
   "coverage": {
     "supported_events": 1845,
     "unsupported_events": 0,
+    "comparable": true,
+    "complete": true,
+    "issues": [],
     "checks": ["sessions", "operations", "conditions", "boundaries", "gating", "regression", "loops"]
   },
   "differences": [],
@@ -227,7 +230,8 @@ The result schema drops the fields that only served the observer: `evidence_sign
 }
 ```
 
-`error_category` appears only on `unavailable`. Schema version 1 never shipped outside this branch,
+`coverage.issues` lists `{ category, count }` pairs and is the machine-readable cause behind
+`partial` and `unavailable`. `error_category` appears only on `unavailable`. Schema version 1 never shipped outside this branch,
 so it is not bumped.
 
 ### Module ownership
@@ -518,8 +522,16 @@ or `unavailable`. Treating such rows as `passed` would be a product decision tha
 - [x] Two assertion messages in `telemetry-oracle-result-check.mjs` name the removed observer. — fixed (fd4582cd)
 - [x] `scripts/cli/telemetry-oracle-findings.mjs` ends with a blank line, which
       `git diff --check main...HEAD` reports. — fixed (fd4582cd)
+- [ ] The user guide's `Unavailable` row says the `Issues:` line names every cause, but a read
+      error is on the `Error:` line and an empty spool shows only `Evidence: 0 events`.
+- [ ] The internals doc says the evidence reader resolves legacy repository identity; it passes the
+      registry through, and unresolved legacy identity stays `partial`.
+- [ ] The Result contract example omits `coverage.comparable`, `complete`, and `issues`, which
+      `--json` prints.
 
 ### Verification
 
 - Validation pass 1 at 272baded (fresh-context subagent): 6 `fix` findings, no `escalate` or
+  `base`.
+- Validation pass 2 at 7a47642a (fresh-context subagent): 3 `fix` findings, no `escalate` or
   `base`.
