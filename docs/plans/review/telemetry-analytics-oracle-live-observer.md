@@ -8,7 +8,7 @@ related:
   - k8mngttv
   - telemetry-analysis-io-performance
   - nl40n9vr
-reviewed_commit: 9ad26ff35337816de9a3ceac07ee3862f1980614
+reviewed_commit: 80e10022fcd9ebc61e72199d43dffa8c8ce89926
 worktree: telemetry-analytics-oracle
 ---
 
@@ -687,9 +687,9 @@ Raised by the human at the approval request, at 91e35bb9:
 
 Validator pass at 8e9b5428, after the bare-tool fix:
 
-- [ ] The bare-tool finding above keeps an open box although it cites its fix.
-- [ ] Current state calls the independent core "Kept unchanged" and the live coverage check does
-      not mention native bare tool names, but 2e9fae86 changed `eventSupport` and added those cases.
+- [x] The bare-tool finding above keeps an open box although it cites its fix. — fixed in review (80e10022)
+- [x] Current state calls the independent core "Kept unchanged" and the live coverage check does
+      not mention native bare tool names, but 2e9fae86 changed `eventSupport` and added those cases. — fixed in review (80e10022)
 
 ### Verification
 
@@ -762,11 +762,13 @@ Human review, 2026-10-21:
   sets, that every production `mcpServerOf` call passes only `tool.name` or `last_result.tool`,
   and that no covered field attributes a now-native row differently. A real-data run printed
   `Partial` with no differences over 16,140 events in 9,379 ms.
+- The two prose fixes in 80e10022 were checked directly against the plan; no validator pass ran
+  after them. Commits after 2e9fae86 touch only this plan, so the 2e9fae86 gate stands.
 
 ### Result
 
-- Status: pending
-- Reviewed implementation commit: 9ad26ff35337816de9a3ceac07ee3862f1980614
+- Status: complete
+- Reviewed implementation commit: 80e10022fcd9ebc61e72199d43dffa8c8ce89926
 - Base commit: 18c664ce4a870e8d012cf52867edb3f8787dd830
 
 ### Approval
