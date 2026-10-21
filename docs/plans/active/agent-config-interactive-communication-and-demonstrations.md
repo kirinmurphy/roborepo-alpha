@@ -453,13 +453,13 @@ how to open it, and what capture does **not** prove.
 - [x] The no-ffmpeg branch was never asserted on a machine that has ffmpeg — fixed with partial browser caches (58871592)
 - [x] `next_action` named a gate run that had already passed — fixed (58871592)
 - [x] Shared `Verified:` line has no value for an `unverified` run — classed escalate by the Validator; resolved in the skill without changing the shared format (see Decision Log) (58871592)
-- [x] Interrupting `browser run` (SIGINT/SIGTERM) left a `--serve` server running — fixed (pending commit)
-- [x] A spec run timeout killed only the runner, orphaning the config's `webServer` — fixed (pending commit)
-- [x] Probe matched any headless shell revision and required the full browser to exist — fixed (pending commit)
-- [x] `browser probe` printed a stack trace when an installed Playwright failed to load — fixed (pending commit)
-- [x] `--url` without an http(s) scheme waited the full timeout instead of failing as usage — fixed (pending commit)
-- [x] A spec timeout was `blocked` while a script timeout was `failed` — fixed, both `failed` (pending commit)
-- [x] A failed browser launch with `--capture video` leaked a temp directory — fixed (pending commit)
+- [x] Interrupting `browser run` (SIGINT/SIGTERM) left a `--serve` server running — fixed (1f03f1ab)
+- [x] A spec run timeout killed only the runner, orphaning the config's `webServer` — fixed (1f03f1ab)
+- [x] Probe matched any headless shell revision and required the full browser to exist — fixed (1f03f1ab)
+- [x] `browser probe` printed a stack trace when an installed Playwright failed to load — fixed (1f03f1ab)
+- [x] `--url` without an http(s) scheme waited the full timeout instead of failing as usage — fixed (1f03f1ab)
+- [x] A spec timeout was `blocked` while a script timeout was `failed` — fixed, both `failed` (1f03f1ab)
+- [x] A failed browser launch with `--capture video` leaked a temp directory — fixed (1f03f1ab)
 - [ ] The "Rename complete" row excludes only `completed/` and `archived/`, but this plan and backlog o9zwxuav must name the old id — escalated, see Open Questions
 
 ### Verification
