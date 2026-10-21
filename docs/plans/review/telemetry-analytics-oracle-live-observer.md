@@ -639,13 +639,13 @@ Validator pass 2 of the human review, at 7e43b329:
 
 Validator pass 3 of the human review, at f7c3f2d8:
 
-- [ ] The report-signature paragraph says the helpers are shared with the removed strict oracle
+- [x] The report-signature paragraph says the helpers are shared with the removed strict oracle
       signature, and credits the branch with file-name and ctime stamps main already had for
       snapshots. The branch adds per-file stamps for the spool, markers, registry, and experiments,
-      plus device and inode.
-- [ ] Current state says the `[data-doc-anchor]` delegate "moved"; it also widened from
+      plus device and inode. — fixed in review (a627e288)
+- [x] Current state says the `[data-doc-anchor]` delegate "moved"; it also widened from
       `portal-info-icon[data-doc-anchor]` to any `[data-doc-anchor]` element. Behavior is the same
-      today, because only info icons carry the attribute.
+      today, because only info icons carry the attribute. — fixed in review (a627e288)
 
 ### Verification
 
