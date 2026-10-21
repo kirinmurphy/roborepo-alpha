@@ -460,10 +460,10 @@ how to open it, and what capture does **not** prove.
 - [x] `--url` without an http(s) scheme waited the full timeout instead of failing as usage — fixed (1f03f1ab)
 - [x] A spec timeout was `blocked` while a script timeout was `failed` — fixed, both `failed` (1f03f1ab)
 - [x] A failed browser launch with `--capture video` leaked a temp directory — fixed (1f03f1ab)
-- [x] Spec runs moved a project's committed screenshot baseline (attached on a mismatch) into the evidence store — fixed: copy anything outside the run's output, and `--update-snapshots=none` (pending commit)
-- [x] A script scenario cut off by `--timeout` kept the CLI alive until its own timers fired — fixed: exit once the result is printed (pending commit)
-- [x] An interrupted run skipped providers' `finally`, leaking `rr-browser-*` temp dirs — fixed: temp dirs registered as owned resources (pending commit)
-- [x] The skill lacked the architecture and progress before/after examples Section 3 asks for — fixed (pending commit)
+- [x] Spec runs moved a project's committed screenshot baseline (attached on a mismatch) into the evidence store — fixed: copy anything outside the run's output, and `--update-snapshots=none` (a670c945)
+- [x] A script scenario cut off by `--timeout` kept the CLI alive until its own timers fired — fixed: exit once the result is printed (a670c945)
+- [x] An interrupted run skipped providers' `finally`, leaking `rr-browser-*` temp dirs — fixed: temp dirs registered as owned resources (a670c945)
+- [x] The skill lacked the architecture and progress before/after examples Section 3 asks for — fixed (a670c945)
 - [ ] The "Rename complete" row excludes only `completed/` and `archived/`, but this plan and backlog o9zwxuav must name the old id — escalated, see Open Questions
 
 ### Verification
