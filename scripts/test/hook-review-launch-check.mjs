@@ -8,6 +8,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { launchHookReview } from "../cli/hook-review-launch.mjs";
+import { installCoreHooks } from "../cli/hook-core-install.mjs";
 import { hookReadinessLines, printHookReviewHint } from "../cli/hook-review-guidance.mjs";
 import { launchInTerminal, terminalLaunchSupported } from "../cli/terminal-launch.mjs";
 import { invalidateHookReadiness, loadHookReadiness, reportPackageHookChange } from "../cli/hook-readiness-status.mjs";
@@ -20,6 +21,7 @@ try {
   terminalLauncherHandlesPlatformsAndFailures();
   await statusCacheFollowsHookChanges();
   await reviewRouteAcceptsNoCommand();
+  await coreInstallUsesServerBundleAndRefreshes();
   await mixedGroupsStillNameHooksAwaitingReview();
   console.log("ok: hook review launch, terminal fallback, and readiness freshness");
 } finally {
@@ -153,6 +155,36 @@ async function reviewRouteAcceptsNoCommand() {
   await get("/api/config/hooks/codex/status", "fresh=1", statusHandlers);
   await get("/api/config/hooks/codex/status", "", statusHandlers);
   assert.deepEqual(reads, [{ fresh: true }, { fresh: false }]);
+
+  const installs = [];
+  const installHandlers = { installCoreHooks: async (harness) => { installs.push(harness); return { ok: true, status: {} }; } };
+  for (const body of [{ bundle: "all" }, { command: "/bin/sh" }, { args: ["--all"] }, []]) {
+    assert.equal((await post("/api/config/hooks/codex/install", body, installHandlers)).status, 400);
+  }
+  assert.deepEqual(installs, []);
+  assert.equal((await post("/api/config/hooks/codex/install", {}, installHandlers)).status, 200);
+  assert.deepEqual(installs, ["codex"]);
+  assert.equal((await post("/api/config/hooks/nope/install", {}, { installCoreHooks })).status, 404);
+  assert.equal((await post("/api/config/hooks/codex/install", {}, { installCoreHooks: async () => { throw new Error("install failed"); } })).status, 500);
+}
+
+async function coreInstallUsesServerBundleAndRefreshes() {
+  const applied = [];
+  const reads = [];
+  const pending = { groups: [{ owner: "core", hooks: [{ state: "review_required" }] }], reviewRevision: "new-core" };
+  const options = {
+    bundleFor: () => ({ id: "hooks" }),
+    apply: async (id) => { applied.push(id); },
+    readStatus: async (harness, options) => { reads.push({ harness, ...options }); return pending; },
+  };
+  const result = await installCoreHooks("codex", options);
+  assert.deepEqual(applied, ["hooks"]);
+  assert.deepEqual(reads, [{ harness: "codex", fresh: true }]);
+  assert.deepEqual(result, { ok: true, status: pending }, "install leaves approval pending in Codex");
+  assert.equal((await installCoreHooks("claude", { ...options, bundleFor: () => null })).ok, false);
+  const missing = { groups: [{ owner: "core", hooks: [{ state: "missing" }] }] };
+  assert.equal((await installCoreHooks("codex", { ...options, readStatus: async () => missing })).ok, false);
+  await assert.rejects(installCoreHooks("codex", { ...options, apply: async () => { throw new Error("failed"); } }), /failed/);
 }
 
 async function post(urlPath, body, handlers) {

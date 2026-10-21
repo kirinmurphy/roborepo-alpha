@@ -24,6 +24,7 @@ import { computePortalSourceHash } from "./portal-source-hash.mjs";
 import { readConfigSnapshot, loadConfigSource } from "./config.mjs";
 import { hookHarnessesForPackages, invalidateHookReadiness, reportPackageHookChange } from "./hook-readiness-status.mjs";
 import { launchHookReview, loadHookReviewStatus } from "./hook-review-launch.mjs";
+import { installCoreHooks } from "./hook-core-install.mjs";
 import { refreshHarnessesAndApply } from "./portal-harness-refresh.mjs";
 import { mutatePackage, setSkillInstalled, setBehaviorBucket, setCommandBucket } from "./config-mutate.mjs";
 import { loadPlansSnapshot, loadCachedPlansSnapshot, loadPlanDocument, buildPlansPrompt, updatePlanPriority, refreshPlans } from "./plans.mjs";
@@ -824,6 +825,7 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     loadConfig: () => readConfigSnapshot(),
     loadHookReadiness: (harness, options) => loadHookReviewStatus(harness, options),
     launchHookReview: (harness) => launchHookReview(harness),
+    installCoreHooks: (harness) => installCoreHooks(harness),
     loadSetupState: () => loadSetupState(),
     // Both can rewrite hook files, so cached readiness is dropped once they finish.
     refreshHarnesses: () => refreshHarnessesAndApply().finally(invalidateHookReadiness),

@@ -17,7 +17,7 @@ const OTHER_STATES = ["missing", "inactive", "unknown"];
 const COPY = {
   review_required: (name) => [`${name} hooks need review`, `${name} will not run these RoboRepo hooks until you trust them.`],
   inactive: (name) => [`${name} hooks are turned off`, `These RoboRepo hooks are installed but turned off in ${name}.`],
-  missing: (name) => [`${name} hooks are missing`, `These RoboRepo hooks are missing from ${name}, so there is nothing to review yet.`],
+  missing: (name) => [`${name} hooks are missing`, `These RoboRepo hooks are missing from ${name}.`],
   unknown: (name) => [`${name} hook status is unknown`, `RoboRepo could not ask ${name} whether its hooks will run. Check that ${name} is installed and has been opened at least once.`],
 };
 
@@ -117,6 +117,9 @@ function stateNotice(status, name, state, groups, handlers) {
   const message = state === "inactive" && guidance.inactive ? guidance.inactive : fallbackMessage;
   const node = fill(tpl("tpl-hook-readiness"), { title, message: `${message} ${missingRemedy(status, groups, state)}`.trim() });
   if (state !== "unknown") listAffected(node, groups, state);
+  if (state === "missing" && status.coreBundle && groups.some((group) => group.owner === "core")) {
+    reveal(node, "install").addEventListener("click", () => installCoreHooks(node, status, handlers));
+  }
   wireCommonActions(node, handlers);
   return node;
 }
@@ -129,9 +132,28 @@ function missingRemedy(status, groups, state) {
   const packages = groups.some((group) => group.owner !== "core");
   const steps = [];
   if (packages) steps.push("Turn the package off and back on in Agents to reinstall it.");
-  if (core && status.coreBundle) steps.push(`Run roborepo bundle apply ${status.coreBundle} to reinstall the core hooks.`);
+  if (core && status.coreBundle) {
+    if (status.guidance?.review_required) steps.push(`Install these hooks first, then review them in ${status.displayName || status.harness}.`);
+    steps.push(`Install core hooks here, or run roborepo bundle apply ${status.coreBundle}. The bundle installs core hooks for all available harnesses.`);
+  }
   else if (core) steps.push("Run roborepo repair to reinstall the core hooks.");
   return steps.join(" ");
+}
+
+async function installCoreHooks(node, status, handlers) {
+  const button = node.querySelector('[data-slot="install"]');
+  button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  try {
+    const reply = await portalPostJson(`/api/config/hooks/${encodeURIComponent(status.harness)}/install`, {});
+    refreshHookReadinessMounts();
+    handlers.onStatus?.(reply.status);
+  } catch (error) {
+    showResult(node, `Could not install core hooks. ${error.message}`);
+  } finally {
+    button.disabled = false;
+    button.removeAttribute("aria-busy");
+  }
 }
 
 async function launchReview(node, status, name, handlers) {

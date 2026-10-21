@@ -15,7 +15,7 @@ main.settings-main {
   border-radius: 6px;
   background: var(--panel);
 }
-.settings-hook-readiness { display: grid; gap: var(--space-sm); margin-top: var(--space-sm); }
+.settings-hook-readiness { display: grid; gap: var(--space-sm); margin-bottom: var(--space-sm); }
 .settings-hook-readiness[hidden] { display: none; }
 .settings-token-active { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); font-weight: 600; }
 .settings-token-active-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }

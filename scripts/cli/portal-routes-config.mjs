@@ -156,6 +156,25 @@ export const configRoutes = defineRoutes([
     },
   },
   {
+    // Applies only the core bundle selected by the server's manifest, on an explicit click.
+    method: "POST",
+    path: "/api/config/hooks/:harness/install",
+    handler: (req, res, { params, handlers }) => {
+      readJsonBody(req, (body, err) => {
+        if (err) return send(res, 400, "application/json", JSON.stringify({ error: "invalid JSON body" }));
+        if (body && (typeof body !== "object" || Array.isArray(body) || Object.keys(body).length > 0)) {
+          return send(res, 400, "application/json", JSON.stringify({ error: "expected an empty body" }));
+        }
+        Promise.resolve()
+          .then(() => handlers.installCoreHooks(params.harness))
+          .then((result) => send(res, result.ok ? 200 : 400, "application/json", JSON.stringify(result)))
+          .catch((error) => send(res, /unsupported harness/.test(String(error?.message)) ? 404 : 500,
+            "application/json", JSON.stringify({ ok: false, error: String(error?.message || error) })));
+      });
+      return true;
+    },
+  },
+  {
     path: "/api/config",
     handler: (req, res, { handlers }) => {
       send(res, 200, "application/json", JSON.stringify(handlers.loadConfig()));

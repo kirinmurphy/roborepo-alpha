@@ -10,6 +10,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { hostHarnessIsolationEnv } from "./portal-ui/host-harness-isolation.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const cli = path.join(repoRoot, "scripts/cli/main.mjs");
@@ -37,7 +38,14 @@ function coreHooksInstallAfterPackageHooks() {
   fs.mkdirSync(path.join(home, ".codex", "hooks"), { recursive: true });
   fs.writeFileSync(path.join(home, ".codex", "hooks", "package-script.mjs"), "// package\n");
 
-  run(env, cli, "bundle", "apply", "hooks");
+  const installed = JSON.parse(run({ ...env, ...hostHarnessIsolationEnv(home) }, "--input-type=module", "-e", `
+    import { installCoreHooks } from ${JSON.stringify(new URL("../cli/hook-core-install.mjs", import.meta.url).href)};
+    console.log(JSON.stringify(await installCoreHooks("codex")));
+  `));
+  assert.equal(installed.ok, true, "portal core installer applies the real bundle");
+  assert.equal(installed.status.groups.find((group) => group.owner === "core").state, "unknown",
+    "installation works without Codex, but cannot claim hooks are trusted");
+  assert.equal(installed.status.reviewLaunch.supported, false, "no launcher is offered without a runtime");
   const after = handlerPositions(hooksPath);
   for (const [command, position] of before) {
     assert.equal(after.get(command), position, `package hook kept its trust position: ${command}`);

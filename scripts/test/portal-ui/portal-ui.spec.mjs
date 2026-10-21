@@ -288,7 +288,46 @@ test.describe("hook readiness warning", () => {
     await expect(missing.locator("[data-slot=message]")).toContainText("Turn the package off and back on in Agents");
     await expect(missing.locator("[data-slot=message]")).toContainText("roborepo bundle apply hooks");
     await expect(missing.getByRole("listitem")).toHaveText(["Codex core hooks: PreToolUse", "Skill visibility: PostToolUse"]);
+    await expect(missing).toContainText("Install these hooks first, then review them in Codex.");
+    await expect(missing).not.toContainText("nothing to review");
     await expect(missing.getByRole("button", { name: "Open Codex hook review" })).toHaveCount(0);
+  });
+
+  test("Settings installs missing core hooks before offering Codex review", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex]) }));
+    let current = codexStatus("missing", [group("core", "Codex core hooks", "missing", [hook("PreToolUse", "missing")])]);
+    await routeStatuses(page, { codex: () => current });
+    const installs = [];
+    await page.route("**/api/config/hooks/codex/install", async (route) => {
+      installs.push(route.request().postDataJSON());
+      current = pendingReview("installed-core");
+      await route.fulfill({ json: { ok: true, status: current } });
+    });
+    const launches = await routeLaunch(page, { launched: true });
+    await page.goto("/settings");
+    const notice = page.locator("#hook-readiness");
+    const heading = page.getByRole("heading", { name: "Token Activity Tracking", exact: true });
+    await expect(notice.getByRole("button", { name: "Install core hooks" })).toBeVisible();
+    expect((await heading.boundingBox()).y).toBeLessThan((await notice.boundingBox()).y);
+    expect((await notice.boundingBox()).y).toBeLessThan((await page.locator("#token-tracking-row").boundingBox()).y);
+    await notice.getByRole("button", { name: "Install core hooks" }).click();
+    await expect(notice.getByText("Codex hooks need review", { exact: true })).toBeVisible();
+    expect(installs).toEqual([{}]);
+    expect(launches).toHaveLength(0);
+    await notice.getByRole("button", { name: "Open Codex hook review" }).click();
+    await expect.poll(() => launches.length).toBe(1);
+  });
+
+  test("failed core installation keeps its remedy available", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex]) }));
+    await routeStatuses(page, { codex: codexStatus("missing", [group("core", "Codex core hooks", "missing", [hook("PreToolUse", "missing")])]) });
+    await page.route("**/api/config/hooks/codex/install", (route) => route.fulfill({ status: 500, json: { error: "Install failed" } }));
+    await page.goto("/settings");
+    const notice = page.locator("#hook-readiness");
+    await notice.getByRole("button", { name: "Install core hooks" }).click();
+    await expect(notice.getByRole("status")).toContainText("Could not install");
+    await expect(notice.getByRole("button", { name: "Install core hooks" })).toBeEnabled();
+    await expect(notice).toContainText("roborepo bundle apply hooks");
   });
 
   test("one package with a missing hook and an untrusted one shows both", async ({ page }) => {
