@@ -466,9 +466,9 @@ how to open it, and what capture does **not** prove.
 - [x] A script scenario cut off by `--timeout` kept the CLI alive until its own timers fired — fixed: exit once the result is printed (a670c945)
 - [x] An interrupted run skipped providers' `finally`, leaking `rr-browser-*` temp dirs — fixed: temp dirs registered as owned resources (a670c945)
 - [x] The skill lacked the architecture and progress before/after examples Section 3 asks for — fixed (a670c945)
-- [x] Probe accepted an ffmpeg of any revision, so `video: true` could precede a run that fails to record — fixed: headless shell and ffmpeg matched to the revisions `playwright-core`'s `browsers.json` pins (pending commit)
-- [x] An interrupted traced script left Playwright's `playwright-tracing-*` scratch dir — fixed: one owned work dir holds `tracesDir` and video (pending commit)
-- [x] The Decision Log's exit-code entry still said `process.exitCode` for `browser run` — fixed (pending commit)
+- [x] Probe accepted an ffmpeg of any revision, so `video: true` could precede a run that fails to record — fixed: headless shell and ffmpeg matched to the revisions `playwright-core`'s `browsers.json` pins (ea628104)
+- [x] An interrupted traced script left Playwright's `playwright-tracing-*` scratch dir — fixed: one owned work dir holds `tracesDir` and video (ea628104)
+- [x] The Decision Log's exit-code entry still said `process.exitCode` for `browser run` — fixed (ea628104)
 - [ ] The "Rename complete" row excludes only `completed/` and `archived/`, but this plan and backlog o9zwxuav must name the old id — escalated, see Open Questions
 
 ### Verification
