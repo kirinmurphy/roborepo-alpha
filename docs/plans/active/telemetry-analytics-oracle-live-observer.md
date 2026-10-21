@@ -1,7 +1,7 @@
 ---
 id: koww80zh
 priority: high
-next_action: Run the Validation Loop over the Phase 8 commit, then the completion preflight and submit transition
+next_action: Get the user's answer on the docs/images/tokens question in Open questions, apply it, rerun the Validation Loop, then the completion preflight and submit transition
 blocked_by: []
 depends_on: []
 related:
@@ -503,6 +503,21 @@ or `unavailable`. Treating such rows as `passed` would be a product decision tha
   not-comparable to `partial` (compares the rest, but the production analyzer still sees the rows,
   so totals may disagree); or leave it (the command stays honest but inconclusive here).
   Recommendation: investigate the bare-tool shape in a follow-up plan. Blocks no Phase 8 task.
+- Blocking: should the branch restore main's `docs/images/tokens/` state? Main deliberately
+  deleted `docs/images/tokens/README.md`, its images, and the root README sentence "Compare observed
+  problem rates… These examples use fictional sample data…" in 23e15c3e. This branch's merge
+  3483f83d brought the README and the sentence back because the Oracle gallery still used them, and
+  `docs/images/tokens/model-metrics-{light,dark}.png` came back too (never on main, referenced
+  nowhere). Phase 8 then rewrote the README as a fixture page and linked it from the scratch review
+  page, on the false premise that it was base content. Options:
+  1. Restore main (recommended): delete the README and both PNGs, restore the root README's Tokens
+     block from main, drop the scratch link. Matches a deliberate decision on main; no reader loses
+     anything the plan names.
+  2. Keep the rewritten fixture README as a new doc and delete only the PNGs. Keeps a short pointer
+     to the documentation fixture, but reverses main's deletion.
+  Why blocked: the change deletes files and restores a file from main, and the attempt to do so in
+  this run was declined, so it needs an explicit answer. Blocks: the two unchecked Review findings
+  and the submit transition.
 
 ## Not tested
 
@@ -534,6 +549,11 @@ or `unavailable`. Treating such rows as `passed` would be a product decision tha
       unresolved. The plan repeated "legacy repository resolution" in three places. — fixed (259fa943)
 - [x] The Result contract says `coverage.issues` explains every `unavailable`; an empty spool and a
       read error both leave it empty. — fixed (259fa943)
+- [ ] `docs/images/tokens/model-metrics-{light,dark}.png` are unreferenced and absent on main.
+      Blocked: see Open questions.
+- [ ] `docs/images/tokens/README.md`, the root README's Tokens sentence, and the scratch link to it
+      were deleted on main in 23e15c3e and came back through the merge 3483f83d. Escalated: see
+      Open questions.
 
 ### Verification
 
@@ -545,3 +565,6 @@ or `unavailable`. Treating such rows as `passed` would be a product decision tha
   `base`. Full gate at 0a221fb2: doctor passed, `git diff --check main...HEAD` clean,
   `npm run check` passed (445 CLI tests, 46/46 suites, 103 browser tests; Windows installer parity
   skipped, `pwsh` unavailable).
+- Validation pass 4 at 18f3422e (fresh-context subagent): 1 `fix` and 1 `escalate` finding, no
+  `base`. Both concern files a merge restored from before main deleted them; both wait on the
+  user (see Open questions). Agent-runnable checks all passed at this commit.
