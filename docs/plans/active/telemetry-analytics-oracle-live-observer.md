@@ -100,7 +100,7 @@ The oracle recomputes these values without importing production analysis helpers
 | Independent core | `scripts/cli/telemetry-oracle-{observations,findings,cohorts,regression,run}.mjs` | Kept unchanged. An import-boundary assertion in `scripts/test/telemetry-oracle-core-check.mjs` rejects production helper imports. |
 | Comparison boundary | `scripts/cli/telemetry-oracle-compare.mjs` | Kept. Returns `passed`, `partial`, `failed`, or `unavailable` with sanitized differences. |
 | CI comparator | `scripts/test/telemetry-oracle-check.mjs`, `scripts/test/fixtures/telemetry-oracle-cases.mjs` | Kept. Nine cases (one bundled demo, two fixed regressions, six seeded spools), 879 events. Exits nonzero on disagreement and appends a summary to `GITHUB_STEP_SUMMARY`. |
-| Live coverage accounting | `scripts/test/telemetry-oracle-live-check.mjs` | Kept. Covers legacy repository resolution, unsupported shapes, skipped evidence, and privacy of injected disagreements. |
+| Live coverage accounting | `scripts/test/telemetry-oracle-live-check.mjs` | Kept. Covers legacy repository hashes staying unresolved, unsupported shapes, skipped evidence, and privacy of injected disagreements. |
 
 ### To remove: live observer
 
@@ -230,8 +230,9 @@ The result schema drops the fields that only served the observer: `evidence_sign
 }
 ```
 
-`coverage.issues` lists `{ category, count }` pairs and is the machine-readable cause behind
-`partial` and `unavailable`. `error_category` appears only on `unavailable`. Schema version 1 never shipped outside this branch,
+`coverage.issues` lists `{ category, count }` pairs: the machine-readable cause behind `partial`
+and behind an `unavailable` caused by uninterpretable evidence. An `unavailable` with no events has
+`event_count: 0`, and one caused by a read or comparison failure carries `error_category`. `error_category` appears only on `unavailable`. Schema version 1 never shipped outside this branch,
 so it is not bumped.
 
 ### Module ownership
@@ -319,7 +320,7 @@ Tests:
       `telemetryReportEvidenceSignature` only, keeping its marker, snapshot, registry, rename, and
       same-size-edit cases.
 - [x] Add `scripts/test/telemetry-oracle-evidence-check.mjs` carrying the evidence-reader cases
-      from the deleted worker check: legacy repository resolution, per-store skipped counts,
+      from the deleted worker check: unresolved legacy repository hashes, per-store skipped counts,
       unsafe parsed rows, and I/O failure.
 - [x] Add `scripts/test/telemetry-oracle-command-check.mjs`. Run the real command against a
       disposable `ROBOREPO_STATE_DIR` and assert, for a supported spool: `Passed`, exit 0, and
@@ -403,7 +404,7 @@ Evidence from completed phases that still applies after Phase 8:
 - `node scripts/test/telemetry-oracle-core-check.mjs` passes import-boundary rejection fixtures,
   harness identity, mirror deduplication, token coverage, input preservation, order independence,
   and evidence-policy checks.
-- `node scripts/test/telemetry-oracle-live-check.mjs` passes legacy repository resolution, raw
+- `node scripts/test/telemetry-oracle-live-check.mjs` passes unresolved legacy repository hashes, raw
   schema coverage, unsupported evidence, skipped-evidence accounting, and privacy checks. Injected
   disagreements in every projected field group yield sanitized `failed` results.
 - Complete production reports matched the pre-refactor analyzer across 213 fixture and option
@@ -528,6 +529,11 @@ or `unavailable`. Treating such rows as `passed` would be a product decision tha
       registry through, and unresolved legacy identity stays `partial`. — fixed (2ebeae7f)
 - [x] The Result contract example omits `coverage.comparable`, `complete`, and `issues`, which
       `--json` prints. — fixed (2ebeae7f)
+- [ ] The internals doc says the oracle resolves `repo.normalized_remote_hash` through the registry
+      and credits observations with identity resolution; the code and checks prove legacy hashes stay
+      unresolved. The plan repeated "legacy repository resolution" in three places.
+- [ ] The Result contract says `coverage.issues` explains every `unavailable`; an empty spool and a
+      read error both leave it empty.
 
 ### Verification
 
@@ -535,3 +541,7 @@ or `unavailable`. Treating such rows as `passed` would be a product decision tha
   `base`.
 - Validation pass 2 at 7a47642a (fresh-context subagent): 3 `fix` findings, no `escalate` or
   `base`.
+- Validation pass 3 at 0a221fb2 (fresh-context subagent): 2 `fix` findings, no `escalate` or
+  `base`. Full gate at 0a221fb2: doctor passed, `git diff --check main...HEAD` clean,
+  `npm run check` passed (445 CLI tests, 46/46 suites, 103 browser tests; Windows installer parity
+  skipped, `pwsh` unavailable).

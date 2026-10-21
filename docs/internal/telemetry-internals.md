@@ -85,7 +85,7 @@ or presentation helpers, fixtures, logging, or filesystem reads.
 
 | Module under `scripts/cli/` | Owns |
 | --- | --- |
-| `telemetry-oracle-observations.mjs` | Raw acceptance, operation deduplication, harness-scoped sessions, and independent repository identity resolution. |
+| `telemetry-oracle-observations.mjs` | Raw acceptance, operation deduplication, harness-scoped sessions, and independent repository identity checks. |
 | `telemetry-oracle-findings.mjs` | Spike, loop, and read-warning detection. |
 | `telemetry-oracle-cohorts.mjs` | Condition rates, marker boundaries and exclusions, and locally encoded evidence policy. |
 | `telemetry-oracle-regression.mjs` | Per-call regression at distinct timestamp boundaries. |
@@ -190,7 +190,7 @@ of the independent calculation modules.
 | Capture schema absent/null, `2`, or `3` | Supported. Exact v3 calls deduplicate by harness/session/call; derived or missing calls use capture/content fallback. |
 | Explicit schema `1`, other versions, non-object rows, unidentified sessions, invalid timestamps, malformed token fields | Explicit unsupported/malformed categories; live comparison is `unavailable`. Such rows never disappear into a pass. |
 | Direct `repo.repository_id` | Supported and takes precedence over legacy hashes. Malformed values are unsupported. |
-| `repo.normalized_remote_hash` with raw registry evidence | Independently hash each registry `normalizedRemote` with SHA-256, truncate to 24 hex characters, and resolve its canonical `id`. Conflicting hash identities make the input unavailable. |
+| `repo.normalized_remote_hash` with raw registry evidence | Not associated with a registry identity, even when a registry `normalizedRemote` hashes to it: only a direct `repository_id` enters repository comparisons, so agreeing calculations remain `partial`. A registry whose `normalizedRemote` values hash to conflicting identities makes the input unavailable. |
 | Missing repository data, unmatched normalized hash, `remote_hash`, `git_root_hash`, basename/label, or path-only evidence | Unresolved. Neither a label nor a path hash establishes canonical identity; agreeing calculations remain `partial`. |
 | Token data absent/null | Supported absence; session and token-session counts remain distinct. |
 | Missing model, missing referenced snapshot, unknown snapshot evaluability, or conflicting session condition evidence | Counted coverage gaps; agreeing calculations remain `partial`. A session that changes snapshot IDs is conservatively partial. |
