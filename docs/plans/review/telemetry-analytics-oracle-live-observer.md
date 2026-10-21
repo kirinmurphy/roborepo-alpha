@@ -647,6 +647,17 @@ Validator pass 3 of the human review, at f7c3f2d8:
       `portal-info-icon[data-doc-anchor]` to any `[data-doc-anchor]` element. Behavior is the same
       today, because only info icons carry the attribute. — fixed in review (a627e288)
 
+Validator pass 4 of the human review, at 923bcb8e:
+
+- [ ] The non-observer changes table says the schema-check split has 51 assertions, up from 48;
+      both sides have 47 assertion calls, and the extra three were `import assert` lines.
+- [ ] The report-signature paragraph credits the branch with a stable fallback for unreadable
+      entries and says main stamped only snapshots per file; main had constant fallbacks and a
+      single-file markers stamp. The branch records unreadable entries one at a time and no longer
+      returns early on a missing spool, which hid marker, experiment, and snapshot changes.
+- [ ] Risks says the doc-guide delegate and `aria-controls` change stay "because other triggers
+      use them", contradicting Current state.
+
 ### Verification
 
 - Validation pass 1 at 272baded (fresh-context subagent): 6 `fix` findings, no `escalate` or
@@ -699,6 +710,9 @@ Human review, 2026-10-21:
   Review and Decision Log cite exists and matches its line.
 - Validator pass 3 at f7c3f2d8 (fresh-context subagent): 2 `fix` findings, both plan prose; no
   `escalate` or `base`. Commits after 7e43b329 touch only this plan, so the 7e43b329 gate stands.
+- Validator pass 4 at 923bcb8e (fresh-context subagent): 3 `fix` findings, all plan prose; no
+  `escalate` or `base`. It also noted the pending Result and the pre-Phase-8 `reviewed_commit`,
+  which the review sets when it records the Result.
 
 ### Result
 
