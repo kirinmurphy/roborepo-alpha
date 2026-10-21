@@ -427,8 +427,9 @@ Phase 8, 2026-10-21:
 - The command check runs the real CLI against a disposable `ROBOREPO_STATE_DIR`: `Passed` and exit 0
   for a supported spool, `Unavailable` and exit 2 for an empty spool, `--json` free of raw fields,
   prompt text, and paths, and exit codes for all four statuses.
-- `node scripts/test/portal-ui/run.mjs` passes 103 browser tests with the Oracle health spec and
-  captures removed.
+- `node scripts/test/portal-ui/run.mjs` passes 104 browser tests at 7b667863 with the Oracle
+  health spec and captures removed, including the test that the session details guide opens over
+  the session drill-down.
 - `node scripts/test/cli-command-catalog-check.mjs` and
   `node scripts/test/cli-surface-integration-check.mjs` pass with the new command definition.
 - The removal check `git grep` returns no matches outside `docs/plans`.
@@ -569,6 +570,7 @@ or `unavailable`. Treating such rows as `passed` would be a product decision tha
       main's session flow. Escalated; resolved by user decision (Decision Log). — fixed (571abb26)
 - [x] `--json` on an empty spool reports `comparable: true` and `complete: true` with `unavailable`.
       Escalated; resolved by user decision (Decision Log). — fixed (571abb26)
+- [x] Verification still reports 103 browser tests; the drill-down test makes it 104. — fixed (PENDING)
 
 ### Verification
 
@@ -587,4 +589,9 @@ or `unavailable`. Treating such rows as `passed` would be a product decision tha
   `base`. Pass 5 is the cap, so the loop stopped with all four open and the plan was not submitted.
 - Full gate at 88e0c7e3: doctor passed, `git diff --check main...HEAD` clean, `npm run check`
   passed (445 CLI tests, 46/46 suites, 103 browser tests; Windows installer parity skipped, `pwsh`
+  unavailable).
+- After the user's answers, a fresh Validation Loop. Pass 1 at 7b667863 (fresh-context subagent):
+  1 `fix` finding, no `escalate` or `base`.
+- Full gate at 7b667863: doctor passed, `git diff --check main...HEAD` clean, `npm run check`
+  passed (445 CLI tests, 46/46 suites, 104 browser tests; Windows installer parity skipped, `pwsh`
   unavailable).
