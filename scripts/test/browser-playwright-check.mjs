@@ -112,6 +112,16 @@ try {
     assert.ok(video.artifacts.some((artifact) => artifact.type === "video" && fs.statSync(artifact.path).size > 0), "a finalized video is returned");
   }
 
+  // ---- Unnamed checks still produce a valid result instead of breaking the contract ----
+  const unnamed = writeScript(path.join(project, "scripts"), "unnamed.mjs", `  await check(undefined, async () => {});`);
+  const unnamedRun = await run({ scenarioPath: unnamed, stateRoot: toolState });
+  assert.equal(unnamedRun.status, STATUS.PASSED);
+  assert.deepEqual(unnamedRun.checks.map((check) => check.name), ["unnamed check 1"]);
+  fs.writeFileSync(path.join(project, "tests", "untitled.spec.mjs"), 'import { test } from "@playwright/test";\ntest("", async () => {});\n');
+  const untitled = await run({ scenarioPath: path.join(project, "tests", "untitled.spec.mjs"), stateRoot: toolState });
+  assert.equal(untitled.status, STATUS.PASSED);
+  assert.deepEqual(untitled.checks.map((check) => check.name), ["untitled test"]);
+
   // ---- A spec that outlives --timeout fails, and the runner's webServer is shut down with it ----
   const slow = path.join(tempRoot, "slow-project");
   const serverPort = await freePort();

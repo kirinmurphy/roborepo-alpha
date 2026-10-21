@@ -46,8 +46,9 @@ export function resolvePlaywright({ fromDir, stateRoot }) {
   return null;
 }
 
-// The exact command an agent asks the user to approve. It installs into the tool directory only,
-// never the target project's manifest or lockfile. The version is the one RoboRepo's own browser
+// The exact command an agent asks the user to approve. The npm package goes into the tool
+// directory, never the target project's manifest or lockfile; Chromium and ffmpeg go into
+// Playwright's shared per-user cache, so browsers the machine already has are reused. The version is the one RoboRepo's own browser
 // suite runs against, read from package.json so there is one place to bump it.
 export function installCommand(stateRoot) {
   const dir = toolsDir(stateRoot);
@@ -59,7 +60,7 @@ export function browserInstallCommand(playwright) {
   return `node ${quote(playwright.cliPath)} install chromium`;
 }
 
-// Chromium and ffmpeg live in Playwright's machine-wide browser cache, not in node_modules. Checking
+// Chromium and ffmpeg live in Playwright's per-user browser cache, not in node_modules. Checking
 // for the files answers "can this capture" without launching or downloading anything.
 //
 // A headless launch runs the headless shell, and recording runs ffmpeg, each at the exact revision

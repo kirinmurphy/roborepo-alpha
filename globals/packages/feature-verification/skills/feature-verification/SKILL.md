@@ -73,8 +73,9 @@ roborepo browser run --scenario <path> [--capture screenshot,video,trace] [--url
 
 ### When Playwright is missing
 
-A `blocked` result names the exact install command. It installs into RoboRepo's tool directory,
-never the project's `package.json` or lockfile. Run it only through the harness's normal permission
+A `blocked` result names the exact install command. It installs the Playwright package into
+RoboRepo's tool directory, never the project's `package.json` or lockfile, and the browser into
+Playwright's shared per-user cache. Run it only through the harness's normal permission
 prompt. If the user declines, the result stays `blocked`: fall back to other evidence and say so.
 
 ## Run safely

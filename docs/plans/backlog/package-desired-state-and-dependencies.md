@@ -54,11 +54,12 @@ Verified on `main` at `be7e441`.
 | Status API | `scripts/cli/package-status.mjs` and `/api/config` `componentStatus` expose probe results | Already shipped |
 | Repair and adopt | `roborepo package reconcile` re-applies effective packages and drops ids missing from the catalog; `roborepo package adopt-live` marks external live packages as enabled | Already shipped |
 | Portal badges | `portal/config/elements/config-item.js` styles `partial` as a warning and `external` as informational | Already shipped |
-| Relationships | Catalog supports `requires` with cycle and missing-id checks. Three packages use it: `convention-capture`, `impact-awareness`, and `skill-visibility` each require `response-shape` | No `recommends`, selectability, or dependency visibility |
+| Relationships | Catalog supports `requires` with cycle and missing-id checks. No built-in package uses it today ([[o93hile]] removed the marker packages' dependency); `scripts/test/test-cli.sh` covers it with a workspace-only `test-composite` fixture that requires `jcodemunch` and `jdocmunch` | No `recommends`, selectability, or dependency visibility |
 
-A concrete case of the sticky dependency: enabling `convention-capture` writes both
-`convention-capture` and `response-shape` to `packages`. Disabling `convention-capture` later
-leaves `response-shape` on, and nothing records that the user never chose it.
+A concrete case of the sticky dependency: enabling `test-composite` writes `test-composite`,
+`jcodemunch`, and `jdocmunch` to `packages`. Disabling `test-composite` later leaves both
+dependencies on, and nothing records that the user never chose them. The first built-in case will
+be `implementation-review` ([[ejsc769o]]).
 
 ### Why now
 
@@ -262,7 +263,7 @@ selectable roots only.
 | Behavior | Check |
 | --- | --- |
 | Catalog accepts valid graphs and rejects bad ids, values, and `requires` cycles | `scripts/test/package-catalog-check.mjs` |
-| Enabling `convention-capture` makes `response-shape` effective without recording it as a root | `scripts/test/package-lifecycle-check.mjs` |
+| Enabling a package that requires another makes the dependency effective without recording it as a root (fixture package) | `scripts/test/package-lifecycle-check.mjs` |
 | Two parents share a dependency; disabling one keeps it, disabling both removes it | `scripts/test/package-lifecycle-check.mjs` |
 | A directly selected dependency survives its parents being disabled | `scripts/test/package-lifecycle-check.mjs` |
 | Direct enable/disable of a non-selectable package fails and changes nothing | `scripts/test/package-lifecycle-check.mjs` |

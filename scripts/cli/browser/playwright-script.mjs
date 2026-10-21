@@ -42,11 +42,13 @@ export async function runScriptScenario({ playwright, scenarioPath, capture, url
     let screenshots = 0;
 
     const check = async (name, fn) => {
+      // The contract requires every check to have a name; an unnamed one is still reported.
+      const label = typeof name === "string" && name.trim() ? name : `unnamed check ${checks.length + 1}`;
       try {
         await fn();
-        checks.push({ name, status: CHECK_STATUS.PASSED });
+        checks.push({ name: label, status: CHECK_STATUS.PASSED });
       } catch (error) {
-        checks.push({ name, status: CHECK_STATUS.FAILED, message: error?.message || String(error) });
+        checks.push({ name: label, status: CHECK_STATUS.FAILED, message: error?.message || String(error) });
       }
     };
     const screenshot = async () => {

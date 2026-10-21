@@ -89,7 +89,7 @@ function readReport(report) {
   const attachments = [];
   const notes = [];
   for (const { titles, test } of walkTests(report.suites || [], [])) {
-    const name = [...titles, test.projectName].filter(Boolean).join(" › ");
+    const name = [...titles, test.projectName].filter(Boolean).join(" › ") || "untitled test";
     const results = test.results || [];
     for (const result of results) attachments.push(...(result.attachments || []));
     if (test.status === "skipped") {

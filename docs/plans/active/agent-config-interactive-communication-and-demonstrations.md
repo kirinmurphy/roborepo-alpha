@@ -1,7 +1,7 @@
 ---
 id: o93hile
 priority: high
-next_action: Answer the two Open Questions (Rename-complete criterion; Playwright browser install location), fix the two open pass-5 findings (unnamed check() crashes the run; stale next_action), then rerun the Validation Loop, the completion preflight, and submit for /plan-review.
+next_action: Run npm run check on the commit that applies the user's two answers and the unnamed-check() fix, then a fresh Validation Loop, the completion preflight, and the submit transition.
 blocked_by: []
 depends_on: []
 related:
@@ -222,7 +222,7 @@ Installing RoboRepo never installs Playwright, and enabling `feature-verificatio
 The provider resolves it the first time a browser run needs it:
 
 1. The target project's own installed `playwright` or `@playwright/test`, resolved from the scenario's directory. No prompt. Prefer the project's existing tests.
-2. Otherwise `blocked`, with the exact install command in `limitations`. The agent asks to run it through the harness's normal permission prompt, and on approval installs the npm package and the browser binary into a RoboRepo-managed tool directory under the state root (for example `<stateRoot>/browser/tools/`). Never write to the target project's manifest or lockfile.
+2. Otherwise `blocked`, with the exact install command in `limitations`. The agent asks to run it through the harness's normal permission prompt, and on approval installs the npm package into a RoboRepo-managed tool directory under the state root (for example `<stateRoot>/browser/tools/`) and the browser binaries into Playwright's shared per-user cache, so browsers the machine already has are reused. Never write to the target project's manifest or lockfile.
 3. If the user declines, the result stays `blocked` and the agent falls back to other evidence.
 
 - `probe` reports availability and each capture capability independently, without launching a browser or downloading anything.
@@ -277,7 +277,7 @@ Example (illustrative; not an actual verification claim):
 
 | Plan | Relationship | Classification |
 | --- | --- | --- |
-| [[o9zwxuav]] One package state model (backlog) | Its Current-state row ("Three packages use it … each require `response-shape`") and its sticky-dependency example (`convention-capture` → `response-shape`) describe relationships this plan removes. Its mechanism is still needed for `implementation-review` ([[ejsc769o]]). Also the home for the Plan Suite all-or-nothing question | Plan-vs-plan prose conflict, superseded here. This plan does not edit o9zwxuav; refresh its example and test row (`scripts/test/package-lifecycle-check.mjs` case) with a fixture or the `implementation-review` case when it is next promoted. Not a dependency in either direction; the only shared touchpoint is `effectiveEnabledIds`, which o9zwxuav moves to `scripts/cli/package-state.mjs` and the `browser` gate calls, so whichever lands second updates that import |
+| [[o9zwxuav]] One package state model (backlog) | Its Current-state row ("Three packages use it … each require `response-shape`") and its sticky-dependency example (`convention-capture` → `response-shape`) describe relationships this plan removes. Its mechanism is still needed for `implementation-review` ([[ejsc769o]]). Also the home for the Plan Suite all-or-nothing question | Plan-vs-plan prose conflict, superseded here. At the user's direction this plan updated o9zwxuav's Current-state row, sticky-dependency example, and test row to use the `test-composite` fixture, since a queued plan is live and must not name the old id. Not a dependency in either direction; the only shared touchpoint is `effectiveEnabledIds`, which o9zwxuav moves to `scripts/cli/package-state.mjs` and the `browser` gate calls, so whichever lands second updates that import |
 | [[0jped168]] Agent behavior evals (backlog) | Headless agent eval runner could later score comprehension | Unlanded, not a dependency; this plan's clarity check stays a small manual sample |
 | [[package-cli-test-guide]] (backlog) | Its prose says Playwright is "not currently installed"; `@playwright/test` and `scripts/test/portal-ui/` have since landed | Plan-vs-code prose drift in that plan; no conflict with this one |
 | `agent-config-code-quality-conventions` (completed) | Rewrote `code-style` guidance this plan's module layout follows | Landed (`eafd8e25`, ancestor of HEAD) |
@@ -304,9 +304,9 @@ Example (illustrative; not an actual verification claim):
   only shared fragments, so `scripts/build/render-rules.sh --check` reports them current with no
   diff; package rules render through `scripts/cli/rules-render.mjs`, which
   `scripts/test/response-output-rules-check.mjs` checks for Claude, Codex, and Gemini.
-- The rename check excludes all of `docs/plans/`, not only `completed/` and `archived/`: this plan
-  and the backlog plan [[o9zwxuav]] describe the old id as history, and this plan does not edit
-  o9zwxuav.
+- The rename check excludes `docs/plans/completed/`, `docs/plans/archived/`, and this plan's own
+  file in any lifecycle folder (it records the rename). Every other plan is live and is checked;
+  [[o9zwxuav]] was updated so it no longer names the old id.
 - Real-environment runs done by hand: a script scenario against a throwaway server (passed, with a
   real screenshot of the filtered list), a capture-only scenario (`unverified`), a project spec
   file with one failing test (`failed`, screenshots and traces adopted, video reported as not
@@ -318,7 +318,7 @@ Example (illustrative; not an actual verification claim):
 
 | Criterion | Acceptance evidence |
 | --- | --- |
-| Rename complete | No live reference to `response-shape` outside `docs/plans/completed/` and `docs/plans/archived/`; `scripts/test/package-catalog-check.mjs` passes |
+| Rename complete | No live reference to `response-shape` outside `docs/plans/completed/`, `docs/plans/archived/`, and this plan, which records the rename (`scripts/test/response-output-rules-check.mjs`); `scripts/test/package-catalog-check.mjs` passes |
 | Shared policy | Rendered rules for Claude, Codex, and Gemini contain the same `response-output` text when enabled and none of it when disabled; no sentence duplicates a shared fragment |
 | Rules size | `globals/packages/response-output/rules.md` is no longer than today's 78-line `response-shape/rules.md`, or the plan records why |
 | Package independence | Enabling `feature-verification` alone leaves `response-output` disabled and vice versa; `browser run` works with `response-output` off |
@@ -442,6 +442,21 @@ how to open it, and what capture does **not** prove.
   Running it here would mean enabling the renamed packages in the user's live harness homes, and
   the criterion asks a reviewer to judge comprehension, which the implementing agent cannot do for
   its own responses.
+- 2026-10-21 (user decision): The "Rename complete" check excludes completed and archived plans
+  plus this plan's own file. Queued and in-flight plans are live, so [[o9zwxuav]] was updated to
+  use the `test-composite` fixture instead of the old id. Alternatives: exclude all of
+  `docs/plans/` (leaves a queued plan describing relationships that no longer exist), or exclude
+  only history and reword this plan too (obscures what was renamed).
+- 2026-10-21 (user decision): The approved Playwright install keeps Chromium, the headless shell,
+  and ffmpeg in Playwright's shared per-user cache; only the npm package goes into
+  `<stateRoot>/browser/tools/`. Section 5, the user CLI reference, the skill, and the resolver's
+  comments now say so. Alternative: set `PLAYWRIGHT_BROWSERS_PATH` to the tool directory for
+  install, probe, and runs, which is self-contained but downloads a second copy of browsers the
+  machine may already have.
+- 2026-10-21 (implementation): An unnamed script `check()` is reported as `unnamed check <n>`, and
+  a spec test with an empty title path as `untitled test`, so providers always return a result that
+  meets the contract. Alternative: catch contract violations in `browser run` and report `blocked`,
+  which would hide a provider bug as an environment problem and discard the checks that did run.
 
 ## Review
 
@@ -469,10 +484,10 @@ how to open it, and what capture does **not** prove.
 - [x] Probe accepted an ffmpeg of any revision, so `video: true` could precede a run that fails to record — fixed: headless shell and ffmpeg matched to the revisions `playwright-core`'s `browsers.json` pins (ea628104)
 - [x] An interrupted traced script left Playwright's `playwright-tracing-*` scratch dir — fixed: one owned work dir holds `tracesDir` and video (ea628104)
 - [x] The Decision Log's exit-code entry still said `process.exitCode` for `browser run` — fixed (ea628104)
-- [ ] A script `check()` called without a string name (or a spec test whose title path is empty) makes `validateRunResult` throw outside the run's try, so `browser run` prints a stack trace instead of a result — open (pass 5, cap reached)
-- [ ] `next_action` named only pass 3 as recorded under ## Review — open (pass 5, cap reached; superseded by this update)
-- [ ] The install command puts Chromium, the headless shell, and ffmpeg in Playwright's per-user cache, not RoboRepo's tool directory as the plan (Section 5) and the user doc say — escalated, see Open Questions
-- [ ] The "Rename complete" row excludes only `completed/` and `archived/`, but this plan and backlog o9zwxuav must name the old id — escalated, see Open Questions
+- [x] A script `check()` called without a string name (or a spec test whose title path is empty) makes `validateRunResult` throw outside the run's try, so `browser run` prints a stack trace instead of a result — fixed: providers name such checks `unnamed check <n>` / `untitled test`, with a regression test
+- [x] `next_action` named only pass 3 as recorded under ## Review — fixed: `next_action` rewritten for the current state
+- [x] The install command puts Chromium, the headless shell, and ffmpeg in Playwright's per-user cache, not RoboRepo's tool directory as the plan (Section 5) and the user doc say — user chose the shared cache; Section 5, the user doc, and the skill corrected (see Decision Log)
+- [x] The "Rename complete" row excludes only `completed/` and `archived/`, but this plan and backlog o9zwxuav must name the old id — user chose to exclude history plus this plan; o9zwxuav updated and the check narrowed (see Decision Log)
 
 ### Verification
 
@@ -489,34 +504,7 @@ how to open it, and what capture does **not** prove.
 
 ## Open Questions
 
-- **Amend the "Rename complete" acceptance criterion?** The row requires no live `response-shape`
-  reference outside `docs/plans/completed/` and `docs/plans/archived/`. This active plan, and the
-  backlog plan o9zwxuav (which this plan does not edit), must name the old id to describe the
-  change, so the row cannot be met as written. `scripts/test/response-output-rules-check.mjs`
-  excludes all of `docs/plans/`.
-  - Option A (recommended): amend the row to exclude all of `docs/plans/`. Plans are history and
-    reasoning, not live configuration; matches the check as built.
-  - Option B: keep the row and edit o9zwxuav and this plan to avoid the literal id. Rewrites
-    another plan's reasoning and obscures what was renamed.
-  - Blocked rather than decided: it changes an acceptance criterion, which is the human's call.
-  - Blocks: closing the escalated Review finding, and therefore the submit transition.
-
-- **Where does the approved install put the browsers?** The `blocked` result's install command
-  (`npm install --prefix <stateRoot>/browser/tools playwright@… && node …/cli.js install chromium`)
-  sets no `PLAYWRIGHT_BROWSERS_PATH`, so Chromium, the headless shell, and ffmpeg land in
-  Playwright's per-user cache (for example `~/Library/Caches/ms-playwright`), while the npm package
-  lands in the tool directory. Section 5 says both go to the tool directory, and
-  `docs/user/reference/roborepo-cli.md` says the same.
-  - Option A (recommended): keep the shared per-user cache. Reuses browsers other projects already
-    downloaded (often hundreds of MB), and is what probe already checks. Correct the user doc and
-    skill, and record the change to Section 5.
-  - Option B: install browsers under `<stateRoot>/browser/tools` by setting
-    `PLAYWRIGHT_BROWSERS_PATH` for the install, for probe, and for every run that uses the
-    tool-directory Playwright. Fully self-contained and removable with RoboRepo, but downloads a
-    second copy of browsers the machine may already have.
-  - Blocked rather than decided: it changes where RoboRepo writes large downloads on the user's
-    machine, which Section 5 specified.
-  - Blocks: the escalated Review finding, the user-doc wording, and the submit transition.
+None open. Both questions from validation pass 5 were answered by the user; see the Decision Log.
 
 ## Not tested
 

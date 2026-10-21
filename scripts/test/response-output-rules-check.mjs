@@ -57,8 +57,15 @@ for (const id of MARKERS) {
 }
 
 // ---- No live reference to the old package id ----
-// Plan documents record history and other plans' reasoning, so docs/plans/ is excluded.
-const grep = spawnSync("git", ["grep", "-l", "response-shape", "--", ".", ":(exclude)docs/plans/**", ":(exclude)scripts/test/response-output-rules-check.mjs"], {
+// Completed and archived plans are history. Queued and in-flight plans are live, except the plan
+// that performs the rename, which has to name the old id; it is matched in every lifecycle folder.
+const grep = spawnSync("git", [
+  "grep", "-l", "response-shape", "--", ".",
+  ":(exclude)docs/plans/completed/**",
+  ":(exclude)docs/plans/archived/**",
+  ":(exclude)docs/plans/*/agent-config-interactive-communication-and-demonstrations.md",
+  ":(exclude)scripts/test/response-output-rules-check.mjs",
+], {
   cwd: repoRoot,
   encoding: "utf8",
 });
