@@ -1,7 +1,7 @@
 ---
 id: harness-parity-todo
 priority: low
-next_action: Resolve the local-vs-global override policy decision (item 2)
+next_action:
 blocked_by: []
 depends_on: []
 related: [skills-vs-commands-invocation-policy, o9zwxuav]
@@ -118,3 +118,7 @@ shape — track it there, not here.
   — how context (rules / skills / commands) enters each harness; owns item 3.
 - [`completed/portable-install-relocation.md`](../completed/portable-install-relocation.md)
   — relocation/repair, shipped.
+
+## Archived
+
+2026-10-22: Superseded as an umbrella: package-state work is owned by o9zwxuav; native invocation and the preserved unresolved repository/global override decision are owned by skills-vs-commands-invocation-policy. Shipped parity history remains here.
