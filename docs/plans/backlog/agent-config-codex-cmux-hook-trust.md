@@ -4,9 +4,8 @@ priority: low
 next_action: Audit Codex hook trust bypass behavior in cmux-launched sessions and decide whether roborepo should document, warn, or guard against it
 blocked_by: []
 depends_on: []
-related:
-  - top-down-security-parity-review
-reviewed_commit:
+related: ["top-down-security-parity-review"]
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
 
 # Codex Cmux Hook Trust Review
@@ -95,3 +94,10 @@ Investigate first, then choose the lightest response:
 - Can cmux launch Codex with inline hooks while excluding user, project, and plugin hook sources?
 - Should roborepo surface this as a security warning, a context note, or no warning unless the user
   opts into runtime audits?
+
+## Evidence to refresh before implementation
+
+The backlog review did not reproduce current cmux arguments or enumerate active native hook sources.
+Treat invocation-wide bypass and source-loading claims as hypotheses to confirm against recorded
+versions and one fresh authenticated session. Completed security plans do not substitute for that
+evidence. Choose documentation, warning, or enforcement only after observing the actual behavior.

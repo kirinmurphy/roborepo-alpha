@@ -4,8 +4,8 @@ priority: high
 next_action: Inspect the current /agents repository-filter placeholder, reusable global components, and Claude/Codex provider contracts; confirm no active plan duplicates this scope.
 blocked_by: []
 depends_on: []
-related: [permva27]
-reviewed_commit:
+related: ["permva27"]
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 worktree:
 ---
 
@@ -19,7 +19,7 @@ Replace the repository-filtered `/agents` placeholder with a **read-only inspect
 
 The initial snapshot is the **primary checkout**, not necessarily the `main` branch: use the main worktree associated with the canonical repository, its current checked-out branch, and its local filesystem. Do not inspect linked worktrees or `origin/main`. No configuration is edited, applied, or executed.
 
-## Context and current state
+## Context
 
 - `/agents` already has a repository filter; the repository view is presently a placeholder. The global page includes installed harnesses, rules, hooks, skills/packages, permissions, and context estimates.
 - Harness installations and RoboRepo-managed machine packages are **machine-wide**, independent of the selected repository.
@@ -132,13 +132,13 @@ Management remains with Claude Code and Codex native tooling. The existing globa
 
 ```mermaid
 flowchart LR
-  Filter[Repository filter] --> Checkout[Primary checkout]
-  Checkout --> Adapter[Existing shared adapter]
-  Adapter --> Claude[Claude provider]
-  Adapter --> Codex[Codex provider]
-  Claude --> Inventory[Read-only inventory]
-  Codex --> Inventory
-  Inventory --> Portal[Agents portal]
+  Filter[Repository filter] -->|resolves| Checkout[Primary checkout]
+  Checkout -->|selects| Adapter[Existing shared adapter]
+  Adapter -->|delegates discovery to| Claude[Claude provider]
+  Adapter -->|delegates discovery to| Codex[Codex provider]
+  Claude -->|returns| Inventory[Read-only inventory]
+  Codex -->|returns| Inventory
+  Inventory -->|presents| Portal[Agents portal]
 ```
 
 First inspect existing provider and portal interfaces and **reuse them where possible**. If needed, add one small read-only discovery capability; do not create a generalized configuration framework or a write/update/apply API.
@@ -198,7 +198,7 @@ A minimal record needs only a harness identifier, resource type, source path, sc
 - [ ] Confirm no inspection path mutates repo/global configuration or runs hooks.
 - [ ] Run relevant repo-native unit and portal tests, and update the existing documentation of record with the new read-only scope.
 
-## Validation / acceptance criteria
+## Validation
 
 - [ ] Repository-filtered `/agents` shows a useful read-only inventory from the **primary checkout** (not linked worktrees), including checkout branch/path.
 - [ ] The Installed Harnesses section remains identical to global scope and clearly machine-wide.

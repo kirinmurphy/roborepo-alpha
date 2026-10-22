@@ -1,28 +1,24 @@
 ---
 id: 74h2tlim
 priority: low
-next_action: Decide the telemetry inclusion policy, then implement the root-domain contract and persisted-data inventory.
+next_action: Agree source/provenance and portable-record ownership with package plans, decide telemetry inclusion, then implement the profile root inventory and migration contract.
 blocked_by: []
-depends_on:
-  - 46up8y7a
-  - o9zwxuav
-  - user-managed-packages-and-add-workflows
-  - pljvmyh
-related:
-  - c7b7swuh
-  - 1rajbd5o
-  - qjsbhel5
-  - package-cli-test-guide
-  - harness-parity-todo
-  - 3jp3yhtq
-  - harness-capability-derived-resource-targeting
-  - plan-session-launching-milestone-1
-  - telemetry-analyze-single-pass-perf
-  - windows-provider-path-schema
-reviewed_commit: 2a56135734a21c6c8ad9435f76f2e9e092b81201
+depends_on: ["o9zwxuav", "user-managed-packages-and-add-workflows"]
+related: ["c7b7swuh", "1rajbd5o", "qjsbhel5", "package-cli-test-guide", "harness-parity-todo", "3jp3yhtq", "harness-capability-derived-resource-targeting", "plan-session-launching-milestone-1", "telemetry-analysis-io-performance", "windows-provider-path-schema", "46up8y7a", "pljvmyh"]
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
 
 # Preserve User Data Across Installations and Macs
+
+## Shared layout and provenance boundary
+
+[[o9zwxuav]] owns the desired-state schema; [[jdsobwn]] owns source identity, immutable installed
+artifacts, and provenance; [[user-managed-packages-and-add-workflows]] owns authored content and
+receipts. This plan owns portable containment, archive integrity, migrations, and restore.
+Agree record references and authored-versus-derived ownership across these plans before moving
+paths. Source transport/unbundling need not finish before a profile inventory can be specified.
+Existing telemetry backup and bounded-store inspection/reset are not portable-profile restore.
+The runtime/repository and install-lifecycle prerequisites are completed; retain them as provenance.
 
 ## Summary
 
@@ -114,11 +110,11 @@ not copy that built-in into the workspace.
 
 ```mermaid
 flowchart TD
-  App["appRoot: application + built-ins"] --> Catalog["Resolved catalog"]
-  Work["workspace: user source + overrides"] --> Catalog
-  Records["records: desired state"] --> Apply["config apply"]
-  Catalog --> Apply
-  Apply --> Output["machine + harness projections"]
+  App["appRoot: application + built-ins"] -->|supplies built-ins to| Catalog["Resolved catalog"]
+  Work["workspace: user source + overrides"] -->|supplies authored resources to| Catalog
+  Records["records: desired state"] -->|supplies desired state to| Apply["config apply"]
+  Catalog -->|supplies resolved resources to| Apply
+  Apply -->|materializes| Output["machine + harness projections"]
 ```
 
 ### Source of truth rules
@@ -536,7 +532,7 @@ Implementation rules from the repository code-style guidance:
 - Archive limits and data classification live in explicit configuration/schema modules.
 - Shared modules return results or typed errors and do not call `process.exit()`.
 - Use named ESM exports and existing atomic-write helpers where practical.
-- Split modules by responsibility near the 150-line soft limit and before the 200-line hard cap.
+- Separate modules where responsibility, consumer, or testability differs; preserve cohesive logic regardless of line count.
 - Interactive CLI and direct CLI routes invoke the same handlers.
 
 Add commands through the existing command-definition/catalog mechanism. Update the npm runtime
@@ -663,7 +659,7 @@ multiple feature stores are cross-cutting, phase and final gates include:
 npm test
 npm run pack:dry-run
 node scripts/test/package-install-smoke.mjs
-npm run test:plans
+node scripts/test/plan-suite-check.mjs
 ```
 
 The exact smoke-test invocation should follow its current supported wrapper/arguments when the work

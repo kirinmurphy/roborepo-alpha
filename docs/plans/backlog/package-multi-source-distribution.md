@@ -1,11 +1,11 @@
 ---
 id: jdsobwn
 priority: low
-next_action: Characterize current package behavior with isolated catalog and lifecycle fixtures
+next_action: Characterize current bundled/workspace catalog behavior and agree source-qualified provenance with desired-state and profile owners before adding source adapters.
 blocked_by: []
 depends_on: []
 related: []
-reviewed_commit: 2a56135734a21c6c8ad9435f76f2e9e092b81201
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
 
 # Decouple Platform Distribution from Configurable Sources
@@ -22,18 +22,18 @@ The resulting model is:
 
 ```mermaid
 flowchart TD
-  platform[RoboRepo platform] --> service[Package service]
-  service --> registry[Source registry]
-  registry --> official[Official RoboRepo source]
-  registry --> thirdParty[Third-party registry source]
-  registry --> local[Local path / workspace source]
-  service --> catalog[Normalized package catalog]
-  service --> resolver[Resolver + provenance lock]
-  service --> store[Package cache / install store]
-  service --> activation[Activation / apply engine]
-  activation --> claude[Claude]
-  activation --> codex[Codex]
-  activation --> future[Future harnesses]
+  platform[RoboRepo platform] -->|calls| service[Package service]
+  service -->|consults| registry[Source registry]
+  registry -->|registers| official[Official RoboRepo source]
+  registry -->|registers| thirdParty[Third-party registry source]
+  registry -->|registers| local[Local path / workspace source]
+  service -->|builds| catalog[Normalized package catalog]
+  service -->|resolves through| resolver[Resolver + provenance lock]
+  service -->|stores artifacts in| store[Package cache / install store]
+  service -->|activates through| activation[Activation / apply engine]
+  activation -->|projects into| claude[Claude]
+  activation -->|projects into| codex[Codex]
+  activation -->|projects into| future[Future harnesses]
 ```
 
 The separation is both a product decision and an ownership boundary:
@@ -126,12 +126,12 @@ Conceptually:
 
 ```mermaid
 flowchart TD
-  official[official · registry] --> normalized[Normalized package descriptors]
-  company[company · registry] --> normalized
-  experiments[experiments · git] --> normalized
-  local[local · path] --> normalized
-  normalized --> resolution[Resolution / installation]
-  resolution --> activation[Activation for selected harnesses]
+  official[official · registry] -->|normalizes into| normalized[Normalized package descriptors]
+  company[company · registry] -->|normalizes into| normalized
+  experiments[experiments · git] -->|normalizes into| normalized
+  local[local · path] -->|normalizes into| normalized
+  normalized -->|passes candidates to| resolution[Resolution / installation]
+  resolution -->|makes installed artifacts available for| activation[Activation for selected harnesses]
 ```
 
 ### Separate Discovery, Installation, and Activation
@@ -418,14 +418,14 @@ A conceptual dependency direction is:
 
 ```mermaid
 flowchart LR
-  cli[CLI] --> service[Package service]
-  portal[Portal / HTTP] --> service
-  service --> registry[Source registry]
-  service --> adapters[Source adapters]
-  service --> catalog[Catalog normalization]
-  service --> resolver[Resolver]
-  service --> store[Install store]
-  service --> lifecycle[Existing package validation / apply logic]
+  cli[CLI] -->|calls| service[Package service]
+  portal[Portal / HTTP] -->|calls| service
+  service -->|consults| registry[Source registry]
+  service -->|dispatches to| adapters[Source adapters]
+  service -->|normalizes through| catalog[Catalog normalization]
+  service -->|resolves through| resolver[Resolver]
+  service -->|persists through| store[Install store]
+  service -->|reuses| lifecycle[Existing package validation / apply logic]
 ```
 
 The package service should expose plain data and typed-by-convention JavaScript objects. RoboRepo currently uses ESM JavaScript; this feature should not introduce TypeScript as a prerequisite.
@@ -520,14 +520,14 @@ Replace the current hard-coded built-in/workspace merge with a general compositi
 
 ```mermaid
 flowchart TD
-  configured[Configured sources] --> adapters[Source adapters list packages]
-  adapters --> validate[Validate source responses]
-  validate --> normalize[Normalize descriptors]
-  normalize --> group[Group by package ID]
+  configured[Configured sources] -->|dispatches to| adapters[Source adapters list packages]
+  adapters -->|returns responses for| validate[Validate source responses]
+  validate -->|passes validated descriptors to| normalize[Normalize descriptors]
+  normalize -->|groups candidates for| group[Group by package ID]
   group -->|One candidate| unqualified[Resolve by unqualified ID]
   group -->|Multiple candidates| collision[Require persisted or explicit source]
-  unqualified --> filter[Apply harness compatibility / metadata filters]
-  collision --> filter
+  unqualified -->|filters resolved candidates through| filter[Apply harness compatibility / metadata filters]
+  collision -->|filters resolved candidates through| filter
 ```
 
 The first refactor can wrap today's built-in directory and workspace directory as adapters. That lets source composition land before any remote distribution behavior changes.
@@ -638,11 +638,11 @@ Use staged writes:
 
 ```mermaid
 flowchart TD
-  fetch[Download / fetch] --> validate[Validate package]
-  validate --> integrity[Verify integrity]
-  integrity --> artifact[Write new immutable artifact]
-  artifact --> lock[Atomically update install / lock record]
-  lock --> activate[Optionally activate]
+  fetch[Download / fetch] -->|supplies downloaded bytes to| validate[Validate package]
+  validate -->|checks validated package with| integrity[Verify integrity]
+  integrity -->|commits verified bytes as| artifact[Write new immutable artifact]
+  artifact -->|records immutable artifact in| lock[Atomically update install / lock record]
+  lock -->|makes installed artifact available to| activate[Optionally activate]
 ```
 
 Source refresh should likewise parse and validate a new catalog before replacing the cached catalog.
@@ -846,10 +846,10 @@ Work:
 Primary existing verification:
 
 ```bash
-npm run test:packages
-npm run test:package-catalog-harness
-npm run test:package-lifecycle
-npm run test:package-default-enabled
+node scripts/test/package-catalog-check.mjs
+node scripts/test/package-catalog-harness-check.mjs
+node scripts/test/package-lifecycle-check.mjs
+node scripts/test/package-default-enabled-check.mjs
 ```
 
 Exit criteria:
@@ -1039,8 +1039,8 @@ Tests:
 ```bash
 npm run pack:dry-run
 npm run test:package-install
-npm run test:packages
-npm run test:package-lifecycle
+node scripts/test/package-catalog-check.mjs
+node scripts/test/package-lifecycle-check.mjs
 npm test
 ```
 
@@ -1127,10 +1127,10 @@ Work:
 Verification:
 
 ```bash
-npm run test:packages
-npm run test:package-catalog-harness
-npm run test:package-lifecycle
-npm run test:package-default-enabled
+node scripts/test/package-catalog-check.mjs
+node scripts/test/package-catalog-harness-check.mjs
+node scripts/test/package-lifecycle-check.mjs
+node scripts/test/package-default-enabled-check.mjs
 npm run test:package-install
 npm run pack:dry-run
 npm test
@@ -1336,3 +1336,16 @@ This backlog plan is ready to promote when:
 - the first implementation stage is scoped to characterization plus source-model refactoring rather than remote distribution all at once;
 - no newer active plan has claimed the same package-source boundary;
 - the implementation session re-checks current `main` because this plan was reviewed against the commit recorded in frontmatter.
+
+## Coordination and first delivery boundary
+
+[[o9zwxuav]] owns desired roots and effective dependency closure; this plan owns source IDs,
+resolution provenance, installed immutable artifacts, collision selection, and source refresh.
+[[user-managed-packages-and-add-workflows]] owns typed authoring/receipts/export UX, and
+[[74h2tlim]] owns portable profile containment and backup. Agree source-qualified record references,
+owned caches versus authored path sources, and cleanup scopes before any storage migration.
+
+Characterization and the local `path`/temporary `bundled` source contract come first; remote registry
+transport and unbundling are later stages. Retain current activation semantics until the desired
+state contract is integrated. Do not force typed local creation or profile inventory to wait for the
+entire remote distribution implementation; their shared layout/provenance decision is the boundary.

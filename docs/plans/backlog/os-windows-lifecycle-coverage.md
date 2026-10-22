@@ -1,12 +1,11 @@
 ---
 id: 0pzhhong
 priority: low
-next_action: Define the Windows lifecycle command matrix and prove scenario isolation on a disposable Windows runner before adding the clean-install case
+next_action: Define real lifecycle scenarios against the shared Windows environment contract and prove isolation before invoking installation.
 blocked_by: []
-depends_on: []
-related:
-  - windows-provider-path-schema
-reviewed_commit: 521bbb3
+depends_on: ["l1mz96d9"]
+related: ["windows-provider-path-schema"]
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
 
 # Verify installation, updates, and removal on Windows
@@ -57,14 +56,14 @@ flowchart LR
 | Proposed owner | Responsibility |
 | --- | --- |
 | `scripts/test/windows-lifecycle-check.ps1` | Preflight, scenario selection, timeout handling, and result summary. |
-| `scripts/test/windows-lifecycle/environment.ps1` | Isolated environment setup/restoration, child-process execution, and cleanup in `finally`. |
+| Shared Windows environment from [[l1mz96d9]] | Runner/profile isolation, prerequisites, state/workspace roots, and shared execution helpers. Lifecycle scenarios add only their own child execution and cleanup. |
 | `scripts/test/windows-lifecycle/checkout.ps1` | Checkout installer and update scenarios using `scripts/install/install-windows.ps1` and the public lifecycle commands. |
 | `scripts/test/windows-lifecycle/package.ps1` | Local tarball installation, package initialization/apply/update, uninstall, and npm removal. |
 | `scripts/test/windows-lifecycle/ownership.ps1` | Assertions for managed links/config and user-owned sentinels, shared where the two install modes have the same contract. |
-| `.github/workflows/ci.yml` | Separate Windows lifecycle job with required prerequisites and bounded failure artifacts. |
+| Shared Windows job in `.github/workflows/ci.yml` | Consume provisioning, prerequisites, ledger, and artifact upload owned by [[l1mz96d9]]; add lifecycle scenario results to that job. |
 | `docs/internal/testing.md` | Verified platform matrix and the Windows reproduction command. |
 
-The proposed files are new. Keep each focused and below 150 lines; split scenario families when
+The proposed files are new. Keep each focused; split scenario families when
 setup or failure meaning differs. Invoke shipping commands instead of reproducing installer logic
 inside the tests. Pack the checkout once and use that local tarball for package scenarios.
 
@@ -72,8 +71,8 @@ inside the tests. Pack the checkout once and use that local tarball for package 
 
 - [ ] Inventory public install/update/uninstall dispatch on Windows for checkout and package modes;
       record the exact commands and prerequisites as the scenario matrix.
-- [ ] Prove isolation, symlink capability, Git Bash discovery, and cleanup using an intentionally
-      failing child process before running installation.
+- [ ] Consume the shared environment owner's isolation, symlink, and Git Bash prerequisites; prove
+      lifecycle-scenario cleanup with an intentionally failing child process before installation.
 - [ ] Add a failing clean-install scenario, then make it pass through the production entry points.
       Check configured harness roots, managed links, generated configuration, and CLI availability.
 - [ ] Cover repeated install/update and a local fixture change. Assert convergence without duplicate
@@ -82,8 +81,8 @@ inside the tests. Pack the checkout once and use that local tarball for package 
       remain, and package removal deletes app files without deleting retained user resources.
 - [ ] Add a path containing spaces, existing user configuration, and missing symlink permission
       cases. Check the documented failure/recovery behavior rather than skipping these cases.
-- [ ] Wire the Windows lifecycle job and upload bounded synthetic logs on failure. Keep the static
-      Windows check separate so parser/provider drift stays quick to diagnose.
+- [ ] Wire lifecycle scenarios into the shared Windows behavior job and its bounded failure
+      artifacts/ledger. Preserve the existing fast static check for parser/provider drift.
 - [ ] Update platform coverage only after the real Windows scenarios pass; record remaining gaps.
 
 ## Validation
@@ -121,3 +120,11 @@ The initial inventory must establish whether package-mode dispatch runs unchange
 on Windows and whether all profile reads can be isolated. Failures discovered there determine the
 implementation effort; the current estimate is 1–3 days for initial coverage and fixes, not a
 commitment to resolve every platform discrepancy within that time.
+
+## Shared environment contract
+
+[[l1mz96d9]] owns runner provisioning, isolation, prerequisites, compatibility results, and artifact
+uploads. This plan supplies lifecycle scenario modules and their outcome rows to that shared job.
+Its initial command/isolation characterization can inform the environment contract; do not create
+a competing runner framework. [[windows-provider-path-schema]] owns verified path-resolution
+changes, not the lifecycle assertions that discover them.

@@ -1,70 +1,69 @@
 ---
 id: windows-provider-path-schema
 priority: low
-next_action: Add a `platforms.win32` path-override shape to the provider manifest schema (scripts/harnesses/provider-manifest.schema.json) that supports absolute environment-variable-rooted paths, not just `~`-relative ones, then update scripts/harnesses/paths.mjs's expandHome() to resolve it.
-blocked_by:
-  - discoverable-harness-provider-architecture
+next_action: Verify supported Windows provider locations on the shared runner, then decide whether home-relative manifest resolution suffices before extending the path schema.
+blocked_by: []
 depends_on: []
-related:
-  - discoverable-harness-provider-architecture
-reviewed_commit:
+related: ["discoverable-harness-provider-architecture", "l1mz96d9", "0pzhhong"]
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
 
 # Windows Provider Path Schema
 
 ## Summary
 
-`install-windows.ps1` (Phase 4 of `discoverable-harness-provider-architecture-plan.md`) still
-hardcodes Claude's Windows home as `%APPDATA%\Claude` and Codex's as `%USERPROFILE%\.codex` in a
-`Resolve-ManifestHomeRoot` switch statement, rather than deriving them from the Node provider
-registry the way the bash installers derive `~/.claude`/`~/.codex` from `harness_detected_rows`
-(`roborepo harness detected`, backed by `scripts/harnesses/paths.mjs`'s `resolveHarnessPath`).
+Derive Windows harness locations from provider manifests instead of maintaining a PowerShell
+provider switch. Add an environment-rooted path form only if supported native locations require it.
 
-## Current State
+## Context
 
-`scripts/harnesses/paths.mjs`'s `expandHome()` only understands `~`-relative paths
-(`path.join(os.homedir(), homeRelativePath.slice(2))`). Claude's Windows install location is not
-`~`-relative at all — `%APPDATA%\Claude` is rooted at a different environment variable
-(`APPDATA`, not `USERPROFILE`/home), so there's no way to express it in the current manifest
-`paths` shape even with a per-platform override, because the override mechanism
-(`manifest.platforms?.[platform]?.paths`) still assumes every path is `~`-relative and only lets a
-platform override *which* `~`-relative path string is used.
+`scripts/install/install-windows.ps1::Resolve-ManifestHomeRoot` currently maps Claude, Codex, and
+Gemini to `USERPROFILE/.claude`, `USERPROFILE/.codex`, and `USERPROFILE/.gemini`. The earlier claim
+that it uses `APPDATA/Claude` was incorrect. This repository inspection does not establish which
+native versions require other Windows locations.
 
-## Why This Was Deferred
-
-Fixing this properly needs two changes together: a new path-expansion form (e.g. a
-`{ "envVar": "APPDATA", "path": "Claude" }` shape, or a documented "path strings starting with a
-recognized env-var token expand against that var instead of home" convention) in both the JSON
-schema and `expandHome()`, plus updating Claude's `provider.json` to declare it. That's a real
-provider-manifest contract change, not a mechanical "swap the source" refactor like the rest of
-Phase 4's install-script work, and no Windows machine was available in the session that did the
-rest of Phase 4 to validate the change end to end. Bundling it into that pass would have meant an
-unverified schema change landing alongside already-tested bash logic.
+`scripts/harnesses/paths.mjs::expandHome()` expands only home-relative strings. Platform overrides
+exist, but still use that path form. The provider architecture prerequisite has completed; real
+Windows behavior coverage is owned by [[l1mz96d9]] and [[0pzhhong]].
 
 ## Goals
 
-- `scripts/harnesses/paths.mjs`'s `resolveHarnessPath`/`resolveHarnessPaths` correctly resolve
-  Claude's Windows home without any Windows-specific code outside the manifest + `paths.mjs`.
-- `install-windows.ps1`'s `Resolve-ManifestHomeRoot` becomes a thin PowerShell wrapper that shells
-  to `roborepo harness detected` (mirroring the bash installers) instead of its own switch
-  statement, once the underlying path can be resolved correctly by that command on Windows.
+- One provider-owned source for Windows homes and configuration locations.
+- Native-location evidence determines whether a new path schema is necessary.
+- PowerShell consumes the provider resolver rather than duplicating its provider list.
 
-## Implementation Plan
+## Proposed design
 
-- Add an `envVar`-rooted path form to `scripts/harnesses/provider-manifest.schema.json`.
-- Extend `expandHome()` (or add a sibling resolver) in `scripts/harnesses/paths.mjs` to handle it,
-  with a unit test pinning both the `~`-relative and `envVar`-rooted resolution paths.
-- Add `platforms.win32.paths.home` (and any other Windows-specific paths, if they diverge) to
-  `globals/harnesses/claude/provider.json`.
-- Update `install-windows.ps1`'s `Resolve-ManifestHomeRoot` to shell to
-  `node scripts/cli/main.mjs harness detected` and parse its home-path column, replacing the
-  hardcoded switch — mirroring `scripts/lib/manifests-data.sh`'s `harness_present`/
-  `harness_detected_rows` bash pattern.
+First compare the registered manifests, installer output, and supported native locations on the
+Windows runner. If every supported path is home-relative, reuse the current schema. If a required
+path is environment-rooted, define a validated resolver form with missing-variable behavior before
+changing manifests. The Node resolver and installer must agree on the same result.
+
+## Implementation plan
+
+- [ ] Reproduce supported provider locations on Windows and record versions and evidence.
+- [ ] Select the smallest schema change justified by those observations, including no extension
+      when home-relative paths suffice.
+- [ ] If needed, extend provider schema/path resolution with environment-rooted values, clear
+      missing-variable errors, and platform-isolated tests.
+- [ ] Update provider Windows overrides from verified paths.
+- [ ] Replace the PowerShell switch with consumption of the canonical provider resolver, using
+      structured output rather than parsing a human-oriented table where practical.
+- [ ] Verify detection, install, update, and uninstall in the shared Windows test environment.
 
 ## Validation
 
-- `node scripts/test/harness-manifest-check.mjs` (extend with a Windows-platform-override case).
-- Manual verification on an actual Windows machine or CI Windows runner — this repo's test suite
-  (`test-roborepo.sh`) is bash-only and cannot exercise `install-windows.ps1` directly; the Phase 4
-  pass that touched this file could only verify via PowerShell 7 parsing + isolated logic dry-runs
-  on macOS, not a real install.
+Run `node scripts/test/harness-manifest-check.mjs` and
+`pwsh -File scripts/test/windows-installer-check.ps1`. Real Windows lifecycle scenarios must prove
+resolved files land at the native locations. A parser pass or simulated platform argument alone is
+not end-to-end acceptance. Run `npm run check` after implementing a shared resolver change.
+
+## Documentation impact
+
+Update `docs/internal/harness-provider-interface.md` and Windows setup guidance only for paths and
+schema forms actually verified. Link the compatibility ledger owned by [[l1mz96d9]].
+
+## Open questions
+
+Which supported native Windows installations require a location not expressible as `~/...`, and
+what should resolution report when a required environment variable is absent?

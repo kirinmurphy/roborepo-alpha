@@ -4,9 +4,8 @@ priority: high
 next_action: Map the current local CI steps into proposed fast, integration, package, and clean-machine tiers with expected ownership for each script; separately, inventory which tiers a docs-only or scope-limited diff can skip entirely
 blocked_by: []
 depends_on: []
-related:
-  - qk4mz7t2
-reviewed_commit:
+related: ["qk4mz7t2"]
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
 
 # Tier and Diff-Scope Validation
@@ -58,7 +57,7 @@ when the diff actually warrants it.
 ```text
 npm run check
   bash scripts/doctor.sh --quiet
-  bash scripts/test/test-roborepo.sh --quiet
+  npm run check
   bash scripts/test/test-install-collisions.sh
   selected package / harness / lifecycle node checks
   npm run --silent test:package-install
@@ -90,13 +89,13 @@ Each stage should print duration.
 
 ```mermaid
 flowchart TD
-  Fast["check:fast"] --> Integration["check:integration"]
-  Fast --> Package["check:package"]
-  Package --> CleanMachine["check:clean-machine"]
-  Integration --> Full["check"]
-  Package --> Full
-  CleanMachine --> Full
-  Platform["platform parity: pwsh/windows where available"] --> Full
+  Fast["check:fast"] -->|can precede| Integration["check:integration"]
+  Fast -->|can precede| Package["check:package"]
+  Package -->|precedes| CleanMachine["check:clean-machine"]
+  Integration -->|contributes to| Full["check"]
+  Package -->|contributes to| Full
+  CleanMachine -->|contributes to| Full
+  Platform["platform parity: pwsh/windows where available"] -->|contributes to| Full
 ```
 
 ### Diff-scoped tier selection
@@ -181,3 +180,11 @@ required check.
 - Should CI display each tier as a separate workflow step for better timing and failure isolation,
   or keep a single `npm run check` command for local/remote command parity?
 - What is the acceptable target runtime for `check:fast` on a normal maintainer machine?
+
+## Inventory additions to preserve
+
+Re-inventory `scripts/test/ci.sh`, check groups, and `package.json` rather than using historical
+suite counts. Include the independent telemetry oracle, portal browser suite, package artifact,
+and clean-machine scenarios in the tier map. Existing scoped commands do not yet compose the
+proposed `check:*` tiers. A docs-only skip must still preserve required-check reporting and every
+applicable plan/document validation gate.

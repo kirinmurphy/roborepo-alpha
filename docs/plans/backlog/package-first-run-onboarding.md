@@ -1,16 +1,11 @@
 ---
 id: v6lvuu2
 priority: low
-next_action: After plan 46up8y7a establishes `roborepo init`, explicit initialization state, and the shared lifecycle boundary, add a shared onboarding draft service and dedicated `/setup` portal route before changing first-run package defaults from immediate apply to confirm-before-apply
+next_action: Build a shared staged onboarding draft on the existing init lifecycle and define setup-route handoff with Home guidance before changing live defaults.
 blocked_by: []
-depends_on:
-  - 46up8y7a
-related:
-  - c7b7swuh
-  - onboarding-wizard
-  - onboarding-reinstatement
-  - 3jp3yhtq
-reviewed_commit: 2a56135734a21c6c8ad9435f76f2e9e092b81201
+depends_on: []
+related: ["c7b7swuh", "onboarding-wizard", "onboarding-reinstatement", "3jp3yhtq", "46up8y7a"]
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
 
 # Let Users Review First-Run Configuration in Browser or Terminal
@@ -36,18 +31,18 @@ After initialization, `roborepo library` / `roborepo package manage` remain the 
 
 ## Context
 
-RoboRepo already has substantial onboarding machinery, but its current wiring reflects older checkout-install flows:
+`scripts/cli/initialization-state.mjs` already records first-run lifecycle and `roborepo init` owns
+initialization. `scripts/cli/presets.mjs` supplies the existing live Package Library wizard, built
+from the shared behavior view. Completed lifecycle plan [[46up8y7a]] is provenance, not pending work.
 
-- `scripts/cli/presets.mjs` contains the live item-level multi-step wizard.
-- `buildOnboardSteps()` derives its sections from `buildBehaviorView(readConfigSnapshot())`, the same server-side behavior model used by the `/config` page.
-- `package manage` invokes that wizard through the internal `onboard` sub-action.
-- `presetsIntro()` contains a historical first-install menu with “install additional tools,” “open in web,” telemetry-only, and done paths.
-- `maybeRunPresetOnboarding()` is currently a pass-through, so there is no forced onboarding gate.
-- completed plans `onboarding-wizard.md` and `onboarding-reinstatement.md` document the older install-time iterations and are implementation history, not work to restore verbatim.
+The remaining feature is a shared staged onboarding draft with browser/terminal editing and one
+commit/verify boundary. Current live mutations must not become draft writes accidentally.
+Completed onboarding iterations supply reusable components, not the requested staged workflow.
 
-Plan `46up8y7a` establishes the new package-mode lifecycle boundary: npm installs the application, `roborepo init` owns first-run initialization, bare `roborepo` routes an uninitialized user into that workflow, and package/default editing is reachable later through `roborepo library`.
-
-This plan adds the richer onboarding UX after that lifecycle seam exists. It intentionally does not own package installation, uninstall cleanup, or harness-presence semantics.
+[[rtkmc8kf]] owns ongoing Home setup calls to action: they enable existing features or route to
+setup, without creating another onboarding draft or declaring initialization complete themselves.
+This plan owns `/setup`, draft persistence/resumption, confirmation, and initialization completion.
+Both must consume the same feature-readiness signals and preserve optional setup after initialization.
 
 ## Goals
 
@@ -113,7 +108,7 @@ The existing `roborepo library` behavior can continue applying live changes afte
 
 The portal page manifest currently serves:
 
-- `/` → Agents
+- `/` → Home (Agents is served separately)
 - `/config` → Agents alias
 - `/plans`
 - `/tokens`
@@ -137,20 +132,20 @@ The workflow after `roborepo init` core setup is:
 
 ```mermaid
 flowchart TD
-  Init["roborepo init"] --> Core["core setup + harness refresh"]
-  Core --> Choice{"finish setup where?"}
+  Init["roborepo init"] -->|performs| Core["core setup + harness refresh"]
+  Core -->|asks| Choice{"finish setup where?"}
   Choice -->|Browser| Web["start/open portal at /setup"]
   Choice -->|Terminal| TTY["terminal onboarding wizard"]
-  Web --> Draft["shared onboarding draft service"]
-  TTY --> Draft
-  Draft --> Review["review package/permission proposal"]
-  Review --> Confirm{"confirm?"}
+  Web -->|edits| Draft["shared onboarding draft service"]
+  TTY -->|edits| Draft
+  Draft -->|produces| Review["review package/permission proposal"]
+  Review -->|requests| Confirm{"confirm?"}
   Confirm -->|not yet| Draft
   Confirm -->|yes| Commit["commit desired settings"]
-  Commit --> Apply["config apply"]
-  Apply --> Verify["post-init verification"]
-  Verify --> Complete["mark initialization complete"]
-  Complete --> Ready["normal roborepo + library + portal"]
+  Commit -->|persists| Apply["config apply"]
+  Apply -->|triggers| Verify["post-init verification"]
+  Verify -->|checks| Complete["mark initialization complete"]
+  Complete -->|enters| Ready["normal roborepo + library + portal"]
 ```
 
 The Browser-versus-Terminal choice is presentation only. It must not select a different configuration model or mutation path.
@@ -521,9 +516,9 @@ Add focused tests for the onboarding draft/service, then run:
 ```sh
 node scripts/test/cli-command-catalog-check.mjs
 node scripts/test/cli-surface-integration-check.mjs
-npm run test:packages
-npm run test:package-lifecycle
-npm run test:harness-cli
+node scripts/test/package-catalog-check.mjs
+node scripts/test/package-lifecycle-check.mjs
+node scripts/test/harness-cli-check.mjs
 bash scripts/doctor.sh --quiet
 npm test
 ```

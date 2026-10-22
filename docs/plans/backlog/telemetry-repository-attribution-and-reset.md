@@ -5,7 +5,7 @@ next_action: Add failing fixtures for alias-aware telemetry scope and canonical 
 blocked_by: []
 depends_on: []
 related: []
-reviewed_commit:
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 worktree:
 ---
 
@@ -162,3 +162,11 @@ RoboRepo can recommend starting sessions from the primary checkout and directing
 4. **Live capture:** Is preserving the current tracking-enabled setting on UI reset the expected default? The CLI's existing `purge --all` currently disables tracking.
 5. **Alias confirmation:** How should users register a verified repository rename when no existing UI affordance is available? Reuse the registry API; do not auto-merge solely from a path.
 6. **Restore:** Is backing up enough for v1, or should the UI offer a matching restore workflow? Restoring is out of scope until explicitly chosen.
+
+## Existing storage operations and reset ownership
+
+Reuse registry alias resolution and shared repository scope; do not reintroduce a page-local
+repository selector. Inventory current telemetry purge and `maintenance stores` reset behavior
+before selecting selective-deletion semantics. Those operations do not establish the proposed
+repository-scoped ownership, concurrency, or cache invalidation guarantee. [[n8kw3rp2]] owns retained
+history/loss disclosure; this plan owns canonical selective deletion and the Tokens confirmation UI.

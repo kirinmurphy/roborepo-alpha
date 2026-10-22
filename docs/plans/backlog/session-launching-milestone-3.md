@@ -5,10 +5,8 @@ next_action: Define the platform adapter contract from the completed macOS imple
 blocked_by: []
 depends_on:
   - plan-session-launching-milestone-2
-related:
-  - plan-session-launching-milestone-1
-  - plan-session-launching-milestone-2
-reviewed_commit: 72c83be
+related: ["plan-session-launching-milestone-1", "plan-session-launching-milestone-2"]
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
 # Session Launching — Milestone 3: Cross-Platform Adapters
 
@@ -43,11 +41,11 @@ assumptions. They must be separate execution environments joined only through an
 ```mermaid
 flowchart TD
   Core["Platform-neutral session core"]
-  Core --> Darwin["macOS adapter"]
-  Core --> Linux["Linux adapter"]
-  Core --> Windows["Native Windows adapter"]
-  Core --> WSL["WSL bridge adapter"]
-  Windows -. explicit translation .-> WSL
+  Core -->|delegates to| Darwin["macOS adapter"]
+  Core -->|delegates to| Linux["Linux adapter"]
+  Core -->|delegates to| Windows["Native Windows adapter"]
+  Core -->|delegates to| WSL["WSL bridge adapter"]
+  Windows -. translates explicitly .-> WSL
 ```
 
 ## Goals
@@ -184,11 +182,11 @@ tested bridge exists.
 
 ```mermaid
 flowchart TD
-  Repo["Repository path"] --> Kind{"Path kind"}
+  Repo["Repository path"] -->|classifies| Kind{"Path kind"}
   Kind -->|"native Windows"| Native["Use Windows harness"]
   Kind -->|"WSL"| Wsl["Use WSL harness"]
-  Native --> CheckN{"Executable native?"}
-  Wsl --> CheckW{"Executable inside distro?"}
+  Native -->|verifies| CheckN{"Executable native?"}
+  Wsl -->|verifies| CheckW{"Executable inside distro?"}
   CheckN -->|no| Block["Block with corrective action"]
   CheckW -->|no| Block
   CheckN -->|yes| Launch["Launch"]
@@ -456,3 +454,11 @@ tested.
 4. Which deployment mode comes first: RoboRepo portal running natively on Windows or inside WSL?
 5. Is UNC-to-WSL translation required, or should UNC repositories remain native-Windows-only in the
    first release?
+
+## Platform environment ownership
+
+Milestones 1 and 2 remain the prerequisite for extracting concrete session adapters. [[l1mz96d9]]
+owns shared Windows provisioning, isolation, compatibility reporting, and CI artifacts. This plan
+adds session-specific platform scenarios to that environment; it does not create another general
+Windows runner. Native Windows/WSL path and executable boundaries still require separate observed
+acceptance. Current provider launch declarations are stubs, not platform implementations.

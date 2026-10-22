@@ -1,27 +1,25 @@
 ---
 id: 4zyo2woj
 priority: high
-next_action: Design the read-secrets provider-capability contract (see Proposed design), then write the Codex path-argument scanner against it
+next_action: Verify native read boundaries and enumerate scanner bypass/non-command coverage before selecting the provider read-secrets enforcement guarantee.
 blocked_by: []
 depends_on: []
-related:
-  - ia1q1z9
-reviewed_commit: 2806e16
+related: ["ia1q1z9"]
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
 
 # Block Codex Sandbox Reads of Credential Paths
 
 ## Summary
 
-Codex's sandbox has no equivalent to Claude's `read-secrets` denylist. Under the `roborepo-workspace`
-permission profile, a Codex session can read any file the user's OS account can read — `.ssh` keys,
-`.aws` credentials, browser data, secrets in unrelated repositories — with no prompt and no deny.
-Writes are correctly confined to the configured workspace roots; reads are not confined at all.
+Add credential-path read enforcement where the supported Codex runtime and current RoboRepo
+profile leave a verified gap. The existing permission hook classifies command prefixes and does
+not implement the proposed credential-path argument scanner. Establish the actual native read
+boundary and scanner coverage before promising parity with Claude's read-secrets policy.
 
-This plan implements full credential-read parity with Claude on Codex, enforced through the
-existing harness provider contract rather than as a standalone Codex-only patch, so the guarantee
-("every provider denies reads of `read-secrets` paths") is structurally required of every provider,
-not opportunistically added to one.
+A command-argument scanner is not by itself complete read confinement: indirect paths, symlinks,
+shell expansion, scripts, and non-command tools may evade it. This plan must define its supported
+threat boundary and fail/ask behavior using observed native capabilities and provider contracts.
 
 ## Context
 
@@ -40,7 +38,7 @@ prefixes** (`git push`, etc. — see `matchesPrefix()`), never on file-path argu
 command. Blocking `.ssh` reads means catching an open-ended set of commands by their *arguments*,
 not their leading tokens, which the current matcher was not built to do.
 
-Verified live against the shipped Codex 0.140.0 binary from within the `roborepo-workspace`
+Historical observation: the original investigation tested Codex 0.140.0 within the `roborepo-workspace`
 sandbox profile:
 
 | Path | Read | Write |
@@ -70,27 +68,26 @@ flowchart LR
     manifest["manifests/inventory/agent-permissions.json<br/>(read-secrets patterns)"]
     render["scripts/harnesses/permissions-render.mjs<br/>(shared permissions.render)"]
     claude["Claude adapter<br/>structured-arg deny rule"]
-    codex["Codex adapter<br/>shell-argument scan hook"]
-    manifest --> render
-    render --> claude
-    render --> codex
+    codex["Codex adapter<br/>candidate read guard"]
+    manifest -->|supplies credential patterns| render
+    render -->|projects native deny rules| claude
+    render -->|evaluates candidate read enforcement| codex
 ```
 
-This is parity in outcome, not in execution: each provider enforces `read-secrets` in its own
-idiom — Claude via a structured tool-argument deny rule, Codex via a shell-argument-scanning
-PreToolUse hook — but both are driven from the same manifest data and both are required by the same
-capability, checked structurally rather than left to convention.
+The intended outcome is shared credential protection through provider-specific mechanisms. The
+diagram sketches a candidate contract; it does not establish that a shell-argument scanner covers
+every read. The mechanism and its structural/behavioral checks must follow the evaluated boundary.
 
 ## Goals
 
-- Every harness provider that ships a `permissions` capability denies reads of `read-secrets`
-  paths, with no partial or best-effort exception for any one provider.
-- Codex's guard reaches credential paths regardless of which shell command or argument form is used
-  to reach them (direct, `xargs`, shell variable expansion, globs) — full coverage, not a narrower
-  literal-first-argument guard that only catches the common case.
-- The guarantee is expressed through the provider contract (`scripts/harnesses/contract.mjs`), so a
-  provider that declares `permissions` without a credential-read guard fails validation rather than
-  silently shipping a gap.
+- Establish the actual credential-read boundary for supported native versions and all relevant
+      tool families, recording gaps and unsupported states explicitly.
+- Evaluate direct reads, indirect commands, shell expansion/globs, symlinks, scripts, and non-command
+      tools before selecting an enforcement mechanism.
+- Preserve a single credential-pattern source while expressing provider-specific coverage through
+      a documented capability contract and behavioral tests.
+- Require observed evidence for any full-parity claim; if no candidate satisfies it, retain the
+      unresolved guarantee rather than silently declaring a narrower scanner complete.
 
 ## Non-goals
 
@@ -123,28 +120,23 @@ write-scope.
 
 ## Proposed design
 
-Full coverage, chosen over a narrower literal-first-argument guard: extend
-`globals/system/hooks/codex/permission-check.mjs` to tokenize **every** argument in a shell command
-(not just its leading words), test each path-like argument against `read-secrets`' patterns after
-resolving shell variable expansion and glob patterns against the sandbox's known roots, and deny the
-whole command if any argument resolves to a credential path. This is deliberately the higher-cost,
-higher-coverage shape — it reaches `cat ~/.ssh/config`, `sed -n 1p ~/.ssh/id_rsa`, and indirect forms
-like `xargs cat < filelist` or `$HOME/.ssh/*`, not just the common direct case.
+Start by evaluating enforceable native read boundaries and all tool families. A path-argument
+scanner is one candidate supplement for command tools, not a proven full-coverage mechanism.
+It may recognize direct literal paths yet miss file-list indirection, script-generated paths,
+expansion performed later by the shell, symlink traversal, or reads through other tools.
 
-Shell quoting, multi-command lines (`&&`, `|`), and expansion correctness are the real
-implementation risk (see Risks) — the design goal is to fail closed (ask or deny) on a command the
-matcher cannot confidently parse, rather than fail open and silently let an unparsed form through.
+| Candidate | Evidence needed before choosing |
+| --- | --- |
+| Native filesystem/sandbox read boundary | Current supported configuration, precedence, runtime enforcement, and interaction with workspace reads |
+| Command-path scanner | Parsing/expansion limits, indirect forms, false positives, and a defined fail-closed/ask contract |
+| Provider-specific combination | Coverage across command and non-command tools without claiming one provider's mechanism is universal |
 
-To make this a structural guarantee rather than a Codex-only patch:
-
-- `manifests/inventory/agent-permissions.json`'s `read-secrets` behavior becomes the single source
-  of credential patterns both providers already partially share — no new pattern list, Codex's
-  matcher reads the same behavior Claude's renderer already reads.
-- `scripts/harnesses/contract.mjs`'s `CAPABILITY_REQUIRED_METHODS.permissions` gains a documented
-  expectation (in code comments and/or a new required method, TBD during implementation) that a
-  provider's `permissions.render` output — or its adapter — accounts for `read-secrets`, so a future
-  provider (or a regression in an existing one) is caught by `validateCapabilityAdapters` rather than
-  discovered the way this gap was: by manual review after the fact.
+Reuse `read-secrets` patterns from `manifests/inventory/agent-permissions.json`; do not add a
+second credential list. Represent enforcement/coverage through the provider capability contract
+or a dedicated behavioral parity test, with explicit unsupported states. Structural method
+presence cannot establish runtime security. Choose the contract before implementing a scanner;
+if the candidate cannot satisfy the desired guarantee, record that limitation and revisit the
+mechanism rather than declaring full parity after direct-path tests.
 
 ## Implementation plan
 
@@ -155,7 +147,8 @@ To make this a structural guarantee rather than a Codex-only patch:
 - [ ] Add a focused test file establishing the credential paths the guard must block — direct reads,
       `xargs`, variable expansion, and glob forms — and the ordinary commands it must not falsely
       block, before implementing the matcher.
-- [ ] Extend `globals/system/hooks/codex/permission-check.mjs` with the path-argument scanner.
+- [ ] Implement the selected native/adapter mechanism; extend the command hook only where its
+      demonstrated coverage contributes to the selected guarantee.
 - [ ] Wire the contract-level check chosen above so a provider declaring `permissions` without
       credential-read enforcement fails validation or a dedicated parity test.
 - [ ] Verify live against the shipped Codex binary the same way [[ia1q1z9]] verified write-scope —
@@ -189,3 +182,11 @@ To make this a structural guarantee rather than a Codex-only patch:
   shape (first Implementation plan item) carefully before wiring enforcement.
 - Scope creep toward general shell-argument parsing for `permission-check.mjs` beyond credential
   paths, which this plan explicitly excludes (see Non-goals).
+
+## Enforcement acceptance boundary
+
+Before implementing the scanner, enumerate command and non-command read paths, indirect execution,
+symlinks, shell expansion, and native sandbox alternatives. Record what can be enforced and what
+remains outside the mechanism. Rewrite any full-parity guarantee against that evidence; do not
+interpret a successful direct `cat` block as complete credential-read confinement. The live test
+and provider contract must reflect the chosen guarantee, including unsupported operations.

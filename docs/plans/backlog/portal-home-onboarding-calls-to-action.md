@@ -4,10 +4,8 @@ priority: high
 next_action: Run /plan-promote to settle the call-to-action design, copy for each setup step, and how Home detects when each step is done
 blocked_by: []
 depends_on: []
-related:
-  - q7m4k2p
-  - v6lvuu2
-reviewed_commit:
+related: ["q7m4k2p", "v6lvuu2"]
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 worktree:
 ---
 
@@ -122,3 +120,12 @@ user who has finished setup sees the normal Home page.
   not built twice.
 - Final copy for each step, including what the plan suite does for a user who has never seen a
   plan document.
+
+## Ownership with first-run setup
+
+[[v6lvuu2]] owns the resumable staged draft, `/setup`, confirmation/apply, and initialization-complete
+record. This plan owns ongoing setup guidance on Home using shared feature-readiness signals.
+Home actions may enter the staged workflow or call an existing post-initialization enable path;
+they must not implement a second draft/commit flow. Whether to lock later optional steps, allow
+skipping, or dismiss guidance remains a promotion-time UX choice. The completed Home/onboarding
+plans supply the current components, not this four-step sequence.

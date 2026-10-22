@@ -1,14 +1,11 @@
 ---
 id: l1mz96d9
 priority: medium
-next_action: Inventory the repository's current test and behavior surfaces, classify their Windows coverage, and define the first windows-latest CI matrix.
+next_action: Define the shared Windows runner/isolation/ledger contract with lifecycle and session consumers, then map current suites to explicit results.
 blocked_by: []
 depends_on: []
-related:
-  - pljvmyh
-  - windows-provider-path-schema
-  - 3jp3yhtq
-reviewed_commit:
+related: ["pljvmyh", "windows-provider-path-schema", "3jp3yhtq"]
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 worktree:
 ---
 
@@ -232,3 +229,13 @@ whether Docker/Compose coverage is worth provisioning before it is added to the 
 - Every blocked or failing row has an owner and a focused follow-up plan, including links to existing Windows plans where applicable.
 - The existing Linux/macOS `npm run check` gate and static Windows installer parity check continue to pass.
 - A contributor can add or investigate a Windows coverage row using repository documentation and the recorded fixture contract.
+
+## Shared environment ownership
+
+This plan owns the Windows runner, isolated profile/state/workspace boundary, prerequisite setup,
+compatibility ledger, and artifact/result contract. [[0pzhhong]] owns real checkout/package
+install-update-uninstall scenarios that consume that environment; avoid a second environment or
+duplicate lifecycle job. [[windows-provider-path-schema]] owns verified native path/resolver fixes.
+[[plan-session-launching-milestone-3]] consumes the shared environment for session adapters rather
+than provisioning another general Windows platform. The current CI job remains static parser/parity
+coverage until real scenarios run and pass.

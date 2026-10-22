@@ -4,11 +4,8 @@ priority: medium
 next_action: Decide the open questions in "Open Questions", then build the forge provider seam in modules/developer-runtime/forge.mjs
 blocked_by: []
 depends_on: []
-related:
-  - developer-runtime-metadata-suggestions
-  - git-exec-consolidation
-  - zdhivxtb
-reviewed_commit:
+related: ["developer-runtime-metadata-suggestions", "git-exec-consolidation", "zdhivxtb"]
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
 
 # Runtime Remote Branch Status
@@ -67,16 +64,16 @@ semantics and must not be presented as if they agree.
 ```mermaid
 flowchart LR
   subgraph now["Current — all local, enforced offline"]
-    A["git.mjs"] --> B["git-exec.mjs<br/>read-only allow-list"]
-    B --> C["local refs<br/>+ .git/FETCH_HEAD"]
+    A["git.mjs"] -->|invokes bounded local commands through| B["git-exec.mjs<br/>read-only allow-list"]
+    B -->|reads| C["local refs<br/>+ .git/FETCH_HEAD"]
   end
   subgraph next["Proposed — second, isolated source"]
-    D["forge.mjs<br/>new"] --> E["gh CLI"]
-    E --> F["forge API"]
-    D --> G["TTL cache"]
+    D["forge.mjs<br/>new"] -->|invokes| E["gh CLI"]
+    E -->|queries| F["forge API"]
+    D -->|caches results in| G["TTL cache"]
   end
-  C --> H["snapshot"]
-  G --> H
+  C -->|contributes local state to| H["snapshot"]
+  G -->|contributes forge state to| H
 ```
 
 The two paths stay separate all the way to the snapshot. No forge call goes through
@@ -180,7 +177,7 @@ Four phases, each independently shippable.
 - A test asserting every failure mode maps to `unknown` and never to `passing`.
 - Confirm `scripts/test/developer-runtime-git-check.mjs` still passes unmodified — if this plan required
   editing that test, the isolation has been broken.
-- `bash scripts/test/test-roborepo.sh --quiet`.
+- `npm run check`.
 - Manual: a repo with passing CI, one with failing CI, one with no CI, and one with `gh` logged out.
 
 ## Risks
@@ -210,3 +207,10 @@ Four phases, each independently shippable.
 - With several checkouts running on different branches, does one per-repository call (for example
   `gh pr list` over open PRs, matched by head branch) cover every row, or does each branch need
   its own lookup?
+
+## Current delivery boundary
+
+Completed Runtime Git-health and metadata work remains the local-ref baseline. A forge-backed
+PR/CI source is still a separate feature and must not widen `git-exec.mjs` to network commands.
+Choose opt-in, authentication dependency, cache/TTL, and rate-limit behavior from the open options
+before adding network activity to scanning. Code inspection in this review did not query a forge.

@@ -5,10 +5,8 @@ next_action: Review Milestone 1 runtime incidents and define the reconciliation 
 blocked_by: []
 depends_on:
   - plan-session-launching-milestone-1
-related:
-  - plan-session-launching-milestone-1
-  - plan-session-launching-milestone-3
-reviewed_commit: 72c83be
+related: ["plan-session-launching-milestone-1", "plan-session-launching-milestone-3"]
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
 # Session Launching — Milestone 2: Reliability and Multi-Terminal Workflows
 
@@ -43,12 +41,12 @@ identities and reconcile only from evidence.
 
 ```mermaid
 flowchart TD
-  Record["Persisted launch record"] --> Reconcile["Startup reconciler"]
-  OS["OS process evidence"] --> Reconcile
-  Harness["Harness session evidence"] --> Reconcile
-  Terminal["Terminal heartbeat evidence"] --> Reconcile
-  Reconcile --> State["Updated lifecycle state"]
-  Reconcile --> Warning["Unknown/orphaned warning"]
+  Record["Persisted launch record"] -->|loads into| Reconcile["Startup reconciler"]
+  OS["OS process evidence"] -->|informs| Reconcile
+  Harness["Harness session evidence"] -->|informs| Reconcile
+  Terminal["Terminal heartbeat evidence"] -->|informs| Reconcile
+  Reconcile -->|derives| State["Updated lifecycle state"]
+  Reconcile -->|reports| Warning["Unknown/orphaned warning"]
 ```
 
 ## Goals
@@ -501,3 +499,11 @@ Manual macOS scenarios:
 4. Should write-capable conflict override be available from the browser, CLI only, or both?
 5. What measured retention limits preserve useful debugging evidence without retaining unnecessary
    content?
+
+## Prerequisite and retention boundary
+
+Milestone 1 remains unimplemented beyond provider stubs. Treat the interfaces/file list here as
+provisional until its lifecycle and incident evidence exist. `modules/retention/` already supplies
+shared policy/measurement primitives: reuse them for output bounds while keeping session-record
+references, prune preview, and resume metadata safe. This milestone owns reconciliation/concurrency
+and terminal registration; generic store policy belongs to the existing retention owner.

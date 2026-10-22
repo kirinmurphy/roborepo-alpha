@@ -9,7 +9,8 @@ npm behavior, and machine-local harness state.
 Use the smallest layer that proves the change. Before publishing, run the full publish matrix.
 
 Use [`test-scenarios.md`](test-scenarios.md) to choose the environment. Use this doc to choose the
-test command/suite.
+test command/suite. For package and user-content journeys, see
+[Verify package and user-content behavior](package-user-content-testing.md).
 
 ## Test Layers
 

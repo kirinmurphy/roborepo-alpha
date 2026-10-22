@@ -4,13 +4,8 @@ priority: high
 next_action: Add time range, harness, and model controls to the Tokens page, wired to the existing /api/data parameters and serialized into the URL
 blocked_by: []
 depends_on: []
-related:
-  - k8mngttv
-  - pljvmyh
-  - tk6s43x3
-  - jqi1dof
-  - n8kw3rp2
-reviewed_commit:
+related: ["k8mngttv", "pljvmyh", "tk6s43x3", "jqi1dof", "n8kw3rp2"]
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
 
 # Tokens Report: Scope Controls and Deeper Change Comparison
@@ -40,7 +35,7 @@ page replaced them with fixed sections.
 
 ## Goals
 
-- Scope the whole report by time range, harness, model, and (through [[tk6s43x3]]) repository.
+- Add time-range, harness, and model scope while preserving the shipped shared repository selector from [[tk6s43x3]].
 - Show a change's effect on a headline metric, not only on spikes, loops, and read warnings.
 - Make the page's recommendations a single prioritized list and shorten the path from a finding to
   a recorded change.
@@ -57,8 +52,8 @@ page replaced them with fixed sections.
 
 | Capability | Backend | `/tokens` UI |
 | --- | --- | --- |
-| Time range (`range`, `end`), `harness`, `model`, and `marker_id` on `/api/data` | Present in `scripts/cli/portal-routes-telemetry.mjs`, cached per window, harness, model, repository, and marker | None. The page requests `/api/data` with no parameters |
-| Repository scope on `/api/data` | Accepts a canonical `repository` ID and a legacy `repo` folder-name label today. [[tk6s43x3]] changes `repository` to accept only a `urlKey` and deletes `repo`, its cohort `repos` dimension, and the unread `telemetry report --repo` flag | None |
+| Time range (`range`, `end`), `harness`, `model`, and `marker_id` on `/api/data` | Present in `scripts/cli/portal-routes-telemetry.mjs`, cached per window, harness, model, repository, and marker | Range/harness/model controls remain absent; the request already carries shared repository scope when selected |
+| Repository scope on `/api/data` | Shared `repo` parameter accepts a repository URL key or `_other`, resolved by `readRepositoryScope` | Shipped shared selector and scoped requests; preserve it |
 | Marker-relative comparison of any registry metric (`POST /api/telemetry/analysis` with `marker_id`) | Present; ~28 metrics across tokens, calls, testing, outcome, reliability | None. Change cards compare spike, loop, and read-warning rates only |
 | Two-cohort metric comparison (`POST /api/telemetry/analysis` without a marker) | Present; returns one value per cohort, correlation-only | None. Condition cards cover model, repository, harness, package, and skill |
 | Experiments (`GET/POST /api/telemetry/experiments`, `POST .../:id/end`) | Present; the `roborepo telemetry experiment` CLI calls the domain functions directly | None |
@@ -71,8 +66,8 @@ Within this repository, the only callers of the analysis and experiment endpoint
 
 ### Phase 1: Report scope controls
 
-- Add range, harness, and model controls near the page header. Repository joins them when
-  [[tk6s43x3]] lands, using its shared selector rather than a page-local one.
+- Add range, harness, and model controls near the page header alongside the existing shared
+  repository selector. Preserve its `repo` URL-key contract and outside-activity scope.
 - Serialize the selection into the URL and restore it on load, so a scoped view can be shared.
 - Send the selection to `/api/data`; the server already returns a scoped report and caches by
   signature. The mock report ignores scope and must say so.
@@ -112,7 +107,8 @@ From the review's recommended iteration:
 From the review's remaining opportunities:
 
 - Finish moving the older investigation and session markup out of `portal/tokens/app.js` into
-  HTML templates and focused modules; the file still exceeds the size guideline.
+  HTML templates and cohesive modules where markup ownership or independently changing behavior
+  justifies extraction; file length is not a split criterion.
 - Label repositories by registry display name in the condition cards and the change form. Today
   `repositoryLabel` (`portal/tokens/conditions-format.js`) shows the last segment of the canonical
   ID, so a `local:` repository reads as an opaque hash and same-named repositories from different
@@ -120,13 +116,13 @@ From the review's remaining opportunities:
   when two names collide; never a filesystem path, matching [[tk6s43x3]]'s selector.
 - Replace broad ID and class selectors in older portal tests with role and name locators.
 - Display `data_quality.findings_lost_to_fallback`, which the report returns but the page does not.
-- Profile condition-payload size on large spools. A separate plan was meant to own this, but it
-  was deleted, so the item is back here.
+- Re-measure condition payloads after completed [[telemetry-analysis-io-performance]] and
+  [[koww80zh]] analytics work; optimize only remaining measured cost, preserving oracle invariants.
 
 ## Implementation checklist
 
 - [ ] Phase 1: range, harness, and model controls wired to `/api/data`, URL-serialized
-- [ ] Phase 1: repository control through the shared selector once [[tk6s43x3]] lands
+- [x] Repository scope uses the shared selector and scoped `/api/data` request from [[tk6s43x3]].
 - [ ] Phase 2: headline-metric before/after on marked changes
 - [ ] Phase 2: task-type and time-window comparison controls
 - [ ] Phase 3: single prioritized decision list

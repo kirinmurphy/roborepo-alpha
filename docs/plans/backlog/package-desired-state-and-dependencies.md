@@ -4,11 +4,8 @@ priority: high
 next_action: Move the enabled-package registry out of scripts/cli/rules-render.mjs into scripts/cli/package-state.mjs and add the pure graph helpers (selected roots, required closure, requiredBy/recommendedBy) with fixtures.
 blocked_by: []
 depends_on: []
-related:
-  - package-registry-live-state-reconciliation
-  - ejsc769o
-  - age4cm7r
-reviewed_commit: be7e441
+related: ["package-registry-live-state-reconciliation", "ejsc769o", "age4cm7r"]
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 worktree:
 ---
 
@@ -153,7 +150,7 @@ and applies or removes resources for the difference.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Off
+    [*] --> Off: initialize unselected
     Off --> Required: a parent is selected
     Required --> Required: one parent removed, another still requires it
     Required --> Off: last requiring parent removed
@@ -306,4 +303,19 @@ selectable roots only.
   redesigned the same registry in the same files. Most of that plan's work had shipped (probes,
   status API, `reconcile`, `adopt-live`, portal badges); its remaining items were a versioned
   registry and verified mutation results, which this plan now owns. Its `forget`/`remove` actions
-  and per-resource detail rows are deferred (see Non-goals). The merged plan is to be archived.
+  and per-resource detail rows are deferred (see Non-goals). The superseded plan is archived at `docs/plans/archived/package-registry-live-state-reconciliation.md`.
+
+## Coordination and completed baseline
+
+The superseded reconciliation proposal is archived as
+`docs/plans/archived/package-registry-live-state-reconciliation.md`; this plan owns its remaining
+versioned state, verified mutation, and repair/adoption requirements. Existing live probes and
+`package inspect/status/reconcile/adopt-live` remain the baseline.
+
+| Plan | Owns | Sequence |
+| --- | --- | --- |
+| This plan | Selected roots, effective closure, relationships, verified activation | Establish before dependency-only skill rollout |
+| [[ejsc769o]] | Required/recommended built-in skill relationships and shared review skill | Consume this state contract and the current review rubric |
+| [[jdsobwn]] | Source identity and installed provenance | Agree state/provenance references before persisting source-qualified selections |
+| [[user-managed-packages-and-add-workflows]] | Typed creation, receipts, export/removal UX | Reuse this registry and live probes |
+| [[74h2tlim]] | Portable record containment and backup | Consume feature-owned schemas; no second package-state model |

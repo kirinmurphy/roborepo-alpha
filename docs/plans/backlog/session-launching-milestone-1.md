@@ -4,10 +4,8 @@ priority: medium
 next_action: Define and test the launch-request schema and machine-local session store
 blocked_by: []
 depends_on: []
-related:
-  - plan-session-launching-milestone-2
-  - plan-session-launching-milestone-3
-reviewed_commit: 72c83be
+related: ["plan-session-launching-milestone-2", "plan-session-launching-milestone-3"]
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
 # Session Launching — Milestone 1: macOS Core Workflow
 
@@ -50,12 +48,12 @@ while its harness session remains resumable; a prepared request can exist before
 
 ```mermaid
 flowchart TD
-  Plan["Plan document"] --> Request["Launch request"]
+  Plan["Plan document"] -->|creates| Request["Launch request"]
   Request -->|"Initiate session"| Terminal["Native terminal"]
   Request -->|"Start in background"| Worker["Worker process"]
-  Worker --> Harness["Harness session"]
-  Terminal --> Harness
-  Worker --> Output["Bounded output"]
+  Worker -->|spawns| Harness["Harness session"]
+  Terminal -->|starts| Harness
+  Worker -->|captures| Output["Bounded output"]
 ```
 
 ## Goals
@@ -103,14 +101,14 @@ The plan was reviewed against commit `72c83be`.
 | --- | --- | --- |
 | Loopback-only Node server | `scripts/cli/portal-server.mjs` | Keep `127.0.0.1` binding |
 | Page manifest and nav | `PAGES` in `scripts/cli/portal-server.mjs` | Keep Plans as the primary session surface |
-| Domain route dispatch | `handle*Api` functions | Add `portal-routes-sessions.mjs` |
+| Domain route dispatch | `API_ROUTE_TABLES` / `dispatchRoutes` functions | Add `portal-routes-sessions.mjs` |
 | POST origin and mutation-token guards | `route()` in `portal-server.mjs` | Apply automatically to launch mutations |
 | Shared browser fetch helpers | `portal/shared/api.js` | Use `portalGetJson` and `portalPostJson` |
 | No framework or build step | `portal/*` ES modules and templates | Extend Plans with session components |
 | Portal handler composition | `serveCommand()` in `scripts/cli/telemetry.mjs` | Inject session service handlers |
 
 Every POST is already protected by a loopback-origin check and the
-`X-Roborepo-Portal-Token` header. Session routes must go through that shared dispatch; they must not
+`X-Cli-Portal-Token` header. Session routes must go through that shared dispatch; they must not
 create a second security mechanism. Launch and terminal-open mutations must additionally reject
 non-loopback requests until authenticated remote portal access is designed; possession of a
 mutation token alone must not turn the launcher into a remote command-execution API.
@@ -137,7 +135,7 @@ current snapshot.
 - `scripts/cli/state-paths.mjs` provides `readJsonState()` and `writeJsonState()`.
 - `scripts/cli/telemetry.mjs::serveCommand()` wires domain handlers into the portal server.
 - The project requires Node 20+ and uses ESM throughout.
-- `package.json` exposes targeted `test:*` scripts and a full `npm test`.
+- `package.json` exposes targeted checks; `npm test` is the main smoke suite and `npm run check` is full local CI parity.
 
 ## Proposed design
 
@@ -513,7 +511,7 @@ command string.
 Milestone 1 supports:
 
 1. A new window/tab in the configured macOS terminal when a stable adapter exists.
-2. The terminal that launched `roborepo serve` only when its identity remains usable.
+2. The terminal that launched `roborepo web` only when its identity remains usable.
 3. Copy command as the universal fallback.
 
 Do not attempt to inject commands into an arbitrary existing iTerm, Terminal, cmux, or editor pane.
@@ -553,7 +551,7 @@ only commands produced by trusted harness adapters.
 - [ ] Inject handlers through `serveCommand()` in `scripts/cli/telemetry.mjs`.
 - [ ] Dispatch the session route before static page handling in `portal-server.mjs`.
 - [ ] Register `roborepo sessions` in `scripts/cli/main.mjs` and
-  `manifests/platform/cli-commands.json`.
+  `manifests/platform/cli/command-definitions/`.
 - [ ] Add request validation, idempotency conflict responses, and sanitized errors.
 - [ ] Re-resolve Plan/repository identity immediately before execution and reject stale snapshots.
 - [ ] Reject launch/open mutations received outside the loopback trust boundary.
@@ -572,7 +570,7 @@ only commands produced by trusted harness adapters.
 
 - [ ] Add configured-terminal resolution and a safe copy-command fallback.
 - [ ] Implement new terminal window/tab launching for supported macOS terminals.
-- [ ] Capture the originating terminal metadata when `roborepo serve` starts, without assuming it
+- [ ] Capture the originating terminal metadata when `roborepo web` starts, without assuming it
   is still available.
 - [ ] Record `handoffIssuedAt` after adapter invocation and `attachedAt` only after confirmed startup.
 - [ ] Clearly explain when no native resume ID exists.
@@ -620,7 +618,7 @@ Extend the portal smoke coverage to verify:
 Run:
 
 ```sh
-npm run test:plans
+node scripts/test/plan-suite-check.mjs
 npm run test:sessions
 npm test
 npm run pack:dry-run
@@ -682,3 +680,12 @@ These decisions should be resolved during Phase 1 without expanding milestone sc
    unavailable?
 3. Which permission profiles can run in background without an additional confirmation? The safe
    default is plan/read-only only.
+
+## Current integration baseline
+
+The registered Claude/Codex providers declare session launch but their launch adapter groups are
+stubs. Reuse the provider contract rather than creating parallel harness detection/argv logic under
+the session domain. This plan still owns request persistence, process control, API/CLI, output,
+terminal handoff, and Plan-to-Session UI; none is established by the capability declaration.
+Current lifecycle operations live in `scripts/cli/plans-command.mjs`; do not restore generic portal
+lifecycle mutation. Use `roborepo web` for portal startup and `npm run check` as full parity.
