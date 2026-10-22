@@ -36,6 +36,32 @@ function findEntryByCommand(event, command) {
   return null;
 }
 
+// Source-only explanations and supported native labels are required for every shipped Codex hook.
+const codexFragments = [readJson("globals/harnesses/codex/hooks-codex.json").hooks];
+for (const root of ["globals/packages", "globals/packages-archived"]) {
+  for (const entry of fs.readdirSync(path.join(repoRoot, root), { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const directory = path.join(repoRoot, root, entry.name);
+    const manifestPath = path.join(directory, "package.config.json");
+    if (!fs.existsSync(manifestPath)) continue;
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    for (const resource of manifest.resources || []) {
+      if (resource.type !== "hooks" || resource.harness !== "codex") continue;
+      codexFragments.push(JSON.parse(fs.readFileSync(path.join(directory, resource.source), "utf8")));
+    }
+  }
+}
+for (const fragment of codexFragments) {
+  const hooks = Object.entries(fragment).filter(([event]) => !event.startsWith("_"))
+    .flatMap(([, groups]) => groups.flatMap((group) => group.hooks || []));
+  const names = hooks.map((hook) => hook.statusMessage);
+  assert.ok(names.every((name) => typeof name === "string" && name.startsWith("RoboRepo: ")), "every shipped Codex hook needs a readable RoboRepo native name");
+  assert.equal(new Set(names).size, names.length, "native names identify individual hooks within a fragment");
+  for (const name of names) assert.ok(fragment._descriptions?.[name]?.trim(), `${name} needs a contextual source description`);
+  assert.deepEqual(Object.keys(fragment._descriptions).sort(), [...names].sort(), "descriptions must match the source hooks exactly");
+}
+assert.ok(!("_descriptions" in readJson("generated/codex/hooks.json").hooks), "source-only help is excluded from native output");
+
 const problems = [];
 
 for (const [event, entries] of Object.entries(fragment)) {

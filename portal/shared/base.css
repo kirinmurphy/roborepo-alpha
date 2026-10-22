@@ -1412,9 +1412,20 @@ portal-menu-button {
 .portal-banner-copy > :first-child { margin-top: 0; }
 .portal-banner-copy > :last-child { margin-bottom: 0; }
 .portal-banner-supporting { color: var(--dim); }
-/* Codex telemetry hook warning: title and message stacked tight, no paragraph margins. */
-.codex-hook-status-copy { display: grid; gap: 2px; }
-.codex-hook-status-copy p { margin: 0; }
+/* Hook readiness warning: title, message, command, and affected hooks stacked tight. */
+.hook-readiness-copy { display: grid; gap: 2px; }
+.hook-readiness-copy p { margin: 0; }
+.hook-readiness-command { display: block; margin-top: 4px; overflow-wrap: anywhere; }
+.hook-readiness-terminal { margin-top: 4px; }
+.hook-readiness-terminal[hidden], .hook-readiness-affected[hidden], .hook-readiness-actions[hidden],
+.hook-readiness-app-route[hidden], .hook-readiness-result[hidden],
+.hook-readiness-actions [hidden] { display: none; }
+.hook-readiness-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.hook-readiness-app-route, .hook-readiness-result { color: var(--dim); }
+/* Pages with persistent readiness use that notice; other pages show one inline offer. */
+.hook-review-offers { display: grid; gap: 8px; margin-bottom: 16px; }
+.hook-review-offers[hidden] { display: none; }
+.hook-readiness-affected, .hook-readiness-steps { margin: 4px 0 0; padding-left: 1.2em; }
 .portal-banner-action {
   grid-column: 2;
   grid-row: 1;
@@ -1634,3 +1645,17 @@ option-dropdown {
   flex: none;
   color: var(--dim);
 }
+
+.hook-readiness-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.hook-readiness-help[data-btn="text"] { color: var(--ink); font-size: var(--text-xs); text-decoration: underline; text-underline-offset: 3px; }
+.hook-readiness-actions [data-slot="cli-setup"] { margin-left: 16px; }
+.portal-tooltip.portal-tooltip--comfortable { width: min(460px, calc(100vw - 16px)); max-width: none; padding: 16px 20px; }
+.hook-readiness-tooltip p { margin: 0; }
+.hook-readiness-tooltip p + p { margin-top: 12px; }
+.hook-readiness-tooltip-steps { margin: 0; padding-left: 1.4em; }
+.hook-readiness-tooltip-steps li + li { margin-top: 8px; }
+.hook-readiness-copy [hidden] { display: none; }
+
+.hook-install-complete { color: var(--ok); }
+.hook-step-completed { text-decoration: line-through; }
+.hook-readiness-tooltip .hook-purpose-intro { margin-bottom: 12px; }

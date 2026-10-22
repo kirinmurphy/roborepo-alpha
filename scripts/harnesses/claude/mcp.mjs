@@ -4,7 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { repoRoot } from "../../cli/roots.mjs";
-import { claudeMcpArgs, runClaudeMcpAdd, hasClaudeCli, claudeMcpRemove, claudeMcpList } from "../mcp-claude-cli.mjs";
+import { claudeMcpArgs, runClaudeMcpAdd, hasClaudeCli, claudeMcpRemove, claudeMcpList } from "./mcp-claude-cli.mjs";
 
 // Mirrors scripts/cli/mcp-config.mjs's MCP_SERVERS_PATH/MCP_SCOPES, duplicated rather than
 // imported: mcp-config.mjs pulls in paths.mjs's registry-dependent half (rootConfigActive/
@@ -86,7 +86,7 @@ export function mcpRemove({ homePath, dryRun = false } = {}) {
 
 // Single-server add: shells to `claude mcp add` (the only way to register with Claude's own MCP
 // client state — there is no direct config file to write into, unlike Codex's TOML table). Thin
-// wrapper over the pure arg-construction/invocation in ../mcp-claude-cli.mjs; unchanged behavior
+// wrapper over the pure arg-construction/invocation in ./mcp-claude-cli.mjs; unchanged behavior
 // from scripts/cli/mcp.mjs's existing mcpAdd, ownership moved behind the contract.
 export function mcpAddServer(spec, opts = {}) {
   const args = claudeMcpArgs({ scope: opts.scope || "user", transport: opts.transport || null }, spec);

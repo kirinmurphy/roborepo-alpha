@@ -9,6 +9,6 @@
   "execution": {
     "adapter": "module",
     "module": "scripts/cli/packages.mjs",
-    "export": "disablePackage"
+    "export": "disablePackageCommand"
   }
 }

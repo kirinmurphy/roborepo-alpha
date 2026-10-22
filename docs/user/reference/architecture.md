@@ -88,13 +88,13 @@ Repo files are source input. The global harness path receives concrete files or 
 ```text
 ~/.codex/AGENTS.md              # rendered_rules
 ~/.codex/commands               # managed_copy
-~/.codex/hooks.json             # managed_copy
-~/.codex/hooks                  # managed_copy
+~/.codex/hooks.json             # hook_fragment: core entries merged beside package hooks
+~/.codex/hooks                  # managed_files: core scripts copied beside package scripts
 ~/.codex/rules                  # managed_copy
 ~/.codex/skills/<name>          # symlink to ~/.roborepo/skills/<name>
 ~/.claude/CLAUDE.md             # rendered_rules
 ~/.claude/commands              # managed_copy
-~/.claude/hooks                 # managed_copy
+~/.claude/hooks                 # managed_files
 ~/.claude/skills/<name>         # symlink to ~/.roborepo/skills/<name>
 ~/.roborepo/skills/<name>       # managed skill cache with .builtin-managed marker
 ```

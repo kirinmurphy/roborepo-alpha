@@ -5,9 +5,13 @@
       "hooks": [
         {
           "type": "command",
-          "command": "echo 'jcodemunch: use resolve_repo, search_symbols, get_file_outline, find_references, get_context_bundle for code exploration. Avoid native source reads/searches after jcodemunch has enough context.'"
+          "command": "echo 'jcodemunch: use resolve_repo, search_symbols, get_file_outline, find_references, get_context_bundle for code exploration. Avoid native source reads/searches after jcodemunch has enough context.'",
+          "statusMessage": "RoboRepo: code exploration reminder"
         }
       ]
     }
-  ]
+  ],
+  "_descriptions": {
+    "RoboRepo: code exploration reminder": "Reminds the session to use the code-index tools for exploration when the package is enabled."
+  }
 }

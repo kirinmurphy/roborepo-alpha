@@ -620,6 +620,21 @@ function Render-HomeRules {
   }
 }
 
+# hook_fragment and managed_files rows share their target with package installs, so they merge or
+# copy per entry. scripts/cli/shared-target-rows.mjs is the one implementation every installer uses.
+function Invoke-SharedTargetRow {
+  param($Row)
+  if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
+    Write-Warning "skip: $($Row.HomePath) needs node to install $($Row.Kind) entries"
+    return
+  }
+  $script = Join-Path $repoRoot "scripts\cli\shared-target-rows.mjs"
+  $nodeArgs = @($script, "apply", $Row.Kind, $Row.Harness, $Row.RepoRel, $Row.HomePath)
+  if ($DryRun) { $nodeArgs += "--dry-run" }
+  & node @nodeArgs
+  if ($LASTEXITCODE -ne 0) { throw "install stopped at $($Row.HomePath)" }
+}
+
 function Invoke-ManifestRows {
   param($HarnessLabel, [string[]]$Harnesses)
 
@@ -637,6 +652,9 @@ function Invoke-ManifestRows {
       }
       "link" {
         Copy-ManagedItem $row.RepoRel $row.HomePath
+      }
+      { $_ -in @("hook_fragment", "managed_files") } {
+        Invoke-SharedTargetRow $row
       }
       "rendered_rules" {
         # Render after the manifest loop for this harness.
