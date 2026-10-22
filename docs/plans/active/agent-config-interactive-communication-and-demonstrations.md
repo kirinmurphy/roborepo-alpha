@@ -1,7 +1,7 @@
 ---
 id: o93hile
 priority: high
-next_action: Run the completion preflight and the submit transition, then /plan-review.
+next_action: Run /plan-review on the submitted plan; the two Not tested entries need a human before /plan-close.
 blocked_by: []
 depends_on: []
 related:
@@ -515,6 +515,8 @@ how to open it, and what capture does **not** prove.
 - Validation loop 2, pass 2 at b5f82243 (fresh-context subagent): 1 fix (a doc line still over-long).
 - Gate: `npm run check` passed at e96ad096 (447 CLI tests, 45/45 check suites, Docker clean-machine suites, 103 portal UI specs; Windows installer parity skipped, no `pwsh`).
 - Validation loop 2, pass 3 at e96ad096 (fresh-context subagent): 3 fix (interrupted traced spec leaves a temp dir; its test could not catch it; two unwrapped lines).
+- Gate: `npm run check` passed at 5c894c1d (447 CLI tests, 45/45 check suites, Docker clean-machine suites, 103 portal UI specs; Windows installer parity skipped, no `pwsh`).
+- Validation: clean on loop 2, pass 4 at 5c894c1d (fresh-context subagent). It also showed the new interrupt test fails against the e96ad096 source.
 
 ## Open Questions
 
