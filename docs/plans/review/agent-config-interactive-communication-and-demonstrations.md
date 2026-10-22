@@ -474,6 +474,11 @@ how to open it, and what capture does **not** prove.
 
   Why: both need a human judging live model sessions, and a judgment based on many real plans is
   worth more than a one-off sample. Alternative: run the sample now and block closing on it.
+- 2026-10-21 (user decision, plan review): `browser run --url` keeps accepting any http(s) host.
+  Staging, LAN, container, and `.test` hosts are legitimate targets, and every `browser run`
+  already goes through the harness approval prompt, which shows the URL; the skill's guidance not
+  to guess production endpoints stays the safeguard. Alternative: refuse non-local hosts, which
+  would need a definition of "local", new tests and docs, and would block staging checks.
 
 ## Review
 
@@ -513,7 +518,7 @@ how to open it, and what capture does **not** prove.
 - [x] Two lines left unwrapped in `browser-playwright-cache-check.mjs` and this plan's Decision Log — fixed (ea66b04a)
 - [x] Plan review: the `roborepo browser` rows in `docs/user/reference/roborepo-cli.md` omit `--provider <id>`, which both commands and their usage strings accept — fixed in review (3669bbab)
 - [x] Plan review: `docs/user/reference/roborepo-cli.md` says the run result "has four fields", but `--json` also prints `provider`, `runId`, and `scenario`, and the probe result's fields are not described — fixed in review (3669bbab)
-- [ ] Plan review: `--url` accepts any http(s) host, not only a local one; Section 6's "known local URL" is enforced by guidance and the harness prompt, not by the command — escalated to the human
+- [x] Plan review: `--url` accepts any http(s) host, not only a local one; Section 6's "known local URL" is enforced by guidance and the harness prompt, not by the command — escalated; user kept it as is (see Decision Log)
 
 ### Verification
 
@@ -542,7 +547,7 @@ how to open it, and what capture does **not** prove.
 
 ### Result
 
-- Status: pending
+- Status: complete
 - Reviewed implementation commit: 3669bbab41b684f47839a49e544876721a2cd28b
 - Base commit: fb8bfb3306b67b3f05e50013f7ab67e3aa87d724
 
@@ -552,10 +557,8 @@ how to open it, and what capture does **not** prove.
 
 ## Open Questions
 
-- Plan review: should `roborepo browser run --url` refuse hosts that are not local, or keep
-  accepting any http(s) URL and rely on the skill's guidance and the harness approval prompt?
-
-Both questions from validation pass 5 were answered by the user; see the Decision Log.
+None open. The plan review's `--url` question and both questions from validation pass 5 were
+answered by the user; see the Decision Log.
 
 ## Not tested
 
