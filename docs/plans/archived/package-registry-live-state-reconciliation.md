@@ -1,7 +1,7 @@
 ---
 id: package-registry-live-state-reconciliation
 priority: low
-next_action: Introduce the versioned package-state file (scripts/cli/package-state.mjs) with migration from enabled-packages.json
+next_action:
 blocked_by: []
 depends_on: []
 related: []
@@ -399,3 +399,7 @@ Likely files:
 - Migration test from old `enabled-packages.json` to new package state.
 - Portal snapshot test for `enabled`, `disabled`, `partial`, `external`, and `blocked`.
 - Existing `scripts/test/test-roborepo.sh` coverage for install/update/doctor stays green.
+
+## Archived
+
+2026-10-22: Superseded by plan o9zwxuav, One Package State Model: What the User Chose, What Follows From It, What Is Live, which explicitly incorporates the remaining desired-state and verified reconciliation work.
