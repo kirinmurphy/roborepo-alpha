@@ -490,6 +490,7 @@ how to open it, and what capture does **not** prove.
 - [x] The "Rename complete" row excludes only `completed/` and `archived/`, but this plan and backlog o9zwxuav must name the old id — user chose to exclude history plus this plan; o9zwxuav updated and the check narrowed (see Decision Log) (b75a92cc)
 - [x] Plan record lagged b75a92cc: stale `next_action`, findings without their fix commit, no gate entry — fixed (5f95e0d9)
 - [x] Two lines left unwrapped in `playwright-resolve.mjs` and `roborepo-cli.md` — fixed (5f95e0d9)
+- [x] The `roborepo-cli.md` rewrap moved the overflow down a line instead of removing it — fixed (fb50ea91)
 
 ### Verification
 
@@ -505,6 +506,8 @@ how to open it, and what capture does **not** prove.
 - Validation pass 5 at fbc26524 (fresh-context subagent): 2 fix, 1 escalate. Stopped at the five-pass cap; its findings and the two escalated questions were resolved after the user answered, in b75a92cc.
 - Gate: `npm run check` passed at b75a92cc (447 CLI tests, 45/45 check suites, Docker clean-machine suites, 103 portal UI specs; Windows installer parity skipped, no `pwsh`).
 - Validation loop 2 (after the user's answers), pass 1 at b75a92cc (fresh-context subagent): 2 fix (stale plan record; two over-long wrapped lines).
+- Gate: `npm run check` passed at b5f82243 (447 CLI tests, 45/45 check suites, Docker clean-machine suites, 103 portal UI specs; Windows installer parity skipped, no `pwsh`).
+- Validation loop 2, pass 2 at b5f82243 (fresh-context subagent): 1 fix (a doc line still over-long).
 
 ## Open Questions
 
