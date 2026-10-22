@@ -9,8 +9,6 @@
 
 import { defaultRunCommand } from "./command-exec.mjs";
 
-export { defaultRunCommand };
-
 // Docker CLI calls cross into Docker Desktop's VM proxy rather than talking to a local daemon
 // directly, so they run measurably slower than lsof/ps and need more headroom than the 1500ms used
 // for those. Verified against a live `docker ps` on a machine with a running Compose stack, where a

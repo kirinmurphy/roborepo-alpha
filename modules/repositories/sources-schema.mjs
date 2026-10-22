@@ -3,7 +3,7 @@
 // separate files. Same conventions as schema.mjs: a *_VERSION const, allow-list validators that
 // throw on unknown keys, no I/O.
 
-import { safeIsoTimestamp } from "./schema.mjs";
+import { safeAbsolutePath, safeIsoTimestamp } from "./schema.mjs";
 
 export const SOURCES_VERSION = 1;
 
@@ -47,14 +47,10 @@ export function safeSourceId(value) {
   return value;
 }
 
-// Absolute, control-character-free, no traversal segments, never trimmed — same discipline as the
-// registry's localRootPaths, because a silently altered path would scan the wrong directory.
-export function safeAbsolutePath(value) {
-  if (typeof value !== "string" || !value || value.length > 4096) throw new Error("repository source path is invalid");
-  if (/[\x00-\x1F\x7F]/.test(value)) throw new Error("repository source path is invalid");
-  if (!value.startsWith("/")) throw new Error("repository source path must be absolute");
-  if (value.split("/").includes("..")) throw new Error("repository source path must not contain traversal segments");
-  return value;
+// Same rule as the registry's localRootPaths, because a silently altered path would scan the wrong
+// directory.
+export function safeSourcePath(value) {
+  return safeAbsolutePath(value, "repository source path");
 }
 
 export function validateSources(store) {
@@ -89,7 +85,7 @@ function validateSource(source) {
     if (source.path !== undefined) throw new Error("auto-discovery source has no path");
   } else {
     safeSourceId(source.id);
-    safeAbsolutePath(source.path);
+    safeSourcePath(source.path);
   }
   if (typeof source.enabled !== "boolean") throw new Error("repository source enabled must be boolean");
   safeIsoTimestamp(source.createdAt, "repository source createdAt");

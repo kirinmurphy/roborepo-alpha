@@ -58,10 +58,8 @@ export {
   disambiguateAssociationKeys,
   toInstance,
 } from "./instance-shape.mjs";
-export {
-  defaultRunCommand,
-  discoverListenerRecords,
-} from "./listeners.mjs";
+export { defaultRunCommand } from "./command-exec.mjs";
+export { discoverListenerRecords } from "./listeners.mjs";
 export {
   parseCwdFieldOutput,
   parseLsofFieldOutput,

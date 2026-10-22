@@ -1,6 +1,6 @@
 // Cross-poll Git context cache for idle checkouts. Git-directory mtimes invalidate entries after
 // some Git operations, reducing subprocess reads during portal polling. Working-tree edits can
-// leave those mtimes unchanged, so cached dirty state can be stale. Refresh policy remains open.
+// leave those mtimes unchanged, so cached dirty state can be stale.
 import fs from "node:fs";
 import path from "node:path";
 

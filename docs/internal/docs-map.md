@@ -44,7 +44,8 @@ doc of record first; supporting docs should add context, not redefine the behavi
 | Inventory manifests | [Inventory Manifest README](../../manifests/inventory/README.md) | [Config-Code Separation](../architecture/config-code-separation.md) |
 | NPM release workflow | [NPM Release Workflow](npm-release.md) | [Testing RoboRepo](testing.md) |
 | Maintainer test matrix | [Testing RoboRepo](testing.md) | [NPM Release Workflow](npm-release.md) |
-| Code style audit findings and remaining coverage | [Code Style Audit](code-style-audit.md) | [Testing RoboRepo](testing.md) |
+| See what the code style audit has reviewed and changed | [Code Style Audit Log](code-style-audit.md) | [Code Style Findings](code-style-findings.md) |
+| Pick up an open code style finding | [Code Style Findings](code-style-findings.md) | [Code Style Audit Log](code-style-audit.md) |
 | Docker-backed test sandboxes | [Docker Test Sandboxes](docker-test-sandboxes.md) | [Testing RoboRepo](testing.md) |
 | Test development vs packaged RoboRepo | [Test Scenarios](test-scenarios.md) | [Testing RoboRepo](testing.md) |
 | Test fresh onboarding / harness permutations | [Test Scenarios](test-scenarios.md) | [Testing RoboRepo](testing.md) |

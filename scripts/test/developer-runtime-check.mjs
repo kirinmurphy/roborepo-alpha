@@ -118,6 +118,15 @@ try {
   const threshold = updateSettings({ stateRoot: thresholdStateRoot, input: { revision: 1, type: "preferences", worktreeStaleDays: 3 } });
   assert.equal(threshold.preferences.worktreeStaleDays, 3);
   assert.throws(() => updateSettings({ stateRoot: thresholdStateRoot, input: { revision: 2, type: "preferences", worktreeStaleDays: 0 } }), /between 1 and 365/);
+  // New repoPath input follows the repository path rule, but a traversal path saved before that
+  // rule existed must still load: loadSettings throws on invalid values, which would stop Runtime.
+  const repoPathStateRoot = path.join(tempRoot, "repo-path-state");
+  assert.throws(() => updateSettings({ stateRoot: repoPathStateRoot, input: { revision: 1, type: "composeProject", composeProject: "stack", repoPath: "/work/../repo" } }), /traversal segments/);
+  fs.mkdirSync(path.dirname(settingsPathFor(repoPathStateRoot)), { recursive: true });
+  fs.writeFileSync(settingsPathFor(repoPathStateRoot), `${JSON.stringify({ ...loadSettings({ stateRoot: repoPathStateRoot }), composeProjects: { stack: { repoPath: "/work/../repo" } } })}\n`);
+  assert.equal(loadSettings({ stateRoot: repoPathStateRoot }).composeProjects.stack.repoPath, "/work/../repo");
+  const renamedStack = updateSettings({ stateRoot: repoPathStateRoot, input: { revision: 1, type: "composeProject", composeProject: "stack", name: "Stack" } });
+  assert.equal(renamedStack.composeProjects.stack.repoPath, "/work/../repo", "an unrelated edit must not be blocked by a stored traversal path");
   const legacyStateRoot = path.join(tempRoot, "legacy-state");
   fs.mkdirSync(path.dirname(settingsPathFor(legacyStateRoot)), { recursive: true });
   fs.writeFileSync(settingsPathFor(legacyStateRoot), `${JSON.stringify({

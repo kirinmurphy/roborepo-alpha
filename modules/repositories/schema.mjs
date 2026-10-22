@@ -43,6 +43,19 @@ export function safeIsoTimestamp(value, label) {
   return value;
 }
 
+// The one rule for a path RoboRepo will read: absolute, control-character-free, and free of
+// traversal segments. Unlike safeString this must NOT trim or truncate: a silently shortened path
+// would resolve to the wrong directory rather than failing, and a path is used to read a
+// filesystem rather than to be displayed.
+export function safeAbsolutePath(value, label) {
+  if (typeof value !== "string" || !value) throw new Error(`${label} is invalid`);
+  if (value.length > 4096) throw new Error(`${label} too long`);
+  if (/[\x00-\x1F\x7F]/.test(value)) throw new Error(`${label} is invalid`);
+  if (!value.startsWith("/")) throw new Error(`${label} must be absolute`);
+  if (value.split("/").includes("..")) throw new Error(`${label} must not contain traversal segments`);
+  return value;
+}
+
 export function validateRegistry(registry) {
   if (!registry || typeof registry !== "object" || Array.isArray(registry)) throw new Error("registry must be an object");
   validateObjectKeys(registry, ["aliases", "localRootPaths", "repositories", "revision", "version"], "registry");
@@ -147,18 +160,6 @@ function safeString(value, label, max = 200) {
 
 function safeOpaqueId(value, label) {
   if (typeof value !== "string" || !/^[a-z0-9][a-z0-9._-]{0,127}$/i.test(value)) throw new Error(`${label} is invalid`);
-  return value;
-}
-
-// Absolute, control-character-free, and free of traversal segments. Unlike safeString this must NOT
-// trim or truncate: a silently shortened path would resolve to the wrong directory rather than
-// failing, and a path is used to read a filesystem rather than to be displayed.
-function safeAbsolutePath(value, label) {
-  if (typeof value !== "string" || !value) throw new Error(`${label} is invalid`);
-  if (value.length > 4096) throw new Error(`${label} too long`);
-  if (/[\x00-\x1F\x7F]/.test(value)) throw new Error(`${label} is invalid`);
-  if (!value.startsWith("/")) throw new Error(`${label} must be absolute`);
-  if (value.split("/").includes("..")) throw new Error(`${label} must not contain traversal segments`);
   return value;
 }
 

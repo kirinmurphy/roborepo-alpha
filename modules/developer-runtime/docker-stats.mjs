@@ -12,8 +12,6 @@
 import os from "node:os";
 import { defaultRunCommand } from "./command-exec.mjs";
 
-export { defaultRunCommand };
-
 const MEM_UNIT_TO_KB = { B: 1 / 1024, KiB: 1, MiB: 1024, GiB: 1024 * 1024, TiB: 1024 * 1024 * 1024 };
 
 // Budget for the optional per-container metrics pass; independent of Docker discovery's timeout.

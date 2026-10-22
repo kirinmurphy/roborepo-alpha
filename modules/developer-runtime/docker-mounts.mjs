@@ -14,8 +14,6 @@
 
 import { defaultRunCommand } from "./command-exec.mjs";
 
-export { defaultRunCommand };
-
 // Crosses the same Docker Desktop VM-proxy boundary as `docker ps`/`docker stats` (see docker.mjs
 // for why that needs more headroom than lsof/ps), and inspects several containers per call.
 export const DOCKER_MOUNTS_TIMEOUT_MS = 6000;

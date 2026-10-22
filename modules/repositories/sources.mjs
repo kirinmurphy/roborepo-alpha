@@ -9,7 +9,7 @@ import {
   USER_SOURCE_KINDS,
   defaultSources,
   pendingStatus,
-  safeAbsolutePath,
+  safeSourcePath,
   validateSources,
 } from "./sources-schema.mjs";
 
@@ -83,7 +83,7 @@ export function userSources(store) {
 
 export function addSource(store, { path: sourcePath, kind, now = new Date().toISOString(), id = newSourceId() }) {
   if (!USER_SOURCE_KINDS.includes(kind)) throw sourceError("INVALID_SOURCE", "Choose whether the path is a repository or a folder of repositories.");
-  safeAbsolutePath(sourcePath);
+  safeSourcePath(sourcePath);
   if (store.sources.some((source) => source.path === sourcePath)) {
     throw sourceError("DUPLICATE_SOURCE", "That path is already a repository source.");
   }

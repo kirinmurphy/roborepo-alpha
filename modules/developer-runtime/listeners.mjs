@@ -1,8 +1,6 @@
 import { defaultRunCommand } from "./command-exec.mjs";
 import { parseCwdFieldOutput, parseLsofFieldOutput } from "./lsof.mjs";
 
-export { defaultRunCommand };
-
 export const LISTENER_DISCOVERY_TIMEOUT_MS = 3000;
 
 export async function discoverListenerRecords({

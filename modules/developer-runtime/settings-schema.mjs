@@ -144,10 +144,14 @@ export function safeComposeOwnership(value, label) {
   if (typeof value !== "string" || !value.startsWith("/") || CONTROL_CHARS.test(value)) {
     throw new Error(`${label} must be "shared" or an absolute checkout path`);
   }
-  return safeAbsolutePath(value, label);
+  return safeStoredAbsolutePath(value, label);
 }
 
-export function safeAbsolutePath(value, label) {
+// Shape check for a path already in the settings file. New input goes through the repositories
+// domain's stricter safeAbsolutePath (settings.mjs), which also rejects traversal segments; stored
+// values are not held to that rule because loadSettings throws on any invalid value, and a
+// `..` path saved before input was checked would otherwise stop every Runtime snapshot.
+export function safeStoredAbsolutePath(value, label) {
   if (typeof value !== "string" || !value.startsWith("/") || CONTROL_CHARS.test(value)) {
     throw new Error(`${label} must be an absolute path`);
   }
@@ -240,7 +244,7 @@ function validateComposeProjects(composeProjects) {
     if (project.name != null) safeLabel(project.name, "compose project name");
     if (project.favorite != null) safeBoolean(project.favorite, "compose project favorite");
     if (project.hidden != null) safeBoolean(project.hidden, "compose project hidden");
-    if (project.repoPath != null) safeAbsolutePath(project.repoPath, "compose project repoPath");
+    if (project.repoPath != null) safeStoredAbsolutePath(project.repoPath, "compose project repoPath");
     if (project.ownership != null) safeComposeOwnership(project.ownership, "compose project ownership");
   }
 }

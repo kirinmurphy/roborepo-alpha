@@ -5,15 +5,16 @@ import { createScanCache } from "../repositories/scan-cache.mjs";
 import { defaultRunGit } from "../repositories/git-exec.mjs";
 import { collectGitContext, collectGitForRoots } from "./git.mjs";
 import { attachHealth, disambiguateAssociationKeys, toInstance } from "./instance-shape.mjs";
-import { defaultRunCommand, discoverListenerRecords } from "./listeners.mjs";
+import { defaultRunCommand } from "./command-exec.mjs";
+import { discoverListenerRecords } from "./listeners.mjs";
 import { originCandidatesForListener } from "./origin.mjs";
 import { probeHttpCandidate } from "./http-probe.mjs";
 import { resolveProjectAlias } from "./settings.mjs";
-import { discoverDockerRecords, defaultRunCommand as defaultRunDockerCommand } from "./docker.mjs";
-import { collectProcessMetrics, defaultRunCommand as defaultRunPsCommand } from "./process-metrics.mjs";
+import { discoverDockerRecords } from "./docker.mjs";
+import { collectProcessMetrics } from "./process-metrics.mjs";
 import { resolveProvenance } from "./provenance.mjs";
-import { collectDockerStats, defaultRunCommand as defaultRunDockerStatsCommand } from "./docker-stats.mjs";
-import { collectDockerMounts, defaultRunCommand as defaultRunDockerMountsCommand } from "./docker-mounts.mjs";
+import { collectDockerStats } from "./docker-stats.mjs";
+import { collectDockerMounts } from "./docker-mounts.mjs";
 
 const PROBE_CONCURRENCY = 8;
 
@@ -34,10 +35,10 @@ export async function discoverInstances(options = {}) {
     // `runCommand` to answer `lsof`, and must not also have to answer `docker`/`ps` invocations they
     // never asked to opt into. Passing `runCommand` here only takes effect for callers who
     // explicitly provide the corresponding command options.
-    runDockerCommand = defaultRunDockerCommand,
-    runPsCommand = defaultRunPsCommand,
-    runDockerStatsCommand = defaultRunDockerStatsCommand,
-    runDockerMountsCommand = defaultRunDockerMountsCommand,
+    runDockerCommand = defaultRunCommand,
+    runPsCommand = defaultRunCommand,
+    runDockerStatsCommand = defaultRunCommand,
+    runDockerMountsCommand = defaultRunCommand,
     previousHealth = new Map(),
     now = new Date(),
     settings = null,
@@ -173,8 +174,10 @@ export async function discoverInstances(options = {}) {
 }
 
 // Decide checkout ownership for a whole Compose project from its bind mounts. The working_dir
-// label can identify the repository, but does not prove which checkout supplies the stack's files.
-// Named volumes provide no checkout evidence.
+// label can identify the repository, but does not prove which checkout supplies the stack's files:
+// placing by it would put a shared database under whichever worktree started it, and
+// `docker compose down` from that row would stop it for every checkout. Named volumes provide no
+// checkout evidence.
 //
 // One matching checkout means owned; competing checkouts or no matching checkout means shared.
 // Unmatched infrastructure mounts do not weaken a single match. No bind mounts means unverified,
@@ -259,8 +262,11 @@ function comparablePath(value) {
 }
 
 // Resolve each Compose project's repository: explicit repoPath first, working_dir second, then
-// bind mounts only when the first two fail. Bind mounts must agree on one repository; otherwise
-// leave it unresolved. Reuse the per-scan Git cache and return mounts for the later ownership pass.
+// bind mounts only when the first two fail. working_dir counts only when it reaches a `.git`:
+// "process" is the resolver's no-repository fallback, and promoting it would make every stack
+// started from a non-repo directory look resolved. Bind mounts must agree on one repository;
+// otherwise leave it unresolved, and mark a match "auto-bind" because a bind source is weaker
+// evidence than working_dir. Reuse the per-scan Git cache and return mounts for the ownership pass.
 async function collectGitForComposeProjects(containers, settings, {
   collectGit,
   scanCache,
@@ -324,8 +330,8 @@ async function collectGitForComposeProjects(containers, settings, {
     }),
   );
 
-  // Only projects the first two tiers could not resolve are inspected, so the common case adds no
-  // subprocess at all — and the ones that do are batched into a single `docker inspect`.
+  // Only projects the first two tiers could not resolve are inspected here, batched into a single
+  // `docker inspect`. The ownership pass inspects the remaining containers and reuses these results.
   if (!collectMounts || needMounts.size === 0) return { byProjectName, mountsByContainerId: new Map() };
   const candidates = containers.filter((c) => needMounts.has(c.composeProject) && c.containerId);
   if (!candidates.length) return { byProjectName, mountsByContainerId: new Map() };

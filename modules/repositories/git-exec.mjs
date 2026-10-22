@@ -28,6 +28,7 @@ export const GIT_MAX_BUFFER = 1024 * 1024;
 
 // Local reads allowed by defaultRunGit and defaultRunGitSync. Unknown subcommands are refused
 // because polling scans arbitrary repositories without requesting mutations or network access.
+// Add an entry only for a local read that neither mutates the repository nor contacts a remote.
 // Explicit mutation callers use runGitProcess or runGitProcessSync, which bypass this list.
 export const GIT_READONLY_COMMANDS = new Set([
   "status",

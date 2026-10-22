@@ -6,8 +6,6 @@
 
 import { defaultRunCommand } from "./command-exec.mjs";
 
-export { defaultRunCommand };
-
 export const PROCESS_METRICS_TIMEOUT_MS = 1500;
 
 export async function collectProcessMetrics(pids, {
