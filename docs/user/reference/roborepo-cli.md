@@ -60,7 +60,7 @@ run `roborepo harness refresh`.
 | `roborepo doctor --installed [--verbose]` | Verifies that installed harness paths resolve correctly; also fails when a local store is over its size cap. |
 | `roborepo maintenance repair [--dry-run] [--on-conflict ...]` | Repairs a moved or renamed checkout by relinking stale symlinks against the current path; it leaves copied config content alone. |
 | `roborepo maintenance repair local-config [--dry-run or --apply]` | Recovers safe local Claude/Codex settings from recent backups when `update` or `doctor --installed` reports local config repair candidates. |
-| `roborepo maintenance stores [list]` | Lists the local stores RoboRepo keeps on disk — telemetry spools, runtime history, capture logs — with each one's size against its bound. |
+| `roborepo maintenance stores [list]` | Lists the local stores RoboRepo keeps on disk — telemetry spools, runtime history, capture logs, browser evidence — with each one's size against its bound. |
 | `roborepo maintenance stores reset <id> [--all]` | Reclaims space in one store. Applies that store's own retention policy, or with `--all` clears it outright. Store ids come from `stores list`. |
 | `roborepo maintenance portal-pids [--reap]` | Lists `~/.roborepo/portal/server-<port>.pid` files and whether each one's process is still alive. `--reap` deletes only entries whose process is gone, never a running portal or one owned by another user. |
 
@@ -142,6 +142,66 @@ RoboRepo prints which package to enable.
 roborepo package enable jcodemunch
 roborepo index code --watch
 ```
+
+## Browser Evidence
+
+Agents use these commands to check a local web app in a real browser and show you what they saw.
+They need the `feature-verification` package; without it, both exit non-zero and print
+`roborepo package enable feature-verification`.
+
+| Command | What it does |
+| --- | --- |
+| `roborepo browser probe [--dir <path>] [--provider <id>] [--json]` | Reports whether Playwright and Chromium are reachable from `<path>` (default: the current directory) and which captures work: screenshot, video, trace. Never installs or launches anything. |
+| `roborepo browser run --scenario <path> [--capture screenshot,video,trace] [--url <url>] [--serve <command>] [--timeout <seconds>] [--provider <id>] [--json]` | Runs a scenario and reports its result. Exits 0 only when the run passed. |
+
+A scenario is either a Playwright test file from the project (`*.spec.*`, `*.test.*`), run by the
+project's own test runner and config, or a JavaScript module whose default export receives
+`{ page, context, url, check, screenshot }`. In a script, only `check(name, fn)` produces an
+assertion; a script that only navigates and captures reports `unverified`.
+
+`--url` is the app to check, as an `http://` or `https://` URL. If something already answers
+there, the run uses it and never stops it. Otherwise `--serve` names the dev command to start it;
+the run waits for the URL, then stops that command's whole process group when it finishes, when it
+is interrupted (Ctrl-C, or a harness ending a long command), and including a server the command
+put in the background. Test files read the URL from `ROBOREPO_BROWSER_URL`. `--timeout` (default
+120 seconds) bounds both the wait for the app and the scenario itself; a scenario that runs past it
+is `failed`, and a test file's runner is shut down gracefully so its config's `webServer` stops too.
+`--provider` picks what drives the browser; `playwright` is the only one and the default.
+
+Every run result has these four fields. With `--json`, the output also names the `provider`, the
+`runId` that prefixes its evidence file names, and the `scenario` as an absolute path.
+
+| Field | Meaning |
+| --- | --- |
+| `status` | `passed` (executed checks passed), `failed` (a check or the run failed), `unverified` (ran, but nothing was asserted), or `blocked` (could not run: no Playwright, no browser, no app, or a scenario that does not load). |
+| `checks` | One entry per test or `check()`, each `passed` or `failed`, with the failure message. |
+| `artifacts` | Files that exist on disk, each with its type. |
+| `limitations` | What was not captured or checked, and why, including the exact install command when something is missing. |
+
+`browser probe --json` prints `provider`, `available` (Playwright and a headless Chromium were
+found), `capabilities` (`screenshot`, `video`, `trace`, each `true` or `false`), `limitations`, and
+`playwright`: its `source` (`project` or `roborepo`), `package`, and `version`, or `null` when no
+Playwright was found.
+
+A screenshot or recording shows what the browser displayed. It does not prove the behavior is
+correct; only checks do. For test files, screenshots and video come from the project's Playwright
+config (`use.screenshot`, `use.video`), and `trace` is passed to the runner. A test file never
+changes the project: missing screenshot baselines are not written (`--update-snapshots=none`), and
+a committed baseline Playwright attaches to a failure is copied into the evidence, not moved.
+
+**Playwright is installed only when needed.** RoboRepo does not ship it, and enabling the package
+downloads nothing. A run uses the project's own `playwright` or `@playwright/test` when it has one.
+Otherwise the result is `blocked`, and its limitation holds an `npm install --prefix
+~/.roborepo/browser/tools …` command. It installs the Playwright package into RoboRepo's tool
+directory, never into the project, and Chromium and ffmpeg into Playwright's shared per-user browser
+cache (for example `~/Library/Caches/ms-playwright` on macOS or `~/.cache/ms-playwright` on Linux),
+so browsers the machine already downloaded are reused. An agent runs that command only through
+your normal permission prompt. `browser run` is never added to agent allowlists, because it
+executes scenario code.
+
+Evidence is written to `~/.roborepo/browser/evidence/` as `<run-id>-<n>-<type>.<ext>` and kept for
+14 days or 250 MB, whichever comes first. Old files are removed when a later run starts; the store
+appears in `roborepo maintenance stores` as `browser-evidence`.
 
 ## Skills
 

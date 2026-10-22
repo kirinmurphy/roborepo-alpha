@@ -1,7 +1,7 @@
 ---
 id: o93hile
 priority: high
-next_action: Rename globals/packages/response-shape to response-output, consolidate its rules while adding the missing communication items, and drop the marker packages' requires; then add the feature-verification package with its evidence skill and the `roborepo browser probe|run` namespace, a stub provider, and contract tests.
+next_action: Run /plan-review on the submitted plan, then /plan-close once its pull request merges.
 blocked_by: []
 depends_on: []
 related:
@@ -222,7 +222,7 @@ Installing RoboRepo never installs Playwright, and enabling `feature-verificatio
 The provider resolves it the first time a browser run needs it:
 
 1. The target project's own installed `playwright` or `@playwright/test`, resolved from the scenario's directory. No prompt. Prefer the project's existing tests.
-2. Otherwise `blocked`, with the exact install command in `limitations`. The agent asks to run it through the harness's normal permission prompt, and on approval installs the npm package and the browser binary into a RoboRepo-managed tool directory under the state root (for example `<stateRoot>/browser/tools/`). Never write to the target project's manifest or lockfile.
+2. Otherwise `blocked`, with the exact install command in `limitations`. The agent asks to run it through the harness's normal permission prompt, and on approval installs the npm package into a RoboRepo-managed tool directory under the state root (for example `<stateRoot>/browser/tools/`) and the browser binaries into Playwright's shared per-user cache, so browsers the machine already has are reused. Never write to the target project's manifest or lockfile.
 3. If the user declines, the result stays `blocked` and the agent falls back to other evidence.
 
 - `probe` reports availability and each capture capability independently, without launching a browser or downloading anything.
@@ -277,32 +277,48 @@ Example (illustrative; not an actual verification claim):
 
 | Plan | Relationship | Classification |
 | --- | --- | --- |
-| [[o9zwxuav]] One package state model (backlog) | Its Current-state row ("Three packages use it … each require `response-shape`") and its sticky-dependency example (`convention-capture` → `response-shape`) describe relationships this plan removes. Its mechanism is still needed for `implementation-review` ([[ejsc769o]]). Also the home for the Plan Suite all-or-nothing question | Plan-vs-plan prose conflict, superseded here. This plan does not edit o9zwxuav; refresh its example and test row (`scripts/test/package-lifecycle-check.mjs` case) with a fixture or the `implementation-review` case when it is next promoted. Not a dependency in either direction; the only shared touchpoint is `effectiveEnabledIds`, which o9zwxuav moves to `scripts/cli/package-state.mjs` and the `browser` gate calls, so whichever lands second updates that import |
+| [[o9zwxuav]] One package state model (backlog) | Its Current-state row ("Three packages use it … each require `response-shape`") and its sticky-dependency example (`convention-capture` → `response-shape`) describe relationships this plan removes. Its mechanism is still needed for `implementation-review` ([[ejsc769o]]). Also the home for the Plan Suite all-or-nothing question | Plan-vs-plan prose conflict, superseded here. At the user's direction this plan updated o9zwxuav's Current-state row, sticky-dependency example, and test row to use the `test-composite` fixture, since a queued plan is live and must not name the old id. Not a dependency in either direction; the only shared touchpoint is `effectiveEnabledIds`, which o9zwxuav moves to `scripts/cli/package-state.mjs` and the `browser` gate calls, so whichever lands second updates that import |
 | [[0jped168]] Agent behavior evals (backlog) | Headless agent eval runner could later score comprehension | Unlanded, not a dependency; this plan's clarity check stays a small manual sample |
 | [[package-cli-test-guide]] (backlog) | Its prose says Playwright is "not currently installed"; `@playwright/test` and `scripts/test/portal-ui/` have since landed | Plan-vs-code prose drift in that plan; no conflict with this one |
 | `agent-config-code-quality-conventions` (completed) | Rewrote `code-style` guidance this plan's module layout follows | Landed (`eafd8e25`, ancestor of HEAD) |
 
 ## Implementation checklist
 
-- [ ] Rename `globals/packages/response-shape/` to `globals/packages/response-output/` and update every reference listed in Current state.
-- [ ] Rewrite `rules.md` per Section 1: consolidate while adding, remove namespaced findings, end near or below 78 lines, and avoid duplicating `04-claims-and-evidence.md` or `07-decide-dont-ask.md`. Align the verification-line format with `test-harness`.
-- [ ] Remove `requires` from the three marker packages and give each its own one-line placement rule (Section 2).
-- [ ] Regenerate tracked snapshots with `scripts/build/render-rules.sh` (`--check` verifies) and confirm Claude, Codex, and Gemini outputs match.
-- [ ] Create `globals/packages/feature-verification/` with the evidence skill and trigger fixtures (Section 3); pick or add a category.
-- [ ] Add the `browser` namespace under `manifests/platform/cli/command-definitions/browser/` and its `scripts/cli/` module; gate both commands on `feature-verification`.
-- [ ] Implement the provider contract, result-shape validation, and a stub provider; status values `passed` / `failed` / `unverified` / `blocked`.
-- [ ] Implement the Playwright provider with the Section 5 resolution order, independent capability probing, and recording lifecycle.
-- [ ] Implement evidence paths under the state root and register a bounded retention store (Section 7).
-- [ ] Keep `browser run` out of `manifests/inventory/agent-permissions.json`; decide whether `browser probe` is allowlisted.
-- [ ] Add tests (see Validation) and register each new check in `scripts/test/check-groups.json`.
-- [ ] Run a small set of real workflows in Claude Code and Codex, including one with `caveman` enabled; compare comprehension and extra agent time, and record findings in this plan.
-- [ ] Update documentation of record (see Documentation impact).
+- [x] Rename `globals/packages/response-shape/` to `globals/packages/response-output/` and update every reference listed in Current state.
+- [x] Rewrite `rules.md` per Section 1: consolidate while adding, remove namespaced findings, end near or below 78 lines, and avoid duplicating `04-claims-and-evidence.md` or `07-decide-dont-ask.md`. Align the verification-line format with `test-harness`.
+- [x] Remove `requires` from the three marker packages and give each its own one-line placement rule (Section 2).
+- [x] Regenerate tracked snapshots with `scripts/build/render-rules.sh` (`--check` verifies) and confirm Claude, Codex, and Gemini outputs match.
+- [x] Create `globals/packages/feature-verification/` with the evidence skill and trigger fixtures (Section 3); pick or add a category.
+- [x] Add the `browser` namespace under `manifests/platform/cli/command-definitions/browser/` and its `scripts/cli/` module; gate both commands on `feature-verification`.
+- [x] Implement the provider contract, result-shape validation, and a stub provider; status values `passed` / `failed` / `unverified` / `blocked`.
+- [x] Implement the Playwright provider with the Section 5 resolution order, independent capability probing, and recording lifecycle.
+- [x] Implement evidence paths under the state root and register a bounded retention store (Section 7).
+- [x] Keep `browser run` out of `manifests/inventory/agent-permissions.json`; decide whether `browser probe` is allowlisted.
+- [x] Add tests (see Validation) and register each new check in `scripts/test/check-groups.json`.
+- [x] Run a small set of real workflows in Claude Code and Codex, including one with `caveman` enabled; compare comprehension and extra agent time, and record findings in this plan. — Moved to `## Not tested`, then deferred by the user to real use over future plans (see Decision Log).
+- [x] Update documentation of record (see Documentation impact).
+
+### Implementation notes
+
+- `globals/packages/response-output/rules.md` is 70 lines (budget 78). Generated snapshots carry
+  only shared fragments, so `scripts/build/render-rules.sh --check` reports them current with no
+  diff; package rules render through `scripts/cli/rules-render.mjs`, which
+  `scripts/test/response-output-rules-check.mjs` checks for Claude, Codex, and Gemini.
+- The rename check excludes `docs/plans/completed/`, `docs/plans/archived/`, and this plan's own
+  file in any lifecycle folder (it records the rename). Every other plan is live and is checked;
+  [[o9zwxuav]] was updated so it no longer names the old id.
+- Real-environment runs done by hand: a script scenario against a throwaway server (passed, with a
+  real screenshot of the filtered list), a capture-only scenario (`unverified`), a project spec
+  file with one failing test (`failed`, screenshots and traces adopted, video reported as not
+  enabled by the config, a pre-existing server left running), and the exact `npm install --prefix
+  … playwright@1.62.1` command from a `blocked` result followed by a passing run from that tool
+  directory.
 
 ## Validation
 
 | Criterion | Acceptance evidence |
 | --- | --- |
-| Rename complete | No live reference to `response-shape` outside `docs/plans/completed/` and `docs/plans/archived/`; `scripts/test/package-catalog-check.mjs` passes |
+| Rename complete | No live reference to `response-shape` outside `docs/plans/completed/`, `docs/plans/archived/`, and this plan, which records the rename (`scripts/test/response-output-rules-check.mjs`); `scripts/test/package-catalog-check.mjs` passes |
 | Shared policy | Rendered rules for Claude, Codex, and Gemini contain the same `response-output` text when enabled and none of it when disabled; no sentence duplicates a shared fragment |
 | Rules size | `globals/packages/response-output/rules.md` is no longer than today's 78-line `response-shape/rules.md`, or the plan records why |
 | Package independence | Enabling `feature-verification` alone leaves `response-output` disabled and vice versa; `browser run` works with `response-output` off |
@@ -381,6 +397,179 @@ how to open it, and what capture does **not** prove.
 - 2026-10-21: `roborepo browser` is a core namespace gated on `feature-verification`, because package `cli-command` resources cannot register namespaces.
 - 2026-10-21: Playwright is provisioned on first browser use, after a harness permission prompt, never at RoboRepo install or package enable.
 - 2026-10-21: `browser run` is never prefix-allowlisted for agents.
+- 2026-10-21 (implementation): `feature-verification` uses the existing `code-conventions` category
+  ("skills auto-loaded when relevant"), beside `test-harness`. Alternatives: a new verification
+  category (one package would sit alone in it) or `chat-time-output` (that category is rules that
+  load every turn, which this package deliberately is not).
+- 2026-10-21 (implementation): Evidence retention is flat: `<run-id>-<n>-<type>.<ext>` in one
+  directory, with a per-store `filter` (`isBrowserEvidenceFile`) that `maintenance stores` now
+  passes to the file-set measurement. Alternative: a directory-aware measurement, which would add a
+  third store shape for no gain. Bounds: 14 days / 250 MB; pruned when a run starts so a run never
+  deletes what it reports. The engine's never-empty guard keeps the newest file even when stale.
+- 2026-10-21 (implementation): `browser probe` is not added to the agent allowlist. It stays under
+  the default prompt, which changes no permission; adding it later is one manifest entry.
+  `browser` is listed in `INTENTIONALLY_UNCLASSIFIED` in
+  `scripts/test/agent-run-coverage-check.mjs`, which now asserts it is never bucketed.
+  Alternative: allowlist it as read-only, which the plan allowed but which widens agent
+  permissions without a request to.
+- 2026-10-21 (implementation): Two scenario kinds. A project test file (`*.spec.*`, `*.test.*`)
+  runs under the project's own runner and config; screenshot and video then follow the project's
+  config, and a requested capture it does not produce is a limitation (trace is a runner flag).
+  Alternative: generate a wrapper config that forces capture, which would rewrite relative paths
+  in the project's config and change what its tests do. A JavaScript script scenario receives
+  `{ page, context, url, check, screenshot }`; only `check()` earns `passed`.
+- 2026-10-21 (implementation): Service lifecycle is in the command: `--url` reuses anything that
+  already answers and never stops it; `--serve` starts a dev command in its own process group only
+  when nothing answers, and stops that group afterward. Alternative: leave starting to the agent,
+  which would leave the "owned process is gone afterward" guarantee untestable.
+- 2026-10-21 (implementation): The stub provider ships in the static provider map but is
+  selectable only with `ROBOREPO_BROWSER_STUB=1`, so the CLI-level checks run without a browser
+  while an agent cannot pick a provider that reports fixture results as evidence.
+- 2026-10-21 (implementation): Exit codes: 0 when probe reports or a run passes; 1 for the package
+  gate or any non-passing run; 2 for usage. Probe, usage, and gate paths set `process.exitCode`,
+  because `main.mjs` ignores values returned by module commands; `browser run` calls
+  `process.exit` once its result is printed, so a timed-out script scenario still holding its own
+  timers cannot keep the command alive.
+- 2026-10-21 (implementation): The pinned install version is read from this repo's
+  `@playwright/test` devDependency, so the browser suite and the provisioned tool share one
+  version.
+- 2026-10-21 (implementation): An `unverified` browser run gets no `Verified:` line; it is
+  reported as observed evidence, the way `response-output` already treats unasserted behavior.
+  `passed`, `failed`, and `blocked` map onto `pass`, `fail`, and `blocked`. Validation pass 1
+  classed this `escalate` because the shared line has no `unverified` value; resolved without
+  changing that shared format (which `test-harness` also uses), so no contract changes.
+  Alternative: add `unverified` to the shared line, which would change the `test-harness` contract
+  outside this plan.
+- 2026-10-21 (implementation): The real-workflow comprehension sample moved to `## Not tested`.
+  Running it here would mean enabling the renamed packages in the user's live harness homes, and
+  the criterion asks a reviewer to judge comprehension, which the implementing agent cannot do for
+  its own responses.
+- 2026-10-21 (user decision): The "Rename complete" check excludes completed and archived plans
+  plus this plan's own file. Queued and in-flight plans are live, so [[o9zwxuav]] was updated to
+  use the `test-composite` fixture instead of the old id. Alternatives: exclude all of
+  `docs/plans/` (leaves a queued plan describing relationships that no longer exist), or exclude
+  only history and reword this plan too (obscures what was renamed).
+- 2026-10-21 (user decision): The approved Playwright install keeps Chromium, the headless shell,
+  and ffmpeg in Playwright's shared per-user cache; only the npm package goes into
+  `<stateRoot>/browser/tools/`. Section 5, the user CLI reference, the skill, and the resolver's
+  comments now say so. Alternative: set `PLAYWRIGHT_BROWSERS_PATH` to the tool directory for
+  install, probe, and runs, which is self-contained but downloads a second copy of browsers the
+  machine may already have.
+- 2026-10-21 (implementation): An unnamed script `check()` is reported as `unnamed check <n>`, and
+  a spec test with an empty title path as `untitled test`, so providers always return a result that
+  meets the contract. Alternative: catch contract violations in `browser run` and report `blocked`,
+  which would hide a provider bug as an environment problem and discard the checks that did run.
+- 2026-10-21 (user decision): Both `## Not tested` entries are deferred to real use rather than
+  confirmed before closing. The user will judge them while using the packages across many future
+  plans and open new plans for any changes that use shows are needed. The deferred checks:
+  - Clarity and caveman sample: in real Claude Code and Codex sessions with `response-output`
+    enabled, and once with `caveman` too, a reviewer can find the outcome, next action,
+    uncertainty, and consequential choices; technical depth stays available; unverified claims
+    stay marked; extra agent time is recorded separately. This is the human-judged part of the
+    Clarity and Caveman coexistence rows under Validation; the rendered-rules part of Caveman
+    coexistence is covered by `scripts/test/response-output-rules-check.mjs`.
+  - Live `feature-verification` behavior: the agent picks proportionate evidence, asks before
+    running the Playwright install command through the harness prompt, and falls back to a text
+    summary when it cannot show an artifact.
+
+  Why: both need a human judging live model sessions, and a judgment based on many real plans is
+  worth more than a one-off sample. Alternative: run the sample now and block closing on it.
+- 2026-10-21 (user decision, plan review): `browser run --url` keeps accepting any http(s) host.
+  Staging, LAN, container, and `.test` hosts are legitimate targets, and every `browser run`
+  already goes through the harness approval prompt, which shows the URL; the skill's guidance not
+  to guess production endpoints stays the safeguard. Alternative: refuse non-local hosts, which
+  would need a definition of "local", new tests and docs, and would block staging checks.
+
+## Review
+
+### Findings
+
+- [x] `--serve` that backgrounds its server left it running: the stop skipped the process group once the shell exited — fixed (58871592)
+- [x] Scenario load, browser launch, or capture errors printed a stack trace instead of a `blocked` result — fixed (58871592)
+- [x] Probe reported Chromium available without the headless shell a headless launch needs — fixed (58871592)
+- [x] `--timeout` above Node's 32-bit timer range fired after 1ms — fixed (58871592)
+- [x] The never-allowlisted check skipped the rendered Gemini policy file — fixed (58871592)
+- [x] The no-ffmpeg branch was never asserted on a machine that has ffmpeg — fixed with partial browser caches (58871592)
+- [x] `next_action` named a gate run that had already passed — fixed (58871592)
+- [x] Shared `Verified:` line has no value for an `unverified` run — classed escalate by the Validator; resolved in the skill without changing the shared format (see Decision Log) (58871592)
+- [x] Interrupting `browser run` (SIGINT/SIGTERM) left a `--serve` server running — fixed (1f03f1ab)
+- [x] A spec run timeout killed only the runner, orphaning the config's `webServer` — fixed (1f03f1ab)
+- [x] Probe matched any headless shell revision and required the full browser to exist — fixed (1f03f1ab)
+- [x] `browser probe` printed a stack trace when an installed Playwright failed to load — fixed (1f03f1ab)
+- [x] `--url` without an http(s) scheme waited the full timeout instead of failing as usage — fixed (1f03f1ab)
+- [x] A spec timeout was `blocked` while a script timeout was `failed` — fixed, both `failed` (1f03f1ab)
+- [x] A failed browser launch with `--capture video` leaked a temp directory — fixed (1f03f1ab)
+- [x] Spec runs moved a project's committed screenshot baseline (attached on a mismatch) into the evidence store — fixed: copy anything outside the run's output, and `--update-snapshots=none` (a670c945)
+- [x] A script scenario cut off by `--timeout` kept the CLI alive until its own timers fired — fixed: exit once the result is printed (a670c945)
+- [x] An interrupted run skipped providers' `finally`, leaking `rr-browser-*` temp dirs — fixed: temp dirs registered as owned resources (a670c945)
+- [x] The skill lacked the architecture and progress before/after examples Section 3 asks for — fixed (a670c945)
+- [x] Probe accepted an ffmpeg of any revision, so `video: true` could precede a run that fails to record — fixed: headless shell and ffmpeg matched to the revisions `playwright-core`'s `browsers.json` pins (ea628104)
+- [x] An interrupted traced script left Playwright's `playwright-tracing-*` scratch dir — fixed: one owned work dir holds `tracesDir` and video (ea628104)
+- [x] The Decision Log's exit-code entry still said `process.exitCode` for `browser run` — fixed (ea628104)
+- [x] A script `check()` called without a string name (or a spec test whose title path is empty) makes `validateRunResult` throw outside the run's try, so `browser run` prints a stack trace instead of a result — fixed: providers name such checks `unnamed check <n>` / `untitled test`, with a regression test (b75a92cc)
+- [x] `next_action` named only pass 3 as recorded under ## Review — fixed: `next_action` rewritten for the current state (b75a92cc)
+- [x] The install command puts Chromium, the headless shell, and ffmpeg in Playwright's per-user cache, not RoboRepo's tool directory as the plan (Section 5) and the user doc say — user chose the shared cache; Section 5, the user doc, and the skill corrected (see Decision Log) (b75a92cc)
+- [x] The "Rename complete" row excludes only `completed/` and `archived/`, but this plan and backlog o9zwxuav must name the old id — user chose to exclude history plus this plan; o9zwxuav updated and the check narrowed (see Decision Log) (b75a92cc)
+- [x] Plan record lagged b75a92cc: stale `next_action`, findings without their fix commit, no gate entry — fixed (5f95e0d9)
+- [x] Two lines left unwrapped in `playwright-resolve.mjs` and `roborepo-cli.md` — fixed (5f95e0d9)
+- [x] The `roborepo-cli.md` rewrap moved the overflow down a line instead of removing it — fixed (fb50ea91)
+- [x] An interrupted spec run deleted its temp dir before signalling the runner, and exited without waiting, so the runner recreated it with traces and failure screenshots — fixed: owned resources unwind newest first and each stop is awaited, and the runner's interrupt resolves only once it has exited (ea66b04a)
+- [x] The interrupted-spec test captured nothing and passed on the first empty observation — fixed: it interrupts a `--capture trace` run and asserts no temp dir at exit and after the shutdown grace (ea66b04a)
+- [x] Two lines left unwrapped in `browser-playwright-cache-check.mjs` and this plan's Decision Log — fixed (ea66b04a)
+- [x] Plan review: the `roborepo browser` rows in `docs/user/reference/roborepo-cli.md` omit `--provider <id>`, which both commands and their usage strings accept — fixed in review (3669bbab)
+- [x] Plan review: `docs/user/reference/roborepo-cli.md` says the run result "has four fields", but `--json` also prints `provider`, `runId`, and `scenario`, and the probe result's fields are not described — fixed in review (3669bbab)
+- [x] Plan review: `--url` accepts any http(s) host, not only a local one; Section 6's "known local URL" is enforced by guidance and the harness prompt, not by the command — escalated; user kept it as is (see Decision Log)
+
+### Verification
+
+- Gate: `npm run check` passed at f7528de4 (447 CLI tests, 42/42 check suites, Docker clean-machine suites, 103 portal UI specs; Windows installer parity skipped, no `pwsh`).
+- Validation pass 1 at f7528de4 (fresh-context subagent): 7 fix, 1 escalate.
+- Gate: `npm run check` passed at 018c8f67 (447 CLI tests, 42/42 check suites, Docker clean-machine suites, portal UI).
+- Validation pass 2 at 018c8f67 (fresh-context subagent): 7 fix, 1 escalate.
+- Gate: `npm run check` passed at 6f4cbb6b (447 CLI tests, 44/44 check suites, Docker clean-machine suites, portal UI).
+- Validation pass 3 at 6f4cbb6b (fresh-context subagent): 4 fix.
+- Gate: `npm run check` passed at 6ae939ac.
+- Validation pass 4 at 6ae939ac (fresh-context subagent): 3 fix.
+- Gate: `npm run check` passed at fbc26524 (447 CLI tests, 45/45 check suites, Docker clean-machine suites, 103 portal UI specs; Windows installer parity skipped, no `pwsh`).
+- Validation pass 5 at fbc26524 (fresh-context subagent): 2 fix, 1 escalate. Stopped at the five-pass cap; its findings and the two escalated questions were resolved after the user answered, in b75a92cc.
+- Gate: `npm run check` passed at b75a92cc (447 CLI tests, 45/45 check suites, Docker clean-machine suites, 103 portal UI specs; Windows installer parity skipped, no `pwsh`).
+- Validation loop 2 (after the user's answers), pass 1 at b75a92cc (fresh-context subagent): 2 fix (stale plan record; two over-long wrapped lines).
+- Gate: `npm run check` passed at b5f82243 (447 CLI tests, 45/45 check suites, Docker clean-machine suites, 103 portal UI specs; Windows installer parity skipped, no `pwsh`).
+- Validation loop 2, pass 2 at b5f82243 (fresh-context subagent): 1 fix (a doc line still over-long).
+- Gate: `npm run check` passed at e96ad096 (447 CLI tests, 45/45 check suites, Docker clean-machine suites, 103 portal UI specs; Windows installer parity skipped, no `pwsh`).
+- Validation loop 2, pass 3 at e96ad096 (fresh-context subagent): 3 fix (interrupted traced spec leaves a temp dir; its test could not catch it; two unwrapped lines).
+- Gate: `npm run check` passed at 5c894c1d (447 CLI tests, 45/45 check suites, Docker clean-machine suites, 103 portal UI specs; Windows installer parity skipped, no `pwsh`).
+- Validation: clean on loop 2, pass 4 at 5c894c1d (fresh-context subagent). It also showed the new interrupt test fails against the e96ad096 source.
+- Plan review: `roborepo plans sync-base` merged main at fb8bfb33 into ea7033df. The only conflict was this plan's move from `active/` to `review/`; both sides held identical content, kept at the `review/` path.
+- Plan review gate: `npm run check` passed at ea7033df (53/53 check suites, clean-machine sandboxes, 104 portal UI specs; Windows installer parity skipped, no `pwsh`).
+- Plan review Validator pass 1 at ea7033df (fresh-context subagent): 2 fix, 1 escalate. Every automatable acceptance criterion met with code and test evidence; the merge kept this branch's `check-groups.json` registrations and `roborepo-cli.md` sections beside main's.
+- Plan review fix 3669bbab is documentation only: `node scripts/test/cli-command-catalog-check.mjs` and `node scripts/test/docs-reference-check.mjs` passed at 3669bbab. No code or test changed since the gate at ea7033df, so no further Validator pass ran.
+
+### Result
+
+- Status: complete
+- Reviewed implementation commit: 3669bbab41b684f47839a49e544876721a2cd28b
+- Base commit: fb8bfb3306b67b3f05e50013f7ab67e3aa87d724
+
+### Approval
+
+- Decision: approved
+- Reviewed implementation commit: 3669bbab41b684f47839a49e544876721a2cd28b
+- Confirmed by: human
+
+The user answered "Approve" in the /plan-review chat on 2026-10-21, to the question naming this
+plan's title and implementation commit 3669bbab (base main fb8bfb33), after deciding to keep
+`--url` as is.
+
+## Open Questions
+
+None open. The plan review's `--url` question and both questions from validation pass 5 were
+answered by the user; see the Decision Log.
+
+## Not tested
+
+None open. The two manual checks were deferred by the user; see the Decision Log entry dated
+2026-10-21 (user decision) on judging the packages through real use.
 
 ## Implementation-time choices
 

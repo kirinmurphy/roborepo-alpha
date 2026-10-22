@@ -85,7 +85,7 @@ function resetStore(args) {
   const policy = policyFor(store);
   const verdict = store.shape === LOG_SHAPE
     ? measureLog({ filePath: store.target, policy })
-    : measureFileSet({ dirPath: store.target, policy });
+    : measureFileSet({ dirPath: store.target, policy, filter: store.filter });
 
   if (!verdict.act) {
     console.log(`${store.id}: already within policy (${verdict.reason})`);
@@ -159,7 +159,7 @@ function policyFor(store) {
 
 function inspect(store) {
   if (store.shape === FILE_SET_SHAPE) {
-    const { fileCount, totalBytes } = describeFileSet({ dirPath: store.target });
+    const { fileCount, totalBytes } = describeFileSet({ dirPath: store.target, filter: store.filter });
     return { bytes: totalBytes, detail: fileCount ? `${fileCount} file(s)` : "empty" };
   }
   try {

@@ -95,7 +95,26 @@ export function retentionStores(stateRoot) {
       policy: { maxAgeDays: 30, maxBytes: 10 * MB, floorBytes: 64 * 1024, keepFraction: null },
       description: "Shell commands that are hard to read or impossible to allowlist.",
     },
+    {
+      id: "browser-evidence",
+      label: "Browser evidence",
+      shape: FILE_SET_SHAPE,
+      target: path.join(stateRoot, "browser", "evidence"),
+      // Screenshots, videos, and traces from `roborepo browser run`. Evidence only has to outlive
+      // the conversation that cites it, so age is the real policy; the byte cap is a backstop for
+      // video, which dominates size. Pruned when a run starts, never mid-run, so a run's own
+      // artifacts always survive to be cited.
+      policy: { maxAgeDays: 14, maxBytes: 250 * MB, floorBytes: 0, keepFraction: null },
+      filter: isBrowserEvidenceFile,
+      description: "Screenshots, recordings, and traces captured as verification evidence.",
+    },
   ];
+}
+
+// Evidence files are flat (`<run-id>-<n>-<type>.<ext>`) so the file-set measurement applies as is;
+// the filter keeps anything else that lands in the directory out of the count.
+export function isBrowserEvidenceFile(name) {
+  return /\.(png|webm|zip)$/.test(name);
 }
 
 export function findRetentionStore(stateRoot, id) {

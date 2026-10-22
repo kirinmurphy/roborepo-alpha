@@ -4,7 +4,7 @@ At the end of any response where a skill shaped the work, list the skills you us
 
 `> 🧩 **Skills loaded:** [comma-separated skill names, or "none"]`
 
-Exact format. Placement: see `response-shape`. Report the skills you knowingly applied this turn;
+Exact format. Put it on its own line at the end of the response, never inside a paragraph. Report the skills you knowingly applied this turn;
 write "none" if no skill influenced the response.
 
 ### Reference observations
