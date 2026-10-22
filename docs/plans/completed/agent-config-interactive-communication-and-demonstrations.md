@@ -1,7 +1,7 @@
 ---
 id: o93hile
 priority: high
-next_action: Run /plan-review on the submitted plan, then /plan-close once its pull request merges.
+next_action:
 blocked_by: []
 depends_on: []
 related:
@@ -578,3 +578,33 @@ None open. The two manual checks were deferred by the user; see the Decision Log
 - Flat vs. directory-aware evidence retention (Section 7).
 - Whether `browser probe` joins the agent allowlist.
 - Which existing local browser tests and real responses to use for the acceptance sample.
+
+## Completion Summary
+
+Agents in RoboRepo-managed sessions can now use two optional packages. `response-output` replaces
+`response-shape`: a 70-line rule set that leads with the result, matches detail to the task, and
+says whether each piece of evidence passed, was only observed, or only illustrates. The three marker
+packages no longer pull it in. `feature-verification` adds an evidence skill and the
+`roborepo browser probe` / `browser run` commands. They drive a local web app through Playwright,
+which is installed only on first use with the user's approval. The commands report `passed` only
+for executed checks and keep screenshots, videos, and traces in a bounded store. The work landed on
+`main` through PR #41 (squash commit `b7a83ff5`). The two human-judged checks, response clarity and
+live skill behavior, are deferred by the user to real use (see the Decision Log).
+
+## Verification
+
+| Check | Result |
+| --- | --- |
+| Integration (`/plan-close` step 0) | The worktree `agent-config-interactive-communication-and-demonstrations` was clean. Its plan copy (blob `adafce5a`) was byte-identical to the primary copy, and a `main` commit after fork `fb8bfb33` produced that blob. Result: integrated |
+| `npm run check` on `main` at `b7a83ff5` | Passed (`CI checks passed`, exit 0). It ran doctor (103 checks), 447 CLI tests, and 53/53 check suites. Those suites include all seven `browser-*` checks, each running rather than skipping, and `response-output-rules-check` (70 lines, 3 harnesses). It also ran package install, the clean-machine container, install, permissions, and onboarding sandboxes, and 104 portal UI specs. Windows installer parity was skipped because `pwsh` is not installed |
+| `roborepo plans validate o93hile` | No findings |
+| Plan against code: rules and rename | `globals/packages/response-shape/` is gone. `git grep response-shape` matches only the excluded history, this plan, and the rename check itself. `response-output/rules.md` is 70 lines and has no namespaced-findings rule. It uses the `Verified: <command> -> <pass\|fail\|blocked>` line and carries the caveman precedence paragraph. The marker packages declare no `requires`, and each states its own placement line |
+| Plan against code: browser command | `manifests/platform/cli/command-definitions/browser/` holds `namespace.json`, `probe.command.json`, and `run.command.json`. `scripts/cli/browser/gate.mjs` refuses unless `feature-verification` is effective. `providers.mjs` is a static map of `playwright` and `stub`, where `stub` requires `ROBOREPO_BROWSER_STUB=1`. `result.mjs` requires at least one executed check and no failed one for `passed` |
+| Plan against code: retention and permissions | `modules/retention/registry.mjs` registers `browser-evidence` with a file filter. `manifests/inventory/agent-permissions.json` has no `browser` entry, and `agent-run-coverage-check.mjs` asserts it stays unbucketed |
+| Validation rows to tests | Package gate, independence, lazy availability, and permissions: `browser-cli-check.mjs`. No target mutation: `browser-playwright-check.mjs`. Safe lifecycle: `browser-lifecycle-check.mjs`. Retention: `maintenance-stores-check.mjs`. Rendered rules and caveman precedence: `response-output-rules-check.mjs`. All are registered in `scripts/test/check-groups.json` and passed in the gate |
+| Docs of record against `main` | Checked against the landed code: `config-control-panel.md` (Chat-Time Output and Code Conventions entries), `roborepo-cli.md` (browser section, result fields, maintenance-stores row), `cli-internals.md` (Browser Commands), `architecture.md` (browser evidence store, 14 days / 250MB), and the `docs-map.md` Feature Areas row. `rules-parity-and-layering.md` needed no change |
+| Approval | `roborepo plans approval o93hile`: fresh. The human approved implementation commit `3669bbab41b684f47839a49e544876721a2cd28b`, and the branch tip is `2d1f9f04` |
+| Landed | `roborepo plans landed o93hile` scanned fork `fb8bfb33` forward and found branch work from reflog entry `157bdc7b`, absorbed by the squash merge |
+| Not verified | Response clarity in real Claude Code and Codex sessions, with and without caveman. Live `feature-verification` behavior: proportionate evidence, asking before the Playwright install, and the text fallback. The user deferred both to real use; see the Decision Log |
+
+- Absorbing commit: b7a83ff52c6b82717f56a6945712f9272d00d178
