@@ -180,7 +180,12 @@ one on `PATH`. Availability does not establish which interface the user is activ
 | `reviewApp` | Desktop review instructions when the desktop app is detected; otherwise null |
 | `preferredInterface` (optional) | `desktop` or `cli`; the provider's presentation preference based on availability |
 | `reviewButtonLabel`, `terminalOptionLabel` (optional) | Labels for the terminal action and its disclosure |
-| `missingCore` (optional) | `{ title, message, steps, installLabel, manualApprovalStep, purposeLabel, purpose, cliSetupLabel, cliSetup }`; procedural installation/review/session steps, hook-purpose help (`purpose`: `{ name, description }[]`) and CLI setup tooltips (`cliSetup`: `string[]`), with manual instructions when terminal launch is unavailable |
+| `missingCore` (optional) | `{ title, message, steps, installLabel, manualApprovalStep, purposeLabel, cliSetupLabel, cliSetup }`; procedural installation/review/session steps, contextual hook-purpose help from readiness and CLI setup tooltips (`cliSetup`: `string[]`), with manual instructions when terminal launch is unavailable |
+
+`packageReview` optionally supplies `{ message, mixedMessage, steps, purposeLabel,
+reviewCaution, cliSetupLabel, cliSetup }` for installed package-hook approval. Its installation
+step is complete independently of the core bundle; mixed pending sets use its shared approval
+steps while listing both owners. Shared rendering adds the combined pending owner/count/event approval instruction from readiness.
 
 Shared code renders this guidance without choosing a provider's executable or product-specific copy.
 
@@ -188,6 +193,12 @@ Core hooks are expected only once installed by choice: when a harness's core hoo
 `hook_fragment` manifest row, readiness includes them only if the bundle holding that row is
 selected (`scripts/cli/core-hook-bundle.mjs`). Claude's core hooks ride in its root
 config, which every install applies, so they are always expected.
+
+Codex’s `core()` reads the canonical source fragment, including its source-only `_descriptions`
+map. Each expected hook can carry `name` from native `statusMessage` and `description` from
+that map; the comparison preserves both. Native generated output and merges exclude the
+underscore metadata. The portal derives approval help from these hook records rather than a
+static provider-purpose list.
 
 `scripts/harnesses/hook-readiness.mjs` builds the expected set from `core()` plus enabled packages'
 `hooks` resources for that harness, compares it with `read()`, and reports one state per group:

@@ -1422,22 +1422,9 @@ portal-menu-button {
 .hook-readiness-actions [hidden] { display: none; }
 .hook-readiness-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
 .hook-readiness-app-route, .hook-readiness-result { color: var(--dim); }
-/* The one-time offer after a hook change: nonmodal, out of the page flow, never covering the nav. */
-.hook-review-offers {
-  position: fixed;
-  right: 16px;
-  bottom: 16px;
-  z-index: 40;
-  display: grid;
-  gap: 8px;
-  width: min(440px, calc(100vw - 32px));
-}
+/* Pages with persistent readiness use that notice; other pages show one inline offer. */
+.hook-review-offers { display: grid; gap: 8px; margin-bottom: 16px; }
 .hook-review-offers[hidden] { display: none; }
-/* The warning tint is translucent; layer it over an opaque panel so page content does not show through. */
-.hook-review-offers .portal-notice.notice-warning {
-  background: linear-gradient(var(--warn-bg), var(--warn-bg)), var(--panel);
-  box-shadow: 0 6px 24px rgb(0 0 0 / 0.18);
-}
 .hook-readiness-affected, .hook-readiness-steps { margin: 4px 0 0; padding-left: 1.2em; }
 .portal-banner-action {
   grid-column: 2;
@@ -1671,4 +1658,4 @@ option-dropdown {
 
 .hook-install-complete { color: var(--ok); }
 .hook-step-completed { text-decoration: line-through; }
-.hook-readiness-copy .hook-review-caution { color: var(--dim); margin-top: 4px; }
+.hook-readiness-tooltip .hook-purpose-intro { margin-bottom: 12px; }

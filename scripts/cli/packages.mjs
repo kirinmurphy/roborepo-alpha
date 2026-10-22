@@ -66,21 +66,21 @@ export function packageCommand(args = []) {
 // hook it rewrote now awaits review. Portal and onboarding changes report their own way, so this
 // sits on the command, not inside enablePackage, which they also call.
 export function enablePackageCommand(rest) {
-  return withHookReviewHint(rest, () => enablePackage(rest));
+  return withHookReviewHint(rest, (changed) => enablePackage(rest, changed));
 }
 
 export function disablePackageCommand(rest) {
-  return withHookReviewHint(rest, () => disablePackage(rest));
+  return withHookReviewHint(rest, (changed) => disablePackage(rest, changed));
 }
 
 async function withHookReviewHint(rest, run) {
-  await run();
+  const changed = new Set();
+  await run(changed);
   if (rest.includes("--dry-run")) return;
-  const ids = rest.filter((arg) => !arg.startsWith("--"));
   const [{ hookHarnessesForPackages }, { printHookReviewHint }] = await Promise.all([
     import("./hook-readiness-status.mjs"), import("./hook-review-guidance.mjs"),
   ]);
-  await printHookReviewHint(hookHarnessesForPackages(ids));
+  await printHookReviewHint(hookHarnessesForPackages(changed));
 }
 
 function createPackage(rest) {
@@ -527,14 +527,18 @@ export async function reconcileEnabledPackages(rest = []) {
     console.warn(`${dryRun ? "  [dry-run] would remove" : "  remove"} stale package not in catalog: ${id}`);
   }
   let reconciled = 0;
+  const changedPackageIds = new Set();
   for (const id of enabledIds) {
     if (!known.has(id)) continue;
-    await enablePackage([id, "--reconcile", ...(dryRun ? ["--dry-run"] : [])]);
+    const seen = new Set();
+    await enablePackage([id, "--reconcile", ...(dryRun ? ["--dry-run"] : [])], seen);
+    for (const changed of seen) changedPackageIds.add(changed);
     reconciled++;
   }
   if (reconciled === 0) console.log("reconcile: no enabled packages");
   cleanupPackageProjections({ dryRun });
   if (!dryRun) forgetPackageIds(stale);
+  return [...changedPackageIds];
 }
 
 export function adoptLivePackages({ dryRun = false } = {}) {
@@ -595,7 +599,7 @@ function removeMcpPreset(presetId, dryRun) {
   for (const provider of configFileMcpProviders()) removeConfigFileMcp(provider, presetId);
 }
 
-export async function disablePackage(rest) {
+export async function disablePackage(rest, _seen = new Set()) {
   const [pkgId, ...flags] = rest;
   if (!pkgId) {
     console.error("usage: roborepo package disable <package-id>");
@@ -609,6 +613,9 @@ export async function disablePackage(rest) {
     process.exit(2);
   }
 
+  if (_seen.has(pkg.id)) return;
+  _seen.add(pkg.id);
+
   const dryRun = flags.includes("--dry-run");
   const cascade = flags.includes("--cascade");
   const catalog = loadPackageCatalog({ includeUnavailable: true });
@@ -620,7 +627,7 @@ export async function disablePackage(rest) {
   }
   if (cascade) {
     for (const dependent of [...dependents].reverse()) {
-      await disablePackage([dependent, ...flags.filter((flag) => flag !== "--cascade"), "--cascade"]);
+      await disablePackage([dependent, ...flags.filter((flag) => flag !== "--cascade"), "--cascade"], _seen);
     }
   }
   console.log(dryRun ? `[dry-run] would disable: ${pkg.label}` : `disabling: ${pkg.label}`);

@@ -6,7 +6,7 @@ export function formatHookReferences(root) {
   while (walker.nextNode()) texts.push(walker.currentNode);
   for (const text of texts) {
     if (text.parentElement?.closest("code")) continue;
-    const parts = text.textContent.split(/(SessionStart|PreToolUse|Settings → Hooks)/g);
+    const parts = text.textContent.split(/(SessionStart|PreToolUse|PostToolUse|UserPromptSubmit|Stop|Settings → Hooks)/g);
     if (parts.length === 1) continue;
     text.replaceWith(...parts.map((part, index) => {
       if (index % 2 === 0) return document.createTextNode(part);

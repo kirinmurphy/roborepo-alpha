@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { launchHookReview } from "../cli/hook-review-launch.mjs";
+import { loadHookReviewStatus, launchHookReview } from "../cli/hook-review-launch.mjs";
 import { installCoreHooks } from "../cli/hook-core-install.mjs";
 import { hookReadinessLines, printHookReviewHint } from "../cli/hook-review-guidance.mjs";
 import { launchInTerminal, terminalLaunchSupported } from "../cli/terminal-launch.mjs";
@@ -20,6 +20,7 @@ try {
   await launchOnlyWhenReviewIsPending();
   terminalLauncherHandlesPlatformsAndFailures();
   await statusCacheFollowsHookChanges();
+  await launchAvailabilityUsesCachedGuidance();
   await reviewRouteAcceptsNoCommand();
   await coreInstallUsesServerBundleAndRefreshes();
   await mixedGroupsStillNameHooksAwaitingReview();
@@ -133,6 +134,18 @@ async function statusCacheFollowsHookChanges() {
   assert.equal(loadHookReadiness("gemini", { now: 20_004 }), unchanged, "and leaves the cache alone");
   assert.deepEqual(reportPackageHookChange({ ok: false }, ["telemetry"]).hookHarnesses, [], "a failed change offers nothing");
   await Promise.all([first, fresh, afterChange, unchanged]);
+}
+
+async function launchAvailabilityUsesCachedGuidance() {
+  invalidateHookReadiness();
+  const status = await loadHookReadiness("gemini", { now: 1000 });
+  status.guidance = { review: { executable: "/fixture/codex", args: [] } };
+  assert.equal((await loadHookReviewStatus("gemini", { now: 1001, platform: "darwin" })).reviewLaunch.supported, true,
+    "launch availability matches the guidance already attached to cached readiness");
+  assert.equal((await loadHookReviewStatus("gemini", { now: 1002, platform: "linux" })).reviewLaunch.supported, false);
+  status.guidance = null;
+  assert.equal((await loadHookReviewStatus("gemini", { now: 1003, platform: "darwin" })).reviewLaunch.supported, false);
+  invalidateHookReadiness();
 }
 
 async function reviewRouteAcceptsNoCommand() {

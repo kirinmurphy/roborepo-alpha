@@ -8,8 +8,8 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getHarnessProvider } from "../harnesses/registry.mjs";
-import { codexHookRecord } from "../harnesses/codex/hooks-read.mjs";
-import { compareHookReadiness, readHookReadiness, readinessSupported } from "../harnesses/hook-readiness.mjs";
+import { readCodexHooks, codexHookRecord } from "../harnesses/codex/hooks-read.mjs";
+import { compareHookReadiness, fragmentHooks, readHookReadiness, readinessSupported } from "../harnesses/hook-readiness.mjs";
 import { buildPackageLiveState } from "../cli/package-probes.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -31,8 +31,8 @@ const fixturePackages = [
   }),
   fixturePackage("observer-fixture", "Observer fixture", { PostToolUse: [group(observerCommand)] }),
 ];
-const coreHooks = Object.entries(getHarnessProvider("codex").adapters.hooks.core())
-  .flatMap(([event, groups]) => groups.flatMap((g) => g.hooks.map((h) => ({ event, command: h.command }))));
+const coreHooks = fragmentHooks(getHarnessProvider("codex").adapters.hooks.core())
+  .map(({ event, command }) => ({ event, command }));
 
 // One `hooks/list` record with every field Codex 0.155 reports, so the fixture pins the real shape.
 function liveRecord({ event, command }, overrides = {}) {
@@ -69,7 +69,7 @@ try {
   {
     const guidance = getHarnessProvider("codex").adapters.hooks.guidance();
     assert.match(guidance.review_required, /trust only those/);
-    assert.match(guidance.review_required, /rather than choosing Trust all/);
+    assert.doesNotMatch(guidance.review_required, /Trust all/);
     assert.match(guidance.review_required, /next Codex session/);
     if (guidance.preferredInterface === "desktop") {
       assert.match(guidance.reviewApp, /ChatGPT desktop app.*Settings.*Hooks/);
@@ -108,6 +108,29 @@ try {
     assert.equal(result.state, "active");
     assert.deepEqual(result.groups.map((g) => g.owner), ["core", "token-telemetry-fixture", "observer-fixture"]);
     assert.ok(result.groups.every((g) => g.state === "active"));
+    const core = result.groups.find((group) => group.owner === "core");
+    assert.ok(core.hooks.every((hook) => hook.name.startsWith("RoboRepo: ") && hook.description), "core readiness carries canonical names and contextual explanations");
+  }
+
+  // A non-ASCII command must compare identically even when stdout splits a UTF-8 code point.
+  {
+    const command = 'node "/fixture/café/observer.mjs"';
+    fs.writeFileSync(hooksListFile, JSON.stringify([liveRecord({ event: "PostToolUse", command })]));
+    process.env.FAKE_CODEX_MODE = "split-utf8";
+    const records = await readCodexHooks({ executable, cwd: tmp, hooksPath, timeoutMs: 3000 });
+    assert.equal(records[0].command, command, "split UTF-8 must not turn a real hook into a missing hook");
+  }
+
+  // Bound output by UTF-8 bytes rather than decoded character count.
+  {
+    for (const [length, accepted] of [[300_000, true], [600_000, false]]) {
+      const command = "é".repeat(length);
+      fs.writeFileSync(hooksListFile, JSON.stringify([liveRecord({ event: "PostToolUse", command })]));
+      process.env.FAKE_CODEX_MODE = "respond";
+      const records = await readCodexHooks({ executable, cwd: tmp, timeoutMs: 3000 });
+      assert.equal(records.length, accepted ? 1 : 0, "the 1 MiB limit counts multibyte response bytes");
+      if (accepted) assert.equal(records[0].command, command);
+    }
   }
 
   // --- managed hooks count as active without a trust hash ---

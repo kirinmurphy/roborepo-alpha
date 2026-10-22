@@ -102,10 +102,39 @@ function reviewNotice(status, name, groups, handlers) {
     && !groupsWithHookState(status.groups || [], "missing").some((group) => group.owner === "core");
   const [title, fallbackMessage] = COPY.review_required(name);
   const node = fill(tpl("tpl-hook-readiness"), { title, message: guidance.review_required || fallbackMessage });
+  const hasPackages = groups.some((group) => group.owner !== "core");
+  if (hasPackages && guidance.packageReview) {
+    const hasCore = groups.some((group) => group.owner === "core");
+    const copy = guidance.packageReview;
+    const setup = {
+      ...copy,
+      purpose: hookPurposes(groups, "review_required"),
+      steps: ["Hooks awaiting review installed.", copy.steps[1], approvalInstruction(status, groups), copy.steps.at(-1)],
+      cliSetup: ["Hooks awaiting review installed.", copy.cliSetup[1], approvalInstruction(status, groups), copy.cliSetup.at(-1)],
+    };
+    fill(node, { message: hasCore ? copy.mixedMessage : copy.message });
+    renderHookSetup(node, setup, { installed: true });
+    if (guidance.preferredInterface !== "desktop" && guidance.command) {
+      const command = reveal(node, "command");
+      command.textContent = guidance.command;
+      node.querySelector(".hook-readiness-copy").append(command);
+      reveal(node, "copy").copySource = guidance.command;
+      if (status.reviewLaunch?.supported) {
+        const open = reveal(node, "open");
+        open.textContent = guidance.reviewButtonLabel || `Open ${name} hook review`;
+        open.addEventListener("click", () => launchReview(node, status, name, handlers));
+      }
+    }
+    wireCommonActions(node, handlers);
+    return node;
+  }
   if (coreSetup) {
     fill(node, { title: guidance.missingCore.title, message: "" });
-    renderCoreSetup(node, guidance.missingCore, { installed: true });
-    listAffected(node, groups.filter((group) => group.owner !== "core"), "review_required");
+    const copy = guidance.missingCore;
+    const steps = [...copy.steps];
+    const cliSetup = [...copy.cliSetup];
+    steps[2] = cliSetup[2] = approvalInstruction(status, groups);
+    renderHookSetup(node, { ...copy, steps, cliSetup, purpose: hookPurposes(groups, "review_required") }, { installed: true });
     wireCommonActions(node, handlers);
     return node;
   } else listAffected(node, groups, "review_required");
@@ -142,7 +171,7 @@ function stateNotice(status, name, state, groups, handlers) {
   const node = fill(tpl("tpl-hook-readiness"), { title, message: `${coreCopy ? coreCopy.message : message} ${missingRemedy(status, coreCopy ? affected : groups, state)}`.trim() });
   if (state !== "unknown") listAffected(node, affected, state);
   if (coreCopy) {
-    renderCoreSetup(node, coreCopy);
+    renderHookSetup(node, { ...coreCopy, purpose: hookPurposes(groups.filter((group) => group.owner === "core"), "missing") });
   }
 
   if (state === "missing" && status.coreBundle && groups.some((group) => group.owner === "core")) {
@@ -154,24 +183,47 @@ function stateNotice(status, name, state, groups, handlers) {
   return node;
 }
 
-function renderCoreSetup(node, copy, { installed = false } = {}) {
+function hookPurposes(groups, state) {
+  return groups.flatMap((group) => group.hooks.filter((hook) => hook.state === state).map((hook) => ({
+    name: hook.name || `${group.label}: ${hook.event}`,
+    description: `${group.label} · ${hook.event}. ${hook.description || "This hook has no recorded description. Check its definition before approving it."}`,
+  })));
+}
+
+function approvalInstruction(status, groups) {
+  const owners = groups.map((group) => {
+    const hooks = group.hooks.filter((hook) => hook.state === "review_required");
+    const owner = group.owner === "core" ? `${status.displayName || status.harness} core` : `${group.label} package`;
+    return `${hooks.length} ${owner} ${hooks.length === 1 ? "hook" : "hooks"}`;
+  });
+  return `Approve ${owners.join("; ")}.`;
+}
+
+function renderHookSetup(node, copy, { installed = false } = {}) {
   fill(node, {
     "step-install-text": copy.steps[0],
     "step-approve-text": copy.steps[1],
     "step-session": copy.steps.at(-1),
   });
   reveal(node, "steps");
-  if (copy.steps.length > 3) reveal(node, "step-trust").textContent = copy.steps[2];
+  if (copy.steps.length > 3) {
+    reveal(node, "step-trust");
+    fill(node, { "step-trust-text": copy.steps[2] });
+  }
   if (installed) {
     node.querySelector('[data-slot="step-install-text"]').classList.add("hook-step-completed");
     reveal(node, "install-complete");
-    reveal(node, "review-caution").textContent = copy.reviewCaution;
   }
   if (copy.purpose) {
     const purpose = reveal(node, "purpose");
     fill(purpose, { "purpose-label": copy.purposeLabel });
     const items = purpose.querySelector("template").content.querySelector('[data-slot="purpose-items"]');
     items.replaceChildren(...copy.purpose.map((hook) => fill(tpl("tpl-hook-purpose-item"), hook)));
+    if (installed && copy.steps.length > 3) {
+      const details = reveal(node, "hook-details");
+      const detailItems = details.querySelector("template").content.querySelector('[data-slot="purpose-items"]');
+      detailItems.replaceChildren(items.cloneNode(true));
+    }
   }
   if (copy.cliSetup) {
     const cliSetup = reveal(node, "cli-setup");
@@ -264,12 +316,15 @@ function showLater(node, onLater, label = "Later") {
   reveal(node, "actions");
 }
 
-function listAffected(node, groups, state) {
+function listAffected(node, groups, state, { counts = false } = {}) {
   const list = node.querySelector('[data-slot="affected"]');
   list.replaceChildren(...groups.map((group) => {
     const item = document.createElement("li");
     const events = group.hooks.filter((hook) => hook.state === state).map((hook) => hook.event);
-    item.textContent = `${group.label}: ${[...new Set(events)].join(", ")}`;
+    const eventNames = [...new Set(events)].join(", ");
+    item.textContent = counts
+      ? `${group.label}${group.owner === "core" ? "" : " (package)"}: ${events.length} ${events.length === 1 ? "hook" : "hooks"} — ${eventNames}`
+      : `${group.label}: ${eventNames}`;
     return item;
   }));
   list.hidden = groups.length === 0;
@@ -331,6 +386,11 @@ export async function renderHookReadiness(mount, setup, { fresh = false } = {}) 
 
 // Re-read every mount on this page from the server's current results, e.g. after a hook change
 // another component triggered.
+export function hasHookReadinessMount(harness) {
+  return [...mounts.entries()].some(([mount, entry]) => mount.isConnected
+    && entry.setup?.harnesses?.active?.some((item) => item.id === harness));
+}
+
 export function refreshHookReadinessMounts({ fresh = false } = {}) {
   for (const [mount, entry] of mounts) {
     if (mount.isConnected) void renderHookReadiness(mount, entry.setup, { fresh });

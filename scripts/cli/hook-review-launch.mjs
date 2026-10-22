@@ -12,7 +12,7 @@ import { launchInTerminal, terminalLaunchSupported } from "./terminal-launch.mjs
 // launch, so the page shows the button only where it can work.
 export async function loadHookReviewStatus(harness, { platform = process.platform, ...options } = {}) {
   const status = await loadHookReadiness(harness, options);
-  return { ...status, reviewLaunch: { supported: terminalLaunchSupported(platform) && Boolean(reviewRoute(harness)) } };
+  return { ...status, reviewLaunch: { supported: terminalLaunchSupported(platform) && Boolean(status.guidance?.review) } };
 }
 
 // Rechecks readiness first: if review was finished elsewhere (the Codex app, another terminal),

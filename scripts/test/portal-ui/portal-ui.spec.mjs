@@ -1,7 +1,9 @@
 import fs from "node:fs";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { test, expect } from "@playwright/test";
+import { codexHookGuidance } from "../../harnesses/codex/hook-guidance.mjs";
 
 // The header bar holds the primary pages; the secondary ones live only in its ⋮ menu, and below
 // the narrow breakpoint the menu holds every page.
@@ -126,7 +128,7 @@ test.describe("hook readiness warning", () => {
     harnesses: { supported: [codex, claude], detected: active, active, guidance: [] },
     telemetry: { enabled: false, captureAvailable: false },
   });
-  const hook = (event, state) => ({ event, command: `fixture ${event}`, trust: null, enabled: true, state });
+  const hook = (event, state) => ({ event, name: event, description: `Records activity at ${event}.`, command: `fixture ${event}`, trust: null, enabled: true, state });
   const group = (owner, label, state, hooks) => ({ owner, label, state, hooks });
   const reviewCommand = "/Applications/ChatGPT.app/Contents/Resources/codex";
   const codexStatus = (state, groups, { reviewRevision = null, launch = true, coreBundle = "hooks" } = {}) => ({
@@ -135,7 +137,7 @@ test.describe("hook readiness warning", () => {
     guidance: {
       command: reviewCommand,
       review: { executable: reviewCommand, args: [] },
-      review_required: "Review the listed RoboRepo hooks in Codex and trust only those. If Codex also lists hooks you do not recognize, leave them alone rather than choosing Trust all. Newly trusted hooks run from the next Codex session.",
+      review_required: "Review the listed RoboRepo hooks in Codex and trust only those. Newly trusted hooks run from the next Codex session.",
       preferredInterface: "cli",
       reviewApp: null,
       inactive: "In the ChatGPT desktop app, open Settings → Hooks and turn the listed RoboRepo hooks back on, or use /hooks in the Codex CLI.",
@@ -144,11 +146,10 @@ test.describe("hook readiness warning", () => {
         title: "Install RoboRepo’s core hooks for Codex/ChatGPT",
         message: "",
         purposeLabel: "Why?",
-        reviewCaution: "If Codex also lists hooks you do not recognize, leave them alone rather than choosing Trust all.",
         purpose: [{ name: "SessionStart", description: "Checks ~/.codex/skills for unmanaged skill folders." }, { name: "PreToolUse", description: "Applies command permissions and limits build output." }],
         cliSetupLabel: "Set up via CLI",
-        cliSetup: ["Install hooks with the same button above.", "Open the Codex CLI.", "Approve RoboRepo’s three core hooks under SessionStart and PreToolUse.", "Start a new Codex session."],
-        steps: ["Install hooks with the button below.", "Open the Codex CLI.", "Approve RoboRepo’s three core hooks under SessionStart and PreToolUse.", "Start a new Codex session."],
+        cliSetup: ["Install hooks with the same button above.", "Open the Codex CLI.", "Approve only the pending RoboRepo hooks listed here.", "Start a new Codex session."],
+        steps: ["Install hooks with the button below.", "Open the Codex CLI.", "Approve only the pending RoboRepo hooks listed here.", "Start a new Codex session."],
         installLabel: "Install hooks",
         manualApprovalStep: "Open the Codex CLI and approve the listed RoboRepo hooks under SessionStart and PreToolUse.",
       },
@@ -198,7 +199,7 @@ test.describe("hook readiness warning", () => {
     await expect(notice).toHaveClass(/notice-warning/);
     await expect(notice.locator("[data-slot=title]")).toHaveText("Codex hooks need review");
     await expect(notice.locator("[data-slot=message]")).toContainText("trust only those");
-    await expect(notice.locator("[data-slot=message]")).toContainText("rather than choosing Trust all");
+    await expect(notice).not.toContainText("Trust all");
     await expect(notice.locator('[data-slot="app-route"]')).toBeHidden();
     await expect(notice.getByRole("listitem")).toHaveText(["Skill visibility: PostToolUse", "Token Telemetry: PostToolUse"]);
     await expect(notice.getByRole("button", { name: "Open Codex hook review" })).toBeVisible();
@@ -255,26 +256,88 @@ test.describe("hook readiness warning", () => {
     await expect(mount.getByRole("button", { name: "Open Codex hook review" })).toHaveCount(0);
   });
 
-  test("desktop review comes first with the CLI available as a collapsed alternative", async ({ page }) => {
+  test("package approval uses the completed checklist and CLI tooltip without requiring core installation", async ({ page }) => {
     await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex]) }));
     const status = pendingReview();
-    status.guidance = {
-      ...status.guidance,
-      preferredInterface: "desktop",
-      reviewApp: "In the ChatGPT desktop app, use the hook review notice or Settings → Hooks.",
-      reviewButtonLabel: "Open Codex CLI instead",
-      terminalOptionLabel: "Use the Codex CLI instead",
-    };
+    status.guidance = codexHookGuidance([{ kind: "executable", source: "desktop", resolvedPath: reviewCommand }]);
+    status.groups = status.groups.filter((group) => group.owner !== "core");
+    Object.assign(status.groups[0].hooks[0], { name: "RoboRepo: skill reference tracking", description: "Observes skill-reference reads after tool calls." });
+    Object.assign(status.groups[1].hooks[1], { name: "RoboRepo: telemetry after tool use", description: "Records local usage after a tool finishes." });
+    status.groups[1].hooks[0].trust = "managed";
+    status.coreBundle = null;
     await routeStatuses(page, { codex: status });
     const launches = await routeLaunch(page, { launched: true });
     await page.goto("/settings");
     const notice = page.locator("#hook-readiness");
-    await expect(notice.getByText(status.guidance.reviewApp, { exact: true })).toBeVisible();
-    await expect(notice.getByRole("button", { name: "Open Codex CLI instead" })).toBeHidden();
-    await notice.getByText("Use the Codex CLI instead", { exact: true }).click();
-    await expect(notice.getByRole("button", { name: "Open Codex CLI instead" })).toBeVisible();
-    await notice.getByRole("button", { name: "Open Codex CLI instead" }).click();
-    await expect.poll(() => launches.length).toBe(1);
+    await expect(notice.locator('[data-slot="steps"] > li')).toHaveCount(4);
+    await expect(notice.locator('[data-slot="message"]')).toContainText("installed by enabled RoboRepo packages");
+    await expect(notice.locator('[data-slot="step-install-text"]')).toHaveText("Hooks awaiting review installed.");
+    await expect(notice.locator('[data-slot="step-install-text"]')).toHaveCSS("text-decoration-line", "line-through");
+    await expect(notice.getByRole("button", { name: "Install hooks", exact: true })).toBeHidden();
+    await expect(notice.locator('[data-slot="step-trust-text"]')).toHaveText("Approve 1 Skill visibility package hook; 1 Token Telemetry package hook.");
+    await expect(notice.locator('[data-slot="affected"]')).toBeHidden();
+    await expect(notice.getByText("Already active", { exact: false })).toHaveCount(0);
+    await expect(notice.locator('[data-slot="terminal-option"]')).toBeHidden();
+    await expect(notice.getByRole("button", { name: "Check again" })).toBeVisible();
+    await notice.getByRole("button", { name: "Set up via CLI", exact: true }).evaluate((button) => button.focus({ preventScroll: true }));
+    await expect(page.getByRole("tooltip").getByRole("listitem")).toHaveCount(4);
+    await expect(page.getByRole("tooltip").getByRole("listitem").first().locator('[data-slot="description"]')).toHaveCSS("text-decoration-line", "line-through");
+    await expect(page.getByRole("tooltip")).not.toContainText("Install hooks with");
+    await expect(page.getByRole("tooltip")).not.toContainText("Trust all");
+    await expect(page.getByRole("tooltip")).toContainText("Approve 1 Skill visibility package hook; 1 Token Telemetry package hook.");
+    await notice.getByRole("button", { name: "View Hook Details", exact: true }).focus();
+    await expect(page.getByRole("tooltip")).toContainText("RoboRepo: telemetry after tool use");
+    await expect(page.getByRole("tooltip")).toContainText("Records local usage after a tool finishes.");
+    await expect(page.getByRole("tooltip")).not.toContainText("Adding these hooks");
+    await notice.getByRole("button", { name: "Why?", exact: true }).evaluate((button) => button.focus({ preventScroll: true }));
+    await expect(page.getByRole("tooltip")).toContainText("Adding these hooks enable RoboRepo to enable strict behaviors within the harness");
+    await expect(page.getByRole("tooltip")).toContainText("RoboRepo: skill reference tracking");
+    await expect(page.getByRole("tooltip")).toContainText("Observes skill-reference reads after tool calls.");
+    await expect(page.getByRole("tooltip")).toContainText("RoboRepo: telemetry after tool use");
+    await expect(page.getByRole("tooltip")).toContainText("Records local usage after a tool finishes.");
+    await expect(page.getByRole("tooltip")).not.toContainText("unmanaged skills");
+    expect(launches).toHaveLength(0);
+  });
+
+  test("partial package installation completes only the installation of hooks awaiting review", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex]) }));
+    const current = codexStatus("missing", [group("telemetry", "Token Telemetry", "missing", [
+      hook("PostToolUse", "review_required"), hook("Stop", "missing"),
+    ])], { reviewRevision: "partial-installed" });
+    current.guidance = codexHookGuidance([{ kind: "executable", source: "desktop", resolvedPath: reviewCommand }]);
+    await routeStatuses(page, { codex: current });
+    await page.goto("/settings");
+    const review = page.locator("#hook-readiness portal-notice").filter({ hasText: "Codex hooks need review" });
+    await expect(review.locator('[data-slot="step-install-text"]')).toHaveText("Hooks awaiting review installed.");
+    await expect(review.locator('[data-slot="step-trust-text"]')).toHaveText("Approve 1 Token Telemetry package hook.");
+    await expect(review.locator('[data-slot="affected"]')).toBeHidden();
+    await expect(page.locator("#hook-readiness portal-notice").filter({ hasText: "Codex hooks are missing" })).toContainText("Token Telemetry: Stop");
+    await review.getByRole("button", { name: "Set up via CLI" }).evaluate((button) => button.focus({ preventScroll: true }));
+    await expect(page.getByRole("tooltip").getByRole("listitem").first()).toContainText("Hooks awaiting review installed.");
+  });
+
+  test("mixed pending hooks use one checklist and partial approval leaves only unresolved hooks", async ({ page }) => {
+    await page.clock.install();
+    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex]) }));
+    let current = pendingReview();
+    current.guidance = codexHookGuidance([{ kind: "executable", source: "cli", resolvedPath: reviewCommand }]);
+    current.groups[0].hooks[0].state = "review_required";
+    await routeStatuses(page, { codex: () => current });
+    await routeLaunch(page, { launched: true });
+    await page.goto("/settings");
+    const notice = page.locator("#hook-readiness portal-notice");
+    await expect(notice).toHaveCount(1);
+    await expect(notice.locator('[data-slot="message"]')).toContainText("core hooks and hooks installed by enabled packages");
+    await expect(notice.locator('[data-slot="steps"] > li')).toHaveCount(4);
+    await expect(notice.locator('[data-slot="step-trust-text"]')).toHaveText("Approve 1 Codex core hook; 1 Skill visibility package hook; 1 Token Telemetry package hook.");
+    await expect(notice.getByRole("button", { name: "Open Codex hook review" })).toBeVisible();
+    await expect(notice.locator('[data-slot="terminal-option"]')).toBeHidden();
+    current.groups[0].hooks[0].state = "active";
+    current.groups[1].hooks[0].state = "active";
+    current.reviewRevision = "only-telemetry";
+    await returnToPortal(page);
+    await expect(notice.locator('[data-slot="step-trust-text"]')).toHaveText("Approve 1 Token Telemetry package hook.");
+    await expect(notice.getByText("Already active", { exact: false })).toHaveCount(0);
   });
 
   test("a failed launch keeps the copy-command route, and a review finished elsewhere updates in place", async ({ page }) => {
@@ -327,7 +390,7 @@ test.describe("hook readiness warning", () => {
     await missing.getByRole("button", { name: "Set up via CLI" }).evaluate((button) => button.focus({ preventScroll: true }));
     await expect(page.getByRole("tooltip")).toContainText("Install hooks with the same button above.");
     await expect(missing.locator('[data-slot="affected"]').getByRole("listitem")).toHaveText(["Skill visibility: PostToolUse"]);
-    await expect(missing).toContainText("Approve RoboRepo’s three core hooks under SessionStart and PreToolUse.");
+    await expect(missing).toContainText("Approve only the pending RoboRepo hooks listed here.");
     await expect(missing).not.toContainText("nothing to review");
     await expect(missing.getByRole("button", { name: "Open Codex hook review" })).toHaveCount(0);
   });
@@ -352,20 +415,20 @@ test.describe("hook readiness warning", () => {
     await expect(notice.locator('[data-slot="message"]')).toBeHidden();
     await expect(notice.locator('[data-slot="terminal-option"]')).toBeHidden();
     await notice.getByRole("button", { name: "Why?" }).evaluate((button) => button.focus({ preventScroll: true }));
-    await expect(page.getByRole("tooltip").locator("b")).toHaveText(["SessionStart", "PreToolUse"]);
+    await expect(page.getByRole("tooltip").locator("b")).toHaveText(["PreToolUse"]);
     await expect(page.getByRole("tooltip")).not.toContainText(".claude");
     await expect(page.getByRole("tooltip")).toHaveCSS("padding", "16px 20px");
     expect((await page.getByRole("tooltip").boundingBox()).width).toBeGreaterThan(400);
     await notice.getByRole("button", { name: "Set up via CLI" }).evaluate((button) => button.focus({ preventScroll: true }));
     await expect(page.getByRole("tooltip").getByRole("listitem")).toHaveText([
       "Install hooks with the same button above.", "Open the Codex CLI.",
-      "Approve RoboRepo’s three core hooks under SessionStart and PreToolUse.", "Start a new Codex session.",
+      "Approve only the pending RoboRepo hooks listed here.", "Start a new Codex session.",
     ]);
     await expect(page.getByRole("tooltip").getByRole("listitem").nth(1)).toHaveCSS("margin-top", "8px");
     await expect(notice.locator('[data-slot="steps"]').getByRole("listitem")).toHaveText([
       "Install hooks with the button below.",
       "Open the Codex CLI.",
-      "Approve RoboRepo’s three core hooks under SessionStart and PreToolUse.",
+      "Approve only the pending RoboRepo hooks listed here.",
       "Start a new Codex session.",
     ], { useInnerText: true });
     expect((await heading.boundingBox()).y).toBeLessThan((await notice.boundingBox()).y);
@@ -402,13 +465,18 @@ test.describe("hook readiness warning", () => {
       await expect(notice.locator('[data-slot="step-install-text"]')).toHaveCSS("text-decoration-line", "line-through");
       await expect(notice.locator('[data-slot="install-complete"]')).toBeVisible();
       await expect(notice.locator('[data-slot="step-approve"]')).toContainText("anchor icon");
-      await expect(notice.locator('[data-slot="step-approve"]')).toContainText("If Codex also lists hooks you do not recognize, leave them alone rather than choosing Trust all.");
+      await expect(notice).not.toContainText("Trust all");
       await expect(notice.locator('[data-slot="message"]')).toBeHidden();
+      await expect(notice.locator('[data-slot="step-trust-text"]')).toHaveText("Approve 2 Codex core hooks.");
+      await notice.getByRole("button", { name: "View Hook Details", exact: true }).focus();
+      await expect(page.getByRole("tooltip")).toContainText("SessionStart");
+      await expect(page.getByRole("tooltip")).toContainText("PreToolUse");
+      await expect(page.getByRole("tooltip")).not.toContainText("Adding these hooks");
       await expect(notice.locator('[data-slot="affected"]')).toBeHidden();
       await expect(notice.getByRole("button", { name: "Install hooks", exact: true })).toBeHidden();
       await expect(notice.getByRole("button", { name: "Why?", exact: true })).toBeVisible();
       await expect(notice.locator('[data-slot="terminal-option"]')).toBeHidden();
-      await expect(notice.locator('[data-slot="steps"] code')).toHaveText(["Settings → Hooks", "SessionStart", "PreToolUse"]);
+      await expect(notice.locator('[data-slot="steps"] code')).toHaveText(["Settings → Hooks"]);
       const check = notice.getByRole("button", { name: "Check again" });
       const cliHelp = notice.getByRole("button", { name: "Set up via CLI", exact: true });
       await expect(cliHelp).toBeVisible();
@@ -419,7 +487,7 @@ test.describe("hook readiness warning", () => {
       await expect(tooltip.getByRole("listitem").first().locator('[data-slot="description"]')).toHaveCSS("text-decoration-line", "line-through");
       await expect(tooltip.getByRole("listitem").first().getByLabel("Completed")).toHaveText("✓");
       await expect(tooltip.getByRole("listitem").nth(1)).toHaveText("Open the Codex CLI.");
-      await expect(tooltip.locator("code")).toHaveText(["SessionStart", "PreToolUse"]);
+      await expect(tooltip.locator("code")).toHaveCount(0);
     }
   });
 
@@ -534,41 +602,21 @@ test.describe("hook readiness warning", () => {
     expect(reads).toHaveLength(0);
   });
 
-  test("a hook-changing operation offers review once per pending set, and Later leaves the notice", async ({ page }) => {
+  test("a hook change refreshes the normal Settings banner without a duplicate offer", async ({ page }) => {
     await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex]) }));
     let current = allActive();
     const reads = await routeStatuses(page, { codex: () => current });
     await page.route("**/api/config/packages", (route) => route.fulfill({ json: { ok: true, hookHarnesses: ["codex"] } }));
-    const offers = page.getByRole("region", { name: "Hook review" });
-
     await page.goto("/settings");
-    await page.locator("#telemetry-toggle").click();
-    await expect.poll(() => reads.some((read) => read.fresh)).toBe(true);
-    await expect(offers.locator("portal-notice")).toHaveCount(0); // nothing awaits review: no offer
-
-    current = pendingReview("rev-1");
-    await page.locator("#telemetry-toggle").click();
-    const card = offers.locator("portal-notice");
-    await expect(card).toHaveCount(1);
-    await expect(card.getByRole("button", { name: "Open Codex hook review" })).toBeVisible();
-    await expect(page.locator("dialog[open]")).toHaveCount(0);
-    await card.getByRole("button", { name: "Later" }).click();
-    await expect(offers.locator("portal-notice")).toHaveCount(0);
-    await expect(page.locator("#hook-readiness [data-slot=title]")).toHaveText("Codex hooks need review");
-
-    // The same pending set is not offered again, even after a reload.
-    const freshReads = () => reads.filter((read) => read.fresh).length;
-    await page.locator("#telemetry-toggle").click();
-    await expect.poll(freshReads).toBe(3);
-    await page.reload();
-    await page.locator("#telemetry-toggle").click();
-    await expect.poll(freshReads).toBe(4);
-    await expect(offers.locator("portal-notice")).toHaveCount(0);
-
-    // A changed definition or shifted trust key is a new set, offered once.
-    current = pendingReview("rev-2");
-    await page.locator("#telemetry-toggle").click();
-    await expect(offers.locator("portal-notice")).toHaveCount(1);
+    await expect(page.locator("#hook-readiness")).toBeHidden();
+    for (const revision of ["rev-1", "rev-1", "rev-2"]) {
+      current = pendingReview(revision);
+      await page.locator("#telemetry-toggle").click();
+      await expect(page.locator("#hook-readiness portal-notice")).toHaveCount(1);
+      await expect(page.getByText("Codex hooks need review", { exact: true })).toHaveCount(1);
+      await expect(page.getByRole("region", { name: "Hook review" })).toHaveCount(0);
+    }
+    expect(reads.some((read) => read.fresh)).toBe(true);
   });
 
   test("a bulk package change on Agents reads once and shows one combined offer", async ({ page }) => {
@@ -584,12 +632,22 @@ test.describe("hook readiness warning", () => {
     await page.getByRole("checkbox", { name: new RegExp(`^${escaped}: (Select|Deselect) All$`) }).dispatchEvent("click");
     await expect(page.getByRole("region", { name: "Hook review" }).locator("portal-notice")).toHaveCount(1);
     expect(reads.filter((read) => read.fresh)).toHaveLength(1);
+    const offer = page.getByRole("region", { name: "Hook review" });
+    await expect(offer).toHaveCSS("position", "static");
+    expect((await offer.boundingBox()).y).toBeLessThan((await page.getByRole("heading", { name: "Available Agent Tools" }).boundingBox()).y);
+    await offer.getByRole("button", { name: "Later" }).click();
+    await page.getByRole("checkbox", { name: new RegExp(`^${escaped}: (Select|Deselect) All$`) }).dispatchEvent("click");
+    await expect.poll(() => reads.filter((read) => read.fresh).length).toBe(2);
+    await expect(offer.locator("portal-notice")).toHaveCount(0);
+    current = pendingReview("rev-bulk-2");
+    await page.getByRole("checkbox", { name: new RegExp(`^${escaped}: (Select|Deselect) All$`) }).dispatchEvent("click");
+    await expect(offer.locator("portal-notice")).toHaveCount(1);
 
     // Review in Codex Settings or a copied terminal command, without using the launcher.
     current = reviewed();
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await expect(page.getByRole("region", { name: "Hook review" }).getByText("Codex hooks reviewed", { exact: true })).toBeVisible();
-    expect(reads.filter((read) => read.fresh)).toHaveLength(2);
+    expect(reads.filter((read) => read.fresh)).toHaveLength(4);
   });
 });
 
@@ -1751,11 +1809,35 @@ function roboRepoCard(page) {
   return page.locator(".repository-card").filter({ has: page.getByRole("heading", { name: "RoboRepo", exact: true }) }).first();
 }
 
+test("Home fixture retries a reset read before applying its repository patch", async ({ page }) => {
+  let reads = 0;
+  const server = http.createServer((request, response) => {
+    if (request.url === "/api/home") {
+      reads += 1;
+      if (reads === 1) return request.socket.destroy();
+      response.setHeader("Content-Type", "application/json");
+      return response.end(JSON.stringify({ repositories: [{ displayName: "RoboRepo", marker: "original" }] }));
+    }
+    response.setHeader("Content-Type", "text/html");
+    response.end(`<script>fetch('/api/home').then(r => r.json()).then(d => { document.body.textContent = d.repositories[0].marker; });</script><body></body>`);
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    await patchRoboRepo(page, (repository) => { repository.marker = "patched after reset"; });
+    await page.goto(`http://127.0.0.1:${server.address().port}`);
+    await expect(page.getByText("patched after reset", { exact: true })).toBeVisible();
+    expect(reads).toBe(2);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 // Serves the real /api/home response with the RoboRepo repository adjusted by `mutate`, so each test
 // states only the domain data it depends on.
 async function patchRoboRepo(page, mutate) {
   await page.route("**/api/home", async (route) => {
-    const data = await (await route.fetch()).json();
+    // Retry a transient connection reset on this read only; HTTP failures still reach the test.
+    const data = await (await route.fetch({ maxRetries: 2 })).json();
     mutate(data.repositories.find((item) => item.displayName === "RoboRepo"));
     await route.fulfill({ json: data });
   });

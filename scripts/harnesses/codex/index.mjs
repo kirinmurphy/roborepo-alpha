@@ -222,7 +222,7 @@ function hooksGuidance() {
 
 // Core hooks: the ones RoboRepo installs for Codex whatever packages are enabled.
 function coreHooks() {
-  const corePath = path.resolve(here, "..", "..", "..", "generated", "codex", "hooks.json");
+  const corePath = path.resolve(here, "..", "..", "..", "globals", "harnesses", "codex", "hooks-codex.json");
   return JSON.parse(fs.readFileSync(corePath, "utf8")).hooks;
 }
 

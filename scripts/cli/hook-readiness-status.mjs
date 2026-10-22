@@ -43,7 +43,7 @@ export function invalidateHookReadiness() {
 // them so the portal reads each once, fresh, and offers review only if the result needs it. A
 // failed change may still have written some hooks, so the cache is dropped either way.
 export function reportPackageHookChange(result, packageIds) {
-  const harnesses = hookHarnessesForPackages(packageIds);
+  const harnesses = hookHarnessesForPackages([...packageIds, ...(result?.changedPackageIds || [])]);
   if (harnesses.length > 0) invalidateHookReadiness();
   return { ...result, hookHarnesses: result?.ok ? harnesses : [] };
 }

@@ -15,7 +15,7 @@ export function codexHookGuidance(evidence = []) {
     review: executable ? { executable, args: [] } : null,
     reviewButtonLabel: desktopFirst ? "Open Codex CLI instead" : "Open Codex hook review",
     terminalOptionLabel: desktopFirst ? "Use the Codex CLI instead" : "Terminal command",
-    review_required: "Review the listed RoboRepo hooks in Codex and trust only those. If Codex also lists hooks you do not recognize, leave them alone rather than choosing Trust all. Newly trusted hooks run from the next Codex session.",
+    review_required: "Review the listed RoboRepo hooks in Codex and trust only those. Newly trusted hooks run from the next Codex session.",
     reviewApp: desktopFirst ? "In the ChatGPT desktop app, use the hook review notice or Settings → Hooks." : null,
     inactive: desktopFirst
       ? "In the ChatGPT desktop app, open Settings → Hooks and turn the listed RoboRepo hooks back on."
@@ -23,23 +23,26 @@ export function codexHookGuidance(evidence = []) {
     terminalHint: desktopFirst
       ? "Alternatively, run this command in a terminal. Codex shows Hooks need review when it starts:"
       : "Run this command in a terminal. Codex shows Hooks need review when it starts:",
+    packageReview: {
+      message: "These hooks were installed by enabled RoboRepo packages, separately from the core Hooks bundle.",
+      mixedMessage: "These pending hooks include RoboRepo’s core hooks and hooks installed by enabled packages.",
+      purposeLabel: "Why?",
+      cliSetupLabel: "Set up via CLI",
+      cliSetup: ["Package hooks installed.", cliStep, "Approve only the pending RoboRepo hooks listed below.", "Start a new Codex session."],
+      steps: ["Package hooks installed.", desktopFirst ? desktopStep : cliStep, "Approve only the pending RoboRepo hooks listed below.", "Start a new Codex session."],
+    },
     missingCore: {
       title: "Install RoboRepo’s core hooks for Codex/ChatGPT",
       message: "",
       purposeLabel: "Why?",
-      reviewCaution: "If Codex also lists hooks you do not recognize, leave them alone rather than choosing Trust all.",
-      purpose: [
-        { name: "SessionStart", description: "RoboRepo: unmanaged skills check — Checks ~/.codex/skills for skill folders outside RoboRepo’s managed links and suggests adopting them into RoboRepo." },
-        { name: "PreToolUse", description: "RoboRepo: command permissions applies command rules. RoboRepo: concise command output limits build/lint/typecheck output to 120 lines and blocks matching watch, verbose, and debug commands." },
-      ],
       cliSetupLabel: "Set up via CLI",
       cliSetup: [
         "Install hooks with the same button above.",
         "Open the Codex CLI.",
-        "Approve RoboRepo’s three core hooks under SessionStart and PreToolUse.",
+        "Approve only the pending RoboRepo hooks listed here.",
         "Start a new Codex session.",
       ],
-      steps: ["Install hooks with the button below.", desktopFirst ? desktopStep : cliStep, "Approve RoboRepo’s three core hooks under SessionStart and PreToolUse.", "Start a new Codex session."],
+      steps: ["Install hooks with the button below.", desktopFirst ? desktopStep : cliStep, "Approve only the pending RoboRepo hooks listed here.", "Start a new Codex session."],
       installLabel: "Install hooks",
       manualApprovalStep: desktopFirst ? desktopStep : cliStep,
     },

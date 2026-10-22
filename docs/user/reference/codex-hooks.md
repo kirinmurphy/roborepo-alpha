@@ -16,11 +16,11 @@ After you change something that rewrites Codex hooks (enabling or disabling a pa
 change on `/agents`, turning on token tracking, applying the `hooks` bundle, or an update),
 RoboRepo asks Codex whether any RoboRepo hook now awaits review. If one does:
 
-- **In the portal**, a card names the hooks and guides you through approval. With a detected Codex
-  desktop app, use its hook review notice or **Settings → Hooks**; **Use the Codex CLI instead**
-  contains the terminal fallback. With only a CLI detected, **Open Codex hook review** and
-  **Copy command** appear directly. The card appears once for that set of pending hooks; **Later**
-  closes it, and the notice on Home, Settings, and Tokens stays until the review is done.
+- **In the portal**, Home, Settings, and Tokens update their normal notice. On Agents, an inline
+  card appears once for each set of pending hooks and **Later** closes it. A page with a normal
+  notice shows that notice alone. With a detected desktop app, follow the ordered steps and use
+  **Set up via CLI** for the terminal instructions in a tooltip. With only a CLI detected, package
+  review also offers **Open Codex hook review** and **Copy command** directly.
 - **In the terminal**, the command prints the same list and the command that opens Codex's review.
   It never opens anything itself.
 
@@ -90,8 +90,16 @@ unrecognized hooks alone. Installation refreshes status automatically,
 and returning to the page picks up installation or approval done elsewhere. **Check again** appears
 when there is no install or launch action, including when Codex could not report its status.
 
+Package hooks use the same four-step checklist, with the installation of hooks awaiting review
+already checked and crossed out. Other missing hooks retain their separate installation remedy. The approval step combines the package name, pending count, and event names in one concise
+line. Already-active hooks are omitted. **Why?** names each pending hook and explains its purpose and package ownership. **Set up via
+CLI** provides ordered terminal instructions in a tooltip. Package approval does not require the
+core Hooks bundle. If core and package hooks await approval together, one checklist lists both.
+
 The native ChatGPT desktop review uses each command hook’s `statusMessage` as its label.
-RoboRepo’s core definitions provide three labels:
+Every shipped RoboRepo Codex hook has a native name, including package hooks. **Why?** uses
+the name and contextual explanation recorded beside that hook’s definition. The core definitions
+provide these three labels:
 
 | Event | Native review label |
 | --- | --- |
@@ -103,7 +111,7 @@ If an existing desktop review dialog still shows numbered titles after an update
 **Settings → Hooks**, select **Reload hooks**, and reopen the review dialog.
 
 These are three core hooks under two event types. Packages such as Telemetry install separate
-hooks; the core setup checklist does not count those package hooks. Adding or changing a label changes the definition
+hooks with their own names and contextual help. Adding or changing a label changes the definition
 Codex approves, so it can require review again. Reapplying the Hooks bundle updates labels in
 place while preserving commands, handler positions, and unrelated hooks.
 

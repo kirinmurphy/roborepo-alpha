@@ -27,7 +27,11 @@ export function fragmentHooks(fragment) {
     .filter(([event, groups]) => !event.startsWith("_") && Array.isArray(groups))
     .flatMap(([event, groups]) => groups.flatMap((group) => (group.hooks || [])
       .filter((hook) => hook.command)
-      .map((hook) => ({ event, command: hook.command }))));
+      .map((hook) => ({
+        event, command: hook.command,
+        ...(hook.statusMessage ? { name: hook.statusMessage } : {}),
+        ...(fragment._descriptions?.[hook.statusMessage] ? { description: fragment._descriptions[hook.statusMessage] } : {}),
+      }))));
 }
 
 // Hook resources name exactly one harness each, the same field packages.mjs installs them by, and

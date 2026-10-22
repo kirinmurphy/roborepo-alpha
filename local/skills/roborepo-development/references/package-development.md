@@ -93,6 +93,17 @@ Codex tool approvals and MCP presets are keyed by server/preset name — same-na
 two packages is not currently detected pre-enable (would surface as one package's approvals
 silently overwriting the other's TOML block).
 
+## Codex hook names and approval help
+
+Each shipped Codex command hook needs a readable `statusMessage` beginning with `RoboRepo: `.
+Add its contextual explanation to the fragment’s `_descriptions` map, keyed by that exact name.
+Keep names unique within the fragment. The readiness model derives each hook’s name,
+explanation, event, command, and owner from this data; **Why?** displays the hooks currently
+awaiting approval. Native merges ignore underscore keys, so help text is never installed as a
+native hook field. Label changes alter the native approval hash; explanation-only edits do not.
+Run `node scripts/test/core-hook-wiring-check.mjs` to check all shipped Codex metadata, then
+exercise installation in an isolated home before updating live hooks.
+
 ## Source vs. generated boundaries
 
 Current source and generated-output boundaries:

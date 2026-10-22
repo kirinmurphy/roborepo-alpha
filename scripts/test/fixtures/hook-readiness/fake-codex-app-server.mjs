@@ -24,7 +24,13 @@ readline.createInterface({ input: process.stdin }).on("line", (line) => {
     return;
   }
   const hooks = mode === "hooks-json" ? recordsFromHooksFile() : JSON.parse(fs.readFileSync(process.env.FAKE_CODEX_HOOKS_FILE, "utf8"));
-  write({ id: request.id, result: { data: [{ cwd: request.params.cwds[0], hooks, warnings: [], errors: [] }] } });
+  const response = { id: request.id, result: { data: [{ cwd: request.params.cwds[0], hooks, warnings: [], errors: [] }] } };
+  if (mode === "split-utf8") {
+    const bytes = Buffer.from(`${JSON.stringify(response)}\n`);
+    const split = bytes.indexOf(Buffer.from("é")) + 1;
+    process.stdout.write(bytes.subarray(0, split));
+    setTimeout(() => process.stdout.write(bytes.subarray(split)), 30);
+  } else write(response);
 });
 
 if (process.env.FAKE_CODEX_LAUNCH_LOG) fs.appendFileSync(process.env.FAKE_CODEX_LAUNCH_LOG, "app-server\n");

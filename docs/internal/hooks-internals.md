@@ -397,3 +397,25 @@ render drift (manifest vs. `generated/codex/rules/default.rules`), not live-mach
 `~/.codex/config.toml` is similar: it is an active local root config file, not a
 symlink, and can diverge the same way. Existing machines need the root config merge/export
 workflow before new baseline session defaults appear in active Codex sessions.
+
+## Codex native names and contextual help
+
+Codex hook fragments keep native names and approval explanations beside their definitions.
+Every shipped command hook has a readable `statusMessage` starting with `RoboRepo: `.
+The fragment’s `_descriptions` map keys each explanation by that exact native name. Core
+metadata lives inside `globals/harnesses/codex/hooks-codex.json`’s `hooks` map; package metadata
+lives beside the event arrays in its `hooks-codex.json` fragment.
+
+The existing underscore-key convention keeps this source-only metadata out of native merges.
+The core renderer also strips underscore keys from its generated baseline. Changing an
+explanation therefore leaves native hook definitions unchanged. Changing `statusMessage`
+changes the definition Codex approves; reapplying updates that label in place but requires the
+user to review its new approval hash.
+
+`fragmentHooks` in `scripts/harnesses/hook-readiness.mjs` carries `name` and `description`
+with each expected event/command pair. Readiness preserves those fields alongside the owning
+package and observed state. The portal builds **Why?** from those actual hook records, including
+partial pending sets, instead of choosing a generic core or package explanation.
+`scripts/test/core-hook-wiring-check.mjs` requires unique native names and matching descriptions
+for shipped core, active-package, and archived-package Codex hook fragments, and rejects orphaned
+descriptions. This check runs in the CI gate.

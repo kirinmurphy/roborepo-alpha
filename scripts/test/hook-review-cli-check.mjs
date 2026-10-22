@@ -20,6 +20,7 @@ const REVIEW_LINE = /^Codex hooks need review: /m;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-hook-review-cli-"));
 try {
   cliOnlyMachine();
+  recursivePackageChanges();
   if (process.platform === "darwin") desktopMachine();
   console.log("ok: terminal hook review guidance");
 } finally {
@@ -40,8 +41,20 @@ function cliOnlyMachine() {
   result = machine.run("package", "enable", "telemetry");
   assert.equal(count(result.stdout, REVIEW_LINE), 1, "one review step for the package change, none extra from telemetry");
   assert.match(result.stdout, /^Codex hooks need review: Token Telemetry \(SessionStart, PreToolUse, PostToolUse, UserPromptSubmit, Stop\)\.$/m);
-  assert.match(result.stdout, /rather than choosing Trust all/);
+  assert.doesNotMatch(result.stdout, /Trust all/);
   assert.match(result.stdout, new RegExp(`^  Open Codex's review: ${escape(pathCodex)}$`, "m"), "CLI-only machine: the PATH binary");
+
+  const hooksFile = path.join(machine.root, "home", ".codex", "hooks.json");
+  const labelled = JSON.parse(fs.readFileSync(hooksFile, "utf8"));
+  assert.ok(!("_descriptions" in labelled.hooks), "source-only explanations never reach the native hook file");
+  const nativeHooks = Object.values(labelled.hooks).flatMap((groups) => groups.flatMap((group) => group.hooks));
+  assert.equal(nativeHooks.length, 5);
+  assert.ok(nativeHooks.every((hook) => hook.statusMessage?.startsWith("RoboRepo: telemetry")), "all five native package hooks have readable names");
+  const unnamed = structuredClone(labelled);
+  for (const groups of Object.values(unnamed.hooks)) for (const group of groups) for (const hook of group.hooks) delete hook.statusMessage;
+  fs.writeFileSync(hooksFile, JSON.stringify(unnamed));
+  machine.run("package", "enable", "telemetry");
+  assert.deepEqual(JSON.parse(fs.readFileSync(hooksFile, "utf8")), labelled, "reapply labels existing package hooks in place without changing their commands or positions");
 
   result = machine.run("telemetry", "enable");
   assert.equal(count(result.stdout, REVIEW_LINE), 1, "telemetry enable reports once");
@@ -59,6 +72,74 @@ function cliOnlyMachine() {
   result = machine.run("package", "disable", "telemetry", { FAKE_CODEX_TRUSTED: "[]" });
   assert.equal(result.status, 0);
   assert.ok(!fs.existsSync(path.join(machine.state, "terminal-launch")), "the CLI never launches a terminal");
+}
+
+function recursivePackageChanges() {
+  const machine = makeMachine("recursive");
+  fakeCodex(path.join(machine.root, "bin", "codex"));
+  for (const [id, requires, hooks] of [
+    ["review-base", [], false],
+    ["review-leaf", ["review-base"], true],
+    ["review-middle", ["review-leaf"], false],
+    ["review-top", ["review-middle"], false],
+  ]) {
+    const dir = path.join(machine.root, "workspace", "packages", id);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "package.config.json"), JSON.stringify({
+      schemaVersion: 1, id, label: id, description: "Hook review fixture", requires,
+      presentation: { category: "integrations" },
+      resources: hooks ? [{ type: "hooks", harness: "codex", source: "hooks.json" }] : [],
+    }));
+    if (hooks) fs.writeFileSync(path.join(dir, "hooks.json"), JSON.stringify({
+      PostToolUse: [{ hooks: [{ type: "command", command: "node /fixture/recursive-observer.mjs" }] }],
+    }));
+  }
+  const reconcileMachine = makeMachine("recursive-reconcile");
+  fakeCodex(path.join(reconcileMachine.root, "bin", "codex"));
+  fs.cpSync(path.join(machine.root, "workspace"), path.join(reconcileMachine.root, "workspace"), { recursive: true });
+  const defaultDir = path.join(reconcileMachine.root, "workspace", "packages", "review-default");
+  fs.mkdirSync(defaultDir, { recursive: true });
+  fs.writeFileSync(path.join(defaultDir, "package.config.json"), JSON.stringify({
+    schemaVersion: 1, id: "review-default", label: "review-default", description: "Default composite fixture",
+    defaultEnabled: true, requires: ["review-leaf"], presentation: { category: "integrations" }, resources: [],
+  }));
+  const reconciled = reconcileMachine.runScript(`
+    const { applyBulkPackageChange } = await import(${JSON.stringify(path.join(repoRoot, "scripts/cli/config-bulk.mjs"))});
+    const { reportPackageHookChange } = await import(${JSON.stringify(path.join(repoRoot, "scripts/cli/hook-readiness-status.mjs"))});
+    console.log(JSON.stringify(reportPackageHookChange(await applyBulkPackageChange(["review-base"], true), ["review-base"])));
+  `);
+  assert.deepEqual(reconciled.hookHarnesses, ["codex"], "reconciliation reports hooks from an untouched default composite requirement");
+  assert.ok(reconciled.changedPackageIds.includes("review-leaf"));
+  assert.match(fs.readFileSync(path.join(reconcileMachine.root, "home", ".codex", "hooks.json"), "utf8"), /recursive-observer/);
+
+  let result = machine.run("package", "enable", "review-top");
+  assert.match(result.stdout, /Codex hooks need review: review-leaf/, "transitive hook dependency gets a terminal review hint");
+  const portalResult = machine.runScript(`
+    const { mutatePackage } = await import(${JSON.stringify(path.join(repoRoot, "scripts/cli/config-mutate.mjs"))});
+    const { reportPackageHookChange } = await import(${JSON.stringify(path.join(repoRoot, "scripts/cli/hook-readiness-status.mjs"))});
+    console.log(JSON.stringify(reportPackageHookChange(await mutatePackage("review-top", true), ["review-top"])));
+  `);
+  assert.deepEqual(portalResult.hookHarnesses, ["codex"], "portal reports hooks installed by transitive requirements");
+  assert.deepEqual(portalResult.changedPackageIds.sort(), ["review-base", "review-leaf", "review-middle", "review-top"]);
+  machine.run("package", "enable", "telemetry");
+  result = machine.run("package", "disable", "review-base", "--cascade");
+  assert.match(result.stdout, REVIEW_LINE, "cascading through hook-owning dependents checks remaining hook readiness");
+  const bulkResult = machine.runScript(`
+    const { applyBulkPackageChange } = await import(${JSON.stringify(path.join(repoRoot, "scripts/cli/config-bulk.mjs"))});
+    const { reportPackageHookChange } = await import(${JSON.stringify(path.join(repoRoot, "scripts/cli/hook-readiness-status.mjs"))});
+    console.log(JSON.stringify(reportPackageHookChange(await applyBulkPackageChange(["review-top"], true), ["review-top"])));
+  `);
+  assert.ok(bulkResult.hookHarnesses.includes("codex"), "bulk reporting includes transitive hook requirements");
+  assert.ok(bulkResult.changedPackageIds.includes("review-leaf"));
+  const cascadeResult = machine.runScript(`
+    const { disablePackage } = await import(${JSON.stringify(path.join(repoRoot, "scripts/cli/packages.mjs"))});
+    const { reportPackageHookChange } = await import(${JSON.stringify(path.join(repoRoot, "scripts/cli/hook-readiness-status.mjs"))});
+    const changed = new Set();
+    await disablePackage(["review-base", "--cascade"], changed);
+    console.log(JSON.stringify(reportPackageHookChange({ ok: true, changedPackageIds: [...changed] }, ["review-base"])));
+  `);
+  assert.deepEqual(cascadeResult.hookHarnesses, ["codex"], "reporting includes transitive cascade dependents");
+  assert.deepEqual(cascadeResult.changedPackageIds.sort(), ["review-base", "review-leaf", "review-middle", "review-top"]);
 }
 
 function desktopMachine() {
@@ -85,6 +166,7 @@ function makeMachine(name) {
     ...process.env,
     HOME: home,
     ROBOREPO_STATE_DIR: state,
+    ROBOREPO_WORKSPACE_ROOT: path.join(root, "workspace"),
     ROBOREPO_ON_CONFLICT: "keep",
     PATH: [path.join(root, "bin"), "/usr/bin", "/bin"].join(path.delimiter),
     NODE_ENV: "test",
@@ -100,6 +182,11 @@ function makeMachine(name) {
       const result = spawnSync(process.execPath, [cli, ...args], { env: { ...env, ...extra }, encoding: "utf8", input: "" });
       assert.equal(result.status, 0, `${args.join(" ")} failed:\n${result.stdout}\n${result.stderr}`);
       return result;
+    },
+    runScript(source) {
+      const result = spawnSync(process.execPath, ["--input-type=module", "-e", source], { env, encoding: "utf8" });
+      assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+      return JSON.parse(result.stdout.trim().split("\n").at(-1));
     },
     codexLaunches: () => (fs.existsSync(launchLog) ? fs.readFileSync(launchLog, "utf8").split("\n").filter(Boolean).length : 0),
   };

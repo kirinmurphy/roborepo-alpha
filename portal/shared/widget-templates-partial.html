@@ -132,12 +132,12 @@
 <template id="tpl-hook-readiness">
   <portal-notice class="portal-notice" variant="warning" aria-live="polite">
     <div class="hook-readiness-copy">
-      <div class="hook-readiness-heading"><strong data-slot="title"></strong> <button type="button" data-btn="text" class="hook-readiness-help" data-slot="purpose" data-tip-html=".hook-purpose-tip" data-tip-size="comfortable" hidden><span data-slot="purpose-label"></span><template class="hook-purpose-tip"><div data-slot="purpose-items" class="hook-readiness-tooltip"></div></template></button></div>
+      <div class="hook-readiness-heading"><strong data-slot="title"></strong> <button type="button" data-btn="text" class="hook-readiness-help" data-slot="purpose" data-tip-html=".hook-purpose-tip" data-tip-size="comfortable" hidden><span data-slot="purpose-label"></span><template class="hook-purpose-tip"><div class="hook-readiness-tooltip"><p class="hook-purpose-intro">Adding these hooks enable RoboRepo to enable strict behaviors within the harness</p><div data-slot="purpose-items"></div></div></template></button></div>
       <p data-slot="message"></p>
       <ol data-slot="steps" class="hook-readiness-steps" hidden>
         <li data-slot="step-install"><span data-slot="install-complete" class="hook-install-complete" aria-label="Completed" hidden>✓</span> <span data-slot="step-install-text"></span></li>
-        <li data-slot="step-approve"><span data-slot="step-approve-text"></span><p data-slot="review-caution" class="hook-review-caution" hidden></p></li>
-        <li data-slot="step-trust" hidden></li>
+        <li data-slot="step-approve"><span data-slot="step-approve-text"></span></li>
+        <li data-slot="step-trust" hidden><span data-slot="step-trust-text"></span> <button type="button" data-btn="text" class="hook-readiness-help" data-slot="hook-details" data-tip-html=".hook-details-tip" data-tip-size="comfortable" hidden>View Hook Details<template class="hook-details-tip"><div data-slot="purpose-items" class="hook-readiness-tooltip"></div></template></button></li>
         <li data-slot="step-session"></li>
       </ol>
       <ul data-slot="affected" class="hook-readiness-affected" hidden></ul>

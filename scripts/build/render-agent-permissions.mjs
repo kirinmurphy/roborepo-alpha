@@ -90,6 +90,7 @@ try {
   const codexHooksSource = path.join(repoRoot, "globals", "harnesses", "codex", "hooks-codex.json");
   const codexHooksPath = path.join(repoRoot, "generated", "codex", "hooks.json");
   const codexHooks = JSON.parse(fs.readFileSync(codexHooksSource, "utf8"));
+  codexHooks.hooks = Object.fromEntries(Object.entries(codexHooks.hooks).filter(([event]) => !event.startsWith("_")));
   ok = checkOrWrite(codexHooksPath, `${JSON.stringify(codexHooks, null, 2)}\n`, "Codex core hooks") && ok;
 
   const codexRulesPath = path.join(repoRoot, "generated", "codex", "rules", "default.rules");

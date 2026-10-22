@@ -65,8 +65,9 @@ function requestHooksList({ executable, cwd, timeoutMs }) {
     child.on("error", () => finish(null));
     child.on("close", () => finish(null));
     child.stdin.on("error", () => finish(null));
+    child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
-      bytes += chunk.length;
+      bytes += Buffer.byteLength(chunk, "utf8");
       if (bytes > MAX_RESPONSE_BYTES) return finish(null);
       pending += chunk;
       let newline;

@@ -8,12 +8,13 @@
 // closes the card; the persistent notice on Home, Settings, and Tokens stays until review is done.
 
 import {
-  hookReadinessNotices, hookReviewResolvedNotice, onHookReviewReturn, pendingReviewKeys, readHookStatus, refreshHookReadinessMounts, reviewConfirmed,
+  hasHookReadinessMount, hookReadinessNotices, hookReviewResolvedNotice, onHookReviewReturn, pendingReviewKeys, readHookStatus, refreshHookReadinessMounts, reviewConfirmed,
 } from "./hook-readiness.js";
 
 const OFFERED_KEY = "roborepo.hook-review-offers";
 const OFFERED_LIMIT = 50;
 const offeredInMemory = new Set();
+const activeOffers = new Map();
 
 // `harnessIds` is the `hookHarnesses` list a mutation response carries.
 export async function offerHookReview(harnessIds) {
@@ -26,17 +27,19 @@ export async function offerHookReview(harnessIds) {
     const key = `${status.harness}:${status.reviewRevision}`;
     if (wasOffered(key)) continue;
     markOffered(key);
-    showOffer(status);
+    if (!hasHookReadinessMount(status.harness)) showOffer(status);
   }
 }
 
 function showOffer(status) {
+  activeOffers.get(status.harness)?.();
   const container = offersContainer();
   const card = document.createElement("div");
   card.dataset.harness = status.harness;
   let stopWatching = () => {};
   const close = () => {
     stopWatching();
+    activeOffers.delete(status.harness);
     card.remove();
     container.hidden = container.childElementCount === 0;
   };
@@ -67,8 +70,10 @@ function showOffer(status) {
   render(status);
   // Back from the terminal: show what is left, or that review is done.
   stopWatching = onHookReviewReturn(() => {
-    if (card.isConnected) readHookStatus(status.harness, { fresh: true }).then(render).catch(() => {});
+    if (!card.isConnected) return close();
+    readHookStatus(status.harness, { fresh: true }).then(render).catch(() => {});
   });
+  activeOffers.set(status.harness, close);
   container.append(card);
   container.hidden = false;
 }
@@ -77,10 +82,11 @@ function offersContainer() {
   let container = document.querySelector(".hook-review-offers");
   if (!container) {
     container = document.createElement("section");
-    container.className = "hook-review-offers";
+    container.className = "hook-review-offers inner";
     container.setAttribute("aria-label", "Hook review");
     container.hidden = true;
-    document.body.append(container);
+    const main = document.querySelector("main");
+    main.before(container);
   }
   return container;
 }
