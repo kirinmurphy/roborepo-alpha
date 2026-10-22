@@ -488,8 +488,8 @@ how to open it, and what capture does **not** prove.
 - [x] `next_action` named only pass 3 as recorded under ## Review — fixed: `next_action` rewritten for the current state (b75a92cc)
 - [x] The install command puts Chromium, the headless shell, and ffmpeg in Playwright's per-user cache, not RoboRepo's tool directory as the plan (Section 5) and the user doc say — user chose the shared cache; Section 5, the user doc, and the skill corrected (see Decision Log) (b75a92cc)
 - [x] The "Rename complete" row excludes only `completed/` and `archived/`, but this plan and backlog o9zwxuav must name the old id — user chose to exclude history plus this plan; o9zwxuav updated and the check narrowed (see Decision Log) (b75a92cc)
-- [x] Plan record lagged b75a92cc: stale `next_action`, findings without their fix commit, no gate entry — fixed (loop 2 pass 1 fix commit)
-- [x] Two lines left unwrapped in `playwright-resolve.mjs` and `roborepo-cli.md` — fixed (loop 2 pass 1 fix commit)
+- [x] Plan record lagged b75a92cc: stale `next_action`, findings without their fix commit, no gate entry — fixed (5f95e0d9)
+- [x] Two lines left unwrapped in `playwright-resolve.mjs` and `roborepo-cli.md` — fixed (5f95e0d9)
 
 ### Verification
 
