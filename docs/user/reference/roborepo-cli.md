@@ -151,8 +151,8 @@ They need the `feature-verification` package; without it, both exit non-zero and
 
 | Command | What it does |
 | --- | --- |
-| `roborepo browser probe [--dir <path>] [--json]` | Reports whether Playwright and Chromium are reachable from `<path>` (default: the current directory) and which captures work: screenshot, video, trace. Never installs or launches anything. |
-| `roborepo browser run --scenario <path> [--capture screenshot,video,trace] [--url <url>] [--serve <command>] [--timeout <seconds>] [--json]` | Runs a scenario and reports its result. Exits 0 only when the run passed. |
+| `roborepo browser probe [--dir <path>] [--provider <id>] [--json]` | Reports whether Playwright and Chromium are reachable from `<path>` (default: the current directory) and which captures work: screenshot, video, trace. Never installs or launches anything. |
+| `roborepo browser run --scenario <path> [--capture screenshot,video,trace] [--url <url>] [--serve <command>] [--timeout <seconds>] [--provider <id>] [--json]` | Runs a scenario and reports its result. Exits 0 only when the run passed. |
 
 A scenario is either a Playwright test file from the project (`*.spec.*`, `*.test.*`), run by the
 project's own test runner and config, or a JavaScript module whose default export receives
@@ -166,8 +166,10 @@ is interrupted (Ctrl-C, or a harness ending a long command), and including a ser
 put in the background. Test files read the URL from `ROBOREPO_BROWSER_URL`. `--timeout` (default
 120 seconds) bounds both the wait for the app and the scenario itself; a scenario that runs past it
 is `failed`, and a test file's runner is shut down gracefully so its config's `webServer` stops too.
+`--provider` picks what drives the browser; `playwright` is the only one and the default.
 
-The result has four fields:
+Every run result has these four fields. With `--json`, the output also names the `provider`, the
+`runId` that prefixes its evidence file names, and the `scenario` as an absolute path.
 
 | Field | Meaning |
 | --- | --- |
@@ -175,6 +177,11 @@ The result has four fields:
 | `checks` | One entry per test or `check()`, each `passed` or `failed`, with the failure message. |
 | `artifacts` | Files that exist on disk, each with its type. |
 | `limitations` | What was not captured or checked, and why, including the exact install command when something is missing. |
+
+`browser probe --json` prints `provider`, `available` (Playwright and a headless Chromium were
+found), `capabilities` (`screenshot`, `video`, `trace`, each `true` or `false`), `limitations`, and
+`playwright`: its `source` (`project` or `roborepo`), `package`, and `version`, or `null` when no
+Playwright was found.
 
 A screenshot or recording shows what the browser displayed. It does not prove the behavior is
 correct; only checks do. For test files, screenshots and video come from the project's Playwright
