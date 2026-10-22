@@ -553,7 +553,13 @@ how to open it, and what capture does **not** prove.
 
 ### Approval
 
-- Decision: requested
+- Decision: approved
+- Reviewed implementation commit: 3669bbab41b684f47839a49e544876721a2cd28b
+- Confirmed by: human
+
+The user answered "Approve" in the /plan-review chat on 2026-10-21, to the question naming this
+plan's title and implementation commit 3669bbab (base main fb8bfb33), after deciding to keep
+`--url` as is.
 
 ## Open Questions
 
