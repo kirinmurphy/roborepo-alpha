@@ -132,21 +132,29 @@
 <template id="tpl-hook-readiness">
   <portal-notice class="portal-notice" variant="warning" aria-live="polite">
     <div class="hook-readiness-copy">
-      <strong data-slot="title"></strong>
+      <div class="hook-readiness-heading"><strong data-slot="title"></strong> <button type="button" data-btn="text" class="hook-readiness-help" data-slot="purpose" data-tip-html=".hook-purpose-tip" data-tip-size="comfortable" hidden><span data-slot="purpose-label"></span><template class="hook-purpose-tip"><div data-slot="purpose-items" class="hook-readiness-tooltip"></div></template></button></div>
       <p data-slot="message"></p>
+      <ol data-slot="steps" class="hook-readiness-steps" hidden>
+        <li data-slot="step-install"><span data-slot="install-complete" class="hook-install-complete" aria-label="Completed" hidden>✓</span> <span data-slot="step-install-text"></span></li>
+        <li data-slot="step-approve"><span data-slot="step-approve-text"></span><p data-slot="review-caution" class="hook-review-caution" hidden></p></li>
+        <li data-slot="step-trust" hidden></li>
+        <li data-slot="step-session"></li>
+      </ol>
       <ul data-slot="affected" class="hook-readiness-affected" hidden></ul>
       <p data-slot="app-route" class="hook-readiness-app-route" hidden></p>
       <div class="hook-readiness-actions" data-slot="actions" hidden>
         <button type="button" data-btn="cta" data-slot="install" hidden>Install core hooks</button>
+        <button type="button" data-btn="secondary" data-slot="check">Check again</button>
+        <button type="button" data-btn="text" class="hook-readiness-help" data-slot="cli-setup" data-tip-html=".hook-cli-tip" data-tip-size="comfortable" hidden><span data-slot="cli-setup-label"></span><template class="hook-cli-tip"><ol data-slot="cli-setup-items" class="hook-readiness-tooltip hook-readiness-tooltip-steps"></ol></template></button>
         <button type="button" data-btn="cta" data-slot="open" hidden></button>
         <portal-copy-button data-slot="copy" label="Copy command" hidden></portal-copy-button>
-        <button type="button" data-btn="secondary" data-slot="check">Check again</button>
         <button type="button" data-btn="text" data-slot="later" hidden>Later</button>
       </div>
       <details data-slot="terminal-option" class="hook-readiness-terminal" hidden>
         <summary>Terminal command</summary>
         <p data-slot="terminal-hint"></p>
         <code data-slot="command" class="hook-readiness-command"></code>
+        <div data-slot="terminal-actions" class="hook-readiness-actions" hidden></div>
       </details>
       <p data-slot="result" class="hook-readiness-result" role="status" hidden></p>
     </div>
@@ -244,3 +252,10 @@
         <span class="route-param-example" data-slot="example"></span>
       </div>
     </template>
+
+<template id="tpl-hook-purpose-item">
+  <p><b data-slot="name"></b>: <span data-slot="description"></span></p>
+</template>
+<template id="tpl-hook-setup-step">
+  <li><span data-slot="complete" class="hook-install-complete" aria-label="Completed" hidden></span> <span data-slot="description"></span></li>
+</template>

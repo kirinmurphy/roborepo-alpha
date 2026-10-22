@@ -175,8 +175,11 @@ auto-loaded" unless a specific skill-load event or field is available.
 
 ## Codex Hooks
 
-System hooks are configured in `globals/system/hooks/codex/` and wired through the generated
-`generated/codex/hooks.json`. Package-owned hooks (Caveman and JDocMunch's `SessionStart` hooks,
+Core scripts live in `globals/system/hooks/codex/`. Their hook definitions and native review
+labels are authored in `globals/harnesses/codex/hooks-codex.json`;
+`scripts/build/render-agent-permissions.mjs` renders `generated/codex/hooks.json` from that source.
+Codex’s adapter reconciles `statusMessage` in place for matching event/command pairs, preserving
+commands, positions, and all other handler fields. Labels participate in native approval hashes. Package-owned hooks (Caveman and JDocMunch's `SessionStart` hooks,
 telemetry's capture hooks) are authored under their owning package
 (`globals/packages/<package>/hooks-codex.json`) and composed into the live Codex hook config only
 when that package is enabled.

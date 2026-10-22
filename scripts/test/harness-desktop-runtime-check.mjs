@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { detectHarnessProvider, selectedHarnessExecutable } from "../harnesses/discovery.mjs";
+import { codexHookGuidance } from "../harnesses/codex/hook-guidance.mjs";
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const claude = JSON.parse(fs.readFileSync(path.join(repo, "globals/harnesses/claude/provider.json"), "utf8"));
@@ -107,6 +108,11 @@ try {
   fs.mkdirSync(path.join(home, ".codex"));
   assert.equal(detectHarnessProvider(codex, options).confidence, "confirmed");
   assert.equal(selectedHarnessExecutable(codex, options), path.join(codexBundle, "Contents/Resources/codex"));
+  const desktopGuidance = codexHookGuidance(detectHarnessProvider(codex, options).evidence);
+  assert.equal(desktopGuidance.preferredInterface, "desktop");
+  assert.match(desktopGuidance.reviewApp, /hook review notice.*Settings/);
+  assert.match(desktopGuidance.missingCore.steps[1], /In the ChatGPT desktop app/);
+  assert.equal(desktopGuidance.review.executable, path.join(codexBundle, "Contents/Resources/codex"));
   executable(path.join(bin, "codex"), 'echo "0.140.0"\n');
   const codexBoth = detectHarnessProvider(codex, options);
   assert.deepEqual(new Set(codexBoth.evidence.filter((item) => item.kind === "executable").map((item) => item.source)), new Set(["cli", "desktop"]));
@@ -115,6 +121,24 @@ try {
   assert.equal(selectedHarnessExecutable(codex, options), path.join(bin, "codex"));
   // Opening Codex for hook review prefers the binary bundled with the desktop app.
   assert.equal(selectedHarnessExecutable(codex, { ...options, prefer: "desktop" }), path.join(codexBundle, "Contents/Resources/codex"));
+  assert.equal(codexHookGuidance(codexBoth.evidence).preferredInterface, "desktop", "both interfaces available still prioritizes desktop");
+
+  // Current desktop releases nest the CLI inside its own app; no PATH CLI is needed.
+  fs.unlinkSync(path.join(bin, "codex"));
+  fs.unlinkSync(path.join(codexBundle, "Contents/Resources/codex"));
+  const nestedExecutable = "Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex";
+  app(codexBundle, "com.openai.codex", nestedExecutable, "0.162.0");
+  assert.equal(selectedHarnessExecutable(codex, options), path.join(codexBundle, nestedExecutable));
+  assert.deepEqual(detectHarnessProvider(codex, options).warnings, [], "an absent alternative layout is not a broken runtime");
+  fs.rmSync(codexBundle, { recursive: true });
+  executable(path.join(bin, "codex"), 'echo "0.162.0"\n');
+  const cliGuidance = codexHookGuidance(detectHarnessProvider(codex, options).evidence);
+  assert.equal(cliGuidance.preferredInterface, "cli");
+  assert.equal(cliGuidance.reviewApp, null, "CLI-only installations never get desktop instructions");
+  assert.match(cliGuidance.missingCore.steps[1], /Codex CLI/);
+  assert.match(cliGuidance.inactive, /Codex CLI/);
+  assert.equal(cliGuidance.review.executable, path.join(bin, "codex"));
+  assert.equal(codexHookGuidance().review, null, "an absent runtime has no CLI fallback to offer");
   console.log("desktop runtime discovery checks passed");
 } finally {
   process.env.HOME = oldHome;

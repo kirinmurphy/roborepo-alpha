@@ -274,6 +274,7 @@ It never sends or stores a trust decision.
 | Piece | Where | Role |
 | --- | --- | --- |
 | Status read | `GET /api/config/hooks/<harness>/status[?fresh=1]`, `loadHookReviewStatus` in `scripts/cli/hook-review-launch.mjs` | Readiness from `scripts/cli/hook-readiness-status.mjs`, plus `reviewLaunch.supported` |
+| Interface guidance | Provider-owned `scripts/harnesses/codex/hook-guidance.mjs` | Uses validated discovery evidence: desktop instructions first with a collapsed CLI fallback when the app is detected; CLI-only instructions otherwise. Availability does not identify the actively used interface |
 | Cache | `scripts/cli/hook-readiness-status.mjs` | One read per harness for 30 seconds, because the Codex read starts an app-server. `fresh` skips it, joining a read started within the last second. `invalidateHookReadiness()` drops it, in-flight reads included |
 | Change reporting | `reportPackageHookChange` wraps `mutatePackage` and `bulkPackageChange` in `telemetry.mjs` | Invalidates the cache and adds `hookHarnesses` to the response: the harnesses whose hooks the change rewrote. Harness refresh and enable invalidate too |
 | Launch | `POST /api/config/hooks/<harness>/review`, body `{}` | Rechecks readiness fresh; if review is still pending, opens the provider's `hooks.guidance().review` binary in a terminal through `scripts/cli/terminal-launch.mjs`. Any body field is a 400: the executable, arguments, and working directory are the server's alone |

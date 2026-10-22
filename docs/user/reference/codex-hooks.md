@@ -16,13 +16,18 @@ After you change something that rewrites Codex hooks (enabling or disabling a pa
 change on `/agents`, turning on token tracking, applying the `hooks` bundle, or an update),
 RoboRepo asks Codex whether any RoboRepo hook now awaits review. If one does:
 
-- **In the portal**, a card names the hooks and offers **Open Codex hook review**, **Copy
-  command**, **Check again**, and **Later**. It appears once for that set of pending hooks; **Later**
+- **In the portal**, a card names the hooks and guides you through approval. With a detected Codex
+  desktop app, use its hook review notice or **Settings → Hooks**; **Use the Codex CLI instead**
+  contains the terminal fallback. With only a CLI detected, **Open Codex hook review** and
+  **Copy command** appear directly. The card appears once for that set of pending hooks; **Later**
   closes it, and the notice on Home, Settings, and Tokens stays until the review is done.
 - **In the terminal**, the command prints the same list and the command that opens Codex's review.
   It never opens anything itself.
 
-**Open Codex hook review** opens a terminal window running Codex's own CLI, which shows **Hooks
+RoboRepo detects available interfaces, not which interface you are actively using. When both are
+available, desktop instructions come first. The desktop app's bundled CLI supplies the fallback.
+
+**Open Codex hook review** (or **Open Codex CLI instead**) opens a terminal window running Codex's own CLI, which shows **Hooks
 need review** when it starts. It prefers the CLI bundled with the Codex desktop app, then a `codex`
 on your `PATH`. The window opens only when you click, and only on macOS for now; elsewhere, use
 **Copy command** and run it in a terminal.
@@ -31,7 +36,7 @@ In Codex's review:
 
 1. Trust only the RoboRepo hooks the portal or terminal listed. If Codex also lists hooks you do
    not recognize, leave them alone rather than choosing **Trust all**.
-2. Come back to the portal. It checks again when you return (or press **Check again**) and shows
+2. Come back to the portal. It checks again when you return and shows
    only what is still pending, or that review is done.
 3. Start a new Codex session. Sessions already running do not pick up newly trusted hooks.
 
@@ -55,7 +60,7 @@ problem, each with its own remedy. `roborepo doctor --installed` prints the same
 | Active | Installed, trusted, and turned on | Nothing |
 | Needs review | Installed, but Codex has not trusted this exact definition (`untrusted` or `modified`) | Follow the review steps above |
 | Turned off | Trusted but disabled in Codex | Turn the hooks back on in Codex's **Settings → Hooks**, or `/hooks` in the CLI |
-| Missing | These hooks are absent from `~/.codex/hooks.json`; install them before reviewing them | A package's hooks: turn the package off and back on in `/agents`. Core hooks: **Install core hooks**, or `roborepo bundle apply hooks` |
+| Missing | These hooks are absent from `~/.codex/hooks.json`; install them before reviewing them | A package's hooks: turn the package off and back on in `/agents`. Core hooks: **Install hooks**, or `roborepo bundle apply hooks` |
 | Unknown | Codex could not be asked | Check that Codex is installed and has been opened at least once |
 
 RoboRepo asks Codex directly (through `codex app-server`), so the notice reflects what Codex will
@@ -66,12 +71,41 @@ Core hooks come with the optional `hooks` bundle, chosen during onboarding or wi
 `roborepo bundle apply hooks`. They install beside package hooks that are already there, and
 readiness expects them only once you have chosen that bundle.
 
-If core hooks are missing, click **Install core hooks** in the notice. The local portal server
+If core hooks are missing, click **Install hooks** in the notice. The local portal server
 runs the same bundle installer as the terminal command, for all available harnesses, then refreshes
-the status. If Codex asks for trust, click **Open Codex hook review** and select the hooks there.
+the status. If approval is needed, follow the four setup steps: desktop instructions come first
+when the app is detected; CLI-only installations show CLI instructions. **Set up via CLI**
+provides the CLI steps in either case.
 Installation does not open Codex automatically or grant trust. If installation fails, the notice
-keeps the terminal command available for diagnosis. On Settings, the notice sits below the token
+keeps **Set up via CLI** available. This inline help link starts with the same Install button, then explains how to open Codex CLI and approve the hooks. **Why?** beside the notice heading explains each installed hook. Both links show tooltips on hover or keyboard focus. On Settings, the notice sits below the token
 tracking heading and above the tracking toggle.
+
+The notice shows **Install hooks** while core hooks are missing, then retains the setup checklist
+for native approval.
+While core hooks await approval, the four setup steps remain visible with a green check and
+strikethrough on the completed installation step. **Set up via CLI** remains a tooltip with the
+same completed first step, replacing the collapsible CLI alternative for this state.
+A muted reminder beneath step 2 says to leave
+unrecognized hooks alone. Installation refreshes status automatically,
+and returning to the page picks up installation or approval done elsewhere. **Check again** appears
+when there is no install or launch action, including when Codex could not report its status.
+
+The native ChatGPT desktop review uses each command hook’s `statusMessage` as its label.
+RoboRepo’s core definitions provide three labels:
+
+| Event | Native review label |
+| --- | --- |
+| `SessionStart` | RoboRepo: unmanaged skills check |
+| `PreToolUse` | RoboRepo: command permissions |
+| `PreToolUse` | RoboRepo: concise command output |
+
+If an existing desktop review dialog still shows numbered titles after an update, open
+**Settings → Hooks**, select **Reload hooks**, and reopen the review dialog.
+
+These are three core hooks under two event types. Packages such as Telemetry install separate
+hooks; the core setup checklist does not count those package hooks. Adding or changing a label changes the definition
+Codex approves, so it can require review again. Reapplying the Hooks bundle updates labels in
+place while preserving commands, handler positions, and unrelated hooks.
 
 ## What Runs
 

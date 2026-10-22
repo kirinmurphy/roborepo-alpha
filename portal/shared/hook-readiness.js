@@ -8,7 +8,9 @@
 // user picks which hooks to trust there. Nothing here sends or records a trust decision.
 
 import { portalGetJson, portalPostJson, portalTpl as tpl, portalFillSlots as fill } from "./api.js";
+import { formatHookReferences } from "./hook-readiness-copy.js";
 import "./copy-button.js";
+import "./tooltip.js";
 
 // Worst first, matching scripts/harnesses/hook-readiness.mjs. Review is listed apart: it gets its
 // own notice whatever else is wrong, because it is the one state the user can fix from here.
@@ -47,6 +49,7 @@ export function hookReadinessNotices(status, handlers = {}) {
   const other = OTHER_STATES.find((state) => groupsWithHookState(groups, state).length > 0)
     ?? (groups.length === 0 && status.state === "unknown" ? "unknown" : null);
   if (other) notices.push(stateNotice(status, name, other, groupsWithHookState(groups, other), handlers));
+  for (const notice of notices) formatHookReferences(notice);
   return notices;
 }
 
@@ -83,7 +86,9 @@ export function hookReviewResolvedNotice(status, { onLater } = {}) {
   const name = status.displayName || status.harness;
   const node = fill(tpl("tpl-hook-readiness"), {
     title: `${name} hooks reviewed`,
-    message: `Nothing RoboRepo installed is waiting for review. Newly trusted hooks run from your next ${name} session.`,
+    message: status.harness === "codex"
+      ? "These updates will be applied to your next ChatGPT/Codex session."
+      : `Nothing RoboRepo installed is waiting for review. Newly trusted hooks run from your next ${name} session.`,
   });
   node.setAttribute("variant", "success");
   if (onLater) showLater(node, onLater, "Dismiss");
@@ -92,10 +97,19 @@ export function hookReviewResolvedNotice(status, { onLater } = {}) {
 
 function reviewNotice(status, name, groups, handlers) {
   const guidance = status.guidance || {};
+  const coreSetup = status.coreBundle && guidance.missingCore
+    && groups.some((group) => group.owner === "core")
+    && !groupsWithHookState(status.groups || [], "missing").some((group) => group.owner === "core");
   const [title, fallbackMessage] = COPY.review_required(name);
   const node = fill(tpl("tpl-hook-readiness"), { title, message: guidance.review_required || fallbackMessage });
-  listAffected(node, groups, "review_required");
-  if (guidance.reviewApp) reveal(node, "app-route").textContent = guidance.reviewApp;
+  if (coreSetup) {
+    fill(node, { title: guidance.missingCore.title, message: "" });
+    renderCoreSetup(node, guidance.missingCore, { installed: true });
+    listAffected(node, groups.filter((group) => group.owner !== "core"), "review_required");
+    wireCommonActions(node, handlers);
+    return node;
+  } else listAffected(node, groups, "review_required");
+  if (!coreSetup && guidance.reviewApp) reveal(node, "app-route").textContent = guidance.reviewApp;
   if (guidance.command) {
     reveal(node, "terminal-option");
     node.querySelector('[data-slot="terminal-hint"]').textContent = guidance.terminalHint || "Run this command in a terminal:";
@@ -104,8 +118,14 @@ function reviewNotice(status, name, groups, handlers) {
   }
   if (status.reviewLaunch?.supported) {
     const open = reveal(node, "open");
-    open.textContent = `Open ${name} hook review`;
+    open.textContent = guidance.reviewButtonLabel || `Open ${name} hook review`;
     open.addEventListener("click", () => launchReview(node, status, name, handlers));
+  }
+  if (guidance.preferredInterface === "desktop" && guidance.command) {
+    node.querySelector('[data-slot="terminal-option"] summary').textContent = guidance.terminalOptionLabel || "Terminal command";
+    reveal(node, "terminal-actions").append(
+      node.querySelector('[data-slot="open"]'), node.querySelector('[data-slot="copy"]'),
+    );
   }
   wireCommonActions(node, handlers);
   return node;
@@ -113,15 +133,62 @@ function reviewNotice(status, name, groups, handlers) {
 
 function stateNotice(status, name, state, groups, handlers) {
   const guidance = status.guidance || {};
-  const [title, fallbackMessage] = COPY[state](name);
+  const coreCopy = state === "missing" && status.coreBundle && groups.some((group) => group.owner === "core")
+    ? guidance.missingCore : null;
+  const [fallbackTitle, fallbackMessage] = COPY[state](name);
+  const title = coreCopy?.title || fallbackTitle;
   const message = state === "inactive" && guidance.inactive ? guidance.inactive : fallbackMessage;
-  const node = fill(tpl("tpl-hook-readiness"), { title, message: `${message} ${missingRemedy(status, groups, state)}`.trim() });
-  if (state !== "unknown") listAffected(node, groups, state);
+  const affected = coreCopy ? groups.filter((group) => group.owner !== "core") : groups;
+  const node = fill(tpl("tpl-hook-readiness"), { title, message: `${coreCopy ? coreCopy.message : message} ${missingRemedy(status, coreCopy ? affected : groups, state)}`.trim() });
+  if (state !== "unknown") listAffected(node, affected, state);
+  if (coreCopy) {
+    renderCoreSetup(node, coreCopy);
+  }
+
   if (state === "missing" && status.coreBundle && groups.some((group) => group.owner === "core")) {
-    reveal(node, "install").addEventListener("click", () => installCoreHooks(node, status, handlers));
+    const button = reveal(node, "install");
+    if (coreCopy?.installLabel) button.textContent = coreCopy.installLabel;
+    button.addEventListener("click", () => installCoreHooks(node, status, handlers));
   }
   wireCommonActions(node, handlers);
   return node;
+}
+
+function renderCoreSetup(node, copy, { installed = false } = {}) {
+  fill(node, {
+    "step-install-text": copy.steps[0],
+    "step-approve-text": copy.steps[1],
+    "step-session": copy.steps.at(-1),
+  });
+  reveal(node, "steps");
+  if (copy.steps.length > 3) reveal(node, "step-trust").textContent = copy.steps[2];
+  if (installed) {
+    node.querySelector('[data-slot="step-install-text"]').classList.add("hook-step-completed");
+    reveal(node, "install-complete");
+    reveal(node, "review-caution").textContent = copy.reviewCaution;
+  }
+  if (copy.purpose) {
+    const purpose = reveal(node, "purpose");
+    fill(purpose, { "purpose-label": copy.purposeLabel });
+    const items = purpose.querySelector("template").content.querySelector('[data-slot="purpose-items"]');
+    items.replaceChildren(...copy.purpose.map((hook) => fill(tpl("tpl-hook-purpose-item"), hook)));
+  }
+  if (copy.cliSetup) {
+    const cliSetup = reveal(node, "cli-setup");
+    fill(cliSetup, { "cli-setup-label": copy.cliSetupLabel });
+    const items = cliSetup.querySelector("template").content.querySelector('[data-slot="cli-setup-items"]');
+    items.replaceChildren(...copy.cliSetup.map((description, index) => {
+      const step = fill(tpl("tpl-hook-setup-step"), { description });
+      if (installed && index === 0) {
+        step.querySelector('[data-slot="description"]').classList.add("hook-step-completed");
+        const complete = step.querySelector('[data-slot="complete"]');
+        complete.textContent = "✓";
+        complete.hidden = false;
+      }
+      return step;
+    }));
+  }
+  node.querySelector('[data-slot="message"]').hidden = !node.querySelector('[data-slot="message"]').textContent;
 }
 
 // A missing package hook comes back by reapplying its package; missing core hooks come back with
@@ -181,11 +248,13 @@ async function launchReview(node, status, name, handlers) {
 }
 
 function wireCommonActions(node, handlers) {
-  reveal(node, "actions");
+  const actions = reveal(node, "actions");
   const check = node.querySelector('[data-slot="check"]');
-  if (handlers.onCheck) check.addEventListener("click", () => handlers.onCheck());
+  const hasPrimaryAction = ["install", "open"].some((slot) => !node.querySelector(`[data-slot="${slot}"]`).hidden);
+  if (handlers.onCheck && !hasPrimaryAction) check.addEventListener("click", () => handlers.onCheck());
   else check.hidden = true;
   if (handlers.onLater) showLater(node, handlers.onLater);
+  actions.hidden = [...actions.children].every((child) => child.hidden);
 }
 
 function showLater(node, onLater, label = "Later") {
@@ -236,7 +305,7 @@ export function onHookReviewReturn(listener) {
 export async function renderHookReadiness(mount, setup, { fresh = false } = {}) {
   const token = {};
   const previous = mounts.get(mount);
-  mounts.set(mount, { setup, token, pending: previous?.pending ?? new Map() });
+  mounts.set(mount, { setup, token, pending: previous?.pending ?? new Map(), needsRefresh: previous?.needsRefresh ?? false });
   const harnesses = setup?.harnesses?.active || [];
   const statuses = await Promise.all(harnesses.map((harness) => readHookStatus(harness.id, { fresh }).catch(() => null)));
   const entry = mounts.get(mount);
@@ -255,6 +324,7 @@ export async function renderHookReadiness(mount, setup, { fresh = false } = {}) 
     return hookReadinessNotices(status, handlers);
   });
   entry.pending = pending;
+  entry.needsRefresh = statuses.some((status) => !status || (status.supported !== false && status.state !== "active"));
   mount.replaceChildren(...notices);
   mount.hidden = notices.length === 0;
 }
@@ -268,12 +338,14 @@ export function refreshHookReadinessMounts({ fresh = false } = {}) {
 }
 
 // Trust changes inside the harness, where RoboRepo cannot see it. When the user comes back to the
-// portal while a review is pending (or after opening one), read fresh once.
+// portal while hooks need attention (or after opening review), read fresh once. This also picks up
+// installation done in a separate terminal without making the user press a second action button.
 const FOCUS_THROTTLE_MS = 2_000;
 let lastFocusRefresh = 0;
 function refreshOnReturn() {
   if (document.visibilityState !== "visible") return;
-  const anyPending = awaitingReturn || returnListeners.size > 0 || [...mounts.values()].some((entry) => entry.pending.size > 0);
+  const anyPending = awaitingReturn || returnListeners.size > 0
+    || [...mounts.entries()].some(([mount, entry]) => mount.isConnected && (entry.pending.size > 0 || entry.needsRefresh));
   if (!anyPending || Date.now() - lastFocusRefresh < FOCUS_THROTTLE_MS) return;
   lastFocusRefresh = Date.now();
   awaitingReturn = false;

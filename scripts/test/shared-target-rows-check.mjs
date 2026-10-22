@@ -59,6 +59,21 @@ function coreHooksInstallAfterPackageHooks() {
   run(env, cli, "bundle", "apply", "hooks");
   assert.deepEqual([...handlerPositions(hooksPath)], [...after], "reapplying the bundle changes nothing");
 
+  const withoutLabels = JSON.parse(fs.readFileSync(hooksPath, "utf8"));
+  for (const entries of Object.values(withoutLabels.hooks)) {
+    for (const entry of entries) for (const hook of entry.hooks || []) delete hook.statusMessage;
+  }
+  fs.writeFileSync(hooksPath, JSON.stringify(withoutLabels));
+  run(env, cli, "bundle", "apply", "hooks");
+  const labelled = JSON.parse(fs.readFileSync(hooksPath, "utf8"));
+  const labels = Object.values(labelled.hooks).flatMap((entries) => entries.flatMap((entry) => entry.hooks || []))
+    .map((hook) => hook.statusMessage).filter(Boolean);
+  assert.deepEqual(labels.sort(), ["RoboRepo: command permissions", "RoboRepo: concise command output", "RoboRepo: unmanaged skills check"].sort(),
+    "reapplying upgrades the three native review labels on existing core hooks");
+  assert.deepEqual([...handlerPositions(hooksPath)], [...after], "labelling preserves every hook's command and position");
+  run(env, cli, "bundle", "apply", "hooks");
+  assert.deepEqual(JSON.parse(fs.readFileSync(hooksPath, "utf8")), labelled, "label reconciliation is idempotent");
+
   run(env, cli, "bundle", "remove", "hooks");
   const removed = handlerPositions(hooksPath);
   assert.deepEqual([...removed], [...before], "removal leaves exactly the package hooks, at their positions");

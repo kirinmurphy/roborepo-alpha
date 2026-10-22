@@ -168,12 +168,21 @@ trust key and definition hash into it); it is never trust material itself.
 | Gemini | Still the `notYetMigrated` stub; readiness skips it | — |
 
 Two optional `hooks` methods feed the readiness comparison: `core()` returns the harness's core hook
-fragment, and `guidance()` returns next-step copy for a harness that gates hooks on trust (Codex):
-`{ command, review, review_required, reviewApp, inactive, terminalHint }`. `review` is
-`{ executable, args }`, the binary that opens the harness's own review screen, or null; Codex picks
-it with `selectedHarnessExecutable(manifest, { prefer: "desktop" })`, so the CLI bundled with the
-desktop app comes before one on `PATH`. `command` is the same binary, shell-quoted for copying.
-Shared code never hardcodes either.
+fragment, and `guidance()` returns next-step copy for a harness that gates hooks on trust (Codex).
+Codex derives its guidance from validated discovery evidence, preferring a desktop-bundled CLI over
+one on `PATH`. Availability does not establish which interface the user is actively using.
+
+| Guidance field | Meaning |
+| --- | --- |
+| `command` | Shell-quoted review executable, or null when none is available |
+| `review` | `{ executable, args }` for opening the harness review screen, or null |
+| `review_required`, `inactive`, `terminalHint` | Provider-owned status and action copy |
+| `reviewApp` | Desktop review instructions when the desktop app is detected; otherwise null |
+| `preferredInterface` (optional) | `desktop` or `cli`; the provider's presentation preference based on availability |
+| `reviewButtonLabel`, `terminalOptionLabel` (optional) | Labels for the terminal action and its disclosure |
+| `missingCore` (optional) | `{ title, message, steps, installLabel, manualApprovalStep, purposeLabel, purpose, cliSetupLabel, cliSetup }`; procedural installation/review/session steps, hook-purpose help (`purpose`: `{ name, description }[]`) and CLI setup tooltips (`cliSetup`: `string[]`), with manual instructions when terminal launch is unavailable |
+
+Shared code renders this guidance without choosing a provider's executable or product-specific copy.
 
 Core hooks are expected only once installed by choice: when a harness's core hooks arrive through a
 `hook_fragment` manifest row, readiness includes them only if the bundle holding that row is

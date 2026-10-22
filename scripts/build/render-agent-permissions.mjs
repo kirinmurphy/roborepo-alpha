@@ -87,6 +87,11 @@ try {
     ok = checkOrWrite(target, rendered, path.relative(repoRoot, target)) && ok;
   }
 
+  const codexHooksSource = path.join(repoRoot, "globals", "harnesses", "codex", "hooks-codex.json");
+  const codexHooksPath = path.join(repoRoot, "generated", "codex", "hooks.json");
+  const codexHooks = JSON.parse(fs.readFileSync(codexHooksSource, "utf8"));
+  ok = checkOrWrite(codexHooksPath, `${JSON.stringify(codexHooks, null, 2)}\n`, "Codex core hooks") && ok;
+
   const codexRulesPath = path.join(repoRoot, "generated", "codex", "rules", "default.rules");
   ok = checkOrWrite(codexRulesPath, renderCodexRules(manifest), "generated/codex/rules/default.rules") && ok;
 } catch (error) {

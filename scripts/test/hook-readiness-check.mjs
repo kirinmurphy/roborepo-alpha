@@ -71,8 +71,13 @@ try {
     assert.match(guidance.review_required, /trust only those/);
     assert.match(guidance.review_required, /rather than choosing Trust all/);
     assert.match(guidance.review_required, /next Codex session/);
-    assert.match(guidance.reviewApp, /Codex app.*Settings.*Hooks/);
-    assert.match(guidance.inactive, /Codex app.*Settings.*Hooks/);
+    if (guidance.preferredInterface === "desktop") {
+      assert.match(guidance.reviewApp, /ChatGPT desktop app.*Settings.*Hooks/);
+      assert.match(guidance.inactive, /ChatGPT desktop app.*Settings.*Hooks/);
+    } else {
+      assert.equal(guidance.reviewApp, null);
+      assert.match(guidance.inactive, /Codex CLI/);
+    }
     assert.match(guidance.terminalHint, /Hooks need review/);
     // The review route names the binary to open, never a command line for the shell to parse.
     if (guidance.review) {

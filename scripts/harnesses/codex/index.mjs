@@ -8,9 +8,10 @@ import { defineHarnessProvider } from "../contract.mjs";
 import { detectHarnessProvider, selectedHarnessExecutable } from "../discovery.mjs";
 import { resolveHarnessPath } from "../paths.mjs";
 import { stubAdapterGroups } from "../stub-adapter.mjs";
-import { isHooksMap, mergeHooksMap, unmergeHooksMap } from "../hooks-merge.mjs";
+import { isHooksMap, unmergeHooksMap } from "../hooks-merge.mjs";
 import { readCodexHooks } from "./hooks-read.mjs";
-import { shellQuote } from "../shell-quote.mjs";
+import { mergeCodexHooks } from "./hooks-merge.mjs";
+import { codexHookGuidance } from "./hook-guidance.mjs";
 import { mergeCodexConfig, normalizeRootConfigContent } from "../../cli/root-config-merge.mjs";
 import { clearOwnedScalar, readOwnedScalar, recordOwnedScalar } from "../../cli/owned-scalars-state.mjs";
 import { resolveBehaviors, resolveArbitraryCommands, renderCodexConfig } from "../permissions-render.mjs";
@@ -197,8 +198,8 @@ function readHooksFile(hooksPath) {
 function hooksMerge(hooksPath, hooksFragment) {
   const { parsed, hooks } = readHooksFile(hooksPath);
   // Append: Codex trust keys are positional, so new entries must not move trusted ones.
-  const { hooks: nextHooks, added } = mergeHooksMap(hooks, hooksFragment, { append: true });
-  return { changed: added > 0, content: `${JSON.stringify({ ...parsed, hooks: nextHooks }, null, 2)}\n` };
+  const { hooks: nextHooks, changed } = mergeCodexHooks(hooks, hooksFragment);
+  return { changed, content: `${JSON.stringify({ ...parsed, hooks: nextHooks }, null, 2)}\n` };
 }
 
 // The executable rule matches discovery's: a Codex CLI on PATH first, then the desktop bundle's
@@ -216,15 +217,7 @@ function hooksRead({ cwd, hooksPath = resolveHarnessPath(codexManifest, "hooks")
 // which binary opens that screen; the desktop app's bundled CLI comes first because it matches the
 // app the user installed. RoboRepo only opens the screen; every trust decision stays in Codex.
 function hooksGuidance() {
-  const executable = selectedHarnessExecutable(codexManifest, { prefer: "desktop" });
-  return {
-    command: executable ? shellQuote(executable) : codexManifest.commandName,
-    review: executable ? { executable, args: [] } : null,
-    review_required: "Review the listed RoboRepo hooks in Codex and trust only those. If Codex also lists hooks you do not recognize, leave them alone rather than choosing Trust all. Newly trusted hooks run from the next Codex session.",
-    reviewApp: "In the Codex app, the same review is under Settings → Hooks.",
-    inactive: "In the Codex app, open Settings → Hooks and turn the listed RoboRepo hooks back on, or use /hooks in the Codex CLI.",
-    terminalHint: "Or run this command in a terminal. Codex shows Hooks need review when it starts:",
-  };
+  return codexHookGuidance(detectHarnessProvider(codexManifest).evidence);
 }
 
 // Core hooks: the ones RoboRepo installs for Codex whatever packages are enabled.

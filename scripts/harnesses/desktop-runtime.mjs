@@ -10,6 +10,7 @@ const MAX_ENTRIES_PER_LEVEL = 64;
 export function resolveDesktopRuntimes(candidates = [], { rootPath = expandRoot, probe } = {}) {
   const observations = [];
   const warnings = [];
+  const missingLayouts = new Set();
   for (const candidate of candidates) {
     let sawRuntime = false;
     for (const root of candidate.roots) {
@@ -20,6 +21,12 @@ export function resolveDesktopRuntimes(candidates = [], { rootPath = expandRoot,
           continue;
         }
         const executable = path.join(bundle, candidate.executable);
+        // Providers can declare alternate layouts within the same app bundle. A missing one
+        // is an error only if none of that provider's declared layouts has a working runtime.
+        if (!fs.existsSync(executable)) {
+          missingLayouts.add(candidate.label);
+          continue;
+        }
         const version = probe(executable);
         if (!version) {
           warnings.push(`${candidate.label} runtime failed its version check.`);
@@ -37,6 +44,9 @@ export function resolveDesktopRuntimes(candidates = [], { rootPath = expandRoot,
         warnings.push(`${setup}, then run roborepo harness refresh.`);
       }
     }
+  }
+  for (const label of missingLayouts) {
+    if (!observations.some((item) => item.value === label)) warnings.push(`${label} runtime failed its version check.`);
   }
   observations.sort((a, b) => compareVersions(b.version, a.version));
   return { observations, warnings };
