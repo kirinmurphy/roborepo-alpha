@@ -1,7 +1,7 @@
 ---
 id: o93hile
 priority: high
-next_action: Run /plan-review on the submitted plan; the two Not tested entries need a human before /plan-close.
+next_action: Run /plan-review on the submitted plan, then /plan-close once its pull request merges.
 blocked_by: []
 depends_on: []
 related:
@@ -295,7 +295,7 @@ Example (illustrative; not an actual verification claim):
 - [x] Implement evidence paths under the state root and register a bounded retention store (Section 7).
 - [x] Keep `browser run` out of `manifests/inventory/agent-permissions.json`; decide whether `browser probe` is allowlisted.
 - [x] Add tests (see Validation) and register each new check in `scripts/test/check-groups.json`.
-- [x] Run a small set of real workflows in Claude Code and Codex, including one with `caveman` enabled; compare comprehension and extra agent time, and record findings in this plan. — Moved to `## Not tested`: judging comprehension needs a human reviewer (see Decision Log).
+- [x] Run a small set of real workflows in Claude Code and Codex, including one with `caveman` enabled; compare comprehension and extra agent time, and record findings in this plan. — Moved to `## Not tested`, then deferred by the user to real use over future plans (see Decision Log).
 - [x] Update documentation of record (see Documentation impact).
 
 ### Implementation notes
@@ -459,6 +459,21 @@ how to open it, and what capture does **not** prove.
   a spec test with an empty title path as `untitled test`, so providers always return a result that
   meets the contract. Alternative: catch contract violations in `browser run` and report `blocked`,
   which would hide a provider bug as an environment problem and discard the checks that did run.
+- 2026-10-21 (user decision): Both `## Not tested` entries are deferred to real use rather than
+  confirmed before closing. The user will judge them while using the packages across many future
+  plans and open new plans for any changes that use shows are needed. The deferred checks:
+  - Clarity and caveman sample: in real Claude Code and Codex sessions with `response-output`
+    enabled, and once with `caveman` too, a reviewer can find the outcome, next action,
+    uncertainty, and consequential choices; technical depth stays available; unverified claims
+    stay marked; extra agent time is recorded separately. This is the human-judged part of the
+    Clarity and Caveman coexistence rows under Validation; the rendered-rules part of Caveman
+    coexistence is covered by `scripts/test/response-output-rules-check.mjs`.
+  - Live `feature-verification` behavior: the agent picks proportionate evidence, asks before
+    running the Playwright install command through the harness prompt, and falls back to a text
+    summary when it cannot show an artifact.
+
+  Why: both need a human judging live model sessions, and a judgment based on many real plans is
+  worth more than a one-off sample. Alternative: run the sample now and block closing on it.
 
 ## Review
 
@@ -524,15 +539,8 @@ None open. Both questions from validation pass 5 were answered by the user; see 
 
 ## Not tested
 
-- [ ] Clarity and caveman sample: in real Claude Code and Codex sessions with `response-output`
-      enabled (and once with `caveman` too), a reviewer can find the outcome, next action,
-      uncertainty, and consequential choices, technical depth is still available, and unverified
-      claims stay marked. Record extra agent time separately. Needs a human judging real
-      responses; automated scoring belongs to [[0jped168]].
-- [ ] In a real session with `feature-verification` enabled, the agent picks proportionate
-      evidence, asks before running the Playwright install command through the harness prompt,
-      and falls back to a text summary when it cannot show an artifact. Skill behavior in a live
-      model session; no deterministic check covers model choices.
+None open. The two manual checks were deferred by the user; see the Decision Log entry dated
+2026-10-21 (user decision) on judging the packages through real use.
 
 ## Implementation-time choices
 
