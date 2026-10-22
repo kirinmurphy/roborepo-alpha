@@ -23,6 +23,17 @@ export function createDocGuideModal(dialogEl, fetchGuide) {
 
   dialogEl.querySelector('[data-slot="close"]').addEventListener("click", close);
   portalWireBackdropClose(dialogEl, close);
+  document.addEventListener("click", (event) => {
+    const trigger = event.target.closest("[data-doc-anchor]");
+    if (!trigger) return;
+    trigger.setAttribute("aria-expanded", "true");
+    open(trigger.dataset.docAnchor);
+  });
+  dialogEl.addEventListener("close", () => {
+    for (const trigger of document.querySelectorAll("[data-doc-anchor][aria-expanded='true']")) {
+      trigger.setAttribute("aria-expanded", "false");
+    }
+  });
 
   let guide = null;
 

@@ -36,6 +36,7 @@
     "test:install-collisions": "scripts/test/test-install-collisions.sh",
     "test:install-smoke": "node scripts/test/install-smoke.mjs",
     "test:telemetry": "node scripts/test/telemetry-correctness-check.mjs",
+    "test:telemetry-oracle": "node scripts/test/telemetry-oracle-check.mjs",
     "pack:dry-run": "npm pack --dry-run",
     "pack:smoke": "npm pack",
     "test:package-install": "node scripts/test/package-install-smoke.mjs",

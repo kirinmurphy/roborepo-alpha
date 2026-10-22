@@ -1353,41 +1353,24 @@ function sessionLink(sessionId, harness, data, fallbackLabel) {
   return `<span class="session-chip session-link" data-session-id="${esc(id)}" data-harness="${esc(s.harness || "")}" tabindex="0" role="button" aria-label="open session detail"><code>${esc(label)}</code></span>`;
 }
 
-// One-time delegated listeners: waste-source links, session-chip drill-down, doc-guide info
-// icons, "+N more" dropdown, sticky-header measure. Declared functions hoist, but the
+// One-time delegated listeners: waste-source links, session-chip drill-down, "+N more" dropdown,
+// sticky-header measure. Declared functions hoist, but the
 // `let stickyHeaderOffset` they touch does not — so the calls sit here, after every declaration,
 // at module end.
 wireWasteSourceLinks();
 wireSessionChips();
-wireDocGuideIcons();
 wireHintToggle();
 
-// ── Doc-guide info icons ──
-// Same one-delegate pattern as the v1 dashboard: any <portal-info-icon data-doc-anchor> opens
-// the shared doc-guide popup showing only the guide section under that heading. The guide is
-// server-rendered from docs/user/guides/telemetry.md, whose headings mirror this page's section
-// titles — the popup and the on-disk doc are always the same content. Sections the guide doesn't
-// cover get NO icon rather than a mismatched one.
-const docModal = createDocGuideModal(document.getElementById("tokensdocmodal"), async () => {
+// ── Doc-guide triggers ──
+// Every [data-doc-anchor] trigger (the info icons) opens the shared popup at its anchor;
+// the factory owns that delegate. The guide is server-rendered from docs/user/guides/telemetry.md.
+createDocGuideModal(document.getElementById("tokensdocmodal"), async () => {
   try {
     return await portalGetJson("/api/telemetry/guide");
   } catch (err) {
     return { ok: false, error: (err && err.message) || String(err) };
   }
 });
-document.getElementById("tokensdocmodal").addEventListener("close", () => {
-  for (const icon of document.querySelectorAll("portal-info-icon[aria-expanded='true']")) {
-    icon.setAttribute("aria-expanded", "false");
-  }
-});
-function wireDocGuideIcons() {
-  document.addEventListener("click", (event) => {
-    const trigger = event.target.closest("portal-info-icon[data-doc-anchor]");
-    if (!trigger) return;
-    trigger.setAttribute("aria-expanded", "true");
-    docModal.open(trigger.dataset.docAnchor);
-  });
-}
 
 // ── Helpers ──
 function emptyMsg(msg) {
