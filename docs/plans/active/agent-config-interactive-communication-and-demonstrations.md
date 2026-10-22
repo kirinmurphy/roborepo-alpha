@@ -493,9 +493,9 @@ how to open it, and what capture does **not** prove.
 - [x] Plan record lagged b75a92cc: stale `next_action`, findings without their fix commit, no gate entry — fixed (5f95e0d9)
 - [x] Two lines left unwrapped in `playwright-resolve.mjs` and `roborepo-cli.md` — fixed (5f95e0d9)
 - [x] The `roborepo-cli.md` rewrap moved the overflow down a line instead of removing it — fixed (fb50ea91)
-- [x] An interrupted spec run deleted its temp dir before signalling the runner, and exited without waiting, so the runner recreated it with traces and failure screenshots — fixed: owned resources unwind newest first and each stop is awaited, and the runner's interrupt resolves only once it has exited (pass-3 fix commit)
-- [x] The interrupted-spec test captured nothing and passed on the first empty observation — fixed: it interrupts a `--capture trace` run and asserts no temp dir at exit and after the shutdown grace (pass-3 fix commit)
-- [x] Two lines left unwrapped in `browser-playwright-cache-check.mjs` and this plan's Decision Log — fixed (pass-3 fix commit)
+- [x] An interrupted spec run deleted its temp dir before signalling the runner, and exited without waiting, so the runner recreated it with traces and failure screenshots — fixed: owned resources unwind newest first and each stop is awaited, and the runner's interrupt resolves only once it has exited (ea66b04a)
+- [x] The interrupted-spec test captured nothing and passed on the first empty observation — fixed: it interrupts a `--capture trace` run and asserts no temp dir at exit and after the shutdown grace (ea66b04a)
+- [x] Two lines left unwrapped in `browser-playwright-cache-check.mjs` and this plan's Decision Log — fixed (ea66b04a)
 
 ### Verification
 
