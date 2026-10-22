@@ -84,6 +84,11 @@ assert(sections.get("Writing Assistants"), "Writing Assistants category label sh
 assert(snapshot.behaviorView.findIndex((section) => section.category === "Writing Assistants")
   > snapshot.behaviorView.findIndex((section) => section.category === "Code Conventions"),
 "Writing Assistants should follow Code Conventions");
+assert(snapshot.behaviorView.filter((section) => section.categoryId).slice(0, 2).map((section) => section.category).join(",")
+  === "Code Conventions,Chat-Time Output",
+"Code Conventions and Chat-Time Output should be the first two package sections");
+assert(sections.get("Chat-Time Output").items.slice(0, 2).map((item) => item.id).join(",") === "response-output,feature-verification",
+  "Response Output and Feature Verification should lead Chat-Time Output");
 const tokenItems = sections.get("Token Optimization").items.map((item) => item.id);
 assert(tokenItems.indexOf("caveman") < tokenItems.indexOf("tool-call-optimization"),
   "Caveman Plugin should precede Tool Call Optimization");

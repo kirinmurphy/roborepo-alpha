@@ -2,6 +2,19 @@
   "schemaVersion": 1,
   "categories": [
     {
+      "id": "code-conventions",
+      "label": "Code Conventions",
+      "description": "Skills auto-loaded when relevant — shape output without an explicit command.",
+      "footnote": "* builtin-support — help skill for this repo, always loaded.",
+      "order": 4
+    },
+    {
+      "id": "chat-time-output",
+      "label": "Chat-Time Output",
+      "description": "Inline chat notes the agent adds while responding — no files written, no workflow started.",
+      "order": 6
+    },
+    {
       "id": "token-optimization",
       "label": "Token Optimization",
       "order": 10
@@ -26,23 +39,10 @@
       "order": 27
     },
     {
-      "id": "code-conventions",
-      "label": "Code Conventions",
-      "description": "Skills auto-loaded when relevant — shape output without an explicit command.",
-      "footnote": "* builtin-support — help skill for this repo, always loaded.",
-      "order": 30
-    },
-    {
       "id": "skills-writing",
       "label": "Writing Assistants",
       "description": "Long-form writing workflows — case studies and structured documentation.",
       "order": 25
-    },
-    {
-      "id": "chat-time-output",
-      "label": "Chat-Time Output",
-      "description": "Inline chat notes the agent adds while responding — no files written, no workflow started.",
-      "order": 40
     },
     {
       "id": "integrations",

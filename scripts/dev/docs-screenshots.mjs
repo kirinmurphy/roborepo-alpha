@@ -42,7 +42,6 @@ const PACKAGES = [
   "javascript-typescript",
   "test-harness",
   "response-output",
-  "convention-capture",
   "skill-visibility",
 ];
 

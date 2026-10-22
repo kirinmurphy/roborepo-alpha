@@ -1,11 +1,11 @@
 ---
 id: 4zyo2woj
 priority: high
-next_action: Run one characterization pass on the supported Codex runtime, covering effective policy sources, loopback binding and connections, credential-path reads, and which layer issues each approval, before selecting any mechanism.
+next_action: Characterize the current Codex runtime with synthetic fixtures, then resolve credential coverage, unclassifiable commands, and audit ownership before rerunning promotion; recheck hook-readiness landing before integration.
 blocked_by: []
 depends_on: ["wjlt1zvf"]
 related: ["46qth5z8", "ia1q1z9", "permva27", "permissions-ui-revamp", "codex-cmux-hook-trust-review", "7k3m9qd", "harness-capability-derived-resource-targeting"]
-reviewed_commit: d155e9ae78ac09dbe910aff211838f18d0e0b626
+reviewed_commit: e201ba8bd00d7b6e8e8cffb065b22134da96bc49
 worktree:
 ---
 
@@ -14,21 +14,22 @@ worktree:
 ## Summary
 
 Routine local development under Codex should run without repeated approvals, while credentials stay
-unreadable and external networking stays off. Three problems stand in the way, all inside the same
-Codex sandbox and the same generated permission profile:
+unreadable and external networking stays off. Three reported problems motivate a joint investigation of native policy, hook behavior, and
+approvals:
 
-| Problem | What happens today |
+| Problem | Evidence and remaining limit |
 | --- | --- |
 | Localhost | The portal browser-test server failed with `listen EPERM` on `127.0.0.1` inside a Codex desktop session |
 | Repeated approvals | Local tests, portal inspection, and restarts each asked for escalation again |
-| Credential reads | The sandbox reads wide (`~/.ssh/config` was readable), and the Codex hook matches command prefixes only, so nothing stops a command from reading a credential path |
+| Credential reads | Historical Codex 0.140.0 evidence records `~/.ssh/config` readable. Current source has no path guard in the command hook or generated profile; current native enforcement is unverified |
 
-They are planned together because they are coupled. Today `network.enabled = false` is the only
-thing that keeps a credential read inside the sandbox from leaving the machine, and the localhost
-work changes network policy. So one characterization pass covers all three, and no network widening
-ships until credential reads are protected or the remaining exposure is explicitly accepted.
+One characterization pass covers all three because the boundaries interact. The tracked profile
+sets `network.enabled = false`, but that setting alone does not establish that credential contents
+cannot leave through tool output, another tool, or a local service. Localhost work changes one of
+these boundaries. Network widening waits for credential protection or explicit acceptance of the
+remaining exposure.
 
-This plan also moves three Codex-side harness details out of platform code and behind provider data,
+This plan also reconciles three Codex-side harness details with provider ownership,
 as `docs/internal/harness-provider-interface.md` requires. The companion plan, Keep local agent work
 within useful boundaries: Claude (`46qth5z8`), owns the Claude worktree-entry hook and the Claude-side
 leaks.
@@ -55,7 +56,8 @@ grant a permission the native sandbox withholds.
 
 ### Current state
 
-Checked against the recorded commit:
+Checked on `main` at the recorded commit on October 22, 2026. Historical runtime observations below
+are separate from these source checks; none establishes current runtime enforcement.
 
 | Source | Current behavior |
 | --- | --- |
@@ -63,13 +65,22 @@ Checked against the recorded commit:
 | `scripts/harnesses/permissions-render.mjs` | `renderCodexWorkspaceProfile` extends `:workspace` and renders a single `network.enabled` boolean from `go-online`; no loopback or read-deny setting is rendered |
 | `generated/codex/config.toml` | Profile `managed-workspace` with `network.enabled = false` and `approval_policy = "on-request"` |
 | `globals/system/hooks/codex/permission-check.mjs` | Handles `exec_command`, `shell`, `local_shell`, and `bash` calls; tokenizes the command by whitespace and matches leading tokens with `matchesPrefix()`. It never inspects path arguments |
-| `scripts/harnesses/contract.mjs` | `validateCapabilityAdapters` fails a provider that declares a capability without its required methods. `permissions` requires `adapters.permissions.render`, and both providers route through `permissions-render.mjs` |
+| `scripts/harnesses/contract.mjs` | `validateCapabilityAdapters` fails a provider that declares a capability without its required methods. `permissions` requires `adapters.permissions.render`, and Claude and Codex route through `permissions-render.mjs` |
 | `scripts/test/portal-ui/run.mjs` | Starts a hermetic portal server on `127.0.0.1` and a browser that connects to it |
 
-Claude blocks credential paths with deny rules on its structured `Read`, `Grep`, and `Glob` tools,
-whose path parameter the permission system parses directly. Codex has no structured file-read tool:
-every read is a shell command string (`cat`, `sed`, `less`, one-liners), so blocking `.ssh` reads
-means catching an open-ended set of commands by their arguments rather than their leading tokens.
+The shared renderer emits Claude credential rules for the `Read` tool because `read-secrets.tools`
+contains only `Read`. That output does not prove protection for shell, `Grep`, `Glob`, or other
+read-capable tools. The Codex hook recognizes four command-tool names and reads only
+`tool_input.command`; nested execution tools and non-command tools need separate characterization.
+Do not assume every Codex read reaches this hook.
+
+The current native binary reports `codex-cli 0.162.0-alpha.17.2`. Local `codex --help` identifies
+`-p` as a config profile, and `codex exec --help` documents positional or stdin prompts for
+non-interactive execution. `roborepo harness inspect codex` still reports a cached
+`0.155.0-alpha.16.4` executable at the former bundle layout; that path does not exist. The current
+binary is in the bundle's `codex-cli` layout. Re-resolve and validate executables before probing;
+do not use cached discovery as proof of the installed version. Help output establishes syntax,
+not successful synthesis or sandbox enforcement.
 
 ### Observed behavior
 
@@ -98,26 +109,29 @@ credential reads as this follow-up.
 
 ```mermaid
 flowchart LR
-  R["Command reads ~/.ssh/id_ed25519"] -->|"tries to send contents"| N{"Sandbox network policy"}
-  N -->|"stops it when network.enabled = false"| B["Contents stay inside sandbox"]
-  N -->|"lets it reach, under a loopback exception,"| L["Local service or proxy on 127.0.0.1"]
-  L -->|"may forward it to"| X["External host"]
+  R["Process reads a credential fixture"] -->|"attempts direct transmission"| N{"Runtime network boundary"}
+  N -->|"blocks the attempted route"| B["Direct transmission fails"]
+  N -->|"permits a loopback connection"| L["Local service or proxy"]
+  L -->|"may forward to"| X["External destination"]
+  R -->|"returns contents through"| T["Tool output or another tool"]
 ```
 
-A loopback exception reaches every local service, including forwarding proxies, so "localhost only"
-is not the same as "no data can leave". Credential-read protection and the loopback exception have
-to be designed against each other.
+Loopback can reach forwarding services. Probe the permitted destinations rather than equating
+localhost access with no egress. A process network restriction also does not establish the policy
+for browser tools, web search, MCP, or tool-result transport. Record these surfaces separately;
+never emit real credentials in a probe.
 
 ### Desired development policy
 
 | Operation | Intended boundary |
 | --- | --- |
-| Ordinary source reads and reversible edits | Current repository and its authorized associated worktree |
+| Ordinary source reads | Preserve existing readable source paths; this plan adds credential protection, not a repository-wide read boundary |
+| Reversible edits | Preserve the active workspace, configured associated-worktree roots, and explicit temp roots |
 | Test scratch files | Explicit temporary fixture roots; no expansion to arbitrary home directories |
 | Named local tests and builds, and restarting this worktree's portal | Proceed within the authorized task without repeated human prompts |
 | Loopback servers and browser connections | Allow narrowly enough to run the local app and tests; define listening addresses and connection destinations separately |
-| External networking and web searches | Remain restricted; loopback access must not enable either implicitly |
-| Credential and environment-file reads | Denied or asked across every form the selected mechanism covers; uncovered forms recorded, never claimed |
+| External networking | Keep sandboxed process egress restricted; record separately which layer controls browser, search, and MCP networking |
+| Credential and environment-file reads | Known `read-secrets` matches retain the deny intent; unknown forms and approval behavior require an explicit coverage decision |
 | Pushes, destructive operations, and branch or worktree moves | Preserve explicit authorization requirements |
 
 ### Provider leaks in platform code
@@ -127,22 +141,31 @@ provider's manifest (`globals/harnesses/<id>/provider.json`):
 
 | Leak | Location | What is hardcoded | Provider data that already exists |
 | --- | --- | --- | --- |
-| Hooks file branch | `scripts/cli/hook-composition.mjs` `writeHooksFile`, `hookFilePath` | Branches on `harness === "codex"` to choose a sidecar hooks file over the root config | Every manifest declares `extensions.app.hooksStorage` (`embedded-in-root-config` or `dedicated-json-sidecar`); `hooksStorageOf()` in `scripts/cli/config.mjs` already reads it |
+| Hooks file branch | `scripts/cli/hook-composition.mjs` `writeHooksFile`, `hookFilePath` | `main` still branches on Codex; the unlanded dependency already routes through manifest paths | Preserve its `hasHarnessPath` / `resolveHarnessPath` routing after landing; no parallel storage selector is needed |
 | Codex hook sources | `globals/system/hooks/codex/` (`permission-check.mjs`, `minimize-bash-output.mjs`) | Codex-only hook scripts live in the system tree | `manifests/platform/manifest.tsv` maps the folder to `~/.codex/hooks` |
-| Headless prompt CLI | `scripts/cli/telemetry.mjs` `findDeepReadCli`, `runDeepRead` | Loops over `["claude", "codex", "gemini"]` and runs each as `<cli> -p <prompt>`. The Codex CLI's `-p` is believed to select a config profile rather than print, so a Codex-only machine would get no deep read. Unverified | Manifests declare `commandName` |
+| Headless prompt CLI | `scripts/cli/telemetry.mjs` `findDeepReadCli`, `runDeepRead` | Loops over `["claude", "codex", "gemini"]` and runs each as `<cli> -p <prompt>`. Local 0.162.0-alpha.17.2 help confirms `-p` selects a profile and `exec` runs non-interactively; successful synthesis has not been tested | Manifests declare `commandName` |
 
-### Related plans
+### Related plans and landing evidence
 
-| Plan | Relationship |
-| --- | --- |
-| `46qth5z8` (`backlog/harness-claude-worktree-entry-and-provider-leaks.md`) | The Claude half of this work. It adds `extensions.app.agentWorktreeDirs`, which Codex may then declare |
-| `wjlt1zvf` (`review/harness-hook-readiness-provider-adapters.md`) | Changes `hook-composition-check.mjs` and Codex hook merge order. The hooks-file-branch fix edits the same module, so it lands after that plan merges |
-| `ia1q1z9` (`completed/agent-config-repo-scoped-write-permissions.md`) | Verified Codex write scope and recorded the credential-read gap this plan closes. Its repo-wide read boundary is not reopened |
-| `permva27` (`backlog/agent-config-permissions-global-audit.md`) | Owns the broad permissions inventory and the retain, simplify, or defer-to-native decision. This plan owns the concrete Codex remediation and supplies its evidence; coordinate any shared-model change |
-| `permissions-ui-revamp` | Owns the permission-editor redesign. Expose only the selected, verified Codex capability here |
-| `codex-cmux-hook-trust-review` | Audits Codex hook trust bypass in cmux-launched sessions. A hook-based credential guard inherits whatever bypass that plan finds |
-| `7k3m9qd` (`backlog/package-resource-provider-delivery.md`) | Owns the per-harness branches in `scripts/cli/packages.mjs` |
-| `harness-capability-derived-resource-targeting` | Changes how `hooks` resources name their harnesses; no shared files |
+| Plan | Classification at the reviewed checkout | Reconciliation |
+| --- | --- | --- |
+| `wjlt1zvf` (`review/harness-hook-readiness-provider-adapters.md`) | Unlanded dependency | Its assigned worktree is authoritative and has a newer title, completed implementation tasks, pending review, and ten open manual checks. Implementation `b3df1d76aff6f085d9b003e12123a66c767d74cd` and worktree tip `b804d89d49f9b37089b9494cefc06f093c20c57f` are not ancestors of `main`; the tip is on `claude/harness-hook-readiness-provider-adapters` only. Recheck landing before integration |
+| `ia1q1z9` (`completed/agent-config-repo-scoped-write-permissions.md`) | Landed dependency with prose drift | Merge `e58a81927fb99bf460eb6a5ea9185224c2a585fd` and evidence commit `bea08c6d42e11a0477a4111ce053eef9950740d4` are ancestors of `main`. Current renderer and hook preserve the write profile and Claude credential rules. Its older “Not verified” paragraphs contradict later live Codex evidence; retain those observations as historical and leave separate document cleanup to its owner |
+| `46qth5z8` (`backlog/harness-claude-worktree-entry-and-provider-leaks.md`) | Unlanded conditional dependency | No `agentWorktreeDirs` field exists in the current schema or manifests. Codex worktree-folder declaration waits for that contract and provenance evidence; all Claude entry-hook and process-label work stays there |
+| `permva27` (`backlog/agent-config-permissions-global-audit.md`) | Plan-vs-plan decision dependency | It reserves the retain/simplify/defer-to-native decision. Characterization can proceed independently, but a new portable permission model or mandatory enforcement contract must wait for that decision or explicit user reconciliation |
+| `permissions-ui-revamp` (`backlog/agent-config-permissions-ui-revamp.md`) | Unlanded downstream consumer | It consumes the audit; no editor redesign or gate/scope simplification belongs here |
+| `codex-cmux-hook-trust-review` (`backlog/agent-config-codex-cmux-hook-trust.md`) | Unlanded research overlap | Its bypass/source-loading claims are explicitly hypotheses to refresh. A bypass of trust review does not by itself prove a permission hook is skipped. Verify loading, enabled state, and decision handling separately |
+| `7k3m9qd` (`backlog/package-resource-provider-delivery.md`) | Unlanded contract overlap | It changes capability/delivery validation in `contract.mjs`. Keep package-delivery redesign there; reconcile any new permissions requirement before editing that shared contract |
+| `harness-capability-derived-resource-targeting` (`backlog/harness-capability-derived-resource-targeting.md`) | Unlanded adjacent work | It owns resource targets and fidelity reconciliation. It already calls for reuse of the existing Codex hook; do not add a second command-permission mechanism |
+
+The hook-readiness worktree already removes the Codex branch with manifest-path routing, preserves
+checkout-symlink protection, and changes Codex hook installation from `managed_copy` to
+`hook_fragment` plus per-file-owned `managed_files`. Its core fragments append after package
+hooks, preserving existing positions. This plan consumes that contract; it must not restore
+whole-directory copying, prepend hooks, change native labels, or replace manifest routing with a
+second `hooksStorage` decision. The primary plan copy is stale relative to its authoritative
+worktree, but its `review` lifecycle is consistent with pending manual review. No other lifecycle
+transition or document cleanup is performed here.
 
 ## Goals
 
@@ -156,7 +179,7 @@ provider's manifest (`globals/harnesses/<id>/provider.json`):
   unsupported controls are reported honestly rather than widened silently.
 - `read-secrets` stays the single credential-pattern source, and provider coverage is expressed
   through a documented capability contract.
-- The three leaks above are resolved by reading provider data.
+- The remaining leaks are resolved through provider data, and the dependency’s hook routing stays intact.
 
 ## Non-goals
 
@@ -205,9 +228,11 @@ evidence of complete confinement.
 
 Reuse the `read-secrets` patterns; do not add a second credential list. Express enforcement either
 as a new required method under the `permissions` capability in `scripts/harnesses/contract.mjs` or
-as a sub-requirement checked by a dedicated parity test, with explicit unsupported states. Decide
-this before writing a scanner, because it defines what done means and a required method affects
-every provider that declares `permissions`.
+as a sub-requirement checked by a dedicated parity test, with explicit unsupported states. Generic
+`permissions` support does not imply credential confinement: Gemini declares `permissions` but its
+renderer skips scoped rules. Missing or overstated coverage must fail a check; an explicit
+unsupported state must remain valid. Resolve the contract with the audit and delivery owners before
+writing a scanner or changing required provider methods.
 
 ### Local-development network profile
 
@@ -231,6 +256,9 @@ accepted the exposure recorded by the forwarding probe.
 ### Approvals
 
 After the sandbox boundary is fixed, identify whether a scoped persistent approval is still needed.
+Keep native hook-trust review distinct from command approval and runtime sandbox escalation.
+Preserve `read-secrets: deny` for recognized protected paths; an ask fallback for unclassifiable
+commands would be a separate policy decision, not permission to approve known credential reads.
 Do not allow arbitrary `node`, Python, or all npm scripts. Record whether each permission is
 native-enforced, command-scoped, or only an agent instruction. The agent should run already-authorized
 routine work directly and explain a genuine platform-imposed approval boundary once, rather than
@@ -240,9 +268,9 @@ repeatedly requesting the same declined escalation.
 
 | Leak | Change |
 | --- | --- |
-| Hooks file branch | `writeHooksFile` and `hookFilePath` branch on `hooksStorage`, and a sidecar provider's file comes from `resolveHarnessPath(manifest, "hooks")` instead of the `codexHooksPath` import. Move `hooksStorageOf` from `scripts/cli/config.mjs` to `scripts/harnesses/paths.mjs`, next to `resolveHarnessPath`, and import it in both modules |
-| Codex hook sources | Move `globals/system/hooks/codex/*` to `globals/harnesses/codex/hooks/` and repoint the `manifest.tsv` row, keeping the `~/.codex/hooks` destination and command strings unchanged. Done before any scanner work, so `permission-check.mjs` is edited in its final location |
-| Headless prompt CLI | Add `extensions.app.headlessPromptArgs` to manifests, holding the argv that runs one prompt non-interactively. `findDeepReadCli` iterates providers that declare it, in registry order |
+| Hooks file branch | Consume the dependency’s manifest-path routing and its synthetic/provider regression coverage. Recheck after landing; add only missing behavior tests. Leave `hooksStorageOf` in `config.mjs` unless another demonstrated consumer needs it |
+| Codex hook sources | Move `globals/system/hooks/codex/*` to `globals/harnesses/codex/hooks/` and repoint the dependency’s `managed_files` row in `manifest.tsv`, keeping the `~/.codex/hooks` destination and command strings unchanged. Done before any scanner work, so `permission-check.mjs` is edited in its final location |
+| Headless prompt CLI | Add `extensions.app.headlessPromptArgs` to manifests, holding an argv template with one whole-argument prompt placeholder, validated by the manifest schema and runtime contract. `findDeepReadCli` iterates enabled eligible providers in registry order and uses the existing executable selection path, including desktop-only runtimes. Keep public `deepread_cli` report values stable; spawn argv directly, never a shell string |
 
 ## Implementation plan
 
@@ -259,21 +287,30 @@ repeatedly requesting the same declined escalation.
       whether a narrow approval persists across sessions.
 - [ ] Check whether the Codex app creates worktrees under `~/.codex/worktrees/` (one was observed at
       `~/.codex/worktrees/<name>/roborepo`; its creator was not confirmed).
+- [ ] After the probes, record a decision packet covering the supported runtime, native controls,
+      tool coverage, audit ownership, and contract shape. Resolve the promotion questions before
+      starting remediation.
 - [ ] Select the smallest enforceable environment for both network and reads. If a container or
       broader access is the only candidate, present its mounts, networking, residual exposure, and
       approval requirements for the user's decision.
 
 ### Phase 2: Codex-side leaks
 
-- [ ] Codex hook sources: move the files and repoint `manifest.tsv`, plus the source paths in
-      `scripts/test/test-cli.sh`. Run
-      `bash scripts/doctor.sh --quiet` and the clean-machine sandbox to prove the install
+- [ ] After `wjlt1zvf` lands, re-read its source ownership and tests. Move Codex script sources
+      and repoint the `managed_files` source without changing per-file ownership or removal semantics,
+      and update source references in `scripts/test/test-cli.sh`. Preserve standalone manifest
+      discovery from installed copies and state-root overrides. Run
+      `bash scripts/doctor.sh --quiet` and
+      `env CLEAN_MACHINE_STRICT=1 npm run test:clean-machine-permissions-sandbox` to prove the install
       destination and command strings are unchanged.
-- [ ] Hooks file branch, after `wjlt1zvf` merges: extend `scripts/test/hook-composition-check.mjs`
-      with a synthetic sidecar provider, then switch the branches to `hooksStorage`.
+- [ ] Hooks file routing: after `wjlt1zvf` merges, confirm it has removed the Codex branches.
+      Preserve `rootConfigPath` fixture overrides, manifest routing, and symlink protections. Extend
+      `scripts/test/hook-composition-check.mjs` only for missing synthetic-provider behavior.
 - [ ] Headless prompt CLI: check the Codex CLI's non-interactive syntax against its own help output.
-      Add a failing test that a provider without `headlessPromptArgs` is skipped and a synthetic
-      provider with it is used, then add the field to each manifest and switch `findDeepReadCli`.
+      Add failing tests for an omitted field, malformed template, disabled provider, desktop-only
+      executable, prompt text containing shell metacharacters, and successful synthetic-provider
+      selection. Add verified argv templates to eligible manifests and switch both selection and
+      `runDeepRead` invocation; leave unsupported providers explicitly ineligible.
 - [ ] Extend `scripts/test/telemetry-synthetic-provider-check.mjs` so the `acme` provider proves
       `headlessPromptArgs` generalizes.
 - [ ] If Phase 1 confirms the Codex app's worktree folder and `46qth5z8` has added
@@ -281,14 +318,17 @@ repeatedly requesting the same declined escalation.
 
 ### Phase 3: credential-read enforcement
 
-- [ ] Decide the contract shape: a required method under `permissions`, or a dedicated parity test.
-- [ ] Decide what the mechanism does with a command it cannot classify: deny or ask.
+- [ ] Implement the coverage contract selected in the decision packet; test missing, overstated,
+      and explicitly unsupported coverage without forcing Gemini credential enforcement.
+- [ ] Implement the selected unclassifiable-command behavior, separately from known protected
+      paths, which retain the `read-secrets` deny intent.
 - [ ] Add a focused test listing the credential-path forms the mechanism must block and the ordinary
-      commands it must not block, before implementing it.
+      commands it must not block, including readable `.env.example` and `.env.sample` templates,
+      before implementing it.
 - [ ] Implement the selected native or hook mechanism; extend `permission-check.mjs` only where its
       demonstrated coverage contributes to the selected guarantee.
-- [ ] Wire the contract check so a provider declaring `permissions` without credential-read
-      enforcement fails validation or the parity test.
+- [ ] Wire the coverage check so missing or overstated enforcement fails validation; explicitly
+      unsupported providers remain loadable and cannot advertise a guard they do not implement.
 - [ ] Verify live against the shipped Codex binary, since shell quoting and expansion only show up
       when a real shell runs the command.
 
@@ -316,21 +356,24 @@ repeatedly requesting the same declined escalation.
 - Phase 1 records version, effective policy, and evidence for every probed environment. A container
   pass does not establish host-native parity, and rendered config or fake binaries do not establish
   runtime enforcement.
-- Under the `managed-workspace` profile, a command reaching a `read-secrets` path is denied or asked
+- Under the `managed-workspace` profile, a command reaching a known `read-secrets` path is denied
   for every form the selected mechanism claims to cover, and each enumerated form it does not cover
   appears in the documented boundary.
 - Ordinary repository commands touching non-credential paths are unaffected; the existing Codex hook
   coverage in `scripts/test/clean-machine-permissions-sandbox.mjs` and `scripts/test/test-cli.sh`
   still passes.
-- A provider that declares `permissions` without credential-read enforcement is caught by the
-  contract check, not by manual review.
+- Missing or falsely claimed credential coverage is caught by the selected contract/parity check.
+  Gemini and a synthetic unsupported provider remain explicit unsupported cases, not forced
+  implementations of the Codex guard.
 - In fresh supported Codex desktop and CLI sessions, `npm run test:portal-ui -- --grep 'hook readiness warning'`
   binds and connects on localhost without per-run escalation. Inspecting and restarting the owned
   worktree portal twice does not prompt repeatedly.
 - Controlled probes show external egress and unauthorized filesystem writes remain blocked, while
   approved repo, worktree, and temp operations succeed.
 - `scripts/cli/hook-composition.mjs` no longer contains `harness === "codex"` or `codexHooksPath`,
-  and `findDeepReadCli` no longer holds a fixed CLI list. Codex hook sources are covered by
+  and `findDeepReadCli` no longer holds a fixed CLI list. A synthetic headless provider receives
+  exactly one literal prompt argument; invalid or omitted templates and unavailable runtimes degrade
+  gracefully, preserving `deepread_cli` consumers. Codex hook sources are covered by
   `doctor.sh` and the sandbox.
 - `node scripts/test/permissions-render-live-characterization-check.mjs`,
   `node scripts/test/hook-composition-check.mjs`, `bash scripts/doctor.sh --quiet`, and
@@ -342,6 +385,8 @@ repeatedly requesting the same declined escalation.
 | Doc | Update |
 | --- | --- |
 | `docs/user/reference/config-control-panel.md` | Document the Codex credential guard and its covered and uncovered forms alongside Claude's `read-secrets`; explain local-server versus external-network access and which approvals remain; record that Gemini stays out of scope |
+| `docs/user/reference/codex-hooks.md` | Explain the installed guard, native hook-review prerequisite, limits, and the difference between trust review, command approval, and sandbox escalation |
+| `docs/user/reference/architecture.md` | Update the Codex hook source-to-install map while preserving its destination and per-file ownership |
 | `docs/internal/hooks-internals.md` | Point the Codex system hook location at `globals/harnesses/codex/hooks/`; describe any credential-path matching added to `permission-check.mjs` |
 | `docs/internal/harness-anatomy.md`, `docs/internal/harnesses-explained.md`, `docs/internal/backlog-review.md` | Update the Codex system hook source paths |
 | `docs/internal/harness-provider-interface.md` | Document the credential-read and network capability contract and unsupported states; document `headlessPromptArgs` |
@@ -354,10 +399,10 @@ repeatedly requesting the same declined escalation.
 | A loopback allowance exposes unrelated services or forwarding proxies | The forwarding probe runs in Phase 1, and Phase 4 is gated on read protection or explicit acceptance |
 | A path-argument scanner is heuristic against shell syntax | Enumerate forms first, decide the unclassifiable-command behavior explicitly, and document uncovered forms instead of claiming complete coverage |
 | A hook-based guard is bypassed when Codex skips hooks | Coordinate with `codex-cmux-hook-trust-review`; prefer a native boundary where one exists |
-| A new required `permissions` method forces work on every provider | Decide the contract shape first, in Phase 3, before implementing |
+| A new required `permissions` method forces work on every provider | Resolve the contract before remediation; validate explicit unsupported coverage without forcing a Gemini implementation |
 | Native or managed policy cannot express the boundary | Keep a capability gate and an explicit user decision; never silently broaden access |
 | Scope creep into general shell parsing in `permission-check.mjs` | Non-goal; argument scanning covers credential paths only |
-| The hooks-file-branch fix conflicts with `wjlt1zvf` | Sequenced after that plan merges |
+| Hook relocation regresses `wjlt1zvf` installation or trust | Wait for landing, consume its existing routing, and preserve `managed_files`, labels, positions, and symlink guards |
 | Moving Codex hook sources orphans old install copies | Keep the destination unchanged |
 
 ## Decision Log
@@ -368,7 +413,25 @@ repeatedly requesting the same declined escalation.
   ID, because `ia1q1z9` references it for the same gap, and absorbs the Codex half of `46qth5z8`:
   localhost, approvals, the hooks-file branch, Codex hook sources, and the headless prompt CLI.
   Merged because one characterization pass serves both, and because loosening network policy
-  removes the only current barrier to exfiltrating a credential read.
+  changes one potential route for transmitting a credential read; complete confinement remains unverified.
+
+- October 22 promotion review: verified `main` at `e201ba8b`, the unlanded hook-readiness
+  implementation and authoritative review copy, and the landed write-scope commits. Removed the
+  duplicate hook-routing refactor and preserved the dependency’s per-file ownership contract.
+  Corrected overbroad read/network claims, confirmed Codex headless CLI syntax from installed help,
+  and distinguished stale cached discovery from the installed runtime. No runtime enforcement,
+  approval persistence, or forwarding claim was certified, and no implementation task was checked.
+
+## Promotion readiness
+
+Preparation found no structural validator findings. Promotion is held because the combined
+implementation still has material security and ownership decisions: native confinement versus a
+partial hook guard, behavior for unclassifiable commands, and whether the audit permits extending
+shared permission management. The hook-readiness dependency is also unlanded. Its source relocation
+must wait, while read-only characterization can proceed without changing live policy.
+
+This preparation does not authorize a container, accept residual credential exposure, or broaden
+networking. Capture the native evidence and resolve the questions below before rerunning promotion.
 
 ## Open questions
 
@@ -379,3 +442,7 @@ repeatedly requesting the same declined escalation.
   unrelated-process access?
 - **Unclassifiable commands:** should the credential guard deny or ask when it cannot parse a
   command? Deny is safer; ask avoids blocking legitimate one-liners.
+- **Coverage and audit ownership:** if native confinement is unavailable, is a documented partial
+  hook guard acceptable, or must the work stop at evidence and limitations? Resolve this together
+  with `permva27` before choosing a new shared contract; do not infer approval to retain or expand
+  the editor from this remediation plan.

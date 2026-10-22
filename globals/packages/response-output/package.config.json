@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "response-output",
-  "label": "Response output",
+  "label": "Response output optimization",
   "description": "How the agent structures and words every response: the result and any decision you owe come first, detail follows the task, evidence says what passed versus what was only observed, and the close is easy to scan.",
   "lifecycle": "optional",
   "presentation": {
