@@ -187,8 +187,8 @@ Otherwise the result is `blocked`, and its limitation holds an `npm install --pr
 ~/.roborepo/browser/tools …` command. It installs the Playwright package into RoboRepo's tool
 directory, never into the project, and Chromium and ffmpeg into Playwright's shared per-user browser
 cache (for example `~/Library/Caches/ms-playwright` on macOS or `~/.cache/ms-playwright` on Linux),
-so browsers the machine already downloaded are reused. An agent runs that command only through your normal permission
-prompt. `browser run` is never added to agent allowlists, because it executes scenario code.
+so browsers the machine already downloaded are reused. An agent runs that command only through
+your normal permission prompt. `browser run` is never added to agent allowlists, because it executes scenario code.
 
 Evidence is written to `~/.roborepo/browser/evidence/` as `<run-id>-<n>-<type>.<ext>` and kept for
 14 days or 250 MB, whichever comes first. Old files are removed when a later run starts; the store

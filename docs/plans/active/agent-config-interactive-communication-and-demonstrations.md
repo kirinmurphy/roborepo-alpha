@@ -1,7 +1,7 @@
 ---
 id: o93hile
 priority: high
-next_action: Run npm run check on the commit that applies the user's two answers and the unnamed-check() fix, then a fresh Validation Loop, the completion preflight, and the submit transition.
+next_action: Run the completion preflight and the submit transition, then /plan-review.
 blocked_by: []
 depends_on: []
 related:
@@ -484,10 +484,12 @@ how to open it, and what capture does **not** prove.
 - [x] Probe accepted an ffmpeg of any revision, so `video: true` could precede a run that fails to record — fixed: headless shell and ffmpeg matched to the revisions `playwright-core`'s `browsers.json` pins (ea628104)
 - [x] An interrupted traced script left Playwright's `playwright-tracing-*` scratch dir — fixed: one owned work dir holds `tracesDir` and video (ea628104)
 - [x] The Decision Log's exit-code entry still said `process.exitCode` for `browser run` — fixed (ea628104)
-- [x] A script `check()` called without a string name (or a spec test whose title path is empty) makes `validateRunResult` throw outside the run's try, so `browser run` prints a stack trace instead of a result — fixed: providers name such checks `unnamed check <n>` / `untitled test`, with a regression test
-- [x] `next_action` named only pass 3 as recorded under ## Review — fixed: `next_action` rewritten for the current state
-- [x] The install command puts Chromium, the headless shell, and ffmpeg in Playwright's per-user cache, not RoboRepo's tool directory as the plan (Section 5) and the user doc say — user chose the shared cache; Section 5, the user doc, and the skill corrected (see Decision Log)
-- [x] The "Rename complete" row excludes only `completed/` and `archived/`, but this plan and backlog o9zwxuav must name the old id — user chose to exclude history plus this plan; o9zwxuav updated and the check narrowed (see Decision Log)
+- [x] A script `check()` called without a string name (or a spec test whose title path is empty) makes `validateRunResult` throw outside the run's try, so `browser run` prints a stack trace instead of a result — fixed: providers name such checks `unnamed check <n>` / `untitled test`, with a regression test (b75a92cc)
+- [x] `next_action` named only pass 3 as recorded under ## Review — fixed: `next_action` rewritten for the current state (b75a92cc)
+- [x] The install command puts Chromium, the headless shell, and ffmpeg in Playwright's per-user cache, not RoboRepo's tool directory as the plan (Section 5) and the user doc say — user chose the shared cache; Section 5, the user doc, and the skill corrected (see Decision Log) (b75a92cc)
+- [x] The "Rename complete" row excludes only `completed/` and `archived/`, but this plan and backlog o9zwxuav must name the old id — user chose to exclude history plus this plan; o9zwxuav updated and the check narrowed (see Decision Log) (b75a92cc)
+- [x] Plan record lagged b75a92cc: stale `next_action`, findings without their fix commit, no gate entry — fixed (loop 2 pass 1 fix commit)
+- [x] Two lines left unwrapped in `playwright-resolve.mjs` and `roborepo-cli.md` — fixed (loop 2 pass 1 fix commit)
 
 ### Verification
 
@@ -500,7 +502,9 @@ how to open it, and what capture does **not** prove.
 - Gate: `npm run check` passed at 6ae939ac.
 - Validation pass 4 at 6ae939ac (fresh-context subagent): 3 fix.
 - Gate: `npm run check` passed at fbc26524 (447 CLI tests, 45/45 check suites, Docker clean-machine suites, 103 portal UI specs; Windows installer parity skipped, no `pwsh`).
-- Validation pass 5 at fbc26524 (fresh-context subagent): 2 fix, 1 escalate. **Stopped at the five-pass cap**; the open findings above are not yet fixed, and the plan was not submitted.
+- Validation pass 5 at fbc26524 (fresh-context subagent): 2 fix, 1 escalate. Stopped at the five-pass cap; its findings and the two escalated questions were resolved after the user answered, in b75a92cc.
+- Gate: `npm run check` passed at b75a92cc (447 CLI tests, 45/45 check suites, Docker clean-machine suites, 103 portal UI specs; Windows installer parity skipped, no `pwsh`).
+- Validation loop 2 (after the user's answers), pass 1 at b75a92cc (fresh-context subagent): 2 fix (stale plan record; two over-long wrapped lines).
 
 ## Open Questions
 

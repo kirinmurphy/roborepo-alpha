@@ -48,8 +48,9 @@ export function resolvePlaywright({ fromDir, stateRoot }) {
 
 // The exact command an agent asks the user to approve. The npm package goes into the tool
 // directory, never the target project's manifest or lockfile; Chromium and ffmpeg go into
-// Playwright's shared per-user cache, so browsers the machine already has are reused. The version is the one RoboRepo's own browser
-// suite runs against, read from package.json so there is one place to bump it.
+// Playwright's shared per-user cache, so browsers the machine already has are reused. The version
+// is the one RoboRepo's own browser suite runs against, read from package.json so there is one
+// place to bump it.
 export function installCommand(stateRoot) {
   const dir = toolsDir(stateRoot);
   const cli = path.join(dir, "node_modules", "playwright", "cli.js");
