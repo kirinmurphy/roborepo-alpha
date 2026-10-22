@@ -511,6 +511,9 @@ how to open it, and what capture does **not** prove.
 - [x] An interrupted spec run deleted its temp dir before signalling the runner, and exited without waiting, so the runner recreated it with traces and failure screenshots — fixed: owned resources unwind newest first and each stop is awaited, and the runner's interrupt resolves only once it has exited (ea66b04a)
 - [x] The interrupted-spec test captured nothing and passed on the first empty observation — fixed: it interrupts a `--capture trace` run and asserts no temp dir at exit and after the shutdown grace (ea66b04a)
 - [x] Two lines left unwrapped in `browser-playwright-cache-check.mjs` and this plan's Decision Log — fixed (ea66b04a)
+- [ ] Plan review: the `roborepo browser` rows in `docs/user/reference/roborepo-cli.md` omit `--provider <id>`, which both commands and their usage strings accept
+- [ ] Plan review: `docs/user/reference/roborepo-cli.md` says the run result "has four fields", but `--json` also prints `provider`, `runId`, and `scenario`, and the probe result's fields are not described
+- [ ] Plan review: `--url` accepts any http(s) host, not only a local one; Section 6's "known local URL" is enforced by guidance and the harness prompt, not by the command — escalated to the human
 
 ### Verification
 
@@ -532,6 +535,19 @@ how to open it, and what capture does **not** prove.
 - Validation loop 2, pass 3 at e96ad096 (fresh-context subagent): 3 fix (interrupted traced spec leaves a temp dir; its test could not catch it; two unwrapped lines).
 - Gate: `npm run check` passed at 5c894c1d (447 CLI tests, 45/45 check suites, Docker clean-machine suites, 103 portal UI specs; Windows installer parity skipped, no `pwsh`).
 - Validation: clean on loop 2, pass 4 at 5c894c1d (fresh-context subagent). It also showed the new interrupt test fails against the e96ad096 source.
+- Plan review: `roborepo plans sync-base` merged main at fb8bfb33 into ea7033df. The only conflict was this plan's move from `active/` to `review/`; both sides held identical content, kept at the `review/` path.
+- Plan review gate: `npm run check` passed at ea7033df (53/53 check suites, clean-machine sandboxes, 104 portal UI specs; Windows installer parity skipped, no `pwsh`).
+- Plan review Validator pass 1 at ea7033df (fresh-context subagent): 2 fix, 1 escalate. Every automatable acceptance criterion met with code and test evidence; the merge kept this branch's `check-groups.json` registrations and `roborepo-cli.md` sections beside main's.
+
+### Result
+
+- Status: pending
+- Reviewed implementation commit: ea7033df531d5575df4776d41cdb07fb652c9fe0
+- Base commit: fb8bfb3306b67b3f05e50013f7ab67e3aa87d724
+
+### Approval
+
+- Decision: requested
 
 ## Open Questions
 
