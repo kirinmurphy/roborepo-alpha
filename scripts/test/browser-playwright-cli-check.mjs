@@ -44,7 +44,9 @@ try {
   assert.equal(JSON.parse(timedOut.stdout).status, "failed", "a scenario that outlives --timeout fails");
   assert.ok(elapsed < 15_000, `the command ends near its timeout, not when the scenario's timer fires (${elapsed}ms)`);
 
-  // ---- An interrupted spec run leaves no temp directory behind ----
+  // ---- An interrupted traced spec run leaves no temp directory behind ----
+  // The runner writes the trace while it shuts down, so the directory is checked when the command
+  // exits and again after the runner's shutdown grace would have passed.
   fs.writeFileSync(path.join(project, "tests", "slow.spec.mjs"), [
     'import { test } from "@playwright/test";',
     'test("runs long", async ({ page }) => {',
@@ -55,14 +57,16 @@ try {
   ].join("\n"));
   const interruptedTmp = tmpDir("interrupt");
   const run = cli.start(
-    ["browser", "run", "--scenario", path.join(project, "tests", "slow.spec.mjs"), "--url", app.url],
+    ["browser", "run", "--scenario", path.join(project, "tests", "slow.spec.mjs"), "--url", app.url, "--capture", "trace"],
     { TMPDIR: interruptedTmp, PLAYWRIGHT_BROWSERS_PATH: browsersPath },
   );
   await waitFor(() => ownTempDirs(interruptedTmp).length > 0, 15_000);
   await new Promise((resolve) => setTimeout(resolve, 2_000));
   run.child.kill("SIGTERM");
   assert.equal((await run.done).status, 143);
-  await waitFor(() => ownTempDirs(interruptedTmp).length === 0, 15_000);
+  assert.deepEqual(ownTempDirs(interruptedTmp), [], "the temp dir is gone when the command exits");
+  await new Promise((resolve) => setTimeout(resolve, 12_000));
+  assert.deepEqual(ownTempDirs(interruptedTmp), [], "nothing recreates it after the command exits");
 
   // ---- An interrupted traced, recorded script leaves neither its own nor Playwright's scratch ----
   const sleeper = path.join(project, "sleeper.mjs");

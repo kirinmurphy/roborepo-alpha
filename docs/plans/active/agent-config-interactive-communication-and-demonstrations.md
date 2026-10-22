@@ -407,7 +407,9 @@ how to open it, and what capture does **not** prove.
   third store shape for no gain. Bounds: 14 days / 250 MB; pruned when a run starts so a run never
   deletes what it reports. The engine's never-empty guard keeps the newest file even when stale.
 - 2026-10-21 (implementation): `browser probe` is not added to the agent allowlist. It stays under
-  the default prompt, which changes no permission; adding it later is one manifest entry. `browser` is listed in `INTENTIONALLY_UNCLASSIFIED` in `scripts/test/agent-run-coverage-check.mjs`, which now asserts it is never bucketed.
+  the default prompt, which changes no permission; adding it later is one manifest entry.
+  `browser` is listed in `INTENTIONALLY_UNCLASSIFIED` in
+  `scripts/test/agent-run-coverage-check.mjs`, which now asserts it is never bucketed.
   Alternative: allowlist it as read-only, which the plan allowed but which widens agent
   permissions without a request to.
 - 2026-10-21 (implementation): Two scenario kinds. A project test file (`*.spec.*`, `*.test.*`)
@@ -491,6 +493,9 @@ how to open it, and what capture does **not** prove.
 - [x] Plan record lagged b75a92cc: stale `next_action`, findings without their fix commit, no gate entry — fixed (5f95e0d9)
 - [x] Two lines left unwrapped in `playwright-resolve.mjs` and `roborepo-cli.md` — fixed (5f95e0d9)
 - [x] The `roborepo-cli.md` rewrap moved the overflow down a line instead of removing it — fixed (fb50ea91)
+- [x] An interrupted spec run deleted its temp dir before signalling the runner, and exited without waiting, so the runner recreated it with traces and failure screenshots — fixed: owned resources unwind newest first and each stop is awaited, and the runner's interrupt resolves only once it has exited (pass-3 fix commit)
+- [x] The interrupted-spec test captured nothing and passed on the first empty observation — fixed: it interrupts a `--capture trace` run and asserts no temp dir at exit and after the shutdown grace (pass-3 fix commit)
+- [x] Two lines left unwrapped in `browser-playwright-cache-check.mjs` and this plan's Decision Log — fixed (pass-3 fix commit)
 
 ### Verification
 
@@ -508,6 +513,8 @@ how to open it, and what capture does **not** prove.
 - Validation loop 2 (after the user's answers), pass 1 at b75a92cc (fresh-context subagent): 2 fix (stale plan record; two over-long wrapped lines).
 - Gate: `npm run check` passed at b5f82243 (447 CLI tests, 45/45 check suites, Docker clean-machine suites, 103 portal UI specs; Windows installer parity skipped, no `pwsh`).
 - Validation loop 2, pass 2 at b5f82243 (fresh-context subagent): 1 fix (a doc line still over-long).
+- Gate: `npm run check` passed at e96ad096 (447 CLI tests, 45/45 check suites, Docker clean-machine suites, 103 portal UI specs; Windows installer parity skipped, no `pwsh`).
+- Validation loop 2, pass 3 at e96ad096 (fresh-context subagent): 3 fix (interrupted traced spec leaves a temp dir; its test could not catch it; two unwrapped lines).
 
 ## Open Questions
 

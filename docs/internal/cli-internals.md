@@ -90,7 +90,7 @@ that still holds its own timers cannot keep it running. The pieces it calls:
 | `browser/playwright-script.mjs` | Runs a script scenario in one browser context, with recording and tracing configured before the script starts and their scratch files (`tracesDir`, video) kept in one owned temp directory. |
 | `browser/evidence.mjs` | Flat per-run file names in the `browser-evidence` retention store; prunes by the store's policy before a run writes. |
 | `browser/local-service.mjs` | Reuses a URL that already responds; otherwise starts `--serve` in its own process group and stops only that group, even after the shell that led it has exited. |
-| `browser/owned-resources.mjs` | Stop functions for everything a run started (the `--serve` group, the test runner, temp directories), called on SIGINT/SIGTERM to the CLI so an interrupted run strands nothing. |
+| `browser/owned-resources.mjs` | Stop functions for everything a run started (the `--serve` group, the test runner, temp directories), called on SIGINT/SIGTERM to the CLI so an interrupted run strands nothing. They run newest first and each is awaited, so the test runner exits (and stops writing into its temp directory) before that directory is removed. |
 
 A second real provider is another entry in `providers.mjs` returning the same shapes; it must pass
 `scripts/test/browser-contract-check.mjs` unchanged. Scenario files are provider-specific and are

@@ -122,17 +122,23 @@ function* walkTests(suites, titles) {
 //
 // Stopping uses SIGINT, which the Playwright runner treats as a graceful shutdown: it closes its
 // browsers and stops the `webServer` its config started. SIGTERM would kill only the runner and
-// orphan that server. SIGKILL follows only if the runner ignores the interrupt.
+// orphan that server. SIGKILL follows only if the runner ignores the interrupt. The interrupt
+// resolves once the runner has exited, because it keeps writing (traces, failure screenshots) into
+// the run's temp directory while it shuts down.
 function runRunner(args, { cwd, env, timeoutMs }) {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
     let output = "";
     child.stdout.on("data", (chunk) => { output += chunk; });
     child.stderr.on("data", (chunk) => { output += chunk; });
+    const closed = new Promise((resolveClosed) => child.once("close", resolveClosed));
     let killTimer = null;
     const interrupt = () => {
-      child.kill("SIGINT");
-      killTimer = setTimeout(() => child.kill("SIGKILL"), SHUTDOWN_GRACE_MS);
+      if (!killTimer) {
+        child.kill("SIGINT");
+        killTimer = setTimeout(() => child.kill("SIGKILL"), SHUTDOWN_GRACE_MS);
+      }
+      return closed;
     };
     const release = own(interrupt);
     let timedOut = false;

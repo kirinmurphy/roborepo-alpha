@@ -66,8 +66,8 @@ export async function browserRun(args = []) {
   const evidence = createEvidenceRun(STATE_ROOT);
   // Ctrl-C, or a harness killing a long command, must not strand a dev server or test runner this
   // run started.
-  const interrupted = (signal) => {
-    stopOwned();
+  const interrupted = async (signal) => {
+    await stopOwned();
     process.exit(signal === "SIGINT" ? 130 : 143);
   };
   process.once("SIGINT", interrupted);

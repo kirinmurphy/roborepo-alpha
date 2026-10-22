@@ -5,8 +5,8 @@
 // - the full browser alone, or a headless shell of the wrong revision: not available, because a
 //   headless launch needs the matching headless shell;
 // - the matching headless shell alone: available, and a run passes;
-// - no ffmpeg, or one of the wrong revision: video is reported unavailable, and a run asked to record says so rather than
-//   returning nothing.
+// - no ffmpeg, or one of the wrong revision: video is reported unavailable, and a run asked to
+//   record says so rather than returning nothing.
 //
 // Skips with a visible `skip:` line when Chromium is not installed, matching
 // scripts/test/portal-ui/run.mjs.
