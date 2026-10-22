@@ -1,8 +1,8 @@
 // Shared route-table matcher for every portal-routes-*.mjs domain. Each domain file exports an
 // array of { method, path, handler } entries (path may contain :param segments) instead of its own
 // if-chain; dispatchRoutes() below is the one place that turns (method, urlPath) into a match. This
-// keeps the full route surface enumerable in one place — see routes() below — which is what lets a
-// future OpenAPI doc be generated from these tables instead of hand-maintained.
+// keeps the API surface enumerable and lets buildOpenApiDocument() generate documentation from
+// the same tables.
 //
 // handler signature: (req, res, ctx) => true, where ctx is { params, qs, handlers }. A handler
 // that intentionally didn't handle the request (shouldn't happen once matched, but mirrors the old
@@ -13,7 +13,7 @@ export function defineRoutes(entries) {
   return entries.map((entry) => ({ ...entry, segments: entry.path.split("/").filter(Boolean) }));
 }
 
-// Called once at startup (see main.mjs) so a copy-pasted or malformed route entry fails loudly
+// Called once at startup (see portal-server.mjs) so a copy-pasted or malformed route entry fails loudly
 // before the server ever binds a port, instead of silently shadowing/never matching at request
 // time. Mirrors command-catalog.mjs's validateCommandCatalog — same "duplicate path" class of bug,
 // same fail-fast-at-startup treatment.
@@ -38,8 +38,7 @@ export function validateRouteTables(tables) {
   }
 }
 
-// Generates a minimal-but-valid OpenAPI document straight from the route tables — the "future
-// OpenAPI doc" flagged as a follow-up when the registry was built. No hand-maintained doc to drift:
+// Generates a minimal OpenAPI document from the route tables:
 // a route added to any table shows up here on the next request, same guarantee /manifest.json and
 // /sitemap.xml already have from PAGES. Deliberately minimal (paths + methods only, no
 // request/response schemas — nothing here has types to generate them from) since the only consumer

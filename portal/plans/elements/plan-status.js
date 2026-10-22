@@ -3,8 +3,8 @@
 // priority control, structure/QA/blocked chips, modified time, and completion.
 //
 // Completion is the shared planCompletion() ring/badge, at the far right. `.merge` is the plan's
-// `{ into }` when its worktree has merged (state.js's mergedPlanBranches), which turns it into the
-// `merged` badge; leave it null otherwise.
+// `{ into }` when its worktree has merged (state.js's mergedPlanBranches), which adds the
+// `merged` badge alongside task progress; leave it null otherwise.
 //
 // Lifecycle is not a control here: the plan suite's commands move plans between lifecycle folders
 // and commit those moves, and the page's tabs already say which lifecycle a card is in.
@@ -30,50 +30,9 @@ const PRIORITY_OPTIONS = [
   ["none", "none"],
 ];
 
-// The QA outcome of a plan under review, kept apart from its task progress (the completion ring):
-// finishing the tasks moved it here, and only review findings and a human's approval move it on.
-function qaChip(plan) {
-  const open = plan.qa?.openFindings || 0;
-  if (open > 0) return chip(`${open} open finding${open === 1 ? "" : "s"}`, "warn");
-  if (plan.qa?.decision === "approved") return chip("approved", "ok");
-  return chip("awaiting review");
-}
-
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
-
-function isSameCalendarDay(a, b) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
-
-function formatRelativeTime(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "modified: unknown";
-
-  const now = new Date();
-  const elapsedMs = now.getTime() - date.getTime();
-  const elapsedMinutes = elapsedMs / MINUTE_MS;
-  const elapsedHours = elapsedMs / HOUR_MS;
-  const elapsedDays = elapsedMs / DAY_MS;
-
-  if (elapsedMinutes < 5) return "just now";
-  if (elapsedMinutes < 60) return "a few minutes ago";
-  if (elapsedHours < 5) return "a few hours ago";
-
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  if (isSameCalendarDay(date, now)) return "earlier today";
-  if (isSameCalendarDay(date, yesterday)) return "yesterday";
-
-  if (elapsedDays < 5) return "a few days ago";
-  if (elapsedDays < 11) return "a week ago";
-  if (elapsedDays < 28) return "a few weeks ago";
-  if (elapsedDays < 45) return "a month ago";
-  if (elapsedDays < 330) return "a few months ago";
-  if (elapsedDays < 550) return "a year ago";
-  return "a few years ago";
-}
 
 class PlanStatusElement extends HTMLElement {
   connectedCallback() {
@@ -163,3 +122,44 @@ class PlanStatusElement extends HTMLElement {
 }
 
 customElements.define("plan-status", PlanStatusElement);
+
+// The QA outcome of a plan under review, kept apart from its task progress (the completion ring):
+// finishing the tasks moved it here, and only review findings and a human's approval move it on.
+function qaChip(plan) {
+  const open = plan.qa?.openFindings || 0;
+  if (open > 0) return chip(`${open} open finding${open === 1 ? "" : "s"}`, "warn");
+  if (plan.qa?.decision === "approved") return chip("approved", "ok");
+  return chip("awaiting review");
+}
+
+function isSameCalendarDay(a, b) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function formatRelativeTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "modified: unknown";
+
+  const now = new Date();
+  const elapsedMs = now.getTime() - date.getTime();
+  const elapsedMinutes = elapsedMs / MINUTE_MS;
+  const elapsedHours = elapsedMs / HOUR_MS;
+  const elapsedDays = elapsedMs / DAY_MS;
+
+  if (elapsedMinutes < 5) return "just now";
+  if (elapsedMinutes < 60) return "a few minutes ago";
+  if (elapsedHours < 5) return "a few hours ago";
+
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (isSameCalendarDay(date, now)) return "earlier today";
+  if (isSameCalendarDay(date, yesterday)) return "yesterday";
+
+  if (elapsedDays < 5) return "a few days ago";
+  if (elapsedDays < 11) return "a week ago";
+  if (elapsedDays < 28) return "a few weeks ago";
+  if (elapsedDays < 45) return "a month ago";
+  if (elapsedDays < 330) return "a few months ago";
+  if (elapsedDays < 550) return "a year ago";
+  return "a few years ago";
+}

@@ -102,6 +102,10 @@ export async function probeHttpCandidates(candidates, options = {}) {
   return results;
 }
 
+export function isTlsTrustErrorCode(code) {
+  return ["DEPTH_ZERO_SELF_SIGNED_CERT", "SELF_SIGNED_CERT_IN_CHAIN", "UNABLE_TO_VERIFY_LEAF_SIGNATURE"].includes(code);
+}
+
 // URL.hostname keeps an IPv6 literal's brackets ("[::1]"), but http.request's `hostname` option
 // wants the bare address — handed the bracketed form it goes to DNS and fails ENOTFOUND. Every
 // IPv6-only listener was therefore probed as unreachable and dropped from the snapshot: an Astro
@@ -213,10 +217,6 @@ function looksLikeTlsError(code, message) {
 
 function isTlsTrustError(err) {
   return isTlsTrustErrorCode(err.code);
-}
-
-export function isTlsTrustErrorCode(code) {
-  return ["DEPTH_ZERO_SELF_SIGNED_CERT", "SELF_SIGNED_CERT_IN_CHAIN", "UNABLE_TO_VERIFY_LEAF_SIGNATURE"].includes(code);
 }
 
 function decodeHtml(value) {

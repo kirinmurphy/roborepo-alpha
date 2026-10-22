@@ -474,7 +474,7 @@ function repositoryMenuItems(repository, actions) {
     { key: "repo", label: "Associate repo", hidden: !repository.composeGroups?.[0] || !actions?.onAssociateRepo },
     { key: "pin", label: repository.pinned ? "Unpin" : "Pin" },
     // Ignore is the registry-wide decision Home offers too; Hide from Runtime only tucks this
-    // repository's running members away on this page (pljvmyh §8).
+    // repository's running members away on this page.
     { key: "ignore", label: "Ignore repo", hidden: !repository.repositoryId || !actions?.onIgnore },
     { key: "hide", label: "Hide from Runtime" },
   ];

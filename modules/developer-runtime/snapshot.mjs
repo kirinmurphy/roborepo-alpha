@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { defaultSettings, resolveProjectAlias } from "./settings.mjs";
+import { DEFAULT_PREFERENCES, labelFromId } from "./settings-schema.mjs";
 import { classifyMemberRole, createRoleComparator } from "./member-role.mjs";
 import { canonicalRepositoryId, providerUrlForRepositoryId } from "../repositories/identity.mjs";
 import { isFixtureRepository } from "../repositories/dev-fixtures.mjs";
@@ -192,9 +193,8 @@ export function buildDeveloperRuntimeSnapshot({
     projects,
     composeProjects,
     unmatchedInstances: unmatchedInstances.sort(compareInstances),
-    // Repository-keyed view over the same instances the three collections above hold. Built
-    // alongside them during the migration (developer-runtime-repository-card-merge) so existing consumers
-    // keep working while the portal moves over; the legacy three are removed once nothing reads them.
+    // Repository-keyed view over the same instances as the collections above. Both shapes have
+    // consumers, so grouping must preserve the instance data shared by them.
     repositories: buildRepositories({ projects, composeProjects, unmatchedInstances, repositoryNames, repositoryUrlKeys, persistedRepositories, idleMainCheckouts, knownWorktrees, worktreeCleanup, pinnedRepositoryIds }),
     inactiveProjects: inactiveProjects.sort(compareProjects),
     hiddenRepositories,
@@ -213,6 +213,17 @@ export function findCurrentInstanceByOpaqueKey(snapshot, opaqueKey) {
     if (instance.opaqueKey === opaqueKey) return instance;
   }
   return null;
+}
+
+// Three groups (see displayGroup): running real repositories, then dev fixtures, then idle/stale —
+// a card with something live on it outranks one without, whatever their names. Within each group
+// compareRepositories applies, so pins and alphabetical order still hold where they did before.
+//
+// Exported because the pin mutation re-sorts an existing snapshot in place rather than rebuilding
+// it (see setDeveloperRuntimeRepositoryPinned): pinning changes the order, and the order must be derived
+// the same way in both paths or the list would reshuffle on the next poll.
+export function sortRepositoriesForDisplay(repositories) {
+  return [...repositories].sort((a, b) => displayGroup(a) - displayGroup(b) || compareRepositories(a, b));
 }
 
 // One row per container, not one per published port — a single Traefik/Postgres container that
@@ -422,10 +433,7 @@ function buildRepositories({ projects, composeProjects, unmatchedInstances, repo
     }
     // Main checkout first (even if empty — the portal always renders its section), then worktrees
     // alphabetically by branch so the order is stable across polls.
-    entry.roots.sort((a, b) => {
-      if (a.isWorktree !== b.isWorktree) return a.isWorktree ? 1 : -1;
-      return (a.git?.branch || "").localeCompare(b.git?.branch || "");
-    });
+    entry.roots.sort(compareCheckoutRoots);
     entry.composeGroups.sort((a, b) => a.name.localeCompare(b.name));
     entry.sharedComposeGroups.sort((a, b) => a.name.localeCompare(b.name));
     // Every member counts toward the aggregate today. Tool processes that resolve to a repository
@@ -464,10 +472,7 @@ function buildRepositories({ projects, composeProjects, unmatchedInstances, repo
       root.checkoutState = checkout.state;
       root.checkoutReason = checkout.reason || null;
     }
-    entry.roots.sort((a, b) => {
-      if (a.isWorktree !== b.isWorktree) return a.isWorktree ? 1 : -1;
-      return (a.git?.branch || "").localeCompare(b.git?.branch || "");
-    });
+    entry.roots.sort(compareCheckoutRoots);
     entry.duplicateGroups = [];
     entry.cpuPercentOfHost = null;
   }
@@ -486,7 +491,7 @@ function buildRepositories({ projects, composeProjects, unmatchedInstances, repo
       root.unmergedCommits = worktree.unmergedCommits;
       root.checkoutState = worktree.prunable ? "absent" : "present";
     }
-    entry.roots.sort((a, b) => a.isWorktree - b.isWorktree || (a.git?.branch || "").localeCompare(b.git?.branch || ""));
+    entry.roots.sort(compareCheckoutRoots);
   }
   for (const [repositoryId, cleanup] of worktreeCleanup) {
     const entry = byRepository.get(repositoryId);
@@ -501,17 +506,6 @@ function buildRepositories({ projects, composeProjects, unmatchedInstances, repo
   }
 
   return sortRepositoriesForDisplay([...byRepository.values()]);
-}
-
-// Three groups (see displayGroup): running real repositories, then dev fixtures, then idle/stale —
-// a card with something live on it outranks one without, whatever their names. Within each group
-// compareRepositories applies, so pins and alphabetical order still hold where they did before.
-//
-// Exported because the pin mutation re-sorts an existing snapshot in place rather than rebuilding
-// it (see setDeveloperRuntimeRepositoryPinned): pinning changes the order, and the order must be derived
-// the same way in both paths or the list would reshuffle on the next poll.
-export function sortRepositoriesForDisplay(repositories) {
-  return [...repositories].sort((a, b) => displayGroup(a) - displayGroup(b) || compareRepositories(a, b));
 }
 
 // Real repositories with something running, then dev fixtures whether running or not, then idle and
@@ -815,7 +809,7 @@ function settingsSummary(settings) {
   return {
     aliases: Object.entries(settings.aliases || {}).map(([from, to]) => ({ from, to })),
     associations: Object.entries(settings.associations || {}).map(([key, association]) => ({ key, ...association })),
-    worktreeStaleDays: settings.preferences?.worktreeStaleDays ?? 7,
+    worktreeStaleDays: settings.preferences?.worktreeStaleDays ?? DEFAULT_PREFERENCES.worktreeStaleDays,
     hidden,
   };
 }
@@ -848,10 +842,6 @@ function savedIdentityFor(identity) {
   return null;
 }
 
-function labelFromId(value) {
-  return value.replace(/[-_]+/g, " ").replace(/\b\w/g, (s) => s.toUpperCase());
-}
-
 function toIso(value) {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
@@ -870,4 +860,9 @@ function withOpaqueKey(instance, projectIdentity, appId) {
 
 function opaqueKeyFor(value) {
   return "lk_" + createHash("sha256").update(JSON.stringify(value)).digest("base64url").slice(0, 22);
+}
+
+function compareCheckoutRoots(a, b) {
+  if (a.isWorktree !== b.isWorktree) return a.isWorktree ? 1 : -1;
+  return (a.git?.branch || "").localeCompare(b.git?.branch || "");
 }

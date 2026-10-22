@@ -12,11 +12,6 @@ import { cardActionMenu, cardPrimaryAction, chip } from "/portal/plans/templates
 // for copy-context/drawer use — only the on-card display is truncated further here.
 const EXCERPT_DISPLAY_LENGTH = 190;
 
-function truncate(text, maxLength) {
-  if (text.length <= maxLength) return text;
-  return `${text.slice(0, maxLength).trimEnd()}…`;
-}
-
 class PlanCardElement extends HTMLElement {
   connectedCallback() {
     if (this.record && this.actions) this.render();
@@ -88,3 +83,8 @@ class PlanCardElement extends HTMLElement {
 }
 
 customElements.define("plan-card", PlanCardElement);
+
+function truncate(text, maxLength) {
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength).trimEnd()}…`;
+}

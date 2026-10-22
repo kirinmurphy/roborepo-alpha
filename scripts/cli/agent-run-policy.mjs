@@ -53,21 +53,6 @@ export function policyFromManifest(manifest) {
   return buckets;
 }
 
-const startsWith = (argv, prefix) => prefix.every((tok, i) => argv[i] === tok);
-
-// Longest match wins so a specific rule beats a general one regardless of manifest order:
-// ["git","push","--force"] (deny) must out-rank ["git","push"] (ask).
-function classify(argv, buckets) {
-  let best = null;
-  for (const bucket of ["allow", "ask", "deny"]) {
-    for (const prefix of buckets[bucket]) {
-      if (!startsWith(argv, prefix)) continue;
-      if (!best || prefix.length > best.length) best = { bucket, length: prefix.length };
-    }
-  }
-  return best?.bucket ?? null;
-}
-
 /**
  * Decide whether `argv` may be executed.
  * @returns {{ok: true} | {ok: false, reason: string, message: string}}
@@ -133,4 +118,21 @@ export function checkAgentRun(argv, manifest) {
     };
   }
   return { ok: true };
+}
+
+function startsWith(argv, prefix) {
+  return prefix.every((token, index) => argv[index] === token);
+}
+
+// Longest match wins so a specific rule beats a general one regardless of manifest order:
+// ["git","push","--force"] (deny) must out-rank ["git","push"] (ask).
+function classify(argv, buckets) {
+  let best = null;
+  for (const bucket of ["allow", "ask", "deny"]) {
+    for (const prefix of buckets[bucket]) {
+      if (!startsWith(argv, prefix)) continue;
+      if (!best || prefix.length > best.length) best = { bucket, length: prefix.length };
+    }
+  }
+  return best?.bucket ?? null;
 }

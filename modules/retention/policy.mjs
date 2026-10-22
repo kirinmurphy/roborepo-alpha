@@ -44,13 +44,6 @@ export function normalizePolicy(policy = {}) {
   return { maxBytes, maxAgeDays, floorBytes, keepFraction };
 }
 
-function assertPositiveOrNull(value, name) {
-  if (value === null) return;
-  if (!Number.isFinite(value) || value <= 0) {
-    throw new Error(`retention policy ${name} must be a positive number or null, got ${value}`);
-  }
-}
-
 // Age cutoff as an absolute epoch-ms. Returns null when the policy has no age dimension, which
 // callers use to skip timestamp parsing entirely rather than comparing against -Infinity.
 export function cutoffMillis(policy, now) {
@@ -97,4 +90,11 @@ export function dropCountForBytes(lengths, total, policy) {
     dropped += 1;
   }
   return dropped;
+}
+
+function assertPositiveOrNull(value, name) {
+  if (value === null) return;
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`retention policy ${name} must be a positive number or null, got ${value}`);
+  }
 }

@@ -1,5 +1,5 @@
 // Persistence and in-memory mutators for the repository-sources store. Server-only: source paths
-// leave this module only through the protected source-management routes (pljvmyh §6).
+// leave this module only through the protected source-management routes.
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";

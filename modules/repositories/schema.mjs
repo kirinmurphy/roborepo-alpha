@@ -4,7 +4,7 @@
 
 import { validateRepositoryUrlKey } from "./url-key.mjs";
 
-// v3 (pljvmyh §4): discoveries carry a per-source `sourceId` for configured repository sources. Lower
+// v3: discoveries carry a per-source `sourceId` for configured repository sources. Lower
 // versions are discarded on load rather than migrated — a deliberate clean cutover.
 export const REGISTRY_VERSION = 3;
 
@@ -43,34 +43,6 @@ export function safeIsoTimestamp(value, label) {
   return value;
 }
 
-function safeString(value, label, max = 200) {
-  if (typeof value !== "string" || !value.trim() || /[\u0000-\u001f\u007f]/.test(value)) throw new Error(`${label} is invalid`);
-  return value.trim().slice(0, max);
-}
-
-function safeOpaqueId(value, label) {
-  if (typeof value !== "string" || !/^[a-z0-9][a-z0-9._-]{0,127}$/i.test(value)) throw new Error(`${label} is invalid`);
-  return value;
-}
-
-// Absolute, control-character-free, and free of traversal segments. Unlike safeString this must NOT
-// trim or truncate: a silently shortened path would resolve to the wrong directory rather than
-// failing, and a path is used to read a filesystem rather than to be displayed.
-function safeAbsolutePath(value, label) {
-  if (typeof value !== "string" || !value) throw new Error(`${label} is invalid`);
-  if (value.length > 4096) throw new Error(`${label} too long`);
-  if (/[\x00-\x1F\x7F]/.test(value)) throw new Error(`${label} is invalid`);
-  if (!value.startsWith("/")) throw new Error(`${label} must be absolute`);
-  if (value.split("/").includes("..")) throw new Error(`${label} must not contain traversal segments`);
-  return value;
-}
-
-function validateObjectKeys(value, allowed, label) {
-  for (const key of Object.keys(value)) {
-    if (!allowed.includes(key)) throw new Error(`unknown ${label} field: ${key}`);
-  }
-}
-
 export function validateRegistry(registry) {
   if (!registry || typeof registry !== "object" || Array.isArray(registry)) throw new Error("registry must be an object");
   validateObjectKeys(registry, ["aliases", "localRootPaths", "repositories", "revision", "version"], "registry");
@@ -80,47 +52,6 @@ export function validateRegistry(registry) {
   validateAliases(registry.aliases);
   validateLocalRootPaths(registry.localRootPaths);
   return registry;
-}
-
-// The private rootId -> absolute path index (pljvmyh §2). It lives in the registry file rather than
-// a sibling one so that identity and path commit as a single logical update: updateRegistry is
-// already one read-mutate-write with a revision bump, and two files could not be committed
-// atomically against a concurrent writer.
-//
-// Paths never reach the browser. That boundary is enforced where payloads are built
-// (repositoryListPayload/repositoryDetailPayload whitelist fields explicitly and map localRoots to
-// kind/timestamps only), not by keeping the data in a separate file — a separate file would be one
-// forgotten spread away from leaking anyway.
-//
-// Keyed by rootId alone, not repositoryId -> rootId: a rootId resolves to at most ONE current path
-// (an invariant of the spec), and a flat key makes that unrepresentable-otherwise rather than
-// merely enforced. Reused directories are the reason this matters — one rootId already appears
-// under two repositories in the live registry.
-function validateLocalRootPaths(localRootPaths) {
-  if (localRootPaths === undefined) return; // Absent on records written before this index existed.
-  if (!localRootPaths || typeof localRootPaths !== "object" || Array.isArray(localRootPaths)) {
-    throw new Error("registry localRootPaths must be an object");
-  }
-  for (const [rootId, entry] of Object.entries(localRootPaths)) {
-    safeOpaqueId(rootId, "localRootPath rootId");
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new Error("localRootPath must be an object");
-    validateObjectKeys(entry, ["path", "repositoryId", "firstSeenAt", "lastSeenAt"], "localRootPath");
-    safeAbsolutePath(entry.path, "localRootPath path");
-    safeRepositoryId(entry.repositoryId);
-    safeIsoTimestamp(entry.firstSeenAt, "localRootPath firstSeenAt");
-    safeIsoTimestamp(entry.lastSeenAt, "localRootPath lastSeenAt");
-  }
-}
-
-function validateRepositories(repositories) {
-  if (!repositories || typeof repositories !== "object" || Array.isArray(repositories)) throw new Error("registry repositories must be an object");
-  const urlKeys = new Set();
-  for (const [id, record] of Object.entries(repositories)) {
-    safeRepositoryId(id);
-    validateRepositoryRecord(id, record);
-    if (urlKeys.has(record.urlKey)) throw new Error(`duplicate repository urlKey: ${record.urlKey}`);
-    urlKeys.add(record.urlKey);
-  }
 }
 
 export function validateRepositoryRecord(id, record) {
@@ -159,6 +90,123 @@ export function validateRepositoryRecord(id, record) {
   if (record.restoredAt != null) safeIsoTimestamp(record.restoredAt, "repository restoredAt");
   if (record.worktreeCleanup != null) validateWorktreeCleanup(record.worktreeCleanup);
   return record;
+}
+
+export function resolveRegistryAlias(registry, identity) {
+  let current = identity;
+  const seen = new Set([current]);
+  for (;;) {
+    const next = registry?.aliases?.[current];
+    if (!next) return current;
+    if (seen.has(next)) throw new Error("registry aliases must not contain cycles");
+    seen.add(next);
+    current = next;
+  }
+}
+
+export function assertAliasGraph(aliases) {
+  for (const identity of Object.keys(aliases)) {
+    const seen = new Set([identity]);
+    let next = aliases[identity];
+    while (next) {
+      if (seen.has(next)) throw new Error("registry aliases must not contain cycles");
+      seen.add(next);
+      next = aliases[next];
+    }
+  }
+}
+
+// Build a fresh, valid repository record with sane lifecycle defaults.
+export function newRepositoryRecord(id, { kind, urlKey, displayName, now = new Date().toISOString(), providerUrl = null, normalizedRemote = null }) {
+  safeRepositoryId(id);
+  const record = {
+    id,
+    kind,
+    urlKey,
+    displayName,
+    providerUrl: providerUrl ?? null,
+    normalizedRemote: normalizedRemote ?? null,
+    localRoots: [],
+    discoveries: [],
+    enrollments: {},
+    aliases: [],
+    visibility: "visible",
+    resolution: kind === "git" ? "resolved" : "unresolved",
+    activity: "unknown",
+    pinned: false,
+    createdAt: now,
+    updatedAt: now,
+  };
+  return validateRepositoryRecord(id, record);
+}
+
+function safeString(value, label, max = 200) {
+  if (typeof value !== "string" || !value.trim() || /[\u0000-\u001f\u007f]/.test(value)) throw new Error(`${label} is invalid`);
+  return value.trim().slice(0, max);
+}
+
+function safeOpaqueId(value, label) {
+  if (typeof value !== "string" || !/^[a-z0-9][a-z0-9._-]{0,127}$/i.test(value)) throw new Error(`${label} is invalid`);
+  return value;
+}
+
+// Absolute, control-character-free, and free of traversal segments. Unlike safeString this must NOT
+// trim or truncate: a silently shortened path would resolve to the wrong directory rather than
+// failing, and a path is used to read a filesystem rather than to be displayed.
+function safeAbsolutePath(value, label) {
+  if (typeof value !== "string" || !value) throw new Error(`${label} is invalid`);
+  if (value.length > 4096) throw new Error(`${label} too long`);
+  if (/[\x00-\x1F\x7F]/.test(value)) throw new Error(`${label} is invalid`);
+  if (!value.startsWith("/")) throw new Error(`${label} must be absolute`);
+  if (value.split("/").includes("..")) throw new Error(`${label} must not contain traversal segments`);
+  return value;
+}
+
+function validateObjectKeys(value, allowed, label) {
+  for (const key of Object.keys(value)) {
+    if (!allowed.includes(key)) throw new Error(`unknown ${label} field: ${key}`);
+  }
+}
+
+// The private rootId -> absolute path index. It lives in the registry file rather than
+// a sibling one so that identity and path commit as a single logical update: updateRegistry is
+// already one read-mutate-write with a revision bump, and two files could not be committed
+// atomically against a concurrent writer.
+//
+// Paths never reach the browser. That boundary is enforced where payloads are built
+// (repositoryListPayload/repositoryDetailPayload whitelist fields explicitly and map localRoots to
+// kind/timestamps only), not by keeping the data in a separate file — a separate file would be one
+// forgotten spread away from leaking anyway.
+//
+// Keyed by rootId alone, not repositoryId -> rootId: a rootId resolves to at most ONE current path
+// (an invariant of the spec), and a flat key makes that unrepresentable-otherwise rather than
+// merely enforced. Reused directories are the reason this matters — one rootId already appears
+// under two repositories in the live registry.
+function validateLocalRootPaths(localRootPaths) {
+  if (localRootPaths === undefined) return; // Absent on records written before this index existed.
+  if (!localRootPaths || typeof localRootPaths !== "object" || Array.isArray(localRootPaths)) {
+    throw new Error("registry localRootPaths must be an object");
+  }
+  for (const [rootId, entry] of Object.entries(localRootPaths)) {
+    safeOpaqueId(rootId, "localRootPath rootId");
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new Error("localRootPath must be an object");
+    validateObjectKeys(entry, ["path", "repositoryId", "firstSeenAt", "lastSeenAt"], "localRootPath");
+    safeAbsolutePath(entry.path, "localRootPath path");
+    safeRepositoryId(entry.repositoryId);
+    safeIsoTimestamp(entry.firstSeenAt, "localRootPath firstSeenAt");
+    safeIsoTimestamp(entry.lastSeenAt, "localRootPath lastSeenAt");
+  }
+}
+
+function validateRepositories(repositories) {
+  if (!repositories || typeof repositories !== "object" || Array.isArray(repositories)) throw new Error("registry repositories must be an object");
+  const urlKeys = new Set();
+  for (const [id, record] of Object.entries(repositories)) {
+    safeRepositoryId(id);
+    validateRepositoryRecord(id, record);
+    if (urlKeys.has(record.urlKey)) throw new Error(`duplicate repository urlKey: ${record.urlKey}`);
+    urlKeys.add(record.urlKey);
+  }
 }
 
 // Opt-in worktree cleanup for a repository without a plans config: the folder automatic removal
@@ -247,52 +295,4 @@ function validateAliases(aliases) {
     if (from === to) throw new Error("alias cannot point to itself");
   }
   assertAliasGraph(aliases);
-}
-
-export function resolveRegistryAlias(registry, identity) {
-  let current = identity;
-  const seen = new Set([current]);
-  for (;;) {
-    const next = registry?.aliases?.[current];
-    if (!next) return current;
-    if (seen.has(next)) throw new Error("registry aliases must not contain cycles");
-    seen.add(next);
-    current = next;
-  }
-}
-
-export function assertAliasGraph(aliases) {
-  for (const identity of Object.keys(aliases)) {
-    const seen = new Set([identity]);
-    let next = aliases[identity];
-    while (next) {
-      if (seen.has(next)) throw new Error("registry aliases must not contain cycles");
-      seen.add(next);
-      next = aliases[next];
-    }
-  }
-}
-
-// Build a fresh, valid repository record with sane lifecycle defaults.
-export function newRepositoryRecord(id, { kind, urlKey, displayName, now = new Date().toISOString(), providerUrl = null, normalizedRemote = null }) {
-  safeRepositoryId(id);
-  const record = {
-    id,
-    kind,
-    urlKey,
-    displayName,
-    providerUrl: providerUrl ?? null,
-    normalizedRemote: normalizedRemote ?? null,
-    localRoots: [],
-    discoveries: [],
-    enrollments: {},
-    aliases: [],
-    visibility: "visible",
-    resolution: kind === "git" ? "resolved" : "unresolved",
-    activity: "unknown",
-    pinned: false,
-    createdAt: now,
-    updatedAt: now,
-  };
-  return validateRepositoryRecord(id, record);
 }

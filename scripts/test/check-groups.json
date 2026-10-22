@@ -44,6 +44,7 @@
     "telemetry-shell-groups-check.mjs",
     "telemetry-conditions-presentation-check.mjs",
     "telemetry-observations-check.mjs",
+    "telemetry-session-findings-check.mjs",
     "telemetry-repository-overview-check.mjs",
     "telemetry-repository-reconcile-check.mjs",
     "browser-contract-check.mjs",

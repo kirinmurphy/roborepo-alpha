@@ -9,15 +9,15 @@
 // One `docker stats --no-stream --format {{json .}}` call for every running container in a scan,
 // not one call per container — same "N things, one call" discipline as docker.mjs's `docker ps`.
 
-import { execFile } from "node:child_process";
 import os from "node:os";
-import { promisify } from "node:util";
+import { defaultRunCommand } from "./command-exec.mjs";
 
-// Crosses the same Docker Desktop VM-proxy boundary as `docker ps` (see docker.mjs), so reuses
-// that call's timeout budget rather than inventing a second magic number for the same boundary.
+export { defaultRunCommand };
+
+const MEM_UNIT_TO_KB = { B: 1 / 1024, KiB: 1, MiB: 1024, GiB: 1024 * 1024, TiB: 1024 * 1024 * 1024 };
+
+// Budget for the optional per-container metrics pass; independent of Docker discovery's timeout.
 export const DOCKER_STATS_TIMEOUT_MS = 6000;
-
-const execFileAsync = promisify(execFile);
 
 export async function collectDockerStats({
   platform = process.platform,
@@ -81,15 +81,10 @@ function parsePercent(value) {
 
 // "151.7MiB / 256MiB" — used vs. limit; only the used side matches what process-metrics.mjs's
 // residentMemoryKb already means (current resident usage, not a ceiling).
-const MEM_UNIT_TO_KB = { B: 1 / 1024, KiB: 1, MiB: 1024, GiB: 1024 * 1024, TiB: 1024 * 1024 * 1024 };
 function parseMemUsage(value) {
   const used = String(value || "").split("/")[0]?.trim();
   const match = used?.match(/^([\d.]+)(B|KiB|MiB|GiB|TiB)$/);
   if (!match) return null;
   const multiplier = MEM_UNIT_TO_KB[match[2]];
   return multiplier ? Number(match[1]) * multiplier : null;
-}
-
-export async function defaultRunCommand(command, args, { timeoutMs } = {}) {
-  return execFileAsync(command, args, { timeout: timeoutMs, encoding: "utf8", maxBuffer: 1024 * 1024 });
 }

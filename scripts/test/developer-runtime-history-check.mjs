@@ -120,6 +120,46 @@ try {
   );
   console.log("ok  retention drops events past the window");
 
+  // Corrupt records still occupy a position in the file. Retention must remove the measured
+  // prefix before filtering invalid events, or an invalid row makes a recent event disappear.
+  const corruptAgeRoot = path.join(tempRoot, "corrupt-age");
+  const corruptAgePath = historyPathFor(corruptAgeRoot);
+  fs.mkdirSync(path.dirname(corruptAgePath), { recursive: true });
+  fs.writeFileSync(corruptAgePath, [
+    JSON.stringify(event("expired", "firstSeen", "2025-12-01T00:00:00.000Z")),
+    JSON.stringify({ at: "2025-12-02T00:00:00.000Z", type: "invalid", associationKey: "invalid" }),
+    "",
+    JSON.stringify(event("recent-first", "firstSeen", "2025-12-30T00:00:00.000Z")),
+    JSON.stringify(event("recent-second", "firstSeen", "2025-12-31T00:00:00.000Z")),
+  ].join("\n") + "\n");
+  assert.equal(compactHistory({ stateRoot: corruptAgeRoot, now: NOW }), true);
+  assert.deepEqual(readHistoryEvents({ stateRoot: corruptAgeRoot }).map((entry) => entry.associationKey),
+    ["recent-first", "recent-second"], "invalid expired rows must not shift the cut into recent history");
+
+  const corruptCapRoot = path.join(tempRoot, "corrupt-cap");
+  const corruptCapPath = historyPathFor(corruptCapRoot);
+  fs.mkdirSync(path.dirname(corruptCapPath), { recursive: true });
+  fs.writeFileSync(corruptCapPath, [
+    "x".repeat(HISTORY_MAX_BYTES),
+    JSON.stringify(event("recent-first", "firstSeen")),
+    JSON.stringify(event("recent-second", "firstSeen")),
+  ].join("\n") + "\n");
+  assert.equal(compactHistory({ stateRoot: corruptCapRoot, now: NOW }), true);
+  assert.deepEqual(readHistoryEvents({ stateRoot: corruptCapRoot }).map((entry) => entry.associationKey),
+    ["recent-first", "recent-second"], "discarding an oversized corrupt prefix must preserve recent history");
+  assert.ok(fs.statSync(corruptCapPath).size <= HISTORY_MAX_BYTES);
+  assert.equal(compactHistory({ stateRoot: corruptCapRoot, now: NOW }), false, "recovered history needs no further trim");
+
+  const corruptTailRoot = path.join(tempRoot, "corrupt-tail");
+  const corruptTailPath = historyPathFor(corruptTailRoot);
+  fs.mkdirSync(path.dirname(corruptTailPath), { recursive: true });
+  fs.writeFileSync(corruptTailPath, JSON.stringify(event("last-valid", "firstSeen")) + "\n" + "x".repeat(HISTORY_MAX_BYTES) + "\n");
+  assert.equal(compactHistory({ stateRoot: corruptTailRoot, now: NOW }), true);
+  assert.deepEqual(readHistoryEvents({ stateRoot: corruptTailRoot }).map((entry) => entry.associationKey),
+    ["last-valid"], "a corrupt tail must not erase the final valid event");
+  assert.ok(fs.statSync(corruptTailPath).size <= HISTORY_MAX_BYTES);
+  console.log("ok  compaction preserves valid history around corrupt records");
+
   // ---- Size cap, and compaction leaves no temp file behind ----
   // Written straight to disk rather than via appendHistoryEvents, because appending already trims
   // past the cap on the way in — this fixture has to exist in the oversized state to prove the trim

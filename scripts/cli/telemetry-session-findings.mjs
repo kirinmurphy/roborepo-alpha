@@ -15,21 +15,32 @@
 // The portal NEVER writes prose itself — it renders these rows verbatim. CLI/portal/agent prompt
 // all read the same output, so the sentence can't drift between surfaces.
 
-const fmt = (n) => Number(n || 0).toLocaleString("en-US");
-const clip = (s, n) => (s && s.length > n ? s.slice(0, n) + "…" : s || "");
+import { clipText, formatCount } from "./telemetry-format.mjs";
+
+const SEVERITY_RANK = { high: 0, warn: 1, info: 2 };
+
+const READ_WARNING_SUMMARY = {
+  large_document_read: (agg) =>
+    `Loaded a very large document straight into context — ${formatTokenCount(agg.tokens)} tokens across ${agg.reads} read${agg.reads > 1 ? "s" : ""}.`,
+  repeated_document_read: (agg) =>
+    `Re-read the same large document ${agg.list.length} time${agg.list.length > 1 ? "s" : ""} — ${formatTokenCount(agg.tokens)} tokens spent re-reading content already in context.`,
+  stale_doc_lookup: () =>
+    "Docs were read repeatedly without any doc-index lookups — the session worked around a missing lookup tool.",
+  mixed_code_lookup: (agg) =>
+    `Used the code index but still made ${agg.reads} native source reads — the lookup habit isn't sticking yet.`,
+};
 
 // One finding per rule, gathered from the session's own rows. Findings are ordered worst-first by
 // severity — the popup shows them in order, no re-ranking client-side.
 export function deriveSessionFindings({ sessionId, spikes = [], loops = [], read_warnings = [], testing_efficiency = null }) {
   const out = [];
-  const tok = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? Math.round(n / 1e3) + "k" : String(Math.round(n || 0)));
 
   // --- spikes in this session ---------------------------------------------------------------------
   for (const s of spikes) {
     out.push({
       kind: "session_spike",
       severity: "high",
-      summary: `A single turn added ${tok(s.delta_tokens)} tokens to the context at once — ${fmt(s.delta_tokens)} tokens in one step.`,
+      summary: `A single turn added ${formatTokenCount(s.delta_tokens)} tokens to the context at once — ${formatCount(s.delta_tokens)} tokens in one step.`,
       detail: `turn at ${s.ts} · ${s.tool || "unknown tool"} · cause: ${s.cause || "unattributed"}`,
       hint: s.hint || null,
       section_key: "spikes",
@@ -42,7 +53,7 @@ export function deriveSessionFindings({ sessionId, spikes = [], loops = [], read
       kind: "session_loop",
       severity: "high",
       summary: `${l.tool} fired ${l.max_repeat}× in a row — a runaway loop that re-spent tokens for the same answer.`,
-      detail: `${fmt(l.wasted_tokens || 0)} tokens spent on repeat calls${l.context?.title ? ` · while working on "${clip(l.context.title, 60)}"` : ""}`,
+      detail: `${formatCount(l.wasted_tokens || 0)} tokens spent on repeat calls${l.context?.title ? ` · while working on "${clipText(l.context.title, 60)}"` : ""}`,
       hint: l.hint || null,
       section_key: "loops",
     });
@@ -63,8 +74,8 @@ export function deriveSessionFindings({ sessionId, spikes = [], loops = [], read
       severity: type === "large_document_read" ? "warn" : "high",
       summary: READ_WARNING_SUMMARY[type]
         ? READ_WARNING_SUMMARY[type](agg)
-        : `Large or repeated document reads added ${tok(agg.tokens)} tokens of context.`,
-      detail: `${agg.list.length} instance${agg.list.length > 1 ? "s" : ""} · ${tok(agg.tokens)} approx tokens · ${agg.reads} total reads`,
+        : `Large or repeated document reads added ${formatTokenCount(agg.tokens)} tokens of context.`,
+      detail: `${agg.list.length} instance${agg.list.length > 1 ? "s" : ""} · ${formatTokenCount(agg.tokens)} approx tokens · ${agg.reads} total reads`,
       hint: agg.list[0]?.hint || null,
       section_key: "reads",
     });
@@ -91,17 +102,11 @@ export function deriveSessionFindings({ sessionId, spikes = [], loops = [], read
   }
 
   // Order: high before warn; ties by kind for stable output.
-  const rank = { high: 0, warn: 1, info: 2 };
-  return out.sort((a, b) => rank[a.severity] - rank[b.severity] || a.kind.localeCompare(b.kind));
+  return out.sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] || a.kind.localeCompare(b.kind));
 }
 
-const READ_WARNING_SUMMARY = {
-  large_document_read: (agg) =>
-    `Loaded a very large document straight into context — ${tok(agg.tokens)} tokens across ${agg.reads} read${agg.reads > 1 ? "s" : ""}.`,
-  repeated_document_read: (agg) =>
-    `Re-read the same large document ${agg.list.length} time${agg.list.length > 1 ? "s" : ""} — ${tok(agg.tokens)} tokens spent re-reading content already in context.`,
-  stale_doc_lookup: () =>
-    "Docs were read repeatedly without any doc-index lookups — the session worked around a missing lookup tool.",
-  mixed_code_lookup: (agg) =>
-    `Used the code index but still made ${agg.reads} native source reads — the lookup habit isn't sticking yet.`,
-};
+function formatTokenCount(value) {
+  if (value >= 1e6) return (value / 1e6).toFixed(1) + "M";
+  if (value >= 1e3) return Math.round(value / 1e3) + "k";
+  return String(Math.round(value || 0));
+}

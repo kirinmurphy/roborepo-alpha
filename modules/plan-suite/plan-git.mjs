@@ -1,8 +1,7 @@
 // Git access for the plan-suite operations that mutate or inspect checkouts: lifecycle transitions,
-// base synchronization, the completion preflight, and approval freshness. Unlike
-// modules/repositories/git-exec.mjs, which is read-only by design, callers of this module commit,
-// rename, and merge, so every mutation they make is preceded by a precondition that refuses rather
-// than working around a surprise.
+// base synchronization, the completion preflight, and approval freshness. Callers commit, rename,
+// and merge, so each operation owns its mutation preconditions. This wrapper preserves raw status
+// columns and uses a longer timeout than the repository executor's default polling reads.
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";

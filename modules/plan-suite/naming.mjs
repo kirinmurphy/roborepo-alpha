@@ -60,7 +60,7 @@ const configCache = new Map();
 // decide. Malformed JSON is treated the same way: naming validation is advisory, and failing a
 // whole scan over an unparseable config would be a worse outcome than not enforcing the rule.
 export function readProjectNamespaces(repositoryRoot) {
-  const file = path.join(repositoryRoot, "docs", "plans", "plans-config.json");
+  const file = path.join(repositoryRoot, PLANS_CONFIG_RELATIVE_PATH);
   let stat;
   try {
     stat = fs.statSync(file);

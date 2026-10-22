@@ -1,6 +1,6 @@
 // The management dialog's payload: sources (with display paths) and one list of every known
 // repository with a quiet "Found by" explanation. This is the only payload allowed to carry source
-// paths (pljvmyh §6), and even here they are home-collapsed display strings.
+// paths, and even here they are home-collapsed display strings.
 import { AUTO_DISCOVERY_SOURCE_ID, CONFIGURED_DISCOVERY_SOURCE, autoDiscoverySource, userSources } from "../../modules/repositories/index.mjs";
 import { isFixtureRepository } from "../../modules/developer-runtime/snapshot.mjs";
 

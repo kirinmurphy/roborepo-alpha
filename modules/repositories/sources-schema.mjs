@@ -1,7 +1,9 @@
-// Versioned schema + strict validators for the repository-sources store (pljvmyh §1). A source is
+// Versioned schema + strict validators for the repository-sources store. A source is
 // user intent — "you may look here" — while the registry is discovered state, so the two live in
 // separate files. Same conventions as schema.mjs: a *_VERSION const, allow-list validators that
 // throw on unknown keys, no I/O.
+
+import { safeIsoTimestamp } from "./schema.mjs";
 
 export const SOURCES_VERSION = 1;
 
@@ -37,6 +39,22 @@ export function defaultSources(now = new Date().toISOString()) {
 
 export function pendingStatus() {
   return { state: "pending", refreshedAt: null, repositoryCount: 0, message: null };
+}
+
+// `src-` plus opaque characters: never derived from the path, so an id leaks nothing about it.
+export function safeSourceId(value) {
+  if (typeof value !== "string" || !/^src-[a-z0-9]{6,32}$/.test(value)) throw new Error("repository source id is invalid");
+  return value;
+}
+
+// Absolute, control-character-free, no traversal segments, never trimmed — same discipline as the
+// registry's localRootPaths, because a silently altered path would scan the wrong directory.
+export function safeAbsolutePath(value) {
+  if (typeof value !== "string" || !value || value.length > 4096) throw new Error("repository source path is invalid");
+  if (/[\x00-\x1F\x7F]/.test(value)) throw new Error("repository source path is invalid");
+  if (!value.startsWith("/")) throw new Error("repository source path must be absolute");
+  if (value.split("/").includes("..")) throw new Error("repository source path must not contain traversal segments");
+  return value;
 }
 
 export function validateSources(store) {
@@ -85,27 +103,6 @@ function validateStatus(status) {
   if (status.refreshedAt != null) safeIsoTimestamp(status.refreshedAt, "repository source refreshedAt");
   if (!Number.isInteger(status.repositoryCount) || status.repositoryCount < 0) throw new Error("repository source repositoryCount is invalid");
   if (status.message != null && (typeof status.message !== "string" || status.message.length > 500)) throw new Error("repository source message is invalid");
-}
-
-// `src-` plus opaque characters: never derived from the path, so an id leaks nothing about it.
-export function safeSourceId(value) {
-  if (typeof value !== "string" || !/^src-[a-z0-9]{6,32}$/.test(value)) throw new Error("repository source id is invalid");
-  return value;
-}
-
-// Absolute, control-character-free, no traversal segments, never trimmed — same discipline as the
-// registry's localRootPaths, because a silently altered path would scan the wrong directory.
-export function safeAbsolutePath(value) {
-  if (typeof value !== "string" || !value || value.length > 4096) throw new Error("repository source path is invalid");
-  if (/[\x00-\x1F\x7F]/.test(value)) throw new Error("repository source path is invalid");
-  if (!value.startsWith("/")) throw new Error("repository source path must be absolute");
-  if (value.split("/").includes("..")) throw new Error("repository source path must not contain traversal segments");
-  return value;
-}
-
-function safeIsoTimestamp(value, label) {
-  if (typeof value !== "string" || Number.isNaN(Date.parse(value))) throw new Error(`${label} must be an ISO-8601 timestamp`);
-  return value;
 }
 
 function validateObjectKeys(value, allowed, label) {

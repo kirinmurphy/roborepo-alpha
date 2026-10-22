@@ -29,29 +29,6 @@ export async function withCleanupLock(stateRoot, action, { fsApi = fs, repositor
   }
 }
 
-function openLock(file, fsApi) {
-  try {
-    return fsApi.openSync(file, "wx");
-  } catch (err) {
-    if (err?.code === "EEXIST") return null;
-    throw err;
-  }
-}
-
-// An empty lock may belong to a run that has opened it but not yet written its pid, so only a
-// recorded pid with no live process counts as stale.
-function staleLock(file, fsApi) {
-  let pid;
-  try { pid = Number.parseInt(fsApi.readFileSync(file, "utf8"), 10); } catch { return false; }
-  if (!Number.isInteger(pid) || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return false;
-  } catch (err) {
-    return err?.code === "ESRCH";
-  }
-}
-
 // The tip's short SHA ends the ref, so the same branch name can be archived again at a new tip, and
 // archiving `a` never blocks a later `a/b` (Git cannot hold `abandoned/a` as a ref and a directory).
 // Seven characters matches the short SHA Home shows, so its confirmation names the exact ref.
@@ -100,4 +77,27 @@ function appendRemoval(stateRoot, entry, fsApi) {
   const file = removalLogPath(stateRoot);
   fsApi.mkdirSync(path.dirname(file), { recursive: true });
   fsApi.appendFileSync(file, `${JSON.stringify(entry)}\n`);
+}
+
+function openLock(file, fsApi) {
+  try {
+    return fsApi.openSync(file, "wx");
+  } catch (err) {
+    if (err?.code === "EEXIST") return null;
+    throw err;
+  }
+}
+
+// An empty lock may belong to a run that has opened it but not yet written its pid, so only a
+// recorded pid with no live process counts as stale.
+function staleLock(file, fsApi) {
+  let pid;
+  try { pid = Number.parseInt(fsApi.readFileSync(file, "utf8"), 10); } catch { return false; }
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch (err) {
+    return err?.code === "ESRCH";
+  }
 }

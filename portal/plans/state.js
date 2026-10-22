@@ -167,12 +167,12 @@ export function completionRatio(plan) {
   return total > 0 ? complete / total : null;
 }
 
-// Most complete first; un-started plans (including untracked 0/0) sink to the bottom as one group.
+// Most complete first; 0% plans follow started work, then plans with no tracked tasks.
 // Ties fall through to planSort so priority, recency, and title still break them the usual way.
 export function activeCompletionSort(a, b) {
   const ratioA = completionRatio(a.plan);
   const ratioB = completionRatio(b.plan);
-  // null (no checklist) sorts with 0% rather than ahead of it — an untracked plan is not progress.
+  // No checklist ranks below 0%: tracked work comes before plans with no tasks.
   const rank = (ratio) => (ratio === null ? -1 : ratio);
   return rank(ratioB) - rank(ratioA) || planSort(a, b);
 }

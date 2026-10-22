@@ -3,7 +3,7 @@
 // "blocked by N" button. Each resolved blocker is a link; app.js's onOpenPlan callback decides
 // what "open" means (closes the popover, opens the target's drawer). Unresolved ids (a blocked_by
 // entry with no matching plan in the same repository) render as plain, unclickable text.
-import { portalTpl as tpl, portalFillSlots as fill } from "/portal/shared/api.js";
+import { blockerLink } from "./templates.js";
 import { positionPopoverPanel } from "/portal/shared/popover-position.js";
 
 export function createBlockersPopover(panelEl, { onOpenPlan }) {
@@ -23,15 +23,10 @@ export function createBlockersPopover(panelEl, { onOpenPlan }) {
   // blockers: [{id, title, key, resolved}], anchor: the button that triggered this popover.
   function open({ blockers, anchor }) {
     titleEl.textContent = blockers.length === 1 ? "Blocked by" : `Blocked by ${blockers.length}`;
-    listEl.replaceChildren(...blockers.map((blocker) => {
-      if (!blocker.resolved) return fill(tpl("tpl-blocker-unresolved"), { title: blocker.title });
-      const link = fill(tpl("tpl-blocker-link"), { title: blocker.title });
-      link.addEventListener("click", () => {
-        close();
-        onOpenPlan(blocker.key);
-      });
-      return link;
-    }));
+    listEl.replaceChildren(...blockers.map((blocker) => blockerLink(blocker, (key) => {
+      close();
+      onOpenPlan(key);
+    })));
     panelEl.hidden = false;
     positionPopoverPanel(panelEl, anchor);
   }

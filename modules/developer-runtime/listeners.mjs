@@ -1,10 +1,9 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { defaultRunCommand } from "./command-exec.mjs";
 import { parseCwdFieldOutput, parseLsofFieldOutput } from "./lsof.mjs";
 
-export const LISTENER_DISCOVERY_TIMEOUT_MS = 3000;
+export { defaultRunCommand };
 
-const execFileAsync = promisify(execFile);
+export const LISTENER_DISCOVERY_TIMEOUT_MS = 3000;
 
 export async function discoverListenerRecords({
   platform = process.platform,
@@ -41,8 +40,4 @@ export async function resolvePidCwd(pid, runCommand, timeoutMs, warnings) {
     warnings.push(`cwd lookup failed for pid ${pid}: ${err.message}`);
     return null;
   }
-}
-
-export async function defaultRunCommand(command, args, { timeoutMs } = {}) {
-  return execFileAsync(command, args, { timeout: timeoutMs, encoding: "utf8", maxBuffer: 1024 * 1024 });
 }

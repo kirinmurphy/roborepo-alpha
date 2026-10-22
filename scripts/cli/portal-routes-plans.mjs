@@ -5,6 +5,43 @@ import { send, readJsonBody } from "./portal-routes-http.mjs";
 import { defineRoutes } from "./portal-router.mjs";
 import { readRepositoryScope } from "./portal-routes-scope.mjs";
 
+export const plansRoutes = defineRoutes([
+  {
+    // ?repo=<urlKey> narrows the snapshot to one repository (the shared Portal scope).
+    path: "/api/plans",
+    handler: (req, res, { qs, handlers }) => {
+      const scope = readRepositoryScope(new URLSearchParams(qs), res, handlers);
+      if (!scope) return true;
+      send(res, 200, "application/json", JSON.stringify(handlers.loadPlans({ repositoryId: scope.repositoryId ?? null })));
+      return true;
+    },
+  },
+  {
+    path: "/api/plans/document",
+    handler: (req, res, { qs, handlers }) => {
+      const params = new URLSearchParams(qs);
+      try {
+        send(res, 200, "application/json", JSON.stringify(handlers.loadPlanDocument({ key: params.get("key") })));
+      } catch (err) {
+        send(res, 400, "application/json", JSON.stringify({ error: String(err?.message || err) }));
+      }
+      return true;
+    },
+  },
+  postJsonRoute("/api/plans/prompt", (handlers, body) => handlers.buildPlansPrompt(body)),
+  postJsonRoute("/api/plans/priority", (handlers, body) => handlers.updatePlanPriority(body), { domainError: true }),
+  {
+    method: "POST",
+    path: "/api/plans/refresh",
+    handler: (req, res, { qs, handlers }) => {
+      const scope = readRepositoryScope(new URLSearchParams(qs), res, handlers);
+      if (!scope) return true;
+      send(res, 200, "application/json", JSON.stringify(handlers.refreshPlans({ repositoryId: scope.repositoryId ?? null })));
+      return true;
+    },
+  },
+]);
+
 // Serializes a domain error (see modules/plan-suite/index.mjs's domainError helper) into the
 // structured { error: { code, message, resolution, details } } shape the client's portalPostJson
 // preserves. Falls back to a plain 400 for any error that isn't domain-shaped (shouldn't happen
@@ -45,40 +82,3 @@ function postJsonRoute(path, run, { domainError = false } = {}) {
     },
   };
 }
-
-export const plansRoutes = defineRoutes([
-  {
-    // ?repo=<urlKey> narrows the snapshot to one repository (the shared Portal scope).
-    path: "/api/plans",
-    handler: (req, res, { qs, handlers }) => {
-      const scope = readRepositoryScope(new URLSearchParams(qs), res, handlers);
-      if (!scope) return true;
-      send(res, 200, "application/json", JSON.stringify(handlers.loadPlans({ repositoryId: scope.repositoryId ?? null })));
-      return true;
-    },
-  },
-  {
-    path: "/api/plans/document",
-    handler: (req, res, { qs, handlers }) => {
-      const params = new URLSearchParams(qs);
-      try {
-        send(res, 200, "application/json", JSON.stringify(handlers.loadPlanDocument({ key: params.get("key") })));
-      } catch (err) {
-        send(res, 400, "application/json", JSON.stringify({ error: String(err?.message || err) }));
-      }
-      return true;
-    },
-  },
-  postJsonRoute("/api/plans/prompt", (handlers, body) => handlers.buildPlansPrompt(body)),
-  postJsonRoute("/api/plans/priority", (handlers, body) => handlers.updatePlanPriority(body), { domainError: true }),
-  {
-    method: "POST",
-    path: "/api/plans/refresh",
-    handler: (req, res, { qs, handlers }) => {
-      const scope = readRepositoryScope(new URLSearchParams(qs), res, handlers);
-      if (!scope) return true;
-      send(res, 200, "application/json", JSON.stringify(handlers.refreshPlans({ repositoryId: scope.repositoryId ?? null })));
-      return true;
-    },
-  },
-]);

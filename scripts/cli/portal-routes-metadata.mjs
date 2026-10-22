@@ -28,13 +28,7 @@ export function handleMetadataAsset(req, res, urlPath, { pages, appName, apiRout
   return false;
 }
 
-// start_url points at "/", same as the sitemap's home-page entry — this is realistic (most real
-// apps' manifests do point start_url at the home page) and correct, but it means manifest's
-// contribution is always deduped behind sitemap's here (SOURCE_PRIORITY in metadata.mjs ranks
-// sitemap above manifest), since every page in PAGES is also in the sitemap. That is dedup working
-// as designed, not a bug — to see manifest's own suggestion distinctly, temporarily comment out the
-// /sitemap.xml branch below (or point PAGES-derived sitemap at a subset) so manifest's "/" has no
-// sitemap entry to collide with.
+// The home URL also appears in the sitemap; metadata discovery deduplicates it by source priority.
 function buildManifest(pages, appName) {
   return {
     name: appName,

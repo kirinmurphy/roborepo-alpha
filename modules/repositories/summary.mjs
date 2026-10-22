@@ -4,6 +4,10 @@
 // `capabilities` (associated domain data exists / can be queried) is deliberately distinct from
 // `enrollments` (an ongoing user-controlled scan is enabled).
 
+import { isEnrolled } from "./enrollment.mjs";
+
+const CONFIDENCE_RANK = { high: 3, medium: 2, low: 1, suggestion: 0 };
+
 // One repository, summarized for a list or embed.
 export function repositorySummary(record) {
   const discoveredBy = (record.discoveries || []).map((d) => d.source);
@@ -57,7 +61,7 @@ function capabilitiesFor(record) {
   const sources = new Set((record.discoveries || []).map((d) => d.source));
   return {
     developerRuntime: sources.has("developer-runtime"),
-    plans: sources.has("plans") || isEnabled(record, "plans"),
+    plans: sources.has("plans") || isEnrolled(record, "plans"),
     telemetry: sources.has("telemetry"),
     agentConfig: sources.has("agentConfig"),
     health: sources.has("doctor"),
@@ -70,20 +74,15 @@ function enrollmentsFor(record) {
   return out;
 }
 
-function isEnabled(record, domain) {
-  return record.enrollments?.[domain]?.enabled === true;
-}
-
 // Highest-confidence discovery; ties broken by recency (most recent lastSeenAt wins) so the
 // surfaced headline confidence/evidence is deterministic and reflects the freshest strong signal.
 function bestDiscovery(discoveries) {
-  const rank = { high: 3, medium: 2, low: 1, suggestion: 0 };
   let best = null;
   for (const d of discoveries) {
     if (!best) { best = d; continue; }
-    const dr = rank[d.confidence] ?? -1;
-    const br = rank[best.confidence] ?? -1;
-    if (dr > br || (dr === br && Date.parse(d.lastSeenAt) > Date.parse(best.lastSeenAt))) best = d;
+    const discoveryRank = CONFIDENCE_RANK[d.confidence] ?? -1;
+    const bestRank = CONFIDENCE_RANK[best.confidence] ?? -1;
+    if (discoveryRank > bestRank || (discoveryRank === bestRank && Date.parse(d.lastSeenAt) > Date.parse(best.lastSeenAt))) best = d;
   }
   return best;
 }
