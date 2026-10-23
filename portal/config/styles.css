@@ -172,7 +172,6 @@ main {
 .bulk-toggle-status {
   font-size: var(--text-2xs);
   color: var(--dim);
-  min-width: 64px; /* reserve room so "applying…" doesn't shift the label/switch */
   text-align: right;
 }
 
@@ -256,11 +255,6 @@ main {
   white-space: nowrap;
   vertical-align: middle;
 }
-.drift-chip.drift-warn {
-  color: var(--warn);
-  border-color: var(--warn-line, var(--warn));
-  background: var(--warn-bg, transparent);
-}
 .drift-chip.drift-info {
   color: var(--accent);
   border-color: var(--accent);
@@ -271,7 +265,16 @@ main {
   border-color: var(--line);
   background: transparent;
 }
-/* toggle switch */
+/* toggle switch, with the in-flight spinner to its left */
+.toggle-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.toggle-spinner {
+  flex: none;
+  margin-top: 2px;
+}
 .switch {
   flex: none;
   position: relative;

@@ -55,7 +55,7 @@ run `roborepo harness refresh`.
 | `roborepo update [--dry-run] [--verbose] [--on-conflict keep\|overwrite\|abort]` | Re-applies harness config on this machine: copied files, rendered rules, root config, command install, and shell wiring. Use after pulling repo changes or upgrading the package; `--verbose` includes unchanged items in the report. `--on-conflict` sets the [collision policy](../guides/install-workflows.md#collision-policy). |
 | `roborepo version` | Prints the package version and the directories RoboRepo runs from. |
 | `roborepo config status` | Shows enabled behaviors and packages. |
-| `roborepo config root inspect` | Read-only report of each harness root config (`~/.claude/settings.json`, `~/.codex/config.toml`): baseline vs. active file and its drift state — `in sync`, `drifted` (edited since RoboRepo's last write), `staged update pending`, or untracked. |
+| `roborepo config root inspect` | Read-only report of each harness root config (`~/.claude/settings.json`, `~/.codex/config.toml`): baseline vs. active file and its drift state — `in sync`, `has local changes` (changed since RoboRepo's last write; the next update keeps them and adds RoboRepo's entries), or untracked. |
 | `roborepo doctor [--verbose]` | Runs harness health checks for config files, links, helper commands, dependencies, and generated outputs. |
 | `roborepo doctor --installed [--verbose]` | Verifies that installed harness paths resolve correctly; also fails when a local store is over its size cap. |
 | `roborepo maintenance repair [--dry-run] [--on-conflict ...]` | Repairs a moved or renamed checkout by relinking stale symlinks against the current path; it leaves copied config content alone. |

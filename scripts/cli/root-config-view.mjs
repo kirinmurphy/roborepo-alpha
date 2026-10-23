@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import { rootConfigBaseline, rootConfigActive } from "./paths.mjs";
 import { checkDrift } from "./root-config-state.mjs";
-import { findSiblingArtifact } from "./staging-lib.mjs";
 
 // Keyed by whichever providers actually declare a rootConfig path (rootConfigActive, from
 // paths.mjs's pathById("rootConfig")) — N-provider-safe, no hardcoded harness list.
@@ -20,22 +19,17 @@ function rootConfigHarnesses() {
 // state label. States:
 //   not-installed  — no active file on disk.
 //   in-sync        — active file matches roborepo's last recorded write ("clean").
-//   drifted        — active file changed since roborepo's last write.
-//   staged-pending — a *_update_TIMESTAMP baseline sits beside the active file (a `keep`-policy
-//                    install/update left the new baseline staged for the user to reconcile).
+//   drifted        — active file changed since roborepo's last write (by the user or the
+//                    harness app); the next update merges into it, keeping every local value.
 //   unwritten      — no recorded roborepo write yet (pre-dates drift tracking, or never installed
 //                    via roborepo).
-// staged-pending is reported when a staged sibling exists regardless of drift status, because a
-// pending staged update is the actionable thing to surface even on an otherwise-clean file.
 function describeDrift(harness, { active, baseline }) {
   const activeExists = fs.existsSync(active);
   const baselineExists = fs.existsSync(baseline);
   const drift = activeExists ? checkDrift(harness, active) : { status: "missing" };
-  const stagedUpdate = activeExists ? findSiblingArtifact(active, "update") : null;
 
   let state;
   if (!activeExists) state = "not-installed";
-  else if (stagedUpdate) state = "staged-pending";
   else if (drift.status === "clean") state = "in-sync";
   else if (drift.status === "drifted") state = "drifted";
   else state = "unwritten"; // covers "unwritten" and any other non-clean/non-drifted status
@@ -47,7 +41,6 @@ function describeDrift(harness, { active, baseline }) {
     activeExists,
     baselineExists,
     state,
-    stagedUpdate,
     lastHash: drift.lastHash ?? null,
     currentHash: drift.currentHash ?? null,
   };
@@ -62,7 +55,6 @@ export function buildRootConfigView() {
 export const ROOT_CONFIG_STATE_LABEL = {
   "not-installed": "not installed",
   "in-sync": "in sync (unchanged since roborepo's last write)",
-  drifted: "drifted (changed since roborepo's last write)",
-  "staged-pending": "staged update pending (a new baseline is staged beside the active file)",
+  drifted: "has local changes (made since roborepo's last write, by you or the harness app; `roborepo update` keeps them and adds roborepo's entries)",
   unwritten: "no recorded roborepo write yet (pre-dates drift tracking, or never installed via roborepo)",
 };

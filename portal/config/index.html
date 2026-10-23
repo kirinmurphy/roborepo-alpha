@@ -222,7 +222,8 @@
           <h2 data-slot="heading"></h2>
           <!-- Section-level bulk toggle (bulkToggle sections only): same switch chrome as the
                per-package toggles, plus a Select/Deselect All label that tracks the group state.
-               The status span shows "applying…" while the batch request is in flight. -->
+               The toggle's own spinner shows while the batch request is in flight; the status
+               span carries only an error. -->
           <span class="bulk-toggle-wrap" data-slot="bulk" hidden>
             <span class="bulk-toggle-status" data-slot="bulk-status"></span>
             <span class="bulk-toggle-label" data-slot="bulk-label"></span>
@@ -339,12 +340,15 @@
       <button type="button" class="bucket-btn"></button>
     </template>
     <template id="tpl-config-toggle">
-      <label class="switch">
-        <input type="checkbox" data-slot="input" />
-        <span class="switch-track">
-          <span class="switch-knob"></span>
-        </span>
-      </label>
+      <span class="toggle-wrap">
+        <span class="spinner toggle-spinner" data-slot="spinner" role="status" hidden></span>
+        <label class="switch">
+          <input type="checkbox" data-slot="input" />
+          <span class="switch-track">
+            <span class="switch-knob"></span>
+          </span>
+        </label>
+      </span>
     </template>
     <template id="tpl-behavior-row">
       <div class="behavior-row">

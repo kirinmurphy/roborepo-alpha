@@ -107,6 +107,17 @@ latest_timestamped_sibling() {
   return 0
 }
 
+# Earlier releases staged a *_update_TIMESTAMP candidate beside a drifted root config instead of
+# merging. export_user_config now always merges, which supersedes any such leftover.
+remove_staged_root_config_candidates() {
+  local path="$1"
+  local staged
+  while staged="$(latest_timestamped_sibling "${path}" update)" && [[ -n "${staged}" ]]; do
+    rm -f "${staged}"
+    say cleanup "${staged}"
+  done
+}
+
 copy_tree() {
   local src="$1"
   local dest="$2"
@@ -785,40 +796,17 @@ export_user_config() {
     fi
   fi
 
-  # Drift-aware collision routing: a *drifted* root config is one the user hand-edited after
-  # roborepo's last write (sidecar hash mismatch). For a fresh adopt ("unwritten") or a
-  # builtin-clean file, the non-destructive merge below is correct and policy-agnostic. But once a
-  # file has genuinely drifted, the merge must NOT silently fold the baseline into the user's edits
-  # and — critically — must not record a fresh "clean" write that hides the drift on the next run.
-  #   keep      -> leave home_path exactly as the user has it; stage the repo candidate as a
-  #                *_update_TIMESTAMP sibling; do not merge, do not record a write (drift stays visible).
-  #   overwrite -> back the drifted file up to *_original_TIMESTAMP, then merge/write the baseline
-  #                (user allow/deny/profiles are still preserved by the merge; the backup is the
-  #                honest record of what was replaced). Falls through to the merge below.
+  # A *drifted* root config changed after roborepo's last write (sidecar hash mismatch). Harness
+  # apps write their own keys into these files, so drift is routine. The merge below keeps every
+  # local value and only adds repo entries, so keep and overwrite both merge: the drifted file is
+  # backed up to *_original_TIMESTAMP first, and cleanup_original_backup_if_redundant drops that
+  # backup again when the merge changed nothing.
+  remove_staged_root_config_candidates "${home_path}"
   local backup_drifted=0
   if [[ -f "${home_path}" && ! -L "${home_path}" ]]; then
     local drift_status
     drift_status="$(root_config_drift_status "${harness}" "${home_path}")"
-    if [[ "${drift_status}" == "drifted" ]]; then
-      case "${ROBOREPO_ON_CONFLICT:-}" in
-        keep)
-          # The JS bundle apply may already have staged this exact candidate earlier in the same
-          # install; don't pile up a duplicate per run.
-          local staged
-          staged="$(latest_timestamped_sibling "${home_path}" update)"
-          if [[ -n "${staged}" ]] && cmp -s "${staged}" "${src}"; then
-            say ok "${home_path} ${RR_DIM}(drifted local root config kept; candidate already staged as $(basename "${staged}"))${RR_RESET}"
-            return 0
-          fi
-          stage_update_item "${repo_rel}" "${home_path}"
-          say ok "${home_path} ${RR_DIM}(drifted local root config kept; candidate staged as *_update_*)${RR_RESET}"
-          return 0
-          ;;
-        overwrite)
-          backup_drifted=1
-          ;;
-      esac
-    fi
+    if [[ "${drift_status}" == "drifted" ]]; then backup_drifted=1; fi
   fi
 
   if [[ "${backup_drifted}" -eq 1 ]]; then

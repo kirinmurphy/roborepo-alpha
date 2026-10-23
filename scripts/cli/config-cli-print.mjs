@@ -20,9 +20,6 @@ export function configRootInspect() {
         console.log(`  for a permanent personal slice, use a Codex profile (~/.codex/<name>.config.toml, --profile <name>)`);
       }
     }
-    if (row.stagedUpdate) {
-      console.log(`  staged update:    ${row.stagedUpdate}`);
-    }
   }
   console.log("");
 }

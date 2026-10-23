@@ -30,10 +30,9 @@ export const BUCKETS = ["allow", "ask", "deny"];
 // Root-config drift chip shown beside settings.json / config.toml. Driven by snap.rootConfig, which
 // the server computes once (buildRootConfigView in config.mjs) so terminal and web agree. "in-sync"
 // and "not-installed" are the quiet default — no chip — so the chip only appears when there is
-// something the user might want to act on (drift, a staged update, or an untracked file).
+// something the user might want to know about (local changes, or an untracked file).
 export const DRIFT_CHIP = {
-  drifted: { label: "drifted", cls: "drift-warn", title: "Changed since roborepo's last write. Run `roborepo update` to reconcile." },
-  "staged-pending": { label: "update staged", cls: "drift-info", title: "A new baseline is staged beside this file, waiting for you to reconcile it." },
+  drifted: { label: "local changes", cls: "drift-info", title: "Changed since roborepo last wrote it, by you or by the harness app. Your settings are kept: `roborepo update` only adds roborepo's own entries." },
   unwritten: { label: "untracked", cls: "drift-muted", title: "No recorded roborepo write yet (pre-dates drift tracking, or not installed via roborepo)." },
 };
 

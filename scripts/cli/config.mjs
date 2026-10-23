@@ -260,12 +260,11 @@ export function readConfigSnapshot() {
         hooks,
       },
     },
-    // Root-config drift state per harness (in-sync / drifted / staged-pending / …), same signal the
+    // Root-config drift state per harness (in-sync / drifted / …), same signal the
     // terminal `roborepo config root inspect` reports. The portal renders a status chip from this.
     rootConfig: buildRootConfigView().map((row) => ({
       harness: row.harness,
       state: row.state,
-      hasStagedUpdate: !!row.stagedUpdate,
     })),
     telemetry: telemetryState
       ? { enabled: !!telemetryState.enabled }

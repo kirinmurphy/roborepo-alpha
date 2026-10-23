@@ -136,7 +136,7 @@ sequenceDiagram
 | Manifest kind | Config says | Code does | Reverse sync |
 | --- | --- | --- | --- |
 | `link` | Home path should point at repo source. | Preflight conflicts, create symlink, verify target. | Syncs home back to repo unless `nosync`. |
-| `root_config` | Home path starts from repo baseline but can become user-owned drift. | Copy clean files, stage `*_update_TIMESTAMP` candidates, back up `*_original_TIMESTAMP` on overwrite, verify active local file. | Skips unless `--include-root-config`. |
+| `root_config` | Home path starts from repo baseline but can become user-owned drift. | Copy clean files, merge drifted ones after backing up `*_original_TIMESTAMP` (under `keep` and `overwrite`), verify active local file. | Skips unless `--include-root-config`. |
 | `cleanup` | Old managed path should no longer be linked to repo. | Remove old repo symlink only. | Never synced. |
 
 ## Remaining Candidates

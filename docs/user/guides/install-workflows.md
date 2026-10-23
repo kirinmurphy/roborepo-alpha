@@ -64,7 +64,7 @@ differs from the repo version. It applies to the checkout installer and to every
 | `abort` | You want to review conflicts by hand first. | Stop instead of changing the conflicting path. |
 
 Root config files (`settings.json`, `config.toml`) are merged rather than replaced, so your
-settings survive; if you edited one since RoboRepo last wrote it, `keep` leaves it untouched. See
+settings survive; if one changed since RoboRepo last wrote it, it is backed up first and still merged. See
 [Root Config Drift Detection](../reference/config-collision-handling.md#root-config-drift-detection).
 
 Pass `--on-conflict keep|overwrite|abort` to choose explicitly:

@@ -30,9 +30,14 @@ file as expected, not a remnant.
 
 `roborepo config root inspect` (terminal) and the `/agents` portal
 drift chip both render from one shared producer, `config.mjs::buildRootConfigView()`, which maps each
-harness to a single state: `not-installed`, `unwritten`, `in-sync`, `drifted`, or `staged-pending` (a
-`*_update_TIMESTAMP` sibling beside the active file, which outranks plain drift because a pending
-staged update is the actionable signal).
+harness to a single state: `not-installed`, `unwritten`, `in-sync`, or `drifted`. A drifted root config
+is merged on the next apply under `keep` and `overwrite` alike (backup first), so there is no staged
+state: `presets.mjs` and `install-lib.sh` remove any `*_update_TIMESTAMP` sibling an earlier release
+left beside the file.
+
+`harness-write-guard.mjs` refuses harness-config writes when the state root is in a temporary
+directory but `HOME` is not. It runs in `writeRootConfig`, at package enable/disable/reconcile and
+bundle apply, and as the installer's first check in `main.sh`.
 
 ## Tests
 
@@ -62,6 +67,5 @@ drift regression coverage:
   harness binaries and checks `keep`, `overwrite`, and `abort` against a drifted root config.
 
 `root-config-state-check.mjs` unit-tests the hash sidecar directly; `root-config-view-check.mjs`
-unit-tests the per-harness drift *view* (`not-installed` / `unwritten` / `in-sync` / `drifted` /
-`staged-pending`) that both `roborepo config root inspect` and the `/agents` portal drift chip render
+unit-tests the per-harness drift *view* (`not-installed` / `unwritten` / `in-sync` / `drifted`) that both `roborepo config root inspect` and the `/agents` portal drift chip render
 from. Both are wired into `test-cli.sh`.

@@ -2,7 +2,7 @@
 // Unit test for buildRootConfigView (scripts/cli/root-config-view.mjs), the per-harness drift view the
 // terminal `roborepo config root inspect` report and the web /agents drift chip both render from.
 // Drives a throwaway HOME so rootConfigActive/rootConfigBaseline resolve into a temp tree, then
-// exercises each user-facing state: not-installed, unwritten, in-sync, drifted, staged-pending.
+// exercises each user-facing state: not-installed, unwritten, in-sync, drifted.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -37,9 +37,9 @@ assert.equal(stateOf("claude"), "in-sync", "unchanged recorded file yields in-sy
 fs.writeFileSync(claudeActive, '{"a":1,"user":"edited"}\n');
 assert.equal(stateOf("claude"), "drifted", "edit after recorded write yields drifted");
 
-// A staged *_update_TIMESTAMP sibling beside the active file -> staged-pending, and it wins over a
-// plain drifted status because the staged update is the actionable thing to surface.
+// A *_update_TIMESTAMP sibling left by an earlier release is not a state of its own: update merges
+// drifted files now and removes such leftovers, so the view reports the file's drift alone.
 fs.writeFileSync(path.join(home, ".claude", "settings_update_20260707-000000.json"), '{"baseline":true}\n');
-assert.equal(stateOf("claude"), "staged-pending", "a staged update sibling yields staged-pending even when drifted");
+assert.equal(stateOf("claude"), "drifted", "a leftover update sibling does not change the reported state");
 
 console.log("root-config-view ok");

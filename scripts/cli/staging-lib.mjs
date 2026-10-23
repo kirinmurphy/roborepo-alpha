@@ -48,7 +48,8 @@ export function timestampedPath(target, tag) {
   return uniquePath(path.join(dir, `${name}_${tag}_${timestamp}${ext}`));
 }
 
-export function findSiblingArtifact(target, tag) {
+// Every <name>_<tag>_* sibling of target, oldest first.
+export function findSiblingArtifacts(target, tag) {
   const dir = path.dirname(target);
   const base = path.basename(target);
   const ext = path.extname(base);
@@ -56,12 +57,15 @@ export function findSiblingArtifact(target, tag) {
   const prefix = `${name}_${tag}_`;
   const suffix = ext || "";
 
-  if (!pathExists(dir)) return null;
-  const matches = fs.readdirSync(dir)
+  if (!pathExists(dir)) return [];
+  return fs.readdirSync(dir)
     .filter((entry) => entry.startsWith(prefix) && entry.endsWith(suffix))
     .sort()
     .map((entry) => path.join(dir, entry));
-  return matches.at(-1) ?? null;
+}
+
+export function findSiblingArtifact(target, tag) {
+  return findSiblingArtifacts(target, tag).at(-1) ?? null;
 }
 
 export function copyTree(source, target) {

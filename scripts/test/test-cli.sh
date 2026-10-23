@@ -1088,10 +1088,11 @@ node -e 'const fs = require("fs"); fs.writeFileSync(process.argv[1], JSON.string
 assert "bundle apply: records root-config writes" \
   bash -c "HOME='${root_keep_home}' ROBOREPO_STATE_DIR='${root_keep_home}/.roborepo' node '${cli}' bundle apply base >/dev/null && HOME='${root_keep_home}' ROBOREPO_STATE_DIR='${root_keep_home}/.roborepo' node '${repo_root}/scripts/cli/root-config-state.mjs' check claude '${root_keep_home}/.claude/settings.json' | grep -q '^clean$'"
 printf '{"MANAGED_BY_ROBOREPO":true,"user":"drifted edit"}\n' > "${root_keep_home}/.claude/settings.json"
-# keep on a drifted root config leaves the user's edit untouched, stages the repo candidate, and does
-# not record a clean write — the drift must stay visible (8828155 fixed the same bug in bash).
-assert "bundle apply: local config keep policy leaves drift untouched and stages candidate" \
-  bash -c "HOME='${root_keep_home}' ROBOREPO_STATE_DIR='${root_keep_home}/.roborepo' node '${repo_root}/scripts/cli/root-config-state.mjs' check claude '${root_keep_home}/.claude/settings.json' | grep -q '^drifted$' && HOME='${root_keep_home}' ROBOREPO_STATE_DIR='${root_keep_home}/.roborepo' ROBOREPO_INSTALL_TIMESTAMP=20260615-101500 node '${cli}' bundle apply base >'${root_keep_home}/out' && grep -q 'drifted edit' '${root_keep_home}/.claude/settings.json' && grep -q 'stage: .*settings_update_20260615-101500.json' '${root_keep_home}/out' && test -f '${root_keep_home}/.claude/settings_update_20260615-101500.json' && HOME='${root_keep_home}' ROBOREPO_STATE_DIR='${root_keep_home}/.roborepo' node '${repo_root}/scripts/cli/root-config-state.mjs' check claude '${root_keep_home}/.claude/settings.json' | grep -q '^drifted$'"
+# keep on a drifted root config backs it up and merges (the user's own key survives), records the
+# merged file as clean, stages no candidate, and removes one an earlier release left behind.
+printf '{"baseline":true}\n' > "${root_keep_home}/.claude/settings_update_20260101-000000.json"
+assert "bundle apply: local config keep policy backs up and merges a drifted file" \
+  bash -c "HOME='${root_keep_home}' ROBOREPO_STATE_DIR='${root_keep_home}/.roborepo' node '${repo_root}/scripts/cli/root-config-state.mjs' check claude '${root_keep_home}/.claude/settings.json' | grep -q '^drifted$' && HOME='${root_keep_home}' ROBOREPO_STATE_DIR='${root_keep_home}/.roborepo' ROBOREPO_INSTALL_TIMESTAMP=20260615-101500 node '${cli}' bundle apply base >'${root_keep_home}/out' && grep -q 'drifted edit' '${root_keep_home}/.claude/settings.json' && grep -q 'backup: .*settings_original_20260615-101500.json' '${root_keep_home}/out' && test -f '${root_keep_home}/.claude/settings_original_20260615-101500.json' && ! ls '${root_keep_home}/.claude/' | grep -q 'settings_update_' && HOME='${root_keep_home}' ROBOREPO_STATE_DIR='${root_keep_home}/.roborepo' node '${repo_root}/scripts/cli/root-config-state.mjs' check claude '${root_keep_home}/.claude/settings.json' | grep -q '^clean$'"
 
 adopt_overwrite_home="${work}/adopt-overwrite-home"
 mkdir -p "${adopt_overwrite_home}/.claude" "${adopt_overwrite_home}/.roborepo"
@@ -1974,7 +1975,9 @@ assert "developer-runtime: metadata suggestion discovery" \
 
 # Root config drift VIEW (buildRootConfigView in root-config-view.mjs): the per-harness state the terminal
 # `config root inspect` report and the web /agents drift chip both render from — not-installed /
-# unwritten / in-sync / drifted / staged-pending.
+# unwritten / in-sync / drifted.
+assert "harness-write-guard: temporary state with a real HOME never writes harness config" \
+  node "${repo_root}/scripts/test/harness-write-guard-check.mjs"
 assert "root-config-view: per-harness drift state covers every user-facing case" \
   node "${repo_root}/scripts/test/root-config-view-check.mjs"
 
