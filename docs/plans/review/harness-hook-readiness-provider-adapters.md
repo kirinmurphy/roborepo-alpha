@@ -722,6 +722,7 @@ None open. Every question was answered by the user; see the Decision Log.
 ## Review
 
 ### Findings
+- [ ] Claude hooks.read comment claims installed hooks execute automatically despite workspace-trust requirements — correct scripts/harnesses/claude/index.mjs to describe file-level configuration.
 - [ ] An already-active portal page does not refresh on return when an external terminal change introduces pending hooks — resolve the refresh behavior before completing review.
 - [x] Native hook source paths using filesystem aliases were filtered out by scripts/harnesses/hook-readiness.mjs, suppressing CLI review hints — fixed in review (uncommitted); alias regression and real-runtime CLI-only verification pass.
 - [x] Clarify missing-hook messaging, offer browser installation, and move the Settings notice above the tracking row — fixed from October 21 user feedback (`7d72487f`), with passing API, real isolated installation, and browser checks.
@@ -729,6 +730,15 @@ None open. Every question was answered by the user; see the Decision Log.
 - [x] Correct the stable-trust design and risk table: core fragments append and preserve existing package positions — fixed in review (`cbf4f2b8`).
 
 ### Verification
+
+#### October 23 resumed review and base synchronization
+
+- Resumed review against the clean feature tip `04a47962`; review Result was pending and plan approval was not requested. Seven native/platform checks remain open. Historical passing checks are not current verification.
+- Synchronized main through `ffbe8024` in merge `ca30ff1e`, preserving hook behavior alongside configuration-write logging, write guards, dry-run previews, CSS, and lifecycle regressions across six resolved conflicts. Main advanced during resolution, so the continue command committed that merge but refused its freshness postcondition. A second canonical sync merged `0cd270ea0c2244438fccbdc93636bd2252c95be5` cleanly as `292ff91678b9d83a20cb2a50fa26a21a183f294a`.
+- Fresh-context Validator pass 1 found one inaccurate Claude adapter comment; no other actionable scoped implementation findings. Independent hook-readiness, hook-composition, shared-target-rows, and hook-review-launch checks passed. Main's later refactor added no hook-specific changes.
+- Added a browser regression for the existing external-update refresh finding. It failed against the original active-page guard. The proposed correction passed all 21 focused hook-readiness/review browser tests. The sandbox initially blocked the local test server; the authorized rerun passed. The correction is being committed separately from this review record.
+- Full completion verification is in progress; the sandboxed attempt encountered local-server permission failures. No complete Result or human approval is asserted.
+
 - October 21, 2026: the submitted plan had no prior `## Review` validation record. Checked tasks and historical test reports were not treated as independent validation.
 - Completion preflight passed; submit committed as `434ab4d0b7b52a198fa30a2287da25cf6e7068e0`.
 - Base synchronization merged main at `434ab4d0b7b52a198fa30a2287da25cf6e7068e0` in `ed4be4d9b0e8a31ed9165aad8bdba38866883a65`.
