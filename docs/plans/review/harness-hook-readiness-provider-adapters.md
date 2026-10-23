@@ -1,7 +1,7 @@
 ---
 id: wjlt1zvf
 priority: high
-next_action: Resolve the external-update refresh gap and seven remaining native/platform checks, then complete /plan-review; commit pending changes only when authorized.
+next_action: Confirm the seven remaining native/platform checks, then complete /plan-review and request plan approval.
 blocked_by: []
 depends_on:
   - 3jp3yhtq
@@ -722,9 +722,9 @@ None open. Every question was answered by the user; see the Decision Log.
 ## Review
 
 ### Findings
-- [ ] Claude hooks.read comment claims installed hooks execute automatically despite workspace-trust requirements — correct scripts/harnesses/claude/index.mjs to describe file-level configuration.
-- [ ] An already-active portal page does not refresh on return when an external terminal change introduces pending hooks — resolve the refresh behavior before completing review.
-- [x] Native hook source paths using filesystem aliases were filtered out by scripts/harnesses/hook-readiness.mjs, suppressing CLI review hints — fixed in review (uncommitted); alias regression and real-runtime CLI-only verification pass.
+- [x] Claude hooks.read comment claimed installed hooks execute automatically despite workspace-trust requirements — corrected to describe file-level configuration in review (`01220497`).
+- [x] An already-active portal page skipped return refresh after external terminal hook changes — fixed in review (`01220497`); the new browser regression failed before the fix, then all 21 focused hook-readiness/review tests passed.
+- [x] Native hook source paths using filesystem aliases were filtered out by scripts/harnesses/hook-readiness.mjs, suppressing CLI review hints — fixed before this resumed review (`04a47962`); alias regression and real-runtime CLI-only verification pass.
 - [x] Clarify missing-hook messaging, offer browser installation, and move the Settings notice above the tracking row — fixed from October 21 user feedback (`7d72487f`), with passing API, real isolated installation, and browser checks.
 - [x] Refresh an Agents review offer on return from manual Codex review — fixed in review (`61b7752d`), with a browser regression that fails under the original focus guard.
 - [x] Correct the stable-trust design and risk table: core fragments append and preserve existing package positions — fixed in review (`cbf4f2b8`).
@@ -736,8 +736,11 @@ None open. Every question was answered by the user; see the Decision Log.
 - Resumed review against the clean feature tip `04a47962`; review Result was pending and plan approval was not requested. Seven native/platform checks remain open. Historical passing checks are not current verification.
 - Synchronized main through `ffbe8024` in merge `ca30ff1e`, preserving hook behavior alongside configuration-write logging, write guards, dry-run previews, CSS, and lifecycle regressions across six resolved conflicts. Main advanced during resolution, so the continue command committed that merge but refused its freshness postcondition. A second canonical sync merged `0cd270ea0c2244438fccbdc93636bd2252c95be5` cleanly as `292ff91678b9d83a20cb2a50fa26a21a183f294a`.
 - Fresh-context Validator pass 1 found one inaccurate Claude adapter comment; no other actionable scoped implementation findings. Independent hook-readiness, hook-composition, shared-target-rows, and hook-review-launch checks passed. Main's later refactor added no hook-specific changes.
-- Added a browser regression for the existing external-update refresh finding. It failed against the original active-page guard. The proposed correction passed all 21 focused hook-readiness/review browser tests. The sandbox initially blocked the local test server; the authorized rerun passed. The correction is being committed separately from this review record.
-- Full completion verification is in progress; the sandboxed attempt encountered local-server permission failures. No complete Result or human approval is asserted.
+- Added a browser regression for the existing external-update refresh finding. It failed against the original active-page guard. The proposed correction passed all 21 focused hook-readiness/review browser tests. The sandbox initially blocked the local test server; the authorized rerun passed. The correction and Claude comment fix were committed separately as `01220497`.
+- Validator pass 2 found no further code issues; it identified an outdated events-in-approval-step claim in the touched portal architecture row, corrected to point to View Hook Details in `be0bb009`. Plan findings and next_action reflect the two fixed issues. Validator pass 3 found no remaining violations against technical-writing core, anti-patterns, section guidance, representation, plan schema, and applicable code conventions.
+- Final `npm run check` passed on implementation `be0bb00917c27ee4e086f0910ed2f281ab22f9fd`, synchronized with main `0cd270ea0c2244438fccbdc93636bd2252c95be5`: 457 CLI assertions, installer collision tests, 60/60 grouped suites, package-install smoke, four Docker clean-machine legs, and 127 browser tests. Windows installer parity was skipped because `pwsh` is unavailable; this is an open platform check, not a passing assertion. The initial sandboxed attempt failed on local-server permissions; the final authorized run exited zero. Final log: `/tmp/wjlt1zvf-review-final-gate.log`.
+- `bash scripts/doctor.sh --quiet` passed 107 checks, `git diff --check` passed, and plan validation reported only seven unconfirmed Not tested entries with no blocking schema findings. No base failures were established. A fresh `git fetch origin main` confirmed local main, origin/main, and FETCH_HEAD all at `0cd270ea`, which is an ancestor of the feature branch. Both merges are committed; no merge conflicts remain.
+- All scoped code/documentation findings are resolved. Seven native/platform checks remain open: live trust preservation through package/core lifecycle, fresh desktop startup and capture, actual terminal launch with partial approval, unrelated-hook/update/re-enable behavior, Windows installer parity, oldest standalone CLI, and Claude trusted-workspace execution. Review Result stays pending and plan approval is not requested; native hook approval is separate from plan approval.
 
 - October 21, 2026: the submitted plan had no prior `## Review` validation record. Checked tasks and historical test reports were not treated as independent validation.
 - Completion preflight passed; submit committed as `434ab4d0b7b52a198fa30a2287da25cf6e7068e0`.
@@ -917,8 +920,8 @@ None open. Every question was answered by the user; see the Decision Log.
 
 ### Result
 - Status: pending
-- Reviewed implementation commit: 7d72487f8461f0243f6ba98e716c8713dba7bd32
-- Base commit: 434ab4d0b7b52a198fa30a2287da25cf6e7068e0
+- Reviewed implementation commit: be0bb00917c27ee4e086f0910ed2f281ab22f9fd
+- Base commit: 0cd270ea0c2244438fccbdc93636bd2252c95be5
 
 ### Approval
 - Decision: not requested
