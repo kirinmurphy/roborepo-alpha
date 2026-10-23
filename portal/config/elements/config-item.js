@@ -78,7 +78,7 @@ class ConfigItemElement extends HTMLElement {
     if (item.inspect) {
       labelEl.title = "view source";
       // Pass the item's cost along so the source popup can show its token chip.
-      labelEl.addEventListener("click", () => onInspect(item.inspect, item.contextCost));
+      labelEl.addEventListener("click", () => onInspect(item.inspect, item.contextCost, { builtIn: item.builtIn }));
     }
 
     // Info URL (GitHub / docs / PyPI): a single inline icon on the label row, opening the FIRST

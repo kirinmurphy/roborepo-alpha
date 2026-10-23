@@ -1,14 +1,11 @@
 ---
 id: qjsbhel5
 priority: low
-next_action: Choose the release archive and tap layout that allow the formula to install RoboRepo without mutating user configuration during `brew install`
+next_action: Agree an immutable release archive/checksum contract with the existing npm release tooling, then verify external tap state before designing the formula.
 blocked_by: []
-depends_on:
-  - 46up8y7a
-  - 1rajbd5o
-related:
-  - c7b7swuh
-reviewed_commit: 6905bcd24d32bb9ad130ea79ed9b8f7bc7d696d9
+depends_on: ["1rajbd5o"]
+related: ["c7b7swuh", "46up8y7a"]
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
 
 # RoboRepo Packaging 04: Distribute Through Homebrew
@@ -68,10 +65,10 @@ the npm/release work.
 ## Current state
 
 - There is no `Formula/*.rb` file or RoboRepo tap.
-- The application is a zero-runtime-dependency Node/ESM package with Node `>=20`.
+- The application is a zero-runtime-dependency Node/ESM package with Node `>=22`.
 - The CLI already has a `bin/roborepo` entry point.
 - Package mode treats the application root as immutable and stores workspace/state separately.
-- npm packaging work will establish versioned release validation and provenance.
+- Local npm publication tooling exists; controlled CI/provenance and exact registry-artifact acceptance remain tracked by [[1rajbd5o]].
 
 ## Proposed design
 
@@ -188,3 +185,10 @@ It must not initialize or mutate user configuration during formula installation.
 - User workspace and state are never owned by the keg.
 - The formula consumes a stable, versioned, checksummed release artifact.
 - npm and Homebrew remain separate channels over the same application/lifecycle architecture.
+
+## Release prerequisite
+
+The shared lifecycle implementation [[46up8y7a]] is complete. Agree a reviewed immutable release
+archive, checksum, and version/source evidence with [[1rajbd5o]] before formula implementation.
+No formula is tracked in this checkout; external tap availability was not checked during the
+backlog sync. Verify ownership/current state before creating or publishing any external tap.

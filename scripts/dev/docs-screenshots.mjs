@@ -41,8 +41,7 @@ const PACKAGES = [
   "code-style",
   "javascript-typescript",
   "test-harness",
-  "response-shape",
-  "convention-capture",
+  "response-output",
   "skill-visibility",
 ];
 

@@ -1,11 +1,11 @@
 ---
 id: usage-statusline-codex-hook-parity
 priority: low
-next_action: File the upstream feature request below on the openai/codex repository asking for a command-backed footer hook (Claude statusLine parity).
+next_action: Revalidate current upstream command-backed footer availability; retain the request as a draft unless separately authorized to file it.
 blocked_by: ["upstream: Codex has no footer-command hook (or equivalent extension point)"]
-depends_on: [usage-statusline-enhancement-plan]
-related: [usage-statusline-enhancement-plan, usage-statusline-claude-refresh]
-reviewed_commit:
+depends_on: []
+related: ["usage-statusline-enhancement-plan", "usage-statusline-claude-refresh"]
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
 
 # Usage Statusline — Codex Footer Parity via an Upstream Hook
@@ -65,7 +65,7 @@ Not present (this plan):
 - Any Codex-side footer change. `codex/status-line.json` remains the native item list.
 - A `codex-statusline` entrypoint (there is nothing to invoke it yet).
 
-## Part 1 — Upstream feature request (ready to file)
+## Upstream feature request draft
 
 > **Where:** `openai/codex` GitHub → Issues → Feature request. Adjust naming/labels to that repo's
 > current issue template before posting.
@@ -127,7 +127,9 @@ serve Codex through this hook.
 
 ---
 
-## Part 2 — RoboRepo wiring once the hook exists (JavaScript only)
+## Proposed design
+
+### RoboRepo wiring once a supported hook exists (JavaScript only)
 
 Do this only after the hook lands in a released Codex version. Confirm the hook's exact
 configuration shape, the payload it passes, and the refresh mechanism against Codex's released docs
@@ -152,7 +154,7 @@ before implementing.
 - [ ] Update the package README: Codex now renders the same used/pacing line; document the minimum
       Codex version.
 
-## Validation / acceptance criteria
+## Validation
 
 - The upstream feature request is filed (link recorded here).
 - (After the hook lands) Codex footer shows used-direction context and rate limits, weekly
@@ -171,3 +173,17 @@ before implementing.
 | Hook ships with a different contract than assumed | Part 2 begins by confirming the real released contract before any wiring. |
 | Temptation to fork Codex to move faster | Out of scope by decision — private fork is a permanent maintenance tax; only an upstream-merged hook is acceptable. |
 | Mixed used/remaining footer during migration | Replace all Codex rate-limit items in a single change; gate on minimum version. |
+
+## Upstream revalidation before action
+
+The shipped Codex fragment still selects native footer fields. Current command-hook availability
+was not verified in this review, so revalidate the blocker against supported versions before
+choosing implementation or an upstream request. The feature-request text is a draft; filing it or
+contacting maintainers requires a separate explicit instruction. Existing native footer selections
+do not by themselves satisfy command-rendered pacing parity.
+
+## Goals
+
+- Reach command-rendered usage/pacing parity through a supported native extension point.
+- Keep native footer selections until a released, verified command contract exists.
+- Preserve the shared normalization/fixtures and avoid maintaining a patched native harness.

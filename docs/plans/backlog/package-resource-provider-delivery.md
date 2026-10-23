@@ -1,13 +1,11 @@
 ---
 id: 7k3m9qd
 priority: medium
-next_action: Define the package-level provider delivery-plan contract and migrate Claude and Codex onto it without changing installed output
+next_action: Characterize Claude/Codex output and agree the target-set/delivery-plan boundary before migrating consumers or implementing Antigravity delivery.
 blocked_by: []
 depends_on: []
-related:
-  - antigravity-cli-provider-integration
-  - harness-capability-derived-resource-targeting
-reviewed_commit:
+related: ["antigravity-cli-provider-integration", "harness-capability-derived-resource-targeting"]
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
 
 # Separate Package Resource Semantics from Provider Delivery
@@ -339,11 +337,11 @@ This phase validates the abstraction without adding a production provider.
 Use the smallest existing checks while developing, then run the full suite because this is a cross-cutting package/provider refactor.
 
 ```text
-npm run test:packages
-npm run test:package-catalog-harness
-npm run test:package-lifecycle
-npm run test:harness-registry
-npm run test:harness-package-config-roundtrip
+node scripts/test/package-catalog-check.mjs
+node scripts/test/package-catalog-harness-check.mjs
+node scripts/test/package-lifecycle-check.mjs
+node scripts/test/harness-registry-check.mjs
+node scripts/test/harness-package-config-roundtrip-check.mjs
 node scripts/test/delivery-synthetic-provider-check.mjs
 npm test
 ```
@@ -379,3 +377,12 @@ No decision here should block the first four phases. Two naming/API choices can 
 
 1. **Delivery action names.** Use the smallest vocabulary that faithfully represents the characterized Claude/Codex paths; do not lock the names in from this plan's illustrative categories.
 2. **Compatibility lifetime for `components`.** Remove the derived compatibility view only after repository search confirms no remaining consumer. If that cleanup is larger than mechanical removal, create a separate follow-up instead of expanding this foundational plan.
+
+## Delivery sequence
+
+Characterize Claude/Codex installed output first. Target eligibility is owned by
+[[harness-capability-derived-resource-targeting]]; this plan consumes its semantic target set and
+owns delivery planning/materialization. Agree both contracts before migrating package consumers.
+[[antigravity-cli-provider-integration]] should use the characterized delivery binding after its
+native-capability research; authentication/path research can proceed independently. Do not make
+Antigravity a prerequisite for the provider-neutral baseline.

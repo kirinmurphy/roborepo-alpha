@@ -1,15 +1,12 @@
 ---
 id: ejsc769o
 priority: high
-next_action: After o9zwxuav lands, add explicit required/recommended relationships to built-in skill packages, create implementation-review, and rewrite Paired Skills guidance to consume the package relationship model.
+next_action: After the desired-state contract lands, extract the current conventions-aware review rubric into implementation-review and declare required/recommended skill relationships.
 blocked_by: []
 depends_on:
   - o9zwxuav
-related:
-  - age4cm7r
-  - gqzjlzgx
-  - skills-vs-commands-invocation-policy
-reviewed_commit: e43770079a37cd5f6b1b23f806280c432b756551
+related: ["age4cm7r", "gqzjlzgx", "skills-vs-commands-invocation-policy"]
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 worktree:
 ---
 
@@ -343,3 +340,11 @@ For each migrated skill:
 - A static recommendation can become noisy if its skill body no longer has a precise `Load when` condition. The migration must preserve those conditions rather than treating `recommends` as "always prompt."
 - Reciprocal conceptual relationships can create bad package graphs. The parent that owns the foundational contract should carry `requires`; inverse or document-type-specific relationships stay runtime-only when necessary.
 - Required dependencies change package health semantics. A parent whose required dependency is missing or drifted must surface that as a real package problem rather than silently falling back to duplicated rules.
+
+## Current review-rubric baseline
+
+[[7e21olcs]] completed cohesion/data-flow/comment improvements in the existing plan-execute
+validation rubric and plan-review's inline copy. `globals/packages/implementation-review/` remains
+unbuilt. Extract that current rubric into the proposed shared skill instead of recreating its
+pre-conventions version. Preserve semantic finding classes and existing review behavior while
+changing ownership. [[o9zwxuav]] remains the unresolved dependency-model prerequisite.

@@ -4,7 +4,7 @@ When the user proposes a new idea, feature, or change, before building it, surfa
 
 `> 🧭 **Impact:** [one-line description]`
 
-Exact format. Placement: see `response-shape`. Base the assessment on the actual code, and on Project Context inventory docs when they exist; do not guess.
+Exact format. Put it on its own line at the end of the response, never inside a paragraph. Base the assessment on the actual code, and on Project Context inventory docs when they exist; do not guess.
 
 Flag when the change:
 

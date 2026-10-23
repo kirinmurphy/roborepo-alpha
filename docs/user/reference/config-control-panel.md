@@ -58,18 +58,22 @@ The panel renders these sections:
   `CLAUDE.md` / `AGENTS.md` content, the file path, and the default-rule drill-downs.
 - **Hooks** — quick links to the live `~/.claude/settings.json`, `~/.codex/config.toml`,
   and `~/.codex/hooks.json` files.
+- **Code Conventions** — auto-loaded skills (no command). Same skill-link toggle.
+- **Chat-Time Output** — response output (how the agent structures and words every response: the
+  result first, detail matched to the task, evidence that says what passed versus what was only
+  observed, and a scannable close) plus the inline chat-note behaviors (impact awareness, skill
+  visibility), each a `rules` package merged into every managed harness. Each is
+  independent: a note behavior states its own placement and does not turn on response output. Each
+  is off until you enable it; toggling adds or removes the behavior's rules block.
+  Feature Verification also lives here: its skill has agents verify finished work themselves and
+  show real evidence, and it unlocks `roborepo browser` for screenshots and recordings of local
+  web apps. Playwright is installed only on first browser use, with your approval.
 - **Token Optimization** — package-level controls such as the Caveman package. Manage Telemetry
   from **Settings** or **Tokens**.
 - **Monitoring** — packages that observe agent activity and usage.
 - **Plan Suite** — plan lifecycle commands and workflows.
 - **Skills - Code Quality** — skills that check and improve code against project patterns.
-- **Code Conventions** — auto-loaded skills (no command). Same skill-link toggle.
 - **Writing Assistants** — long-form writing workflows and structured documentation.
-- **Chat-Time Output** — response shape (the shared formatting/closing-structure rules) plus the
-  inline chat-note behaviors (convention capture, impact awareness, skill visibility), each a
-  `rules` package merged into every managed harness. The three note behaviors `requires` response
-  shape, so enabling one auto-enables it. Each is off until you enable it; toggling adds or removes
-  the behavior's rules block.
 - **Additional Agent Rules** — Branch Safety and Capture Dense Bash.
 - **Integrations** — optional connections between RoboRepo and supported tools.
 - **Permissions** — flat behavior and command buckets. Named behaviors and arbitrary commands can

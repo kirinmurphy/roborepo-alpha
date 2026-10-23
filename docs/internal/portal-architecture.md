@@ -50,7 +50,11 @@ copy to hand-sync:
    `<meta name="cli-portal-token">` tag. `currentPageId` lets a dynamic page identify the static
    nav entry it belongs to; `routeParams` carries its decoded segment values.
 3. `/api/portal/status` returns the same `pageManifest()` shape, so the terminal-facing status
-   check and the browser nav can never drift.
+   check and the browser nav can never drift. It also reports `serverCodeChanged`: whether the
+   server-side code (`scripts/cli`, `scripts/harnesses`, `modules`) changed on disk since this
+   process started, from a size-and-mtime signature (`computeServerCodeSignature`). `theme.js`
+   polls it and shows a restart notice under the header, because a running server never re-reads
+   its own modules while page assets reload fresh.
 4. `portal/shared/theme.js` reads `window.PORTAL_MANIFEST.pages` to render the nav and uses
    `currentPageId` to mark the active link. Repository detail therefore marks Home active without
    adding a sixth nav item. If the global is missing (e.g. a page opened directly as a file, or a broken

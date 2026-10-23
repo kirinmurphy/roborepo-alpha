@@ -10,7 +10,6 @@ import {
   resolveDriftChip,
   harnessChipSpec,
   rulesChipSpec,
-  tokenWarningEntries,
   isBulkInFlight,
 } from "./state.js";
 
@@ -43,36 +42,6 @@ export function labeledTokenChip({ label, spec }) {
   const wrap = fill(tpl("tpl-labeled-token-chip"), { label: label + ":" });
   applyTokenChip(wrap.querySelector("[data-slot=chip]"), spec);
   return wrap;
-}
-
-function warningInfoIcon(info) {
-  const wrap = fill(tpl("tpl-warning-info-icon"), { tip: info });
-  const tip = wrap.querySelector("[data-slot=tip]");
-
-  const show = () => {
-    tip.hidden = false;
-    wrap.setAttribute("aria-expanded", "true");
-  };
-  const hide = () => {
-    tip.hidden = true;
-    wrap.setAttribute("aria-expanded", "false");
-  };
-  wrap.addEventListener("mouseenter", show);
-  wrap.addEventListener("mouseleave", hide);
-  wrap.addEventListener("focus", show);
-  wrap.addEventListener("blur", hide);
-  wrap.addEventListener("click", () => (tip.hidden ? show() : hide()));
-  wrap.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") hide();
-  });
-  return wrap;
-}
-
-function tokenWarningItem({ name, suffix, spec, info }) {
-  const row = fill(tpl("tpl-token-warning-item"), { name, suffix: suffix || "" });
-  if (info) row.querySelector("[data-slot=info]").append(warningInfoIcon(info));
-  applyTokenChip(row.querySelector("[data-slot=chip]"), spec);
-  return row;
 }
 
 function wireDefaultButton(btn, ruleKey, rulePath, label, rules, onDefaultClick) {
@@ -359,21 +328,6 @@ export function standardSection(section, { onInspectClick, onToggle, onBulkToggl
       toggle.disabled = true;
     }
   }
-  return panel;
-}
-
-export function contextWarnings(snap) {
-  const entries = tokenWarningEntries(snap);
-  if (!entries.length) return null;
-  const panel = tpl("tpl-context-warnings");
-  const hasHigh = entries.some((entry) => entry.spec.level === "high");
-  // <portal-notice> owns the callout chrome now; escalate to the alert (red) variant when any
-  // element is in high token use, otherwise the default warning (amber) tint.
-  panel.setAttribute("variant", hasHigh ? "alert" : "warning");
-  panel.querySelector('[data-slot="title"]').textContent = hasHigh
-    ? "The following elements have a high token use:"
-    : "The following elements have elevated token use:";
-  panel.querySelector('[data-slot="items"]').replaceChildren(...entries.map(tokenWarningItem));
   return panel;
 }
 

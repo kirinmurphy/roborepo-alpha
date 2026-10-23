@@ -1,0 +1,13 @@
+{
+  "path": ["browser", "probe"],
+  "kind": "command",
+  "title": "Probe browser support",
+  "description": "Report whether a browser provider is available and what it can capture, without installing or launching anything",
+  "order": 10,
+  "usage": "roborepo browser probe [--dir <path>] [--provider <id>] [--json]",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/browser.mjs",
+    "export": "browserProbe"
+  }
+}

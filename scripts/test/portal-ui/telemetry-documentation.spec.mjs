@@ -40,3 +40,20 @@ test("a Tokens info icon opens only its own guide section", async ({ page }) => 
   await dialog.locator('[data-slot="close"]').click();
   await expect(icon).toHaveAttribute("aria-expanded", "false");
 });
+
+test("the session details guide opens over the session drill-down and leaves it open", async ({ page }) => {
+  await page.route("**/api/session**", (route) => route.fulfill({ json: { found: false, findings: [], analysis_prompt: "Fictional sample session prompt", heavy_turns: [] } }));
+  await page.goto("/tokens");
+  await page.getByText("Recent problem sessions", { exact: true }).click();
+  await page.getByRole("region", { name: "Problem sessions" }).getByRole("button", { name: "Session details", exact: true }).first().click();
+  const sessionDialog = page.locator("#tokenssession-modal");
+  await expect(sessionDialog).toBeVisible();
+  await sessionDialog.locator('portal-info-icon[data-doc-anchor="session-details"]').click();
+  const guide = page.locator("#tokensdocmodal");
+  await expect(guide).toBeVisible();
+  await expect(guide.locator('[data-slot="title"]')).toHaveText("Session details");
+  await expect(sessionDialog).toBeVisible();
+  await guide.locator('[data-slot="close"]').click();
+  await expect(guide).not.toBeVisible();
+  await expect(sessionDialog).toBeVisible();
+});

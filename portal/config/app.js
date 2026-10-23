@@ -18,8 +18,6 @@ import { clearRepositoryScope, currentRepositoryScope } from "/portal/shared/rep
 import { onRepositoryScopeResolved, repositoryScopeUnavailableNotice } from "/portal/shared/repository-scope-selector.js";
 
 const modal = createConfigModal();
-// Keep the warning renderer/template available while the Agents-page banner is temporarily hidden.
-const SHOW_CONTEXT_WARNINGS = false;
 // Packages whose on/off control lives on another page. Settings owns token telemetry, so a second
 // toggle here would only duplicate it; the terminal `roborepo config` view still lists it.
 const PACKAGES_CONTROLLED_ELSEWHERE = new Set(["telemetry"]);
@@ -32,10 +30,10 @@ function withoutPackagesControlledElsewhere(view) {
     .filter((section) => !section.categoryId || section.items.length > 0);
 }
 
-function openSourceModal(inspect, itemCost = null) {
+function openSourceModal(inspect, itemCost = null, { builtIn = false } = {}) {
   const rules = lastSnapshot?.globals?.rules || {};
   const harnesses = lastSnapshot?.harnesses || [];
-  const chips = inspectChipSpecs(inspect, itemCost, lastSnapshot);
+  const chips = inspectChipSpecs(inspect, itemCost, lastSnapshot, { builtIn });
   return modal.openSource(inspect, { rules, harnesses, onDefaultClick: modal.openSnapshot, chips });
 }
 
@@ -135,7 +133,6 @@ function render(snap) {
   main.replaceChildren(
     ...[
       tmpl.harnessWarning(lastSetup || snap, { onRefreshed: reloadSetup, watch: false }),
-      ...(SHOW_CONTEXT_WARNINGS ? [tmpl.contextWarnings(snap)] : []),
       tmpl.configFiles(snap, { onInspectClick: openSourceModal }),
       tmpl.packagesIntro(),
     ].filter(Boolean),

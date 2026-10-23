@@ -18,4 +18,16 @@ if ! command -v node >/dev/null 2>&1; then
   exit 1
 fi
 
+# Keep in step with "engines" in package.json. Release lines below this no longer receive Node.js
+# security fixes. `roborepo doctor` covers the finer question of patch currency within a line.
+readonly min_node_major=22
+node_version="$(node --version 2>/dev/null || true)"
+node_major="${node_version#v}"
+node_major="${node_major%%.*}"
+if ! [[ "${node_major}" =~ ^[0-9]+$ ]] || (( node_major < min_node_major )); then
+  echo "roborepo requires Node.js ${min_node_major} or newer (found ${node_version:-an unreadable version} at $(command -v node))." >&2
+  echo "Node.js release lines older than ${min_node_major} no longer receive security fixes; upgrade from https://nodejs.org." >&2
+  exit 1
+fi
+
 exec node "${repo_root}/scripts/cli/main.mjs" "$@"

@@ -1,23 +1,34 @@
 ---
 id: plans-portal-live-refresh-and-static-preflight
 priority: low
-next_action: Decide whether to build the SSE live-refresh path or defer indefinitely in favor of manual refresh
+next_action: Decide general file-change refresh independently from static command help, using current refresh APIs and the native invocation research.
 blocked_by: []
 depends_on: []
-related: [plan-docs-and-plans-portal-plan]
-reviewed_commit: b8684ef
+related: ["plan-docs-and-plans-portal-plan"]
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
 
 # Plans Portal — Live Refresh and Static Slash-Command Preflight
 
 ## Summary
 
-Ancillary follow-up carved out of
-[`completed/plan-docs-and-plans-portal-plan.md`](../completed/plan-docs-and-plans-portal-plan.md).
-The core Plans portal, the portable `plan-suite` domain module, the `plan-write`
-package + skill, and portal-driven lifecycle/priority mutation all shipped. Two
-optional enhancements from the original plan were never built and are tracked
-here so the parent can move to `completed/`.
+Decide whether to add general plan-file live refresh and static no-argument workflow help. These
+are independent optional enhancements to the completed Plans portal. The parent is already in
+completed; neither proposal is required to finish that historical work.
+
+Manual refresh, priority editing, and agent-routed help are the current baseline. Lifecycle changes
+use atomic commands rather than the former generic portal mutation route.
+
+## Current API and independent decisions
+
+`scripts/cli/portal-routes-plans.mjs` currently exposes refresh, prompt, document, and priority
+operations, not a generic lifecycle mutation endpoint. Lifecycle transitions use atomic commands.
+The page polls synchronization progress, but does not subscribe to general plan-file changes.
+
+Live file-change refresh and static no-argument command preflight are independent optional
+workstreams. Implement neither implicitly while preparing the other. Native invocation discovery
+is owned by [[wrap-up-coderabbit-integration-plan]] Workstream 1; decide static help only after its
+supported provider mechanism is known. Manual refresh remains an acceptance fallback.
 
 ## Context
 
@@ -45,9 +56,8 @@ Shipped in `main` (from the parent plan):
 - Portable domain module — `modules/plan-suite/` (`index.mjs`, `repair.mjs`).
 - CLI adapter — `scripts/cli/plans.mjs`.
 - `plan-write` package + skill — `globals/packages/plan-write/`.
-- Lifecycle/priority mutation — `POST /api/plans/lifecycle`,
-  `POST /api/plans/priority` (`portal/plans/api.js`,
-  `modules/plan-suite/index.mjs::movePlanLifecycle` / `updatePlanPriority`).
+- Priority updates use `POST /api/plans/priority`; lifecycle changes use the current atomic
+  plan-suite commands. The earlier generic portal lifecycle-mutation route is retired.
 
 Not built:
 
@@ -90,7 +100,7 @@ Not built:
   refresh; watcher failure falls back to manual refresh cleanly.
 - Preflight: no-argument `/plan-write` returns static help without agent-runtime
   cost on supported harnesses; argument invocations still route to the skill.
-- `roborepo doctor` and `roborepo verify` remain green.
+- `roborepo doctor` and `bash scripts/verify-install.sh --quiet` remain green.
 
 ## Open questions
 
@@ -98,3 +108,7 @@ Not built:
   works for a single-user local portal?
 - Can both harnesses support static no-argument command help without
   hook-specific workarounds?
+
+## Documentation impact
+
+`docs/user/reference/plans-portal.md` and `docs/internal/plans-portal-internals.md`: selected refresh/help behavior and its limitations.

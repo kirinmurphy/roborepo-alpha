@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "feature-verification",
+  "label": "Feature verification (skill)",
+  "description": "Agents verify finished work themselves and show real evidence: executed checks, command and API output, measured numbers, and browser screenshots or recordings through `roborepo browser`. Playwright is installed only on first browser use, with your approval.",
+  "lifecycle": "optional",
+  "presentation": {
+    "category": "chat-time-output",
+    "order": 7
+  },
+  "resources": [
+    {
+      "type": "skill",
+      "id": "feature-verification",
+      "source": "skills/feature-verification",
+      "invocation": "auto",
+      "risk": "medium"
+    }
+  ]
+}

@@ -2,6 +2,18 @@
 
 Managed plans live under `docs/plans`.
 
+## Contents
+
+- Lifecycle and frontmatter
+- Worktree association
+- Plan authority
+- Plan ids
+- Naming
+- Not tested
+- Review
+
+## Lifecycle and frontmatter
+
 Lifecycle is derived from folders, not frontmatter. The folders, and the moves between them, are
 declared in `manifests/platform/plan-lifecycle.json`:
 

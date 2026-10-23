@@ -34,6 +34,32 @@ export function computePortalSourceHash() {
   return hash.digest("hex");
 }
 
+// Cheap signature of the code the running server process has loaded: scripts/cli, the harness
+// adapters, and modules/. Unlike computePortalSourceHash it reads only file sizes and modification
+// times, so the server can recompute it on every status poll and tell an open page "the code on disk
+// has changed since this server started" — page assets under portal/ are left out because a reload
+// already picks those up, while server modules stay as loaded until the process restarts.
+export function computeServerCodeSignature() {
+  const hash = crypto.createHash("sha256");
+  const roots = [
+    path.join(repoRoot, "scripts", "cli"),
+    path.join(repoRoot, "scripts", "harnesses"),
+    path.join(repoRoot, "modules"),
+  ];
+  for (const root of roots) {
+    for (const rel of walkFiles(root)) {
+      if (!/\.(mjs|cjs|js)$/.test(rel)) continue;
+      try {
+        const stat = fs.statSync(path.join(root, rel));
+        hash.update(`${rel}\0${stat.size}\0${stat.mtimeMs}\0`);
+      } catch {
+        // File vanished between listing and stat (rare race) — skip rather than fail.
+      }
+    }
+  }
+  return hash.digest("hex");
+}
+
 function walkFiles(dir, base = dir, out = []) {
   let entries;
   try {

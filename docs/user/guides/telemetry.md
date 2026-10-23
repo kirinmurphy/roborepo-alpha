@@ -144,3 +144,31 @@ roborepo telemetry report --conditions
 
 See the [Telemetry Service Reference](../reference/telemetry.md) for capture, retention, schemas,
 and CLI details.
+
+## Independent check
+
+To confirm that the report's calculations hold for your own telemetry, run:
+
+```sh
+roborepo telemetry oracle
+```
+
+It recomputes selected analytics with a separate, deliberately simple implementation over the same
+local evidence and compares the two. The checked calculations are harness-scoped sessions, mirrored
+operation deduplication, condition comparisons, change boundaries and exclusions, evidence gates,
+per-call regression, and harness-local loop detection. Add `--json` for a machine-readable result.
+
+| Status | Exit code | Meaning |
+| --- | ---: | --- |
+| **Passed** | 0 | Both implementations agree, and every required row could be interpreted independently. |
+| **Failed** | 1 | The two implementations disagree on at least one checked calculation. |
+| **Partial** | 2 | Checked values agree, but some evidence could not be interpreted independently. |
+| **Unavailable** | 2 | There is no evidence (`Evidence: 0 events`), the evidence includes shapes the check cannot interpret (named on the `Issues:` line), or the evidence could not be read (named on the `Error:` line). |
+
+Exit code 2 means the check was inconclusive: it neither passed nor found a disagreement.
+
+The check does not prove that capture is complete, verify every number on the page, or show that a
+condition caused an outcome. Its output contains only aggregate counts, coverage categories, and the
+names of fields that differ: never raw events, prompts, file paths, or command output. The same
+comparison runs in CI against fixed sample data, so a disagreement on your machine points at
+evidence the sample data does not cover.

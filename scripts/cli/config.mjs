@@ -170,6 +170,7 @@ export function readConfigSnapshot() {
   const packages = availablePackages.map((pkg) => ({
     id: pkg.id,
     label: pkg.label,
+    origin: pkg.origin,
     archived: pkg.archived === true,
     description: pkg.description || null,
     status: packageLiveState.get(pkg.id)?.status || "disabled",
@@ -260,12 +261,11 @@ export function readConfigSnapshot() {
         hooks,
       },
     },
-    // Root-config drift state per harness (in-sync / drifted / staged-pending / …), same signal the
+    // Root-config drift state per harness (in-sync / drifted / …), same signal the
     // terminal `roborepo config root inspect` reports. The portal renders a status chip from this.
     rootConfig: buildRootConfigView().map((row) => ({
       harness: row.harness,
       state: row.state,
-      hasStagedUpdate: !!row.stagedUpdate,
     })),
     telemetry: telemetryState
       ? { enabled: !!telemetryState.enabled }
@@ -524,6 +524,7 @@ function packagePresentationItem(item, tool, contextCost = null) {
     order: item.presentation?.order || 0,
     active: item.enabled,
     toggle: "package",
+    builtIn: item.origin === "built-in",
     urls: item.urls || [],
     badges: [
       ...(item.catalogStatus === "pending" ? ["pending"] : []),

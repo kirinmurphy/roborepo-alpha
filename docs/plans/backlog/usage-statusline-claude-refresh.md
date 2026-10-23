@@ -1,11 +1,11 @@
 ---
 id: usage-statusline-claude-refresh
 priority: low
-next_action: Verify the exact Claude statusLine refresh/interval config property and minimum supported version from official Claude Code documentation, then add it to the package's claude/statusline.json.
+next_action: Verify whether a supported native idle-refresh property exists and its minimum version before proposing any configuration key.
 blocked_by: []
-depends_on: [usage-statusline-enhancement-plan]
-related: [usage-statusline-enhancement-plan]
-reviewed_commit:
+depends_on: []
+related: ["usage-statusline-enhancement-plan"]
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
 
 # Usage Statusline — Claude Idle Refresh Property
@@ -53,9 +53,9 @@ committed. Adding a wrong key risks being silently ignored or erroring on older 
       single owned singleton (update the lifecycle test if the owned object shape changes).
 - [ ] Manually confirm on macOS that elapsed advances while the session is idle.
 
-## Validation / acceptance criteria
+## Validation
 
-- `npm run test:usage-statusline` passes with the refresh property present in the owned object.
+- `node scripts/test/usage-statusline-check.mjs` passes with the refresh property present in the owned object.
 - Enable/disable remains idempotent and preserves an unmanaged Claude `statusLine`.
 - Manual macOS check: with a session left idle, the weekly `## elapsed` value increases without user
   activity, and debt/surplus reclassifies accordingly.
@@ -69,3 +69,10 @@ committed. Adding a wrong key risks being silently ignored or erroring on older 
 | Wrong property name silently ignored | Verify against official docs before committing; manual idle smoke test confirms it actually fires |
 | Property errors on older Claude versions | Record and gate on a minimum supported version |
 | Refresh property breaks the owned-singleton equality/probe | Include it in the owned object and update equality/probe tests together |
+
+## Research prerequisite
+
+The shipped statusLine fragment contains command and padding fields without an idle-refresh key.
+This backlog sync did not verify a current supported native interval property. Establish the
+property, minimum version, and actual idle behavior first; if unsupported, retain this as an
+accepted limitation or upstream-dependent proposal rather than inventing a key.

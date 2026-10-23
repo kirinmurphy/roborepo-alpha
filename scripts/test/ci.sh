@@ -8,6 +8,10 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${repo_root}"
 
+# doctor's Node release check reads nodejs.org. Keep the gate off the network so a slow or
+# unreachable host cannot change its timing or output; node-release-health-check.mjs covers the logic.
+export ROBOREPO_SKIP_NODE_RELEASE_CHECK=1
+
 run() {
   echo ""
   echo "==> $*"

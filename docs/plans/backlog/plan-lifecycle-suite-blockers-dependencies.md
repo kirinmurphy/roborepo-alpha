@@ -1,18 +1,24 @@
 ---
 id: plan-lifecycle-suite-blockers-dependencies
 priority: low
-next_action: Implement the blocker schema and domain mutation contract after the lifecycle manifest/action model is available.
+next_action: Extend the implemented atomic suite with a canonical blocker schema/list-mutation contract before adding portal management.
 blocked_by: []
-blocked_reasons: []
-depends_on:
-  - gqzjlzgx
-related:
-  - plan-lifecycle-controls-and-filter-aware-toast
-  - plan-lifecycle-readiness-validation-and-repair-prompts
-  - plan-unclassified-plan-recovery
-reviewed_commit:
+depends_on: []
+related: ["plan-lifecycle-controls-and-filter-aware-toast", "plan-lifecycle-readiness-validation-and-repair-prompts", "plan-unclassified-plan-recovery", "gqzjlzgx"]
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
 # Plan Lifecycle Suite 05 — Blockers and Dependencies
+
+## Atomic lifecycle baseline and schema ownership
+
+The lifecycle manifest and atomic CLI are implemented. This plan extends them; it does not restore
+the retired generic portal lifecycle route. Put blocker mutations behind a shared deterministic
+domain/CLI operation, then adapt portal prompts or supported endpoints to that operation.
+`blocked_reasons` is a proposed schema addition, not currently supported metadata for this plan.
+Update the canonical plan schema before writing it to managed documents. Preserve
+`depends_on` as sequencing/provenance separately from blockers, and characterize current ID
+findings before adding missing cycle/self/duplicate checks. Blocker-aware action eligibility must
+use the current backlog/ready/active/review lifecycle.
 
 ## Summary
 
@@ -87,7 +93,7 @@ a new general-purpose YAML parser as an incidental dependency.
 ## Non-goals
 
 - Do not add a `docs/plans/blocked/` lifecycle folder.
-- Do not redesign the full lifecycle or integration-branch workflow in this plan.
+- Do not redesign the lifecycle or branch-delivery workflow in this plan.
 - Do not add a general-purpose YAML parser solely for blocker metadata.
 - Do not automatically stop an active agent session or delete worktrees when a blocker is added.
 - Do not automatically remove a plan blocker when the referenced plan changes lifecycle.
@@ -113,20 +119,15 @@ does not stop an agent, discard changes, or remove a worktree.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Icebox
-    Icebox --> Backlog
-    Backlog --> Ready
-    Ready --> Active
-    Active --> Integration
-    Integration --> Review
-    Review --> Complete
-    Icebox --> Archived
-    Backlog --> Archived
-    Ready --> Archived
-    Active --> Archived
-    Integration --> Archived
-    Review --> Archived
-    Complete --> Archived
+    [*] --> Backlog: write
+    Backlog --> Ready: promote
+    Ready --> Active: start
+    Active --> Review: submit
+    Review --> Completed: close
+    Backlog --> Archived: archive
+    Ready --> Archived: archive
+    Active --> Archived: archive
+    Review --> Archived: archive
 
     state "Blocked overlay" as Blocked
     note right of Blocked
@@ -143,7 +144,7 @@ blocked_by:
   - plan-cross-harness-workflow-runner
 
 blocked_reasons:
-  - Waiting for a product decision on integration branch policy
+  - Waiting for a product decision on supported harnesses
   - Staging credentials are unavailable
 ```
 
@@ -351,12 +352,12 @@ And:
 - [ ] Exclude blocked Ready plans from pickup.
 - [ ] Explain disabled lifecycle actions.
 - [ ] Keep validation, archive, and blocker management available.
-- [ ] Warn when Active, Integration, or Review work becomes blocked.
+- [ ] Warn when Active or Review work becomes blocked.
 
 ### Phase 6: CLI, skills, and documentation
 
 - [ ] Add block/unblock CLI commands.
-- [ ] Add `/plan-write block` and `/plan-write unblock`.
+- [ ] Wire skill prompts to the canonical block/unblock operation; do not invent plan-write modes that conflict with its create/revise/sync contract.
 - [ ] Update prompt contracts and guide examples.
 - [ ] Add the blocked overlay to the lifecycle infographic.
 
@@ -371,9 +372,9 @@ And:
 ## Validation
 
 ```bash
-npm run test:plans
-npm run test:plans-findings
-npm run test:plans-portal-state
+node scripts/test/plan-suite-check.mjs
+node scripts/test/plan-suite-findings-check.mjs
+node scripts/test/plans-portal-state-check.mjs
 npm test
 npm run pack:dry-run
 ```
@@ -410,3 +411,7 @@ not guess when they are resolved.
 - Should adding a blocker optionally add the same ID to `depends_on`?
 - Does blocking Active work eventually need Pause or Cancel?
 - Should structured blocker records later gain IDs, timestamps, ownership, and external references?
+
+## Documentation impact
+
+The canonical plan-write schema/lifecycle references, `docs/user/reference/plans-portal.md`, and the plan-suite walkthrough: proposed blocker fields and deterministic management operations.

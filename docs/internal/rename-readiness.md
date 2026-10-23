@@ -22,7 +22,7 @@ Snapshot date: 2026-09-13 · branch: `rename-prep` · counts from `git ls-files`
 | Test fixtures | `codethings-roborepo-alpha` fixture dirs, `github.com/kirinmurphy/roborepo` fixture URLs | `scripts/test/*` |
 | Telemetry identity | `version` reported as `app_version`, repo label `roborepo` | telemetry modules |
 
-Non-code surfaces: `docs/user/reference/roborepo{,-cli,-skills}.md` (185 refs), README (44), docs/plans (2,868 refs, historical), skill dirs `builtin-support` / `roborepo-development` / `builtin-code-style`, generated harness output, `docs/plans/backlog/roborepo-repository-plans.zip`.
+Non-code surfaces: `docs/user/reference/roborepo{,-cli,-skills}.md` (185 refs), README (44), docs/plans (2,868 refs, historical), skill dirs `builtin-support` / `roborepo-development` / `builtin-code-style`, generated harness output, `docs/internal/history/plan-lifecycle/repository-plans-snapshot.zip`.
 
 ## Classification
 
@@ -32,7 +32,7 @@ Non-code surfaces: `docs/user/reference/roborepo{,-cli,-skills}.md` (185 refs), 
 - **Env-var literals `ROBOREPO_*`** — they are a public interface; each literal is its own definition site. (A rename later maps them explicitly, one rule per var family — see manifest.)
 - **`package.json` name/bin/version fields** — metadata, inherently a literal.
 - **Historical plan docs under `docs/plans/`** — dated records; they stay as-written (like git history). Only *living* docs matter for the rename.
-- **`docs/plans/backlog/roborepo-repository-plans.zip`** — binary artifact.
+- **`docs/internal/history/plan-lifecycle/repository-plans-snapshot.zip`** — binary artifact.
 
 ### 2. Consolidated behind a canonical source (Phase 1 cleanup)
 - **CLI display name in help text** — `manifests/platform/cli-commands.json` already has `commandName` + `title` and `help-renderer.mjs` already interpolates `catalog.commandName` (the interactive help tree is fine). But ~39 hardcoded `usage: roborepo …` strings in `scripts/cli/*.mjs` bypass the catalog. Those live in module-local usage printers; consolidating all of them is churn with real regression risk in a zero-dep CLI. **Decision: leave the usage-string literals; the rename manifest maps them mechanically (single unambiguous pattern `usage: roborepo`), and `cli-commands.json` remains the one canonical definition the tool rewrites.**

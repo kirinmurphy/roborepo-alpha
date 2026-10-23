@@ -10,6 +10,15 @@ The start transition is one of the lifecycle transitions the repository's shared
 operation commits; `/plan-execute` runs it, and the submit transition when implementation is
 complete. The transition command owns their rules; this skill owns the judgment around them.
 
+## Contents
+
+- Terms
+- What stays with the skill
+- The command
+- Validator
+- Correction passes
+- After approval
+
 ## Terms
 
 | Term | Meaning |

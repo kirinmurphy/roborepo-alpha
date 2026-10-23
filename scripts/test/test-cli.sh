@@ -9,6 +9,8 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cli="${repo_root}/scripts/cli/main.mjs"
+# Every doctor run below stays off the network; node-release-health-check.mjs covers that check.
+export ROBOREPO_SKIP_NODE_RELEASE_CHECK=1
 pass=0
 fail=0
 quiet=0
@@ -692,6 +694,12 @@ assert "config: existing Codex override also gets managed rules without losing u
   bash -c "grep -q 'Impact Awareness' '${cfg_home}/.codex/AGENTS.override.md' && grep -q 'override custom' '${cfg_home}/.codex/AGENTS.override.md'"
 assert "config: rules pkg reports enabled in snapshot" \
   bash -c "${cfg_env} node -e \"import('${repo_root}/scripts/cli/config.mjs').then(c=>{const p=c.readConfigSnapshot().packages.find(x=>x.id==='impact-awareness');process.exit(p&&p.enabled?0:1)})\""
+# Marker packages stand alone: enabling one no longer pulls in response-output, and the marker
+# rule carries its own placement line instead of pointing at that package.
+assert "config: marker pkg leaves response-output disabled" \
+  bash -c "${cfg_env} node -e \"import('${repo_root}/scripts/cli/config.mjs').then(c=>{const p=c.readConfigSnapshot().packages.find(x=>x.id==='response-output');process.exit(p&&!p.enabled?0:1)})\" && ! grep -q 'Response Output' '${cfg_home}/.claude/CLAUDE.md'"
+assert "config: marker rule renders its own placement line" \
+  bash -c "grep -q 'on its own line at the end of the response' '${cfg_home}/.claude/CLAUDE.md'"
 # Independence: enabling a second behavior must not disturb the first; disabling the first must leave
 # the second in place in both harnesses.
 bash -c "${cfg_env} node '${cli}' package enable skill-visibility >/dev/null 2>&1" || true
@@ -831,7 +839,7 @@ if node -e 'const s=require("node:net").createServer();s.once("error",()=>proces
   assert "config: behaviorView sections carry contextCost rollups" \
     bash -c "node -e \"const j=require('${cfg_home}/config-snapshot.json');const secs=j.behaviorView.filter(s=>s.categoryId);const perms=j.behaviorView.find(s=>s.kind==='permissions');const stores=j.behaviorView.find(s=>s.kind==='stores');process.exit(secs.length&&secs.every(s=>s.contextCost&&Number.isFinite(s.contextCost.activeStartupTokens))&&perms.contextCost.label==='not-prompt-context'&&stores.contextCost.label==='not-prompt-context'?0:1)\""
   assert "config: portal status identifies current app" \
-    bash -c "curl -s 'http://127.0.0.1:${cfg_port}/api/portal/status' | node -e \"let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);process.exit(j.ok&&j.appRoot==='${repo_root}'&&String(j.portalDir).endsWith('/portal')&&Number.isInteger(j.pid)&&j.pages.some(p=>p.id==='developer-runtime'&&p.path==='/runtime')?0:1)})\""
+    bash -c "curl -s 'http://127.0.0.1:${cfg_port}/api/portal/status' | node -e \"let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);process.exit(j.ok&&j.appRoot==='${repo_root}'&&String(j.portalDir).endsWith('/portal')&&Number.isInteger(j.pid)&&j.serverCodeChanged===false&&j.pages.some(p=>p.id==='developer-runtime'&&p.path==='/runtime')?0:1)})\""
   # The next two assertions run `web` against cfg_srv and expect it to reuse or adopt that portal and
   # exit at once. When reuse breaks — or cfg_srv is already gone because a killed suite's watchdog
   # stopped it — `web` starts its own server instead: in the foreground, where it would block the
@@ -1082,10 +1090,11 @@ node -e 'const fs = require("fs"); fs.writeFileSync(process.argv[1], JSON.string
 assert "bundle apply: records root-config writes" \
   bash -c "HOME='${root_keep_home}' ROBOREPO_STATE_DIR='${root_keep_home}/.roborepo' node '${cli}' bundle apply base >/dev/null && HOME='${root_keep_home}' ROBOREPO_STATE_DIR='${root_keep_home}/.roborepo' node '${repo_root}/scripts/cli/root-config-state.mjs' check claude '${root_keep_home}/.claude/settings.json' | grep -q '^clean$'"
 printf '{"MANAGED_BY_ROBOREPO":true,"user":"drifted edit"}\n' > "${root_keep_home}/.claude/settings.json"
-# keep on a drifted root config leaves the user's edit untouched, stages the repo candidate, and does
-# not record a clean write — the drift must stay visible (8828155 fixed the same bug in bash).
-assert "bundle apply: local config keep policy leaves drift untouched and stages candidate" \
-  bash -c "HOME='${root_keep_home}' ROBOREPO_STATE_DIR='${root_keep_home}/.roborepo' node '${repo_root}/scripts/cli/root-config-state.mjs' check claude '${root_keep_home}/.claude/settings.json' | grep -q '^drifted$' && HOME='${root_keep_home}' ROBOREPO_STATE_DIR='${root_keep_home}/.roborepo' ROBOREPO_INSTALL_TIMESTAMP=20260615-101500 node '${cli}' bundle apply base >'${root_keep_home}/out' && grep -q 'drifted edit' '${root_keep_home}/.claude/settings.json' && grep -q 'stage: .*settings_update_20260615-101500.json' '${root_keep_home}/out' && test -f '${root_keep_home}/.claude/settings_update_20260615-101500.json' && HOME='${root_keep_home}' ROBOREPO_STATE_DIR='${root_keep_home}/.roborepo' node '${repo_root}/scripts/cli/root-config-state.mjs' check claude '${root_keep_home}/.claude/settings.json' | grep -q '^drifted$'"
+# keep on a drifted root config backs it up and merges (the user's own key survives), records the
+# merged file as clean, stages no candidate, and removes one an earlier release left behind.
+printf '{"baseline":true}\n' > "${root_keep_home}/.claude/settings_update_20260101-000000.json"
+assert "bundle apply: local config keep policy backs up and merges a drifted file" \
+  bash -c "HOME='${root_keep_home}' ROBOREPO_STATE_DIR='${root_keep_home}/.roborepo' node '${repo_root}/scripts/cli/root-config-state.mjs' check claude '${root_keep_home}/.claude/settings.json' | grep -q '^drifted$' && HOME='${root_keep_home}' ROBOREPO_STATE_DIR='${root_keep_home}/.roborepo' ROBOREPO_INSTALL_TIMESTAMP=20260615-101500 node '${cli}' bundle apply base >'${root_keep_home}/out' && grep -q 'drifted edit' '${root_keep_home}/.claude/settings.json' && grep -q 'backup: .*settings_original_20260615-101500.json' '${root_keep_home}/out' && test -f '${root_keep_home}/.claude/settings_original_20260615-101500.json' && ! ls '${root_keep_home}/.claude/' | grep -q 'settings_update_' && HOME='${root_keep_home}' ROBOREPO_STATE_DIR='${root_keep_home}/.roborepo' node '${repo_root}/scripts/cli/root-config-state.mjs' check claude '${root_keep_home}/.claude/settings.json' | grep -q '^clean$'"
 
 adopt_overwrite_home="${work}/adopt-overwrite-home"
 mkdir -p "${adopt_overwrite_home}/.claude" "${adopt_overwrite_home}/.roborepo"
@@ -1379,6 +1388,15 @@ assert "lifecycle: roborepo update preserves local hooks, trust, and enabled ski
 assert "lifecycle: update writes nothing into the source tree" globals_unchanged_since_fixture
 assert "lifecycle: package enable and update leave the tracked Codex hooks baseline unchanged" \
   bash -c "[[ \"\$(shasum '${repo_root}/generated/codex/hooks.json')\" == '${codex_hooks_baseline_before}' ]]"
+# A stale skill cache is invisible to a before/after snapshot when nothing is written, so the dry
+# run must predict the refresh itself — and agree with the real update that follows.
+stale_cache="${update_home}/.roborepo/skills/case-study"
+printf '\nstale local edit\n' >> "${stale_cache}/SKILL.md"
+stale_digest="$(cd "${stale_cache}" && find . -type f -exec shasum {} + | sort | shasum)"
+assert "lifecycle: update --dry-run previews a stale skill refresh without writing it" \
+  bash -c "HOME='${update_home}' ROBOREPO_STATE_DIR='${update_home}/.roborepo' node '${cli}' update --dry-run >'${update_out}.stale' 2>&1 && grep -q -- '- would update skill case-study' '${update_out}.stale' && ! grep -q 'changed: none' '${update_out}.stale' && [[ \"\$(cd '${stale_cache}' && find . -type f -exec shasum {} + | sort | shasum)\" == '${stale_digest}' ]]"
+assert "lifecycle: update refreshes the skill the dry run previewed" \
+  bash -c "HOME='${update_home}' ROBOREPO_STATE_DIR='${update_home}/.roborepo' node '${cli}' update >'${update_out}.refresh' 2>&1 && grep -q -- '- updated skill case-study' '${update_out}.refresh' && ! grep -q 'stale local edit' '${stale_cache}/SKILL.md'"
 
 update_legacy_home="${work}/update-legacy-home"
 mkdir -p "${update_legacy_home}/.claude" "${update_legacy_home}/.codex" "${update_legacy_home}/.roborepo/rules"
@@ -1827,6 +1845,8 @@ assert "harness: skill linking (machine-local cache + symlinks) is registry-back
 # back through the registry.
 assert "harness: live permission rendering is registry-backed" \
   node "${repo_root}/scripts/test/permissions-render-live-characterization-check.mjs"
+assert "harness: Codex permission render keeps lines it did not generate" \
+  node "${repo_root}/scripts/test/codex-permissions-foreign-lines-check.mjs"
 
 # MCP add/remove/list through provider MCP adapters: mcp.mjs's mcpAdd/mcpApply and
 # packages.mjs's installMcpPreset/removeMcpPreset (previously three independent, duplicated
@@ -1974,7 +1994,23 @@ assert "developer-runtime: metadata suggestion discovery" \
 
 # Root config drift VIEW (buildRootConfigView in root-config-view.mjs): the per-harness state the terminal
 # `config root inspect` report and the web /agents drift chip both render from — not-installed /
-# unwritten / in-sync / drifted / staged-pending.
+# unwritten / in-sync / drifted.
+assert "harness-write-guard: temporary state with a real HOME never writes harness config" \
+  node "${repo_root}/scripts/test/harness-write-guard-check.mjs"
+assert "skill-structure: body length, reference contents, and reference depth rules" \
+  node "${repo_root}/scripts/test/skill-structure-check.mjs"
+assert "write-log: every logged config write names its trigger" \
+  node "${repo_root}/scripts/test/write-log-check.mjs"
+assert "portal restart notice: server code signature tracks changes on disk" \
+  node "${repo_root}/scripts/test/portal-server-code-signature-check.mjs"
+# An installed skill copy that differs from its source makes doctor warn (not fail) by name.
+stale_skill_home="${work}/stale-skill-home"
+mkdir -p "${stale_skill_home}/.roborepo/skills"
+cp -R "${repo_root}/globals/packages/plan-write/skills/plan-write" "${stale_skill_home}/.roborepo/skills/plan-write"
+touch "${stale_skill_home}/.roborepo/skills/plan-write/.builtin-managed"
+printf '\nstale line\n' >> "${stale_skill_home}/.roborepo/skills/plan-write/SKILL.md"
+assert "doctor: warns when an installed skill copy is out of date" \
+  bash -c "HOME='${stale_skill_home}' ROBOREPO_SKIP_NODE_RELEASE_CHECK=1 bash '${repo_root}/scripts/doctor.sh' --quiet 2>&1 | grep -q 'warn: installed skills are out of date (plan-write) — run: roborepo update'"
 assert "root-config-view: per-harness drift state covers every user-facing case" \
   node "${repo_root}/scripts/test/root-config-view-check.mjs"
 

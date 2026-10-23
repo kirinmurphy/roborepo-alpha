@@ -67,6 +67,18 @@ try {
   const remaining = fs.readdirSync(snapshots).filter((name) => name.endsWith(".json"));
   assert.ok(remaining.length > 0 && remaining.length < 40, "oldest snapshot files are removed");
 
+  // ---- Browser evidence is listed with its bound, and counts only evidence files ----
+  const evidence = path.join(tempRoot, "browser", "evidence");
+  fs.mkdirSync(evidence, { recursive: true });
+  fs.writeFileSync(path.join(evidence, "20261021T000000Z-abc123-1-screenshot.png"), "png");
+  fs.writeFileSync(path.join(evidence, "20261021T000000Z-abc123-2-video.webm"), "webm");
+  fs.writeFileSync(path.join(evidence, "notes.txt"), "not evidence");
+  const listed = run([]);
+  const evidenceBlock = listed.stdout.slice(listed.stdout.indexOf("browser-evidence"));
+  assert.ok(listed.stdout.includes("browser-evidence"), "list names the browser evidence store");
+  assert.match(evidenceBlock, /bound 14d \/ 250\.0MB/, "the evidence store reports both bounds");
+  assert.match(evidenceBlock, /2 file\(s\)/, "the evidence count ignores non-evidence files");
+
   // ---- Bad input is rejected with usage, not a stack trace ----
   const unknown = run(["reset", "not-a-store"]);
   assert.equal(unknown.status, 2, "an unknown store id exits 2");

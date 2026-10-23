@@ -4,9 +4,9 @@
 
 ## Summary
 
-- Shared skills: 16
-- Package skill resources: 16
-- Static findings: 4
+- Shared skills: 17
+- Package skill resources: 17
+- Static findings: 5
 - Unknown manifest entries: none
 
 ## Compatibility Result
@@ -23,6 +23,7 @@ Keep shared `SKILL.md` frontmatter portable; use package-backed checks before ad
 
 | Skill | Invocation | Risk | Explicit command | Static findings | Recommendation |
 | --- | --- | --- | --- | --- | --- |
+| `feature-verification` | auto | medium | false | side-effect keyword | Keep trigger narrow; add near-miss tests. |
 | `code-style` | auto | low | false | none | Keep auto if trigger remains narrow. |
 | `javascript-typescript` | auto | low | false | none | Keep auto if trigger remains narrow. |
 | `react` | auto | low | false | none | Keep auto if trigger remains narrow. |

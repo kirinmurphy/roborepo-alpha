@@ -23,7 +23,7 @@ flowchart LR
 
 ## Install
 
-Requires **Node.js 20+**.
+Requires **Node.js 22+**.
 
 ```sh
 npm install -g codethings-roborepo-alpha
@@ -119,6 +119,7 @@ Automatic helpers:
 | `react`                        | React components, hooks, and tests   |
 | `supabase-integration-testing` | Real Supabase integration tests      |
 | `test-harness`                 | Choosing and validating test runs    |
+| `feature-verification`         | Showing real evidence that work runs |
 
 ![A package section on the Agents page: slash-command skills with token costs and on/off toggles](docs/images/agents-config.png)
 
@@ -235,7 +236,7 @@ The README covers common entry points. See the reference for the full command su
 
 ## Development
 
-Requires **Node.js 20+**.
+Requires **Node.js 22+**.
 
 ```sh
 git clone https://github.com/kirinmurphy/roborepo.git

@@ -1,19 +1,18 @@
 ---
 id: git-exec-consolidation
 priority: low
-next_action: Migrate the three private git() helpers onto defaultRunGitSync from modules/repositories/git-exec.mjs
+next_action: Inventory the three private wrappers and capture diff subprocess, then migrate exact read-only operations to the shared bounded Git seam.
 blocked_by: []
-depends_on:
-  - developer-runtime-git-health-history
-related: []
-reviewed_commit:
+depends_on: []
+related: ["developer-runtime-git-health-history"]
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
 
 # Git Exec Consolidation
 
 ## Summary
 
-Migrate three duplicated, unhardened `git()` helpers onto the shared `defaultRunGitSync` seam
+Migrate duplicated Git execution, including three private `git()` wrappers and capture's direct diff call, onto the shared `defaultRunGitSync` seam
 introduced by `developer-runtime-git-health-history`.
 
 ## Current State
@@ -23,15 +22,15 @@ subcommand allow-list, hook and lock hardening, an explicit timeout, and `maxBuf
 `defaultRunGit` (async) and `defaultRunGitSync` (sync), the latter existing specifically so these
 call sites can migrate without restructuring.
 
-Three private copies predate it, each byte-similar and each missing protections:
+Three private wrappers remain, each missing the shared execution bounds; capture also has a separate direct Git diff call:
 
 - `modules/plan-suite/index.mjs` — `gitInfo` / `gitFileInfo`
 - `scripts/cli/telemetry-capture.mjs` — `repoMetadata`
 - `scripts/cli/telemetry-markers.mjs` — `resolveGitIdentity`
+- `scripts/cli/telemetry-capture.mjs` — direct `gitDiffFingerprint` subprocess outside its private wrapper
 
 All three use `spawnSync` with **no timeout and no `maxBuffer`**. A hung or pathologically verbose
-`git` blocks the calling process indefinitely. None disables hooks, so a repository-local
-`core.hooksPath` could execute code during a Plans scan or a telemetry capture. None passes
+`git` blocks the calling process indefinitely. None applies the seam's hook configuration hardening. Determine which invoked read-only Git operations can actually execute hooks before describing a hook-execution vulnerability. None passes
 `--no-optional-locks`, so `git status`-style calls can contend for `index.lock` with the user's own
 commands.
 
@@ -55,13 +54,13 @@ capture) into that plan's diff. `defaultRunGitSync` was shipped ready so this be
   `remote` out and read the URL from config as `modules/repositories/identity.mjs` already does.
 - Replace each private `git()` with `defaultRunGitSync`, mapping the existing return shapes
   (`{ ok, stdout }` and bare-string variants) onto `{ ok, stdout, code, error }`.
-- Delete the three private helpers.
+- Delete the three private helpers and migrate the separate diff-fingerprint call after allowing its exact read-only argument shape.
 - Confirm the telemetry capture path stays fast — it runs on a hook, so the added argument list must
   not measurably slow it.
 
 ## Validation
 
-- `npm run test:plans`, `npm run test:telemetry`, `npm run test:telemetry-marker-cli`.
+- `node scripts/test/plan-suite-check.mjs`, `npm run test:telemetry`, `node scripts/test/telemetry-marker-cli-check.mjs`.
 - `node --check` touched files.
-- `bash scripts/test/test-roborepo.sh --quiet`.
+- `npm run check`.
 - Confirm a repository with a hostile `core.hooksPath` executes nothing during a Plans scan.

@@ -184,9 +184,11 @@ of it part of the portable profile.
 | Telemetry snapshots | `telemetry/snapshots/` | one file per id | 5MB total |
 | Telemetry experiments | `telemetry/experiments/` | one file per id | 5MB total |
 | Dense bash capture | `capture/<harness>/dense-bash.jsonl` | append-only JSONL | 30 days, 10MB |
+| Browser evidence | `browser/evidence/` | one file per screenshot, video, or trace | 14 days, 250MB |
 | Usage snapshots | `usage/latest/<harness>.json` | overwritten per harness | self-bounding |
 
-Each store trims itself on write; nothing runs on a schedule.
+Each store trims itself on write; nothing runs on a schedule. Browser evidence is trimmed when a
+`roborepo browser run` starts, so a run never removes the files it is about to report.
 
 Durable user intent — the repository registry, command overrides, enabled packages — is not listed
 here. It never expires and is not observability data.

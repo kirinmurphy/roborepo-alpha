@@ -4,8 +4,8 @@ priority: medium
 next_action: Inventory the current global /agents permissions UI and provider projections, then compare them against supported Claude Code and Codex native permission and sandbox controls.
 blocked_by: []
 depends_on: []
-related: [nrvwti51]
-reviewed_commit:
+related: ["nrvwti51"]
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 worktree:
 ---
 
@@ -17,7 +17,7 @@ Determine whether RoboRepo's existing machine-wide permissions management still 
 
 This is a separate, non-blocking follow-up to the repository configuration inspector (`nrvwti51`). That feature only displays native permission configuration sources; it must not extend the global editor into repository scope.
 
-## Problem
+## Context
 
 RoboRepo's global editor uses simplified permission buckets and projects settings into harness-native configuration. Native harness models have evolved and differ in security behavior. It is unclear which UI controls still work, which are partial or misleading, and whether maintaining cross-harness permission editing is worth the complexity and security risk.
 
@@ -36,7 +36,7 @@ RoboRepo's global editor uses simplified permission buckets and projects setting
 - Simulating comprehensive runtime security policy or evaluating every historical harness version.
 - Creating backward-compatibility layers for obsolete permission profiles without a demonstrated need.
 
-## Research and validation
+## Implementation plan
 
 - [ ] Locate current global permissions UI controls, data model, writes, and harness adapters.
 - [ ] List the user-facing promises and their native Claude/Codex mappings.
@@ -69,3 +69,12 @@ RoboRepo's global editor uses simplified permission buckets and projects setting
 - [Claude Code — permissions](https://code.claude.com/docs/en/permissions)
 - [Claude Code — settings](https://code.claude.com/docs/en/settings)
 - [Codex — configuration](https://developers.openai.com/codex/config-basic)
+
+## Verified starting discrepancy
+
+The tracked Codex PreToolUse hook emits command-specific `allow`, `deny`, and `ask` decisions, while
+the provider manifest still declares `perCommandAsk: false` and the static renderer skips ask rules.
+Include this implementation/metadata/readiness discrepancy in the audit. Verify installed-hook
+execution and native enforcement before certifying controls. [[permissions-ui-revamp]] consumes
+this audit before choosing fidelity UI or gate/scope simplification; the repository inspector stays
+read-only and independent.

@@ -1,19 +1,59 @@
 ---
 id: wrap-up-coderabbit-integration-plan
 priority: low
-next_action: Fill in the next concrete task.
+next_action: Verify native workflow discovery across supported providers and scope the cross-package correction separately from optional CodeRabbit integration.
 blocked_by: []
 depends_on: []
 related: []
-reviewed_commit:
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
 
 # Wrap-Up Codex Invocation and CodeRabbit Integration
 
-> Status: proposed
->
-> Scope: correct the unsupported Codex command installation model, then extend the
-> `session-close` skill with an optional post-commit CodeRabbit review and fix loop.
+## Summary
+
+Two independent workstreams remain: correct native workflow invocation across affected packages,
+and optionally integrate CodeRabbit into Session Close. The former does not depend on selecting or
+installing an external review tool. Keep the detailed integration proposal below as proposed design
+until its current maintained contract and installation requirements are verified.
+
+## Goals
+
+- Make manual workflow discovery work through supported native provider surfaces.
+- Preserve explicit-request activation and ownership-safe cleanup of generated artifacts.
+- Add optional external review using a stable review boundary without weakening Session Close.
+
+## Context
+
+The Codex provider still declares `~/.codex/commands`; generated files do not prove current native
+discovery. Revalidate the native documentation/runtime contract before choosing a replacement.
+`globals/packages/session-close/skills/session-close/SKILL.md` has no CodeRabbit integration.
+[[7e21olcs]] improved the existing review rubric; [[ejsc769o]] owns extraction into the still-unbuilt
+shared `implementation-review` skill. Use that rubric instead of adding a parallel quality standard.
+
+## Implementation plan
+
+### Workstream 1 — Native invocation
+
+- [ ] Verify current native manual invocation/discovery and required metadata for supported providers.
+- [ ] Coordinate risk/activation and Claude duplicate-listing decisions with
+      [[skills-vs-commands-invocation-policy]].
+- [ ] Correct provider/resource rendering across all affected packages and clean only owned stale
+      generated/live artifacts; preserve explicit workflow activation.
+- [ ] Test installed native discovery separately from generated-file existence.
+
+### Workstream 2 — Optional CodeRabbit review
+
+- [ ] Verify maintained integration/CLI contract and platform requirements before implementation.
+- [ ] Reuse the current shared-review rubric and preserve the existing self-review, documentation,
+      stray-file, commit, and handoff sequence described by the detailed proposal.
+- [ ] Keep integration optional, detect missing prerequisites explicitly, and authorize any external
+      installation or publishing separately from this documentation update.
+- [ ] Capture the exact reviewed commit/diff boundary and preserve a bounded fix/review loop with
+      clear skipped/error outcomes, as specified in the detailed acceptance criteria.
+
+The detailed proposal below remains conditional on Workstream 1 native discovery verification
+and Workstream 2 maintained-integration verification.
 
 ## Outcomes
 
@@ -27,7 +67,7 @@ reviewed_commit:
 5. Missing CLI or authentication state produces a safe, platform-aware setup prompt
    instead of silently installing software or skipping review.
 
-## Current-State Findings
+## Prior native-invocation findings to revalidate
 
 ### Why `/session-close` appears in Claude but not Codex
 
@@ -41,11 +81,12 @@ The package declaration is present and the renderer works as currently designed:
   `~/.codex/commands`.
 - `generated/packages/session-close/codex/commands/session-close.md` exists.
 
-The failure is the assumed Codex runtime contract. Current Codex does not scan
-`~/.codex/commands` for user-defined slash commands. Its supported reusable workflow
-is a skill, invoked explicitly as `$session-close` or selected through `/skills`.
+The original investigation attributed the failure to the native discovery contract: it reported
+that Codex did not scan `~/.codex/commands` and instead supported explicit skills through
+`$session-close` or `/skills`. Revalidate those observations against supported current versions
+before choosing the delivery change.
 
-Codex still documents legacy custom prompts under `~/.codex/prompts`, but they are:
+The original documentation research described legacy prompts under `~/.codex/prompts` as:
 
 - deprecated in favor of skills;
 - displayed as `/prompts:<name>`, not `/<name>`;
@@ -57,13 +98,14 @@ It is not the recommended fix.
 
 ### Broader impact
 
-This is not specific to Wrap Up. RoboRepo currently generates unsupported Codex
-command wrappers for every skill-backed or standalone entrypoint that lists `codex`.
+The suspected mismatch affects every generated Codex skill-backed or standalone wrapper, not
+only Wrap Up. Whether those wrappers are unsupported must be verified against the current native
+contract.
 Tests prove only that files are generated and copied; they do not prove that Codex
 discovers them. Documentation also incorrectly describes `~/.codex/commands` as a
 native live command directory.
 
-## Decision: Use Native Invocation Per Harness
+## Proposed native invocation after verification
 
 Use the same shared skill with harness-native explicit entrypoints:
 

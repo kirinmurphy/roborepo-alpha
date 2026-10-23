@@ -3,11 +3,9 @@ id: f0j4j8y2
 priority: high
 next_action: Scope canonical fingerprint source keys and minimal content normalization, then implement per-file fingerprints in the snapshot builder and schema bump
 blocked_by: []
-depends_on: [k8mngttv]
-related:
-  - k8mngttv
-  - roborepo-telemetry-events-experiments
-reviewed_commit:
+depends_on: []
+related: ["k8mngttv", "roborepo-telemetry-events-experiments"]
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
 
 # Telemetry Content Fingerprints: Skill and Rule Revision Tracking
@@ -44,14 +42,15 @@ The key distinction is:
 
 ## Current state
 
-- `computeSnapshotId` currently hashes sorted ID arrays plus configuration objects, not skill
-  or rules file contents.
-- Built snapshots do not yet carry robust provider-correct rules/skill file identities.
-- Snapshots are SessionStart-only. Mid-session edits are first visible at the next SessionStart.
-- `intervening.diff_fingerprint` is a project-repo change signal, not a persisted identity for
-  installed skill/rule revisions.
-- `privacyHash` is the existing hashing primitive and snapshot persistence already dedupes by
-  snapshot ID.
+`scripts/cli/telemetry-schemas/snapshot-schema.mjs` currently writes snapshot schema v2, with ambient
+package-resource evidence, evaluability, and `revision_contract: 1`. `computeSnapshotId` hashes that
+configuration plus ID arrays and settings, not the proposed canonical per-file skill/rule content
+records. Same-ID file edits therefore need this extension.
+
+The conditions prerequisite [[k8mngttv]] is complete. Extend v2 and preserve mixed-version reads;
+legacy absence must remain unknown revision. Session observation time and interaction-scoped skill
+invocation remain distinct from deduplicated snapshot creation time. `intervening.diff_fingerprint`
+is a project-repo change signal, not an installed skill/rule revision identity.
 
 ## Goals
 

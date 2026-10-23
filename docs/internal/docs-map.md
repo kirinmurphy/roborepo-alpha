@@ -38,6 +38,7 @@ doc of record first; supporting docs should add context, not redefine the behavi
 | Code indexing | [jcodemunch](../user/reference/jcodemunch.md) | [roborepo CLI Commands](../user/reference/roborepo-cli.md#indexing) |
 | Docs indexing | [jdocmunch](../user/reference/jdocmunch.md) | [roborepo CLI Commands](../user/reference/roborepo-cli.md#indexing) |
 | Convention capture | [Convention Capture](../user/reference/convention-capture.md) | [Config Control Panel](../user/reference/config-control-panel.md) |
+| Feature verification and browser evidence | [roborepo CLI Commands](../user/reference/roborepo-cli.md#browser-evidence) | [roborepo CLI Internals](cli-internals.md#browser-commands), [Config Control Panel](../user/reference/config-control-panel.md) |
 | Plans portal and workflows | [Plans Portal Reference](../user/reference/plans-portal.md) | [Plan Suite Walkthrough](../user/guides/plan/lifecycle/plan-suite.md) |
 | Telemetry and the telemetry portal | [Telemetry Service Reference](../user/reference/telemetry.md) | [Telemetry Walkthrough](../user/guides/telemetry.md) |
 | Inventory manifests | [Inventory Manifest README](../../manifests/inventory/README.md) | [Config-Code Separation](../architecture/config-code-separation.md) |

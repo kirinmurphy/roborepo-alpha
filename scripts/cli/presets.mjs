@@ -4,6 +4,8 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { repoRoot, harnessHome } from "./paths.mjs";
 import { isMainModule } from "./roots.mjs";
+import { assertHarnessWriteAllowed } from "./harness-write-guard.mjs";
+import { recordConfigWrite } from "./write-log.mjs";
 import { installStatePath, presetsStatePath, recordAppRoot } from "./state-paths.mjs";
 import { readConfigSnapshot, buildBehaviorView } from "./config.mjs";
 import { mutatePackage, setBehaviorBucket } from "./config-mutate.mjs";
@@ -11,7 +13,7 @@ import { renderHomeRules, removeHomeRules, isRenderedRulesOutput } from "./rules
 import { listHarnessProviders, getHarnessProvider } from "../harnesses/registry.mjs";
 import { readinessSupported } from "../harnesses/hook-readiness.mjs";
 import { confirmYesNo, makePrompter, selectMenu, wizard } from "./skill-lib.mjs";
-import { pathExists, findSiblingArtifact, copyTree, stageCandidate, backupOriginal, timestampedPath } from "./staging-lib.mjs";
+import { pathExists, findSiblingArtifact, findSiblingArtifacts, copyTree, stageCandidate, backupOriginal, timestampedPath } from "./staging-lib.mjs";
 import { checkDrift, recordWrite } from "./root-config-state.mjs";
 import { SHARED_TARGET_KINDS, SharedTargetConflictAbort, applySharedTargetRow, removeSharedTargetRow, sharedTargetInstalled } from "./shared-target-rows.mjs";
 
@@ -400,6 +402,7 @@ async function maybeLaunchPortal() {
 
 export function presetsApply(args) {
   rejectUnknownFlags(args, new Set(["--default", "--all"]));
+  assertHarnessWriteAllowed();
   const catalog = readPresetCatalog();
   const requested = withDependencies(requestedBundles(args, catalog));
   applySelection(requested, catalog, { reconcile: false });
@@ -666,7 +669,10 @@ function copyItem(row, policy) {
   if (!pathExists(row.homeAbs)) {
     copyTree(source, row.homeAbs);
     console.log(`copy: ${row.homeAbs} <- ${source}`);
-    if (row.kind === "root_config") recordWrite(row.harness, row.homeAbs);
+    if (row.kind === "root_config") {
+      recordWrite(row.harness, row.homeAbs);
+      recordConfigWrite(row.homeAbs, "install root config");
+    }
     return;
   }
 
@@ -685,8 +691,12 @@ function copyItem(row, policy) {
     const repoText = fs.readFileSync(source, "utf8");
     const localText = fs.readFileSync(row.homeAbs, "utf8");
     const merged = getHarnessProvider(row.harness).adapters.rootConfig.merge(repoText, localText);
+    // Earlier releases staged a *_update_TIMESTAMP candidate beside a drifted root config instead
+    // of merging. The merge below supersedes any such leftover, so it is removed on every apply.
+    removeStagedRootConfigCandidates(row.homeAbs);
     if (drift.status === "clean") {
       fs.writeFileSync(row.homeAbs, merged);
+      recordConfigWrite(row.homeAbs, "merge baseline update");
       console.log(`update: ${row.homeAbs} <- ${source} (baseline changed, no local drift)`);
       // The merge just changed the file's content, so recordWrite must rehash post-write — there's
       // no precomputed hash to thread through here.
@@ -696,21 +706,22 @@ function copyItem(row, policy) {
     // status is "unwritten" (no prior recorded write) or "drifted" (local edits after roborepo's
     // last write). Both are real collisions, so abort stops here before anything is written.
     if (policy.onConflict === "abort" && merged !== localText) abortOnConflict(row, source);
+    // Mirrors export_user_config in install-lib.sh. Harness apps write their own keys into these
+    // files, so drift is routine rather than a sign the user needs to reconcile anything. The merge
+    // keeps every local value and only adds repo entries, so keep and overwrite both merge; when it
+    // would change nothing, the current file is simply adopted as roborepo's last write.
+    if (merged === localText) {
+      console.log(`ok: ${row.homeAbs} (local root config already current)`);
+      recordWrite(row.harness, row.homeAbs);
+      return;
+    }
     if (drift.status === "drifted") {
-      // Mirrors export_user_config in install-lib.sh. keep leaves the user's edits exactly as they
-      // are and records nothing, so the drift stays visible to `config root inspect`; overwrite
-      // backs the drifted file up before merging over it.
-      if (policy.onConflict === "keep") {
-        stageRootConfigCandidate(row, source);
-        return;
-      }
       const originalPath = timestampedPath(row.homeAbs, "original");
       fs.copyFileSync(row.homeAbs, originalPath);
       console.log(`backup: ${row.homeAbs} -> ${originalPath}`);
     }
-    // An unwritten file is a first adopt: merging preserves local settings and layers repo-only
-    // additions on top, so it applies under keep and overwrite alike.
     fs.writeFileSync(row.homeAbs, merged);
+    recordConfigWrite(row.homeAbs, "merge into local root config");
     console.log(`merge: ${row.homeAbs} <- ${source} (local root config preserved)`);
     recordWrite(row.harness, row.homeAbs);
     return;
@@ -732,7 +743,10 @@ function copyItem(row, policy) {
   }
   copyTree(source, row.homeAbs);
   console.log(`copy: ${row.homeAbs} <- ${source}`);
-  if (row.kind === "root_config") recordWrite(row.harness, row.homeAbs);
+  if (row.kind === "root_config") {
+    recordWrite(row.harness, row.homeAbs);
+    recordConfigWrite(row.homeAbs, "replace root config");
+  }
 }
 
 function removeOwnedLink(row) {
@@ -861,16 +875,11 @@ function readInstallPolicy() {
   return { onConflict };
 }
 
-// A drifted root config under keep: stage the repo candidate beside the user's file, unless an
-// identical candidate is already staged — repeated updates would otherwise pile up one copy per run.
-function stageRootConfigCandidate(row, source) {
-  const staged = findSiblingArtifact(row.homeAbs, "update");
-  if (staged && fs.readFileSync(staged, "utf8") === fs.readFileSync(source, "utf8")) {
-    console.log(`ok: ${row.homeAbs} (drifted local root config kept; candidate already staged as ${path.basename(staged)})`);
-    return;
+function removeStagedRootConfigCandidates(homeAbs) {
+  for (const staged of findSiblingArtifacts(homeAbs, "update")) {
+    fs.rmSync(staged, { recursive: true, force: true });
+    console.log(`cleanup: ${staged}`);
   }
-  stageUpdate(row);
-  printMergePrompt(row);
 }
 
 function abortOnConflict(row, source) {

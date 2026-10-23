@@ -107,6 +107,70 @@ function renderCodexPermissionBlock(behaviors, arbitraryCommands, { workspaceRoo
   return `${[...lines, end].join("\n")}\n`;
 }
 
+// Keys and tables the generated block owns, in this format and the older CODEX PERMISSIONS one.
+const OWNED_ROOT_KEYS = new Set(["approval_policy", "default_permissions", "sandbox_mode"]);
+const ownedTable = (name) => name === "sandbox_workspace_write" || name === "permissions" || name.startsWith("permissions.");
+
+// TOML requires top-level keys before the first table, and this block carries tables, so the block
+// sits exactly where another tool adds a new top-level key. Codex placed the user's `notify` hook
+// inside it that way, and replacing the block wholesale deleted it. Whatever the block did not
+// generate is returned so the caller can keep it: top-level lines go above the block, tables below.
+function foreignBlockContent(oldBlock) {
+  const root = [];
+  const tables = [];
+  let section = null; // null: top level; { owned, lines }: inside a table
+  let continuation = null; // fate of the lines of a multi-line value still open
+  let depth = 0;
+  for (const line of oldBlock.split("\n")) {
+    const trimmed = line.trim();
+    if (continuation) {
+      if (continuation.keep) continuation.into.push(line);
+      depth += bracketDelta(line);
+      if (depth <= 0) continuation = null;
+      continue;
+    }
+    if (trimmed === begin || trimmed === end || trimmed.startsWith("# BEGIN GENERATED") || trimmed === "# Source: manifests/inventory/agent-permissions.json") continue;
+    const header = trimmed.match(/^\[\[?\s*([^\]]+?)\s*\]\]?$/);
+    if (header) {
+      const name = header[1].replace(/"/g, "");
+      section = { owned: ownedTable(name), lines: [line] };
+      if (!section.owned) tables.push(section);
+      continue;
+    }
+    if (!trimmed) {
+      if (section && !section.owned) section.lines.push(line);
+      continue;
+    }
+    const key = trimmed.match(/^([A-Za-z0-9_.-]+|"[^"]+")\s*=/)?.[1]?.replace(/"/g, "");
+    const keep = section ? !section.owned : !(key && OWNED_ROOT_KEYS.has(key));
+    const into = section ? section.lines : root;
+    if (keep) into.push(line);
+    depth = bracketDelta(line);
+    if (key && depth > 0) continuation = { keep, into };
+  }
+  return {
+    root,
+    tables: tables.map((table) => table.lines.join("\n").replace(/\n+$/, "")),
+  };
+}
+
+// Net [ minus ] outside quoted strings, to follow a multi-line array to its closing bracket.
+function bracketDelta(line) {
+  let delta = 0;
+  let quote = null;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (quote) {
+      if (ch === "\\" && quote === '"') i += 1;
+      else if (ch === quote) quote = null;
+    } else if (ch === '"' || ch === "'") quote = ch;
+    else if (ch === "#") break;
+    else if (ch === "[") delta += 1;
+    else if (ch === "]") delta -= 1;
+  }
+  return delta;
+}
+
 export function renderCodexConfig(current, behaviors, arbitraryCommands, target, options = {}) {
   const block = renderCodexPermissionBlock(behaviors, arbitraryCommands, options);
   const oldBegin = "# BEGIN GENERATED CODEX PERMISSIONS";
@@ -121,7 +185,10 @@ export function renderCodexConfig(current, behaviors, arbitraryCommands, target,
     }
     const afterEnd = finish + markerEnd.length;
     const suffix = current.slice(afterEnd).replace(/^\n*/, "\n");
-    return `${current.slice(0, start)}${block}${suffix}`;
+    const foreign = foreignBlockContent(current.slice(start, finish));
+    const above = foreign.root.length ? `${foreign.root.join("\n")}\n` : "";
+    const below = foreign.tables.length ? `\n${foreign.tables.join("\n")}\n` : "";
+    return `${current.slice(0, start)}${above}${block}${below}${suffix}`;
   }
 
   const stripped = current

@@ -4,9 +4,8 @@ priority: medium
 next_action: Design a hermetic portal-to-capture scenario using a simulated supported harness and the production telemetry capture path
 blocked_by: []
 depends_on: []
-related:
-  - nkhk6bb
-reviewed_commit:
+related: ["nkhk6bb"]
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 worktree:
 ---
 
@@ -69,3 +68,10 @@ coverage without requiring a developer to install or launch a real harness in au
 
 - Which supported provider offers the smallest stable fixture for exercising the generated hook
   configuration without launching its interactive agent process?
+
+## Coverage after analytics completion
+
+[[koww80zh]] delivered independent analysis verification and the on-demand oracle, and explicitly
+excludes capture wiring and browser rendering. Existing browser empty-state tests stub report
+responses. Reuse those fixtures, but this plan still must join harness discovery, enablement,
+installed hook command, production capture, and report visibility in one hermetic scenario.

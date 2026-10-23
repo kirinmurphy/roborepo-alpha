@@ -5,7 +5,7 @@ next_action: Resolve the evidence-consent, automatic chat-candidate, and retenti
 blocked_by: []
 depends_on: []
 related: []
-reviewed_commit: 2a56135734a21c6c8ad9435f76f2e9e092b81201
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
 
 # Rough Draft: Harness Incident Logging and Evidence Capture
@@ -498,3 +498,10 @@ test harness is available.
 | `/harness-log` surface | Skill; native harness command; both | Both where supported, each delegating to the CLI | The workflow should remain available across harness capability differences. |
 | GitHub promotion | Portal action; CLI command; manual copy | Defer; reserve typed links in schema | Local evidence must be reviewed and sanitized before leaving the machine. |
 | Incident deletion | Permanent delete; evidence-only delete plus tombstone | Evidence-only delete plus tombstone | History integrity must be balanced against user-controlled deletion. |
+
+## Current implementation boundary
+
+The tracked CLI/state paths do not yet expose this incident workflow. Telemetry analytics and the
+on-demand oracle are reusable diagnostics, not consented incident evidence capture or its lifecycle.
+Resolve the recorded consent, automatic-candidate, and retention decisions before enabling capture;
+reuse current retention primitives only after that policy is selected. This remains a draft.

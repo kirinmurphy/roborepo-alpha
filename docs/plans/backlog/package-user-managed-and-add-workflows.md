@@ -1,19 +1,14 @@
 ---
 id: user-managed-packages-and-add-workflows
 priority: low
-next_action: Fill in the next concrete task.
+next_action: Characterize existing workspace catalog and typed skill/MCP primitives, then agree source/provenance and receipt boundaries before designing unified add flows.
 blocked_by: []
 depends_on: []
 related: []
-reviewed_commit:
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
 
 # User-Managed Packages And Add Workflows
-
-> Status: draft. This plan proposes a user-facing creation model for custom skills, MCP servers,
-> rules, hooks, permissions, plugins, and grouped toolsets. The core recommendation is that
-> `package` remains the unified internal management unit, while most users create content through
-> typed `roborepo add <kind>` flows and only meet packages when grouping, exporting, or debugging.
 
 ## Purpose
 
@@ -30,6 +25,17 @@ The main design constraint is trust. Users should not feel like they are adding 
 mysterious local black box. Roborepo may use machine-local state for implementation, but the user
 should have a clear source path, receipt, inspect command, export path, and remove path for anything
 they add.
+
+## Goals
+
+- Make typed additions inspectable, reversible, and portable through the existing package model.
+- Give source identity, ownership, export, and removal one explicit user-facing contract.
+- Preserve native/unmanaged content and reject ambiguous collisions without silent adoption.
+
+The proposal keeps packages as the internal management unit for custom skills, MCP servers,
+rules, hooks, permissions, plugins, and grouped toolsets. Users create simple content through typed
+`roborepo add <kind>` flows and encounter package details for grouping, export, or diagnosis.
+
 
 ## Concept Model
 
@@ -116,28 +122,21 @@ source of truth for user-authored content.
 
 ## Current Behavior
 
-Roborepo already has several pieces of this architecture:
+The package system already loads built-in and workspace `package.config.json` files through
+`scripts/cli/package-catalog.mjs`, validates IDs/collisions, normalizes typed resources, and carries
+presentation/category metadata. Package inspect/status/reconcile/adopt-live, skill new/adopt, and
+MCP add provide reusable primitives. These are the baseline, not new catalog or inspection work.
 
-- Built-in package definitions live in `globals/packages/*/package.config.json`.
-- `scripts/cli/package-catalog.mjs` loads built-in and workspace package configs.
-- `scripts/cli/packages.mjs` enables and disables packages by dispatching on resource type.
-- `scripts/cli/package-probes.mjs` computes desired vs observed package live state.
-- `scripts/cli/config.mjs` builds the `/config` snapshot and maps it to behavior sections.
-- `scripts/cli/config-mutate.mjs` provides shared mutation primitives for the portal and onboarding.
-- `scripts/cli/skill-inventory.mjs` can detect managed and native skills across harness dirs.
+Remaining gaps are a coherent typed-add user journey, portable source/provenance receipts, generic
+user-content visibility, export/remove guarantees, and drift/adoption beyond existing supported
+resources. Proposed example IDs and aliases below are illustrative; they must be reconciled with
+the current manifest schema rather than introduced as a second package format.
 
-The current gaps:
-
-- Built-in packages are cataloged as top-level package records; workspace package configs are also
-  discoverable.
-- User-added native skills can be detected, but they are not first-class package records.
-- `buildBehaviorView()` is still hard-coded around known internal package IDs and section buckets.
-- Users have simple flows for some single-type things, especially skills and MCP servers, but not
-  for rule snippets, hooks, chat-time-output behavior, plugin metadata, or package-owned permission
-  additions.
-- There is no portable user package authoring/export format.
-- `~/.roborepo` stores useful machine state, but the product does not yet explain the boundary
-  between user source, Roborepo cache, and live harness writes.
+[[o9zwxuav]] owns selected roots/dependency closure and verified activation. [[jdsobwn]] owns source
+identity, collision resolution, remote artifacts, and installation provenance. This plan owns typed
+creation, grouping, receipts, export, and removal UX on those contracts. [[74h2tlim]] owns profile
+containment and backup; agree source/record boundaries before any path migration. Remote registry
+implementation is not required merely to begin characterizing shipped local add primitives.
 
 ## Proposed Behavior
 
@@ -605,15 +604,15 @@ the source is moved or the shell starts from a different directory.
 
 - [ ] Define a user package manifest schema with `schemaVersion`, `id`, `origin`, `label`,
       `description`, `category`, `source`, `scope`, `resources`, and `requires`.
-- [ ] Add a user package catalog loader that merges built-in packages with user package records.
+- [ ] Extend the existing workspace catalog only for verified gaps in typed-add provenance; reuse built-in/workspace composition.
 - [ ] Namespace user package IDs and reject collisions with built-ins.
-- [ ] Add manifest validation with clear errors.
+- [ ] Extend existing manifest validation for approved user-content metadata and receipt contracts.
 - [ ] Add source path resolution and path-containment checks.
 - [ ] Reject unsupported scopes explicitly.
 
 ### Phase 2 - Data-Driven Behavior View
 
-- [ ] Replace hard-coded package ID/category mapping in `buildBehaviorView()` with package metadata.
+- [ ] Audit existing presentation/category metadata consumers and remove only remaining hard-coded user-content gaps.
 - [ ] Keep curated descriptions for built-ins where useful, but make category placement data-driven.
 - [ ] Add a generic web section renderer for unknown/new categories.
 - [ ] Add `origin` and status badges to behavior view items.
@@ -635,7 +634,7 @@ the source is moved or the shell starts from a different directory.
 ### Phase 4 - Inspect, Export, Remove
 
 - [ ] Add `roborepo added` or equivalent user-added inventory.
-- [ ] Add `roborepo package inspect <id>` for built-in and user packages.
+- [ ] Extend existing `roborepo package inspect <id>` with approved source/receipt details for user content.
 - [ ] Add `roborepo config inspect <id>` as a user-friendly alias if appropriate.
 - [ ] Add `roborepo package export <id> <dir>`.
 - [ ] Add `roborepo package export-all <dir>`.
@@ -650,13 +649,13 @@ the source is moved or the shell starts from a different directory.
 - [ ] Add update-from-source for imported local paths.
 - [ ] Add explicit adoption flows for native skills, MCP servers, plugins, rules, and hooks where
       ownership can be proven or confirmed.
-- [ ] Add repair for partial package installs.
+- [ ] Extend existing reconcile/live probes for user-content-specific partial-install cases.
 - [ ] Add tests for native collisions and weak ownership cases.
 
 ### Phase 6 - Docs And UX Copy
 
 - [ ] Document the source/cache/live-install model.
-- [ ] Document `~/.roborepo` as machine-local state, not user source.
+- [ ] Document authored source, durable intent, and derived machine artifacts using the root contract agreed with the profile-backup plan; do not label all state-root data disposable.
 - [ ] Document export and remove guarantees.
 - [ ] Update `/config` copy to show origin and portability without overwhelming users.
 - [ ] Update CLI help so common verbs are prominent and advanced/internal verbs are de-emphasized.
@@ -698,3 +697,7 @@ the source is moved or the shell starts from a different directory.
 - Removing a user-managed item does not delete the user's original source unless explicitly asked.
 - The main CLI help emphasizes `web`, `onboard`, `add`, `config`, `package`, `skill`, `mcp`,
   `update`, and `doctor`, while keeping advanced verbs available but less prominent.
+
+## Documentation impact
+
+`docs/user/reference/config-control-panel.md`, `docs/user/reference/roborepo-cli.md`, and `docs/internal/root-domains.md`: typed-add, source/receipt, export/remove, and ownership semantics.

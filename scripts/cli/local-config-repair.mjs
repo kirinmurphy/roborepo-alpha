@@ -5,6 +5,7 @@ import { rootConfigActive, rootConfigBaseline } from "./paths.mjs";
 import { isMainModule } from "./roots.mjs";
 import { getHarnessProvider } from "../harnesses/registry.mjs";
 import { recordWrite } from "./root-config-state.mjs";
+import { recordConfigWrite } from "./write-log.mjs";
 
 // Registry-driven label ("<Display Name> settings"), not a hardcoded claude/codex map — every
 // registered provider's rootConfig gets a sensible label with no per-provider entry needed.
@@ -335,6 +336,7 @@ function applyPlans(plans) {
     fs.copyFileSync(plan.activePath, backupPath);
     fs.writeFileSync(plan.activePath, plan.repaired);
     recordWrite(plan.harness, plan.activePath);
+    recordConfigWrite(plan.activePath, "repair local config");
     console.log(`backup: ${plan.activePath} -> ${backupPath}`);
     console.log(`repair: ${plan.activePath}`);
   }

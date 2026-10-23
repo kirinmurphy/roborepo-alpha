@@ -2,7 +2,6 @@
 // module's functions; templates.js owns turning its output into markup.
 
 import { formatTokens } from "/portal/shared/token-chip.js";
-import { activePresentedHarnesses } from "/portal/shared/harness-cohort.js";
 export { formatTokens };
 
 export const TOGGLE_ENDPOINT = {
@@ -30,10 +29,10 @@ export const BUCKETS = ["allow", "ask", "deny"];
 // Root-config drift chip shown beside settings.json / config.toml. Driven by snap.rootConfig, which
 // the server computes once (buildRootConfigView in config.mjs) so terminal and web agree. "in-sync"
 // and "not-installed" are the quiet default — no chip — so the chip only appears when there is
-// something the user might want to act on (drift, a staged update, or an untracked file).
+// something the user might want to know about. A drifted file gets none: update merges into it and
+// keeps every local value, so there is nothing to act on; `roborepo config root inspect` still
+// reports it.
 export const DRIFT_CHIP = {
-  drifted: { label: "drifted", cls: "drift-warn", title: "Changed since roborepo's last write. Run `roborepo update` to reconcile." },
-  "staged-pending": { label: "update staged", cls: "drift-info", title: "A new baseline is staged beside this file, waiting for you to reconcile it." },
   unwritten: { label: "untracked", cls: "drift-muted", title: "No recorded roborepo write yet (pre-dates drift tracking, or not installed via roborepo)." },
 };
 
@@ -92,132 +91,21 @@ export function rulesChipSpec(contextCost, harnessId) {
   };
 }
 
-function warningRatio(spec) {
-  const highAbove = spec?.legend?.highAbove;
-  if (!Number.isFinite(spec?.tokens) || !Number.isFinite(highAbove) || highAbove <= 0) return 0;
-  return spec.tokens / highAbove;
-}
-
-function warningEntry(label, spec, extra = {}) {
-  if (!spec || !["medium", "high"].includes(spec.level)) return null;
-  return { label, spec, ratio: warningRatio(spec), ...extra };
-}
-
-function splitWarningLabel(label) {
-  const match = String(label).match(/^(.+?)(\s+\(.+\))$/);
-  return match ? { name: match[1], suffix: match[2] } : { name: String(label), suffix: "" };
-}
-
-function discoveryWarning(contextCost, harnesses) {
-  const legend = contextCost?.skillDiscoveryThresholds || contextCost?.thresholds;
-  const displayNameOf = new Map((harnesses || []).map((h) => [h.id, h.displayName]));
-  const activeHarnessIds = new Set((harnesses || []).map((harness) => harness.id));
-  const rows = Object.entries(contextCost?.harnesses || {})
-    .filter(([harness]) => activeHarnessIds.has(harness))
-    .map(([harness, cost]) => ({
-      harness,
-      tokens: cost.breakdown?.skillDiscoveryTokens || 0,
-    }));
-  if (rows.length === 0) return null;
-  const max = rows.reduce((best, row) => (row.tokens > best.tokens ? row : best), { harness: "", tokens: 0 });
-  const spec = {
-    tokens: max.tokens,
-    level: levelFor(max.tokens, legend),
-    detail: "Total skill discovery descriptions loaded at chat start while enabled.",
-    breakdown: rows.map((row) => ({
-      label: displayNameOf.get(row.harness) || row.harness,
-      tokens: row.tokens,
-    })),
-    legend,
-  };
-  return warningEntry("Skill Discovery Descriptions (in total)", spec, {
-    info: discoveryWarningInfo(contextCost),
-  });
-}
-
-function discoveryWarningInfo(contextCost) {
-  const itemWarnings = skillDiscoveryItemWarnings(contextCost);
-  if (itemWarnings.length) {
-    return "Total of all enabled skill discovery descriptions. Individual large entries: "
-      + itemWarnings.map((item) => `${item.label} (${formatTokens(item.tokens)})`).join(", ")
-      + ".";
-  }
-  return "Total of all enabled skill discovery descriptions. No single discovery description is large on its own; the warning comes from the combined total.";
-}
-
-function skillDiscoveryItemWarnings(contextCost) {
-  const legend = contextCost?.skillDiscoveryThresholds || contextCost?.thresholds;
-  const byPackage = contextCost?.packages || {};
-  return Object.entries(byPackage)
-    .map(([id, cost]) => ({
-      label: cost.label || id,
-      tokens: cost.activeDiscoveryTokens || 0,
-      level: cost.activeDiscoveryLevel || levelFor(cost.activeDiscoveryTokens || 0, legend),
-      ratio: warningRatio({ tokens: cost.activeDiscoveryTokens || 0, legend }),
-    }))
-    .filter((item) => ["medium", "high"].includes(item.level))
-    .sort((a, b) => (b.level === "high") - (a.level === "high") || b.ratio - a.ratio || a.label.localeCompare(b.label));
-}
-
-function itemWarningEntry(item, contextCost) {
-  const cost = item.contextCost;
-  if (!cost) return null;
-  const isCommand = item.inspect?.kind === "command-skill";
-  if (cost.onDemandTokens > 0 && cost.onDemandLevel && cost.onDemandLevel !== "low") {
-    return warningEntry(item.label + (isCommand ? " (when run)" : " (when loaded)"), {
-      tokens: cost.onDemandTokens,
-      level: cost.onDemandLevel || null,
-      detail: isCommand ? "Loaded when the command runs." : "Loaded when the skill is invoked.",
-      legend: contextCost.onDemandThresholds,
-    });
-  }
-  if (cost.rulesTokens > 0 && cost.rulesLevel && cost.rulesLevel !== "low") {
-    return warningEntry(item.label + " (rules snippet)", {
-      tokens: cost.rulesTokens,
-      level: cost.rulesLevel || null,
-      detail: "Rule snippet included in rendered rules while enabled.",
-      legend: contextCost.ruleFragmentThresholds || contextCost.thresholds,
-    });
-  }
-  if (cost.discoveryTokens > 0 && cost.discoveryLevel && cost.discoveryLevel !== "low") {
-    return warningEntry(item.label + " (discovery)", {
-      tokens: cost.discoveryTokens,
-      level: cost.discoveryLevel || null,
-      detail: "Discovery metadata, loaded at chat start while enabled.",
-      legend: contextCost.skillDiscoveryThresholds || contextCost.thresholds,
-    });
-  }
-  return null;
-}
-
-function compareWarningEntries(a, b) {
-  const levelDelta = (b.spec.level === "high") - (a.spec.level === "high");
-  if (levelDelta) return levelDelta;
-  return b.ratio - a.ratio || a.label.localeCompare(b.label);
-}
-
-export function tokenWarningEntries(snap) {
-  const contextCost = snap?.contextCost;
-  if (!contextCost) return [];
-  const harnesses = activePresentedHarnesses(snap);
-  const entries = [
-    ...harnesses.map((h) => warningEntry(h.rulesFile, rulesChipSpec(contextCost, h.id))),
-    discoveryWarning(contextCost, harnesses),
-    ...(snap.behaviorView || [])
-      .flatMap((section) => section.items || [])
-      .filter((item) => item.active !== false)
-      .map((item) => itemWarningEntry(item, contextCost)),
-  ].filter(Boolean);
-  return entries.map((entry) => ({ ...entry, ...splitWarningLabel(entry.label) })).sort(compareWarningEntries);
-}
-
 // Labeled chip specs for the source-inspect modal's dedicated cost row: what does the thing
 // being viewed cost? Always returns an array of { label, spec } so the row can render
 // "Startup: [chip]  When loaded: [chip]" — the moment-of-cost distinction lives in the label,
 // never inside the chip's own text. live-rules → one "Startup" chip for that harness's rendered
 // rules; skills/commands → separate Startup (discovery) and When loaded/When run entries; rules
 // fragments → one Startup entry.
-export function inspectChipSpecs(inspect, itemCost, snap) {
+// Built-in packages show their numbers muted, with no threshold scale: their size is not something
+// the user can act on. The live rules file keeps its scale, because that total is the capacity gauge.
+export function inspectChipSpecs(inspect, itemCost, snap, { builtIn = false } = {}) {
+  const entries = costChipEntries(inspect, itemCost, snap);
+  if (!builtIn || inspect?.kind === "live-rules") return entries;
+  return entries.map(({ label, spec }) => ({ label, spec: { ...spec, level: null, legend: undefined } }));
+}
+
+function costChipEntries(inspect, itemCost, snap) {
   const contextCost = snap?.contextCost;
   if (!inspect || !contextCost) return [];
   if (inspect.kind === "live-rules") {
@@ -269,10 +157,13 @@ export function inspectChipSpecs(inspect, itemCost, snap) {
 
 // Chip specs for one behaviorView item row. Warning-only: a chip appears ONLY for medium/high
 // cost (never low/green) — the row list is meant to flag notable cost, not restate every
-// package's size. Returns { spec, label } pairs consumed by <token-chip> directly.
+// package's size. Built-in packages get none: their size is fixed by the release, so a warning
+// would not be actionable; the per-harness startup totals remain the capacity signal, and
+// doctor's skill structure checks hold built-in skills to their size limits. Returns
+// { spec, label } pairs consumed by <token-chip> directly.
 export function contextCostChipSpecs(item, contextCost) {
   const cost = item.contextCost;
-  if (!cost || !contextCost) return [];
+  if (!cost || !contextCost || item.builtIn) return [];
   const chips = [];
   const isCommand = item.inspect?.kind === "command-skill";
   const differNote = cost.harnessesDiffer ? " Costs differ by harness; the larger is shown." : "";

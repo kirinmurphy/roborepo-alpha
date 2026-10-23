@@ -4,13 +4,8 @@ priority: medium
 next_action: "Phase 0 spike: run `claude -p` once against a hermetic agent home and capture a stream-json transcript for a Skill call, a command-wrapper Read, and a Bash call, confirming auth, permission flags, project instruction loading, and early stop."
 blocked_by: []
 depends_on: []
-related:
-  - age4cm7r
-  - e6f1pknt
-  - q6lj4w96
-  - a7bslb00
-  - 6q16tocb
-reviewed_commit: 77fb0952537f9afc2aea9866f52f13ebed678b59
+related: ["age4cm7r", "e6f1pknt", "q6lj4w96", "a7bslb00", "6q16tocb"]
+reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 worktree:
 ---
 
@@ -18,9 +13,9 @@ worktree:
 
 ## Summary
 
-Every roborepo test today is deterministic, and none of them runs an agent. So two kinds of claims
-have no evidence behind them: that a model picks the right skill for a prompt, and that `/plan-close`
-refuses or closes when it should. This plan adds `npm run eval`, an opt-in gate that runs a real
+The checked-in test gates are deterministic and do not expose a repeatable hermetic live-agent
+runner. Completed coding-conventions work recorded live-agent samples, but those samples do not
+prove skill routing or the current plan-close contract across repeatable scenarios. This plan adds `npm run eval`, an opt-in gate that runs a real
 headless agent against fixtures, checks the effects structurally, runs each case N times, and writes
 a JSON report per run.
 
@@ -49,7 +44,7 @@ inside `npm run check`.
 - Running evals in CI or inside `npm run check`.
 - Codex and Gemini adapters. This plan defines the interface and leaves those two as stubs that
   report `unsupported`.
-- Scenario evals for `/plan-write`, `/plan-promote`, and `/plan-start`, apart from the optional
+- Scenario evals for `/plan-write`, `/plan-promote`, and `/plan-execute`, apart from the optional
   paired-skill scenario in Phase 5.
 - A model-as-judge. Every assertion in this plan is structural. A later plan may add a judge for
   qualitative output such as the close report's prose.
@@ -98,7 +93,7 @@ These shape the design below. Each was checked against the repository.
    fails any `match` prompt that lacks a trigger phrase. Natural phrasings cannot go into `match`
    without breaking `roborepo skill triggers --check`.
 5. **Some near-misses belong to a sibling skill.** "close this plan now that it has merged" is a
-   near-miss for `plan-start` and a correct match for `plan-close`.
+   near-miss for `plan-execute` and a correct match for `plan-close`.
 6. **Disabled paired skills stop a headless `/plan-close`.** The skill asks "Enable it, or skip it
    for this run?" for each disabled paired skill. `technical-writing` and `test-harness` are
    `optional` packages, and in headless mode the question ends the run before any close.
@@ -158,7 +153,8 @@ flowchart TD
 
 ### Placement
 
-Orchestration and execution live in separate files, and every new file stays under about 200 lines.
+Keep orchestration and execution readable; separate modules only at meaningful ownership,
+consumer, or testability boundaries. Do not split files by size.
 
 ```text
 scripts/eval/
@@ -508,3 +504,12 @@ repair the agent made (constraint 8) is visible.
   project instructions file. Nothing in roborepo renders that mapping for real repositories, so a
   `/plan-close` run outside the fixtures has to find them unaided. Recommended: leave this to its own
   plan, and add a discovery scenario with no declaration once that plan picks a mechanism.
+
+## Current evidence and scenario refresh
+
+[[7e21olcs]] records real agent samples; reuse their lessons while preserving this runner's distinct
+routing/closure purpose. There is still no `eval` script in `package.json`. Refresh fixture counts,
+current `plan-execute` near misses, native invocation, package availability, approval freshness,
+and landing/cleanup behavior from current code before freezing the scenario contract. Do not
+reuse historical auth availability or host PATH as a present fact. The Phase 0 authenticated spike
+remains an explicit prerequisite, and paid live runs stay outside deterministic CI.

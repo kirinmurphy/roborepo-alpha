@@ -70,8 +70,8 @@ one response.
 The snapshot carries `contextCost` (computed by `scripts/cli/context-cost.mjs`): per-harness
 token estimates for the configuration itself, rendered as a `Usage` row in the agent files
 grid (one `<token-chip>` per harness, colored by level, with a contributing-amounts tooltip),
-plus warning summaries, per-package cost badges, matching chips on the rules-file cells when
-rules are medium/high, and chips in the source-inspect popup header.
+plus matching chips on the rules-file cells when rules are medium/high, per-package cost badges
+for workspace packages, and chips in the source-inspect popup header.
 `<token-chip>` is a shared web component (`portal/shared/token-chip.js`, styles in
 `base.css`) so every cost chip renders and behaves identically.
 
@@ -89,16 +89,17 @@ Two cost classes are tracked and never mixed:
   high > 3k) and only medium/high sizes render a colored per-item chip; low-cost skills show
   no chip.
 
+Built-in packages get no per-item chip, and their popup chips render muted with no threshold
+scale (`builtIn` on each package row in `behaviorView`): their size ships with the release, so a
+warning is not something the user can act on. The per-harness startup totals stay the capacity
+signal, and `scripts/cli/skill-structure.mjs` holds built-in skills to structure limits instead —
+a `SKILL.md` body under 500 lines, a `## Contents` section in any reference over 100 lines, and
+every reference linked from `SKILL.md`. `doctor` fails on a built-in skill that breaks them in a
+development checkout, and warns about the user's own workspace skills.
+
 Config/settings syntax, hook scripts, and MCP schemas never receive token numbers — they are
 labeled `Not prompt context`, `conditional`, and `runtime-dependent` respectively. Disabled
 packages keep a measured *potential* cost but contribute nothing to active totals.
-
-The warning panel appears above the agent files grid only when medium/high items exist. It sorts
-high items first, then by each item's percent of its own high threshold. Warning labels bold only
-the item name; parenthetical qualifiers such as `(when loaded)` stay plain. The aggregate
-`Skill Discovery Descriptions (in total)` warning includes an info tooltip that explains the
-number is the active total of skill description metadata and distinguishes individual large
-contributors from many small descriptions adding up.
 
 All counts are estimates (`~4 characters per token`, `method: "estimated-v1"`). The
 low/medium/high rating uses threshold families from

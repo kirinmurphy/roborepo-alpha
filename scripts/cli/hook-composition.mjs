@@ -3,6 +3,7 @@ import path from "node:path";
 import { harnessHome } from "./paths.mjs";
 import { writeRootConfig } from "./root-config-writes.mjs";
 import { detachRepoLink, resolvesIntoRepo } from "./repo-links.mjs";
+import { recordConfigWrite } from "./write-log.mjs";
 import { getHarnessProvider } from "../harnesses/registry.mjs";
 import { hasHarnessPath, resolveHarnessPath } from "../harnesses/paths.mjs";
 import { validateAdapterComputeResult } from "../harnesses/schemas.mjs";
@@ -26,6 +27,7 @@ export function writeHooksFile(harness, filePath, content) {
     detachRepoLink(filePath);
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
     fs.writeFileSync(filePath, content);
+    recordConfigWrite(filePath);
     return;
   }
   writeRootConfig(harness, filePath, content);
