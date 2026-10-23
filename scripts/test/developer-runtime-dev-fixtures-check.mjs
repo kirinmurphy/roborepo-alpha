@@ -54,7 +54,7 @@ const probe = `
     const snapshot = await runtime.refreshDeveloperRuntimeSnapshot({ discover, refreshGit: async () => {} });
     return {
       repositories: snapshot.repositories.map((repository) => repository.repositoryId).sort(),
-      projects: snapshot.projects.map((project) => project.repositoryId || project.project?.repositoryId || null),
+      projects: snapshot.projects.map((project) => project.repositoryId),
     };
   };
 
@@ -77,9 +77,9 @@ try {
   const { devOff, devOn, devStopped, ids } = JSON.parse(result.stdout);
 
   assert.deepEqual(devOff.repositories, [ids.REAL], "outside dev mode a running fixture stays off Runtime");
-  assert.equal(devOff.projects.length, 0, "and its listener is not listed as a project");
+  assert.deepEqual(devOff.projects, [], "and its listener is not listed as a project");
   assert.deepEqual(devOn.repositories, [ids.REAL, ids.IDLE, ids.RUNNING].sort(), "dev mode shows the running fixture and the idle fixture checkout");
-  assert.equal(devOn.projects.length, 1, "the running fixture's listener is listed");
+  assert.deepEqual(devOn.projects, [ids.RUNNING], "the running fixture's listener is listed");
   assert.deepEqual(devStopped.repositories, [ids.REAL], "turning dev mode off hides them again");
   console.log("developer-runtime dev fixtures: ok");
 } finally {
