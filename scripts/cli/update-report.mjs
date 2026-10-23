@@ -12,8 +12,11 @@ const HARNESS_HOME = harnessHome;
 
 const MANAGED_MARKER = ".builtin-managed";
 
+const DRY_RUN_VERBS = { added: "add", updated: "update", removed: "remove", linked: "link", unlinked: "unlink" };
+
 export async function runUpdateWithReport(commandConfig, args) {
   const { installArgs, verbose } = parseReportArgs(args);
+  const dryRun = installArgs.includes("--dry-run");
   const before = snapshotInstallState();
   const result = runInstall(commandConfig, installArgs, { verbose });
   const installOutput = `${result.stdout || ""}${result.stderr || ""}`;
@@ -21,8 +24,9 @@ export async function runUpdateWithReport(commandConfig, args) {
     process.stdout.write(installOutput);
   }
   if (result.status === 0) {
-    if (!installArgs.includes("--dry-run")) await refreshLivePermissions({ verbose });
-    printUpdateReport(before, snapshotInstallState(), { verbose, installOutput });
+    if (!dryRun) await refreshLivePermissions({ verbose });
+    const after = dryRun ? projectDryRunState(before) : snapshotInstallState();
+    printUpdateReport(before, after, { verbose, installOutput, dryRun });
   }
   process.exit(result.status ?? 1);
 }
@@ -152,6 +156,32 @@ function snapshotSkillBodies() {
   return entries;
 }
 
+// A dry run writes nothing, so re-snapshotting after it always reads "changed: none". Instead,
+// project the skill bodies the real run would refresh: a managed cache whose content differs from
+// its source. The test is the installer's own (link_skill_item, and doctor's stale-skill warning):
+// `diff -rq` ignoring the marker, so the preview cannot disagree with what update then does.
+function projectDryRunState(before) {
+  const skills = before.skills.map((entry) => {
+    const cacheDir = path.join(stateSkillsDir, entry.key);
+    const sourceDir = skillSourceDir(entry.key);
+    if (!sourceDir || !fs.existsSync(path.join(cacheDir, MANAGED_MARKER))) return entry;
+    const diff = spawnSync("diff", ["-rq", "-x", MANAGED_MARKER, sourceDir, cacheDir], { stdio: "ignore" });
+    return diff.status === 0 ? entry : { ...entry, digest: `pending:${pathDigest(sourceDir)}` };
+  });
+  return { ...before, skills };
+}
+
+// Mirrors list_global_skill_sources in install-lib.sh: the system support skill plus every
+// package-owned skill.
+function skillSourceDir(name) {
+  const candidates = [path.join(repoRoot, "globals", "system", "skills", name)];
+  const packagesDir = path.join(repoRoot, "globals", "packages");
+  if (fs.existsSync(packagesDir)) {
+    for (const pkg of fs.readdirSync(packagesDir).sort()) candidates.push(path.join(packagesDir, pkg, "skills", name));
+  }
+  return candidates.find((dir) => fs.existsSync(path.join(dir, "SKILL.md"))) ?? null;
+}
+
 // The per-harness pointers. Adding a harness fans an already-installed skill out to one more dir;
 // that is a link, not a new skill, so these entries stay out of the skills group and are folded
 // into link details by linkDetails().
@@ -249,7 +279,7 @@ function hashParts(parts) {
   return hash.digest("hex");
 }
 
-function printUpdateReport(before, after, { verbose = false, installOutput = "" } = {}) {
+function printUpdateReport(before, after, { verbose = false, installOutput = "", dryRun = false } = {}) {
   console.log("");
   const groups = [
     ["rules", compareEntries(before.renderedRules, after.renderedRules)],
@@ -262,7 +292,7 @@ function printUpdateReport(before, after, { verbose = false, installOutput = "" 
   ];
   if (!verbose) printUpdateSummary(groups, installOutput);
   console.log("Update change report:");
-  printReportGroups(groups, { verbose });
+  printReportGroups(groups, { verbose, dryRun });
   printLocalConfigRepairHint();
   printOrphanSkillHint();
 }
@@ -369,12 +399,12 @@ function notableLines(output) {
   });
 }
 
-function printReportGroups(groups, { verbose }) {
+function printReportGroups(groups, { verbose, dryRun = false }) {
   const changed = uniqueChanges(groups.flatMap(([, group]) => group.changed));
   const unchanged = unique(groups.flatMap(([, group]) => group.unchanged));
   if (changed.length) {
     console.log("  changed:");
-    for (const { label, verb } of changed) console.log(`    - ${verb} ${label}`);
+    for (const { label, verb } of changed) console.log(`    - ${dryRun ? `would ${DRY_RUN_VERBS[verb] ?? verb}` : verb} ${label}`);
   } else {
     console.log("  changed: none");
   }

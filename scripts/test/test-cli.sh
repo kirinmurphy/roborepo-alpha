@@ -1382,6 +1382,15 @@ assert "lifecycle: roborepo update --verbose reports unchanged detail" \
 assert "lifecycle: roborepo update preserves local hooks, trust, and enabled skills" \
   bash -c "HOME='${update_home}' ROBOREPO_STATE_DIR='${update_home}/.roborepo' node '${cli}' update >/dev/null 2>&1 && node -e \"const fs=require('fs');const s=JSON.parse(fs.readFileSync('${update_home}/.claude/settings.json','utf8'));process.exit((s.hooks?.PreToolUse||[]).some(e=>(e.hooks||[]).some(h=>h.command.includes('capture-dense-bash.mjs')))?0:1)\" && grep -q '\\[projects\\.\"/Users/kirinmurphy/projects/activedev/roborepo\"\\]' '${update_home}/.codex/config.toml' && test -L '${update_home}/.claude/skills/case-study' && test -L '${update_home}/.codex/skills/case-study'"
 assert "lifecycle: update writes nothing into the source tree" globals_unchanged_since_fixture
+# A stale skill cache is invisible to a before/after snapshot when nothing is written, so the dry
+# run must predict the refresh itself — and agree with the real update that follows.
+stale_cache="${update_home}/.roborepo/skills/case-study"
+printf '\nstale local edit\n' >> "${stale_cache}/SKILL.md"
+stale_digest="$(cd "${stale_cache}" && find . -type f -exec shasum {} + | sort | shasum)"
+assert "lifecycle: update --dry-run previews a stale skill refresh without writing it" \
+  bash -c "HOME='${update_home}' ROBOREPO_STATE_DIR='${update_home}/.roborepo' node '${cli}' update --dry-run >'${update_out}.stale' 2>&1 && grep -q -- '- would update skill case-study' '${update_out}.stale' && ! grep -q 'changed: none' '${update_out}.stale' && [[ \"\$(cd '${stale_cache}' && find . -type f -exec shasum {} + | sort | shasum)\" == '${stale_digest}' ]]"
+assert "lifecycle: update refreshes the skill the dry run previewed" \
+  bash -c "HOME='${update_home}' ROBOREPO_STATE_DIR='${update_home}/.roborepo' node '${cli}' update >'${update_out}.refresh' 2>&1 && grep -q -- '- updated skill case-study' '${update_out}.refresh' && ! grep -q 'stale local edit' '${stale_cache}/SKILL.md'"
 
 update_legacy_home="${work}/update-legacy-home"
 mkdir -p "${update_legacy_home}/.claude" "${update_legacy_home}/.codex" "${update_legacy_home}/.roborepo/rules"
