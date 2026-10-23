@@ -30,10 +30,11 @@ behavior and do not count as review coverage.
 | Repository domain | Reviewed; findings open | All 27 modules in `modules/repositories/` read in full. Findings F1, F4–F6. |
 | Plan domain | Reviewed; findings open | All 27 modules in `modules/plan-suite/` read in full. Findings F2, F3, F7. |
 | Runtime domain | Reviewed; findings open | All 28 modules in `modules/developer-runtime/` read in full, plus the shared command executor added by the audit. Findings F8–F12. |
-| CLI and server | Partly reviewed | Agent-run policy, skill-command configuration, telemetry findings/insights/observations, and the Plans CLI and HTTP routing files listed in pass 4. Most CLI files are unreviewed. Finding F13. |
+| CLI and server | Partly reviewed | Agent-run policy, skill-command configuration, telemetry findings/insights/observations, and the Plans CLI and HTTP routing files listed in pass 4. Diffs only (pass 6): `buildSnapshot` in `developer-runtime.mjs` and the startup purge removed from `mock-home.mjs` and `telemetry.mjs`. Most CLI files are unreviewed. Finding F13. |
 | Portal | Partly reviewed | All 14 Plans JavaScript files, both Plans HTML files, and both Plans stylesheets. Other pages are unreviewed or inventory-only. Findings F14, F15. |
 | Installer, providers, hooks, build, maintenance | Inventory only | Source inventory collected; behavior needs review before changes. |
-| Tests | Partly reviewed | Runner and CI scripts, retention, idle-cache, telemetry correctness, Runtime history, `plan-suite-authority-edge-check.mjs`, `portal-ui/plans-status.spec.mjs`, and selected scope/documentation browser tests. Finding F16. |
+| Tests | Partly reviewed | Runner and CI scripts, retention, idle-cache, telemetry correctness, Runtime history, `plan-suite-authority-edge-check.mjs`, `portal-ui/plans-status.spec.mjs`, `developer-runtime-dev-fixtures-check.mjs`, `portal-dev-fixtures-startup-check.mjs`, and selected scope/documentation browser tests. Findings F16, F17. |
+| Merged from `main` | Unreviewed | Merge `765465e7` brought in six `main` commits (`e201ba8b` through `28a202fd`). New: `scripts/cli/harness-write-guard.mjs`, `node-release-health.mjs`, `skill-structure.mjs`, `write-log.mjs`, and their five checks. Changed: `scripts/cli/config.mjs`, `config-cli-print.mjs`, `hook-composition.mjs`, `main.mjs`, `packages.mjs`, `portal-server.mjs`, `portal-source-hash.mjs`, `presets.mjs`, `root-config-view.mjs`, `root-config-writes.mjs`, `rules-render.mjs`, `staging-lib.mjs`; `scripts/harnesses/claude/hooks-withdraw.mjs`; seven `portal/config/` files; four `portal/shared/` files; three `scripts/install/` scripts; eight existing test files. Earlier rows describe these files as they were at `d155e9ae`. |
 
 ## Passes
 
@@ -100,11 +101,28 @@ was introduced, and Git hardening is unchanged.
 | Add browser coverage for behavior the refactor touched: the blocked-by popover (a known blocker opens its plan, an external one stays text), Compose `repoPath` refusal of a traversal path, and repository-source path handling (relative refused, `..` stored resolved). | `scripts/test/portal-ui/plans-status.spec.mjs`, `developer-runtime-rows.spec.mjs`, `repository-sources.spec.mjs` | Each spec passes. The popover and `repoPath` tests each failed once their fix was removed. |
 | Split open findings into their own page and restate size-based findings in terms of responsibilities. | This log; `docs/internal/code-style-findings.md` | Documentation reference check passed. |
 
+Pass 5 landed in commits `9c461fe1` and `9d043f63`.
+
+### Pass 6 — dev-fixture commits from another session
+
+Commits `5fa9cff1`, `1b31ff07`, and `888cf95a` came from a separate session and reached this branch
+before the `main` merge. Their diffs and both new checks were read in full; the rest of each touched
+file was not. No code changed.
+
+| Commit | Result |
+| --- | --- |
+| `5fa9cff1` — Runtime's web snapshot drops fixture repositories only outside dev mode | Conforms. The `withoutFixtureRepositories` comment in `scripts/cli/developer-runtime.mjs` and the new note in the `roborepo-development` skill match the code. `isFixtureRepository` has one definition, in `modules/repositories/dev-fixtures.mjs`; the Runtime snapshot module re-exports it. |
+| `1b31ff07` — portal startup no longer purges the fixture records | Conforms. Nothing still calls the removed `purgePersistedMockRepositories`, and the `repository-scope-portal-check.mjs` comment that described the purge was corrected. The new `portal-dev-fixtures-startup-check.mjs` launches its portal by hand instead of through the shared helper: finding F17. |
+| `888cf95a` — the dev-fixtures check asserts which listener is listed | Conforms. It compares against the running fixture's id instead of a count, so an unrelated listener can no longer satisfy it. |
+
 ## Verification notes
 
 - `npm run check` is the completion gate. On `240102ce` it passed every stage: doctor, the CLI
   suite, install collisions, 54/54 CI-group suites, package install, all four Docker clean-machine
-  suites, and 104/104 portal browser tests.
+  suites, and 104/104 portal browser tests. On `765465e7`, after the `main` merge, it passed every
+  stage again: doctor, the CLI suite (452 tests), install collisions, 57/57 CI-group suites, package
+  install, all four Docker clean-machine suites, and 108/108 portal browser tests. The install
+  collision suite skipped its `verify-install` active-root fixture because `uvx` was unavailable.
 - Windows installer parity has not run: the machine that ran these passes has no PowerShell.
   Windows behavior is unverified by this audit.
 - Suites that bind `127.0.0.1` (Runtime discovery, metadata suggestions, plan commands) fail with

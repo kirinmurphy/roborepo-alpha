@@ -32,6 +32,7 @@ pass that resolves it records the change in the log.
 | F14 | Plans browser modules span independent controllers | Boundary |
 | F15 | Tokens page builds multi-element markup in JavaScript | Markup |
 | F16 | Browser suites use structural selectors for named controls | Tests |
+| F17 | Portal checks launch the server by hand instead of through the hermetic helper | Tests |
 
 ## Correctness
 
@@ -224,3 +225,17 @@ pass that resolves it records the change in the log.
   selectors where geometry or style is under test.
 - **Why discuss:** broad automatic replacement could change which element matches; each spec needs
   review by feature.
+
+### F17 — Portal checks launch the server by hand instead of through the hermetic helper
+
+- **Evidence:** `startHermeticPortal` in `scripts/test/lib/portal-cleanup.mjs` starts a test portal,
+  stops it on exit and on SIGINT/SIGTERM, and runs a watchdog (`kill-when-orphaned.sh`) that stops
+  it if the check is killed with SIGKILL. `config-bulk-toggle-check.mjs` and `portal-ui/capture.mjs`
+  use it. `portal-dev-fixtures-startup-check.mjs`, `repository-scope-portal-check.mjs`, and
+  `telemetry-conditions-cache-check.mjs` instead spawn `web`, poll the ready file, and send SIGTERM
+  themselves, so a SIGKILL leaves their portal running. The newest of the three, added in
+  `1b31ff07`, copied the hand-written loop.
+- **Next step:** move the three checks onto `startHermeticPortal`, passing `logFile` so a startup
+  failure still reports the server's output.
+- **Why discuss:** small, but it rewrites three passing checks, and their failure messages change
+  from captured stdout to a log tail.
