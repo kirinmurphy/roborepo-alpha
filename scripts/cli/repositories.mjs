@@ -55,7 +55,7 @@ export function recordRepositoryDiscovery({
       if (recordDiscovery(registry, targetId, { source, evidence, confidence, now })) changed = true;
       if (localRoot && registerLocalRoot(registry, targetId, { rootId: localRoot, kind: localRootKind, now })) changed = true;
       // Identity and path commit in this same mutate() — one updateRegistry call, one revision bump,
-      // one write. pljvmyh §2 requires them to land as a single logical update so a crash or a
+      // one write. They must land as a single logical update so a crash or a
       // concurrent writer can never leave a rootId registered with no path or vice versa.
       if (localRoot && rootPath && registerLocalRootPath(registry, targetId, { rootId: localRoot, path: rootPath, now })) changed = true;
       // upsert of a brand-new repository is itself a change even if discovery/root debounced.

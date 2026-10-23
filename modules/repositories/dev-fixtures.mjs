@@ -16,10 +16,6 @@ export function isFixtureRepository(repositoryId) {
   return typeof repositoryId === "string" && FIXTURE_REPOSITORY_PATTERN.test(repositoryId);
 }
 
-function devModeMarkerPath(stateRoot) {
-  return path.join(stateRoot, "repositories", "dev-fixtures-enabled");
-}
-
 export function devFixturesEnabled({ stateRoot, fsApi = fs } = {}) {
   try {
     fsApi.statSync(devModeMarkerPath(stateRoot));
@@ -51,4 +47,8 @@ export function withoutFixtureRepositories(registry) {
     Object.entries(registry.aliases || {}).filter(([from, to]) => !isFixtureRepository(from) && !isFixtureRepository(to)),
   );
   return { ...registry, repositories, aliases };
+}
+
+function devModeMarkerPath(stateRoot) {
+  return path.join(stateRoot, "repositories", "dev-fixtures-enabled");
 }

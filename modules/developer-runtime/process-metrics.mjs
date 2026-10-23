@@ -4,12 +4,9 @@
 // One batched `ps` call for every PID in a scan, not one call per PID: same "N things, one call"
 // discipline as git's per-root dedup and Docker's single `docker ps` pass.
 
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { defaultRunCommand } from "./command-exec.mjs";
 
 export const PROCESS_METRICS_TIMEOUT_MS = 1500;
-
-const execFileAsync = promisify(execFile);
 
 export async function collectProcessMetrics(pids, {
   platform = process.platform,
@@ -30,37 +27,6 @@ export async function collectProcessMetrics(pids, {
   const byPid = parsePsOutput(result.stdout ?? result);
   await collectAncestors(byPid, { runCommand, timeoutMs });
   return byPid;
-}
-
-// Listener PIDs alone cannot answer "who launched this" — the answer lives further up the tree. One
-// extra batched `ps` per generation walks the chain, which on a dev machine terminates in two or
-// three rounds (node -> npm -> shell -> agent). Ancestors are merged into the same map so callers
-// see one lookup surface.
-//
-// Failure here is silent by design: provenance is an enrichment, and losing it must never cost the
-// caller the metrics that already resolved.
-async function collectAncestors(byPid, { runCommand, timeoutMs, maxGenerations = 6 }) {
-  const resolved = new Set(byPid.keys());
-  for (let generation = 0; generation < maxGenerations; generation += 1) {
-    const wanted = [...byPid.values()]
-      .map((entry) => entry.ppid)
-      .filter((ppid) => Number.isInteger(ppid) && ppid > 1 && !resolved.has(ppid));
-    if (!wanted.length) return;
-    const unique = [...new Set(wanted)];
-    for (const pid of unique) resolved.add(pid);
-
-    let result;
-    try {
-      result = await runCommand("ps", ["-o", "pid=,ppid=,pcpu=,rss=,etime=,comm=", "-p", unique.join(",")], { timeoutMs });
-    } catch {
-      return;
-    }
-    const parsed = parsePsOutput(result.stdout ?? result);
-    if (!parsed.size) return;
-    for (const [pid, entry] of parsed) {
-      if (!byPid.has(pid)) byPid.set(pid, entry);
-    }
-  }
 }
 
 // Fields are fixed-width via the `key=` (no header, empty label) form, but values are
@@ -104,6 +70,33 @@ function parseElapsed(value) {
   return null;
 }
 
-export async function defaultRunCommand(command, args, { timeoutMs } = {}) {
-  return execFileAsync(command, args, { timeout: timeoutMs, encoding: "utf8", maxBuffer: 1024 * 1024 });
+// Listener PIDs alone cannot answer "who launched this" — the answer lives further up the tree. One
+// extra batched `ps` per generation walks the chain, which on a dev machine terminates in two or
+// three rounds (node -> npm -> shell -> agent). Ancestors are merged into the same map so callers
+// see one lookup surface.
+//
+// Failure here is silent by design: provenance is an enrichment, and losing it must never cost the
+// caller the metrics that already resolved.
+async function collectAncestors(byPid, { runCommand, timeoutMs, maxGenerations = 6 }) {
+  const resolved = new Set(byPid.keys());
+  for (let generation = 0; generation < maxGenerations; generation += 1) {
+    const wanted = [...byPid.values()]
+      .map((entry) => entry.ppid)
+      .filter((ppid) => Number.isInteger(ppid) && ppid > 1 && !resolved.has(ppid));
+    if (!wanted.length) return;
+    const unique = [...new Set(wanted)];
+    for (const pid of unique) resolved.add(pid);
+
+    let result;
+    try {
+      result = await runCommand("ps", ["-o", "pid=,ppid=,pcpu=,rss=,etime=,comm=", "-p", unique.join(",")], { timeoutMs });
+    } catch {
+      return;
+    }
+    const parsed = parsePsOutput(result.stdout ?? result);
+    if (!parsed.size) return;
+    for (const [pid, entry] of parsed) {
+      if (!byPid.has(pid)) byPid.set(pid, entry);
+    }
+  }
 }

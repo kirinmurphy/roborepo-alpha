@@ -1,7 +1,7 @@
-// Repository-source orchestration (pljvmyh §1–§5): sequences the sources store, the bounded walker,
+// Repository-source orchestration: sequences the sources store, the bounded walker,
 // canonical identity, and registry writes. Dependency-injectable (stateRoot / fsApi / hooks) so
 // checks drive it against temp state. Every payload here is for the protected source-management
-// routes, the only browser surface allowed to carry configured source paths (§6).
+// routes, the only browser surface allowed to carry configured source paths.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -73,7 +73,7 @@ export function wipeRepositoryList({ stateRoot = defaultStateRoot, fsApi = fs, h
   return loadRepositorySources({ stateRoot, fsApi, homeDir });
 }
 
-// Disabling a source and removing it drop evidence identically (§4); auto-discovery's evidence is
+// Disabling a source and removing it drop evidence identically; auto-discovery's evidence is
 // its developer-runtime entries. Enabling refreshes at once — for auto-discovery that is the
 // consent step, so the first process scan starts immediately through `onAutoDiscoveryEnabled`.
 export function setRepositorySourceEnabled({ id, enabled, onAutoDiscoveryEnabled = () => {}, stateRoot = defaultStateRoot, fsApi = fs, homeDir = os.homedir(), now = new Date().toISOString() }) {

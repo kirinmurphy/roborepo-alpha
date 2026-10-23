@@ -1,4 +1,4 @@
-// Every checkout of one known repository that Plans should read (pljvmyh §9): the main checkout
+// Every checkout of one known repository that Plans should read: the main checkout
 // plus each linked worktree and any other registered clone. Read from Git's administrative files,
 // not from `git worktree list`, so enumerating checkouts costs no subprocess per repository.
 import fs from "node:fs";

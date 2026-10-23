@@ -4,22 +4,19 @@
 // Containers started by a tool other than `docker compose up` — Supabase CLI is the case that
 // motivated this — get `com.docker.compose.project` but no working_dir, so discovery.mjs's
 // auto-derivation has nothing to resolve from. Their bind mounts still point into the project
-// directory, which is enough to find the repo (see resolveRepoPathFromMounts in discovery.mjs).
+// directory, which discovery.mjs can use to resolve a repository.
 //
 // Deliberately a separate call from docker.mjs's `docker ps`: mounts are not in `docker ps` output
 // at any --format, so this needs `docker inspect`. One batched call for every container id that
 // needs inspecting, not one per container, matching the same "N things, one call" discipline as the
-// rest of this module. Callers only inspect containers whose project failed working_dir resolution,
-// so the common case makes no call at all.
+// rest of this module. Discovery reuses the results for repository resolution and checkout
+// ownership classification.
 
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { defaultRunCommand } from "./command-exec.mjs";
 
 // Crosses the same Docker Desktop VM-proxy boundary as `docker ps`/`docker stats` (see docker.mjs
 // for why that needs more headroom than lsof/ps), and inspects several containers per call.
 export const DOCKER_MOUNTS_TIMEOUT_MS = 6000;
-
-const execFileAsync = promisify(execFile);
 
 export async function collectDockerMounts(containerIds, {
   platform = process.platform,
@@ -96,8 +93,4 @@ function bindSources(mounts) {
 function hostPathFromMountSource(source) {
   const stripped = source.replace(/^\/host_mnt(?=\/)/, "") || source;
   return stripped.replace(/\/{2,}/g, "/");
-}
-
-export async function defaultRunCommand(command, args, { timeoutMs } = {}) {
-  return execFileAsync(command, args, { timeout: timeoutMs, encoding: "utf8", maxBuffer: 1024 * 1024 });
 }

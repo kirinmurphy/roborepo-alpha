@@ -1,5 +1,5 @@
 // The Plans snapshot, built from the repositories RoboRepo knows about rather than from folders
-// Plans owns (pljvmyh §9). Every visible repository with a readable checkout is scanned across all
+// Plans owns. Every visible repository with a readable checkout is scanned across all
 // of its checkouts; copies of one plan are merged by plan `id`, and the one authoritative copy is
 // returned (plan-authority.mjs).
 import { checkoutRootsFor, loadRegistry } from "../repositories/index.mjs";
@@ -52,7 +52,7 @@ export function buildPlanSnapshot({ stateRoot, packageState = null, registry = n
 }
 
 // Visible canonical records only: an alias points at another record that is scanned in its place,
-// and a hidden (ignored) repository is left out of normal Plans entries (§8).
+// and a hidden (ignored) repository is left out of normal Plans entries.
 export function plannableRepositories(registry) {
   return Object.values(registry.repositories || {})
     .filter((record) => record.visibility !== "hidden" && !registry.aliases?.[record.id])
@@ -61,7 +61,7 @@ export function plannableRepositories(registry) {
 
 function scanRepository(checkouts, canonical) {
   const scanned = checkouts.map((checkout) => scanCheckout(checkout, canonical));
-  // Repository-relative paths only: /api/plans never carries an absolute path (§6).
+  // Repository-relative paths only: /api/plans never carries an absolute path.
   const errors = scanned.flatMap(({ checkout, scoped }) => scoped.errors.map((error) => ({ checkout: checkout.label, path: error.path, error: "could not be read" })));
   return { repository: scanned[0].scoped, plans: selectRecords(scanned), errors };
 }

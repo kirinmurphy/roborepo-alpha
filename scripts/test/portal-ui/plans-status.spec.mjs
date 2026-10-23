@@ -15,8 +15,8 @@ import {
   roboRepoCard,
 } from "./helpers.mjs";
 
-const plan = ({ id, title, nextAction, tasks }) => [
-  "---", `id: ${id}`, "priority: high", `next_action: ${nextAction}`, "---", "",
+const plan = ({ id, title, nextAction, tasks, frontmatter = [] }) => [
+  "---", `id: ${id}`, "priority: high", `next_action: ${nextAction}`, ...frontmatter, "---", "",
   `# ${title}`, "", "## Summary", "", "Body.", "", "## Tasks", "", ...tasks, "",
 ].join("\n");
 
@@ -53,6 +53,11 @@ test.describe("Plans card status", () => {
       plan({ id: "stmerg01", title: "Merged status plan", nextAction: "Close it out", tasks: ["- [x] One", "- [ ] Two", "- [ ] Three"] }));
     fs.writeFileSync(path.join(planRoot, "docs", "plans", "backlog", "status-done.md"),
       plan({ id: "stdone01", title: "Done status plan", nextAction: "Nothing left", tasks: ["- [x] One", "- [x] Two"] }));
+    fs.writeFileSync(path.join(planRoot, "docs", "plans", "backlog", "status-blocker.md"),
+      plan({ id: "stblkr01", title: "Blocker target plan", nextAction: "Land the prerequisite", tasks: ["- [ ] One"] }));
+    fs.writeFileSync(path.join(planRoot, "docs", "plans", "backlog", "status-blocked.md"),
+      plan({ id: "stblkd01", title: "Blocked status plan", nextAction: "Wait for the prerequisite", tasks: ["- [ ] One"],
+        frontmatter: ['blocked_by: [stblkr01, "upstream: vendor API is not ready"]'] }));
   });
   test.afterAll(() => fs.rmSync(planRoot, { recursive: true, force: true }));
   test.beforeEach(async ({ page }) => {
@@ -108,6 +113,23 @@ test.describe("Plans card status", () => {
     const drawer = page.locator("dialog#drawer");
     await expect(drawer.locator("plan-status .plan-merged-badge")).toHaveText("merged");
     await expect(drawer.locator("plan-status .plan-percent")).toHaveText("33%");
+  });
+
+  // A blocker id that names a plan in the same repository is a link to that plan; an external
+  // blocker names no plan, so it has nothing to open and stays plain text.
+  test("the blocked-by badge lists each blocker, and a known blocker opens its plan", async ({ page }) => {
+    await page.goto("/plans?lifecycle=backlog");
+    const card = page.locator("plan-card", { hasText: "Blocked status plan" });
+    await card.getByRole("button", { name: "blocked by 2" }).click();
+    const popover = page.locator("#blockers-popover");
+    await expect(popover).toBeVisible();
+    await expect(popover.locator(".blockers-popover-title")).toHaveText("Blocked by 2");
+    await expect(popover.getByText("upstream: vendor API is not ready")).toBeVisible();
+    await expect(popover.getByRole("button", { name: "upstream: vendor API is not ready" })).toHaveCount(0);
+
+    await popover.getByRole("button", { name: "Blocker target plan" }).click();
+    await expect(popover).toBeHidden();
+    await expect(page.locator("dialog#drawer #drawer-title")).toHaveText("Blocker target plan");
   });
 
   test("the drawer keeps the lifecycle and next action the card leaves out", async ({ page }) => {

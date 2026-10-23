@@ -1,7 +1,6 @@
 // Home's first-run demonstration data. This is deliberately an in-memory projection rather than
 // repository-registry state: it must never opt a user into Runtime observation, Plans, or telemetry.
 
-import { forgetRepository, loadRegistry, updateRegistry } from "../../modules/repositories/index.mjs";
 import { LIFECYCLE_MODEL, lifecycleProjection } from "../../modules/plan-suite/lifecycle-manifest.mjs";
 
 // Keep the first-run Home/Runtime mock data available for a later product decision, but leave the
@@ -74,23 +73,6 @@ const MOCK_DISPLAY_NAMES = {
   [MOCK_REPOSITORY_IDS[1]]: "Mock: Multi-member app",
   [MOCK_REPOSITORY_IDS[2]]: "Mock: Idle checkout",
 };
-
-export function purgePersistedMockRepositories({ stateRoot }) {
-  loadRegistry({ stateRoot });
-  return updateRegistry({
-    stateRoot,
-    mutate: (current) => {
-      let changed = false;
-      for (const repositoryId of MOCK_REPOSITORY_IDS) {
-        if (current.repositories?.[repositoryId]) {
-          forgetRepository(current, repositoryId);
-          changed = true;
-        }
-      }
-      return changed;
-    },
-  });
-}
 
 export function mockHomeOverview({ now = new Date().toISOString() } = {}) {
   const plansByRepository = mockPlanDataByRepository();

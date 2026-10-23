@@ -9,6 +9,11 @@ import crypto from "node:crypto";
 import { defaultRunGitSync } from "../repositories/git-exec.mjs";
 import { LIFECYCLE_MODEL } from "./lifecycle-manifest.mjs";
 
+// A reftable repository keeps HEAD in the reftable and writes `ref: refs/heads/.invalid` to every
+// HEAD file, so a branch read from that file is this placeholder; `.invalid` can never name a real
+// branch. Only Git can say which branch such a worktree has checked out.
+const REFTABLE_HEAD_BRANCH = ".invalid";
+
 // `primary` and `assigned.copy` are { lifecycle, worktree } read from each copy's path and
 // frontmatter. `assigned` is null when Git has no linked worktree by the primary copy's `worktree`
 // name, and `assigned.copy` is null when that worktree has no readable copy of the plan.
@@ -86,11 +91,6 @@ export function producedBlobs(rawLog) {
   }
   return blobs;
 }
-
-// A reftable repository keeps HEAD in the reftable and writes `ref: refs/heads/.invalid` to every
-// HEAD file, so a branch read from that file is this placeholder; `.invalid` can never name a real
-// branch. Only Git can say which branch such a worktree has checked out.
-const REFTABLE_HEAD_BRANCH = ".invalid";
 
 function checkedOutBranch(checkoutPath, runGit) {
   const head = checkoutPath ? runGit(checkoutPath, ["symbolic-ref", "-q", "HEAD"]) : { ok: false };

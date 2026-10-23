@@ -15,8 +15,8 @@
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import { capabilityForPlatform } from "./capabilities.mjs";
+import { defaultRunCommand } from "./command-exec.mjs";
 import {
-  defaultRunCommand,
   discoverListenerRecords,
   LISTENER_DISCOVERY_TIMEOUT_MS,
   resolvePidCwd,

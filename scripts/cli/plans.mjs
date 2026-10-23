@@ -60,14 +60,6 @@ export function loadCachedPlansSnapshot() {
   return publicSnapshot(cachedSnapshot);
 }
 
-// The fingerprint is taken before the build, so a file that changes mid-build shows up as a
-// mismatch on the next check rather than being masked.
-function rebuildSnapshot(registry, fingerprint = planSnapshotFingerprint({ registry })) {
-  cachedSnapshot = buildPlanSnapshot({ stateRoot, registry, packageState: planWritePackageState() });
-  cachedSnapshotIsMock = false;
-  cachedFingerprint = fingerprint;
-}
-
 export function loadPlanDocument({ key }) {
   if (MOCK_FIRST_RUN_VIEWS_ENABLED && hasNoRegisteredRepositories()) return mockPlanDocument({ key });
   const snapshot = cachedSnapshot || buildPlanSnapshot({ stateRoot, packageState: planWritePackageState() });
@@ -94,18 +86,26 @@ export function updatePlanPriority({ id, key, priority, expectedPriority, mtimeM
   return publicMutationResult(result);
 }
 
+export function refreshPlans({ repositoryId = null } = {}) {
+  cachedSnapshot = null;
+  cachedSnapshotIsMock = false;
+  return loadPlansSnapshot({ repositoryId });
+}
+
+// The fingerprint is taken before the build, so a file that changes mid-build shows up as a
+// mismatch on the next check rather than being masked.
+function rebuildSnapshot(registry, fingerprint = planSnapshotFingerprint({ registry })) {
+  cachedSnapshot = buildPlanSnapshot({ stateRoot, registry, packageState: planWritePackageState() });
+  cachedSnapshotIsMock = false;
+  cachedFingerprint = fingerprint;
+}
+
 // Strips the same private fields (absolutePath, repository.root) from a mutation result's record
 // that publicSnapshot() strips from every plan in a full snapshot — the domain layer's record
 // shape always carries them internally, but they must never cross the HTTP boundary.
 function publicMutationResult(result) {
   const { absolutePath, repository, ...plan } = result.record;
   return { change: result.change, record: { ...plan, repository: stripRepositoryRoot(repository) } };
-}
-
-export function refreshPlans({ repositoryId = null } = {}) {
-  cachedSnapshot = null;
-  cachedSnapshotIsMock = false;
-  return loadPlansSnapshot({ repositoryId });
 }
 
 function planWritePackageState() {

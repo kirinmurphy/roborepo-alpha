@@ -50,13 +50,14 @@ import {
 } from "./repositories.mjs";
 import { loadRegistry, updateRegistry, recordDiscoveryIfKnown, resolveRepositoryScope, listedRepositoryIds } from "../../modules/repositories/index.mjs";
 import { createRepositoryOverviewService } from "./repository-overview.mjs";
-import { MOCK_FIRST_RUN_VIEWS_ENABLED, mockHomeOverview, purgePersistedMockRepositories } from "./mock-home.mjs";
+import { MOCK_FIRST_RUN_VIEWS_ENABLED, mockHomeOverview } from "./mock-home.mjs";
 import { buildTelemetryRepositoryProjection, fixtureTelemetryRepositories, homeTelemetryProjection } from "./telemetry-repository-overview.mjs";
 import { removeRepositoryWorktree, stopRepositoryWorktreeServers } from "./worktree-cleanup.mjs";
 import { dismissWorktreeCleanupNotice, enableWorktreeCleanup } from "./worktree-cleanup-optin.mjs";
 import { packageStatusSummary } from "./package-status.mjs";
 import { buildAnalysisPrompt } from "../harnesses/transcript-locate.mjs";
 import { insightsSummary } from "./telemetry-insights.mjs";
+import { formatCount } from "./telemetry-format.mjs";
 import { deriveSessionFindings } from "./telemetry-session-findings.mjs";
 import { hookFilePath, writeHooksFile } from "./hook-composition.mjs";
 import { getHarnessProvider, hasHarnessProvider, listHarnessProviders, harnessDisplayName } from "../harnesses/registry.mjs";
@@ -535,8 +536,8 @@ function printTestingEfficiency(summary) {
 function printUsageWindows(windows) {
   if (!windows) return;
   console.log("\nrecent token usage (local estimate, not server rate limit):");
-  console.log(`  last 5h:  ~${fmt(windows.five_hour).padStart(12)} tok`);
-  console.log(`  last 7d:  ~${fmt(windows.seven_day).padStart(12)} tok`);
+  console.log(`  last 5h:  ~${formatCount(windows.five_hour).padStart(12)} tok`);
+  console.log(`  last 7d:  ~${formatCount(windows.seven_day).padStart(12)} tok`);
 }
 
 function printDataQualityWarnings(warnings) {
@@ -551,7 +552,7 @@ function printReadWarnings(warnings) {
   if (!warnings || warnings.length === 0) return;
   console.log("\nread warnings:");
   for (const warning of warnings.slice(0, 8)) {
-    const size = warning.approx_tokens ? ` ~${fmt(warning.approx_tokens)} tok` : "";
+    const size = warning.approx_tokens ? ` ~${formatCount(warning.approx_tokens)} tok` : "";
     const file = warning.file_ext ? ` ${warning.file_ext}/${warning.file_path_hash || "unknown"}` : "";
     console.log(`  ${warning.type} ${warning.repo}/${warning.session_short_id}${file}${size}: ${warning.hint}`);
   }
@@ -576,7 +577,7 @@ function printSpikeCauses(causes) {
   if (!causes || causes.length === 0) return;
   console.log("\nwhat's causing spikes (biggest token cost first):");
   for (const cause of causes.slice(0, 8)) {
-    console.log(`  ${cause.cause.padEnd(22)} n=${String(cause.spikes).padEnd(3)} avg Δ=${fmt(cause.avg_delta).padStart(9)} tok  worst @${cause.worst_repo}`);
+    console.log(`  ${cause.cause.padEnd(22)} n=${String(cause.spikes).padEnd(3)} avg Δ=${formatCount(cause.avg_delta).padStart(9)} tok  worst @${cause.worst_repo}`);
     console.log(`    → ${cause.hint}`);
   }
 }
@@ -611,7 +612,7 @@ function printGroupCost(groups) {
   if (!groups || groups.length === 0) return;
   console.log("\ncost per call by group (approx tokens from result size):");
   for (const g of groups) {
-    console.log(`  ${g.group.padEnd(14)} ${fmt(g.avg_tokens).padStart(7)} tok/call  (${g.calls} calls)`);
+    console.log(`  ${g.group.padEnd(14)} ${formatCount(g.avg_tokens).padStart(7)} tok/call  (${g.calls} calls)`);
   }
 }
 
@@ -619,7 +620,7 @@ function printToolCost(tools) {
   if (!tools || tools.length === 0) return;
   console.log("\ncost per call by tool (approx tokens from result size):");
   for (const t of tools.slice(0, 10)) {
-    console.log(`  ${t.tool.padEnd(24)} avg ${fmt(t.avg_tokens).padStart(7)}  max ${fmt(t.max_tokens).padStart(8)}  (${t.calls})`);
+    console.log(`  ${t.tool.padEnd(24)} avg ${formatCount(t.avg_tokens).padStart(7)}  max ${formatCount(t.max_tokens).padStart(8)}  (${t.calls})`);
   }
 }
 
@@ -629,7 +630,7 @@ function printSpikeAnatomy(anatomy) {
   console.log(`\nwhat's different in spikes (${anatomy.spike_count} spike vs ${anatomy.normal_count} normal results):`);
   for (const g of anatomy.groups.slice(0, 6)) {
     const lift = g.lift == null ? "only-in-spikes" : `${g.lift}× vs normal`;
-    console.log(`  ${g.group.padEnd(14)} ${lift.padEnd(16)} ${Math.round(g.spike_share * 100)}% of spike results  avg ${fmt(g.avg_tokens)} tok`);
+    console.log(`  ${g.group.padEnd(14)} ${lift.padEnd(16)} ${Math.round(g.spike_share * 100)}% of spike results  avg ${formatCount(g.avg_tokens)} tok`);
   }
 }
 
@@ -640,7 +641,7 @@ function printRegression(regression) {
   console.log(`\nregression (earlier vs later half, split @ ${regression.split_ts?.slice(0, 19)}):`);
   for (const g of regression.groups.slice(0, 6)) {
     const arrow = g.delta_tokens > 0 ? "↑" : g.delta_tokens < 0 ? "↓" : "·";
-    console.log(`  ${g.group.padEnd(14)} ${fmt(g.before_avg_tokens).padStart(6)} → ${fmt(g.after_avg_tokens).padStart(6)} tok/call  ${arrow}${fmt(Math.abs(g.delta_tokens))}`);
+    console.log(`  ${g.group.padEnd(14)} ${formatCount(g.before_avg_tokens).padStart(6)} → ${formatCount(g.after_avg_tokens).padStart(6)} tok/call  ${arrow}${formatCount(Math.abs(g.delta_tokens))}`);
   }
 }
 
@@ -657,19 +658,19 @@ function printSessions(sessions) {
   for (const session of sessions.slice(0, 8)) {
     const repoBranch = session.repo + (session.branch ? `@${session.branch}` : "");
     const label = `${repoBranch} ${session.harness ?? ""} ${shortId(session.session_id)}`.trim();
-    console.log(`  ${label.padEnd(36)} ${fmt(session.total_tokens).padStart(10)} tok  ${session.tool_calls} tools  ${session.mcp_calls} mcp`);
+    console.log(`  ${label.padEnd(36)} ${formatCount(session.total_tokens).padStart(10)} tok  ${session.tool_calls} tools  ${session.mcp_calls} mcp`);
   }
 }
 
 function printSpikes(report) {
-  console.log(`\ntoken spikes (delta >= ${fmt(report.spike_threshold)} tok):`);
+  console.log(`\ntoken spikes (delta >= ${formatCount(report.spike_threshold)} tok):`);
   if (report.spikes.length === 0) {
     console.log("  none — no capture exceeded the spike threshold");
     return;
   }
   for (const spike of report.spikes.slice(0, 8)) {
     const where = `${spike.repo}/${shortId(spike.session_id)}`;
-    console.log(`  ${spike.ts.slice(0, 19)}  ${where.padEnd(24)} +${fmt(spike.delta_tokens).padStart(8)} tok  ${spike.event}${spike.tool ? ` (${spike.tool})` : ""}`);
+    console.log(`  ${spike.ts.slice(0, 19)}  ${where.padEnd(24)} +${formatCount(spike.delta_tokens).padStart(8)} tok  ${spike.event}${spike.tool ? ` (${spike.tool})` : ""}`);
   }
 }
 
@@ -677,7 +678,7 @@ function printTokenContributors(label, rows) {
   if (rows.length === 0) return;
   console.log(`\n${label}:`);
   for (const row of rows.slice(0, 8)) {
-    console.log(`  ${String(row.key).padEnd(24)} ${fmt(row.tokens).padStart(10)} tok  (${row.captures})`);
+    console.log(`  ${String(row.key).padEnd(24)} ${formatCount(row.tokens).padStart(10)} tok  (${row.captures})`);
   }
 }
 
@@ -692,7 +693,7 @@ function formatMetricValue(value) {
 function printComparison(comparison) {
   console.log("\nspike vs normal captures:");
   for (const [label, stats] of [["spike", comparison.spike], ["normal", comparison.normal]]) {
-    console.log(`  ${label.padEnd(8)} n=${String(stats.count).padEnd(4)} avg Δ=${fmt(stats.avg_delta).padStart(8)} tok  avg tools=${stats.avg_tool_calls}  mcp rate=${stats.mcp_rate}`);
+    console.log(`  ${label.padEnd(8)} n=${String(stats.count).padEnd(4)} avg Δ=${formatCount(stats.avg_delta).padStart(8)} tok  avg tools=${stats.avg_tool_calls}  mcp rate=${stats.mcp_rate}`);
   }
 }
 
@@ -748,10 +749,6 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
       console.log(`RoboRepo initialized. Detected harnesses: ${names.join(", ")}.`);
     }
   }
-
-  // Remove synthetic records left by an earlier development-only mock implementation. Current
-  // first-run mocks are in-memory Home data and never enter the canonical registry.
-  purgePersistedMockRepositories({ stateRoot });
 
   if (options.detach) {
     const port = await startDetachedPortal(options.port, { allowPortFallback, portExplicit: options.portExplicit });
@@ -1823,10 +1820,6 @@ function printTop(label, entries) {
   for (const [key, count] of entries.slice(0, 8)) {
     console.log(`  ${String(key).padEnd(24)} ${count}`);
   }
-}
-
-function fmt(value) {
-  return Number(value || 0).toLocaleString("en-US");
 }
 
 function shortId(id) {

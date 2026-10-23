@@ -9,7 +9,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { cutoffMillis, dropCountForBytes, normalizePolicy, toMillis } from "./policy.mjs";
+import { DAY_MS, cutoffMillis, dropCountForBytes, normalizePolicy, toMillis } from "./policy.mjs";
 
 export function measureFileSet({
   dirPath,
@@ -105,7 +105,7 @@ export function describeFileSet({ dirPath, fsApi = fs, filter = isJsonFile } = {
 export function oldestAgeDays({ dirPath, now = new Date(), fsApi = fs, filter = isJsonFile } = {}) {
   const { oldestMtimeMs } = describeFileSet({ dirPath, fsApi, filter });
   if (oldestMtimeMs === null) return null;
-  return (toMillis(now) - oldestMtimeMs) / (24 * 60 * 60 * 1000);
+  return (toMillis(now) - oldestMtimeMs) / DAY_MS;
 }
 
 function isJsonFile(name) {

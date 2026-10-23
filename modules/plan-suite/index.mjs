@@ -23,7 +23,7 @@ const MAX_PLANS_PER_REPO = 500;
 // listing still runs on every call (cheap `readdirSync`), so new/removed files are always seen.
 const planRecordCache = new Map();
 
-// Plans scans the repositories RoboRepo knows about (pljvmyh §9); the scan lives beside this module.
+// Plans scans the repositories RoboRepo knows about; the scan lives beside this module.
 export { buildPlanSnapshot } from "./canonical-scan.mjs";
 export { planSnapshotFingerprint } from "./snapshot-fingerprint.mjs";
 
@@ -481,16 +481,11 @@ export function parseFrontmatter(markdown) {
   };
 }
 
-// Narrow scalar-only frontmatter writer: patches one `key: value` line in place, preserving key
-// order, blank lines, and the entire body byte-for-byte. Appends the key (at the end of the
-// frontmatter block) when it's missing entirely — a plan with no `priority:` line at all renders
-// the same "none" fallback in buildPlanRecord() as one with an empty value, so the writer must be
-// able to turn either into a real on-disk line. Does not support list fields (blocked_by etc).
-export // YAML flow sequences (`related: [a, b]`). Both list forms are valid YAML and authors write both,
+// YAML flow sequences (`related: [a, b]`). Both list forms are valid YAML and authors write both,
 // so the parser accepts both rather than reporting one as unsupported. Splitting respects quotes,
 // because a quoted entry may legitimately contain a comma — an external blocker reads as prose, not
 // as an id.
-function parseInlineArray(value) {
+export function parseInlineArray(value) {
   const inner = value.slice(1, -1);
   const entries = [];
   let buffer = "";
@@ -516,6 +511,11 @@ function parseInlineArray(value) {
   return entries.map((entry) => entry.trim()).filter(Boolean);
 }
 
+// Narrow scalar-only frontmatter writer: patches one `key: value` line in place, preserving key
+// order, blank lines, and the entire body byte-for-byte. Appends the key (at the end of the
+// frontmatter block) when it's missing entirely — a plan with no `priority:` line at all renders
+// the same "none" fallback in buildPlanRecord() as one with an empty value, so the writer must be
+// able to turn either into a real on-disk line. Does not support list fields (blocked_by etc).
 export function writeFrontmatterField(markdown, key, value) {
   if (!markdown.startsWith("---\n")) throw new Error("missing frontmatter");
   const end = markdown.indexOf("\n---", 4);

@@ -23,6 +23,7 @@ import {
   loadRegistry,
   checkoutRootsFor,
   deriveLifecycle,
+  devFixturesEnabled,
   lastSeenAtFor,
   mainCheckoutPath,
   resolveGitDir,
@@ -500,7 +501,7 @@ function scheduleRefresh() {
 }
 
 function buildSnapshot({ discovery, settings = loadSettings({ stateRoot }), refresh = { state: "idle", startedAt: null, error: null }, now = new Date(), persistedRepositories = [], idleMainCheckouts = new Map(), knownWorktrees = lastKnownWorktrees, worktreeCleanup = lastWorktreeCleanup, registry = loadRegistrySafe() }) {
-  return withoutFixtureRepositories(withAutoDiscovery(buildDeveloperRuntimeSnapshot({
+  const snapshot = withAutoDiscovery(buildDeveloperRuntimeSnapshot({
     discovery,
     settings,
     refresh,
@@ -513,12 +514,13 @@ function buildSnapshot({ discovery, settings = loadSettings({ stateRoot }), refr
     worktreeCleanup,
     hiddenRepositories: collectHiddenRepositories(registry),
     pinnedRepositoryIds: registryPinnedIds(registry),
-  })));
+  }));
+  return devFixturesEnabled({ stateRoot }) ? snapshot : withoutFixtureRepositories(snapshot);
 }
 
-// Development fixtures can still be running for lower-level classifier tests, but they are not
-// product data. Keep them out of every web snapshot so a later discovery pass cannot make them
-// reappear after startup cleanup or after auto-discovery is enabled.
+// Development fixtures are not product data, so outside dev mode they stay out of every web snapshot
+// even while their servers run: the registry already hides their records, but discovery still sees
+// a running fixture's listeners. `roborepo dev start` turns dev mode on so Runtime shows them.
 function withoutFixtureRepositories(snapshot) {
   const fixtureIds = new Set((snapshot.repositories || [])
     .filter((repository) => isFixtureRepository(repository.repositoryId))

@@ -31,26 +31,6 @@ export function loadRegistry({ stateRoot, fsApi = fs } = {}) {
   return devFixturesEnabled({ stateRoot, fsApi }) ? registry : withoutFixtureRepositories(registry);
 }
 
-// The registry exactly as stored. Writers start from this so saving never drops hidden fixtures.
-function readRegistry({ stateRoot, fsApi = fs } = {}) {
-  const filePath = registryPathFor(stateRoot);
-  try {
-    const parsed = JSON.parse(fsApi.readFileSync(filePath, "utf8"));
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("repository registry must be an object");
-    if (Number.isInteger(parsed.version) && parsed.version < REGISTRY_VERSION) {
-      const fresh = defaultRegistry();
-      writeRegistry({ stateRoot, registry: fresh, fsApi });
-      return fresh;
-    }
-    if (parsed.version !== REGISTRY_VERSION) throw new Error(`unsupported repository registry version: ${parsed.version}`);
-    return validateRegistry(parsed);
-  } catch (err) {
-    if (err && err.code === "ENOENT") return defaultRegistry();
-    if (err instanceof SyntaxError) throw new Error("repository registry contains malformed JSON");
-    throw err;
-  }
-}
-
 export function writeRegistry({ stateRoot, registry, fsApi = fs } = {}) {
   const filePath = registryPathFor(stateRoot);
   const dir = path.dirname(filePath);
@@ -80,13 +60,6 @@ export function updateRegistry({ stateRoot, mutate, expectedRevision, fsApi = fs
 }
 
 // ---- In-memory mutators (operate on a registry clone; used inside updateRegistry) ----
-
-// Shared guard: every mutator needs an existing record and fails identically without one.
-function requireRecord(registry, id, action) {
-  const record = registry.repositories[id];
-  if (!record) throw new Error(`cannot ${action} for unknown repository: ${id}`);
-  return record;
-}
 
 // Insert or refresh a canonical repository record. Idempotent: an existing record keeps its
 // createdAt/discoveries/localRoots and only merges the provided metadata. Returns the record.
@@ -137,7 +110,7 @@ export function recordDiscovery(registry, id, { source, sourceId = null, evidenc
 }
 
 // Record evidence on the repository an identity resolves to, only when that repository is already
-// known. For observers that are evidence rather than sources (agent sessions, pljvmyh): they
+// known. For observers that are evidence rather than sources (agent sessions): they
 // consolidate onto a repository a source found and never create one, so every listed repository has
 // a checkout the user asked RoboRepo to read. Returns false when the identity matches no record.
 export function recordDiscoveryIfKnown(registry, identity, discovery) {
@@ -146,7 +119,7 @@ export function recordDiscoveryIfKnown(registry, identity, discovery) {
   return recordDiscovery(registry, id, discovery);
 }
 
-// Delete one source's discovery entries from every record (pljvmyh §4). `sourceId` omitted removes
+// Delete one source's discovery entries from every record. `sourceId` omitted removes
 // every entry of that kind, which is how turning auto-discovery off drops its developer-runtime
 // evidence. Records are never deleted here: a repository left with no evidence stays known and ages
 // out through ageOutCandidates. Returns the ids of records that lost an entry.
@@ -160,10 +133,6 @@ export function removeDiscoveries(registry, { source, sourceId = undefined, now 
     affected.push(record.id);
   }
   return affected;
-}
-
-function sameDiscoverySource(discovery, { source, sourceId }) {
-  return discovery.source === source && (discovery.sourceId ?? null) === (sourceId ?? null);
 }
 
 // Register a local on-disk root (clone or worktree) under a repository. Idempotent by rootId.
@@ -221,7 +190,7 @@ export function setWorktreeCleanup(registry, id, changes, { now = new Date().toI
   return true;
 }
 
-// Record where a rootId actually lives on disk (pljvmyh §2's private index). Separate from
+// Record where a rootId actually lives on disk. Separate from
 // registerLocalRoot because the two answer different questions — that one records THAT a checkout
 // exists under a repository, this one records WHERE — but callers that know the path should call
 // both, and recordRepositoryDiscovery does.
@@ -396,4 +365,35 @@ export function setAlias(registry, fromIdentity, toRepositoryId, { now = new Dat
     record.updatedAt = now;
   }
   return true;
+}
+
+// The registry exactly as stored. Writers start from this so saving never drops hidden fixtures.
+function readRegistry({ stateRoot, fsApi = fs } = {}) {
+  const filePath = registryPathFor(stateRoot);
+  try {
+    const parsed = JSON.parse(fsApi.readFileSync(filePath, "utf8"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("repository registry must be an object");
+    if (Number.isInteger(parsed.version) && parsed.version < REGISTRY_VERSION) {
+      const fresh = defaultRegistry();
+      writeRegistry({ stateRoot, registry: fresh, fsApi });
+      return fresh;
+    }
+    if (parsed.version !== REGISTRY_VERSION) throw new Error(`unsupported repository registry version: ${parsed.version}`);
+    return validateRegistry(parsed);
+  } catch (err) {
+    if (err && err.code === "ENOENT") return defaultRegistry();
+    if (err instanceof SyntaxError) throw new Error("repository registry contains malformed JSON");
+    throw err;
+  }
+}
+
+// Shared guard: every mutator needs an existing record and fails identically without one.
+function requireRecord(registry, id, action) {
+  const record = registry.repositories[id];
+  if (!record) throw new Error(`cannot ${action} for unknown repository: ${id}`);
+  return record;
+}
+
+function sameDiscoverySource(discovery, { source, sourceId }) {
+  return discovery.source === source && (discovery.sourceId ?? null) === (sourceId ?? null);
 }
