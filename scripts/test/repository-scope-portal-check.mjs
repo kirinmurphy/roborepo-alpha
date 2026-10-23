@@ -18,9 +18,9 @@ const ready = path.join(tmp, "ready");
 const state = path.join(tmp, "state");
 const spoolDir = path.join(state, "telemetry", "spool");
 
-// The fixture rows are remapped onto this check's own repositories: the portal forgets the dev
-// fixture ids at startup (they are Home's mock repositories). Listed: SHARED and IDLE. Ignored:
-// MULTI. UNKNOWN is in the spool but not the registry, and one session carries no repository.
+// The fixture rows are remapped onto this check's own repositories: dev fixture ids are hidden from
+// every registry reader outside dev mode. Listed: SHARED and IDLE. Ignored: MULTI. UNKNOWN is in
+// the spool but not the registry, and one session carries no repository.
 const SHARED = "git:github.com/acme/scope-shared";
 const IDLE = "git:github.com/acme/scope-idle";
 const MULTI = "git:github.com/acme/scope-ignored";

@@ -48,7 +48,7 @@ import {
 } from "./repositories.mjs";
 import { loadRegistry, updateRegistry, recordDiscoveryIfKnown, resolveRepositoryScope, listedRepositoryIds } from "../../modules/repositories/index.mjs";
 import { createRepositoryOverviewService } from "./repository-overview.mjs";
-import { MOCK_FIRST_RUN_VIEWS_ENABLED, mockHomeOverview, purgePersistedMockRepositories } from "./mock-home.mjs";
+import { MOCK_FIRST_RUN_VIEWS_ENABLED, mockHomeOverview } from "./mock-home.mjs";
 import { buildTelemetryRepositoryProjection, fixtureTelemetryRepositories, homeTelemetryProjection } from "./telemetry-repository-overview.mjs";
 import { removeRepositoryWorktree, stopRepositoryWorktreeServers } from "./worktree-cleanup.mjs";
 import { dismissWorktreeCleanupNotice, enableWorktreeCleanup } from "./worktree-cleanup-optin.mjs";
@@ -745,10 +745,6 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
       console.log(`RoboRepo initialized. Detected harnesses: ${names.join(", ")}.`);
     }
   }
-
-  // Remove synthetic records left by an earlier development-only mock implementation. Current
-  // first-run mocks are in-memory Home data and never enter the canonical registry.
-  purgePersistedMockRepositories({ stateRoot });
 
   if (options.detach) {
     const port = await startDetachedPortal(options.port, { allowPortFallback, portExplicit: options.portExplicit });

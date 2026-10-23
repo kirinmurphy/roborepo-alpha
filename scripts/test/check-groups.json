@@ -30,6 +30,7 @@
     "developer-runtime-dev-fixtures-check.mjs",
     "developer-runtime-member-role-check.mjs",
     "harness-refresh-simulation-check.mjs",
+    "portal-dev-fixtures-startup-check.mjs",
     "portal-pages-check.mjs",
     "portal-ui-host-isolation-check.mjs",
     "portal-surface-layers-check.mjs",
