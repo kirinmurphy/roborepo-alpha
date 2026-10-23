@@ -1426,6 +1426,7 @@ portal-menu-button {
 .hook-review-offers { display: grid; gap: 8px; margin-bottom: 16px; }
 .hook-review-offers[hidden] { display: none; }
 .hook-readiness-affected, .hook-readiness-steps { margin: 4px 0 0; padding-left: 1.2em; }
+.hook-readiness-steps > li + li { margin-top: var(--space-xs); }
 .portal-banner-action {
   grid-column: 2;
   grid-row: 1;
@@ -1647,7 +1648,7 @@ option-dropdown {
 }
 
 .hook-readiness-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
-.hook-readiness-help[data-btn="text"] { color: var(--ink); font-size: var(--text-xs); text-decoration: underline; text-underline-offset: 3px; }
+.hook-readiness-help[data-btn="text"] { color: var(--ink); font-size: var(--text-2xs); text-decoration: underline; text-underline-offset: 3px; }
 .hook-readiness-actions [data-slot="cli-setup"] { margin-left: 16px; }
 .portal-tooltip.portal-tooltip--comfortable { width: min(460px, calc(100vw - 16px)); max-width: none; padding: 16px 20px; }
 .hook-readiness-tooltip p { margin: 0; }

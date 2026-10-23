@@ -185,8 +185,8 @@ function stateNotice(status, name, state, groups, handlers) {
 
 function hookPurposes(groups, state) {
   return groups.flatMap((group) => group.hooks.filter((hook) => hook.state === state).map((hook) => ({
-    name: hook.name || `${group.label}: ${hook.event}`,
-    description: `${group.label} · ${hook.event}. ${hook.description || "This hook has no recorded description. Check its definition before approving it."}`,
+    name: `RoboRepo: ${group.label} ${hook.event}`,
+    description: hook.description || "This hook has no recorded description. Check its definition before approving it.",
   })));
 }
 

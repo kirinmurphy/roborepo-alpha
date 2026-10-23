@@ -53,8 +53,8 @@ export function expectedHooks(harness, { packages = [], repoRoot, includeCore = 
   return groups.filter((group) => group.hooks.length > 0);
 }
 
-// Pure comparison of expected groups against hooks.read records. Records from another source file
-// (a project or plugin hook that happens to share a command) never satisfy an expected hook.
+// Compare expected groups against hooks.read records, resolving filesystem aliases. Hooks from
+// another source file (a project or plugin hook sharing a command) never satisfy an expected hook.
 //
 // `reviewRevision` names the exact set of RoboRepo hooks awaiting review, so a surface can offer
 // review once per set: it changes when a definition changes or a trust key shifts, and stays the
@@ -104,7 +104,12 @@ function digest(identities) {
 }
 
 function samePath(a, b) {
-  return path.resolve(a) === path.resolve(b);
+  if (path.resolve(a) === path.resolve(b)) return true;
+  try {
+    return fs.realpathSync(a) === fs.realpathSync(b);
+  } catch {
+    return false;
+  }
 }
 
 function readFragment(filePath) {

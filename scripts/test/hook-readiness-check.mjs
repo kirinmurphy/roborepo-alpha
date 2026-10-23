@@ -297,6 +297,27 @@ try {
     assert.equal(result.state, "review_required");
   }
 
+  {
+    const physical = path.join(tmp, "physical-hooks");
+    const alias = path.join(tmp, "aliased-hooks");
+    fs.mkdirSync(physical);
+    fs.writeFileSync(path.join(physical, "hooks.json"), "{}");
+    fs.symlinkSync(physical, alias, process.platform === "win32" ? "junction" : "dir");
+    const realPath = fs.realpathSync(path.join(physical, "hooks.json"));
+    const aliasPath = path.join(alias, "hooks.json");
+    const expected = [{ owner: "core", label: "Core", hooks: [{ event: "Stop", command: "observer" }] }];
+    for (const [installed, reported] of [[aliasPath, realPath], [realPath, aliasPath]]) {
+      const result = compareHookReadiness(expected, [{ event: "Stop", command: "observer", sourcePath: reported, trust: "untrusted", enabled: true }], { hooksPath: installed });
+      assert.equal(result.state, "review_required", "filesystem aliases must not hide pending native hooks");
+      assert.ok(result.reviewRevision);
+    }
+    const unrelated = path.join(tmp, "unrelated-hooks.json");
+    fs.writeFileSync(unrelated, "{}");
+    const result = compareHookReadiness(expected, [{ event: "Stop", command: "observer", sourcePath: unrelated, trust: "untrusted", enabled: true }], { hooksPath: aliasPath });
+    assert.equal(result.state, "missing", "a different source file must stay out of scope even with the same command");
+    assert.equal(result.reviewRevision, null);
+  }
+
   console.log("ok: hook readiness reports every state for core and package hooks across providers");
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });

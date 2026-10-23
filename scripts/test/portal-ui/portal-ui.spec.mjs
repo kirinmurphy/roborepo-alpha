@@ -187,6 +187,13 @@ test.describe("hook readiness warning", () => {
     return launches;
   };
   const returnToPortal = (page) => page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  const focusAfterScroll = async (button) => {
+    await button.scrollIntoViewIfNeeded();
+    await button.evaluate((element) => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => {
+      element.focus({ preventScroll: true });
+      resolve();
+    }))));
+  };
 
   test("Settings, Tokens, and Home offer selective review in Codex; Agents does not", async ({ page }) => {
     await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex, claude]) }));
@@ -279,23 +286,28 @@ test.describe("hook readiness warning", () => {
     await expect(notice.getByText("Already active", { exact: false })).toHaveCount(0);
     await expect(notice.locator('[data-slot="terminal-option"]')).toBeHidden();
     await expect(notice.getByRole("button", { name: "Check again" })).toBeVisible();
-    await notice.getByRole("button", { name: "Set up via CLI", exact: true }).evaluate((button) => button.focus({ preventScroll: true }));
+    for (const name of ["Why?", "View Hook Details", "Set up via CLI"]) {
+      await expect(notice.getByRole("button", { name, exact: true })).toHaveCSS("font-size", "14px");
+    }
+    await focusAfterScroll(notice.getByRole("button", { name: "Set up via CLI", exact: true }));
     await expect(page.getByRole("tooltip").getByRole("listitem")).toHaveCount(4);
     await expect(page.getByRole("tooltip").getByRole("listitem").first().locator('[data-slot="description"]')).toHaveCSS("text-decoration-line", "line-through");
     await expect(page.getByRole("tooltip")).not.toContainText("Install hooks with");
     await expect(page.getByRole("tooltip")).not.toContainText("Trust all");
     await expect(page.getByRole("tooltip")).toContainText("Approve 1 Skill visibility package hook; 1 Token Telemetry package hook.");
-    await notice.getByRole("button", { name: "View Hook Details", exact: true }).focus();
-    await expect(page.getByRole("tooltip")).toContainText("RoboRepo: telemetry after tool use");
+    await focusAfterScroll(notice.getByRole("button", { name: "View Hook Details", exact: true }));
+    await expect(page.getByRole("tooltip")).toContainText("RoboRepo: Token Telemetry PostToolUse");
     await expect(page.getByRole("tooltip")).toContainText("Records local usage after a tool finishes.");
     await expect(page.getByRole("tooltip")).not.toContainText("Adding these hooks");
-    await notice.getByRole("button", { name: "Why?", exact: true }).evaluate((button) => button.focus({ preventScroll: true }));
+    await focusAfterScroll(notice.getByRole("button", { name: "Why?", exact: true }));
     await expect(page.getByRole("tooltip")).toContainText("Adding these hooks enable RoboRepo to enable strict behaviors within the harness");
-    await expect(page.getByRole("tooltip")).toContainText("RoboRepo: skill reference tracking");
+    await expect(page.getByRole("tooltip")).toContainText("RoboRepo: Skill visibility PostToolUse");
     await expect(page.getByRole("tooltip")).toContainText("Observes skill-reference reads after tool calls.");
-    await expect(page.getByRole("tooltip")).toContainText("RoboRepo: telemetry after tool use");
+    await expect(page.getByRole("tooltip")).toContainText("RoboRepo: Token Telemetry PostToolUse");
     await expect(page.getByRole("tooltip")).toContainText("Records local usage after a tool finishes.");
     await expect(page.getByRole("tooltip")).not.toContainText("unmanaged skills");
+    await expect(page.getByRole("tooltip")).not.toContainText("telemetry after tool use");
+    await expect(page.getByRole("tooltip")).not.toContainText("skill reference tracking");
     expect(launches).toHaveLength(0);
   });
 
@@ -415,7 +427,7 @@ test.describe("hook readiness warning", () => {
     await expect(notice.locator('[data-slot="message"]')).toBeHidden();
     await expect(notice.locator('[data-slot="terminal-option"]')).toBeHidden();
     await notice.getByRole("button", { name: "Why?" }).evaluate((button) => button.focus({ preventScroll: true }));
-    await expect(page.getByRole("tooltip").locator("b")).toHaveText(["PreToolUse"]);
+    await expect(page.getByRole("tooltip").locator("b")).toHaveText(["RoboRepo: Codex core hooks PreToolUse"]);
     await expect(page.getByRole("tooltip")).not.toContainText(".claude");
     await expect(page.getByRole("tooltip")).toHaveCSS("padding", "16px 20px");
     expect((await page.getByRole("tooltip").boundingBox()).width).toBeGreaterThan(400);
@@ -468,7 +480,7 @@ test.describe("hook readiness warning", () => {
       await expect(notice).not.toContainText("Trust all");
       await expect(notice.locator('[data-slot="message"]')).toBeHidden();
       await expect(notice.locator('[data-slot="step-trust-text"]')).toHaveText("Approve 2 Codex core hooks.");
-      await notice.getByRole("button", { name: "View Hook Details", exact: true }).focus();
+      await focusAfterScroll(notice.getByRole("button", { name: "View Hook Details", exact: true }));
       await expect(page.getByRole("tooltip")).toContainText("SessionStart");
       await expect(page.getByRole("tooltip")).toContainText("PreToolUse");
       await expect(page.getByRole("tooltip")).not.toContainText("Adding these hooks");
@@ -481,7 +493,7 @@ test.describe("hook readiness warning", () => {
       const cliHelp = notice.getByRole("button", { name: "Set up via CLI", exact: true });
       await expect(cliHelp).toBeVisible();
       expect((await check.boundingBox()).x).toBeLessThan((await cliHelp.boundingBox()).x);
-      await cliHelp.evaluate((button) => button.focus({ preventScroll: true }));
+      await focusAfterScroll(cliHelp);
       const tooltip = page.getByRole("tooltip");
       await expect(tooltip.getByRole("listitem")).toHaveCount(4);
       await expect(tooltip.getByRole("listitem").first().locator('[data-slot="description"]')).toHaveCSS("text-decoration-line", "line-through");

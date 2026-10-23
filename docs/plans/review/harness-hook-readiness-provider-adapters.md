@@ -1,7 +1,7 @@
 ---
 id: wjlt1zvf
 priority: high
-next_action: Confirm the ten open Not tested checks, then rerun /plan-review for approval of the checked implementation.
+next_action: Resolve the external-update refresh gap and seven remaining native/platform checks, then complete /plan-review; commit pending changes only when authorized.
 blocked_by: []
 depends_on:
   - 3jp3yhtq
@@ -484,45 +484,46 @@ approval: only a later Codex `hooks/list` result clears `review_required`.
 
 ## Not tested
 
-- [ ] Visually confirm the live worktree portal shows one Codex review notice on Home, Settings,
-      and Tokens, none on Agents, and no browser-console errors. Automated UI checks passed. On
-      October 16, 2026 a hermetic portal (temp `HOME`, fake Codex reporting the telemetry hooks
-      untrusted) showed the Settings notice and the one-time offer card, **Later** closed the card
-      and kept the notice, and the console had no errors; the reference Mac's live state was not
-      opened, because the portal's harness setup can write to live config.
-- [ ] Confirm nonzero token and tool counts in live Codex capture after the parser fix is installed.
-      Carried from `3jp3yhtq`. Five sessions captured since October 13, 2026 report 1.7M to 30.5M
-      tokens and 18 to 228 tool calls. This needs the user to confirm by hand that those sessions
-      came from the Codex desktop app.
-- [ ] After Phase 1, enable or disable a package on the reference Mac and confirm `hooks/list`
-      still reports the earlier hooks as `trusted`. Requires a live Codex runtime and a hand
-      review in `/hooks`.
-- [ ] After core installation, use Codex's native review to trust only selected RoboRepo
-      `PostToolUse` hooks, then confirm a new Codex desktop task writes `PostToolUse` spool records
-      again. The trust decision is the user's; keep unrelated hooks untrusted.
-- [ ] On macOS, click **Open Codex hook review** in this branch's portal: a terminal window opens
-      the desktop-bundled CLI in `<stateRoot>/terminal-launch/`, and Codex shows **Hooks need
-      review** (or first asks whether to trust that folder, which is Codex's own workspace prompt).
-      Trust one RoboRepo hook, defer another, return to the portal, and confirm it lists only the
-      deferred one; then trust it and confirm the resolved notice. Not exercised: it opens a real
-      terminal and changes live Codex trust, which only the user decides.
-- [ ] Repeat the review flow with an unrelated pending hook (confirm no **Trust all** prompt is
-      suggested by RoboRepo), after disabling a package that shifts a later hook, after an update
-      that changes a hook definition, and after re-enabling a package. Confirm one offer per
-      pending set. Needs live Codex trust changes.
-- [ ] Windows installer: `install-windows.ps1` dispatches `hook_fragment` and `managed_files` rows
-      to `scripts/cli/shared-target-rows.mjs`. Not run: no `pwsh` on the reference Mac.
-- [ ] On the reference Mac, the `hooks` bundle is selected but the core Codex hooks are missing
-      (`doctor --installed` read on October 16, 2026). Running `roborepo bundle apply hooks` from
-      this branch appends them after the existing package hooks; then review them in Codex. Not
-      run: it changes live hook files.
-- [ ] Confirm `hooks/list` exists on the oldest Codex CLI on `PATH` that RoboRepo supports. The
-      reference Mac has no `PATH` CLI, and installing one is a download the user has not approved.
-      An older CLI that lacks the method makes readiness report `unknown`, which the fake
-      `app-server`'s method-not-found mode covers in `hook-readiness-check.mjs`.
-- [ ] Check Claude hook behavior in a fresh interactive workspace and a `-p` session. The provider
-      reads configuration rather than session trust, and the documented distinction has not been
-      manually exercised on this branch.
+- [x] Verify hook banner placement, checklist, tooltips, return refresh, resolved messaging, and
+      absence of console errors. October 23 feature verification passed 17 browser assertions:
+      live approved pages have no pending banner; browser-only pending fixtures show one notice
+      on Home, Settings, and Tokens, and one inline Agents offer per revision without floating or
+      duplicate cards. Partial and resolved states were fixtures, not native approval changes.
+- [x] Confirm nonzero token and tool counts in live Codex capture. October 23 verification
+      observed fresh PreToolUse and PostToolUse records with nonzero cumulative counts in the
+      primary-checkout scope. This replaces reliance on the older five sessions carried from
+      3jp3yhtq; their desktop provenance is not asserted. Fresh-session execution remains below.
+- [ ] Confirm native approval preservation on the reference Mac when enabling or disabling a
+      package, including adding core hooks after existing package hooks. Earlier hooks must
+      remain trusted when their definitions and positions are unchanged. Append order and
+      stable keys/hashes have automated or isolated-runtime evidence; live trusted-hook
+      preservation across these operations remains unconfirmed.
+- [ ] Start a fresh Codex desktop session after the newly granted approvals and confirm startup
+      hooks execute and PostToolUse spool records appear. The user approved all nine RoboRepo
+      hooks and native reads confirmed them trusted; capture was observed in the existing
+      session, not a newly started session.
+- [ ] On macOS, click Open Codex hook review in the portal and confirm a terminal opens the
+      detected CLI in the neutral terminal-launch directory. Approve one RoboRepo hook, defer
+      another, return to see only the unresolved hook, then complete approval and confirm the
+      resolved notice. Browser fixtures verify partial/resolved refresh; actual terminal launch,
+      workspace-trust prompts, and native partial approval remain unconfirmed.
+- [ ] Verify the native review flow with an unrelated pending hook, package removal that shifts
+      later hooks, a changed definition after update, and package re-enable. Confirm unrelated
+      approvals are preserved and only the required hooks need review. Browser verification
+      already confirms one offer per pending revision and no Trust all recommendation.
+- [ ] Run Windows installer parity for hook_fragment and managed_files dispatch to
+      scripts/cli/shared-target-rows.mjs. The full gate skipped this because pwsh is unavailable.
+- [x] Confirm fresh core hook installation and native approval on the reference Mac. The user
+      confirmed installation worked; October 23 native and portal reads confirmed all three core
+      hooks enabled and trusted. Core installation also passed in the isolated real CLI fixture.
+      Installation after pre-existing trusted package hooks is retained in the lifecycle check above.
+- [ ] Confirm hooks/list on the oldest supported standalone Codex CLI. The October 23 real
+      CLI-only fixture passed with the existing 0.163.0-alpha.11.2 bundled engine on isolated PATH;
+      it does not establish standalone distribution or oldest-version compatibility. Simulated
+      unsupported-method coverage verifies the unknown fallback.
+- [ ] Check Claude hook execution in a fresh interactive workspace and a -p session. File-level
+      configured status is implemented and tested; actual workspace-trust behavior remains
+      unconfirmed.
 
 ## Risks
 
@@ -541,6 +542,8 @@ approval: only a later Codex `hooks/list` result clears `review_required`.
 None open. Every question was answered by the user; see the Decision Log.
 
 ## Decision Log
+
+- **October 23 checklist synchronization requested by the user:** mark the verified browser flow, current live capture, and core installation/approval checked with their evidence limits. Keep seven native/platform scenarios open, narrow partially verified items to their remaining checks, and track the previously documented external-update refresh gap as an open review finding. Current capture replaces reliance on historical session provenance; a fresh desktop session remains a separate required check. This updates tracking only; overall review and approval stay pending.
 
 - **Interface-aware approval guidance (October 21, 2026, user feedback after seeing the native
   hook notice).** Prefer desktop approval instructions when a desktop runtime is detected, with
@@ -719,6 +722,8 @@ None open. Every question was answered by the user; see the Decision Log.
 ## Review
 
 ### Findings
+- [ ] An already-active portal page does not refresh on return when an external terminal change introduces pending hooks — resolve the refresh behavior before completing review.
+- [x] Native hook source paths using filesystem aliases were filtered out by scripts/harnesses/hook-readiness.mjs, suppressing CLI review hints — fixed in review (uncommitted); alias regression and real-runtime CLI-only verification pass.
 - [x] Clarify missing-hook messaging, offer browser installation, and move the Settings notice above the tracking row — fixed from October 21 user feedback (`7d72487f`), with passing API, real isolated installation, and browser checks.
 - [x] Refresh an Agents review offer on return from manual Codex review — fixed in review (`61b7752d`), with a browser regression that fails under the original focus guard.
 - [x] Correct the stable-trust design and risk table: core fragments append and preserve existing package positions — fixed in review (`cbf4f2b8`).
@@ -862,6 +867,31 @@ None open. Every question was answered by the user; see the Decision Log.
 - **Why?** now begins with the requested sentence, **Adding these hooks enable RoboRepo to enable strict behaviors within the harness**. **View Hook Details** contains the hook details alone. The CLI setup tooltip keeps the concise approval instruction without nesting another tooltip trigger.
 - All 20 focused hook-readiness browser tests passed. An initial assertion still expected inline event names in the approval row and was updated to the new location. A separate read-only validation found no actionable code issues. The full completion gate is running for this revision.
 - Review remains pending; the ten manual checks remain open and all follow-up changes remain uncommitted.
+
+#### October 23 installed Skill Visibility name and metadata audit
+
+- User requested naming the native **Hook 2** entry and checking all package hooks for review names and badge descriptions. The entry’s command identifies Skill Visibility’s PostToolUse observer. Its source already declares **RoboRepo: skill reference tracking**, but the installed definition lacked a statusMessage.
+- Applied only that installed label using the normal hook writer. Assertions confirmed unchanged commands, positions, non-label fields, and unrelated labels. No approval state was written.
+- Audited all five active or archived packages with Codex hook resources: Caveman, Skill Visibility, Token Telemetry, jcodemunch, and jdocmunch. All nine source hooks have readable native names and matching descriptions. The metadata guard passed. A separate live-file comparison verified all six currently installed package hooks match their source names and have source descriptions. No package source additions were needed.
+- The latest UI edits use smaller tooltip triggers and owner/event headings without duplicate native titles. Current focused browser verification is not clean: 19 passed and the core approval checklist test failed because the details tooltip was absent after focus. An earlier full run also had a tooltip-visibility failure; the cause remains unverified. The interrupted final full-gate log does not establish a passing completion gate for these latest edits.
+- Overall review remains pending and the ten manual checks remain open. Current edits remain uncommitted; earlier changes were committed outside this agent’s actions as fe215376.
+
+#### October 23 approved hooks and CLI-only verification
+
+- User confirmed **ok i've approved the hooks**. A fresh read-only native hooks/list query reported all nine RoboRepo hooks enabled and trusted: three core hooks, five Telemetry hooks, and Skill Visibility. A fresh read from the worktree-owned portal agreed: all groups active and reviewRevision null. This confirms current native approvals, not execution in a new session or approval of the plan.
+- Ran hook-review-cli-check.mjs and hook-readiness-check.mjs locally; both passed. Ran both suites again in a disposable node:22-bookworm-slim Docker container with no network, the worktree mounted read-only, and no host harness configuration; both passed. The image was already available locally. Docker access required sandbox escalation.
+- These suites use a simulated Codex app-server. They cover CLI-only discovery and review guidance, package and core installation, metadata reapply, trusted-hook preservation expectations, recursive package changes, missing runtime, timeouts, and unsupported hooks/list. They do not establish a real CLI approval screen, real native approval reuse in Linux, actual hook execution, or compatibility with the oldest supported CLI.
+- The ten broad manual checklist entries remain open. Current core installation and approval are confirmed, but earlier entries also require installation order, trust preservation, native launch, partial approval, and new-session capture checks. The latest full gate remains unconfirmed; tooltip-visibility failures recorded above still need investigation. Overall review and approval remain pending.
+
+#### October 23 feature-verification pass
+
+- Ran the feature-verification skill against the worktree-owned portal. Seventeen browser assertions passed across two runs: nine live hooks active, no pending banners on Home/Settings/Tokens, no persistent or floating Agents banner, one fixture banner with four spaced steps, smaller triggers, contextual Why and hook details, CLI tooltip, partial-review return refresh, exact resolved message, no console errors, pending notices without duplicates on all three normal banner pages, one inline Agents offer per revision, and CLI-only instructions with launch/copy controls. Pending and partial states were browser-only response fixtures; live approval state was unchanged. Screenshots are observed layout evidence alongside the executed assertions.
+- An initial browser run failed two hover checks. A focused diagnostic recorded scroll events after pointer entry canceling pending tooltip display; keyboard activation passed. With controls visible without auto-scrolling, all twelve browser checks passed. The two existing tooltip tests now scroll controls into view and wait for animation frames before focus; both passed ten repetitions each. This does not claim every earlier suite failure has the same cause.
+- During a harmless tool action, fresh live Codex capture records appeared: two PreToolUse and two PostToolUse records with nonzero cumulative tokens and tool counts. Captures used the current chat’s primary-checkout scope, not the command’s worktree override. This is live capture evidence, not a newly started session or direct evidence that every approved hook has executed.
+- Evidence: browser runs 20261023T061500Z-57ecd4 (12 checks) and 20261023T150033Z-07c523 (5 checks), with screenshots under <stateRoot>/browser/evidence/. Local results are /tmp/wjlt1zvf-feature-verification-result.json, /tmp/wjlt1zvf-feature-extra-result.json, /tmp/wjlt1zvf-live-capture-verification.json, and /tmp/wjlt1zvf-real-cli-only-result.json. Full-gate output is /tmp/wjlt1zvf-feature-verification-final-gate.log.
+- A real Codex CLI-only fixture exposed the source-path alias finding above: the runtime returned a canonical /private/var path for the same file RoboRepo knew through /var. The new regression failed before the fix and passed after physical-file comparison was added; unrelated files with identical commands remain excluded.
+- Using the existing Codex CLI engine (0.163.0-alpha.11.2), a temporary home, isolated PATH, and desktop discovery disabled, verified CLI-only detection, native hooks/list, core plus Telemetry installation, review hints, eight named untrusted hooks, and stable native keys/hashes after identical reapply. No terminal was launched, no hook was approved, and no live config was reset. This is not standalone Linux-distribution or oldest-supported-version coverage.
+- The final npm run check passed: 447 CLI assertions, 41/41 check suites, all four clean-machine legs, and 121 browser tests. Windows parity was skipped because pwsh is unavailable. git diff --check passed. The worktree-owned portal was restarted to load the path fix. Required native approval interactions, fresh-session execution, live package lifecycle checks, oldest CLI, Windows parity, and Claude workspace trust remain separate. Review remains pending and changes remain uncommitted.
 
 ### Acceptance evidence
 
