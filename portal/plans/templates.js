@@ -7,7 +7,7 @@ import {
   portalTpl as tpl,
   portalFillSlots as fill,
 } from "/portal/shared/api.js";
-import { FILTER_LABELS, FRESHNESS_LABELS, formatDate } from "./state.js";
+import { FILTER_LABELS, FRESHNESS_LABELS } from "./state.js";
 import { lifecycleActions, lifecycleLabel } from "./lifecycle.js";
 import { primaryPlanAction } from "./plan-actions.js";
 
@@ -44,8 +44,7 @@ export function filterChipDescriptors(filters, defaults, optionLabelFor) {
   return chips;
 }
 
-// <select> children are trivial and a <template> adds no value here, so this builds the native
-// element directly rather than through tpl()/fill() — mirrors telemetry/templates.js's selectOption.
+// A single option needs only a value and text; it does not need a multi-element template.
 export function selectOption([value, label]) {
   const opt = document.createElement("option");
   opt.value = value;
@@ -53,7 +52,7 @@ export function selectOption([value, label]) {
   return opt;
 }
 
-// Which §7 onboarding step the page is on once plan-write is enabled. "plans" means there is a plan
+// Which onboarding step the page is on once plan-write is enabled. "plans" means there is a plan
 // board to render; the other steps each show a single call to action instead.
 export function plansOnboardingStep(snapshot) {
   const scans = snapshot.repositoryScans || [];
@@ -102,10 +101,6 @@ export function emptyState() {
     title: "No matching plans",
     body: "Adjust search or filters to show more results.",
   });
-}
-
-function repositoryCount(count) {
-  return `${count} ${count === 1 ? "repository" : "repositories"}`;
 }
 
 // A small status chip (tpl-chip), optionally toned by a class such as "ok" or "warn".
@@ -161,87 +156,6 @@ export function cardGrid(plans, cardActions) {
   grid.className = "card-grid";
   grid.append(...plans.map((record) => planCardElement(record, cardActions)));
   return grid;
-}
-
-function planCardElement(record, cardActions) {
-  const node = document.createElement("plan-card");
-  node.record = record;
-  node.actions = cardActions;
-  return node;
-}
-
-// One clickable menu item (icon + label + optional description) that runs copyFn on click. `run`
-// wraps copyFn so a copy failure surfaces via onError instead of an unhandled rejection.
-function menuItem({ icon = "copy", label, description, run }) {
-  const item = fill(tpl("tpl-menu-item"), { label });
-  item.querySelector("[data-slot=icon]").setAttribute("name", icon);
-  const descSlot = item.querySelector("[data-slot=description]");
-  if (description) {
-    descSlot.textContent = description;
-    descSlot.hidden = false;
-  }
-  item.addEventListener("click", async (event) => {
-    event.stopPropagation();
-    await run();
-  });
-  return item;
-}
-
-// The unified ⋯ menu body, shared by the drawer and the card. When plan-write is installed it shows
-// the lifecycle's suite commands (each copies its prompt), then a portable prompt — a
-// self-contained summary for a chat without repo access. Copy path is always last. The recommended action gets
-// its own dedicated CTA button outside this menu (see primaryPlanAction/cardPrimaryAction) — it is
-// deliberately not called out again inside the menu, to avoid a second, redundant highlight.
-// When plan-write is NOT installed there are no lifecycle actions, so it falls back to the generic
-// repo-aware / portable prompts plus the enable-skill banner.
-//
-// api: { installed, lifecycle, planWritePackage, skillModal, onError,
-//        copyPath, copyPrompt(command), copyRepoPrompt, copyPortablePrompt, onEnablePackage }
-function planMenuBody(api) {
-  const wrap = tpl("tpl-plan-menu");
-  const run = (fn) => async () => {
-    try {
-      await fn();
-    } catch (err) {
-      api.onError?.(err);
-    }
-  };
-
-  const note = wrap.querySelector("[data-slot=note]");
-  const group = wrap.querySelector("[data-slot=group]");
-  const fallbackActions = wrap.querySelector("[data-slot=fallback-actions]");
-
-  if (api.installed) {
-    note.textContent = "Copies a prompt to run in an agent chat.";
-    group.hidden = false;
-    for (const { command, label, description } of lifecycleActions(api.lifecycle)) {
-      group.append(
-        menuItem({ icon: "agent-prompt", label, description, run: run(() => api.copyPrompt(command)) }),
-      );
-    }
-    group.append(
-      menuItem({ icon: "agent-prompt", label: "Portable prompt", description: "Self-contained — works without repo access", run: run(() => api.copyPortablePrompt()) }),
-    );
-  } else {
-    // No lifecycle actions available — offer the generic prompts the actions would otherwise cover.
-    note.textContent = "Enable the plan suite for lifecycle actions. For now:";
-    fallbackActions.hidden = false;
-    fallbackActions.append(
-      menuItem({ icon: "agent-prompt", label: "Repo-aware prompt", description: "For an agent that already has this repo open", run: run(() => api.copyRepoPrompt()) }),
-      menuItem({ icon: "agent-prompt", label: "Portable prompt", description: "Self-contained — works without repo access", run: run(() => api.copyPortablePrompt()) }),
-    );
-  }
-
-  wrap.querySelector("[data-slot=copy-path]").append(
-    menuItem({ icon: "copy", label: "Copy path", run: run(() => api.copyPath()) }),
-  );
-
-  if (api.installed === false && api.planWritePackage) {
-    const banner = wrap.querySelector("[data-slot=package-banner]");
-    banner.hidden = false;
-    banner.append(packageBanner(api.planWritePackage, api.onEnablePackage, api.skillModal));
-  }
-  return wrap;
 }
 
 // drawerActions: { onCopyPath, onCopyRepoContext, onCopyPortableContext, onPlanAction,
@@ -343,11 +257,96 @@ export function dtdd(term, value) {
 }
 
 // One entry in the drawer's Blocked by / Blocking sections (see state.js's resolveBlockers /
-// resolveBlocking) — a link for a resolved blocker, plain unclickable text otherwise. Shares the
-// same tpl-blocker-link/tpl-blocker-unresolved templates as blockers-popover.js's card popup.
+// resolveBlocking) and in blockers-popover.js's card popup — a link for a resolved blocker, plain
+// unclickable text otherwise.
 export function blockerLink(blocker, onOpenPlan) {
   if (!blocker.resolved) return fill(tpl("tpl-blocker-unresolved"), { title: blocker.title });
   const link = fill(tpl("tpl-blocker-link"), { title: blocker.title });
   link.addEventListener("click", () => onOpenPlan(blocker.key));
   return link;
+}
+
+function repositoryCount(count) {
+  return `${count} ${count === 1 ? "repository" : "repositories"}`;
+}
+
+function planCardElement(record, cardActions) {
+  const node = document.createElement("plan-card");
+  node.record = record;
+  node.actions = cardActions;
+  return node;
+}
+
+// One clickable menu item (icon + label + optional description) that runs copyFn on click. `run`
+// wraps copyFn so a copy failure surfaces via onError instead of an unhandled rejection.
+function menuItem({ icon = "copy", label, description, run }) {
+  const item = fill(tpl("tpl-menu-item"), { label });
+  item.querySelector("[data-slot=icon]").setAttribute("name", icon);
+  const descSlot = item.querySelector("[data-slot=description]");
+  if (description) {
+    descSlot.textContent = description;
+    descSlot.hidden = false;
+  }
+  item.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    await run();
+  });
+  return item;
+}
+
+// The unified ⋯ menu body, shared by the drawer and the card. When plan-write is installed it shows
+// the lifecycle's suite commands (each copies its prompt), then a portable prompt — a
+// self-contained summary for a chat without repo access. Copy path is always last. The recommended action gets
+// its own dedicated CTA button outside this menu (see primaryPlanAction/cardPrimaryAction) — it is
+// deliberately not called out again inside the menu, to avoid a second, redundant highlight.
+// When plan-write is NOT installed there are no lifecycle actions, so it falls back to the generic
+// repo-aware / portable prompts plus the enable-skill banner.
+//
+// api: { installed, lifecycle, planWritePackage, skillModal, onError,
+//        copyPath, copyPrompt(command), copyRepoPrompt, copyPortablePrompt, onEnablePackage }
+function planMenuBody(api) {
+  const wrap = tpl("tpl-plan-menu");
+  const run = (fn) => async () => {
+    try {
+      await fn();
+    } catch (err) {
+      api.onError?.(err);
+    }
+  };
+
+  const note = wrap.querySelector("[data-slot=note]");
+  const group = wrap.querySelector("[data-slot=group]");
+  const fallbackActions = wrap.querySelector("[data-slot=fallback-actions]");
+
+  if (api.installed) {
+    note.textContent = "Copies a prompt to run in an agent chat.";
+    group.hidden = false;
+    for (const { command, label, description } of lifecycleActions(api.lifecycle)) {
+      group.append(
+        menuItem({ icon: "agent-prompt", label, description, run: run(() => api.copyPrompt(command)) }),
+      );
+    }
+    group.append(
+      menuItem({ icon: "agent-prompt", label: "Portable prompt", description: "Self-contained — works without repo access", run: run(() => api.copyPortablePrompt()) }),
+    );
+  } else {
+    // No lifecycle actions available — offer the generic prompts the actions would otherwise cover.
+    note.textContent = "Enable the plan suite for lifecycle actions. For now:";
+    fallbackActions.hidden = false;
+    fallbackActions.append(
+      menuItem({ icon: "agent-prompt", label: "Repo-aware prompt", description: "For an agent that already has this repo open", run: run(() => api.copyRepoPrompt()) }),
+      menuItem({ icon: "agent-prompt", label: "Portable prompt", description: "Self-contained — works without repo access", run: run(() => api.copyPortablePrompt()) }),
+    );
+  }
+
+  wrap.querySelector("[data-slot=copy-path]").append(
+    menuItem({ icon: "copy", label: "Copy path", run: run(() => api.copyPath()) }),
+  );
+
+  if (api.installed === false && api.planWritePackage) {
+    const banner = wrap.querySelector("[data-slot=package-banner]");
+    banner.hidden = false;
+    banner.append(packageBanner(api.planWritePackage, api.onEnablePackage, api.skillModal));
+  }
+  return wrap;
 }

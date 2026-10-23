@@ -191,3 +191,18 @@ test.describe("Runtime checkout rows (developer-runtime-repository-row-layout)",
     await expect(row(page, "shop-main").locator(".repository-root-head").getByRole("button", { name: "Links", exact: true })).toBeVisible();
   });
 });
+
+// The browser stub renders the stack, but the save still goes to the real server, so this exercises
+// the server's repoPath validation and the dialog's error display together.
+test.describe("Compose repo association", () => {
+  test("a repo path with a traversal segment is refused and the dialog stays open with the reason", async ({ page }) => {
+    await card(page, "shop").locator(".card-head").getByRole("button", { name: "Actions" }).click();
+    await page.getByRole("button", { name: "Associate repo" }).click();
+    const dialog = page.locator("dialog#compose-repo-dialog");
+    await expect(dialog).toBeVisible();
+    await dialog.locator("#compose-repo-path").fill("/tmp/work/../shop");
+    await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(dialog.locator("#compose-repo-error")).toContainText("must not contain traversal segments");
+    await expect(dialog).toBeVisible();
+  });
+});

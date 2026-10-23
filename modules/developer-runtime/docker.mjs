@@ -7,8 +7,7 @@
 // git's per-root dedup. `docker ps --format '{{json .}}'` already carries Ports and Labels as
 // strings, so no per-container `docker inspect` round trip is needed.
 
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { defaultRunCommand } from "./command-exec.mjs";
 
 // Docker CLI calls cross into Docker Desktop's VM proxy rather than talking to a local daemon
 // directly, so they run measurably slower than lsof/ps and need more headroom than the 1500ms used
@@ -22,8 +21,6 @@ import { promisify } from "node:util";
 // The cost of a generous ceiling is bounded (one call per scan, and it only waits when Docker is
 // genuinely slow); the cost of a tight one is a dashboard that randomly drops every container.
 export const DOCKER_DISCOVERY_TIMEOUT_MS = 15000;
-
-const execFileAsync = promisify(execFile);
 
 export async function discoverDockerRecords({
   platform = process.platform,
@@ -122,8 +119,4 @@ function dockerFailureWarning(err, timeoutMs = DOCKER_DISCOVERY_TIMEOUT_MS) {
     return "docker discovery skipped: docker daemon is not running";
   }
   return `docker discovery failed: ${message}`;
-}
-
-export async function defaultRunCommand(command, args, { timeoutMs } = {}) {
-  return execFileAsync(command, args, { timeout: timeoutMs, encoding: "utf8", maxBuffer: 1024 * 1024 });
 }

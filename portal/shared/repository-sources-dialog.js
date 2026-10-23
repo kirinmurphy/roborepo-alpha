@@ -1,4 +1,4 @@
-// The repository-source surface (pljvmyh §7): one controller powers both the Manage Repos dialog
+// The repository-source surface: one controller powers both the Manage Repos dialog
 // and Settings' inline surface. Top to bottom: auto-discovery (primary), one list of every known
 // repository, then folders (secondary).
 import { portalWireBackdropClose } from "/portal/shared/api.js";

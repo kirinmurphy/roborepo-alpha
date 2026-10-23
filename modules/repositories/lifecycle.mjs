@@ -126,45 +126,13 @@ export function supersededBy(registry, repositoryId) {
   return successor;
 }
 
-// The repository that absorbed this one after a remote rename, or null.
+// Infer a successor for older records whose roots predate the localRootPaths index.
+// The most recently seen root must belong to the successor, which must also have seen more roots
+// than this record. Older abandoned roots do not prevent a match. The old record stops updating
+// when its remote changes, so comparing its timestamps to the successor's creation cannot work.
 //
-// `supersededBy` above answers the same question from `localRootPaths`, the ownership index — which
-// is empty for any root registered before that index existed. This reads the `localRoots` arrays
-// instead, which every record has always had, and so covers exactly the old records the index
-// cannot see. `harness_configs`/`roborepo` on the live registry was one: three roots, none in the
-// index, while the shared rootId sat in plain view in both arrays.
-//
-// A rootId is a hash of an absolute path, so two records listing the same one is direct evidence the
-// same DIRECTORY was seen under both remotes. That is the evidence the rename path lacked when it
-// refused to merge a rename automatically. Its worry was that "a deleted-then-recloned
-// directory produces identical stored data" — but the two are distinguishable here:
-//
-//   rename : the old record's roots are all still present on the new one. Nothing was left behind,
-//            because the directories did not change — only the remote did.
-//   reclone: the old record keeps roots the new one never saw (its own worktrees, a former path).
-//            A strict subset never holds, so this returns null and the two records stay separate.
-//
-// Which of the old record's roots have to carry over took two wrong tries, so the reasoning is
-// worth stating. Demanding ALL of them fails: a long-lived record accumulates directories abandoned
-// well before the rename (the live example had one last touched five days prior), and they say
-// nothing about the handover. Filtering by "last seen after the successor was created" fails for a
-// deeper reason — the old record STOPS being updated the moment the remote changes, so every one of
-// its timestamps predates the successor by construction and the filter admits nothing, ever.
-//
-// What does discriminate is the MOST RECENTLY SEEN root. That is the directory in use when the
-// remote changed, and it is the one the rename necessarily carried across:
-//
-//   rename : the newest root is on both records. The directory kept working; only its remote moved.
-//   reclone: the newest root belongs to the old record alone — the new clone lives somewhere else,
-//            or the old directory was replaced and never re-registered under the new id.
-//
-// Older roots are ignored deliberately. They are history, and requiring them to match punishes a
-// record for having been used longer.
-//
-// The action this justifies is an ALIAS, never a merge. An alias leaves both records intact, renders
-// one row, and is undone by deleting one line; the worst case is a row briefly missing rather than
-// one repository's work hidden inside another. That asymmetry is what makes acting automatically
-// defensible here when merging still would not be.
+// Return null when candidates are ambiguous. Callers may alias the records without merging them;
+// keeping both records preserves the evidence if the user needs to undo the association.
 export function renamedInto(registry, repositoryId) {
   const record = registry?.repositories?.[repositoryId];
   const roots = (record?.localRoots || []).filter((r) => r?.rootId);

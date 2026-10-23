@@ -1,6 +1,5 @@
-// Bounded repository traversal for directory sources and `roborepo plans repair`. Moved here from
-// modules/plan-suite so repository discovery has one owner; limits and eligibility are unchanged
-// (pljvmyh §2), so a directory source finds exactly what the old Plans folder scan found.
+// Bounded traversal for repository sources and `roborepo plans repair`. Both consumers share
+// the same repository eligibility rules and scan limits.
 import fs from "node:fs";
 import path from "node:path";
 import { resolveGitDir } from "./identity.mjs";
@@ -11,12 +10,6 @@ export const DEFAULT_IGNORED_DIRECTORIES = Object.freeze([
 ]);
 export const DISCOVERY_MAX_DEPTH = 6;
 export const DISCOVERY_MAX_REPOSITORIES = 250;
-
-// Overridable so tests can force truncation deterministically (0ms against a normal-size tree)
-// instead of needing a real slow scan or a huge synthetic directory tree.
-function discoveryTimeBudgetMs() {
-  return process.env.DISCOVERY_TIME_BUDGET_MS !== undefined ? Number(process.env.DISCOVERY_TIME_BUDGET_MS) : 5000;
-}
 
 // A folder is a repository root when it has a `.git` entry or a `docs/plans` directory. Linked
 // worktrees are not roots of their own: the main checkout stands for the repository, and Plans
@@ -122,4 +115,9 @@ export function classifySourcePath(sourcePath, { fsApi = fs } = {}) {
     return "unresolved";
   }
   return isRepositoryRoot(sourcePath, { fsApi }) ? "repository" : "directory";
+}
+
+// A zero budget lets callers exercise truncation without depending on scan speed.
+function discoveryTimeBudgetMs() {
+  return process.env.DISCOVERY_TIME_BUDGET_MS !== undefined ? Number(process.env.DISCOVERY_TIME_BUDGET_MS) : 5000;
 }

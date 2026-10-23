@@ -30,6 +30,30 @@ export function describeDocument(parsed, { normalizeHeading }) {
   };
 }
 
+// The destination-policy map, keyed by the state ids declared in manifests/platform/plan-lifecycle.json.
+// A lifecycle absent from this map (notably "unclassified") gets the universal rules only — it has
+// no destination contract of its own because it isn't a place a plan is ever deliberately moved to.
+export const lifecyclePolicies = {
+  backlog: validateBacklog,
+  ready: validateReady,
+  active: validateActive,
+  review: validateReview,
+  completed: validateCompleted,
+  archived: validateArchived,
+};
+
+// The single entry point. Returns findings for `lifecycle`, universal rules first, then that
+// destination's own. `ready` drives both the scanner's readiness chip and the move gate.
+export function validateForLifecycle(parsed, { lifecycle, priorities, normalizeHeading }) {
+  const doc = describeDocument(parsed, { normalizeHeading });
+  const policy = lifecyclePolicies[lifecycle];
+  const findings = [
+    ...universalFindings(doc, { lifecycle, priorities }),
+    ...(policy ? policy(doc) : []),
+  ];
+  return { ready: findings.length === 0, findings };
+}
+
 function missingSection(section) {
   return finding(SECTION_FINDING_CODES[section], { meta: { accepted: SECTION_SYNONYMS[section] } });
 }
@@ -128,28 +152,4 @@ function validateArchived(doc) {
     findings.push(finding("ARCHIVED_NEXT_ACTION", { meta: { value: doc.frontmatter.next_action } }));
   }
   return findings;
-}
-
-// The destination-policy map, keyed by the state ids declared in manifests/platform/plan-lifecycle.json.
-// A lifecycle absent from this map (notably "unclassified") gets the universal rules only — it has
-// no destination contract of its own because it isn't a place a plan is ever deliberately moved to.
-export const lifecyclePolicies = {
-  backlog: validateBacklog,
-  ready: validateReady,
-  active: validateActive,
-  review: validateReview,
-  completed: validateCompleted,
-  archived: validateArchived,
-};
-
-// The single entry point. Returns findings for `lifecycle`, universal rules first, then that
-// destination's own. `ready` drives both the scanner's readiness chip and the move gate.
-export function validateForLifecycle(parsed, { lifecycle, priorities, normalizeHeading }) {
-  const doc = describeDocument(parsed, { normalizeHeading });
-  const policy = lifecyclePolicies[lifecycle];
-  const findings = [
-    ...universalFindings(doc, { lifecycle, priorities }),
-    ...(policy ? policy(doc) : []),
-  ];
-  return { ready: findings.length === 0, findings };
 }

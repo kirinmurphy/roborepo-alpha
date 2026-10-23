@@ -5,46 +5,10 @@
 // Repository ids contain ':' and '/', so in the path they are percent-encoded; portal-router.mjs's
 // :id segment decodes them. Every payload is path-free by construction (see modules/repositories/summary.mjs)
 // except the /api/repositories/sources* management routes, the one surface allowed to carry
-// configured source paths (pljvmyh §6). Those routes are listed before /api/repositories/:id so the
+// configured source paths. Those routes are listed before /api/repositories/:id so the
 // literal `sources` segment is never read as a repository id.
 import { send, readJsonBody } from "./portal-routes-http.mjs";
 import { defineRoutes } from "./portal-router.mjs";
-
-function writeResult(res, fn) {
-  try {
-    send(res, 200, "application/json", JSON.stringify(fn()));
-  } catch (err) {
-    const status = err?.code === "NOT_FOUND" ? 404 : 400;
-    send(res, status, "application/json", JSON.stringify({ error: String(err?.message || err) }));
-  }
-}
-
-// Source mutations answer with the structured { error: { code, message } } shape portalPostJson
-// preserves, because the dialog branches on codes such as INTENT_REQUIRED and DUPLICATE_SOURCE.
-function postRoute(path, run) {
-  return {
-    method: "POST",
-    path,
-    handler: (req, res, { params, handlers }) => {
-      readJsonBody(req, (body, err) => {
-        if (err) return send(res, 400, "application/json", JSON.stringify({ error: "invalid JSON body" }));
-        const success = (result) => {
-          send(res, 200, "application/json", JSON.stringify(result));
-        };
-        const failure = (error) => {
-          const status = error?.code === "NOT_FOUND" ? 404 : 400;
-          send(res, status, "application/json", JSON.stringify({ error: { code: error?.code || "INVALID_SOURCE", message: String(error?.message || error) } }));
-        };
-        try {
-          const result = run(handlers, body || {}, params);
-          if (result && typeof result.then === "function") result.then(success, failure);
-          else success(result);
-        } catch (error) { failure(error); }
-      });
-      return true;
-    },
-  };
-}
 
 export const repositoriesRoutes = defineRoutes([
   {
@@ -116,3 +80,39 @@ export const repositoriesRoutes = defineRoutes([
     },
   },
 ]);
+
+function writeResult(res, fn) {
+  try {
+    send(res, 200, "application/json", JSON.stringify(fn()));
+  } catch (err) {
+    const status = err?.code === "NOT_FOUND" ? 404 : 400;
+    send(res, status, "application/json", JSON.stringify({ error: String(err?.message || err) }));
+  }
+}
+
+// Source mutations answer with the structured { error: { code, message } } shape portalPostJson
+// preserves, because the dialog branches on codes such as INTENT_REQUIRED and DUPLICATE_SOURCE.
+function postRoute(path, run) {
+  return {
+    method: "POST",
+    path,
+    handler: (req, res, { params, handlers }) => {
+      readJsonBody(req, (body, err) => {
+        if (err) return send(res, 400, "application/json", JSON.stringify({ error: "invalid JSON body" }));
+        const success = (result) => {
+          send(res, 200, "application/json", JSON.stringify(result));
+        };
+        const failure = (error) => {
+          const status = error?.code === "NOT_FOUND" ? 404 : 400;
+          send(res, status, "application/json", JSON.stringify({ error: { code: error?.code || "INVALID_SOURCE", message: String(error?.message || error) } }));
+        };
+        try {
+          const result = run(handlers, body || {}, params);
+          if (result && typeof result.then === "function") result.then(success, failure);
+          else success(result);
+        } catch (error) { failure(error); }
+      });
+      return true;
+    },
+  };
+}

@@ -143,8 +143,7 @@ export const telemetryRoutes = defineRoutes([
 
   // --- Dedicated high-dimensional comparison endpoint ------------------------------------------
   // Kept separate from /api/data (which every panel polls every 5s) so an Analysis-explorer
-  // interaction doesn't inflate the hot polling payload — plan: "Add a dedicated endpoint for
-  // high-dimensional comparisons rather than inflating /api/data for every explorer interaction."
+  // interaction does not inflate the hot polling payload.
   {
     method: "POST",
     path: "/api/telemetry/analysis",

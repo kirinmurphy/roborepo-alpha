@@ -22,7 +22,7 @@ import {
 
 // The canonical repository a root belongs to, or null when it is not a repository. Identity comes
 // from the same resolver Runtime uses, so a repository found by both a folder and auto-discovery is
-// one record (§3). A plans-only folder outside any Git checkout gets an opaque local id, exactly as
+// one record. A plans-only folder outside any Git checkout gets an opaque local id, exactly as
 // the Plans scan has always treated such folders.
 export function identifyRepositoryRoot(root, { fsApi = fs } = {}) {
   const resolved = resolveProjectIdentity(root, "repository-source", { fsApi });

@@ -132,6 +132,32 @@ export function labelFromId(value) {
   return value.replace(/[-_]+/g, " ").replace(/\b\w/g, (s) => s.toUpperCase());
 }
 
+// The escape hatch for placement the mount evidence cannot see. classifyComposeOwnership reads bind
+// mounts, so a stack that depends on a checkout through a mechanism no mount reveals — a .env naming
+// a path, a host-network service — is classified on incomplete evidence. This overrides it.
+//
+// Two forms, deliberately not three: "shared" states the stack belongs to no single checkout, and an
+// absolute path names the checkout it does belong to. There is no manual "unverified" because that
+// value means "no evidence was found", which is an observation the user cannot assert.
+export function safeComposeOwnership(value, label) {
+  if (value === "shared") return value;
+  if (typeof value !== "string" || !value.startsWith("/") || CONTROL_CHARS.test(value)) {
+    throw new Error(`${label} must be "shared" or an absolute checkout path`);
+  }
+  return safeStoredAbsolutePath(value, label);
+}
+
+// Shape check for a path already in the settings file. New input goes through the repositories
+// domain's stricter safeAbsolutePath (settings.mjs), which also rejects traversal segments; stored
+// values are not held to that rule because loadSettings throws on any invalid value, and a
+// `..` path saved before input was checked would otherwise stop every Runtime snapshot.
+export function safeStoredAbsolutePath(value, label) {
+  if (typeof value !== "string" || !value.startsWith("/") || CONTROL_CHARS.test(value)) {
+    throw new Error(`${label} must be an absolute path`);
+  }
+  return value;
+}
+
 function validateProjects(projects) {
   if (!projects || typeof projects !== "object" || Array.isArray(projects)) throw new Error("settings projects must be an object");
   for (const [identity, project] of Object.entries(projects)) {
@@ -218,31 +244,9 @@ function validateComposeProjects(composeProjects) {
     if (project.name != null) safeLabel(project.name, "compose project name");
     if (project.favorite != null) safeBoolean(project.favorite, "compose project favorite");
     if (project.hidden != null) safeBoolean(project.hidden, "compose project hidden");
-    if (project.repoPath != null) safeAbsolutePath(project.repoPath, "compose project repoPath");
+    if (project.repoPath != null) safeStoredAbsolutePath(project.repoPath, "compose project repoPath");
     if (project.ownership != null) safeComposeOwnership(project.ownership, "compose project ownership");
   }
-}
-
-// The escape hatch for placement the mount evidence cannot see. classifyComposeOwnership reads bind
-// mounts, so a stack that depends on a checkout through a mechanism no mount reveals — a .env naming
-// a path, a host-network service — is classified on incomplete evidence. This overrides it.
-//
-// Two forms, deliberately not three: "shared" states the stack belongs to no single checkout, and an
-// absolute path names the checkout it does belong to. There is no manual "unverified" because that
-// value means "no evidence was found", which is an observation the user cannot assert.
-export function safeComposeOwnership(value, label) {
-  if (value === "shared") return value;
-  if (typeof value !== "string" || !value.startsWith("/") || CONTROL_CHARS.test(value)) {
-    throw new Error(`${label} must be "shared" or an absolute checkout path`);
-  }
-  return safeAbsolutePath(value, label);
-}
-
-export function safeAbsolutePath(value, label) {
-  if (typeof value !== "string" || !value.startsWith("/") || CONTROL_CHARS.test(value)) {
-    throw new Error(`${label} must be an absolute path`);
-  }
-  return value;
 }
 
 function validateAliases(aliases) {

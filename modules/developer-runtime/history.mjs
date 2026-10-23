@@ -43,18 +43,7 @@ export function historyPathFor(stateRoot) {
 // History is read whole, on demand, filtered by key — there is no cursor to hold, and inventing one
 // to satisfy that signature would use the helper against its stated design.
 export function readHistoryEvents({ stateRoot, fsApi = fs } = {}) {
-  let raw;
-  try {
-    raw = fsApi.readFileSync(historyPathFor(stateRoot), "utf8");
-  } catch {
-    return [];
-  }
-  const events = [];
-  for (const line of raw.split("\n")) {
-    const event = parseEvent(line);
-    if (event) events.push(event);
-  }
-  return events;
+  return readHistoryLines({ stateRoot, fsApi }).map(parseEvent).filter(Boolean);
 }
 
 // Append a batch in a single write. This is the in-memory write queue: one
@@ -103,15 +92,17 @@ export function compactHistory({
   const verdict = measureLog({ filePath, policy, now, fsApi });
   if (!verdict.act) return false;
 
-  const events = readHistoryEvents({ stateRoot, fsApi });
-  if (!events.length) return false;
-
-  // measureLog counts physical lines, including any that failed to parse; readHistoryEvents drops
-  // those. Clamping keeps a corrupt line from shifting the cut into live events — the retained set
-  // can only ever be too generous, never too small.
-  const dropped = Math.min(verdict.dropCount, events.length - 1);
-  const kept = events.slice(dropped);
-  if (kept.length === events.length) return false;
+  // measureLog counts nonblank physical lines, including malformed records. Apply its cut before
+  // parsing so a corrupt prefix cannot shift the boundary into valid recent events.
+  const lines = readHistoryLines({ stateRoot, fsApi }).filter((line) => line.trim());
+  const kept = lines.slice(verdict.dropCount).map(parseEvent).filter(Boolean);
+  if (!kept.length) {
+    // The measurement preserves the final physical line, which may be corrupt. Preserve the last
+    // valid event as well, matching the store's rule that compaction must not erase all history.
+    const newest = lines.map(parseEvent).findLast(Boolean);
+    if (!newest) return false;
+    kept.push(newest);
+  }
 
   try {
     const dir = path.dirname(filePath);
@@ -152,6 +143,14 @@ function maybeCompact({ stateRoot, fsApi, now, retentionDays }) {
 
 function serialize(events) {
   return events.length ? events.map((event) => JSON.stringify(event)).join("\n") + "\n" : "";
+}
+
+function readHistoryLines({ stateRoot, fsApi }) {
+  try {
+    return fsApi.readFileSync(historyPathFor(stateRoot), "utf8").split("\n");
+  } catch {
+    return [];
+  }
 }
 
 function parseEvent(line) {

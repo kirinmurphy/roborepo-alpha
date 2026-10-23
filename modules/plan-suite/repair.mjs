@@ -47,24 +47,6 @@ export function hasNoFrontmatter(markdown) {
   return findings.some((item) => item.code === "MISSING_FRONTMATTER");
 }
 
-function walkPlanFiles(dir, files) {
-  let entries = [];
-  try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return;
-  }
-  for (const entry of entries) {
-    if (entry.name.startsWith(".") || entry.name.endsWith("~") || entry.name.endsWith(".swp")) continue;
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      walkPlanFiles(full, files);
-      continue;
-    }
-    if (entry.isFile() && entry.name.endsWith(".md")) files.push(full);
-  }
-}
-
 // Scans every repository under `discoveryRoot` (the repository domain's bounded walk, so the same
 // eligibility rule as a directory source: a `.git` or `docs/plans` dir) for plan docs with zero
 // frontmatter.
@@ -97,4 +79,22 @@ export function repairPlansMissingFrontmatter(discoveryRoot, { dryRun = false } 
     repaired.push(item);
   }
   return { repaired, errors };
+}
+
+function walkPlanFiles(dir, files) {
+  let entries = [];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (entry.name.startsWith(".") || entry.name.endsWith("~") || entry.name.endsWith(".swp")) continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      walkPlanFiles(full, files);
+      continue;
+    }
+    if (entry.isFile() && entry.name.endsWith(".md")) files.push(full);
+  }
 }

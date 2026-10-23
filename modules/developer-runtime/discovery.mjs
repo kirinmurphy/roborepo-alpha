@@ -5,15 +5,16 @@ import { createScanCache } from "../repositories/scan-cache.mjs";
 import { defaultRunGit } from "../repositories/git-exec.mjs";
 import { collectGitContext, collectGitForRoots } from "./git.mjs";
 import { attachHealth, disambiguateAssociationKeys, toInstance } from "./instance-shape.mjs";
-import { defaultRunCommand, discoverListenerRecords } from "./listeners.mjs";
+import { defaultRunCommand } from "./command-exec.mjs";
+import { discoverListenerRecords } from "./listeners.mjs";
 import { originCandidatesForListener } from "./origin.mjs";
 import { probeHttpCandidate } from "./http-probe.mjs";
 import { resolveProjectAlias } from "./settings.mjs";
-import { discoverDockerRecords, defaultRunCommand as defaultRunDockerCommand } from "./docker.mjs";
-import { collectProcessMetrics, defaultRunCommand as defaultRunPsCommand } from "./process-metrics.mjs";
+import { discoverDockerRecords } from "./docker.mjs";
+import { collectProcessMetrics } from "./process-metrics.mjs";
 import { resolveProvenance } from "./provenance.mjs";
-import { collectDockerStats, defaultRunCommand as defaultRunDockerStatsCommand } from "./docker-stats.mjs";
-import { collectDockerMounts, defaultRunCommand as defaultRunDockerMountsCommand } from "./docker-mounts.mjs";
+import { collectDockerStats } from "./docker-stats.mjs";
+import { collectDockerMounts } from "./docker-mounts.mjs";
 
 const PROBE_CONCURRENCY = 8;
 
@@ -33,11 +34,11 @@ export async function discoverInstances(options = {}) {
     // Deliberately separate from the listener `runCommand`: existing callers/tests configure
     // `runCommand` to answer `lsof`, and must not also have to answer `docker`/`ps` invocations they
     // never asked to opt into. Passing `runCommand` here only takes effect for callers who
-    // explicitly provide these two options.
-    runDockerCommand = defaultRunDockerCommand,
-    runPsCommand = defaultRunPsCommand,
-    runDockerStatsCommand = defaultRunDockerStatsCommand,
-    runDockerMountsCommand = defaultRunDockerMountsCommand,
+    // explicitly provide the corresponding command options.
+    runDockerCommand = defaultRunCommand,
+    runPsCommand = defaultRunCommand,
+    runDockerStatsCommand = defaultRunCommand,
+    runDockerMountsCommand = defaultRunCommand,
     previousHealth = new Map(),
     now = new Date(),
     settings = null,
@@ -172,73 +173,16 @@ export async function discoverInstances(options = {}) {
   return { capabilities, warnings, instances, composeProjectGit };
 }
 
-// Attach canonical repository fields alongside the existing identity contract. repositoryId is the
-// portable git id (or opaque local id) for git/path roots; null for process-only observations. A
-// worktree resolves to the same repositoryId as its primary clone (readGitRemote reads commondir)
-// while keeping its own rootId so worktree-specific metadata is retained. Additive — existing
-// consumers of {identity, identityKind, confidence, projectRoot, evidence} are unaffected.
-function withRepositoryFields(identity) {
-  return {
-    ...identity,
-    repositoryId: canonicalRepositoryId(identity),
-    rootId: identity.projectRoot ? computeRootId(identity.projectRoot) : null,
-  };
-}
-
-// One collectGit call per distinct associated repoPath, not per container — several compose
-// projects could theoretically point at the same path, and a project with no association at all
-// (the common case) costs nothing here. repositoryId is resolved alongside git so the compose
-// card's repo link can reuse providerUrlForRepositoryId the same way a regular project card does.
+// Decide checkout ownership for a whole Compose project from its bind mounts. The working_dir
+// label can identify the repository, but does not prove which checkout supplies the stack's files:
+// placing by it would put a shared database under whichever worktree started it, and
+// `docker compose down` from that row would stop it for every checkout. Named volumes provide no
+// checkout evidence.
 //
-// A manual settings.composeProjects[name].repoPath always wins over the auto-derived working_dir
-// label when both exist — repoPath is a deliberate user decision (see settings-schema.mjs) and is
-// never silently overridden by a guess. When no manual repoPath exists,
-// com.docker.compose.project.working_dir (already present on every container from that project's
-// `docker ps` output, no extra subprocess call) is tried instead, but only promoted to a resolved
-// identity when resolveIdentity actually found a `.git` (identityKind "git" or "path") —
-// "process" is resolveProjectIdentity's safe fallback for "no .git found at all", and promoting
-// that would make every compose project pointed at a non-repo directory look resolved. The
-// auto-derived path and its resolved identity are never written to settings — only repoPath itself
-// is a durable, deliberate association; this stays exactly as ephemeral/scan-cached as git context
-// already is.
-// A third tier runs when working_dir is absent too: the host paths a project's containers bind-mount
-// (see docker-mounts.mjs). Containers started outside `docker compose up` — Supabase CLI is the
-// motivating case — carry `com.docker.compose.project` but no working_dir, yet still mount paths
-// inside the project directory, so walking up from a bind source finds the same `.git`.
-//
-// This tier is deliberately the weakest and is marked "auto-bind" rather than "auto" so consumers
-// can present it as lower-provenance. Unlike working_dir, which Compose guarantees IS the project
-// directory, a bind source guarantees nothing — it could point at a cache dir or a shared volume.
-// Two guards keep it honest: the same identityKind !== "process" promotion rule the working_dir tier
-// uses, and an agreement requirement (below) when a project's containers disagree about which repo
-// they belong to.
-// Which checkout, if any, a Compose stack belongs to — decided by what its containers actually
-// depend on rather than by where `docker compose up` happened to be typed.
-//
-// BIND MOUNTS DECIDE. A bind mount is a hard dependency on one checkout's files: the stack cannot
-// run without them. A named volume is persisted state that says nothing about which checkout is in
-// play, so it is ignored for placement (bindSources already drops it).
-//
-// working_dir is deliberately NOT consulted here. It still resolves WHICH REPOSITORY a stack
-// belongs to (tier 2 above, unchanged), but it must never decide WHICH CHECKOUT — that is the bug
-// this exists to fix. A shared database started from whichever worktree you happened to be in would
-// otherwise render under that worktree, and `docker compose down` from that row would stop the
-// database every other checkout is using.
-//
-// Classified per Compose PROJECT, never per container: a stack is one `docker compose down` unit.
-//
-// The three outcomes and why they differ:
-//   owned       - mounts land in exactly one checkout; that checkout's files are the dependency.
-//                 Mounts that land in NO checkout do not weaken this: real stacks routinely bind
-//                 /var/run/docker.sock, /etc/localtime, or a log directory, and requiring every
-//                 mount to be inside the checkout would misclassify most ordinary stacks as shared.
-//   shared      - mounts land in two or more checkouts (they compete), or bind mounts exist but none
-//                 resolves to any known checkout — the repository root itself, or a sibling path.
-//                 A positive finding that this is not checkout-specific.
-//   unverified  - no bind mounts at all (named volumes only); an ABSENCE of evidence, not a finding
-//
-// shared and unverified render in the same place but are not the same claim, so the evidence kind
-// travels with the result and the card can distinguish them.
+// One matching checkout means owned; competing checkouts or no matching checkout means shared.
+// Unmatched infrastructure mounts do not weaken a single match. No bind mounts means unverified,
+// which renders with shared services while retaining the distinction between absent and conflicting
+// evidence. A Compose project stays one unit because stopping it affects all its containers.
 export function classifyComposeOwnership(mountPaths, checkoutRoots) {
   const paths = (mountPaths || []).filter(Boolean);
   const roots = (checkoutRoots || []).filter((r) => r && r.path);
@@ -289,6 +233,19 @@ export function classifyComposeOwnership(mountPaths, checkoutRoots) {
   return { ownership: "shared", evidence: { kind: "repo-root", checkoutPaths: [] } };
 }
 
+// Attach canonical repository fields alongside the existing identity contract. repositoryId is the
+// portable git id (or opaque local id) for git/path roots; null for process-only observations. A
+// worktree resolves to the same repositoryId as its primary clone (readGitRemote reads commondir)
+// while keeping its own rootId so worktree-specific metadata is retained. Additive — existing
+// consumers of {identity, identityKind, confidence, projectRoot, evidence} are unaffected.
+function withRepositoryFields(identity) {
+  return {
+    ...identity,
+    repositoryId: canonicalRepositoryId(identity),
+    rootId: identity.projectRoot ? computeRootId(identity.projectRoot) : null,
+  };
+}
+
 // Both sides of the placement comparison reduced to one spelling. Pure string work — no realpath()
 // call, which would put a filesystem hit per mount per checkout on the poll's hot path and would
 // still be wrong for a checkout that has since been deleted.
@@ -304,6 +261,12 @@ function comparablePath(value) {
   return candidate.length > 1 ? candidate.replace(/\/+$/, "") : candidate;
 }
 
+// Resolve each Compose project's repository: explicit repoPath first, working_dir second, then
+// bind mounts only when the first two fail. working_dir counts only when it reaches a `.git`:
+// "process" is the resolver's no-repository fallback, and promoting it would make every stack
+// started from a non-repo directory look resolved. Bind mounts must agree on one repository;
+// otherwise leave it unresolved, and mark a match "auto-bind" because a bind source is weaker
+// evidence than working_dir. Reuse the per-scan Git cache and return mounts for the ownership pass.
 async function collectGitForComposeProjects(containers, settings, {
   collectGit,
   scanCache,
@@ -334,10 +297,7 @@ async function collectGitForComposeProjects(containers, settings, {
         byProjectName.set(name, {
           git: await collectGit(repoPath, { scanCache, runGit }),
           repositoryId: canonicalRepositoryId(identity),
-          // A compose stack is tied to whichever checkout `docker compose up` was actually run
-          // from — worktrees are not guaranteed to share one stack (different branches can run
-          // different docker-compose.yml files, or a sandboxed worktree its own isolated stack) —
-          // so this needs the same per-checkout rootId a regular project gets, not a repo-wide one.
+          // An explicit repoPath names one checkout, so retain its rootId for manual placement.
           rootId: identity.projectRoot ? computeRootId(identity.projectRoot) : null,
           // The checkout directory this stack resolved to. Carried so the caller can persist the
           // rootId -> path mapping for a repository whose only presence is containers — without it
@@ -370,8 +330,8 @@ async function collectGitForComposeProjects(containers, settings, {
     }),
   );
 
-  // Only projects the first two tiers could not resolve are inspected, so the common case adds no
-  // subprocess at all — and the ones that do are batched into a single `docker inspect`.
+  // Only projects the first two tiers could not resolve are inspected here, batched into a single
+  // `docker inspect`. The ownership pass inspects the remaining containers and reuses these results.
   if (!collectMounts || needMounts.size === 0) return { byProjectName, mountsByContainerId: new Map() };
   const candidates = containers.filter((c) => needMounts.has(c.composeProject) && c.containerId);
   if (!candidates.length) return { byProjectName, mountsByContainerId: new Map() };
@@ -474,20 +434,11 @@ async function classifyComposeProjects(containers, byProjectName, {
     const verdict = classifyComposeOwnership(mountPaths, roots);
     resolved.ownership = verdict.ownership;
     resolved.ownershipEvidence = verdict.evidence;
-    // rootId is set ONLY for `owned`, so a consumer that ignores the new fields degrades to "shared
-    // stacks have no checkout" rather than to a wrong one. This is the line that fixes the original
-    // bug: a working_dir-derived rootId no longer survives into a stack that mounts say is shared.
+    // Only owned stacks carry a checkout rootId; shared and unverified stacks must not inherit
+    // checkout placement from the working_dir used during repository resolution.
     resolved.rootId = verdict.ownership === "owned" ? verdict.rootId : null;
-    // The CHECKOUT-SPECIFIC half of git goes with rootId, for the same reason. Branch, HEAD, dirty,
-    // and ahead/behind are facts about one working tree, so a stack that mounts several has no
-    // business reporting any of them: the card showed "main branch" on a shared group whose whole
-    // claim is that it belongs to no single checkout, inherited from whichever checkout happened to
-    // resolve the repository.
-    //
-    // `root` and `provider` survive, because those describe the REPOSITORY, which a shared stack
-    // does still belong to — that is how it gets grouped onto a repository card at all. Nulling the
-    // whole object also erased the repo root (see developer-runtime-compose-identity-check's "git context
-    // is collected against the repo ROOT" case), which is a different claim from "which checkout".
+    // Shared stacks retain repository-level root/provider data, but branch, HEAD, dirty state,
+    // and ahead/behind describe a single checkout and cannot be claimed here.
     if (verdict.ownership !== "owned" && resolved.git) {
       const { root, provider } = resolved.git;
       resolved.git = { root, provider };

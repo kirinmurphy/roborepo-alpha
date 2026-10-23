@@ -26,16 +26,10 @@ const execFileAsync = promisify(execFile);
 export const GIT_TIMEOUT_MS = 1500;
 export const GIT_MAX_BUFFER = 1024 * 1024;
 
-// Allow-list of Git subcommands this seam will run. Both are read-only and neither touches the
-// network. This exists so that "never fetch remotes, never invoke hooks" is enforced by the code
-// rather than by everyone remembering it — adding `fetch` here has to be a deliberate act.
-// Deliberately a strict allow-list, not a deny-list of known-dangerous verbs: a subcommand nobody
-// considered must be refused by default, since we run these against arbitrary repositories on the
-// user's machine. Every entry is a local read that neither mutates the repo nor contacts a remote.
-//   status, rev-list        working-tree state and ahead/behind
-//   symbolic-ref, rev-parse resolving the base branch (origin/HEAD, then main/master)
-//   merge-base              where a branch last shared history with its base
-//   log                     commit timestamps, for drift measured in time rather than commits
+// Local reads allowed by defaultRunGit and defaultRunGitSync. Unknown subcommands are refused
+// because polling scans arbitrary repositories without requesting mutations or network access.
+// Add an entry only for a local read that neither mutates the repository nor contacts a remote.
+// Explicit mutation callers use runGitProcess or runGitProcessSync, which bypass this list.
 export const GIT_READONLY_COMMANDS = new Set([
   "status",
   "rev-list",

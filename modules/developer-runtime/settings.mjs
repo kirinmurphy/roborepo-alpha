@@ -12,7 +12,6 @@ import {
   normalizeMatch,
   normalizeRoutePath,
   resolveProjectAlias,
-  safeAbsolutePath,
   safeBoolean,
   safeId,
   safeIdentity,
@@ -21,6 +20,7 @@ import {
   validateLegacySettings,
   validateSettings,
 } from "./settings-schema.mjs";
+import { safeAbsolutePath } from "../repositories/schema.mjs";
 
 export {
   SETTINGS_VERSION,

@@ -225,7 +225,7 @@ function applySnapshot(snapshot) {
   // The URL's tab could only be checked once the lifecycle model arrived.
   state.selectedLifecycle = lifecycleFromSearchParams(new URLSearchParams(location.search));
   portalSetUpdatedAt();
-  // One call to action at a time (pljvmyh §7): the package banner while plan-write is disabled,
+  // One call to action at a time: the package banner while plan-write is disabled,
   // then the shared repository empty state until a repository is known; the header only once there
   // is something to monitor.
   plansHeaderEl.hidden = !snapshot.planWritePackage.enabled || tmpl.plansOnboardingStep(snapshot) === "no-repositories";

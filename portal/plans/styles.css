@@ -1,9 +1,4 @@
-/* Breakpoints used on this page — kept to these values everywhere below (no build step here,
- * so no @custom-media/var() substitution in media queries; reusing fixed values is the plain-CSS
- * equivalent):
- *   960px  — wide: drawer/filter-row go single-column below it.
- * The lifecycle row's collapse point lives in app.js, where it mounts the shared overflow nav.
- */
+/* The lifecycle collapse point is shared with app.js; smaller breakpoints adjust filters and empty states. */
 main {
   /* Matches the grid gap, so the filter tags row has the same space above and below it. */
   padding-top: 14px;
@@ -379,7 +374,6 @@ plan-card {
 
   .filter-row label {
     display: none;
-    /* grid-template-columns: 1fr; */
   }
 }
 /* Overrides base.css's .spinner: smaller, green (not accent), inline next to button text. */

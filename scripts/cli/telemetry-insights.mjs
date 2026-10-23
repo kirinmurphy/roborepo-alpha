@@ -11,8 +11,7 @@
 // comparison), so their confidence is derived from sample size alone (MIN_CALLS-scaled), and
 // `next_action` is a short deterministic template per finding shape — never free LLM text.
 
-const fmt = (n) => Number(n || 0).toLocaleString("en-US");
-const pct = (n) => Math.round(n * 100);
+import { clipText, formatCount } from "./telemetry-format.mjs";
 
 // Minimum calls before a per-call cost comparison is trustworthy (avoid concluding from 2 samples).
 const MIN_CALLS = 20;
@@ -41,8 +40,8 @@ export function deriveInsights(report) {
       const cheaper = gap > 0; // MCP cheaper than native
       out.push({
         severity: "info",
-        headline: `${pkg.package} (MCP) is ${pct(Math.abs(gap))}% ${cheaper ? "cheaper" : "more expensive"} per call than native read/grep`,
-        detail: `${fmt(pkg.avg_tokens)} vs ${fmt(nativeRead.avg_tokens)} tok/call (${fmt(pkg.calls)} ${pkg.package} · ${fmt(nativeRead.calls)} native calls)`,
+        headline: `${pkg.package} (MCP) is ${formatPercent(Math.abs(gap))}% ${cheaper ? "cheaper" : "more expensive"} per call than native read/grep`,
+        detail: `${formatCount(pkg.avg_tokens)} vs ${formatCount(nativeRead.avg_tokens)} tok/call (${formatCount(pkg.calls)} ${pkg.package} · ${formatCount(nativeRead.calls)} native calls)`,
         metric: Math.abs(gap),
         kind: "mcp_vs_native",
         sample_size: pkg.calls + nativeRead.calls,
@@ -59,7 +58,7 @@ export function deriveInsights(report) {
       out.push({
         severity: "high",
         headline: `${g.group} is ${Math.round(g.lift)}× more likely to drive a token spike than normal — tail risk`,
-        detail: `appears in ${pct(g.spike_share)}% of spike turns; rare but blows up context when used`,
+        detail: `appears in ${formatPercent(g.spike_share)}% of spike turns; rare but blows up context when used`,
         metric: g.lift,
         kind: "spike_tail_risk",
         sample_size: report.spike_anatomy?.spike_count ?? 0,
@@ -74,8 +73,8 @@ export function deriveInsights(report) {
   if (top && totalTokens > 0 && top.total_tokens / totalTokens >= DOMINANT_SHARE) {
     out.push({
       severity: "info",
-      headline: `${top.group} is your dominant token cost — ${pct(top.total_tokens / totalTokens)}% of all tool tokens`,
-      detail: `${fmt(top.total_tokens)} tok across ${fmt(top.calls)} calls (${fmt(top.avg_tokens)}/call)`,
+      headline: `${top.group} is your dominant token cost — ${formatPercent(top.total_tokens / totalTokens)}% of all tool tokens`,
+      detail: `${formatCount(top.total_tokens)} tok across ${formatCount(top.calls)} calls (${formatCount(top.avg_tokens)}/call)`,
       metric: top.total_tokens / totalTokens,
       kind: "dominant_cost",
       sample_size: top.calls,
@@ -93,7 +92,7 @@ export function deriveInsights(report) {
     out.push({
       severity: "high",
       headline: `${loops.length} runaway loop${loops.length > 1 ? "s" : ""} detected — mostly ${topTool}`,
-      detail: `worst: ${worst.tool} ×${worst.max_repeat} in ${worst.repo}${worst.context?.title ? ` ("${clip(worst.context.title, 50)}")` : ""}`,
+      detail: `worst: ${worst.tool} ×${worst.max_repeat} in ${worst.repo}${worst.context?.title ? ` ("${clipText(worst.context.title, 50)}")` : ""}`,
       metric: worst.max_repeat,
       kind: "runaway_loop",
       sample_size: loops.length,
@@ -111,7 +110,7 @@ export function deriveInsights(report) {
     const afterShare = Math.round((worstReg.after_share ?? 0) * 100);
     out.push({
       severity: "warn",
-      headline: `${worstReg.group} calls got ${pct(worstReg.delta_tokens / worstReg.before_avg_tokens)}% heavier: ${fmt(worstReg.before_avg_tokens)} → ${fmt(worstReg.after_avg_tokens)} tok/call`,
+      headline: `${worstReg.group} calls got ${formatPercent(worstReg.delta_tokens / worstReg.before_avg_tokens)}% heavier: ${formatCount(worstReg.before_avg_tokens)} → ${formatCount(worstReg.after_avg_tokens)} tok/call`,
       detail: `${worstReg.group} is ${afterShare}% of tool tokens in the later half vs ${beforeShare}% in the earlier half`,
       metric: worstReg.delta_tokens,
       kind: "midpoint_regression",
@@ -125,8 +124,8 @@ export function deriveInsights(report) {
   if (heaviest && heaviest.avg_tokens >= 3000) {
     out.push({
       severity: "info",
-      headline: `${heaviest.tool} is your heaviest call at ${fmt(heaviest.avg_tokens)} tok each`,
-      detail: `${fmt(heaviest.calls)} calls, up to ${fmt(heaviest.max_tokens)} tok in one — scope it tighter`,
+      headline: `${heaviest.tool} is your heaviest call at ${formatCount(heaviest.avg_tokens)} tok each`,
+      detail: `${formatCount(heaviest.calls)} calls, up to ${formatCount(heaviest.max_tokens)} tok in one — scope it tighter`,
       metric: heaviest.avg_tokens,
       kind: "heaviest_tool",
       sample_size: heaviest.calls,
@@ -147,6 +146,32 @@ export function deriveInsights(report) {
 // philosophy, scaled down since these are per-call rather than per-session findings.
 const STRONG_SIGNAL_MIN_CALLS = MIN_CALLS * 2;
 
+// Compact text summary of the deterministic findings + key facts, for the optional LLM deeper-read.
+// Only computed facts go out — never raw spool lines, prompts, or tool results.
+export function insightsSummary(report) {
+  const lines = [];
+  lines.push(`captures: ${report.capture_count}, sessions: ${report.sessions?.length || 0}`);
+  lines.push("cost per call by group (approx tokens):");
+  for (const g of report.group_cost || []) lines.push(`  ${g.group}: ${g.avg_tokens}/call, ${g.calls} calls, ${g.total_tokens} total`);
+  if (report.spike_anatomy?.groups?.length) {
+    lines.push("spike anatomy (lift vs normal):");
+    for (const g of report.spike_anatomy.groups.slice(0, 6)) lines.push(`  ${g.group}: lift ${g.lift ?? "only-in-spikes"}, ${formatPercent(g.spike_share)}% of spikes`);
+  }
+  if (report.loops?.length) lines.push(`loops: ${report.loops.length} (worst ${report.loops[0].tool} x${report.loops[0].max_repeat} in ${report.loops[0].repo})`);
+  lines.push("deterministic findings:");
+  for (const f of deriveInsights(report)) lines.push(`  [${f.severity}] ${f.headline} — ${f.detail}`);
+  return lines.join("\n");
+}
+
+function indexBy(arr, key) {
+  const m = {};
+  for (const x of arr || []) m[x[key]] = x;
+  return m;
+}
+function formatPercent(value) {
+  return Math.round(value * 100);
+}
+
 // Adds the actionable-finding-contract fields (confidence, analysis_filter_state) to a
 // deterministic finding, on top of its existing severity/headline/detail/metric shape. Every finding
 // that reaches this point already passed its rule's own evidence threshold, so confidence here only
@@ -165,27 +190,3 @@ function attachActionableFields(finding) {
     analysis_filter_state: { kind: finding.kind ?? null },
   };
 }
-
-// Compact text summary of the deterministic findings + key facts, for the optional LLM deeper-read.
-// Only computed facts go out — never raw spool lines, prompts, or tool results.
-export function insightsSummary(report) {
-  const lines = [];
-  lines.push(`captures: ${report.capture_count}, sessions: ${report.sessions?.length || 0}`);
-  lines.push("cost per call by group (approx tokens):");
-  for (const g of report.group_cost || []) lines.push(`  ${g.group}: ${g.avg_tokens}/call, ${g.calls} calls, ${g.total_tokens} total`);
-  if (report.spike_anatomy?.groups?.length) {
-    lines.push("spike anatomy (lift vs normal):");
-    for (const g of report.spike_anatomy.groups.slice(0, 6)) lines.push(`  ${g.group}: lift ${g.lift ?? "only-in-spikes"}, ${pct(g.spike_share)}% of spikes`);
-  }
-  if (report.loops?.length) lines.push(`loops: ${report.loops.length} (worst ${report.loops[0].tool} x${report.loops[0].max_repeat} in ${report.loops[0].repo})`);
-  lines.push("deterministic findings:");
-  for (const f of deriveInsights(report)) lines.push(`  [${f.severity}] ${f.headline} — ${f.detail}`);
-  return lines.join("\n");
-}
-
-function indexBy(arr, key) {
-  const m = {};
-  for (const x of arr || []) m[x[key]] = x;
-  return m;
-}
-function clip(s, n) { return s && s.length > n ? s.slice(0, n) + "…" : (s || ""); }

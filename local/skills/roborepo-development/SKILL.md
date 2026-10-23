@@ -177,6 +177,9 @@ Everything else (the two symlink levels, the layer table) lives in
   `github.com/example/*-fixture` id) without the marker; `updateRegistry` reads the unfiltered file,
   so saving never erases them. It is a marker, not a process flag, because `dev start` adopts a
   portal that is already running. A reader that must see fixtures regardless needs its own read.
+  Runtime's web snapshot (`buildSnapshot` in `scripts/cli/developer-runtime.mjs`) follows the same
+  marker: outside dev mode it also drops running fixture listeners, which never pass through the
+  registry filter.
 - **`web --detach` cold starts are slow.** The portal warms telemetry/developer-runtime views before it
   binds — measured ~29s on a normal dev checkout. `waitForPortalReady` allows 60s for that; do not
   "tidy" it back down to a few seconds or every cold detached start fails while the child goes on

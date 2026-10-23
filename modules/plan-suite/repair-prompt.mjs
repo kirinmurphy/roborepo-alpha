@@ -10,18 +10,6 @@
 // the transition operation (transition.mjs), which re-validates fresh disk content on the next run.
 import { sortBySeverity } from "./findings.mjs";
 
-function capitalize(text) {
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-// Section findings carry the heading names that would satisfy them, so the agent gets the actual
-// accepted vocabulary instead of guessing from one example in the resolution text.
-function acceptedHeadingsNote(item) {
-  const accepted = item.meta?.accepted;
-  if (!Array.isArray(accepted) || accepted.length < 2) return "";
-  return `\n   Accepted headings: ${accepted.map((name) => `"${name}"`).join(", ")}`;
-}
-
 export function buildRepairPrompt({ repository, plan, sourceLifecycle, destinationLifecycle, findings }) {
   const ordered = sortBySeverity(findings);
   const problems = ordered.map((item, index) =>
@@ -54,4 +42,16 @@ export function buildRepairPrompt({ repository, plan, sourceLifecycle, destinati
     `- Run \`roborepo plans validate ${plan.relativePath}\` before reporting done, and list any`,
     "  requirement you could not satisfy along with the reason.",
   ].join("\n");
+}
+
+function capitalize(text) {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+// Section findings carry the heading names that would satisfy them, so the agent gets the actual
+// accepted vocabulary instead of guessing from one example in the resolution text.
+function acceptedHeadingsNote(item) {
+  const accepted = item.meta?.accepted;
+  if (!Array.isArray(accepted) || accepted.length < 2) return "";
+  return `\n   Accepted headings: ${accepted.map((name) => `"${name}"`).join(", ")}`;
 }
