@@ -16,6 +16,7 @@ import { installPackageCommands, removePackageCommands } from "./slash-commands.
 import { cleanupPackageProjections } from "./package-projection-cleanup.mjs";
 import { getHarnessProvider } from "../harnesses/registry.mjs";
 import { hasClaudeCli } from "../harnesses/mcp-claude-cli.mjs";
+import { assertHarnessWriteAllowed } from "./harness-write-guard.mjs";
 
 export const USER_CLAUDE_SETTINGS = rootConfigActive.claude;
 export const USER_CODEX_CONFIG = rootConfigActive.codex;
@@ -368,6 +369,7 @@ export async function enablePackage(rest, _seen = new Set()) {
   }
 
   const dryRun = flags.includes("--dry-run");
+  if (!dryRun) assertHarnessWriteAllowed();
   const reconcile = flags.includes("--reconcile");
   const catalog = loadPackageCatalog({ includeUnavailable: reconcile });
   const pkg = catalog.find((p) => p.id === pkgId);
@@ -495,6 +497,7 @@ export async function enablePackage(rest, _seen = new Set()) {
 
 export async function reconcileEnabledPackages(rest = []) {
   const dryRun = rest.includes("--dry-run");
+  if (!dryRun) assertHarnessWriteAllowed();
   const catalog = loadPackageCatalog({ includeUnavailable: true });
   const enabledIds = effectiveEnabledIds(catalog);
   const known = new Set(catalog.map((pkg) => pkg.id));
@@ -589,6 +592,7 @@ export async function disablePackage(rest) {
   }
 
   const dryRun = flags.includes("--dry-run");
+  if (!dryRun) assertHarnessWriteAllowed();
   const cascade = flags.includes("--cascade");
   const catalog = loadPackageCatalog({ includeUnavailable: true });
   const dependents = enabledDependents(pkg.id, catalog);

@@ -16,6 +16,9 @@ refreshAppRootRecord();
 // gate is gone (first-run routing below replaces it), but the flag stays accepted-and-ignored so
 // existing scripts and shell aliases carrying it keep working instead of failing on an unknown flag.
 const argv = process.argv.slice(2).filter((arg) => arg !== "--no-presets-onboard");
+// Names the outermost command in write-log.mjs entries; child processes (the installer behind
+// `roborepo update`) inherit it instead of logging their own internal invocation.
+process.env.ROBOREPO_WRITE_ACTOR ??= `roborepo ${argv.join(" ")}`.trim();
 const catalog = loadCommandCatalog();
 validateExecutions({ catalog });
 

@@ -134,7 +134,7 @@ current snapshot.
 - `scripts/cli/state-paths.mjs` centralizes state paths below `stateRoot`.
 - `scripts/cli/state-paths.mjs` provides `readJsonState()` and `writeJsonState()`.
 - `scripts/cli/telemetry.mjs::serveCommand()` wires domain handlers into the portal server.
-- The project requires Node 20+ and uses ESM throughout.
+- The project requires Node 22+ and uses ESM throughout.
 - `package.json` exposes targeted checks; `npm test` is the main smoke suite and `npm run check` is full local CI parity.
 
 ## Proposed design

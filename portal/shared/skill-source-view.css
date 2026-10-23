@@ -3,8 +3,12 @@
  * the Config page's #config-modal and the reusable <skill-detail-modal> element used from other
  * pages (e.g. /plans). Linked from every portal page via head-partial.html so both stay in sync
  * without duplicating the ruleset per page. */
+/* minmax(0, 1fr), not the implicit auto track: an auto track grows to its widest item's
+ * min-content, so one unbreakable path in Install and Ownership stretched every section past the
+ * popup's edge. Pinning the track to the container lets pre blocks and tables scroll inside it. */
 .skill-source-view {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
 }
 /* Section fill uses a real lightening mix toward --ink (not just var(--panel)/var(--bg), which
@@ -15,6 +19,9 @@
   border-radius: 6px;
   padding: 12px;
   background: color-mix(in srgb, var(--ink) 5%, var(--panel));
+  /* Install paths and package sources are single unbreakable tokens; wrap them at the edge
+   * rather than overflow. pre keeps white-space: pre, so code blocks still scroll instead. */
+  overflow-wrap: anywhere;
 }
 .source-section > :first-child:not(.source-section-label) {
   margin-top: 0;

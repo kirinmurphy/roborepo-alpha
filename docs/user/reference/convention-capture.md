@@ -2,8 +2,10 @@
 
 Conversations with an agent surface conventions and architectural decisions that are easy to miss.
 When one is confirmed in chat, convention capture has the agent flag it inline so you can see it and
-decide what to do with it. It is one of the Config Control Panel's **Chat-Time Output** toggles and
-is off until you enable it.
+decide what to do with it.
+
+**Archived:** the package now lives in `globals/packages-archived/` and no longer appears on the
+Agents page. `roborepo package enable convention-capture` still turns it on.
 
 It only adds a note to the conversation: it writes no files and starts no workflow.
 

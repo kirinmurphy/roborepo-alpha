@@ -4,6 +4,21 @@ Canonical reference for creating or modifying a RoboRepo package. This documents
 repository behavior — not an aspirational parallel system. If something described here doesn't
 match what you find in code, trust the code and fix this doc.
 
+## Contents
+
+- Package anatomy
+- Manifest schema (`package.config.json`)
+- Resource types
+- Ownership and conflict behavior (current, not aspirational)
+- Source vs. generated boundaries
+- Default-selection semantics
+- Token-cost: computed, not declared
+- Portal metadata
+- The `roborepo package` CLI surface (undocumented elsewhere — this is now the source)
+- Apply behavior (already automatic — do not reintroduce a manual step)
+- Tests
+- Package completion checklist
+
 ## Package anatomy
 
 A package lives at `globals/packages/<id>/`, `id` matching the directory name exactly

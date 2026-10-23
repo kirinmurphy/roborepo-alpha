@@ -12,6 +12,7 @@
     "worktree-lifecycle-check.mjs",
     "core-hook-wiring-check.mjs",
     "permission-rule-home-path-check.mjs",
+    "node-release-health-check.mjs",
     "telemetry-oracle-check.mjs",
     "telemetry-oracle-core-check.mjs",
     "telemetry-oracle-live-check.mjs",

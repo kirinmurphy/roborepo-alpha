@@ -172,67 +172,11 @@ main {
 .bulk-toggle-status {
   font-size: var(--text-2xs);
   color: var(--dim);
-  min-width: 64px; /* reserve room so "applying…" doesn't shift the label/switch */
   text-align: right;
 }
 
 .bulk-toggle-status.error {
   color: var(--danger);
-}
-/* token-cost warnings above the agent files grid. Callout chrome (border/bg/padding/icon) is now
-   owned by the shared <portal-notice> wrapper (portal/shared/base.css); this only lays out the
-   title + list inside it. */
-.token-warnings-body {
-  display: grid;
-  gap: 8px;
-}
-.token-warnings-title {
-  margin: 0;
-  color: var(--ink);
-  font-size: var(--text-sm);
-  font-weight: 600;
-}
-.token-warning-list {
-  display: grid;
-  gap: 6px;
-}
-.token-warning-item {
-  display: grid;
-  grid-template-columns: minmax(180px, 1fr) max-content;
-  align-items: center;
-  gap: 10px;
-}
-.token-warning-label {
-  color: var(--dim);
-  font-size: var(--text-xs);
-}
-.token-warning-label strong {
-  color: var(--ink);
-  font-weight: 700;
-}
-.token-warning-info {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  margin-left: 6px;
-  color: var(--accent);
-  cursor: pointer;
-  font-size: var(--text-2xs);
-}
-.token-warning-tip {
-  position: absolute;
-  left: 0;
-  top: calc(100% + 6px);
-  z-index: 40;
-  width: min(320px, 80vw);
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--panel);
-  box-shadow: 0 14px 32px var(--modal-shadow);
-  color: var(--ink);
-  font-size: var(--text-2xs);
-  line-height: 1.4;
 }
 /* "Label: [chip]" pair used in the popup cost row and (via rowCostChip) inline in item rows */
 .cost-row-item {
@@ -256,22 +200,21 @@ main {
   white-space: nowrap;
   vertical-align: middle;
 }
-.drift-chip.drift-warn {
-  color: var(--warn);
-  border-color: var(--warn-line, var(--warn));
-  background: var(--warn-bg, transparent);
-}
-.drift-chip.drift-info {
-  color: var(--accent);
-  border-color: var(--accent);
-  background: transparent;
-}
 .drift-chip.drift-muted {
   color: var(--dim);
   border-color: var(--line);
   background: transparent;
 }
-/* toggle switch */
+/* toggle switch, with the in-flight spinner to its left */
+.toggle-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.toggle-spinner {
+  flex: none;
+  margin-top: 2px;
+}
 .switch {
   flex: none;
   position: relative;

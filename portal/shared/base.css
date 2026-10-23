@@ -1634,3 +1634,14 @@ option-dropdown {
   flex: none;
   color: var(--dim);
 }
+/* Band under the header: the portal server's code changed on disk after it started (theme.js). */
+.server-restart-notice {
+  border-top: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line));
+  background: color-mix(in srgb, var(--warn) 12%, var(--panel));
+  color: var(--ink);
+  font-size: var(--text-xs);
+  padding: 6px 0;
+}
+.server-restart-notice code {
+  font-size: inherit;
+}

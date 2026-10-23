@@ -23,7 +23,7 @@ flowchart LR
 
 ## Install
 
-Requires **Node.js 20+**.
+Requires **Node.js 22+**.
 
 ```sh
 npm install -g codethings-roborepo-alpha
@@ -236,7 +236,7 @@ The README covers common entry points. See the reference for the full command su
 
 ## Development
 
-Requires **Node.js 20+**.
+Requires **Node.js 22+**.
 
 ```sh
 git clone https://github.com/kirinmurphy/roborepo.git

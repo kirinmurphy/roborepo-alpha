@@ -3,8 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-// package.json declares node >=20 and moduleDir only landed in 20.11, so it is undefined
-// on a supported floor version. The rest of this repo derives the directory this way.
+// The rest of this repo derives the directory this way.
 import { fileURLToPath } from "node:url";
 import { loadPackageCatalog, validatePackageCatalog } from "../cli/package-catalog.mjs";
 import { listPackageCommands } from "../cli/package-commands.mjs";
@@ -84,6 +83,11 @@ assert(sections.get("Writing Assistants"), "Writing Assistants category label sh
 assert(snapshot.behaviorView.findIndex((section) => section.category === "Writing Assistants")
   > snapshot.behaviorView.findIndex((section) => section.category === "Code Conventions"),
 "Writing Assistants should follow Code Conventions");
+assert(snapshot.behaviorView.filter((section) => section.categoryId).slice(0, 2).map((section) => section.category).join(",")
+  === "Code Conventions,Chat-Time Output",
+"Code Conventions and Chat-Time Output should be the first two package sections");
+assert(sections.get("Chat-Time Output").items.slice(0, 2).map((item) => item.id).join(",") === "response-output,feature-verification",
+  "Response Output and Feature Verification should lead Chat-Time Output");
 const tokenItems = sections.get("Token Optimization").items.map((item) => item.id);
 assert(tokenItems.indexOf("caveman") < tokenItems.indexOf("tool-call-optimization"),
   "Caveman Plugin should precede Tool Call Optimization");

@@ -4,6 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { repoRoot } from "../../cli/roots.mjs";
+import { recordConfigWrite } from "../../cli/write-log.mjs";
 
 const PACKAGE_DIRS = [
   path.join(repoRoot, "globals", "packages"),
@@ -104,6 +105,7 @@ export function hooksWriteRemove({ homePath, dryRun = false } = {}) {
   }
 
   fs.writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
+  recordConfigWrite(settingsPath, "withdraw package hooks");
   paths.push(settingsPath);
   return { ok: true, changed: true, providerId: "claude", action: "hooks.write", paths, warnings };
 }

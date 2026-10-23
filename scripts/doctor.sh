@@ -397,6 +397,35 @@ check_portal_pids() {
   fi
 }
 
+# roborepo runs whatever node is on PATH. An end-of-life line or a build behind its line's latest
+# security release is the user's to upgrade, not a broken install, so warnings print even under
+# --quiet and doctor stays green. Needs nodejs.org; offline it reports a skip. Test suites set
+# ROBOREPO_SKIP_NODE_RELEASE_CHECK=1 so their doctor runs stay off the network.
+check_node_release() {
+  if ! command -v node >/dev/null 2>&1; then
+    ok "node unavailable; skipped node release check"
+    return 0
+  fi
+  if [[ "${ROBOREPO_SKIP_NODE_RELEASE_CHECK:-}" == "1" ]]; then
+    ok "node release check skipped (ROBOREPO_SKIP_NODE_RELEASE_CHECK=1)"
+    return 0
+  fi
+  local output status
+  set +e
+  output="$(node "${repo_root}/scripts/cli/node-release-health.mjs" --check 2>&1)"
+  status=$?
+  set -e
+  case "${status}" in
+    0|3) ok "${output}" ;;
+    1)
+      while IFS= read -r line; do
+        [[ -n "${line}" ]] && echo "warn: ${line}"
+      done <<< "${output}"
+      ;;
+    *) fail "node release check crashed: ${output}" ;;
+  esac
+}
+
 check_local_config_repair_candidates() {
   if ! command -v node >/dev/null 2>&1; then
     ok "node unavailable; skipped local config repair check"
@@ -493,12 +522,25 @@ for old_root in agents claude codex skills-local; do
 done
 # Derive the shared-skill list from package skill resources plus system support skills so this
 # never goes stale. The installer fans each skill into ~/.roborepo/skills/<n> and symlinks each
-# present harness view there.
+# present harness view there. An installed cache copy that differs from its source is stale: agents
+# read the old text until the next update refreshes it. That is a warning, not a failure, and it
+# prints even under --quiet because only the user can act on it.
+stale_skill_caches=()
 for skill_src in "${repo_root}"/globals/packages/*/skills/*/SKILL.md "${repo_root}"/globals/system/skills/builtin-support/SKILL.md; do
   [[ -e "${skill_src}" ]] || continue
   skill_name="$(basename "$(dirname "${skill_src}")")"
   check_file "${skill_src#${repo_root}/}"
+  skill_cache="${HOME}/${STATE_DIRNAME}/skills/${skill_name}"
+  if [[ -e "${skill_cache}/.builtin-managed" ]] \
+    && ! diff -rq -x '.builtin-managed' "$(dirname "${skill_src}")" "${skill_cache}" >/dev/null 2>&1; then
+    stale_skill_caches+=("${skill_name}")
+  fi
 done
+if [[ "${#stale_skill_caches[@]}" -gt 0 ]]; then
+  echo "warn: installed skills are out of date (${stale_skill_caches[*]}) — run: roborepo update"
+else
+  ok "installed skill copies match their source"
+fi
 check_readme_skill_coverage
 # Internal (repo-only) skills: source in local/skills/, linked into THIS repo's project-scope
 # dotdirs (.claude/skills, .codex/skills) — never global, never exported.
@@ -526,6 +568,8 @@ if command -v uvx >/dev/null 2>&1; then
 else
   ok "uvx unavailable; skipped (optional, only needed for jcodemunch/jdocmunch MCP setup)"
 fi
+
+check_node_release
 
 if command -v node >/dev/null 2>&1; then
   node "${repo_root}/scripts/build/normalize-claude-settings.mjs" --check "${repo_root}/generated/claude/settings.json" >/dev/null \
@@ -571,6 +615,27 @@ if [[ "${package_mode}" -ne 1 ]]; then
   else
     node "${repo_root}/scripts/cli/main.mjs" skill audit --check || failed=1
   fi
+fi
+
+# Skill structure (skill-structure.mjs): a SKILL.md body under 500 lines, a contents section in any
+# reference over 100 lines, and every reference linked from SKILL.md. Built-in skills fail doctor in
+# a development checkout, where they can be fixed; the user's own workspace skills only warn, and the
+# warnings print even under --quiet because they are the user's to act on.
+if command -v node >/dev/null 2>&1; then
+  if [[ "${package_mode}" -ne 1 ]]; then
+    if structure_output="$(node "${repo_root}/scripts/cli/skill-structure.mjs" --built-in)"; then
+      ok "built-in skill structure"
+    else
+      echo "${structure_output}" >&2
+      failed=1
+    fi
+  fi
+  while IFS= read -r line; do
+    case "${line}" in
+      warn:*) echo "${line}" ;;
+      ok:*) ok "${line#ok: }" ;;
+    esac
+  done < <(node "${repo_root}/scripts/cli/skill-structure.mjs" --workspace)
 fi
 
 if [[ "${check_installed}" -eq 1 ]]; then

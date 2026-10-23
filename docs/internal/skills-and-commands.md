@@ -148,9 +148,9 @@ flag, they can make an ordinary chat request such as "update CLAUDE.md with
 this" or "add this to the plan-write skill."
 
 If capture later grows a stricter multi-step workflow that users should invoke
-by name, make it a skill-backed command. Until then, keep it as a default-on
-observer behavior (the toggleable convention-capture rules package) plus normal
-chat.
+by name, make it a skill-backed command. The observer shipped as the
+convention-capture rules package, now archived under
+`globals/packages-archived/`.
 
 ## Plan And Tighten
 

@@ -74,7 +74,7 @@ flowchart TD
 
 At reviewed commit `72c83be`, RoboRepo:
 
-- uses Node 20+ ESM;
+- uses Node 22+ ESM;
 - uses `node:child_process` in multiple CLI modules;
 - centralizes machine-local paths in `scripts/cli/paths.mjs` and
   `scripts/cli/state-paths.mjs`;

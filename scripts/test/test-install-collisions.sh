@@ -224,7 +224,8 @@ EOF
 
   assert_file_contains "$home_dir/wiz.out" "Applying changes" "wizard runs deferred batch apply after a toggle"
   assert_file_not_contains "$home_dir/wiz.out" "failed:" "wizard toggle applies without error"
-  assert_file_contains "$home_dir/wiz.out" "enable caveman — ok" "wizard applies the toggled package"
+  # Step 1 is Code Conventions; Down + Space toggles its second item, which is off by default.
+  assert_file_contains "$home_dir/wiz.out" "enable javascript-typescript — ok" "wizard applies the toggled package"
   trap - RETURN
   cp "$claude_settings_backup" "$repo_root/generated/claude/settings.json"
 }
@@ -939,20 +940,26 @@ claude_drift_status() {
 test_full_install_drifted_root_config_honors_policy() {
   local home_dir before
 
-  # keep: user edits survive untouched, one candidate is staged, drift stays visible.
+  # keep: the drifted file is backed up and merged like overwrite (the merge keeps every local
+  # value), and a candidate left staged by an earlier release is cleaned up rather than kept.
   home_dir="$(make_home)"
   run_full_install_with_stub_harnesses "$home_dir" "$home_dir/first.out" --on-conflict keep \
     || fail "full install (first run) succeeds" "$home_dir/first.out"
   drift_claude_settings "$home_dir"
+  printf '{"baseline":true}\n' > "$home_dir/.claude/settings_update_20260101-000000.json"
   run_full_install_with_stub_harnesses "$home_dir" "$home_dir/keep.out" --on-conflict keep \
-    || fail "full install keeps a drifted root config" "$home_dir/keep.out"
+    || fail "full install merges a drifted root config under keep" "$home_dir/keep.out"
   assert_file_contains "$home_dir/.claude/settings.json" '"userMarker"' "full install keep preserves the user's edit"
-  [[ "$(claude_drift_status "$home_dir")" == "drifted" ]] \
-    && pass "full install keep leaves drift visible" \
-    || fail "full install keep leaves drift visible" "$home_dir/keep.out"
-  [[ "$(find "$home_dir/.claude" -maxdepth 1 -name 'settings_update_*' | wc -l | tr -d ' ')" == "1" ]] \
-    && pass "full install keep stages exactly one candidate" \
-    || fail "full install keep stages exactly one candidate" "$home_dir/keep.out"
+  assert_file_contains "$home_dir/.claude/settings.json" '"awaySummaryEnabled"' "full install keep merges the missing baseline key back"
+  [[ -n "$(find "$home_dir/.claude" -maxdepth 1 -name 'settings_original_*')" ]] \
+    && pass "full install keep backs up the drifted file" \
+    || fail "full install keep backs up the drifted file" "$home_dir/keep.out"
+  [[ "$(claude_drift_status "$home_dir")" == "clean" ]] \
+    && pass "full install keep records the merged file" \
+    || fail "full install keep records the merged file" "$home_dir/keep.out"
+  [[ -z "$(find "$home_dir/.claude" -maxdepth 1 -name 'settings_update_*')" ]] \
+    && pass "full install keep removes a leftover staged candidate" \
+    || fail "full install keep removes a leftover staged candidate" "$home_dir/keep.out"
 
   # overwrite: the drifted file is backed up, then merged, and recorded clean.
   home_dir="$(make_home)"
@@ -991,11 +998,9 @@ test_full_install_drifted_root_config_honors_policy() {
     || fail "full install abort does not block a clean root config" "$home_dir/abort-clean.out"
 }
 
-# Regression test: export_user_config must NOT record a write when install_copy_item took the
-# "keep" branch, since "keep" leaves home_path exactly as the user had it (stages the repo
-# candidate as a *_update_TIMESTAMP sibling instead). Recording a write there would falsely mark a
-# drifted, user-owned file as builtin-clean, permanently hiding the drift on the next check.
-test_root_config_keep_policy_does_not_record_false_clean() {
+# export_user_config under keep: a drifted root config is backed up, merged (the user's own keys
+# survive), and recorded, so the next check reports it clean instead of leaving a staged candidate.
+test_root_config_keep_policy_merges_drifted_file() {
   local home_dir
   home_dir="$(make_home)"
 
@@ -1012,15 +1017,18 @@ test_root_config_keep_policy_does_not_record_false_clean() {
     && pass "user edit is detected as drift before reinstall" \
     || fail "user edit is detected as drift before reinstall"
 
-  # Reinstall with --on-conflict keep: home_path must stay untouched, and the drift status must
-  # NOT reset to clean, since roborepo did not actually (re)write home_path on this path.
   run_harness_install_args "$home_dir" "$home_dir/second.out" --on-conflict keep
   assert_file_contains "$home_dir/.claude/settings.json" "user.*drifted edit" \
-    "keep policy leaves the user's drifted file untouched"
+    "keep policy keeps the user's own key"
+  assert_file_contains "$home_dir/second.out" "backup: $home_dir/.claude/settings.json" \
+    "keep policy backs up the drifted file before merging"
+  [[ -z "$(find "$home_dir/.claude" -maxdepth 1 -name 'settings_update_*')" ]] \
+    && pass "keep policy stages no candidate" \
+    || fail "keep policy stages no candidate" "$home_dir/second.out"
   HOME="$home_dir" node "$repo_root/scripts/cli/root-config-state.mjs" check claude "$home_dir/.claude/settings.json" \
-    | grep -q "^drifted$" \
-    && pass "keep policy does not falsely clear drift status" \
-    || fail "keep policy does not falsely clear drift status"
+    | grep -q "^clean$" \
+    && pass "keep policy records the merged file" \
+    || fail "keep policy records the merged file"
 }
 
 # Uninstall drift-awareness:
@@ -1226,7 +1234,7 @@ test_cli_entry_points_run_through_symlinked_path
 test_uninstall_stops_repo_owned_processes
 test_idempotency_no_extra_backups
 test_root_config_drift_silent_update_vs_real_collision
-test_root_config_keep_policy_does_not_record_false_clean
+test_root_config_keep_policy_merges_drifted_file
 test_full_install_drifted_root_config_honors_policy
 test_uninstall_preserves_drifted_root_config
 test_uninstall_check_clean_tolerates_drifted_root_config

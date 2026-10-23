@@ -52,11 +52,15 @@ policy:
 | Missing | Copy the baseline | Copy the baseline | Copy the baseline |
 | Clean — matches RoboRepo's last write | Merge the new baseline in | Merge the new baseline in | Merge the new baseline in |
 | Unwritten — a file RoboRepo has never written | Merge: local settings kept, repo additions layered on | Same as `keep` | Stop before writing, if the merge would change the file |
-| Drifted — edited since RoboRepo's last write | Leave the file untouched; stage the candidate as `*_update_TIMESTAMP` | Back up to `*_original_TIMESTAMP`, then merge | Stop before writing |
+| Drifted — changed since RoboRepo's last write | Back up to `*_original_TIMESTAMP`, then merge | Same as `keep` | Stop before writing, if the merge would change the file |
 
 The merge never discards local settings: it keeps every local value and adds repo-only entries.
-Under `keep`, a drifted file stays drifted, so `roborepo config root inspect` keeps reporting it;
-repeated updates stage the candidate only once while it is unchanged.
+That is why `keep` merges a drifted file instead of leaving it alone. Drift is routine for these
+files, because Claude Code and Codex write their own settings into them (a model choice, plugin
+toggles, desktop preferences), so a file can drift without you editing it. The backup is kept only
+when the merge actually changed something; when the file already contains every repo entry, it is
+simply recorded as current. Earlier releases staged a `*_update_TIMESTAMP` copy beside a drifted
+root config instead; update now removes any such leftover.
 
 The merge also removes a top-level `model` key from Claude's global `settings.json`, so global
 harness config never overrides the harness default or your per-session model choice.
@@ -70,9 +74,22 @@ show it is RoboRepo's. A drifted file — one you edited after RoboRepo's last w
 and its path is reported, never deleted.
 
 **Seeing drift.** `roborepo config root inspect` and the drift chip on the `/agents` page report one
-state per harness: `not-installed`, `unwritten`, `in-sync`, `drifted`, or `staged-pending`.
-`staged-pending` means a `*_update_TIMESTAMP` candidate is waiting beside the file; it takes
-precedence over `drifted` because it is the state you can act on.
+state per harness: `not-installed`, `unwritten`, `in-sync`, or `drifted`. A drifted file needs nothing
+from you: your settings are kept, and the next `roborepo update` only adds roborepo's own entries.
+The `/agents` page therefore shows no chip for it; it marks only an `unwritten` (untracked) file.
+
+**Isolated runs.** A roborepo command whose state directory (`ROBOREPO_STATE_DIR` or
+`ROBOREPO_STATE_ROOT`) is in a temporary directory while `HOME` is your real home refuses to write
+harness config. Such a run would otherwise write your real `settings.json` with paths into scratch
+state that disappear when it is cleaned up. Set `HOME` to an isolated directory as well when you
+isolate the state directory.
+
+**Write log.** Every write RoboRepo makes to your harness config (`settings.json`, `config.toml`,
+`CLAUDE.md`, `AGENTS.md`, hooks files, and the enabled-packages list) adds one line to
+`~/.roborepo/logs/config-writes.jsonl`: the time, the file, and what triggered it, either the
+`roborepo` command you ran (a `roborepo update` names itself even for writes its installer makes) or
+the portal request, such as `portal POST /api/config/packages`. `roborepo config root inspect` shows
+the last logged write for each root config. The log rotates to a single `.1` file past 512 KB.
 
 ## Codex Native Profiles (permanent personal config)
 

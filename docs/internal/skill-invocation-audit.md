@@ -23,11 +23,11 @@ Keep shared `SKILL.md` frontmatter portable; use package-backed checks before ad
 
 | Skill | Invocation | Risk | Explicit command | Static findings | Recommendation |
 | --- | --- | --- | --- | --- | --- |
+| `feature-verification` | auto | medium | false | side-effect keyword | Keep trigger narrow; add near-miss tests. |
 | `code-style` | auto | low | false | none | Keep auto if trigger remains narrow. |
 | `javascript-typescript` | auto | low | false | none | Keep auto if trigger remains narrow. |
 | `react` | auto | low | false | none | Keep auto if trigger remains narrow. |
 | `test-harness` | auto | low | false | none | Keep auto if trigger remains narrow. |
-| `feature-verification` | auto | medium | false | side-effect keyword | Keep trigger narrow; add near-miss tests. |
 | `supabase-integration-testing` | auto | medium | false | none | Keep trigger narrow; add near-miss tests. |
 | `tighten` | auto | medium | true | names a paired skill in prose but declares no Paired Skills table | Keep trigger narrow; add near-miss tests. |
 | `telemetry-marker` | manual | low | true | none | Keep manual-only or command-gated. |

@@ -6,7 +6,7 @@ manages.
 Works with Claude Code, Codex, and Gemini CLI — any one of them, or any combination. RoboRepo
 discovers whichever are installed and manages those; see
 [Supported Harnesses](harnesses/supported-harnesses.md) for what each one receives. Requires
-**Node.js 20+**. Supports macOS and Linux; Windows is available but less tested — see
+**Node.js 22+**. Supports macOS and Linux; Windows is available but less tested — see
 [Windows](#windows).
 
 ## Choose An Install Path

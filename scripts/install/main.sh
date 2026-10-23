@@ -145,6 +145,12 @@ preflight_shell_setup() {
 }
 
 
+# Refuse before the first write when roborepo state sits in a temporary directory but HOME is real:
+# that run would write the user's harness files with paths into scratch state.
+if [[ $dry_run -eq 0 ]]; then
+  node "${repo_root}/scripts/cli/harness-write-guard.mjs"
+fi
+
 # Durable, once-only snapshot of the user's genuine pre-install config — taken before the first
 # mutation below so uninstall/reinstall cycles always have a pristine image to fall back on.
 snapshot_pre_install_original

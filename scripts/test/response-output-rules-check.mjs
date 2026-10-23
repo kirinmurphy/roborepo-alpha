@@ -21,7 +21,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const rulesPath = path.join(repoRoot, "globals", "packages", "response-output", "rules.md");
 const rules = fs.readFileSync(rulesPath, "utf8");
 const MAX_RULE_LINES = 78;
-const MARKERS = ["impact-awareness", "convention-capture", "skill-visibility"];
+const MARKERS = ["impact-awareness", "skill-visibility"];
 
 // ---- Same text in every harness when enabled, none when disabled ----
 const harnesses = harnessIdsWithCapability("rules");

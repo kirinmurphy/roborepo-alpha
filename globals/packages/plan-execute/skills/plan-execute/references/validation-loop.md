@@ -12,6 +12,11 @@ This file has two parts. **The loop** is how `/plan-execute` runs the Validator 
 report. **The rubric** is what the Validator checks and how it classifies a finding; `/plan-review`
 applies the same rubric in its own pass.
 
+## Contents
+
+- The loop
+- The rubric
+
 ## The loop
 
 ### Running the Validator
