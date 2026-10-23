@@ -68,14 +68,6 @@
         <p>Extend your harness config. Toggling a package below writes it into every active harness's configuration.</p>
       </header>
     </template>
-    <template id="tpl-context-warnings">
-      <portal-notice class="portal-notice token-warnings" variant="warning" aria-live="polite">
-        <div class="token-warnings-body">
-          <p class="token-warnings-title" data-slot="title"></p>
-          <div class="token-warning-list" data-slot="items"></div>
-        </div>
-      </portal-notice>
-    </template>
     <!-- Config grid shell: header + 4 row skeletons, one per config-type. The row-label cell
      (strong + description) doesn't vary per harness so it's authored here; each row's per-harness
      data cells start empty and are filled by cloning the matching tpl-config-*-cell template once
@@ -325,15 +317,6 @@
         <span class="cost-row-label" data-slot="label"></span>
         <token-chip data-slot="chip"></token-chip>
       </span>
-    </template>
-    <template id="tpl-warning-info-icon">
-      <span class="token-warning-info" tabindex="0" role="button" aria-label="Skill discovery description details" aria-expanded="false">ⓘ<span class="token-warning-tip" data-slot="tip" hidden></span></span>
-    </template>
-    <template id="tpl-token-warning-item">
-      <div class="token-warning-item">
-        <span class="token-warning-label"><strong data-slot="name"></strong><span data-slot="suffix"></span>:<span data-slot="info"></span></span>
-        <token-chip data-slot="chip"></token-chip>
-      </div>
     </template>
     <!-- Behavior/permission controls: bucket picker, toggle, arbitrary-command rows -->
     <template id="tpl-bucket-btn">

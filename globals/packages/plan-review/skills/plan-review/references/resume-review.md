@@ -30,6 +30,12 @@ Confirm the Result is committed before asking for approval. If a previous run wr
 review evidence but failed to commit it, finish that plan-only commit first; independently edited
 plan content needs reconciliation rather than automatic staging.
 
+## Contents
+
+- Choose the remaining work
+- Recover missing records
+- Commit approval durably
+
 ## Choose the remaining work
 
 | Evidence | Resume at |

@@ -1978,6 +1978,8 @@ assert "developer-runtime: metadata suggestion discovery" \
 # unwritten / in-sync / drifted.
 assert "harness-write-guard: temporary state with a real HOME never writes harness config" \
   node "${repo_root}/scripts/test/harness-write-guard-check.mjs"
+assert "skill-structure: body length, reference contents, and reference depth rules" \
+  node "${repo_root}/scripts/test/skill-structure-check.mjs"
 assert "root-config-view: per-harness drift state covers every user-facing case" \
   node "${repo_root}/scripts/test/root-config-view-check.mjs"
 

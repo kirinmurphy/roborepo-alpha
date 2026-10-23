@@ -573,6 +573,27 @@ if [[ "${package_mode}" -ne 1 ]]; then
   fi
 fi
 
+# Skill structure (skill-structure.mjs): a SKILL.md body under 500 lines, a contents section in any
+# reference over 100 lines, and every reference linked from SKILL.md. Built-in skills fail doctor in
+# a development checkout, where they can be fixed; the user's own workspace skills only warn, and the
+# warnings print even under --quiet because they are the user's to act on.
+if command -v node >/dev/null 2>&1; then
+  if [[ "${package_mode}" -ne 1 ]]; then
+    if structure_output="$(node "${repo_root}/scripts/cli/skill-structure.mjs" --built-in)"; then
+      ok "built-in skill structure"
+    else
+      echo "${structure_output}" >&2
+      failed=1
+    fi
+  fi
+  while IFS= read -r line; do
+    case "${line}" in
+      warn:*) echo "${line}" ;;
+      ok:*) ok "${line#ok: }" ;;
+    esac
+  done < <(node "${repo_root}/scripts/cli/skill-structure.mjs" --workspace)
+fi
+
 if [[ "${check_installed}" -eq 1 ]]; then
   check_link "bin/roborepo" "${HOME}/.local/bin/roborepo"
   check_cli_on_path

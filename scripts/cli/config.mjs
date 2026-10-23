@@ -170,6 +170,7 @@ export function readConfigSnapshot() {
   const packages = availablePackages.map((pkg) => ({
     id: pkg.id,
     label: pkg.label,
+    origin: pkg.origin,
     archived: pkg.archived === true,
     description: pkg.description || null,
     status: packageLiveState.get(pkg.id)?.status || "disabled",
@@ -523,6 +524,7 @@ function packagePresentationItem(item, tool, contextCost = null) {
     order: item.presentation?.order || 0,
     active: item.enabled,
     toggle: "package",
+    builtIn: item.origin === "built-in",
     urls: item.urls || [],
     badges: [
       ...(item.catalogStatus === "pending" ? ["pending"] : []),
