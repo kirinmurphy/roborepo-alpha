@@ -1830,6 +1830,8 @@ assert "harness: skill linking (machine-local cache + symlinks) is registry-back
 # back through the registry.
 assert "harness: live permission rendering is registry-backed" \
   node "${repo_root}/scripts/test/permissions-render-live-characterization-check.mjs"
+assert "harness: Codex permission render keeps lines it did not generate" \
+  node "${repo_root}/scripts/test/codex-permissions-foreign-lines-check.mjs"
 
 # MCP add/remove/list through provider MCP adapters: mcp.mjs's mcpAdd/mcpApply and
 # packages.mjs's installMcpPreset/removeMcpPreset (previously three independent, duplicated

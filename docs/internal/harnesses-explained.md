@@ -199,6 +199,11 @@ enabled = false
 # END GENERATED AGENT PERMISSIONS
 ```
 
+The Codex block carries tables, and TOML puts every top-level key before the first table, so the
+block sits exactly where another tool adds a new top-level setting — Codex has written a `notify`
+hook there. The renderer keeps whatever it did not generate: foreign top-level lines move above the
+block and foreign tables below it, instead of being replaced along with the block.
+
 The mechanism is the same as global rules — one source, a renderer per target — even though the two
 outputs look nothing alike. That's the point: a bigger structural gap doesn't need a _different kind_
 of solution, just a renderer that knows two output shapes instead of one.
