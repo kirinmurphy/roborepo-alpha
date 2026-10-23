@@ -836,6 +836,7 @@ export_user_config() {
     return 0
   fi
   mv "${merge_tmp}" "${home_path}"
+  node "${repo_root}/scripts/cli/write-log.mjs" record "${home_path}" "merge into local root config" 2>/dev/null || true
   if [[ "${converted_from_symlink}" -eq 1 ]]; then
     say merge "${home_path} <- ${src} ${RR_DIM}(converted from repo symlink, local root config preserved)${RR_RESET}"
   else

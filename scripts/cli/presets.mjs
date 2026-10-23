@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import { repoRoot, harnessHome } from "./paths.mjs";
 import { isMainModule } from "./roots.mjs";
 import { assertHarnessWriteAllowed } from "./harness-write-guard.mjs";
+import { recordConfigWrite } from "./write-log.mjs";
 import { installStatePath, presetsStatePath, recordAppRoot } from "./state-paths.mjs";
 import { readConfigSnapshot, buildBehaviorView } from "./config.mjs";
 import { mutatePackage, setBehaviorBucket } from "./config-mutate.mjs";
@@ -641,7 +642,10 @@ function copyItem(row, policy) {
   if (!pathExists(row.homeAbs)) {
     copyTree(source, row.homeAbs);
     console.log(`copy: ${row.homeAbs} <- ${source}`);
-    if (row.kind === "root_config") recordWrite(row.harness, row.homeAbs);
+    if (row.kind === "root_config") {
+      recordWrite(row.harness, row.homeAbs);
+      recordConfigWrite(row.homeAbs, "install root config");
+    }
     return;
   }
 
@@ -665,6 +669,7 @@ function copyItem(row, policy) {
     removeStagedRootConfigCandidates(row.homeAbs);
     if (drift.status === "clean") {
       fs.writeFileSync(row.homeAbs, merged);
+      recordConfigWrite(row.homeAbs, "merge baseline update");
       console.log(`update: ${row.homeAbs} <- ${source} (baseline changed, no local drift)`);
       // The merge just changed the file's content, so recordWrite must rehash post-write — there's
       // no precomputed hash to thread through here.
@@ -689,6 +694,7 @@ function copyItem(row, policy) {
       console.log(`backup: ${row.homeAbs} -> ${originalPath}`);
     }
     fs.writeFileSync(row.homeAbs, merged);
+    recordConfigWrite(row.homeAbs, "merge into local root config");
     console.log(`merge: ${row.homeAbs} <- ${source} (local root config preserved)`);
     recordWrite(row.harness, row.homeAbs);
     return;
@@ -710,7 +716,10 @@ function copyItem(row, policy) {
   }
   copyTree(source, row.homeAbs);
   console.log(`copy: ${row.homeAbs} <- ${source}`);
-  if (row.kind === "root_config") recordWrite(row.harness, row.homeAbs);
+  if (row.kind === "root_config") {
+    recordWrite(row.harness, row.homeAbs);
+    recordConfigWrite(row.homeAbs, "replace root config");
+  }
 }
 
 function removeOwnedLink(row) {

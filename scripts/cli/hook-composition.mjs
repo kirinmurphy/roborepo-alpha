@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { codexHooksPath, harnessHome } from "./paths.mjs";
 import { writeRootConfig } from "./root-config-writes.mjs";
+import { recordConfigWrite } from "./write-log.mjs";
 import { getHarnessProvider } from "../harnesses/registry.mjs";
 import { validateAdapterComputeResult } from "../harnesses/schemas.mjs";
 
@@ -22,6 +23,7 @@ export function writeHooksFile(harness, filePath, content) {
   if (harness === "codex") {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
     fs.writeFileSync(filePath, content);
+    recordConfigWrite(filePath);
     return;
   }
   writeRootConfig(harness, filePath, content);

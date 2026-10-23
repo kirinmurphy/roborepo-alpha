@@ -3,7 +3,8 @@ import http from "node:http";
 import path from "node:path";
 import crypto from "node:crypto";
 import { repoRoot } from "./paths.mjs";
-import { computePortalSourceHash } from "./portal-source-hash.mjs";
+import { computePortalSourceHash, computeServerCodeSignature } from "./portal-source-hash.mjs";
+import { runWithWriteActor } from "./write-log.mjs";
 import { send } from "./portal-routes-http.mjs";
 import { dispatchRoutes, matchSegments, validateRouteTables } from "./portal-router.mjs";
 import { configRoutes } from "./portal-routes-config.mjs";
@@ -41,6 +42,16 @@ const APP_NAME = "roborepo";
 // running at this path, but its code is now stale" and restart it instead of reusing it (see
 // resolvePortalPort in telemetry.mjs). See portal-source-hash.mjs for why this exists.
 const SOURCE_HASH = computePortalSourceHash();
+// The open page polls /api/portal/status and shows a restart notice once the server code on disk
+// no longer matches what this process loaded. Recomputed at most every few seconds per poll burst.
+const SERVER_CODE_SIGNATURE = computeServerCodeSignature();
+const SERVER_CODE_CHECK_MS = 5000;
+let serverCodeCheck = { at: 0, changed: false };
+function serverCodeChanged() {
+  if (Date.now() - serverCodeCheck.at < SERVER_CODE_CHECK_MS) return serverCodeCheck.changed;
+  serverCodeCheck = { at: Date.now(), changed: computeServerCodeSignature() !== SERVER_CODE_SIGNATURE };
+  return serverCodeCheck.changed;
+}
 const STATIC_TYPES = {
   ".png": "image/png",
   ".svg": "image/svg+xml",
@@ -290,7 +301,11 @@ function route(req, res, handlers, mutationToken) {
     );
   }
 
-  if (dispatchRoutes(API_ROUTE_TABLES, req, res, urlPath, qs, handlers)) return;
+  // Config writes made while handling a portal mutation are logged as that request (write-log.mjs).
+  const dispatched = isMutation(req)
+    ? runWithWriteActor(`portal ${req.method} ${urlPath}`, () => dispatchRoutes(API_ROUTE_TABLES, req, res, urlPath, qs, handlers))
+    : dispatchRoutes(API_ROUTE_TABLES, req, res, urlPath, qs, handlers);
+  if (dispatched) return;
   if (handleMetadataAsset(req, res, urlPath, { pages: PAGES, appName: APP_NAME, apiRouteTables: API_ROUTE_TABLES })) return;
   if (handlePortalPage(req, res, urlPath, mutationToken)) return;
   if (handlePortalAsset(req, res, urlPath)) return;
@@ -343,6 +358,7 @@ function handlePortalStatus(req, res, urlPath) {
       appRoot: repoRoot,
       portalDir: PORTAL_DIR,
       sourceHash: SOURCE_HASH,
+      serverCodeChanged: serverCodeChanged(),
       pages: pageManifest(),
     }),
   );

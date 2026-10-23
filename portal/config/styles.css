@@ -200,11 +200,6 @@ main {
   white-space: nowrap;
   vertical-align: middle;
 }
-.drift-chip.drift-info {
-  color: var(--accent);
-  border-color: var(--accent);
-  background: transparent;
-}
 .drift-chip.drift-muted {
   color: var(--dim);
   border-color: var(--line);

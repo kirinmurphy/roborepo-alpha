@@ -1,4 +1,5 @@
 import { buildRootConfigView, ROOT_CONFIG_STATE_LABEL } from "./root-config-view.mjs";
+import { lastConfigWrite, WRITE_LOG_PATH } from "./write-log.mjs";
 import { formatBytes } from "../../modules/retention/index.mjs";
 
 // Read-only report of baseline vs. active root config vs. drift state, per harness. No writes;
@@ -9,6 +10,8 @@ export function configRootInspect() {
     console.log(`  baseline: ${row.baseline}${row.baselineExists ? "" : "  (missing)"}`);
     console.log(`  active:   ${row.active}${row.activeExists ? "" : "  (missing)"}`);
     console.log(`  status:   ${ROOT_CONFIG_STATE_LABEL[row.state] ?? row.state}`);
+    const lastWrite = row.activeExists ? lastConfigWrite(row.active) : null;
+    if (lastWrite) console.log(`  last roborepo write: ${lastWrite.at} by ${lastWrite.actor}`);
     if (row.state === "drifted") {
       console.log(`  last-known hash:  ${row.lastHash}`);
       console.log(`  current hash:     ${row.currentHash}`);
@@ -21,6 +24,7 @@ export function configRootInspect() {
       }
     }
   }
+  console.log(`\nwrite log: ${WRITE_LOG_PATH}`);
   console.log("");
 }
 

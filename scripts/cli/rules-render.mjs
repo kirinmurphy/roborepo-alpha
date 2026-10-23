@@ -3,6 +3,7 @@ import path from "node:path";
 import { repoRoot } from "./paths.mjs";
 import { isMainModule } from "./roots.mjs";
 import { enabledPackagesPath, stateDir } from "./state-paths.mjs";
+import { recordConfigWrite } from "./write-log.mjs";
 import { loadPackageCatalog } from "./package-catalog.mjs";
 import { listHarnessProviders, getHarnessProvider } from "../harnesses/registry.mjs";
 import { resolveHarnessPath, hasHarnessPath } from "../harnesses/paths.mjs";
@@ -64,12 +65,13 @@ export function readEnabledPackagesRegistry() {
   }
 }
 
-function writeRegistry(ids, disabledIds) {
+function writeRegistry(ids, disabledIds, detail = null) {
   fs.mkdirSync(path.dirname(enabledPackagesPath), { recursive: true });
   fs.writeFileSync(enabledPackagesPath, JSON.stringify(
     { packages: [...new Set(ids)], disabled: [...new Set(disabledIds)], updatedAt: new Date().toISOString() },
     null, 2,
   ) + "\n");
+  recordConfigWrite(enabledPackagesPath, detail);
 }
 
 // Add or remove a package ID from the enabled-packages registry, then return the updated list.
@@ -85,7 +87,7 @@ export function setPackageEnabled(id, enabled) {
   const nextDisabled = enabled
     ? disabled.filter((x) => x !== id)
     : [...new Set([...disabled, id])];
-  writeRegistry(next, nextDisabled);
+  writeRegistry(next, nextDisabled, `${enabled ? "enable" : "disable"} ${id}`);
   return next;
 }
 
@@ -300,6 +302,7 @@ function writeText(filePath, text, dryRun, label = "write") {
   }
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, text);
+  recordConfigWrite(filePath);
   console.log(`${label}: ${filePath}`);
 }
 

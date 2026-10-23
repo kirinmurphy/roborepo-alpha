@@ -74,15 +74,22 @@ show it is RoboRepo's. A drifted file — one you edited after RoboRepo's last w
 and its path is reported, never deleted.
 
 **Seeing drift.** `roborepo config root inspect` and the drift chip on the `/agents` page report one
-state per harness: `not-installed`, `unwritten`, `in-sync`, or `drifted`. The `/agents` page labels a
-drifted file **local changes**: your settings are kept, and the next `roborepo update` only adds
-roborepo's own entries. Nothing needs reconciling by hand.
+state per harness: `not-installed`, `unwritten`, `in-sync`, or `drifted`. A drifted file needs nothing
+from you: your settings are kept, and the next `roborepo update` only adds roborepo's own entries.
+The `/agents` page therefore shows no chip for it; it marks only an `unwritten` (untracked) file.
 
 **Isolated runs.** A roborepo command whose state directory (`ROBOREPO_STATE_DIR` or
 `ROBOREPO_STATE_ROOT`) is in a temporary directory while `HOME` is your real home refuses to write
 harness config. Such a run would otherwise write your real `settings.json` with paths into scratch
 state that disappear when it is cleaned up. Set `HOME` to an isolated directory as well when you
 isolate the state directory.
+
+**Write log.** Every write RoboRepo makes to your harness config (`settings.json`, `config.toml`,
+`CLAUDE.md`, `AGENTS.md`, hooks files, and the enabled-packages list) adds one line to
+`~/.roborepo/logs/config-writes.jsonl`: the time, the file, and what triggered it, either the
+`roborepo` command you ran (a `roborepo update` names itself even for writes its installer makes) or
+the portal request, such as `portal POST /api/config/packages`. `roborepo config root inspect` shows
+the last logged write for each root config. The log rotates to a single `.1` file past 512 KB.
 
 ## Codex Native Profiles (permanent personal config)
 

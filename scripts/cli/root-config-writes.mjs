@@ -4,6 +4,7 @@ import { checkDrift, recordWrite } from "./root-config-state.mjs";
 import { rootConfigActive, rootConfigBaseline } from "./paths.mjs";
 import { normalizeRootConfigContent } from "./root-config-merge.mjs";
 import { assertHarnessWriteAllowed } from "./harness-write-guard.mjs";
+import { recordConfigWrite } from "./write-log.mjs";
 
 export function writeRootConfig(harness, filePath, content) {
   assertHarnessWriteAllowed(filePath);
@@ -11,6 +12,7 @@ export function writeRootConfig(harness, filePath, content) {
   const nextContent = normalizeRootConfigContent(harness, content);
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, nextContent);
+  recordConfigWrite(filePath);
   if (shouldRecord) recordRootConfigWriteIfActive(harness, filePath);
 }
 

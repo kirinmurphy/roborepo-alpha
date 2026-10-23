@@ -522,12 +522,25 @@ for old_root in agents claude codex skills-local; do
 done
 # Derive the shared-skill list from package skill resources plus system support skills so this
 # never goes stale. The installer fans each skill into ~/.roborepo/skills/<n> and symlinks each
-# present harness view there.
+# present harness view there. An installed cache copy that differs from its source is stale: agents
+# read the old text until the next update refreshes it. That is a warning, not a failure, and it
+# prints even under --quiet because only the user can act on it.
+stale_skill_caches=()
 for skill_src in "${repo_root}"/globals/packages/*/skills/*/SKILL.md "${repo_root}"/globals/system/skills/builtin-support/SKILL.md; do
   [[ -e "${skill_src}" ]] || continue
   skill_name="$(basename "$(dirname "${skill_src}")")"
   check_file "${skill_src#${repo_root}/}"
+  skill_cache="${HOME}/${STATE_DIRNAME}/skills/${skill_name}"
+  if [[ -e "${skill_cache}/.builtin-managed" ]] \
+    && ! diff -rq -x '.builtin-managed' "$(dirname "${skill_src}")" "${skill_cache}" >/dev/null 2>&1; then
+    stale_skill_caches+=("${skill_name}")
+  fi
 done
+if [[ "${#stale_skill_caches[@]}" -gt 0 ]]; then
+  echo "warn: installed skills are out of date (${stale_skill_caches[*]}) — run: roborepo update"
+else
+  ok "installed skill copies match their source"
+fi
 check_readme_skill_coverage
 # Internal (repo-only) skills: source in local/skills/, linked into THIS repo's project-scope
 # dotdirs (.claude/skills, .codex/skills) — never global, never exported.

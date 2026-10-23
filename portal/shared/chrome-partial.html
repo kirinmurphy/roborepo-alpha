@@ -20,6 +20,13 @@
     </div>
   </div>
 </template>
+<!-- Band under the site header once the portal server's own code changed on disk after it started
+     (theme.js polls /api/portal/status). Page assets reload fresh; server modules do not. -->
+<template id="tpl-server-restart-notice">
+  <div class="server-restart-notice" role="status">
+    <div class="inner"><span>This portal is running older server code than what is on disk. Restart <code>roborepo web</code> to load the changes.</span></div>
+  </div>
+</template>
 <template id="tpl-portal-footer">
   <footer class="portal-footer">
     <div class="inner">

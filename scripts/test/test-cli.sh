@@ -839,7 +839,7 @@ if node -e 'const s=require("node:net").createServer();s.once("error",()=>proces
   assert "config: behaviorView sections carry contextCost rollups" \
     bash -c "node -e \"const j=require('${cfg_home}/config-snapshot.json');const secs=j.behaviorView.filter(s=>s.categoryId);const perms=j.behaviorView.find(s=>s.kind==='permissions');const stores=j.behaviorView.find(s=>s.kind==='stores');process.exit(secs.length&&secs.every(s=>s.contextCost&&Number.isFinite(s.contextCost.activeStartupTokens))&&perms.contextCost.label==='not-prompt-context'&&stores.contextCost.label==='not-prompt-context'?0:1)\""
   assert "config: portal status identifies current app" \
-    bash -c "curl -s 'http://127.0.0.1:${cfg_port}/api/portal/status' | node -e \"let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);process.exit(j.ok&&j.appRoot==='${repo_root}'&&String(j.portalDir).endsWith('/portal')&&Number.isInteger(j.pid)&&j.pages.some(p=>p.id==='developer-runtime'&&p.path==='/runtime')?0:1)})\""
+    bash -c "curl -s 'http://127.0.0.1:${cfg_port}/api/portal/status' | node -e \"let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);process.exit(j.ok&&j.appRoot==='${repo_root}'&&String(j.portalDir).endsWith('/portal')&&Number.isInteger(j.pid)&&j.serverCodeChanged===false&&j.pages.some(p=>p.id==='developer-runtime'&&p.path==='/runtime')?0:1)})\""
   # The next two assertions run `web` against cfg_srv and expect it to reuse or adopt that portal and
   # exit at once. When reuse breaks — or cfg_srv is already gone because a killed suite's watchdog
   # stopped it — `web` starts its own server instead: in the foreground, where it would block the
@@ -1982,6 +1982,18 @@ assert "harness-write-guard: temporary state with a real HOME never writes harne
   node "${repo_root}/scripts/test/harness-write-guard-check.mjs"
 assert "skill-structure: body length, reference contents, and reference depth rules" \
   node "${repo_root}/scripts/test/skill-structure-check.mjs"
+assert "write-log: every logged config write names its trigger" \
+  node "${repo_root}/scripts/test/write-log-check.mjs"
+assert "portal restart notice: server code signature tracks changes on disk" \
+  node "${repo_root}/scripts/test/portal-server-code-signature-check.mjs"
+# An installed skill copy that differs from its source makes doctor warn (not fail) by name.
+stale_skill_home="${work}/stale-skill-home"
+mkdir -p "${stale_skill_home}/.roborepo/skills"
+cp -R "${repo_root}/globals/packages/plan-write/skills/plan-write" "${stale_skill_home}/.roborepo/skills/plan-write"
+touch "${stale_skill_home}/.roborepo/skills/plan-write/.builtin-managed"
+printf '\nstale line\n' >> "${stale_skill_home}/.roborepo/skills/plan-write/SKILL.md"
+assert "doctor: warns when an installed skill copy is out of date" \
+  bash -c "HOME='${stale_skill_home}' ROBOREPO_SKIP_NODE_RELEASE_CHECK=1 bash '${repo_root}/scripts/doctor.sh' --quiet 2>&1 | grep -q 'warn: installed skills are out of date (plan-write) — run: roborepo update'"
 assert "root-config-view: per-harness drift state covers every user-facing case" \
   node "${repo_root}/scripts/test/root-config-view-check.mjs"
 

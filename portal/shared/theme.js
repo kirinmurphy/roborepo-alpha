@@ -84,6 +84,27 @@ const PORTAL_PAGES = window.PORTAL_MANIFEST.pages;
   publishHeaderHeight();
 })();
 
+// Restart notice: a running server never re-reads its own modules, so after a pull or an edit it keeps
+// serving the old behavior with nothing on the page to say so. Polls the server's own status (cheap,
+// and only while the page is visible) and shows a band under the header once its code changed on disk.
+(function serverRestartNotice() {
+  const POLL_MS = 30000;
+  let shown = false;
+  const check = async () => {
+    if (shown || document.hidden) return;
+    try {
+      const status = await fetch("/api/portal/status", { cache: "no-store" }).then((r) => r.json());
+      if (!status?.serverCodeChanged) return;
+      shown = true;
+      document.querySelector(".portal-header")?.append(tpl("tpl-server-restart-notice"));
+    } catch {
+      // Server unreachable: the header freshness indicator already reports that.
+    }
+  };
+  setTimeout(check, 3000);
+  setInterval(check, POLL_MS);
+})();
+
 // Theme toggle: sun glyph in dark mode (click -> light), moon in light mode. Choice persists in
 // localStorage (key shared with the head init script) and is applied across all portal pages.
 // On change we dispatch "portal:themechange" on <html> so a page can react (e.g. the telemetry
