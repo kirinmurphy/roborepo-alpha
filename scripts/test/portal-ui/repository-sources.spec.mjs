@@ -180,6 +180,34 @@ test.describe("Manage repositories dialog", () => {
     await expect(dialog.locator("[data-slot=folders] li", { hasText: missing })).toHaveCount(0);
   });
 
+  // Source paths are read from disk, so a path must name one directory exactly: a relative path is
+  // refused before anything is stored, and a `..` segment is resolved so the stored path never
+  // carries one.
+  test("a relative path is refused with the reason and is not added", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("link", { name: "Manage Repos" }).click();
+    const dialog = page.locator("#repository-sources-dialog");
+    await dialog.getByRole("button", { name: "Find more repos" }).click();
+    await dialog.getByLabel("Find more repos in").fill("projects/dialog-fixture");
+    await dialog.getByRole("button", { name: "Add folder" }).click();
+    await expect(dialog.locator("[data-slot=error]")).toHaveText("Enter an absolute path, or one starting with ~/.");
+    await expect(dialog.locator("[data-slot=folders] li")).toHaveCount(0);
+  });
+
+  test("a path with a traversal segment is stored resolved", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("link", { name: "Manage Repos" }).click();
+    const dialog = page.locator("#repository-sources-dialog");
+    await dialog.getByRole("button", { name: "Find more repos" }).click();
+    await dialog.getByLabel("Find more repos in").fill(path.join(projects, "dialog-fixture") + "/..");
+    await dialog.getByRole("button", { name: "Add folder" }).click();
+    const folder = dialog.locator("[data-slot=folders] li");
+    await expect(folder).toHaveCount(1);
+    await expect(folder.locator("[data-slot=path]")).toHaveAttribute("title", projects);
+    await folder.getByRole("button", { name: "Remove" }).click();
+    await expect(folder).toHaveCount(0);
+  });
+
   test("keeps the title fixed while a tall dialog body scrolls and shows full paths on hover", async ({ page }) => {
     await page.setViewportSize({ width: 760, height: 800 });
     await routeRepositorySources(page, crowdedSourcesPayload());
