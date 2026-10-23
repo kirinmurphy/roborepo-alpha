@@ -44,7 +44,7 @@ or targeted test check when the touched surface is harness/provider/test/CI plum
 
 ## Publish Matrix
 
-Before an npm publish decision, run these commands from a clean `main` checkout with Node 20 or
+Before an npm publish decision, run these commands from a clean `main` checkout with Node 22 or
 newer:
 
 ```sh

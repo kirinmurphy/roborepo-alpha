@@ -3,8 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-// package.json declares node >=20 and moduleDir only landed in 20.11, so it is undefined
-// on a supported floor version. The rest of this repo derives the directory this way.
+// The rest of this repo derives the directory this way.
 import { fileURLToPath } from "node:url";
 import { loadPackageCatalog, validatePackageCatalog } from "../cli/package-catalog.mjs";
 import { listPackageCommands } from "../cli/package-commands.mjs";

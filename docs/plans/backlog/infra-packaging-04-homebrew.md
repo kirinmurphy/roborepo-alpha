@@ -65,7 +65,7 @@ the npm/release work.
 ## Current state
 
 - There is no `Formula/*.rb` file or RoboRepo tap.
-- The application is a zero-runtime-dependency Node/ESM package with Node `>=20`.
+- The application is a zero-runtime-dependency Node/ESM package with Node `>=22`.
 - The CLI already has a `bin/roborepo` entry point.
 - Package mode treats the application root as immutable and stores workspace/state separately.
 - Local npm publication tooling exists; controlled CI/provenance and exact registry-artifact acceptance remain tracked by [[1rajbd5o]].

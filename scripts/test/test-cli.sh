@@ -9,6 +9,8 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cli="${repo_root}/scripts/cli/main.mjs"
+# Every doctor run below stays off the network; node-release-health-check.mjs covers that check.
+export ROBOREPO_SKIP_NODE_RELEASE_CHECK=1
 pass=0
 fail=0
 quiet=0

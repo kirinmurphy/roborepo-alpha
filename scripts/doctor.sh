@@ -397,6 +397,35 @@ check_portal_pids() {
   fi
 }
 
+# roborepo runs whatever node is on PATH. An end-of-life line or a build behind its line's latest
+# security release is the user's to upgrade, not a broken install, so warnings print even under
+# --quiet and doctor stays green. Needs nodejs.org; offline it reports a skip. Test suites set
+# ROBOREPO_SKIP_NODE_RELEASE_CHECK=1 so their doctor runs stay off the network.
+check_node_release() {
+  if ! command -v node >/dev/null 2>&1; then
+    ok "node unavailable; skipped node release check"
+    return 0
+  fi
+  if [[ "${ROBOREPO_SKIP_NODE_RELEASE_CHECK:-}" == "1" ]]; then
+    ok "node release check skipped (ROBOREPO_SKIP_NODE_RELEASE_CHECK=1)"
+    return 0
+  fi
+  local output status
+  set +e
+  output="$(node "${repo_root}/scripts/cli/node-release-health.mjs" --check 2>&1)"
+  status=$?
+  set -e
+  case "${status}" in
+    0|3) ok "${output}" ;;
+    1)
+      while IFS= read -r line; do
+        [[ -n "${line}" ]] && echo "warn: ${line}"
+      done <<< "${output}"
+      ;;
+    *) fail "node release check crashed: ${output}" ;;
+  esac
+}
+
 check_local_config_repair_candidates() {
   if ! command -v node >/dev/null 2>&1; then
     ok "node unavailable; skipped local config repair check"
@@ -526,6 +555,8 @@ if command -v uvx >/dev/null 2>&1; then
 else
   ok "uvx unavailable; skipped (optional, only needed for jcodemunch/jdocmunch MCP setup)"
 fi
+
+check_node_release
 
 if command -v node >/dev/null 2>&1; then
   node "${repo_root}/scripts/build/normalize-claude-settings.mjs" --check "${repo_root}/generated/claude/settings.json" >/dev/null \

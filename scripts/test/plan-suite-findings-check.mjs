@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import path from "node:path";
-// package.json declares node >=20 and import.meta.dirname only landed in 20.11, so it is undefined
-// on a supported floor version. The other 48 modules in this repo derive the directory this way.
+// The other modules in this repo derive the directory this way.
 import { fileURLToPath } from "node:url";
 import { finding, messagesOf, sortBySeverity, FINDING_CODES } from "../../modules/plan-suite/findings.mjs";
 import { validateForLifecycle, lifecyclePolicies } from "../../modules/plan-suite/lifecycle-policy.mjs";
