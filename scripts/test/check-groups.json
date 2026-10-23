@@ -27,6 +27,7 @@
     "skill-trigger-fixtures-shipping-check.mjs",
     "config-bulk-toggle-check.mjs",
     "developer-runtime-auto-discovery-check.mjs",
+    "developer-runtime-dev-fixtures-check.mjs",
     "developer-runtime-member-role-check.mjs",
     "harness-refresh-simulation-check.mjs",
     "portal-pages-check.mjs",
