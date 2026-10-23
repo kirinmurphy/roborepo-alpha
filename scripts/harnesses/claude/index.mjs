@@ -96,7 +96,7 @@ function wireCaptureHooks(settingsPath) {
   return mergeRootConfigHooks(settingsPath, fragment);
 }
 
-// Claude Code runs every installed hook, so there is no trust step: installed means active.
+// Claude has no per-hook approval; this confirms file-level configuration, not workspace execution.
 // Async to match the contract, whose Codex implementation has to ask a running process.
 async function hooksRead({ hooksPath = resolveHarnessPath(claudeManifest, "rootConfig") } = {}) {
   return hookRecordsFromFile(hooksPath, { trust: "not-required" });

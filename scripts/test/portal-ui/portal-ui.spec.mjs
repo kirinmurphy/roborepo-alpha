@@ -605,6 +605,22 @@ test.describe("hook readiness warning", () => {
     await expect(page.locator("#hook-readiness")).toBeHidden();
   });
 
+  test("returning to an active page discovers hooks changed in an external terminal", async ({ page }) => {
+    await page.clock.install();
+    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex]) }));
+    let current = allActive();
+    const reads = await routeStatuses(page, { codex: () => current });
+    await page.goto("/settings");
+    await expect.poll(() => reads.length).toBeGreaterThan(0);
+    const notice = page.locator("#hook-readiness");
+    await expect(notice).toBeHidden();
+    current = pendingReview();
+    await page.clock.fastForward(2100);
+    await returnToPortal(page);
+    await expect(notice.getByText("Codex hooks need review", { exact: true })).toBeVisible();
+    expect(reads.some((read) => read.fresh)).toBe(true);
+  });
+
   test("asks nothing when no harness is active", async ({ page }) => {
     await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([]) }));
     const reads = await routeStatuses(page, {});

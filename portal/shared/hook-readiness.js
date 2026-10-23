@@ -360,7 +360,7 @@ export function onHookReviewReturn(listener) {
 export async function renderHookReadiness(mount, setup, { fresh = false } = {}) {
   const token = {};
   const previous = mounts.get(mount);
-  mounts.set(mount, { setup, token, pending: previous?.pending ?? new Map(), needsRefresh: previous?.needsRefresh ?? false });
+  mounts.set(mount, { setup, token, pending: previous?.pending ?? new Map() });
   const harnesses = setup?.harnesses?.active || [];
   const statuses = await Promise.all(harnesses.map((harness) => readHookStatus(harness.id, { fresh }).catch(() => null)));
   const entry = mounts.get(mount);
@@ -379,7 +379,6 @@ export async function renderHookReadiness(mount, setup, { fresh = false } = {}) 
     return hookReadinessNotices(status, handlers);
   });
   entry.pending = pending;
-  entry.needsRefresh = statuses.some((status) => !status || (status.supported !== false && status.state !== "active"));
   mount.replaceChildren(...notices);
   mount.hidden = notices.length === 0;
 }
@@ -398,15 +397,15 @@ export function refreshHookReadinessMounts({ fresh = false } = {}) {
 }
 
 // Trust changes inside the harness, where RoboRepo cannot see it. When the user comes back to the
-// portal while hooks need attention (or after opening review), read fresh once. This also picks up
-// installation done in a separate terminal without making the user press a second action button.
+// portal, read fresh once even if the previous status was active: another terminal may have changed
+// hooks since that read.
 const FOCUS_THROTTLE_MS = 2_000;
 let lastFocusRefresh = 0;
 function refreshOnReturn() {
   if (document.visibilityState !== "visible") return;
-  const anyPending = awaitingReturn || returnListeners.size > 0
-    || [...mounts.entries()].some(([mount, entry]) => mount.isConnected && (entry.pending.size > 0 || entry.needsRefresh));
-  if (!anyPending || Date.now() - lastFocusRefresh < FOCUS_THROTTLE_MS) return;
+  const watching = awaitingReturn || returnListeners.size > 0
+    || [...mounts.keys()].some((mount) => mount.isConnected);
+  if (!watching || Date.now() - lastFocusRefresh < FOCUS_THROTTLE_MS) return;
   lastFocusRefresh = Date.now();
   awaitingReturn = false;
   refreshHookReadinessMounts({ fresh: true });
