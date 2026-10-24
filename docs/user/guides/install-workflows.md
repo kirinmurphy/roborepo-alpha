@@ -15,9 +15,9 @@ the [collision policy](#collision-policy).
 4. Let onboarding enable optional packages and skills.
 5. If onboarding installed Codex hooks that Codex has not trusted yet and the ChatGPT desktop app
    is detected, it ends by listing them and the command that opens Codex's review. On a CLI-only
-   installation it prints nothing extra: Codex asks for approval when it next starts. Trust only the RoboRepo hooks it lists; see
-   [Codex Hooks](../reference/codex-hooks.md#trusting-roborepos-hooks). A base-only or headless
-   install installs nothing that needs review and skips this step.
+   installation it prints nothing extra: Codex asks for approval when it next starts. Trust only
+   the RoboRepo hooks it lists; see [Codex Hooks](../reference/codex-hooks.md#trusting-roborepos-hooks).
+   A base-only or headless install installs nothing that needs review and skips this step.
 6. Verify with `roborepo doctor --installed`.
 
 ## Preview
