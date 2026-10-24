@@ -25,9 +25,11 @@ and turns capture on. Use it to measure baseline token usage before adopting the
 the normal install later upgrades it.
 
 **Codex hook trust.** Codex runs only hooks you have reviewed and trusted. When you turn tracking
-on, RoboRepo checks with Codex once: if the capture hooks await review, the portal offers **Open
-Codex hook review** (the CLI prints the command instead), the same single offer any package change
-gets. Trust only the RoboRepo hooks it lists; see [Codex Hooks](codex-hooks.md#trusting-roborepos-hooks).
+on, RoboRepo checks with Codex once: if the capture hooks await review and the ChatGPT desktop app
+is detected, the portal shows one review offer pointing to the app's hook review (Settings → Hooks),
+with the Codex CLI as an alternative; the CLI prints the command instead. This is the same single
+offer any package change gets. On a CLI-only installation there is no offer: Codex asks for approval
+when it next starts. Trust only the RoboRepo hooks it lists; see [Codex Hooks](codex-hooks.md#trusting-roborepos-hooks).
 The Home, Settings, and Tokens notice keeps naming hooks still awaiting review. Codex loads hooks at
 session start, so sessions that were already running do not capture. Start a new session in the
 app; a full app restart is not part of normal setup.

@@ -13,8 +13,9 @@ the [collision policy](#collision-policy).
 2. Run the installer.
 3. Choose a collision policy when the first run asks.
 4. Let onboarding enable optional packages and skills.
-5. If onboarding installed Codex hooks that Codex has not trusted yet, it ends by listing them and
-   the command that opens Codex's review. Trust only the RoboRepo hooks it lists; see
+5. If onboarding installed Codex hooks that Codex has not trusted yet and the ChatGPT desktop app
+   is detected, it ends by listing them and the command that opens Codex's review. On a CLI-only
+   installation it prints nothing extra: Codex asks for approval when it next starts. Trust only the RoboRepo hooks it lists; see
    [Codex Hooks](../reference/codex-hooks.md#trusting-roborepos-hooks). A base-only or headless
    install installs nothing that needs review and skips this step.
 6. Verify with `roborepo doctor --installed`.
@@ -98,7 +99,8 @@ unchanged: package registry
 ```
 
 When an update rewrote Codex hooks and Codex now holds RoboRepo hooks awaiting review, the report
-ends with those hooks and the command that opens Codex's review.
+ends with those hooks and the command that opens Codex's review. A CLI-only installation skips this:
+Codex asks for approval when it next starts.
 
 ## Uninstall
 
