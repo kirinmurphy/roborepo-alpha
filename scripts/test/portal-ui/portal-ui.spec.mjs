@@ -137,6 +137,7 @@ test.describe("hook readiness warning", () => {
     guidance: {
       command: reviewCommand,
       review: { executable: reviewCommand, args: [] },
+      reviewResolved: "These updates will be applied to your next ChatGPT/Codex session.",
       review_required: "Review the listed RoboRepo hooks in Codex and trust only those. Newly trusted hooks run from the next Codex session.",
       preferredInterface: "cli",
       reviewApp: null,

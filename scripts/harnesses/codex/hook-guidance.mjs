@@ -16,6 +16,7 @@ export function codexHookGuidance(evidence = []) {
     review: executable ? { executable, args: [] } : null,
     reviewButtonLabel: desktopFirst ? "Open Codex CLI instead" : "Open Codex hook review",
     terminalOptionLabel: desktopFirst ? "Use the Codex CLI instead" : "Terminal command",
+    reviewResolved: "These updates will be applied to your next ChatGPT/Codex session.",
     review_required: "Review the listed RoboRepo hooks in Codex and trust only those. Newly trusted hooks run from the next Codex session.",
     reviewApp: desktopFirst ? "In the ChatGPT desktop app, use the hook review notice or Settings → Hooks." : null,
     inactive: desktopFirst

@@ -87,9 +87,8 @@ export function hookReviewResolvedNotice(status, { onLater } = {}) {
   const name = status.displayName || status.harness;
   const node = fill(tpl("tpl-hook-readiness"), {
     title: `${name} hooks reviewed`,
-    message: status.harness === "codex"
-      ? "These updates will be applied to your next ChatGPT/Codex session."
-      : `Nothing RoboRepo installed is waiting for review. Newly trusted hooks run from your next ${name} session.`,
+    message: status.guidance?.reviewResolved
+      || `Nothing RoboRepo installed is waiting for review. Newly trusted hooks run from your next ${name} session.`,
   });
   node.setAttribute("variant", "success");
   if (onLater) showLater(node, onLater, "Dismiss");

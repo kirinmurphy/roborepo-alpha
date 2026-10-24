@@ -177,6 +177,7 @@ one on `PATH`. Availability does not establish which interface the user is activ
 | `command` | Shell-quoted review executable, or null when none is available |
 | `review` | `{ executable, args }` for opening the harness review screen, or null |
 | `review_required`, `inactive`, `terminalHint` | Provider-owned status and action copy |
+| `reviewResolved` (optional) | Message once a fresh read confirms nothing is left to review; shared code falls back to a generic sentence |
 | `reviewApp` | Desktop review instructions when the desktop app is detected; otherwise null |
 | `reviewOnStartup` (optional) | Native interactive startup handles approval without extra portal notices, offers, resolved banners, or post-change terminal hints. Codex sets this only when a CLI is detected and no desktop runtime is detected. Other readiness remedies and diagnostic/API state remain available |
 | `preferredInterface` (optional) | `desktop` or `cli`; the provider's presentation preference based on availability |
