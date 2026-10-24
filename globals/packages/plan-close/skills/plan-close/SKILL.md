@@ -47,9 +47,11 @@ If the completed document is uncommitted or edited, report the discrepancy witho
 or claiming that closure is durable.
 
 For an already closed plan, inspect whether its named linked worktree still exists. If absent,
-report cleanup already done and stop. If present, resume only steps 9 and 10 with the canonical
-plan-scoped commands and their current guards. Do not repeat a completed cleanup action or remove
-a branch by hand. Report any guard that keeps the worktree without undoing the closed result.
+report cleanup already done and continue to the follow-up handoff in step 11. If present, resume
+only steps 9 and 10 with the canonical plan-scoped commands and their current guards. Do not repeat
+a completed cleanup action or remove
+a branch by hand. Report any guard that keeps the worktree without undoing the closed result,
+then continue to step 11.
 
 For a plan still in `review/`, resume verification of the remaining requirements. Reuse matching
 landing evidence as described in step 7; a previous refusal does not grant approval or make a
@@ -287,6 +289,27 @@ landing evidence was reused or scanned, which guard kept them, or why removal fa
 a guard. Skip this step for an archived or refused plan, and in repositories without a canonical
 cleanup command.
 
+### 11. Hand off to dependent follow-up plans
+
+After successful closure, including an already-closed retry, read the current repository plan
+snapshot using the repository's existing plan discovery. Find unfinished plans whose `depends_on`
+contains the closed plan's stable id; do not infer a dependency from a numbered title or `related`.
+Use each plan's authoritative copy and current lifecycle, title, path, dependencies, and blockers.
+
+In the final report, call out the next follow-up by its full title and current path and provide
+the matching instruction: `/plan-promote <path>` for backlog, `/plan-execute <path>` for ready or
+active, or `/plan-review <path>` for review. Check the other prerequisites before recommending
+that the user move on; closing one dependency does not establish that the follow-up is unblocked
+or ready. List remaining dependencies, explicit blockers, or uncertain landing when they prevent
+the next step. When several follow-ups qualify, list the choices and recommend an order supported
+by their dependency graph and next actions. If none exist, say there are no dependent follow-ups;
+if discovery is unavailable, report that limitation instead of claiming none exist.
+
+This is a handoff only. Do not start another workflow, create a branch/worktree, change another
+plan's lifecycle or blocker fields, or message another chat. A refused closure does not advance
+the dependency chain. Cleanup guards do not erase a committed closure; report them separately
+from follow-up readiness.
+
 ## Refusal and blocker reporting
 
 When any remaining issue prevents closure, stop and report every issue explicitly. Do not report
@@ -329,6 +352,7 @@ Close result
 - Closed: yes|no
 - Close commit: <hash>|failed|not applicable
 - Servers stopped: <pid :port result, ...>|none|skipped
+- Follow-up: <title and path, next instruction, remaining prerequisites>|none|unavailable|not applicable (closure refused)
 ```
 
 Also report the evidence behind the verdict, every refusal reason, unverified checks, paired skills
@@ -337,7 +361,8 @@ current Git status.
 
 For an already closed retry, report `Closed: yes (already closed)`, the existing close commit,
 `Lifecycle change: none`, and any resumed cleanup results. Mark tests, approval, and landing
-`not rerun (already closed)` rather than presenting historical results as fresh checks. Paired
+`not rerun (already closed)` rather than presenting historical results as fresh checks. Refresh
+the follow-up handoff from the current snapshot rather than repeating a stale next task. Paired
 skills not needed by this path are `not applicable`.
 
 ## Boundaries
