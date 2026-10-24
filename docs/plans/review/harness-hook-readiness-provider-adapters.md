@@ -523,13 +523,14 @@ approval: only a later Codex `hooks/list` result clears `review_required`.
       native state showed eight trusted hooks and one pending; after the user trusted Skill
       Visibility, the portal showed the exact resolved message and native state showed all nine
       enabled and trusted. CLI-only portal launch guidance was removed by the later user decision.
-- [x] Verify the native review flow with an unrelated pending hook and a changed definition after
+- [ ] Verify the native review flow with an unrelated pending hook and a changed definition after
       update. October 24 isolated real-engine check: with an unrelated untrusted user hook appended
       and a trusted Telemetry PostToolUse definition carrying an older label, reapplying Telemetry
       restored the shipped label; Codex reported that hook `modified`, the other four trusted, and the
       unrelated hook untrusted. Readiness listed only Telemetry PostToolUse as pending, never the
       unrelated hook, set a review revision, and its guidance has no Trust all recommendation. The
-      Codex review screen itself was not viewed. Package removal that shifts later hooks, package re-enable, and preservation of the
+      Codex review screen itself was not viewed; left open for the human to accept this RoboRepo-side
+      evidence or check the screen. Package removal that shifts later hooks, package re-enable, and preservation of the
       seven unaffected approvals were confirmed live October 23; partial and resolved desktop review
       were also confirmed by the user and native reads. Browser tests cover revision offers and
       avoiding Trust all recommendations.
@@ -538,7 +539,8 @@ approval: only a later Codex `hooks/list` result clears `review_required`.
 - [x] Confirm fresh core hook installation and native approval on the reference Mac. The user
       confirmed installation worked; October 23 native and portal reads confirmed all three core
       hooks enabled and trusted. Core installation also passed in the isolated real CLI fixture.
-      Installation after pre-existing trusted package hooks is retained in the lifecycle check above.
+      Installation after pre-existing trusted package hooks is confirmed by the October 24 isolated
+      real-engine check in the lifecycle entry above.
 - [ ] Confirm hooks/list on the oldest supported standalone Codex CLI. The October 23 real
       CLI-only fixture passed with the existing 0.163.0-alpha.11.2 bundled engine on isolated PATH;
       it does not establish standalone distribution or oldest-version compatibility. Simulated
@@ -676,10 +678,9 @@ None open. Every question was answered by the user; see the Decision Log.
   since the parser fix, so Phase 1 no longer runs a separate capture task. The `## Not tested`
   entry stays until the user confirms it.
 - **The review command is the selected executable, here
-  `/Applications/ChatGPT.app/Contents/Resources/codex`** (superseded October 24: that path no longer
-  exists; discovery now selects `…/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex`)
-  (since October 16, chosen desktop-first;
-  see the launch entry above). Its `--help` says a bare invocation
+  `/Applications/ChatGPT.app/Contents/Resources/codex`** (chosen desktop-first since October 16; see
+  the launch entry above. Superseded October 24: that path no longer exists, and discovery now
+  selects `…/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex`). Its `--help` says a bare invocation
   opens the interactive CLI. `3jp3yhtq` QA trusted the five telemetry hooks through this embedded
   runtime's review screen, and the next desktop task produced seven spool records, so trust
   recorded there applies to desktop sessions. Alternatives: a hardcoded `codex` (fails when no CLI
@@ -754,7 +755,11 @@ None open. Every question was answered by the user; see the Decision Log.
 - [x] `listAffected` `counts` option is never set; remove the dead branch (`portal/shared/hook-readiness.js:320`). — fixed in review (`d637c1f4`).
 - [x] User docs still describe review offers and hints on CLI-only installs (`docs/user/reference/telemetry.md:29`, `docs/user/guides/install-workflows.md:16,100`, `docs/user/reference/config-control-panel.md:92`). — fixed in review (`02250966`).
 - [x] Decision Log names a review executable path that no longer exists; mark it superseded by the current CodexCLI.app path. — fixed in review (this plan record).
-- [x] Two Not tested entries (core hooks after trusted package hooks; unrelated pending hook plus changed definition) can run against an isolated real-CLI fixture instead of the human. — run in review; both pass (see October 24 verification).
+- [x] Two Not tested entries (core hooks after trusted package hooks; unrelated pending hook plus changed definition) can run against an isolated real-CLI fixture instead of the human. — run in review; both pass (see the October 24 verification and the two Not tested entries). The review-screen half of the second stays a human decision.
+- [x] Pass 2: CLI-only and offer-placement wording in `telemetry.md` and `config-control-panel.md` did not match the pages that render notices and offers — fixed in review (`7e289a2b`).
+- [x] Pass 2: no test asserted the real Codex `reviewResolved` copy or the shared fallback — fixed in review (`c4c2e6b1`).
+- [x] Pass 2: stale plan wording (verification pointer, lifecycle sentence, doubled Decision Log parenthetical) — fixed in review (this plan record).
+- [ ] Pass 2 escalation: the unrelated-pending/changed-definition Not tested entry is proven on RoboRepo's side only; the human decides whether that settles it.
 - [x] A visible Agents approval offer survived a desktop-to-CLI-only discovery change during mutation — fixed in `1f3217ee`; regression failed before the fix and passed afterward.
 - [x] CLI-only hook approval duplicated Codex startup prompts — fixed in `1f3217ee` following the user decision; pending-review/resolved notices, offers, duplicate CLI tooltips, and post-change hints are suppressed while desktop guidance and other readiness remedies remain.
 - [x] Claude hooks.read comment claimed installed hooks execute automatically despite workspace-trust requirements — corrected to describe file-level configuration in review (`01220497`).
@@ -771,6 +776,10 @@ None open. Every question was answered by the user; see the Decision Log.
 - Resumed from pending Result at `1f3217ee` (base `0cd270ea`); plan tip `ec76894d` differed only in this plan. Main had advanced to `501f5aeb`; `roborepo plans sync-base` merged it cleanly as `0cdcb7bf`. The base change shares no files with this branch.
 - `npm run check` on `0cdcb7bf`: doctor (107 checks), CLI, install-collision, and 60/60 check suites passed, then package-install smoke failed at `scripts/test/package-install-smoke/tarball.mjs:23` (TypeError, not iterable). **Base failure:** a clean `git archive` export of main `501f5aeb` fails identically with exit 1. The gate stopped before its Docker legs and browser stage.
 - Fresh-context Validator pass 1: goals met with observable-outcome tests; no interaction defect from `501f5aeb` (`writeRootConfig` link detach, TOML `[hooks.state]` headers, write-log actor sanitizing, package command definitions). It reported the six code/doc fix findings and the two agent-runnable Not tested entries above, no escalations. Its 12 focused checks passed, including hook-readiness, hook-composition, hook-review-cli, hook-review-launch, shared-target-rows, root-config-merge characterization, and write-log.
+
+- Isolated real-engine checks (bundled Codex 0.163.0-alpha.11.2, temporary HOME/CODEX_HOME, fixture-only `trusted_hash` seeding) passed for core-after-trusted-package installation and for an unrelated pending hook plus a reapplied changed definition; details are in the two Not tested entries. No live hook or trust state was read or written.
+- After the pass-1 fixes, a second `npm run check` gave the same result: doctor (106 checks; the change from 107 is an installed-skills-out-of-date warning from the home installation, not this branch), CLI, install-collision, and 60/60 check suites passed, then the package-install smoke base failure. The focused hook browser suite (25 tests) passed after each portal change.
+- Fresh-context Validator pass 2 reported seven fix findings (docs, test gap, plan wording) and one escalation, all recorded above.
 
 #### October 23 CLI-only workflow refinement and native QA
 
