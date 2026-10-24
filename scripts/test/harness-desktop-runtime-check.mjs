@@ -110,6 +110,7 @@ try {
   assert.equal(selectedHarnessExecutable(codex, options), path.join(codexBundle, "Contents/Resources/codex"));
   const desktopGuidance = codexHookGuidance(detectHarnessProvider(codex, options).evidence);
   assert.equal(desktopGuidance.preferredInterface, "desktop");
+  assert.equal(desktopGuidance.reviewOnStartup, false);
   assert.match(desktopGuidance.reviewApp, /hook review notice.*Settings/);
   assert.match(desktopGuidance.missingCore.steps[1], /In the ChatGPT desktop app/);
   assert.equal(desktopGuidance.review.executable, path.join(codexBundle, "Contents/Resources/codex"));
@@ -134,6 +135,9 @@ try {
   executable(path.join(bin, "codex"), 'echo "0.162.0"\n');
   const cliGuidance = codexHookGuidance(detectHarnessProvider(codex, options).evidence);
   assert.equal(cliGuidance.preferredInterface, "cli");
+  assert.equal(cliGuidance.reviewOnStartup, true);
+  assert.equal(codexHookGuidance(codexBoth.evidence).reviewOnStartup, false);
+  assert.equal(codexHookGuidance().reviewOnStartup, false, "missing runtimes retain unknown-status remedies");
   assert.equal(cliGuidance.reviewApp, null, "CLI-only installations never get desktop instructions");
   assert.match(cliGuidance.missingCore.steps[1], /Codex CLI/);
   assert.match(cliGuidance.inactive, /Codex CLI/);

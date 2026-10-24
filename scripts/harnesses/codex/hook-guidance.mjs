@@ -11,6 +11,7 @@ export function codexHookGuidance(evidence = []) {
   const cliStep = "Open the Codex CLI.";
   return {
     preferredInterface: desktopFirst ? "desktop" : "cli",
+    reviewOnStartup: !desktopFirst && Boolean(cli),
     command: executable ? shellQuote(executable) : null,
     review: executable ? { executable, args: [] } : null,
     reviewButtonLabel: desktopFirst ? "Open Codex CLI instead" : "Open Codex hook review",

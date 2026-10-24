@@ -195,6 +195,70 @@ test.describe("hook readiness warning", () => {
     }))));
   };
 
+  test("CLI-only pending approvals stay out of portal notices and offers", async ({ page }) => {
+    await page.clock.install();
+    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex]) }));
+    let current = pendingReview();
+    current.guidance = codexHookGuidance([{ kind: "executable", source: "cli", resolvedPath: reviewCommand }]);
+    const reads = await routeStatuses(page, { codex: () => current });
+    const launches = await routeLaunch(page, { launched: true });
+    for (const url of ["/settings", "/", "/tokens"]) {
+      await page.goto(url);
+      await expect.poll(() => reads.length).toBeGreaterThan(0);
+      await expect(page.getByText("Codex hooks need review", { exact: true })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Set up via CLI", exact: true })).toHaveCount(0);
+    }
+    await page.goto("/settings");
+    await page.route("**/api/config/packages", (route) => route.fulfill({ json: { ok: true, hookHarnesses: ["codex"] } }));
+    await page.locator("#telemetry-toggle").click();
+    await expect.poll(() => reads.some(read => read.fresh)).toBe(true);
+    await expect(page.getByRole("region", { name: "Hook review" })).toHaveCount(0);
+    current = { ...reviewed(), guidance: current.guidance };
+    await page.clock.fastForward(2100);
+    await returnToPortal(page);
+    await expect(page.getByText("Codex hooks reviewed", { exact: true })).toHaveCount(0);
+    expect(launches).toHaveLength(0);
+
+    current = { ...pendingReview("cli-offer"), guidance: current.guidance };
+    const config = await (await page.request.get("/api/config")).json();
+    await page.route("**/api/config/packages/bulk", (route) => route.fulfill({ json: { ok: true, status: 200, results: [], config, hookHarnesses: ["codex"] } }));
+    const section = config.behaviorView.find(entry => entry.bulkToggle);
+    await page.goto("/agents");
+    const before = reads.length;
+    const escaped = section.category.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    await page.getByRole("checkbox", { name: new RegExp(`^${escaped}: (Select|Deselect) All$`) }).dispatchEvent("click");
+    await expect.poll(() => reads.length).toBeGreaterThan(before);
+    await expect(page.getByRole("region", { name: "Hook review" })).toHaveCount(0);
+  });
+
+  test("CLI-only missing core hooks retain installation without a duplicate CLI tooltip", async ({ page }) => {
+    await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex]) }));
+    let current = codexStatus("missing", [group("core", "Codex core hooks", "missing", [hook("SessionStart", "missing")])]);
+    current.guidance = codexHookGuidance([{ kind: "executable", source: "cli", resolvedPath: reviewCommand }]);
+    await routeStatuses(page, { codex: () => current });
+    await page.route("**/api/config/hooks/codex/install", route => {
+      current = { ...current, state: "review_required", reviewRevision: "cli-core", groups: [group("core", "Codex core hooks", "review_required", [hook("SessionStart", "review_required")])] };
+      return route.fulfill({ json: { ok: true, status: current } });
+    });
+    await page.goto("/settings");
+    await expect(page.getByRole("button", { name: "Set up via CLI", exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "Install hooks", exact: true }).click();
+    await expect(page.locator("#hook-readiness")).toBeHidden();
+  });
+
+  test("CLI-only missing disabled and unknown hooks still have remedies", async ({ page }) => {
+    await page.route("**/api/settings", route => route.fulfill({ json: setupWith([codex]) }));
+    let current;
+    await routeStatuses(page, { codex: () => current });
+    for (const [state, title] of [["missing", "Codex hooks are missing"], ["inactive", "Codex hooks are turned off"], ["unknown", "Codex hook status is unknown"]]) {
+      current = codexStatus(state, [group("telemetry", "Token Telemetry", state, [hook("Stop", state), hook("PostToolUse", "review_required")])], { reviewRevision: "cli-mixed" });
+      current.guidance = codexHookGuidance([{ kind: "executable", source: "cli", resolvedPath: reviewCommand }]);
+      await page.goto("/settings");
+      await expect(page.getByText(title, { exact: true })).toBeVisible();
+      await expect(page.getByText("Codex hooks need review", { exact: true })).toHaveCount(0);
+    }
+  });
+
   test("Settings, Tokens, and Home offer selective review in Codex; Agents does not", async ({ page }) => {
     await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex, claude]) }));
     await routeStatuses(page, { claude: claudeActive, codex: pendingReview() });
@@ -332,7 +396,7 @@ test.describe("hook readiness warning", () => {
     await page.clock.install();
     await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex]) }));
     let current = pendingReview();
-    current.guidance = codexHookGuidance([{ kind: "executable", source: "cli", resolvedPath: reviewCommand }]);
+    current.guidance = codexHookGuidance([{ kind: "executable", source: "desktop", resolvedPath: reviewCommand }]);
     current.groups[0].hooks[0].state = "review_required";
     await routeStatuses(page, { codex: () => current });
     await routeLaunch(page, { launched: true });
@@ -342,7 +406,7 @@ test.describe("hook readiness warning", () => {
     await expect(notice.locator('[data-slot="message"]')).toContainText("core hooks and hooks installed by enabled packages");
     await expect(notice.locator('[data-slot="steps"] > li')).toHaveCount(4);
     await expect(notice.locator('[data-slot="step-trust-text"]')).toHaveText("Approve 1 Codex core hook; 1 Skill visibility package hook; 1 Token Telemetry package hook.");
-    await expect(notice.getByRole("button", { name: "Open Codex hook review" })).toBeVisible();
+    await expect(notice.getByRole("button", { name: "Set up via CLI", exact: true })).toBeVisible();
     await expect(notice.locator('[data-slot="terminal-option"]')).toBeHidden();
     current.groups[0].hooks[0].state = "active";
     current.groups[1].hooks[0].state = "active";
@@ -676,6 +740,14 @@ test.describe("hook readiness warning", () => {
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await expect(page.getByRole("region", { name: "Hook review" }).getByText("Codex hooks reviewed", { exact: true })).toBeVisible();
     expect(reads.filter((read) => read.fresh)).toHaveLength(4);
+
+    current = pendingReview("desktop-last-offer");
+    await page.getByRole("checkbox", { name: new RegExp(`^${escaped}: (Select|Deselect) All$`) }).dispatchEvent("click");
+    await expect(offer.locator("portal-notice")).toHaveCount(1);
+    current.guidance = codexHookGuidance([{ kind: "executable", source: "cli", resolvedPath: reviewCommand }]);
+    await page.getByRole("checkbox", { name: new RegExp(`^${escaped}: (Select|Deselect) All$`) }).dispatchEvent("click");
+    await expect(offer.locator("portal-notice")).toHaveCount(0);
+
   });
 });
 

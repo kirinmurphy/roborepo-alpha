@@ -12,37 +12,34 @@ Codex runs a non-managed hook only after you review and trust its exact definiti
 package installs its hooks but does not grant that trust, and RoboRepo never grants it for you or
 records a trust decision.
 
-After you change something that rewrites Codex hooks (enabling or disabling a package, a bulk
-change on `/agents`, turning on token tracking, applying the `hooks` bundle, or an update),
-RoboRepo asks Codex whether any RoboRepo hook now awaits review. If one does:
+On a CLI-only installation, Codex prompts for pending hook approval when you start it. Review
+there, or reopen `/hooks` later. RoboRepo does not repeat that prompt with a portal approval
+banner, one-time offer, or post-change terminal instructions. Readiness still reports pending
+hooks in package status, the API, and explicit `roborepo doctor --installed` diagnostics.
 
-- **In the portal**, Home, Settings, and Tokens update their normal notice. On Agents, an inline
-  card appears once for each set of pending hooks and **Later** closes it. A page with a normal
-  notice shows that notice alone. With a detected desktop app, follow the ordered steps and use
-  **Set up via CLI** for the terminal instructions in a tooltip. With only a CLI detected, package
-  review also offers **Open Codex hook review** and **Copy command** directly.
-- **In the terminal**, the command prints the same list and the command that opens Codex's review.
-  It never opens anything itself.
+When the desktop app is detected, RoboRepo provides approval guidance after package changes,
+core hook installation, or updates:
+
+- Home, Settings, and Tokens update their normal notice. Agents shows one inline card per pending
+  hook set; **Later** closes it. A page with a normal notice shows that notice alone.
+- Follow the ordered desktop steps. **Set up via CLI** provides the terminal alternative in a
+  tooltip. RoboRepo commands also print the review next step when hooks await approval.
 
 RoboRepo detects available interfaces, not which interface you are actively using. When both are
-available, desktop instructions come first. The desktop app's bundled CLI supplies the fallback.
-
-**Open Codex hook review** (or **Open Codex CLI instead**) opens a terminal window running Codex's own CLI, which shows **Hooks
-need review** when it starts. It prefers the CLI bundled with the Codex desktop app, then a `codex`
-on your `PATH`. The window opens only when you click, and only on macOS for now; elsewhere, use
-**Copy command** and run it in a terminal.
+available, desktop guidance remains visible. The desktop app's bundled CLI supplies its terminal
+fallback. Where a launch action is offered, it opens only after a click and only on macOS;
+elsewhere, copy the command and run it in a terminal.
 
 In Codex's review:
 
-1. Trust only the RoboRepo hooks the portal or terminal listed. If Codex also lists hooks you do
-   not recognize, leave them alone rather than choosing **Trust all**.
-2. Come back to the portal. It checks again when you return and shows
-   only what is still pending, or that review is done.
-3. Start a new Codex session. Sessions already running do not pick up newly trusted hooks.
+1. Trust only the RoboRepo hooks you recognize. Leave unrelated hooks alone instead of choosing
+   **Trust all**.
+2. For desktop guidance, return to the portal to see only what remains pending, or the resolved
+   message. CLI-only approval does not add a portal completion banner.
+3. Start a new Codex session. Running sessions do not pick up newly trusted hooks.
 
-The Codex app has the same review under **Settings → Hooks**; there is no link that opens that
-screen directly. In the CLI, `/hooks` reopens it later. Trust is stored in `~/.codex/config.toml`,
-which the desktop app and the CLI both read, so trusting in either applies to both.
+Desktop review is available under **Settings → Hooks**. Trust is stored in `~/.codex/config.toml`,
+which the desktop app and CLI share; trusting in either applies to both.
 
 Codex keys trust by a hook's position in `~/.codex/hooks.json`. RoboRepo adds a package's Codex
 hooks, and its own core hooks, after the existing ones, so a change leaves the hooks you already
@@ -52,7 +49,8 @@ the hooks after them at the same event, and Codex asks you to review those again
 ## Checking Hook Readiness
 
 Settings, Tokens, and Home show a notice for RoboRepo hooks that need attention, one per kind of
-problem, each with its own remedy. `roborepo doctor --installed` prints the same findings as
+problem, each with its own remedy. CLI-only pending approval is handled by Codex startup; missing,
+disabled, and unknown hooks still produce portal notices. `roborepo doctor --installed` prints findings as
 `hint:` lines. Neither changes Codex's trust decisions.
 
 | State | Meaning | What to do |
@@ -71,30 +69,21 @@ Core hooks come with the optional `hooks` bundle, chosen during onboarding or wi
 `roborepo bundle apply hooks`. They install beside package hooks that are already there, and
 readiness expects them only once you have chosen that bundle.
 
-If core hooks are missing, click **Install hooks** in the notice. The local portal server
-runs the same bundle installer as the terminal command, for all available harnesses, then refreshes
-the status. If approval is needed, follow the four setup steps: desktop instructions come first
-when the app is detected; CLI-only installations show CLI instructions. **Set up via CLI**
-provides the CLI steps in either case.
-Installation does not open Codex automatically or grant trust. If installation fails, the notice
-keeps **Set up via CLI** available. This inline help link starts with the same Install button, then explains how to open Codex CLI and approve the hooks. **Why?** beside the notice heading explains each installed hook. Both links show tooltips on hover or keyboard focus. On Settings, the notice sits below the token
-tracking heading and above the tracking toggle.
+If core hooks are missing, click **Install hooks** in the notice. The local server runs the same
+bundle installer as `roborepo bundle apply hooks`, for all available harnesses, then refreshes
+status. Installation does not launch Codex or grant trust.
 
-The notice shows **Install hooks** while core hooks are missing, then retains the setup checklist
-for native approval.
-While core hooks await approval, the four setup steps remain visible with a green check and
-strikethrough on the completed installation step. **Set up via CLI** remains a tooltip with the
-same completed first step, replacing the collapsible CLI alternative for this state.
-A muted reminder beneath step 2 says to leave
-unrecognized hooks alone. Installation refreshes status automatically,
-and returning to the page picks up installation or approval done elsewhere. **Check again** appears
-when there is no install or launch action, including when Codex could not report its status.
+With desktop detected, the four setup steps remain visible while approval is pending. The completed
+installation step has a green check and strikethrough. **Why?** explains the pending hooks;
+**View Hook Details** names their events and purposes. **Set up via CLI** provides the terminal
+alternative. Package hooks use the same checklist independently of the core Hooks bundle, and
+mixed core/package sets share one checklist with pending counts and owners.
 
-Package hooks use the same four-step checklist, with the installation of hooks awaiting review
-already checked and crossed out. Other missing hooks retain their separate installation remedy. The approval step combines the package name, pending count, and event names in one concise
-line. Already-active hooks are omitted. **Why?** names each pending hook and explains its purpose and package ownership. **Set up via
-CLI** provides ordered terminal instructions in a tooltip. Package approval does not require the
-core Hooks bundle. If core and package hooks await approval together, one checklist lists both.
+On CLI-only installs, the missing-hook notice includes installation and native CLI review steps
+without a duplicate **Set up via CLI** tooltip. Once installation leaves only pending approval,
+the notice disappears: Codex handles that approval at startup. Other readiness problems remain
+visible. **Check again** is available when there is no install or launch action, including when
+Codex cannot report its status. Returning to the page refreshes status after external changes.
 
 The native ChatGPT desktop review uses each command hook’s `statusMessage` as its label.
 Every shipped RoboRepo Codex hook has a native name, including package hooks. **Why?** uses

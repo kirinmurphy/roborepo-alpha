@@ -1,6 +1,7 @@
 // The one-time hook review offer: after an operation that rewrote hooks (a package change, a bulk
 // change, turning telemetry on), read readiness fresh for the harnesses it touched and, if any
 // RoboRepo hook now awaits review, show one nonmodal card with the review action and **Later**.
+// Providers whose native startup handles approval do not need an extra offer.
 //
 // The card appears at most once per review set: the server's `reviewRevision` names exactly which
 // RoboRepo hooks are pending, so rereads, other pages, and reloads do not offer the same set again.
@@ -23,6 +24,10 @@ export async function offerHookReview(harnessIds) {
   // The fresh reads replaced the server's cached results; pages showing a notice pick them up.
   refreshHookReadinessMounts();
   for (const status of statuses) {
+    if (status?.guidance?.reviewOnStartup) {
+      activeOffers.get(status.harness)?.();
+      continue;
+    }
     if (!status?.reviewRevision) continue;
     const key = `${status.harness}:${status.reviewRevision}`;
     if (wasOffered(key)) continue;
@@ -46,6 +51,7 @@ function showOffer(status) {
   // The hooks this card offered; "reviewed" needs a read confirming each one is now active.
   let offered = pendingReviewKeys(status);
   const render = (next) => {
+    if (next.guidance?.reviewOnStartup) return close();
     const handlers = {
       onCheck: () => readHookStatus(next.harness, { fresh: true }).then(render).catch(() => {}),
       onStatus: render,

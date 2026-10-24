@@ -178,6 +178,7 @@ one on `PATH`. Availability does not establish which interface the user is activ
 | `review` | `{ executable, args }` for opening the harness review screen, or null |
 | `review_required`, `inactive`, `terminalHint` | Provider-owned status and action copy |
 | `reviewApp` | Desktop review instructions when the desktop app is detected; otherwise null |
+| `reviewOnStartup` (optional) | Native interactive startup handles approval without extra portal notices, offers, resolved banners, or post-change terminal hints. Codex sets this only when a CLI is detected and no desktop runtime is detected. Other readiness remedies and diagnostic/API state remain available |
 | `preferredInterface` (optional) | `desktop` or `cli`; the provider's presentation preference based on availability |
 | `reviewButtonLabel`, `terminalOptionLabel` (optional) | Labels for the terminal action and its disclosure |
 | `missingCore` (optional) | `{ title, message, steps, installLabel, manualApprovalStep, purposeLabel, cliSetupLabel, cliSetup }`; procedural installation/review/session steps, contextual hook-purpose help from readiness and CLI setup tooltips (`cliSetup`: `string[]`), with manual instructions when terminal launch is unavailable |
@@ -185,7 +186,7 @@ one on `PATH`. Availability does not establish which interface the user is activ
 `packageReview` optionally supplies `{ message, mixedMessage, steps, purposeLabel,
 reviewCaution, cliSetupLabel, cliSetup }` for installed package-hook approval. Its installation
 step is complete independently of the core bundle; mixed pending sets use its shared approval
-steps while listing both owners. Shared rendering adds the combined pending owner/count/event approval instruction from readiness.
+steps while listing both owners. Shared rendering adds the combined pending owner/count approval instruction; events appear in View Hook Details from readiness.
 
 Shared code renders this guidance without choosing a provider's executable or product-specific copy.
 

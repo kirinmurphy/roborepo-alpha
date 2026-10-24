@@ -1,7 +1,8 @@
 // Hook readiness as terminal text: `doctor --installed` lists every harness whose RoboRepo hooks
 // will not all run, and commands that just rewrote hooks (package enable/disable, bundle apply,
 // onboarding, update) print the review next step when, and only when, a fresh read shows RoboRepo
-// hooks awaiting review. The terminal never opens anything; it names the command to run.
+// hooks awaiting review and the provider does not handle approval at startup. The terminal never
+// opens anything; it names the command to run.
 
 import { harnessDisplayName } from "../harnesses/registry.mjs";
 import { loadHookReadiness } from "./hook-readiness-status.mjs";
@@ -24,7 +25,7 @@ export async function printHookReviewHint(harnesses, { log = console.log, read =
   for (const harness of new Set(harnesses)) {
     let readiness;
     try { readiness = await read(harness); } catch { continue; }
-    if (!readiness?.reviewRevision) continue;
+    if (!readiness?.reviewRevision || readiness.guidance?.reviewOnStartup) continue;
     const name = readiness.displayName || harnessDisplayName(harness);
     const pending = readiness.groups
       .filter((group) => group.hooks.some((hook) => hook.state === "review_required"))

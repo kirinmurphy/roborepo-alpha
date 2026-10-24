@@ -32,7 +32,7 @@ export function readHookStatus(harness, { fresh = false } = {}) {
   return portalGetJson(`/api/config/hooks/${encodeURIComponent(harness)}/status${fresh ? "?fresh=1" : ""}`);
 }
 
-// The notices one harness status needs: a review notice when any RoboRepo hook awaits review, and
+// The notices one harness status needs: review guidance unless native startup handles it, and
 // one more for the worst other problem, each with its own remedy. `handlers` wires the buttons:
 // onCheck (Check again), onStatus (a launch reply carried a newer status), onLater (offer only).
 //
@@ -45,7 +45,7 @@ export function hookReadinessNotices(status, handlers = {}) {
   const groups = status.groups || [];
   const notices = [];
   const review = groupsWithHookState(groups, "review_required");
-  if (review.length) notices.push(reviewNotice(status, name, review, handlers));
+  if (review.length && !status.guidance?.reviewOnStartup) notices.push(reviewNotice(status, name, review, handlers));
   const other = OTHER_STATES.find((state) => groupsWithHookState(groups, state).length > 0)
     ?? (groups.length === 0 && status.state === "unknown" ? "unknown" : null);
   if (other) notices.push(stateNotice(status, name, other, groupsWithHookState(groups, other), handlers));
@@ -55,6 +55,7 @@ export function hookReadinessNotices(status, handlers = {}) {
 
 // The RoboRepo hooks this status shows awaiting review, as stable keys.
 export function pendingReviewKeys(status) {
+  if (status?.guidance?.reviewOnStartup) return new Set();
   return new Set((status?.groups || []).flatMap((group) => group.hooks
     .filter((hook) => hook.state === "review_required")
     .map((hook) => hookKey(group, hook))));
@@ -63,7 +64,7 @@ export function pendingReviewKeys(status) {
 // Review is done only when a successful read finds every hook that was pending now active. A read
 // that failed (unknown), or a hook that went missing instead of being trusted, is not a review.
 export function reviewConfirmed(previousKeys, status) {
-  if (!previousKeys?.size || !status || status.reviewRevision) return false;
+  if (!previousKeys?.size || !status || status.reviewRevision || status.guidance?.reviewOnStartup) return false;
   const now = new Map((status.groups || []).flatMap((group) => group.hooks.map((hook) => [hookKey(group, hook), hook.state])));
   return [...previousKeys].every((key) => now.get(key) === "active");
 }
@@ -171,7 +172,7 @@ function stateNotice(status, name, state, groups, handlers) {
   const node = fill(tpl("tpl-hook-readiness"), { title, message: `${coreCopy ? coreCopy.message : message} ${missingRemedy(status, coreCopy ? affected : groups, state)}`.trim() });
   if (state !== "unknown") listAffected(node, affected, state);
   if (coreCopy) {
-    renderHookSetup(node, { ...coreCopy, purpose: hookPurposes(groups.filter((group) => group.owner === "core"), "missing") });
+    renderHookSetup(node, { ...coreCopy, cliSetup: guidance.reviewOnStartup ? null : coreCopy.cliSetup, purpose: hookPurposes(groups.filter((group) => group.owner === "core"), "missing") });
   }
 
   if (state === "missing" && status.coreBundle && groups.some((group) => group.owner === "core")) {

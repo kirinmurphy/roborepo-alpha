@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 // Terminal hook review guidance end to end: a temp HOME, a fake Codex whose `hooks/list` answers
-// from that home's hooks.json, and the real CLI. Commands that rewrite Codex hooks print the review
-// step exactly once, only when a RoboRepo hook awaits review; a base-only install asks Codex
-// nothing; and the printed command prefers the desktop app's bundled CLI over one on PATH.
+// from that home's hooks.json, and the real CLI. CLI-only changes leave approval to native startup;
+// desktop-detected changes print review guidance using the bundled CLI fallback.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -29,7 +28,7 @@ try {
 
 function cliOnlyMachine() {
   const machine = makeMachine("cli-only");
-  const pathCodex = fakeCodex(path.join(machine.root, "bin", "codex"));
+  fakeCodex(path.join(machine.root, "bin", "codex"));
 
   let result = machine.run("bundle", "apply", "--default");
   assert.doesNotMatch(result.stdout, REVIEW_LINE, "base-only install installs nothing that needs review");
@@ -39,10 +38,8 @@ function cliOnlyMachine() {
   assert.doesNotMatch(result.stdout, REVIEW_LINE, "headless onboarding applies base only");
 
   result = machine.run("package", "enable", "telemetry");
-  assert.equal(count(result.stdout, REVIEW_LINE), 1, "one review step for the package change, none extra from telemetry");
-  assert.match(result.stdout, /^Codex hooks need review: Token Telemetry \(SessionStart, PreToolUse, PostToolUse, UserPromptSubmit, Stop\)\.$/m);
-  assert.doesNotMatch(result.stdout, /Trust all/);
-  assert.match(result.stdout, new RegExp(`^  Open Codex's review: ${escape(pathCodex)}$`, "m"), "CLI-only machine: the PATH binary");
+  assert.doesNotMatch(result.stdout, REVIEW_LINE, "CLI startup owns hook approval");
+  assert.doesNotMatch(result.stdout, /Open Codex.s review:/);
 
   const hooksFile = path.join(machine.root, "home", ".codex", "hooks.json");
   const labelled = JSON.parse(fs.readFileSync(hooksFile, "utf8"));
@@ -57,7 +54,7 @@ function cliOnlyMachine() {
   assert.deepEqual(JSON.parse(fs.readFileSync(hooksFile, "utf8")), labelled, "reapply labels existing package hooks in place without changing their commands or positions");
 
   result = machine.run("telemetry", "enable");
-  assert.equal(count(result.stdout, REVIEW_LINE), 1, "telemetry enable reports once");
+  assert.doesNotMatch(result.stdout, REVIEW_LINE, "CLI-only telemetry enable does not repeat native approval instructions");
 
   // Trusted in Codex: nothing to say.
   result = machine.run("package", "enable", "telemetry", { FAKE_CODEX_TRUSTED: JSON.stringify(telemetryCommands) });
@@ -65,10 +62,10 @@ function cliOnlyMachine() {
 
   // The optional hooks bundle adds core hooks; telemetry's stay trusted at their positions.
   result = machine.run("bundle", "apply", "hooks", { FAKE_CODEX_TRUSTED: JSON.stringify(telemetryCommands) });
-  assert.match(result.stdout, /^Codex hooks need review: Codex core hooks \(SessionStart, PreToolUse\)\.$/m);
+  assert.doesNotMatch(result.stdout, REVIEW_LINE, "CLI-only core installation leaves review to Codex startup");
   assert.doesNotMatch(result.stdout, /Token Telemetry \(/, "trusted package hooks did not move, so they need no new review");
 
-  // Package changes in a headless run still print guidance, and never open a terminal.
+  // CLI-only changes never launch a terminal.
   result = machine.run("package", "disable", "telemetry", { FAKE_CODEX_TRUSTED: "[]" });
   assert.equal(result.status, 0);
   assert.ok(!fs.existsSync(path.join(machine.state, "terminal-launch")), "the CLI never launches a terminal");
@@ -113,7 +110,7 @@ function recursivePackageChanges() {
   assert.match(fs.readFileSync(path.join(reconcileMachine.root, "home", ".codex", "hooks.json"), "utf8"), /recursive-observer/);
 
   let result = machine.run("package", "enable", "review-top");
-  assert.match(result.stdout, /Codex hooks need review: review-leaf/, "transitive hook dependency gets a terminal review hint");
+  assert.doesNotMatch(result.stdout, REVIEW_LINE, "CLI-only transitive changes leave review to Codex startup");
   const portalResult = machine.runScript(`
     const { mutatePackage } = await import(${JSON.stringify(path.join(repoRoot, "scripts/cli/config-mutate.mjs"))});
     const { reportPackageHookChange } = await import(${JSON.stringify(path.join(repoRoot, "scripts/cli/hook-readiness-status.mjs"))});
@@ -123,7 +120,7 @@ function recursivePackageChanges() {
   assert.deepEqual(portalResult.changedPackageIds.sort(), ["review-base", "review-leaf", "review-middle", "review-top"]);
   machine.run("package", "enable", "telemetry");
   result = machine.run("package", "disable", "review-base", "--cascade");
-  assert.match(result.stdout, REVIEW_LINE, "cascading through hook-owning dependents checks remaining hook readiness");
+  assert.doesNotMatch(result.stdout, REVIEW_LINE, "CLI-only cascades leave remaining approval to Codex startup");
   const bulkResult = machine.runScript(`
     const { applyBulkPackageChange } = await import(${JSON.stringify(path.join(repoRoot, "scripts/cli/config-bulk.mjs"))});
     const { reportPackageHookChange } = await import(${JSON.stringify(path.join(repoRoot, "scripts/cli/hook-readiness-status.mjs"))});
@@ -205,9 +202,6 @@ function commands(fragment) {
     .flatMap(([, groups]) => groups.flatMap((group) => group.hooks.map((hook) => hook.command)));
 }
 
-function count(text, pattern) {
-  return text.split("\n").filter((line) => pattern.test(line)).length;
-}
 
 function escape(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
