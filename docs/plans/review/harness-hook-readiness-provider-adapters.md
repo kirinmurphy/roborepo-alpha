@@ -1,7 +1,7 @@
 ---
 id: wjlt1zvf
 priority: high
-next_action: Confirm remaining core, desktop fallback, and platform checks before plan approval; package-smoke failure is reproduced on main.
+next_action: Human approval of the reviewed implementation; package-smoke failure is a base failure reproduced on main.
 blocked_by: []
 depends_on:
   - 3jp3yhtq
@@ -527,14 +527,14 @@ approval: only a later Codex `hooks/list` result clears `review_required`.
       October 24: the user confirmed the desktop notice's terminal option opens a terminal, and
       restated that CLI-only installs need no portal workflow because Codex prompts at startup
       (already implemented per the October 23 decision).
-- [ ] Verify the native review flow with an unrelated pending hook and a changed definition after
+- [x] Verify the native review flow with an unrelated pending hook and a changed definition after
       update. October 24 isolated real-engine check: with an unrelated untrusted user hook appended
       and a trusted Telemetry PostToolUse definition carrying an older label, reapplying Telemetry
       restored the shipped label; Codex reported that hook `modified`, the other four trusted, and the
       unrelated hook untrusted. Readiness listed only Telemetry PostToolUse as pending, never the
       unrelated hook, set a review revision, and its guidance has no Trust all recommendation. The
-      Codex review screen itself was not viewed; left open for the human to accept this RoboRepo-side
-      evidence or check the screen. Package removal that shifts later hooks, package re-enable, and preservation of the
+      Codex review screen itself was not viewed. The user accepted this RoboRepo-side evidence
+      October 24 ("Also tick the review-screen item"). Package removal that shifts later hooks, package re-enable, and preservation of the
       seven unaffected approvals were confirmed live October 23; partial and resolved desktop review
       were also confirmed by the user and native reads. Browser tests cover revision offers and
       avoiding Trust all recommendations.
@@ -547,10 +547,12 @@ approval: only a later Codex `hooks/list` result clears `review_required`.
       hooks enabled and trusted. Core installation also passed in the isolated real CLI fixture.
       Installation after pre-existing trusted package hooks is confirmed by the October 24 isolated
       real-engine check in the lifecycle entry above.
-- [ ] Confirm hooks/list on the oldest supported standalone Codex CLI. The October 23 real
+- [x] Confirm hooks/list on the oldest supported standalone Codex CLI. The October 23 real
       CLI-only fixture passed with the existing 0.163.0-alpha.11.2 bundled engine on isolated PATH;
       it does not establish standalone distribution or oldest-version compatibility. Simulated
-      unsupported-method coverage verifies the unknown fallback.
+      unsupported-method coverage verifies the unknown fallback. Not required for this plan: the user
+      dropped it October 24 ("Drop the oldest standalone Codex CLI check as not required; the unknown
+      fallback is tested").
 - [x] Check Claude hook execution in a fresh interactive workspace and a -p session. File-level
       configured status is implemented and tested; actual workspace-trust behavior remains
       unconfirmed. Not required for this plan: the user ruled it out of scope October 24 ("this
@@ -570,17 +572,17 @@ approval: only a later Codex `hooks/list` result clears `review_required`.
 
 ## Open Questions
 
-One review decision is open: whether RoboRepo-side evidence settles the unrelated-pending and
-changed-definition Not tested entry, or the human checks Codex's review screen (see `## Review`).
-Every earlier question was answered by the user; see the Decision Log.
+None open. Every question was answered by the user; see the Decision Log.
 
 ## Decision Log
 
 - **October 24 remaining manual checks:** The user confirmed core hooks run in a fresh desktop
   session and that the desktop notice's terminal option opens a terminal. Windows installer parity
   is deferred to `l1mz96d9`, where a task was added. Claude workspace-trust execution is out of
-  scope for this Codex hook story. Alternative for each deferral was keeping it as an approval
-  blocker; the user chose not to.
+  scope for this Codex hook story. The user also dropped the oldest-standalone-CLI check (the unknown
+  fallback is tested) and accepted RoboRepo-side evidence for the unrelated-pending/changed-definition
+  review-flow check without viewing Codex's review screen. Alternative for each was keeping it as an
+  approval blocker; the user chose not to.
 - **October 23 CLI-only approval guidance:** User observed native approval prompts on CLI startup and explicitly approved removing redundant pending-review banners, one-time offers, CLI-focused Set up via CLI tooltips, and repeated post-install terminal instructions. Desktop-detected installs retain approval guidance. Missing, disabled, and unknown hooks retain their remedies. This refines presentation without changing installation, native trust, or readiness reporting.
 
 - **October 23 checklist synchronization requested by the user:** mark the verified browser flow, current live capture, and core installation/approval checked with their evidence limits. Keep seven native/platform scenarios open, narrow partially verified items to their remaining checks, and track the previously documented external-update refresh gap as an open review finding. Current capture replaces reliance on historical session provenance; a fresh desktop session remains a separate required check. This updates tracking only; overall review and approval stay pending.
@@ -773,7 +775,7 @@ Every earlier question was answered by the user; see the Decision Log.
 - [x] Pass 2: CLI-only and offer-placement wording in `telemetry.md` and `config-control-panel.md` did not match the pages that render notices and offers — fixed in review (`7e289a2b`).
 - [x] Pass 2: no test asserted the real Codex `reviewResolved` copy or the shared fallback — fixed in review (`c4c2e6b1`).
 - [x] Pass 2: stale plan wording (verification pointer, lifecycle sentence, doubled Decision Log parenthetical) — fixed in review (this plan record).
-- [ ] Pass 2 escalation: the unrelated-pending/changed-definition Not tested entry is proven on RoboRepo's side only; the human decides whether that settles it.
+- [x] Pass 2 escalation: the unrelated-pending/changed-definition Not tested entry is proven on RoboRepo's side only; the human decides whether that settles it. — resolved by the user October 24: RoboRepo-side evidence accepted.
 - [x] A visible Agents approval offer survived a desktop-to-CLI-only discovery change during mutation — fixed in `1f3217ee`; regression failed before the fix and passed afterward.
 - [x] CLI-only hook approval duplicated Codex startup prompts — fixed in `1f3217ee` following the user decision; pending-review/resolved notices, offers, duplicate CLI tooltips, and post-change hints are suppressed while desktop guidance and other readiness remedies remain.
 - [x] Claude hooks.read comment claimed installed hooks execute automatically despite workspace-trust requirements — corrected to describe file-level configuration in review (`01220497`).
