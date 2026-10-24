@@ -98,14 +98,26 @@ Hook merging (`scripts/cli/hook-composition.mjs`, `mergeHooksInto`/`unmergeHooks
   hook entry itself. Two packages that happen to install hooks with an identical command string
   will collide silently; two packages with different command strings for logically-the-same
   behavior will both persist.
-- New entries are **prepended**, not appended, so a package's hooks can run before pre-existing
-  ones for the same event (deliberate, for deny-before-allow ordering).
+- Claude and Gemini **prepend** new entries so a package's hooks can run before pre-existing
+  entries for the same event (deliberate, for deny-before-allow ordering). Codex **appends** new
+  entries because its trust keys depend on each hook's position in the file.
 - This is a known limitation (see the module's header comment). A full package-ID-tagged
   provenance system would be new infrastructure; address it when a concrete collision requires it.
 
 Codex tool approvals and MCP presets are keyed by server/preset name — same-name collision across
 two packages is not currently detected pre-enable (would surface as one package's approvals
 silently overwriting the other's TOML block).
+
+## Codex hook names and approval help
+
+Each shipped Codex command hook needs a readable `statusMessage` beginning with `RoboRepo: `.
+Add its contextual explanation to the fragment’s `_descriptions` map, keyed by that exact name.
+Keep names unique within the fragment. The readiness model derives each hook’s name,
+explanation, event, command, and owner from this data; **Why?** displays the hooks currently
+awaiting approval. Native merges ignore underscore keys, so help text is never installed as a
+native hook field. Label changes alter the native approval hash; explanation-only edits do not.
+Run `node scripts/test/core-hook-wiring-check.mjs` to check all shipped Codex metadata, then
+exercise installation in an isolated home before updating live hooks.
 
 ## Source vs. generated boundaries
 

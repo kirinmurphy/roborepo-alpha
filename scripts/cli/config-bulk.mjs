@@ -27,7 +27,7 @@ export function isBatchInFlight() {
 // paths and is not reentrant); reconcileEnabledPackages is the mutation-relevant core of it.
 async function reconcileOnce() {
   const { reconcileEnabledPackages } = await import("./packages.mjs");
-  await reconcileEnabledPackages([]);
+  return reconcileEnabledPackages([]);
 }
 
 // Validate the whole batch BEFORE touching anything: ownership conflicts would otherwise hit
@@ -64,6 +64,7 @@ export async function applyBulkPackageChange(ids, enabled) {
   try {
     const catalog = loadPackageCatalog({ includeUnavailable: true });
     const currentEnabled = new Set(effectiveEnabledIds(catalog));
+    const changedPackageIds = new Set();
 
     if (enabled) {
       // Preflight the would-be-enabled set as one unit, then mutate sequentially.
@@ -79,13 +80,14 @@ export async function applyBulkPackageChange(ids, enabled) {
       }
       for (const id of targetEnabled) {
         const result = await mutatePackage(id, true);
+        for (const changed of result.changedPackageIds || []) changedPackageIds.add(changed);
         const entry = results.find((r) => r.id === id);
         entry.ok = result.ok;
         entry.changed = true;
         entry.message = result.message;
       }
-      await reconcileOnce();
-      return { ok: true, status: 200, results };
+      for (const id of await reconcileOnce()) changedPackageIds.add(id);
+      return { ok: true, status: 200, results, changedPackageIds: [...changedPackageIds] };
     }
 
     // Disable path: no ownership conflicts possible, but dependency edges do exist — sequential
@@ -97,11 +99,12 @@ export async function applyBulkPackageChange(ids, enabled) {
         continue;
       }
       const result = await mutatePackage(id, false);
+      for (const changed of result.changedPackageIds || []) changedPackageIds.add(changed);
       results.push({ id, changed: true, ok: result.ok, message: result.message });
       if (result.ok) currentEnabled.delete(id);
     }
-    await reconcileOnce();
-    return { ok: true, status: 200, results };
+    for (const id of await reconcileOnce()) changedPackageIds.add(id);
+    return { ok: true, status: 200, results, changedPackageIds: [...changedPackageIds] };
   } finally {
     batchInFlight = false;
   }

@@ -15,7 +15,10 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { resolvesIntoRepo } from "../cli/hook-composition.mjs";
+import { detachRepoLink, resolvesIntoRepo } from "../cli/repo-links.mjs";
+import { hookFilePath } from "../cli/hook-composition.mjs";
+import { getHarnessProvider } from "../harnesses/registry.mjs";
+import { resolveHarnessPath } from "../harnesses/paths.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const cli = path.join(repoRoot, "scripts/cli/main.mjs");
@@ -58,8 +61,8 @@ const env = {
   SKIP_MCP: "1",
 };
 
-function run(args) {
-  const result = spawnSync(process.execPath, [cli, ...args], { env, encoding: "utf8" });
+function run(args, runEnv = env) {
+  const result = spawnSync(process.execPath, [cli, ...args], { env: runEnv, encoding: "utf8" });
   return result;
 }
 
@@ -76,6 +79,18 @@ function codexHookCommands() {
 }
 
 try {
+  // --- each provider's declared storage path is used, including Gemini's root config ---
+  {
+    const claudeOverride = path.join(tmp, "claude-settings.json");
+    assert.equal(hookFilePath("claude", { rootConfigPath: claudeOverride }), claudeOverride);
+    for (const harness of ["codex", "gemini"]) {
+      const manifest = getHarnessProvider(harness).manifest;
+      const key = harness === "codex" ? "hooks" : "rootConfig";
+      assert.equal(hookFilePath(harness), resolveHarnessPath(manifest, key),
+        `${harness} hook file comes from its own manifest`);
+    }
+  }
+
   // --- symlink guard: complete chains back into the repo are refused ---
   {
     const repoTarget = path.join(repoRoot, "globals");
@@ -87,6 +102,73 @@ try {
     fs.symlinkSync(linkTwo, linkOne);
     assert.equal(resolvesIntoRepo(linkOne, repoRoot), true, "multi-hop symlink into repo is detected");
     assert.equal(resolvesIntoRepo(outside, repoRoot), false, "ordinary outside directory is allowed");
+    assert.equal(resolvesIntoRepo(path.join(linkOne, "new-hooks.json"), repoRoot), true,
+      "a new file below a repo-linked directory is still inside the checkout");
+    const dangling = path.join(tmp, "dangling-hooks.json");
+    fs.symlinkSync(path.join(repoTarget, "not-yet-created-hooks.json"), dangling);
+    assert.equal(resolvesIntoRepo(dangling, repoRoot), true,
+      "a dangling file link into the checkout is still detected before writing");
+    const fakeRepo = path.join(tmp, "fake-repo");
+    fs.mkdirSync(fakeRepo);
+    const danglingInFakeRepo = path.join(tmp, "dangling-fake-hooks.json");
+    fs.symlinkSync(path.join(fakeRepo, "new-hooks.json"), danglingInFakeRepo);
+    assert.equal(detachRepoLink(danglingInFakeRepo, fakeRepo), true,
+      "a dangling link into the checkout is detached");
+    assert.equal(fs.existsSync(danglingInFakeRepo), false);
+    const linkedDirectory = path.join(tmp, "linked-directory");
+    fs.symlinkSync(fakeRepo, linkedDirectory);
+    assert.throws(() => detachRepoLink(path.join(linkedDirectory, "new-hooks.json"), fakeRepo),
+      /resolves into the checkout/, "a linked parent directory must not carry writes into the checkout");
+  }
+
+  // --- merge order: Codex appends so trusted positions hold; Claude prepends ---
+  // Codex keys hook trust by `<file>:<event>:<group index>:<handler index>`, so a merge that moves an
+  // existing entry revokes trust the user already granted. Claude treats the first decisive hook
+  // result as final, so a package's own hooks still go first there.
+  {
+    const entry = (command) => ({ matcher: "", hooks: [{ type: "command", command }] });
+    const first = { PostToolUse: [entry("echo first-a"), entry("echo first-b")] };
+    const second = { PostToolUse: [entry("echo second-a"), entry("echo second-b")] };
+    const commandsAt = (content, key) => JSON.parse(content)[key].PostToolUse.map((e) => e.hooks[0].command);
+
+    const codexPath = path.join(tmp, "order-codex-hooks.json");
+    const codexHooks = getHarnessProvider("codex").adapters.hooks;
+    fs.writeFileSync(codexPath, codexHooks.merge(codexPath, first).content);
+    fs.writeFileSync(codexPath, codexHooks.merge(codexPath, second).content);
+    assert.deepEqual(
+      commandsAt(fs.readFileSync(codexPath, "utf8"), "hooks"),
+      ["echo first-a", "echo first-b", "echo second-a", "echo second-b"],
+      "Codex merge keeps earlier entries at their indexes and appends the new fragment in order",
+    );
+
+    const claudePath = path.join(tmp, "order-claude-settings.json");
+    fs.writeFileSync(claudePath, "{}");
+    const claudeHooks = getHarnessProvider("claude").adapters.hooks;
+    fs.writeFileSync(claudePath, claudeHooks.merge(claudePath, first).content);
+    fs.writeFileSync(claudePath, claudeHooks.merge(claudePath, second).content);
+    assert.deepEqual(
+      commandsAt(fs.readFileSync(claudePath, "utf8"), "hooks"),
+      ["echo second-a", "echo second-b", "echo first-a", "echo first-b"],
+      "Claude merge still prepends the new fragment, preserving its internal order",
+    );
+  }
+
+  // --- duplicate commands within one fragment keep the old merge's last-entry winner ---
+  {
+    const entry = (matcher, command) => ({ matcher, hooks: [{ type: "command", command }] });
+    const fragment = { PostToolUse: [
+      entry("first", "echo repeated"),
+      entry("middle", "echo distinct"),
+      entry("last", "echo repeated"),
+    ] };
+    for (const harness of ["claude", "codex"]) {
+      const hooksPath = path.join(tmp, `dedupe-${harness}.json`);
+      fs.writeFileSync(hooksPath, "{}");
+      const result = getHarnessProvider(harness).adapters.hooks.merge(hooksPath, fragment);
+      const groups = JSON.parse(result.content).hooks.PostToolUse;
+      assert.deepEqual(groups.map((group) => group.matcher), ["middle", "last"],
+        `${harness} preserves the old merge's intra-fragment dedupe`);
+    }
   }
 
   // --- enable: both harnesses' hooks land ---
@@ -135,6 +217,35 @@ try {
     assert.equal(redisable.status, 0, `re-disable failed: ${redisable.stderr}`);
     assert.ok(!claudeHookCommands().includes("echo hook-composition-fixture-claude"), "Claude hook stays removed after re-disable");
     assert.ok(!codexHookCommands().includes("echo hook-composition-fixture-codex"), "Codex hook stays removed after re-disable");
+  }
+
+  // --- legacy links into the checkout: a home whose hook files are symlinks into the repo (the old
+  // install layout) gets real files, and the tracked targets are never written through ---
+  {
+    const linkedHome = path.join(tmp, "linked-home");
+    fs.mkdirSync(path.join(linkedHome, ".claude"), { recursive: true });
+    fs.mkdirSync(path.join(linkedHome, ".codex"), { recursive: true });
+    fs.writeFileSync(path.join(linkedHome, ".codex", "config.toml"), "");
+    const trackedSettings = path.join(fixturePkgDir, "tracked-settings.json");
+    const trackedCodexHooks = path.join(fixturePkgDir, "tracked-codex-hooks.json");
+    fs.writeFileSync(trackedSettings, "{}\n");
+    fs.writeFileSync(trackedCodexHooks, `${JSON.stringify({ hooks: {} })}\n`);
+    const liveSettings = path.join(linkedHome, ".claude", "settings.json");
+    const liveCodexHooks = path.join(linkedHome, ".codex", "hooks.json");
+    fs.symlinkSync(trackedSettings, liveSettings);
+    fs.symlinkSync(trackedCodexHooks, liveCodexHooks);
+
+    const enable = run(["package", "enable", "hook-composition-fixture"], {
+      ...env, HOME: linkedHome, ROBOREPO_STATE_DIR: path.join(linkedHome, ".roborepo"),
+    });
+    assert.equal(enable.status, 0, `enable through legacy links failed: ${enable.stderr}`);
+    assert.equal(fs.readFileSync(trackedSettings, "utf8"), "{}\n", "tracked Claude settings target is not written through");
+    assert.equal(fs.readFileSync(trackedCodexHooks, "utf8"), `${JSON.stringify({ hooks: {} })}\n`, "tracked Codex hooks target is not written through");
+    for (const live of [liveSettings, liveCodexHooks]) {
+      assert.equal(fs.lstatSync(live).isSymbolicLink(), false, `${path.basename(live)} is replaced by a real file`);
+    }
+    assert.match(fs.readFileSync(liveSettings, "utf8"), /hook-composition-fixture-claude/, "Claude hook lands in the real settings file");
+    assert.match(fs.readFileSync(liveCodexHooks, "utf8"), /hook-composition-fixture-codex/, "Codex hook lands in the real hooks file");
   }
 
   console.log("ok: cross-harness hook composition round-trips for both Claude and Codex");

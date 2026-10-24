@@ -175,8 +175,11 @@ auto-loaded" unless a specific skill-load event or field is available.
 
 ## Codex Hooks
 
-System hooks are configured in `globals/system/hooks/codex/` and wired through the generated
-`generated/codex/hooks.json`. Package-owned hooks (Caveman and JDocMunch's `SessionStart` hooks,
+Core scripts live in `globals/system/hooks/codex/`. Their hook definitions and native review
+labels are authored in `globals/harnesses/codex/hooks-codex.json`;
+`scripts/build/render-agent-permissions.mjs` renders `generated/codex/hooks.json` from that source.
+Codex’s adapter reconciles `statusMessage` in place for matching event/command pairs, preserving
+commands, positions, and all other handler fields. Labels participate in native approval hashes. Package-owned hooks (Caveman and JDocMunch's `SessionStart` hooks,
 telemetry's capture hooks) are authored under their owning package
 (`globals/packages/<package>/hooks-codex.json`) and composed into the live Codex hook config only
 when that package is enabled.
@@ -394,3 +397,25 @@ render drift (manifest vs. `generated/codex/rules/default.rules`), not live-mach
 `~/.codex/config.toml` is similar: it is an active local root config file, not a
 symlink, and can diverge the same way. Existing machines need the root config merge/export
 workflow before new baseline session defaults appear in active Codex sessions.
+
+## Codex native names and contextual help
+
+Codex hook fragments keep native names and approval explanations beside their definitions.
+Every shipped command hook has a readable `statusMessage` starting with `RoboRepo: `.
+The fragment’s `_descriptions` map keys each explanation by that exact native name. Core
+metadata lives inside `globals/harnesses/codex/hooks-codex.json`’s `hooks` map; package metadata
+lives beside the event arrays in its `hooks-codex.json` fragment.
+
+The existing underscore-key convention keeps this source-only metadata out of native merges.
+The core renderer also strips underscore keys from its generated baseline. Changing an
+explanation therefore leaves native hook definitions unchanged. Changing `statusMessage`
+changes the definition Codex approves; reapplying updates that label in place but requires the
+user to review its new approval hash.
+
+`fragmentHooks` in `scripts/harnesses/hook-readiness.mjs` carries `name` and `description`
+with each expected event/command pair. Readiness preserves those fields alongside the owning
+package and observed state. The portal builds **Why?** from those actual hook records, including
+partial pending sets, instead of choosing a generic core or package explanation.
+`scripts/test/core-hook-wiring-check.mjs` requires unique native names and matching descriptions
+for shipped core, active-package, and archived-package Codex hook fragments, and rejects orphaned
+descriptions. This check runs in the CI gate.

@@ -1,0 +1,38 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "count=0; for d in \"${HOME}/.codex/skills\"/*/; do name=\"$(basename \"${d%/}\")\"; case \"${name}\" in .*) continue;; esac; [ -L \"${d%/}\" ] || count=$((count+1)); done; for d in \"${HOME}/.claude/skills\"/*/; do name=\"$(basename \"${d%/}\")\"; case \"${name}\" in .*) continue;; esac; [ -L \"${d%/}\" ] || count=$((count+1)); done; [ \"${count}\" -gt 0 ] && echo \"unmanaged skills: ${count} — run 'roborepo skill adopt <name>' to version-control\" || true",
+            "statusMessage": "RoboRepo: unmanaged skills check"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.codex/hooks/permission-check.mjs\"",
+            "statusMessage": "RoboRepo: command permissions"
+          },
+          {
+            "type": "command",
+            "command": "node \"$HOME/.codex/hooks/minimize-bash-output.mjs\"",
+            "statusMessage": "RoboRepo: concise command output"
+          }
+        ]
+      }
+    ],
+    "_descriptions": {
+      "RoboRepo: unmanaged skills check": "Checks the Codex and Claude skill folders for unmanaged skill directories and suggests adopting them into RoboRepo.",
+      "RoboRepo: command permissions": "Applies RoboRepo’s command permission rules before a shell tool runs.",
+      "RoboRepo: concise command output": "Limits noisy build, lint, and typecheck output and blocks matching watch, verbose, and debug commands."
+    }
+  }
+}

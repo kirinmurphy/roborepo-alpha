@@ -27,6 +27,11 @@
 #                  enabled-packages registry; src_rel is "-" (no single source file);
 #                  user's original is backed up to pre-install dir before first render.
 #                  (renderHomeRules / reclaim_rendered_rules_target)
+#   hook_fragment  a hooks file packages also merge into: the source's `hooks` map merges
+#                  through the provider's hooks.merge and unmerges on removal, entry by entry.
+#   managed_files  a directory packages also copy into: each source file is copied and
+#                  tracked by hash; only unedited copies are updated or removed.
+#                  (both: scripts/cli/shared-target-rows.mjs)
 #
 # harness	kind	src_rel	home_sub	home_root	flags
 claude	root_config	generated/claude/settings.json	settings.json	claude	-
@@ -35,7 +40,7 @@ claude	managed_copy	globals/harnesses/claude/MANAGED_BY_ROBOREPO.md	MANAGED_BY_R
 # commands/ is no longer a manifest row: it is composed at install/update time from only the
 # enabled packages' generated/packages/<pkg>/claude/commands wrappers (link_package_commands in
 # install-lib.sh), not copied as one static repo-wide directory. See Phase 7 of the ownership plan.
-claude	managed_copy	globals/system/hooks/claude	hooks	claude	-
+claude	managed_files	globals/system/hooks/claude	hooks	claude	-
 claude	managed_copy	globals/harnesses/claude/hooks	hooks/provider	claude	-
 claude	cleanup	-	MANAGED_BY_HARNESS_CONFIGS.md	claude	-
 claude	cleanup	-	plugins/known_marketplaces.json	claude	-
@@ -53,8 +58,8 @@ codex	rendered_rules	-	AGENTS.md	codex	-
 # enabled packages' generated/packages/<pkg>/codex/commands wrappers (link_package_commands in
 # install-lib.sh), not copied as one static repo-wide directory. See Phase 7 of the ownership plan.
 codex	managed_copy	globals/harnesses/codex/MANAGED_BY_ROBOREPO.md	MANAGED_BY_ROBOREPO.md	codex	nodoctor
-codex	managed_copy	generated/codex/hooks.json	hooks.json	codex	-
-codex	managed_copy	globals/system/hooks/codex	hooks	codex	-
+codex	hook_fragment	generated/codex/hooks.json	hooks.json	codex	-
+codex	managed_files	globals/system/hooks/codex	hooks	codex	-
 codex	managed_copy	generated/codex/rules	rules	codex	-
 codex	cleanup	-	MANAGED_BY_HARNESS_CONFIGS.md	codex	-
 codex	cleanup	-	skills	codex	-

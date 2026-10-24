@@ -416,7 +416,7 @@ snapshot_pre_install_original() {
   local -a candidates=()
   local _h kind src_rel home_abs _flags src
   while IFS=$'\t' read -r _h kind src_rel home_abs _flags; do
-    case "${kind}" in root_config|link|managed_copy|rendered_rules) ;; *) continue ;; esac
+    case "${kind}" in root_config|link|managed_copy|managed_files|hook_fragment|rendered_rules) ;; *) continue ;; esac
     src="${repo_root}/${src_rel}"
     [[ -e "${home_abs}" && ! -L "${home_abs}" ]] || continue   # absent or our symlink — nothing to keep
     is_builtin_authored "${home_abs}" && continue
@@ -455,6 +455,21 @@ snapshot_pre_install_original() {
     say "pre-install backup" "snapshot skipped: ${reason:-tar failed with no message}"
     rm -f "${archive}" "${tar_err}"   # never leave a partial/corrupt image behind
   fi
+}
+
+# hook_fragment and managed_files rows share their target with package installs, so they merge or
+# copy per entry instead of owning the whole path. One Node implementation serves bundle apply, this
+# installer, and uninstall: scripts/cli/shared-target-rows.mjs. Usage: <apply|remove> <kind>
+# <harness> <src_rel> <home_abs>; the conflict policy rides ROBOREPO_ON_CONFLICT.
+shared_target_row() {
+  local action="$1" kind="$2" harness="$3" src_rel="$4" home_abs="$5"
+  if ! command -v node >/dev/null 2>&1; then
+    echo "skip: ${home_abs} needs node to ${action} ${kind} entries" >&2
+    return 0
+  fi
+  local -a args=("${action}" "${kind}" "${harness}" "${src_rel}" "${home_abs}")
+  [[ "${dry_run}" -eq 1 ]] && args+=(--dry-run)
+  node "${repo_root}/scripts/cli/shared-target-rows.mjs" "${args[@]}"
 }
 
 install_copy_item() {

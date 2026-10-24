@@ -56,6 +56,12 @@ fail() {
   failed=1
 }
 
+# Advisory output: something the user may want to act on that is not a broken install. Printed even
+# under --quiet, and never fails the run.
+hint() {
+  echo "hint: $*"
+}
+
 check_file() {
   [[ -e "${repo_root}/$1" ]] && ok "$1 exists" || fail "$1 missing"
 }
@@ -740,8 +746,16 @@ if [[ "${check_installed}" -eq 1 ]]; then
 fi
 
 while IFS=$'\t' read -r _doctor_harness_id warning; do
-  [[ -z "${warning}" ]] || echo "hint: ${warning}"
+  [[ -z "${warning}" ]] || hint "${warning}"
 done < <(harness_warning_rows)
+
+# Hook readiness asks each harness whether it will run RoboRepo's hooks, which starts the Codex
+# runtime, so it is a live-home check like the rest of --installed.
+if [[ "${check_installed}" -eq 1 ]] && command -v node >/dev/null 2>&1; then
+  while IFS= read -r readiness_line; do
+    [[ -z "${readiness_line}" ]] || hint "${readiness_line}"
+  done < <(node "${repo_root}/scripts/cli/hook-readiness-doctor.mjs" 2>/dev/null)
+fi
 
 if [[ "${failed}" -ne 0 ]]; then
   if [[ "${drift_detected}" -eq 1 ]]; then

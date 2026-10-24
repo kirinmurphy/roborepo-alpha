@@ -185,13 +185,14 @@ export async function mutatePackage(id, enabled, { dryRun = false } = {}) {
   if (!findPackage(id)) {
     return { ok: false, message: unavailablePackageMessage(id) };
   }
+  const changed = new Set();
   try {
     const flags = dryRun ? ["--dry-run"] : [];
-    if (enabled) await enablePackage([id, ...flags]);
-    else await disablePackage([id, ...flags]);
-    return { ok: true, message: `${enabled ? "enabled" : "disabled"}: ${id}` };
+    if (enabled) await enablePackage([id, ...flags], changed);
+    else await disablePackage([id, ...flags], changed);
+    return { ok: true, message: `${enabled ? "enabled" : "disabled"}: ${id}`, changedPackageIds: [...changed] };
   } catch (err) {
-    return { ok: false, message: String(err?.message || err) };
+    return { ok: false, message: String(err?.message || err), changedPackageIds: [...changed] };
   }
 }
 

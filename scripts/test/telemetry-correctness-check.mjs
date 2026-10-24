@@ -5,7 +5,6 @@ import os from "node:os";
 import path from "node:path";
 import { transcriptStats } from "../harnesses/transcript-parse.mjs";
 import { analyzeTelemetry } from "../cli/telemetry-analyze.mjs";
-import { summarizeCodexTelemetryHooks } from "../cli/codex-hook-status.mjs";
 
 const FIXTURES_DIR = path.join(path.dirname(new URL(import.meta.url).pathname), "fixtures", "telemetry");
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-telemetry-correctness-"));
@@ -19,29 +18,12 @@ try {
   testClaudeTranscriptFailureText();
   testCodexTranscript();
   testCodexTranscriptTurnContextModel();
-  testCodexHookTrustStatus();
   testAnalyzerWarnings();
   testAnalyzerRateLimitPresent();
   testAnalyzerIndexedSummaries();
   console.log("telemetry correctness checks passed");
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
-}
-
-function testCodexHookTrustStatus() {
-  const events = ["SessionStart", "PreToolUse", "PostToolUse", "UserPromptSubmit", "Stop"];
-  const hooks = events.map((event) => ({
-    eventName: event[0].toLowerCase() + event.slice(1),
-    command: `roborepo telemetry capture --harness codex --event ${event}`,
-    enabled: true,
-    trustStatus: "trusted",
-  }));
-  assert.deepEqual(summarizeCodexTelemetryHooks([{ hooks }]), { state: "active", installed: 5 });
-  assert.deepEqual(summarizeCodexTelemetryHooks([{ hooks: hooks.slice(1) }]), { state: "missing", installed: 4 });
-  assert.deepEqual(summarizeCodexTelemetryHooks([{ hooks: hooks.map((hook, i) =>
-    i === 2 ? { ...hook, trustStatus: "untrusted" } : hook) }]), { state: "review_required", installed: 5 });
-  assert.deepEqual(summarizeCodexTelemetryHooks([{ hooks: hooks.map((hook, i) =>
-    i === 2 ? { ...hook, enabled: false } : hook) }]), { state: "inactive", installed: 5 });
 }
 
 function testClaudeTranscript() {

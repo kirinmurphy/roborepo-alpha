@@ -1,17 +1,67 @@
 {
   "SessionStart": [
-    { "matcher": "startup|resume", "hooks": [{ "type": "command", "command": "roborepo telemetry capture --harness codex --event SessionStart" }] }
+    {
+      "matcher": "startup|resume",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "roborepo telemetry capture --harness codex --event SessionStart",
+          "statusMessage": "RoboRepo: telemetry session start"
+        }
+      ]
+    }
   ],
   "PreToolUse": [
-    { "matcher": "", "hooks": [{ "type": "command", "command": "roborepo telemetry capture --harness codex --event PreToolUse" }] }
+    {
+      "matcher": "",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "roborepo telemetry capture --harness codex --event PreToolUse",
+          "statusMessage": "RoboRepo: telemetry before tool use"
+        }
+      ]
+    }
   ],
   "PostToolUse": [
-    { "matcher": "", "hooks": [{ "type": "command", "command": "roborepo telemetry capture --harness codex --event PostToolUse" }] }
+    {
+      "matcher": "",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "roborepo telemetry capture --harness codex --event PostToolUse",
+          "statusMessage": "RoboRepo: telemetry after tool use"
+        }
+      ]
+    }
   ],
   "UserPromptSubmit": [
-    { "hooks": [{ "type": "command", "command": "roborepo telemetry capture --harness codex --event UserPromptSubmit" }] }
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "roborepo telemetry capture --harness codex --event UserPromptSubmit",
+          "statusMessage": "RoboRepo: telemetry prompt submitted"
+        }
+      ]
+    }
   ],
   "Stop": [
-    { "hooks": [{ "type": "command", "command": "roborepo telemetry capture --harness codex --event Stop" }] }
-  ]
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "roborepo telemetry capture --harness codex --event Stop",
+          "statusMessage": "RoboRepo: telemetry response complete"
+        }
+      ]
+    }
+  ],
+  "_descriptions": {
+    "RoboRepo: telemetry session start": "Records local token and tool-usage evidence when a session starts or resumes.",
+    "RoboRepo: telemetry before tool use": "Records local usage evidence before a tool runs, so activity before the tool call remains observable.",
+    "RoboRepo: telemetry after tool use": "Records local token and tool-usage evidence after a tool finishes.",
+    "RoboRepo: telemetry prompt submitted": "Records local usage evidence when you submit a prompt.",
+    "RoboRepo: telemetry response complete": "Records local usage evidence when the assistant finishes a response."
+  }
 }

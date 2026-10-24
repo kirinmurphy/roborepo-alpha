@@ -25,6 +25,7 @@ const cli = path.join(repoRoot, "scripts/cli/main.mjs");
   const hooksJson = fs.readFileSync(path.join(repoRoot, "generated/codex/hooks.json"), "utf8");
   assert.doesNotMatch(hooksJson, /CAVEMAN MODE ACTIVE/, "fixed: Caveman Codex hook no longer hardcoded in the committed baseline hooks.json");
   assert.doesNotMatch(hooksJson, /jdocmunch: docs indexed/, "fixed: JDocMunch Codex hook no longer hardcoded in the committed baseline hooks.json");
+  assert.doesNotMatch(hooksJson, /jcodemunch: use resolve_repo/, "fixed: JCodeMunch Codex hook no longer hardcoded in the committed baseline hooks.json");
 
   const cavemanFragment = JSON.parse(fs.readFileSync(path.join(repoRoot, "globals/packages/caveman/hooks-codex.json"), "utf8"));
   assert.match(cavemanFragment.SessionStart[0].hooks[0].command, /CAVEMAN MODE ACTIVE/, "caveman package owns its Codex SessionStart hook");

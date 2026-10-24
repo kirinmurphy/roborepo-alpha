@@ -125,9 +125,15 @@ export function discoverHarnessProviders(providers) {
 }
 
 // Command operations resolve live: versioned desktop directories may be replaced by an update.
-export function selectedHarnessExecutable(manifest, options = {}) {
+// A CLI on PATH first, then the desktop bundle's own binary. `prefer: "desktop"` reverses that for a
+// caller that opens the harness for the user, where the binary bundled with the app the user
+// installed is the one known to match it.
+export function selectedHarnessExecutable(manifest, { prefer = "cli", ...options } = {}) {
   const evidence = detectHarnessProvider(manifest, options).evidence;
-  return evidence.find((item) => item.kind === "executable" && item.source === "cli")?.resolvedPath
-    ?? evidence.find((item) => item.kind === "executable" && item.source === "desktop")?.resolvedPath
-    ?? null;
+  const order = prefer === "desktop" ? ["desktop", "cli"] : ["cli", "desktop"];
+  for (const source of order) {
+    const found = evidence.find((item) => item.kind === "executable" && item.source === source)?.resolvedPath;
+    if (found) return found;
+  }
+  return null;
 }

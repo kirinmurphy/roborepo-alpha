@@ -679,6 +679,15 @@ check_no_active_remnants() {
           failed=1
         fi
         ;;
+      hook_fragment|managed_files)
+        command -v node >/dev/null 2>&1 || continue
+        local remnant
+        while IFS= read -r remnant; do
+          [[ -n "${remnant}" ]] || continue
+          echo "remnant: ${remnant}" >&2
+          failed=1
+        done < <(node "${repo_root}/scripts/cli/shared-target-rows.mjs" remnants "${kind}" "${_h}" "${src_rel}" "${home_abs}")
+        ;;
       root_config)
         # A drifted root_config is left in place on purpose by remove_root_config (the user edited
         # it after roborepo's last write), so it is NOT a remnant even though is_builtin_authored

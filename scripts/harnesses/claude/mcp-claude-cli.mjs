@@ -8,17 +8,12 @@
 
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
-import { selectedHarnessExecutable } from "./discovery.mjs";
+import { selectedHarnessExecutable } from "../discovery.mjs";
 
-const claudeManifest = JSON.parse(fs.readFileSync(new URL("../../globals/harnesses/claude/provider.json", import.meta.url), "utf8"));
+const claudeManifest = JSON.parse(fs.readFileSync(new URL("../../../globals/harnesses/claude/provider.json", import.meta.url), "utf8"));
 
 export function selectedClaudeExecutable() {
   return selectedHarnessExecutable(claudeManifest);
-}
-
-export function shellQuote(arg) {
-  if (/^[a-zA-Z0-9_./:=@%+-]+$/.test(arg)) return arg;
-  return `'${arg.replace(/'/g, `'\\''`)}'`;
 }
 
 export function claudeMcpArgs(opts, spec) {

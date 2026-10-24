@@ -5,9 +5,13 @@
       "hooks": [
         {
           "type": "command",
-          "command": "node \"$HOME/.codex/hooks/skill-reference-observer.mjs\""
+          "command": "node \"$HOME/.codex/hooks/skill-reference-observer.mjs\"",
+          "statusMessage": "RoboRepo: skill reference tracking"
         }
       ]
     }
-  ]
+  ],
+  "_descriptions": {
+    "RoboRepo: skill reference tracking": "Observes skill-reference reads after tool calls and records which skills informed the response."
+  }
 }

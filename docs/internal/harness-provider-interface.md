@@ -152,6 +152,73 @@ Each capability maps to a required adapter group and method set, defined in
 | `session-launch` | `session` | `launch` |
 | `session-resume` | `session` | `resume` |
 
+### Hooks: read, merge order, and readiness
+
+`hooks.read({ cwd, hooksPath })` returns a promise of one record per installed hook handler:
+`{ event, command, sourcePath, trust, enabled, identity? }`. `event` uses the fragment spelling
+(`PostToolUse`) so records compare directly with `hooks` resources. `trust` is one of `trusted`,
+`managed`, `untrusted`, `modified`, `not-required`, or `unknown`. The optional `identity` is an
+opaque digest that changes exactly when the harness would ask for review again (Codex folds the
+trust key and definition hash into it); it is never trust material itself.
+
+| Provider | `read` | Trust source |
+| --- | --- | --- |
+| Claude | Reads the `hooks` key of `settings.json` | Always `not-required`: Claude has no per-hook approval. It is not proof a hook runs: an interactive session holds settings hooks until the user trusts the workspace, while `-p` and SDK sessions treat it as trusted. Package status says "configured" rather than "active" for these hooks |
+| Codex | Asks `codex app-server` for `hooks/list`, using the executable `selectedHarnessExecutable` picks (a `PATH` CLI first) | Codex's own `trustStatus`; `isManaged` maps to `managed`. A missing, old, or slow runtime returns the file's entries with `trust: "unknown"` instead of throwing |
+| Gemini | Still the `notYetMigrated` stub; readiness skips it | — |
+
+Two optional `hooks` methods feed the readiness comparison: `core()` returns the harness's core hook
+fragment, and `guidance()` returns next-step copy for a harness that gates hooks on trust (Codex).
+Codex derives its guidance from validated discovery evidence, preferring a desktop-bundled CLI over
+one on `PATH`. Availability does not establish which interface the user is actively using.
+
+| Guidance field | Meaning |
+| --- | --- |
+| `command` | Shell-quoted review executable, or null when none is available |
+| `review` | `{ executable, args }` for opening the harness review screen, or null |
+| `review_required`, `inactive`, `terminalHint` | Provider-owned status and action copy |
+| `reviewResolved` (optional) | Message once a fresh read confirms nothing is left to review; shared code falls back to a generic sentence |
+| `reviewApp` | Desktop review instructions when the desktop app is detected; otherwise null |
+| `reviewOnStartup` (optional) | Native interactive startup handles approval without extra portal notices, offers, resolved banners, or post-change terminal hints. Codex sets this only when a CLI is detected and no desktop runtime is detected. Other readiness remedies and diagnostic/API state remain available |
+| `preferredInterface` (optional) | `desktop` or `cli`; the provider's presentation preference based on availability |
+| `reviewButtonLabel`, `terminalOptionLabel` (optional) | Labels for the terminal action and its disclosure |
+| `missingCore` (optional) | `{ title, message, steps, installLabel, manualApprovalStep, purposeLabel, cliSetupLabel, cliSetup }`; procedural installation/review/session steps, contextual hook-purpose help from readiness and CLI setup tooltips (`cliSetup`: `string[]`), with manual instructions when terminal launch is unavailable |
+
+`packageReview` optionally supplies `{ message, mixedMessage, steps, purposeLabel,
+reviewCaution, cliSetupLabel, cliSetup }` for installed package-hook approval. Its installation
+step is complete independently of the core bundle; mixed pending sets use its shared approval
+steps while listing both owners. Shared rendering adds the combined pending owner/count approval instruction; events appear in View Hook Details from readiness.
+
+Shared code renders this guidance without choosing a provider's executable or product-specific copy.
+
+Core hooks are expected only once installed by choice: when a harness's core hooks arrive through a
+`hook_fragment` manifest row, readiness includes them only if the bundle holding that row is
+selected (`scripts/cli/core-hook-bundle.mjs`). Claude's core hooks ride in its root
+config, which every install applies, so they are always expected.
+
+Codex’s `core()` reads the canonical source fragment, including its source-only `_descriptions`
+map. Each expected hook can carry `name` from native `statusMessage` and `description` from
+that map; the comparison preserves both. Native generated output and merges exclude the
+underscore metadata. The portal derives approval help from these hook records rather than a
+static provider-purpose list.
+
+`scripts/harnesses/hook-readiness.mjs` builds the expected set from `core()` plus enabled packages'
+`hooks` resources for that harness, compares it with `read()`, and reports one state per group:
+`active`, `review_required`, `inactive`, `missing`, or `unknown`, plus `reviewRevision`: a digest of
+the pending RoboRepo hooks' identities, or null when none await review. Surfaces offer review once
+per revision. Records from another `sourcePath` never satisfy an expected hook, and a pending hook
+RoboRepo did not install never enters the revision. Package status (`probeHooks`), the portal route
+`/api/config/hooks/<harness>/status`, `doctor --installed`, and the CLI completion hint
+(`scripts/cli/hook-review-guidance.mjs`) all consume it.
+
+`hooks.merge` order differs on purpose. Claude and Gemini prepend a fragment's entries, because
+Claude treats the first decisive hook result as final. Codex appends, because Codex keys trust by
+position (`<file>:<event>:<group index>:<handler index>`) and prepending would revoke trust the
+user already granted. Codex launches matching command hooks concurrently, so order carries no
+decision priority there. Core Codex hooks go through the same merge: the `hooks` bundle's
+`hook_fragment` row (`scripts/cli/shared-target-rows.mjs`) appends them after package hooks that
+are already installed.
+
 ### Migration state — read this before you are surprised
 
 Not every capability's logic lives in its adapter yet. Several still live in `scripts/cli/*.mjs` and

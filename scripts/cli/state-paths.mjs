@@ -129,6 +129,10 @@ export const rootConfigStatePath = path.join(stateDir, "config-state", "root-con
 // its value" so disable can restore an unmanaged prior value or remove a key roborepo introduced.
 // Keyed by "<harness>.<table>.<key>". Lives in roborepo state, not a package-side backup file.
 export const ownedScalarsStatePath = path.join(stateDir, "config-state", "owned-scalars.json");
+// Content hash of each file a `managed_files` manifest row copied, keyed by absolute target path.
+// Those rows share a directory with package-installed files, so they are tracked per file: an
+// unchanged copy can be updated in place, and uninstall removes only files roborepo wrote.
+export const managedFilesStatePath = path.join(stateDir, "config-state", "managed-files.json");
 // Discovered/enabled harness provider state — which providers were found, their evidence and
 // confidence, and whether the user (or discovery, or migration) enabled or disabled each one. See
 // scripts/harnesses/state.mjs, which owns read/write and the "preserve explicit disable across

@@ -20,6 +20,12 @@
           "roots": ["/Applications", "~/Applications"],
           "layouts": [["ChatGPT.app"]],
           "bundleId": "com.openai.codex",
+          "executable": "Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex"
+        }, {
+          "label": "Codex",
+          "roots": ["/Applications", "~/Applications"],
+          "layouts": [["ChatGPT.app"]],
+          "bundleId": "com.openai.codex",
           "executable": "Contents/Resources/codex"
         }]
       }

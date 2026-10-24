@@ -9,6 +9,7 @@
 // live in this file — add a template in templates.js instead.
 
 import { portalSetUpdatedAt, portalHideLoading } from "/portal/shared/api.js";
+import { offerHookReview } from "/portal/shared/hook-review-offer.js";
 import * as api from "./api.js";
 import * as tmpl from "./templates.js";
 import { createConfigModal } from "./panels.js";
@@ -54,6 +55,7 @@ async function applyBucket(payload, errSlot) {
 async function handleToggle(item, enabled) {
   const data = await api.toggleItem(item.toggle, item.id, enabled);
   if (data.config) applySnapshot(data.config); // re-render from the authoritative post-mutation snapshot
+  void offerHookReview(data.hookHarnesses);
 }
 
 // Section-level batch (bulkToggle sections): one request for the whole section, server applies
@@ -69,6 +71,8 @@ async function handleBulkToggle(section, items, enabled) {
       enabled,
     );
     if (data.config) applySnapshot(data.config);
+    // One read and at most one offer for the whole batch, not one per package.
+    void offerHookReview(data.hookHarnesses);
   } catch (err) {
     console.error(err);
     if (err.status === 409) {
