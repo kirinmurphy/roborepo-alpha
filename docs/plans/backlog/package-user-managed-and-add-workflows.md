@@ -3,7 +3,7 @@ id: user-managed-packages-and-add-workflows
 priority: low
 next_action: Characterize existing workspace catalog and typed skill/MCP primitives, then agree source/provenance and receipt boundaries before designing unified add flows.
 blocked_by: []
-depends_on: []
+depends_on: ["bysyzl1e"]
 related: []
 reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
@@ -204,14 +204,27 @@ What do you want to add?
 If the user chooses one item type, Roborepo creates a package-shaped record in the background but
 does not require the user to understand package authoring.
 
-If the user chooses "Multiple things together", the wizard should introduce the package concept:
+If the user chooses "Multiple things together", the wizard asks the one question that separates a
+package from a collection, as defined in [[bysyzl1e]]:
 
 ```txt
-These pieces work together. Roborepo can save them as one package so you can enable,
-disable, export, or share them together.
+Should these turn on and off together?
+
+  Always together     They depend on each other. One switch for all of them.
+  Usually together    Each keeps its own switch, with Select All / Deselect All.
 ```
 
-That keeps packages from feeling like an arbitrary domain term on first contact.
+"Always together" creates one package with several resources. "Usually together" creates one
+package per item and groups them as a collection. The user answers in terms of switches; the words
+package and collection appear only in the confirmation and in inspect output.
+
+When the source being added declares its own grouping, such as a Claude Code plugin or a RoboRepo
+package folder, the wizard uses that grouping and skips the question.
+
+Open decision: today a collection is a category with `bulkToggle`, and categories live in
+`manifests/inventory/package-categories.json`, which users do not edit. A "Usually together" answer
+needs somewhere to record a user-created collection, either user-defined categories in the
+workspace or a separate collection record. Decide before building the "Usually together" path.
 
 ### User Package Folders Are The Portable Format
 

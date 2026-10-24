@@ -3,7 +3,7 @@ id: o9zwxuav
 priority: high
 next_action: Move the enabled-package registry out of scripts/cli/rules-render.mjs into scripts/cli/package-state.mjs and add the pure graph helpers (selected roots, required closure, requiredBy/recommendedBy) with fixtures.
 blocked_by: []
-depends_on: []
+depends_on: ["bysyzl1e"]
 related: ["package-registry-live-state-reconciliation", "ejsc769o", "age4cm7r"]
 reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 worktree:

@@ -3,7 +3,7 @@ id: jdsobwn
 priority: low
 next_action: Characterize current bundled/workspace catalog behavior and agree source-qualified provenance with desired-state and profile owners before adding source adapters.
 blocked_by: []
-depends_on: []
+depends_on: ["bysyzl1e"]
 related: []
 reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
@@ -190,6 +190,25 @@ Rules:
 5. If a previously resolved source disappears, report the package as unresolved rather than substituting a different source automatically.
 
 This favors reproducibility over convenience.
+
+### Packages and Collections From Sources Without RoboRepo Manifests
+
+Many skill sources ship no `package.config.json`. A source adapter still produces package
+descriptors for them, and the format of the source decides how its skills are grouped, using the
+package and collection definitions from [[bysyzl1e]]:
+
+| Source format | Grouping | Why |
+| --- | --- | --- |
+| RoboRepo package (`package.config.json`) | As declared | The author already chose |
+| Claude Code plugin (`.claude-plugin/plugin.json`) | One package holding every skill in the plugin | The plugin author declared it as one installable unit |
+| Agent Skills folders only (`skills/*/SKILL.md`, no unit manifest) | One package per skill; the source becomes a collection when it has two or more | Nothing says the skills are correct only together |
+| Catalog entry (for example skills.sh) | One package per listed skill, resolved to its upstream repo | The catalog lists skills, not bundles |
+
+Every rule above reads files the source contains, so the same source always groups the same way.
+A collection from a source renders as a portal section titled with the source and has
+Select All / Deselect All. A source with one skill renders as one card with a source badge and no
+section header. `cloudflare/security-audit-skill` is that case: one Agent Skills folder, one
+package.
 
 ## User Experience
 
