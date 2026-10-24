@@ -131,7 +131,7 @@ repair_cleanup_rows() {
 # Per-skill copies: repair only re-materializes the base support skill. Optional skills are
 # controlled by onboarding/package toggles.
 repair_skill_links() {
-  link_global_skills "${1%/skills}" builtin-support
+  link_global_skills "${1%/skills}" roborepo-support
 }
 
 # Iterates every registered provider instead of a fixed Claude/Codex pair. home_path is always the resolved manifest location

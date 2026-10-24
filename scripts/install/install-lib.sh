@@ -1105,12 +1105,25 @@ link_global_skills() {
     [[ "$(readlink "${skills_home}/${skill_name}")" == "${entry}" ]] || continue
     say ok "${skills_home}/${skill_name}"
   done
+
+  # The cache is shared across harnesses, so an earlier harness's run may already have pruned the
+  # entry; this harness's link into it is then dangling and the loop above never sees it.
+  [[ -d "${skills_home}" ]] || return 0
+  local view
+  for view in "${skills_home}"/*; do
+    [[ -L "${view}" && ! -e "${view}" ]] || continue
+    [[ "$(readlink "${view}")" == "${cache_home}/"* ]] || continue
+    if [[ "${dry_run}" -eq 0 ]]; then
+      rm -f "${view}"
+    fi
+    echo "prune: ${view} (cache entry removed)"
+  done
 }
 
 list_global_skill_sources() {
   local skill_dir name rel
-  if [[ -f "${repo_root}/globals/system/skills/builtin-support/SKILL.md" ]]; then
-    printf 'builtin-support\tglobals/system/skills/builtin-support\n'
+  if [[ -f "${repo_root}/globals/system/skills/roborepo-support/SKILL.md" ]]; then
+    printf 'roborepo-support\tglobals/system/skills/roborepo-support\n'
   fi
   for skill_dir in "${repo_root}"/globals/packages/*/skills/*; do
     [[ -d "${skill_dir}" && -f "${skill_dir}/SKILL.md" ]] || continue

@@ -24,7 +24,7 @@ section links the matching step in [the teaching doc](harnesses-explained.md).
 | Element | What it is | Source | Maintain with |
 | --- | --- | --- | --- |
 | Global rules | The always-on instruction file each harness reads at startup. | Claude: `generated/claude/CLAUDE.md` (tracked snapshot)<br>Codex: `generated/codex/AGENTS.md` (tracked snapshot)<br>Gemini: live `~/.gemini/GEMINI.md` (no tracked snapshot) | `roborepo rules [--check]` |
-| Skills | On-demand capability/instruction bundles the agent loads when relevant. | Package-owned `globals/packages/<package>/skills/<name>/SKILL.md`, plus system `globals/system/skills/builtin-support/SKILL.md` — materialized into `~/.roborepo/skills/<name>` and linked from harness skill dirs | `roborepo skill new`, `roborepo skill adopt <name>`, `roborepo skill inspect <name>`, `roborepo skill sync-global` |
+| Skills | On-demand capability/instruction bundles the agent loads when relevant. | Package-owned `globals/packages/<package>/skills/<name>/SKILL.md`, plus system `globals/system/skills/roborepo-support/SKILL.md` — materialized into `~/.roborepo/skills/<name>` and linked from harness skill dirs | `roborepo skill new`, `roborepo skill adopt <name>`, `roborepo skill inspect <name>`, `roborepo skill sync-global` |
 | Slash commands | Named workflows the user starts explicitly (`/case-study`, etc.). | Package-scoped generated wrappers under `generated/packages/<package>/<harness>/commands/`, composed live for enabled packages | `roborepo skill render-commands [--check]` |
 | Install bundles | Named groups of install-time file operations applied at install/update. Internal to the install pipeline — not a user-facing verb. | `manifests/platform/presets.json` | `roborepo update` (applies them); `roborepo bundle …` is an internal verb called by `scripts/install/main.sh` |
 | Hooks | Scripts the harness runs on lifecycle/tool events. | System hooks: `globals/system/hooks/claude/*.mjs` + `settings.json` wiring, `globals/system/hooks/codex/*.mjs` + `hooks.json`. Package-owned hooks (e.g. Caveman/JDocMunch Codex `SessionStart`, telemetry capture, JCodeMunch's Bash blocker) live under `globals/packages/<package>/hooks*` and are composed in only when that package is enabled | edit source, then `roborepo update` |
@@ -64,11 +64,11 @@ override-layering rules: [Rules Parity and Layering](rules-parity-and-layering.m
 ## Skills
 
 **What they do:** on-demand bundles the agent loads when a task matches (`code-style`, `react`,
-`builtin-support`, …). Shared skills are also exportable to other repos.
+`roborepo-support`, …). Shared skills are also exportable to other repos.
 
 **Parity model:** package-owned skills are sourced from
 `globals/packages/<package>/skills/<name>/SKILL.md`; the required base support skill is sourced from
-`globals/system/skills/builtin-support/SKILL.md`. The installer materializes each enabled shared
+`globals/system/skills/roborepo-support/SKILL.md`. The installer materializes each enabled shared
 skill into `~/.roborepo/skills/<name>` and links each harness's native dir to that machine-local
 cache entry. Roborepo owns only the skill names it manages;
 native-installed skills (via native harness tools or `skill-installer`) at unrecognized names are

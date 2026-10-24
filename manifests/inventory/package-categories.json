@@ -5,7 +5,7 @@
       "id": "code-conventions",
       "label": "Code Conventions",
       "description": "Skills auto-loaded when relevant — shape output without an explicit command.",
-      "footnote": "* builtin-support — help skill for this repo, always loaded.",
+      "footnote": "* roborepo-support — help skill for this repo, always loaded.",
       "order": 4
     },
     {

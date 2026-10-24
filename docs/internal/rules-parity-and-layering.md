@@ -75,7 +75,7 @@ snapshotted under `~/.roborepo/backups/pre-install/<harness>/` before the manage
 
 - Shared fragments hold behavior that should apply to every harness.
 - Harness-specific fragments hold only true harness differences. A fragment under `globals/system/rules/<harness-id>/` lands directly in that harness's live managed block and nowhere else.
-- Shared fragments should stay compact. Expanded workflow guidance belongs in skills such as `test-harness`, `code-style`, `javascript-typescript`, `react`, or `builtin-support`.
+- Shared fragments should stay compact. Expanded workflow guidance belongs in skills such as `test-harness`, `code-style`, `javascript-typescript`, `react`, or `roborepo-support`.
 - Global rules may tell the agent when to use a skill, but should not duplicate the full skill body.
 - The renderer should preserve deliberate format differences:
   - Claude can keep Markdown sections.

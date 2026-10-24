@@ -149,7 +149,7 @@ backup, and uninstall behavior.
 
 Package-owned shared skills are sourced from `globals/packages/<package>/skills/<name>/` (each a
 folder with a `SKILL.md`). The required base support skill remains a system skill at
-`globals/system/skills/builtin-support/`. RoboRepo materializes those skills into a
+`globals/system/skills/roborepo-support/`. RoboRepo materializes those skills into a
 machine-local cache at `~/.roborepo/skills/<name>` and then symlinks each installed harness view to
 that cache entry:
 

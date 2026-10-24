@@ -288,7 +288,7 @@ const activeDocPaths = [
   "docs/user/guides/plan/lifecycle/plan-suite.md",
   "local/skills/roborepo-development/SKILL.md",
   "local/skills/roborepo-development/references/package-development.md",
-  "globals/system/skills/builtin-support/SKILL.md",
+  "globals/system/skills/roborepo-support/SKILL.md",
   "globals/packages/telemetry/package.config.json",
   "scripts/install/main.sh",
   "scripts/cli/config.mjs",
