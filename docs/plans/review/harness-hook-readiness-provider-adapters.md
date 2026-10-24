@@ -563,7 +563,9 @@ approval: only a later Codex `hooks/list` result clears `review_required`.
 
 ## Open Questions
 
-None open. Every question was answered by the user; see the Decision Log.
+One review decision is open: whether RoboRepo-side evidence settles the unrelated-pending and
+changed-definition Not tested entry, or the human checks Codex's review screen (see `## Review`).
+Every earlier question was answered by the user; see the Decision Log.
 
 ## Decision Log
 
@@ -776,10 +778,11 @@ None open. Every question was answered by the user; see the Decision Log.
 - Resumed from pending Result at `1f3217ee` (base `0cd270ea`); plan tip `ec76894d` differed only in this plan. Main had advanced to `501f5aeb`; `roborepo plans sync-base` merged it cleanly as `0cdcb7bf`. The base change shares no files with this branch.
 - `npm run check` on `0cdcb7bf`: doctor (107 checks), CLI, install-collision, and 60/60 check suites passed, then package-install smoke failed at `scripts/test/package-install-smoke/tarball.mjs:23` (TypeError, not iterable). **Base failure:** a clean `git archive` export of main `501f5aeb` fails identically with exit 1. The gate stopped before its Docker legs and browser stage.
 - Fresh-context Validator pass 1: goals met with observable-outcome tests; no interaction defect from `501f5aeb` (`writeRootConfig` link detach, TOML `[hooks.state]` headers, write-log actor sanitizing, package command definitions). It reported the six code/doc fix findings and the two agent-runnable Not tested entries above, no escalations. Its 12 focused checks passed, including hook-readiness, hook-composition, hook-review-cli, hook-review-launch, shared-target-rows, root-config-merge characterization, and write-log.
-
 - Isolated real-engine checks (bundled Codex 0.163.0-alpha.11.2, temporary HOME/CODEX_HOME, fixture-only `trusted_hash` seeding) passed for core-after-trusted-package installation and for an unrelated pending hook plus a reapplied changed definition; details are in the two Not tested entries. No live hook or trust state was read or written.
 - After the pass-1 fixes, a second `npm run check` gave the same result: doctor (106 checks; the change from 107 is an installed-skills-out-of-date warning from the home installation, not this branch), CLI, install-collision, and 60/60 check suites passed, then the package-install smoke base failure. The focused hook browser suite (25 tests) passed after each portal change.
 - Fresh-context Validator pass 2 reported seven fix findings (docs, test gap, plan wording) and one escalation, all recorded above.
+- After the pass-2 fixes, the full browser suite passed 130 tests. A third `npm run check` failed one CLI assertion (`single-repo refresh should leave other cached ahead repos in the main list`, the remote-sync menu check also seen October 22); this branch changes no remote-sync code, and `node scripts/test/cli-surface-integration-check.mjs` passed three isolated reruns. Cause not established.
+- Fresh-context Validator pass 3 found no defects; its cosmetic findings (a short source line in `telemetry.md`, this Open Questions entry, a stray blank line here) were fixed in this plan record and a doc rewrap.
 
 #### October 23 CLI-only workflow refinement and native QA
 
