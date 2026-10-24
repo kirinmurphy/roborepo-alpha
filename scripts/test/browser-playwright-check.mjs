@@ -122,6 +122,13 @@ try {
   assert.equal(untitled.status, STATUS.PASSED);
   assert.deepEqual(untitled.checks.map((check) => check.name), ["untitled test"]);
 
+  // Runner errors can happen after every individual test has passed.
+  fs.writeFileSync(path.join(project, "teardown.mjs"), 'export default () => { throw new Error("teardown failed"); };\n');
+  fs.writeFileSync(path.join(project, "playwright.config.mjs"), 'export default { testDir: "./tests", globalTeardown: "./teardown.mjs" };\n');
+  const teardown = await run({ scenarioPath: path.join(project, "tests", "untitled.spec.mjs"), stateRoot: toolState });
+  assert.equal(teardown.status, STATUS.FAILED, "a global teardown error fails an otherwise passing test run");
+  assert.ok(teardown.checks.some((check) => check.status === "failed" && /teardown failed/.test(check.message)));
+
   // ---- A spec that outlives --timeout fails, and the runner's webServer is shut down with it ----
   const slow = path.join(tempRoot, "slow-project");
   const serverPort = await freePort();

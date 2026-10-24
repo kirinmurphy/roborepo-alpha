@@ -122,7 +122,8 @@ export function mergeClaudeSettings(repoText, localText) {
 }
 
 function tomlHeader(line) {
-  return /^\[[^\]]+\]$/.test(line.trim()) ? line.trim() : null;
+  const match = line.trim().match(/^(\[\[?.+?\]\]?)\s*(?:#.*)?$/);
+  return match?.[1] ?? null;
 }
 
 function tomlKey(line) {
@@ -159,14 +160,14 @@ function splitTomlSections(text) {
   const sections = [];
   let current = { header: null, lines: [] };
 
-  for (const line of String(text || "").split(/\r?\n/)) {
-    const header = tomlHeader(line);
+  for (const entry of tomlStatements(String(text || "").split(/\r?\n/))) {
+    const header = entry.key ? null : tomlHeader(entry.lines[0]);
     if (header) {
       sections.push(current);
-      current = { header, lines: [line] };
+      current = { header, lines: entry.lines };
       continue;
     }
-    current.lines.push(line);
+    current.lines.push(...entry.lines);
   }
   sections.push(current);
   return sections.map((section) => ({
@@ -178,19 +179,18 @@ function splitTomlSections(text) {
 function mergeTomlSection(repoSection, localSection) {
   if (!localSection) return repoSection.lines;
 
-  // Track each local key's line plus the contiguous comment/blank lines that immediately preceded
+  // Track each local key's complete value plus the comment/blank lines that immediately preceded
   // it, so a user's hand-written comment stays attached to the key it documents when we re-emit
   // local-only keys. Trailing comments with no following key are kept as loose extras.
   const localByKey = new Map();
   const pending = [];
   const localExtras = [];
-  for (const line of localSection.lines.slice(localSection.header ? 1 : 0)) {
-    const key = tomlKey(line);
+  for (const { key, lines } of tomlStatements(localSection.lines.slice(localSection.header ? 1 : 0))) {
     if (key) {
-      localByKey.set(key, { line, comments: pending.slice() });
+      localByKey.set(key, { lines, comments: pending.slice() });
       pending.length = 0;
     } else {
-      pending.push(line);
+      pending.push(...lines);
     }
   }
   for (const line of pending) {
@@ -199,20 +199,19 @@ function mergeTomlSection(repoSection, localSection) {
 
   const seen = new Set();
   const merged = [];
-  for (const line of repoSection.lines) {
-    const key = tomlKey(line);
+  for (const { key, lines } of tomlStatements(repoSection.lines)) {
     if (key && localByKey.has(key)) {
-      merged.push(localByKey.get(key).line);
+      merged.push(...localByKey.get(key).lines);
       seen.add(key);
     } else {
-      merged.push(line);
+      merged.push(...lines);
       if (key) seen.add(key);
     }
   }
 
   for (const [key, entry] of localByKey) {
     if (seen.has(key)) continue;
-    merged.push(...entry.comments, entry.line);
+    merged.push(...entry.comments, ...entry.lines);
   }
   for (const line of localExtras) {
     if (!merged.includes(line)) merged.push(line);
@@ -238,8 +237,46 @@ export function mergeCodexConfig(repoText, localText) {
     out.push(...localSection.lines, "");
   }
 
-  const output = out.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd();
+  const output = out.join("\n").trimEnd();
   return `${output}\n`;
+}
+
+// Split at value boundaries, not physical lines. Brackets and table-looking lines inside quoted
+// strings are data; comments cannot open or close an array. Refuse incomplete values before a
+// caller writes anything. This is a lexical boundary check, not a general TOML schema validator.
+function tomlStatements(lines) {
+  const entries = [];
+  let entry = null;
+  let quote = null;
+  const brackets = [];
+  for (const line of lines) {
+    entry ??= { key: tomlKey(line), lines: [] };
+    entry.lines.push(line);
+    for (let i = 0; i < line.length; i += 1) {
+      const ch = line[i];
+      if (quote) {
+        if (ch === "\\" && quote[0] === '"') { i += 1; continue; }
+        if (line.startsWith(quote, i)) {
+          const delimiter = quote;
+          i += delimiter.length - 1;
+          // A multiline closing delimiter may include one or two final quote characters.
+          if (delimiter.length === 3) while (line[i + 1] === delimiter[0]) i += 1;
+          quote = null;
+        }
+      } else if (ch === "#") break;
+      else if (ch === '"' || ch === "'") {
+        quote = line.startsWith(ch.repeat(3), i) ? ch.repeat(3) : ch;
+        i += quote.length - 1;
+      } else if (ch === "[" || ch === "{") brackets.push(ch);
+      else if (ch === "]" || ch === "}") {
+        if (brackets.pop() !== (ch === "]" ? "[" : "{")) throw new Error("unbalanced TOML value");
+      }
+    }
+    if (quote?.length === 1) throw new Error("unterminated TOML value");
+    if (!quote && brackets.length === 0) { entries.push(entry); entry = null; }
+  }
+  if (entry) throw new Error("unterminated TOML value");
+  return entries;
 }
 
 export function mergeRootConfig(harness, repoText, localText) {

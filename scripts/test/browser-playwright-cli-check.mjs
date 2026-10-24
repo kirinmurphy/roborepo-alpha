@@ -44,6 +44,11 @@ try {
   assert.equal(JSON.parse(timedOut.stdout).status, "failed", "a scenario that outlives --timeout fails");
   assert.ok(elapsed < 15_000, `the command ends near its timeout, not when the scenario's timer fires (${elapsed}ms)`);
 
+  const slowImport = path.join(project, "slow-import.mjs");
+  fs.writeFileSync(slowImport, 'await new Promise((r) => setTimeout(r, 2000));\nexport default async ({ check }) => { await check("loaded", async () => {}); };\n');
+  const importTimeout = await browserRun(["--scenario", slowImport, "--timeout", "0.05", "--json"], tmpDir("import-timeout"));
+  assert.equal(JSON.parse(importTimeout.stdout).status, "failed", "module loading is inside the scenario deadline");
+
   // ---- An interrupted traced spec run leaves no temp directory behind ----
   // The runner writes the trace while it shuts down, so the directory is checked when the command
   // exits and again after the runner's shutdown grace would have passed.

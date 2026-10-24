@@ -57,10 +57,31 @@ try {
   const enable = spawnSync(process.execPath, [cli, "package", "enable", "react"], { encoding: "utf8", env: env() });
   assert.equal(enable.status, 0, enable.stderr);
   const registryWrite = entries().reverse().find((entry) => entry.file.endsWith("enabled-packages.json"));
-  assert.equal(registryWrite?.actor, "roborepo package enable react", "a CLI command names itself");
+  assert.equal(registryWrite?.actor, "roborepo package enable", "a CLI command names itself without positional arguments");
   assert.equal(registryWrite?.detail, "enable react");
 
-  fs.writeFileSync(logPath, "x".repeat(600 * 1024));
+  const secretActor = "roborepo mcp add https://example.invalid/mcp?api_key=PRIVATE_SYNTHETIC_KEY --harness codex";
+  node(`${importLog} log.recordConfigWrite(${JSON.stringify(target)});`, { ROBOREPO_WRITE_ACTOR: secretActor });
+  assert.equal(entries().at(-1).actor, "roborepo mcp add");
+  assert.ok(!fs.readFileSync(logPath, "utf8").includes("PRIVATE_SYNTHETIC_KEY"), "command arguments never enter the log");
+  const privateEnv = env({ ROBOREPO_MODE: "package", ROBOREPO_WORKSPACE_ROOT: path.join(state, "workspace") });
+  const mcp = spawnSync(process.execPath, [cli, "mcp", "add", "https://example.invalid/mcp?api_key=PRIVATE_SYNTHETIC_KEY", "--harness", "codex", "--name=private-fixture"],
+    { encoding: "utf8", env: privateEnv });
+  assert.equal(mcp.status, 0, mcp.stderr);
+  assert.ok(!fs.readFileSync(logPath, "utf8").includes("PRIVATE_SYNTHETIC_KEY"), "the real MCP CLI never logs credentials");
+  const inspect = spawnSync(process.execPath, [cli, "config", "root", "inspect"], { encoding: "utf8", env: privateEnv });
+  assert.equal(inspect.status, 0, inspect.stderr);
+  assert.ok(!inspect.stdout.includes("PRIVATE_SYNTHETIC_KEY"), "config inspection never echoes credentials from the actor");
+  fs.writeFileSync(logPath, `${JSON.stringify({ file: target, actor: secretActor })}\n`);
+  fs.copyFileSync(logPath, `${logPath}.1`);
+  assert.equal(node(`${importLog} console.log(log.lastConfigWrite(${JSON.stringify(target)}).actor);`), "roborepo mcp add",
+    "historical actors are sanitized before display");
+  for (const file of [logPath, `${logPath}.1`]) {
+    assert.ok(!fs.readFileSync(file, "utf8").includes("PRIVATE_SYNTHETIC_KEY"), "historical logs are sanitized in place");
+    if (process.platform !== "win32") assert.equal(fs.statSync(file).mode & 0o777, 0o600, "logs are private");
+  }
+
+  fs.writeFileSync(logPath, `${JSON.stringify({ file: target, actor: "roborepo update", detail: "x".repeat(600 * 1024) })}\n`);
   node(`${importLog} log.recordConfigWrite(${JSON.stringify(target)});`);
   assert.ok(fs.existsSync(`${logPath}.1`), "an oversized log rotates to .1");
   assert.equal(entries().length, 1, "the fresh log starts with the new entry");
