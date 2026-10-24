@@ -316,15 +316,12 @@ function showLater(node, onLater, label = "Later") {
   reveal(node, "actions");
 }
 
-function listAffected(node, groups, state, { counts = false } = {}) {
+function listAffected(node, groups, state) {
   const list = node.querySelector('[data-slot="affected"]');
   list.replaceChildren(...groups.map((group) => {
     const item = document.createElement("li");
     const events = group.hooks.filter((hook) => hook.state === state).map((hook) => hook.event);
-    const eventNames = [...new Set(events)].join(", ");
-    item.textContent = counts
-      ? `${group.label}${group.owner === "core" ? "" : " (package)"}: ${events.length} ${events.length === 1 ? "hook" : "hooks"} — ${eventNames}`
-      : `${group.label}: ${eventNames}`;
+    item.textContent = `${group.label}: ${[...new Set(events)].join(", ")}`;
     return item;
   }));
   list.hidden = groups.length === 0;
@@ -383,13 +380,13 @@ export async function renderHookReadiness(mount, setup, { fresh = false } = {}) 
   mount.hidden = notices.length === 0;
 }
 
-// Re-read every mount on this page from the server's current results, e.g. after a hook change
-// another component triggered.
 export function hasHookReadinessMount(harness) {
   return [...mounts.entries()].some(([mount, entry]) => mount.isConnected
     && entry.setup?.harnesses?.active?.some((item) => item.id === harness));
 }
 
+// Re-read every mount on this page from the server's current results, e.g. after a hook change
+// another component triggered.
 export function refreshHookReadinessMounts({ fresh = false } = {}) {
   for (const [mount, entry] of mounts) {
     if (mount.isConnected) void renderHookReadiness(mount, entry.setup, { fresh });
