@@ -1,7 +1,7 @@
 ---
 id: wjlt1zvf
 priority: high
-next_action: Confirm the seven remaining native/platform checks, then complete /plan-review and request plan approval.
+next_action: Confirm remaining core, desktop fallback, and platform checks before plan approval; package-smoke failure is reproduced on main.
 blocked_by: []
 depends_on:
   - 3jp3yhtq
@@ -266,7 +266,9 @@ reinstalling it.
 ```mermaid
 flowchart LR
   Change[Successful hook-affecting change] -->|requests fresh readiness| Read[Provider hooks.read]
-  Read -->|installed RoboRepo hook needs review| Offer[One portal review offer]
+  Read -->|installed RoboRepo hook needs review| Policy{Provider review guidance}
+  Policy -->|desktop guidance| Offer[One portal review offer]
+  Policy -->|CLI-only startup review| Startup[Native approval prompt at next CLI startup]
   Read -->|no review needed| Done[Normal completion]
   Offer -->|user clicks Open| Native[Native Codex CLI review]
   Native -->|user returns to portal| Refresh[Fresh readiness read]
@@ -275,8 +277,10 @@ flowchart LR
 ```
 
 1. Finish the entire setup or configuration operation, then read fresh readiness for each selected
-   provider. Offer review only for installed RoboRepo hooks reported as `review_required`.
-2. Show one contextual, nonmodal card naming affected owners and events. Offer **Open Codex hook
+   provider. Offer review only for installed RoboRepo hooks reported as `review_required` when
+   the provider does not delegate approval to startup through `reviewOnStartup`. CLI-only installs
+   get no pending-approval or resolved banner, offer, or post-change terminal hint.
+2. For desktop guidance, show one contextual, nonmodal card naming affected owners and events. Offer **Open Codex hook
    review** on a platform with a tested launcher, **Copy command**, **Later**, and **Check again**.
    **Later** dismisses the immediate card but leaves a persistent notice. Neither a page load nor
    a successful mutation automatically opens a terminal or modal.
@@ -288,16 +292,19 @@ flowchart LR
    remaining review items, clear resolved ones, and explain that newly trusted hooks need a new
    Codex session to run.
 
+For every operation below, CLI-only pending approval stays with native Codex startup. Desktop
+guidance follows the offer policies; all environments retain missing, disabled, and unknown remedies.
+
 | Successful operation | Review policy |
 | --- | --- |
-| Terminal or browser onboarding | Check once after final apply, including optional `hooks` bundle and telemetry selections. Base-only install gets no offer unless it actually installed reviewable hooks. A TTY gets a concise next step; headless runs print guidance only when review need is known and never launch a terminal |
+| Terminal or browser onboarding | Check once after final apply, including optional `hooks` bundle and telemetry selections. Base-only install gets no offer unless it actually installed reviewable hooks. Desktop-detected installs receive review guidance; CLI-only installs rely on native startup approval. Headless runs never launch a terminal |
 | Package enable or re-enable | Refresh after apply; offer review for newly installed or changed Codex hooks only when provider readiness confirms it |
 | Package disable | Refresh after removal because later hooks at an event may shift position and need renewed trust. Do not offer review for the removed package |
 | Bulk enable or disable | Reconcile first, then read once and show one combined offer, not one per package |
 | Telemetry enable from Tokens, Agents, or CLI | Use the same package handoff once; do not add a second telemetry-specific prompt |
 | Update, repair, bundle apply, harness refresh, or another hook rewrite | Invalidate readiness and offer review only if the finished change leaves RoboRepo hooks in `review_required` |
 
-Show the immediate card at most once per completed change and review-set revision, even if several
+For desktop-detected installs, show the immediate card at most once per completed change and review-set revision, even if several
 portal views refresh. A changed definition or shifted trust key is a new revision; routine reads of
 the same pending hooks are not. Use the read-only Codex `hooks/list` key/hash identity for matching
 RoboRepo hooks without exposing or persisting hashes as approval material. Avoid another app-server
@@ -308,13 +315,13 @@ read for every member of a bulk operation.
 | Route | Role and limit |
 | --- | --- |
 | Portal click opens a terminal with Codex CLI | Preferred on macOS after a real launch prototype passes. A bare invocation of the reference Mac's bundled CLI opens interactive Codex and automatically presents **Hooks need review** when pending hooks exist |
-| **Copy command** | Always available. A CLI-only user can also wait for the next interactive startup warning, but the portal still explains what is pending now |
+| **Copy command** | Desktop review fallback where offered. CLI-only approval relies on the native interactive startup prompt |
 | `codex://settings` then Settings → Hooks | Opens general desktop Settings only; no supported direct Hooks deep link is documented. Keep as manual guidance, not a button labeled as direct review |
 | RoboRepo trust editor | Out of scope because it would write Codex trust state and assume responsibility for races and hash-format compatibility |
 
 At click time on macOS, use provider discovery to prefer a validated desktop-bundled CLI, then a
 validated `PATH` CLI. Desktop presence does not reveal which surface the user normally uses; a
-CLI-only installation must still receive review guidance. Test systems where both binaries exist
+CLI-only installation relies on Codex startup review, without redundant portal approval notices or post-change terminal instructions. Test systems where both binaries exist
 against the same user home and trust state. Launch from a server-chosen neutral working directory
 to avoid unnecessarily including project hooks from the portal checkout. The local authenticated
 route accepts no browser-provided executable, command, arguments, or working directory. Prototype
@@ -329,7 +336,8 @@ approval: only a later Codex `hooks/list` result clears `review_required`.
 
 | Fresh readiness | Portal behavior |
 | --- | --- |
-| Any matched RoboRepo hook is `review_required` | Show its owner and event with the review action, even if another group is `missing` and the aggregate state is `missing` |
+| CLI-only `review_required` with `reviewOnStartup` | No pending-approval banner, offer, CLI setup tooltip, resolved banner, or post-change terminal hint; native startup handles review. Diagnostic/API status remains available |
+| Any matched RoboRepo hook is `review_required` and startup does not handle review | Show its owner and event with the review action, even if another group is `missing` and the aggregate state is `missing` |
 | All active, or no expected Codex hooks | No review offer; clear a resolved notice |
 | `inactive` | Explain how to turn hooks on in Codex rather than describing trust approval |
 | `missing` | Explain repair or reapply; an absent hook cannot be reviewed |
@@ -493,24 +501,29 @@ approval: only a later Codex `hooks/list` result clears `review_required`.
       observed fresh PreToolUse and PostToolUse records with nonzero cumulative counts in the
       primary-checkout scope. This replaces reliance on the older five sessions carried from
       3jp3yhtq; their desktop provenance is not asserted. Fresh-session execution remains below.
-- [ ] Confirm native approval preservation on the reference Mac when enabling or disabling a
-      package, including adding core hooks after existing package hooks. Earlier hooks must
-      remain trusted when their definitions and positions are unchanged. Append order and
-      stable keys/hashes have automated or isolated-runtime evidence; live trusted-hook
-      preservation across these operations remains unconfirmed.
-- [ ] Start a fresh Codex desktop session after the newly granted approvals and confirm startup
-      hooks execute and PostToolUse spool records appear. The user approved all nine RoboRepo
-      hooks and native reads confirmed them trusted; capture was observed in the existing
-      session, not a newly started session.
-- [ ] On macOS, click Open Codex hook review in the portal and confirm a terminal opens the
-      detected CLI in the neutral terminal-launch directory. Approve one RoboRepo hook, defer
-      another, return to see only the unresolved hook, then complete approval and confirm the
-      resolved notice. Browser fixtures verify partial/resolved refresh; actual terminal launch,
-      workspace-trust prompts, and native partial approval remain unconfirmed.
-- [ ] Verify the native review flow with an unrelated pending hook, package removal that shifts
-      later hooks, a changed definition after update, and package re-enable. Confirm unrelated
-      approvals are preserved and only the required hooks need review. Browser verification
-      already confirms one offer per pending revision and no Trust all recommendation.
+- [ ] Confirm native approval preservation when adding core hooks after already-trusted package
+      hooks. Live package removal and re-enable were verified October 23: removing Skill Visibility
+      shifted telemetry PostToolUse into a different identity and required renewed approval; all
+      seven unchanged hooks stayed trusted. Re-enable appended Skill Visibility and preserved all
+      eight existing identities/states. Core installation order remains unconfirmed on the live Mac.
+- [x] Confirm fresh Codex desktop telemetry startup and tool capture after native approval.
+      User ran one pwd call in new chat 01a1698a-bfe6-7920-b3a5-42da6eae978d. Native spool records
+      showed SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, and Stop for that session;
+      Stop reported 73,306 tokens and one tool call. The command ran in the plan worktree, but
+      the chat's hook scope remained the primary checkout. This confirms global telemetry execution.
+- [ ] Confirm execution of the core hooks in a fresh desktop session. The fresh chat above confirms
+      telemetry startup/tool capture, but does not independently prove each core hook executed.
+- [ ] Confirm the desktop notice's terminal fallback opens the detected CLI in the neutral
+      terminal-launch directory, including workspace-trust behavior. Native desktop partial approval
+      was confirmed October 23: user trusted telemetry alone, portal showed only Skill Visibility,
+      native state showed eight trusted hooks and one pending; after the user trusted Skill
+      Visibility, the portal showed the exact resolved message and native state showed all nine
+      enabled and trusted. CLI-only portal launch guidance was removed by the later user decision.
+- [ ] Verify the native review flow with an unrelated pending hook and a changed definition after
+      update. Package removal that shifts later hooks, package re-enable, and preservation of the
+      seven unaffected approvals were confirmed live October 23; partial and resolved desktop review
+      were also confirmed by the user and native reads. Browser tests cover revision offers and
+      avoiding Trust all recommendations.
 - [ ] Run Windows installer parity for hook_fragment and managed_files dispatch to
       scripts/cli/shared-target-rows.mjs. The full gate skipped this because pwsh is unavailable.
 - [x] Confirm fresh core hook installation and native approval on the reference Mac. The user
@@ -542,6 +555,8 @@ approval: only a later Codex `hooks/list` result clears `review_required`.
 None open. Every question was answered by the user; see the Decision Log.
 
 ## Decision Log
+
+- **October 23 CLI-only approval guidance:** User observed native approval prompts on CLI startup and explicitly approved removing redundant pending-review banners, one-time offers, CLI-focused Set up via CLI tooltips, and repeated post-install terminal instructions. Desktop-detected installs retain approval guidance. Missing, disabled, and unknown hooks retain their remedies. This refines presentation without changing installation, native trust, or readiness reporting.
 
 - **October 23 checklist synchronization requested by the user:** mark the verified browser flow, current live capture, and core installation/approval checked with their evidence limits. Keep seven native/platform scenarios open, narrow partially verified items to their remaining checks, and track the previously documented external-update refresh gap as an open review finding. Current capture replaces reliance on historical session provenance; a fresh desktop session remains a separate required check. This updates tracking only; overall review and approval stay pending.
 
@@ -722,6 +737,8 @@ None open. Every question was answered by the user; see the Decision Log.
 ## Review
 
 ### Findings
+- [x] A visible Agents approval offer survived a desktop-to-CLI-only discovery change during mutation — fixed in `1f3217ee`; regression failed before the fix and passed afterward.
+- [x] CLI-only hook approval duplicated Codex startup prompts — fixed in `1f3217ee` following the user decision; pending-review/resolved notices, offers, duplicate CLI tooltips, and post-change hints are suppressed while desktop guidance and other readiness remedies remain.
 - [x] Claude hooks.read comment claimed installed hooks execute automatically despite workspace-trust requirements — corrected to describe file-level configuration in review (`01220497`).
 - [x] An already-active portal page skipped return refresh after external terminal hook changes — fixed in review (`01220497`); the new browser regression failed before the fix, then all 21 focused hook-readiness/review tests passed.
 - [x] Native hook source paths using filesystem aliases were filtered out by scripts/harnesses/hook-readiness.mjs, suppressing CLI review hints — fixed before this resumed review (`04a47962`); alias regression and real-runtime CLI-only verification pass.
@@ -730,6 +747,16 @@ None open. Every question was answered by the user; see the Decision Log.
 - [x] Correct the stable-trust design and risk table: core fragments append and preserve existing package positions — fixed in review (`cbf4f2b8`).
 
 ### Verification
+
+#### October 23 CLI-only workflow refinement and native QA
+
+- Verification on the refined implementation: full browser suite passed 130 tests; focused hook browser suite passed 24 tests. A fresh isolated profile using the real native CLI reported five untrusted hooks while four executed browser checks confirmed diagnostic pending state and no duplicate approval UI on Settings, Home, and Tokens. The successful capture waited for loading overlays to disappear; a prior screenshot caught a spinner and is not used as layout evidence. The optional browser runner initially could not resolve Playwright from a scenario under /tmp; placing the temporary scenario in the project reused the existing dependency. The temporary scenario was removed after the run.
+- `npm run check` passed doctor (107 checks), 457 CLI assertions, installer collisions, and all 60 grouped suites, then failed in package-install smoke at scripts/test/package-install-smoke/tarball.mjs:23 because parsed npm pack output was not the expected iterable array. The same command reproduced the failure in the primary main checkout, which had unrelated edits. A subsequent temporary export containing only committed main `a1917ca62e1834fd1d9edd1a73aae23c2aa26ac5` reproduced the identical TypeError with exit 1, establishing a clean-base failure rather than a hook-guidance finding. No branch or worktree was moved for that check. The gate stopped before its four clean-machine legs and browser stage; those Docker legs were not rerun for this refinement. The browser suite was run separately and passed. Full parity is not claimed.
+- Current evidence: /tmp/wjlt1zvf-cli-refinement-full-gate.log, /tmp/wjlt1zvf-cli-base-package-smoke.log, /tmp/wjlt1zvf-cli-clean-main-package-smoke.log, /tmp/wjlt1zvf-cli-refinement-full-browser.log, and /tmp/wjlt1zvf-cli-quiet-browser-result.json. Browser run 20261024T204516Z-6c76a5 passed four assertions and produced an observed Settings screenshot under <stateRoot>/browser/evidence/. The new CLI-only test portal is available at its recorded temporary port for inspection; no live hooks or trust records were changed by this refinement.
+
+- User approved leaving CLI-only hook approval to Codex startup. The provider now supplies reviewOnStartup when a validated CLI is present without a desktop runtime. Portal approval/resolved notices, one-time offers, duplicate CLI-focused setup tooltips, and post-change terminal hints follow this policy. Missing, disabled, unknown, and explicit diagnostic/API readiness remain available. Native definitions and trust writes are unchanged.
+- Native package removal/re-enable and partial/resolved desktop QA passed as described in Not tested. User confirmations concern those checks, not overall plan approval. Seven narrower native/platform entries remain open, including independent core-hook execution.
+- New CLI-only browser regressions failed before the change. Validator pass 1 found an existing offer could survive a desktop-to-CLI-only mutation; its added regression failed before the fix and passed afterward. All 24 focused browser tests, CLI guidance, desktop discovery, hook readiness, and launch checks passed. Validator pass 2 found stale unconditional offer policies in the current plan design; these now describe the CLI-only startup branch. Validator pass 3 found no remaining code/documentation violations. This refinement is committed as `1f3217ee9d1424423ba473b4931833df446a93fe`.
 
 #### October 23 resumed review and base synchronization
 
@@ -920,7 +947,7 @@ None open. Every question was answered by the user; see the Decision Log.
 
 ### Result
 - Status: pending
-- Reviewed implementation commit: be0bb00917c27ee4e086f0910ed2f281ab22f9fd
+- Reviewed implementation commit: 1f3217ee9d1424423ba473b4931833df446a93fe
 - Base commit: 0cd270ea0c2244438fccbdc93636bd2252c95be5
 
 ### Approval
