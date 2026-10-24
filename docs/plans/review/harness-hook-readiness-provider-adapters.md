@@ -501,8 +501,12 @@ approval: only a later Codex `hooks/list` result clears `review_required`.
       observed fresh PreToolUse and PostToolUse records with nonzero cumulative counts in the
       primary-checkout scope. This replaces reliance on the older five sessions carried from
       3jp3yhtq; their desktop provenance is not asserted. Fresh-session execution remains below.
-- [ ] Confirm native approval preservation when adding core hooks after already-trusted package
-      hooks. Live package removal and re-enable were verified October 23: removing Skill Visibility
+- [x] Confirm native approval preservation when adding core hooks after already-trusted package
+      hooks. October 24 isolated real-engine check (bundled Codex 0.163.0-alpha.11.2, temporary
+      HOME/CODEX_HOME, fixture-only `trusted_hash` seeding): after trusting five Telemetry hooks,
+      `bundle apply hooks` appended the three core hooks at index 1; all five Telemetry keys, hashes,
+      and trust were unchanged, core hooks were untrusted, and readiness reported Telemetry active and
+      core review_required. Live package removal and re-enable were verified October 23: removing Skill Visibility
       shifted telemetry PostToolUse into a different identity and required renewed approval; all
       seven unchanged hooks stayed trusted. Re-enable appended Skill Visibility and preserved all
       eight existing identities/states. Core installation order remains unconfirmed on the live Mac.
@@ -519,8 +523,13 @@ approval: only a later Codex `hooks/list` result clears `review_required`.
       native state showed eight trusted hooks and one pending; after the user trusted Skill
       Visibility, the portal showed the exact resolved message and native state showed all nine
       enabled and trusted. CLI-only portal launch guidance was removed by the later user decision.
-- [ ] Verify the native review flow with an unrelated pending hook and a changed definition after
-      update. Package removal that shifts later hooks, package re-enable, and preservation of the
+- [x] Verify the native review flow with an unrelated pending hook and a changed definition after
+      update. October 24 isolated real-engine check: with an unrelated untrusted user hook appended
+      and a trusted Telemetry PostToolUse definition carrying an older label, reapplying Telemetry
+      restored the shipped label; Codex reported that hook `modified`, the other four trusted, and the
+      unrelated hook untrusted. Readiness listed only Telemetry PostToolUse as pending, never the
+      unrelated hook, set a review revision, and its guidance has no Trust all recommendation. The
+      Codex review screen itself was not viewed. Package removal that shifts later hooks, package re-enable, and preservation of the
       seven unaffected approvals were confirmed live October 23; partial and resolved desktop review
       were also confirmed by the user and native reads. Browser tests cover revision offers and
       avoiding Trust all recommendations.
@@ -667,7 +676,9 @@ None open. Every question was answered by the user; see the Decision Log.
   since the parser fix, so Phase 1 no longer runs a separate capture task. The `## Not tested`
   entry stays until the user confirms it.
 - **The review command is the selected executable, here
-  `/Applications/ChatGPT.app/Contents/Resources/codex`** (since October 16, chosen desktop-first;
+  `/Applications/ChatGPT.app/Contents/Resources/codex`** (superseded October 24: that path no longer
+  exists; discovery now selects `…/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex`)
+  (since October 16, chosen desktop-first;
   see the launch entry above). Its `--help` says a bare invocation
   opens the interactive CLI. `3jp3yhtq` QA trusted the five telemetry hooks through this embedded
   runtime's review screen, and the next desktop task produced seven spool records, so trust
@@ -737,13 +748,13 @@ None open. Every question was answered by the user; see the Decision Log.
 ## Review
 
 ### Findings
-- [ ] Portal Install hooks spawns `bundle apply` without `ROBOREPO_WRITE_ACTOR`, so its writes log under the portal server's actor (`scripts/cli/hook-core-install.mjs:35`).
-- [ ] Shared resolved notice hardcodes Codex product copy (`portal/shared/hook-readiness.js:90`); move it into Codex hook guidance.
-- [ ] Mount-refresh comment sits above `hasHookReadinessMount` instead of `refreshHookReadinessMounts` (`portal/shared/hook-readiness.js:387`).
-- [ ] `listAffected` `counts` option is never set; remove the dead branch (`portal/shared/hook-readiness.js:320`).
-- [ ] User docs still describe review offers and hints on CLI-only installs (`docs/user/reference/telemetry.md:29`, `docs/user/guides/install-workflows.md:16,100`, `docs/user/reference/config-control-panel.md:92`).
-- [ ] Decision Log names a review executable path that no longer exists; mark it superseded by the current CodexCLI.app path.
-- [ ] Two Not tested entries (core hooks after trusted package hooks; unrelated pending hook plus changed definition) can run against an isolated real-CLI fixture instead of the human.
+- [x] Portal Install hooks spawns `bundle apply` without `ROBOREPO_WRITE_ACTOR`, so its writes log under the portal server's actor (`scripts/cli/hook-core-install.mjs:35`). — fixed in review (`75538ced`); regression asserts the child gets the request actor.
+- [x] Shared resolved notice hardcodes Codex product copy (`portal/shared/hook-readiness.js:90`); move it into Codex hook guidance. — fixed in review (`77a57dc1`); `guidance.reviewResolved`, documented in the provider interface.
+- [x] Mount-refresh comment sits above `hasHookReadinessMount` instead of `refreshHookReadinessMounts` (`portal/shared/hook-readiness.js:387`). — fixed in review (`d637c1f4`).
+- [x] `listAffected` `counts` option is never set; remove the dead branch (`portal/shared/hook-readiness.js:320`). — fixed in review (`d637c1f4`).
+- [x] User docs still describe review offers and hints on CLI-only installs (`docs/user/reference/telemetry.md:29`, `docs/user/guides/install-workflows.md:16,100`, `docs/user/reference/config-control-panel.md:92`). — fixed in review (`02250966`).
+- [x] Decision Log names a review executable path that no longer exists; mark it superseded by the current CodexCLI.app path. — fixed in review (this plan record).
+- [x] Two Not tested entries (core hooks after trusted package hooks; unrelated pending hook plus changed definition) can run against an isolated real-CLI fixture instead of the human. — run in review; both pass (see October 24 verification).
 - [x] A visible Agents approval offer survived a desktop-to-CLI-only discovery change during mutation — fixed in `1f3217ee`; regression failed before the fix and passed afterward.
 - [x] CLI-only hook approval duplicated Codex startup prompts — fixed in `1f3217ee` following the user decision; pending-review/resolved notices, offers, duplicate CLI tooltips, and post-change hints are suppressed while desktop guidance and other readiness remedies remain.
 - [x] Claude hooks.read comment claimed installed hooks execute automatically despite workspace-trust requirements — corrected to describe file-level configuration in review (`01220497`).
