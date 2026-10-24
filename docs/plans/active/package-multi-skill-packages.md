@@ -6,7 +6,7 @@ blocked_by: []
 depends_on: []
 related: ["o9zwxuav", "ejsc769o", "jdsobwn", "user-managed-packages-and-add-workflows"]
 reviewed_commit: ce0749f0ef66bc30e53addd4f2029cd14abcaf4a
-worktree:
+worktree: package-multi-skill-packages
 ---
 
 # Package Management: Part 01 - Bundle Skills That Only Work Together
