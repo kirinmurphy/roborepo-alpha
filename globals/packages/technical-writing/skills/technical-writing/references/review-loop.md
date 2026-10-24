@@ -5,7 +5,7 @@ point is to catch rule violations the drafting pass missed, then fix them — no
 the roles separate; do not let the writer grade its own work in the same pass.
 
 - **Creator** — writes and revises the doc. Owns the prose.
-- **Validator** — does not write. Resolves the applicable rule set below, reads every rule in it,
+- **Validator** — does not write. Resolves the applicable rule set below, uses every rule in it,
   and checks the current draft against each one. Its only output is a report of violations.
 
 ## Applicable rule set
@@ -20,8 +20,8 @@ exact failure this loop exists to catch.
 | `anti-patterns.md` | Always |
 | `section-guidance.md` | Always |
 | `representation.md` | Always — the draft was authored under it, so it is checked against it |
-| `doc-shapes.md` | Non-plan documents: the chosen shape |
-| `plan-write` `references/plan-schema.md` | Documents under `docs/plans`, in place of `doc-shapes.md` |
+| `doc-shapes.md` | The chosen shape, unless the caller or repository supplies a required structure |
+| Supplied document constraints | Content, structure, and ownership requirements provided by the caller or repository; reuse available guidance without invoking another workflow |
 | `doc-organization.md` | Only when revising a documentation set rather than a single document |
 | Applicable paired skills | Whenever they materially constrain the guidance the document gives — an explicit request is one trigger, not the only one |
 
@@ -29,6 +29,12 @@ A paired skill constrains validation, not only drafting: when a document tells a
 build something, the rules governing that construction are in scope. Within a paired skill, only
 the references that actually apply are required — `javascript-typescript/references/framework-less-markup.md` matters when the
 document covers DOM structure, and not otherwise.
+
+Reuse rules and references already available in context; do not reread unchanged guidance for
+each pass. A fresh-context Validator must receive or read the applicable rules it lacks. When
+validation is part of an enclosing workflow, combine the applicable rubrics in its independent
+pass rather than launch a second loop; include these rule sources in the pass report and recheck
+prose fixes before completion. Routine record updates do not enter this authoring loop.
 
 The loop:
 

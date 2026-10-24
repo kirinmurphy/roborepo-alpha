@@ -1,6 +1,6 @@
 ---
 name: technical-writing
-description: Use when creating or revising durable technical documentation — architecture notes, implementation plans, migration docs, operational runbooks, design proposals, or repo reference/guide docs — that must explain concepts, current behavior, happy path, edge cases, decisions, and implementation steps for future readers. Use for docs that need clear structure, newcomer-friendly explanations, and separation of facts, recommendations, risks, and open questions. Do not use for brief answers, quick todos, PR descriptions, commit messages, or lightweight implementation notes unless the user asks for a structured document.
+description: Use when creating or revising durable technical documentation — architecture notes, implementation plans, migration docs, operational runbooks, design proposals, or repo reference/guide docs — that must explain concepts, current behavior, happy path, edge cases, decisions, and implementation steps for future readers. Use for docs that need clear structure, newcomer-friendly explanations, and separation of facts, recommendations, risks, and open questions. Do not use for brief answers, quick todos, PR descriptions, commit messages, lightweight implementation notes, routine review records, test results, decisions, and checklist updates unless the user asks for substantive document authoring.
 ---
 
 # Technical Writing
@@ -8,21 +8,31 @@ description: Use when creating or revising durable technical documentation — a
 Use this skill to write or revise technical documentation that helps future readers understand a
 system, plan, migration, or operational workflow.
 
+Routine review records, test results, decisions, and checklist updates stay in their owning
+workflow. Editing skill instructions uses the skill-maintenance guidance; it does not by itself
+invoke document authoring. A substantive rewrite of requirements, design, or explanatory prose
+still uses this skill, even when it occurs during implementation or review.
+
 ## Paired Skills
 
-**Load these as part of the mode; do not wait to be asked for them by name.**
+Load a paired skill only when its rules materially constrain the current work;
+do not wait to be asked for them by name. Reuse guidance already loaded in this conversation,
+including applicable references. Read again only if the source changed, the task enters new subject matter, or the
+needed guidance is no longer available in context. A pairing does not invoke the paired skill's
+whole workflow or recursively load its dependencies; apply each trigger to the actual work.
 
 | Skill | Load when | Contributes |
 | --- | --- | --- |
-| `plan-write` | The document lives under `docs/plans` | Frontmatter, lifecycle folders, naming, and the required-section schema. Don't duplicate its section list here (see `doc-shapes.md`'s note on this) |
 | `code-style` | The document specifies where code goes: module boundaries, orchestration vs. execution, reuse | Ownership and layering constraints the guidance must respect |
-| `javascript-typescript` | The document covers JS/TS — ESM, exports, types, framework-less DOM structure | Language and markup conventions the guidance must not contradict |
-| `test-harness` | The document proposes tests, verification commands, or a regression strategy | Test selection and observable-behavior assertions |
+| `javascript-typescript` | The document prescribes JS/TS implementation choices — ESM, exports, types, framework-less DOM structure; not merely a JS/TS path | Language and markup conventions the guidance must not contradict |
+| `test-harness` | The document proposes tests, verification commands, or a regression strategy; not recording existing test results | Test selection and observable-behavior assertions |
 
-This skill covers prose quality; a paired skill governs whether what the document *says to build*
-is right. Both are in scope, and whatever loaded here joins the Validator's rule set in
-`references/review-loop.md`. State which paired skills applied and which did not — a skipped skill
-and a forgotten one look identical otherwise.
+This skill is agnostic to document-specific workflows. Apply content, structure, and ownership
+constraints supplied by the caller or repository without choosing or invoking a workflow based
+on the document's kind or location. Report skills actually used, including reused guidance,
+and applicable skills skipped or unavailable; non-applicable rows need no inventory.
+
+This skill covers prose quality and the content constraints of applicable paired skills.
 
 ## Mode Selection
 
@@ -51,7 +61,10 @@ For a named mode, read only the needed references:
 
 **Do not present a durable document as finished until the Creator/Validator loop in
 `references/review-loop.md` has run** — every `write` invocation, new document or edit alike. The
-procedure lives in the reference; what decides whether the work is done:
+procedure lives in the reference. When an enclosing workflow already requires an independent
+Validator, a single pass may cover both rubrics explicitly; preserve read-only review, report its
+findings, fix and recheck them, and retain the enclosing workflow's gates. Do not start a second
+loop solely because this skill was paired. What decides whether the work is done:
 
 - The Creator owns edits. The Validator only reports violations and never rewrites.
 - Every Validator pass is surfaced to the user in chat, including a pass that finds nothing.

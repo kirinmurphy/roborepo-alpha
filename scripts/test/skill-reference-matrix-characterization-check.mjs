@@ -33,7 +33,8 @@ testCompletionGateIsVisibleFromTheEntryPoint();
 testValidatorRuleSetNamesEveryAuthoringReference();
 testPlanWriteCreateRequiresSchemaAndNamespaceResolution();
 testPlanWriteCreateRunsBothValidationLayers();
-testPlanWritePairsTechnicalWritingUnconditionally();
+testRoutineRecordsDoNotCascade();
+testTechnicalWritingHasNoPlanDependencies();
 testPlanWriteNamesConditionalPairedSkillsAndTheirTriggers();
 testBothSkillsInstructPairedLoadingWithoutBeingAsked();
 testEveryReferencedFileExists();
@@ -237,19 +238,47 @@ function testBothSkillsInstructPairedLoadingWithoutBeingAsked() {
     "material relevance is the trigger; a request is one way to reach it");
 }
 
-// The behavior this pins: a user should not have to name `technical-writing` on every plan request
-// for it to be loaded. Prose that merely observes the two skills are related ("pair with
-// technical-writing") reads as background, not as an instruction, and background does not get
-// followed — so the requirement has to be stated as one, and stated at the entry point.
-function testPlanWritePairsTechnicalWritingUnconditionally() {
-  const skill = flat(`${PLAN_WRITE}/SKILL.md`);
-  assert.match(skill, /## Paired Skills/, "plan-write must declare its paired skills at the entry point");
-  assert.match(skill, /Load these as part of the work; do not wait to be asked for them by name/,
-    "the paired-skill list must instruct loading rather than describe a relationship");
-  assert.match(skill, /`technical-writing` \| \*\*Always\*\*/,
-    "technical-writing is unconditional: every plan is prose someone reads later");
-  assert.match(skill, /Load `technical-writing` before drafting, without being asked/,
-    "the creation gates must repeat the requirement, so skipping it is visibly noncompliant before any reference is opened");
+// Routine evidence updates must not enter authoring workflows through a path or a pairing cycle.
+function testRoutineRecordsDoNotCascade() {
+  const plans = flat(`${PLAN_WRITE}/SKILL.md`);
+  const writing = flat(`${TECHNICAL_WRITING}/SKILL.md`);
+  const review = flat("globals/packages/plan-review/skills/plan-review/SKILL.md");
+  const support = flat("globals/system/skills/roborepo-support/SKILL.md");
+  for (const [name, content] of [["plan-write", plans], ["technical-writing", writing], ["plan-review", review], ["roborepo-support", support]]) {
+    assert.match(content, /Reuse .*already loaded/i, `${name} must reuse conversation guidance`);
+    assert.match(content, /materially constrain/, `${name} must scope pairing by actual constraints`);
+  }
+  assert.doesNotMatch(plans, /`technical-writing` \| \*\*Always\*\*/, "sync must not unconditionally load prose validation");
+  assert.match(plans, /Routine records owned by another lifecycle skill do not invoke/, "review bookkeeping must stay with its owner");
+  assert.match(plans, /Sync-only updates do not run the technical-writing loop/, "standalone sync must bypass prose validation");
+  assert.match(writing, /routine review records, test results, decisions, and checklist updates/, "routine evidence must be outside prose authoring");
+  assert.doesNotMatch(review, /`technical-writing` \| Writing findings and the review record/, "ordinary review must not start document authoring");
+  assert.match(review, /Routine findings and review records use the format below/, "review must keep its record format");
+  assert.match(support, /Do not load dependencies transitively/, "maintenance guidance must prohibit blind dependency traversal");
+  const update = flat(`${PLAN_WRITE}/references/workflow-update.md`);
+  assert.match(update, /canonical plan validator/, "sync must retain schema validation");
+  assert.match(update, /Authority, lifecycle, and approval boundaries always apply/, "sync exemptions must preserve lifecycle safeguards");
+  for (const content of [plans, writing]) {
+    assert.match(content, /both rubrics explicitly/, "combined validation must explicitly cover both rubrics");
+    assert.match(content, /read-only/, "combined validation must stay independent of edits");
+  }
+  assert.match(review, /human's explicit answer/, "review must still require explicit human approval");
+  assert.match(review, /fresh-context subagent/, "review must retain independent validation");
+  const feature = flat("globals/packages/feature-verification/skills/feature-verification/SKILL.md");
+  assert.doesNotMatch(feature, /or any completion report/, "a completion report alone must not trigger another workflow");
+  assert.match(feature, /routine test-result reporting/, "test-result reporting must have an explicit exclusion");
+}
+
+function testTechnicalWritingHasNoPlanDependencies() {
+  const directory = path.join(repoRoot, TECHNICAL_WRITING);
+  for (const relativePath of fs.readdirSync(directory, { recursive: true })) {
+    if (!relativePath.endsWith(".md")) continue;
+    const content = read(path.join(TECHNICAL_WRITING, relativePath));
+    assert.doesNotMatch(content, /\bplan-[a-z-]+\b|docs\/plans/,
+      `${relativePath}: technical-writing must not route to plan skills or repository-specific plan folders`);
+  }
+  assert.match(flat(`${TECHNICAL_WRITING}/SKILL.md`), /supplied by the caller or repository/,
+    "document-specific constraints must come from outside the writing skill");
 }
 
 // Conditional skills need their trigger written down. "Load when relevant" defers the judgment back

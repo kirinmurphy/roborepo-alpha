@@ -10,7 +10,8 @@
       ],
       "nearMiss": [
         "which tests should I add for this module",
-        "explain how the cache layer is structured"
+        "explain how the cache layer is structured",
+        "report the CLI test results already produced"
       ],
       "triggerPhrases": [
         "show me it works",
@@ -21,7 +22,8 @@
       ],
       "skipPhrases": [
         "test-harness",
-        "nothing was built"
+        "nothing was built",
+        "routine test-result reporting"
       ]
     }
   ]
