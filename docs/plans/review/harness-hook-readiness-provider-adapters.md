@@ -795,6 +795,7 @@ Every earlier question was answered by the user; see the Decision Log.
 - Fresh-context Validator pass 2 reported seven fix findings (docs, test gap, plan wording) and one escalation, all recorded above.
 - After the pass-2 fixes, the full browser suite passed 130 tests. A third `npm run check` failed one CLI assertion (`single-repo refresh should leave other cached ahead repos in the main list`, the remote-sync menu check also seen October 22); this branch changes no remote-sync code, and `node scripts/test/cli-surface-integration-check.mjs` passed three isolated reruns. Cause not established.
 - Fresh-context Validator pass 3 found no defects; its cosmetic findings (a short source line in `telemetry.md`, this Open Questions entry, a stray blank line here) were fixed in this plan record and a doc rewrap.
+- Final `npm run check` on `3e35f1bb` (implementation unchanged since `ce870941`): doctor (106 checks), 457/457 CLI assertions, install-collision, and 60/60 check suites passed; package-install smoke then hit the recorded base failure, so the four Docker legs did not run. The full browser suite (130 tests) passed separately on `6f9db269`; later commits changed only docs and this plan. Windows parity is deferred to `l1mz96d9`.
 
 #### October 23 CLI-only workflow refinement and native QA
 
