@@ -8,7 +8,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { loadHookReviewStatus, launchHookReview } from "../cli/hook-review-launch.mjs";
-import { installCoreHooks } from "../cli/hook-core-install.mjs";
+import { applyBundle, installCoreHooks } from "../cli/hook-core-install.mjs";
+import { runWithWriteActor } from "../cli/write-log.mjs";
 import { hookReadinessLines, printHookReviewHint } from "../cli/hook-review-guidance.mjs";
 import { launchInTerminal, terminalLaunchSupported } from "../cli/terminal-launch.mjs";
 import { invalidateHookReadiness, loadHookReadiness, reportPackageHookChange } from "../cli/hook-readiness-status.mjs";
@@ -198,6 +199,11 @@ async function coreInstallUsesServerBundleAndRefreshes() {
   const missing = { groups: [{ owner: "core", hooks: [{ state: "missing" }] }] };
   assert.equal((await installCoreHooks("codex", { ...options, readStatus: async () => missing })).ok, false);
   await assert.rejects(installCoreHooks("codex", { ...options, apply: async () => { throw new Error("failed"); } }), /failed/);
+
+  const spawned = [];
+  await runWithWriteActor("portal POST /api/config/hooks/codex/install", () => applyBundle("hooks", { run: async (...args) => { spawned.push(args); } }));
+  assert.deepEqual(spawned[0][1].slice(1), ["bundle", "apply", "hooks"]);
+  assert.equal(spawned[0][2].env.ROBOREPO_WRITE_ACTOR, "portal POST /api/config/hooks/codex/install", "bundle writes name the portal install request");
 }
 
 async function post(urlPath, body, handlers) {

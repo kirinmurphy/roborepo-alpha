@@ -7,6 +7,7 @@ import { coreHookBundle } from "./core-hook-bundle.mjs";
 import { invalidateHookReadiness } from "./hook-readiness-status.mjs";
 import { loadHookReviewStatus } from "./hook-review-launch.mjs";
 import { getHarnessProvider } from "../harnesses/registry.mjs";
+import { currentWriteActor } from "./write-log.mjs";
 
 const runFile = promisify(execFile);
 
@@ -29,10 +30,13 @@ export async function installCoreHooks(harness, {
     : { ok: true, status };
 }
 
-async function applyBundle(id) {
+// The child's writes are logged under the portal request that started it, not the portal server.
+export async function applyBundle(id, { run = runFile } = {}) {
   const cli = fileURLToPath(new URL("./main.mjs", import.meta.url));
   try {
-    await runFile(process.execPath, [cli, "bundle", "apply", id], { timeout: 60_000, maxBuffer: 1024 * 1024 });
+    await run(process.execPath, [cli, "bundle", "apply", id], {
+      timeout: 60_000, maxBuffer: 1024 * 1024, env: { ...process.env, ROBOREPO_WRITE_ACTOR: currentWriteActor() },
+    });
   } catch {
     throw new Error("Core hook installation failed. Run the bundle command in a terminal for details.");
   }
