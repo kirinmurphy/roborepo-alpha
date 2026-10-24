@@ -5,7 +5,7 @@ next_action: Add a catalog fixture with two skill resources in one package and c
 blocked_by: []
 depends_on: []
 related: ["o9zwxuav", "ejsc769o", "jdsobwn", "user-managed-packages-and-add-workflows"]
-reviewed_commit: 5556666da3b986a87d1d1f1e2022d048ddc00d06
+reviewed_commit: ce0749f0ef66bc30e53addd4f2029cd14abcaf4a
 worktree:
 ---
 
@@ -39,7 +39,7 @@ skills that are useful together.**
 
 ### Current state
 
-Verified at `5556666`.
+Verified at `ce0749f`.
 
 | Area | Today |
 | --- | --- |
@@ -56,10 +56,11 @@ Plan suite specifics:
 | Area | Today |
 | --- | --- |
 | Packages | `globals/packages/plan-{write,promote,execute,review,close,archive}/`, each with one `skill` resource and one `slash-command` entrypoint. `plan-execute` also has a `rules` resource (`rules.md`). All are in `skills-dev-lifecycle`, with order 10–45. |
-| Runtime package-ID references | `scripts/cli/plans.mjs` `planWritePackageState()` reads `packageStatusSummary("plan-write")`. `scripts/cli/telemetry.mjs` `loadPlanCloseEnabled` reads `packageStatusSummary("plan-close")`. `portal/plans/api.js` `PLAN_SUITE_PACKAGES` lists all six plus `session-close` for the onboarding banner's bulk enable. |
-| Command references | `manifests/platform/plan-lifecycle.json`, `portal/plans/plan-actions.js`, and `portal/plans/plan-drawer-partial.html` name commands and skills, not packages, so they stay as they are. |
-| Docs | `docs/user/guides/setup-and-daily-use.md` and `docs/user/guides/plan/lifecycle/plan-suite.md` tell users to run `roborepo package enable` once per plan package. |
-| Tests naming the packages | `scripts/test/plan-suite-check.mjs` and `scripts/test/plan-suite-commands-check.mjs` enable or query `plan-write` by package ID. `scripts/test/plan-close-integration-check.mjs`, `scripts/test/skill-reference-matrix-characterization-check.mjs`, `scripts/test/plan-suite-skills-check.mjs`, and `scripts/test/test-cli.sh` read files under `globals/packages/plan-*/`. |
+| Runtime package-ID references | `scripts/cli/plans.mjs` `planWritePackageState()` reads `packageStatusSummary("plan-write")`, and every plans snapshot carries the result as `planWritePackage`, which `portal/plans/app.js`, `portal/plans/templates.js`, `portal/plans/plan-drawer.js`, `portal/home/app.js`, and `scripts/cli/mock-home.mjs` read. `scripts/cli/telemetry.mjs` `loadPlanCloseEnabled` reads `packageStatusSummary("plan-close")`; the comment on `withCleanupOffer` in `scripts/cli/repository-overview-projections.mjs` names "the plan-close package". `portal/plans/api.js` `PLAN_SUITE_PACKAGES` lists all six plus `session-close` for the onboarding banner's bulk enable. |
+| Command references | `manifests/platform/plan-lifecycle.json`, `portal/plans/plan-actions.js`, and `portal/plans/plan-drawer-partial.html` name commands and skills, not packages, so they stay as they are. The Plans page skill popup (`portal/shared/skill-detail-modal.js`) and `loadConfigSource` resolve skills by skill ID and commands through `packageSlashCommands()`, so they follow the move without edits. No preset or bundle in `manifests/` names a plan package. |
+| Docs | `docs/user/guides/setup-and-daily-use.md` and `docs/user/guides/plan/lifecycle/plan-suite.md` tell users to run `roborepo package enable` once per plan package. `docs/internal/plans-portal-internals.md` lists the six `globals/packages/plan-*/` directories. |
+| Tests naming the packages | By package ID: `scripts/test/plan-suite-check.mjs` and `scripts/test/plan-suite-commands-check.mjs` (enable, disable, or query `plan-write`); `scripts/test/config-bulk-toggle-check.mjs` (`SECTION_IDS` lists all seven, plus individual `plan-write` toggles); `scripts/test/package-retired-ids-check.mjs` and `scripts/test/system-package-ownership-characterization-check.mjs` (use `plan-write` as a current, enableable package); `scripts/test/package-catalog-check.mjs` (looks up `plan-write`'s `urls`, which would pass vacuously once the ID is gone); `scripts/test/cli-command-catalog-check.mjs` (parses `package status plan-write` without reading the catalog, so it can stay). By path: `scripts/test/plan-close-integration-check.mjs`, `scripts/test/skill-reference-matrix-characterization-check.mjs`, `scripts/test/plan-suite-skills-check.mjs`, and `scripts/test/test-cli.sh` read files under `globals/packages/plan-*/` or `generated/packages/plan-*/`. Other tests name the plan skills or commands only. |
+| Retired package IDs | No mapping exists. `scripts/test/package-retired-ids-check.mjs` pins what `roborepo update` does with registry IDs the catalog no longer has (`plan-docs`, `wrap-up`, `plan-start`): `reconcile` drops them from both registry lists and removes their skill cache, harness skill views, and slash commands. |
 
 ### Why now
 
@@ -68,8 +69,9 @@ Plan suite specifics:
   to work on content RoboRepo controls first.
 - **Desired state ([[o9zwxuav]])** changes what the enabled-packages file means. Changing the plan
   package IDs first means its migration fixtures use the final IDs.
-- **Required and recommended skills ([[ejsc769o]])** lists `requires` edges from `plan-execute`,
-  `plan-review`, and `plan-close`. After this plan those become one edge from `plan-suite`.
+- **Required and recommended skills ([[ejsc769o]])** lists `requires` edges from `plan-write`,
+  `plan-promote`, `plan-execute`, `plan-review`, and `plan-close`. After this plan those edges all
+  start from `plan-suite`.
 
 ## Goals
 
@@ -218,7 +220,9 @@ manifest (`id`, `source`, `invocation`, `risk`, and the `slash-command` entrypoi
 | Location | Today | After |
 | --- | --- | --- |
 | `scripts/cli/plans.mjs` `planWritePackageState` | `packageStatusSummary("plan-write")` | `packageStatusSummary("plan-suite")`. Rename the function to `planSuitePackageState`. |
-| `scripts/cli/telemetry.mjs` `loadPlanCloseEnabled` | `packageStatusSummary("plan-close").enabled` | `packageStatusSummary("plan-suite").enabled` |
+| Plans snapshot field `planWritePackage` and the portal's `planWriteEnabled` / `getPlanWritePackage` | Named after `plan-write` | Rename to `planSuitePackage`, `planSuiteEnabled`, and `getPlanSuitePackage` in `scripts/cli/plans.mjs`, `scripts/cli/mock-home.mjs`, `portal/plans/`, `portal/home/app.js`, and the portal UI specs, so no name points at a package that no longer exists. The field's shape is unchanged. |
+| `scripts/cli/telemetry.mjs` `loadPlanCloseEnabled` | `packageStatusSummary("plan-close").enabled` | `packageStatusSummary("plan-suite").enabled`. The name stays: it still answers whether `/plan-close` is available. |
+| `scripts/cli/repository-overview-projections.mjs` `withCleanupOffer` comment | "the plan-close package is disabled" | "the plan-suite package is disabled" |
 | `portal/plans/api.js` `PLAN_SUITE_PACKAGES` | seven IDs | `["plan-suite", "session-close"]` |
 
 After the move, the `skills-dev-lifecycle` category keeps its "Plan Suite" label and `bulkToggle`,
@@ -258,11 +262,20 @@ off, matching what the onboarding banner enables. See Decision Log.
       delete the six old package directories.
 - [ ] Run `roborepo skill render-commands` and `roborepo skill triggers --check`; commit
       `generated/packages/plan-suite/` and delete the six `generated/packages/plan-*/` directories.
-- [ ] Update the three runtime references above, then search `scripts/`, `modules/`, `portal/`, and
-      `manifests/` again for any old package ID used as a package ID.
-- [ ] Update the tests that name old package IDs or paths, listed under Current state.
+- [ ] Update the runtime references in the table above, then search `scripts/`, `modules/`,
+      `portal/`, and `manifests/` again for any old package ID used as a package ID.
+- [ ] Update the tests that name old package IDs or paths, listed under Current state. In
+      `package-catalog-check.mjs`, point the `urls` lookup at `plan-suite` and assert the package
+      exists, so the check cannot pass vacuously.
+- [ ] Extend `scripts/test/package-retired-ids-check.mjs` with the six old plan package IDs: after
+      `reconcile`, they leave the registry; after `roborepo package enable plan-suite`, all six
+      plan skills and their slash commands are installed. Record in this plan what happens to the
+      plan skill links between those two steps.
 - [ ] Update the two user guides so the CLI shows `roborepo package enable plan-suite` and
       `roborepo package enable session-close`.
+- [ ] Replace `globals/packages/plan-*/` paths in `docs/internal/plans-portal-internals.md` and in
+      open plans under `docs/plans/backlog/`, `ready/`, `active/`, and `review/`. Leave completed and
+      archived plans and `docs/internal/history/` as written: they record the layout at the time.
 
 ### Phase 5: Guidance
 
@@ -283,6 +296,8 @@ off, matching what the onboarding banner enables. See Decision Log.
 | Plans page and command status read `plan-suite` | `node scripts/test/plan-suite-check.mjs`, `node scripts/test/plan-suite-commands-check.mjs` |
 | Plan skill content and the rules fragment are unchanged after the move | `node scripts/test/plan-suite-skills-check.mjs`, `node scripts/test/plan-close-integration-check.mjs`, `node scripts/test/skill-reference-matrix-characterization-check.mjs` |
 | Onboarding bulk enable turns on `plan-suite` and `session-close` | `node scripts/test/config-bulk-toggle-check.mjs` |
+| Updating a machine that enabled the six old IDs drops them, and enabling `plan-suite` installs all six skills and commands | `node scripts/test/package-retired-ids-check.mjs` |
+| Enabling and disabling `plan-suite` installs and removes its command wrappers | `node scripts/test/system-package-ownership-characterization-check.mjs` |
 | Generated command wrappers and trigger fixtures match source | `roborepo skill render-commands --check`, `roborepo skill triggers --check` |
 | Full gate: package defaults, generated output, CLI catalog, and portal change | `bash scripts/doctor.sh --quiet`, `npm run check` |
 
@@ -290,7 +305,7 @@ off, matching what the onboarding banner enables. See Decision Log.
 
 | Risk | Treatment |
 | --- | --- |
-| Existing machines list the six old IDs in `~/.roborepo/enabled-packages.json`. `reconcileEnabledPackages` in `scripts/cli/packages.mjs` drops IDs missing from the catalog and then runs `cleanupPackageProjections`, so `plan-suite` is not enabled after update. Whether the old skill links survive cleanup has not been checked. | Pre-launch, no mapping is added. The release note and both user guides say to run `roborepo package enable plan-suite` once. Phase 4's checks assert the actual result. |
+| Existing machines list the six old IDs in `~/.roborepo/enabled-packages.json`. `reconcileEnabledPackages` in `scripts/cli/packages.mjs` drops IDs missing from the catalog and then runs `cleanupPackageProjections`, so `plan-suite` is not enabled after update. `package-retired-ids-check.mjs` shows that a retired package's skill cache, skill views, and commands are removed; the plan suite differs because `plan-suite` reuses the same skill IDs, and whether that keeps the links has not been checked. | Pre-launch, no mapping is added. The release note and both user guides say to run `roborepo package enable plan-suite` once. Phase 4 extends `package-retired-ids-check.mjs` to assert the actual result. |
 | A path assumes one skill per package and the fixture does not reach it | Phase 1 searches as well as tests, and Phase 4 repeats the search for the plan suite |
 | Authors put unrelated skills in one package to save toggles | The authoring question in package-development guidance, and the [[ejsc769o]] audit, which also reports skills in one package that never reference each other |
 
@@ -301,6 +316,10 @@ off, matching what the onboarding banner enables. See Decision Log.
   and its section header shares a name with the `plan-suite` card. Considered and not chosen:
   renaming the category to "Dev Lifecycle" and dropping `bulkToggle`, and moving `session-close`
   to another category.
+- **2026-10-24: The plans snapshot field `planWritePackage` is renamed to `planSuitePackage`.**
+  Decided during promotion. It reports `plan-suite`'s status after the move, and the field is
+  internal to the portal and its tests. `loadPlanCloseEnabled` keeps its name because it still
+  answers whether `/plan-close` is available.
 
 ## Documentation impact
 
@@ -311,12 +330,14 @@ off, matching what the onboarding banner enables. See Decision Log.
 | `docs/user/reference/config-control-panel.md` | Contents view and skill-count badge |
 | `docs/user/guides/setup-and-daily-use.md` | Replace the six per-package `enable` lines with `plan-suite` |
 | `docs/user/guides/plan/lifecycle/plan-suite.md` | Same CLI change, and the new Agents page layout |
+| `docs/internal/plans-portal-internals.md` | The six plan package directories become `globals/packages/plan-suite/` |
 
 ## Coordination
 
 | Plan | Effect |
 | --- | --- |
-| [[o9zwxuav]] | Depends on this plan; registry migration fixtures use `plan-suite` |
+| [[o9zwxuav]] | Depends on this plan; registry migration fixtures use `plan-suite`. Its dependency-row mockup still shows `/plan-close` as its own card under Plan Suite; after this plan that card is `Plan Suite`. It should refresh the mockup when it is promoted. |
 | [[ejsc769o]] | Depends on this plan; owns the reference audit that flags package-or-collection candidates, and its plan rows collapse into one `plan-suite` row |
 | [[jdsobwn]] | Depends on this plan; external suites become packages with several skills and use the contents view |
 | [[user-managed-packages-and-add-workflows]] | Depends on this plan; "Multiple things together" asks whether to create a package or a collection; adds the System / Custom / Third Party tabs, inside which the contents view must work unchanged |
+| [[46qth5z8]], [[plans-portal-live-refresh-and-static-preflight]], [[plan-lifecycle-suite-blockers-dependencies]] | Not dependencies. Each names a file under `globals/packages/plan-*/`; Phase 4 rewrites those paths to `globals/packages/plan-suite/` and changes nothing else in them |
