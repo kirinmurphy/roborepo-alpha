@@ -111,6 +111,7 @@ try {
   const desktopGuidance = codexHookGuidance(detectHarnessProvider(codex, options).evidence);
   assert.equal(desktopGuidance.preferredInterface, "desktop");
   assert.equal(desktopGuidance.reviewOnStartup, false);
+  assert.equal(desktopGuidance.reviewResolved, "These updates will be applied to your next ChatGPT/Codex session.");
   assert.match(desktopGuidance.reviewApp, /hook review notice.*Settings/);
   assert.match(desktopGuidance.missingCore.steps[1], /In the ChatGPT desktop app/);
   assert.equal(desktopGuidance.review.executable, path.join(codexBundle, "Contents/Resources/codex"));

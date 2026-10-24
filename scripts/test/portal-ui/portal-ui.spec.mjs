@@ -431,10 +431,12 @@ test.describe("hook readiness warning", () => {
     await expect(mount.locator("[data-slot=command]")).toBeVisible();
     await expect(mount.getByRole("button", { name: "Copy command" })).toBeVisible();
 
-    current = reviewed();
+    // Guidance without provider resolved copy falls back to the shared sentence.
+    current = { ...reviewed(), guidance: { ...reviewed().guidance, reviewResolved: undefined } };
     reply = { launched: false, reason: "no_review", status: current };
     await mount.getByRole("button", { name: "Open Codex hook review" }).click();
     await expect(mount.locator("[data-slot=title]")).toHaveText("Codex hooks reviewed");
+    await expect(mount.locator("[data-slot=message]")).toHaveText("Nothing RoboRepo installed is waiting for review. Newly trusted hooks run from your next Codex session.");
   });
 
   test("without a tested terminal launcher the notice offers only the command", async ({ page }) => {
