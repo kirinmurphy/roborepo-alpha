@@ -737,6 +737,13 @@ None open. Every question was answered by the user; see the Decision Log.
 ## Review
 
 ### Findings
+- [ ] Portal Install hooks spawns `bundle apply` without `ROBOREPO_WRITE_ACTOR`, so its writes log under the portal server's actor (`scripts/cli/hook-core-install.mjs:35`).
+- [ ] Shared resolved notice hardcodes Codex product copy (`portal/shared/hook-readiness.js:90`); move it into Codex hook guidance.
+- [ ] Mount-refresh comment sits above `hasHookReadinessMount` instead of `refreshHookReadinessMounts` (`portal/shared/hook-readiness.js:387`).
+- [ ] `listAffected` `counts` option is never set; remove the dead branch (`portal/shared/hook-readiness.js:320`).
+- [ ] User docs still describe review offers and hints on CLI-only installs (`docs/user/reference/telemetry.md:29`, `docs/user/guides/install-workflows.md:16,100`, `docs/user/reference/config-control-panel.md:92`).
+- [ ] Decision Log names a review executable path that no longer exists; mark it superseded by the current CodexCLI.app path.
+- [ ] Two Not tested entries (core hooks after trusted package hooks; unrelated pending hook plus changed definition) can run against an isolated real-CLI fixture instead of the human.
 - [x] A visible Agents approval offer survived a desktop-to-CLI-only discovery change during mutation — fixed in `1f3217ee`; regression failed before the fix and passed afterward.
 - [x] CLI-only hook approval duplicated Codex startup prompts — fixed in `1f3217ee` following the user decision; pending-review/resolved notices, offers, duplicate CLI tooltips, and post-change hints are suppressed while desktop guidance and other readiness remedies remain.
 - [x] Claude hooks.read comment claimed installed hooks execute automatically despite workspace-trust requirements — corrected to describe file-level configuration in review (`01220497`).
@@ -747,6 +754,12 @@ None open. Every question was answered by the user; see the Decision Log.
 - [x] Correct the stable-trust design and risk table: core fragments append and preserve existing package positions — fixed in review (`cbf4f2b8`).
 
 ### Verification
+
+#### October 24 resumed review and base synchronization
+
+- Resumed from pending Result at `1f3217ee` (base `0cd270ea`); plan tip `ec76894d` differed only in this plan. Main had advanced to `501f5aeb`; `roborepo plans sync-base` merged it cleanly as `0cdcb7bf`. The base change shares no files with this branch.
+- `npm run check` on `0cdcb7bf`: doctor (107 checks), CLI, install-collision, and 60/60 check suites passed, then package-install smoke failed at `scripts/test/package-install-smoke/tarball.mjs:23` (TypeError, not iterable). **Base failure:** a clean `git archive` export of main `501f5aeb` fails identically with exit 1. The gate stopped before its Docker legs and browser stage.
+- Fresh-context Validator pass 1: goals met with observable-outcome tests; no interaction defect from `501f5aeb` (`writeRootConfig` link detach, TOML `[hooks.state]` headers, write-log actor sanitizing, package command definitions). It reported the six code/doc fix findings and the two agent-runnable Not tested entries above, no escalations. Its 12 focused checks passed, including hook-readiness, hook-composition, hook-review-cli, hook-review-launch, shared-target-rows, root-config-merge characterization, and write-log.
 
 #### October 23 CLI-only workflow refinement and native QA
 
