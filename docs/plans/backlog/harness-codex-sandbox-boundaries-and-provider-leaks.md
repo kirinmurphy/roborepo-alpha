@@ -58,8 +58,8 @@ flowchart LR
 | 3 | [[8bjltk2n]] | Disconnected app/browser workflow and scoped approval verification |
 
 Parts 2 and 3 must not start implementation before Part 1 has landed and its current behavior has
-been rechecked. The existing `ready/` lifecycle records prior promotion, not permission to bypass
-the newly required prerequisite. Part 1 consumes the still-unlanded hook-readiness work; this plan
+been rechecked. This plan waits in `backlog/` until its prerequisite is ready and a new promotion
+review is appropriate. Part 1 consumes the still-unlanded hook-readiness work; this plan
 consumes that contract transitively rather than relocating hooks itself.
 
 `ia1q1z9` is landed (merge `e58a81927fb99bf460eb6a5ea9185224c2a585fd`, evidence
@@ -272,6 +272,8 @@ in fresh supported sessions.
   becomes Part 2 while retaining `4zyo2woj`, its existing path/lifecycle, and the original probe
   evidence. Part 1 owns provider cleanup; Part 3 owns browser isolation. No implementation result,
   approval persistence, forwarding result, or other plan's completion is inferred from the split.
+- October 24: at the user's request, return Part 2 from ready to backlog while retaining its id,
+  title, evidence, and provider-cleanup prerequisite.
 
 ## Open questions
 

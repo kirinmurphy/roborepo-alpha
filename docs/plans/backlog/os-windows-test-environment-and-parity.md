@@ -165,6 +165,10 @@ added without duplicating runner setup.
       `manifests/platform/manifest.tsv`. The installer reads manifest rows generically, but no
       PowerShell run has exercised that row. `windows-installer-check.ps1` only parses the script
       and compares harness ids, and the machine that restored the row had no `pwsh`.
+- [ ] Verify that `install-windows.ps1` dispatches `hook_fragment` and `managed_files` manifest
+      rows to `scripts/cli/shared-target-rows.mjs`, installing the Codex core hook fragment and its
+      owned scripts the same way the macOS and Linux installers do. Plan `wjlt1zvf` added that
+      dispatch and deferred this check to Windows coverage because no `pwsh` was available.
 - [ ] Add observable assertions for every expected-unsupported Windows behavior, including the
       current Runtime discovery capability message and source-path rejection behavior.
 
