@@ -5,6 +5,7 @@ next_action: After the desired-state contract lands, extract the current convent
 blocked_by: []
 depends_on:
   - o9zwxuav
+  - bysyzl1e
 related: ["age4cm7r", "gqzjlzgx", "skills-vs-commands-invocation-policy"]
 reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 worktree:
@@ -267,6 +268,23 @@ For each migrated skill:
 - remove hand-copied generic package-state resolution instructions once a shared resolution mechanism exists;
 - do not duplicate another skill's actual rules inside the parent skill.
 
+### 7. Report package-boundary candidates
+
+The same audit that classifies references also checks package boundaries. [[bysyzl1e]] defines
+package, collection, category, and dependency, and leaves the choice to the author; this check makes
+a wrong choice visible.
+
+| Audit finding | Suggests |
+| --- | --- |
+| A skill unconditionally hands off to, or loads, a skill in another package, and neither package `requires` the other | Merge them into one package, or add `requires` |
+| Two packages each unconditionally hand off to the other | Merge them into one package: neither is correct alone |
+| A package holds several skills and none of them references another | Split them into separate packages, in a collection if users want them together |
+
+Findings are warnings from `roborepo skill audit`, never validation errors: whether skills are
+correct apart is the author's call. After [[bysyzl1e]] lands, the `plan-execute`, `plan-review`, and
+`plan-close` rows in the audit table above become one `plan-suite` row, and handoffs between plan
+skills are references inside one package, which this check does not report.
+
 ## Implementation plan
 
 ### Phase 1 — Audit and manifest classification
@@ -275,6 +293,7 @@ For each migrated skill:
 - [ ] Classify each relationship using the policy in this plan and update the audit table for anything not already listed.
 - [ ] Add `requires` / `recommends` to the applicable built-in `package.config.json` files.
 - [ ] Validate that required relationships remain acyclic; keep reciprocal/contextual relationships such as `technical-writing -> plan-write` runtime-only where a static edge would create the wrong ownership or a cycle.
+- [ ] Add the package-boundary warnings from section 7 to `roborepo skill audit`, with fixtures for each finding.
 
 ### Phase 2 — Shared recommendation resolution
 
@@ -330,6 +349,7 @@ For each migrated skill:
 - [ ] `session-close`, `plan-close`, `plan-execute`, and `plan-review` use the same implementation-review severity/risk contract while preserving different scope and lifecycle behavior.
 - [ ] `plan-close` uses `test-harness` as required verification guidance; `session-close` can proceed after an explicit skip of its recommended verification.
 - [ ] The built-in skill audit has no remaining duplicated generic package-status prompt procedure where the shared relationship resolver applies.
+- [ ] `roborepo skill audit` reports each package-boundary finding from section 7 on its fixture and reports none on the built-in catalog once relationships are declared.
 - [ ] `npm run test:unit` passes package-catalog, dependency, skill/reference, and plan-suite characterization checks.
 - [ ] `npm run test:portal-ui` passes required/recommended dependency presentation and source-popup behavior.
 - [ ] `npm test` passes CLI package enable/disable/status/reconcile and plan-suite command flows.

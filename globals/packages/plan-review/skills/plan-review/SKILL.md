@@ -46,24 +46,31 @@ Do not synchronize base, rerun the gate, or request approval again before applyi
 
 ## Paired Skills
 
-Load these when the run calls for them; do not wait to be asked for them by name.
+Load a paired skill only when its rules materially constrain the current work;
+do not wait to be asked for them by name. Reuse guidance already loaded in this conversation,
+including applicable references. Read again only if the source changed, the task enters new subject matter, or the
+needed guidance is no longer available in context. A pairing does not invoke the paired skill's
+whole workflow or recursively load its dependencies; apply each trigger to the actual work.
 
 | Skill | Load when | Contributes |
 | --- | --- | --- |
 | `test-harness` | Judging test coverage, running checks, or deciding whether a gap needs a test | Test selection and observable-behavior assertions |
 | `code-style` | Reviewing where code was placed: module boundaries, orchestration vs. execution, reuse | Ownership and layering constraints |
-| `technical-writing` | Writing findings and the review record | Section content and reader clarity |
+| `technical-writing` | Authoring or substantially revising explanatory documentation, requirements, or design prose during a fix | Section content and reader clarity |
 
-Each row is its own optional package, so check it before loading it:
+For a pairing whose trigger applies, use the host's advertised skill availability first. Consult
+the host's skill/package manager only if availability or activation is unclear; reuse a known
+state unless there is evidence it changed. If disabled, ask: "Enable it, or skip it for this run?"
+Enable only with permission. If missing, skip and report it. For inconsistent activation, offer
+reconciliation or skip; never describe a drifted package as loaded.
 
-1. Check the host's skill/package manager for `<skill>` and read its availability and activation state.
-2. If `available` is true, `enabled` is true, and `status` is `enabled` or `configured`, load it.
-3. If it is disabled, ask: "`<skill>` is not enabled. Enable it, or skip it for this run?"
-   - **Enable:** use the host's package manager to enable `<skill>` with the user's permission, then load it.
-   - **Skip:** continue without it, and name it as skipped in the final report.
-4. If `enabled` and `status` disagree (`partial`, `external`), report the status, offer
-   the host's package reconciliation command or skip, and never describe a drifted package as loaded.
-5. If it is `missing` or `unavailable`, skip it and say so in the final report.
+State which paired skills were used, including guidance reused from context, and any applicable
+skill skipped or unavailable. Do not load skills or check package state just to report
+non-applicable rows.
+
+Routine findings and review records use the format below; test results, decisions, approval
+records, and checklist updates do not trigger `technical-writing` or `plan-write`. The review
+workflow owns those records and its validation and approval gates still apply.
 
 ## Workflow
 

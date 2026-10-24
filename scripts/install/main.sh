@@ -177,7 +177,7 @@ install_section "Base Skill"
 if [[ $dry_run -eq 0 && "${#present_harness_rows[@]}" -gt 0 ]]; then
   for row in "${present_harness_rows[@]}"; do
     IFS=$'\t' read -r _id home_path _present _display_name _root_config_path _confidence <<< "${row}"
-    link_global_skills "${home_path}" --preserve-existing builtin-support
+    link_global_skills "${home_path}" --preserve-existing roborepo-support
   done
 fi
 
@@ -219,7 +219,7 @@ run_post_install_onboarding() {
   while IFS=$'\t' read -r _id home_path present _display_name _root_config_path _confidence; do
     [[ -z "${_id}" ]] && continue
     [[ "${present}" == "1" ]] || continue
-    link_global_skills "${home_path}" --preserve-existing builtin-support
+    link_global_skills "${home_path}" --preserve-existing roborepo-support
   done < <(harness_detected_rows)
 
   if presets_onboarded; then

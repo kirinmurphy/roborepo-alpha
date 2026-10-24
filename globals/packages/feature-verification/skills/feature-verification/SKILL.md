@@ -1,6 +1,6 @@
 ---
 name: feature-verification
-description: Use when completing or demonstrating a change whose behavior the user should see proven — "show me it works", "prove it", "screenshot", "recording", "demo the change", or any completion report for a UI, server, API, CLI, or performance change. Picks the fastest sufficient evidence (executed checks, command or request output, measured numbers, browser screenshots or recordings through `roborepo browser`), runs safe verification itself instead of handing it to the user, and reports what passed versus what was only observed. Do not use for choosing or running a repo's tests (test-harness), and do not use for questions or plans where nothing was built.
+description: Use when completing or demonstrating a change whose behavior the user should see proven — "show me it works", "prove it", "screenshot", "recording", "demo the change", or when a UI, server, API, CLI, or performance change needs evidence beyond existing checks. Picks the fastest sufficient evidence (executed checks, command or request output, measured numbers, browser screenshots or recordings through `roborepo browser`), runs safe verification itself instead of handing it to the user, and reports what passed versus what was only observed. Do not use for routine test-result reporting when existing checks already establish the outcome, choosing or running a repo's tests (test-harness), and do not use for questions or plans where nothing was built.
 ---
 
 # Feature Verification
@@ -10,6 +10,9 @@ verification yourself; hand a check to the user only when it truly needs them.
 
 `test-harness` chooses and runs the repo's tests. This skill decides what evidence the user sees and
 reports it with the same `Verified: <command> -> <pass|fail|blocked>` line.
+
+Reporting existing test results alone does not trigger this skill. Reuse evidence already
+produced; load this guidance when selecting or capturing additional behavioral evidence.
 
 ## Choose the fastest sufficient evidence
 

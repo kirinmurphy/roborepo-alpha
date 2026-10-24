@@ -1,6 +1,6 @@
 ---
 name: plan-write
-description: Use when creating a repository plan document under docs/plans, or revising or syncing an existing one — revising follows the user's intent to change scope or design; syncing follows repository evidence to tick finished tasks and refresh next_action and reviewed_commit. Trigger on explicit /plan-write or requests to create a durable implementation plan, revise a plan, sync this plan, or update a plan after work. Do not use for preparing a plan for development (plan-promote), implementing a plan (plan-execute), reviewing an implementation (plan-review), closing a finished plan (plan-close), archiving a plan (plan-archive), ending a session (session-close), brief answers, PR descriptions, ordinary implementation without plan-document management, or casual checklists.
+description: Use when creating a repository plan document under docs/plans, or revising or syncing an existing one — revising follows the user's intent to change scope or design; syncing follows repository evidence to tick finished tasks and refresh next_action and reviewed_commit. Trigger on explicit /plan-write or requests to create a durable implementation plan, revise a plan, sync this plan, or update a plan after work. Do not use for preparing a plan for development (plan-promote), implementing a plan (plan-execute), reviewing an implementation (plan-review), closing a finished plan (plan-close), archiving a plan (plan-archive), ending a session (session-close), brief answers, PR descriptions, ordinary implementation without plan-document management, casual checklists, or routine lifecycle records owned by another plan skill.
 ---
 
 # Plan Write
@@ -17,33 +17,31 @@ refines it. Prose quality and implementation correctness come from the paired sk
 
 ## Paired Skills
 
-**Load these as part of the work; do not wait to be asked for them by name.** Their rules constrain
-the plan's content, not just its wording, and they join the validation scope — the
-`technical-writing` Validator checks the plan against every paired skill that was loaded.
+Load a paired skill only when its rules materially constrain the current work;
+do not wait to be asked for them by name. Reuse guidance already loaded in this conversation,
+including applicable references. Read again only if the source changed, the task enters new subject matter, or the
+needed guidance is no longer available in context. A pairing does not invoke the paired skill's
+whole workflow or recursively load its dependencies; apply each trigger to the actual work.
 
 | Skill | Load when | Contributes |
 | --- | --- | --- |
-| `technical-writing` | **Always** | Section ordering, representation, anti-patterns, reader clarity, and the Creator/Validator loop. Knows nothing about lifecycle or frontmatter, so it never overrides a rule from this skill |
+| `technical-writing` | Creating a plan or substantively revising requirements, design, or explanatory prose; not sync-only evidence updates | Section ordering, representation, anti-patterns, reader clarity, and the Creator/Validator loop. Knows nothing about lifecycle or frontmatter, so it never overrides a rule from this skill |
 | `code-style` | The plan specifies where code goes: module boundaries, orchestration vs. execution, reuse | Ownership and layering constraints |
-| `javascript-typescript` | The plan touches JS/TS — ESM, exports, types, framework-less DOM | Language and markup conventions the plan must not contradict |
-| `test-harness` | The plan proposes tests, verification commands, or a regression strategy | Test selection and observable-behavior assertions |
+| `javascript-typescript` | The plan prescribes JS/TS implementation choices — ESM, exports, types, framework-less DOM; not merely a JS/TS path | Language and markup conventions the plan must not contradict |
+| `test-harness` | The plan proposes tests, verification commands, or a regression strategy; not recording existing test results | Test selection and observable-behavior assertions |
 
 Conditional triggers are subject matter, never plan size: a one-phase plan that specifies module
 placement still needs `code-style`.
 
-Each row is its own optional package, so check it before loading it:
+For a pairing whose trigger applies, use the host's advertised skill availability first. Consult
+the host's skill/package manager only if availability or activation is unclear; reuse a known
+state unless there is evidence it changed. If disabled, ask: "Enable it, or skip it for this run?"
+Enable only with permission. If missing, skip and report it. For inconsistent activation, offer
+reconciliation or skip; never describe a drifted package as loaded.
 
-1. Check the host's skill/package manager for `<skill>` and read its availability and activation state.
-2. If `available` is true, `enabled` is true, and `status` is `enabled` or `configured`, load it.
-3. If it is disabled, ask: "`<skill>` is not enabled. Enable it, or skip it for this run?"
-   - **Enable:** use the host's package manager to enable `<skill>` with the user's permission, then load it.
-   - **Skip:** continue without it, and name it as skipped in the final report.
-4. If `enabled` and `status` disagree (`partial`, `external`), report the status, offer
-   the host's package reconciliation command or skip, and never describe a drifted package as loaded.
-5. If it is `missing` or `unavailable`, skip it and say so in the final report.
-
-State which paired skills applied and which did not — a skipped skill and a forgotten one look
-identical otherwise.
+State which paired skills were used, including guidance reused from context, and any applicable
+skill skipped or unavailable. Do not load skills or check package state just to report
+non-applicable rows.
 
 ## Create, Revise, or Sync
 
@@ -56,6 +54,14 @@ identical otherwise.
 | An existing plan, to bring up to date after work | **Sync** it: tick a task only when the code proves it done, add `## Not tested` entries for gaps, update `next_action` and `reviewed_commit` | Repository evidence |
 
 Revise and sync can happen in the same run; say which edits came from which.
+
+Routine records owned by another lifecycle skill do not invoke `/plan-write`: that skill owns
+its findings, test results, decisions, approvals, and checklist updates. A standalone request to
+sync a plan still uses this skill's authority, evidence, schema, and lifecycle rules.
+Sync-only updates do not run the technical-writing loop. Creating or substantively revising a
+plan still requires both plan validation and independent prose validation. When an enclosing
+workflow already requires an independent Validator, one pass may cover both rubrics explicitly;
+keep its read-only role, fix/recheck loop, and reporting rather than starting a duplicate loop.
 
 Read the references for the situation:
 

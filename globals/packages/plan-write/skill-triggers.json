@@ -11,7 +11,8 @@
         "write a quick PR summary",
         "give me a brief answer about this function",
         "implement this ordinary code change",
-        "close this plan, the work is merged"
+        "close this plan, the work is merged",
+        "record the review findings and check off the completed task"
       ],
       "triggerPhrases": [
         "/plan-write",
@@ -23,7 +24,8 @@
         "brief answers",
         "PR descriptions",
         "ordinary implementation",
-        "closing a finished plan"
+        "closing a finished plan",
+        "routine lifecycle records"
       ]
     }
   ]

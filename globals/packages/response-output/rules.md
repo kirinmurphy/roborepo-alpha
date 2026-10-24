@@ -18,10 +18,14 @@ emphasis.
 ### Form
 
 - **Choose the clearest medium; prose is the fallback.** Tables for like items or comparisons;
-  fenced blocks for commands, output, config, and file layout; Mermaid for workflows and
+  fenced blocks for commands, output, config, and file layout; a diagram for workflows and
   relationships; a concrete example, screenshot, recording, or actual output when it shows the point
   faster than a description. Keep prose connective; never narrate what a table or diagram already
   shows.
+- **Draw chat diagrams with the inline visual tool when one is available.** Chat surfaces such as
+  the Claude desktop app show a fenced Mermaid block as raw source, so render the diagram with the
+  harness's inline visual or widget tool instead. Use Mermaid in files that render it (docs,
+  READMEs, PR and issue bodies on GitHub) and in chat only when no inline visual tool exists.
 - **Use headers for distinct parts** of a long response. Short answers need none.
 - **Bold the load-bearing claim** the reader must not miss — a regression, a destructive
   consequence, a blocked step — and nothing else.

@@ -271,7 +271,7 @@ test_direct_harness_installers_export_root_configs() {
   assert_regular_file_contains "$home_dir/.codex/config.toml" "approval_policy" "direct Codex installer copies root config as local file"
   assert_not_symlink "$home_dir/.claude/CLAUDE.md" "direct Claude installer copies read-mostly assets (not symlinks)"
   assert_not_symlink "$home_dir/.codex/AGENTS.md" "direct Codex installer copies read-mostly assets (not symlinks)"
-  assert_managed_skill "$home_dir" "$home_dir/.codex/skills/builtin-support" "$repo_root/globals/system/skills/builtin-support" "direct Codex installer links base support skill through ~/.roborepo/skills"
+  assert_managed_skill "$home_dir" "$home_dir/.codex/skills/roborepo-support" "$repo_root/globals/system/skills/roborepo-support" "direct Codex installer links base support skill through ~/.roborepo/skills"
   assert_absent "$home_dir/.codex/skills/case-study" "direct Codex installer does not copy optional skills by default"
 }
 
@@ -319,10 +319,45 @@ test_old_repo_managed_symlinks_are_migrated() {
   # Old dir-level ~/.claude/skills symlink is cleaned up by the migration cleanup row.
   # Old ~/.agents/skills and transitional ~/.codex/skills dir-level symlinks are no longer managed.
   # After install, ~/.codex/skills/ and ~/.claude/skills/ point at the machine-local cache.
-  assert_managed_skill "$home_dir" "$home_dir/.codex/skills/builtin-support" "$repo_root/globals/system/skills/builtin-support" "old machine migrated: base Codex support skill cache link created"
-  assert_managed_skill "$home_dir" "$home_dir/.claude/skills/builtin-support" "$repo_root/globals/system/skills/builtin-support" "old machine migrated: base Claude support skill cache link created"
+  assert_managed_skill "$home_dir" "$home_dir/.codex/skills/roborepo-support" "$repo_root/globals/system/skills/roborepo-support" "old machine migrated: base Codex support skill cache link created"
+  assert_managed_skill "$home_dir" "$home_dir/.claude/skills/roborepo-support" "$repo_root/globals/system/skills/roborepo-support" "old machine migrated: base Claude support skill cache link created"
   assert_absent "$home_dir/.codex/skills/case-study" "old machine migrated: optional Codex skill not copied by default"
   assert_absent "$home_dir/.claude/skills/case-study" "old machine migrated: optional Claude skill not copied by default"
+}
+
+seed_retired_support_skill() {
+  local home_dir="$1" harness
+  mkdir -p "$home_dir/.roborepo/skills/builtin-support"
+  cp "$repo_root/globals/system/skills/roborepo-support/SKILL.md" "$home_dir/.roborepo/skills/builtin-support/SKILL.md"
+  touch "$home_dir/.roborepo/skills/builtin-support/.builtin-managed"
+  for harness in claude codex; do
+    mkdir -p "$home_dir/.$harness/skills"
+    ln -s "$home_dir/.roborepo/skills/builtin-support" "$home_dir/.$harness/skills/builtin-support"
+  done
+}
+
+assert_retired_support_skill_migrated() {
+  local home_dir="$1" label="$2" harness
+  assert_absent "$home_dir/.roborepo/skills/builtin-support" "$label: retired support skill cache pruned"
+  for harness in claude codex; do
+    assert_absent "$home_dir/.$harness/skills/builtin-support" "$label: retired $harness support skill link pruned"
+    assert_managed_skill "$home_dir" "$home_dir/.$harness/skills/roborepo-support" "$repo_root/globals/system/skills/roborepo-support" "$label: $harness support skill linked under new name"
+  done
+}
+
+# Machines installed before the support skill was renamed carry a managed builtin-support cache
+# entry and harness links; both install paths must replace them rather than leave two copies.
+test_renamed_support_skill_is_migrated() {
+  local home_dir
+  home_dir="$(make_home)"
+  seed_retired_support_skill "$home_dir"
+  run_harness_install_args "$home_dir" "$home_dir/out"
+  assert_retired_support_skill_migrated "$home_dir" "direct harness install"
+
+  home_dir="$(make_home)"
+  seed_retired_support_skill "$home_dir"
+  ROBOREPO_PRESETS_ONBOARD=skip run_expect_install_args "$home_dir" "$home_dir/out" --on-conflict overwrite
+  assert_retired_support_skill_migrated "$home_dir" "main install"
 }
 
 test_direct_claude_installer_removes_stale_retired_symlink() {
@@ -1206,6 +1241,7 @@ test_existing_root_symlinks_convert_to_local_copies
 test_direct_harness_installers_export_root_configs
 test_direct_harness_installers_convert_root_symlinks
 test_old_repo_managed_symlinks_are_migrated
+test_renamed_support_skill_is_migrated
 test_direct_claude_installer_removes_stale_retired_symlink
 test_verify_install_requires_active_root_configs
 test_dry_run_collision_no_mutation

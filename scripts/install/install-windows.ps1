@@ -688,7 +688,7 @@ foreach ($id in $KnownHarnessIds) {
     Invoke-ManifestRows $HarnessDisplayNames[$id] @($id)
     Render-HomeRules $id
     $harnessHome = Resolve-ManifestHomeRoot $id
-    Copy-GlobalSkills $harnessHome @("builtin-support")
+    Copy-GlobalSkills $harnessHome @("roborepo-support")
   } else {
     Write-Host "skip: $($HarnessDisplayNames[$id]) — not found"
   }

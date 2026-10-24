@@ -4,13 +4,13 @@ description: >
   Repo-local guidance for developing RoboRepo itself: installer and update flows, package/apply
   state, provider adapters, generated outputs, CLI, portal, and tests. Use for implementation or
   architecture work inside this repository. For shared/exportable agent skills and rules, use
-  builtin-support. This skill stays in the development checkout; never install or export it to
+  roborepo-support. This skill stays in the development checkout; never install or export it to
   client repositories.
 ---
 
 # Roborepo Development (internal)
 
-Mechanic's manual for developing roborepo itself. Distinct from `builtin-support`
+Mechanic's manual for developing roborepo itself. Distinct from `roborepo-support`
 (operating shared/exportable skill, rule, hook, MCP, and parity content). This skill is
 firewalled to this repo — it loads only when an agent works inside this repo.
 

@@ -42,7 +42,7 @@ The installer writes:
 - rendered base rules to `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md`
 - copied RoboRepo-owned files such as markers, commands, hooks, and Codex rules
 - copied root config baselines when no local file exists
-- `builtin-support` in each installed harness skill directory
+- `roborepo-support` in each installed harness skill directory
 - `~/.local/bin/roborepo`
 - install state at `~/.roborepo/install-state.json`
 
@@ -94,7 +94,7 @@ After a successful update it prints a concise change report, for example:
 
 ```text
 changed: rules claude
-changed: skill builtin-support
+changed: skill roborepo-support
 unchanged: package registry
 ```
 

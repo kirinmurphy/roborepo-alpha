@@ -1555,9 +1555,9 @@ HOME="${rp_home}" ROBOREPO_STATE_DIR="${rp_state}" \
 assert "repair: bin link healed to new checkout" \
   bash -c "test \"\$(readlink '${rp_home}/.local/bin/roborepo')\" = '${rp_new}/bin/roborepo'"
 assert "repair: base Claude support skill cache link created after repair" \
-  bash -c "test -L '${rp_home}/.claude/skills/builtin-support' && test \"\$(readlink '${rp_home}/.claude/skills/builtin-support')\" = '${rp_home}/.roborepo/skills/builtin-support' && test -d '${rp_home}/.roborepo/skills/builtin-support' && test -e '${rp_home}/.roborepo/skills/builtin-support/.builtin-managed' && diff -rq -x .builtin-managed '${rp_new}/globals/system/skills/builtin-support' '${rp_home}/.roborepo/skills/builtin-support' >/dev/null 2>&1 && ! test -e '${rp_home}/.claude/skills/case-study'"
+  bash -c "test -L '${rp_home}/.claude/skills/roborepo-support' && test \"\$(readlink '${rp_home}/.claude/skills/roborepo-support')\" = '${rp_home}/.roborepo/skills/roborepo-support' && test -d '${rp_home}/.roborepo/skills/roborepo-support' && test -e '${rp_home}/.roborepo/skills/roborepo-support/.builtin-managed' && diff -rq -x .builtin-managed '${rp_new}/globals/system/skills/roborepo-support' '${rp_home}/.roborepo/skills/roborepo-support' >/dev/null 2>&1 && ! test -e '${rp_home}/.claude/skills/case-study'"
 assert "repair: base Codex support skill cache link created after repair" \
-  bash -c "test -L '${rp_home}/.codex/skills/builtin-support' && test \"\$(readlink '${rp_home}/.codex/skills/builtin-support')\" = '${rp_home}/.roborepo/skills/builtin-support' && test -d '${rp_home}/.roborepo/skills/builtin-support' && test -e '${rp_home}/.roborepo/skills/builtin-support/.builtin-managed' && diff -rq -x .builtin-managed '${rp_new}/globals/system/skills/builtin-support' '${rp_home}/.roborepo/skills/builtin-support' >/dev/null 2>&1 && ! test -e '${rp_home}/.codex/skills/case-study'"
+  bash -c "test -L '${rp_home}/.codex/skills/roborepo-support' && test \"\$(readlink '${rp_home}/.codex/skills/roborepo-support')\" = '${rp_home}/.roborepo/skills/roborepo-support' && test -d '${rp_home}/.roborepo/skills/roborepo-support' && test -e '${rp_home}/.roborepo/skills/roborepo-support/.builtin-managed' && diff -rq -x .builtin-managed '${rp_new}/globals/system/skills/roborepo-support' '${rp_home}/.roborepo/skills/roborepo-support' >/dev/null 2>&1 && ! test -e '${rp_home}/.codex/skills/case-study'"
 assert "repair: install state records the new checkout path" \
   grep -q "\"repo\": \"${rp_new}\"" "${rp_state}/install-state.json"
 # Idempotent: a second repair reclaims nothing (everything already points at the new checkout).
@@ -1573,7 +1573,7 @@ HOME="${rp_codex_only_home}" ROBOREPO_STATE_DIR="${rp_codex_only_state}" \
 assert "repair: Codex-only repair does not create Claude home" \
   bash -c "! test -e '${rp_codex_only_home}/.claude'"
 assert "repair: Codex-only repair still restores Codex skill link" \
-  bash -c "test -L '${rp_codex_only_home}/.codex/skills/builtin-support'"
+  bash -c "test -L '${rp_codex_only_home}/.codex/skills/roborepo-support'"
 
 # -- repair ignores copied content dirs and still heals the moved checkout --
 rp_keep_home="${reloc_root}/reloc-repair-keep/home"
@@ -1620,7 +1620,7 @@ HOME="${la_home}" ROBOREPO_STATE_DIR="${la_home}/.roborepo" ROBOREPO_ASSUME_INTE
 assert "legacy: managed ~/.agents/skills link removed after install" \
   bash -c "! test -L '${la_home}/.agents/skills'"
 assert "legacy: base Codex support skill cache link created in place of the legacy dir link" \
-  bash -c "test -d '${la_home}/.codex/skills/builtin-support' && test -e '${la_home}/.codex/skills/builtin-support/.builtin-managed' && diff -rq -x .builtin-managed '${repo_root}/globals/system/skills/builtin-support' '${la_home}/.codex/skills/builtin-support' >/dev/null 2>&1 && ! test -e '${la_home}/.codex/skills/case-study'"
+  bash -c "test -d '${la_home}/.codex/skills/roborepo-support' && test -e '${la_home}/.codex/skills/roborepo-support/.builtin-managed' && diff -rq -x .builtin-managed '${repo_root}/globals/system/skills/roborepo-support' '${la_home}/.codex/skills/roborepo-support' >/dev/null 2>&1 && ! test -e '${la_home}/.codex/skills/case-study'"
 
 # A user's real ~/.agents/skills (not a managed symlink) must be left untouched.
 lu_home="${reloc_root}/legacy-agents-userdir/home"
@@ -1666,7 +1666,7 @@ assert "install: Claude-only presence does not crash" \
 assert "install: Claude-only home reports unavailable runtime" \
   bash -c "echo '${claude_only_out}' | grep -q 'Claude Code.*configuration present, runtime unavailable'"
 assert "install: Claude-only links the base skill into .claude" \
-  bash -c "test -e '${claude_only_home}/.claude/skills/builtin-support'"
+  bash -c "test -e '${claude_only_home}/.claude/skills/roborepo-support'"
 
 codex_only_home="${reloc_root}/presence-codex-only/home"
 mkdir -p "${codex_only_home}/.codex" "${codex_only_home}/.local/bin"
@@ -1677,7 +1677,7 @@ assert "install: Codex-only presence does not crash" \
 assert "install: Codex-only home reports unavailable runtime" \
   bash -c "echo '${codex_only_out}' | grep -q 'Codex.*configuration present, runtime unavailable'"
 assert "install: Codex-only links the base skill into .codex" \
-  bash -c "test -e '${codex_only_home}/.codex/skills/builtin-support'"
+  bash -c "test -e '${codex_only_home}/.codex/skills/roborepo-support'"
 
 # ---------------------------------------------------------------------------
 # `roborepo harness withdraw <id>`: actively unmerges RoboRepo's content from ONE
@@ -1699,9 +1699,9 @@ assert "harness withdraw: removes the target provider's root config" \
 assert "harness withdraw: leaves the sibling provider's root config untouched" \
   bash -c "test -f '${wd_home}/.codex/config.toml'"
 assert "harness withdraw: removes the target provider's linked base skill" \
-  bash -c "! test -e '${wd_home}/.claude/skills/builtin-support'"
+  bash -c "! test -e '${wd_home}/.claude/skills/roborepo-support'"
 assert "harness withdraw: leaves the sibling provider's linked base skill untouched" \
-  bash -c "test -e '${wd_home}/.codex/skills/builtin-support'"
+  bash -c "test -e '${wd_home}/.codex/skills/roborepo-support'"
 withdraw_codex_out="$(HOME="${wd_home}" ROBOREPO_STATE_DIR="${wd_home}/.roborepo" node "${cli}" harness withdraw codex --yes 2>&1)"
 assert "harness withdraw: unsupported hooks.write capability is reported for codex" \
   bash -c "echo '${withdraw_codex_out}' | grep -q 'unsupported: hooks.write has no codex adapter'"

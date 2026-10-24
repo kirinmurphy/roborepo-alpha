@@ -86,9 +86,9 @@ if command -v node >/dev/null 2>&1; then
   fi
 fi
 
-# Base install materializes the shared skill cache for builtin-support and links this harness's view.
+# Base install materializes the shared skill cache for roborepo-support and links this harness's view.
 # Other shared skills are installed by onboarding/package toggles, so a minimal install stays small.
-link_global_skills "${home_dir}" builtin-support
+link_global_skills "${home_dir}" roborepo-support
 
 # Guard: this script installs harness config only. The roborepo CLI (and `roborepo index code`)
 # require a full install via scripts/install/main.sh which wires the binary into PATH.

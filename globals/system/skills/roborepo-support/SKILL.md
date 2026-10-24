@@ -1,5 +1,5 @@
 ---
-name: builtin-support
+name: roborepo-support
 description: >
   Work with builtin-managed global agent config from any repo. Use when adding or editing
   shared/exportable skills, skill-backed slash commands, global rules, hooks, settings,
@@ -33,7 +33,7 @@ the repo-local `roborepo-development` skill instead.
 
 The canonical shared source is a package-owned skill resource at
 **`globals/packages/<package>/skills/<name>/`**. The required base support skill is the only current
-system skill under **`globals/system/skills/builtin-support/`**. Roborepo materializes shared
+system skill under **`globals/system/skills/roborepo-support/`**. Roborepo materializes shared
 skills into the machine-local cache at `~/.roborepo/skills/<name>`, then both harnesses read from
 their native skill dir via symlink:
 
@@ -128,39 +128,29 @@ Rules for writing them:
 
 ### Pairing another skill
 
-The same rule applies one level up. A reference loads from within a skill; a paired skill loads
-from beside it. Both fail the same way — by being mentioned rather than required. Prose that names
-a related skill without instructing the load reads as background, and the observed consequence is
-that the user names the paired skill by hand on every request.
+Declare paired skills in a `## Paired Skills` table with concrete `Load when` conditions. Load
+only skills whose guidance materially constrains the actual task; do not infer relevance from a
+file path, language mention, or routine record update alone. Substantive requirements, design,
+and document authoring differ from recording findings, test results, decisions, and checklists.
 
-| Written as | What happens |
-| --- | --- |
-| "For plans, pair with `technical-writing`." | never loads — a fact about two skills, not a step |
-| "Load `technical-writing`; do not wait to be asked for it by name." | loads |
-| "Load `code-style` when relevant." | never loads — defers the judgment to the reader, who is the one who did not already know |
-| "Load `code-style` when the document specifies module boundaries, orchestration vs. execution, or reuse." | loads when it applies |
+- Give each pairing a subject-matter trigger and explicit exclusions where bookkeeping can look
+  like authoring. Use "Always" only when every supported path actually needs that guidance.
+- Do not load dependencies transitively or invoke a paired skill's entire workflow by default.
+  Evaluate each dependency against the work. In particular, editing skill instructions uses this
+  maintenance guidance without automatically invoking document or plan authoring.
+- Reuse guidance and applicable references already loaded in the conversation. Reread only for
+  changed sources, new subject matter, or guidance unavailable in context. Fresh-context reviewers
+  still need the rules that apply to their review.
+- Use advertised skill availability; query package state only for an applicable skill whose state
+  is unclear. Do not inspect every optional package merely because it appears in a table.
+- Keep the skills-loaded report accurate: include guidance actually applied, including reuse,
+  and applicable skills skipped or unavailable. Do not load anything to populate the report or
+  enumerate non-applicable pairings.
+- Preserve content constraints and independent review. An enclosing read-only Validator may cover
+  multiple applicable rubrics in one reported pass rather than start nested loops; fix and recheck
+  findings and keep all testing, lifecycle, and explicit human-approval gates.
 
-Rules:
-
-- **Declare paired skills in a table at the entry point**, with a `Load when` column. One row per
-  skill; no prose-only mentions elsewhere that a reader has to reconstruct into a rule.
-- **Write the unconditional ones as always.** If a skill is required for every invocation of a
-  mode, say "Always" and put the requirement in the completion gates too, so skipping it is
-  visibly noncompliant before any reference is opened.
-- **Give every conditional skill a subject-matter trigger.** "When relevant", "if useful", and
-  "for larger work" are not triggers. Size is never the trigger — a one-phase plan that specifies
-  module placement needs `code-style` exactly as much as a ten-phase one.
-- **Never make the trigger an explicit user request.** "When the user asks for them" restores the
-  manual step the pairing exists to remove. A request is one way to reach relevance, not the
-  condition itself.
-- **Require the load to be reported**, including which conditional skills did not apply. A skipped
-  skill and a forgotten one are indistinguishable otherwise.
-- **A paired skill constrains content, not just wording.** If a document tells a reader to build
-  something the paired skill forbids, the document is wrong on the merits — so whatever was paired
-  in also joins the review scope (see `technical-writing`'s `references/review-loop.md`).
-
-`plan-write` and `technical-writing` both carry a `## Paired Skills` table in this shape; copy it
-rather than inventing a second format. Coverage lives in
+`plan-write` and `technical-writing` show this table shape. Routing regression coverage lives in
 `scripts/test/skill-reference-matrix-characterization-check.mjs`.
 
 ## Editing global rules / behavior

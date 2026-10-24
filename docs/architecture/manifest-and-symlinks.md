@@ -21,10 +21,10 @@ Shared skills live in:
 
 ```text
 globals/packages/<package>/skills/<name>/
-globals/system/skills/builtin-support/
+globals/system/skills/roborepo-support/
 ```
 
-The installer materializes package-owned skills and `builtin-support` into
+The installer materializes package-owned skills and `roborepo-support` into
 `~/.roborepo/skills/<name>`. Each enabled harness's native skills directory links each managed
 skill name to that cache entry. Package toggles control which optional skills are active. Each
 roborepo-owned cache entry contains:

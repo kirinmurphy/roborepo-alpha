@@ -20,7 +20,9 @@ export function packTarball(repoRoot, packDest) {
     { cwd: repoRoot, encoding: "utf8" },
   );
   assert.equal(result.status, 0, `npm pack failed\n${result.stderr}`);
-  const [entry] = JSON.parse(result.stdout);
+  // npm 11 and earlier print an array of pack entries; npm 12 prints an object keyed by package name.
+  const report = JSON.parse(result.stdout);
+  const [entry] = Array.isArray(report) ? report : Object.values(report);
   assert.ok(entry?.filename, "npm pack did not report a filename");
   return { tarballPath: path.join(packDest, entry.filename), tarballName: entry.filename };
 }

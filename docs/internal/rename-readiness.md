@@ -22,7 +22,7 @@ Snapshot date: 2026-09-13 · branch: `rename-prep` · counts from `git ls-files`
 | Test fixtures | `codethings-roborepo-alpha` fixture dirs, `github.com/kirinmurphy/roborepo` fixture URLs | `scripts/test/*` |
 | Telemetry identity | `version` reported as `app_version`, repo label `roborepo` | telemetry modules |
 
-Non-code surfaces: `docs/user/reference/roborepo{,-cli,-skills}.md` (185 refs), README (44), docs/plans (2,868 refs, historical), skill dirs `builtin-support` / `roborepo-development` / `builtin-code-style`, generated harness output, `docs/internal/history/plan-lifecycle/repository-plans-snapshot.zip`.
+Non-code surfaces: `docs/user/reference/roborepo{,-cli,-skills}.md` (185 refs), README (44), docs/plans (2,868 refs, historical), skill dirs `roborepo-support` / `roborepo-development` / `builtin-code-style`, generated harness output, `docs/internal/history/plan-lifecycle/repository-plans-snapshot.zip`.
 
 ## Classification
 
@@ -44,7 +44,7 @@ Fixed in this cleanup (commit 1):
 - `scripts/cli/roots.mjs:72` — `requireDevelopmentCheckout` error: "this roborepo install is running in package mode" → "this install is running in package mode" (user-facing message that gains nothing from the brand).
 - `scripts/cli/roots.mjs:9-11` comment — `~/.roborepo/workspace` prose stays (it names the real path, see §4).
 
-Deliberately NOT reworded (prose that legitimately names the product): README, user-guide docs, portal home/config copy ("Welcome to RoboRepo", "Uninstall RoboRepo"), `MANAGED_BY_ROBOREPO.md` (it IS the branding artifact), `globals/system/skills/builtin-support/SKILL.md`, plan docs.
+Deliberately NOT reworded (prose that legitimately names the product): README, user-guide docs, portal home/config copy ("Welcome to RoboRepo", "Uninstall RoboRepo"), `MANAGED_BY_ROBOREPO.md` (it IS the branding artifact), `globals/system/skills/roborepo-support/SKILL.md`, plan docs.
 
 ### 4. Identifiers that cannot be abstracted — explicit migration later
 These are real persisted identifiers; a rename must handle them deliberately (they are enumerated in the rename manifest, never swept):

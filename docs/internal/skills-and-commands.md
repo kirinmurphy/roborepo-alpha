@@ -227,7 +227,7 @@ generated command files together.
 
 Package-owned skills live at `globals/packages/<package>/skills/<name>/SKILL.md` in version control.
 The required base support skill remains a system skill at
-`globals/system/skills/builtin-support/SKILL.md`.
+`globals/system/skills/roborepo-support/SKILL.md`.
 At install/update time, enabled shared skills are materialized into
 `~/.roborepo/skills/<name>` and each harness's native skills dir symlinks to that cache entry:
 `~/.claude/skills/<name>` and `~/.codex/skills/<name>`. Roborepo-owned cache entries carry a
@@ -262,7 +262,7 @@ machines. `roborepo update` does not restore memory. This is a deliberate stance
 There are two distinct, firewalled skill layers:
 
 - **Shared** — package-owned `globals/packages/<package>/skills/<name>/` plus the required system
-  `globals/system/skills/builtin-support/`. Materialized into `~/.roborepo/skills/<name>` and
+  `globals/system/skills/roborepo-support/`. Materialized into `~/.roborepo/skills/<name>` and
   symlinked from each installed harness's native skills dir at install/update time; global on both
   harnesses and exportable to other repos when package-owned. Advisory coding skills any repo may
   receive.
