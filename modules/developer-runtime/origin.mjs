@@ -4,11 +4,12 @@ export function originCandidatesForListener(listener, preference = null) {
     hosts.splice(hosts.indexOf("localhost"), 1);
     hosts.unshift("localhost");
   }
+  const protocol = listener.port === 443 ? "https" : "http";
   return hosts.map((host) => ({
-    protocol: "http",
+    protocol,
     host,
     port: listener.port,
-    origin: host === "::1" ? `http://[::1]:${listener.port}` : `http://${host}:${listener.port}`,
+    origin: `${protocol}://${host === "::1" ? "[::1]" : host}${listener.port === 443 ? "" : `:${listener.port}`}`,
   }));
 }
 

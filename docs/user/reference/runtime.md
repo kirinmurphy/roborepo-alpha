@@ -265,6 +265,9 @@ suggestions, so one broken source never blocks suggestions from the others.
 - **Probe targets come only from local listeners**, never from a URL the browser supplies.
 - **Probes stay local:** no cookies or credentials, no redirects away from loopback, and capped body
   size and time. Titles and favicons are treated as untrusted display data.
+- **HTTPS discovery:** port 443 is probed with HTTPS. For an untrusted local development certificate,
+  a loopback-only retry reads page metadata while retaining the certificate warning and degraded
+  health state. Traefik's dashboard is classified as tooling separately from the app it proxies.
 - **[Metadata suggestions](#metadata-suggestions) use the same fetch guard**, so every limit above
   applies to them too.
 - **Exposed listeners are flagged:** listeners bound to wildcard or non-loopback interfaces stay

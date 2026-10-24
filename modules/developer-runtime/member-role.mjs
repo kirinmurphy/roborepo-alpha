@@ -41,6 +41,7 @@ export function createRoleComparator({ repositoryName = "" } = {}) {
     || preferTrue(titleNamesRepository(a, repository), titleNamesRepository(b, repository))
     || preferTrue(hasAppLikeName(a), hasAppLikeName(b))
     || preferTrue(onCommonAppPort(a), onCommonAppPort(b))
+    || preferTrue(Boolean(a.instance?.origin?.startsWith("https:")), Boolean(b.instance?.origin?.startsWith("https:")))
     || portOf(a) - portOf(b);
 }
 
