@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { repoRoot } from "./paths.mjs";
+import { repoRoot } from "./roots.mjs";
 
 const DEFINITION_SUFFIXES = [".command.json", "namespace.json"];
 

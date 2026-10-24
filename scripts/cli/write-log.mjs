@@ -4,6 +4,7 @@ import path from "node:path";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { appRoot, isMainModule } from "./roots.mjs";
 import { stateDir } from "./state-paths.mjs";
+import { loadCommandDefinitions } from "./command-definition-files.mjs";
 
 // One JSON line per write roborepo makes to the user's harness config (root configs, rendered rules,
 // hooks files, the enabled-packages registry), so "what changed my config, and when?" has an
@@ -16,13 +17,34 @@ export const WRITE_LOG_PATH = path.join(stateDir, "logs", "config-writes.jsonl")
 const MAX_LOG_BYTES = 512 * 1024;
 
 const actorStore = new AsyncLocalStorage();
+const securedLogs = new Set();
+let commandPaths;
 
 export function runWithWriteActor(actor, fn) {
   return actorStore.run(actor, fn);
 }
 
 export function currentWriteActor() {
-  return actorStore.getStore() || process.env.ROBOREPO_WRITE_ACTOR || `roborepo ${process.argv.slice(2).join(" ")}`.trim();
+  return sanitizeWriteActor(actorStore.getStore() || process.env.ROBOREPO_WRITE_ACTOR || `roborepo ${process.argv.slice(2).join(" ")}`.trim());
+}
+
+// Resolve only manifest-owned command words. Positional arguments, flags, URLs, and headers can
+// contain credentials, so redacting a guessed list of secret names is not sufficient.
+export function sanitizeWriteActor(actor) {
+  if (/^portal (POST|PATCH|PUT|DELETE) \/api\/[\w/-]+$/.test(actor)) return actor;
+  if (!String(actor).startsWith("roborepo ")) return "roborepo";
+  try {
+    if (!commandPaths) {
+      const catalog = JSON.parse(fs.readFileSync(path.join(appRoot, "manifests", "platform", "cli-commands.json"), "utf8"));
+      commandPaths = loadCommandDefinitions({ roots: catalog.commandDefinitionRoots }).map((definition) => definition.path.join(" "))
+        .sort((a, b) => b.length - a.length);
+    }
+    const command = actor.slice("roborepo ".length);
+    const known = commandPaths.find((candidate) => command === candidate || command.startsWith(`${candidate} `));
+    return known ? `roborepo ${known}` : "roborepo";
+  } catch {
+    return "roborepo";
+  }
 }
 
 function isInside(child, parent) {
@@ -38,14 +60,14 @@ export function recordConfigWrite(filePath, detail = null) {
   const userConfig = isInside(file, os.homedir()) || isInside(file, stateDir);
   if (!userConfig || isInside(file, appRoot) || file === WRITE_LOG_PATH) return;
   try {
-    fs.mkdirSync(path.dirname(WRITE_LOG_PATH), { recursive: true });
+    secureLogs();
     try {
       if (fs.statSync(WRITE_LOG_PATH).size > MAX_LOG_BYTES) fs.renameSync(WRITE_LOG_PATH, `${WRITE_LOG_PATH}.1`);
     } catch {
       // No log yet.
     }
     const entry = { at: new Date().toISOString(), actor: currentWriteActor(), file, ...(detail ? { detail } : {}), pid: process.pid };
-    fs.appendFileSync(WRITE_LOG_PATH, `${JSON.stringify(entry)}\n`);
+    fs.appendFileSync(WRITE_LOG_PATH, `${JSON.stringify(entry)}\n`, { mode: 0o600 });
   } catch {
     // Logging is best effort.
   }
@@ -56,6 +78,7 @@ export function lastConfigWrite(filePath) {
   const file = path.resolve(filePath);
   let text = "";
   try {
+    secureLogs();
     text = fs.readFileSync(WRITE_LOG_PATH, "utf8");
   } catch {
     return null;
@@ -64,12 +87,32 @@ export function lastConfigWrite(filePath) {
   for (let i = lines.length - 1; i >= 0; i -= 1) {
     try {
       const entry = JSON.parse(lines[i]);
-      if (entry.file === file) return entry;
+      if (entry.file === file) return { ...entry, actor: sanitizeWriteActor(entry.actor) };
     } catch {
       // Skip a torn line.
     }
   }
   return null;
+}
+
+function secureLogs() {
+  const directory = path.dirname(WRITE_LOG_PATH);
+  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+  fs.chmodSync(directory, 0o700);
+  for (const file of [WRITE_LOG_PATH, `${WRITE_LOG_PATH}.1`]) {
+    if (securedLogs.has(file) || !fs.existsSync(file)) continue;
+    fs.chmodSync(file, 0o600);
+    const original = fs.readFileSync(file, "utf8");
+    const sanitized = original.split("\n").filter(Boolean).flatMap((line) => {
+      try {
+        const entry = JSON.parse(line);
+        return [JSON.stringify({ ...entry, actor: sanitizeWriteActor(entry.actor) })];
+      } catch { return []; }
+    }).join("\n");
+    const next = sanitized ? `${sanitized}\n` : "";
+    if (next !== original) fs.writeFileSync(file, next, { mode: 0o600 });
+    securedLogs.add(file);
+  }
 }
 
 // The bash installer logs its own writes: node write-log.mjs record <file> [detail]

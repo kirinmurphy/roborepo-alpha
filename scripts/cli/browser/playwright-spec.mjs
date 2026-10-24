@@ -59,7 +59,14 @@ export async function runSpecScenario({ playwright, scenarioPath, capture, url, 
       return blockedResult([`Playwright produced no report: ${lastLine(child.output) || `exit ${child.code}`}`]);
     }
 
-    const { checks, attachments, notes } = readReport(JSON.parse(fs.readFileSync(reportPath, "utf8")));
+    const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+    const { checks, attachments, notes } = readReport(report);
+    for (const error of report.errors || []) {
+      checks.push({ name: "test runner", status: CHECK_STATUS.FAILED, message: stripAnsi(error.message || "Playwright runner error") });
+    }
+    if (child.code !== 0 && !checks.some((check) => check.status === CHECK_STATUS.FAILED)) {
+      checks.push({ name: "test runner", status: CHECK_STATUS.FAILED, message: `Playwright exited with code ${child.code}` });
+    }
     if (checks.length === 0) return blockedResult([`no tests in ${scenarioPath} ran (is it inside the config's testDir?)`, ...notes]);
 
     const limitations = [...notes];

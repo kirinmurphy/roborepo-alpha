@@ -72,7 +72,24 @@ try {
   await waitFor(async () => !(await responds(servedPort)));
   assert.equal(isAlive(Number(fs.readFileSync(pidFile, "utf8"))), false, "a service started by an interrupted run is stopped");
 
-  console.log("ok: browser service lifecycle (reuse, start/stop, background, interrupt, bad URL)");
+  if (process.platform !== "win32") {
+    const stubbornPort = await freePort();
+    const stubbornPid = path.join(fixtures, "stubborn.pid");
+    const stubborn = path.join(fixtures, "stubborn.mjs");
+    fs.writeFileSync(stubborn, `process.on("SIGTERM", () => {});\nawait import(${JSON.stringify(server)});\n`);
+    try {
+      const result = cli.stub(["--scenario", passing, "--url", `http://127.0.0.1:${stubbornPort}/`, "--serve",
+        `node ${[stubborn, stubbornPort, stubbornPid].map((arg) => JSON.stringify(String(arg))).join(" ")}`, "--json"]);
+      assert.equal(JSON.parse(result.stdout).status, "passed");
+      assert.equal(await responds(stubbornPort), false, "cleanup stops a service that ignores SIGTERM before returning");
+    } finally {
+      if (fs.existsSync(stubbornPid)) {
+        try { process.kill(Number(fs.readFileSync(stubbornPid, "utf8")), "SIGKILL"); } catch {}
+      }
+    }
+  }
+
+  console.log("ok: browser service lifecycle (reuse, start/stop, background, interrupt, bad URL, forced shutdown)");
 } finally {
   for (const child of children) child.kill();
   cli.cleanup();

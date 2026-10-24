@@ -84,7 +84,7 @@ export async function browserRun(args = []) {
     // write: the run could not execute, which the contract reports as `blocked`, not a stack trace.
     result = blockedResult([`run could not execute: ${firstLine(error)}`], { artifacts: evidence.written() });
   } finally {
-    service?.stop();
+    await service?.stop();
     process.off("SIGINT", interrupted);
     process.off("SIGTERM", interrupted);
   }

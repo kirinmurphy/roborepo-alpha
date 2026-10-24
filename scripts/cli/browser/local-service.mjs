@@ -6,6 +6,8 @@ import { spawn, spawnSync } from "node:child_process";
 import { own } from "./owned-resources.mjs";
 
 const POLL_MS = 250;
+const SHUTDOWN_GRACE_MS = 1000;
+const SHUTDOWN_POLL_MS = 25;
 
 export async function ensureLocalService({ url, serve, timeoutMs }) {
   if (!url) {
@@ -21,23 +23,21 @@ export async function ensureLocalService({ url, serve, timeoutMs }) {
   // Its own process group (POSIX), so stop() reaches the dev server the shell spawned, not just
   // the shell.
   const child = spawn(serve, { shell: true, detached: process.platform !== "win32", stdio: "ignore" });
-  const release = own(() => stopProcessTree(child));
-  const stop = () => {
-    release();
-    stopProcessTree(child);
-  };
+  let stopping;
+  const stop = () => stopping ??= stopProcessTree(child).finally(release);
+  const release = own(stop);
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     // A command that backgrounds its server (`npm run dev &`) exits 0 while the server keeps
     // starting in the same process group, so only a failing exit ends the wait early.
     if (child.exitCode !== null && child.exitCode !== 0) {
-      stop();
+      await stop();
       return { blocked: `--serve command exited (${child.exitCode}) before ${url} responded`, stop: noop };
     }
     if (await responds(url)) return { started: child.pid, stop };
     await new Promise((resolve) => setTimeout(resolve, POLL_MS));
   }
-  stop();
+  await stop();
   return { blocked: `${url} did not respond within ${timeoutMs}ms of starting --serve`, stop: noop };
 }
 
@@ -52,15 +52,35 @@ async function responds(url) {
 
 // Signals the whole group even when the shell that led it has exited: a backgrounded server
 // outlives its shell and is still in the group.
-function stopProcessTree(child) {
+async function stopProcessTree(child) {
   if (process.platform === "win32") {
     spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
     return;
   }
+  if (!signalGroup(child.pid, "SIGTERM")) return;
+  if (await waitForGroupExit(child.pid)) return;
+  signalGroup(child.pid, "SIGKILL");
+  // A killed group can retain zombie entries until its parent reaps them; no member can serve
+  // requests after SIGKILL. Bound this wait as well so cleanup cannot hang on a zombie.
+  await waitForGroupExit(child.pid);
+}
+
+async function waitForGroupExit(pid) {
+  const deadline = Date.now() + SHUTDOWN_GRACE_MS;
+  while (Date.now() < deadline) {
+    if (!signalGroup(pid, 0)) return true;
+    await new Promise((resolve) => setTimeout(resolve, SHUTDOWN_POLL_MS));
+  }
+  return false;
+}
+
+function signalGroup(pid, signal) {
   try {
-    process.kill(-child.pid, "SIGTERM");
-  } catch {
-    // The whole group is already gone.
+    process.kill(-pid, signal);
+    return true;
+  } catch (error) {
+    if (error.code === "ESRCH") return false;
+    throw error;
   }
 }
 

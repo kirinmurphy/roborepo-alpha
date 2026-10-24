@@ -9,6 +9,7 @@ import { shouldRouteToInit } from "./first-run-routing.mjs";
 import { renderHelp } from "./help-renderer.mjs";
 import { runInteractiveMenu } from "./interactive-menu.mjs";
 import { refreshAppRootRecord } from "./state-paths.mjs";
+import { sanitizeWriteActor } from "./write-log.mjs";
 
 refreshAppRootRecord();
 
@@ -18,7 +19,7 @@ refreshAppRootRecord();
 const argv = process.argv.slice(2).filter((arg) => arg !== "--no-presets-onboard");
 // Names the outermost command in write-log.mjs entries; child processes (the installer behind
 // `roborepo update`) inherit it instead of logging their own internal invocation.
-process.env.ROBOREPO_WRITE_ACTOR ??= `roborepo ${argv.join(" ")}`.trim();
+process.env.ROBOREPO_WRITE_ACTOR = sanitizeWriteActor(process.env.ROBOREPO_WRITE_ACTOR || `roborepo ${argv.join(" ")}`.trim());
 const catalog = loadCommandCatalog();
 validateExecutions({ catalog });
 

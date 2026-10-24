@@ -113,4 +113,17 @@ testCodexBracketInValueSurvives();
 testCodexLocalOnlySectionAppended();
 testMergeRootConfigDispatchesByHarness();
 
+// Values are indivisible even when the next key overrides a baseline entry.
+const multilineNotify = 'notify = [\n  "node",\n  "/tmp/notify.js",\n]\n';
+const multilineMerged = mergeCodexConfig('model = "baseline"\n[features]\nhooks = true\n', `${multilineNotify}model = "local"\n`);
+assert.ok(multilineMerged.includes(multilineNotify), "a multiline local-only array stays whole before another key");
+const multilineOverride = 'args = [\n  "[not a table]", # ] in a comment\n  "--local",\n]\n';
+assert.ok(mergeCodexConfig('[tool]\nargs = [\n "--baseline",\n]\nnext = true\n', `[tool]\n${multilineOverride}next = false\n`).includes(multilineOverride),
+  "a multiline override replaces the entire baseline value");
+const instructions = 'developer_instructions = """\n[features]\nexample = true\n\n\nkeep blank lines\n"""\n';
+assert.ok(mergeCodexConfig('model = "baseline"\n[features]\nhooks = true\n', `${instructions}model = "local"\n`).includes(instructions),
+  "table-like content and blank lines inside multiline strings survive");
+assert.throws(() => mergeCodexConfig('model = "baseline"\n', 'notify = [\n "unfinished"\n'), /unterminated TOML value/,
+  "an incomplete local value fails before a caller can write the merge");
+
 console.log("root-config-merge characterization: all checks passed");
