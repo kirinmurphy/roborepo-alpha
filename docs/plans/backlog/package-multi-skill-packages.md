@@ -9,7 +9,7 @@ reviewed_commit: 5556666da3b986a87d1d1f1e2022d048ddc00d06
 worktree:
 ---
 
-# Support Packages With Several Skills
+# Package Management: Part 01 - Bundle Skills That Only Work Together
 
 ## Summary
 
@@ -96,6 +96,8 @@ Plan suite specifics:
 - Mapping old plan package IDs to `plan-suite` in the enabled-packages file. RoboRepo has not
   launched, so no compatibility shim is added. See Risks.
 - Changing any plan skill's content or workflow.
+- The System / Custom / Third Party tabs on the Agents page, owned by
+  [[user-managed-packages-and-add-workflows]].
 
 ## Proposed design
 
@@ -162,6 +164,10 @@ Rules           Code Outlives Plans                                 <cost>  ›
 
 On the card, a `6 skills` badge sits beside the cost chips so users can tell before clicking that
 the card controls a set. The card label is the package label, never one of its commands.
+
+[[user-managed-packages-and-add-workflows]] later splits the Agents page into System, Custom, and
+Third Party tabs. The card, badge, and contents view behave the same on every tab; `plan-suite`
+sits on the System tab.
 
 Server side, `packagePresentationItem` sets `inspect` to `{ kind: "package-contents", id, entries }`
 when a package has two or more skills. Each entry carries the `inspect` object it would have had as
@@ -313,4 +319,4 @@ off, matching what the onboarding banner enables. See Decision Log.
 | [[o9zwxuav]] | Depends on this plan; registry migration fixtures use `plan-suite` |
 | [[ejsc769o]] | Depends on this plan; owns the reference audit that flags package-or-collection candidates, and its plan rows collapse into one `plan-suite` row |
 | [[jdsobwn]] | Depends on this plan; external suites become packages with several skills and use the contents view |
-| [[user-managed-packages-and-add-workflows]] | Depends on this plan; "Multiple things together" asks whether to create a package or a collection |
+| [[user-managed-packages-and-add-workflows]] | Depends on this plan; "Multiple things together" asks whether to create a package or a collection; adds the System / Custom / Third Party tabs, inside which the contents view must work unchanged |

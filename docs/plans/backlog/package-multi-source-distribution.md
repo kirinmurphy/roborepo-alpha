@@ -4,11 +4,11 @@ priority: low
 next_action: Characterize current bundled/workspace catalog behavior and agree source-qualified provenance with desired-state and profile owners before adding source adapters.
 blocked_by: []
 depends_on: ["bysyzl1e"]
-related: []
+related: ["user-managed-packages-and-add-workflows"]
 reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
 
-# Decouple Platform Distribution from Configurable Sources
+# Package Management: Part 04 - Get Packages From GitHub, Catalogs, and Local Folders
 
 ## Summary
 
@@ -205,10 +205,10 @@ package and collection definitions from [[bysyzl1e]]:
 | Catalog entry (for example skills.sh) | One package per listed skill, resolved to its upstream repo | The catalog lists skills, not bundles |
 
 Every rule above reads files the source contains, so the same source always groups the same way.
-A collection from a source renders as a portal section titled with the source and has
-Select All / Deselect All. A source with one skill renders as one card with a source badge and no
-section header. `cloudflare/security-audit-skill` is that case: one Agent Skills folder, one
-package.
+A collection from a source renders, inside its portal tab (see Portal Tabs and Removal), as a
+section titled with the source and has Select All / Deselect All. A source with one skill renders
+as one card with a source badge and no section header. `cloudflare/security-audit-skill` is that
+case: one Agent Skills folder, one package, in the Third Party tab.
 
 ## User Experience
 
@@ -242,7 +242,34 @@ CLI and portal should expose the same underlying information:
 - update availability;
 - errors such as unavailable source, invalid manifest, or integrity mismatch.
 
-The portal may present source labels such as **Official**, **Local**, and **Third-party**. These are presentation labels derived from source metadata; they are not separate package types.
+### Portal Tabs and Removal
+
+The portal never mixes RoboRepo's own packages with anything else in one list. Packages are split
+across three tabs by where they came from. The tab is derived from the package's source; it is a
+presentation grouping, not a separate package type, and categories and collections still apply
+inside each tab.
+
+| Tab | Holds | Source types | Turn off | Remove |
+| --- | --- | --- | --- | --- |
+| **System** | RoboRepo's own packages | `official` (the temporary `bundled` adapter until Stage 6) | Disable | Never offered |
+| **Custom** | Packages the user wrote or keeps in a local folder | `path`, including the workspace | Disable | Removes RoboRepo's record and any managed copy; never the user's folder |
+| **Third Party** | Packages from someone else's repo or catalog | `git`, and any `registry` other than `official` | Disable | Removes the installed copy and its record |
+
+A local clone of someone else's repo, added as a `path` source, is Custom: the tab follows the
+source, not the original author.
+
+Required rules:
+
+- System packages are always listed and cannot be removed. The rule holds in the CLI as well as the
+  portal, because both read the same package service.
+- After Stage 6, a System package that has never been enabled may not be downloaded yet. Enabling
+  it downloads it first; offline, that enable fails with a clear message instead of a partial
+  install. To the user, a System package behaves as always installed.
+- `roborepo uninstall` and reset scopes may still delete downloaded System artifacts; that is
+  cleanup of managed state, not a per-package remove.
+
+Third Party cards carry a source badge naming the repo or catalog, plus **Trusted** when the
+package came through the trusted catalog (see Source Types).
 
 ### Source Management
 
@@ -626,9 +653,44 @@ Characteristics:
 
 #### `git`
 
-Defer unless implementation cost is genuinely low after `registry`.
+Purpose:
 
-A Git source is useful for direct repositories, but it adds selector, branch/tag/commit, authentication, and archive rules. The adapter architecture should permit it without making it a blocker for moving the official library out of the application artifact.
+- third-party skills published on GitHub, added by pasting a repo URL in the portal or CLI;
+- entries of the trusted catalog, which point at GitHub repos.
+
+v1 scope:
+
+- public GitHub repositories over HTTPS, with no authentication;
+- the URL resolves to a commit SHA when the package is added, and that SHA is the lock's
+  `resolved` value;
+- updating is an explicit action that resolves the latest commit and moves the pin; nothing tracks
+  a branch silently;
+- package grouping follows the source-format table in Packages and Collections From Sources
+  Without RoboRepo Manifests.
+
+Deferred: private repositories and authentication, hosts other than GitHub, and tag or branch
+selectors beyond "latest commit on the default branch".
+
+Characteristics:
+
+- remote;
+- immutable by commit;
+- managed copy under `stateRoot`;
+- integrity is the commit SHA plus a content hash of the materialized tree.
+
+The adapter does not depend on the `registry` adapter and can land before it; both need the
+install store from Stage 3.
+
+#### Trusted catalog
+
+A `registry`-type source that ships with RoboRepo and lists vetted third-party GitHub repos. Each
+entry names the upstream repo and a reviewed commit, and installs through the `git` adapter.
+
+- The portal shows it as a picker of known repos beside the paste-a-URL field.
+- Its packages land in the Third Party tab with a **Trusted** badge.
+- Adding a URL that is not in the catalog is allowed, with a stronger warning before install.
+- Its index is RoboRepo-owned data, so it can be updated without a platform release once the
+  official registry exists. Until then it ships inside the application.
 
 ### Trust and Security
 
@@ -636,7 +698,10 @@ Package source separation expands the trust boundary because packages can affect
 
 At minimum:
 
-- every source has a trust classification;
+- every source has a trust classification: `official`, `local`, `trusted` (an entry in the
+  trusted catalog), or `unverified` (a pasted URL);
+- before installing from an `unverified` source, the portal and CLI show what the package contains,
+  including any hooks, scripts, or permissions, and require an explicit confirmation;
 - every installed remote package records source provenance;
 - registry artifacts use integrity verification;
 - integrity failure is fatal and does not replace the prior installed artifact;
@@ -1014,6 +1079,37 @@ Exit criteria:
 - all remote content is validated and integrity-checked;
 - network failure cannot corrupt the prior catalog or installed artifact.
 
+### Stage 4b — GitHub Source and Trusted Catalog
+
+**Goal:** let a user add a third-party skill from a public GitHub repo, by URL or from the trusted
+catalog. Depends on Stage 3, not Stage 4, so it can land before the registry.
+
+Work:
+
+- Implement the `git` adapter for public GitHub repos: resolve to a commit SHA, download that
+  commit's archive into staged storage, hash the materialized tree, then promote it atomically.
+- Group the repo's skills by the source-format table (plugin, Agent Skills folders, RoboRepo
+  package).
+- Report a contents summary before install: skills, rules, hooks, scripts, and permissions found.
+- Ship the trusted catalog index and its source record; mark its entries `trusted` and pasted URLs
+  `unverified`.
+- Make update resolve the latest commit and show what changed before moving the pin.
+
+Tests:
+
+- fixture Git server or local bare repo, never the public internet;
+- URL resolves to an exact SHA and the lock records it;
+- the three grouping rules each produce the expected packages;
+- the contents summary lists a hook found in the repo;
+- a moved branch does not change an installed package until an explicit update;
+- unreachable repo and invalid URL fail without writing state.
+
+Exit criteria:
+
+- a public GitHub skill can be added, enabled, disabled, updated, and removed;
+- the trusted catalog lists its entries and installs them through the `git` adapter;
+- every installed Git package records its repo and commit.
+
 ### Stage 5 — Establish the Official Package Source
 
 **Goal:** make RoboRepo's optional package library independently distributable.
@@ -1079,9 +1175,11 @@ Work:
 - Add source list/add/remove/refresh/info operations to the shared package service.
 - Expose them through CLI.
 - Add package available/installed/active/source/update fields to current CLI output.
-- Add portal source filters and provenance badges where package management is exposed.
+- Expose each package's tab (System, Custom, Third Party) and source badge in the shared package
+  view; the portal tabs themselves are rendered by [[user-managed-packages-and-add-workflows]].
 - Add explicit collision/disambiguation flow.
 - Add package install/update/remove actions distinct from enable/disable.
+- Refuse remove for `official` packages in the service, so the CLI and portal agree.
 - Preserve concise default output; detailed provenance can be available in package/source info views.
 
 Tests:
@@ -1090,7 +1188,8 @@ Tests:
 - non-interactive error codes;
 - portal/service tests around normalized state;
 - same-ID source collision;
-- source unavailable while installed package remains active/usable.
+- source unavailable while installed package remains active/usable;
+- remove of an `official` package is refused; remove of a `path` package leaves the folder intact.
 
 Exit criteria:
 
@@ -1221,6 +1320,9 @@ The feature is complete when all of the following are true:
 - [ ] Installed remote packages can be activated offline.
 - [ ] Discovery, installation, and activation are separate service operations.
 - [ ] CLI and portal consume the same normalized package/source domain state.
+- [ ] Every package maps to exactly one tab (System, Custom, Third Party), and `official` packages cannot be removed from the CLI or portal.
+- [ ] A public GitHub repo URL can be added, resolves to a pinned commit, and installs only after its contents summary is shown.
+- [ ] The trusted catalog ships with RoboRepo, and its entries install with a `trusted` label while other URLs install as `unverified`.
 - [ ] The official RoboRepo package library is available through the registry source.
 - [ ] Optional official packages are no longer bundled in the npm platform artifact.
 - [ ] A platform update does not overwrite `stateRoot` package installs or user-owned path sources.
@@ -1242,6 +1344,8 @@ The feature is complete when all of the following are true:
 | Platform update deletes packages | Loss of user state | Keep installs/cache in `stateRoot`; treat `appRoot` as replaceable only |
 | Purge deletes a custom workspace path | User data loss | Ownership inventory; user path sources are preserved by default; dry-run required for inspection |
 | Migration guesses wrong source | Provenance corruption | Report ambiguity and require repair rather than source substitution |
+| A pasted GitHub URL carries hooks or scripts the user did not expect | Untrusted code runs in the harness | Contents summary and explicit confirmation before install; `unverified` label; validation before activation |
+| A trusted catalog entry's upstream repo changes after review | Users get unreviewed content | Catalog entries pin a reviewed commit; update is explicit and shows the change |
 | Official registry hosting choice leaks into domain code | Later infrastructure migration is expensive | RoboRepo-owned registry schema and source adapter hide transport/hosting |
 | Package releases become incompatible with older clients | Broken installs | Add explicit registry/package schema and minimum compatibility metadata before independent release cadence is relied upon |
 
@@ -1263,6 +1367,24 @@ The implementation should treat these as settled unless new repository constrain
 12. **Use `roborepo uninstall` for RoboRepo-managed cleanup; do not depend on npm uninstall hooks.**
 13. **Keep package-domain logic shared below CLI and portal surfaces.**
 14. **Implement in modern ESM JavaScript and reuse current validation/apply behavior rather than introducing a new TypeScript or package runtime.**
+15. **Split packages into System, Custom, and Third Party tabs by source.**
+16. **System packages cannot be removed; after unbundling they download on first enable.**
+17. **Support public GitHub repos in v1 of the `git` source, pinned to a commit.**
+18. **Ship a trusted catalog of vetted third-party repos; allow other URLs with a stronger warning.**
+
+## Decision Log
+
+- **2026-10-24: Three portal tabs by source.** Decided by the user. System holds RoboRepo's
+  packages, Custom holds the user's local packages, Third Party holds packages from other people's
+  repos or catalogs. Considered and not chosen: one list with origin badges, and two tabs with
+  user-authored packages under External.
+- **2026-10-24: System packages are never removable.** Decided by the user. Unbundling (Stage 6)
+  still goes ahead: a System package downloads the first time it is enabled. Considered and not
+  chosen: keeping every System package bundled in the application.
+- **2026-10-24: `git` source no longer deferred.** Decided by the user, to support adding a skill
+  by pasting a GitHub URL. Limited to public GitHub repos in v1.
+- **2026-10-24: Trusted catalog plus open URLs.** Decided by the user. Considered and not chosen:
+  allowing only catalog entries.
 
 ## Open Decisions
 
@@ -1291,6 +1413,11 @@ Do not implement npm-style semver dependency solving unless a future package-dep
 Recommended v1: integrity hash plus trusted HTTPS distribution for the official source, with schema fields reserved for future signatures if helpful.
 
 Revisit signatures before treating arbitrary public third-party registries as equally trusted.
+
+### Trusted Catalog Curation
+
+Who adds a repo to the trusted catalog, what review it gets, and how often reviewed commits are
+refreshed. This decides how much "Trusted" actually promises.
 
 ### Source Configuration File Name
 
@@ -1360,7 +1487,8 @@ This backlog plan is ready to promote when:
 
 [[o9zwxuav]] owns desired roots and effective dependency closure; this plan owns source IDs,
 resolution provenance, installed immutable artifacts, collision selection, and source refresh.
-[[user-managed-packages-and-add-workflows]] owns typed authoring/receipts/export UX, and
+[[user-managed-packages-and-add-workflows]] owns typed authoring/receipts/export UX, the portal tabs,
+and the portal add screen that calls Stage 4b, and
 [[74h2tlim]] owns portable profile containment and backup. Agree source-qualified record references,
 owned caches versus authored path sources, and cleanup scopes before any storage migration.
 

@@ -4,11 +4,11 @@ priority: low
 next_action: Characterize existing workspace catalog and typed skill/MCP primitives, then agree source/provenance and receipt boundaries before designing unified add flows.
 blocked_by: []
 depends_on: ["bysyzl1e"]
-related: []
+related: ["jdsobwn"]
 reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
 
-# User-Managed Packages And Add Workflows
+# Package Management: Part 05 - Add, Organize, and Remove Custom and Third-Party Packages
 
 ## Purpose
 
@@ -31,6 +31,10 @@ they add.
 - Make typed additions inspectable, reversible, and portable through the existing package model.
 - Give source identity, ownership, export, and removal one explicit user-facing contract.
 - Preserve native/unmanaged content and reject ambiguous collisions without silent adoption.
+- Keep RoboRepo's own packages, the user's own packages, and third-party packages in separate
+  portal tabs.
+- Let a user add a third-party skill from the portal by pasting a GitHub URL or picking from the
+  trusted catalog.
 
 The proposal keeps packages as the internal management unit for custom skills, MCP servers,
 rules, hooks, permissions, plugins, and grouped toolsets. Users create simple content through typed
@@ -136,7 +140,9 @@ the current manifest schema rather than introduced as a second package format.
 identity, collision resolution, remote artifacts, and installation provenance. This plan owns typed
 creation, grouping, receipts, export, and removal UX on those contracts. [[74h2tlim]] owns profile
 containment and backup; agree source/record boundaries before any path migration. Remote registry
-implementation is not required merely to begin characterizing shipped local add primitives.
+implementation is not required merely to begin characterizing shipped local add primitives. The
+portal add screen's GitHub path needs [[jdsobwn]] Stage 4b (the `git` source and trusted catalog);
+local adds do not.
 
 ## Proposed Behavior
 
@@ -225,6 +231,35 @@ Open decision: today a collection is a category with `bulkToggle`, and categorie
 `manifests/inventory/package-categories.json`, which users do not edit. A "Usually together" answer
 needs somewhere to record a user-created collection, either user-defined categories in the
 workspace or a separate collection record. Decide before building the "Usually together" path.
+
+### Adding From The Portal
+
+The Third Party tab's Add button opens one screen with two ways in:
+
+- **Paste a URL**: a public GitHub repo URL.
+- **Browse trusted**: a list of repos from the trusted catalog that ships with RoboRepo.
+
+Both lead to the same preview before anything is installed:
+
+```mermaid
+flowchart TD
+  paste[User pastes a GitHub URL] -->|resolves to a commit| preview[Preview]
+  browse[User picks a trusted catalog entry] -->|resolves to its reviewed commit| preview
+  preview -->|lists skills, rules, hooks, scripts, permissions found| warn{Trusted catalog entry?}
+  warn -->|yes| confirm[Standard confirmation]
+  warn -->|no| strong[Stronger third-party warning]
+  confirm -->|user confirms| install[Install and show receipt]
+  strong -->|user confirms| install
+  install -->|adds a card to| tab[Third Party tab]
+```
+
+The preview names the repo, the commit, and each package that will appear, using the grouping
+rules in [[jdsobwn]]. The receipt after install is the same receipt the CLI prints. Fetching,
+pinning, and integrity checks belong to the `git` source in [[jdsobwn]] Stage 4b; this plan owns
+the screen.
+
+The Custom tab's Add button opens the same typed flows as `roborepo add` for local folders and
+files.
 
 ### User Package Folders Are The Portable Format
 
@@ -353,28 +388,39 @@ filesystem
 ### Web And Onboard Use The Same Model
 
 The config portal and onboarding flow should consume the same behavior view for built-in and user
-packages.
+packages, but the portal never mixes them in one list. A tab bar above the package lists splits
+them by where they came from:
 
-Behavior sections should be data-driven from package metadata:
+```text
+[ System ]  [ Custom ]  [ Third Party ]
+```
+
+| Tab | Holds | Actions on each package |
+| --- | --- | --- |
+| **System** | RoboRepo's own packages | Enable, disable, inspect. No Remove. |
+| **Custom** | Packages the user wrote or keeps in a local folder, including everything from typed `roborepo add` flows on local paths | Enable, disable, inspect, export, remove. Remove never deletes the user's source folder. |
+| **Third Party** | Packages from someone else's GitHub repo or catalog | Enable, disable, inspect, update, remove. |
+
+The tab comes from the package's source, as defined in [[jdsobwn]] Portal Tabs and Removal. The
+Add button sits on the Custom and Third Party tabs.
+
+Inside each tab, sections stay data-driven from package metadata, using the existing categories:
 
 - `Token Optimization`
 - `Commands`
 - `Code Conventions`
 - `Chat-Time Output`
 - `Permissions`
-- `User Installs`
 
-Known categories render inline with built-in content. Unknown or uncategorized user content falls
-into `User Installs`. Rows carry badges:
+A Custom or Third Party package with no known category renders in an `Uncategorized` section of
+its own tab. Rows carry status badges:
 
-- `built-in`
-- `user`
-- `external`
 - `partial`
 - `native`
 - `blocked`
 
-This makes user content first-class without hiding provenance.
+Third Party rows also carry a source badge naming the repo or catalog, and `Trusted` when the
+package came from the trusted catalog. Origin needs no badge, because the tab already shows it.
 
 ## CLI Surface
 
@@ -423,7 +469,7 @@ The main simplification is not removing capability. It is routing new user-creat
    collisions.
 6. Roborepo prints a receipt showing source, managed ID, install targets, and inspect/export/remove
    commands.
-7. `/config` shows the skill in `Code Conventions` or `Commands`, with a `user` badge.
+7. `/config` shows the skill on the Custom tab, in `Code Conventions` or `Commands`.
 
 ### Adding A Rule Snippet
 
@@ -433,7 +479,19 @@ The main simplification is not removing capability. It is routing new user-creat
 4. Roborepo marks the package desired/enabled and re-renders live rules.
 5. Roborepo prints a receipt showing the source file, managed ID, rendered harness files, and
    inspect/export/remove commands.
-6. `/config` shows the row in `Chat-Time Output`, with source inspect available.
+6. `/config` shows the row on the Custom tab in `Chat-Time Output`, with source inspect available.
+
+### Adding A Third-Party Skill From The Portal
+
+1. User opens the Third Party tab and selects Add.
+2. User pastes `https://github.com/cloudflare/security-audit-skill`, or picks it from the trusted
+   catalog if it is listed there.
+3. RoboRepo resolves the repo to a commit and shows the preview: the repo name, the commit, the
+   package it will create, any hooks or scripts found, and whether it is a trusted catalog entry.
+4. User confirms, after the stronger warning when the repo is not in the catalog.
+5. RoboRepo installs the package and shows the receipt.
+6. The skill appears on the Third Party tab with a source badge, ready to enable.
+7. Later, the user can disable it, update it to a newer commit, or remove it.
 
 ### Adding Multiple Pieces Together
 
@@ -470,6 +528,8 @@ The main simplification is not removing capability. It is routing new user-creat
 - Remove should ask before deleting Roborepo's local cache and should not delete the user's original
   source path unless explicitly requested.
 - Export should preserve resource structure and relative paths where possible.
+- System packages are never offered Remove. Custom and Third Party packages are.
+- Nothing from a pasted URL is installed before the user has seen its preview and confirmed.
 
 ## Data Integrity And Validation
 
@@ -627,8 +687,11 @@ the source is moved or the shell starts from a different directory.
 
 - [ ] Audit existing presentation/category metadata consumers and remove only remaining hard-coded user-content gaps.
 - [ ] Keep curated descriptions for built-ins where useful, but make category placement data-driven.
-- [ ] Add a generic web section renderer for unknown/new categories.
-- [ ] Add `origin` and status badges to behavior view items.
+- [ ] Add the System / Custom / Third Party tab bar above the package lists, driven by each
+      package's tab from the shared package view.
+- [ ] Add a generic web section renderer for unknown/new categories, including `Uncategorized`.
+- [ ] Add status and source badges to behavior view items.
+- [ ] Show Remove only on Custom and Third Party cards.
 - [ ] Ensure `onboard` applies toggles by item type rather than hard-coded package IDs.
 
 ### Phase 3 - Add Flows
@@ -643,6 +706,17 @@ the source is moved or the shell starts from a different directory.
 - [ ] Add `roborepo add command`.
 - [ ] Route `roborepo skill add` and `roborepo mcp add` through the same internals where possible.
 - [ ] Print a receipt after every successful add.
+
+### Phase 3b - Portal Add
+
+Needs [[jdsobwn]] Stage 4b for the GitHub path.
+
+- [ ] Add the Add button to the Custom and Third Party tabs.
+- [ ] Build the Third Party add screen: paste-a-URL field and trusted catalog list.
+- [ ] Show the preview: repo, commit, packages, and any hooks, scripts, or permissions found.
+- [ ] Show the stronger warning for URLs outside the trusted catalog.
+- [ ] Show the install receipt in the portal.
+- [ ] Route the Custom add button to the typed local add flows.
 
 ### Phase 4 - Inspect, Export, Remove
 
@@ -687,7 +761,7 @@ the source is moved or the shell starts from a different directory.
 5. **Should direct add flows enable immediately by default?** Defaulting to enabled is convenient;
    staging first may feel safer for hooks, permissions, and plugins.
 6. **Should package category be free-form?** Free-form categories are flexible but can clutter the
-   portal; a fixed list plus `User Installs` fallback is simpler.
+   portal; a fixed list plus an `Uncategorized` fallback in each tab is simpler.
 7. **How should rule snippets express "chat-time output"?** This might be a category only, or a
    more specific resource subtype/presentation hint.
 8. **How should user package sharing handle secrets?** Hook commands, MCP env vars, and plugin
@@ -710,6 +784,20 @@ the source is moved or the shell starts from a different directory.
 - Removing a user-managed item does not delete the user's original source unless explicitly asked.
 - The main CLI help emphasizes `web`, `onboard`, `add`, `config`, `package`, `skill`, `mcp`,
   `update`, and `doctor`, while keeping advanced verbs available but less prominent.
+- The portal shows System, Custom, and Third Party packages on separate tabs, and only Custom and
+  Third Party packages can be removed.
+- A user can add a public GitHub skill from the portal by URL or from the trusted catalog, after
+  seeing a preview of its contents.
+
+## Decision Log
+
+- **2026-10-24: Three portal tabs.** Decided by the user. System, Custom, and Third Party replace
+  the earlier design of built-in and user rows mixed in shared categories with a `User Installs`
+  fallback.
+- **2026-10-24: Remove only outside System.** Decided by the user. System packages turn off but
+  stay installed; Custom and Third Party packages can also be removed.
+- **2026-10-24: Portal add by URL or trusted catalog.** Decided by the user. URLs outside the
+  catalog are allowed with a stronger warning.
 
 ## Documentation impact
 

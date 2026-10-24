@@ -9,7 +9,7 @@ reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 worktree:
 ---
 
-# One Package State Model: What the User Chose, What Follows From It, What Is Live
+# Package Management: Part 02 - Track What You Turned On, What It Pulls In, and What Is Installed
 
 ## Summary
 
