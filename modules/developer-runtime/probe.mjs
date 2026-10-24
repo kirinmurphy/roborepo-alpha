@@ -7,7 +7,7 @@ export const MAX_BODY_BYTES = 64 * 1024;
 export async function probeHttpCandidate(candidate, options = {}) {
   const timeoutMs = options.timeoutMs || DEFAULT_TIMEOUT_MS;
   const first = await probeOrigin(candidate.origin, { timeoutMs });
-  if (first.http || !looksLikeTlsError(first.errorCode, first.errorMessage)) {
+  if (first.http || !candidate.origin.startsWith("http:") || !looksLikeTlsError(first.errorCode, first.errorMessage)) {
     // A redirect response carries no HTML body, so its title is null — and title is the
     // entrypoint signal that decides whether a member gets hoisted to the repository header.
     // Static servers commonly redirect "/" -> /index.html or /admin/..., so follow ONE more
@@ -22,6 +22,7 @@ export async function probeHttpCandidate(candidate, options = {}) {
         // The ORIGINAL origin is what the user opens; the redirect is only where the title
         // came from. Status/latency stay the first hop's (the reachable entry point).
         origin: candidate.origin,
+        tls: first.tls || redirected.tls || null,
       };
     }
     return first;
@@ -103,7 +104,7 @@ export async function probeHttpCandidates(candidates, options = {}) {
 }
 
 export function isTlsTrustErrorCode(code) {
-  return ["DEPTH_ZERO_SELF_SIGNED_CERT", "SELF_SIGNED_CERT_IN_CHAIN", "UNABLE_TO_VERIFY_LEAF_SIGNATURE"].includes(code);
+  return ["DEPTH_ZERO_SELF_SIGNED_CERT", "SELF_SIGNED_CERT_IN_CHAIN", "UNABLE_TO_VERIFY_LEAF_SIGNATURE", "UNABLE_TO_GET_ISSUER_CERT_LOCALLY"].includes(code);
 }
 
 // URL.hostname keeps an IPv6 literal's brackets ("[::1]"), but http.request's `hostname` option
@@ -118,7 +119,7 @@ function requestHostname(url) {
   return url.hostname.startsWith("[") ? url.hostname.slice(1, -1) : url.hostname;
 }
 
-async function probeOrigin(origin, { timeoutMs, protocol } = {}) {
+async function probeOrigin(origin, { timeoutMs, protocol, rejectUnauthorized = true } = {}) {
   const url = new URL(origin);
   const client = url.protocol === "https:" ? https : http;
   const started = Date.now();
@@ -131,6 +132,7 @@ async function probeOrigin(origin, { timeoutMs, protocol } = {}) {
       path: `${url.pathname}${url.search}`,
       method: "GET",
       timeout: timeoutMs,
+      rejectUnauthorized,
       headers: { "User-Agent": "developer-runtime-probe", Accept: "text/html,*/*;q=0.1" },
     }, (res) => {
       let body = "";
@@ -141,6 +143,7 @@ async function probeOrigin(origin, { timeoutMs, protocol } = {}) {
       res.on("end", () => {
         const location = res.headers.location ? safeRedirect(origin, res.headers.location) : null;
         resolve({
+          origin,
           http: true,
           status: res.statusCode || null,
           latencyMs: Date.now() - started,
@@ -158,8 +161,9 @@ async function probeOrigin(origin, { timeoutMs, protocol } = {}) {
     req.on("timeout", () => {
       req.destroy(Object.assign(new Error("probe timeout"), { code: "TIMEOUT" }));
     });
-    req.on("error", (err) => {
-      resolve({
+    req.on("error", async (err) => {
+      const failure = {
+        origin,
         http: isTlsTrustError(err),
         status: null,
         latencyMs: Date.now() - started,
@@ -170,7 +174,18 @@ async function probeOrigin(origin, { timeoutMs, protocol } = {}) {
         tls: isTlsTrustError(err) ? "untrusted" : null,
         errorCode: err.code || null,
         errorMessage: err.message || String(err),
-      });
+      };
+      // Local development certificates often lack a trusted issuer. Read only local display
+      // metadata on a second connection, preserving the trust failure for health and warnings.
+      // Redirects are still reported rather than followed by this request.
+      if (rejectUnauthorized && isTlsTrustError(err) && isLoopbackUrl(origin)) {
+        const metadata = await probeOrigin(origin, { timeoutMs, protocol, rejectUnauthorized: false });
+        if (metadata.http) {
+          resolve({ ...metadata, tls: "untrusted", errorCode: failure.errorCode, errorMessage: failure.errorMessage });
+          return;
+        }
+      }
+      resolve(failure);
     });
     req.end();
   });
@@ -212,7 +227,8 @@ function isLoopbackUrl(value) {
 }
 
 function looksLikeTlsError(code, message) {
-  return /SSL|TLS|wrong version number|EPROTO|HTTPS/i.test(`${code || ""} ${message || ""}`);
+  // Node's TLS server closes a plaintext connection with ECONNRESET ("socket hang up").
+  return code === "ECONNRESET" || /SSL|TLS|wrong version number|EPROTO|HTTPS/i.test(`${code || ""} ${message || ""}`);
 }
 
 function isTlsTrustError(err) {

@@ -519,7 +519,7 @@ async function probeCandidatesForInstances(items, probeHttp, warnings, concurren
         try {
           const result = await probeHttp(candidate);
           if (result?.http === true) {
-            results.set(item, { ...result, origin: candidate.origin });
+            results.set(item, { ...result, origin: result.origin || candidate.origin });
             break;
           }
         } catch (err) {

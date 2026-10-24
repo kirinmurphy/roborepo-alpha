@@ -601,6 +601,22 @@ assert.equal(containerRole(5432), "service");
 assert.equal(containerRole(6379), "service");
 assert.equal(containerRole(54321), "service");
 
+// One proxy publishes both the product and its dashboard. Classify each port by its page,
+// rather than demoting every port just because its container is named Traefik.
+const proxyApp = composeContainer({ pid: 915, port: 443, service: "traefik", status: 200, title: "tRPC Starter", contentType: "text/html" });
+proxyApp.origin = "https://localhost";
+proxyApp.protocol = "https";
+proxyApp.tls = "untrusted";
+const proxyRedirect = composeContainer({ pid: 915, port: 80, service: "traefik", status: 200, title: "tRPC Starter", contentType: "text/html" });
+proxyRedirect.protocol = "https";
+const proxyRoot = rankedRoot([
+  proxyApp,
+  proxyRedirect,
+  composeContainer({ pid: 915, port: 8080, service: "traefik", status: 200, title: "Traefik Proxy", contentType: "text/html" }),
+], { composeProjectGit: composeGit });
+assert.equal(proxyRoot.primaryEntrypoint?.origin, "https://localhost");
+assert.equal(proxyRoot.composeGroups[0].containers[0].instances.find((item) => item.bind.port === 8080).role, "tooling");
+
 // With no name or title hint and neither on a common app port, the lower port wins.
 const noHints = rankedRoot([
   rankListener({ pid: 920, port: 7002, title: "Beta" }),

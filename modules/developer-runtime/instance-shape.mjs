@@ -26,9 +26,8 @@ export function toInstance({ listener, identity, candidates, probe, cwd, git = n
     },
     status: probe?.status ?? null,
     latencyMs: probe?.latencyMs ?? null,
-    protocol: probe?.protocol ?? "http",
-    // Carried because a trust failure is the one case where http is true but status is null, and
-    // both statusLabel (CLI) and statusText (portal) already read it.
+    protocol: probe?.protocol ?? candidates[0]?.protocol ?? "http",
+    // Keep certificate warnings even when a local metadata retry recovered a page and status.
     tls: probe?.tls ?? null,
     title: probe?.title ?? null,
     contentType: probe?.contentType ?? null,

@@ -27,6 +27,7 @@ export const TOOLING_PRESETS = Object.freeze({
     "drizzle studio",
     "swagger ui",
     "ngrok",
+    "traefik",
   ]),
   // Storybook, Prisma Studio, Mailpit/MailHog, the ngrok inspector, Drizzle Studio, Supabase Studio.
   ports: Object.freeze([6006, 5555, 8025, 4040, 4983, 54323]),

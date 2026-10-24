@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import http from "node:http";
+import https from "node:https";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -11,6 +12,7 @@ import {
   discoverInstances,
   findCurrentInstanceByOpaqueKey,
   isTlsTrustErrorCode,
+  originCandidatesForListener,
   loadSettings,
   normalizeGitRemote,
   normalizeRoutePath,
@@ -36,6 +38,8 @@ const noProviders = {
   collectProcess: async () => new Map(),
 };
 try {
+  assert.equal(originCandidatesForListener({ address: "*", port: 443 })[0].origin, "https://localhost");
+  assert.equal(originCandidatesForListener({ address: "127.0.0.1", port: 8080 })[0].protocol, "http");
   assert.equal(capabilityForPlatform("win32").discovery, "unsupported");
   assert.match(capabilityForPlatform("win32").message, /Windows/);
   assert.equal(capabilityForPlatform("darwin").providers.listeners.state, "supported");
@@ -280,6 +284,15 @@ try {
   assert.equal(discovery.instances[1].status, 401);
   assert.notEqual(discovery.instances[0].associationKey, discovery.instances[0].key);
   assert.doesNotMatch(discovery.instances[0].associationKey, /5173|101/);
+
+  const secureDiscovery = await discoverInstances({
+    platform: "darwin", runCommand, ...noProviders,
+    probeHttp: async (candidate) => ({
+      http: true, status: 200, protocol: "https", title: "Secure app",
+      origin: candidate.origin.replace(/^http:/, "https:"),
+    }),
+  });
+  assert.equal(secureDiscovery.instances[0].origin, "https://127.0.0.1:5173");
 
   const unsupported = await discoverInstances({
     platform: "linux",
@@ -527,6 +540,38 @@ try {
     assert.equal(huge.title, null);
   } finally {
     await new Promise((resolve) => server.close(resolve));
+  }
+
+  const secureServer = https.createServer({
+    key: fs.readFileSync(new URL("./fixtures/runtime-tls/localhost-key.pem", import.meta.url)),
+    cert: fs.readFileSync(new URL("./fixtures/runtime-tls/localhost-cert.pem", import.meta.url)),
+  }, (req, res) => {
+    if (req.url === "/external") {
+      res.writeHead(302, { Location: "https://example.com/out" });
+      res.end();
+      return;
+    }
+    res.writeHead(200, { "Content-Type": "text/html" });
+    res.end("<title>Secure Starter</title>");
+  });
+  await new Promise((resolve) => secureServer.listen(0, "127.0.0.1", resolve));
+  try {
+    const origin = `https://127.0.0.1:${secureServer.address().port}`;
+    const probe = await probeHttpCandidate({ origin });
+    assert.equal(probe.origin, origin);
+    assert.equal(probe.title, "Secure Starter");
+    assert.equal(probe.tls, "untrusted", "reading local display metadata retains the certificate warning");
+    // A TLS-only listener closes a plaintext request without an SSL-specific error message.
+    const fallback = await probeHttpCandidate({ origin: origin.replace(/^https:/, "http:") });
+    assert.equal(fallback.origin, origin);
+    assert.equal(fallback.title, "Secure Starter");
+    assert.equal(fallback.tls, "untrusted");
+    const external = await probeHttpCandidate({ origin: `${origin}/external` });
+    assert.equal(external.redirectExternal, true, "a local certificate retry never follows an external redirect");
+    assert.equal(external.title, null);
+    assert.equal(external.tls, "untrusted");
+  } finally {
+    await new Promise((resolve) => secureServer.close(resolve));
   }
 } finally {
   fs.rmSync(tempRoot, { recursive: true, force: true });
