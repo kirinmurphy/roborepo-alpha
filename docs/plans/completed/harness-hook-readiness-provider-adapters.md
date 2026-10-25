@@ -1,7 +1,7 @@
 ---
 id: wjlt1zvf
 priority: high
-next_action: Run /plan-close; human approval is recorded for the reviewed implementation already landed on main as b134ef42.
+next_action: ""
 blocked_by: []
 depends_on:
   - 3jp3yhtq
@@ -1019,3 +1019,45 @@ None open. Every question was answered by the user; see the Decision Log.
 - Reviewed implementation commit: 7597445780b14bb66b64697775c8ec5274f6fa0b
 - Confirmed by: human
 - Evidence: October 24, 2026, explicit response to the approval question naming this plan and exact commit: "Approve the reviewed implementation".
+
+## Completion summary
+
+Completed October 24, 2026. Codex hook additions preserve existing positions; provider-owned
+readiness covers core and enabled-package hooks, and desktop users receive installation and
+selective-review guidance with fresh return status. CLI-only approval stays with native startup.
+Core scripts retain per-file ownership, and discovery copy and Claude MCP behavior remain with
+their providers. Every required task and review finding is resolved. Manual checks are confirmed
+or explicitly removed from scope by the user, as recorded above.
+
+## Verification
+
+- `npm run check`: passed on primary `main` at `13007f1d10cf0873faf4d13e2fe7cb629fdcae2e`:
+  doctor (107 checks), 457 CLI assertions, install-collision tests, 60/60 check suites,
+  package-install smoke, all four strict Docker clean-machine legs, and 130 browser tests.
+  Windows parity was skipped because `pwsh` is unavailable; its user-approved deferral to
+  `l1mz96d9` remains in effect. Final log: `/tmp/wjlt1zvf-close-gate-unrestricted.log`.
+  The initial sandboxed run failed three local-listener checks with `listen EPERM` on
+  `127.0.0.1`; the authorized unrestricted run passed them and the complete gate.
+- Focused checks passed: `node scripts/test/hook-readiness-check.mjs`,
+  `node scripts/test/hook-composition-check.mjs`, `node scripts/test/hook-review-cli-check.mjs`,
+  `node scripts/test/hook-review-launch-check.mjs`, `node scripts/test/shared-target-rows-check.mjs`,
+  `node scripts/test/harness-registry-check.mjs`, and
+  `node scripts/test/harness-desktop-runtime-check.mjs`.
+- `node scripts/cli/main.mjs plans validate wjlt1zvf --json`: zero findings. No unchecked
+  required tasks, unresolved review findings, or open Not tested entries remain.
+- Checked the implementation against the goals, validation requirements, and resolved review
+  findings. Checked the docs of record and affected guidance against the landed behavior:
+  `docs/user/reference/{codex-hooks,claude-hooks,config-control-panel,telemetry,architecture}.md`,
+  `docs/user/guides/{first-time-setup,setup-and-daily-use,install-workflows}.md`, and
+  `docs/internal/{harness-provider-interface,hooks-internals,portal-architecture}.md`.
+- Approved implementation: `7597445780b14bb66b64697775c8ec5274f6fa0b`.
+  The canonical approval check reports fresh against branch tip
+  `8a5dd04572a8b0fe48466c5a2d2c5cd8fa3125cd`.
+- The assigned worktree's plan copy is integrated. The canonical landing check newly scanned
+  main's history and confirmed that it absorbs the current branch tip. The scan required
+  authorized access outside the sandbox to create temporary Git objects.
+- Absorbing commit: 13007f1d10cf0873faf4d13e2fe7cb629fdcae2e
+- `git diff --check`: passed. Verification ran with existing unrelated edits in
+  `scripts/cli/telemetry.mjs` and `scripts/test/repository-scope-portal-check.mjs`; neither was
+  changed for closure. Live native approval and fresh-session evidence are the recorded user
+  confirmations above, not newly repeated manual checks.
