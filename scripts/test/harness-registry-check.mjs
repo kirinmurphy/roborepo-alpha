@@ -55,6 +55,8 @@ function fakeManifest(id, overrides = {}) {
       homeCandidates: [],
       configCandidates: [],
       minimumConfidence: "probable",
+      // These fixtures test validity, not process-startup latency on a busy host.
+      executableValidation: { args: ["--version"], timeoutMs: 10000 },
       ...overrides,
     },
     paths: {},

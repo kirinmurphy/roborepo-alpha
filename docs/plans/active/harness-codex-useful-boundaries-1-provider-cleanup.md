@@ -248,3 +248,17 @@ None requiring a design decision before preparation. Hook-readiness landing rema
   reviewable delivery artifact. No shareable server URL applies.
 - The first full gate encountered localhost `listen EPERM` in the sandbox. A fresh full gate is
   running with required local-server and Docker access; do not treat the first run as passing.
+
+- Full-gate follow-ups: authorized run had four rules-package assertions fail; the original
+  prefix through those assertions passed 146/146 on replay, and the next full run did not repeat
+  them. No cause or baseline classification is claimed for those failures.
+- The next full run had one existing discovery assertion fail. Instrumented repetition reproduced
+  a valid fixture executable's `ETIMEDOUT` at the production two-second probe deadline. The fake
+  manifest now grants ten seconds for validity checks; production discovery timing is unchanged.
+  The failing assertion and discovery implementation precede this change; the fixture correction
+  is included because this run extends the same suite. Diagnostic log:
+  `/tmp/hr78g4sj-discovery-diagnostic-detail.log`.
+- Validation pass 1 at `71af81cf`: fresh-context validator reported no fix/escalate findings after
+  reviewing the full diff, acceptance criteria, docs, schema/runtime parity, and skills; reran
+  registry, synthetic provider, desktop runtime, shared-target rows, and diff checks successfully.
+  Full-gate evidence was pending, so this was not a completion claim.
