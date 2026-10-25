@@ -1,0 +1,127 @@
+{
+  "schemaVersion": 1,
+  "id": "plan-suite",
+  "label": "Development Planning Lifecycle",
+  "description": "Six commands that carry a repository plan from first draft to merged work: write, promote, execute, review, close, and archive. Each step hands off to the next, so they turn on and off together.",
+  "lifecycle": "optional",
+  "presentation": {
+    "category": "skills-dev-lifecycle",
+    "order": 10
+  },
+  "resources": [
+    {
+      "type": "skill",
+      "id": "plan-write",
+      "source": "skills/plan-write",
+      "invocation": "manual",
+      "risk": "medium",
+      "entrypoints": [
+        {
+          "type": "slash-command",
+          "name": "plan-write",
+          "description": "Create, revise, or sync a repository plan document.",
+          "harnesses": [
+            "claude",
+            "codex",
+            "gemini"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "skill",
+      "id": "plan-promote",
+      "source": "skills/plan-promote",
+      "invocation": "manual",
+      "risk": "medium",
+      "entrypoints": [
+        {
+          "type": "slash-command",
+          "name": "plan-promote",
+          "harnesses": [
+            "claude",
+            "codex",
+            "gemini"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "skill",
+      "id": "plan-execute",
+      "source": "skills/plan-execute",
+      "invocation": "manual",
+      "risk": "high",
+      "entrypoints": [
+        {
+          "type": "slash-command",
+          "name": "plan-execute",
+          "harnesses": [
+            "claude",
+            "codex",
+            "gemini"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "skill",
+      "id": "plan-review",
+      "source": "skills/plan-review",
+      "invocation": "manual",
+      "risk": "high",
+      "entrypoints": [
+        {
+          "type": "slash-command",
+          "name": "plan-review",
+          "harnesses": [
+            "claude",
+            "codex",
+            "gemini"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "skill",
+      "id": "plan-close",
+      "source": "skills/plan-close",
+      "invocation": "manual",
+      "risk": "high",
+      "entrypoints": [
+        {
+          "type": "slash-command",
+          "name": "plan-close",
+          "harnesses": [
+            "claude",
+            "codex",
+            "gemini"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "skill",
+      "id": "plan-archive",
+      "source": "skills/plan-archive",
+      "invocation": "manual",
+      "risk": "high",
+      "entrypoints": [
+        {
+          "type": "slash-command",
+          "name": "plan-archive",
+          "harnesses": [
+            "claude",
+            "codex",
+            "gemini"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "rules",
+      "source": "rules.md",
+      "harness": "both"
+    }
+  ]
+}

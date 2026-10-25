@@ -44,6 +44,24 @@ export function labeledTokenChip({ label, spec }) {
   return wrap;
 }
 
+// Contents view of a package with several skills (inspect.kind "package-contents"): the summary
+// line and one button per resource. `entryChipSpec(entry)` gives the entry's cost chip spec, or
+// null to hide it; `onSelect(entry)` opens that entry's source view.
+export function packageContents(inspect, { entryChipSpec, onSelect }) {
+  const node = tpl("tpl-package-contents");
+  toggleSlot(node, "summary", !!inspect.summary, inspect.summary);
+  node.querySelector('[data-slot="entries"]').replaceChildren(...(inspect.entries || []).map((entry) => {
+    const row = fill(tpl("tpl-package-contents-entry"), { label: entry.label, description: entry.description || "" });
+    const button = row.querySelector('[data-slot="button"]');
+    button.dataset.entry = entry.key;
+    if (entry.description) row.querySelector('[data-slot="description"]').title = entry.description;
+    applyTokenChip(row.querySelector('[data-slot="chip"]'), entryChipSpec(entry));
+    button.addEventListener("click", () => onSelect(entry));
+    return row;
+  }));
+  return node;
+}
+
 function wireDefaultButton(btn, ruleKey, rulePath, label, rules, onDefaultClick) {
   btn.dataset.ruleKey = ruleKey;
   btn.dataset.rulePath = rulePath;

@@ -18,6 +18,50 @@ const ROUTES = [
 ];
 
 test.describe("Agents page", () => {
+  test("a package with several skills opens a contents view; each entry opens its source and Back returns", async ({ page }) => {
+    await page.goto("/agents");
+    const suite = page.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^Development Planning Lifecycle$/ }) });
+    await expect(suite).toHaveCount(1);
+    await expect(suite.locator(".badge", { hasText: /^6 skills$/ })).toBeVisible();
+
+    await suite.locator(".item-label").click();
+    const modal = page.locator("dialog#config-modal");
+    await expect(modal).toBeVisible();
+    await expect(modal.locator("#modal-title")).toHaveText("Development Planning Lifecycle");
+    await expect(modal.locator(".package-contents-summary")).toHaveText("6 skills · 1 rules fragment");
+    await expect(modal.locator(".package-contents-label")).toHaveText(["/plan-write", "/plan-promote", "/plan-execute", "/plan-review", "/plan-close", "/plan-archive", "Rules"]);
+    await expect(modal.locator("#modal-back")).toBeHidden();
+    await expect(modal.locator(".package-contents-entry", { hasText: "Rules" }).locator(".package-contents-desc")).toHaveText("Code Outlives Plans");
+
+    await modal.locator(".package-contents-entry", { hasText: "/plan-execute" }).click();
+    await expect(modal.locator("#modal-title")).toHaveText(/plan-execute/);
+    await expect(modal.locator("#modal-path")).toContainText("plan-execute/SKILL.md");
+    await expect(modal.locator("#modal-back")).toBeVisible();
+
+    await modal.locator("#modal-back").click();
+    await expect(modal.locator("#modal-title")).toHaveText("Development Planning Lifecycle");
+    await expect(modal.locator(".package-contents-entry")).toHaveCount(7);
+    await expect(modal.locator("#modal-back")).toBeHidden();
+
+    await modal.locator(".package-contents-entry", { hasText: "Rules" }).click();
+    await expect(modal.locator("#modal-content")).toContainText("Code Outlives Plans");
+    await modal.locator("#modal-close").click();
+    await expect(modal).not.toBeVisible();
+  });
+
+  test("a package with one skill keeps its command label and opens its source directly", async ({ page }) => {
+    await page.goto("/agents");
+    const single = page.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^\/session-close$/ }) });
+    await expect(single).toHaveCount(1);
+    await expect(single.locator(".badge", { hasText: /skills$/ })).toHaveCount(0);
+    await single.locator(".item-label").click();
+    const modal = page.locator("dialog#config-modal");
+    await expect(modal.locator("#modal-path")).toContainText("session-close/SKILL.md");
+    await expect(modal.locator(".package-contents")).toHaveCount(0);
+    await expect(modal.locator("#modal-back")).toBeHidden();
+    await modal.locator("#modal-close").click();
+  });
+
   test("keeps the high token-use banner hidden", async ({ page }) => {
     const snapshot = await (await page.request.get("/api/config")).json();
     const activeItem = snapshot.behaviorView.flatMap((section) => section.items || []).find((item) => item.active);
@@ -1048,10 +1092,10 @@ test.describe("shared plan drawer", () => {
   test.afterEach(async ({ page }) => removeRepositorySources(page));
 
   test("a Plans card opens the plan drawer", async ({ page }) => {
-    // The board only shows once plan-write is enabled; the hermetic machine has no packages.
+    // The board only shows once plan-suite is enabled; the hermetic machine has no packages.
     await page.route("**/api/plans", async (route) => {
       const data = await (await route.fetch()).json();
-      data.planWritePackage = { ...data.planWritePackage, available: true, enabled: true };
+      data.planSuitePackage = { ...data.planSuitePackage, available: true, enabled: true };
       await route.fulfill({ json: data });
     });
     await page.goto("/plans");
@@ -1066,7 +1110,7 @@ test.describe("shared plan drawer", () => {
   test("the drawer says when an active plan is read from its worktree", async ({ page }) => {
     await page.route("**/api/plans", async (route) => {
       const data = await (await route.fetch()).json();
-      data.planWritePackage = { ...data.planWritePackage, available: true, enabled: true };
+      data.planSuitePackage = { ...data.planSuitePackage, available: true, enabled: true };
       await route.fulfill({ json: data });
     });
     await page.route("**/api/plans/document?*", async (route) => {
@@ -1146,7 +1190,7 @@ test.describe("Plans card commands", () => {
     await addRepositorySource(page, planRoot);
     await page.route("**/api/plans", async (route) => {
       const data = await (await route.fetch()).json();
-      data.planWritePackage = { ...data.planWritePackage, available: true, enabled: true };
+      data.planSuitePackage = { ...data.planSuitePackage, available: true, enabled: true };
       await route.fulfill({ json: data });
     });
   });
@@ -1245,6 +1289,7 @@ test.describe("Plans card commands", () => {
 
 test.describe("Plans onboarding", () => {
   const SUITE = ["plan-write", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive", "session-close"];
+  const SUITE_PACKAGES = ["plan-suite", "session-close"];
 
   test("each suite command's details button opens that command's skill", async ({ page }) => {
     await page.goto("/plans");
@@ -1261,22 +1306,22 @@ test.describe("Plans onboarding", () => {
     }
   });
 
-  test("the enable button turns on all seven suite packages in one request", async ({ page }) => {
+  test("the enable button turns on the plan-suite and session-close packages in one request", async ({ page }) => {
     await page.goto("/plans");
     const token = await page.locator("meta[name=cli-portal-token]").getAttribute("content");
     const bulk = page.waitForRequest((request) => request.url().endsWith("/api/config/packages/bulk") && request.method() === "POST");
     await page.locator(".package-onboarding").getByRole("button", { name: "Enable the Plan Suite" }).click();
-    expect((await bulk).postDataJSON()).toEqual({ ids: SUITE, enabled: true });
+    expect((await bulk).postDataJSON()).toEqual({ ids: SUITE_PACKAGES, enabled: true });
     await expect(page.locator(".package-onboarding")).toBeHidden();
     const config = await (await page.request.get("/api/config")).json();
     const section = config.behaviorView.find((item) => item.categoryId === "skills-dev-lifecycle");
-    for (const skill of SUITE) {
-      expect(section.items.find((item) => item.id === skill)?.active, `${skill} enabled`).toBe(true);
+    for (const id of SUITE_PACKAGES) {
+      expect(section.items.find((item) => item.id === id)?.active, `${id} enabled`).toBe(true);
     }
     // Leave the hermetic machine as the other specs expect it: no suite packages enabled.
     const reset = await page.request.post("/api/config/packages/bulk", {
       headers: { "X-Cli-Portal-Token": token },
-      data: { ids: SUITE, enabled: false },
+      data: { ids: SUITE_PACKAGES, enabled: false },
     });
     expect(reset.ok()).toBe(true);
   });

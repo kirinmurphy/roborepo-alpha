@@ -3,9 +3,9 @@
 ## Purpose
 
 The Plans portal is a built-in RoboRepo portal page for local Markdown planning documents. It is
-paired with the optional plan suite: seven packages that each install one agent-facing command,
-`/plan-write`, `/plan-promote`, `/plan-execute`, `/plan-review`, `/plan-close`, `/plan-archive`,
-and `/session-close`.
+paired with the optional plan suite: the `plan-suite` package, which installs `/plan-write`,
+`/plan-promote`, `/plan-execute`, `/plan-review`, `/plan-close`, and `/plan-archive`, and the
+`session-close` package, which installs `/session-close`.
 
 ## Concept Model
 
@@ -109,7 +109,7 @@ The page shows one call to action at a time:
 
 | Step | Condition | Plans shows |
 | --- | --- | --- |
-| 1 | plan-write package disabled | The plan suite banner |
+| 1 | plan-suite package disabled | The plan suite banner |
 | 2 | No repository has a recorded checkout | The same repository empty state as Home: **Enable auto-discovery of active repos**, then **Add a folder** |
 | 3 | Repositories known, none scanned | `Not scanned yet: N repositories`, with **Manage Repos** |
 | 4 | Repositories scanned, no plans | `No plans found in N repositories`, with **Manage Repos**; with a repo selected, `No plans yet found in <repo>` on the page itself (no panel) and **View All Repos**, which clears the repo filter |
@@ -275,12 +275,12 @@ Repositories without Git remain browsable.
 
 ## Package Integration
 
-The plan suite is seven optional packages: `plan-write`, `plan-promote`, `plan-execute`,
-`plan-review`, `plan-close`, `plan-archive`, and `session-close`. The Plans page gates its workflow
-actions on `plan-write`, and its onboarding banner enables all seven in one request through the
-config section's bulk endpoint.
+The plan suite is two optional packages: `plan-suite`, which holds the six plan skills and the
+Code Outlives Plans rules fragment, and `session-close`. The Plans page gates its workflow actions
+on `plan-suite`, and its onboarding banner enables both in one request through the config
+section's bulk endpoint.
 
-When `plan-write` is disabled:
+When `plan-suite` is disabled:
 
 - `/plans` remains available, behind the onboarding banner
 - copy path and repository-aware or portable prompts remain available
@@ -288,7 +288,7 @@ When `plan-write` is disabled:
 
 When enabled:
 
-- each package installs one manual skill and generates Markdown command wrappers for Claude,
+- each of the seven skills is a manual skill with Markdown command wrappers for Claude,
   Codex, and Gemini. Gemini CLI requires TOML custom commands, so its generated wrappers are not
   usable native slash commands yet
 - `/plans` shows each lifecycle's actions, read from the lifecycle manifest the plans snapshot

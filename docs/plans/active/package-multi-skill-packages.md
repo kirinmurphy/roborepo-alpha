@@ -1,7 +1,7 @@
 ---
 id: bysyzl1e
 priority: high
-next_action: Add a catalog fixture with two skill resources in one package and confirm validation, enable, status, and context cost handle it before changing any built-in package.
+next_action: Run /plan-review to review the implementation and confirm the Not tested entries.
 blocked_by: []
 depends_on: []
 related: ["o9zwxuav", "ejsc769o", "jdsobwn", "user-managed-packages-and-add-workflows"]
@@ -28,7 +28,7 @@ easy to confuse with a group of packages:
 | Concept | What the user controls | Example | Declared by |
 | --- | --- | --- | --- |
 | **Package** | One switch. Every resource in it turns on and off together. | `plan-suite`, `caveman` | `package.config.json` |
-| **Collection** | Each member has its own switch, plus Select All / Deselect All for the group | Today's Plan Suite section | Today, a category with `bulkToggle: true`; see Non-goals |
+| **Collection** | Each member has its own switch, plus Select All / Deselect All for the group | None built in after this plan (the Plan Suite section was the only one) | A category with `bulkToggle: true`; see Non-goals |
 | **Category** | Each member has its own switch, with no group switch | Code Conventions | A category without `bulkToggle` |
 | **Dependency** | Nothing directly. It turns on because a selected package `requires` it. | `implementation-review` | `requires` in the parent manifest ([[o9zwxuav]]) |
 
@@ -142,7 +142,7 @@ flowchart TD
 Contents view, rendered inside the existing `#config-modal` dialog:
 
 ```text
-Plan Suite                                      Startup: <cost>  When loaded: <cost>
+Development Planning Lifecycle                  Startup: <cost>  When loaded: <cost>
 6 skills · 1 rules fragment
 ──────────────────────────────────────────────────────────────────────────────
 /plan-write     <SKILL.md description, one line>                    <cost>  ›
@@ -206,8 +206,8 @@ The manifest header replaces the six old headers:
 {
   "schemaVersion": 1,
   "id": "plan-suite",
-  "label": "Plan Suite",
-  "description": "One command for each step of a plan's life: write, promote, execute, review, close, and archive.",
+  "label": "Development Planning Lifecycle",
+  "description": "Six commands that carry a repository plan from first draft to merged work: write, promote, execute, review, close, and archive. Each step hands off to the next, so they turn on and off together.",
   "lifecycle": "optional",
   "presentation": { "category": "skills-dev-lifecycle", "order": 10 }
 }
@@ -225,63 +225,65 @@ manifest (`id`, `source`, `invocation`, `risk`, and the `slash-command` entrypoi
 | `scripts/cli/repository-overview-projections.mjs` `withCleanupOffer` comment | "the plan-close package is disabled" | "the plan-suite package is disabled" |
 | `portal/plans/api.js` `PLAN_SUITE_PACKAGES` | seven IDs | `["plan-suite", "session-close"]` |
 
-After the move, the `skills-dev-lifecycle` category keeps its "Plan Suite" label and `bulkToggle`,
-and holds two packages: `plan-suite` and `session-close`. Select All / Deselect All turns both on or
-off, matching what the onboarding banner enables. See Decision Log.
+After the move, the `skills-dev-lifecycle` category is labeled "Development Workflows", drops
+`bulkToggle`, and holds two packages, `plan-suite` and `session-close`, each with its own switch.
+The category and the package each have their own description. The Plans onboarding banner still
+enables both through the bulk endpoint, which does not depend on `bulkToggle`. See Decision Log.
 
 ## Implementation plan
 
 ### Phase 1: Several skills in one package
 
-- [ ] Add a workspace fixture package with two skills, one with a slash command, plus a rules
+- [x] Add a workspace fixture package with two skills, one with a slash command, plus a rules
       resource.
-- [ ] Prove with checks that the fixture validates, enables both skills and the command, reports
+- [x] Prove with checks that the fixture validates, enables both skills and the command, reports
       `partial` when one skill link is removed, disables cleanly, and sums context cost.
-- [ ] Fix any path that assumes one skill per package, found by the checks or by searching
+- [x] Fix any path that assumes one skill per package, found by the checks or by searching
       `scripts/cli/` for `skillIds[0]` and for maps keyed by package ID that hold one resource.
 
 ### Phase 2: Authoring
 
-- [ ] Add the `package dev add-skill` command definition under
+- [x] Add the `package dev add-skill` command definition under
       `manifests/platform/cli/command-definitions/package/` and its implementation beside
       `package dev create` in `scripts/cli/packages.mjs`.
-- [ ] Update `docs/user/reference/roborepo-cli.md` and the package-development reference.
+- [x] Update `docs/user/reference/roborepo-cli.md` and the package-development reference.
 
 ### Phase 3: Agents page
 
-- [ ] Group tools by package in `buildBehaviorView`, and emit the `package-contents` inspect target
+- [x] Group tools by package in `buildBehaviorView`, and emit the `package-contents` inspect target
       and the skill-count badge from `packagePresentationItem`.
-- [ ] Add a `showContents` view to `createConfigModal` in `portal/config/panels.js`, with Back
+- [x] Add a `showContents` view to `createConfigModal` in `portal/config/panels.js`, with Back
       returning to it from `openSource`, and a template for the entry list in
       `portal/config/templates.js`.
-- [ ] Keep card and popup output identical for packages with zero or one skill.
+- [x] Keep card and popup output identical for packages with zero or one skill.
 
 ### Phase 4: Plan suite migration
 
-- [ ] Create `globals/packages/plan-suite/` with `git mv` for the skill folders and `rules.md`, then
+- [x] Create `globals/packages/plan-suite/` with `git mv` for the skill folders and `rules.md`, then
       delete the six old package directories.
-- [ ] Run `roborepo skill render-commands` and `roborepo skill triggers --check`; commit
+- [x] Run `roborepo skill render-commands` and `roborepo skill triggers --check`; commit
       `generated/packages/plan-suite/` and delete the six `generated/packages/plan-*/` directories.
-- [ ] Update the runtime references in the table above, then search `scripts/`, `modules/`,
+- [x] Update the runtime references in the table above, then search `scripts/`, `modules/`,
       `portal/`, and `manifests/` again for any old package ID used as a package ID.
-- [ ] Update the tests that name old package IDs or paths, listed under Current state. In
+- [x] Update the tests that name old package IDs or paths, listed under Current state. In
       `package-catalog-check.mjs`, point the `urls` lookup at `plan-suite` and assert the package
       exists, so the check cannot pass vacuously.
-- [ ] Extend `scripts/test/package-retired-ids-check.mjs` with the six old plan package IDs: after
+- [x] Extend `scripts/test/package-retired-ids-check.mjs` with the six old plan package IDs: after
       `reconcile`, they leave the registry; after `roborepo package enable plan-suite`, all six
       plan skills and their slash commands are installed. Record in this plan what happens to the
-      plan skill links between those two steps.
-- [ ] Update the two user guides so the CLI shows `roborepo package enable plan-suite` and
+      plan skill links between those two steps. Recorded under Risks: the links survive, because
+      adopt-live adopts `plan-suite` during the update.
+- [x] Update the two user guides so the CLI shows `roborepo package enable plan-suite` and
       `roborepo package enable session-close`.
-- [ ] Replace `globals/packages/plan-*/` paths in `docs/internal/plans-portal-internals.md` and in
+- [x] Replace `globals/packages/plan-*/` paths in `docs/internal/plans-portal-internals.md` and in
       open plans under `docs/plans/backlog/`, `ready/`, `active/`, and `review/`. Leave completed and
       archived plans and `docs/internal/history/` as written: they record the layout at the time.
 
 ### Phase 5: Guidance
 
-- [ ] Add the package, collection, category, and dependency table and the authoring question to
+- [x] Add the package, collection, category, and dependency table and the authoring question to
       `.claude/skills/roborepo-development/references/package-development.md`.
-- [ ] Describe the contents view and the skill-count badge in `docs/user/reference/config-control-panel.md`.
+- [x] Describe the contents view and the skill-count badge in `docs/user/reference/config-control-panel.md`.
 
 ## Validation
 
@@ -305,13 +307,20 @@ off, matching what the onboarding banner enables. See Decision Log.
 
 | Risk | Treatment |
 | --- | --- |
-| Existing machines list the six old IDs in `~/.roborepo/enabled-packages.json`. `reconcileEnabledPackages` in `scripts/cli/packages.mjs` drops IDs missing from the catalog and then runs `cleanupPackageProjections`, so `plan-suite` is not enabled after update. `package-retired-ids-check.mjs` shows that a retired package's skill cache, skill views, and commands are removed; the plan suite differs because `plan-suite` reuses the same skill IDs, and whether that keeps the links has not been checked. | Pre-launch, no mapping is added. The release note and both user guides say to run `roborepo package enable plan-suite` once. Phase 4 extends `package-retired-ids-check.mjs` to assert the actual result. |
+| Existing machines list the six old IDs in `~/.roborepo/enabled-packages.json`. `reconcileEnabledPackages` in `scripts/cli/packages.mjs` drops IDs missing from the catalog and then runs `cleanupPackageProjections`. | Checked in Phase 4: the update's earlier `package adopt-live` step finds the plan skill caches still in place and adopts `plan-suite`, and reconcile then installs all six skills and re-owns their commands, so the plan skill links survive and `plan-suite` ends enabled. A machine that had enabled only some of the six ends with all six. `package-retired-ids-check.mjs` asserts this with two of the six enabled. Pre-launch, no mapping is added; the user guides say to run `roborepo package enable plan-suite` on a fresh setup, and the plan suite walkthrough says what an update does. |
 | A path assumes one skill per package and the fixture does not reach it | Phase 1 searches as well as tests, and Phase 4 repeats the search for the plan suite |
 | Authors put unrelated skills in one package to save toggles | The authoring question in package-development guidance, and the [[ejsc769o]] audit, which also reports skills in one package that never reference each other |
 
 ## Decision Log
 
-- **2026-10-24: The `skills-dev-lifecycle` category stays "Plan Suite" with `bulkToggle`.** Decided
+- **2026-10-24 (user decision, supersedes the next entry): The `skills-dev-lifecycle` category is
+  "Development Workflows" with no `bulkToggle`, and the `plan-suite` package is labeled
+  "Development Planning Lifecycle".** Decided by the user after seeing the result: a category and a
+  package both named "Plan Suite", with the same description and a Select All over two cards, did
+  not make sense. Each now has its own description. The package ID stays `plan-suite`, and the
+  Plans page keeps calling the feature the plan suite. No built-in category has `bulkToggle` after
+  this; the portal still supports it.
+- **2026-10-24 (superseded): The `skills-dev-lifecycle` category stays "Plan Suite" with `bulkToggle`.** Decided
   by the user. After the move it is a collection of two packages, `plan-suite` and `session-close`,
   and its section header shares a name with the `plan-suite` card. Considered and not chosen:
   renaming the category to "Dev Lifecycle" and dropping `bulkToggle`, and moving `session-close`
@@ -320,6 +329,52 @@ off, matching what the onboarding banner enables. See Decision Log.
   Decided during promotion. It reports `plan-suite`'s status after the move, and the field is
   internal to the portal and its tests. `loadPlanCloseEnabled` keeps its name because it still
   answers whether `/plan-close` is available.
+
+- **2026-10-24: "Partial when one component is missing" means one skill's cache or command
+  wrapper.** Decided during implementation. The skill probe in `scripts/cli/package-probes.mjs`
+  checks each skill's cache and command wrappers, not its harness skill links, for every package;
+  a several-skill package inherits that per skill, which Phase 1 asserts. Considered and not
+  chosen: probing harness links too, which would change status for every package (a harness not
+  installed on the machine would read partial) and is outside this plan.
+- **2026-10-24: The several-skill fixture lives in a throwaway app root, not a workspace.**
+  Decided during implementation. Only built-in packages get generated slash-command wrappers
+  (`installPackageCommands` reads `generated/packages/<id>/`), so a workspace package's command
+  can never install, whatever its skill count. A temporary development app root with the fixture
+  under `globals/packages/` exercises the command path without adding a test package to the real
+  catalog. Considered and not chosen: a workspace fixture without the command (would not cover
+  the command), and teaching workspace packages to render commands (out of scope).
+- **2026-10-24: Each resource's cost is reported under `contextCost.packages[<id>].resources`,
+  keyed `skill:<id>`, `rules:<source>`, or `slash-command:<name>`.** Decided during
+  implementation. A skill-backed command wrapper counts toward its skill, so a contents-view row
+  shows one figure per skill. Considered and not chosen: computing entry costs in the portal from
+  the raw component list, which would repeat the harness-max logic `aggregatePackages` already
+  owns.
+- **2026-10-24: The contents view lists skills first, then one Rules and one Hooks row.**
+  Decided during implementation. `loadConfigSource` serves one rules and one hooks source per
+  package, so each type is one row; the rules row is described by its fragment's first heading.
+  A skill row shows its on-demand cost, a rules row its startup cost.
+- **2026-10-24: `package dev add-skill` places the new skill after the package's last skill and
+  leaves an empty trigger fixture.** Decided during implementation. Keeping skills ahead of rules
+  and hooks matches the plan-suite manifest's order; an empty `skill-triggers.json` entry passes
+  `skill triggers --check` and gives the author the place to fill. It also refuses a built-in
+  package in package mode, where app files are immutable, and restores the package if the result
+  does not validate.
+- **2026-10-24: `docs/user/reference/plans-portal.md`, `docs/user/reference/repositories.md`, and
+  `docs/internal/portal-architecture.md` were updated too.** They named the old plan package IDs
+  as packages, so they were newly affected docs of record.
+
+- **2026-10-24: Two links into moved files were repointed, including one in
+  `docs/internal/history/`.** Decided during implementation. `docs-reference-check.mjs` fails on a
+  missing link target, so the history README's link to `plan-execute/SKILL.md` and
+  `docs/internal/backlog-review.md`'s link to `plan-write/package.config.json` now point at
+  `globals/packages/plan-suite/`. Only the targets changed; the prose still records the layout at
+  the time. Considered and not chosen: leaving them broken, which fails the gate.
+
+## Not tested
+
+- [ ] Updating a real machine that enabled some of the old plan packages ends with `plan-suite`
+      enabled and all six commands working in Claude, Codex, and Gemini. The retired-IDs check
+      covers the registry and Claude files in a hermetic home, not a live harness session.
 
 ## Documentation impact
 
@@ -336,7 +391,7 @@ off, matching what the onboarding banner enables. See Decision Log.
 
 | Plan | Effect |
 | --- | --- |
-| [[o9zwxuav]] | Depends on this plan; registry migration fixtures use `plan-suite`. Its dependency-row mockup still shows `/plan-close` as its own card under Plan Suite; after this plan that card is `Plan Suite`. It should refresh the mockup when it is promoted. |
+| [[o9zwxuav]] | Depends on this plan; registry migration fixtures use `plan-suite`. Its dependency-row mockup still shows `/plan-close` as its own card under Plan Suite; after this plan that card is `Development Planning Lifecycle`, under Development Workflows. It should refresh the mockup when it is promoted. |
 | [[ejsc769o]] | Depends on this plan; owns the reference audit that flags package-or-collection candidates, and its plan rows collapse into one `plan-suite` row |
 | [[jdsobwn]] | Depends on this plan; external suites become packages with several skills and use the contents view. It also names `globals/packages/plan-write/skills/plan-write/`, which Phase 4 rewrites |
 | [[user-managed-packages-and-add-workflows]] | Depends on this plan; "Multiple things together" asks whether to create a package or a collection; adds the System / Custom / Third Party tabs, inside which the contents view must work unchanged |

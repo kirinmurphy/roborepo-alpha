@@ -370,14 +370,15 @@ id: fence001
     return { ...json(result, `package status ${id}`), exit: result.status };
   };
 
-  assert.deepEqual(status("plan-write"), { id: "plan-write", available: true, enabled: false, status: "disabled", exit: 0 });
+  assert.deepEqual(status("plan-suite"), { id: "plan-suite", available: true, enabled: false, status: "disabled", exit: 0 });
 
-  assert.equal(roborepo(["package", "enable", "plan-write"]).status, 0);
-  assert.deepEqual(status("plan-write"), { id: "plan-write", available: true, enabled: true, status: "enabled", exit: 0 });
+  assert.equal(roborepo(["package", "enable", "plan-suite"]).status, 0);
+  assert.deepEqual(status("plan-suite"), { id: "plan-suite", available: true, enabled: true, status: "enabled", exit: 0 });
 
-  // Desired but incomplete on disk: the command wrapper was removed behind the registry's back.
+  // Desired but incomplete on disk: one skill's command wrapper was removed behind the registry's
+  // back, and the other five skills being whole does not make the package whole.
   fs.rmSync(path.join(home, ".claude", "commands", "plan-write.md"), { force: true });
-  assert.equal(status("plan-write").status, "partial", "an enabled package missing a component is partial");
+  assert.equal(status("plan-suite").status, "partial", "an enabled package missing a component is partial");
 
   roborepo(["package", "enable", "telemetry"]);
   fs.writeFileSync(path.join(home, ".roborepo", "telemetry", "state.json"), '{"enabled":false,"updatedAt":"x"}\n');
@@ -400,7 +401,7 @@ id: fence001
   assert.equal(missing.status, 1, "an unknown package id exits 1");
   assert.equal(json(missing, "missing").status, "missing");
 
-  assert.match(roborepo(["package", "status", "plan-write"]).stdout, /^plan-write: partial$/m, "text output is one line");
+  assert.match(roborepo(["package", "status", "plan-suite"]).stdout, /^plan-suite: partial$/m, "text output is one line");
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

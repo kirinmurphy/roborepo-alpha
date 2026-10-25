@@ -46,6 +46,15 @@ A package may list `requires: [pkgId, ...]`:
 - A composite reports itself enabled only when every required package, and any resources of its
   own, are enabled.
 
+A package may also hold several skills. They turn on and off together with the package's one
+toggle; there is no switch for a single skill inside it. Its card shows the package name, never one
+of its commands, and an `<n> skills` badge beside its cost chips. Clicking the name opens a
+contents view in the source dialog: the package's startup and when-loaded totals, a summary line
+such as `6 skills · 1 rules fragment`, and one row per skill (its command, or its skill ID when it
+has none, a one-line description, and its own cost), followed by a row for the package's rules or
+hooks. Selecting a row opens the same source view a single-skill card opens; **Back** returns to
+the list in the same dialog. A package with one skill or none opens its source directly, as before.
+
 > Composition (`requires`, runtime feature enablement) is distinct from an install
 > **bundle** (`manifests/platform/presets.json`), which groups file-copy/link rows at
 > install time. Both exist; they operate at different layers.
@@ -71,7 +80,8 @@ The panel renders these sections:
 - **Token Optimization** — package-level controls such as the Caveman package. Manage Telemetry
   from **Settings** or **Tokens**.
 - **Monitoring** — packages that observe agent activity and usage.
-- **Plan Suite** — plan lifecycle commands and workflows.
+- **Development Workflows** — **Development Planning Lifecycle** (the `plan-suite` package: all
+  six plan lifecycle commands, one toggle) and `/session-close`, each with its own toggle.
 - **Skills - Code Quality** — skills that check and improve code against project patterns.
 - **Writing Assistants** — long-form writing workflows and structured documentation.
 - **Additional Agent Rules** — Branch Safety and Capture Dense Bash.

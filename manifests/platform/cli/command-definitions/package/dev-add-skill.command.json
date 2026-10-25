@@ -1,0 +1,18 @@
+{
+  "path": ["package", "dev", "add-skill"],
+  "kind": "command",
+  "title": "Add skill to package",
+  "description": "Add a skill to an existing package",
+  "order": 15,
+  "usage": "roborepo package dev add-skill <package-id> <skill-id> [--command] [--description=<text>]",
+  "arguments": [
+    { "name": "package-id", "required": true, "interactive": { "prompt": "Package id" } },
+    { "name": "skill-id", "required": true, "interactive": { "prompt": "Skill id" } }
+  ],
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/packages.mjs",
+    "export": "packageCommand",
+    "prependArgs": ["add-skill"]
+  }
+}

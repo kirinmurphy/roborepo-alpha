@@ -21,7 +21,10 @@ import { loadSlashCommandPlan } from "../cli/slash-commands.mjs";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const cli = path.join(repoRoot, "scripts/cli/main.mjs");
 const normalize = (text) => text.replace(/\s+/g, " ");
-const readSkill = (id) => normalize(fs.readFileSync(path.join(repoRoot, "globals/packages", id, "skills", id, "SKILL.md"), "utf8"));
+// The six plan skills ship in one package; session-close is its own.
+const PLAN_SUITE_PACKAGE = "plan-suite";
+const packageOf = (id) => (id.startsWith("plan-") ? PLAN_SUITE_PACKAGE : id);
+const readSkill = (id) => normalize(fs.readFileSync(path.join(repoRoot, "globals/packages", packageOf(id), "skills", id, "SKILL.md"), "utf8"));
 const readPackageFile = (relative) => normalize(fs.readFileSync(path.join(repoRoot, "globals/packages", relative), "utf8"));
 const includesAll = (label, text, phrases) => {
   for (const phrase of phrases) assert.ok(text.includes(phrase), `${label}: missing "${phrase}"`);
@@ -90,7 +93,7 @@ const SKILLS = {
 
 // --- SKILL.md discoverability + frontmatter ---
 for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries(SKILLS)) {
-  const skillPath = path.join(repoRoot, "globals/packages", id, "skills", id, "SKILL.md");
+  const skillPath = path.join(repoRoot, "globals/packages", packageOf(id), "skills", id, "SKILL.md");
   assert.ok(fs.existsSync(skillPath), `${id}: SKILL.md missing at ${skillPath}`);
   const raw = fs.readFileSync(skillPath, "utf8");
   const frontmatterMatch = raw.match(/^---\n([\s\S]*?)\n---/);
@@ -107,7 +110,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
 // --- plan-execute: state-aware entry, the start transition, completion, and review findings ---
 {
   const skill = readSkill("plan-execute");
-  const reference = readPackageFile("plan-execute/skills/plan-execute/references/start-validation.md");
+  const reference = readPackageFile("plan-suite/skills/plan-execute/references/start-validation.md");
   includesAll("plan-execute entry", skill, [
     "| `backlog/` | Refuse. The plan has not been prepared; direct the user to `/plan-promote`. |",
     "| `ready/` | Preflight, the Start Transition",
@@ -161,7 +164,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "Never run the submit transition until a pass reports no `fix` findings",
     "five-pass cap",
   ]);
-  includesAll("validation-loop.md", readPackageFile("plan-execute/skills/plan-execute/references/validation-loop.md"), [
+  includesAll("validation-loop.md", readPackageFile("plan-suite/skills/plan-execute/references/validation-loop.md"), [
     "## The loop",
     "## The rubric",
     "never pass `isolation: \"worktree\"`",
@@ -227,14 +230,14 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
 // covered behaviorally by the plan-suite checks. ---
 {
   const execute = readSkill("plan-execute");
-  const startReference = readPackageFile("plan-execute/skills/plan-execute/references/start-validation.md");
+  const startReference = readPackageFile("plan-suite/skills/plan-execute/references/start-validation.md");
   for (const text of [execute, startReference]) {
     assert.ok(!/mirror|canonical copy|Plan status updates still go|synchronized in the matching plan document/i.test(text), "plan-execute: no instruction to copy plan updates to the primary checkout");
   }
   assert.ok(execute.includes("Never copy plan updates to the primary checkout"), "plan-execute: plan updates stay in the worktree's copy");
   assert.ok(startReference.includes("never a copy to the primary checkout"), "plan-execute: start-validation.md hands the plan to the worktree");
 
-  const schema = readPackageFile("plan-write/skills/plan-write/references/plan-schema.md");
+  const schema = readPackageFile("plan-suite/skills/plan-write/references/plan-schema.md");
   includesAll("plan-schema.md", schema, ["## Plan authority", "PLAN_EDITED_OUTSIDE_WORKTREE", "PLAN_WORKTREE_COPY_UNAVAILABLE", "never copy plan content between checkouts", "`active/` or `review/`"]);
   const write = readSkill("plan-write");
   assert.ok(write.includes("resolve its authoritative copy by the \"Plan authority\" rule"), "plan-write: resolves the authoritative copy before editing");
@@ -314,7 +317,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "Do not invoke either command yourself",
     "`/plan-close` never synchronizes",
   ]);
-  const resume = readPackageFile("plan-review/skills/plan-review/references/resume-review.md");
+  const resume = readPackageFile("plan-suite/skills/plan-review/references/resume-review.md");
   includesAll("plan-review resume", resume, [
     "roborepo plans approval <plan> --json",
     "already approved",
@@ -419,15 +422,23 @@ validatePackageCatalog(catalog);
 const byId = new Map(catalog.map((pkg) => [pkg.id, pkg]));
 assert.ok(!byId.has("plan-start"), "plan-start is retired, with no compatibility alias");
 assert.ok(!byId.has("plan-ship"), "there is no plan-ship command");
+assert.ok(byId.has(PLAN_SUITE_PACKAGE), `catalog missing package: ${PLAN_SUITE_PACKAGE}`);
+for (const id of ["plan-write", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive"]) {
+  assert.ok(!byId.has(id), `${id} is a skill of ${PLAN_SUITE_PACKAGE}, not a package of its own`);
+}
+assert.deepEqual(
+  byId.get(PLAN_SUITE_PACKAGE).resources.filter((r) => r.type === "skill").map((r) => r.id),
+  ["plan-write", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive"],
+  `${PLAN_SUITE_PACKAGE} lists its skills in lifecycle order`,
+);
 for (const [id, { risk }] of Object.entries(SKILLS)) {
-  assert.ok(byId.has(id), `catalog missing package: ${id}`);
-  const skillResource = byId.get(id).resources.find((r) => r.type === "skill" && r.id === id);
-  assert.ok(skillResource, `${id}: package.config.json has no matching skill resource`);
+  const skillResource = byId.get(PLAN_SUITE_PACKAGE).resources.find((r) => r.type === "skill" && r.id === id);
+  assert.ok(skillResource, `${PLAN_SUITE_PACKAGE}: package.config.json has no ${id} skill resource`);
   assert.equal(skillResource.invocation, "manual", `${id}: skill resource should be manually invoked`);
   assert.equal(skillResource.risk, risk, `${id} should be risk: ${risk}`);
 }
-assert.ok(byId.get("plan-execute").resources.some((r) => r.type === "rules" && r.source === "rules.md"), "plan-execute carries the Code Outlives Plans rule");
-assert.match(fs.readFileSync(path.join(repoRoot, "globals/packages/plan-execute/rules.md"), "utf8"), /^## Code Outlives Plans$/m);
+assert.ok(byId.get(PLAN_SUITE_PACKAGE).resources.some((r) => r.type === "rules" && r.source === "rules.md"), `${PLAN_SUITE_PACKAGE} carries the Code Outlives Plans rule`);
+assert.match(fs.readFileSync(path.join(repoRoot, "globals/packages", PLAN_SUITE_PACKAGE, "rules.md"), "utf8"), /^## Code Outlives Plans$/m);
 
 // --- generated slash commands exist for every harness and point at the right SKILL.md ---
 const slashNames = new Set(loadSlashCommandPlan().commands.map((c) => c.name));
@@ -437,7 +448,7 @@ assert.ok(!fs.existsSync(path.join(repoRoot, "generated/packages/plan-start")), 
 
 for (const harness of ["claude", "codex", "gemini"]) {
   for (const id of Object.keys(SKILLS)) {
-    const generatedPath = path.join(repoRoot, "generated/packages", id, harness, "commands", `${id}.md`);
+    const generatedPath = path.join(repoRoot, "generated/packages", PLAN_SUITE_PACKAGE, harness, "commands", `${id}.md`);
     assert.ok(fs.existsSync(generatedPath), `missing generated command: ${generatedPath}`);
     const body = fs.readFileSync(generatedPath, "utf8");
     assert.ok(body.includes(`/${harness === "claude" ? ".claude" : harness === "codex" ? ".codex" : ".gemini"}/skills/${id}/SKILL.md`),
@@ -446,9 +457,9 @@ for (const harness of ["claude", "codex", "gemini"]) {
 }
 
 // --- package validation via the real CLI ---
-for (const id of Object.keys(SKILLS)) {
-  const result = spawnSync(process.execPath, [cli, "package", "validate", id], { cwd: repoRoot, encoding: "utf8" });
-  assert.equal(result.status, 0, `roborepo package validate ${id} failed: ${result.stderr}\n${result.stdout}`);
+{
+  const result = spawnSync(process.execPath, [cli, "package", "validate", PLAN_SUITE_PACKAGE], { cwd: repoRoot, encoding: "utf8" });
+  assert.equal(result.status, 0, `roborepo package validate ${PLAN_SUITE_PACKAGE} failed: ${result.stderr}\n${result.stdout}`);
 }
 
 console.log("ok: plan-suite command skills: discoverability, frontmatter, generated commands, and boundaries");

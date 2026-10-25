@@ -24,7 +24,7 @@ let cachedFingerprint = null;
 // no per-repository cache, so Home's loadCachedPlansSnapshot always sees the same build.
 export function loadPlansSnapshot({ repositoryId = null } = {}) {
   if (MOCK_FIRST_RUN_VIEWS_ENABLED && hasNoRegisteredRepositories()) {
-    cachedSnapshot = mockPlansSnapshot({ packageState: planWritePackageState() });
+    cachedSnapshot = mockPlansSnapshot({ packageState: planSuitePackageState() });
     cachedSnapshotIsMock = true;
     cachedFingerprint = null;
     return scopeSnapshot(cachedSnapshot, repositoryId);
@@ -53,7 +53,7 @@ export function scopeSnapshot(snapshot, repositoryId) {
 // rebuilt only when the stat-only fingerprint says plan files or checkouts changed (or nothing is
 // cached yet). Without that check, Home kept whatever the Plans page last loaded.
 export function loadCachedPlansSnapshot() {
-  if (MOCK_FIRST_RUN_VIEWS_ENABLED && hasNoRegisteredRepositories()) return mockPlansSnapshot({ packageState: planWritePackageState() });
+  if (MOCK_FIRST_RUN_VIEWS_ENABLED && hasNoRegisteredRepositories()) return mockPlansSnapshot({ packageState: planSuitePackageState() });
   const registry = loadRegistry({ stateRoot });
   const fingerprint = planSnapshotFingerprint({ registry });
   if (!cachedSnapshot || cachedSnapshotIsMock || fingerprint !== cachedFingerprint) rebuildSnapshot(registry, fingerprint);
@@ -62,25 +62,25 @@ export function loadCachedPlansSnapshot() {
 
 export function loadPlanDocument({ key }) {
   if (MOCK_FIRST_RUN_VIEWS_ENABLED && hasNoRegisteredRepositories()) return mockPlanDocument({ key });
-  const snapshot = cachedSnapshot || buildPlanSnapshot({ stateRoot, packageState: planWritePackageState() });
+  const snapshot = cachedSnapshot || buildPlanSnapshot({ stateRoot, packageState: planSuitePackageState() });
   return readPlanDocument(snapshot, key);
 }
 
 export function buildPlansPrompt({ action, keys, mode }) {
   if (MOCK_FIRST_RUN_VIEWS_ENABLED && hasNoRegisteredRepositories()) {
-    const snapshot = mockPlansSnapshot({ packageState: planWritePackageState() });
+    const snapshot = mockPlansSnapshot({ packageState: planSuitePackageState() });
     const selected = (Array.isArray(keys) ? keys : []).map((key) => snapshot.plans.find((plan) => plan.key === key));
     if (selected.length === 0 || selected.some((plan) => !plan)) throw new Error("select at least one plan");
     return { prompt: buildPrompt(action, selected, { mode }) };
   }
-  const snapshot = cachedSnapshot || buildPlanSnapshot({ stateRoot, packageState: planWritePackageState() });
+  const snapshot = cachedSnapshot || buildPlanSnapshot({ stateRoot, packageState: planSuitePackageState() });
   const selected = (Array.isArray(keys) ? keys : []).map((key) => findPlanByKey(snapshot, key));
   if (selected.length === 0) throw new Error("select at least one plan");
   return { prompt: buildPrompt(action, selected, { mode }) };
 }
 
 export function updatePlanPriority({ id, key, priority, expectedPriority, mtimeMs, repositoryId }) {
-  const snapshot = cachedSnapshot || buildPlanSnapshot({ stateRoot, packageState: planWritePackageState() });
+  const snapshot = cachedSnapshot || buildPlanSnapshot({ stateRoot, packageState: planSuitePackageState() });
   const result = updatePlanPriorityInDocs(snapshot, { id, key, priority, expectedPriority, mtimeMs, repositoryId });
   cachedSnapshot = null;
   return publicMutationResult(result);
@@ -95,7 +95,7 @@ export function refreshPlans({ repositoryId = null } = {}) {
 // The fingerprint is taken before the build, so a file that changes mid-build shows up as a
 // mismatch on the next check rather than being masked.
 function rebuildSnapshot(registry, fingerprint = planSnapshotFingerprint({ registry })) {
-  cachedSnapshot = buildPlanSnapshot({ stateRoot, registry, packageState: planWritePackageState() });
+  cachedSnapshot = buildPlanSnapshot({ stateRoot, registry, packageState: planSuitePackageState() });
   cachedSnapshotIsMock = false;
   cachedFingerprint = fingerprint;
 }
@@ -108,8 +108,8 @@ function publicMutationResult(result) {
   return { change: result.change, record: { ...plan, repository: stripRepositoryRoot(repository) } };
 }
 
-function planWritePackageState() {
-  return { ...packageStatusSummary("plan-write"), message: "" };
+function planSuitePackageState() {
+  return { ...packageStatusSummary("plan-suite"), message: "" };
 }
 
 function hasNoRegisteredRepositories() {

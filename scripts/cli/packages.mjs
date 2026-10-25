@@ -14,6 +14,7 @@ import { hookFilePath, mergeHooksInto, unmergeHooksFrom, installHookScripts, rem
 import { installPackageRuntimeAsset, mergeHarnessConfig, removePackageRuntimeAsset, unmergeHarnessConfig } from "./package-harness-config.mjs";
 import { installPackageCommands, removePackageCommands } from "./slash-commands.mjs";
 import { cleanupPackageProjections } from "./package-projection-cleanup.mjs";
+import { SKILL_TRIGGERS_FILE } from "./skill-trigger-fixtures.mjs";
 import { getHarnessProvider } from "../harnesses/registry.mjs";
 import { hasClaudeCli } from "../harnesses/mcp-claude-cli.mjs";
 import { assertHarnessWriteAllowed } from "./harness-write-guard.mjs";
@@ -47,6 +48,8 @@ export function packageCommand(args = []) {
       return printPackageStatus(rest);
     case "create":
       return createPackage(rest);
+    case "add-skill":
+      return addSkillToPackage(rest);
     case "enable":
       return enablePackage(rest);
     case "disable":
@@ -58,7 +61,7 @@ export function packageCommand(args = []) {
     case "adopt-live":
       return adoptLivePackages({ dryRun: rest.includes("--dry-run") });
     default:
-      console.error("usage: roborepo package list|inspect|status|create|enable|disable|validate|reconcile|adopt-live");
+      console.error("usage: roborepo package list|inspect|status|create|add-skill|enable|disable|validate|reconcile|adopt-live");
       process.exit(2);
   }
 }
@@ -91,7 +94,85 @@ function createPackage(rest) {
   console.log(`next: roborepo package validate ${opts.id}`);
 }
 
-function parseCreateArgs(rest) {
+// Adds one skill to an existing package: its SKILL.md, the `skill` resource (placed after the
+// package's other skills, so they stay ahead of rules and hooks), an optional slash-command
+// entrypoint, and an empty trigger fixture for the author to fill. Refuses an ID any package
+// already claims, and restores the package if the result does not validate.
+function addSkillToPackage(rest) {
+  const usage = "usage: roborepo package dev add-skill <package-id> <skill-id> [--command] [--description=<text>]";
+  const { flags, positional } = parseFlags(rest);
+  const [pkgId, skillId] = positional;
+  if (!pkgId || !/^[a-z0-9][a-z0-9-]*$/.test(String(skillId || ""))) {
+    console.error(usage);
+    process.exit(2);
+  }
+  const catalog = loadPackageCatalog({ includeUnavailable: true });
+  const pkg = catalog.find((entry) => entry.id === pkgId);
+  if (!pkg) throw new Error(`unknown package: ${pkgId}`);
+  if (packageMode && pkg.origin === "built-in") {
+    throw new Error(`package ${pkgId} is built in; app files are not edited in package mode`);
+  }
+  const withCommand = flags.get("command") === "true";
+  for (const other of catalog) {
+    for (const resource of other.resources || []) {
+      if (resource.type === "skill" && resource.id === skillId) {
+        throw new Error(`skill ${skillId} is already claimed by package ${other.id}`);
+      }
+      const commandNames = resource.type === "slash-command"
+        ? [resource.name]
+        : (resource.entrypoints || []).filter((e) => e.type === "slash-command").map((e) => e.name);
+      if (withCommand && commandNames.includes(skillId)) {
+        throw new Error(`slash command /${skillId} is already claimed by package ${other.id}`);
+      }
+    }
+  }
+
+  const description = flags.get("description") || `${titleize(skillId)} skill.`;
+  const configPath = pkg.sourceFile || path.join(pkg.sourceRoot, "package.config.json");
+  const originalConfig = fs.readFileSync(configPath, "utf8");
+  const config = JSON.parse(originalConfig);
+  const skillDir = path.join(pkg.sourceRoot, "skills", skillId);
+  if (fs.existsSync(skillDir)) throw new Error(`skill directory already exists: ${skillDir}`);
+  const triggersPath = path.join(pkg.sourceRoot, SKILL_TRIGGERS_FILE);
+  const originalTriggers = fs.existsSync(triggersPath) ? fs.readFileSync(triggersPath, "utf8") : null;
+
+  const resource = withCommand
+    ? {
+        type: "skill",
+        id: skillId,
+        source: `skills/${skillId}`,
+        invocation: "manual",
+        risk: "medium",
+        entrypoints: [{ type: "slash-command", name: skillId, description, harnesses: harnessIdsWithCapability("slash-commands") }],
+      }
+    : { type: "skill", id: skillId, source: `skills/${skillId}`, invocation: "auto", risk: "low" };
+  const resources = config.resources || [];
+  const lastSkill = resources.map((r) => r.type).lastIndexOf("skill");
+  resources.splice(lastSkill + 1, 0, resource);
+  config.resources = resources;
+
+  const triggers = originalTriggers ? JSON.parse(originalTriggers) : { tests: [] };
+  triggers.tests.push({ skill: skillId, match: [], nearMiss: [], triggerPhrases: [], skipPhrases: [] });
+
+  fs.mkdirSync(skillDir, { recursive: true });
+  fs.writeFileSync(path.join(skillDir, "SKILL.md"), skillBody(skillId, description));
+  fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+  fs.writeFileSync(triggersPath, `${JSON.stringify(triggers, null, 2)}\n`);
+  try {
+    validatePackageCatalog(loadPackageCatalog({ includeUnavailable: true }));
+  } catch (error) {
+    fs.writeFileSync(configPath, originalConfig);
+    if (originalTriggers === null) fs.rmSync(triggersPath, { force: true });
+    else fs.writeFileSync(triggersPath, originalTriggers);
+    fs.rmSync(skillDir, { recursive: true, force: true });
+    throw new Error(`package ${pkgId} did not validate with skill ${skillId}; nothing was changed: ${error.message}`);
+  }
+  console.log(`added skill ${skillId} to package ${pkgId}: ${path.join(skillDir, "SKILL.md")}`);
+  if (withCommand) console.log("next: roborepo skill render-commands");
+  console.log(`then fill the ${skillId} trigger fixture in ${triggersPath} and run: roborepo skill triggers --check`);
+}
+
+function parseFlags(rest) {
   const flags = new Map();
   const positional = [];
   for (const arg of rest) {
@@ -104,6 +185,11 @@ function parseCreateArgs(rest) {
       positional.push(arg);
     }
   }
+  return { flags, positional };
+}
+
+function parseCreateArgs(rest) {
+  const { flags, positional } = parseFlags(rest);
   const id = positional[0] || flags.get("id") || flags.get("name");
   if (!/^[a-z0-9][a-z0-9-]*$/.test(String(id || ""))) {
     console.error("usage: roborepo package dev create <id> [--kind=empty|auto-skill|skill-command|standalone-command] [--description=<text>] [--default-enabled=true]");

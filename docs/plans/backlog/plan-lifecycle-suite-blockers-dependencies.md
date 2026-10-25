@@ -68,7 +68,7 @@ a new general-purpose YAML parser as an incidental dependency.
 
 | Area | Current behavior | Primary touchpoints |
 |---|---|---|
-| Schema | `blocked_by` is a simple array and blocking is derived from it | `globals/packages/plan-write/skills/plan-write/references/plan-schema.md`, `references/lifecycle.md` |
+| Schema | `blocked_by` is a simple array and blocking is derived from it | `globals/packages/plan-suite/skills/plan-write/references/plan-schema.md`, `references/lifecycle.md` |
 | Parsing | Only `blocked_by`, `depends_on`, and `related` are normalized as arrays | `modules/plan-suite/index.mjs` |
 | Domain record | `blocked_by` is exposed as `plan.blockers` | `modules/plan-suite/index.mjs` |
 | Mutations | Scalar priority and lifecycle moves are supported; list fields are not editable | `modules/plan-suite/index.mjs`, `scripts/cli/plans.mjs`, `scripts/cli/portal-routes-plans.mjs` |

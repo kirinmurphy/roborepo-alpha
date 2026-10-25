@@ -12,7 +12,7 @@ import { portalSetUpdatedAt, portalHideLoading } from "/portal/shared/api.js";
 import * as api from "./api.js";
 import * as tmpl from "./templates.js";
 import { createConfigModal } from "./panels.js";
-import { snapshotChanged, inspectChipSpecs, setBulkInFlight, isBulkInFlight } from "./state.js";
+import { snapshotChanged, inspectChipSpecs, contentsEntryChipSpec, setBulkInFlight, isBulkInFlight } from "./state.js";
 import { clearRepositoryScope, currentRepositoryScope } from "/portal/shared/repository-scope.js";
 import { onRepositoryScopeResolved, repositoryScopeUnavailableNotice } from "/portal/shared/repository-scope-selector.js";
 
@@ -29,11 +29,25 @@ function withoutPackagesControlledElsewhere(view) {
     .filter((section) => !section.categoryId || section.items.length > 0);
 }
 
-function openSourceModal(inspect, itemCost = null, { builtIn = false } = {}) {
+function openSourceModal(inspect, itemCost = null, { builtIn = false, back = null } = {}) {
+  if (inspect?.kind === "package-contents") return openContentsModal(inspect, itemCost, { builtIn });
   const rules = lastSnapshot?.globals?.rules || {};
   const harnesses = lastSnapshot?.harnesses || [];
   const chips = inspectChipSpecs(inspect, itemCost, lastSnapshot, { builtIn });
-  return modal.openSource(inspect, { rules, harnesses, onDefaultClick: modal.openSnapshot, chips });
+  return modal.openSource(inspect, { rules, harnesses, onDefaultClick: modal.openSnapshot, chips, back });
+}
+
+// A package with several skills opens a list of its resources; each entry opens the same source
+// view a single-skill card would, with Back returning to the list.
+function openContentsModal(inspect, itemCost, { builtIn }) {
+  modal.showContents(inspect, {
+    chips: inspectChipSpecs(inspect, itemCost, lastSnapshot, { builtIn }),
+    entryChipSpec: (entry) => contentsEntryChipSpec(entry, lastSnapshot, { builtIn }),
+    onSelect: (entry) => openSourceModal(entry.inspect, entry.contextCost, {
+      builtIn,
+      back: () => openContentsModal(inspect, itemCost, { builtIn }),
+    }),
+  });
 }
 
 // POST a bucket change for either a named behavior (behaviorId) or an arbitrary command

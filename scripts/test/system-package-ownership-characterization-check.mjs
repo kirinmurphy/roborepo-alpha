@@ -237,16 +237,23 @@ const cli = path.join(repoRoot, "scripts/cli/main.mjs");
   fs.writeFileSync(path.join(tmp, ".codex", "config.toml"), "");
   fs.writeFileSync(path.join(tmp, ".claude", "commands", "user-owned.md"), "user command\n");
 
-  spawnSync(process.execPath, [cli, "package", "enable", "plan-write"], { env, stdio: "ignore" });
+  const PLAN_SUITE_COMMANDS = ["plan-write", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive"];
+  spawnSync(process.execPath, [cli, "package", "enable", "plan-suite"], { env, stdio: "ignore" });
   spawnSync(process.execPath, [cli, "package", "enable", "tighten"], { env, stdio: "ignore" });
-  assert.ok(fs.existsSync(path.join(tmp, ".claude", "commands", "plan-write.md")), "enabled plan-write installs its Claude command wrapper");
-  assert.ok(fs.existsSync(path.join(tmp, ".codex", "commands", "plan-write.md")), "enabled plan-write installs its Codex command wrapper");
+  for (const name of PLAN_SUITE_COMMANDS) {
+    for (const harness of ["claude", "codex"]) {
+      assert.ok(fs.existsSync(path.join(tmp, `.${harness}`, "commands", `${name}.md`)), `enabled plan-suite installs its ${harness} /${name} wrapper`);
+    }
+  }
 
-  spawnSync(process.execPath, [cli, "package", "disable", "plan-write"], { env, stdio: "ignore" });
-  assert.ok(!fs.existsSync(path.join(tmp, ".claude", "commands", "plan-write.md")), "disabled plan-write removes its Claude command wrapper");
-  assert.ok(!fs.existsSync(path.join(tmp, ".codex", "commands", "plan-write.md")), "disabled plan-write removes its Codex command wrapper");
-  assert.ok(fs.existsSync(path.join(tmp, ".claude", "commands", "tighten.md")), "disabling plan-write leaves tighten's command untouched");
-  assert.ok(fs.existsSync(path.join(tmp, ".claude", "commands", "user-owned.md")), "disabling plan-write leaves the user's own command untouched");
+  spawnSync(process.execPath, [cli, "package", "disable", "plan-suite"], { env, stdio: "ignore" });
+  for (const name of PLAN_SUITE_COMMANDS) {
+    for (const harness of ["claude", "codex"]) {
+      assert.ok(!fs.existsSync(path.join(tmp, `.${harness}`, "commands", `${name}.md`)), `disabled plan-suite removes its ${harness} /${name} wrapper`);
+    }
+  }
+  assert.ok(fs.existsSync(path.join(tmp, ".claude", "commands", "tighten.md")), "disabling plan-suite leaves tighten's command untouched");
+  assert.ok(fs.existsSync(path.join(tmp, ".claude", "commands", "user-owned.md")), "disabling plan-suite leaves the user's own command untouched");
 
   fs.rmSync(tmp, { recursive: true, force: true });
 }

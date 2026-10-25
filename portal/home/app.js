@@ -36,7 +36,7 @@ let mergedPlans = new Map();
 // Plans page's mutation flow, which Home does not carry.
 const planDrawer = createPlanDrawer({
   getPlans: () => plansSnapshot?.plans || [],
-  getPlanWritePackage: () => plansSnapshot?.planWritePackage || {},
+  getPlanSuitePackage: () => plansSnapshot?.planSuitePackage || {},
   mergeFor: (key) => mergedPlans.get(key) || null,
   onEnablePackage: () => { location.href = "/plans"; },
   onError: showWarning,

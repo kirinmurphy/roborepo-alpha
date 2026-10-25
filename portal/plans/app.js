@@ -86,7 +86,7 @@ const onboarding = {
 // toast and the plan-write skill modal, so the page reuses those rather than creating its own.
 const planDrawer = createPlanDrawer({
   getPlans: () => state.snapshot.plans,
-  getPlanWritePackage: () => state.snapshot.planWritePackage,
+  getPlanSuitePackage: () => state.snapshot.planSuitePackage,
   mergeFor: (key) => state.mergedPlans.get(key) || null,
   onEnablePackage: enablePackage,
   onError: showError,
@@ -228,7 +228,7 @@ function applySnapshot(snapshot) {
   // One call to action at a time: the package banner while plan-write is disabled,
   // then the shared repository empty state until a repository is known; the header only once there
   // is something to monitor.
-  plansHeaderEl.hidden = !snapshot.planWritePackage.enabled || tmpl.plansOnboardingStep(snapshot) === "no-repositories";
+  plansHeaderEl.hidden = !snapshot.planSuitePackage.enabled || tmpl.plansOnboardingStep(snapshot) === "no-repositories";
   populateFilters(snapshot);
   render();
   renderRepositorySyncStatus();
@@ -334,7 +334,7 @@ function render() {
   if (!snapshot) return;
   renderPackageBanner(snapshot);
   const step = tmpl.plansOnboardingStep(snapshot);
-  if (!snapshot.planWritePackage.enabled || step !== "plans") {
+  if (!snapshot.planSuitePackage.enabled || step !== "plans") {
     lifecycleBarEl.dataset.board = "false";
     filterChipsEl.replaceChildren();
     warningsEl.hidden = true;
@@ -366,8 +366,8 @@ function render() {
     onCopyPortableContext: (key) => copyPrompt(null, [key], "portable"),
     onPlanAction: (key, command) => copyPrompt(command, [key], "repository-aware"),
     mergeFor: (key) => state.mergedPlans.get(key) || null,
-    planWriteEnabled: snapshot.planWritePackage.enabled,
-    planWritePackage: snapshot.planWritePackage,
+    planSuiteEnabled: snapshot.planSuitePackage.enabled,
+    planSuitePackage: snapshot.planSuitePackage,
     skillModal,
     onEnablePackage: enablePackage,
     onError: showError,
@@ -540,7 +540,7 @@ function scopeForEmptyState() {
 }
 
 function renderOnboarding(snapshot, step) {
-  onboardingEl.hidden = !snapshot.planWritePackage.enabled;
+  onboardingEl.hidden = !snapshot.planSuitePackage.enabled;
   if (onboardingEl.hidden) return;
   const node = step === "no-repositories"
     ? tmpl.plansNoRepositories(onboarding.onManage)
@@ -559,7 +559,7 @@ function renderWarnings(snapshot) {
 }
 
 function renderPackageBanner(snapshot) {
-  const pkg = snapshot.planWritePackage || {};
+  const pkg = snapshot.planSuitePackage || {};
   // Banner is the step-1 onboarding prompt: visible whenever the package is disabled (even with
   // roots already configured — a mid-life disable needs its re-enable path back). Once enabled,
   // the Project Folders form is the only visible setup surface.

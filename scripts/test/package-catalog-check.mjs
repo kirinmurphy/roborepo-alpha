@@ -10,6 +10,7 @@ import { listPackageCommands } from "../cli/package-commands.mjs";
 import { loadSlashCommandPlan } from "../cli/slash-commands.mjs";
 import { readConfigSnapshot } from "../cli/config.mjs";
 import { buildOnboardSteps } from "../cli/presets.mjs";
+import { MULTI_SKILL_IDS, MULTI_SKILL_PACKAGE_ID, writeMultiSkillPackage } from "./fixtures/multi-skill-package.mjs";
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -25,14 +26,15 @@ assert(
   !catalog.some((pkg) => pkg.origin === "built-in" && pkg.defaultEnabled),
   "built-in packages should all be off by default",
 );
-for (const id of ["jcodemunch", "jdocmunch", "telemetry", "caveman", "plan-promote", "plan-execute", "plan-review", "plan-archive"]) {
+for (const id of ["jcodemunch", "jdocmunch", "telemetry", "caveman", "plan-suite", "session-close"]) {
   assert(packageIds.has(id), `missing package: ${id}`);
 }
 for (const id of ["jcodemunch", "jdocmunch"]) {
   assert(catalog.find((pkg) => pkg.id === id)?.archived, `${id} should be marked archived`);
 }
-assert(!(catalog.find((pkg) => pkg.id === "plan-write")?.urls || []).length,
-  "Plan Write should not expose external links");
+const planSuite = catalog.find((pkg) => pkg.id === "plan-suite");
+assert(planSuite, "missing package: plan-suite");
+assert(!(planSuite.urls || []).length, "Plan Suite should not expose external links");
 assert(!packageIds.has("code-intel"), "Code Intelligence composite package should not be present");
 
 const commands = listPackageCommands({ includeUnavailable: true }).map((command) => command.name).sort();
@@ -105,8 +107,42 @@ assert(snapshot.behaviorView.findIndex((section) => section.category === "Additi
 "Additional Agent Rules should follow Chat-Time Output");
 assert(snapshot.behaviorView.filter((section) => section.categoryId).at(-1)?.category === "Additional Agent Rules",
   "Additional Agent Rules should be the final package section");
-assert(sections.get("Plan Suite").items.map((item) => item.id).join(",") === "plan-write,plan-promote,plan-execute,plan-review,plan-close,plan-archive,session-close",
-  "the Plan Suite section lists the seven suite commands in lifecycle order");
+assert(sections.get("Development Workflows").items.map((item) => item.id).join(",") === "plan-suite,session-close",
+  "the Development Workflows section holds the plan-suite package, then session-close");
+assert(!sections.get("Development Workflows").bulkToggle, "Development Workflows has no Select All switch");
+
+// A package with several skills is labeled by its package label, carries a skill-count badge, and
+// opens a contents view whose entries each carry the inspect target a single-skill card would have.
+// A single-skill package keeps today's shape: its command label and command-skill inspect target.
+{
+  const items = new Map(sections.get("Development Workflows").items.map((item) => [item.id, item]));
+  const suite = items.get("plan-suite");
+  assert(suite.label === "Development Planning Lifecycle", `plan-suite card label should be its package label, got ${suite.label}`);
+  assert(suite.description !== sections.get("Development Workflows").description, "the package and its category describe different things");
+  assert(suite.badges.includes("6 skills"), `plan-suite card should carry a 6 skills badge: ${suite.badges}`);
+  assert(suite.inspect?.kind === "package-contents", "plan-suite card label should open the contents view");
+  assert(suite.inspect.summary === "6 skills · 1 rules fragment", `contents summary: ${suite.inspect.summary}`);
+  const entries = suite.inspect.entries;
+  assert(entries.map((entry) => entry.label).join(",") === "/plan-write,/plan-promote,/plan-execute,/plan-review,/plan-close,/plan-archive,Rules",
+    `contents entries: ${entries.map((entry) => entry.label)}`);
+  for (const entry of entries.slice(0, 6)) {
+    const id = entry.label.slice(1);
+    assert(entry.inspect.kind === "command-skill" && entry.inspect.id === id && entry.inspect.skill === id, `${id} entry opens its command and skill`);
+    assert(entry.description && !/\n/.test(entry.description), `${id} entry has a one-line description`);
+    assert(entry.contextCost?.onDemandTokens > 0, `${id} entry carries its own on-demand cost`);
+  }
+  const rules = entries.at(-1);
+  assert(rules.inspect.kind === "rules" && rules.inspect.id === "plan-suite", "rules entry opens the package's rules source");
+  assert(rules.description === "Code Outlives Plans", `rules entry describes the fragment by its heading: ${rules.description}`);
+  assert(rules.contextCost?.rulesTokens > 0, "rules entry carries its own cost");
+  const totals = Object.values(snapshot.contextCost.packages["plan-suite"].resources);
+  assert(totals.reduce((sum, r) => sum + r.onDemandTokens, 0) === suite.contextCost.onDemandTokens, "entry costs add up to the package cost");
+
+  const single = items.get("session-close");
+  assert(single.label === "/session-close" && single.inspect?.kind === "command-skill" && !single.skillCount,
+    "a single-skill package keeps its command label and command-skill inspect target");
+  assert(!single.badges.some((badge) => /skills$/.test(badge)), "a single-skill package gets no skill-count badge");
+}
 
 const libraryStepTitles = new Set(buildOnboardSteps().map((step) => step.title));
 for (const section of snapshot.behaviorView) {
@@ -255,6 +291,45 @@ try {
   assert(result.status === 0, "package configs with legacy components should be rejected");
 } finally {
   fs.rmSync(tempRoot, { recursive: true, force: true });
+}
+
+// A package may hold several skills, and each skill ID is still claimed by exactly one package: a
+// second package naming one of the fixture's skills must fail validation.
+const multiSkillRoot = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-package-multi-skill-"));
+try {
+  fs.cpSync(path.resolve("manifests"), path.join(multiSkillRoot, "manifests"), { recursive: true });
+  fs.mkdirSync(path.join(multiSkillRoot, "globals", "packages"), { recursive: true });
+  fs.cpSync(path.resolve("globals/harnesses"), path.join(multiSkillRoot, "globals", "harnesses"), { recursive: true });
+  writeMultiSkillPackage(path.join(multiSkillRoot, "globals", "packages"));
+  const validateIn = () => spawnSync(process.execPath, [
+    "-e",
+    `import(${JSON.stringify(path.resolve("scripts/cli/package-catalog.mjs"))}).then((m) => { try { const c = m.loadPackageCatalog({ includeUnavailable: true }); m.validatePackageCatalog(c); console.log(JSON.stringify(c.map((p) => [p.id, p.resources.filter((r) => r.type === "skill").map((r) => r.id)]))); } catch (err) { console.error(err.message); process.exit(1); } })`,
+  ], {
+    env: { ...process.env, ROBOREPO_APP_ROOT: multiSkillRoot, ROBOREPO_STATE_DIR: path.join(multiSkillRoot, "state") },
+    encoding: "utf8",
+  });
+  const clean = validateIn();
+  assert(clean.status === 0, `a package with two skills and a rules fragment should validate: ${clean.stderr}`);
+  assert(
+    JSON.stringify(JSON.parse(clean.stdout)) === JSON.stringify([[MULTI_SKILL_PACKAGE_ID, MULTI_SKILL_IDS]]),
+    `the fixture package should load both skills in order: ${clean.stdout}`,
+  );
+
+  const rivalDir = path.join(multiSkillRoot, "globals", "packages", "duo-rival");
+  fs.mkdirSync(path.join(rivalDir, "skills", "duo-helper"), { recursive: true });
+  fs.writeFileSync(path.join(rivalDir, "skills", "duo-helper", "SKILL.md"), "---\nname: duo-helper\ndescription: Rival.\n---\n");
+  fs.writeFileSync(path.join(rivalDir, "package.config.json"), JSON.stringify({
+    schemaVersion: 1,
+    id: "duo-rival",
+    label: "Duo Rival",
+    description: "Claims a skill another package owns.",
+    presentation: { category: "skills-dev-lifecycle" },
+    resources: [{ type: "skill", id: "duo-helper", source: "skills/duo-helper", invocation: "auto" }],
+  }));
+  const claimed = validateIn();
+  assert(claimed.status !== 0 && /duo-helper/.test(claimed.stderr), `a skill ID claimed by two packages should fail validation: ${claimed.stderr}`);
+} finally {
+  fs.rmSync(multiSkillRoot, { recursive: true, force: true });
 }
 
 const scaffoldWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-package-scaffold-"));

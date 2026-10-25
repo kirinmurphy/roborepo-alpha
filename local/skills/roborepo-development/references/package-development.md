@@ -7,6 +7,7 @@ match what you find in code, trust the code and fix this doc.
 ## Contents
 
 - Package anatomy
+- Package, collection, category, dependency
 - Manifest schema (`package.config.json`)
 - Resource types
 - Ownership and conflict behavior (current, not aspirational)
@@ -32,6 +33,47 @@ globals/packages/<id>/
 Resource-type-specific files live alongside it (`skills/<id>/SKILL.md`, `rules.md`,
 `hooks-claude.json`, `hooks-codex.json`, `commands/<name>.md`, etc.) — see Resource types below.
 
+A package may hold several `skill` resources, each in its own `skills/<skill-id>/` folder, with all
+their trigger fixtures in the one `skill-triggers.json`. `plan-suite` ("Development Planning Lifecycle") is the built-in example: six
+skills plus a rules fragment. Installed paths never name the package: each skill is cached at
+`~/.roborepo/skills/<skill-id>` and linked by skill ID, so moving a skill between packages does not
+move it on disk.
+
+## Package, collection, category, dependency
+
+Four ways skills relate, by what the user controls:
+
+| Concept | What the user controls | Example | Declared by |
+| --- | --- | --- | --- |
+| **Package** | One switch. Every resource in it turns on and off together. | `plan-suite`, `caveman` | `package.config.json` |
+| **Collection** | Each member has its own switch, plus Select All / Deselect All for the group | None built in today; the portal still renders the switch for any such category | A category with `bulkToggle: true` in `manifests/inventory/package-categories.json` |
+| **Category** | Each member has its own switch, with no group switch | Code Conventions; Development Workflows (`plan-suite` and `session-close`) | A category without `bulkToggle` |
+| **Dependency** | Nothing directly. It turns on because a selected package `requires` it. | A package named in another's `requires` | `requires` in the parent manifest |
+
+**A package holds skills that are only correct together; a collection holds skills that are useful
+together.** Only the author knows whether a skill does its job without its siblings, so the author
+decides:
+
+| Question | Answer | Shape |
+| --- | --- | --- |
+| Does each skill do its job when the others are off? | No: they hand off or share one contract | One package |
+| | One needs another, but not the reverse | Separate packages joined by `requires` |
+| | Yes | Ask the next question |
+| Will users usually want them together? | Yes | Separate packages in a `bulkToggle` category |
+| | No | Separate packages in a plain category |
+
+The plan suite answers "no" to the first question: `/plan-promote` hands off to `/plan-execute`,
+which hands off to `/plan-review`, and so on. Code Conventions answers "yes, but not always
+together": `code-style` is useful without `react`. A package is all-or-nothing; there is no switch
+for one skill inside it, so skills that need their own switches belong in a collection.
+
+On the Agents page, a package with two or more skills shows its package label (never one of its
+commands) and an `<n> skills` badge. Clicking the label opens a contents view in the source dialog
+listing each skill, then its rules or hooks, with each entry's own cost; each entry opens the same
+source view a single-skill card does, and Back returns to the list. `buildBehaviorView` and
+`packagePresentationItem` in `scripts/cli/config.mjs` build that `package-contents` inspect
+target, and `context-cost.mjs` reports each resource's share under `contextCost.packages[<id>].resources`.
+
 ## Manifest schema (`package.config.json`)
 
 Enforced by `normalizePackage`/`normalizeResource` in `scripts/cli/package-catalog.mjs`.
@@ -48,7 +90,7 @@ Enforced by `normalizePackage`/`normalizeResource` in `scripts/cli/package-catal
 | `presentation.order` | no (defaults `0`) | numeric, controls sort within category |
 | `requires` | no | array of package IDs; cycle-checked, missing-dep-checked |
 | `resources` | yes | array — see Resource types |
-| `urls` | no | optional array shown in portal (see e.g. `caveman`, `jcodemunch`, `plan-write`) |
+| `urls` | no | optional array shown in portal (see e.g. `caveman`, `jcodemunch`) |
 
 There is no `.schema.json` file — validation is hand-rolled JS, not JSON Schema. Do not add one
 speculatively; the current approach is deliberate (see `validatePackageCatalog`).
@@ -131,7 +173,7 @@ everything under `generated/` is derived and gets overwritten — never hand-edi
 
 A package opts into default-enabled by setting `defaultEnabled: true` in `package.config.json`
 (validated as a boolean by `normalizePackage`; absent/`false` is the default, matching every
-package that predates this field). Scaffold with `roborepo package create <id> --default-enabled=true`.
+package that predates this field). Scaffold with `roborepo package dev create <id> --default-enabled=true`.
 
 The enabled-packages registry (`scripts/cli/rules-render.mjs`) tracks two lists, not one:
 
@@ -195,7 +237,8 @@ accurate `package.config.json` automatically renders a complete portal card.
 
 | Command | What it does |
 | --- | --- |
-| `roborepo package create <id> [--kind=empty\|auto-skill\|skill-command\|standalone-command] [--description=...] [--command=...] [--default-enabled=true]` | Scaffolds a new package into `globals/packages/<id>/` (dev checkout) or the user workspace packages dir (package mode). Refuses to overwrite an existing package. Prints the created path. |
+| `roborepo package dev create <id> [--kind=empty\|auto-skill\|skill-command\|standalone-command] [--description=...] [--command=...] [--default-enabled=true]` | Scaffolds a new package into `globals/packages/<id>/` (dev checkout) or the user workspace packages dir (package mode). Refuses to overwrite an existing package. Prints the created path. |
+| `roborepo package dev add-skill <package-id> <skill-id> [--command] [--description=...]` | Adds a skill to an existing package: `skills/<skill-id>/SKILL.md`, a `skill` resource placed after the package's other skills (manual with a slash-command entrypoint under `--command`, auto otherwise), and an empty `skill-triggers.json` entry to fill. Refuses a skill ID, or with `--command` a command name, that any package already claims, and a built-in package in package mode. Restores the package if the result does not validate. |
 | `roborepo package list` | Lists packages grouped by category with concise live enabled/disabled status. |
 | `roborepo package inspect <id>` | Prints full manifest JSON for one package. |
 | `roborepo package validate [id]` | Runs `validatePackageCatalog`; scope to one package or the whole catalog. |

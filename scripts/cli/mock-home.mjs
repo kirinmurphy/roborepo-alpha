@@ -147,7 +147,7 @@ export function mockPlansSnapshot({ now = new Date().toISOString(), packageState
     plans,
     errors: [],
     truncated: false,
-    planWritePackage: packageState || { available: false, enabled: false, status: "missing", message: "" },
+    planSuitePackage: packageState || { available: false, enabled: false, status: "missing", message: "" },
     autoDiscovery: { enabled: false },
     lifecycle: lifecycleProjection(LIFECYCLE_MODEL),
   };

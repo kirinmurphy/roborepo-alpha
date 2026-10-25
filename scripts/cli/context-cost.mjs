@@ -108,6 +108,7 @@ function packageRulesComponents(pkg, harness, enabled, deps) {
     components.push({
       id: `${pkg.id}:rules:${comp.source}`,
       packageId: pkg.id,
+      resourceKey: `rules:${comp.source}`,
       sourceType: "rules",
       load: "startup",
       tokens: estimateTokens(normalizeFragment(content)).tokens,
@@ -130,6 +131,7 @@ function skillComponents(tool, harness, enabled, deps) {
   components.push({
     id: `${tool.id}:skill-discovery`,
     packageId: tool.packageId,
+    resourceKey: `skill:${tool.id}`,
     sourceType: "skill",
     load: "startup",
     tokens: estimateTokens(discoveryText).tokens,
@@ -141,6 +143,7 @@ function skillComponents(tool, harness, enabled, deps) {
   components.push({
     id: `${tool.id}:skill-body`,
     packageId: tool.packageId,
+    resourceKey: `skill:${tool.id}`,
     sourceType: "skill",
     load: "on-demand",
     tokens: skillMd === null ? 0 : estimateTokens(skillMd).tokens,
@@ -167,6 +170,7 @@ function commandComponents(plan, harness, enabledSet) {
       components.push({
         id: `${command.name}:command-discovery`,
         packageId: command.packageId,
+        resourceKey: `slash-command:${command.name}`,
         sourceType: "slash-command",
         load: "startup",
         tokens: estimateTokens(command.description || "").tokens,
@@ -178,6 +182,9 @@ function commandComponents(plan, harness, enabledSet) {
     components.push({
       id: `${command.name}:command-wrapper`,
       packageId: command.packageId,
+      // A skill-backed wrapper is part of its skill's cost, so a package's contents view shows
+      // one figure per skill rather than splitting the skill from the command that runs it.
+      resourceKey: command.kind === "skill-backed" && command.skill ? `skill:${command.skill}` : `slash-command:${command.name}`,
       sourceType: "slash-command",
       load: "on-demand",
       tokens: estimateTokens(wrapper).tokens,
@@ -277,6 +284,40 @@ function harnessCost(harness, { catalog, enabledIds, tools, deps, plan }) {
   };
 }
 
+// Each resource's share of its package's cost, keyed by resourceKey (`skill:<id>`,
+// `rules:<source>`, `slash-command:<name>`), with the larger harness shown, as for the package.
+// The per-resource figures add up to the package totals on each harness.
+function aggregateResources(harnesses, packageId) {
+  const keys = new Set();
+  for (const harness of HARNESSES) {
+    for (const c of harnesses[harness].components) {
+      if (c.packageId === packageId && c.resourceKey) keys.add(c.resourceKey);
+    }
+  }
+  const resources = {};
+  for (const key of keys) {
+    const perHarness = HARNESSES.map((harness) => {
+      const own = harnesses[harness].components.filter((c) => c.packageId === packageId && c.resourceKey === key);
+      return {
+        startupTokens: sumTokens(own, "startup"),
+        rulesTokens: own.filter((c) => c.sourceType === "rules").reduce((total, c) => total + (c.tokens || 0), 0),
+        onDemandTokens: sumTokens(own, "on-demand"),
+      };
+    });
+    const startupTokens = Math.max(...perHarness.map((h) => h.startupTokens));
+    const rulesTokens = Math.max(...perHarness.map((h) => h.rulesTokens));
+    const onDemandTokens = Math.max(...perHarness.map((h) => h.onDemandTokens));
+    resources[key] = {
+      startupTokens,
+      rulesTokens,
+      rulesLevel: classifyRuleFragmentLevel(rulesTokens),
+      onDemandTokens,
+      onDemandLevel: classifyOnDemandLevel(onDemandTokens),
+    };
+  }
+  return resources;
+}
+
 function aggregatePackages(catalog, enabledIds, harnesses) {
   const packages = {};
   for (const pkg of catalog) {
@@ -329,6 +370,7 @@ function aggregatePackages(catalog, enabledIds, harnesses) {
         (h) => perHarness[h].startupTokens !== startupTokens || perHarness[h].onDemandTokens !== onDemandTokens,
       ),
       perHarness,
+      resources: aggregateResources(harnesses, pkg.id),
       labels: labelResources(pkg),
       notes: harnesses.claude.components.some(
         (c) => c.packageId === pkg.id && (c.notes || []).includes("reference files not counted"),

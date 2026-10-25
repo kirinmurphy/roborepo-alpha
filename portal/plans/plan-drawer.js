@@ -17,7 +17,7 @@ import { createOutcomeToast } from "./toast-controller.js";
 import { repositoryContext, resolveBlockers, resolveBlocking } from "./state.js";
 import "./elements/index.js";
 
-// deps: { getPlans, getPlanWritePackage, mergeFor, onEnablePackage, onError, readonly }
+// deps: { getPlans, getPlanSuitePackage, mergeFor, onEnablePackage, onError, readonly }
 // mergeFor(key) returns the plan's `{ into }` when its worktree has merged, else null; optional.
 export function createPlanDrawer(deps) {
   const dialog = document.getElementById("drawer");
@@ -65,7 +65,7 @@ export function createPlanDrawer(deps) {
       onCopyPortableContext: (key) => copyPrompt(null, [key], "portable"),
       onPlanAction: (key, command) => copyPrompt(command, [key], "repository-aware"),
       onEnablePackage: deps.onEnablePackage,
-      planWritePackage: deps.getPlanWritePackage(),
+      planSuitePackage: deps.getPlanSuitePackage(),
       skillModal,
       onError: deps.onError,
     });

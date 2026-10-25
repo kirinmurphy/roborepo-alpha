@@ -1,5 +1,5 @@
 // <plan-card> — set .record (plan record) and .actions (cardActions bag: onOpen, onCopyPath,
-// onCopyContext, onCopyPortableContext, onPlanAction, mergeFor, planWriteEnabled, planWritePackage,
+// onCopyContext, onCopyPortableContext, onPlanAction, mergeFor, planSuiteEnabled, planSuitePackage,
 // skillModal, onEnablePackage, onError) as properties right after creation, then append to the
 // DOM. The whole card triggers onOpen on click, except interactive widgets (the mounted
 // <plan-status>, the recommended-next CTA, and the ⋯ actions menu) inside it. The priority

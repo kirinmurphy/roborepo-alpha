@@ -19,7 +19,7 @@ Use it when you want to:
 | Piece | Always available? | What it does |
 | --- | --- | --- |
 | Plans page | Yes | Local `/plans` portal view for discovering, filtering, rendering, and copying plan context |
-| Plan suite | Optional packages | Seven slash commands, one per lifecycle step |
+| Plan suite | Optional packages: `plan-suite` and `session-close` | Seven slash commands: six for the lifecycle steps, plus `/session-close` |
 
 | Command | What you get |
 | --- | --- |
@@ -64,24 +64,28 @@ flowchart LR
 
 ## Enable The Plan Suite
 
-The Plans page shows an onboarding banner until the suite is enabled. Its button enables all seven
-commands at once, and each command in the list has a **Details** button that shows that command's
-skill. The Agents page lists the same seven under **Plan Suite**, with a toggle for the whole
-section.
+The six plan commands hand off to one another, so they ship as one package, `plan-suite`, that
+turns on and off as a unit. `/session-close` is a separate package, because it is useful in any
+chat.
 
-From the CLI, enable each package:
+The Plans page shows an onboarding banner until the suite is enabled. Its button enables both
+packages at once, and each command in the list has a **Details** button that shows that command's
+skill. The Agents page shows them under **Development Workflows**: a **Development Planning
+Lifecycle** card with a `6 skills` badge, and a **/session-close** card, each with its own toggle.
+Click the Development Planning Lifecycle card's name to list its six skills and its rules
+fragment, each of which opens its source.
+
+From the CLI:
 
 ```sh
-roborepo package enable plan-write
-roborepo package enable plan-promote
-roborepo package enable plan-execute
-roborepo package enable plan-review
-roborepo package enable plan-close
-roborepo package enable plan-archive
+roborepo package enable plan-suite
 roborepo package enable session-close
 ```
 
-`/plan-start` was replaced by `/plan-execute`. Updating RoboRepo removes the old package.
+The six commands were once six packages (`plan-write`, `plan-promote`, and so on), and
+`/plan-start` was replaced by `/plan-execute`. Updating RoboRepo removes the old package IDs. If
+any of the six plan skills were installed, the update keeps them and turns on `plan-suite`, which
+installs all six.
 
 ## Where Lifecycle Moves Happen
 

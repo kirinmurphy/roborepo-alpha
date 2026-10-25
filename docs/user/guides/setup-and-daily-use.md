@@ -19,15 +19,11 @@ It works without enabling any workflow package: you can filter plans, open rende
 warnings/tasks, and copy repository-aware context.
 
 Enable the plan suite when you want agent workflow prompts and one slash command per lifecycle
-step. The Plans page banner enables all seven at once; from the CLI, enable each package:
+step. The six plan commands ship as one `plan-suite` package, and `/session-close` is its own
+package. The Plans page banner enables both at once; from the CLI:
 
 ```sh
-roborepo package enable plan-write
-roborepo package enable plan-promote
-roborepo package enable plan-execute
-roborepo package enable plan-review
-roborepo package enable plan-close
-roborepo package enable plan-archive
+roborepo package enable plan-suite
 roborepo package enable session-close
 ```
 

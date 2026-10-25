@@ -92,6 +92,7 @@ RoboRepo configuration in place. See [Uninstall](../guides/install-workflows.md#
 | `roborepo package adopt-live [--dry-run]` | Detects externally installed package behavior and marks it enabled without reinstalling it. |
 | `roborepo package validate [id]` | Validates one package or the whole catalog against the manifest schema. |
 | `roborepo package dev create <id> [--kind=empty\|auto-skill\|skill-command\|standalone-command] [--description=...] [--default-enabled=true]` | Scaffolds a new package under `globals/packages/<id>/` (dev checkout) or `~/.roborepo/workspace/packages/<id>/` (package mode). Refuses to overwrite an existing package. |
+| `roborepo package dev add-skill <package-id> <skill-id> [--command] [--description=...]` | Adds a skill to an existing package: its `SKILL.md`, its resource entry (with a slash command under `--command`), and an empty trigger fixture to fill. Refuses a skill ID or command another package already claims, and leaves the package unchanged if the result does not validate. |
 
 Most users only need `list`, `inspect`, `enable`, and `disable`.
 

@@ -790,7 +790,7 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     loadRuntime: () => loadDeveloperRuntimeSnapshot(),
     loadPlans: () => loadCachedPlansSnapshot(),
     loadAutoDiscoveryEnabled: () => autoDiscoveryEnabled(),
-    loadPlanCloseEnabled: () => packageStatusSummary("plan-close").enabled,
+    loadPlanCloseEnabled: () => packageStatusSummary("plan-suite").enabled,
     loadMockHomeOverview: mockHomeOverview,
     mockHomeEnabled: MOCK_FIRST_RUN_VIEWS_ENABLED,
     loadTelemetry: () => homeTelemetryProjection({
