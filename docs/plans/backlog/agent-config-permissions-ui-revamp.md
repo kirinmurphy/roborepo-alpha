@@ -17,7 +17,7 @@ simpler file-operation editor using the global permissions audit's findings.
 
 ## Context
 
-`globals/system/hooks/codex/permission-check.mjs` implements per-command `allow`, `deny`, and `ask`
+`globals/harnesses/codex/hooks/permission-check.mjs` implements per-command `allow`, `deny`, and `ask`
 decisions. The static rules renderer still omits `ask`, while
 `globals/harnesses/codex/provider.json` declares `perCommandAsk: false`. Static output alone no
 longer proves prompting is absent. Installed-hook readiness and native runtime behavior must be

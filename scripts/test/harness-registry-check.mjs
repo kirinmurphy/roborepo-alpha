@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Harness provider registry, discovery, state, and harness-runtime.
 
-import { defineHarnessProvider } from "../harnesses/contract.mjs";
+import { defineHarnessProvider, validateProviderManifest } from "../harnesses/contract.mjs";
 import { detectHarnessProvider, effectiveDetection } from "../harnesses/discovery.mjs";
 import {
   applyDiscoveryToState,
@@ -232,7 +232,7 @@ assertThrows(
   }
 }
 
-console.log("harness registry/discovery/state/harness-runtime: all checks passed");
+
 
 function withDiscoveryEnv({ home, pathPrefix }, fn) {
   const previousHome = process.env.HOME;
@@ -252,3 +252,17 @@ function writeExecutable(filePath, body) {
   fs.writeFileSync(filePath, `#!/bin/sh\n${body}`);
   fs.chmodSync(filePath, 0o755);
 }
+
+// Optional headless argv is a contract, not a provider-name convention.
+for (const args of [[], ["-p"], ["prefix{prompt}"], ["{prompt}", "{prompt}"], ["{prompt}", "x{prompt}"], ["{prompt}", 1], ["{prompt}", ""], null]) {
+  const manifest = fakeManifest("headless");
+  manifest.extensions = { app: { headlessPromptArgs: args } };
+  assertThrows(() => validateProviderManifest(manifest), `invalid headless args ${JSON.stringify(args)}`);
+}
+for (const args of [["-p", "{prompt}"], ["exec", "--", "{prompt}"]]) {
+  const manifest = fakeManifest("headless");
+  manifest.extensions = { app: { headlessPromptArgs: args } };
+  validateProviderManifest(manifest);
+}
+
+console.log("harness registry/discovery/state/harness-runtime: all checks passed");

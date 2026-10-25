@@ -1,8 +1,8 @@
 ---
 id: hr78g4sj
 priority: high
-next_action: Wait for hook-readiness to land, verify its routing and per-file ownership in main, then relocate Codex hook sources and implement provider-declared headless argv.
-blocked_by: ["wjlt1zvf"]
+next_action: Finish full parity verification, commit implementation, and run fresh-context validation before submitting for review.
+blocked_by: []
 depends_on: ["wjlt1zvf"]
 related: ["4zyo2woj", "8bjltk2n", "46qth5z8", "7k3m9qd", "harness-capability-derived-resource-targeting"]
 reviewed_commit: 890f56fe688b314408ee313af01b3601b747b019
@@ -29,7 +29,7 @@ and calls its adapters; provider code owns native paths, formats, and command sy
 | `scripts/cli/telemetry.mjs` | `findDeepReadCli` uses a fixed CLI list and `runDeepRead` passes `-p` to every CLI. Recorded Codex help identifies `-p` as profile selection, not its non-interactive prompt syntax |
 | `scripts/cli/worktree-policy.mjs` and provider manifests | The optional Codex worktree-folder declaration depends on the Claude companion's `agentWorktreeDirs` contract and verified app provenance |
 
-Checked against local main `890f56fe688b314408ee313af01b3601b747b019` on October 24.
+Historical preparation evidence (superseded by the execution record below): checked against local main `890f56fe688b314408ee313af01b3601b747b019` on October 24.
 The configured origin is `kirinmurphy/roborepo-alpha`; the checkout directory is named `roborepo`.
 No remote freshness or push status is inferred. Hook-readiness remains in review. Its authoritative
 worktree tip `caa888b897fe0e2c9e4a6ad413b7e3d3e48b29d9` and frontmatter reviewed commit
@@ -129,24 +129,24 @@ process test proves argument transport, not successful native model synthesis.
 
 ## Implementation plan
 
-- [ ] Confirm `wjlt1zvf` has landed and inspect current routing, source ownership, trust safeguards,
+- [x] Confirm `wjlt1zvf` has landed and inspect current routing, source ownership, trust safeguards,
       config-write logging, and tests. Verify Git ancestry and current behavior before clearing
       `blocked_by`. If unlanded, stop implementation without merging its branch or recreating it.
-- [ ] Add missing source-relocation and install/remove/idempotence coverage before moving scripts.
-- [ ] Move Codex sources provider-side and update `manifests/platform/manifest.tsv`, source-path
+- [x] Add missing source-relocation and install/remove/idempotence coverage before moving scripts.
+- [x] Move Codex sources provider-side and update `manifests/platform/manifest.tsv`, source-path
       references in `scripts/test/test-cli.sh`, and affected docs; preserve installed commands.
-- [ ] Add failing headless selection/argv cases for omitted/malformed templates, disabled and
+- [x] Add failing headless selection/argv cases for omitted/malformed templates, disabled and
       unavailable providers, desktop-only discovery, shell metacharacters, and a synthetic provider.
-- [ ] Validate the optional template in schema and runtime contract. Extend
+- [x] Validate the optional template in schema and runtime contract. Extend
       `scripts/test/harness-registry-check.mjs` with valid and invalid manifest fixtures; use existing
       discovery fixtures for PATH preference and desktop fallback, without probing real model calls.
-- [ ] Add verified eligible-provider templates and migrate both headless selection and invocation.
+- [x] Add verified eligible-provider templates and migrate both headless selection and invocation.
       Extend `scripts/test/telemetry-synthetic-provider-check.mjs` for a literal prompt argument.
-- [ ] Recheck the conditional worktree-folder contract; implement only if its prerequisites hold,
+- [x] Recheck the conditional worktree-folder contract; implement only if its prerequisites hold,
       otherwise record why it remains with the companion and does not block Parts 2 and 3.
 - [ ] Run focused checks and the full local parity gate; document any native synthesis checks
       that need separate authorization rather than making an unapproved model call.
-- [ ] Update the documentation listed below and scan current source/test/doc references for the
+- [x] Update the documentation listed below and scan current source/test/doc references for the
       old source path. Follow the moved file in adjacent backlog plans; preserve historical evidence
       in completed plans and keep their lifecycle unchanged.
 
@@ -202,3 +202,49 @@ process test proves argument transport, not successful native model synthesis.
 ## Open questions
 
 None requiring a design decision before preparation. Hook-readiness landing remains a prerequisite.
+
+## Execution record
+
+- Start: main `374936e746d7d1a8ab7818a2ece7b1a9d5a96a23`; hook-readiness squash merge
+  `b134ef42` is an ancestor, its plan is completed, and current shared hook routing uses
+  `hasHarnessPath` / `resolveHarnessPath`. The platform row uses `managed_files`.
+- Branch: `codex/harness-codex-provider-cleanup`; Git worktree name:
+  `harness-codex-provider-cleanup`. Start transition `b183753b` passed all six checks with zero
+  correction passes. Base main's pre-existing telemetry and repository-scope edits are untouched.
+- Enabled paired skills: code-style, javascript-typescript, test-harness. React does not apply.
+- Provider sources relocated; installed commands and generated hook definitions unchanged.
+- Ran local selected-executable help only: Claude desktop runtime `2.1.308` documents `-p`;
+  Codex desktop runtime documents `exec [OPTIONS] [PROMPT]`. Gemini has no selected executable.
+- Headless template rejection was observed failing before implementation (empty array accepted),
+  then passing after implementation. Source-relocation suite initially failed on the missing new
+  provider source directory, then passed after relocation.
+- Focused assertions passed: hook composition, registry, synthetic headless processes, desktop
+  discovery and invocation, and shared-target install/removal/idempotence/conflict handling.
+- Strict Docker permissions sandbox passed after retry with Docker access. Doctor passed 107 checks.
+
+### Additional implementation decisions
+
+- Use the existing runtime and discovery functions beside the telemetry consumer, as specified;
+  retain command-name report identifiers while spawning the resolved path.
+- Verify Claude and Codex templates from local help and leave Gemini ineligible. Adding an
+  unverified template would violate the contract; omission is explicitly supported.
+- Use schema draft 2020-12 so `minContains` / `maxContains` enforce exactly one placeholder.
+  The existing schema already uses `$defs`; no external draft-07 validator consumer was found in
+  scripts. Runtime contract separately rejects malformed templates supplied outside schema validation.
+- Correct the standalone source-root fallback to four parent directories. Source-relative lookup
+  otherwise resolves `globals/`; explicit repo root, both state-root overrides, recorded app-root,
+  install-state, and missing-manifest behavior have executed standalone tests.
+- Defer optional Codex worktree-folder declaration: `agentWorktreeDirs` is still proposed in the
+  Claude companion backlog and absent from current code. Do not invent a parallel contract.
+
+## Not tested
+
+- [ ] Native model synthesis using the real provider templates. Local help and synthetic processes
+      verify syntax and transport; a real model call requires separate authorization and is not
+      needed for the provider cleanup's automated acceptance checks.
+
+- Package build: `npm run build` passed (pack dry run). No running UI is needed for this source
+  ownership and argv change; fixture processes exercise invocation and the package build is the
+  reviewable delivery artifact. No shareable server URL applies.
+- The first full gate encountered localhost `listen EPERM` in the sandbox. A fresh full gate is
+  running with required local-server and Docker access; do not treat the first run as passing.
