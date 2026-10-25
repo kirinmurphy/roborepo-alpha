@@ -6,7 +6,7 @@ blocked_by: ["wjlt1zvf"]
 depends_on: ["wjlt1zvf"]
 related: ["4zyo2woj", "8bjltk2n", "46qth5z8", "7k3m9qd", "harness-capability-derived-resource-targeting"]
 reviewed_commit: 890f56fe688b314408ee313af01b3601b747b019
-worktree:
+worktree: harness-codex-provider-cleanup
 ---
 
 # Keep local agent work within useful boundaries: Codex — Part 1: Provider cleanup
