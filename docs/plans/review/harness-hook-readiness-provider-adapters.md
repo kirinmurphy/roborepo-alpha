@@ -1,7 +1,7 @@
 ---
 id: wjlt1zvf
 priority: high
-next_action: Human approval of the reviewed implementation; package-smoke failure is a base failure reproduced on main.
+next_action: Run /plan-close; human approval is recorded for the reviewed implementation already landed on main as b134ef42.
 blocked_by: []
 depends_on:
   - 3jp3yhtq
@@ -12,7 +12,7 @@ related:
   - usage-statusline-codex-hook-parity
   - v6lvuu2
   - rtkmc8kf
-reviewed_commit: 7d72487f8461f0243f6ba98e716c8713dba7bd32
+reviewed_commit: caa888b897fe0e2c9e4a6ad413b7e3d3e48b29d9
 worktree: harness-hook-readiness-provider-adapters
 ---
 
@@ -784,8 +784,21 @@ None open. Every question was answered by the user; see the Decision Log.
 - [x] Clarify missing-hook messaging, offer browser installation, and move the Settings notice above the tracking row — fixed from October 21 user feedback (`7d72487f`), with passing API, real isolated installation, and browser checks.
 - [x] Refresh an Agents review offer on return from manual Codex review — fixed in review (`61b7752d`), with a browser regression that fails under the original focus guard.
 - [x] Correct the stable-trust design and risk table: core fragments append and preserve existing package positions — fixed in review (`cbf4f2b8`).
+- [x] Pass 4: `next_action` still named the package-smoke base failure, which main fixed in `5556666d` — fixed in review (this plan record).
+- [x] Pass 4: frontmatter `reviewed_commit` and `### Result` named older commits than the reviewed tip `caa888b8` — fixed in review (this plan record).
+- [x] Pass 4: the Verification record stopped at `3e35f1bb`, and older dated subsections still said manual checks were open and changes uncommitted — fixed in review (this plan record; superseded note below).
+- [x] Pass 4: the Acceptance evidence table said live desktop checks remain open — fixed in review (this plan record).
 
 ### Verification
+
+#### October 24 post-merge review of the landed implementation
+
+- The branch merged main cleanly twice more (`7cf63276`, `caa888b8`) and added only a docs rewrap (`c0e00ac5`). It landed on main as squash commit `b134ef42`; `git diff b134ef42 caa888b8 -- . ':!docs/plans'` is empty.
+- Every Not tested entry is now confirmed by the user or deferred by the user, and all work is committed at `caa888b8`. This supersedes the "remain open" and "remain uncommitted" statements in the older dated subsections below.
+- Main's `5556666d` fixed the package-install smoke failure recorded below as a base failure (npm 12 object output in `tarball.mjs`).
+- Fresh-context Validator pass 4 over `3e35f1bb..caa888b8` found no code or interaction defects: the base changes touch none of this plan's hook, CLI, portal, or manifest files, and the skill rename leaves the hook rows untouched. Its four findings were stale plan-record statements, fixed in this record. Its 7 focused checks passed: hook-readiness, hook-composition, hook-review-cli, hook-review-launch, shared-target-rows, harness-registry, harness-desktop-runtime.
+- `npm run check` on `caa888b8` passed: doctor, 457/457 CLI assertions, install-collision, 60/60 check suites, package-install smoke (the earlier base failure is gone), and 130/130 browser tests. The four Docker clean-machine legs, skipped in that run because Docker was not running, then passed separately (`test:clean-machine`, `-install-sandbox`, `-permissions-sandbox`, `-onboarding-sandbox`, all with `CLEAN_MACHINE_STRICT=1`). Windows parity was skipped (no `pwsh`) and stays deferred to `l1mz96d9`.
+- The earlier run cleared every blocker at `56dd6e7b` and set `next_action` to approval, but did not write a complete Result or ask for approval before the PR merged.
 
 #### October 24 resumed review and base synchronization
 
@@ -991,15 +1004,18 @@ None open. Every question was answered by the user; see the Decision Log.
 | Codex additions preserve existing positions; Claude retains prepend behavior | `scripts/harnesses/codex/index.mjs`, `scripts/harnesses/hooks-merge.mjs` | `hook-composition-check.mjs` checks append order, deduplication, and cross-provider behavior |
 | Readiness derives from providers, core selection, and enabled package resources | `scripts/harnesses/codex/hooks-read.mjs`, `scripts/harnesses/hook-readiness.mjs`, `scripts/cli/core-hook-bundle.mjs` | `hook-readiness-check.mjs`, `harness-registry-check.mjs`: all states, timeout/old RPC fallback, source filtering, core and non-telemetry packages |
 | Core hooks install alongside package hooks and scripts retain ownership protection | `manifests/platform/manifest.tsv`, `scripts/cli/shared-target-rows.mjs`, `scripts/cli/managed-files-row.mjs` | `shared-target-rows-check.mjs`, install-collision and Docker clean-machine legs; Windows remains unverified |
-| Portal and terminal report readiness and selective review remedies | `portal/shared/hook-readiness.js`, `scripts/cli/hook-review-guidance.mjs`, `scripts/cli/hook-readiness-doctor.mjs` | Browser notice tests, `hook-review-cli-check.mjs`, `harness-portal-api-check.mjs`; live desktop checks remain open |
+| Portal and terminal report readiness and selective review remedies | `portal/shared/hook-readiness.js`, `scripts/cli/hook-review-guidance.mjs`, `scripts/cli/hook-readiness-doctor.mjs` | Browser notice tests, `hook-review-cli-check.mjs`, `harness-portal-api-check.mjs`; live desktop checks confirmed by the user (see Not tested) |
 | Launch is authenticated, user-triggered, and refreshes status after review | `scripts/cli/portal-routes-config.mjs`, `scripts/cli/hook-review-launch.mjs`, `portal/shared/hook-review-offer.js` | `hook-review-launch-check.mjs` and browser tests cover routes, cache refresh, partial review, failed reads, manual return on Agents, and no automatic launch |
 | Provider-specific discovery copy and Claude MCP code stay provider-owned | `globals/harnesses/claude/provider.json`, `scripts/harnesses/desktop-runtime.mjs`, `scripts/harnesses/claude/mcp-claude-cli.mjs` | `harness-desktop-runtime-check.mjs`, manifest/registry and CLI suites |
 | User and internal docs describe the implemented flow | `docs/user/reference/codex-hooks.md`, setup/install guides, `docs/internal/harness-provider-interface.md`, `docs/internal/portal-architecture.md` | Read against the implementation; obsolete core-order claims corrected in this plan |
 
 ### Result
-- Status: pending
-- Reviewed implementation commit: 1f3217ee9d1424423ba473b4931833df446a93fe
-- Base commit: 0cd270ea0c2244438fccbdc93636bd2252c95be5
+- Status: complete
+- Reviewed implementation commit: 7597445780b14bb66b64697775c8ec5274f6fa0b
+- Base commit: b134ef424292ece32822ce05efa5a41fc0df1fa8
 
 ### Approval
-- Decision: not requested
+- Decision: approved
+- Reviewed implementation commit: 7597445780b14bb66b64697775c8ec5274f6fa0b
+- Confirmed by: human
+- Evidence: October 24, 2026, explicit response to the approval question naming this plan and exact commit: "Approve the reviewed implementation".
