@@ -195,7 +195,8 @@ is asked to approve. Record `### Result` with `Status: complete`, that full revi
 commit, and the full base commit synchronized in step 2. Commit this evidence before asking the
 human. Plan-only evidence commits do not change the reviewed implementation. If findings or
 required manual checks remain, keep Result pending and present those outstanding decisions instead
-of asking for approval.
+of asking for approval. Say plainly that approval was not requested, and list each open finding and
+unconfirmed manual check that blocks it.
 
 Present a review packet:
 
@@ -208,8 +209,11 @@ Present a review packet:
 - the manual checks that need the human, from `## Not tested`;
 - each escalated finding as a decision: the options, their consequences, and a recommendation.
 
-Then ask the human directly for approval, naming the plan by its title and the exact commit. An agent cannot approve, and passing tests are not
-approval.
+Then ask the human directly for approval, naming the plan by its title and the exact commit. Ask
+through the harness's structured question tool where one exists (in Claude Code, `AskUserQuestion`
+or the app's next-step box; in Codex, its user-input request), so the request reads as a decision
+rather than a line at the end of a report. Without such a tool, end the reply with the approval
+question. An agent cannot approve, and passing tests are not approval.
 
 #### 6a. The human approves
 
@@ -278,7 +282,7 @@ Review result
 - Findings: <open count> open, <count> fixed in review (<commits>), <count> escalated
 - Not tested entries open: <count>
 - Review result: complete at <commit> | pending | stale | missing
-- Approval: approved at <commit> | requested | not requested | invalidated
+- Approval: approved at <commit> | requested | not requested (blocked by <open findings and manual checks>) | invalidated
 - Approval freshness: fresh | stale | missing | not-approved | invalid | unavailable
 - Next command: merge the pull request, then /plan-close | /plan-close (already landed) | /plan-review | /plan-execute | none (already closed)
 ```
