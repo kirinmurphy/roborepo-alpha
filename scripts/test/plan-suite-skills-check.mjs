@@ -303,6 +303,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "never discard work and never pick a side blindly",
     "Never merge the feature branch into the base branch",
     "Do not fix anything while checking. Record every finding first",
+    "A long gate does not hold up work that cannot change its result",
     "Plain checkboxes are enough for findings",
     "- Decision: approved",
     "- Reviewed implementation commit: <full commit id>",
