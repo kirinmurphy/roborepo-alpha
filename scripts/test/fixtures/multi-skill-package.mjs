@@ -1,6 +1,8 @@
-// A workspace package holding two skills and a rules fragment, for checks that a package with
-// several skill resources validates, enables, reports, and costs as one unit. `duo-lead` is a
-// manual skill with a slash command; `duo-helper` is an auto skill without one.
+// A package holding two skills and a rules fragment, for checks that a package with several skill
+// resources validates, enables, reports, and costs as one unit. Callers write it under a throwaway
+// app root's globals/packages/, as a built-in package, since only built-in packages get generated
+// slash-command wrappers. `duo-lead` is a manual skill with a slash command; `duo-helper` is an
+// auto skill without one.
 import fs from "node:fs";
 import path from "node:path";
 

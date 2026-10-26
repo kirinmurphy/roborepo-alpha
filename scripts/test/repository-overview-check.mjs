@@ -392,7 +392,7 @@ assert.deepEqual([offlineStates.matched, offlineStates.unlisted, offlineStates["
 const namelessScan = loadAssociation({ plans: { ...associationPlans, repositoryScans: [{ repositoryId: ASSOC, state: "scanned", planCount: 10, checkoutCount: 1 }] } });
 assert.equal(namelessScan.domains.plans.data.active.find((plan) => plan.id === "unlisted").worktreeState, "unknown", "a scan without worktree names cannot call a worktree missing or unlisted");
 
-// Home offers the opt-in cleanup hook only while the plan-close package is disabled, to a repository
+// Home offers the opt-in cleanup hook only while the plan-suite package is disabled, to a repository
 // with linked worktrees whose hook is absent or another tool's, until the user dismisses it.
 const cleanupOffer = (cleanup, loadPlanCloseEnabled) => loadAssociation({
   runtime: { ...associationRuntime, repositories: [{ ...associationRuntime.repositories[0], worktreeCleanup: cleanup }] },

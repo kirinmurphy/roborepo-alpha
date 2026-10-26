@@ -1,7 +1,7 @@
 ---
 id: bysyzl1e
 priority: high
-next_action: Run /plan-review to review the implementation and confirm the Not tested entries.
+next_action: On the user's go-ahead, merge main into this branch, make main's two bulkToggle Agents tests route a bulkToggle section, rerun the gate and the validation loop, then submit for review.
 blocked_by: []
 depends_on: []
 related: ["o9zwxuav", "ejsc769o", "jdsobwn", "user-managed-packages-and-add-workflows"]
@@ -234,8 +234,8 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
 
 ### Phase 1: Several skills in one package
 
-- [x] Add a workspace fixture package with two skills, one with a slash command, plus a rules
-      resource.
+- [x] Add a fixture package with two skills, one with a slash command, plus a rules
+      resource. It sits in a throwaway app root, not a workspace; see Decision Log.
 - [x] Prove with checks that the fixture validates, enables both skills and the command, reports
       `partial` when one skill link is removed, disables cleanly, and sums context cost.
 - [x] Fix any path that assumes one skill per package, found by the checks or by searching
@@ -374,6 +374,23 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
   `globals/packages/plan-suite/`. Only the targets changed; the prose still records the layout at
   the time. Considered and not chosen: leaving them broken, which fails the gate.
 
+## Open Questions
+
+- **Merge main into this branch and adapt main's two `bulkToggle` tests?** Since this branch was
+  cut, main gained two Agents-page tests in `scripts/test/portal-ui/portal-ui.spec.mjs` (the hook
+  readiness change, b134ef42): one near line 226 and "a bulk package change on Agents reads once
+  and shows one combined offer" near line 723. Both find a section with `bulkToggle` in the live
+  config, and this branch removes the only one (the user's decision), so `npm run test:portal-ui`
+  will fail once the two meet. Options:
+  - **Merge main here, then have both tests route `/api/config` with `bulkToggle: true` set on one
+    section** (recommended). Keeps the user's decision, and gives the still-supported Select All
+    switch a UI test again. Needs the user's go-ahead because it merges into this branch.
+  - Keep a built-in `bulkToggle` category. Reverses the user's decision.
+  - Leave it to whoever merges. The branch would land with a known red portal suite.
+
+  Blocked rather than decided because merging into the branch needs the user's approval. Blocks:
+  the submit transition to `review/`.
+
 ## Not tested
 
 - [ ] Updating a real machine that enabled some of the old plan packages ends with `plan-suite`
@@ -393,12 +410,18 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
 - [x] `aggregateResources` comment claimed per-resource figures always sum to the package total —
       reworded; `package-catalog-check.mjs` asserts equality only when harnesses agree (22b2b531)
 - [x] A failed `add-skill` on a package with no `skills/` folder left an empty one behind while
-      reporting nothing changed — the restore removes a `skills/` folder the call created; tested
+      reporting nothing changed — the restore removes a `skills/` folder the call created; tested (e01c9d9f)
+- [x] A test comment still said the cleanup offer depends on the plan-close package — fixed
+- [x] The fixture comment and Phase 1 task called the fixture a workspace package; it is a built-in
+      package in a throwaway app root — fixed
+- [ ] main's two hook-readiness Agents tests need a built-in `bulkToggle` section, which this
+      branch removes — escalated, see Open Questions
 
 ### Verification
 
 - Validation pass 1: 3 `fix` findings (fresh-context subagent)
 - Validation pass 2: 1 `fix` finding (fresh-context subagent)
+- Validation pass 3: 2 `fix` findings, 1 `escalate` (fresh-context subagent)
 
 ## Documentation impact
 
