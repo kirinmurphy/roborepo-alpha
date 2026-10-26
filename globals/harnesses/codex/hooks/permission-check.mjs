@@ -37,7 +37,7 @@ function candidateRepoRoots() {
     } catch {}
   }
 
-  candidates.push(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..'))
+  candidates.push(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..'))
   return candidates
 }
 

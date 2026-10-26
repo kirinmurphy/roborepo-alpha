@@ -266,3 +266,18 @@ guard (see `docs/internal/portal-architecture.md`).
 
 See [Portal Architecture](portal-architecture.md) for the shared server, route, and mutation-token
 architecture.
+
+## Optional headless synthesis
+
+`telemetry.mjs` selects enabled providers in registry order, skipping missing or malformed
+`extensions.app.headlessPromptArgs` and unavailable executables. `selectedHarnessExecutable`
+resolves a validated PATH runtime before a desktop runtime. The resolved path is spawned directly;
+`deepread_cli` and result `cli` retain the manifest's command name. Exactly one `{prompt}` argument
+is replaced by `DEEP_READ_PROMPT + insightsSummary(report)`. The 60-second timeout, nonzero exit,
+empty-output, and process-error paths return best-effort failures.
+
+The synthetic-provider check asserts literal argument transport (including quotes, newlines,
+leading dashes, and shell metacharacters), eligibility, registry order, and failure behavior.
+Desktop discovery fixtures separately prove PATH preference and desktop fallback. Local help
+confirmed Claude's `-p` and Codex's `exec` syntax; these checks do not claim native model synthesis.
+Gemini has no verified template and remains ineligible.

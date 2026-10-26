@@ -193,6 +193,11 @@ export function validateProviderManifest(manifest) {
     fail(errors, `${label} adapter must be a lowercase slug matching ${ID_PATTERN}`);
   }
 
+  const headlessArgs = manifest.extensions?.app?.headlessPromptArgs;
+  if (headlessArgs !== undefined && !isValidHeadlessPromptArgs(headlessArgs)) {
+    fail(errors, `${label} extensions.app.headlessPromptArgs must contain nonempty strings and exactly one whole-argument {prompt}`);
+  }
+
   validateDetection(manifest.detection, label, errors);
   validatePathMap(manifest.paths, label, errors);
 
@@ -265,4 +270,11 @@ export function defineHarnessProvider({ manifest, adapters }) {
   validateProviderManifest(manifest);
   validateCapabilityAdapters(manifest.capabilities, adapters);
   return Object.freeze({ id: manifest.id, manifest, adapters });
+}
+
+export function isValidHeadlessPromptArgs(args) {
+  return Array.isArray(args) && args.length > 0
+    && args.every((arg) => typeof arg === "string" && arg.length > 0
+      && (arg === "{prompt}" || !arg.includes("{prompt}")))
+    && args.filter((arg) => arg === "{prompt}").length === 1;
 }

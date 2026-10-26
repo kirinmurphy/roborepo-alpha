@@ -1,8 +1,8 @@
 ---
 id: hr78g4sj
 priority: high
-next_action: Wait for hook-readiness to land, verify its routing and per-file ownership in main, then relocate Codex hook sources and implement provider-declared headless argv.
-blocked_by: ["wjlt1zvf"]
+next_action: Human merges the PR, then runs /plan-close hr78g4sj.
+blocked_by: []
 depends_on: ["wjlt1zvf"]
 related: ["4zyo2woj", "8bjltk2n", "46qth5z8", "7k3m9qd", "harness-capability-derived-resource-targeting"]
 reviewed_commit: 890f56fe688b314408ee313af01b3601b747b019
@@ -29,7 +29,7 @@ and calls its adapters; provider code owns native paths, formats, and command sy
 | `scripts/cli/telemetry.mjs` | `findDeepReadCli` uses a fixed CLI list and `runDeepRead` passes `-p` to every CLI. Recorded Codex help identifies `-p` as profile selection, not its non-interactive prompt syntax |
 | `scripts/cli/worktree-policy.mjs` and provider manifests | The optional Codex worktree-folder declaration depends on the Claude companion's `agentWorktreeDirs` contract and verified app provenance |
 
-Checked against local main `890f56fe688b314408ee313af01b3601b747b019` on October 24.
+Historical preparation evidence (superseded by the execution record below): checked against local main `890f56fe688b314408ee313af01b3601b747b019` on October 24.
 The configured origin is `kirinmurphy/roborepo-alpha`; the checkout directory is named `roborepo`.
 No remote freshness or push status is inferred. Hook-readiness remains in review. Its authoritative
 worktree tip `caa888b897fe0e2c9e4a6ad413b7e3d3e48b29d9` and frontmatter reviewed commit
@@ -129,24 +129,24 @@ process test proves argument transport, not successful native model synthesis.
 
 ## Implementation plan
 
-- [ ] Confirm `wjlt1zvf` has landed and inspect current routing, source ownership, trust safeguards,
+- [x] Confirm `wjlt1zvf` has landed and inspect current routing, source ownership, trust safeguards,
       config-write logging, and tests. Verify Git ancestry and current behavior before clearing
       `blocked_by`. If unlanded, stop implementation without merging its branch or recreating it.
-- [ ] Add missing source-relocation and install/remove/idempotence coverage before moving scripts.
-- [ ] Move Codex sources provider-side and update `manifests/platform/manifest.tsv`, source-path
+- [x] Add missing source-relocation and install/remove/idempotence coverage before moving scripts.
+- [x] Move Codex sources provider-side and update `manifests/platform/manifest.tsv`, source-path
       references in `scripts/test/test-cli.sh`, and affected docs; preserve installed commands.
-- [ ] Add failing headless selection/argv cases for omitted/malformed templates, disabled and
+- [x] Add failing headless selection/argv cases for omitted/malformed templates, disabled and
       unavailable providers, desktop-only discovery, shell metacharacters, and a synthetic provider.
-- [ ] Validate the optional template in schema and runtime contract. Extend
+- [x] Validate the optional template in schema and runtime contract. Extend
       `scripts/test/harness-registry-check.mjs` with valid and invalid manifest fixtures; use existing
       discovery fixtures for PATH preference and desktop fallback, without probing real model calls.
-- [ ] Add verified eligible-provider templates and migrate both headless selection and invocation.
+- [x] Add verified eligible-provider templates and migrate both headless selection and invocation.
       Extend `scripts/test/telemetry-synthetic-provider-check.mjs` for a literal prompt argument.
-- [ ] Recheck the conditional worktree-folder contract; implement only if its prerequisites hold,
+- [x] Recheck the conditional worktree-folder contract; implement only if its prerequisites hold,
       otherwise record why it remains with the companion and does not block Parts 2 and 3.
-- [ ] Run focused checks and the full local parity gate; document any native synthesis checks
+- [x] Run focused checks and the full local parity gate; document any native synthesis checks
       that need separate authorization rather than making an unapproved model call.
-- [ ] Update the documentation listed below and scan current source/test/doc references for the
+- [x] Update the documentation listed below and scan current source/test/doc references for the
       old source path. Follow the moved file in adjacent backlog plans; preserve historical evidence
       in completed plans and keep their lifecycle unchanged.
 
@@ -199,6 +199,238 @@ process test proves argument transport, not successful native model synthesis.
   prose, and made headless validation, state/discovery reuse, report compatibility, and documentation
   touchpoints explicit. The optional folder declaration is still conditional; no code was implemented.
 
+### Additional implementation decisions
+
+- Use the existing runtime and discovery functions beside the telemetry consumer, as specified;
+  retain command-name report identifiers while spawning the resolved path.
+- Verify Claude and Codex templates from local help and leave Gemini ineligible. Adding an
+  unverified template would violate the contract; omission is explicitly supported.
+- Use schema draft 2020-12 so `minContains` / `maxContains` enforce exactly one placeholder.
+  The existing schema already uses `$defs`; no external draft-07 validator consumer was found in
+  scripts. Runtime contract separately rejects malformed templates supplied outside schema validation.
+- Correct the standalone source-root fallback to four parent directories. Source-relative lookup
+  otherwise resolves `globals/`; explicit repo root, both state-root overrides, recorded app-root,
+  install-state, and missing-manifest behavior have executed standalone tests.
+- Defer optional Codex worktree-folder declaration: `agentWorktreeDirs` is still proposed in the
+  Claude companion backlog and absent from current code. Do not invent a parallel contract.
+
+
 ## Open questions
 
-None requiring a design decision before preparation. Hook-readiness landing remains a prerequisite.
+None. Hook-readiness landing was verified before implementation; no design decision is blocked.
+
+## Execution record
+
+- Start: main `374936e746d7d1a8ab7818a2ece7b1a9d5a96a23`; hook-readiness squash merge
+  `b134ef42` is an ancestor, its plan is completed, and current shared hook routing uses
+  `hasHarnessPath` / `resolveHarnessPath`. The platform row uses `managed_files`.
+- Branch: `codex/harness-codex-provider-cleanup`; Git worktree name:
+  `harness-codex-provider-cleanup`. Start transition `b183753b` passed all six checks with zero
+  correction passes. Base main's pre-existing telemetry and repository-scope edits are untouched.
+- Enabled paired skills: code-style, javascript-typescript, test-harness. React does not apply.
+- Provider sources relocated; installed commands and generated hook definitions unchanged.
+- Ran local selected-executable help only: Claude desktop runtime `2.1.308` documents `-p`;
+  Codex desktop runtime documents `exec [OPTIONS] [PROMPT]`. Gemini has no selected executable.
+- Headless template rejection was observed failing before implementation (empty array accepted),
+  then passing after implementation. Source-relocation suite initially failed on the missing new
+  provider source directory, then passed after relocation.
+- Focused assertions passed: hook composition, registry, synthetic headless processes, desktop
+  discovery and invocation, and shared-target install/removal/idempotence/conflict handling.
+- Strict Docker permissions sandbox passed after retry with Docker access. Doctor passed 107 checks.
+
+- Package build: `npm run build` passed (pack dry run). No running UI is needed for this source
+  ownership and argv change; fixture processes exercise invocation and the package build is the
+  reviewable delivery artifact. No shareable server URL applies.
+- The first full gate encountered localhost `listen EPERM` in the sandbox. The final full gate passed
+  with required local-server and Docker access; the first run is not counted as passing.
+
+- Full-gate follow-ups: authorized run had four rules-package assertions fail; the original
+  prefix through those assertions passed 146/146 on replay, and the next full run did not repeat
+  them. No cause or baseline classification is claimed for those failures.
+- The next full run had one existing discovery assertion fail. Instrumented repetition reproduced
+  a valid fixture executable's `ETIMEDOUT` at the production two-second probe deadline. The fake
+  manifest now grants ten seconds for validity checks; production discovery timing is unchanged.
+  The failing assertion and discovery implementation precede this change; the fixture correction
+  is included because this run extends the same suite. Diagnostic repetition observed a valid
+  executable time out at the production two-second deadline.
+- Validation pass 1 at `71af81cf`: fresh-context validator reported no fix/escalate findings after
+  reviewing the full diff, acceptance criteria, docs, schema/runtime parity, and skills; reran
+  registry, synthetic provider, desktop runtime, shared-target rows, and diff checks successfully.
+  Full-gate evidence was pending, so this was not a completion claim.
+
+## Review
+
+### Findings
+
+- [x] The Codex headless argv example in `docs/internal/harness-provider-interface.md` omitted
+  `--skip-git-repo-check`; corrected to match the provider — fixed in review (f9772b07).
+
+No implementation fix or escalate findings in the validation passes.
+
+- [x] Durable review evidence contained temporary log paths; replaced them with the observed
+  outcomes required by the updated review guidance (d62ba4d5).
+- [x] Codex Deep Read required a Git working directory; added `--skip-git-repo-check` before
+  the prompt separator and updated existing desktop argv expectations (b4cd7228).
+- [x] Runtime discovery test rejected incidental PID/port digit sequences inside a hash;
+  replaced the substring assertion with the opaque-key format assertion (b4cd7228).
+
+### Verification
+
+- Pass 1: clean at `71af81cf`; full parity evidence pending at review time.
+- Pass 2: clean at `7997eb72`; independently rechecked the full diff, acceptance criteria, docs,
+  schema/runtime constraints, ownership/trust preservation, and paired skills. Registry, synthetic
+  provider, desktop runtime, shared-target rows, and diff checks passed. Full parity evidence was
+  still pending at review time.
+
+### Completion evidence
+
+- October 25: `npm run check` passed on implementation `7997eb72`, exit 0. It includes doctor
+  (107 checks), CLI smoke (457 passed, zero failed), all install-collision checks, 60/60 grouped
+  suites, package-install smoke, four strict Docker scenarios, and 130 browser tests.
+  The executed gate exited successfully; counts and platform exclusions are recorded here.
+- Windows installer parity was skipped because `pwsh` is unavailable. The optional active-root
+  verification fixture also reported `uvx` unavailable. Those optional platform/dependency checks
+  are not claimed as passed; wider Windows parity remains in its adjacent backlog plan.
+- `npm run build`, focused hook composition, registry, synthetic headless invocation, desktop
+  runtime, shared-target rows, strict permissions sandbox, and `git diff --check` passed.
+- Current source/test/docs scan found no retired Codex source path outside this plan's historical
+  context and completed/archived records. All listed docs of record and adjacent backlog pointers
+  were updated. No generated hook commands or trust records changed.
+- Validation: clean on pass 2 at `7997eb72`, fresh-context subagent; zero fix/escalate findings,
+  zero verified base failures, no open questions. Conditional worktree-folder declaration deferred
+  as designed. No runtime server is needed for this non-UI change; package build and executed
+  fixture processes provide the verification environment, without a persistent shareable URL.
+- Implementation commits: `71af81cf` (provider cleanup) and `7997eb72` (fixture startup allowance).
+  No push, merge, publication, or native model call was performed.
+
+### Human-review round — October 25
+
+- Base synchronization: user explicitly authorized `roborepo plans sync-base`; merged main
+  `6b6521d54433113b4b7afcfc224f09ed6e0104cd` as
+  `576f295064e05a5c99f3a4466475bbd69725b7d4`, without conflicts.
+- Independent Validator pass: clean at the synchronized commit; zero fix findings and zero
+  escalations. Checked every acceptance criterion, docs of record, observable test coverage,
+  flow/cohesion, data/state, and comments/abstractions. Registry, synthetic-provider, desktop-runtime,
+  shared-target-rows, hook-composition, and diff checks passed.
+- Base failure: `npm run check` stops in doctor because `generated/claude/CLAUDE.md` differs from
+  rendered rules. `git diff main...HEAD -- globals/system/rules generated` is empty: the failing
+  inputs are identical on synchronized main. The command exited 1 at the doctor stage.
+- Remaining gate stages are being checked separately. Initial sandbox runs hit local-server
+  `listen EPERM` and npm access restrictions; authorized retries are pending. No initial failed
+  attempt is counted as passing.
+- Review made no implementation fixes. Primary checkout has unrelated edits; they remain outside
+  this worktree and are not part of review commits.
+
+### Result
+- Status: complete
+- Reviewed implementation commit: a8aa353fbb1b7cb45ad2822314385354b0f6f5f6
+- Base commit: fb068616abc30baaaf6194e7ba6871f32e78e496
+
+### Approval
+- Decision: approved
+- Reviewed implementation commit: a8aa353fbb1b7cb45ad2822314385354b0f6f5f6
+- Confirmed by: human
+- Evidence: October 26, 2026, the human answered "Approve this implementation" to the
+  approval prompt naming this plan and exact reviewed implementation commit.
+- Previous decision: approved
+- Previous reviewed implementation commit: d62ba4d5b9f3f987c2be3eea4410efd1c51e78f6
+- Previous confirmed by: human
+- Previous evidence: October 25, 2026, the human answered "Approve this implementation" to the
+  approval question naming this plan and exact reviewed implementation commit.
+- Reason: the October 26 feedback fixes changed implementation after that approval. The previous
+  reviewed commit and human answer above are historical evidence, not approval of the new fixes.
+
+### Review evidence before PR feedback
+
+- Final `npm run check` passed, exit 0, on the synchronized implementation, with only plan-record
+  commits afterward. Health: 106 checks; CLI: 457 passed, zero failed; install collisions: all
+  passed; grouped CI suites: 60/60; package-install smoke: passed; strict Docker clean-machine,
+  install, permissions, and onboarding scenarios: all passed; browser assertions: 130 passed.
+  `git diff --check` passed. Windows installer parity was skipped because `pwsh` is unavailable;
+  the optional active-root fixture reported `uvx` unavailable. Neither is claimed as passed.
+- Earlier generated-rules base failures are historical and resolved in synchronized main. No
+  current base failures, open implementation findings, escalations, or required manual checks
+  remain. Both primary and worktree statuses were clean before committing this final evidence.
+- Review commits: `8b6a424e` recorded the initial review; `d62ba4d5` recorded the second-sync
+  acceptance evidence and the sole documentation correction. No implementation fix commit exists.
+- Main advanced while verification ran. A second authorized synchronization merged base
+  `9211dab11354fbf36de3275584b5481987f15481` without conflicts, producing implementation
+  `cdb37fda4d3f31400ab126586e6057f4dee47df5`. That base repairs the earlier generated-rules drift.
+- Validator pass 2 found no implementation issues or escalations. Its sole plan-record finding
+  was removal of temporary-log references; those now record actual outcomes instead. Incoming
+  telemetry projection caching is separate from headless invocation. Synthetic-provider and
+  repository-scope assertions passed again.
+- The isolated hook-readiness suite passed after the earlier grouped run reported `missing`
+  instead of `active`. No cause is claimed for that earlier failure; the final full gate remains
+  the completion check.
+- Before the second synchronization, all 130 browser tests, the strict permissions Docker
+  sandbox, and install-collision tests passed. Other lifecycle failures referred to the now-fixed
+  generated-rules drift. These results describe the previous synchronized implementation.
+- No code or test fixes were made in review. The optional folder declaration remains deferred by
+  design. Real model synthesis is excluded from required manual checks for this cleanup.
+
+| Acceptance area | Code and executed evidence |
+| --- | --- |
+| Manifest-backed hook routing | Existing shared composition retains path overrides, link protection, and logging; hook-composition assertions passed |
+| Provider-owned sources and installed behavior | Provider hook directory and per-file manifest row; shared-target assertions cover install, removal, ownership, conflicts, and standalone lookup |
+| Validated headless contract | Schema and runtime contract reject omitted/malformed eligibility; registry and synthetic-provider assertions passed |
+| Literal summary transport and failures | Telemetry consumer spawns resolved executable argv; synthetic processes assert summary-only input, metacharacters, timeout, empty output, and nonzero exit |
+| Enablement, order, desktop/PATH selection | Runtime registry filtering and discovery; synthetic-provider and desktop-runtime assertions passed |
+| Documentation and conditional scope | Architecture, hook, provider, and telemetry docs follow current behavior; old source-path scan found no active source/test/doc references |
+
+### PR feedback fixes and verification — October 26
+
+- Fixes are committed in `b4cd722843c1d824838324f0265d592dbc7b1b6e` (three files, four line
+  replacements). The local Codex executable's `exec --help` confirms that
+  `--skip-git-repo-check` permits running outside Git repositories. The provider template now
+  places that flag before `--` and the literal prompt argument. Existing desktop process
+  assertions were updated; no additional test suite or real model call was introduced.
+- The CI-reported hash is valid but contains `101` by chance. The old assertion was reproduced
+  rejecting it. The replacement checks the `a`-prefixed 24-digit hexadecimal format; existing
+  restart assertions still verify the association key survives PID and port changes.
+- Focused checks passed: `node scripts/test/developer-runtime-check.mjs`,
+  `node scripts/test/harness-desktop-runtime-check.mjs`,
+  `node scripts/test/harness-registry-check.mjs`, and
+  `node scripts/test/telemetry-synthetic-provider-check.mjs`. The first runtime attempt hit
+  sandbox `listen EPERM`; the authorized retry passed. The failed attempt is not counted as passing.
+- `npm run check` passed, exit 0, on the three-file fix content subsequently committed as
+  `b4cd7228`: health 106 checks; CLI 457 passed, zero failed; install collisions all passed;
+  grouped suites 60/60; package-install smoke passed; all four strict Docker scenarios passed;
+  browser tests 130 passed. `git diff --check` passed.
+- Windows installer parity was skipped because `pwsh` is unavailable. The optional active-root
+  fixture reported `uvx` unavailable. Neither is claimed as passed. These are local verification
+  results, not a claim that remote CI has rerun successfully.
+- Renewed review and explicit approval of the changed implementation remain pending. Earlier
+  validator passes cover the implementation before these feedback fixes.
+
+### Synchronized feedback review — October 26
+
+- User completed the base merge: synchronized main
+  `fb068616abc30baaaf6194e7ba6871f32e78e496` into the feature branch as
+  `767405be0f3a2f3a726f2728f29459ab1a1f7ebb`. The canonical landed check reports `not absorbed`:
+  the feature has not yet landed in local main. No additional synchronization was needed.
+- Fresh-context Validator reviewed acceptance criteria, the full feature diff, changes since
+  the prior reviewed implementation, observable assertions, documentation, and conventions.
+  No code/test fix or escalation findings. One stale Codex argv documentation example was fixed
+  separately in `f9772b07`; no implementation behavior changed in this review.
+- Validator checks passed: registry, synthetic-provider transport, desktop-runtime selection,
+  shared-target install/removal, hook composition, and diff checks. The provider-interface fix
+  also passed `node scripts/test/docs-reference-check.mjs` and `git diff --check`.
+- Validator recheck at `f9772b07` confirmed the documentation fix; zero fix or escalate findings
+  remain. No code or test fix was needed during this synchronized review.
+- Final `npm run check` passed, exit 0, on the synchronized implementation with only the recorded
+  documentation correction and plan evidence commits afterward: health 107 checks; CLI 457 passed,
+  zero failed; install collisions all passed; grouped suites 60/60; package-install smoke passed;
+  all four strict Docker scenarios passed; browser tests 130 passed. Documentation references
+  and `git diff --check` passed after the documentation correction.
+- Windows installer parity was skipped because `pwsh` is unavailable; it is not claimed as passed.
+  No current base failures remain. Both primary and feature checkouts were clean before writing
+  this final evidence. No claim is made that remote CI has rerun successfully.
+- No required manual tests remain; native model synthesis stays explicitly optional. Human's
+  statement that they are ready to approve is readiness, not explicit approval of a new commit.
+
+## Not tested
+
+- Deferred, optional: native model synthesis using the real provider templates. Local help and synthetic processes
+      verify syntax and transport; a real model call requires separate authorization and is not
+      needed for the provider cleanup's automated acceptance checks.

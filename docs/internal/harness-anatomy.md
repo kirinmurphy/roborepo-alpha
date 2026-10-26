@@ -27,7 +27,7 @@ section links the matching step in [the teaching doc](harnesses-explained.md).
 | Skills | On-demand capability/instruction bundles the agent loads when relevant. | Package-owned `globals/packages/<package>/skills/<name>/SKILL.md`, plus system `globals/system/skills/roborepo-support/SKILL.md` — materialized into `~/.roborepo/skills/<name>` and linked from harness skill dirs | `roborepo skill new`, `roborepo skill adopt <name>`, `roborepo skill inspect <name>`, `roborepo skill sync-global` |
 | Slash commands | Named workflows the user starts explicitly (`/case-study`, etc.). | Package-scoped generated wrappers under `generated/packages/<package>/<harness>/commands/`, composed live for enabled packages | `roborepo skill render-commands [--check]` |
 | Install bundles | Named groups of install-time file operations applied at install/update. Internal to the install pipeline — not a user-facing verb. | `manifests/platform/presets.json` | `roborepo update` (applies them); `roborepo bundle …` is an internal verb called by `scripts/install/main.sh` |
-| Hooks | Scripts the harness runs on lifecycle/tool events. | System hooks: `globals/system/hooks/claude/*.mjs` + `settings.json` wiring, `globals/system/hooks/codex/*.mjs` + `hooks.json`. Package-owned hooks (e.g. Caveman/JDocMunch Codex `SessionStart`, telemetry capture, JCodeMunch's Bash blocker) live under `globals/packages/<package>/hooks*` and are composed in only when that package is enabled | edit source, then `roborepo update` |
+| Hooks | Scripts the harness runs on lifecycle/tool events. | System hooks: `globals/system/hooks/claude/*.mjs` + `settings.json` wiring, `globals/harnesses/codex/hooks/*.mjs` + `hooks.json`. Package-owned hooks (e.g. Caveman/JDocMunch Codex `SessionStart`, telemetry capture, JCodeMunch's Bash blocker) live under `globals/packages/<package>/hooks*` and are composed in only when that package is enabled | edit source, then `roborepo update` |
 | MCP servers | External tool servers (jcodemunch, jdocmunch, …) registered with every enabled harness. | Claude: native live store<br>Codex: active `~/.codex/config.toml`, fully owned by each package's `mcp`/`codex_tool_approvals` components<br>Gemini: `mcpServers` key in `~/.gemini/settings.json`, direct JSON read/write | `roborepo mcp add <name-or-url>` |
 | Permissions | Allowed, denied, and ask-before-run behavior for commands, tools, and network defaults. | Claude: `settings.json` `permissions.*`<br>Codex: `config.toml` + `rules/default.rules` + runtime ask hook<br>Gemini: `~/.gemini/policies/generated-permissions.toml`, one fully-owned file in the Policy Engine's rule directory | `roborepo permissions [--check]` |
 | Telemetry | Local capture + analysis of sessions, tools, MCP, and token usage; spike detection + cause attribution + dashboard; backup/reset. | Package-owned hooks (`globals/packages/telemetry/hooks-{claude,codex}.json`) feed `~/.roborepo/telemetry`. Gemini sessions can appear in capture/analysis (harness id is a free-form CLI flag), but the package declares no Gemini hook wiring yet, so capture isn't wired in for it | `roborepo telemetry enable\|disable\|status\|report\|backup\|purge` |
@@ -128,7 +128,7 @@ startup, broad-read nudges, noisy-Bash trimming, the write guard.
 
 **Parity model:** no shared generator — a behavior wanted on both sides is authored twice. Mandatory
 system hooks are `.mjs` scripts under `globals/system/hooks/claude/` wired through `settings.json`,
-and `globals/system/hooks/codex/` wired through `hooks.json`. Package-owned hooks (Caveman's and
+and `globals/harnesses/codex/hooks/` wired through `hooks.json`. Package-owned hooks (Caveman's and
 JDocMunch's Codex `SessionStart` hooks, telemetry's capture hooks, JCodeMunch's Bash blocker) are
 authored under their owning package and composed into live hook config only when that package is
 enabled. Telemetry capture uses the same hook-composition layer when it is
@@ -178,7 +178,7 @@ native shape — Claude's `permissions.allow`/`permissions.deny`/`permissions.as
 `settings.json`, Codex's `config.toml` session defaults + `rules/default.rules` command policy, and
 Gemini's `~/.gemini/policies/generated-permissions.toml` — one fully-owned file inside the Policy
 Engine's rule directory, rather than a marked block inside a shared file. Codex's static rules cannot
-express per-command `ask`, so `globals/system/hooks/codex/permission-check.mjs` supplies that runtime
+express per-command `ask`, so `globals/harnesses/codex/hooks/permission-check.mjs` supplies that runtime
 decision from the same manifest; Gemini needs no such workaround — its Policy Engine has a native
 3-state `allow`/`deny`/`ask_user` decision at the config layer. (Why one source, per-harness output
 shapes: [explained.md Step 3](harnesses-explained.md#step-3--bridging-a-structural-gap-permissions).)

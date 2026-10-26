@@ -59,6 +59,8 @@ into `~/.codex/skills/` and enabled package command output from `generated/packa
 - `AGENTS.md` rendered from base fragments plus enabled package fragments
 - `config.toml` exported as a local active file
 - `hooks.json` composed from system hooks plus enabled package hook resources
+- `hooks/` receives per-file-owned scripts from `globals/harnesses/codex/hooks/`; installed commands
+  continue to use `~/.codex/hooks/`, preserving user-owned files and Codex trust positions
 - `MANAGED_BY_ROBOREPO.md`
 - `commands/` composed from enabled packages only
 - `rules/`

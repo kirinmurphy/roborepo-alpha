@@ -232,12 +232,12 @@ assert "workspace import: copies package configs and reports changed built-ins" 
 # than deriving it from ~/.codex/hooks.
 codex_hook_home="${work}/codex-hook-home"
 mkdir -p "${codex_hook_home}/.codex/hooks" "${codex_hook_home}/.roborepo"
-cp "${repo_root}/globals/system/hooks/codex/permission-check.mjs" "${codex_hook_home}/.codex/hooks/permission-check.mjs"
+cp "${repo_root}/globals/harnesses/codex/hooks/permission-check.mjs" "${codex_hook_home}/.codex/hooks/permission-check.mjs"
 printf '{ "repo": "%s" }\n' "${repo_root}" > "${codex_hook_home}/.roborepo/install-state.json"
 assert "codex hooks: permission-check tolerates empty stdin" \
-  bash -c "HOME='${codex_hook_home}' node '${repo_root}/globals/system/hooks/codex/permission-check.mjs' </dev/null >/dev/null"
+  bash -c "HOME='${codex_hook_home}' node '${repo_root}/globals/harnesses/codex/hooks/permission-check.mjs' </dev/null >/dev/null"
 assert "codex hooks: minimize-bash-output tolerates malformed stdin" \
-  bash -c "printf 'not-json' | HOME='${codex_hook_home}' node '${repo_root}/globals/system/hooks/codex/minimize-bash-output.mjs' >/dev/null"
+  bash -c "printf 'not-json' | HOME='${codex_hook_home}' node '${repo_root}/globals/harnesses/codex/hooks/minimize-bash-output.mjs' >/dev/null"
 assert "codex hooks: installed permission-check reads repo manifest from install state" \
   bash -c "printf '%s\n' '{\"tool_name\":\"exec_command\",\"tool_input\":{\"command\":\"git push --force origin main\"}}' | HOME='${codex_hook_home}' node '${codex_hook_home}/.codex/hooks/permission-check.mjs' | grep -q '\"permissionDecision\":\"deny\"'"
 # An npm install writes no install-state.json; the CLI records the app root under the state root

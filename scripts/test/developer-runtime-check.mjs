@@ -283,7 +283,7 @@ try {
   assert.equal(calls.filter((call) => call.includes("-p 101")).length, 1);
   assert.equal(discovery.instances[1].status, 401);
   assert.notEqual(discovery.instances[0].associationKey, discovery.instances[0].key);
-  assert.doesNotMatch(discovery.instances[0].associationKey, /5173|101/);
+  assert.match(discovery.instances[0].associationKey, /^a[0-9a-f]{24}$/);
 
   const secureDiscovery = await discoverInstances({
     platform: "darwin", runCommand, ...noProviders,

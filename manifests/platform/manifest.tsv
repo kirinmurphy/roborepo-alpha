@@ -59,7 +59,7 @@ codex	rendered_rules	-	AGENTS.md	codex	-
 # install-lib.sh), not copied as one static repo-wide directory. See Phase 7 of the ownership plan.
 codex	managed_copy	globals/harnesses/codex/MANAGED_BY_ROBOREPO.md	MANAGED_BY_ROBOREPO.md	codex	nodoctor
 codex	hook_fragment	generated/codex/hooks.json	hooks.json	codex	-
-codex	managed_files	globals/system/hooks/codex	hooks	codex	-
+codex	managed_files	globals/harnesses/codex/hooks	hooks	codex	-
 codex	managed_copy	generated/codex/rules	rules	codex	-
 codex	cleanup	-	MANAGED_BY_HARNESS_CONFIGS.md	codex	-
 codex	cleanup	-	skills	codex	-

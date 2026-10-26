@@ -61,6 +61,9 @@ import { formatCount } from "./telemetry-format.mjs";
 import { deriveSessionFindings } from "./telemetry-session-findings.mjs";
 import { hookFilePath, writeHooksFile } from "./hook-composition.mjs";
 import { getHarnessProvider, hasHarnessProvider, listHarnessProviders, harnessDisplayName } from "../harnesses/registry.mjs";
+import { createHarnessRuntime } from "../harnesses/harness-runtime.mjs";
+import { selectedHarnessExecutable } from "../harnesses/discovery.mjs";
+import { isValidHeadlessPromptArgs } from "../harnesses/contract.mjs";
 import { setHarnessEnabled } from "../harnesses/service.mjs";
 import { loadSetupState } from "./portal-setup.mjs";
 import { ensureInitialized, finalizeInitialization, describeNewerSchemaRefusal } from "./initialization-bootstrap.mjs";
@@ -1657,24 +1660,29 @@ const DEEP_READ_PROMPT =
   "Give 3-5 terse, actionable conclusions a developer can act on: call out the biggest token cost, " +
   "any tail risks, and one concrete thing to change. No preamble.\n\n";
 
-// Find the first available AI CLI for the deeper-read feature: prefer claude, fall back to codex, then gemini.
-function findDeepReadCli() {
-  for (const cmd of ["claude", "codex", "gemini"]) {
-    const check = spawnSync("which", [cmd], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
-    if (check.status === 0 && check.stdout.trim()) return cmd;
+export function findDeepReadProvider({ runtime = createHarnessRuntime(), resolveExecutable = selectedHarnessExecutable } = {}) {
+  for (const provider of runtime.enabledProviders()) {
+    const args = provider.manifest.extensions?.app?.headlessPromptArgs;
+    if (!isValidHeadlessPromptArgs(args)) continue;
+    const executable = resolveExecutable(provider.manifest);
+    if (executable) return { cli: provider.manifest.commandName, executable, args };
   }
   return null;
 }
 
-// Run the optional LLM synthesis via the headless AI CLI (claude, codex, or gemini — whichever is available).
-// Best-effort: returns { ok:false, note } when no CLI is available so callers degrade gracefully.
-function runDeepRead(report) {
-  const cli = findDeepReadCli();
-  if (!cli) return { ok: false, note: "no AI CLI available (tried claude, codex, gemini)", cli: null };
+function findDeepReadCli() {
+  return findDeepReadProvider()?.cli ?? null;
+}
+
+// Only the computed summary is passed to the selected provider. Failures remain best-effort.
+export function runDeepRead(report, { timeout = 60000, ...selection } = {}) {
+  const provider = findDeepReadProvider(selection);
+  if (!provider) return { ok: false, note: "no enabled AI provider with a valid headless template and available runtime", cli: null };
+  const { cli, executable, args } = provider;
   const prompt = DEEP_READ_PROMPT + insightsSummary(report);
   let result;
   try {
-    result = spawnSync(cli, ["-p", prompt], { encoding: "utf8", timeout: 60000 });
+    result = spawnSync(executable, args.map((arg) => arg === "{prompt}" ? prompt : arg), { encoding: "utf8", timeout });
   } catch (err) {
     return { ok: false, note: `${cli} CLI not available: ${err.message}`, cli };
   }

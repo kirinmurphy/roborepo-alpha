@@ -190,9 +190,12 @@ data-quality warnings, read warnings, recent markers, experiment readiness, usag
 efficiency, cost breakdowns, the exploratory midpoint regression, loops, sessions, spikes, and raw
 contributor tables.
 
-`--deep` adds an LLM summary of those findings. It tries the installed Claude, Codex, and Gemini
-CLIs in that order and invokes the first available one with `-p`. Only the computed summary is
-passed to that CLI, never raw capture or transcript content.
+`--deep` adds an LLM summary of those findings. It selects the first enabled provider in registry order that declares a valid headless argument
+template and has an available runtime, preferring its validated PATH executable over a desktop
+runtime. Claude uses `-p`; Codex uses `exec`. Providers without verified templates (currently Gemini)
+are skipped. Missing runtimes, failed commands, timeouts, and empty output return an unavailable
+result without interrupting the report. Only the computed summary is passed as one literal argument,
+never raw capture or transcript content.
 
 The report and the portal share one analysis and metric registry, so their numbers agree for the
 same cohort.

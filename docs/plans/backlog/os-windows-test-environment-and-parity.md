@@ -161,7 +161,7 @@ added without duplicating runner setup.
       and record its result in the compatibility ledger. The macOS desktop-runtime discovery QA
       could not run it because `pwsh` was unavailable there.
 - [ ] Verify that a real `install-windows.ps1` run installs and uninstalls the Codex hook scripts
-      from the `codex managed_copy globals/system/hooks/codex hooks` row in
+      from the `codex managed_files globals/harnesses/codex/hooks hooks` row in
       `manifests/platform/manifest.tsv`. The installer reads manifest rows generically, but no
       PowerShell run has exercised that row. `windows-installer-check.ps1` only parses the script
       and compares harness ids, and the machine that restored the row had no `pwsh`.
