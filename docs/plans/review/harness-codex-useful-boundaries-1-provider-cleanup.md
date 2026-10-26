@@ -1,7 +1,7 @@
 ---
 id: hr78g4sj
 priority: high
-next_action: Await explicit human approval of a8aa353fbb1b7cb45ad2822314385354b0f6f5f6, then human merges the PR and runs /plan-close hr78g4sj.
+next_action: Human merges the PR, then runs /plan-close hr78g4sj.
 blocked_by: []
 depends_on: ["wjlt1zvf"]
 related: ["4zyo2woj", "8bjltk2n", "46qth5z8", "7k3m9qd", "harness-capability-derived-resource-targeting"]
@@ -327,8 +327,11 @@ No implementation fix or escalate findings in the validation passes.
 - Base commit: fb068616abc30baaaf6194e7ba6871f32e78e496
 
 ### Approval
-- Decision: requested
+- Decision: approved
 - Reviewed implementation commit: a8aa353fbb1b7cb45ad2822314385354b0f6f5f6
+- Confirmed by: human
+- Evidence: October 26, 2026, the human answered "Approve this implementation" to the
+  approval prompt naming this plan and exact reviewed implementation commit.
 - Previous decision: approved
 - Previous reviewed implementation commit: d62ba4d5b9f3f987c2be3eea4410efd1c51e78f6
 - Previous confirmed by: human
