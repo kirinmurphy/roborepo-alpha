@@ -265,7 +265,7 @@ test.describe("hook readiness warning", () => {
     expect(launches).toHaveLength(0);
 
     current = { ...pendingReview("cli-offer"), guidance: current.guidance };
-    const config = await (await page.request.get("/api/config")).json();
+    const config = await routeBulkToggleConfig(page);
     await page.route("**/api/config/packages/bulk", (route) => route.fulfill({ json: { ok: true, status: 200, results: [], config, hookHarnesses: ["codex"] } }));
     const section = config.behaviorView.find(entry => entry.bulkToggle);
     await page.goto("/agents");
@@ -762,7 +762,7 @@ test.describe("hook readiness warning", () => {
     await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex]) }));
     let current = pendingReview("rev-bulk");
     const reads = await routeStatuses(page, { codex: () => current });
-    const config = await (await page.request.get("/api/config")).json();
+    const config = await routeBulkToggleConfig(page);
     await page.route("**/api/config/packages/bulk", (route) => route.fulfill({ json: { ok: true, status: 200, results: [], config, hookHarnesses: ["codex"] } }));
     const section = config.behaviorView.find((entry) => entry.bulkToggle);
     expect(section, "fixture needs a bulk-toggle section").toBeTruthy();
@@ -1915,6 +1915,17 @@ test.describe("Plans onboarding", () => {
     expect(reset.ok()).toBe(true);
   });
 });
+
+// No built-in category carries a Select All switch, but the portal still renders one for any
+// section marked bulkToggle. Serves the live config with the first package section so marked, and
+// returns that config so a routed bulk response can hand it back unchanged.
+async function routeBulkToggleConfig(page) {
+  const config = await (await page.request.get("/api/config")).json();
+  const section = config.behaviorView.find((entry) => entry.categoryId && entry.items.some((item) => item.toggle));
+  section.bulkToggle = true;
+  await page.route("**/api/config", (route) => route.fulfill({ json: config }));
+  return config;
+}
 
 async function portalToken(page) {
   await page.goto("/plans");

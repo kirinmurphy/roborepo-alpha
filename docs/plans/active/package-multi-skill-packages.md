@@ -1,7 +1,7 @@
 ---
 id: bysyzl1e
 priority: high
-next_action: On the user's go-ahead, merge main into this branch, make main's two bulkToggle Agents tests route a bulkToggle section, rerun the gate and the validation loop, then submit for review.
+next_action: Run /plan-review to review the implementation and confirm the Not tested entry.
 blocked_by: []
 depends_on: []
 related: ["o9zwxuav", "ejsc769o", "jdsobwn", "user-managed-packages-and-add-workflows"]
@@ -374,22 +374,13 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
   `globals/packages/plan-suite/`. Only the targets changed; the prose still records the layout at
   the time. Considered and not chosen: leaving them broken, which fails the gate.
 
-## Open Questions
-
-- **Merge main into this branch and adapt main's two `bulkToggle` tests?** Since this branch was
-  cut, main gained two Agents-page tests in `scripts/test/portal-ui/portal-ui.spec.mjs` (the hook
-  readiness change, b134ef42): one near line 226 and "a bulk package change on Agents reads once
-  and shows one combined offer" near line 723. Both find a section with `bulkToggle` in the live
-  config, and this branch removes the only one (the user's decision), so `npm run test:portal-ui`
-  will fail once the two meet. Options:
-  - **Merge main here, then have both tests route `/api/config` with `bulkToggle: true` set on one
-    section** (recommended). Keeps the user's decision, and gives the still-supported Select All
-    switch a UI test again. Needs the user's go-ahead because it merges into this branch.
-  - Keep a built-in `bulkToggle` category. Reverses the user's decision.
-  - Leave it to whoever merges. The branch would land with a known red portal suite.
-
-  Blocked rather than decided because merging into the branch needs the user's approval. Blocks:
-  the submit transition to `review/`.
+- **2026-10-25 (user decision): Merge main into this branch and adapt main's two `bulkToggle`
+  tests.** main gained two hook-readiness Agents tests that looked for a built-in section with
+  `bulkToggle`, which this branch removes. The user approved merging main; both tests now serve the
+  live config with the first package section marked `bulkToggle`, which keeps the user's category
+  decision and gives the Select All switch a UI test again. Considered and not chosen: keeping a
+  built-in `bulkToggle` category (reverses the user's decision), and leaving it to the merge (a
+  red portal suite).
 
 ## Not tested
 
@@ -414,8 +405,9 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
 - [x] A test comment still said the cleanup offer depends on the plan-close package — fixed
 - [x] The fixture comment and Phase 1 task called the fixture a workspace package; it is a built-in
       package in a throwaway app root — fixed
-- [ ] main's two hook-readiness Agents tests need a built-in `bulkToggle` section, which this
-      branch removes — escalated, see Open Questions
+- [x] main's two hook-readiness Agents tests need a built-in `bulkToggle` section, which this
+      branch removes — the user approved merging main; both tests now route a config with one
+      section marked `bulkToggle` (`routeBulkToggleConfig` in `portal-ui.spec.mjs`)
 
 ### Verification
 
