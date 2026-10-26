@@ -38,6 +38,13 @@ plan content needs reconciliation rather than automatic staging.
 
 ## Choose the remaining work
 
+Resume means continuing the workflow, not just reporting its state. Apply the entrypoint's
+**Continue until a human decision** contract to every route below: finish authorized work, ask
+for the specific input or action that blocks progress, or ask for exact-commit approval once the
+review is complete. After an answer, continue from that step without requiring a new invocation.
+Fresh approved and committed completed results still return without another approval prompt;
+an explicit human pause or deferral still stops the workflow.
+
 | Evidence | Resume at |
 | --- | --- |
 | Committed completed plan, without pending edits to that plan | Report already closed; stop without checking a removed worktree or repeating review. |

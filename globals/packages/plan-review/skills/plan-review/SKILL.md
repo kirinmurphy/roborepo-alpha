@@ -13,6 +13,36 @@ fixes what it can in the same session, and puts the result in front of the human
 explicit approval is the only thing that clears a plan for its merge: a deterministic gate cannot
 prove semantic correctness, and an agent cannot infer approval from passing tests.
 
+## Continue until a human decision
+
+Keep the review moving within its authorized scope. Pending is an intermediate state, not a
+handoff by itself. Finish agent-resolvable work, including fixes, checks, evidence updates, and
+required commits, before asking the human to act. Do not ask whether to continue work already
+authorized by this invocation.
+
+Before ending a response, apply the first matching outcome:
+
+| Remaining work | Required next action |
+| --- | --- |
+| Human explicitly pauses, defers, cancels, or requests a separate session | Honor that choice and report the remaining work without pressing for another decision. |
+| Approval already fresh and durable, or plan already closed | Report that terminal result; do not ask again. |
+| A refusal, unavailable prerequisite, or the five-pass limit | Explain the blocker and prompt for the repair, prerequisite, or supported handoff needed to resume. Do not bypass the gate or retry indefinitely. |
+| Authorized work the agent can perform | Continue working; a checklist or pending report is not a stopping point. |
+| Permission, a design decision, missing input, or a required human test | Ask a concrete question naming the action or decision that unblocks review; continue independent work while waiting. |
+| Review complete; explicit approval still needed | Present the evidence and ask for approval of the exact reviewed commit through step 6. |
+
+Never end a pending review without an actionable prompt to continue, unless the human explicitly
+chose to stop or defer. Use the harness's structured question tool when available; otherwise end
+with the question itself. A next-command suggestion or an offer such as "I can continue" is not
+a prompt. For required manual checks, name the steps and expected result and ask the human to
+report the outcome; never confirm it on their behalf.
+
+When the human answers, resume the appropriate step without requiring another `/plan-review`
+invocation. Recheck freshness before relying on earlier evidence. Resolve newly unblocked work
+and ask the next necessary question until approval can be requested. Ask for approval directly,
+without a separate readiness round; being ready is not approval. An unanswered question grants
+no permission. These rules do not authorize another plan command or expand execution permissions.
+
 ## Inputs
 
 Resolve the primary plan's lifecycle first. A committed completed plan returns before worktree
@@ -79,7 +109,8 @@ workflow owns those records and its validation and approval gates still apply.
 Run the repository's canonical completion preflight command for `<plan>` from the primary checkout.
 
 - **It fails:** report exactly which checks failed and what remains, and stop. The plan stays in
-  `active/`; the user resumes it with `/plan-execute`. Make no other change.
+  `active/`; the user resumes it with `/plan-execute`. Make no other change. Prompt for the
+  missing prerequisite or the handoff to `/plan-execute`; do not end with only the failed preflight.
 - **It passes:** run the repository's canonical submit transition command for `<plan>` from the
   primary checkout. It commits the plan-only move to `review/` on the base branch. Do not push.
 
@@ -198,7 +229,9 @@ commit, and the full base commit synchronized in step 2. Commit this evidence be
 human. Plan-only evidence commits do not change the reviewed implementation. If findings or
 required manual checks remain, keep Result pending and present those outstanding decisions instead
 of asking for approval. Say plainly that approval was not requested, and list each open finding and
-unconfirmed manual check that blocks it.
+unconfirmed manual check that blocks it. Then ask the concrete question that unblocks the next
+step, following **Continue until a human decision**. Continue agent-resolvable work instead of
+presenting it as a decision for the human.
 
 Present a review packet:
 
@@ -294,6 +327,11 @@ loaded or skipped, and current Git status in the worktree and the primary checko
 Label historical checks as reused. Skills and checks bypassed by an unchanged success path are
 not applicable to this run; never present them as newly performed. Report unavailable worktree
 status as expected after completed cleanup.
+
+The report does not replace the required prompt: a pending, stale, or missing review must end
+with the next actionable question under **Continue until a human decision**, unless the human
+explicitly chose to stop or defer. A complete review awaiting approval must include step 6's
+exact-commit approval question. After explicit approval, record it through step 6a before ending.
 
 ## Boundaries
 

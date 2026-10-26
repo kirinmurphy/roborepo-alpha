@@ -539,13 +539,12 @@ main {
 .config-empty strong {
   color: var(--ink);
 }
+/* Harnesses are rows and config types are columns, so a new harness adds a row instead of
+ * widening the table past the panel. */
 .config-grid-head,
 .config-grid-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) repeat(
-      var(--provider-count, 2),
-      140px
-    );
+  grid-template-columns: minmax(120px, 1fr) repeat(4, minmax(110px, 1fr));
 }
 .config-grid-head {
   background: var(--bg);
@@ -554,10 +553,25 @@ main {
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
+.config-grid-head > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.config-grid-head .info-icon {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  text-transform: none;
+}
 .config-grid-head > div,
 .config-grid-row > div {
   padding: 10px 12px;
   border-left: 1px solid var(--line);
+}
+.config-harness {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink);
 }
 .harness-provider {
   display: flex;
@@ -566,11 +580,11 @@ main {
   gap: 6px;
 }
 
-[data-slot="row-usage"] .harness-provider {
+.harness-usage {
   position: relative;
 }
 
-[data-slot="row-usage"] .harness-provider .token-chip {
+.harness-usage .token-chip {
   position: absolute;
   top: 0;
   right: 0;
@@ -588,18 +602,6 @@ main {
 }
 .config-grid-row {
   border-top: 1px solid var(--line);
-}
-.config-type > * {
-  display: inline-block;
-}
-.config-type strong {
-  font-size: var(--text-sm);
-  color: var(--ink);
-  margin-right: 0.5rem;
-}
-.config-type span {
-  font-size: var(--text-2xs);
-  color: var(--dim);
 }
 /* .markdown element chrome lives in portal/shared/markdown.css (linked from head-partial.html).
  * The copy that used to sit here had no table or mermaid rules, so a skill containing either
@@ -748,19 +750,39 @@ dialog#config-modal::backdrop {
   padding: 10px 16px;
   border-top: 1px solid var(--line);
 }
+/* Narrow screens drop the column header and stack each harness into two columns: the harness
+ * name beside its four config cells, each cell naming its column via data-label. */
 @media (max-width: 640px) {
   .config-grid-head {
     display: none;
   }
   .config-grid-row {
-    grid-template-columns: 1fr;
+    /* Fixed, not auto: each row is its own grid, so auto would size every harness differently. */
+    grid-template-columns: 88px 1fr;
   }
-  .config-grid-row > div {
-    border-left: none;
+  .config-grid-row > .config-harness {
+    /* One row per config type cell beside it. */
+    grid-row: span 4;
+  }
+  .config-grid-row > .harness-provider + .harness-provider {
     border-top: 1px solid var(--line);
   }
-  .config-grid-row > div:first-child {
-    border-top: none;
+  .harness-provider {
+    flex-direction: row;
+    align-items: center;
+    min-width: 0;
+  }
+  .harness-provider::before {
+    content: attr(data-label);
+    flex: 0 0 58px;
+    color: var(--dim);
+    font-size: var(--text-2xs);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .harness-usage .token-chip {
+    position: static;
+    border-radius: 4px;
   }
 }
 

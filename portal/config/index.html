@@ -7,9 +7,9 @@
     <main id="main" class="inner">
       {{LOADING}}
       <!-- Static shell shown until the first snapshot loads (see .page-loading in base.css). Mirrors
-       tpl-config-files's row spine so the loading scrim sits over real structure instead of a blank
-       page; the per-harness data columns aren't shown here since the real column count is only
-       known once the snapshot with its `harnesses` list arrives. app.js's render() replaceChildren()s
+       tpl-config-files's column header so the loading scrim sits over real structure instead of a
+       blank page; the per-harness rows aren't shown here since which harnesses exist is only known
+       once the snapshot with its `harnesses` list arrives. app.js's render() replaceChildren()s
        this away on first successful load(); the dynamic behaviorView sections that follow it are
        genuinely server-computed and have no static equivalent, so they simply aren't in this
        pre-hydration shell. -->
@@ -17,28 +17,23 @@
         <h2 class="config-files-title">Active Harnesses</h2>
         <section class="panel wide">
           <div class="config-grid" role="table" aria-label="Agent files">
-            <div class="config-grid-row" role="row">
-              <div class="config-type" role="cell">
-                <strong>Usage</strong>
-                <span>Startup context loaded automatically.</span>
+            <div class="config-grid-head" role="row">
+              <div role="columnheader">Harness</div>
+              <div role="columnheader">
+                Usage
+                <portal-info-icon data-tip="Startup context loaded automatically." aria-label="Usage: startup context loaded automatically."></portal-info-icon>
               </div>
-            </div>
-            <div class="config-grid-row" role="row">
-              <div class="config-type" role="cell">
-                <strong>Rules</strong>
-                <span>Global context for every session.</span>
+              <div role="columnheader">
+                Rules
+                <portal-info-icon data-tip="Global context for every session." aria-label="Rules: global context for every session."></portal-info-icon>
               </div>
-            </div>
-            <div class="config-grid-row" role="row">
-              <div class="config-type" role="cell">
-                <strong>Config</strong>
-                <span>Settings, permissions, and runtime defaults.</span>
+              <div role="columnheader">
+                Config
+                <portal-info-icon data-tip="Settings, permissions, and runtime defaults." aria-label="Config: settings, permissions, and runtime defaults."></portal-info-icon>
               </div>
-            </div>
-            <div class="config-grid-row" role="row">
-              <div class="config-type" role="cell">
-                <strong>Hooks</strong>
-                <span>Automation triggered by lifecycle or tool events.</span>
+              <div role="columnheader">
+                Hooks
+                <portal-info-icon data-tip="Automation triggered by lifecycle or tool events." aria-label="Hooks: automation triggered by lifecycle or tool events."></portal-info-icon>
               </div>
             </div>
           </div>
@@ -68,40 +63,33 @@
         <p>Extend your harness config. Toggling a package below writes it into every active harness's configuration.</p>
       </header>
     </template>
-    <!-- Config grid shell: header + 4 row skeletons, one per config-type. The row-label cell
-     (strong + description) doesn't vary per harness so it's authored here; each row's per-harness
-     data cells start empty and are filled by cloning the matching tpl-config-*-cell template once
-     per registered provider (templates.js's configFiles/configGridColumn) — never JS-built markup. -->
+    <!-- Config grid shell: one column per config type, one row per harness, so adding a harness
+     adds a row instead of widening the table. The column header (label + info tip) doesn't vary per
+     harness so it's authored here; each harness row is a tpl-config-harness-row clone filled with
+     the tpl-config-*-cell templates (templates.js's configFiles) — never JS-built markup. Each cell
+     carries its column's data-label so the narrow layout, which hides the header, can still name it. -->
     <template id="tpl-config-files">
       <div class="config-files-section">
         <h2 class="config-files-title">Active Harnesses</h2>
         <section class="panel wide">
           <div class="config-grid" role="table" aria-label="Agent files">
-            <div class="config-grid-head" role="row" data-slot="head">
-              <div role="columnheader"></div>
-            </div>
-            <div class="config-grid-row" role="row" data-slot="row-usage">
-              <div class="config-type" role="cell">
-                <strong>Usage</strong>
-                <span>Startup context loaded automatically.</span>
+            <div class="config-grid-head" role="row">
+              <div role="columnheader">Harness</div>
+              <div role="columnheader">
+                Usage
+                <portal-info-icon data-tip="Startup context loaded automatically." aria-label="Usage: startup context loaded automatically."></portal-info-icon>
               </div>
-            </div>
-            <div class="config-grid-row" role="row" data-slot="row-rules">
-              <div class="config-type" role="cell">
-                <strong>Rules</strong>
-                <span>Global context for every session.</span>
+              <div role="columnheader">
+                Rules
+                <portal-info-icon data-tip="Global context for every session." aria-label="Rules: global context for every session."></portal-info-icon>
               </div>
-            </div>
-            <div class="config-grid-row" role="row" data-slot="row-config">
-              <div class="config-type" role="cell">
-                <strong>Config</strong>
-                <span>Settings, permissions, and runtime defaults.</span>
+              <div role="columnheader">
+                Config
+                <portal-info-icon data-tip="Settings, permissions, and runtime defaults." aria-label="Config: settings, permissions, and runtime defaults."></portal-info-icon>
               </div>
-            </div>
-            <div class="config-grid-row" role="row" data-slot="row-hooks">
-              <div class="config-type" role="cell">
-                <strong>Hooks</strong>
-                <span>Automation triggered by lifecycle or tool events.</span>
+              <div role="columnheader">
+                Hooks
+                <portal-info-icon data-tip="Automation triggered by lifecycle or tool events." aria-label="Hooks: automation triggered by lifecycle or tool events."></portal-info-icon>
               </div>
             </div>
           </div>
@@ -149,28 +137,30 @@
         <code data-slot="npm"></code>
       </div>
     </template>
-    <template id="tpl-config-header-cell">
-      <div role="columnheader" data-slot="label"></div>
+    <template id="tpl-config-harness-row">
+      <div class="config-grid-row" role="row">
+        <div class="config-harness" role="rowheader" data-slot="label"></div>
+      </div>
     </template>
     <template id="tpl-config-usage-cell">
-      <div class="harness-provider" role="cell">
+      <div class="harness-provider harness-usage" role="cell" data-label="Usage">
         <token-chip data-slot="chip"></token-chip>
       </div>
     </template>
     <template id="tpl-config-rules-cell">
-      <div class="harness-provider" role="cell">
+      <div class="harness-provider" role="cell" data-label="Rules">
         <button class="text-link" type="button" data-slot="button"></button>
         <token-chip data-slot="chip"></token-chip>
       </div>
     </template>
     <template id="tpl-config-config-cell">
-      <div class="harness-provider" role="cell">
+      <div class="harness-provider" role="cell" data-label="Config">
         <button class="text-link" type="button" data-slot="button"></button>
         <span class="drift-chip" data-slot="drift" hidden></span>
       </div>
     </template>
     <template id="tpl-config-hooks-cell">
-      <div class="harness-provider" role="cell">
+      <div class="harness-provider" role="cell" data-label="Hooks">
         <button class="text-link" type="button" data-slot="button"></button>
       </div>
     </template>
@@ -369,6 +359,8 @@
     {{REPOSITORY_SOURCES}}
     <script src="/portal/config/elements/index.js" type="module"></script>
     <script src="/portal/shared/icon.js" type="module"></script>
+    <script src="/portal/shared/info-icon.js" type="module"></script>
+    <script src="/portal/shared/tooltip.js" type="module"></script>
     <script src="/portal/shared/notice.js" type="module"></script>
     <script src="/portal/shared/close-button.js" type="module"></script>
     <script src="/portal/shared/theme.js" type="module"></script>
