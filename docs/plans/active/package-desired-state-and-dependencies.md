@@ -6,7 +6,7 @@ blocked_by: []
 depends_on: ["bysyzl1e"]
 related: ["package-registry-live-state-reconciliation", "ejsc769o", "age4cm7r", "user-managed-packages-and-add-workflows"]
 reviewed_commit: 69dea56f35677f1b657de8de084e365cc3d1341e
-worktree:
+worktree: package-desired-state-and-dependencies
 ---
 
 # Package Management: Part 02 - Track What You Turned On, What It Pulls In, and What Is Installed
