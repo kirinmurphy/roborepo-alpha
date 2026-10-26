@@ -255,7 +255,7 @@ In the primary copy, clear `next_action`, add a completion summary, and write a 
 section with the evidence: the test command and result, which affected docs of record were checked
 against the landed code, the approved commit, the absorbing commit as
 `- Absorbing commit: <full commit id>`, what else was checked, and anything that could not be
-verified. Later landing checks verify that recorded line instead of rescanning. Run the repository's canonical plan validator and resolve every
+verified. Later landing checks verify that recorded line instead of rescanning. Record evidence itself, never a path under `/tmp` or another temporary folder: the OS deletes those within days and the plan outlives them. Run the repository's canonical plan validator and resolve every
 finding.
 
 Then run the repository's canonical close transition command for `<plan>` from the primary checkout.

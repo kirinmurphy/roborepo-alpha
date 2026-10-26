@@ -68,14 +68,14 @@ The panel renders these sections:
 - **Hooks** — quick links to the live `~/.claude/settings.json`, `~/.codex/config.toml`,
   and `~/.codex/hooks.json` files.
 - **Code Conventions** — auto-loaded skills (no command). Same skill-link toggle.
-- **Chat-Time Output** — response output (how the agent structures and words every response: the
-  result first, detail matched to the task, evidence that says what passed versus what was only
-  observed, and a scannable close) plus the inline chat-note behaviors (impact awareness, skill
+- **Chat-Time Output** — response output (how the agent words every response: a one-line result
+  first, short and scannable by default, visuals over prose, no unexplained internal names, and
+  plain evidence lines, with detail on request) plus the inline chat-note behaviors (impact awareness, skill
   visibility), each a `rules` package merged into every managed harness. Each is
   independent: a note behavior states its own placement and does not turn on response output. Each
   is off until you enable it; toggling adds or removes the behavior's rules block.
   Feature Verification also lives here: its skill has agents verify finished work themselves and
-  show real evidence, and it unlocks `roborepo browser` for screenshots and recordings of local
+  show the evidence in the conversation (screenshots inline and the steps they took), and it unlocks `roborepo browser` for screenshots and recordings of local
   web apps. Playwright is installed only on first browser use, with your approval.
 - **Token Optimization** — package-level controls such as the Caveman package. Manage Telemetry
   from **Settings** or **Tokens**.

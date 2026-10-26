@@ -121,6 +121,10 @@ Everything else (the two symlink levels, the layer table) lives in
   `bash scripts/doctor.sh --quiet` and `git diff --check` before final/push. `doctor.sh` is the
   provider-registry health gate; do not substitute narrower render/catalog checks when the change
   touches harness, provider, test, or CI plumbing.
+- **Prose-only edits** to a skill, rules file, package description, or doc: run the checks that
+  read the edited file (`git grep -l <path> -- scripts/test`), `roborepo skill triggers --check`
+  when a skill description changed, and `docs-reference-check.mjs` for docs. No `doctor.sh`, no
+  `npm run check`.
 - **Full CI parity is expensive.** `npm run check` is the full local CI parity gate: main suite,
   install-collisions, package install, and Docker clean-machine checks when Docker is available.
   Do not use it as the default cleanup loop for ordinary review or CodeRabbit feedback. Prefer

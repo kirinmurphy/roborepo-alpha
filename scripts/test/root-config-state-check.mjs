@@ -8,6 +8,7 @@ import os from "node:os";
 import path from "node:path";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-root-config-state-"));
+process.on("exit", () => fs.rmSync(tmp, { recursive: true, force: true }));
 process.env.ROBOREPO_STATE_DIR = tmp;
 
 const { recordWrite, checkDrift } = await import("../cli/root-config-state.mjs");

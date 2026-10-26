@@ -6,6 +6,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-root-config-merge-"));
+process.on("exit", () => fs.rmSync(tmp, { recursive: true, force: true }));
 const repo = path.join(tmp, "repo.toml");
 const local = path.join(tmp, "local.toml");
 const out = path.join(tmp, "out.toml");

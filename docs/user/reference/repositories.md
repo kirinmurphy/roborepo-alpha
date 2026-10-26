@@ -227,8 +227,10 @@ checkout tooltip and the worktree dropdown still carry them.
 
 `roborepo git worktrees cleanup` previews candidates and reasons. Add `--apply` to remove eligible
 landed worktrees and local branches. `--plan <id>` limits it to a completed plan's worktree, and
-verifies the absorbing commit that plan's `## Verification` records instead of rescanning. The
-command also accepts `--remove <branch> --confirm --apply`. Automatic cleanup waits for an
+verifies the absorbing commit that plan's `## Verification` records instead of rescanning. Like
+`roborepo plans close`, it checks landing against the local `main` (or `--base <branch>`), so a
+closure commit that is not pushed yet still counts. Without `--plan`, landing is checked against
+`origin/HEAD` when the repository has one. The command also accepts `--remove <branch> --confirm --apply`. Automatic cleanup waits for an
 associated plan to leave `active`. It only removes a clean, unlocked, landed worktree beneath the
 repository's worktree folder, and never uses `git worktree remove --force`. The folder is
 `worktreeRoot` from `docs/plans/plans-config.json`, or else the folder confirmed when cleanup was

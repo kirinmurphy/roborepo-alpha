@@ -412,20 +412,16 @@ export function configFiles(snap, { onInspectClick }) {
   const harnesses = presentedHarnesses(snap).filter((harness) => harness.enabled !== false);
   if (harnesses.length === 0) return null;
   const panel = tpl("tpl-config-files");
-  panel.querySelector(".config-grid").style.setProperty("--provider-count", harnesses.length);
-  const head = panel.querySelector("[data-slot=head]");
-  const rows = {
-    usage: panel.querySelector("[data-slot=row-usage]"),
-    rules: panel.querySelector("[data-slot=row-rules]"),
-    config: panel.querySelector("[data-slot=row-config]"),
-    hooks: panel.querySelector("[data-slot=row-hooks]"),
-  };
+  const grid = panel.querySelector(".config-grid");
   for (const harness of harnesses) {
-    head.append(fill(tpl("tpl-config-header-cell"), { label: harness.displayName }));
-    rows.usage.append(configUsageCell(harness, snap));
-    rows.rules.append(configRulesCell(harness, snap, onInspectClick));
-    rows.config.append(configConfigCell(harness, snap, onInspectClick));
-    rows.hooks.append(configHooksCell(harness, onInspectClick));
+    const row = fill(tpl("tpl-config-harness-row"), { label: harness.displayName });
+    row.append(
+      configUsageCell(harness, snap),
+      configRulesCell(harness, snap, onInspectClick),
+      configConfigCell(harness, snap, onInspectClick),
+      configHooksCell(harness, onInspectClick),
+    );
+    grid.append(row);
   }
   return panel;
 }

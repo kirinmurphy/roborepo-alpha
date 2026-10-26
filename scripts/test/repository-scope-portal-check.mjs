@@ -43,6 +43,7 @@ const rows = fs.readFileSync(path.join(root, "local/dev-fixtures/token-warnings-
     return row;
   });
 fs.mkdirSync(spoolDir, { recursive: true });
+fs.writeFileSync(path.join(state, "telemetry", "state.json"), JSON.stringify({ enabled: true }));
 for (const harness of new Set(rows.map((row) => row.harness))) {
   const lines = rows.filter((row) => row.harness === harness).map((row) => JSON.stringify(row));
   fs.writeFileSync(path.join(spoolDir, `${harness}.jsonl`), `${lines.join("\n")}\n`);
@@ -137,6 +138,47 @@ try {
   assert.equal(sessionsOf(outsideAfter).has(UNKNOWN_SESSION), false, "a found repository's sessions leave _other");
   assert.equal(outsideAfter.event_count, outside.event_count - countFor((id) => id === UNKNOWN));
   assert.deepEqual(fs.readdirSync(spoolDir).map((name) => fs.statSync(path.join(spoolDir, name)).mtimeMs), spoolBefore, "the spool did not change");
+
+  // Repository discovery invalidates analysis too; Home keeps its warnings while the next
+  // default analysis is pending, even if a scoped Tokens view has already been analyzed.
+  const tokensForShared = async () => {
+    const { json: home } = await get("/api/home");
+    return home.repositories.find((repository) => repository.repositoryId === SHARED).domains.tokens;
+  };
+  const pendingTokens = await tokensForShared();
+  assert.equal(pendingTokens.status, "stale");
+  assert.ok(pendingTokens.data.warningCount > 0, "Home retains analyzed warnings after repository discovery");
+  await report(null);
+  const freshTokens = await tokensForShared();
+  assert.equal(freshTokens.status, "available");
+  assert.deepEqual(freshTokens.data, pendingTokens.data);
+
+  const appended = { ...rows.find((row) => row.repo?.repository_id === SHARED), ts: "2026-10-01T00:00:00.000Z", capture_id: "cap_0000000000000099", call_id: "home-refresh" };
+  fs.appendFileSync(path.join(spoolDir, `${appended.harness}.jsonl`), `${JSON.stringify(appended)}\n`);
+  const afterCapture = await tokensForShared();
+  assert.equal(afterCapture.status, "stale");
+  assert.deepEqual(afterCapture.data, freshTokens.data, "new captures do not clear Home's warnings");
+  await report(idleKey);
+  assert.deepEqual((await tokensForShared()).data, freshTokens.data, "scoped analysis cannot replace Home's all-repository warnings");
+  await report(null);
+  assert.equal((await tokensForShared()).status, "available");
+
+  for (let index = 0; index < 33; index += 1) {
+    assert.equal((await get(`/api/data?model=uncaptured-${index}`)).status, 200);
+  }
+  const afterEviction = await tokensForShared();
+  assert.equal(afterEviction.status, "stale");
+  assert.ok(afterEviction.data.warningCount > 0, "filtered report cache eviction cannot clear Home's warnings");
+
+  for (const name of fs.readdirSync(spoolDir)) fs.writeFileSync(path.join(spoolDir, name), "");
+  await report(null);
+  const emptyTokens = await tokensForShared();
+  assert.equal(emptyTokens.status, "available");
+  assert.equal(emptyTokens.data.warningCount, 0, "fresh analysis can legitimately clear warnings");
+  fs.appendFileSync(path.join(spoolDir, `${appended.harness}.jsonl`), `${JSON.stringify(appended)}\n`);
+  const pendingAfterEmpty = await tokensForShared();
+  assert.equal(pendingAfterEmpty.status, "stale");
+  assert.equal(pendingAfterEmpty.data.warningCount, 0, "pending analysis retains the latest result without resurrecting old warnings");
 
   console.log("repository scope portal checks passed");
 } finally {
