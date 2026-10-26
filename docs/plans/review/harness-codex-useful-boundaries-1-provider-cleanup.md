@@ -362,6 +362,6 @@ No implementation fix or escalate findings in the validation passes.
 
 ## Not tested
 
-- [ ] Native model synthesis using the real provider templates. Local help and synthetic processes
+- Deferred, optional: native model synthesis using the real provider templates. Local help and synthetic processes
       verify syntax and transport; a real model call requires separate authorization and is not
       needed for the provider cleanup's automated acceptance checks.
