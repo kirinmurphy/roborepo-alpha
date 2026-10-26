@@ -27,6 +27,10 @@
 **/plugins/known_marketplaces.json
 **/scheduled_tasks.lock
 
+# Per-machine preview-server config for the Claude desktop app: entries name local worktree paths
+# and ports, so each developer keeps their own.
+.claude/launch.json
+
 # Local backup output from install script.
 .backups/
 
