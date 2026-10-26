@@ -52,7 +52,7 @@ export function selectOption([value, label]) {
   return opt;
 }
 
-// Which onboarding step the page is on once plan-write is enabled. "plans" means there is a plan
+// Which onboarding step the page is on once plan-suite is enabled. "plans" means there is a plan
 // board to render; the other steps each show a single call to action instead.
 export function plansOnboardingStep(snapshot) {
   const scans = snapshot.repositoryScans || [];
@@ -149,7 +149,7 @@ export function lifecycleTab(lifecycle, count, isSelected, onSelect) {
 }
 
 // cardActions: { onOpen, onCopyPath, onCopyContext, onCopyPortableContext, onPlanAction,
-//                 planWriteEnabled, planWritePackage, skillModal,
+//                 planSuiteEnabled, planSuitePackage, skillModal,
 //                 onEnablePackage, onError }
 export function cardGrid(plans, cardActions) {
   const grid = document.createElement("div");
@@ -159,15 +159,15 @@ export function cardGrid(plans, cardActions) {
 }
 
 // drawerActions: { onCopyPath, onCopyRepoContext, onCopyPortableContext, onPlanAction,
-//                   onEnablePackage, planWritePackage, skillModal, onError }
+//                   onEnablePackage, planSuitePackage, skillModal, onError }
 export function drawerContent(doc, drawerActions) {
   const plan = doc.plan.plan;
-  const pkg = drawerActions.planWritePackage || {};
+  const pkg = drawerActions.planSuitePackage || {};
   const key = doc.plan.key;
   const menu = planMenuBody({
     installed: Boolean(pkg.enabled),
     lifecycle: plan.lifecycle,
-    planWritePackage: pkg,
+    planSuitePackage: pkg,
     skillModal: drawerActions.skillModal,
     onError: drawerActions.onError,
     onEnablePackage: drawerActions.onEnablePackage,
@@ -210,9 +210,9 @@ export function cardActionMenu(record, cardActions) {
   menu.setAttribute("icon", "copy");
   menu.setAttribute("aria-label", "Plan actions");
   menu.panelContent = planMenuBody({
-    installed: Boolean(cardActions.planWriteEnabled),
+    installed: Boolean(cardActions.planSuiteEnabled),
     lifecycle: plan.lifecycle,
-    planWritePackage: cardActions.planWritePackage,
+    planSuitePackage: cardActions.planSuitePackage,
     skillModal: cardActions.skillModal,
     onError: cardActions.onError,
     onEnablePackage: cardActions.onEnablePackage,
@@ -294,15 +294,15 @@ function menuItem({ icon = "copy", label, description, run }) {
   return item;
 }
 
-// The unified ⋯ menu body, shared by the drawer and the card. When plan-write is installed it shows
+// The unified ⋯ menu body, shared by the drawer and the card. When plan-suite is installed it shows
 // the lifecycle's suite commands (each copies its prompt), then a portable prompt — a
 // self-contained summary for a chat without repo access. Copy path is always last. The recommended action gets
 // its own dedicated CTA button outside this menu (see primaryPlanAction/cardPrimaryAction) — it is
 // deliberately not called out again inside the menu, to avoid a second, redundant highlight.
-// When plan-write is NOT installed there are no lifecycle actions, so it falls back to the generic
+// When plan-suite is NOT installed there are no lifecycle actions, so it falls back to the generic
 // repo-aware / portable prompts plus the enable-skill banner.
 //
-// api: { installed, lifecycle, planWritePackage, skillModal, onError,
+// api: { installed, lifecycle, planSuitePackage, skillModal, onError,
 //        copyPath, copyPrompt(command), copyRepoPrompt, copyPortablePrompt, onEnablePackage }
 function planMenuBody(api) {
   const wrap = tpl("tpl-plan-menu");
@@ -343,10 +343,10 @@ function planMenuBody(api) {
     menuItem({ icon: "copy", label: "Copy path", run: run(() => api.copyPath()) }),
   );
 
-  if (api.installed === false && api.planWritePackage) {
+  if (api.installed === false && api.planSuitePackage) {
     const banner = wrap.querySelector("[data-slot=package-banner]");
     banner.hidden = false;
-    banner.append(packageBanner(api.planWritePackage, api.onEnablePackage, api.skillModal));
+    banner.append(packageBanner(api.planSuitePackage, api.onEnablePackage, api.skillModal));
   }
   return wrap;
 }

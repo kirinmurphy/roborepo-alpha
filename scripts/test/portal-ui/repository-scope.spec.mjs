@@ -36,13 +36,13 @@ test.beforeAll(() => {
 test.afterAll(() => fs.rmSync(fixtureRoot, { recursive: true, force: true }));
 test.beforeEach(async ({ page }) => {
   for (const name of [ALPHA, BETA]) await addRepositorySource(page, path.join(fixtureRoot, name));
-  // The board only shows once plan-write is enabled; the hermetic machine has no packages. Matched
+  // The board only shows once plan-suite is enabled; the hermetic machine has no packages. Matched
   // by path so scoped requests (?repo=) are patched too.
   await page.route((url) => url.pathname === "/api/plans", async (route) => {
     // An unavailable scope's 404 passes through with its status.
     const response = await route.fetch();
     const data = await response.json();
-    if (data.planWritePackage) data.planWritePackage = { ...data.planWritePackage, available: true, enabled: true };
+    if (data.planSuitePackage) data.planSuitePackage = { ...data.planSuitePackage, available: true, enabled: true };
     await route.fulfill({ response, json: data });
   });
 });
@@ -206,7 +206,7 @@ test("a repository with no plans shows plain copy and View All Repos, not a pane
   await page.route((url) => url.pathname === "/api/plans", async (route) => {
     const response = await route.fetch();
     const data = await response.json();
-    await route.fulfill({ response, json: { ...data, plans: [], repositories: [], repositoryScans: [{ repositoryId: "local:aaaaaaaaaaaaaaaa", state: "scanned", planCount: 0, checkoutCount: 1 }], planWritePackage: { ...data.planWritePackage, available: true, enabled: true } } });
+    await route.fulfill({ response, json: { ...data, plans: [], repositories: [], repositoryScans: [{ repositoryId: "local:aaaaaaaaaaaaaaaa", state: "scanned", planCount: 0, checkoutCount: 1 }], planSuitePackage: { ...data.planSuitePackage, available: true, enabled: true } } });
   });
   await page.goto(`/plans?repo=${ALPHA}`);
   const empty = page.locator("#plans-onboarding .empty-state");

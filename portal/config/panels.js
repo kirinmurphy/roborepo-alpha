@@ -16,9 +16,22 @@ export function createConfigModal() {
   const costRowEl = document.getElementById("modal-cost-row");
   const contentEl = document.getElementById("modal-content");
   const footerEl = document.getElementById("modal-footer");
+  const backEl = document.getElementById("modal-back");
+  let onBack = null;
+  // Bumped by every view change, so a source fetch that resolves after the user moved on (Back
+  // pressed mid-load) does not overwrite the view now showing.
+  let viewSeq = 0;
 
   document.getElementById("modal-close").addEventListener("click", close);
   portalWireBackdropClose(dialogEl, close);
+  backEl.addEventListener("click", () => onBack?.());
+
+  // Back shows only on a source view opened from a package's contents view, and re-renders that
+  // view in this same dialog rather than stacking a second one.
+  function setBack(handler) {
+    onBack = handler || null;
+    backEl.hidden = !onBack;
+  }
 
   function setPaths(pathText) {
     const paths = Array.isArray(pathText)
@@ -75,13 +88,16 @@ export function createConfigModal() {
   }
 
   // fetch-then-show: the source-inspect entry point (inspect-click, config-files grid click).
-  async function openSource(inspect, { rules, harnesses, onDefaultClick, chips = [] }) {
+  async function openSource(inspect, { rules, harnesses, onDefaultClick, chips = [], back = null }) {
+    const seq = ++viewSeq;
+    setBack(back);
     setHeader(inspect.label || inspect.id, "loading…");
     contentEl.innerHTML = "";
     setFooter(null);
     open();
     try {
       const data = await api.fetchSource(inspect);
+      if (seq !== viewSeq) return;
       if (!data.ok) {
         setHeader(inspect.label || inspect.id, "");
         contentEl.textContent = "error: " + (data.error || "failed to load");
@@ -93,18 +109,33 @@ export function createConfigModal() {
         setFooter(tmpl.modalDefaults(rules, harnesses, onDefaultClick));
       }
     } catch (e) {
+      if (seq !== viewSeq) return;
       setHeader(inspect.label || inspect.id, "");
       contentEl.textContent = "error: " + e.message;
     }
   }
 
+  // The contents view of a package with several skills. Everything it lists is already in the
+  // snapshot, so nothing is fetched; selecting an entry calls `onSelect(entry)`, which opens that
+  // entry's source view with a Back that calls showContents again.
+  function showContents(inspect, { chips = [], entryChipSpec, onSelect }) {
+    viewSeq += 1;
+    setBack(null);
+    setHeader(inspect.label || inspect.id, "", chips);
+    contentEl.replaceChildren(tmpl.packageContents(inspect, { entryChipSpec, onSelect }));
+    setFooter(null);
+    open();
+  }
+
   // show-already-known-data: the defaults-menu entry point (globals baseline/per-harness/packages).
   function openSnapshot(title, pathText, data) {
+    viewSeq += 1;
+    setBack(null);
     setHeader(title, pathText);
     setContent(data);
     setFooter(null);
     open();
   }
 
-  return { openSource, openSnapshot };
+  return { openSource, openSnapshot, showContents };
 }

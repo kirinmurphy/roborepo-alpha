@@ -343,7 +343,7 @@ worktree.
   "dirty": false,
   "harness": { "id": "claude", "version": "<cli version>", "model": "<model id>" },
   "repeat": 3,
-  "enabledPackages": ["plan-close", "technical-writing", "test-harness"],
+  "enabledPackages": ["plan-suite", "technical-writing", "test-harness"],
   "suites": {
     "trigger": {
       "skills": {
@@ -352,7 +352,7 @@ worktree.
           "confusion": { "plan-close": 5, "none": 1 }
         }
       },
-      "cases": [{ "skill": "plan-close", "packageId": "plan-close", "kind": "routing", "prompt": "…", "runs": [{ "routed": "plan-close", "via": "skill-tool", "costUsd": 0.01 }] }]
+      "cases": [{ "skill": "plan-close", "packageId": "plan-suite", "kind": "routing", "prompt": "…", "runs": [{ "routed": "plan-close", "via": "skill-tool", "costUsd": 0.01 }] }]
     },
     "plan-close": {
       "scenarios": {

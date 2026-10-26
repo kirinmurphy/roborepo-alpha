@@ -1,0 +1,147 @@
+{
+  "tests": [
+    {
+      "skill": "plan-write",
+      "match": [
+        "create an implementation plan for package reconciliation",
+        "sync this plan with what we just changed",
+        "/plan-write docs/plans/backlog/example.md"
+      ],
+      "nearMiss": [
+        "write a quick PR summary",
+        "give me a brief answer about this function",
+        "implement this ordinary code change",
+        "close this plan, the work is merged",
+        "record the review findings and check off the completed task"
+      ],
+      "triggerPhrases": [
+        "/plan-write",
+        "implementation plan",
+        "sync this plan",
+        "revise a plan"
+      ],
+      "skipPhrases": [
+        "brief answers",
+        "PR descriptions",
+        "ordinary implementation",
+        "closing a finished plan",
+        "routine lifecycle records"
+      ]
+    },
+    {
+      "skill": "plan-promote",
+      "match": [
+        "I need help reviewing and preparing an existing repository implementation plan before we start coding",
+        "please reconcile stale assumptions and validate readiness on docs/plans/backlog/example.md"
+      ],
+      "nearMiss": [
+        "create an implementation plan for package reconciliation",
+        "start implementing this plan",
+        "close this plan now that it has merged"
+      ],
+      "triggerPhrases": [
+        "reviewing and preparing an existing repository implementation plan",
+        "reconcile stale assumptions",
+        "validate readiness"
+      ],
+      "skipPhrases": [
+        "creating a new plan from scratch",
+        "writing feature code",
+        "creating worktrees",
+        "starting or resuming implementation"
+      ]
+    },
+    {
+      "skill": "plan-execute",
+      "match": [
+        "help me with starting, resuming, or fixing the implementation of a prepared repository plan, docs/plans/ready/example.md",
+        "please create or safely reuse an isolated worktree and implement this plan"
+      ],
+      "nearMiss": [
+        "prepare this plan before we start building",
+        "sync this plan with what we just changed",
+        "close this plan now that it has merged"
+      ],
+      "triggerPhrases": [
+        "starting, resuming, or fixing the implementation of a prepared repository plan",
+        "create or safely reuse an isolated worktree"
+      ],
+      "skipPhrases": [
+        "preparing a backlog plan",
+        "the human review or approval",
+        "post-merge closure",
+        "implementation without an existing plan"
+      ]
+    },
+    {
+      "skill": "plan-review",
+      "match": [
+        "/plan-review docs/plans/review/example.md",
+        "run the human review of this finished plan before I merge it",
+        "record explicit human approval for this plan's implementation"
+      ],
+      "nearMiss": [
+        "review this diff for bugs",
+        "implement the next task in this plan",
+        "close this plan now that it has merged"
+      ],
+      "triggerPhrases": [
+        "/plan-review",
+        "human review",
+        "record explicit human approval"
+      ],
+      "skipPhrases": [
+        "implementing a plan",
+        "reviewing an arbitrary diff",
+        "merging branches",
+        "post-merge closure"
+      ]
+    },
+    {
+      "skill": "plan-close",
+      "match": [
+        "/plan-close docs/plans/review/example.md",
+        "the work merged, so close this plan and move it to completed",
+        "the pull request merged, please close this plan now that it has merged"
+      ],
+      "nearMiss": [
+        "sync this plan with what we just changed",
+        "wrap up this chat",
+        "review this diff for bugs"
+      ],
+      "triggerPhrases": [
+        "/plan-close",
+        "close this plan"
+      ],
+      "skipPhrases": [
+        "creating or revising plans",
+        "ending a session",
+        "reviewing a working diff",
+        "merging branches"
+      ]
+    },
+    {
+      "skill": "plan-archive",
+      "match": [
+        "/plan-archive docs/plans/backlog/example.md",
+        "archive this plan, we are not doing it anymore",
+        "this plan is superseded, retire this plan"
+      ],
+      "nearMiss": [
+        "close this plan now that it has merged",
+        "clean up old worktrees",
+        "delete this branch"
+      ],
+      "triggerPhrases": [
+        "/plan-archive",
+        "archive this plan",
+        "retire this plan"
+      ],
+      "skipPhrases": [
+        "closing finished work",
+        "cleaning up worktrees",
+        "deleting branches"
+      ]
+    }
+  ]
+}

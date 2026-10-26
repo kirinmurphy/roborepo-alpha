@@ -45,7 +45,7 @@ export function buildPlanSnapshot({ stateRoot, packageState = null, registry = n
     plans: withRelationshipFindings(plans).map(publicPlan),
     errors,
     truncated: plans.some((plan) => plan.repository.truncated),
-    planWritePackage: packageState || { available: false, enabled: false, status: "missing" },
+    planSuitePackage: packageState || { available: false, enabled: false, status: "missing" },
     // The portal reads states, tabs, and actions from here rather than keeping its own copy.
     lifecycle: lifecycleProjection(LIFECYCLE_MODEL),
   };

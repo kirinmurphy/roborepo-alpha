@@ -19,7 +19,7 @@ import { buildRepositoryPlanSnapshot, selectRepositoryPlan } from "../../modules
 import { archiveCarry, worktreeCopyIntegration } from "../../modules/plan-suite/copy-integration.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const skill = fs.readFileSync(path.join(repoRoot, "globals/packages/plan-close/skills/plan-close/SKILL.md"), "utf8");
+const skill = fs.readFileSync(path.join(repoRoot, "globals/packages/plan-suite/skills/plan-close/SKILL.md"), "utf8");
 const tempRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-plan-close-integration-")));
 const PLAN = "docs/plans/review/p.md";
 Object.assign(process.env, { GIT_AUTHOR_NAME: "Test", GIT_AUTHOR_EMAIL: "t@example.com", GIT_COMMITTER_NAME: "Test", GIT_COMMITTER_EMAIL: "t@example.com" });

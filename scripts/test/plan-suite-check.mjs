@@ -361,7 +361,7 @@ Run targeted checks.
   assert.equal(priorityCliResult.record.absolutePath, undefined, "CLI-layer priority result must not expose absolutePath");
   assert.equal(priorityCliResult.record.repository.root, undefined, "CLI-layer priority result must not expose repository.root");
 
-  // Regression: planWritePackage.enabled must track the package's real live-enabled state
+  // Regression: planSuitePackage.enabled must track the package's real live-enabled state
   // (buildPackageLiveState, same source config.mjs's readConfigSnapshot uses), not the raw
   // catalog entry — the catalog entry never carries a `.status`/`.catalogStatus` field at all, so
   // reading those directly off it (the previous implementation) always evaluated to `enabled:
@@ -385,22 +385,22 @@ Run targeted checks.
     const readSnapshotEnabled = () => {
       const result = spawnSync(process.execPath, [
         "-e",
-        "import('./scripts/cli/plans.mjs').then((m) => { process.stdout.write(JSON.stringify(m.loadPlansSnapshot().planWritePackage)); })",
+        "import('./scripts/cli/plans.mjs').then((m) => { process.stdout.write(JSON.stringify(m.loadPlansSnapshot().planSuitePackage)); })",
       ], { cwd, env, encoding: "utf8" });
       assert.equal(result.status, 0, result.stderr);
       return JSON.parse(result.stdout);
     };
 
     const beforeEnable = readSnapshotEnabled();
-    assert.equal(beforeEnable.enabled, false, "plan-write starts disabled in a fresh HOME");
+    assert.equal(beforeEnable.enabled, false, "plan-suite starts disabled in a fresh HOME");
 
-    spawnSync(process.execPath, [cliPath, "package", "enable", "plan-write"], { env, stdio: "ignore" });
+    spawnSync(process.execPath, [cliPath, "package", "enable", "plan-suite"], { env, stdio: "ignore" });
     const afterEnable = readSnapshotEnabled();
-    assert.equal(afterEnable.enabled, true, "planWritePackage.enabled reflects the real live-enabled state after `roborepo package enable plan-write`");
+    assert.equal(afterEnable.enabled, true, "planSuitePackage.enabled reflects the real live-enabled state after `roborepo package enable plan-suite`");
 
-    spawnSync(process.execPath, [cliPath, "package", "disable", "plan-write"], { env, stdio: "ignore" });
+    spawnSync(process.execPath, [cliPath, "package", "disable", "plan-suite"], { env, stdio: "ignore" });
     const afterDisable = readSnapshotEnabled();
-    assert.equal(afterDisable.enabled, false, "planWritePackage.enabled reflects disabled state after `roborepo package disable plan-write`");
+    assert.equal(afterDisable.enabled, false, "planSuitePackage.enabled reflects disabled state after `roborepo package disable plan-suite`");
 
     fs.rmSync(homeDir, { recursive: true, force: true });
   }

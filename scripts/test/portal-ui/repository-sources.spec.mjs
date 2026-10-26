@@ -101,7 +101,7 @@ test.describe("first-run repository states", () => {
     test(`Plans shows one call to action when ${step}`, async ({ page }) => {
       await page.route("**/api/plans", async (route) => {
         const data = await (await route.fetch()).json();
-        await route.fulfill({ json: { ...data, plans, repositories: [], repositoryScans: scans, autoDiscovery: { enabled: false }, planWritePackage: { ...data.planWritePackage, available: true, enabled: true } } });
+        await route.fulfill({ json: { ...data, plans, repositories: [], repositoryScans: scans, autoDiscovery: { enabled: false }, planSuitePackage: { ...data.planSuitePackage, available: true, enabled: true } } });
       });
       await page.goto("/plans");
       const onboarding = page.locator("#plans-onboarding");

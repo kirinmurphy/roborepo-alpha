@@ -728,6 +728,73 @@ dialog#config-modal .modal-head {
 .modal-head-main portal-close-button {
   margin-left: auto;
 }
+.modal-back {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--dim);
+  cursor: pointer;
+  font: inherit;
+  padding: 2px 8px;
+}
+.modal-back:hover {
+  color: var(--ink);
+}
+/* package contents view: one full-width button per resource, label | description | cost | › */
+.package-contents-summary {
+  color: var(--dim);
+  margin: 0 0 8px;
+}
+/* #modal-content is a .markdown container, whose list rules would indent this list. */
+.markdown .package-contents-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+.markdown .package-contents-list li {
+  margin: 0;
+  border-bottom: 1px solid var(--line);
+}
+.package-contents-entry {
+  display: grid;
+  grid-template-columns: minmax(8em, max-content) 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 4px;
+  background: none;
+  border: none;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.package-contents-entry:hover {
+  background: var(--bg);
+}
+.package-contents-label {
+  font-family: var(--mono);
+}
+.package-contents-desc {
+  color: var(--dim);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.package-contents-chevron {
+  color: var(--dim);
+}
+@media (max-width: 640px) {
+  .package-contents-entry {
+    grid-template-columns: 1fr auto auto;
+  }
+  .package-contents-desc {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
 dialog#config-modal .modal-path {
   display: grid;
   gap: 2px;
@@ -821,7 +888,7 @@ dialog#config-modal::backdrop {
   max-height: 220px;
   overflow-y: auto;
   color: var(--dim);
-  font-family: var(--mono, monospace);
+  font-family: var(--mono);
   font-size: var(--text-xs);
 }
 .maintenance-actions {

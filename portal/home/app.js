@@ -36,7 +36,7 @@ let mergedPlans = new Map();
 // Plans page's mutation flow, which Home does not carry.
 const planDrawer = createPlanDrawer({
   getPlans: () => plansSnapshot?.plans || [],
-  getPlanWritePackage: () => plansSnapshot?.planWritePackage || {},
+  getPlanSuitePackage: () => plansSnapshot?.planSuitePackage || {},
   mergeFor: (key) => mergedPlans.get(key) || null,
   onEnablePackage: () => { location.href = "/plans"; },
   onError: showWarning,
@@ -101,7 +101,7 @@ async function dismissCleanupNotice(repository) {
   }
 }
 
-// The plans snapshot supplies what the drawer resolves against (blockers, plan-write package state, the
+// The plans snapshot supplies what the drawer resolves against (blockers, plan-suite package state, the
 // lifecycle's labels and actions); it is fetched on open rather than polled, since Home only needs it
 // while a drawer is showing.
 async function openPlan(plan) {

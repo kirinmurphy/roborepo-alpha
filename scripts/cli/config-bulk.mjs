@@ -1,5 +1,6 @@
-// Section-level bulk enable/disable for the portal's bulkToggle sections. One HTTP request
-// carries the whole section; this module applies it as ONE unit:
+// Bulk enable/disable of a set of packages: a bulkToggle section's Select All switch, or the Plans
+// onboarding banner's plan-suite and session-close. One HTTP request carries the whole set; this
+// module applies it as ONE unit:
 //
 //   preflight (validate every id against the simulated target set) -> diff vs current state ->
 //   sequential mutations (each enable/disable re-reads the registry and re-renders rules from

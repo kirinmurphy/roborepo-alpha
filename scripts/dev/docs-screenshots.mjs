@@ -37,7 +37,7 @@ const outIndex = args.indexOf("--out");
 const outDir = path.resolve(outIndex !== -1 ? args[outIndex + 1] : path.join(repoRoot, "docs", "images"));
 
 const PACKAGES = [
-  "plan-write",
+  "plan-suite",
   "code-style",
   "javascript-typescript",
   "test-harness",

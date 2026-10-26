@@ -158,7 +158,7 @@ function unmatchedWorktreeState(name, { claims, worktreeNames, worktrees, runtim
 }
 
 // Home offers the opt-in cleanup hook only where the plan suite is not closing stories: the
-// plan-close package is disabled, the repository has linked worktrees, the hook is absent or another
+// plan-suite package is disabled, the repository has linked worktrees, the hook is absent or another
 // tool's, and the user has not dismissed the offer. A shared global hooks path cannot be offered.
 function withCleanupOffer(workspace, planCloseEnabled) {
   const cleanup = workspace.worktreeCleanup;

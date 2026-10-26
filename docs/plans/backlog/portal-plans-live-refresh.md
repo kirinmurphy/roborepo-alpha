@@ -55,7 +55,7 @@ Shipped in `main` (from the parent plan):
 - `/plans` portal — `portal/plans/`.
 - Portable domain module — `modules/plan-suite/` (`index.mjs`, `repair.mjs`).
 - CLI adapter — `scripts/cli/plans.mjs`.
-- `plan-write` package + skill — `globals/packages/plan-write/`.
+- `plan-write` skill, in the `plan-suite` package — `globals/packages/plan-suite/skills/plan-write/`.
 - Priority updates use `POST /api/plans/priority`; lifecycle changes use the current atomic
   plan-suite commands. The earlier generic portal lifecycle-mutation route is retired.
 
