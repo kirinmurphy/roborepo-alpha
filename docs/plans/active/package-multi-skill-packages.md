@@ -427,7 +427,9 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
 - [x] `multiSkillPresentationItem` emitted a `skillCount` field nothing reads (the badge carries the
       count) — removed, with the assertion that only checked its absence (e9e3aec2)
 - [x] `plans-portal.md` said enabling `plan-suite` turns on seven skills; it turns on six, and
-      `/session-close` is its own package — fixed
+      `/session-close` is its own package — fixed (42d61c23)
+- [x] No test covered a successful `add-skill` without `--command` (an auto skill with no
+      entrypoint) — added to `test-cli.sh`
 
 ### Verification
 
@@ -439,6 +441,7 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
 - Full gate at e84e3c35: `npm run check` passed — doctor 106 checks, test-cli 463/0, check suites 60/60, package-install, clean-machine Docker suites, portal UI 132; Windows installer parity skipped (pwsh unavailable)
 - Resumed run, validation pass 1: 3 `fix` findings (fresh-context subagent)
 - Resumed run, validation pass 2: 1 `fix` finding, a docs wording fix (fresh-context subagent)
+- Resumed run, validation pass 3: 1 `fix` finding, a missing test (fresh-context subagent)
 
 ## Documentation impact
 

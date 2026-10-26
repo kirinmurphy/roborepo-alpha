@@ -184,6 +184,10 @@ assert "package dev add-skill: adds a commanded skill, its trigger entry, and va
     && node -e \"const c=require('${add_skill_root}/packages/add-skill-pack/package.config.json'); const s=c.resources.filter(r=>r.type==='skill'); process.exit(s.map(r=>r.id).join()==='add-skill-pack,add-skill-second' && s[1].entrypoints[0].name==='add-skill-second' ? 0 : 1)\" \
     && node -e \"const t=require('${add_skill_root}/packages/add-skill-pack/skill-triggers.json'); process.exit(t.tests.some(x=>x.skill==='add-skill-second') ? 0 : 1)\" \
     && ${add_skill_env} node '${cli}' package validate add-skill-pack >/dev/null"
+assert "package dev add-skill: without --command adds an auto skill with no entrypoint, after the existing skills" \
+  bash -c "${add_skill_env} node '${cli}' package dev add-skill add-skill-pack add-skill-third >'${work}/add-skill-auto.out' \
+    && node -e \"const c=require('${add_skill_root}/packages/add-skill-pack/package.config.json'); const s=c.resources.filter(r=>r.type==='skill'); const t=s.at(-1); process.exit(s.map(r=>r.id).join()==='add-skill-pack,add-skill-second,add-skill-third' && t.invocation==='auto' && t.risk==='low' && !t.entrypoints ? 0 : 1)\" \
+    && ! grep -q 'render-commands\|will not install' '${work}/add-skill-auto.out'"
 cp "${add_skill_root}/packages/add-skill-pack/package.config.json" "${work}/add-skill-pack.before.json"
 cp "${add_skill_root}/packages/add-skill-pack/skill-triggers.json" "${work}/add-skill-triggers.before.json"
 add_skill_unchanged="cmp -s '${work}/add-skill-pack.before.json' '${add_skill_root}/packages/add-skill-pack/package.config.json' && cmp -s '${work}/add-skill-triggers.before.json' '${add_skill_root}/packages/add-skill-pack/skill-triggers.json'"
