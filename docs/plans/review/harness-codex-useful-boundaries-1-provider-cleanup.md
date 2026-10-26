@@ -1,7 +1,7 @@
 ---
 id: hr78g4sj
 priority: high
-next_action: Review feedback fixes at b4cd722843c1d824838324f0265d592dbc7b1b6e, then request renewed human approval.
+next_action: Finish verification of the synchronized review, then request approval of the exact implementation commit.
 blocked_by: []
 depends_on: ["wjlt1zvf"]
 related: ["4zyo2woj", "8bjltk2n", "46qth5z8", "7k3m9qd", "harness-capability-derived-resource-targeting"]
@@ -262,6 +262,9 @@ None. Hook-readiness landing was verified before implementation; no design decis
 
 ### Findings
 
+- [x] The Codex headless argv example in `docs/internal/harness-provider-interface.md` omitted
+  `--skip-git-repo-check`; corrected to match the provider — fixed in review (f9772b07).
+
 No implementation fix or escalate findings in the validation passes.
 
 - [x] Durable review evidence contained temporary log paths; replaced them with the observed
@@ -395,6 +398,24 @@ No implementation fix or escalate findings in the validation passes.
   results, not a claim that remote CI has rerun successfully.
 - Renewed review and explicit approval of the changed implementation remain pending. Earlier
   validator passes cover the implementation before these feedback fixes.
+
+### Synchronized feedback review — October 26
+
+- User completed the base merge: synchronized main
+  `fb068616abc30baaaf6194e7ba6871f32e78e496` into the feature branch as
+  `767405be0f3a2f3a726f2728f29459ab1a1f7ebb`. The canonical landed check reports `not absorbed`:
+  the feature has not yet landed in local main. No additional synchronization was needed.
+- Fresh-context Validator reviewed acceptance criteria, the full feature diff, changes since
+  the prior reviewed implementation, observable assertions, documentation, and conventions.
+  No code/test fix or escalation findings. One stale Codex argv documentation example was fixed
+  separately in `f9772b07`; no implementation behavior changed in this review.
+- Validator checks passed: registry, synthetic-provider transport, desktop-runtime selection,
+  shared-target install/removal, hook composition, and diff checks. The provider-interface fix
+  also passed `node scripts/test/docs-reference-check.mjs` and `git diff --check`.
+- Final full parity gate is running on the synchronized implementation. Earlier passing gate
+  evidence is historical; this round does not claim completion until the current gate finishes.
+- No required manual tests remain; native model synthesis stays explicitly optional. Human's
+  statement that they are ready to approve is readiness, not explicit approval of a new commit.
 
 ## Not tested
 
