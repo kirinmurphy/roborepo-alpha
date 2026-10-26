@@ -463,6 +463,26 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
 - `/plan-review` validator pass 2 at 0d26b9a4: 2 `fix` findings and 1 `escalate`, reclassified as
   `fix` because the remedy is a Coordination note (fresh-context subagent). Its Not tested finding
   was already fixed in 3dee1cf6
+- Full gate at 0d26b9a4: `npm run check` failed once on `browser-lifecycle-check.mjs` (empty JSON
+  from the backgrounded `--serve` case, line 50). The branch does not touch that check or the
+  browser CLI; it passed 3/3 standalone on the branch and 5/5 on main, so it is intermittent, not a
+  base failure
+- Full gate at fb0c9543: `npm run check` passed — check suites 60/60, test-cli 464/0, portal UI
+  132, clean-machine sandboxes; Windows installer parity skipped (pwsh unavailable)
+- `/plan-review` validator pass 3 at fb0c9543: clean (fresh-context subagent)
+- Manual: the Not tested entry (a real machine updated from the old plan packages) is not yet
+  confirmed by the user
+
+### Result
+
+- Status: pending
+- Reviewed implementation commit: fb0c9543194d39d8d552a54445c24e1904c16414
+- Base commit: e479885db4383315645e2ff8a9d7c8ef334de427
+- Pending: the Not tested manual check
+
+### Approval
+
+- Decision: not requested (blocked by the unconfirmed manual check)
 
 ## Documentation impact
 
