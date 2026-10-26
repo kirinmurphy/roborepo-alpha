@@ -875,7 +875,7 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     },
     mutatePackage: async (id, enabled) => reportPackageHookChange(await mutatePackage(id, enabled), [id]),
     mutateSkill: (id, enabled) => setSkillInstalled(id, enabled),
-    // Section-level bulk enable/disable (portal bulkToggle sections). Lazy import: keeps the
+    // Bulk enable/disable of a set of packages (Select All sections, the Plans onboarding banner). Lazy import: keeps the
     // batch module (and its reconcile dependency) out of every non-portal code path.
     bulkPackageChange: (ids, enabled) =>
       import("./config-bulk.mjs").then((m) => m.applyBulkPackageChange(ids, enabled))

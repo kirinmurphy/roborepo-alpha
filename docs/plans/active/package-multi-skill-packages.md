@@ -402,18 +402,21 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
       reworded; `package-catalog-check.mjs` asserts equality only when harnesses agree (22b2b531)
 - [x] A failed `add-skill` on a package with no `skills/` folder left an empty one behind while
       reporting nothing changed — the restore removes a `skills/` folder the call created; tested (e01c9d9f)
-- [x] A test comment still said the cleanup offer depends on the plan-close package — fixed
+- [x] A test comment still said the cleanup offer depends on the plan-close package — fixed (28e30973)
 - [x] The fixture comment and Phase 1 task called the fixture a workspace package; it is a built-in
-      package in a throwaway app root — fixed
+      package in a throwaway app root — fixed (28e30973)
 - [x] main's two hook-readiness Agents tests need a built-in `bulkToggle` section, which this
       branch removes — the user approved merging main; both tests now route a config with one
-      section marked `bulkToggle` (`routeBulkToggleConfig` in `portal-ui.spec.mjs`)
+      section marked `bulkToggle` (`routeBulkToggleConfig` in `portal-ui.spec.mjs`) (3aa6d03c)
+- [x] Bulk endpoint comments said it serves only `bulkToggle` sections; the Plans banner, from a
+      section without one, is now its built-in caller — reworded
 
 ### Verification
 
 - Validation pass 1: 3 `fix` findings (fresh-context subagent)
 - Validation pass 2: 1 `fix` finding (fresh-context subagent)
 - Validation pass 3: 2 `fix` findings, 1 `escalate` (fresh-context subagent)
+- Validation pass 4: 1 `fix` finding, after merging main (fresh-context subagent)
 
 ## Documentation impact
 
