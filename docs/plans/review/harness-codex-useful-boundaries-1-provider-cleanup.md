@@ -1,7 +1,7 @@
 ---
 id: hr78g4sj
 priority: high
-next_action: Finish current review verification, then request human approval of the reviewed implementation.
+next_action: Await explicit human approval of reviewed implementation d62ba4d5b9f3f987c2be3eea4410efd1c51e78f6.
 blocked_by: []
 depends_on: ["wjlt1zvf"]
 related: ["4zyo2woj", "8bjltk2n", "46qth5z8", "7k3m9qd", "harness-capability-derived-resource-targeting"]
@@ -265,7 +265,7 @@ None. Hook-readiness landing was verified before implementation; no design decis
 No implementation fix or escalate findings in the validation passes.
 
 - [x] Durable review evidence contained temporary log paths; replaced them with the observed
-  outcomes required by the updated review guidance.
+  outcomes required by the updated review guidance (d62ba4d5).
 
 ### Verification
 
@@ -315,8 +315,8 @@ No implementation fix or escalate findings in the validation passes.
   this worktree and are not part of review commits.
 
 ### Result
-- Status: pending
-- Reviewed implementation commit: cdb37fda4d3f31400ab126586e6057f4dee47df5
+- Status: complete
+- Reviewed implementation commit: d62ba4d5b9f3f987c2be3eea4410efd1c51e78f6
 - Base commit: 9211dab11354fbf36de3275584b5481987f15481
 
 ### Approval
@@ -324,6 +324,17 @@ No implementation fix or escalate findings in the validation passes.
 
 ### Current review evidence
 
+- Final `npm run check` passed, exit 0, on the synchronized implementation, with only plan-record
+  commits afterward. Health: 106 checks; CLI: 457 passed, zero failed; install collisions: all
+  passed; grouped CI suites: 60/60; package-install smoke: passed; strict Docker clean-machine,
+  install, permissions, and onboarding scenarios: all passed; browser assertions: 130 passed.
+  `git diff --check` passed. Windows installer parity was skipped because `pwsh` is unavailable;
+  the optional active-root fixture reported `uvx` unavailable. Neither is claimed as passed.
+- Earlier generated-rules base failures are historical and resolved in synchronized main. No
+  current base failures, open implementation findings, escalations, or required manual checks
+  remain. Both primary and worktree statuses were clean before committing this final evidence.
+- Review commits: `8b6a424e` recorded the initial review; `d62ba4d5` recorded the second-sync
+  acceptance evidence and the sole documentation correction. No implementation fix commit exists.
 - Main advanced while verification ran. A second authorized synchronization merged base
   `9211dab11354fbf36de3275584b5481987f15481` without conflicts, producing implementation
   `cdb37fda4d3f31400ab126586e6057f4dee47df5`. That base repairs the earlier generated-rules drift.
