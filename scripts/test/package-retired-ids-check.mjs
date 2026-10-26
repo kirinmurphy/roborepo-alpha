@@ -96,11 +96,13 @@ try {
     assert.equal(fs.existsSync(path.join(home, ".claude", "commands", `${id}.md`)), false, `${id}: slash command removed`);
   }
   const planSuiteInstalled = (when) => {
-    for (const id of OLD_PLAN_PACKAGES) {
-      assert.ok(fs.existsSync(path.join(home, ".claude", "skills", id, "SKILL.md")), `${when}: ${id} skill is installed`);
-      const command = path.join(home, ".claude", "commands", `${id}.md`);
-      assert.ok(fs.existsSync(command), `${when}: /${id} is installed`);
-      assert.match(fs.readFileSync(command, "utf8"), /Owned by package: plan-suite/, `${when}: /${id} is owned by plan-suite`);
+    for (const harness of [".claude", ".codex", ".gemini"]) {
+      for (const id of OLD_PLAN_PACKAGES) {
+        assert.ok(fs.existsSync(path.join(home, harness, "skills", id, "SKILL.md")), `${when}: ${harness} ${id} skill is installed`);
+        const command = path.join(home, harness, "commands", `${id}.md`);
+        assert.ok(fs.existsSync(command), `${when}: ${harness} /${id} is installed`);
+        assert.match(fs.readFileSync(command, "utf8"), /Owned by package: plan-suite/, `${when}: ${harness} /${id} is owned by plan-suite`);
+      }
     }
   };
   planSuiteInstalled("after update");
