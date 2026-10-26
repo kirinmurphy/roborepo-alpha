@@ -1,7 +1,7 @@
 ---
 id: bysyzl1e
 priority: high
-next_action: Run /plan-review to review the implementation and confirm the Not tested entry.
+next_action: Fix the three open validation pass 5 findings under Review (bulk endpoint wording in portal/plans/api.js and plans-portal.md, the add-skill render-commands hint in package mode, a cost-chip assertion in the contents-view test), then rerun /plan-execute to validate and submit.
 blocked_by: []
 depends_on: []
 related: ["o9zwxuav", "ejsc769o", "jdsobwn", "user-managed-packages-and-add-workflows"]
@@ -409,7 +409,16 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
       branch removes — the user approved merging main; both tests now route a config with one
       section marked `bulkToggle` (`routeBulkToggleConfig` in `portal-ui.spec.mjs`) (3aa6d03c)
 - [x] Bulk endpoint comments said it serves only `bulkToggle` sections; the Plans banner, from a
-      section without one, is now its built-in caller — reworded
+      section without one, is now its built-in caller — reworded (de5ad784)
+- [ ] `portal/plans/api.js:35` and `docs/user/reference/plans-portal.md:280-281` still say the
+      banner enables its packages "through the config section's bulk endpoint"; no section has
+      `bulkToggle` now. Reword to "the config bulk endpoint (`/api/config/packages/bulk`)"
+- [ ] `scripts/cli/packages.mjs` `addSkillToPackage` prints `next: roborepo skill render-commands`
+      after `--command` even in package mode, where only workspace packages are editable and their
+      commands never install. Print it only for built-in packages, or say the command will not
+      install
+- [ ] The contents-view portal UI test does not assert that each entry renders its own cost chip
+      (`contentsEntryChipSpec`); add an assertion that each skill row's `token-chip` is visible
 
 ### Verification
 
@@ -417,6 +426,8 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
 - Validation pass 2: 1 `fix` finding (fresh-context subagent)
 - Validation pass 3: 2 `fix` findings, 1 `escalate` (fresh-context subagent)
 - Validation pass 4: 1 `fix` finding, after merging main (fresh-context subagent)
+- Validation pass 5: 3 `fix` findings; the loop stopped at its five-pass cap with them open (fresh-context subagent)
+- Full gate at 3aa6d03c (after merging main): `npm run check` passed — doctor 107 checks, test-cli 463/0, check suites 60/60, package-install, clean-machine Docker suites, portal UI 132; Windows installer parity skipped (pwsh unavailable)
 
 ## Documentation impact
 
