@@ -386,7 +386,8 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
 
 - [ ] Updating a real machine that enabled some of the old plan packages ends with `plan-suite`
       enabled and all six commands working in Claude, Codex, and Gemini. The retired-IDs check
-      covers the registry and Claude files in a hermetic home, not a live harness session.
+      covers the registry and each harness's skill and command files in a hermetic home, not a live
+      harness session running the commands.
 
 ## Review
 
@@ -430,13 +431,13 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
       `/session-close` is its own package — fixed (42d61c23)
 - [x] No test covered a successful `add-skill` without `--command` (an auto skill with no
       entrypoint) — added to `test-cli.sh` (55e55a00)
-- [ ] `scripts/dev/docs-screenshots.mjs` `PACKAGES` still enables `plan-write`, which no longer
-      exists, so `setUpHome` throws — use `plan-suite`
-- [ ] Open backlog plan `portal-home-onboarding-calls-to-action.md` (lines 37, 113) names
-      `plan-write` as a package — use `plan-suite`
-- [ ] `package-retired-ids-check.mjs` asserts plan-suite's skills and commands only for Claude; the
-      hermetic home also installs them for Codex and Gemini — assert all three harnesses and narrow
-      the Not tested entry to a live harness session
+- [x] `scripts/dev/docs-screenshots.mjs` `PACKAGES` still enables `plan-write`, which no longer
+      exists, so `setUpHome` throws — fixed in review (c5c35b35)
+- [x] Open backlog plan `portal-home-onboarding-calls-to-action.md` (lines 37, 113) names
+      `plan-write` as a package — fixed in review (a229395d)
+- [x] `package-retired-ids-check.mjs` asserts plan-suite's skills and commands only for Claude; the
+      hermetic home also installs them for Codex and Gemini — all three asserted; Not tested entry
+      narrowed to a live harness session (0d26b9a4)
 
 ### Verification
 
