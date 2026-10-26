@@ -386,16 +386,19 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
 
 - [x] Portal comments still named the `plan-write` package as the Plans page gate
       (`portal/plans/app.js`, `templates.js`, `plan-drawer.js`, `plan-drawer-partial.html`,
-      `portal/home/app.js`) — fixed
+      `portal/home/app.js`) — fixed (22b2b531)
 - [x] `add-skill` refusals documented but untested: built-in package in package mode, a claimed
       command name, and the restore on validation failure — tested; claim checks now go through
-      validation so the restore path runs
+      validation so the restore path runs (22b2b531)
 - [x] `aggregateResources` comment claimed per-resource figures always sum to the package total —
-      reworded; `package-catalog-check.mjs` asserts equality only when harnesses agree
+      reworded; `package-catalog-check.mjs` asserts equality only when harnesses agree (22b2b531)
+- [x] A failed `add-skill` on a package with no `skills/` folder left an empty one behind while
+      reporting nothing changed — the restore removes a `skills/` folder the call created; tested
 
 ### Verification
 
 - Validation pass 1: 3 `fix` findings (fresh-context subagent)
+- Validation pass 2: 1 `fix` finding (fresh-context subagent)
 
 ## Documentation impact
 

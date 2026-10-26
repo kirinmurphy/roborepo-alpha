@@ -195,6 +195,10 @@ assert "package dev add-skill: a command name another package claims fails valid
     && test ! -d '${add_skill_root}/packages/add-skill-pack/skills/add-skill-taken' && ${add_skill_unchanged}"
 assert "package dev add-skill: refuses a skill the package already has" \
   bash -c "! env ${add_skill_env} node '${cli}' package dev add-skill add-skill-pack add-skill-second >/dev/null 2>'${work}/add-skill-repeat.err' && grep -q 'package add-skill-pack already has skill add-skill-second' '${work}/add-skill-repeat.err' && ${add_skill_unchanged}"
+assert "package dev add-skill: a failed add to a package without skills leaves no skills folder behind" \
+  bash -c "${add_skill_env} node '${cli}' package dev create add-skill-empty --kind=empty >/dev/null \
+    && ! env ${add_skill_env} node '${cli}' package dev add-skill add-skill-empty code-style >/dev/null 2>&1 \
+    && test ! -e '${add_skill_root}/packages/add-skill-empty/skills' && test ! -e '${add_skill_root}/packages/add-skill-empty/skill-triggers.json'"
 assert "package dev add-skill: refuses a built-in package in package mode" \
   bash -c "! env ${add_skill_env} node '${cli}' package dev add-skill plan-suite add-skill-extra >/dev/null 2>'${work}/add-skill-builtin.err' && grep -q 'package plan-suite is built in' '${work}/add-skill-builtin.err' && test ! -d '${repo_root}/globals/packages/plan-suite/skills/add-skill-extra' && git -C '${repo_root}' diff --quiet -- globals/packages/plan-suite"
 

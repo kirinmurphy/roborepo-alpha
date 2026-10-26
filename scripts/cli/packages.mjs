@@ -125,8 +125,10 @@ function addSkillToPackage(rest) {
   const configPath = pkg.sourceFile || path.join(pkg.sourceRoot, "package.config.json");
   const originalConfig = fs.readFileSync(configPath, "utf8");
   const config = JSON.parse(originalConfig);
-  const skillDir = path.join(pkg.sourceRoot, "skills", skillId);
+  const skillsRoot = path.join(pkg.sourceRoot, "skills");
+  const skillDir = path.join(skillsRoot, skillId);
   if (fs.existsSync(skillDir)) throw new Error(`skill directory already exists: ${skillDir}`);
+  const createsSkillsRoot = !fs.existsSync(skillsRoot);
   const triggersPath = path.join(pkg.sourceRoot, SKILL_TRIGGERS_FILE);
   const originalTriggers = fs.existsSync(triggersPath) ? fs.readFileSync(triggersPath, "utf8") : null;
 
@@ -158,7 +160,7 @@ function addSkillToPackage(rest) {
     fs.writeFileSync(configPath, originalConfig);
     if (originalTriggers === null) fs.rmSync(triggersPath, { force: true });
     else fs.writeFileSync(triggersPath, originalTriggers);
-    fs.rmSync(skillDir, { recursive: true, force: true });
+    fs.rmSync(createsSkillsRoot ? skillsRoot : skillDir, { recursive: true, force: true });
     throw new Error(`package ${pkgId} did not validate with skill ${skillId}; nothing was changed: ${error.message}`);
   }
   console.log(`added skill ${skillId} to package ${pkgId}: ${path.join(skillDir, "SKILL.md")}`);
