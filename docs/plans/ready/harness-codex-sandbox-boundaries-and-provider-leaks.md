@@ -1,11 +1,11 @@
 ---
 id: 4zyo2woj
 priority: high
-next_action: Wait for Part 1 provider cleanup to land, then extend native credential fixtures and implement denial in writable and read-only Codex profiles before Part 3 uses source staging.
-blocked_by: ["hr78g4sj"]
+next_action: Resolve supported Codex runtimes and effective permission layers, then add synthetic credential projection and enforcement fixtures before implementing native denial in writable and read-only profiles.
+blocked_by: []
 depends_on: ["hr78g4sj"]
-related: ["8bjltk2n", "wjlt1zvf", "ia1q1z9", "permva27", "permissions-ui-revamp", "codex-cmux-hook-trust-review", "46qth5z8", "harness-capability-derived-resource-targeting", "7k3m9qd"]
-reviewed_commit: d6b7fea242f9473ae9f0ca6899e6389a403e9706
+related: ["8bjltk2n", "wjlt1zvf", "ia1q1z9", "permva27", "permissions-ui-revamp", "codex-cmux-hook-trust-review", "46qth5z8", "harness-capability-derived-resource-targeting", "7k3m9qd", "o9zwxuav"]
+reviewed_commit: 60d2ba76e5a9ca0cc5dbb5d98ab73330c674d5de
 worktree:
 ---
 
@@ -23,7 +23,7 @@ is now owned by Part 1; isolated app/browser execution is owned by Part 3.
 ## Context
 
 The original write-scope plan (`ia1q1z9`) showed that restricting writes did not also restrict
-credential reads. Local main at `d6b7fea2` still renders Codex workspace roots and a network boolean
+credential reads. Local main at `60d2ba76` still renders Codex workspace roots and a network boolean
 without credential-denial entries. Its read-only branch selects `:read-only` directly and renders
 no filesystem entries either. The user selected native denial even though matching files
 also become unwritable. Host networking remains restricted throughout this work.
@@ -61,34 +61,40 @@ flowchart LR
 | 2 | This plan | Credential protection and historical characterization evidence |
 | 3 | [[8bjltk2n]] | Disconnected app/browser workflow and scoped approval verification |
 
-Parts 2 and 3 must not start implementation before Part 1 has landed and its current behavior has
-been rechecked. Preparation may move this document to `ready/` with
-`blocked_by: ["hr78g4sj"]`; implementation must stop at the prerequisite check until Part 1 lands.
-Hook-readiness has landed and is consumed transitively. This plan does not relocate hooks itself.
+Part 1 landed through squash merge `b79bf35dac5f6c430c85b1352331a8c943d61038`, an ancestor
+of current main. Its provider-owned sources, standalone manifest lookup, hook ownership/trust
+safeguards, and declared headless invocation were rechecked against current code and focused
+assertions. The implementation prerequisite is satisfied; `depends_on` retains the series
+relationship and `blocked_by` is empty. Part 3 still requires credential protection to land before
+using source staging. This plan does not relocate hooks itself.
 
 ### October 26 repository reconciliation
 
-Verified against local main `d6b7fea242f9473ae9f0ca6899e6389a403e9706` in the primary checkout.
+Verified against local main `60d2ba76e5a9ca0cc5dbb5d98ab73330c674d5de` in the primary checkout.
 Origin identifies `kirinmurphy/roborepo-alpha`; its directory name is `roborepo`. Remote freshness
-was not checked. Related plans were read together with the authoritative Part 1 worktree copy.
+was not checked. The initial preparation read the related plans and Part 1 worktree copy; the
+post-merge review rechecked Part 1's integrated record and the adjacent plan changes in its squash merge.
 
 | Plan | Classification | Contract retained here |
 | --- | --- | --- |
-| [[hr78g4sj]] | Unlanded dependency; stale primary copy | Wait for final provider cleanup to land |
+| [[hr78g4sj]] | Landed dependency; lifecycle/prose drift | Consume provider cleanup; close its review record separately |
 | [[wjlt1zvf]] | Landed dependency | Preserve hook routing, logging, ownership, order, and readiness |
 | [[ia1q1z9]] | Landed dependency; historical prose drift | Preserve write roots; supersede its Codex credential-read gap |
 | [[8bjltk2n]] | Unlanded downstream dependency | Owns source staging, browser isolation, and repeat approvals |
-| [[46qth5z8]] | Superseded ownership conflict | Claude entry/folders stay there; Codex cleanup belongs to Part 1 |
+| [[46qth5z8]] | Unlanded adjacent work; residual prose drift | Related-plan row now assigns Codex cleanup to Part 1; Claude entry/folders stay there |
 | [[permva27]] | Unlanded adjacent audit | Owns editor/product decisions and broad fidelity audit |
 | [[permissions-ui-revamp]] | Unlanded adjacent UI work | Consumes the audit; retains editor and gate/scope choices |
 | [[codex-cmux-hook-trust-review]] | Unlanded adjacent study | Owns trust bypass research |
 | [[harness-capability-derived-resource-targeting]] | Unlanded adjacent targeting work | Owns resource selection, independently of credential projection |
 | [[7k3m9qd]] | Unlanded adjacent delivery work | Owns package delivery redesign; retain existing render integration here |
+| [[o9zwxuav]] | Unlanded active adjacent package work | Owns selected/effective package and bundle state; no native credential projection |
 
-Part 1's worktree records explicit approval of implementation
-`a8aa353fbb1b7cb45ad2822314385354b0f6f5f6`, with tip `9facb7ee`. Both commits are confined to
-its feature branch and are not ancestors of main. Its primary copy still says to wait for
-hook-readiness; its authoritative worktree records that dependency as cleared.
+Part 1's integrated review records explicit approval of implementation
+`a8aa353fbb1b7cb45ad2822314385354b0f6f5f6`. Its feature tip `9facb7ee` need not be an ancestor
+after squash: merge `b79bf35d` is an ancestor, and current code contains the accepted source and
+headless contracts. The plan remains in `review/` with a merge/close next action and historical
+unlanded prose. That is lifecycle/prose drift, not an implementation blocker. Closing it belongs
+to its own workflow and was not performed in this review.
 
 Hook-readiness squash `b134ef424292ece32822ce05efa5a41fc0df1fa8` is an ancestor of main.
 Original reviewed commits need not be ancestors after squash. Current code confirms manifest-backed
@@ -98,19 +104,23 @@ Its completed lifecycle needs no cleanup here.
 Write-scope merge `e58a81927fb99bf460eb6a5ea9185224c2a585fd` and subsequent completion squash
 `2d1dd799abc0234f4c9250793856b50d9975b4b0` are ancestors of main. Its later native evidence
 contradicts older Not verified prose; historical prose cleanup remains separate. The Claude
-companion's older text assigns Codex relocation and headless cleanup here; the user-approved series
-split supersedes that text and assigns both to Part 1. That companion needs separate prose cleanup.
+companion's related-plan row now assigns Codex relocation to Part 1 and credential protection here.
+Its introduction and non-goals still use older combined-companion wording; the approved series
+split remains authoritative, with no unresolved scope choice.
 
-Part 1's primary copy is stale, but its implementation is genuinely unlanded: main still installs
-from `globals/system/hooks/codex`, and telemetry still selects a fixed CLI list and passes `-p`.
-The feature branch instead has provider-owned sources and declared headless argv. No implementation
-or lifecycle from that branch is copied here. Its optional worktree-folder declaration remains
-conditional and does not block credential protection.
+Main installs Codex hook scripts from `globals/harnesses/codex/hooks` using `managed_files`,
+retaining installed paths under `~/.codex/hooks`. Telemetry now selects an enabled eligible provider
+and spawns its declared argv with a literal prompt. Codex's template is
+`["exec", "--skip-git-repo-check", "--", "{prompt}"]`. Source relocation preserved standalone
+state/app-root discovery, with its source-relative fallback corrected for the new depth.
+The optional worktree-folder declaration remains deferred to the Claude companion and does not
+block credential protection.
 
 Capability-derived targeting remains adjacent, with its own unresolved resource-selection model.
 This plan uses the existing provider `permissions.render` contract and a dedicated parity check;
-it does not depend on that model or the audit's eventual product decision. The companion's stale
-ownership text is resolved here by the already-approved series split, not a new scope choice.
+it does not depend on that model or the audit's eventual product decision. The active package-state
+plan [[o9zwxuav]] changes package selection and bundle dependencies, not native credential projection;
+it introduces no additional implementation prerequisite here.
 
 ### Observed behavior
 
@@ -258,10 +268,10 @@ cannot satisfy Part 3's source-staging prerequisite by inference.
 
 ### Confirm prerequisites and remaining coverage
 
-- [ ] Verify Part 1's final implementation landed in the current base using Git landing evidence
-      and current code. If still unlanded, stop implementation without merging or duplicating it.
-      Only after confirmation clear `blocked_by`; recheck provider rendering, hook ownership/trust,
-      config-write logging, and foreign-config preservation before modifying integration points.
+- [x] Verify Part 1's final implementation landed and clear `blocked_by`. October 26 post-merge
+      review confirmed squash `b79bf35d` is an ancestor of main; current provider routing, relocated
+      sources, ownership/trust safeguards, logging, and foreign-config preservation were checked.
+      Five focused checks passed; see Preparation verification below.
 - [ ] Resolve desktop and CLI executables through `scripts/harnesses/discovery.mjs`
       (`selectedHarnessExecutable`) and their provider detection data. Record versions and effective
       permission layers separately for each claimed runtime; do not add a hardcoded binary picker.
@@ -361,15 +371,40 @@ cannot satisfy Part 3's source-staging prerequisite by inference.
   approval persistence, forwarding result, or other plan's completion is inferred from the split.
 - October 24: at the user's request, return Part 2 from ready to backlog while retaining its id,
   title, evidence, and provider-cleanup prerequisite.
-- October 26 preparation: checked local main `d6b7fea2`, the Part 1 worktree at `9facb7ee`,
-  related plans, render/apply sources, fixtures, and docs of record. Hook-readiness is landed;
+- October 26 initial preparation, before Part 1 merged: checked local main `d6b7fea2`,
+  the Part 1 worktree at `9facb7ee`, related plans, render/apply sources, fixtures, and docs of record. Hook-readiness is landed;
   Part 1 remains unlanded despite its worktree's approval. Recorded it in `blocked_by`, reconciled
   stale ownership notes, specified target-home portability and read-only projection, and separated
   deterministic checks from native coverage. Preparation changes no feature code or related lifecycle.
 
+- October 26 post-merge review: verified provider-cleanup squash `b79bf35d` on main
+  `60d2ba76`, rechecked its source/headless contracts and five focused checks, and cleared the
+  implementation blocker. Part 1's separate lifecycle closure remains outstanding. No credential
+  enforcement implementation or new runtime certification is inferred from its merge.
+
+## Preparation verification
+
+Post-merge review on main `60d2ba76` passed:
+
+```text
+node scripts/test/codex-permissions-foreign-lines-check.mjs
+node scripts/test/permissions-render-live-characterization-check.mjs
+node scripts/test/hook-composition-check.mjs
+node scripts/test/shared-target-rows-check.mjs
+node scripts/test/telemetry-synthetic-provider-check.mjs
+```
+
+These assertions cover foreign-config preservation, live render behavior, hook composition,
+per-file install/removal and standalone discovery, and synthetic headless invocation. They do not
+prove native credential denial, which remains unimplemented. The selected-plan reference/command
+scan passed. The broader docs-reference check found a pre-existing stale link in
+`docs/internal/backlog-review.md` to the package-state plan's old backlog location; that plan is now
+active. This review does not change that unrelated document.
+No full parity gate or historical native probes were rerun for this plan-only refinement.
+
 ## Open questions
 
-No unresolved policy choice. Part 1 landing is the sole implementation blocker. Actual runtime/tool
+No unresolved policy choice or implementation dependency blocker remains. Actual runtime/tool
 coverage is implementation verification; unsupported surfaces must be explicit, and Part 3 cannot
 use source staging until its native boundary is established. Historical runtime probes above were
 not rerun during preparation.
