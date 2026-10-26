@@ -573,7 +573,6 @@ function multiSkillPresentationItem(item, tools, contextCost) {
     ...packageItemBase(item, contextCost),
     label: item.label,
     badges: [`${item.skillIds.length} skills`, ...statusBadges(item)],
-    skillCount: item.skillIds.length,
     inspect: {
       kind: "package-contents",
       id: item.id,

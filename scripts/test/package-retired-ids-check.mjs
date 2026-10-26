@@ -51,8 +51,8 @@ try {
   fs.writeFileSync(path.join(home, ".claude", "settings.json"), "{}");
   fs.writeFileSync(path.join(home, ".codex", "config.toml"), "");
 
-  // The registry as an install left it: two retired IDs enabled, one explicitly disabled, next to
-  // a current package.
+  // The registry as an install left it: five retired IDs enabled (three old packages and two of the
+  // six old plan packages), one explicitly disabled, next to a current package.
   fs.mkdirSync(state, { recursive: true });
   fs.writeFileSync(registryPath, `${JSON.stringify({ packages: ["plan-docs", "wrap-up", "plan-start", ...ENABLED_OLD_PLAN_PACKAGES, "session-close"], disabled: ["integration-check"] }, null, 2)}\n`);
 

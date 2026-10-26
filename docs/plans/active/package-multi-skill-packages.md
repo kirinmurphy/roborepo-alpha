@@ -412,13 +412,20 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
       section without one, is now its built-in caller — reworded (de5ad784)
 - [x] `portal/plans/api.js:35` and `docs/user/reference/plans-portal.md:280-281` still say the
       banner enables its packages "through the config section's bulk endpoint"; no section has
-      `bulkToggle` now — reworded to "the config bulk endpoint (`/api/config/packages/bulk`)"
+      `bulkToggle` now — reworded to "the config bulk endpoint (`/api/config/packages/bulk`)" (e84e3c35)
 - [x] `scripts/cli/packages.mjs` `addSkillToPackage` prints `next: roborepo skill render-commands`
       after `--command` even in package mode, where only workspace packages are editable and their
       commands never install — the hint now prints only for built-in packages; a workspace package
-      gets a note that the command will not install, asserted in `test-cli.sh`
+      gets a note that the command will not install, asserted in `test-cli.sh` (e84e3c35)
 - [x] The contents-view portal UI test does not assert that each entry renders its own cost chip
       (`contentsEntryChipSpec`) — the test now asserts all seven rows show a visible chip with tokens
+      (e84e3c35)
+- [x] Validation record still said pass 5's findings were open and named an older gate run —
+      updated
+- [x] `package-retired-ids-check.mjs` comment said two retired IDs are enabled; the registry
+      enables five — fixed
+- [x] `multiSkillPresentationItem` emitted a `skillCount` field nothing reads (the badge carries the
+      count) — removed, with the assertion that only checked its absence
 
 ### Verification
 
@@ -426,8 +433,9 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
 - Validation pass 2: 1 `fix` finding (fresh-context subagent)
 - Validation pass 3: 2 `fix` findings, 1 `escalate` (fresh-context subagent)
 - Validation pass 4: 1 `fix` finding, after merging main (fresh-context subagent)
-- Validation pass 5: 3 `fix` findings; the loop stopped at its five-pass cap with them open (fresh-context subagent)
-- Full gate at 3aa6d03c (after merging main): `npm run check` passed — doctor 107 checks, test-cli 463/0, check suites 60/60, package-install, clean-machine Docker suites, portal UI 132; Windows installer parity skipped (pwsh unavailable)
+- Validation pass 5: 3 `fix` findings; the loop stopped at its five-pass cap, and a resumed `/plan-execute` fixed them (e84e3c35) (fresh-context subagent)
+- Full gate at e84e3c35: `npm run check` passed — doctor 106 checks, test-cli 463/0, check suites 60/60, package-install, clean-machine Docker suites, portal UI 132; Windows installer parity skipped (pwsh unavailable)
+- Resumed run, validation pass 1: 3 `fix` findings (fresh-context subagent)
 
 ## Documentation impact
 

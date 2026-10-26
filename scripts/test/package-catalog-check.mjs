@@ -143,7 +143,7 @@ assert(!sections.get("Development Workflows").bulkToggle, "Development Workflows
   if (!suite.contextCost.harnessesDiffer) assert(entrySum === suite.contextCost.onDemandTokens, "entry costs add up to the package cost when harnesses agree");
 
   const single = items.get("session-close");
-  assert(single.label === "/session-close" && single.inspect?.kind === "command-skill" && !single.skillCount,
+  assert(single.label === "/session-close" && single.inspect?.kind === "command-skill",
     "a single-skill package keeps its command label and command-skill inspect target");
   assert(!single.badges.some((badge) => /skills$/.test(badge)), "a single-skill package gets no skill-count badge");
 }
