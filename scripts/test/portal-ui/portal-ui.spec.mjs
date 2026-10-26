@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { test, expect } from "@playwright/test";
 import { codexHookGuidance } from "../../harnesses/codex/hook-guidance.mjs";
+import { buildBehaviorView } from "../../cli/config.mjs";
 
 // The header bar holds the primary pages; the secondary ones live only in its ⋮ menu, and below
 // the narrow breakpoint the menu holds every page.
@@ -101,6 +102,35 @@ test.describe("Agents page", () => {
     }));
     expect(warningButtonGrid.column).toBe("2");
     expect(warningButtonGrid.row).toBe("1");
+  });
+
+  test("explains a package whose pieces were installed outside RoboRepo", async ({ page }) => {
+    const snapshot = await (await page.request.get("/api/config")).json();
+    const shown = new Set(snapshot.behaviorView.flatMap((section) => section.items || []).map((item) => item.id));
+    const pkg = snapshot.packages.find((entry) => !entry.enabled && !entry.archived && shown.has(entry.id));
+    expect(pkg, "fixture needs a disabled package on the Agents page").toBeTruthy();
+    // What the probes report when another tool configured this package's MCP server and status
+    // line: two status line components (Claude and Codex) must read as one "status line".
+    pkg.status = "external";
+    pkg.componentStatus = [
+      { type: "mcp", id: "context7", state: "external" },
+      { type: "harness-config", id: "claude/statusline.json", state: "external" },
+      { type: "harness-config", id: "codex/status-line.json", state: "external" },
+    ];
+    // Rebuilt by the server's own view builder, so this covers its copy as well as the card.
+    snapshot.behaviorView = buildBehaviorView(snapshot);
+    await page.route("**/api/config", (route) => route.fulfill({ json: snapshot }));
+
+    await page.goto("/agents");
+    const row = page.locator("config-item").filter({ has: page.getByText(pkg.label, { exact: true }) });
+    const badge = row.locator(".badge", { hasText: "Installed outside RoboRepo" });
+    await expect(badge).toHaveClass(/badge-info/);
+    await expect(badge).toHaveAttribute("title", "Found: MCP server context7, status line");
+    await expect(row.getByText("external", { exact: true })).toHaveCount(0);
+    await expect(row.locator("[data-slot=note]")).toHaveText(
+      "Already installed without RoboRepo: MCP server context7, status line. "
+        + "Turning this on replaces them with RoboRepo's version and manages them from then on.",
+    );
   });
 
   test("finishes setting up a launched harness without a click", async ({ page }) => {

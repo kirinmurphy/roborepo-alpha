@@ -593,6 +593,7 @@ function packageItemBase(item, contextCost) {
     builtIn: item.origin === "built-in",
     urls: item.urls || [],
     resources: item.resources || item.components || [],
+    note: item.status === "external" ? externalNote(externalComponentLabels(item.componentStatus)) : null,
     contextCost,
     hint: item.id === "telemetry" && (item.enabled || item.status === "configured") ? "roborepo web" : null,
   };
@@ -601,7 +602,8 @@ function packageItemBase(item, contextCost) {
 function statusBadges(item) {
   return [
     ...(item.catalogStatus === "pending" ? ["pending"] : []),
-    ...(item.status && item.status !== "enabled" && item.status !== "disabled" ? [item.status] : []),
+    ...(item.status === "external" ? [externalBadge(externalComponentLabels(item.componentStatus))] : []),
+    ...(item.status && !["enabled", "disabled", "external"].includes(item.status) ? [item.status] : []),
   ];
 }
 
@@ -647,6 +649,50 @@ function readText(filePath) {
 
 function oneLine(text) {
   return text ? String(text).replace(/\s+/g, " ").trim() : null;
+}
+
+// Plain names for the component types a package can find already installed. A bare type id
+// ("harness-config", "mcp") means nothing to someone reading the Agents page.
+const EXTERNAL_COMPONENT_NOUNS = {
+  skill: "skill",
+  mcp: "MCP server",
+  plugin: "plugin",
+  command: "command",
+  rules: "rules",
+  hooks: "hooks",
+  permissions: "permissions",
+  codex_tool_approvals: "Codex tool approvals",
+  // The harness-config probe only compares status line settings, so that is what was found.
+  "harness-config": "status line",
+  "package-runtime-asset": "script file",
+};
+// Types whose id is a name a person would recognize; the rest carry a source path, so the noun alone reads better.
+const NAMED_COMPONENT_TYPES = new Set(["skill", "mcp", "plugin", "command"]);
+
+// "external" = this package's components exist on the machine but RoboRepo did not install them
+// (a hand-copied skill, an MCP server or status line another tool configured). Names each one.
+function externalComponentLabels(componentStatus) {
+  const labels = (componentStatus || [])
+    .filter((component) => component.state === "external")
+    .map((component) => {
+      const noun = EXTERNAL_COMPONENT_NOUNS[component.type] || component.type;
+      return NAMED_COMPONENT_TYPES.has(component.type) && component.id ? `${noun} ${component.id}` : noun;
+    });
+  return [...new Set(labels)];
+}
+
+function externalBadge(found) {
+  return {
+    text: "Installed outside RoboRepo",
+    status: "external",
+    title: found.length ? `Found: ${found.join(", ")}` : "Found files RoboRepo did not install",
+  };
+}
+
+function externalNote(found) {
+  const them = found.length === 1 ? "it" : "them";
+  const what = found.length ? found.join(", ") : "some of this package's files";
+  return `Already installed without RoboRepo: ${what}. Turning this on replaces ${them} with RoboRepo's version and manages ${them} from then on.`;
 }
 
 function hooksStorageOf(harness) {
