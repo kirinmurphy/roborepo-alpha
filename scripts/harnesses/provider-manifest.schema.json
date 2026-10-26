@@ -132,7 +132,13 @@
             "label": { "type": "string", "minLength": 1 },
             "roots": { "type": "array", "minItems": 1, "items": { "type": "string", "pattern": "^(~/|/)" } },
             "bundle": { "type": "string", "pattern": "^[^/.][^/]*$" },
-            "bundleId": { "type": "string", "minLength": 1 }
+            "bundleId": { "type": "string", "minLength": 1 },
+            "setupHint": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "[^.]$",
+              "description": "How the parent app installs the runtime, as a clause with no final period. Discovery appends \", then run roborepo harness refresh.\" Without it, discovery says \"Open <label> to install <runtime>\"."
+            }
           }
         }
       }

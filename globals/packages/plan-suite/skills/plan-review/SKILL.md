@@ -118,7 +118,7 @@ of it. The human's review is the independent check; this step makes sure they re
   `### Verification`, and it is neither a finding nor a blocker.
 - Run one Validator pass over the merged result: a fresh-context subagent where the environment has
   one, otherwise a separate read-only step in this session. Give it the plan, the base branch, and
-  the gate output, never an account of the work. It applies the same rubric as `/plan-execute`'s
+  the gate output if the gate has finished, never an account of the work. It applies the same rubric as `/plan-execute`'s
   Validation Loop: every acceptance criterion against the code and test evidence (a checked task is a
   claim, not evidence), tests that assert observable outcomes for new behavior, docs of record that
   match the code, `## Not tested` entries an agent could run instead, each gate failure, and the
@@ -132,6 +132,12 @@ of it. The human's review is the independent check; this step makes sure they re
   or lands outside the plan.
 - Do not fix anything while checking. Record every finding first, so each fix answers a recorded
   finding.
+
+A long gate does not hold up work that cannot change its result. Run it in the background, and
+while it runs, run the Validator pass, record findings, and make and commit fixes that touch only
+the plan record. Only these wait for the gate: code or test fixes, which need a gate run that
+includes them, and a complete `### Result`. A gate failure that shows up later becomes a finding
+like any other.
 
 ### 4. Record the review
 
@@ -189,7 +195,8 @@ is asked to approve. Record `### Result` with `Status: complete`, that full revi
 commit, and the full base commit synchronized in step 2. Commit this evidence before asking the
 human. Plan-only evidence commits do not change the reviewed implementation. If findings or
 required manual checks remain, keep Result pending and present those outstanding decisions instead
-of asking for approval.
+of asking for approval. Say plainly that approval was not requested, and list each open finding and
+unconfirmed manual check that blocks it.
 
 Present a review packet:
 
@@ -202,8 +209,11 @@ Present a review packet:
 - the manual checks that need the human, from `## Not tested`;
 - each escalated finding as a decision: the options, their consequences, and a recommendation.
 
-Then ask the human directly for approval, naming the plan by its title and the exact commit. An agent cannot approve, and passing tests are not
-approval.
+Then ask the human directly for approval, naming the plan by its title and the exact commit. Ask
+through the harness's structured question tool where one exists (in Claude Code, `AskUserQuestion`
+or the app's next-step box; in Codex, its user-input request), so the request reads as a decision
+rather than a line at the end of a report. Without such a tool, end the reply with the approval
+question. An agent cannot approve, and passing tests are not approval.
 
 #### 6a. The human approves
 
@@ -272,7 +282,7 @@ Review result
 - Findings: <open count> open, <count> fixed in review (<commits>), <count> escalated
 - Not tested entries open: <count>
 - Review result: complete at <commit> | pending | stale | missing
-- Approval: approved at <commit> | requested | not requested | invalidated
+- Approval: approved at <commit> | requested | not requested (blocked by <open findings and manual checks>) | invalidated
 - Approval freshness: fresh | stale | missing | not-approved | invalid | unavailable
 - Next command: merge the pull request, then /plan-close | /plan-close (already landed) | /plan-review | /plan-execute | none (already closed)
 ```

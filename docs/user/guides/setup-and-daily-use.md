@@ -82,6 +82,9 @@ roborepo doctor --installed            # also check harness links and managed sk
 roborepo doctor --installed --verbose  # include every passing check
 ```
 
+- **Codex hooks not running.** Codex runs a hook only after you trust it. The portal's Home,
+  Settings, and Tokens notice and `roborepo doctor --installed` name RoboRepo hooks awaiting review;
+  see [Codex Hooks](../reference/codex-hooks.md#trusting-roborepos-hooks).
 - **Recovering settings.** If a past update left recoverable local settings in a backup,
   `roborepo update` or `roborepo doctor --installed` points you at
   `roborepo maintenance repair local-config --dry-run`; `--apply` restores them.

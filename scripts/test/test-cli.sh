@@ -1361,7 +1361,11 @@ ln -s "${repo_root}/globals/harnesses/claude/MANAGED_BY_ROBOREPO.md" "${update_h
 cp -R "${repo_root}/globals/harnesses/claude/hooks" "${work}/legacy-claude-hooks"
 ln -s "${work}/legacy-claude-hooks" "${update_home}/.claude/hooks"
 ln -s "${repo_root}/generated/codex/AGENTS.md" "${update_home}/.codex/AGENTS.md"
-ln -s "${repo_root}/generated/codex/hooks.json" "${update_home}/.codex/hooks.json"
+# Same for Codex's hooks.json: `package enable` below merges package hooks into it, and through a
+# link into generated/ that merge rewrote the tracked core-hook baseline.
+cp "${repo_root}/generated/codex/hooks.json" "${work}/legacy-codex-hooks.json"
+ln -s "${work}/legacy-codex-hooks.json" "${update_home}/.codex/hooks.json"
+codex_hooks_baseline_before="$(shasum "${repo_root}/generated/codex/hooks.json")"
 ln -s "${repo_root}/globals/harnesses/codex/MANAGED_BY_ROBOREPO.md" "${update_home}/.codex/MANAGED_BY_ROBOREPO.md"
 ln -s "${repo_root}/generated/codex/rules" "${update_home}/.codex/rules"
 # Skills and commands are linked/composed per-package by the installer's enumerate-step, not as
@@ -1412,6 +1416,8 @@ assert "lifecycle: roborepo update --verbose reports unchanged detail" \
 assert "lifecycle: roborepo update preserves local hooks, trust, and enabled skills" \
   bash -c "HOME='${update_home}' ROBOREPO_STATE_DIR='${update_home}/.roborepo' node '${cli}' update >/dev/null 2>&1 && node -e \"const fs=require('fs');const s=JSON.parse(fs.readFileSync('${update_home}/.claude/settings.json','utf8'));process.exit((s.hooks?.PreToolUse||[]).some(e=>(e.hooks||[]).some(h=>h.command.includes('capture-dense-bash.mjs')))?0:1)\" && grep -q '\\[projects\\.\"/Users/kirinmurphy/projects/activedev/roborepo\"\\]' '${update_home}/.codex/config.toml' && test -L '${update_home}/.claude/skills/case-study' && test -L '${update_home}/.codex/skills/case-study'"
 assert "lifecycle: update writes nothing into the source tree" globals_unchanged_since_fixture
+assert "lifecycle: package enable and update leave the tracked Codex hooks baseline unchanged" \
+  bash -c "[[ \"\$(shasum '${repo_root}/generated/codex/hooks.json')\" == '${codex_hooks_baseline_before}' ]]"
 # A stale skill cache is invisible to a before/after snapshot when nothing is written, so the dry
 # run must predict the refresh itself — and agree with the real update that follows.
 stale_cache="${update_home}/.roborepo/skills/case-study"
@@ -1878,7 +1884,7 @@ assert "harness: Codex permission render keeps lines it did not generate" \
 # getHarnessProvider(id).adapters.mcp.addServer/removeServer/list. Distinct names from the
 # bulk mcp.remove (withdraw's "strip every server this package owns" sweep) -- same
 # merge/unmerge-vs-write naming lesson as hooks. Pure Claude CLI-arg and Codex TOML-block logic
-# extracted into scripts/harnesses/{mcp-claude-cli,mcp-codex-toml}.mjs so provider adapters can
+# extracted into scripts/harnesses/{claude/mcp-claude-cli,mcp-codex-toml}.mjs so provider adapters can
 # import them without cycling back through the registry.
 assert "harness: single-server MCP add is registry-backed (dry-run display, --only-* gating)" \
   node "${repo_root}/scripts/test/mcp-add-characterization-check.mjs"
@@ -2047,6 +2053,11 @@ assert "ownership refactor: every confirmed leakage case stays fixed" \
 # (install/reapply/disable/reapply, unrelated user hooks survive throughout).
 assert "ownership refactor: cross-harness hook composition round-trips" \
   node "${repo_root}/scripts/test/hook-composition-check.mjs"
+
+# Core hooks install beside package hooks (hook_fragment / managed_files manifest rows) without
+# moving them, follow the conflict policy per script, and remove only what RoboRepo wrote.
+assert "hooks bundle: core hooks install beside package hooks" \
+  node "${repo_root}/scripts/test/shared-target-rows-check.mjs"
 
 # Telemetry transcript parsing (Claude/Codex field shapes) and analyzer warning detection.
 assert "telemetry: transcript stats and analyzer warnings are correct" \

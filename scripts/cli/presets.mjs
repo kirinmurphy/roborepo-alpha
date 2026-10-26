@@ -11,9 +11,11 @@ import { readConfigSnapshot, buildBehaviorView } from "./config.mjs";
 import { mutatePackage, setBehaviorBucket } from "./config-mutate.mjs";
 import { renderHomeRules, removeHomeRules, isRenderedRulesOutput } from "./rules-render.mjs";
 import { listHarnessProviders, getHarnessProvider } from "../harnesses/registry.mjs";
+import { readinessSupported } from "../harnesses/hook-readiness.mjs";
 import { confirmYesNo, makePrompter, selectMenu, wizard } from "./skill-lib.mjs";
 import { pathExists, findSiblingArtifact, findSiblingArtifacts, copyTree, stageCandidate, backupOriginal, timestampedPath } from "./staging-lib.mjs";
 import { checkDrift, recordWrite } from "./root-config-state.mjs";
+import { SHARED_TARGET_KINDS, SharedTargetConflictAbort, applySharedTargetRow, removeSharedTargetRow, sharedTargetInstalled } from "./shared-target-rows.mjs";
 
 const PRESET_MANIFEST = path.join(repoRoot, "manifests", "platform", "presets.json");
 const INSTALL_MANIFEST = path.join(repoRoot, "manifests", "platform", "manifest.tsv");
@@ -35,13 +37,15 @@ export async function presetsCommand(rest) {
     case "bundle":
       return bundleCommand(args);
     case "apply":
-      return presetsApply(args);
+      presetsApply(args);
+      return printBundleHookReviewHint(args);
     case "status":
       return presetsStatus(args);
     case "check":
       return presetsCheck(args);
     case "remove":
-      return presetsRemove(args);
+      presetsRemove(args);
+      return printBundleHookReviewHint(args);
     default:
       console.error(`usage: roborepo package manage | roborepo bundle status|apply|check|remove`);
       process.exit(2);
@@ -52,13 +56,15 @@ export async function bundleCommand(args) {
   const [sub, ...rest] = args;
   switch (sub) {
     case "apply":
-      return presetsApply(rest);
+      presetsApply(rest);
+      return printBundleHookReviewHint(rest);
     case "status":
       return presetsStatus(rest);
     case "check":
       return presetsCheck(rest);
     case "remove":
-      return presetsRemove(rest);
+      presetsRemove(rest);
+      return printBundleHookReviewHint(rest);
     default:
       console.error(`usage: roborepo bundle status|apply|check|remove`);
       process.exit(2);
@@ -84,6 +90,14 @@ export async function presetsOnboard(args) {
 
   await runInteractiveOnboard({ launchPortal, source: "library" });
   markOnboarded();
+  await printOnboardingHookReviewHint();
+}
+
+// One check after the whole interactive onboarding, however many hook-bearing choices it made. The
+// headless paths apply only the base bundle, which installs nothing that needs review.
+async function printOnboardingHookReviewHint() {
+  const { printHookReviewHint } = await import("./hook-review-guidance.mjs");
+  await printHookReviewHint(listHarnessProviders().map((provider) => provider.id).filter(harnessAvailable).filter(readinessSupported));
 }
 
 function markOnboarded() {
@@ -325,6 +339,7 @@ export async function presetsIntro(args) {
   }
 
   markOnboarded();
+  await printOnboardingHookReviewHint();
   printIntroHelp();
 }
 
@@ -583,6 +598,18 @@ function applyRow(row, policy) {
   if (row.kind === "rendered_rules") return renderRulesItem(row);
   if (row.kind === "managed_copy" || row.kind === "link") return copyItem(row, policy);
   if (row.kind === "root_config") return copyItem(row, policy);
+  if (SHARED_TARGET_KINDS.includes(row.kind)) return applySharedTarget(row, policy);
+}
+
+function applySharedTarget(row, policy) {
+  try {
+    applySharedTargetRow(row, { onConflict: policy.onConflict });
+  } catch (error) {
+    if (!(error instanceof SharedTargetConflictAbort)) throw error;
+    console.error(`abort: install canceled by user (${error.message})`);
+    console.error("Rerun with --on-conflict keep or --on-conflict overwrite to continue.");
+    process.exit(1);
+  }
 }
 
 function renderRulesItem(row) {
@@ -762,6 +789,7 @@ function removeRenderedRulesRow(row) {
 
 function removeRow(row, policy) {
   if (row.kind === "rendered_rules") return removeRenderedRulesRow(row);
+  if (SHARED_TARGET_KINDS.includes(row.kind)) return removeSharedTargetRow(row);
   const source = path.join(repoRoot, row.srcRel);
   const staged = findSiblingArtifact(row.homeAbs, "update");
   const backup = findSiblingArtifact(row.homeAbs, "original");
@@ -803,6 +831,21 @@ function removeRow(row, policy) {
   }
 }
 
+// Bundles that merge hook entries (hook_fragment rows) can leave hooks awaiting review, including
+// package hooks whose position shifted when core entries were removed.
+async function printBundleHookReviewHint(args) {
+  const catalog = readPresetCatalog();
+  const rows = manifestRowsByKey();
+  const harnesses = [...withDependencies(requestedBundles(args, catalog))]
+    .flatMap((id) => catalog.byId.get(id)?.rows ?? [])
+    .map((key) => rows.get(key))
+    .filter((row) => row?.kind === "hook_fragment" && harnessAvailable(row.harness))
+    .map((row) => row.harness);
+  if (harnesses.length === 0) return;
+  const { printHookReviewHint } = await import("./hook-review-guidance.mjs");
+  await printHookReviewHint(harnesses);
+}
+
 function bundleApplied(bundle, rows, policy = readInstallPolicy()) {
   return bundle.rows.every((key) => {
     const row = rows.get(key);
@@ -811,6 +854,7 @@ function bundleApplied(bundle, rows, policy = readInstallPolicy()) {
       return fs.existsSync(row.homeAbs) && !readlink(row.homeAbs);
     if (row.kind === "rendered_rules")
       return fs.existsSync(row.homeAbs) && !readlink(row.homeAbs) && isRenderedRulesOutput(row.homeAbs);
+    if (SHARED_TARGET_KINDS.includes(row.kind)) return sharedTargetInstalled(row);
     return true;
   });
 }

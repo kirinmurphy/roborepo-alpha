@@ -86,9 +86,3 @@ export const claudeJsonPath = resolveHarnessPath(
   listHarnessProviders().find((provider) => provider.id === "claude").manifest,
   "mcpLiveStore"
 );
-// Codex hooks live in a dedicated file, not inside config.toml — single source of truth for the
-// live path (previously re-derived independently in package-probes.mjs, config.mjs, telemetry.mjs).
-export const codexHooksPath = resolveHarnessPath(
-  listHarnessProviders().find((provider) => provider.id === "codex").manifest,
-  "hooks"
-);

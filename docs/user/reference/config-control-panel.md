@@ -98,7 +98,10 @@ The panel renders these sections:
    in a terminal).
 2. The panel shows the current state of each section.
 3. Toggle a package or skill. The change is written to your live harness config and the panel
-   refreshes. Token tracking is controlled from Settings and the Tokens page.
+   refreshes. Token tracking is controlled from Settings and the Tokens page. If the change left a
+   RoboRepo Codex hook awaiting review, one card offers to open Codex's review; a bulk change gets
+   one card for the whole batch. A CLI-only installation gets no card, because Codex asks at
+   startup. See [Codex Hooks](codex-hooks.md#trusting-roborepos-hooks).
 4. To change permissions, set a named behavior or arbitrary command to `deny`, `ask`, `allow`, or
    `default`.
 5. Changes take effect the next time the agent harness starts a session.

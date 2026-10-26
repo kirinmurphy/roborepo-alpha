@@ -16,7 +16,7 @@ import { installPackageCommands, removePackageCommands } from "./slash-commands.
 import { cleanupPackageProjections } from "./package-projection-cleanup.mjs";
 import { SKILL_TRIGGERS_FILE } from "./skill-trigger-fixtures.mjs";
 import { getHarnessProvider } from "../harnesses/registry.mjs";
-import { hasClaudeCli } from "../harnesses/mcp-claude-cli.mjs";
+import { hasClaudeCli } from "../harnesses/claude/mcp-claude-cli.mjs";
 import { assertHarnessWriteAllowed } from "./harness-write-guard.mjs";
 
 export const USER_CLAUDE_SETTINGS = rootConfigActive.claude;
@@ -51,9 +51,9 @@ export function packageCommand(args = []) {
     case "add-skill":
       return addSkillToPackage(rest);
     case "enable":
-      return enablePackage(rest);
+      return enablePackageCommand(rest);
     case "disable":
-      return disablePackage(rest);
+      return disablePackageCommand(rest);
     case "validate":
       return validatePackages(rest);
     case "reconcile":
@@ -64,6 +64,27 @@ export function packageCommand(args = []) {
       console.error("usage: roborepo package list|inspect|status|create|add-skill|enable|disable|validate|reconcile|adopt-live");
       process.exit(2);
   }
+}
+
+// `package enable|disable` from the terminal: once the change finishes, say whether any RoboRepo
+// hook it rewrote now awaits review. Portal and onboarding changes report their own way, so this
+// sits on the command, not inside enablePackage, which they also call.
+export function enablePackageCommand(rest) {
+  return withHookReviewHint(rest, (changed) => enablePackage(rest, changed));
+}
+
+export function disablePackageCommand(rest) {
+  return withHookReviewHint(rest, (changed) => disablePackage(rest, changed));
+}
+
+async function withHookReviewHint(rest, run) {
+  const changed = new Set();
+  await run(changed);
+  if (rest.includes("--dry-run")) return;
+  const [{ hookHarnessesForPackages }, { printHookReviewHint }] = await Promise.all([
+    import("./hook-readiness-status.mjs"), import("./hook-review-guidance.mjs"),
+  ]);
+  await printHookReviewHint(hookHarnessesForPackages(changed));
 }
 
 function createPackage(rest) {
@@ -523,7 +544,7 @@ export async function enablePackage(rest, _seen = new Set()) {
           break;
         }
         const hooksFragment = JSON.parse(fs.readFileSync(hooksPath, "utf8"));
-        const targetPath = hookFilePath(component.harness, { claudeSettingsPath: USER_CLAUDE_SETTINGS });
+        const targetPath = hookFilePath(component.harness, { rootConfigPath: rootConfigActive[component.harness] });
         if (targetPath) mergeHooksInto(component.harness, targetPath, hooksFragment);
         if (component.scripts?.length) installHookScripts(component.harness, component.scripts, repoRoot);
         break;
@@ -591,14 +612,18 @@ export async function reconcileEnabledPackages(rest = []) {
     console.warn(`${dryRun ? "  [dry-run] would remove" : "  remove"} stale package not in catalog: ${id}`);
   }
   let reconciled = 0;
+  const changedPackageIds = new Set();
   for (const id of enabledIds) {
     if (!known.has(id)) continue;
-    await enablePackage([id, "--reconcile", ...(dryRun ? ["--dry-run"] : [])]);
+    const seen = new Set();
+    await enablePackage([id, "--reconcile", ...(dryRun ? ["--dry-run"] : [])], seen);
+    for (const changed of seen) changedPackageIds.add(changed);
     reconciled++;
   }
   if (reconciled === 0) console.log("reconcile: no enabled packages");
   cleanupPackageProjections({ dryRun });
   if (!dryRun) forgetPackageIds(stale);
+  return [...changedPackageIds];
 }
 
 export function adoptLivePackages({ dryRun = false } = {}) {
@@ -659,7 +684,7 @@ function removeMcpPreset(presetId, dryRun) {
   for (const provider of configFileMcpProviders()) removeConfigFileMcp(provider, presetId);
 }
 
-export async function disablePackage(rest) {
+export async function disablePackage(rest, _seen = new Set()) {
   const [pkgId, ...flags] = rest;
   if (!pkgId) {
     console.error("usage: roborepo package disable <package-id>");
@@ -673,6 +698,9 @@ export async function disablePackage(rest) {
     process.exit(2);
   }
 
+  if (_seen.has(pkg.id)) return;
+  _seen.add(pkg.id);
+
   const dryRun = flags.includes("--dry-run");
   if (!dryRun) assertHarnessWriteAllowed();
   const cascade = flags.includes("--cascade");
@@ -685,7 +713,7 @@ export async function disablePackage(rest) {
   }
   if (cascade) {
     for (const dependent of [...dependents].reverse()) {
-      await disablePackage([dependent, ...flags.filter((flag) => flag !== "--cascade"), "--cascade"]);
+      await disablePackage([dependent, ...flags.filter((flag) => flag !== "--cascade"), "--cascade"], _seen);
     }
   }
   console.log(dryRun ? `[dry-run] would disable: ${pkg.label}` : `disabling: ${pkg.label}`);
@@ -724,7 +752,7 @@ export async function disablePackage(rest) {
           break;
         }
         const hooksFragment = JSON.parse(fs.readFileSync(path.join(repoRoot, component.source), "utf8"));
-        const targetPath = hookFilePath(component.harness, { claudeSettingsPath: USER_CLAUDE_SETTINGS });
+        const targetPath = hookFilePath(component.harness, { rootConfigPath: rootConfigActive[component.harness] });
         if (targetPath) unmergeHooksFrom(component.harness, targetPath, hooksFragment);
         if (component.scripts?.length) removeHookScripts(component.harness, component.scripts, repoRoot);
         break;

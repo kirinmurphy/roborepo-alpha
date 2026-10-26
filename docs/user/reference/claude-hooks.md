@@ -23,6 +23,15 @@ them. Turn a package's hooks off by disabling the package in `/agents` or with
 
 Caveman mode on Claude comes from the `caveman` plugin, not a hook.
 
+## When Installed Hooks Run
+
+Claude Code has no per-hook approval like Codex's. Instead, an interactive session holds every hook
+from settings files, including your user settings, until you accept workspace trust for that
+folder. A `-p` or SDK session treats the folder as trusted. So RoboRepo can confirm a Claude hook is
+installed and configured, but not that a session in an untrusted folder will run it; package status
+says "configured" for that reason. See Claude Code's
+[hooks reference](https://code.claude.com/docs/en/hooks#workspace-trust).
+
 ## Source-Exploration Block
 
 Blocking `Grep` and `Glob` alone would let Claude shell out to read source instead, so a Bash hook

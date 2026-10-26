@@ -13,7 +13,11 @@ function request(body) {
 
 const handlers = {
   loadConfig: () => ({ machineHarnesses: [{ id: "codex", enabled: true }] }),
-  loadCodexHookStatus: async () => ({ state: "review_required", installed: 5 }),
+  loadHookReadiness: async (harness) => {
+    if (harness === "unknown") throw new Error("unsupported harness: unknown");
+    if (harness === "claude") throw new Error("hook file unreadable");
+    return { harness, state: "review_required", groups: [] };
+  },
   refreshHarnesses: () => ({ detected: ["codex"], state: { providers: { codex: { evidence: [{ value: "/secret" }] } } } }),
   setHarnessEnabled(id, enabled) {
     if (id === "unknown") throw new Error("unsupported harness: unknown");
@@ -43,6 +47,17 @@ res = response();
 dispatchRoutes([configRoutes], { method: "GET" }, res, "/api/config/hooks/codex/status", "", handlers);
 await new Promise(setImmediate);
 assert.equal(res.status, 200);
-assert.deepEqual(JSON.parse(res.body), { state: "review_required", installed: 5 });
+assert.deepEqual(JSON.parse(res.body), { harness: "codex", state: "review_required", groups: [] });
+
+res = response();
+dispatchRoutes([configRoutes], { method: "GET" }, res, "/api/config/hooks/unknown/status", "", handlers);
+await new Promise(setImmediate);
+assert.equal(res.status, 404, "an unregistered harness has no hook readiness");
+
+res = response();
+dispatchRoutes([configRoutes], { method: "GET" }, res, "/api/config/hooks/claude/status", "", handlers);
+await new Promise(setImmediate);
+assert.equal(res.status, 200);
+assert.deepEqual(JSON.parse(res.body), { harness: "claude", state: "unknown", groups: [] }, "a failed read reports unknown, never an error page");
 
 console.log("portal harness API checks passed");

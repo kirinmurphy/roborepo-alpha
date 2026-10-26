@@ -12,7 +12,8 @@ import { fileURLToPath } from "node:url";
 import { defineHarnessProvider } from "../contract.mjs";
 import { detectHarnessProvider } from "../discovery.mjs";
 import { stubAdapterGroups } from "../stub-adapter.mjs";
-import { mergeRootConfigHooks, unmergeRootConfigHooks } from "../root-config-hooks.mjs";
+import { hookRecordsFromFile, mergeRootConfigHooks, unmergeRootConfigHooks } from "../root-config-hooks.mjs";
+import { resolveHarnessPath } from "../paths.mjs";
 import { mergeHooksMap } from "../hooks-merge.mjs";
 import { mergeClaudeSettings, normalizeRootConfigContent } from "../../cli/root-config-merge.mjs";
 import { renderClaudeSettings } from "../permissions-render.mjs";
@@ -95,6 +96,12 @@ function wireCaptureHooks(settingsPath) {
   return mergeRootConfigHooks(settingsPath, fragment);
 }
 
+// Claude has no per-hook approval; this confirms file-level configuration, not workspace execution.
+// Async to match the contract, whose Codex implementation has to ask a running process.
+async function hooksRead({ hooksPath = resolveHarnessPath(claudeManifest, "rootConfig") } = {}) {
+  return hookRecordsFromFile(hooksPath, { trust: "not-required" });
+}
+
 function locate(sessionId) {
   return locateTranscript(sessionId, "claude");
 }
@@ -119,7 +126,6 @@ const stubGroups = stubAdapterGroups("claude", {
   rules: ["render"],
   skills: ["link"],
   commands: ["render"],
-  hooks: ["read"],
   mcp: ["add"],
   session: ["launch"],
 });
@@ -143,7 +149,8 @@ export const claudeProvider = defineHarnessProvider({
       list: mcpList,
     },
     hooks: {
-      ...stubGroups.hooks,
+      read: hooksRead,
+      core: () => readCoreHooksFragment(),
       write: hooksWriteRemove,
       merge: mergeRootConfigHooks,
       unmerge: unmergeRootConfigHooks,

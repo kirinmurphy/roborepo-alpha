@@ -2,9 +2,10 @@ import fs from "node:fs";
 import { rootConfigActive, rootConfigBaseline } from "./paths.mjs";
 import { displayPath } from "./mcp-config.mjs";
 import { writeRootConfig } from "./root-config-writes.mjs";
-import { shellQuote, claudeMcpArgs, runClaudeMcpAdd } from "../harnesses/mcp-claude-cli.mjs";
+import { claudeMcpArgs, runClaudeMcpAdd } from "../harnesses/claude/mcp-claude-cli.mjs";
+import { shellQuote } from "../harnesses/shell-quote.mjs";
 
-// shellQuote/claudeMcpArgs/runClaudeMcpAdd live in scripts/harnesses/mcp-claude-cli.mjs (a leaf
+// claudeMcpArgs/runClaudeMcpAdd live in scripts/harnesses/claude/mcp-claude-cli.mjs (a leaf
 // module with zero registry-touching imports) so the Claude provider adapter can call them
 // directly; re-exported here for existing consumers (mcp.mjs).
 export { shellQuote, claudeMcpArgs, runClaudeMcpAdd };

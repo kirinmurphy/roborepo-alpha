@@ -65,6 +65,7 @@ echo "withdraw: ${harness_id}"
 while IFS=$'\t' read -r _h kind src_rel home_abs _flags; do
   case "${kind}" in
     managed_copy)    reclaim_link_target          "${src_rel}" "${home_abs}" "${_h}" ;;
+    hook_fragment|managed_files) shared_target_row remove "${kind}" "${_h}" "${src_rel}" "${home_abs}" ;;
     link)            reclaim_link_target          "${src_rel}" "${home_abs}" "${_h}" ;;
     cleanup)         remove_repo_symlink          "${home_abs}" ;;
     root_config)     remove_root_config           "${home_abs}" "${_h}" "${src_rel}" ;;

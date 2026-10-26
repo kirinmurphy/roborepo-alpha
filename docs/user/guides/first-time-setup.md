@@ -64,8 +64,6 @@ you turn it on). Choose packages in the portal's `/agents` page, or in the termi
 roborepo library
 ```
 
-Turn on token tracking in **Settings** or **Tokens**.
-
 The chooser walks the available package sections, then a read-only Permissions panel, one section per
 step:
 
@@ -79,6 +77,14 @@ step:
 
 `roborepo library` and `roborepo package manage` are two names for the same chooser. Rerun it any
 time to change your choices. Noninteractive runs skip it and apply the baseline headlessly.
+
+Turn on token tracking in **Settings** or **Tokens**.
+
+If you use Codex, review any new RoboRepo hooks in the Codex app under **Settings → Hooks** after
+choosing behaviors. The portal's Home, Settings, and Tokens pages name hooks that still need your
+review. Trust is your choice; RoboRepo does not grant it automatically. Start a new Codex session
+after trusting hooks so that session can run them. See [Codex Hooks](../reference/codex-hooks.md)
+for the terminal alternative and hook states.
 
 ## After Setup
 

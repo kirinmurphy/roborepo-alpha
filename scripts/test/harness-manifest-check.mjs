@@ -73,6 +73,21 @@ assertThrows(
   "unknown top-level key",
 );
 
+// parentApp.setupHint is a clause: discovery appends ", then run roborepo harness refresh.", so a
+// hint with its own final period would produce a doubled sentence end.
+{
+  const withHint = (setupHint) => ({
+    ...loadFixture("valid-claude.json"),
+    platforms: { darwin: { detection: { desktopCandidates: [{
+      label: "Fixture", roots: ["/Applications"], layouts: [["Fixture.app"]], bundleId: "fixture.app",
+      executable: "Contents/MacOS/fixture",
+      parentApp: { label: "Parent", roots: ["/Applications"], bundle: "Parent.app", bundleId: "parent.app", setupHint },
+    }] } } },
+  });
+  validateProviderManifest(withHint("Open Parent's Setup pane to install Fixture"));
+  assertThrows(() => validateProviderManifest(withHint("Open Parent.")), "setupHint must be a non-empty clause", "setupHint with a final period");
+}
+
 // defineHarnessProvider wires manifest + adapter validation together and freezes the result.
 const completeAdapters = {
   rootConfig: { merge() {}, render() {}, mergePackageComponent() {}, unmergePackageComponent() {} },
