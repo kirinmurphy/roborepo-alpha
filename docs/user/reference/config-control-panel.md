@@ -105,6 +105,12 @@ Package rows can show `enabled`, `configured`, `disabled`, `partial`, `external`
 `configured` means fully installed with a runtime service deliberately turned off (for example,
 telemetry capture disabled); `partial` means the install is genuinely incomplete.
 
+`external` shows on the card as **Installed outside RoboRepo**. The package is off, but some of its
+pieces already exist on this machine and RoboRepo did not put them there: a skill folder copied in
+by hand, or an MCP server or status line that another tool configured. The card names what it
+found (hover the badge for the same list). Turning the package on replaces those pieces with
+RoboRepo's version, and RoboRepo manages them from then on. Leaving it off changes nothing.
+
 ## Context Cost Estimates
 
 The panel estimates how many tokens your configuration adds to each harness, so you can see what a

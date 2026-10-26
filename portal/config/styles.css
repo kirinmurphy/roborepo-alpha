@@ -89,6 +89,13 @@ main {
   margin-top: 2px;
   line-height: 1.4;
 }
+/* What the package found already installed, and what turning it on does to it. */
+.item-note {
+  color: var(--desc-dim);
+  font-size: var(--text-2xs);
+  margin-top: 3px;
+  line-height: 1.4;
+}
 .item-hint {
   color: var(--accent);
   font-size: var(--text-2xs);

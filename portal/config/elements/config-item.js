@@ -20,11 +20,14 @@ const STATUS_BADGE_CLASS = {
 };
 
 // tpl-badge's root element IS the data-slot="text" node, and portalFillSlots only matches
-// descendants — so this sets textContent directly instead of going through fill().
-function badge(text) {
+// descendants — so this sets textContent directly instead of going through fill(). A badge is
+// either a bare status string or { text, status, title } when its words differ from the status key.
+function badge(spec) {
+  const { text, status = text, title } = typeof spec === "string" ? { text: spec } : spec;
   const node = tpl("tpl-badge");
   node.textContent = text;
-  const statusClass = STATUS_BADGE_CLASS[text];
+  if (title) node.title = title;
+  const statusClass = STATUS_BADGE_CLASS[status];
   node.classList.add(statusClass || (text.startsWith("/") ? "badge-cmd" : "badge-skill"));
   return node;
 }
@@ -63,6 +66,7 @@ class ConfigItemElement extends HTMLElement {
     const { onInspect, onToggle, contextCost } = this._actions;
     const row = fill(tpl("tpl-config-item"), {
       description: item.description,
+      note: item.note,
       hint: item.hint,
     });
 
@@ -92,6 +96,7 @@ class ConfigItemElement extends HTMLElement {
     }
 
     row.querySelector('[data-slot="description"]').hidden = !item.description;
+    row.querySelector('[data-slot="note"]').hidden = !item.note;
     row.querySelector('[data-slot="hint"]').hidden = !item.hint;
 
     row.querySelector('[data-slot="badges"]').replaceChildren(
