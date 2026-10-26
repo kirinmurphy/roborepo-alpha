@@ -879,7 +879,7 @@ test.describe("repository-first portal Home", () => {
     const card = roboRepoCard(page);
     await expect(card.locator(".repository-state-badge")).toHaveText("idle");
     // No port says nothing runs; the row does not spell out "idle".
-    await expect(card.getByText("idle", { exact: true })).toHaveCount(0);
+    await expect(cardRows(card).getByText("idle", { exact: true })).toHaveCount(0);
     // Only a worktree no plan claims has a ⋮ cell; a plan's row keeps its actions in its dropdown.
     await expect(planRowOf(card, "Idle Story").locator(".worktree-row-menu")).toBeHidden();
     await expect(checkoutRow(card, "feature/stale").locator(".worktree-row-menu")).toBeVisible();
