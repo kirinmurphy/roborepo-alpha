@@ -421,11 +421,13 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
       (`contentsEntryChipSpec`) — the test now asserts all seven rows show a visible chip with tokens
       (e84e3c35)
 - [x] Validation record still said pass 5's findings were open and named an older gate run —
-      updated
+      updated (e9e3aec2)
 - [x] `package-retired-ids-check.mjs` comment said two retired IDs are enabled; the registry
-      enables five — fixed
+      enables five — fixed (e9e3aec2)
 - [x] `multiSkillPresentationItem` emitted a `skillCount` field nothing reads (the badge carries the
-      count) — removed, with the assertion that only checked its absence
+      count) — removed, with the assertion that only checked its absence (e9e3aec2)
+- [x] `plans-portal.md` said enabling `plan-suite` turns on seven skills; it turns on six, and
+      `/session-close` is its own package — fixed
 
 ### Verification
 
@@ -436,6 +438,7 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
 - Validation pass 5: 3 `fix` findings; the loop stopped at its five-pass cap, and a resumed `/plan-execute` fixed them (e84e3c35) (fresh-context subagent)
 - Full gate at e84e3c35: `npm run check` passed — doctor 106 checks, test-cli 463/0, check suites 60/60, package-install, clean-machine Docker suites, portal UI 132; Windows installer parity skipped (pwsh unavailable)
 - Resumed run, validation pass 1: 3 `fix` findings (fresh-context subagent)
+- Resumed run, validation pass 2: 1 `fix` finding, a docs wording fix (fresh-context subagent)
 
 ## Documentation impact
 

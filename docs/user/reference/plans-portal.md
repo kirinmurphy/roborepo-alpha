@@ -288,7 +288,8 @@ When `plan-suite` is disabled:
 
 When enabled:
 
-- each of the seven skills is a manual skill with Markdown command wrappers for Claude,
+- each of the six plan skills (and `/session-close`, once its own package is enabled) is a manual
+  skill with Markdown command wrappers for Claude,
   Codex, and Gemini. Gemini CLI requires TOML custom commands, so its generated wrappers are not
   usable native slash commands yet
 - `/plans` shows each lifecycle's actions, read from the lifecycle manifest the plans snapshot
