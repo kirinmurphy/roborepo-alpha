@@ -438,6 +438,10 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
 - [x] `package-retired-ids-check.mjs` asserts plan-suite's skills and commands only for Claude; the
       hermetic home also installs them for Codex and Gemini — all three asserted; Not tested entry
       narrowed to a live harness session (0d26b9a4)
+- [x] Open backlog plan `test-agent-behavior-evals.md` (lines 346, 355) uses `plan-close` as a
+      package ID in its example run report — fixed in review (85f3cd2a)
+- [x] Coordination did not say that [[ejsc769o]]'s per-skill plan `requires`/`recommends` edges
+      merge into `plan-suite` — noted in its Coordination row; that plan settles the merged edges
 
 ### Verification
 
@@ -454,6 +458,11 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
 - `/plan-review` sync-base at bdde8726: up-to-date with main e479885d
 - `/plan-review` validator pass 1 at bdde8726: 3 `fix` findings, 0 `escalate` (fresh-context
   subagent); the ten per-row Validation checks passed
+- Full gate at bdde8726: `npm run check` passed — doctor 100 checks, portal UI 132; Windows
+  installer parity skipped (pwsh unavailable)
+- `/plan-review` validator pass 2 at 0d26b9a4: 2 `fix` findings and 1 `escalate`, reclassified as
+  `fix` because the remedy is a Coordination note (fresh-context subagent). Its Not tested finding
+  was already fixed in 3dee1cf6
 
 ## Documentation impact
 
@@ -471,7 +480,7 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
 | Plan | Effect |
 | --- | --- |
 | [[o9zwxuav]] | Depends on this plan; registry migration fixtures use `plan-suite`. Its dependency-row mockup still shows `/plan-close` as its own card under Plan Suite; after this plan that card is `Development Planning Lifecycle`, under Development Workflows. It should refresh the mockup when it is promoted. |
-| [[ejsc769o]] | Depends on this plan; owns the reference audit that flags package-or-collection candidates, and its plan rows collapse into one `plan-suite` row |
+| [[ejsc769o]] | Depends on this plan; owns the reference audit that flags package-or-collection candidates, and its plan rows collapse into one `plan-suite` row. Its Phase 4 and 5 tasks still give `plan-write`, `plan-promote`, `plan-execute`, `plan-review`, and `plan-close` their own `requires` and `recommends` edges; those merge into the one `plan-suite` manifest, and that plan settles the merged edges when it is promoted |
 | [[jdsobwn]] | Depends on this plan; external suites become packages with several skills and use the contents view. It also names `globals/packages/plan-write/skills/plan-write/`, which Phase 4 rewrites |
 | [[user-managed-packages-and-add-workflows]] | Depends on this plan; "Multiple things together" asks whether to create a package or a collection; adds the System / Custom / Third Party tabs, inside which the contents view must work unchanged |
 | [[46qth5z8]], [[plans-portal-live-refresh-and-static-preflight]], [[plan-lifecycle-suite-blockers-dependencies]] | Not dependencies. Each names a file under `globals/packages/plan-*/`; Phase 4 rewrites those paths to `globals/packages/plan-suite/` and changes nothing else in them |
