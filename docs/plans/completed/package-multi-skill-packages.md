@@ -1,7 +1,7 @@
 ---
 id: bysyzl1e
 priority: high
-next_action: Merge the pull request, then run /plan-close.
+next_action: ""
 blocked_by: []
 depends_on: []
 related: ["o9zwxuav", "ejsc769o", "jdsobwn", "user-managed-packages-and-add-workflows"]
@@ -520,3 +520,41 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
 | [[jdsobwn]] | Depends on this plan; external suites become packages with several skills and use the contents view. It also names `globals/packages/plan-write/skills/plan-write/`, which Phase 4 rewrites |
 | [[user-managed-packages-and-add-workflows]] | Depends on this plan; "Multiple things together" asks whether to create a package or a collection; adds the System / Custom / Third Party tabs, inside which the contents view must work unchanged |
 | [[46qth5z8]], [[plans-portal-live-refresh-and-static-preflight]], [[plan-lifecycle-suite-blockers-dependencies]] | Not dependencies. Each names a file under `globals/packages/plan-*/`; Phase 4 rewrites those paths to `globals/packages/plan-suite/` and changes nothing else in them |
+
+## Completion summary
+
+Several skills in one package is a supported shape. Such a package validates, enables, disables,
+reports `partial` and sums its context cost across every skill. `roborepo package dev add-skill`
+adds a skill to an existing package. On the Agents page, a package with several skills shows a
+skill-count badge, and its label opens a contents view. The six plan lifecycle skills ship as one
+`plan-suite` package ("Development Planning Lifecycle"), and `session-close` stays separate. The
+`skills-dev-lifecycle` category is now "Development Workflows" with no `bulkToggle`. The package,
+collection, category and dependency vocabulary is in the package-development guidance.
+
+## Verification
+
+- `npm run check` on primary `main` at `07650ccb4f6af5944e02a9a830e07042093598ea`: doctor (100
+  checks), `test-cli.sh` 464 passed / 0 failed, 60/60 check suites, package-install smoke, the
+  clean-machine container and the install, permissions and onboarding sandboxes all passed.
+  Portal UI: 131 passed, 1 failed. The failure was "worktree rows show their state"
+  (`portal-ui.spec.mjs:809`). It is caused by an uncommitted edit to that test in the primary
+  checkout, made outside this plan. The same test passed on the committed code in the plan's
+  worktree, whose `scripts/` and `portal/` match `main`.
+- `roborepo plans validate bysyzl1e --json`: zero findings.
+- Checked against `main`: `globals/packages/plan-suite/` holds the six skills and `rules.md`. No
+  `globals/packages/plan-*` or `generated/packages/plan-*` folder remains for the old IDs, and no
+  built-in category has `bulkToggle`. `plans.mjs` and `telemetry.mjs` read `plan-suite`, and
+  `PLAN_SUITE_PACKAGES` is `["plan-suite", "session-close"]`. The `package dev add-skill`
+  definition and implementation exist, and so do the `package-contents` inspect target and
+  `showContents`.
+- Docs of record checked against the landed code: `package-development.md`, `roborepo-cli.md`,
+  `config-control-panel.md`, `setup-and-daily-use.md`, `plan/lifecycle/plan-suite.md` and
+  `plans-portal-internals.md`. Open plans and `docs/` no longer name the old plan package paths.
+- Approved implementation: `59df96072435b4fa2ac19e6cf8a999916220d366`. The canonical approval
+  check reports fresh against branch tip `940a5e9319be22e4bb5c7d3f9c07b257609e5cf5`.
+- The squash merge (#44) left out the branch's approval commit, which was pushed after the merge.
+  It was cherry-picked onto `main` as `07650ccb`, and the worktree's plan copy then matched `main`.
+- The canonical landing check newly scanned base history from fork `fb068616`.
+- Absorbing commit: 07650ccb4f6af5944e02a9a830e07042093598ea
+- Not verified: Windows installer parity in a real PowerShell environment. The Not tested entry
+  (a live harness session after an update) was confirmed by the user on 2026-10-26.
