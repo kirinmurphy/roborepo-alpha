@@ -1,7 +1,7 @@
 ---
 id: hr78g4sj
 priority: high
-next_action: Human to open and merge the pull request, then run /plan-close hr78g4sj.
+next_action: Review feedback fixes at b4cd722843c1d824838324f0265d592dbc7b1b6e, then request renewed human approval.
 blocked_by: []
 depends_on: ["wjlt1zvf"]
 related: ["4zyo2woj", "8bjltk2n", "46qth5z8", "7k3m9qd", "harness-capability-derived-resource-targeting"]
@@ -266,6 +266,10 @@ No implementation fix or escalate findings in the validation passes.
 
 - [x] Durable review evidence contained temporary log paths; replaced them with the observed
   outcomes required by the updated review guidance (d62ba4d5).
+- [x] Codex Deep Read required a Git working directory; added `--skip-git-repo-check` before
+  the prompt separator and updated existing desktop argv expectations (b4cd7228).
+- [x] Runtime discovery test rejected incidental PID/port digit sequences inside a hash;
+  replaced the substring assertion with the opaque-key format assertion (b4cd7228).
 
 ### Verification
 
@@ -315,18 +319,21 @@ No implementation fix or escalate findings in the validation passes.
   this worktree and are not part of review commits.
 
 ### Result
-- Status: complete
+- Status: pending
 - Reviewed implementation commit: d62ba4d5b9f3f987c2be3eea4410efd1c51e78f6
 - Base commit: 9211dab11354fbf36de3275584b5481987f15481
 
 ### Approval
-- Decision: approved
+- Decision: invalidated
+- Previous decision: approved
 - Reviewed implementation commit: d62ba4d5b9f3f987c2be3eea4410efd1c51e78f6
 - Confirmed by: human
 - Evidence: October 25, 2026, the human answered "Approve this implementation" to the
   approval question naming this plan and exact reviewed implementation commit.
+- Reason: the October 26 feedback fixes changed implementation after that approval. The previous
+  reviewed commit and human answer above are historical evidence, not approval of the new fixes.
 
-### Current review evidence
+### Review evidence before PR feedback
 
 - Final `npm run check` passed, exit 0, on the synchronized implementation, with only plan-record
   commits afterward. Health: 106 checks; CLI: 457 passed, zero failed; install collisions: all
@@ -363,6 +370,31 @@ No implementation fix or escalate findings in the validation passes.
 | Literal summary transport and failures | Telemetry consumer spawns resolved executable argv; synthetic processes assert summary-only input, metacharacters, timeout, empty output, and nonzero exit |
 | Enablement, order, desktop/PATH selection | Runtime registry filtering and discovery; synthetic-provider and desktop-runtime assertions passed |
 | Documentation and conditional scope | Architecture, hook, provider, and telemetry docs follow current behavior; old source-path scan found no active source/test/doc references |
+
+### PR feedback fixes and verification — October 26
+
+- Fixes are committed in `b4cd722843c1d824838324f0265d592dbc7b1b6e` (three files, four line
+  replacements). The local Codex executable's `exec --help` confirms that
+  `--skip-git-repo-check` permits running outside Git repositories. The provider template now
+  places that flag before `--` and the literal prompt argument. Existing desktop process
+  assertions were updated; no additional test suite or real model call was introduced.
+- The CI-reported hash is valid but contains `101` by chance. The old assertion was reproduced
+  rejecting it. The replacement checks the `a`-prefixed 24-digit hexadecimal format; existing
+  restart assertions still verify the association key survives PID and port changes.
+- Focused checks passed: `node scripts/test/developer-runtime-check.mjs`,
+  `node scripts/test/harness-desktop-runtime-check.mjs`,
+  `node scripts/test/harness-registry-check.mjs`, and
+  `node scripts/test/telemetry-synthetic-provider-check.mjs`. The first runtime attempt hit
+  sandbox `listen EPERM`; the authorized retry passed. The failed attempt is not counted as passing.
+- `npm run check` passed, exit 0, on the three-file fix content subsequently committed as
+  `b4cd7228`: health 106 checks; CLI 457 passed, zero failed; install collisions all passed;
+  grouped suites 60/60; package-install smoke passed; all four strict Docker scenarios passed;
+  browser tests 130 passed. `git diff --check` passed.
+- Windows installer parity was skipped because `pwsh` is unavailable. The optional active-root
+  fixture reported `uvx` unavailable. Neither is claimed as passed. These are local verification
+  results, not a claim that remote CI has rerun successfully.
+- Renewed review and explicit approval of the changed implementation remain pending. Earlier
+  validator passes cover the implementation before these feedback fixes.
 
 ## Not tested
 
