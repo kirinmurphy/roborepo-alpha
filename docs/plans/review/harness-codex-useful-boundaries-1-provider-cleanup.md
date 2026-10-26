@@ -1,7 +1,7 @@
 ---
 id: hr78g4sj
 priority: high
-next_action: Finish verification of the synchronized review, then request approval of the exact implementation commit.
+next_action: Await explicit human approval of a8aa353fbb1b7cb45ad2822314385354b0f6f5f6, then human merges the PR and runs /plan-close hr78g4sj.
 blocked_by: []
 depends_on: ["wjlt1zvf"]
 related: ["4zyo2woj", "8bjltk2n", "46qth5z8", "7k3m9qd", "harness-capability-derived-resource-targeting"]
@@ -322,16 +322,17 @@ No implementation fix or escalate findings in the validation passes.
   this worktree and are not part of review commits.
 
 ### Result
-- Status: pending
-- Reviewed implementation commit: d62ba4d5b9f3f987c2be3eea4410efd1c51e78f6
-- Base commit: 9211dab11354fbf36de3275584b5481987f15481
+- Status: complete
+- Reviewed implementation commit: a8aa353fbb1b7cb45ad2822314385354b0f6f5f6
+- Base commit: fb068616abc30baaaf6194e7ba6871f32e78e496
 
 ### Approval
-- Decision: invalidated
+- Decision: requested
+- Reviewed implementation commit: a8aa353fbb1b7cb45ad2822314385354b0f6f5f6
 - Previous decision: approved
-- Reviewed implementation commit: d62ba4d5b9f3f987c2be3eea4410efd1c51e78f6
-- Confirmed by: human
-- Evidence: October 25, 2026, the human answered "Approve this implementation" to the
+- Previous reviewed implementation commit: d62ba4d5b9f3f987c2be3eea4410efd1c51e78f6
+- Previous confirmed by: human
+- Previous evidence: October 25, 2026, the human answered "Approve this implementation" to the
   approval question naming this plan and exact reviewed implementation commit.
 - Reason: the October 26 feedback fixes changed implementation after that approval. The previous
   reviewed commit and human answer above are historical evidence, not approval of the new fixes.
@@ -412,8 +413,16 @@ No implementation fix or escalate findings in the validation passes.
 - Validator checks passed: registry, synthetic-provider transport, desktop-runtime selection,
   shared-target install/removal, hook composition, and diff checks. The provider-interface fix
   also passed `node scripts/test/docs-reference-check.mjs` and `git diff --check`.
-- Final full parity gate is running on the synchronized implementation. Earlier passing gate
-  evidence is historical; this round does not claim completion until the current gate finishes.
+- Validator recheck at `f9772b07` confirmed the documentation fix; zero fix or escalate findings
+  remain. No code or test fix was needed during this synchronized review.
+- Final `npm run check` passed, exit 0, on the synchronized implementation with only the recorded
+  documentation correction and plan evidence commits afterward: health 107 checks; CLI 457 passed,
+  zero failed; install collisions all passed; grouped suites 60/60; package-install smoke passed;
+  all four strict Docker scenarios passed; browser tests 130 passed. Documentation references
+  and `git diff --check` passed after the documentation correction.
+- Windows installer parity was skipped because `pwsh` is unavailable; it is not claimed as passed.
+  No current base failures remain. Both primary and feature checkouts were clean before writing
+  this final evidence. No claim is made that remote CI has rerun successfully.
 - No required manual tests remain; native model synthesis stays explicitly optional. Human's
   statement that they are ready to approve is readiness, not explicit approval of a new commit.
 
