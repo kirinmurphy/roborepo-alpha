@@ -165,7 +165,9 @@ findings; earlier findings may stay for readable history.
 - Decision: requested
 ```
 
-Keep each finding to one line a fixer can act on: what is wrong and where. Keep Result pending
+Keep each finding to one line a fixer can act on: what is wrong and where. Record evidence itself,
+never a path under `/tmp` or another temporary folder: the OS deletes those within days and the
+plan outlives them. Keep Result pending
 until step 5 finishes and all findings and required manual checks are resolved. Commit the plan in
 the worktree as a plan-only commit; leave any prior approval intact as historical evidence rather
 than replacing it with an implied new approval.

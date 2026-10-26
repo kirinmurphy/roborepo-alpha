@@ -249,7 +249,7 @@ Readiness requires: H1 title, Summary, Goals or desired outcome, Current state o
 
 Section headings are matched by label against a synonym list, so several common titles satisfy the same requirement — `Purpose` or `Overview` for Summary, `Current behavior` or `Background` for Context, `Implementation checklist`/`sequence`/`phases` or `Proposed behavior` for Proposed design, `Exit criteria` for Validation. The authoritative list is `modules/plan-suite/section-synonyms.mjs`; add to it rather than renaming existing documents.
 
-Completed plans additionally need a `Verification` section with real content under it — evidence the work was checked, or an explicit statement of what was not verified. A bare heading does not satisfy it.
+Completed plans additionally need a `Verification` section with real content under it — evidence the work was checked, or an explicit statement of what was not verified. A bare heading does not satisfy it. Record evidence itself, never a path under `/tmp` or another temporary folder: the OS deletes those within days and the plan outlives them.
 
 Validation reports each problem as a finding with a stable code, a plain-language message, and a resolution. In place, findings are advisory: a plan can sit in any folder with findings, and the portal reports them. A lifecycle transition is stricter: moving a plan into a folder whose requirements it does not meet is refused with `LIFECYCLE_REQUIREMENTS`, listing every problem at once along with a generated repair prompt, and nothing moves. Moves into `ready/` and `completed/` require no findings at all; moves into `active/` and `review/` tolerate unconfirmed `## Not tested` entries; a move into `archived/` checks only the archived rules.
 

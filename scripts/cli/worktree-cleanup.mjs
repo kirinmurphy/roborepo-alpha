@@ -11,13 +11,16 @@ import { checkoutRootsFor, loadRegistry } from "../../modules/repositories/regis
 import { activeWorktreeNames, findPlanAbsorbingCommit, findPlanWorktree, repositoryRecordFor, worktreeFolder } from "./worktree-policy.mjs";
 import { STATE_ROOT } from "./paths.mjs";
 
-export async function cleanupWorktrees({ cwd = process.cwd(), stateRoot = STATE_ROOT, apply = false, plan = null, remove = null, confirm = false, currentPath = cwd, discover = discoverInstances } = {}) {
+export async function cleanupWorktrees({ cwd = process.cwd(), stateRoot = STATE_ROOT, apply = false, plan = null, base = "main", remove = null, confirm = false, currentPath = cwd, discover = discoverInstances } = {}) {
   const mainPath = mainCheckout(cwd);
   if (!mainPath) throw new Error("a non-bare Git checkout is required");
   const gitDir = path.join(mainPath, ".git");
   const worktreeRoot = worktreeFolder(mainPath, repositoryRecordFor(loadRegistry({ stateRoot }), mainPath));
   const scopedName = plan ? findPlanWorktree(mainPath, plan) : null;
   const recorded = plan ? findPlanAbsorbingCommit(mainPath, plan) : null;
+  // A plan closes against the local base branch, so its cleanup checks landing there too. The
+  // absorbing commit is often still unpushed when /plan-close runs, and `origin/HEAD` would miss it.
+  const landingBase = plan ? `refs/heads/${base}` : null;
   if (plan && !scopedName) throw new Error(`plan not found or has no worktree: ${plan}`);
   const worktrees = linkedWorktrees(gitDir);
   const selectedBranch = remove;
@@ -32,7 +35,7 @@ export async function cleanupWorktrees({ cwd = process.cwd(), stateRoot = STATE_
       if (selectedBranch && worktree.branch !== selectedBranch && worktree.name !== selectedBranch) continue;
       const kind = remove ? "confirmed" : "automatic";
       const surveyTip = await worktreeTip(mainPath, worktree);
-      const landing = worktree.branch ? await inspectBranchLanding(mainPath, worktree.branch, { recorded }) : { landed: false, reason: "detached" };
+      const landing = worktree.branch ? await inspectBranchLanding(mainPath, worktree.branch, { base: landingBase, recorded }) : { landed: false, reason: "detached" };
       const guard = await checkWorktreeRemoval({
         worktree, kind, landed: landing.landed, worktreeRoot, mainPath, currentPath,
         activePlan: activePlans.has(worktree.name), running: running.has(worktree.path),
@@ -118,7 +121,7 @@ export async function worktreeCleanupCommand(args) {
   const options = { apply: false, confirm: false, json: false };
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    if (["--plan", "--remove", "--current"].includes(arg)) {
+    if (["--plan", "--base", "--remove", "--current"].includes(arg)) {
       const value = args[++i];
       if (!value || value.startsWith("--")) throw new Error(`${arg} needs a value`);
       options[arg === "--current" ? "currentPath" : arg.slice(2)] = value;
