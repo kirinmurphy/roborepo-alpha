@@ -429,7 +429,7 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
 - [x] `plans-portal.md` said enabling `plan-suite` turns on seven skills; it turns on six, and
       `/session-close` is its own package — fixed (42d61c23)
 - [x] No test covered a successful `add-skill` without `--command` (an auto skill with no
-      entrypoint) — added to `test-cli.sh`
+      entrypoint) — added to `test-cli.sh` (55e55a00)
 
 ### Verification
 
@@ -442,6 +442,7 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
 - Resumed run, validation pass 1: 3 `fix` findings (fresh-context subagent)
 - Resumed run, validation pass 2: 1 `fix` finding, a docs wording fix (fresh-context subagent)
 - Resumed run, validation pass 3: 1 `fix` finding, a missing test (fresh-context subagent)
+- Validation: clean on resumed-run pass 4 at 55e55a00 (fresh-context subagent)
 
 ## Documentation impact
 
