@@ -3,7 +3,7 @@
 // package, so every browser command checks that the package is effective before doing anything.
 
 import { loadPackageCatalog } from "../package-catalog.mjs";
-import { effectiveEnabledIds } from "../rules-render.mjs";
+import { effectiveEnabledIds } from "../package-state.mjs";
 
 export const OWNING_PACKAGE = "feature-verification";
 

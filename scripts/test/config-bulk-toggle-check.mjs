@@ -2,8 +2,9 @@
 // Section-level bulk toggle (portal bulkToggle sections): one POST applies a section's packages
 // as a unit — preflighted sequential mutations, exactly one reconcile pass, fresh snapshot back.
 // Covers enable-all from off, disable-all, no-op diffing (no-change ids skipped), mixed->enable,
-// the in-flight lock (409, deterministic same-tick invocation), 400 validation, and that the
-// individual toggle path keeps working beside the batch endpoint.
+// the in-flight lock (409, deterministic same-tick invocation), 400 validation, that the
+// individual toggle path keeps working beside the batch endpoint, and that dependency-only
+// packages are skipped while every changed member returns per-package outcomes.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -145,6 +146,22 @@ try {
   process.env.HOME = home;
   process.env.ROBOREPO_STATE_DIR = path.join(home, ".roborepo");
   process.env.ROBOREPO_STATE_ROOT = path.join(home, ".roborepo");
+  // Workspace fixtures for the dependency cases below: a selectable parent that requires a
+  // dependency-only package. Set before the import, which resolves the workspace root once.
+  const workspace = path.join(tmp, "workspace");
+  process.env.ROBOREPO_WORKSPACE_ROOT = workspace;
+  for (const [id, extra] of [
+    ["bulk-parent", { requires: ["bulk-dep-only"] }],
+    ["bulk-dep-only", { selectable: false, presentation: { category: "integrations", visibility: "dependency" } }],
+  ]) {
+    const dir = path.join(workspace, "packages", id);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "rules.md"), `## Bulk fixture ${id}\n`);
+    fs.writeFileSync(path.join(dir, "package.config.json"), JSON.stringify({
+      schemaVersion: 1, id, label: id, description: "Bulk dependency fixture", presentation: { category: "integrations" },
+      resources: [{ type: "rules", harness: "claude", source: "rules.md" }], ...extra,
+    }));
+  }
   const bulk = await import(path.join(repoRoot, "scripts/cli/config-bulk.mjs"));
   // Start from all-off so the first batch has real work and stays in flight across the check.
   await bulk.applyBulkPackageChange(SECTION_IDS, false);
@@ -153,7 +170,29 @@ try {
   assert.equal(second.status, 409, `overlapping batch must 409 (got ${second.status})`);
   assert.equal((await first).status, 200, "first batch completes once the lock frees");
 
-  console.log("ok: section bulk toggle (enable/disable/no-op/mixed/lock/validation/individual coexistence)");
+  // ── dependency rows: a bulk switch acts on selectable packages only, and each changed member
+  // carries the probed outcome of every package it applied.
+  const on = await bulk.applyBulkPackageChange(["bulk-dep-only", "bulk-parent"], true);
+  assert.equal(on.status, 200, `dependency batch enable: ${on.message}`);
+  const onById = new Map(on.results.map((r) => [r.id, r]));
+  assert.equal(onById.get("bulk-dep-only").skipped, true, "a dependency-only package is skipped by bulk enable");
+  assert.equal(onById.get("bulk-dep-only").changed, false);
+  assert.deepEqual(
+    onById.get("bulk-parent").outcomes.map((o) => [o.id, o.outcome]),
+    [["bulk-dep-only", "enabled"], ["bulk-parent", "enabled"]],
+    "the parent's result lists one probed outcome per applied package, dependency first",
+  );
+  assert.ok(!registryIds().packages.has("bulk-dep-only"), "the dependency is never recorded as a root");
+  const off = await bulk.applyBulkPackageChange(["bulk-dep-only", "bulk-parent"], false);
+  const offById = new Map(off.results.map((r) => [r.id, r]));
+  assert.equal(offById.get("bulk-dep-only").skipped, true, "a dependency-only package is skipped by bulk disable");
+  assert.deepEqual(
+    offById.get("bulk-parent").outcomes.map((o) => [o.id, o.outcome]).sort(),
+    [["bulk-dep-only", "disabled"], ["bulk-parent", "disabled"]],
+    "disabling the parent turns its dependency off with it",
+  );
+
+  console.log("ok: section bulk toggle (enable/disable/no-op/mixed/lock/validation/individual coexistence/dependencies)");
 } finally {
   stopServer();
   fs.rmSync(tmp, { recursive: true, force: true });

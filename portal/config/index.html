@@ -55,6 +55,33 @@
       </div>
       <div class="modal-footer" id="modal-footer" hidden></div>
     </dialog>
+    <!-- Shown after a package enable that left some of its recommendations off: the user picks
+         which to enable too, or continues without them. Nothing is enabled without a choice here. -->
+    <dialog id="recommendations-modal" aria-labelledby="recommendations-title" data-dialog-size="sm">
+      <div class="modal-head">
+        <div class="modal-head-main">
+          <span class="modal-title" id="recommendations-title"></span>
+          <portal-close-button id="recommendations-close"></portal-close-button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <p class="recommendations-lead">Recommended alongside it. Choose any to enable too:</p>
+        <div class="recommendations-list" id="recommendations-list"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" data-btn="text" id="recommendations-skip">Continue without</button>
+        <button type="button" data-btn="cta" id="recommendations-enable">Enable selected</button>
+      </div>
+    </dialog>
+    <template id="tpl-recommendation-option">
+      <label class="recommendation-option">
+        <input type="checkbox" data-slot="check" checked />
+        <span class="recommendation-text">
+          <span class="recommendation-label" data-slot="label"></span>
+          <span class="recommendation-desc" data-slot="description"></span>
+        </span>
+      </label>
+    </template>
     <!-- Persistent intro above the package sections: what the package manager provides. Not an
          onboarding notice — it renders on every load, whatever the onboarding state. A plain
          header, not a .panel: .panel is reserved for the package-group sections below it. -->
@@ -215,6 +242,16 @@
         </div>
         <p class="panel-desc" data-slot="description" hidden></p>
         <div data-slot="items"></div>
+        <!-- Packages this section's rows require or recommend (buildBehaviorView's
+             requiredDependencies / recommendedDependencies), each row naming what references it. -->
+        <div class="dependency-group" data-slot="required-group" hidden>
+          <h3 class="dependency-head">Required dependencies</h3>
+          <div data-slot="required-items"></div>
+        </div>
+        <div class="dependency-group" data-slot="recommended-group" hidden>
+          <h3 class="dependency-head">Recommended dependencies</h3>
+          <div data-slot="recommended-items"></div>
+        </div>
         <p class="panel-footnote" data-slot="footnote" hidden></p>
       </section>
     </template>
@@ -294,6 +331,7 @@
             <span data-slot="badges"></span>
           </div>
           <div class="item-desc" data-slot="description"></div>
+          <div class="item-relation" data-slot="relation"></div>
           <div class="item-note" data-slot="note"></div>
           <div class="item-hint" data-slot="hint"></div>
           <div class="item-status" data-slot="status"></div>

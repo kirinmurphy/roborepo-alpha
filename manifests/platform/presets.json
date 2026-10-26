@@ -36,6 +36,7 @@
       "id": "telemetry",
       "label": "Telemetry",
       "description": "Local cross-repo metadata capture and reports. Installed off unless selected.",
+      "requires": ["hooks"],
       "rows": []
     }
   ]

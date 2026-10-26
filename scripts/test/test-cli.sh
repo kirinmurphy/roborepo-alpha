@@ -602,6 +602,26 @@ assert "bundle check: selected bundles verify" \
   bash -c "HOME='${presets_home}' ROBOREPO_STATE_DIR='${presets_home}/.roborepo' node '${cli}' bundle check >/dev/null"
 assert "bundle remove: unlinks owned link bundle" \
   bash -c "HOME='${presets_home}' ROBOREPO_STATE_DIR='${presets_home}/.roborepo' node '${cli}' bundle remove hooks >/dev/null && ! test -e '${presets_home}/.claude/hooks'"
+# Bundle selections record roots only: telemetry requires hooks (presets.json), so applying
+# telemetry applies hooks without recording it, and hooks leaves with telemetry unless selected.
+bundle_dep_home="${work}/bundle-dep-home"
+mkdir -p "${bundle_dep_home}/.claude" "${bundle_dep_home}/.codex"
+bundle_dep_env="HOME='${bundle_dep_home}' ROBOREPO_STATE_DIR='${bundle_dep_home}/.roborepo'"
+bundle_dep_state="${bundle_dep_home}/.roborepo/presets/state.json"
+assert "bundle apply: telemetry applies its required hooks bundle without recording it" \
+  bash -c "${bundle_dep_env} node '${cli}' bundle apply base telemetry >/dev/null && test -e '${bundle_dep_home}/.claude/hooks' && node -e 'const s=JSON.parse(require(\"fs\").readFileSync(process.argv[1],\"utf8\"));process.exit(s.schemaVersion===2&&!s.selected.includes(\"hooks\")&&s.selected.includes(\"telemetry\")?0:1)' '${bundle_dep_state}'"
+assert "bundle status: marks a derived bundle as required by its parent" \
+  bash -c "${bundle_dep_env} node '${cli}' bundle status | grep -Eq '^hooks +required by telemetry +applied'"
+assert "bundle check: a missing required bundle names its rows" \
+  bash -c "mv '${bundle_dep_home}/.claude/hooks' '${bundle_dep_home}/.claude/hooks.moved' && out=\$(${bundle_dep_env} node '${cli}' bundle check 2>&1); status=\$?; mv '${bundle_dep_home}/.claude/hooks.moved' '${bundle_dep_home}/.claude/hooks'; test \$status -ne 0 && grep -q 'fail: hooks selected but not fully applied; missing: claude:hooks' <<<\"\$out\""
+assert "bundle remove: a required bundle stays applied and says why" \
+  bash -c "${bundle_dep_env} node '${cli}' bundle remove hooks | grep -q 'kept: hooks stays applied; required by telemetry' && test -e '${bundle_dep_home}/.claude/hooks'"
+assert "bundle remove: removing telemetry removes the hooks it required" \
+  bash -c "${bundle_dep_env} node '${cli}' bundle remove telemetry >/dev/null && ! test -e '${bundle_dep_home}/.claude/hooks'"
+assert "bundle remove: a directly selected required bundle survives its parent" \
+  bash -c "${bundle_dep_env} node '${cli}' bundle apply hooks telemetry >/dev/null && ${bundle_dep_env} node '${cli}' bundle remove telemetry >/dev/null && test -e '${bundle_dep_home}/.claude/hooks'"
+assert "bundle state: an unversioned record drops required bundles from its roots" \
+  bash -c "printf '{\"selected\":[\"base\",\"hooks\",\"telemetry\"]}\n' > '${bundle_dep_state}' && ${bundle_dep_env} node '${cli}' bundle status | grep -Eq '^hooks +required by telemetry'"
 mkdir -p "${presets_home}/.claude/hooks"
 printf 'local hook file\n' > "${presets_home}/.claude/hooks/local.txt"
 printf '{"hooks":[]}\n' > "${presets_home}/.codex/hooks.json"

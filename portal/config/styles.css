@@ -917,3 +917,53 @@ dialog#config-modal::backdrop {
   background: var(--bg);
   width: fit-content;
 }
+
+/* Required / Recommended dependency lists under a package section's own rows. */
+.dependency-group {
+  margin-top: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+.dependency-head {
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 4px;
+}
+.item-relation {
+  color: var(--desc-dim);
+  font-size: var(--text-2xs);
+  margin-top: 3px;
+}
+
+/* Post-enable recommendations dialog. */
+.recommendations-lead {
+  margin: 0 0 10px;
+  color: var(--desc-dim);
+}
+.recommendations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.recommendation-option {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  cursor: pointer;
+}
+.recommendation-text {
+  display: flex;
+  flex-direction: column;
+}
+.recommendation-desc {
+  color: var(--desc-dim);
+  font-size: var(--text-2xs);
+}
+#recommendations-modal .modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

@@ -1,7 +1,7 @@
 ---
 id: o9zwxuav
 priority: high
-next_action: Add scripts/cli/package-graph.mjs (selected roots, required closure, requiredBy/recommendedBy) with fixtures, then move the enabled-packages registry out of scripts/cli/rules-render.mjs into scripts/cli/package-state.mjs and repoint every importer.
+next_action: Run the Validation Loop over the implementation commit, fix any fix-class findings, then run the completion preflight and submit transition.
 blocked_by: []
 depends_on: ["bysyzl1e"]
 related: ["package-registry-live-state-reconciliation", "ejsc769o", "age4cm7r", "user-managed-packages-and-add-workflows"]
@@ -257,60 +257,60 @@ rule:
 
 ### Phase 1: State module and graph helpers
 
-- [ ] Add `scripts/cli/package-graph.mjs` with pure functions over `{ id, requires, recommends }`
+- [x] Add `scripts/cli/package-graph.mjs` with pure functions over `{ id, requires, recommends }`
       nodes: selected roots, required closure, `requiredBy`, and `recommendedBy`.
-- [ ] Add `scripts/cli/package-state.mjs`; move `readEnabledPackagesRegistry`,
+- [x] Add `scripts/cli/package-state.mjs`; move `readEnabledPackagesRegistry`,
       `setPackageEnabled`, `forgetPackageIds`, and `effectiveEnabledIds` out of
       `scripts/cli/rules-render.mjs`, and update every importer listed under Current state.
-- [ ] Extend `scripts/cli/package-catalog.mjs` to normalize and validate `recommends`,
+- [x] Extend `scripts/cli/package-catalog.mjs` to normalize and validate `recommends`,
       `selectable`, and `presentation.visibility`, including the non-selectable default-enabled
       rejection.
-- [ ] Fixtures: shared, transitive, and directly selected dependencies; non-selectable packages;
+- [x] Fixtures: shared, transitive, and directly selected dependencies; non-selectable packages;
       missing recommendation ids; a `requires` cycle.
 
 ### Phase 2: Derived activation and verified results
 
-- [ ] Remove the recursive `enablePackage` call for `requires`; enable and disable change roots,
+- [x] Remove the recursive `enablePackage` call for `requires`; enable and disable change roots,
       then reconcile the before/after effective difference.
-- [ ] Apply the disable rules in Proposed design §4 (root removal, derived-only refusal,
+- [x] Apply the disable rules in Proposed design §4 (root removal, derived-only refusal,
       `--cascade`).
-- [ ] Reject direct mutation of `selectable: false` packages.
-- [ ] Replace mid-apply `process.exit` calls in `packages.mjs` with typed errors the CLI entry
+- [x] Reject direct mutation of `selectable: false` packages.
+- [x] Replace mid-apply `process.exit` calls in `packages.mjs` with typed errors the CLI entry
       point maps to exit codes.
-- [ ] Probe changed packages after each mutation and return `enabled`, `partial`, or `blocked`
+- [x] Probe changed packages after each mutation and return `enabled`, `partial`, or `blocked`
       from `enablePackage`/`disablePackage`, `mutatePackage`, and the `config-bulk.mjs` batch.
-- [ ] Read version-1 registries with the drop-required rule, and write `schemaVersion: 2`.
-- [ ] Confirm rules rendering, command ownership, probes, `reconcile`, `adopt-live`, hook
+- [x] Read version-1 registries with the drop-required rule, and write `schemaVersion: 2`.
+- [x] Confirm rules rendering, command ownership, probes, `reconcile`, `adopt-live`, hook
       readiness, and the browser gate read the effective set from `package-state.mjs`, and that
       no other module reads `enabled-packages.json`.
 
 ### Phase 3: Recommendations
 
-- [ ] Return disabled recommendations from the enable result.
-- [ ] Add the portal prompt and the interactive CLI prompt; keep the non-interactive path silent.
+- [x] Return disabled recommendations from the enable result.
+- [x] Add the portal prompt and the interactive CLI prompt; keep the non-interactive path silent.
 
 ### Phase 4: Config presentation
 
-- [ ] Add selectability, visibility, derived-vs-selected state, and inverse relationships to the
+- [x] Add selectability, visibility, derived-vs-selected state, and inverse relationships to the
       package snapshot in `scripts/cli/config.mjs`.
-- [ ] Derive dependency sections in `buildBehaviorView`; omit `visibility: dependency` packages
+- [x] Derive dependency sections in `buildBehaviorView`; omit `visibility: dependency` packages
       from normal rows.
-- [ ] Render the sections in `portal/config/elements/config-item.js` and its templates, following
+- [x] Render the sections in `portal/config/elements/config-item.js` and its templates, following
       the portal's template and light-DOM conventions, with no toggle for non-selectable rows;
       dependency rows open `openSource`.
-- [ ] Make bulk enable skip non-selectable and derived-only rows.
+- [x] Make bulk enable skip non-selectable and derived-only rows.
 
 ### Phase 5: Install bundles
 
-- [ ] Add `requires` to the bundle schema in `manifests/platform/presets.json` and declare
+- [x] Add `requires` to the bundle schema in `manifests/platform/presets.json` and declare
       `telemetry → hooks`.
-- [ ] Replace `withDependencies` in `scripts/cli/presets.mjs` with the graph closure; store roots
+- [x] Replace `withDependencies` in `scripts/cli/presets.mjs` with the graph closure; store roots
       only and read unversioned state with the drop-required rule.
-- [ ] Show derived bundles in `bundle status` and name missing rows in `bundle check`.
+- [x] Show derived bundles in `bundle status` and name missing rows in `bundle check`.
 
 ### Phase 6: Catalog and docs
 
-- [ ] Update the docs listed under Documentation impact.
+- [x] Update the docs listed under Documentation impact.
 
 ## Validation
 
@@ -352,6 +352,17 @@ rule:
 | `docs/user/reference/roborepo-cli.md` | `package enable`/`disable` outcomes, disable rules for dependencies, recommendation prompt |
 | `docs/internal/cli-internals.md` | `package-state.mjs`/`package-graph.mjs` ownership; bundle roots and derived dependencies |
 
+## Not tested
+
+- [ ] The portal recommendations dialog appears after a real enable of a package whose
+      `recommends` names a disabled package, and **Enable selected** enables the checked ones. No
+      built-in package declares `recommends` yet ([[ejsc769o]] adds the first edges), so the portal
+      test drives the dialog with a stubbed toggle response; needs a browser session against a
+      workspace package that declares `recommends`.
+- [ ] The interactive terminal prompt (`package enable` on a TTY) asks about each off
+      recommendation and enables the ones answered yes. The test suite runs without a TTY, so only
+      the non-interactive listing is asserted; needs a manual run in a terminal.
+
 ## Decision Log
 
 - **2026-10-12: Merged `package-registry-live-state-reconciliation` into this plan.** Both plans
@@ -370,6 +381,54 @@ rule:
   depend on it" refusal and let a user deselect a still-required root. Resolved: deselecting a root
   always succeeds and the package stays effective if required; refusal and `--cascade` apply only to
   a package that is effective solely through a parent.
+
+- **2026-10-26: Disable reports its own outcomes.** The plan's outcome table names `enabled`,
+  `partial`, and `blocked` for enables. Disable needed a success state too, so each removed package
+  probes as `disabled` (nothing it owns is present), `partial` (something it owns is still there,
+  named), or `blocked`. Alternatives: reuse `enabled` for "change applied" (misleading), or return
+  no outcomes from disable (the plan asks for one per changed package).
+- **2026-10-26: `partial` exits 0, `blocked` exits 1.** A partial apply already happened before
+  this change (with exit 0) and is common in fake homes (an MCP preset skipped with `SKIP_MCP`); a
+  non-zero exit would break every scripted enable while adding nothing the printed warning does
+  not. `blocked` replaces the uncaught error that already exited 1. Refusals keep exit 2.
+- **2026-10-26: Enable re-applies the whole required closure.** Enable applies every package in
+  the selected root's closure, not only the newly effective ones, matching the old recursive
+  enable that re-applied each dependency. Re-applying is idempotent and repairs a dependency with
+  a missing resource; applying only the difference would leave such a dependency broken.
+- **2026-10-26: `--cascade` on a selected root also deselects the parents that require it.** The
+  design text covers `--cascade` for a derived-only package. For a root a parent also requires,
+  `--cascade` deselects those parents too, so the package actually turns off — the same meaning
+  `--cascade` has always had ("disable dependents first"). Without it, the root is deselected and
+  stays on, as §4 specifies.
+- **2026-10-26: Reconcile applies effective packages directly.** `reconcile` used to call
+  `enablePackage --reconcile`, an internal flag. It now applies each effective package's components
+  in dependency order through the same component-apply function enable uses, and the internal flag
+  is gone.
+- **2026-10-26: The non-interactive enable lists recommendations in one line.** "Silent" in Phase 3
+  is read as "never prompts and never enables": scripts get one `recommended (not enabled): ...`
+  line, and API callers get `recommendations[]` in the result. Alternative: print nothing, which
+  hides the offer from scripted users entirely.
+- **2026-10-26: Dependency rows list transitive requirements, minus rows already in the section.**
+  A section's Required list holds the full required closure of its rows, so a two-level dependency
+  is visible; a package that already has a row in the same section is not repeated, and a package
+  both required and recommended is listed as required. A required row that is on only through its
+  parents has no switch, since deselecting it would be refused.
+- **2026-10-26: Bulk disable skips derived-only members.** A bulk Deselect All member that is on
+  only because another selection requires it is reported `skipped` instead of being refused, so a
+  batch never fails on a package it cannot switch directly. Selection is re-read before each member.
+- **2026-10-26: Turning telemetry off leaves the hooks bundle's files in place.** Under the new
+  rule, `hooks` stops being effective when the telemetry bundle is deselected (unless selected
+  directly), but `markTelemetrySelected` stays bookkeeping only, as before: it records the
+  selection and never applies or removes bundle rows. `bundle remove telemetry` is the path that
+  removes the hooks it required. Removing core hooks as a side effect of a telemetry toggle would
+  be a wider behavior change than this plan asks for.
+- **2026-10-26: Bundle selection lives in its own small module.** `bundle-selection.mjs` holds bundle
+  roots and the effective set so hook readiness (`core-hook-bundle.mjs`), the Config snapshot, and
+  `presets.mjs` share one rule without hook readiness importing the bundle-apply module.
+- **2026-10-26: Updated one fixture for the planned bundle behavior.** `shared-target-rows-check`
+  enabled the telemetry package and then expected `bundle remove hooks` to remove the hooks bundle.
+  Telemetry now requires hooks, so that removal is kept (as §7 specifies); the fixture now asserts
+  the kept message and removes `hooks` and `telemetry` together.
 
 ## Coordination and completed baseline
 

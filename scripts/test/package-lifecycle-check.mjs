@@ -174,4 +174,131 @@ for (const pkgId of packageIds) {
   }
 }
 
-console.log(`ok: package lifecycle contract (${packageIds.length} packages, plus a several-skill package)`);
+// Derived dependencies: the registry records selected roots only, and every package a root
+// requires is effective through it. Fixture packages live in a throwaway workspace and each carries
+// a rules fragment, so "effective" is also visible as live rules in CLAUDE.md.
+{
+  const tmp = makeHome();
+  const workspace = path.join(tmp, "workspace");
+  const stateDir = path.join(tmp, ".roborepo");
+  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_DIR: stateDir, ROBOREPO_WORKSPACE_ROOT: workspace, SKIP_MCP: "1" };
+  const fixture = (id, config = {}, { rules = true } = {}) => {
+    const dir = path.join(workspace, "packages", id);
+    fs.mkdirSync(dir, { recursive: true });
+    const resources = [...(rules ? [{ type: "rules", harness: "claude", source: "rules.md" }] : []), ...(config.resources || [])];
+    if (rules) fs.writeFileSync(path.join(dir, "rules.md"), `## Fixture rules ${id}\n`);
+    fs.writeFileSync(path.join(dir, "package.config.json"), JSON.stringify({
+      schemaVersion: 1, id, label: `Fixture ${id}`, description: "Dependency fixture",
+      presentation: { category: "integrations" }, ...config, resources,
+    }));
+  };
+  fixture("dep-parent-a", { requires: ["dep-shared"], recommends: ["dep-helper"] });
+  fixture("dep-parent-b", { requires: ["dep-shared"] });
+  fixture("dep-shared", { requires: ["dep-leaf"] });
+  fixture("dep-leaf");
+  fixture("dep-helper");
+  fixture("dep-lonely");
+  fixture("dep-only", { selectable: false, presentation: { category: "integrations", visibility: "dependency" } });
+  fixture("dep-only-parent", { requires: ["dep-only"] });
+  fixture("dep-partial", { resources: [{ type: "mcp", preset: "jcodemunch" }] });
+  fixture("dep-blocked", { resources: [{ type: "mcp", preset: "no-such-preset" }] });
+
+  const run = (...args) => spawnSync(process.execPath, [cli, ...args], { env, encoding: "utf8", input: "" });
+  const ok = (...args) => {
+    const result = run(...args);
+    assert.equal(result.status, 0, `${args.join(" ")} should succeed\n${result.stdout}${result.stderr}`);
+    return `${result.stdout}${result.stderr}`;
+  };
+  const registryFile = path.join(stateDir, "enabled-packages.json");
+  const registry = () => JSON.parse(fs.readFileSync(registryFile, "utf8"));
+  const stateScript = (expr) => {
+    const result = spawnSync(process.execPath, ["-e",
+      `Promise.all([import(${JSON.stringify(path.join(repoRoot, "scripts/cli/package-state.mjs"))}), import(${JSON.stringify(path.join(repoRoot, "scripts/cli/package-catalog.mjs"))})]).then(([s, c]) => { const catalog = c.loadPackageCatalog({ includeUnavailable: true }); console.log(JSON.stringify(${expr})); })`,
+    ], { env, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    return JSON.parse(result.stdout);
+  };
+  const effective = () => stateScript("s.effectiveEnabledIds(catalog).filter((id) => id.startsWith('dep-')).sort()");
+  const liveRules = (id) => {
+    try { return fs.readFileSync(path.join(tmp, ".claude", "CLAUDE.md"), "utf8").includes(`## Fixture rules ${id}`); } catch { return false; }
+  };
+  try {
+    // Enabling a package makes its transitive requirements effective without recording them.
+    let out = ok("package", "enable", "dep-parent-a");
+    assert.deepEqual(registry().packages, ["dep-parent-a"], "only the selected root is recorded");
+    assert.equal(registry().schemaVersion, 2, "writes mark the registry as roots-only");
+    assert.deepEqual(effective(), ["dep-leaf", "dep-parent-a", "dep-shared"]);
+    assert.ok(liveRules("dep-shared") && liveRules("dep-leaf"), "required packages are applied");
+    assert.match(out, /^ {2}enabled: dep-shared$/m, "enable reports one probed outcome per applied package");
+    assert.match(out, /recommended \(not enabled\): dep-helper/, "a non-interactive enable lists recommendations");
+    assert.ok(!effective().includes("dep-helper"), "a recommendation is never enabled without a user choice");
+
+    // A shared dependency stays until the last selected root that requires it is turned off.
+    ok("package", "enable", "dep-parent-b");
+    out = ok("package", "disable", "dep-parent-a");
+    assert.deepEqual(effective(), ["dep-leaf", "dep-parent-b", "dep-shared"], "the other parent keeps the shared dependency");
+    assert.ok(liveRules("dep-shared"), "the shared dependency's resources stay");
+    assert.ok(!liveRules("dep-parent-a"), "the deselected parent's resources go");
+    ok("package", "disable", "dep-parent-b");
+    assert.deepEqual(effective(), [], "the last parent takes its dependencies with it");
+    assert.ok(!liveRules("dep-shared") && !liveRules("dep-leaf"), "dependency resources are removed");
+
+    // A directly selected dependency survives its parents; deselecting it while a parent remains
+    // keeps it effective.
+    ok("package", "enable", "dep-shared");
+    ok("package", "enable", "dep-parent-a");
+    ok("package", "disable", "dep-parent-a");
+    assert.deepEqual(effective(), ["dep-leaf", "dep-shared"], "a directly selected dependency survives its parent");
+    ok("package", "enable", "dep-parent-a");
+    out = ok("package", "disable", "dep-shared");
+    assert.match(out, /dep-shared stays on: required by dep-parent-a/);
+    assert.ok(!registry().packages.includes("dep-shared"), "the root is removed");
+    assert.deepEqual(effective(), ["dep-leaf", "dep-parent-a", "dep-shared"], "the dependency stays effective through its parent");
+
+    // A dependency effective only through a parent has no root to remove: refused, or --cascade.
+    const before = fs.readFileSync(registryFile, "utf8");
+    const refused = run("package", "disable", "dep-leaf");
+    assert.equal(refused.status, 2, "disabling a derived-only dependency is refused");
+    assert.match(refused.stderr, /it is on because selected packages require it: dep-parent-a/);
+    assert.equal(fs.readFileSync(registryFile, "utf8"), before, "a refused disable changes nothing");
+    out = ok("package", "disable", "dep-leaf", "--cascade");
+    assert.deepEqual(effective(), [], "--cascade turns the dependency off with its parents");
+    assert.ok(!liveRules("dep-parent-a") && !liveRules("dep-leaf"), "cascade removes resources");
+
+    // A dependency-only package cannot be switched directly.
+    for (const verb of ["enable", "disable"]) {
+      const snapshot = fs.readFileSync(registryFile, "utf8");
+      const direct = run("package", verb, "dep-only");
+      assert.equal(direct.status, 2, `${verb} of a non-selectable package fails`);
+      assert.match(direct.stderr, new RegExp(`cannot ${verb} dep-only directly: it is a dependency-only package; it turns on and off with: dep-only-parent`));
+      assert.equal(fs.readFileSync(registryFile, "utf8"), snapshot, `${verb} of a non-selectable package changes nothing`);
+    }
+    ok("package", "enable", "dep-only-parent");
+    assert.ok(effective().includes("dep-only") && liveRules("dep-only"), "a dependency-only package turns on with its parent");
+    ok("package", "disable", "dep-only-parent");
+    assert.ok(!effective().includes("dep-only"), "and off with it");
+
+    // A component that does not land reads partial; an apply error reads blocked and exits 1.
+    out = ok("package", "enable", "dep-partial");
+    assert.match(out, /partial: dep-partial \(missing: mcp jcodemunch\)/, "a missing component reports partial, not enabled");
+    const blocked = spawnSync(process.execPath, [cli, "package", "enable", "dep-blocked"], { env: { ...env, SKIP_MCP: "0" }, encoding: "utf8", input: "" });
+    assert.equal(blocked.status, 1, `an apply error exits 1\n${blocked.stdout}${blocked.stderr}`);
+    assert.match(blocked.stderr, /blocked: dep-blocked \(mcp add failed for preset: no-such-preset \(unknown preset\)\)/);
+    ok("package", "disable", "dep-partial");
+    ok("package", "disable", "dep-blocked");
+
+    // A version-1 registry listed dependencies as if they were chosen: reading one keeps the same
+    // effective set and drops the required ids from the roots; the next write stores version 2.
+    fs.writeFileSync(registryFile, JSON.stringify({ packages: ["dep-parent-a", "dep-shared", "dep-leaf", "dep-lonely"], disabled: [] }));
+    assert.deepEqual(effective(), ["dep-leaf", "dep-lonely", "dep-parent-a", "dep-shared"], "upgrade leaves the effective set unchanged");
+    assert.deepEqual(stateScript("s.selectedRootIds(catalog).filter((id) => id.startsWith('dep-')).sort()"), ["dep-lonely", "dep-parent-a"]);
+    ok("package", "disable", "dep-lonely");
+    assert.deepEqual(registry().packages, ["dep-parent-a"], "the first write stores roots only");
+    assert.equal(registry().schemaVersion, 2);
+    ok("package", "disable", "dep-parent-a");
+    assert.deepEqual(effective(), [], "an upgraded dependency turns off with its last parent");
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+console.log(`ok: package lifecycle contract (${packageIds.length} packages, a several-skill package, and derived dependencies)`);

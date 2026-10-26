@@ -38,13 +38,29 @@ applies each installable resource; the enable/disable switch dispatches on `reso
 
 ### Package composition
 
-A package may list `requires: [pkgId, ...]`:
+A package may list `requires: [pkgId, ...]` and `recommends: [pkgId, ...]`:
 
-- Enabling it enables each required package first (deduplicated and cycle-safe), then its own
-  resources.
+- Enabling it turns on each required package (dependencies first) and then its own resources. Only
+  the package you turned on is recorded; a required package stays on while any package you turned
+  on still requires it, and turns off with the last one.
 - A **composite** package lists only `requires`, so it bundles other packages under one toggle.
 - A composite reports itself enabled only when every required package, and any resources of its
   own, are enabled.
+- A recommended package is never turned on for you. When an enable leaves recommendations off, the
+  panel asks which of them to enable too; **Continue without** enables none.
+- A **dependency-only** package (`selectable: false`) has no toggle of its own and no row in the
+  normal list; it turns on and off with the packages that require it.
+
+Below its own rows, a section lists the packages its rows reference:
+
+- **Required dependencies** — what its packages require, each row naming the packages that require
+  it (`required by Development Planning Lifecycle, Session Close`). A row that is on only because of
+  those packages has no toggle.
+- **Recommended dependencies** — what its packages recommend, with a toggle, naming the packages
+  that recommend it.
+
+Clicking a dependency row's name opens its source, like any other row. **Select All** and the Plans
+banner act on selectable packages only.
 
 A package may also hold several skills. They turn on and off together with the package's one
 toggle; there is no switch for a single skill inside it. Its card shows the package name, never one

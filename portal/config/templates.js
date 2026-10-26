@@ -317,6 +317,14 @@ export function standardSection(section, { onInspectClick, onToggle, onBulkToggl
     ...section.items.map((item) => configItemElement(item, { onInspect: onInspectClick, onToggle, contextCost })),
   );
 
+  for (const [group, items] of [["required", section.requiredDependencies], ["recommended", section.recommendedDependencies]]) {
+    if (!items?.length) continue;
+    panel.querySelector(`[data-slot="${group}-items"]`).replaceChildren(
+      ...items.map((item) => configItemElement(item, { onInspect: onInspectClick, onToggle, contextCost })),
+    );
+    panel.querySelector(`[data-slot="${group}-group"]`).hidden = false;
+  }
+
   const bulkWrap = panel.querySelector('[data-slot="bulk"]');
   if (section.bulkToggle && typeof onBulkToggle === "function") {
     const toggleableItems = section.items.filter((item) => item.toggle);
@@ -358,6 +366,14 @@ export function harnessWarning(snap, options) {
 
 // Persistent intro above the package sections. Always rendered (not an ephemeral onboarding
 // banner) — it explains what the package manager provides, whatever the onboarding state.
+// One choosable recommendation in the post-enable recommendations dialog.
+export function recommendationOption(rec) {
+  const node = tpl("tpl-recommendation-option");
+  fill(node, { label: rec.label, description: rec.description || "" });
+  node.querySelector('[data-slot="check"]').value = rec.id;
+  return node;
+}
+
 export function packagesIntro() {
   return tpl("tpl-packages-intro");
 }

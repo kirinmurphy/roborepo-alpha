@@ -2,7 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { loadPackageCatalog } from "./package-catalog.mjs";
-import { effectiveEnabledIds } from "./rules-render.mjs";
+import { effectiveEnabledIds } from "./package-state.mjs";
+import { requiredClosure } from "./package-graph.mjs";
 
 function commandComponents(pkg) {
   return (pkg.components || []).filter((component) => component.type === "command");
@@ -10,17 +11,6 @@ function commandComponents(pkg) {
 
 function packageById(catalog) {
   return new Map(catalog.map((pkg) => [pkg.id, pkg]));
-}
-
-function collectClosure(pkg, byId, seen = new Set()) {
-  if (!pkg || seen.has(pkg.id)) return [];
-  seen.add(pkg.id);
-  const out = [pkg];
-  for (const depId of pkg.requires || []) {
-    const dep = byId.get(depId);
-    if (dep) out.push(...collectClosure(dep, byId, seen));
-  }
-  return out;
 }
 
 function commandDef(component, pkg) {
@@ -95,7 +85,8 @@ export function packageCommandNames(pkg) {
 
 export function validatePackageCommandOwnership(pkg, { catalog = loadPackageCatalog({ includeUnavailable: true }), enabledIds = effectiveEnabledIds(catalog) } = {}) {
   const byId = packageById(catalog);
-  const closure = collectClosure(pkg, byId);
+  // The package first, then what it requires, so a conflict names the package being enabled.
+  const closure = requiredClosure(catalog, [pkg.id]).reverse().map((id) => byId.get(id));
   const closureIds = new Set(closure.map((item) => item.id));
   const claims = new Map();
 

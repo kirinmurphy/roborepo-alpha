@@ -1,5 +1,7 @@
 // <config-item></config-item> — one row in a standard config section (Token Optimization,
-// Commands, Code Conventions, Chat-Time Output). Set .item (the behaviorView item) and .actions
+// Commands, Code Conventions, Chat-Time Output), or in one of its dependency lists, where the row
+// also names the packages that require or recommend it and has no switch when it is not
+// directly selectable. Set .item (the behaviorView item) and .actions
 // ({onInspect, onToggle}) as properties right after creation. Builds itself from the
 // tpl-config-item template, owns conditional listener wiring (inspect-click, toggle-swap)
 // internally, embeds <config-toggle> in its toggle slot when the item is mutable.
@@ -66,6 +68,7 @@ class ConfigItemElement extends HTMLElement {
     const { onInspect, onToggle, contextCost } = this._actions;
     const row = fill(tpl("tpl-config-item"), {
       description: item.description,
+      relation: item.relationText,
       note: item.note,
       hint: item.hint,
     });
@@ -96,6 +99,7 @@ class ConfigItemElement extends HTMLElement {
     }
 
     row.querySelector('[data-slot="description"]').hidden = !item.description;
+    row.querySelector('[data-slot="relation"]').hidden = !item.relationText;
     row.querySelector('[data-slot="note"]').hidden = !item.note;
     row.querySelector('[data-slot="hint"]').hidden = !item.hint;
 

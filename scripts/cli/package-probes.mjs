@@ -8,7 +8,8 @@ import { hookRecordsFromFile } from "../harnesses/root-config-hooks.mjs";
 import { getHarnessProvider } from "../harnesses/registry.mjs";
 import { stateSkillsDir, telemetryDir } from "./state-paths.mjs";
 import { codexStatusLineIncludes, readHarnessConfig, packageRuntimeAssetDestination } from "./package-harness-config.mjs";
-import { effectiveEnabledIds, knownHarnessIds } from "./rules-render.mjs";
+import { knownHarnessIds } from "./rules-render.mjs";
+import { effectiveEnabledIds } from "./package-state.mjs";
 
 const CLAUDE_SETTINGS = path.join(os.homedir(), ".claude", "settings.json");
 const CODEX_CONFIG = path.join(os.homedir(), ".codex", "config.toml");

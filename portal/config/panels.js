@@ -1,5 +1,5 @@
-// Wiring for the Config page's single self-contained chrome panel: the source-inspect /
-// snapshot-view <dialog>. app.js calls into this controller instead of owning the modal's DOM
+// Wiring for the Config page's self-contained chrome panels: the source-inspect /
+// snapshot-view <dialog>, and the post-enable recommendations <dialog>. app.js calls into this controller instead of owning the modal's DOM
 // refs and listeners itself. This is a
 // panel-factory (like createInfoModal in plans/panels.js), not a custom element: the modal is a
 // page singleton referenced by id, never declaratively instantiated or cloned.
@@ -138,4 +138,39 @@ export function createConfigModal() {
   }
 
   return { openSource, openSnapshot, showContents };
+}
+
+// The recommendations dialog: after an enable that left some recommended packages off, ask which
+// to enable too. Resolves to the chosen ids, or [] when the user continues without them (closing
+// the dialog counts as that). Never enables anything itself; app.js does, with the user's choice.
+export function createRecommendationsDialog() {
+  const dialogEl = document.getElementById("recommendations-modal");
+  const titleEl = document.getElementById("recommendations-title");
+  const listEl = document.getElementById("recommendations-list");
+  let settle = null;
+
+  function finish(ids) {
+    const resolve = settle;
+    settle = null;
+    if (dialogEl.open) dialogEl.close();
+    resolve?.(ids);
+  }
+
+  document.getElementById("recommendations-close").addEventListener("click", () => finish([]));
+  document.getElementById("recommendations-skip").addEventListener("click", () => finish([]));
+  document.getElementById("recommendations-enable").addEventListener("click", () => {
+    finish([...listEl.querySelectorAll('input[type="checkbox"]:checked')].map((input) => input.value));
+  });
+  dialogEl.addEventListener("cancel", () => finish([]));
+  portalWireBackdropClose(dialogEl, () => finish([]));
+
+  function ask(packageLabel, recommendations) {
+    finish([]);
+    titleEl.textContent = `${packageLabel} is on`;
+    listEl.replaceChildren(...recommendations.map((rec) => tmpl.recommendationOption(rec)));
+    dialogEl.showModal();
+    return new Promise((resolve) => { settle = resolve; });
+  }
+
+  return { ask };
 }

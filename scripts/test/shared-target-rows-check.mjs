@@ -74,7 +74,10 @@ function coreHooksInstallAfterPackageHooks() {
   run(env, cli, "bundle", "apply", "hooks");
   assert.deepEqual(JSON.parse(fs.readFileSync(hooksPath, "utf8")), labelled, "label reconciliation is idempotent");
 
-  run(env, cli, "bundle", "remove", "hooks");
+  // The telemetry package selected the telemetry bundle, which requires hooks: removing hooks alone
+  // would keep it applied, so the telemetry bundle's (row-less) selection is removed with it.
+  assert.match(run(env, cli, "bundle", "remove", "hooks"), /kept: hooks stays applied; required by telemetry/);
+  run(env, cli, "bundle", "remove", "hooks", "telemetry");
   const removed = handlerPositions(hooksPath);
   assert.deepEqual([...removed], [...before], "removal leaves exactly the package hooks, at their positions");
   assert.ok(fs.existsSync(path.join(home, ".codex", "hooks", "package-script.mjs")), "package script survives removal");

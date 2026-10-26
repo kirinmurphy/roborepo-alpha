@@ -1,7 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { repoRoot, rootConfigActive, harnessHome, workspacePackagesDir, packageMode, initializeWorkspace } from "./paths.mjs";
-import { forgetPackageIds, readEnabledPackagesRegistry, setPackageEnabled, renderHomeRules, effectiveEnabledIds, knownHarnessIds, harnessIdsWithCapability } from "./rules-render.mjs";
+import { renderHomeRules, knownHarnessIds, harnessIdsWithCapability } from "./rules-render.mjs";
+import { forgetPackageIds, readEnabledPackagesRegistry, selectedRootIds, setPackageEnabled, effectiveEnabledIds, withPackageSelection } from "./package-state.mjs";
+import { requiredBy, requiredClosure, rootsRequiring } from "./package-graph.mjs";
 import { loadPackageCatalog, unavailablePackageMessage, validatePackageCatalog, BUILT_IN_PACKAGES_DIR, readPackageCategories } from "./package-catalog.mjs";
 import { packageCommandNames, validatePackageCommandOwnership } from "./package-commands.mjs";
 import { buildPackageLiveState } from "./package-probes.mjs";
@@ -18,6 +20,7 @@ import { SKILL_TRIGGERS_FILE } from "./skill-trigger-fixtures.mjs";
 import { getHarnessProvider } from "../harnesses/registry.mjs";
 import { hasClaudeCli } from "../harnesses/claude/mcp-claude-cli.mjs";
 import { assertHarnessWriteAllowed } from "./harness-write-guard.mjs";
+import { confirmYesNo, makePrompter } from "./prompts.mjs";
 
 export const USER_CLAUDE_SETTINGS = rootConfigActive.claude;
 export const USER_CODEX_CONFIG = rootConfigActive.codex;
@@ -67,10 +70,16 @@ export function packageCommand(args = []) {
 }
 
 // `package enable|disable` from the terminal: once the change finishes, say whether any RoboRepo
-// hook it rewrote now awaits review. Portal and onboarding changes report their own way, so this
-// sits on the command, not inside enablePackage, which they also call.
+// hook it rewrote now awaits review, and turn the result into an exit code (a refused mutation
+// exits with its error's code, a blocked apply exits 1, a partial apply still exits 0 after its
+// warning). Portal and onboarding changes report their own way, so this sits on the command, not
+// inside enablePackage, which they also call.
 export function enablePackageCommand(rest) {
-  return withHookReviewHint(rest, (changed) => enablePackage(rest, changed));
+  return withHookReviewHint(rest, async (changed) => {
+    const result = await enablePackage(rest, changed);
+    await offerRecommendations(result, rest, changed);
+    return result;
+  });
 }
 
 export function disablePackageCommand(rest) {
@@ -79,12 +88,43 @@ export function disablePackageCommand(rest) {
 
 async function withHookReviewHint(rest, run) {
   const changed = new Set();
-  await run(changed);
-  if (rest.includes("--dry-run")) return;
-  const [{ hookHarnessesForPackages }, { printHookReviewHint }] = await Promise.all([
-    import("./hook-readiness-status.mjs"), import("./hook-review-guidance.mjs"),
-  ]);
-  await printHookReviewHint(hookHarnessesForPackages(changed));
+  let result;
+  try {
+    result = await run(changed);
+  } catch (err) {
+    if (!(err instanceof PackageMutationError)) throw err;
+    console.error(err.message);
+    process.exit(err.exitCode);
+  }
+  if (!rest.includes("--dry-run")) {
+    const [{ hookHarnessesForPackages }, { printHookReviewHint }] = await Promise.all([
+      import("./hook-readiness-status.mjs"), import("./hook-review-guidance.mjs"),
+    ]);
+    await printHookReviewHint(hookHarnessesForPackages(changed));
+  }
+  if (!result.ok) process.exit(1);
+}
+
+// Interactive terminals are asked about each recommendation the enable left off; a pipe, a script,
+// or --dry-run only lists them. The package engine itself never prompts.
+async function offerRecommendations(result, rest, changed) {
+  if (!result.recommendations?.length) return;
+  const interactive = process.stdin.isTTY && process.stdout.isTTY && !rest.includes("--dry-run");
+  if (!interactive) {
+    console.log(`recommended (not enabled): ${result.recommendations.map((rec) => rec.id).join(", ")}`);
+    return;
+  }
+  const prompter = makePrompter();
+  try {
+    for (const rec of result.recommendations) {
+      if (!(await confirmYesNo(prompter, `Also enable recommended package ${rec.label} (${rec.id})?`, false))) continue;
+      const next = await enablePackage([rec.id], changed);
+      result.outcomes.push(...next.outcomes);
+      result.ok &&= next.ok;
+    }
+  } finally {
+    prompter.close();
+  }
 }
 
 function createPackage(rest) {
@@ -465,57 +505,150 @@ function installMcpPreset(presetId) {
   for (const provider of configFileMcpProviders()) ensureConfigFileMcp(provider, spec);
 }
 
-export async function enablePackage(rest, _seen = new Set()) {
-  const [pkgId, ...flags] = rest;
-  if (!pkgId) {
-    console.error("usage: roborepo package enable <package-id>");
-    const catalog = loadPackageCatalog();
-    console.error(`available: ${catalog.map((p) => p.id).join(", ")}`);
-    process.exit(2);
+// Typed failure for a package mutation that cannot start: a usage error, an unknown package, an
+// ownership conflict, or a disable the dependency rules refuse. Nothing has changed when it is
+// thrown. The terminal commands print the message and exit with `exitCode`; the portal returns it.
+export class PackageMutationError extends Error {
+  constructor(message, { exitCode = 2 } = {}) {
+    super(message);
+    this.name = "PackageMutationError";
+    this.exitCode = exitCode;
   }
+}
 
-  const dryRun = flags.includes("--dry-run");
-  if (!dryRun) assertHarnessWriteAllowed();
-  const reconcile = flags.includes("--reconcile");
-  const catalog = loadPackageCatalog({ includeUnavailable: reconcile });
-  const pkg = catalog.find((p) => p.id === pkgId);
-  if (!pkg) {
-    console.error(unavailablePackageMessage(pkgId));
-    console.error(`available: ${catalog.map((p) => p.id).join(", ")}`);
-    process.exit(2);
+function packageIdUsage(verb, catalog) {
+  return `usage: roborepo package ${verb} <package-id>\navailable: ${catalog.filter((p) => p.selectable).map((p) => p.id).join(", ")}`;
+}
+
+function unknownPackageError(pkgId, catalog) {
+  return new PackageMutationError(`${unavailablePackageMessage(pkgId)}\navailable: ${catalog.filter((p) => p.selectable).map((p) => p.id).join(", ")}`);
+}
+
+// A dependency-only package is controlled by the selectable packages that require it.
+function notSelectableError(pkg, catalog, verb) {
+  const controllers = requiredBy(catalog, pkg.id);
+  const by = controllers.length ? `; it turns on and off with: ${controllers.join(", ")}` : "";
+  return new PackageMutationError(`cannot ${verb} ${pkg.id} directly: it is a dependency-only package${by}`);
+}
+
+// One probed outcome per package whose effective state the mutation changed (or re-applied):
+//   enabled  — wanted, and every component probes as present (or configured, for an off service)
+//   partial  — some components probe as present and others as missing (or, after a disable, a
+//              component is still there)
+//   blocked  — applying stopped on an error before this package finished
+//   disabled — not wanted, and nothing it owns probes as present
+function probeOutcomes(catalog, ids, blocked) {
+  const live = buildPackageLiveState(catalog);
+  return ids.map((id) => {
+    if (blocked.has(id)) return { id, outcome: "blocked", message: blocked.get(id), components: [] };
+    const state = live.get(id);
+    const components = state?.components || [];
+    let outcome;
+    if (state?.desired) outcome = state.status === "enabled" || state.status === "configured" ? "enabled" : "partial";
+    else outcome = state?.status === "disabled" ? "disabled" : "partial";
+    const missing = components.filter((c) => (state?.desired ? ["missing", "blocked"] : ["external"]).includes(c.state));
+    return {
+      id,
+      outcome,
+      message: outcome === "partial"
+        ? `${state?.desired ? "missing" : "still present"}: ${missing.map((c) => `${c.type} ${c.id ?? ""}`.trim()).join(", ")}`
+        : null,
+      components,
+    };
+  });
+}
+
+function printOutcomes(outcomes) {
+  for (const entry of outcomes) {
+    const detail = entry.message ? ` (${entry.message})` : "";
+    const line = `  ${entry.outcome}: ${entry.id}${detail}`;
+    if (entry.outcome === "enabled" || entry.outcome === "disabled") console.log(line);
+    else console.warn(line);
   }
+}
 
-  if (_seen.has(pkg.id)) return; // already handled in this enable pass (cycle / shared dependency)
-  _seen.add(pkg.id);
-
-  const enabledIds = effectiveEnabledIds(catalog);
-  const ownership = validatePackageCommandOwnership(pkg, { catalog, enabledIds });
-  if (!ownership.ok) {
-    console.error(ownership.message);
-    process.exit(2);
-  }
-
-  // A package can compose others via `requires`: enable its dependencies first (deduped, cycle-safe).
-  // A composite package (one with `requires`) bundles the component-packages it depends on. NOTE:
-  // distinct from an install "bundle" (manifests/platform/presets.json), which groups file-copy rows
-  // at install time — composition here is runtime feature enablement.
-  for (const depId of pkg.requires ?? []) {
-    if (!catalog.find((p) => p.id === depId)) {
-      console.warn(`  warn: ${pkg.id} requires unknown package: ${depId}`);
-      continue;
+// Apply each package in order (dependencies first), stopping at the first error. Packages the
+// error stopped are recorded as blocked with that error.
+async function applyInOrder(ids, catalog, run) {
+  const blocked = new Map();
+  for (const [index, id] of ids.entries()) {
+    try {
+      await run(catalog.find((p) => p.id === id));
+    } catch (err) {
+      const message = String(err?.message || err);
+      blocked.set(id, message);
+      for (const rest of ids.slice(index + 1)) blocked.set(rest, `not applied: ${id} failed`);
+      break;
     }
-    await enablePackage([depId, ...flags], _seen);
   }
+  return blocked;
+}
 
-  if (dryRun) { console.log(`[dry-run] would enable: ${pkg.label}`); }
-  else { console.log(reconcile ? `reconcile: ${pkg.label}` : `enabling: ${pkg.label}`); }
+// Enable records one selected root, then applies every package in its required closure,
+// dependencies first. Dependencies become effective without being recorded as roots, so they
+// turn off with the last selected package that requires them. Re-applying an already-effective
+// dependency is idempotent and repairs a missing resource. Returns:
+//   { ok, outcomes[], recommendations[], changedPackageIds[] }
+// `changed` (optional) collects the ids whose resources were applied.
+export async function enablePackage(rest, changed = new Set()) {
+  const [pkgId, ...flags] = rest;
+  const catalog = loadPackageCatalog();
+  if (!pkgId) throw new PackageMutationError(packageIdUsage("enable", catalog));
+  const dryRun = flags.includes("--dry-run");
+  const pkg = catalog.find((p) => p.id === pkgId);
+  if (!pkg) throw unknownPackageError(pkgId, catalog);
+  if (!pkg.selectable) throw notSelectableError(pkg, catalog, "enable");
+  if (!dryRun) assertHarnessWriteAllowed();
 
+  const ownership = validatePackageCommandOwnership(pkg, { catalog, enabledIds: effectiveEnabledIds(catalog) });
+  if (!ownership.ok) throw new PackageMutationError(ownership.message);
+
+  const order = requiredClosure(catalog, [pkg.id]);
   if (dryRun) {
-    console.log(`  [dry-run] mark package enabled in registry`);
-  } else if (!reconcile) {
-    setPackageEnabled(pkg.id, true);
+    console.log(`[dry-run] would enable: ${pkg.label}`);
+    console.log(`  [dry-run] mark package selected in registry`);
+    for (const id of order) {
+      if (id !== pkg.id) console.log(`  [dry-run] would enable required package: ${id}`);
+      await applyPackageComponents(catalog.find((p) => p.id === id), { dryRun: true });
+    }
+    return { ok: true, outcomes: [], recommendations: disabledRecommendations(pkg, catalog, order), changedPackageIds: [] };
   }
 
+  console.log(`enabling: ${pkg.label}`);
+  setPackageEnabled(pkg.id, true, loadPackageCatalog({ includeUnavailable: true }));
+  const blocked = await applyInOrder(order, catalog, async (target) => {
+    if (target.id !== pkg.id) console.log(`enabling required package: ${target.label}`);
+    changed.add(target.id);
+    await applyPackageComponents(target);
+  });
+  const outcomes = probeOutcomes(catalog, order, blocked);
+  printOutcomes(outcomes);
+
+  const commandNames = packageCommandNames(pkg);
+  if (commandNames.length && !blocked.size) {
+    console.log(`\ncli commands available: ${commandNames.map((c) => `roborepo ${c}`).join(", ")}`);
+  }
+  return {
+    ok: blocked.size === 0,
+    outcomes,
+    recommendations: disabledRecommendations(pkg, catalog, effectiveEnabledIds(catalog)),
+    changedPackageIds: [...changed],
+  };
+}
+
+// Selectable recommendations of `pkg` that are not effective. Offered, never applied here: only
+// the portal and the interactive terminal command ask the user.
+function disabledRecommendations(pkg, catalog, effectiveIds) {
+  const effective = new Set(effectiveIds);
+  return (pkg.recommends || [])
+    .map((id) => catalog.find((p) => p.id === id))
+    .filter((dep) => dep && dep.selectable && !effective.has(dep.id))
+    .map((dep) => ({ id: dep.id, label: dep.label, description: dep.description }));
+}
+
+// Apply one package's resources to every harness. Used by enable and by reconcile, which
+// re-applies effective packages without touching the registry.
+async function applyPackageComponents(pkg, { dryRun = false } = {}) {
   const servicePromises = [];
   for (const component of pkg.components) {
     switch (component.type) {
@@ -593,12 +726,6 @@ export async function enablePackage(rest, _seen = new Set()) {
   // the function doesn't resolve before the side effects land.
   if (servicePromises.length) await Promise.all(servicePromises);
 
-  if (!dryRun && !reconcile) {
-    const commandNames = packageCommandNames(pkg);
-    if (commandNames.length) {
-      console.log(`\ncli commands available: ${commandNames.map((c) => `roborepo ${c}`).join(", ")}`);
-    }
-  }
 }
 
 export async function reconcileEnabledPackages(rest = []) {
@@ -616,11 +743,13 @@ export async function reconcileEnabledPackages(rest = []) {
   }
   let reconciled = 0;
   const changedPackageIds = new Set();
+  // Effective ids come dependencies first, so a package is never re-applied ahead of what it needs.
   for (const id of enabledIds) {
-    if (!known.has(id)) continue;
-    const seen = new Set();
-    await enablePackage([id, "--reconcile", ...(dryRun ? ["--dry-run"] : [])], seen);
-    for (const changed of seen) changedPackageIds.add(changed);
+    const pkg = catalog.find((entry) => entry.id === id);
+    if (!pkg) continue;
+    console.log(dryRun ? `[dry-run] would reconcile: ${pkg.label}` : `reconcile: ${pkg.label}`);
+    await applyPackageComponents(pkg, { dryRun });
+    changedPackageIds.add(id);
     reconciled++;
   }
   if (reconciled === 0) console.log("reconcile: no enabled packages");
@@ -687,45 +816,71 @@ function removeMcpPreset(presetId, dryRun) {
   for (const provider of configFileMcpProviders()) removeConfigFileMcp(provider, presetId);
 }
 
-export async function disablePackage(rest, _seen = new Set()) {
+// Disable removes selected roots, then removes the resources of every package that left the
+// effective set, dependents first:
+//   - a selected root is deselected; if a selected parent still requires it, it stays effective
+//     and the result names the parents keeping it on
+//   - a package effective only because a parent requires it has no root to remove, so it is
+//     refused; --cascade deselects those parents first and it turns off with them
+//   - --cascade on a root that a parent also requires deselects those parents too
+// Returns { ok, outcomes[], keptOnBy[], changedPackageIds[] }. `changed` (optional) collects the ids
+// whose resources were removed.
+export async function disablePackage(rest, changed = new Set()) {
   const [pkgId, ...flags] = rest;
-  if (!pkgId) {
-    console.error("usage: roborepo package disable <package-id>");
-    console.error(`available: ${loadPackageCatalog().map((p) => p.id).join(", ")}`);
-    process.exit(2);
-  }
+  const catalog = loadPackageCatalog({ includeUnavailable: true });
+  if (!pkgId) throw new PackageMutationError(packageIdUsage("disable", catalog));
   const pkg = findPackage(pkgId);
-  if (!pkg) {
-    console.error(unavailablePackageMessage(pkgId));
-    console.error(`available: ${loadPackageCatalog().map((p) => p.id).join(", ")}`);
-    process.exit(2);
-  }
-
-  if (_seen.has(pkg.id)) return;
-  _seen.add(pkg.id);
+  if (!pkg) throw unknownPackageError(pkgId, catalog);
+  if (!pkg.selectable) throw notSelectableError(pkg, catalog, "disable");
 
   const dryRun = flags.includes("--dry-run");
-  if (!dryRun) assertHarnessWriteAllowed();
   const cascade = flags.includes("--cascade");
-  const catalog = loadPackageCatalog({ includeUnavailable: true });
-  const dependents = enabledDependents(pkg.id, catalog);
-  if (dependents.length > 0 && !cascade) {
-    console.error(`cannot disable ${pkg.id}; enabled packages depend on it: ${dependents.join(", ")}`);
-    console.error(`rerun with --cascade to disable dependents first`);
-    process.exit(2);
+  const roots = selectedRootIds(catalog);
+  const isRoot = roots.includes(pkg.id);
+  const keepers = rootsRequiring(catalog, pkg.id, roots);
+  if (!isRoot && keepers.length && !cascade) {
+    throw new PackageMutationError(
+      `cannot disable ${pkg.id}; it is on because selected packages require it: ${keepers.join(", ")}\n` +
+      `rerun with --cascade to disable them too`,
+    );
   }
-  if (cascade) {
-    for (const dependent of [...dependents].reverse()) {
-      await disablePackage([dependent, ...flags.filter((flag) => flag !== "--cascade"), "--cascade"], _seen);
-    }
-  }
-  console.log(dryRun ? `[dry-run] would disable: ${pkg.label}` : `disabling: ${pkg.label}`);
+  if (!dryRun) assertHarnessWriteAllowed();
+
+  const deselect = [...(isRoot || !keepers.length ? [pkg.id] : []), ...(cascade ? keepers : [])];
+  const registry = readEnabledPackagesRegistry();
+  const nextRegistry = deselect.reduce((next, id) => withPackageSelection(catalog, next, id, false), registry);
+  const before = effectiveEnabledIds(catalog, registry);
+  const afterSet = new Set(effectiveEnabledIds(catalog, nextRegistry));
+  // Dependents before their dependencies; the target itself is always cleaned when it ends up off,
+  // so re-disabling an already-off package still removes anything it left behind.
+  const order = [...new Set([...before.filter((id) => !afterSet.has(id)), ...(afterSet.has(pkg.id) ? [] : [pkg.id])])]
+    .filter((id) => catalog.some((p) => p.id === id))
+    .reverse();
+  const keptOnBy = afterSet.has(pkg.id) ? rootsRequiring(catalog, pkg.id, selectedRootIds(catalog, nextRegistry)) : [];
+
   if (dryRun) {
-    console.log(`  [dry-run] mark package disabled in registry`);
-  } else {
-    setPackageEnabled(pkg.id, false);
+    console.log(`[dry-run] would disable: ${pkg.label}`);
+    for (const id of deselect) console.log(`  [dry-run] mark ${id} deselected in registry`);
+    for (const id of order) await removePackageComponents(catalog.find((p) => p.id === id), { dryRun: true });
+    if (keptOnBy.length) console.log(`  [dry-run] ${pkg.id} would stay on: required by ${keptOnBy.join(", ")}`);
+    return { ok: true, outcomes: [], keptOnBy, changedPackageIds: [] };
   }
 
+  console.log(`disabling: ${pkg.label}`);
+  for (const id of deselect) setPackageEnabled(id, false, catalog);
+  const blocked = await applyInOrder(order, catalog, async (target) => {
+    if (target.id !== pkg.id) console.log(`disabling ${deselect.includes(target.id) ? "dependent" : "no longer required"} package: ${target.label}`);
+    changed.add(target.id);
+    await removePackageComponents(target);
+  });
+  const outcomes = probeOutcomes(catalog, order, blocked);
+  printOutcomes(outcomes);
+  if (keptOnBy.length) console.log(`  ${pkg.id} stays on: required by ${keptOnBy.join(", ")}`);
+  return { ok: blocked.size === 0, outcomes, keptOnBy, changedPackageIds: [...changed] };
+}
+
+// Remove one package's resources from every harness.
+async function removePackageComponents(pkg, { dryRun = false } = {}) {
   const servicePromises = [];
   for (const component of pkg.components) {
     switch (component.type) {
@@ -798,18 +953,6 @@ export async function disablePackage(rest, _seen = new Set()) {
     }
   }
   if (servicePromises.length) await Promise.all(servicePromises);
-}
-
-function enabledDependents(pkgId, catalog) {
-  const enabled = new Set(effectiveEnabledIds(catalog));
-  const direct = catalog
-    .filter((pkg) => enabled.has(pkg.id) && (pkg.requires || []).includes(pkgId))
-    .map((pkg) => pkg.id);
-  const out = new Set(direct);
-  for (const id of direct) {
-    for (const nested of enabledDependents(id, catalog)) out.add(nested);
-  }
-  return [...out];
 }
 
 // --------------------------------------------------------------------------- service component
