@@ -1213,6 +1213,9 @@ function filterByWindow(events, window) {
 // the route sends it directly. Only the route consumes this, and it needs a string, so the report
 // object is discarded once stringified rather than retained as dead memory.
 const _analysisCache = new Map();
+// Home keeps the last default projection independently of report-cache eviction. New capture or
+// registry evidence invalidates report keys before the debounced background analysis runs.
+let _lastRepositoryProjection = null;
 const ANALYSIS_CACHE_MAX = 32;
 // model/scope/markerId layer a normalized cohort filter on top of the existing
 // time/harness window; folded into the cache key so a cohort-filtered view gets its own cached
@@ -1296,7 +1299,11 @@ function cachedAnalysisEntry(window, harness, extra = {}) {
   const { model = null, scope = null, markerId = null } = extra;
   const key = analysisKey(window, harness, { model, scope, markerId });
   const hit = _analysisCache.get(key);
-  if (hit) return hit;
+  const isDefaultView = !window && !harness && !model && (!scope || scope.kind === "all") && !markerId;
+  if (hit) {
+    if (isDefaultView) _lastRepositoryProjection = hit.repositoryProjection;
+    return hit;
+  }
   const allEvents = readSpoolEventsCached();
   const markers = readMarkers();
   // Filter dropdowns cascade: harness is the top-level split, so the model dropdown should only
@@ -1348,6 +1355,7 @@ function cachedAnalysisEntry(window, harness, extra = {}) {
     _analysisCache.delete(_analysisCache.keys().next().value);
   }
   _analysisCache.set(key, entry);
+  if (isDefaultView) _lastRepositoryProjection = entry.repositoryProjection;
   return entry;
 }
 
@@ -1358,7 +1366,10 @@ function cachedAnalysisJson(window, harness, extra = {}) {
 
 export function loadTelemetryRepositoryProjection() {
   const key = analysisKey(null, null);
-  return _analysisCache.get(key)?.repositoryProjection || {
+  const current = _analysisCache.get(key)?.repositoryProjection;
+  if (current) return current;
+  if (_lastRepositoryProjection) return { ..._lastRepositoryProjection, status: "stale" };
+  return {
     status: "unavailable",
     updatedAt: null,
     repositories: {},
