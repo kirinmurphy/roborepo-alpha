@@ -1,7 +1,7 @@
 ---
 id: hr78g4sj
 priority: high
-next_action: Finish full parity verification, commit implementation, and run fresh-context validation before submitting for review.
+next_action: Run /plan-review for human review of the validated implementation.
 blocked_by: []
 depends_on: ["wjlt1zvf"]
 related: ["4zyo2woj", "8bjltk2n", "46qth5z8", "7k3m9qd", "harness-capability-derived-resource-targeting"]
@@ -144,7 +144,7 @@ process test proves argument transport, not successful native model synthesis.
       Extend `scripts/test/telemetry-synthetic-provider-check.mjs` for a literal prompt argument.
 - [x] Recheck the conditional worktree-folder contract; implement only if its prerequisites hold,
       otherwise record why it remains with the companion and does not block Parts 2 and 3.
-- [ ] Run focused checks and the full local parity gate; document any native synthesis checks
+- [x] Run focused checks and the full local parity gate; document any native synthesis checks
       that need separate authorization rather than making an unapproved model call.
 - [x] Update the documentation listed below and scan current source/test/doc references for the
       old source path. Follow the moved file in adjacent backlog plans; preserve historical evidence
@@ -199,9 +199,25 @@ process test proves argument transport, not successful native model synthesis.
   prose, and made headless validation, state/discovery reuse, report compatibility, and documentation
   touchpoints explicit. The optional folder declaration is still conditional; no code was implemented.
 
+### Additional implementation decisions
+
+- Use the existing runtime and discovery functions beside the telemetry consumer, as specified;
+  retain command-name report identifiers while spawning the resolved path.
+- Verify Claude and Codex templates from local help and leave Gemini ineligible. Adding an
+  unverified template would violate the contract; omission is explicitly supported.
+- Use schema draft 2020-12 so `minContains` / `maxContains` enforce exactly one placeholder.
+  The existing schema already uses `$defs`; no external draft-07 validator consumer was found in
+  scripts. Runtime contract separately rejects malformed templates supplied outside schema validation.
+- Correct the standalone source-root fallback to four parent directories. Source-relative lookup
+  otherwise resolves `globals/`; explicit repo root, both state-root overrides, recorded app-root,
+  install-state, and missing-manifest behavior have executed standalone tests.
+- Defer optional Codex worktree-folder declaration: `agentWorktreeDirs` is still proposed in the
+  Claude companion backlog and absent from current code. Do not invent a parallel contract.
+
+
 ## Open questions
 
-None requiring a design decision before preparation. Hook-readiness landing remains a prerequisite.
+None. Hook-readiness landing was verified before implementation; no design decision is blocked.
 
 ## Execution record
 
@@ -222,32 +238,11 @@ None requiring a design decision before preparation. Hook-readiness landing rema
   discovery and invocation, and shared-target install/removal/idempotence/conflict handling.
 - Strict Docker permissions sandbox passed after retry with Docker access. Doctor passed 107 checks.
 
-### Additional implementation decisions
-
-- Use the existing runtime and discovery functions beside the telemetry consumer, as specified;
-  retain command-name report identifiers while spawning the resolved path.
-- Verify Claude and Codex templates from local help and leave Gemini ineligible. Adding an
-  unverified template would violate the contract; omission is explicitly supported.
-- Use schema draft 2020-12 so `minContains` / `maxContains` enforce exactly one placeholder.
-  The existing schema already uses `$defs`; no external draft-07 validator consumer was found in
-  scripts. Runtime contract separately rejects malformed templates supplied outside schema validation.
-- Correct the standalone source-root fallback to four parent directories. Source-relative lookup
-  otherwise resolves `globals/`; explicit repo root, both state-root overrides, recorded app-root,
-  install-state, and missing-manifest behavior have executed standalone tests.
-- Defer optional Codex worktree-folder declaration: `agentWorktreeDirs` is still proposed in the
-  Claude companion backlog and absent from current code. Do not invent a parallel contract.
-
-## Not tested
-
-- [ ] Native model synthesis using the real provider templates. Local help and synthetic processes
-      verify syntax and transport; a real model call requires separate authorization and is not
-      needed for the provider cleanup's automated acceptance checks.
-
 - Package build: `npm run build` passed (pack dry run). No running UI is needed for this source
   ownership and argv change; fixture processes exercise invocation and the package build is the
   reviewable delivery artifact. No shareable server URL applies.
-- The first full gate encountered localhost `listen EPERM` in the sandbox. A fresh full gate is
-  running with required local-server and Docker access; do not treat the first run as passing.
+- The first full gate encountered localhost `listen EPERM` in the sandbox. The final full gate passed
+  with required local-server and Docker access; the first run is not counted as passing.
 
 - Full-gate follow-ups: authorized run had four rules-package assertions fail; the original
   prefix through those assertions passed 146/146 on replay, and the next full run did not repeat
@@ -262,3 +257,44 @@ None requiring a design decision before preparation. Hook-readiness landing rema
   reviewing the full diff, acceptance criteria, docs, schema/runtime parity, and skills; reran
   registry, synthetic provider, desktop runtime, shared-target rows, and diff checks successfully.
   Full-gate evidence was pending, so this was not a completion claim.
+
+## Review
+
+### Findings
+
+No fix or escalate findings in either fresh-context pass.
+
+### Verification
+
+- Pass 1: clean at `71af81cf`; full parity evidence pending at review time.
+- Pass 2: clean at `7997eb72`; independently rechecked the full diff, acceptance criteria, docs,
+  schema/runtime constraints, ownership/trust preservation, and paired skills. Registry, synthetic
+  provider, desktop runtime, shared-target rows, and diff checks passed. Full parity evidence was
+  still pending at review time.
+
+### Completion evidence
+
+- October 25: `npm run check` passed on implementation `7997eb72`, exit 0. It includes doctor
+  (107 checks), CLI smoke (457 passed, zero failed), all install-collision checks, 60/60 grouped
+  suites, package-install smoke, four strict Docker scenarios, and 130 browser tests.
+  Full log: `/tmp/hr78g4sj-completion-gate.log`.
+- Windows installer parity was skipped because `pwsh` is unavailable. The optional active-root
+  verification fixture also reported `uvx` unavailable. Those optional platform/dependency checks
+  are not claimed as passed; wider Windows parity remains in its adjacent backlog plan.
+- `npm run build`, focused hook composition, registry, synthetic headless invocation, desktop
+  runtime, shared-target rows, strict permissions sandbox, and `git diff --check` passed.
+- Current source/test/docs scan found no retired Codex source path outside this plan's historical
+  context and completed/archived records. All listed docs of record and adjacent backlog pointers
+  were updated. No generated hook commands or trust records changed.
+- Validation: clean on pass 2 at `7997eb72`, fresh-context subagent; zero fix/escalate findings,
+  zero verified base failures, no open questions. Conditional worktree-folder declaration deferred
+  as designed. No runtime server is needed for this non-UI change; package build and executed
+  fixture processes provide the verification environment, without a persistent shareable URL.
+- Implementation commits: `71af81cf` (provider cleanup) and `7997eb72` (fixture startup allowance).
+  No push, merge, publication, or native model call was performed.
+
+## Not tested
+
+- [ ] Native model synthesis using the real provider templates. Local help and synthetic processes
+      verify syntax and transport; a real model call requires separate authorization and is not
+      needed for the provider cleanup's automated acceptance checks.
