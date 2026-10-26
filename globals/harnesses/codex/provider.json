@@ -56,7 +56,7 @@
   ],
   "extensions": {
     "app": {
-      "headlessPromptArgs": ["exec", "--", "{prompt}"],
+      "headlessPromptArgs": ["exec", "--skip-git-repo-check", "--", "{prompt}"],
       "rootConfigFormat": "toml",
       "hooksStorage": "dedicated-json-sidecar",
       "mcpStorage": "toml-mcp_servers-table",

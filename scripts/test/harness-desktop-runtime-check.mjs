@@ -142,12 +142,12 @@ try {
   let synthesis = runDeepRead({ capture_count: 0 }, selection);
   assert.equal(synthesis.ok, true);
   assert.equal(synthesis.cli, "codex");
-  assert.deepEqual(JSON.parse(synthesis.text).slice(0, 2), ["exec", "--"]);
+  assert.deepEqual(JSON.parse(synthesis.text).slice(0, 3), ["exec", "--skip-git-repo-check", "--"]);
   fs.writeFileSync(path.join(bin, "codex"), argvScript, { mode: 0o755 });
   assert.equal(findDeepReadProvider(selection).executable, path.join(bin, "codex"));
   synthesis = runDeepRead({ capture_count: 0 }, selection);
   assert.equal(synthesis.ok, true);
-  assert.equal(JSON.parse(synthesis.text).length, 3);
+  assert.equal(JSON.parse(synthesis.text).length, 4);
   fs.rmSync(codexBundle, { recursive: true });
   executable(path.join(bin, "codex"), 'echo "0.162.0"\n');
   const cliGuidance = codexHookGuidance(detectHarnessProvider(codex, options).evidence);
