@@ -52,7 +52,7 @@ export function selectOption([value, label]) {
   return opt;
 }
 
-// Which onboarding step the page is on once plan-write is enabled. "plans" means there is a plan
+// Which onboarding step the page is on once plan-suite is enabled. "plans" means there is a plan
 // board to render; the other steps each show a single call to action instead.
 export function plansOnboardingStep(snapshot) {
   const scans = snapshot.repositoryScans || [];
@@ -294,12 +294,12 @@ function menuItem({ icon = "copy", label, description, run }) {
   return item;
 }
 
-// The unified ⋯ menu body, shared by the drawer and the card. When plan-write is installed it shows
+// The unified ⋯ menu body, shared by the drawer and the card. When plan-suite is installed it shows
 // the lifecycle's suite commands (each copies its prompt), then a portable prompt — a
 // self-contained summary for a chat without repo access. Copy path is always last. The recommended action gets
 // its own dedicated CTA button outside this menu (see primaryPlanAction/cardPrimaryAction) — it is
 // deliberately not called out again inside the menu, to avoid a second, redundant highlight.
-// When plan-write is NOT installed there are no lifecycle actions, so it falls back to the generic
+// When plan-suite is NOT installed there are no lifecycle actions, so it falls back to the generic
 // repo-aware / portable prompts plus the enable-skill banner.
 //
 // api: { installed, lifecycle, planSuitePackage, skillModal, onError,

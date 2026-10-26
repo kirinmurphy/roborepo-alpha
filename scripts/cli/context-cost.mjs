@@ -285,8 +285,9 @@ function harnessCost(harness, { catalog, enabledIds, tools, deps, plan }) {
 }
 
 // Each resource's share of its package's cost, keyed by resourceKey (`skill:<id>`,
-// `rules:<source>`, `slash-command:<name>`), with the larger harness shown, as for the package.
-// The per-resource figures add up to the package totals on each harness.
+// `rules:<source>`, `slash-command:<name>`). Each figure is that resource's largest value across
+// harnesses, as the package totals are, so the figures add up to the package total only when one
+// harness is largest for every resource; otherwise their sum can exceed it.
 function aggregateResources(harnesses, packageId) {
   const keys = new Set();
   for (const harness of HARNESSES) {

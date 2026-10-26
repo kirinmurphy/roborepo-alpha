@@ -136,7 +136,11 @@ assert(!sections.get("Development Workflows").bulkToggle, "Development Workflows
   assert(rules.description === "Code Outlives Plans", `rules entry describes the fragment by its heading: ${rules.description}`);
   assert(rules.contextCost?.rulesTokens > 0, "rules entry carries its own cost");
   const totals = Object.values(snapshot.contextCost.packages["plan-suite"].resources);
-  assert(totals.reduce((sum, r) => sum + r.onDemandTokens, 0) === suite.contextCost.onDemandTokens, "entry costs add up to the package cost");
+  // Each entry shows its own harness maximum, so together they cover the package total and can
+  // exceed it only when harnesses differ per resource.
+  const entrySum = totals.reduce((sum, r) => sum + r.onDemandTokens, 0);
+  assert(entrySum >= suite.contextCost.onDemandTokens, "entry costs cover the package cost");
+  if (!suite.contextCost.harnessesDiffer) assert(entrySum === suite.contextCost.onDemandTokens, "entry costs add up to the package cost when harnesses agree");
 
   const single = items.get("session-close");
   assert(single.label === "/session-close" && single.inspect?.kind === "command-skill" && !single.skillCount,

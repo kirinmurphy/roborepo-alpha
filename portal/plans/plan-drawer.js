@@ -2,7 +2,7 @@
 // templates, and stylesheet come from plan-drawer-partial.html ({{PLAN_DRAWER}}); this controller
 // owns filling and opening it, so the two pages cannot drift.
 //
-// The page supplies what only it knows: the plan list blockers resolve against, the plan-write
+// The page supplies what only it knows: the plan list blockers resolve against, the plan-suite
 // package state, which plans' worktrees have merged, and how to surface copies/errors. Priority
 // edits are the page's call too — on Plans the drawer's <plan-status> dispatches `plan-change` into
 // the page's mutation orchestrator; a page without one passes `readonly` and the status renders as

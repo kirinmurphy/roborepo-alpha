@@ -183,8 +183,20 @@ assert "package dev add-skill: adds a commanded skill, its trigger entry, and va
     && node -e \"const c=require('${add_skill_root}/packages/add-skill-pack/package.config.json'); const s=c.resources.filter(r=>r.type==='skill'); process.exit(s.map(r=>r.id).join()==='add-skill-pack,add-skill-second' && s[1].entrypoints[0].name==='add-skill-second' ? 0 : 1)\" \
     && node -e \"const t=require('${add_skill_root}/packages/add-skill-pack/skill-triggers.json'); process.exit(t.tests.some(x=>x.skill==='add-skill-second') ? 0 : 1)\" \
     && ${add_skill_env} node '${cli}' package validate add-skill-pack >/dev/null"
-assert "package dev add-skill: refuses a skill ID another package claims" \
-  bash -c "! env ${add_skill_env} node '${cli}' package dev add-skill add-skill-pack code-style >/dev/null 2>'${work}/add-skill-claimed.err' && grep -q 'already claimed by package code-style' '${work}/add-skill-claimed.err' && test ! -d '${add_skill_root}/packages/add-skill-pack/skills/code-style'"
+cp "${add_skill_root}/packages/add-skill-pack/package.config.json" "${work}/add-skill-pack.before.json"
+cp "${add_skill_root}/packages/add-skill-pack/skill-triggers.json" "${work}/add-skill-triggers.before.json"
+add_skill_unchanged="cmp -s '${work}/add-skill-pack.before.json' '${add_skill_root}/packages/add-skill-pack/package.config.json' && cmp -s '${work}/add-skill-triggers.before.json' '${add_skill_root}/packages/add-skill-pack/skill-triggers.json'"
+assert "package dev add-skill: a skill ID another package claims fails validation and restores the package" \
+  bash -c "! env ${add_skill_env} node '${cli}' package dev add-skill add-skill-pack code-style >/dev/null 2>'${work}/add-skill-claimed.err' && grep -q 'nothing was changed: skill code-style owned by multiple packages: code-style, add-skill-pack' '${work}/add-skill-claimed.err' && test ! -d '${add_skill_root}/packages/add-skill-pack/skills/code-style' && ${add_skill_unchanged}"
+assert "package dev add-skill: a command name another package claims fails validation and restores the package" \
+  bash -c "${add_skill_env} node '${cli}' package dev create add-skill-cmd-owner --kind=standalone-command --command=add-skill-taken >/dev/null \
+    && ! env ${add_skill_env} node '${cli}' package dev add-skill add-skill-pack add-skill-taken --command >/dev/null 2>'${work}/add-skill-cmd.err' \
+    && grep -q 'slash command add-skill-taken owned by multiple packages: add-skill-cmd-owner, add-skill-pack' '${work}/add-skill-cmd.err' \
+    && test ! -d '${add_skill_root}/packages/add-skill-pack/skills/add-skill-taken' && ${add_skill_unchanged}"
+assert "package dev add-skill: refuses a skill the package already has" \
+  bash -c "! env ${add_skill_env} node '${cli}' package dev add-skill add-skill-pack add-skill-second >/dev/null 2>'${work}/add-skill-repeat.err' && grep -q 'package add-skill-pack already has skill add-skill-second' '${work}/add-skill-repeat.err' && ${add_skill_unchanged}"
+assert "package dev add-skill: refuses a built-in package in package mode" \
+  bash -c "! env ${add_skill_env} node '${cli}' package dev add-skill plan-suite add-skill-extra >/dev/null 2>'${work}/add-skill-builtin.err' && grep -q 'package plan-suite is built in' '${work}/add-skill-builtin.err' && test ! -d '${repo_root}/globals/packages/plan-suite/skills/add-skill-extra' && git -C '${repo_root}' diff --quiet -- globals/packages/plan-suite"
 
 workspace_import_home="${work}/workspace-import-home"
 workspace_import_root="${work}/workspace-import"

@@ -96,8 +96,10 @@ function createPackage(rest) {
 
 // Adds one skill to an existing package: its SKILL.md, the `skill` resource (placed after the
 // package's other skills, so they stay ahead of rules and hooks), an optional slash-command
-// entrypoint, and an empty trigger fixture for the author to fill. Refuses an ID any package
-// already claims, and restores the package if the result does not validate.
+// entrypoint, and an empty trigger fixture for the author to fill. Ownership is left to
+// validatePackageCatalog rather than re-checked here: the files are written, the catalog is
+// validated, and any failure (a skill or command another package claims, among others) restores
+// the package and reports the validation error.
 function addSkillToPackage(rest) {
   const usage = "usage: roborepo package dev add-skill <package-id> <skill-id> [--command] [--description=<text>]";
   const { flags, positional } = parseFlags(rest);
@@ -113,18 +115,10 @@ function addSkillToPackage(rest) {
     throw new Error(`package ${pkgId} is built in; app files are not edited in package mode`);
   }
   const withCommand = flags.get("command") === "true";
-  for (const other of catalog) {
-    for (const resource of other.resources || []) {
-      if (resource.type === "skill" && resource.id === skillId) {
-        throw new Error(`skill ${skillId} is already claimed by package ${other.id}`);
-      }
-      const commandNames = resource.type === "slash-command"
-        ? [resource.name]
-        : (resource.entrypoints || []).filter((e) => e.type === "slash-command").map((e) => e.name);
-      if (withCommand && commandNames.includes(skillId)) {
-        throw new Error(`slash command /${skillId} is already claimed by package ${other.id}`);
-      }
-    }
+  // validatePackageCatalog ignores a second claim by the same package, so a repeat inside this
+  // package is refused here.
+  if ((pkg.resources || []).some((r) => r.type === "skill" && r.id === skillId)) {
+    throw new Error(`package ${pkgId} already has skill ${skillId}`);
   }
 
   const description = flags.get("description") || `${titleize(skillId)} skill.`;

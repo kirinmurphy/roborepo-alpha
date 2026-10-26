@@ -357,8 +357,12 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
   leaves an empty trigger fixture.** Decided during implementation. Keeping skills ahead of rules
   and hooks matches the plan-suite manifest's order; an empty `skill-triggers.json` entry passes
   `skill triggers --check` and gives the author the place to fill. It also refuses a built-in
-  package in package mode, where app files are immutable, and restores the package if the result
-  does not validate.
+  package in package mode, where app files are immutable. Ownership is left to
+  `validatePackageCatalog`: the files are written, the catalog is validated, and a skill or command
+  another package claims fails validation and restores the package. Only a repeat inside the same
+  package is checked up front, because `claim()` ignores a second claim by the same owner.
+  Considered and not chosen: hand-written claim checks before writing, which duplicated the
+  catalog's rules and left the restore path unreachable and untested.
 - **2026-10-24: `docs/user/reference/plans-portal.md`, `docs/user/reference/repositories.md`, and
   `docs/internal/portal-architecture.md` were updated too.** They named the old plan package IDs
   as packages, so they were newly affected docs of record.
@@ -375,6 +379,23 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
 - [ ] Updating a real machine that enabled some of the old plan packages ends with `plan-suite`
       enabled and all six commands working in Claude, Codex, and Gemini. The retired-IDs check
       covers the registry and Claude files in a hermetic home, not a live harness session.
+
+## Review
+
+### Findings
+
+- [x] Portal comments still named the `plan-write` package as the Plans page gate
+      (`portal/plans/app.js`, `templates.js`, `plan-drawer.js`, `plan-drawer-partial.html`,
+      `portal/home/app.js`) — fixed
+- [x] `add-skill` refusals documented but untested: built-in package in package mode, a claimed
+      command name, and the restore on validation failure — tested; claim checks now go through
+      validation so the restore path runs
+- [x] `aggregateResources` comment claimed per-resource figures always sum to the package total —
+      reworded; `package-catalog-check.mjs` asserts equality only when harnesses agree
+
+### Verification
+
+- Validation pass 1: 3 `fix` findings (fresh-context subagent)
 
 ## Documentation impact
 
