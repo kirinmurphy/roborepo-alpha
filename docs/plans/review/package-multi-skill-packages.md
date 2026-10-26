@@ -430,6 +430,13 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
       `/session-close` is its own package — fixed (42d61c23)
 - [x] No test covered a successful `add-skill` without `--command` (an auto skill with no
       entrypoint) — added to `test-cli.sh` (55e55a00)
+- [ ] `scripts/dev/docs-screenshots.mjs` `PACKAGES` still enables `plan-write`, which no longer
+      exists, so `setUpHome` throws — use `plan-suite`
+- [ ] Open backlog plan `portal-home-onboarding-calls-to-action.md` (lines 37, 113) names
+      `plan-write` as a package — use `plan-suite`
+- [ ] `package-retired-ids-check.mjs` asserts plan-suite's skills and commands only for Claude; the
+      hermetic home also installs them for Codex and Gemini — assert all three harnesses and narrow
+      the Not tested entry to a live harness session
 
 ### Verification
 
@@ -443,6 +450,9 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
 - Resumed run, validation pass 2: 1 `fix` finding, a docs wording fix (fresh-context subagent)
 - Resumed run, validation pass 3: 1 `fix` finding, a missing test (fresh-context subagent)
 - Validation: clean on resumed-run pass 4 at 55e55a00 (fresh-context subagent)
+- `/plan-review` sync-base at bdde8726: up-to-date with main e479885d
+- `/plan-review` validator pass 1 at bdde8726: 3 `fix` findings, 0 `escalate` (fresh-context
+  subagent); the ten per-row Validation checks passed
 
 ## Documentation impact
 
