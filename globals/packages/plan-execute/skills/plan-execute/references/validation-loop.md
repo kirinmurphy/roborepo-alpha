@@ -67,6 +67,7 @@ Show each pass's report in the run's output, a clean pass included.
 ```
 
 Unchecked findings are open tasks, so the completion preflight refuses to submit while any remain.
+Record evidence itself, never a path under `/tmp` or another temporary folder: the OS deletes those within days and the plan outlives them.
 `/plan-review` adds to this same record, and only `/plan-review` writes `### Approval`.
 
 ## The rubric

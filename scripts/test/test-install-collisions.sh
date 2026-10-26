@@ -4,6 +4,13 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 export ROBOREPO_UNINSTALL_PROCESS_ROOT="${TMPDIR:-/tmp}/roborepo-test-process-root-never-match-$$"
 
+# make_home runs in a command substitution, so it cannot record its homes here; keeping them under
+# one root lets a single EXIT trap remove every one of them.
+tmp_base="${TMPDIR:-/tmp}"
+# macOS TMPDIR ends in "/"; a doubled slash would not match the normalized paths tools print.
+homes_root="$(mktemp -d "${tmp_base%/}/roborepo-install-collisions.XXXXXX")"
+trap 'rm -rf "$homes_root"' EXIT
+
 pass() {
   echo "ok: $1"
 }
@@ -99,7 +106,7 @@ assert_managed_skill() {
 
 make_home() {
   local tmp
-  tmp="$(mktemp -d)"
+  tmp="$(mktemp -d "$homes_root/home.XXXXXX")"
   mkdir -p "$tmp/.claude" "$tmp/.codex"
   echo "$tmp"
 }
