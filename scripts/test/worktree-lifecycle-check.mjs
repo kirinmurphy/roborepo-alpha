@@ -214,6 +214,31 @@ try {
     assert.equal(locked.result.locked, true, "a second cleanup cannot enter the lock");
   }
   {
+    // /plan-close commits the absorbing commit on local main and cleans up before anything is
+    // pushed. Plan-scoped cleanup must check that same base, not `origin/HEAD`, which lags behind.
+    const { main, worktree } = repository("unpushed-close");
+    const remote = path.join(root, "unpushed-close-remote.git");
+    git(root, "init", "-q", "--bare", remote);
+    git(main, "remote", "add", "origin", remote);
+    git(main, "push", "-q", "-u", "origin", "main");
+    git(main, "remote", "set-head", "origin", "main");
+    const stateRoot = path.join(root, "unpushed-close-state");
+    fs.mkdirSync(path.join(main, "docs/plans/completed"), { recursive: true });
+    fs.writeFileSync(path.join(main, "docs/plans/plans-config.json"), JSON.stringify({ worktreeRoot: root }));
+    commit(worktree, "feature.txt", "feature\n");
+    git(main, "merge", "--squash", "feature");
+    git(main, "commit", "-qm", "landed feature");
+    fs.writeFileSync(path.join(main, "docs/plans/completed/story.md"), `---\nid: unpushed1\nworktree: unpushed-close-work\n---\n\n## Verification\n\n- Absorbing commit: ${git(main, "rev-parse", "HEAD")}\n`);
+    const options = { cwd: main, stateRoot, discover: async () => ({ instances: [] }) };
+    const unscoped = await cleanupWorktrees(options);
+    assert.equal(unscoped.find((row) => row.branch === "feature").state, "not landed", "unscoped cleanup still checks origin/HEAD");
+    const rows = await cleanupWorktrees({ ...options, plan: "unpushed1", apply: true });
+    assert.equal(rows[0].action, "removed", rows[0].reason);
+    assert.equal(rows[0].landingEvidence, "reused");
+    assert.equal(fs.existsSync(worktree), false);
+    await assert.rejects(worktreeCleanupCommand(["--plan", "unpushed1", "--base"]), /--base needs a value/);
+  }
+  {
     const { main, worktree } = repository("confirmed");
     const stateRoot = path.join(root, "confirmed-state");
     const tip = git(worktree, "rev-parse", "HEAD");
