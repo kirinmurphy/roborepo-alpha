@@ -12,7 +12,7 @@ Keep verification small, native to the repo, and explicit.
 1. Discover commands from repo files before guessing: `package.json`, `pyproject.toml`, `Makefile`, `justfile`, `taskfile`, CI config, or docs.
 2. Choose the smallest check that proves touched behavior.
 3. Prefer scoped format/lint/type/test commands when available.
-4. Run full checks only for shared app code, build/tooling config, dependency changes, generated types, auth/payments/data migrations, CI scripts, broad refactors, cross-cutting types/config, CI risk, or explicit user request.
+4. Pick the tier by what the change can break: prose-only edits run the checks that read those files, not a suite; module code runs that module's tests; shared code adds its callers. Run full checks only for build/tooling config, dependency changes, generated types, auth/payments/data migrations, CI scripts, broad refactors, cross-cutting types/config, before a push, or on explicit user request.
 5. If output may be large, use `roborepo run <command> ...` or redirect to `/tmp` and show only useful failure/pass lines.
 6. Final response includes `Verified: <command> -> <pass|fail|blocked>`.
 
