@@ -824,6 +824,7 @@ test.describe("repository-first portal Home", () => {
       await route.fulfill({ json: { action: "stopped", stopped: 1, reason: null } });
     });
     await patchRoboRepo(page, (repository) => {
+      repository.lifecycle = { state: "idle" };
       repository.domains.plans = { status: "available", data: { active: [
         { id: "idle-plan", key: "idle-plan", title: "Idle Story", worktree: "idle-tree", checkoutRootId: "idle-tree", taskCounts: { total: 1, complete: 0 } },
       ], counts: { active: 1, backlog: 0 }, recent: [] } };
@@ -846,6 +847,7 @@ test.describe("repository-first portal Home", () => {
     });
     await page.goto("/");
     const card = roboRepoCard(page);
+    await expect(card.locator(".repository-state-badge")).toHaveText("idle");
     // No port says nothing runs; the row does not spell out "idle".
     await expect(card.getByText("idle", { exact: true })).toHaveCount(0);
     // Only a worktree no plan claims has a ⋮ cell; a plan's row keeps its actions in its dropdown.
