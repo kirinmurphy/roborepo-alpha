@@ -185,7 +185,10 @@ function addSkillToPackage(rest) {
     throw new Error(`package ${pkgId} did not validate with skill ${skillId}; nothing was changed: ${error.message}`);
   }
   console.log(`added skill ${skillId} to package ${pkgId}: ${path.join(skillDir, "SKILL.md")}`);
-  if (withCommand) console.log("next: roborepo skill render-commands");
+  // Only built-in packages get generated command wrappers, so a workspace package's command
+  // entrypoint is declared but never installs.
+  if (withCommand && pkg.origin === "built-in") console.log("next: roborepo skill render-commands");
+  else if (withCommand) console.log(`note: /${skillId} will not install; only built-in packages get generated slash-command wrappers`);
   console.log(`then fill the ${skillId} trigger fixture in ${triggersPath} and run: roborepo skill triggers --check`);
 }
 

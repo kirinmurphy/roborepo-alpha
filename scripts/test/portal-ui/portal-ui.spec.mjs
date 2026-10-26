@@ -32,6 +32,13 @@ test.describe("Agents page", () => {
     await expect(modal.locator("#modal-title")).toHaveText("Development Planning Lifecycle");
     await expect(modal.locator(".package-contents-summary")).toHaveText("6 skills · 1 rules fragment");
     await expect(modal.locator(".package-contents-label")).toHaveText(["/plan-write", "/plan-promote", "/plan-execute", "/plan-review", "/plan-close", "/plan-archive", "Rules"]);
+    // Every row shows its own cost: a skill's when-loaded size, the rules fragment's startup size.
+    const chips = modal.locator(".package-contents-entry token-chip");
+    await expect(chips).toHaveCount(7);
+    for (const chip of await chips.all()) {
+      await expect(chip).toBeVisible();
+      expect(await chip.evaluate((el) => el.tokens)).toBeGreaterThan(0);
+    }
     await expect(modal.locator("#modal-back")).toBeHidden();
     await expect(modal.locator(".package-contents-entry", { hasText: "Rules" }).locator(".package-contents-desc")).toHaveText("Code Outlives Plans");
 

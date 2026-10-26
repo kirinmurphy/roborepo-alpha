@@ -1,7 +1,7 @@
 ---
 id: bysyzl1e
 priority: high
-next_action: Fix the three open validation pass 5 findings under Review (bulk endpoint wording in portal/plans/api.js and plans-portal.md, the add-skill render-commands hint in package mode, a cost-chip assertion in the contents-view test), then rerun /plan-execute to validate and submit.
+next_action: Run /plan-review to review the implementation and confirm the Not tested entry.
 blocked_by: []
 depends_on: []
 related: ["o9zwxuav", "ejsc769o", "jdsobwn", "user-managed-packages-and-add-workflows"]
@@ -410,15 +410,15 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
       section marked `bulkToggle` (`routeBulkToggleConfig` in `portal-ui.spec.mjs`) (3aa6d03c)
 - [x] Bulk endpoint comments said it serves only `bulkToggle` sections; the Plans banner, from a
       section without one, is now its built-in caller — reworded (de5ad784)
-- [ ] `portal/plans/api.js:35` and `docs/user/reference/plans-portal.md:280-281` still say the
+- [x] `portal/plans/api.js:35` and `docs/user/reference/plans-portal.md:280-281` still say the
       banner enables its packages "through the config section's bulk endpoint"; no section has
-      `bulkToggle` now. Reword to "the config bulk endpoint (`/api/config/packages/bulk`)"
-- [ ] `scripts/cli/packages.mjs` `addSkillToPackage` prints `next: roborepo skill render-commands`
+      `bulkToggle` now — reworded to "the config bulk endpoint (`/api/config/packages/bulk`)"
+- [x] `scripts/cli/packages.mjs` `addSkillToPackage` prints `next: roborepo skill render-commands`
       after `--command` even in package mode, where only workspace packages are editable and their
-      commands never install. Print it only for built-in packages, or say the command will not
-      install
-- [ ] The contents-view portal UI test does not assert that each entry renders its own cost chip
-      (`contentsEntryChipSpec`); add an assertion that each skill row's `token-chip` is visible
+      commands never install — the hint now prints only for built-in packages; a workspace package
+      gets a note that the command will not install, asserted in `test-cli.sh`
+- [x] The contents-view portal UI test does not assert that each entry renders its own cost chip
+      (`contentsEntryChipSpec`) — the test now asserts all seven rows show a visible chip with tokens
 
 ### Verification
 

@@ -277,8 +277,8 @@ Repositories without Git remain browsable.
 
 The plan suite is two optional packages: `plan-suite`, which holds the six plan skills and the
 Code Outlives Plans rules fragment, and `session-close`. The Plans page gates its workflow actions
-on `plan-suite`, and its onboarding banner enables both in one request through the config
-section's bulk endpoint.
+on `plan-suite`, and its onboarding banner enables both in one request through the config bulk
+endpoint (`/api/config/packages/bulk`).
 
 When `plan-suite` is disabled:
 

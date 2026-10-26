@@ -178,7 +178,8 @@ add_skill_env="HOME='${add_skill_home}' ROBOREPO_MODE=package ROBOREPO_STATE_ROO
 mkdir -p "${add_skill_home}"
 assert "package dev add-skill: adds a commanded skill, its trigger entry, and validates" \
   bash -c "${add_skill_env} node '${cli}' package dev create add-skill-pack --kind=auto-skill >/dev/null \
-    && ${add_skill_env} node '${cli}' package dev add-skill add-skill-pack add-skill-second --command --description='Second skill.' >/dev/null \
+    && ${add_skill_env} node '${cli}' package dev add-skill add-skill-pack add-skill-second --command --description='Second skill.' >'${work}/add-skill-ok.out' \
+    && grep -q 'note: /add-skill-second will not install' '${work}/add-skill-ok.out' && ! grep -q 'render-commands' '${work}/add-skill-ok.out' \
     && test -f '${add_skill_root}/packages/add-skill-pack/skills/add-skill-second/SKILL.md' \
     && node -e \"const c=require('${add_skill_root}/packages/add-skill-pack/package.config.json'); const s=c.resources.filter(r=>r.type==='skill'); process.exit(s.map(r=>r.id).join()==='add-skill-pack,add-skill-second' && s[1].entrypoints[0].name==='add-skill-second' ? 0 : 1)\" \
     && node -e \"const t=require('${add_skill_root}/packages/add-skill-pack/skill-triggers.json'); process.exit(t.tests.some(x=>x.skill==='add-skill-second') ? 0 : 1)\" \
