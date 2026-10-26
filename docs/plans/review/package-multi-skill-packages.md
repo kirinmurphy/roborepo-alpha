@@ -1,7 +1,7 @@
 ---
 id: bysyzl1e
 priority: high
-next_action: Run /plan-review to review the implementation and confirm the Not tested entry.
+next_action: Merge the pull request, then run /plan-close.
 blocked_by: []
 depends_on: []
 related: ["o9zwxuav", "ejsc769o", "jdsobwn", "user-managed-packages-and-add-workflows"]
@@ -494,7 +494,11 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
 
 ### Approval
 
-- Decision: requested
+- Decision: approved
+- Reviewed implementation commit: 59df96072435b4fa2ac19e6cf8a999916220d366
+- Confirmed by: human
+- Evidence: on 2026-10-26 the user answered in chat: "I approve \"Bundle Skills That Only Work
+  Together\" (bysyzl1e) at commit 59df96072435b4fa2ac19e6cf8a999916220d366."
 
 ## Documentation impact
 
