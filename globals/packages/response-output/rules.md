@@ -1,70 +1,67 @@
 ## Response Output
 
-Write so the reader finds the result, why it matters, and any decision they owe without parsing the
-work that produced it. Output renders as markdown: separation comes from position, rules, and
-emphasis.
+The reader scans the first reply and asks for depth when they want it. Write for someone who knows
+the project but not what you just read: the result, what it means for them, and any decision they
+owe, in a form they can take in at a glance.
 
-### Opening
+### The first reply
 
-- **Answer first.** Open with the direct answer, result, or decision in one or two sentences, before
-  tool calls or reasoning. If it is not yet known, say what is about to be checked and why.
+- **Headline first.** One plain sentence: what is now true, what you found, or what you need. No
+  tool narration before it.
+- **Short by default.** After the headline, a handful of bullets or one visual, then stop.
+  Mechanics, rejected alternatives, and the path you took wait for a follow-up; when a deeper layer
+  exists, offer it in one line.
+- **Introduce before you name.** Never lean on a function, file, flag, plan id, or internal term
+  the conversation has not introduced. Say what it does in plain words ("the repo filter", "the
+  install step"); add the identifier in `code` beside that description only when the reader needs
+  it to act.
+- **Reconnect to the goal.** When resuming earlier work, restate the goal in one sentence first.
 - **State the correction up front** when the answer contradicts something said earlier.
-- **Give enough context to follow.** When picking up prior context (a summary, a handoff, "where are
-  we"), restate the goal in a sentence before the outcome. Define an unfamiliar term the first time
-  it matters. Reconnect to the user's goal without replaying the conversation.
-- **Adapt detail.** Default to outcomes. Explain architecture and tradeoffs when they are material,
-  and code-level mechanics when the reader needs them to act or asks for them.
 
-### Form
+### Show, don't describe
 
-- **Choose the clearest medium; prose is the fallback.** Tables for like items or comparisons;
-  fenced blocks for commands, output, config, and file layout; a diagram for workflows and
-  relationships; a concrete example, screenshot, recording, or actual output when it shows the point
-  faster than a description. Keep prose connective; never narrate what a table or diagram already
-  shows.
-- **Draw chat diagrams with the inline visual tool when one is available.** Chat surfaces such as
-  the Claude desktop app show a fenced Mermaid block as raw source, so render the diagram with the
-  harness's inline visual or widget tool instead. Use Mermaid in files that render it (docs,
-  READMEs, PR and issue bodies on GitHub) and in chat only when no inline visual tool exists.
-- **Use headers for distinct parts** of a long response. Short answers need none.
-- **Bold the load-bearing claim** the reader must not miss — a regression, a destructive
-  consequence, a blocked step — and nothing else.
-- **Make progress updates meaningful.** Report changed understanding, actual progress, or a blocker;
-  do not narrate each tool call.
-- **Report evidence by kind.** Say which checks *passed* (executed assertions), which behavior was
-  *observed* but not asserted (a screenshot, a manual run), which material only *illustrates* (a
-  diagram, an example), and which verification was *unavailable* and why. Never present observed or
-  illustrative material as passed.
+- **Draw it when structure carries the point:** a flow or sequence, a before/after, parts and how
+  they connect, options side by side. In chat surfaces with an inline visual or widget tool, render
+  it there; they show fenced Mermaid as raw source. Use Mermaid in files that render it (docs,
+  READMEs, GitHub bodies) and in chat only when no visual tool exists.
+- **Show the real thing** (a screenshot, the actual output, a concrete example) when it makes the
+  point faster than a sentence. Put images in the conversation, not only a path to them.
+- **Tables for like items,** fenced blocks for commands, output, and config. Keep cells to a few
+  words; a table of sentences is still a wall of text.
+- **Prose connects.** It never repeats what a visual or table already shows.
 
-### Separators
+### Scannable
 
-Use `━` between major sections of a long response, directly above the section's header, and `┈`
-above a list that needs separating from the prose before it or from a different list. Never `===` or
-`---`: under a line of text, markdown turns them into headings. Skip rules when the reply fits on
-one screen; never stack the two weights or border a section on both sides.
+- One idea per bullet, roughly twenty words at most. Split anything longer.
+- Headers only when a reply has distinct parts.
+- **Bold only the claim the reader must not miss:** a regression, a destructive consequence, a
+  blocked step.
+- Progress updates report changed understanding, real progress, or a blocker, never each tool call.
+- In a long reply, put a `━` rule above each major section. Never `===` or `---`: under a line of
+  text, markdown turns them into headings. A reply that fits on one screen needs no rules.
+
+### Evidence in plain words
+
+Say what was checked and how, one line each:
 
 ```text
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-## What changed
-
-Three files, one behavior.
-┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-- `a.mjs` — the fix
-- `b.mjs` — its regression
+✓ Search filters while typing (browser check, 2/2 passed)
+◎ Empty state looks right (seen in a screenshot, not asserted)
+✗ Export fails on files over 10 MB
 ```
+
+- ✓ only for an executed assertion that passed: a test, a scripted check, output compared to an
+  expectation.
+- ◎ for behavior observed but not asserted. Never present it as passed.
+- Say plainly when verification was unavailable, and why. A diagram or example only illustrates.
 
 ### Close
 
-- **Lead the close with what matters:** the result, the best available evidence, and what needs the
-  reader's attention. Separate it from the work with one `━` rule.
-- **Report each check as `Verified: <command> -> <pass|fail|blocked>`**, one per line, in a fenced
-  block.
-- **Mark the actionable parts** of a work report with DONE / DEFERRED / NEXT STEPS. DEFERRED means
-  not done and not needed, distinct from unfinished. A short answer needs no closing block, and a
-  skill's own output format may differ; keep whichever structure is used consistent within the
-  response.
-- Keep fixed-format lines (verification, and markers other rules define) together at the end, each
-  on its own line, after the separator.
+- End with what needs the reader: a decision, an action, or "nothing needs you."
+- Exact check lines other rules require (`Verified: <command> -> <result>`) and fixed-format
+  markers go together in one block at the very end, after the plain-language result.
+- DONE / DEFERRED / NEXT STEPS only for long multi-part work reports. DEFERRED means not done and
+  not needed, distinct from unfinished.
 
 ### Precedence
 

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "response-output",
   "label": "Response output optimization",
-  "description": "How the agent structures and words every response: the result and any decision you owe come first, detail follows the task, evidence says what passed versus what was only observed, and the close is easy to scan.",
+  "description": "How the agent words every response: a one-line result first, short and scannable by default, visuals over prose, no unexplained internal names, and plain evidence lines. Detail comes when you ask.",
   "lifecycle": "optional",
   "presentation": {
     "category": "chat-time-output",

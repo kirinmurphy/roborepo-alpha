@@ -1,6 +1,6 @@
 ---
 name: feature-verification
-description: Use when completing or demonstrating a change whose behavior the user should see proven — "show me it works", "prove it", "screenshot", "recording", "demo the change", or when a UI, server, API, CLI, or performance change needs evidence beyond existing checks. Picks the fastest sufficient evidence (executed checks, command or request output, measured numbers, browser screenshots or recordings through `roborepo browser`), runs safe verification itself instead of handing it to the user, and reports what passed versus what was only observed. Do not use for routine test-result reporting when existing checks already establish the outcome, choosing or running a repo's tests (test-harness), and do not use for questions or plans where nothing was built.
+description: Use when completing or demonstrating a change whose behavior the user should see proven — "show me it works", "prove it", "screenshot", "recording", "demo the change", or when a UI, server, API, CLI, or performance change needs evidence beyond existing checks. Picks the fastest sufficient evidence (executed checks, command or request output, measured numbers, browser screenshots or recordings through `roborepo browser`), runs safe verification itself instead of handing it to the user, and shows that evidence in the conversation (screenshots inline, the steps taken, what passed versus what was only observed). Do not use for routine test-result reporting when existing checks already establish the outcome, choosing or running a repo's tests (test-harness), and do not use for questions or plans where nothing was built.
 ---
 
 # Feature Verification
@@ -9,7 +9,7 @@ Show the user that finished work behaves as claimed, with evidence they can open
 verification yourself; hand a check to the user only when it truly needs them.
 
 `test-harness` chooses and runs the repo's tests. This skill decides what evidence the user sees and
-reports it with the same `Verified: <command> -> <pass|fail|blocked>` line.
+puts it in front of them: the picture, the steps taken, and what passed.
 
 Reporting existing test results alone does not trigger this skill. Reuse evidence already
 produced; load this guidance when selecting or capturing additional behavioral evidence.
@@ -25,7 +25,7 @@ better, and do not capture anything decorative.
 | Interactive UI | Key frames; a short recording if sequence or motion matters | Stills cannot show the behavior |
 | Browser failure | The failure and a selective screenshot | A trace is needed to diagnose it |
 | Server, API, CLI | The executed command or request and its output, plus test results, run directly | An unexpected result needs diagnosis |
-| Architecture / workflow | Mermaid, when relationships are hard to explain in prose | Alternatives or tradeoffs need context |
+| Architecture / workflow | A diagram: the inline visual tool in chat, Mermaid in files | Alternatives or tradeoffs need context |
 | Performance | Measured before/after values | A chart shows the trend better |
 | Simple or nonvisual work | A brief result and proportionate checks | A material question remains |
 
@@ -96,23 +96,48 @@ Never guess production URLs or deployments. Never purchase, send, publish, or ch
 external to stage evidence. Prefer fixtures and mock data, keep capture narrow, and keep
 credentials, tokens, and private data out of frame.
 
-## Deliver it
+## Make the verification visible
 
-- Lead with one primary evidence item; mention secondary artifacts only if they add something.
-- Give exact paths. Evidence lives under `~/.roborepo/browser/evidence/` for 14 days; it is pruned
-  only when a later run starts.
-- Before calling evidence viewable, confirm this session can show or open the file. If it cannot,
-  give a real text summary and say the artifact is local. Never invent a URL.
+The user does not see your tool calls. Browser, computer-use, and shell work that happened out of
+sight did not happen as far as they can tell, so the report has to show it.
+
+- **Show the picture.** Put the primary screenshot or recording in the conversation with the
+  harness's file-sharing or image tool, rendered inline. A path alone is not evidence the user can
+  see. If this session cannot display files, say so, describe what the frame shows, and give the
+  path. Never invent a URL.
+- **Name the walk-through** in one line, in the user's terms: "Opened Settings → turned on dark mode
+  → reloaded → still dark." This applies to every browser or desktop tool, including the harness's
+  own browser pane, Chrome, and desktop control, not only `roborepo browser`.
+- **Before/after** for a visual change: two frames side by side, or one visual comparing them.
+- **Output, trimmed:** for a command or request, show the few lines that prove the point in a fenced
+  block, not the whole log.
+- One primary evidence item; add secondary artifacts only when they show something new. Evidence
+  under `~/.roborepo/browser/evidence/` is kept 14 days and pruned when a later run starts.
 
 ## Completion responses
 
-Short and outcome-first: the result, the best available evidence, and what needs attention. Add
-architecture detail only when a decision, uncertainty, or risk needs the user's judgment.
+A one-line result, the evidence shown, then what needs the user. Use the user's words for
+the feature, not file or function names they have not seen. Code-level detail waits until asked.
+
+```text
+Search now filters as you type.
+
+[screenshot shown inline]
+Opened the shop page → typed "tea" → list narrowed to 2 items
+
+✓ Browser check passed (2/2)
+◎ Empty-search state seen in the screenshot, not asserted
+
+Nothing needs you. Want the code-level detail?
+```
 
 | Before | After |
 | --- | --- |
-| "I updated `SearchList.tsx` to debounce input and refactored the filter hook. Please run the app and check the search box." | "Search now filters while typing. Browser checks passed (2/2); screenshot: `…/20261021T…-1-screenshot.png`. Nothing needs your attention." |
-| "The tests should pass now." | "`Verified: npm test -- search -> pass` (14 tests). The empty-query state was only observed in a screenshot, not asserted." |
-| "Investigated the 500s — it's probably the cache." | "The 500s come from a cache miss on cold start: reproduced with `curl -i localhost:3000/api/items` (500) after restart, then 200 once warm. Not yet fixed." |
-| "I looked at a few ways to store sessions and went with Redis, then wired up the client, added a pool, and updated the config loader." | "Sessions need a store that survives restarts. Your call: Redis (fast, one more service to run) or Postgres (already deployed, ~5ms slower per request, measured locally). I'd pick Postgres. Nothing is built yet." |
-| "Running tests… reading `auth.ts`… editing `auth.ts`… running tests again…" | "Login now works with the new token format; refresh is next. One assumption changed: tokens carry the org id, so the org lookup is gone." |
+| "I updated `SearchList.tsx` to debounce input and refactored the filter hook. Please run the app and check the search box." | The block above. |
+| "The tests should pass now." | "✓ Search tests pass (14). ◎ The empty-query state was only seen in a screenshot, not asserted." |
+| "Investigated the 500s — it's probably the cache." | "The errors happen on the first request after a restart, then stop once the cache warms up. Reproduced: first call 500, second call 200. Not fixed yet." |
+| "I looked at a few ways to store sessions and went with Redis, then wired up the client, added a pool, and updated the config loader." | "Logins need storage that survives restarts. Your call: Redis (fast, one more service to run) or Postgres (already running, ~5 ms slower, measured locally). I'd pick Postgres. Nothing built yet." |
+| "Running tests… reading `auth.ts`… editing `auth.ts`… running tests again…" | "Login works with the new token format; token refresh is next." |
+
+Exact `Verified: <command> -> <pass|fail|blocked>` lines, when required, go in one block at the end,
+after this plain-language report.
