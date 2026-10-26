@@ -384,10 +384,11 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
 
 ## Not tested
 
-- [ ] Updating a real machine that enabled some of the old plan packages ends with `plan-suite`
+- [x] Updating a real machine that enabled some of the old plan packages ends with `plan-suite`
       enabled and all six commands working in Claude, Codex, and Gemini. The retired-IDs check
       covers the registry and each harness's skill and command files in a hermetic home, not a live
-      harness session running the commands.
+      harness session running the commands. Confirmed by the user on 2026-10-26 ("i have confirmed
+      the manual check").
 
 ## Review
 
@@ -470,8 +471,8 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
 - Full gate at fb0c9543: `npm run check` passed — check suites 60/60, test-cli 464/0, portal UI
   132, clean-machine sandboxes; Windows installer parity skipped (pwsh unavailable)
 - `/plan-review` validator pass 3 at fb0c9543: clean (fresh-context subagent)
-- Manual: the Not tested entry (a real machine updated from the old plan packages) is not yet
-  confirmed by the user
+- Manual: the Not tested entry (a real machine updated from the old plan packages) confirmed by
+  the user on 2026-10-26
 
 ### Result
 
