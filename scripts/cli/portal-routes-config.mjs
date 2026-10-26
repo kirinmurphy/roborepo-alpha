@@ -68,8 +68,8 @@ export const configRoutes = defineRoutes([
   { method: "POST", path: "/api/config/packages", handler: handleToggle("/api/config/packages") },
   { method: "POST", path: "/api/config/skills", handler: handleToggle("/api/config/skills") },
   {
-    // Section-level bulk enable/disable (bulkToggle sections only; the client sends the whole
-    // section's package ids). One request = one unit: preflighted sequential mutations, then a
+    // Bulk enable/disable of a set of package ids (a bulkToggle section's Select All, or the Plans
+    // onboarding banner; any caller may send any ids). One request = one unit: preflighted sequential mutations, then a
     // single reconcile pass, then the fresh snapshot. 409 when another batch is in flight or
     // preflight rejects (ownership conflicts) — results carries per-id detail for the UI.
     method: "POST",

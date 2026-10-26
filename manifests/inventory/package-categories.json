@@ -26,9 +26,8 @@
     },
     {
       "id": "skills-dev-lifecycle",
-      "label": "Plan Suite",
-      "description": "One command for each step of a plan's life: write, promote, execute, review, close or archive, and close out the session.",
-      "bulkToggle": true,
+      "label": "Development Workflows",
+      "description": "Structured workflows for development work: plan a change through to merge, and close out a work session cleanly.",
       "order": 20
     },
     {

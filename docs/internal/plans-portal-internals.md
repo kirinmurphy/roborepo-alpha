@@ -152,7 +152,7 @@ current snapshot and rechecks repository boundaries before reading document cont
 - `portal/plans/app.js`
 - `portal/plans/lifecycle.js`, `portal/plans/plan-actions.js`
 - `portal/plans/styles.css`
-- `globals/packages/plan-write/`, `plan-promote/`, `plan-execute/`, `plan-review/`, `plan-close/`, `plan-archive/`, `session-close/`
+- `globals/packages/plan-suite/` (the six plan skills and the Code Outlives Plans rules fragment), `globals/packages/session-close/`
 - `scripts/test/plan-suite-check.mjs`, `plan-suite-findings-check.mjs`, `plan-suite-commands-check.mjs`
 - `scripts/test/plan-lifecycle-manifest-check.mjs`, `plan-lifecycle-transitions-check.mjs`, `plan-sync-base-check.mjs`
 

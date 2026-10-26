@@ -186,6 +186,13 @@ export function readConfigSnapshot() {
     presentation: pkg.presentation,
     sourceRoot: pkg.sourceRoot,
     skillIds: pkg.resources.filter((c) => c.type === "skill").map((c) => c.id),
+    // Source paths by type, as context-cost keys its rules components, so a contents-view entry
+    // can find its own cost.
+    resourceSources: {
+      rules: pkg.components.filter((c) => c.type === "rules").map((c) => c.source),
+      hooks: pkg.components.filter((c) => c.type === "hooks").map((c) => c.source),
+    },
+    rulesTitle: packageRulesTitle(pkg),
     requires: pkg.requires || [],
     urls: pkg.urls || [],
   }));
@@ -303,13 +310,17 @@ export function buildBehaviorView(snap) {
   const perms = snap.permissions;
   const categories = readPackageCategories();
   const byCategory = new Map(categories.map((category) => [category.id, { ...category, items: [] }]));
-  const toolByPackage = new Map((snap.tools || []).map((tool) => [tool.packageId, tool]));
+  const toolsByPackage = new Map();
+  for (const tool of snap.tools || []) {
+    if (!toolsByPackage.has(tool.packageId)) toolsByPackage.set(tool.packageId, []);
+    toolsByPackage.get(tool.packageId).push(tool);
+  }
   const packageCosts = snap.contextCost?.packages || {};
   for (const item of snap.packages) {
     if (item.archived) continue;
     const section = byCategory.get(item.presentation?.category);
     if (!section) continue;
-    section.items.push(packagePresentationItem(item, toolByPackage.get(item.id), packageCosts[item.id] || null));
+    section.items.push(packagePresentationItem(item, toolsByPackage.get(item.id) || [], packageCosts[item.id] || null));
   }
 
   const sections = categories
@@ -488,7 +499,14 @@ function labelRestatesCommand(label, command) {
   return [...labelWords].every((word) => commandWords.includes(word));
 }
 
-function packagePresentationItem(item, tool, contextCost = null) {
+// A package with this many skills or more is a set: its card label opens a contents view listing
+// each resource instead of one source file.
+const CONTENTS_VIEW_MIN_SKILLS = 2;
+
+function packagePresentationItem(item, tools, contextCost = null) {
+  const skillCount = item.skillIds?.length || 0;
+  if (skillCount >= CONTENTS_VIEW_MIN_SKILLS) return multiSkillPresentationItem(item, tools, contextCost);
+  const tool = tools[0];
   const command = tool?.command || null;
   // Label a command-backed package by the command it exposes (`/session-close`) rather than its prose
   // label. Keyed on the package actually having a command, NOT on a category id: this previously
@@ -505,36 +523,176 @@ function packagePresentationItem(item, tool, contextCost = null) {
   const showCommandLabel = Boolean(command) && labelRestatesCommand(item.label, command);
   const resources = item.resources || item.components || [];
   const inspect = command
-    ? {
-        kind: "command-skill",
-        id: command,
-        skill: tool.id,
-        harness: (tool.commandHarnesses || []).includes("claude") ? "claude" : (tool.commandHarnesses || [])[0] || "claude",
-        label: `/${command}`,
-      }
+    ? commandSkillInspect(tool)
     : resources.includes("skill") && item.skillIds?.length
       ? { kind: "skill", id: item.skillIds[0], label: item.label }
       : resources.includes("rules")
         ? { kind: "rules", id: item.id, label: item.label }
         : null;
   return {
-    id: item.id,
+    ...packageItemBase(item, contextCost),
     label: showCommandLabel ? `/${command}` : item.label,
+    badges: statusBadges(item),
+    inspect,
+  };
+}
+
+// The card for a package with several skills: always the package label (never one of its
+// commands), a skill-count badge, and a `package-contents` inspect target whose entries each carry
+// the inspect object that resource would have had on a card of its own.
+function multiSkillPresentationItem(item, tools, contextCost) {
+  const toolById = new Map(tools.map((tool) => [tool.id, tool]));
+  const resourceCosts = contextCost?.resources || {};
+  const entries = [];
+  for (const skillId of item.skillIds) {
+    const tool = toolById.get(skillId);
+    if (!tool) continue;
+    entries.push({
+      key: `skill:${skillId}`,
+      type: "skill",
+      label: tool.command ? `/${tool.command}` : skillId,
+      description: oneLine(tool.inventory?.frontmatter?.description || tool.description),
+      inspect: tool.command ? commandSkillInspect(tool) : { kind: "skill", id: skillId, label: skillId },
+      contextCost: resourceCosts[`skill:${skillId}`] || null,
+    });
+  }
+  // loadConfigSource serves one rules and one hooks source per package, so each type is one entry.
+  for (const type of ["rules", "hooks"]) {
+    const sources = item.resourceSources?.[type] || [];
+    if (sources.length === 0) continue;
+    entries.push({
+      key: `${type}:${sources[0]}`,
+      type,
+      label: type === "rules" ? "Rules" : "Hooks",
+      description: type === "rules" ? item.rulesTitle || null : null,
+      inspect: { kind: type, id: item.id, label: `${item.label} — ${type}` },
+      contextCost: resourceCosts[`${type}:${sources[0]}`] || null,
+    });
+  }
+  return {
+    ...packageItemBase(item, contextCost),
+    label: item.label,
+    badges: [`${item.skillIds.length} skills`, ...statusBadges(item)],
+    inspect: {
+      kind: "package-contents",
+      id: item.id,
+      label: item.label,
+      summary: contentsSummary(item.resources || []),
+      entries,
+    },
+  };
+}
+
+function packageItemBase(item, contextCost) {
+  return {
+    id: item.id,
     description: item.description,
     order: item.presentation?.order || 0,
     active: item.enabled,
     toggle: "package",
     builtIn: item.origin === "built-in",
     urls: item.urls || [],
-    badges: [
-      ...(item.catalogStatus === "pending" ? ["pending"] : []),
-      ...(item.status && item.status !== "enabled" && item.status !== "disabled" ? [item.status] : []),
-    ],
-    resources,
-    inspect,
+    resources: item.resources || item.components || [],
+    note: item.status === "external" ? externalNote(externalComponentLabels(item.componentStatus)) : null,
     contextCost,
     hint: item.id === "telemetry" && (item.enabled || item.status === "configured") ? "roborepo web" : null,
   };
+}
+
+function statusBadges(item) {
+  return [
+    ...(item.catalogStatus === "pending" ? ["pending"] : []),
+    ...(item.status === "external" ? [externalBadge(externalComponentLabels(item.componentStatus))] : []),
+    ...(item.status && !["enabled", "disabled", "external"].includes(item.status) ? [item.status] : []),
+  ];
+}
+
+function commandSkillInspect(tool) {
+  return {
+    kind: "command-skill",
+    id: tool.command,
+    skill: tool.id,
+    harness: (tool.commandHarnesses || []).includes("claude") ? "claude" : (tool.commandHarnesses || [])[0] || "claude",
+    label: `/${tool.command}`,
+  };
+}
+
+const RESOURCE_COUNT_NOUNS = { skill: ["skill", "skills"], rules: ["rules fragment", "rules fragments"], hooks: ["hooks file", "hooks files"] };
+
+// "6 skills · 1 rules fragment": counts by resource type, for the types the contents view lists.
+function contentsSummary(resourceTypes) {
+  const parts = [];
+  for (const [type, [singular, plural]] of Object.entries(RESOURCE_COUNT_NOUNS)) {
+    const count = resourceTypes.filter((t) => t === type).length;
+    if (count > 0) parts.push(`${count} ${count === 1 ? singular : plural}`);
+  }
+  return parts.join(" · ");
+}
+
+// The first heading of a package's rules fragment ("Code Outlives Plans"), read only for packages
+// with several skills, whose contents view describes the rules entry by it.
+function packageRulesTitle(pkg) {
+  if (pkg.resources.filter((r) => r.type === "skill").length < CONTENTS_VIEW_MIN_SKILLS) return null;
+  const source = pkg.components.find((c) => c.type === "rules")?.source;
+  if (!source) return null;
+  const text = readText(path.join(repoRoot, source));
+  return text?.match(/^#+\s+(.+)$/m)?.[1].trim() || null;
+}
+
+function readText(filePath) {
+  try {
+    return fs.readFileSync(filePath, "utf8");
+  } catch {
+    return null;
+  }
+}
+
+function oneLine(text) {
+  return text ? String(text).replace(/\s+/g, " ").trim() : null;
+}
+
+// Plain names for the component types a package can find already installed. A bare type id
+// ("harness-config", "mcp") means nothing to someone reading the Agents page.
+const EXTERNAL_COMPONENT_NOUNS = {
+  skill: "skill",
+  mcp: "MCP server",
+  plugin: "plugin",
+  command: "command",
+  rules: "rules",
+  hooks: "hooks",
+  permissions: "permissions",
+  codex_tool_approvals: "Codex tool approvals",
+  // The harness-config probe only compares status line settings, so that is what was found.
+  "harness-config": "status line",
+  "package-runtime-asset": "script file",
+};
+// Types whose id is a name a person would recognize; the rest carry a source path, so the noun alone reads better.
+const NAMED_COMPONENT_TYPES = new Set(["skill", "mcp", "plugin", "command"]);
+
+// "external" = this package's components exist on the machine but RoboRepo did not install them
+// (a hand-copied skill, an MCP server or status line another tool configured). Names each one.
+function externalComponentLabels(componentStatus) {
+  const labels = (componentStatus || [])
+    .filter((component) => component.state === "external")
+    .map((component) => {
+      const noun = EXTERNAL_COMPONENT_NOUNS[component.type] || component.type;
+      return NAMED_COMPONENT_TYPES.has(component.type) && component.id ? `${noun} ${component.id}` : noun;
+    });
+  return [...new Set(labels)];
+}
+
+function externalBadge(found) {
+  return {
+    text: "Installed outside RoboRepo",
+    status: "external",
+    title: found.length ? `Found: ${found.join(", ")}` : "Found files RoboRepo did not install",
+  };
+}
+
+function externalNote(found) {
+  const them = found.length === 1 ? "it" : "them";
+  const what = found.length ? found.join(", ") : "some of this package's files";
+  return `Already installed without RoboRepo: ${what}. Turning this on replaces ${them} with RoboRepo's version and manages ${them} from then on.`;
 }
 
 function hooksStorageOf(harness) {

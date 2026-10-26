@@ -26,11 +26,11 @@ export async function removeRepositorySources(page) {
   }
 }
 
-// The Plans board only shows once plan-write is enabled; the hermetic machine has no packages.
+// The Plans board only shows once plan-suite is enabled; the hermetic machine has no packages.
 export async function enablePlanBoard(page) {
   await page.route("**/api/plans", async (route) => {
     const data = await (await route.fetch()).json();
-    data.planWritePackage = { ...data.planWritePackage, available: true, enabled: true };
+    data.planSuitePackage = { ...data.planSuitePackage, available: true, enabled: true };
     await route.fulfill({ json: data });
   });
 }

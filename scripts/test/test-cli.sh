@@ -100,7 +100,7 @@ assert() {
 assert "source layout: globals system skills exist" test -d "${repo_root}/globals/system/skills"
 assert "source layout: globals harnesses Claude source exists" test -d "${repo_root}/globals/harnesses/claude"
 assert "source layout: globals harnesses Codex source exists" test -d "${repo_root}/globals/harnesses/codex"
-assert "source layout: generated per-package Codex commands exist" test -d "${repo_root}/generated/packages/plan-write/codex/commands"
+assert "source layout: generated per-package Codex commands exist" test -d "${repo_root}/generated/packages/plan-suite/codex/commands"
 assert "source layout: local internal skills exist" test -d "${repo_root}/local/skills"
 assert "source layout: legacy agents root absent" bash -c "! test -e '${repo_root}/agents'"
 assert "source layout: legacy claude root absent" bash -c "! test -e '${repo_root}/claude'"
@@ -171,6 +171,41 @@ assert "workspace resources: MCP collision requires typed override" \
 printf '%s\n' '{"schemaVersion":1,"overrides":[{"type":"package","id":"jcodemunch","mode":"replace"},{"type":"mcp-server","id":"jcodemunch","mode":"replace"}]}' > "${workspace_resource_root}/overrides/resources.json"
 assert "workspace resources: typed MCP replace override validates" \
   bash -c "HOME='${workspace_resource_home}' ROBOREPO_STATE_ROOT='${workspace_resource_home}/.roborepo' ROBOREPO_WORKSPACE_ROOT='${workspace_resource_root}' node '${cli}' workspace validate >/dev/null"
+
+add_skill_home="${work}/add-skill-home"
+add_skill_root="${work}/add-skill-workspace"
+add_skill_env="HOME='${add_skill_home}' ROBOREPO_MODE=package ROBOREPO_STATE_ROOT='${add_skill_home}/.roborepo' ROBOREPO_WORKSPACE_ROOT='${add_skill_root}'"
+mkdir -p "${add_skill_home}"
+assert "package dev add-skill: adds a commanded skill, its trigger entry, and validates" \
+  bash -c "${add_skill_env} node '${cli}' package dev create add-skill-pack --kind=auto-skill >/dev/null \
+    && ${add_skill_env} node '${cli}' package dev add-skill add-skill-pack add-skill-second --command --description='Second skill.' >'${work}/add-skill-ok.out' \
+    && grep -q 'note: /add-skill-second will not install' '${work}/add-skill-ok.out' && ! grep -q 'render-commands' '${work}/add-skill-ok.out' \
+    && test -f '${add_skill_root}/packages/add-skill-pack/skills/add-skill-second/SKILL.md' \
+    && node -e \"const c=require('${add_skill_root}/packages/add-skill-pack/package.config.json'); const s=c.resources.filter(r=>r.type==='skill'); process.exit(s.map(r=>r.id).join()==='add-skill-pack,add-skill-second' && s[1].entrypoints[0].name==='add-skill-second' ? 0 : 1)\" \
+    && node -e \"const t=require('${add_skill_root}/packages/add-skill-pack/skill-triggers.json'); process.exit(t.tests.some(x=>x.skill==='add-skill-second') ? 0 : 1)\" \
+    && ${add_skill_env} node '${cli}' package validate add-skill-pack >/dev/null"
+assert "package dev add-skill: without --command adds an auto skill with no entrypoint, after the existing skills" \
+  bash -c "${add_skill_env} node '${cli}' package dev add-skill add-skill-pack add-skill-third >'${work}/add-skill-auto.out' \
+    && node -e \"const c=require('${add_skill_root}/packages/add-skill-pack/package.config.json'); const s=c.resources.filter(r=>r.type==='skill'); const t=s.at(-1); process.exit(s.map(r=>r.id).join()==='add-skill-pack,add-skill-second,add-skill-third' && t.invocation==='auto' && t.risk==='low' && !t.entrypoints ? 0 : 1)\" \
+    && ! grep -q 'render-commands\|will not install' '${work}/add-skill-auto.out'"
+cp "${add_skill_root}/packages/add-skill-pack/package.config.json" "${work}/add-skill-pack.before.json"
+cp "${add_skill_root}/packages/add-skill-pack/skill-triggers.json" "${work}/add-skill-triggers.before.json"
+add_skill_unchanged="cmp -s '${work}/add-skill-pack.before.json' '${add_skill_root}/packages/add-skill-pack/package.config.json' && cmp -s '${work}/add-skill-triggers.before.json' '${add_skill_root}/packages/add-skill-pack/skill-triggers.json'"
+assert "package dev add-skill: a skill ID another package claims fails validation and restores the package" \
+  bash -c "! env ${add_skill_env} node '${cli}' package dev add-skill add-skill-pack code-style >/dev/null 2>'${work}/add-skill-claimed.err' && grep -q 'nothing was changed: skill code-style owned by multiple packages: code-style, add-skill-pack' '${work}/add-skill-claimed.err' && test ! -d '${add_skill_root}/packages/add-skill-pack/skills/code-style' && ${add_skill_unchanged}"
+assert "package dev add-skill: a command name another package claims fails validation and restores the package" \
+  bash -c "${add_skill_env} node '${cli}' package dev create add-skill-cmd-owner --kind=standalone-command --command=add-skill-taken >/dev/null \
+    && ! env ${add_skill_env} node '${cli}' package dev add-skill add-skill-pack add-skill-taken --command >/dev/null 2>'${work}/add-skill-cmd.err' \
+    && grep -q 'slash command add-skill-taken owned by multiple packages: add-skill-cmd-owner, add-skill-pack' '${work}/add-skill-cmd.err' \
+    && test ! -d '${add_skill_root}/packages/add-skill-pack/skills/add-skill-taken' && ${add_skill_unchanged}"
+assert "package dev add-skill: refuses a skill the package already has" \
+  bash -c "! env ${add_skill_env} node '${cli}' package dev add-skill add-skill-pack add-skill-second >/dev/null 2>'${work}/add-skill-repeat.err' && grep -q 'package add-skill-pack already has skill add-skill-second' '${work}/add-skill-repeat.err' && ${add_skill_unchanged}"
+assert "package dev add-skill: a failed add to a package without skills leaves no skills folder behind" \
+  bash -c "${add_skill_env} node '${cli}' package dev create add-skill-empty --kind=empty >/dev/null \
+    && ! env ${add_skill_env} node '${cli}' package dev add-skill add-skill-empty code-style >/dev/null 2>&1 \
+    && test ! -e '${add_skill_root}/packages/add-skill-empty/skills' && test ! -e '${add_skill_root}/packages/add-skill-empty/skill-triggers.json'"
+assert "package dev add-skill: refuses a built-in package in package mode" \
+  bash -c "! env ${add_skill_env} node '${cli}' package dev add-skill plan-suite add-skill-extra >/dev/null 2>'${work}/add-skill-builtin.err' && grep -q 'package plan-suite is built in' '${work}/add-skill-builtin.err' && test ! -d '${repo_root}/globals/packages/plan-suite/skills/add-skill-extra' && git -C '${repo_root}' diff --quiet -- globals/packages/plan-suite"
 
 workspace_import_home="${work}/workspace-import-home"
 workspace_import_root="${work}/workspace-import"
@@ -389,9 +424,9 @@ assert "skill native --full: prints fallback when native help unavailable" \
 assert "skill render-commands: check dispatches generated command verifier" \
   bash -c "cd '${repo_root}' && node '${cli}' skill render-commands --check >/dev/null"
 assert "skill render-commands: generated Claude wrapper exists" \
-  grep -q 'Use the `plan-write` skill' "${repo_root}/generated/packages/plan-write/claude/commands/plan-write.md"
+  grep -q 'Use the `plan-write` skill' "${repo_root}/generated/packages/plan-suite/claude/commands/plan-write.md"
 assert "skill render-commands: generated Codex wrapper uses codex skill path" \
-  grep -q '~/.codex/skills/plan-write/SKILL.md' "${repo_root}/generated/packages/plan-write/codex/commands/plan-write.md"
+  grep -q '~/.codex/skills/plan-write/SKILL.md' "${repo_root}/generated/packages/plan-suite/codex/commands/plan-write.md"
 assert "skill render-commands: capture observer has no slash command" \
   bash -c "! test -e '${repo_root}/generated/packages/convention-capture/claude/commands/capture-convention.md'"
 assert "skill render-commands: capture observer absent from Codex commands" \
@@ -2006,7 +2041,7 @@ assert "portal restart notice: server code signature tracks changes on disk" \
 # An installed skill copy that differs from its source makes doctor warn (not fail) by name.
 stale_skill_home="${work}/stale-skill-home"
 mkdir -p "${stale_skill_home}/.roborepo/skills"
-cp -R "${repo_root}/globals/packages/plan-write/skills/plan-write" "${stale_skill_home}/.roborepo/skills/plan-write"
+cp -R "${repo_root}/globals/packages/plan-suite/skills/plan-write" "${stale_skill_home}/.roborepo/skills/plan-write"
 touch "${stale_skill_home}/.roborepo/skills/plan-write/.builtin-managed"
 printf '\nstale line\n' >> "${stale_skill_home}/.roborepo/skills/plan-write/SKILL.md"
 assert "doctor: warns when an installed skill copy is out of date" \

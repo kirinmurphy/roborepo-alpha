@@ -237,7 +237,7 @@ repository's worktree folder, and never uses `git worktree remove --force`. The 
 turned on from Home. A worktree elsewhere is suggested for manual review. The command does not touch
 remote branches.
 
-With the plan-close package enabled, `/plan-close` removes each story's worktree as its last step,
+With the plan-suite package enabled, `/plan-close` removes each story's worktree as its last step,
 and Home does not offer the hook. With it disabled, a repository card with linked worktrees and no
 hook shows **Automatic worktree cleanup is off** in its footer. **Turn on automatic cleanup**
 confirms the worktree folder (proposed as the deepest folder holding the repository's worktrees,
@@ -245,7 +245,7 @@ outside `.claude/worktrees/`) and installs the hook; **Dismiss** hides the offer
 repository. If another tool's `post-merge` hook is already installed, the dialog shows the line to
 add to it.
 
-A hook installed before the plan-close package is enabled keeps working: a worktree whose active or review
+A hook installed before the plan-suite package is enabled keeps working: a worktree whose active or review
 plan names it waits for `/plan-close`. A plan that does not name its worktree cannot protect
 it, so if that branch lands the hook may remove the worktree first; the removal log keeps its tip.
 

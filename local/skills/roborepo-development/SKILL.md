@@ -221,7 +221,7 @@ Subcommands, grouped by category:
 - `package enable <package-id>` / `package disable <package-id>` / `package manage` / `presets` — package and preset
   feature toggles. Package mode separates immutable app files, portable workspace resources, and
   machine-local state; do not collapse those roots.
-- `package create|list|inspect|validate|enable|disable|reconcile|adopt-live` (`cli/packages.mjs`)
+- `package dev create|dev add-skill|list|inspect|validate|enable|disable|reconcile|adopt-live` (`cli/packages.mjs`)
   — full package lifecycle surface. See `references/package-development.md` for details on each subcommand.
   `enable`/`disable` already apply live immediately — no `roborepo update` needed afterward.
 - `setup` / `apply` / `workspace` / `version` — package-mode setup and root inspection tools.

@@ -281,6 +281,57 @@ check("commands: wrapper counted on-demand; standalone adds discovery line", () 
   assert.equal(result.harnesses.codex.components.some((c) => c.id === "solo:command-wrapper"), false);
 });
 
+check("several skills in one package: totals sum every resource; each resource keeps its share", () => {
+  invalidateContextCostCache();
+  const fixture = makeFixture();
+  const skills = {
+    "duo-lead": "---\nname: duo-lead\ndescription: Lead duo skill\n---\n\nLead body that hands off to the helper.\n",
+    "duo-helper": "---\nname: duo-helper\ndescription: Helper duo skill\n---\n\nHelper body, longer than the lead body by a few words.\n",
+  };
+  for (const [id, text] of Object.entries(skills)) {
+    const file = `${REPO}/pkgs/duo/skills/${id}/SKILL.md`;
+    fixture.files.set(file, text);
+    fixture.mtimes.set(file, 1000);
+    fixture.tools.push({
+      id,
+      packageId: "duo",
+      inventory: {
+        frontmatter: { name: id, description: text.match(/description: (.*)/)[1] },
+        harnesses: { claude: { installed: true }, codex: { installed: true } },
+        inspectPath: file,
+      },
+    });
+  }
+  fixture.files.set(`${REPO}/pkgs/duo/rules.md`, "## Duo\n\nDuo rule fragment.\n");
+  fixture.mtimes.set(`${REPO}/pkgs/duo/rules.md`, 1000);
+  fixture.catalog.push({
+    id: "duo",
+    label: "Duo",
+    sourceFile: `${REPO}/pkgs/duo/package.config.json`,
+    components: [{ type: "skill", id: "duo-lead" }, { type: "skill", id: "duo-helper" }, { type: "rules", harness: "both", source: "pkgs/duo/rules.md" }],
+    resources: [{ type: "skill", id: "duo-lead" }, { type: "skill", id: "duo-helper" }, { type: "rules" }],
+  });
+  const result = build(fixture, ["duo"]);
+  const duo = result.packages.duo;
+  const keys = Object.keys(duo.resources).sort();
+  assert.deepEqual(keys, ["rules:pkgs/duo/rules.md", "skill:duo-helper", "skill:duo-lead"]);
+  const sum = (field) => Object.values(duo.resources).reduce((total, r) => total + r[field], 0);
+  assert.equal(sum("startupTokens"), duo.startupTokens);
+  assert.equal(sum("onDemandTokens"), duo.onDemandTokens);
+  assert.ok(duo.resources["skill:duo-helper"].onDemandTokens > duo.resources["skill:duo-lead"].onDemandTokens);
+  assert.equal(duo.resources["rules:pkgs/duo/rules.md"].rulesTokens, duo.rulesTokens);
+  assert.equal(duo.discoveryTokens, duo.resources["skill:duo-lead"].startupTokens + duo.resources["skill:duo-helper"].startupTokens);
+});
+
+check("skill-backed command wrapper counts toward its skill's resource share", () => {
+  invalidateContextCostCache();
+  const fixture = makeFixture();
+  const result = build(fixture, ["gamma"]);
+  const gamma = result.packages.gamma.resources["skill:gamma"];
+  assert.equal(gamma.onDemandTokens, result.packages.gamma.onDemandTokens);
+  assert.equal(Object.keys(result.packages.gamma.resources).length, 1);
+});
+
 check("hooks and mcp: labels only, no token numbers, never summed", () => {
   invalidateContextCostCache();
   const fixture = makeFixture();

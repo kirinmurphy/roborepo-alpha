@@ -1462,7 +1462,7 @@ Relevant current RoboRepo files:
 - `scripts/test/package-catalog-check.mjs`
 - `docs/architecture/config-code-separation.md`
 - `package.json`
-- `globals/packages/plan-write/skills/plan-write/`
+- `globals/packages/plan-suite/skills/plan-write/`
 - `globals/packages/technical-writing/skills/technical-writing/`
 - `globals/packages/code-style/skills/code-style/`
 - `globals/packages/javascript-typescript/skills/javascript-typescript/`

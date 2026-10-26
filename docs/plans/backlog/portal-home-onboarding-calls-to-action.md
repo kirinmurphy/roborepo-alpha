@@ -34,7 +34,7 @@ the design, copy, and completion signals.
 | --- | --- |
 | Repository observer | Runtime auto-discovery: RoboRepo watches local dev servers and Docker containers and remembers the repositories they run from |
 | Agent harness | A supported coding agent installed on this machine (for example Claude Code or Codex) that RoboRepo configures |
-| Plan suite | The `plan-write` package and its sibling plan commands, which manage plan documents under `docs/plans` and power the Plans page |
+| Plan suite | The `plan-suite` package, whose plan commands manage plan documents under `docs/plans` and power the Plans page |
 | Token tracking | The `telemetry` package, which captures agent session usage for the Tokens page |
 
 ### Why the order matters
@@ -110,7 +110,7 @@ user who has finished setup sees the normal Home page.
 ## Open questions
 
 - Where each step's done state comes from (auto-discovery setting, active harness cohort, package
-  status for `plan-write` and `telemetry`), and whether Home reads them through one endpoint or
+  status for `plan-suite` and `telemetry`), and whether Home reads them through one endpoint or
   several.
 - Whether later steps are locked until earlier ones finish, or shown in order but always
   actionable.

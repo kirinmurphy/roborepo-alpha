@@ -23,7 +23,7 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 const TECHNICAL_WRITING = "globals/packages/technical-writing/skills/technical-writing";
-const PLAN_WRITE = "globals/packages/plan-write/skills/plan-write";
+const PLAN_WRITE = "globals/packages/plan-suite/skills/plan-write";
 
 testMatricesParse();
 testWriteModeLoadsTheReviewLoop();
@@ -242,7 +242,7 @@ function testBothSkillsInstructPairedLoadingWithoutBeingAsked() {
 function testRoutineRecordsDoNotCascade() {
   const plans = flat(`${PLAN_WRITE}/SKILL.md`);
   const writing = flat(`${TECHNICAL_WRITING}/SKILL.md`);
-  const review = flat("globals/packages/plan-review/skills/plan-review/SKILL.md");
+  const review = flat("globals/packages/plan-suite/skills/plan-review/SKILL.md");
   const support = flat("globals/system/skills/roborepo-support/SKILL.md");
   for (const [name, content] of [["plan-write", plans], ["technical-writing", writing], ["plan-review", review], ["roborepo-support", support]]) {
     assert.match(content, /Reuse .*already loaded/i, `${name} must reuse conversation guidance`);

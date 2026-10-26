@@ -113,7 +113,8 @@ function costChipEntries(inspect, itemCost, snap) {
     return spec ? [{ label: "Startup", spec }] : [];
   }
   if (!itemCost) return [];
-  if (inspect.kind === "skill" || inspect.kind === "command-skill") {
+  // A package's contents view heads with the package's own totals, read as a skill's are.
+  if (inspect.kind === "skill" || inspect.kind === "command-skill" || inspect.kind === "package-contents") {
     const entries = [];
     if (itemCost.startupTokens > 0) {
       entries.push({
@@ -153,6 +154,25 @@ function costChipEntries(inspect, itemCost, snap) {
     }];
   }
   return [];
+}
+
+// The one chip on a contents-view entry: what that resource costs when it loads. A skill shows its
+// on-demand size (body plus command wrapper); a rules fragment shows its startup size. Built-in
+// packages get muted numbers, as their source view does.
+export function contentsEntryChipSpec(entry, snap, { builtIn = false } = {}) {
+  const cost = entry.contextCost;
+  const contextCost = snap?.contextCost;
+  if (!cost || !contextCost) return null;
+  const isRules = entry.type === "rules";
+  const tokens = isRules ? cost.rulesTokens : cost.onDemandTokens;
+  if (!(tokens > 0)) return null;
+  const legend = isRules ? contextCost.ruleFragmentThresholds || contextCost.thresholds : contextCost.onDemandThresholds;
+  return {
+    tokens,
+    level: builtIn ? null : (isRules ? cost.rulesLevel : cost.onDemandLevel) || null,
+    detail: isRules ? "Rule snippet included in rendered rules while enabled." : "Loaded when the skill is invoked.",
+    legend: builtIn ? undefined : legend,
+  };
 }
 
 // Chip specs for one behaviorView item row. Warning-only: a chip appears ONLY for medium/high

@@ -43,6 +43,7 @@
     <dialog id="config-modal" aria-labelledby="modal-title">
       <div class="modal-head">
         <div class="modal-head-main">
+          <button type="button" class="modal-back" id="modal-back" hidden>‹ Back</button>
           <span class="modal-title" id="modal-title"></span>
           <portal-close-button id="modal-close"></portal-close-button>
         </div>
@@ -293,11 +294,30 @@
             <span data-slot="badges"></span>
           </div>
           <div class="item-desc" data-slot="description"></div>
+          <div class="item-note" data-slot="note"></div>
           <div class="item-hint" data-slot="hint"></div>
           <div class="item-status" data-slot="status"></div>
         </div>
         <span data-slot="toggle"></span>
       </div>
+    </template>
+    <!-- Contents view of a package with several skills: one row per resource, each opening that
+         resource's source view in the same dialog. -->
+    <template id="tpl-package-contents">
+      <div class="package-contents">
+        <p class="package-contents-summary" data-slot="summary"></p>
+        <ul class="package-contents-list" data-slot="entries"></ul>
+      </div>
+    </template>
+    <template id="tpl-package-contents-entry">
+      <li>
+        <button type="button" class="package-contents-entry" data-slot="button">
+          <span class="package-contents-label" data-slot="label"></span>
+          <span class="package-contents-desc" data-slot="description"></span>
+          <token-chip data-slot="chip"></token-chip>
+          <span class="package-contents-chevron" aria-hidden="true">›</span>
+        </button>
+      </li>
     </template>
     <template id="tpl-badge">
       <span class="badge" data-slot="text"></span>

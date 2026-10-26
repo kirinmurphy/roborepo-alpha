@@ -11,6 +11,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { loadPackageCatalog } from "../cli/package-catalog.mjs";
+import { MULTI_SKILL_COMMAND, MULTI_SKILL_IDS, MULTI_SKILL_PACKAGE_ID, writeMultiSkillPackage } from "./fixtures/multi-skill-package.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const cli = path.join(repoRoot, "scripts/cli/main.mjs");
@@ -115,4 +116,62 @@ for (const pkgId of packageIds) {
   }
 }
 
-console.log(`ok: package lifecycle contract (${packageIds.length} packages)`);
+// A package with several skills is one unit: enable installs every skill and command, removing any
+// one skill's cache or command wrapper reports the whole package partial, and disable removes all
+// of it. The fixture sits in a throwaway app root because only a built-in package gets generated
+// command wrappers, and the real catalog must not gain a test package.
+{
+  const tmp = makeHome();
+  const appRoot = path.join(tmp, "app");
+  fs.mkdirSync(path.join(appRoot, ".git"), { recursive: true });
+  for (const dir of ["manifests", "scripts", "globals/harnesses", "globals/system"]) {
+    fs.cpSync(path.join(repoRoot, dir), path.join(appRoot, dir), { recursive: true });
+  }
+  writeMultiSkillPackage(path.join(appRoot, "globals", "packages"));
+  const stateDir = path.join(tmp, ".roborepo");
+  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_DIR: stateDir, ROBOREPO_APP_ROOT: appRoot, ROBOREPO_MODE: "development", SKIP_MCP: "1" };
+  const run = (...args) => spawnSync(process.execPath, [cli, ...args], { env, encoding: "utf8" });
+  const status = () => JSON.parse(run("package", "status", MULTI_SKILL_PACKAGE_ID, "--json").stdout).status;
+  const pkgId = MULTI_SKILL_PACKAGE_ID;
+  const commandPath = (harness) => path.join(tmp, `.${harness}`, "commands", `${MULTI_SKILL_COMMAND}.md`);
+  try {
+    const validate = run("package", "validate", pkgId);
+    assert.equal(validate.status, 0, `${pkgId}: validate should pass\n${validate.stderr}`);
+    const render = run("skill", "render-commands");
+    assert.equal(render.status, 0, `${pkgId}: render-commands should succeed\n${render.stderr}`);
+
+    assert.equal(run("package", "enable", pkgId).status, 0, `${pkgId}: enable should succeed`);
+    for (const skillId of MULTI_SKILL_IDS) {
+      assert.ok(fs.existsSync(path.join(stateDir, "skills", skillId, "SKILL.md")), `${pkgId}: enable caches ${skillId}`);
+      for (const harness of ["claude", "codex"]) {
+        assert.ok(fs.existsSync(path.join(tmp, `.${harness}`, "skills", skillId)), `${pkgId}: enable links ${skillId} for ${harness}`);
+      }
+    }
+    for (const harness of ["claude", "codex"]) assert.ok(fs.existsSync(commandPath(harness)), `${pkgId}: enable installs /${MULTI_SKILL_COMMAND} for ${harness}`);
+    assert.match(fs.readFileSync(path.join(tmp, ".claude", "CLAUDE.md"), "utf8"), /## Duo Suite/, `${pkgId}: enable renders its rules fragment`);
+    assert.equal(status(), "enabled", `${pkgId}: every component present reads enabled`);
+
+    fs.rmSync(path.join(stateDir, "skills", "duo-helper"), { recursive: true, force: true });
+    assert.equal(status(), "partial", `${pkgId}: one missing skill cache reads partial`);
+    assert.equal(run("package", "enable", pkgId).status, 0, `${pkgId}: re-enable repairs the missing skill`);
+    assert.equal(status(), "enabled", `${pkgId}: re-enable restores enabled`);
+
+    fs.rmSync(commandPath("codex"));
+    assert.equal(status(), "partial", `${pkgId}: one missing command wrapper reads partial`);
+
+    assert.equal(run("package", "disable", pkgId).status, 0, `${pkgId}: disable should succeed`);
+    assert.equal(status(), "disabled", `${pkgId}: disable reads disabled`);
+    for (const skillId of MULTI_SKILL_IDS) {
+      assert.ok(!fs.existsSync(path.join(stateDir, "skills", skillId)), `${pkgId}: disable removes ${skillId} cache`);
+      for (const harness of ["claude", "codex"]) {
+        assert.ok(!fs.existsSync(path.join(tmp, `.${harness}`, "skills", skillId)), `${pkgId}: disable unlinks ${skillId} for ${harness}`);
+      }
+    }
+    assert.ok(!fs.existsSync(commandPath("claude")), `${pkgId}: disable removes /${MULTI_SKILL_COMMAND}`);
+    assert.doesNotMatch(fs.readFileSync(path.join(tmp, ".claude", "CLAUDE.md"), "utf8"), /## Duo Suite/, `${pkgId}: disable drops its rules fragment`);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+console.log(`ok: package lifecycle contract (${packageIds.length} packages, plus a several-skill package)`);

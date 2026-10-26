@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { test, expect } from "@playwright/test";
 import { codexHookGuidance } from "../../harnesses/codex/hook-guidance.mjs";
+import { buildBehaviorView } from "../../cli/config.mjs";
 
 // The header bar holds the primary pages; the secondary ones live only in its ⋮ menu, and below
 // the narrow breakpoint the menu holds every page.
@@ -20,6 +21,57 @@ const ROUTES = [
 ];
 
 test.describe("Agents page", () => {
+  test("a package with several skills opens a contents view; each entry opens its source and Back returns", async ({ page }) => {
+    await page.goto("/agents");
+    const suite = page.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^Development Planning Lifecycle$/ }) });
+    await expect(suite).toHaveCount(1);
+    await expect(suite.locator(".badge", { hasText: /^6 skills$/ })).toBeVisible();
+
+    await suite.locator(".item-label").click();
+    const modal = page.locator("dialog#config-modal");
+    await expect(modal).toBeVisible();
+    await expect(modal.locator("#modal-title")).toHaveText("Development Planning Lifecycle");
+    await expect(modal.locator(".package-contents-summary")).toHaveText("6 skills · 1 rules fragment");
+    await expect(modal.locator(".package-contents-label")).toHaveText(["/plan-write", "/plan-promote", "/plan-execute", "/plan-review", "/plan-close", "/plan-archive", "Rules"]);
+    // Every row shows its own cost: a skill's when-loaded size, the rules fragment's startup size.
+    const chips = modal.locator(".package-contents-entry token-chip");
+    await expect(chips).toHaveCount(7);
+    for (const chip of await chips.all()) {
+      await expect(chip).toBeVisible();
+      expect(await chip.evaluate((el) => el.tokens)).toBeGreaterThan(0);
+    }
+    await expect(modal.locator("#modal-back")).toBeHidden();
+    await expect(modal.locator(".package-contents-entry", { hasText: "Rules" }).locator(".package-contents-desc")).toHaveText("Code Outlives Plans");
+
+    await modal.locator(".package-contents-entry", { hasText: "/plan-execute" }).click();
+    await expect(modal.locator("#modal-title")).toHaveText(/plan-execute/);
+    await expect(modal.locator("#modal-path")).toContainText("plan-execute/SKILL.md");
+    await expect(modal.locator("#modal-back")).toBeVisible();
+
+    await modal.locator("#modal-back").click();
+    await expect(modal.locator("#modal-title")).toHaveText("Development Planning Lifecycle");
+    await expect(modal.locator(".package-contents-entry")).toHaveCount(7);
+    await expect(modal.locator("#modal-back")).toBeHidden();
+
+    await modal.locator(".package-contents-entry", { hasText: "Rules" }).click();
+    await expect(modal.locator("#modal-content")).toContainText("Code Outlives Plans");
+    await modal.locator("#modal-close").click();
+    await expect(modal).not.toBeVisible();
+  });
+
+  test("a package with one skill keeps its command label and opens its source directly", async ({ page }) => {
+    await page.goto("/agents");
+    const single = page.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^\/session-close$/ }) });
+    await expect(single).toHaveCount(1);
+    await expect(single.locator(".badge", { hasText: /skills$/ })).toHaveCount(0);
+    await single.locator(".item-label").click();
+    const modal = page.locator("dialog#config-modal");
+    await expect(modal.locator("#modal-path")).toContainText("session-close/SKILL.md");
+    await expect(modal.locator(".package-contents")).toHaveCount(0);
+    await expect(modal.locator("#modal-back")).toBeHidden();
+    await modal.locator("#modal-close").click();
+  });
+
   test("keeps the high token-use banner hidden", async ({ page }) => {
     const snapshot = await (await page.request.get("/api/config")).json();
     const activeItem = snapshot.behaviorView.flatMap((section) => section.items || []).find((item) => item.active);
@@ -50,6 +102,35 @@ test.describe("Agents page", () => {
     }));
     expect(warningButtonGrid.column).toBe("2");
     expect(warningButtonGrid.row).toBe("1");
+  });
+
+  test("explains a package whose pieces were installed outside RoboRepo", async ({ page }) => {
+    const snapshot = await (await page.request.get("/api/config")).json();
+    const shown = new Set(snapshot.behaviorView.flatMap((section) => section.items || []).map((item) => item.id));
+    const pkg = snapshot.packages.find((entry) => !entry.enabled && !entry.archived && shown.has(entry.id));
+    expect(pkg, "fixture needs a disabled package on the Agents page").toBeTruthy();
+    // What the probes report when another tool configured this package's MCP server and status
+    // line: two status line components (Claude and Codex) must read as one "status line".
+    pkg.status = "external";
+    pkg.componentStatus = [
+      { type: "mcp", id: "context7", state: "external" },
+      { type: "harness-config", id: "claude/statusline.json", state: "external" },
+      { type: "harness-config", id: "codex/status-line.json", state: "external" },
+    ];
+    // Rebuilt by the server's own view builder, so this covers its copy as well as the card.
+    snapshot.behaviorView = buildBehaviorView(snapshot);
+    await page.route("**/api/config", (route) => route.fulfill({ json: snapshot }));
+
+    await page.goto("/agents");
+    const row = page.locator("config-item").filter({ has: page.getByText(pkg.label, { exact: true }) });
+    const badge = row.locator(".badge", { hasText: "Installed outside RoboRepo" });
+    await expect(badge).toHaveClass(/badge-info/);
+    await expect(badge).toHaveAttribute("title", "Found: MCP server context7, status line");
+    await expect(row.getByText("external", { exact: true })).toHaveCount(0);
+    await expect(row.locator("[data-slot=note]")).toHaveText(
+      "Already installed without RoboRepo: MCP server context7, status line. "
+        + "Turning this on replaces them with RoboRepo's version and manages them from then on.",
+    );
   });
 
   test("finishes setting up a launched harness without a click", async ({ page }) => {
@@ -221,7 +302,7 @@ test.describe("hook readiness warning", () => {
     expect(launches).toHaveLength(0);
 
     current = { ...pendingReview("cli-offer"), guidance: current.guidance };
-    const config = await (await page.request.get("/api/config")).json();
+    const config = await routeBulkToggleConfig(page);
     await page.route("**/api/config/packages/bulk", (route) => route.fulfill({ json: { ok: true, status: 200, results: [], config, hookHarnesses: ["codex"] } }));
     const section = config.behaviorView.find(entry => entry.bulkToggle);
     await page.goto("/agents");
@@ -718,7 +799,7 @@ test.describe("hook readiness warning", () => {
     await page.route("**/api/settings", (route) => route.fulfill({ json: setupWith([codex]) }));
     let current = pendingReview("rev-bulk");
     const reads = await routeStatuses(page, { codex: () => current });
-    const config = await (await page.request.get("/api/config")).json();
+    const config = await routeBulkToggleConfig(page);
     await page.route("**/api/config/packages/bulk", (route) => route.fulfill({ json: { ok: true, status: 200, results: [], config, hookHarnesses: ["codex"] } }));
     const section = config.behaviorView.find((entry) => entry.bulkToggle);
     expect(section, "fixture needs a bulk-toggle section").toBeTruthy();
@@ -773,6 +854,7 @@ test.describe("repository-first portal Home", () => {
       await route.fulfill({ json: { action: "stopped", stopped: 1, reason: null } });
     });
     await patchRoboRepo(page, (repository) => {
+      repository.lifecycle = { state: "idle" };
       repository.domains.plans = { status: "available", data: { active: [
         { id: "idle-plan", key: "idle-plan", title: "Idle Story", worktree: "idle-tree", checkoutRootId: "idle-tree", taskCounts: { total: 1, complete: 0 } },
       ], counts: { active: 1, backlog: 0 }, recent: [] } };
@@ -795,8 +877,9 @@ test.describe("repository-first portal Home", () => {
     });
     await page.goto("/");
     const card = roboRepoCard(page);
+    await expect(card.locator(".repository-state-badge")).toHaveText("idle");
     // No port says nothing runs; the row does not spell out "idle".
-    await expect(card.getByText("idle", { exact: true })).toHaveCount(0);
+    await expect(cardRows(card).getByText("idle", { exact: true })).toHaveCount(0);
     // Only a worktree no plan claims has a ⋮ cell; a plan's row keeps its actions in its dropdown.
     await expect(planRowOf(card, "Idle Story").locator(".worktree-row-menu")).toBeHidden();
     await expect(checkoutRow(card, "feature/stale").locator(".worktree-row-menu")).toBeVisible();
@@ -1637,10 +1720,10 @@ test.describe("shared plan drawer", () => {
   test.afterEach(async ({ page }) => removeRepositorySources(page));
 
   test("a Plans card opens the plan drawer", async ({ page }) => {
-    // The board only shows once plan-write is enabled; the hermetic machine has no packages.
+    // The board only shows once plan-suite is enabled; the hermetic machine has no packages.
     await page.route("**/api/plans", async (route) => {
       const data = await (await route.fetch()).json();
-      data.planWritePackage = { ...data.planWritePackage, available: true, enabled: true };
+      data.planSuitePackage = { ...data.planSuitePackage, available: true, enabled: true };
       await route.fulfill({ json: data });
     });
     await page.goto("/plans");
@@ -1655,7 +1738,7 @@ test.describe("shared plan drawer", () => {
   test("the drawer says when an active plan is read from its worktree", async ({ page }) => {
     await page.route("**/api/plans", async (route) => {
       const data = await (await route.fetch()).json();
-      data.planWritePackage = { ...data.planWritePackage, available: true, enabled: true };
+      data.planSuitePackage = { ...data.planSuitePackage, available: true, enabled: true };
       await route.fulfill({ json: data });
     });
     await page.route("**/api/plans/document?*", async (route) => {
@@ -1735,7 +1818,7 @@ test.describe("Plans card commands", () => {
     await addRepositorySource(page, planRoot);
     await page.route("**/api/plans", async (route) => {
       const data = await (await route.fetch()).json();
-      data.planWritePackage = { ...data.planWritePackage, available: true, enabled: true };
+      data.planSuitePackage = { ...data.planSuitePackage, available: true, enabled: true };
       await route.fulfill({ json: data });
     });
   });
@@ -1834,6 +1917,7 @@ test.describe("Plans card commands", () => {
 
 test.describe("Plans onboarding", () => {
   const SUITE = ["plan-write", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive", "session-close"];
+  const SUITE_PACKAGES = ["plan-suite", "session-close"];
 
   test("each suite command's details button opens that command's skill", async ({ page }) => {
     await page.goto("/plans");
@@ -1850,26 +1934,37 @@ test.describe("Plans onboarding", () => {
     }
   });
 
-  test("the enable button turns on all seven suite packages in one request", async ({ page }) => {
+  test("the enable button turns on the plan-suite and session-close packages in one request", async ({ page }) => {
     await page.goto("/plans");
     const token = await page.locator("meta[name=cli-portal-token]").getAttribute("content");
     const bulk = page.waitForRequest((request) => request.url().endsWith("/api/config/packages/bulk") && request.method() === "POST");
     await page.locator(".package-onboarding").getByRole("button", { name: "Enable the Plan Suite" }).click();
-    expect((await bulk).postDataJSON()).toEqual({ ids: SUITE, enabled: true });
+    expect((await bulk).postDataJSON()).toEqual({ ids: SUITE_PACKAGES, enabled: true });
     await expect(page.locator(".package-onboarding")).toBeHidden();
     const config = await (await page.request.get("/api/config")).json();
     const section = config.behaviorView.find((item) => item.categoryId === "skills-dev-lifecycle");
-    for (const skill of SUITE) {
-      expect(section.items.find((item) => item.id === skill)?.active, `${skill} enabled`).toBe(true);
+    for (const id of SUITE_PACKAGES) {
+      expect(section.items.find((item) => item.id === id)?.active, `${id} enabled`).toBe(true);
     }
     // Leave the hermetic machine as the other specs expect it: no suite packages enabled.
     const reset = await page.request.post("/api/config/packages/bulk", {
       headers: { "X-Cli-Portal-Token": token },
-      data: { ids: SUITE, enabled: false },
+      data: { ids: SUITE_PACKAGES, enabled: false },
     });
     expect(reset.ok()).toBe(true);
   });
 });
+
+// No built-in category carries a Select All switch, but the portal still renders one for any
+// section marked bulkToggle. Serves the live config with the first package section so marked, and
+// returns that config so a routed bulk response can hand it back unchanged.
+async function routeBulkToggleConfig(page) {
+  const config = await (await page.request.get("/api/config")).json();
+  const section = config.behaviorView.find((entry) => entry.categoryId && entry.items.some((item) => item.toggle));
+  section.bulkToggle = true;
+  await page.route("**/api/config", (route) => route.fulfill({ json: config }));
+  return config;
+}
 
 async function portalToken(page) {
   await page.goto("/plans");

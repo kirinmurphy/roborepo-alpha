@@ -51,7 +51,7 @@ flowchart LR
   A -->|"agent calls EnterWorktree({ path })"| D["Session stays filed under main checkout"]
 ```
 
-`globals/packages/plan-execute/skills/plan-execute/SKILL.md` ("Enter the Worktree") tells the agent to
+`globals/packages/plan-suite/skills/plan-execute/SKILL.md` ("Enter the Worktree") tells the agent to
 make the worktree the session's working directory by "the environment's standard mechanism". In the
 desktop app an agent may pick either tool.
 
@@ -217,7 +217,7 @@ Rules it follows, matching `globals/harnesses/claude/hooks/repo-write-scope.mjs`
 | `docs/internal/hooks-internals.md` | Point the Claude system hook location at `globals/harnesses/claude/hooks/`; describe the worktree-entry protocol |
 | `docs/internal/harness-anatomy.md`, `docs/internal/skill-reference-observation.md` | Update the Claude system hook source paths |
 | `docs/internal/harness-provider-interface.md` | Correct the extension key to `app`; document `agentWorktreeDirs` and the use of `detection.executables` for process labels |
-| `globals/packages/plan-execute/skills/plan-execute/SKILL.md` | None. Its tool-neutral "Enter the Worktree" wording stays; the hook steers Claude |
+| `globals/packages/plan-suite/skills/plan-execute/SKILL.md` | None. Its tool-neutral "Enter the Worktree" wording stays; the hook steers Claude |
 
 ## Risks
 

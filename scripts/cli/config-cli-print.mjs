@@ -109,9 +109,10 @@ export function printConfigStatus(view) {
           if (item.detail.length > 5) console.log(`    … (${item.detail.length - 5} more)`);
         }
       } else {
-        const badges = item.badges?.length ? "  " + item.badges.map((b) => `[${b}]`).join(" ") : "";
+        const badges = item.badges?.length ? "  " + item.badges.map((b) => `[${b.text ?? b}]`).join(" ") : "";
         console.log(`  ${check(item.active)} ${item.label}${badges}`);
         if (item.description) console.log(`      ${item.description}`);
+        if (item.note) console.log(`      ${item.note}`);
         if (!item.active && item.hint) console.log(`      → ${item.hint}`);
       }
     }
