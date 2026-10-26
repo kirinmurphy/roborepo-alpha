@@ -251,8 +251,8 @@ None. Hook-readiness landing was verified before implementation; no design decis
   a valid fixture executable's `ETIMEDOUT` at the production two-second probe deadline. The fake
   manifest now grants ten seconds for validity checks; production discovery timing is unchanged.
   The failing assertion and discovery implementation precede this change; the fixture correction
-  is included because this run extends the same suite. Diagnostic log:
-  `/tmp/hr78g4sj-discovery-diagnostic-detail.log`.
+  is included because this run extends the same suite. Diagnostic repetition observed a valid
+  executable time out at the production two-second deadline.
 - Validation pass 1 at `71af81cf`: fresh-context validator reported no fix/escalate findings after
   reviewing the full diff, acceptance criteria, docs, schema/runtime parity, and skills; reran
   registry, synthetic provider, desktop runtime, shared-target rows, and diff checks successfully.
@@ -262,7 +262,10 @@ None. Hook-readiness landing was verified before implementation; no design decis
 
 ### Findings
 
-No fix or escalate findings in either fresh-context pass.
+No implementation fix or escalate findings in the validation passes.
+
+- [x] Durable review evidence contained temporary log paths; replaced them with the observed
+  outcomes required by the updated review guidance.
 
 ### Verification
 
@@ -277,7 +280,7 @@ No fix or escalate findings in either fresh-context pass.
 - October 25: `npm run check` passed on implementation `7997eb72`, exit 0. It includes doctor
   (107 checks), CLI smoke (457 passed, zero failed), all install-collision checks, 60/60 grouped
   suites, package-install smoke, four strict Docker scenarios, and 130 browser tests.
-  Full log: `/tmp/hr78g4sj-completion-gate.log`.
+  The executed gate exited successfully; counts and platform exclusions are recorded here.
 - Windows installer parity was skipped because `pwsh` is unavailable. The optional active-root
   verification fixture also reported `uvx` unavailable. Those optional platform/dependency checks
   are not claimed as passed; wider Windows parity remains in its adjacent backlog plan.
@@ -304,7 +307,7 @@ No fix or escalate findings in either fresh-context pass.
   shared-target-rows, hook-composition, and diff checks passed.
 - Base failure: `npm run check` stops in doctor because `generated/claude/CLAUDE.md` differs from
   rendered rules. `git diff main...HEAD -- globals/system/rules generated` is empty: the failing
-  inputs are identical on synchronized main. Log: `/tmp/hr78g4sj-review-gate.log`.
+  inputs are identical on synchronized main. The command exited 1 at the doctor stage.
 - Remaining gate stages are being checked separately. Initial sandbox runs hit local-server
   `listen EPERM` and npm access restrictions; authorized retries are pending. No initial failed
   attempt is counted as passing.
@@ -313,11 +316,38 @@ No fix or escalate findings in either fresh-context pass.
 
 ### Result
 - Status: pending
-- Reviewed implementation commit: 576f295064e05a5c99f3a4466475bbd69725b7d4
-- Base commit: 6b6521d54433113b4b7afcfc224f09ed6e0104cd
+- Reviewed implementation commit: cdb37fda4d3f31400ab126586e6057f4dee47df5
+- Base commit: 9211dab11354fbf36de3275584b5481987f15481
 
 ### Approval
 - Decision: requested
+
+### Current review evidence
+
+- Main advanced while verification ran. A second authorized synchronization merged base
+  `9211dab11354fbf36de3275584b5481987f15481` without conflicts, producing implementation
+  `cdb37fda4d3f31400ab126586e6057f4dee47df5`. That base repairs the earlier generated-rules drift.
+- Validator pass 2 found no implementation issues or escalations. Its sole plan-record finding
+  was removal of temporary-log references; those now record actual outcomes instead. Incoming
+  telemetry projection caching is separate from headless invocation. Synthetic-provider and
+  repository-scope assertions passed again.
+- The isolated hook-readiness suite passed after the earlier grouped run reported `missing`
+  instead of `active`. No cause is claimed for that earlier failure; the final full gate remains
+  the completion check.
+- Before the second synchronization, all 130 browser tests, the strict permissions Docker
+  sandbox, and install-collision tests passed. Other lifecycle failures referred to the now-fixed
+  generated-rules drift. These results describe the previous synchronized implementation.
+- No code or test fixes were made in review. The optional folder declaration remains deferred by
+  design. Real model synthesis is excluded from required manual checks for this cleanup.
+
+| Acceptance area | Code and executed evidence |
+| --- | --- |
+| Manifest-backed hook routing | Existing shared composition retains path overrides, link protection, and logging; hook-composition assertions passed |
+| Provider-owned sources and installed behavior | Provider hook directory and per-file manifest row; shared-target assertions cover install, removal, ownership, conflicts, and standalone lookup |
+| Validated headless contract | Schema and runtime contract reject omitted/malformed eligibility; registry and synthetic-provider assertions passed |
+| Literal summary transport and failures | Telemetry consumer spawns resolved executable argv; synthetic processes assert summary-only input, metacharacters, timeout, empty output, and nonzero exit |
+| Enablement, order, desktop/PATH selection | Runtime registry filtering and discovery; synthetic-provider and desktop-runtime assertions passed |
+| Documentation and conditional scope | Architecture, hook, provider, and telemetry docs follow current behavior; old source-path scan found no active source/test/doc references |
 
 ## Not tested
 
