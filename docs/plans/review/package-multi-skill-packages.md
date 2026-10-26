@@ -474,16 +474,27 @@ enables both through the bulk endpoint, which does not depend on `bulkToggle`. S
 - Manual: the Not tested entry (a real machine updated from the old plan packages) confirmed by
   the user on 2026-10-26
 
+- `/plan-review` sync-base merged main twice: 93afd4dd (stop tracking `.claude/launch.json`) and
+  fb068616 (a `/plan-review` skill edit and a new backlog plan); main's skill edit landed under
+  `globals/packages/plan-suite/skills/plan-review/` and no old `plan-*` package folder returned
+- Base failure: `cli-surface-integration-check.mjs` remote-sync menu flow (line 361) fails
+  intermittently with `ROBOREPO_SKIP_NODE_RELEASE_CHECK=1`, which `scripts/test/ci.sh` sets; it
+  failed 1 of 2 runs on main fb068616 and 1 of 2 on the branch, and failed the gate's CLI stage at
+  f90541df, 6d91d484, and 59df9607
+- Gate at 59df9607: doctor 107 checks; `test-cli.sh` 464/0 when run alone; the stages after it run
+  individually: install collisions, unit `--group ci` 60/60, package-install, the four
+  clean-machine sandboxes, portal UI 132 — all passed; Windows installer parity skipped (pwsh
+  unavailable)
+
 ### Result
 
-- Status: pending
-- Reviewed implementation commit: fb0c9543194d39d8d552a54445c24e1904c16414
-- Base commit: e479885db4383315645e2ff8a9d7c8ef334de427
-- Pending: the Not tested manual check
+- Status: complete
+- Reviewed implementation commit: 59df96072435b4fa2ac19e6cf8a999916220d366
+- Base commit: fb068616abc30baaaf6194e7ba6871f32e78e496
 
 ### Approval
 
-- Decision: not requested (blocked by the unconfirmed manual check)
+- Decision: requested
 
 ## Documentation impact
 
