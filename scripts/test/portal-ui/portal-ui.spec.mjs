@@ -2000,17 +2000,29 @@ test.describe("Plans card commands", () => {
       await page.goto("/plans");
       await page.getByText(new RegExp(`^${tab} \\(`)).first().click();
       const card = page.locator("plan-card", { hasText: title });
-      if (tab !== "Review") {
+      if (tab === "Active") {
         await expect(card.locator(".recommended-cta")).toHaveCount(0);
         await card.getByRole("button", { name: "Plan actions", exact: true }).click();
+      } else {
+        await expect(card.getByRole("button", { name: label, exact: true }).locator('portal-icon[name="copy"]')).toBeVisible();
       }
       const prompt = page.waitForRequest((request) => request.url().endsWith("/api/plans/prompt"));
-      await card.getByRole("button", tab === "Review" ? { name: label, exact: true } : { name: new RegExp(`^${label}\\b`) }).click();
+      await card.getByRole("button", tab === "Active" ? { name: new RegExp(`^${label}\\b`) } : { name: label, exact: true }).click();
       expect((await prompt).postDataJSON().action).toBe(command);
       await expect(page.locator("#toast")).toContainText(`Copied the /${command} prompt`);
       expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(new RegExp(`^/${command}\\n`));
       if (tab === "Review") await expect(card.getByRole("button", { name: "Archive" })).toHaveCount(0);
       expect(fs.existsSync(path.join(planRoot, "docs", "plans", folder)), `${folder} stays where it was`).toBe(true);
+      if (tab === "Backlog" || tab === "Ready") {
+        await card.getByRole("button", { name: title, exact: false }).first().click();
+        const drawer = page.getByRole("dialog").filter({ has: page.getByRole("heading", { name: title, exact: true }) });
+        const drawerAction = drawer.getByRole("button", { name: label, exact: true });
+        await expect(drawerAction).toBeVisible();
+        await expect(drawerAction.locator('portal-icon[name="copy"]')).toBeVisible();
+        const drawerPrompt = page.waitForRequest((request) => request.url().endsWith("/api/plans/prompt"));
+        await drawerAction.click();
+        expect((await drawerPrompt).postDataJSON().action).toBe(command);
+      }
     });
   }
 

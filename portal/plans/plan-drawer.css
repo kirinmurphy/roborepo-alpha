@@ -371,6 +371,9 @@ dialog#drawer::backdrop {
 /* Unified plan ⋯ menu (drawer-menu / card ⋯ panel content, built in templates.js#planMenuBody) plus
    the recommended-next CTA that sits beside the ⋯ trigger. */
 .recommended-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   white-space: nowrap;
 }
 .plan-menu {

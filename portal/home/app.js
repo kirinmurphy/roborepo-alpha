@@ -133,7 +133,7 @@ async function loadNextPlanActions(overview) {
   if (!keys.size) return new Map();
   try {
     const { plans } = await loadPlansSnapshot();
-    return new Map(plans.filter((record) => keys.has(record.key)).map((record) => [record.key, primaryPlanAction(record.plan)]).filter(([, action]) => action));
+    return new Map(plans.filter((record) => keys.has(record.key)).map((record) => [record.key, primaryPlanAction(record.plan)]).filter(([, action]) => action?.command === "plan-review" || action?.command === "plan-close"));
   } catch {
     return nextPlanActions;
   }

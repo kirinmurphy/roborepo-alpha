@@ -89,7 +89,7 @@ export function createPlanDrawer(deps) {
     // Recommended-next CTA (hidden when there's no clear recommendation) + the unified ⋯ menu.
     const ctaEl = document.getElementById("drawer-cta");
     if (content.cta) {
-      ctaEl.textContent = content.cta.label;
+      ctaEl.querySelector("[data-slot=label]").textContent = content.cta.label;
       ctaEl.hidden = false;
       ctaEl.onclick = () => copyPrompt(content.cta.command, [doc.plan.key], "repository-aware");
     } else {
