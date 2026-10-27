@@ -1,7 +1,7 @@
 ---
 id: 4xc0gjuw
 priority: high
-next_action: Complete the current gate and independent validation pass, then submit for human review.
+next_action: Run /plan-review to review the completed implementation; confirm native Windows restore behavior before closure.
 blocked_by: []
 depends_on: []
 related: ["hr78g4sj", "b2sgiejd", "a7bslb00", "gqzjlzgx"]
@@ -498,16 +498,22 @@ checkout intact.
   automatic snapshots, shared CLI/portal archive requests, lost ledgers, and garbage collection.
 - Primary-only recovery tests cover committed evidence authority, approval and integration,
   priority writes staying in the worktree, readiness, conflicting copies, and later code changes.
-- Portal test environment: hermetic local portal started by the browser runner; all 146 browser
-  checks passed, including archive recovery instructions and unchanged Delete/discard behavior.
-- Initial CI behavior group: 61/62 suites passed. The stale documentation link has since been
-  corrected at the user's explicit request; the refreshed CI group is running. Catalog, command renderer, triggers, CLI surface, focused repository/plan suites,
+- Portal test environment: hermetic local portal started by the browser runner; the initial 146
+  browser checks passed. After incoming main UI changes, the current full browser stage has
+  144 passed and seven failures independently reproduced on current main. The archive/discard
+  regression passes. The live disposable demo at `http://127.0.0.1:59439` runs current server code;
+  the dedicated real archive walkthrough passes both assertions and exposes a restore reference.
+- Current CI behavior group: 62/62 suites passed; CLI smoke: 464/464 checks passed. The stale
+  documentation link was corrected at the user's explicit request. Catalog, command renderer,
+  triggers, CLI surface, focused repository/plan suites,
   and whitespace checks passed. Package installation and installer collision suites passed.
 - All four available Docker clean-machine suites passed. Native Windows verification is unavailable.
 - Initial `npm run check` stopped at the then-existing skill body limit. While validation was
   running, current main was merged into this worktree in `a375a484`; the incoming
-  `c1d92150` extracts the report reference and resolves that limit. Rerun the gate on the new tree.
-  Remaining gate stages had already been run separately.
+  `c1d92150` extracts the report reference and resolves that limit. The gate was rerun against the new tree.
+  The refreshed full gate passes doctor (106 checks), CLI (464/464), all 62 CI behavior suites,
+  package installation, installer collisions, and all four Docker suites. Its browser stage has
+  144 passed and seven base failures, so the full gate is not passing.
 
 ## Not tested
 
@@ -533,12 +539,21 @@ checkout intact.
 
 ### Verification
 
+- Validation pass 3 at `1fde0cff` (fresh-context subagent): no additional implementation or prose
+  findings. Reviewed the full diff, all safety/acceptance paths, regression evidence, shared
+  consumers, code-style/JavaScript/support constraints, and technical-writing rules.
+- Current completion preflight passed all six checks: assigned authority, complete tasks, no
+  blockers, clean worktree, feature commits, and review schema apart from the Windows entry.
+- Current full gate: doctor passed (106); CLI passed (464/464); CI suites passed (62/62); package,
+  collision, and all Docker checks passed. Browser stage: 144 passed, seven failed on unchanged
+  main inputs. Base runs reproduce the Plans drawer/card assertions and four scope/filter
+  assertions; the Home drawer's high-priority assertion also fails on main. No passing full-gate
+  claim is made. These base failures do not weaken preservation or archive safety checks.
 - Validation pass 2 (fresh-context subagent): two fix findings above; no additional code or prose violations.
 - Validation pass 1 (fresh-context subagent): five fix findings above, corrected in `3b5f7100`; no documentation violations.
   Corrective checks pass for snapshot/preservation, landed recovery/readiness, and parser contracts.
-- `main` CLI smoke comparison: 461 passed, three failed; all three are the pre-existing doctor
-  body-limit failure. Feature CLI smoke is rerun from committed changes to avoid its clean-diff
-  fixture assertion rejecting this session's pending skill edits.
+- Historical `main` CLI comparison was 461 passed / three old doctor failures. Superseding current
+  feature gate: 464 passed / zero failed.
 - Historical base failure resolved by incoming main: the execution skill body limit no longer
   fails at `c1d92150`; initial logs describe the earlier tree only.
 - Resolved prior base failure: at the user's request, update the stale credential-plan link in
@@ -553,3 +568,16 @@ checkout intact.
   dirty proofs; tests assert that conservative contract while still exercising capture/restore.
 - Binary regression: a 2 MiB asset exposed the text executor's small output bound. Binary reads
   now have a separate 64 MiB bound; larger files refuse with their path before capture.
+
+## Implementation handoff
+
+- Mode: start; worktree administrative name: `git-worktree-preservation-and-recovery`.
+- Start validator: APPROVED without correction; start/base commit: `a68a9cc30aa00869403db47aa907fed50f8bf63a`.
+- Objectives: ten complete, zero blocked. Validation findings: seven resolved; clean third pass.
+- Implementation commits: `4dad6d04`, `3b5f7100`, and `1fde0cff`. Incoming/user-recorded commits
+  `a375a484` and `920def11` preserve the base synchronization and CI fixes made during this run.
+- Open questions: none. Native Windows verification: one Not tested entry above.
+- No push, pull-request merge, publication, real worktree retirement, or skill installation was performed by
+  the implementation agent. Only disposable fixture worktrees were removed in verification.
+- The full gate remains partial solely for the seven verified base browser failures above.
+  Human review is the next lifecycle step; this record grants no approval or merge permission.
