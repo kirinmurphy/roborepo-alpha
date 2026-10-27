@@ -1,7 +1,7 @@
 ---
 id: 4zyo2woj
 priority: high
-next_action: Ask the human whether the three unverified surfaces remain documented coverage limits for this delivery or require verification before review approval.
+next_action: Await explicit human approval of reviewed implementation 81ae9e362000c1a48574b1aeceda4c2302b19570, then merge the pull request and run /plan-close.
 blocked_by: []
 depends_on: ["hr78g4sj"]
 related: ["8bjltk2n", "wjlt1zvf", "ia1q1z9", "permva27", "permissions-ui-revamp", "codex-cmux-hook-trust-review", "46qth5z8", "harness-capability-derived-resource-targeting", "7k3m9qd", "o9zwxuav"]
@@ -358,6 +358,14 @@ cannot satisfy Part 3's source-staging prerequisite by inference.
 
 ## Decision Log
 
+- October 27 human review: the user explicitly selected "Accept documented coverage limits for
+  this delivery (Recommended)" for desktop/product file tools, browser/MCP/escalated execution,
+  and Linux/Windows. Reclassified the three unchecked Not tested tasks as coverage limitations
+  below because verification of those surfaces is not required for this delivery. None is marked
+  tested or protected. Future use of any unverified surface for protected source staging still
+  requires independent boundary verification. This decision accepts coverage limits; it does
+  not approve the implementation commit.
+
 - October 22: split the Codex boundary work from the Claude companion, retaining this id because
   the landed write-scope plan references its credential-read gap.
 - October 23: user selected native credential read-and-write denial and dedicated provider parity.
@@ -467,14 +475,14 @@ Git administrative worktree `credential-protection`; this document contains no m
   packed-install/container fixtures. This configuration change has no persistent server or
   shareable URL; installed live settings were not rewritten.
 
-## Not tested
+## Coverage limitations accepted for this delivery
 
-- [ ] Verify credential denial in a fresh desktop session and product structured-read tools after
+- Verify credential denial in a fresh desktop session and product structured-read tools after
       applying the new profile. No disposable desktop session was configured; native subprocess
       checks do not exercise desktop tool dispatch or inherited session policy.
-- [ ] Verify native enforcement on Linux and Windows before claiming either platform. No native
+- Verify native enforcement on Linux and Windows before claiming either platform. No native
       hosts for those platforms were used; the Linux container checks render/install behavior only.
-- [ ] Establish credential boundaries independently for browser, MCP and separately escalated
+- Establish credential boundaries independently for browser, MCP and separately escalated
       execution before using those surfaces for protected source staging. These tools were not
       certified by the native subprocess runner and have separate execution boundaries.
 
@@ -570,11 +578,16 @@ Git administrative worktree `credential-protection`; this document contains no m
   Ask the human whether to retain them as documented unverified coverage limits for this delivery
   (with an explicit plan decision), or require their verification before approval. Do not check
   them off without actual evidence.
+- Resumed after the user's explicit October 27 coverage decision recorded in the Decision Log.
+  Preserved all three limitations as unverified prose rather than checking off unperformed work.
+  Implementation and base content are unchanged from the verified result; earlier checks are
+  reused. No unresolved findings or required manual acceptance checks remain. Implementation
+  approval is requested separately for the exact reviewed commit below.
 
 ### Result
-- Status: pending
-- Reviewed implementation commit: 85786aa84afd8f942f32e2550a5b57ad6e1d88e6
+- Status: complete
+- Reviewed implementation commit: 81ae9e362000c1a48574b1aeceda4c2302b19570
 - Base commit: 977d29f04ab25f5191f21c832cb98709be99efae
 
 ### Approval
-- Decision: not requested
+- Decision: requested
