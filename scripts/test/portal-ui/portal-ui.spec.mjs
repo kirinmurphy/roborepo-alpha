@@ -935,12 +935,26 @@ test.describe("repository-first portal Home", () => {
     await expect(dialog).toBeHidden();
     await card.getByRole("button", { name: "Actions for feature/landed" }).click();
     await card.getByRole("button", { name: "Delete Worktree" }).click();
-    await expect(dialog).toContainText("Its changes are already merged into main, so nothing is lost.");
+    await expect(dialog).toContainText("Its changes are already merged into main, so no committed work is lost.");
     await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "cta");
     await dialog.getByRole("button", { name: "Cancel" }).click();
     expect(removals).toEqual([]);
 
-    removal = { action: "kept", reason: "uncommitted or untracked changes" };
+    await card.getByRole("button", { name: "Actions for feature/guarded" }).click();
+    await card.getByRole("button", { name: "Delete Worktree" }).click();
+    await expect(dialog.getByRole("alert")).toContainText("These changes and files cannot be retrieved after deletion.");
+    await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "danger");
+    await expect(dialog).not.toContainText("nothing is lost");
+    const deleteBounds = await dialog.getByRole("button", { name: "Delete worktree", exact: true }).boundingBox();
+    const dialogBounds = await dialog.boundingBox();
+    expect(deleteBounds.y + deleteBounds.height).toBeLessThanOrEqual(dialogBounds.y + dialogBounds.height);
+    expect(deleteBounds.y + deleteBounds.height).toBeLessThanOrEqual(420);
+    await page.screenshot({ path: "/tmp/worktree-dirty-delete-warning.png" });
+    await dialog.getByRole("button", { name: "Delete worktree", exact: true }).click();
+    await expect.poll(() => removals).toEqual([{ branch: "feature/guarded", discardChanges: true }]);
+    await expect(dialog).toBeHidden();
+
+    removal = { action: "kept", reason: "uncommitted or untracked changes", requiresDiscardConfirmation: true };
     let release;
     removalHeld = new Promise((resolve) => { release = resolve; });
     await card.getByRole("button", { name: "Actions for feature/stale" }).click();
@@ -955,10 +969,16 @@ test.describe("repository-first portal Home", () => {
     await expect(dialog.getByRole("button", { name: "Cancel" })).toBeDisabled();
     release();
     removalHeld = null;
-    await expect(dialog).toContainText("uncommitted or untracked changes");
+    await expect(dialog.getByRole("alert")).toContainText("uncommitted or untracked changes");
+    await expect(dialog.locator("[data-slot=error]")).toBeHidden();
+    await expect(confirm).toHaveAttribute("data-btn", "danger");
     await expect(confirm).toBeEnabled();
     await expect(confirm).toHaveText("Delete worktree");
-    await dialog.getByRole("button", { name: "Cancel" }).click();
+    expect(removals.at(-1)).toEqual({ branch: "feature/stale" });
+    removal = { action: "removed" };
+    await confirm.click();
+    await expect(dialog).toBeHidden();
+    expect(removals.at(-1)).toEqual({ branch: "feature/stale", discardChanges: true });
 
     removal = { action: "removed" };
     // The plan's dropdown: one status line, then the same drift warning the row shows.
@@ -1003,7 +1023,12 @@ test.describe("repository-first portal Home", () => {
     await expect(dialog.locator("[data-slot=restore]")).toBeHidden();
     await dialog.getByRole("button", { name: "Delete worktree" }).click();
     await expect(dialog).toBeHidden();
-    expect(removals).toEqual([{ branch: "feature/stale" }, { branch: "feature/idle" }]);
+    expect(removals).toEqual([
+      { branch: "feature/guarded", discardChanges: true },
+      { branch: "feature/stale" },
+      { branch: "feature/stale", discardChanges: true },
+      { branch: "feature/idle", discardChanges: true },
+    ]);
     // The deletion's follow-up refresh may still be in flight through the patched route.
     await page.unrouteAll({ behavior: "ignoreErrors" });
   });
