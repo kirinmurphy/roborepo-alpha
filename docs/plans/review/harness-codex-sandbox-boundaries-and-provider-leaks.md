@@ -483,6 +483,10 @@ Git administrative worktree `credential-protection`; this document contains no m
 
 ### Findings
 
+- [ ] Backlog audit links this plan at its former active path after submission to review;
+      update the link in `docs/internal/backlog-review.md:86`. The same input is stale on main
+      (its link names ready, while the committed plan is in review).
+
 - [x] Missing-denies native control omitted `--include-managed-config` while the main probe
       included it. Fixed: both runs now include managed policy; the same native matrix and
       missing-denies mutation passed again after correction (`808681c7`).
