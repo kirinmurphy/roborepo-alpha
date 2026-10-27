@@ -88,9 +88,9 @@ export function defaultRunGitSync(cwd, args, { timeoutMs = GIT_TIMEOUT_MS } = {}
   return runGitProcessSync(cwd, args, { timeoutMs });
 }
 
-export async function runGitProcess(cwd, args, { timeoutMs = GIT_TIMEOUT_MS, input = null, binary = false, plumbing = null } = {}) {
+export async function runGitProcess(cwd, args, { timeoutMs = GIT_TIMEOUT_MS, input = null, binary = false, plumbing = null, maxBuffer = GIT_MAX_BUFFER } = {}) {
   try {
-    const pending = execFileAsync("git", [...HARDENING_ARGS, ...args], execOptions(cwd, timeoutMs, { binary, plumbing }));
+    const pending = execFileAsync("git", [...HARDENING_ARGS, ...args], execOptions(cwd, timeoutMs, { binary, plumbing, maxBuffer }));
     pending.child.stdin.on("error", () => {});
     pending.child.stdin.end(input);
     const result = await pending;
@@ -106,8 +106,8 @@ export async function runGitProcess(cwd, args, { timeoutMs = GIT_TIMEOUT_MS, inp
   }
 }
 
-export function runGitProcessSync(cwd, args, { timeoutMs = GIT_TIMEOUT_MS, input = null, binary = false, plumbing = null } = {}) {
-  const result = spawnSync("git", [...HARDENING_ARGS, ...args], { ...execOptions(cwd, timeoutMs, { binary, plumbing }), input });
+export function runGitProcessSync(cwd, args, { timeoutMs = GIT_TIMEOUT_MS, input = null, binary = false, plumbing = null, maxBuffer = GIT_MAX_BUFFER } = {}) {
+  const result = spawnSync("git", [...HARDENING_ARGS, ...args], { ...execOptions(cwd, timeoutMs, { binary, plumbing, maxBuffer }), input });
   if (result.error || result.status !== 0) {
     return {
       ok: false,
@@ -137,7 +137,7 @@ function gitEnvironment() {
   return env;
 }
 
-function execOptions(cwd, timeoutMs, { binary = false, plumbing = null } = {}) {
+function execOptions(cwd, timeoutMs, { binary = false, plumbing = null, maxBuffer = GIT_MAX_BUFFER } = {}) {
   const env = gitEnvironment();
   // Only explicit plumbing callers can choose a temporary index/object store. Ambient repository
   // variables remain stripped; callers must create and own these paths.
@@ -150,8 +150,7 @@ function execOptions(cwd, timeoutMs, { binary = false, plumbing = null } = {}) {
     cwd,
     timeout: timeoutMs,
     encoding: binary ? "buffer" : "utf8",
-    // Snapshot blobs need room for ordinary binary assets; text scans keep their smaller bound.
-    maxBuffer: binary ? GIT_MAX_BINARY_BUFFER : GIT_MAX_BUFFER,
+    maxBuffer,
     // Callers close the pipe immediately; only explicit raw plumbing supplies input.
     stdio: ["pipe", "pipe", "pipe"],
     env,

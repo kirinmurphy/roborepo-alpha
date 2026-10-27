@@ -32,7 +32,9 @@ try {
   const packet = `\n### Result\n\n- Status: complete\n- Reviewed implementation commit: ${tip}\n- Base commit: ${seed}\n\n### Approval\n\n- Decision: approved\n- Reviewed implementation commit: ${tip}\n- Confirmed by: User said yes on 2026-10-27\n`;
   fs.writeFileSync(path.join(work, relativePath), precursor + packet);
   const localRecord = readPlanRecord(repositoryRecord(main), path.join(main, relativePath));
-  assert.equal(mergeReadiness({ primary: main, record: localRecord }).ok, false, "uncommitted review packet prevents merge readiness");
+  const pendingReadiness = mergeReadiness({ primary: main, record: localRecord });
+  assert.equal(pendingReadiness.ok, false, "uncommitted review packet prevents merge readiness");
+  assert.deepEqual(pendingReadiness.checks.map((check) => check.n), pendingReadiness.checks.map((_, index) => index + 1), "readiness failures have sequential check numbers");
   git(work, "add", relativePath); git(work, "commit", "-qm", "commit review and explicit approval");
   assert.equal(mergeReadiness({ primary: main, record: localRecord }).ok, true, "committed approval with a clean checkout is ready before merge");
   const approvedPacket = fs.readFileSync(path.join(work, relativePath), "utf8");
@@ -71,7 +73,10 @@ try {
   updatePlanPriority(buildPlanSnapshot({ stateRoot }), { key: selected.key, priority: "low", expectedPriority: "high", mtimeMs: selected.plan.mtimeMs, repositoryId: selected.repository.repositoryId });
   assert.equal(fs.readFileSync(path.join(main, relativePath), "utf8"), recovered, "priority writes never redirect into primary recovery evidence");
   assert.match(fs.readFileSync(path.join(work, relativePath), "utf8"), /priority: low/);
-  fs.writeFileSync(path.join(work, relativePath), precursor);
+  const changedCopy = { markdown: fs.readFileSync(path.join(work, relativePath), "utf8") };
+  assert.equal(verifiedLandedRecovery({ ...options, copy: changedCopy }).ok, true, "priority updates preserve recovery authority");
+  assert.deepEqual(authoritativeMarkdown(main, record).authority, { source: "primary", reason: "verified-landed-recovery" });
+  assert.equal(verifiedLandedRecovery({ ...options, copy: { markdown: changedCopy.markdown.replace("Implement the behavior", "Different requirements") } }).ok, false, "other worktree edits invalidate recovery");
   assert.equal(verifiedLandedRecovery({ ...options, markdown: recovered.replace("Implement the behavior", "Change requirements") }).ok, false);
   assert.equal(verifiedLandedRecovery({ ...options, copy: { markdown: precursor + "\nIndependent edit\n" } }).ok, false);
   fs.writeFileSync(path.join(work, "code"), "new implementation\n"); git(work, "add", "code"); git(work, "commit", "-qm", "new implementation");

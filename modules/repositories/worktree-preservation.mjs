@@ -3,7 +3,7 @@ import { planEntriesByIdentity } from "../plan-suite/copy-integration.mjs";
 import os from "node:os";
 import path from "node:path";
 import { inspectBranchLanding, FIRST_PARENT_SCAN_LIMIT } from "./worktree-landed.mjs";
-import { runGitProcess } from "./git-exec.mjs";
+import { GIT_MAX_BINARY_BUFFER, runGitProcess } from "./git-exec.mjs";
 import { inventoryWorktree, inspectRawAttributes, required, writeTree } from "./worktree-snapshot.mjs";
 
 // Every proof object is disposable. Neither preview nor a failed proof creates repository refs or
@@ -34,7 +34,7 @@ export async function assessWorktreePreservation(cwd, { branch, base = null, rec
     landing = await inspectBranchLanding(cwd, branch, { base, recorded, runGit });
     const result = (state, reason, extra = {}) => ({ state, reason, landing, fingerprint: inventory.fingerprint, tip: inventory.tip, baseCommit, baseRef: base, remainingPaths, blockingPaths: [], ...extra });
     if (landing.tip && landing.tip !== inventory.tip) throw new Error("branch changed during assessment");
-    const baseline = parseTree(required(await git(["ls-tree", "-r", "-z", inventory.tip])));
+    const baseline = parseTree(required(await git(["ls-tree", "-r", "-z", inventory.tip], { maxBuffer: GIT_MAX_BINARY_BUFFER })));
     const filesystem = [];
     for (const entry of inventory.entries) {
       if (entry.mode === "directory") continue;
@@ -51,12 +51,12 @@ export async function assessWorktreePreservation(cwd, { branch, base = null, rec
     const hasLocalContent = !sameTree(baseline, inventory.index) || !sameTree(baseline, filesystem) || inventory.entries.some((entry) => entry.mode === "directory");
     if (!landing.landed) {
       // Committed differences are remaining work too; local paths alone omit an unlanded branch.
-      const committed = await git(["diff", "--name-only", "-z", baseCommit, inventory.tip]);
+      const committed = await git(["diff", "--name-only", "-z", baseCommit, inventory.tip], { maxBuffer: GIT_MAX_BINARY_BUFFER });
       if (committed.ok) remainingPaths = [...new Set([...remainingPaths, ...committed.stdout.split("\0").filter(Boolean)])].sort();
       return result(landing.reason === "not absorbed" || landing.reason === "no own work" ? "remaining" : "unknown", landing.reason, { hasLocalContent });
     }
     if (!hasLocalContent) return result("preserved", null, { evidenceCommit: landing.absorbingCommit, hasLocalContent: false });
-    const candidates = required(await git(["rev-list", "--first-parent", "--reverse", `${landing.fork}..${baseCommit}`])).trim().split("\n").filter(Boolean);
+    const candidates = required(await git(["rev-list", "--first-parent", "--reverse", `${landing.fork}..${baseCommit}`], { maxBuffer: GIT_MAX_BINARY_BUFFER })).trim().split("\n").filter(Boolean);
     if (candidates.length > FIRST_PARENT_SCAN_LIMIT) throw new Error("scan limit exceeded");
     let reachedLanding = false;
     let conflicted = false;
@@ -64,7 +64,7 @@ export async function assessWorktreePreservation(cwd, { branch, base = null, rec
       if (candidate === landing.absorbingCommit) reachedLanding = true;
       if (!reachedLanding) continue;
       const candidateTree = required(await git(["rev-parse", `${candidate}^{tree}`])).trim();
-      const target = parseTree(required(await git(["ls-tree", "-r", "-z", candidate])));
+      const target = parseTree(required(await git(["ls-tree", "-r", "-z", candidate], { maxBuffer: GIT_MAX_BINARY_BUFFER })));
       await inspectRawAttributes(git, target.map((entry) => entry.path), candidate);
       const mapped = await mapPlanPaths(baseline, inventory.index, filesystem, target, git);
       const parentTree = await writeTree(mapped.baseline, git);
@@ -73,7 +73,7 @@ export async function assessWorktreePreservation(cwd, { branch, base = null, rec
       for (const layer of [mapped.index, mapped.filesystem]) {
         const tree = await writeTree(layer, git);
         const synthetic = await syntheticCommit(tree, inventory.tip, git);
-        const merge = await git(["merge-tree", "--write-tree", `--merge-base=${parent}`, candidate, synthetic]);
+        const merge = await git(["merge-tree", "--write-tree", `--merge-base=${parent}`, candidate, synthetic], { maxBuffer: GIT_MAX_BINARY_BUFFER });
         if (!merge.ok && merge.code !== 1) throw new Error(String(merge.stderr || "tree merge unavailable").trim());
         if (merge.code === 1) conflicted = true;
         if (!merge.ok || merge.stdout.trim().split("\n")[0] !== candidateTree) { absorbs = false; break; }
@@ -81,7 +81,7 @@ export async function assessWorktreePreservation(cwd, { branch, base = null, rec
       if (absorbs) {
         const fresh = await inventoryWorktree(cwd, { git });
         if (fresh.fingerprint !== inventory.fingerprint || required(await git(["rev-parse", base])).trim() !== baseCommit) throw new Error("state changed during assessment");
-        return result("preserved", null, { evidenceCommit: candidate, hasLocalContent: true });
+        return result("preserved", null, { evidenceCommit: candidate, hasLocalContent: true, remainingPaths: [] });
       }
     }
     return result(conflicted ? "unknown" : "remaining", conflicted ? "local layer merge conflicted within assessed history" : "local layers not absorbed within assessed history", { hasLocalContent: true });
@@ -108,7 +108,7 @@ async function syntheticCommit(tree, parent, git) {
 }
 
 async function mapPlanPaths(baseline, index, filesystem, target, git) {
-  const [basePlans, indexPlans, fsPlans, targetPlans] = await Promise.all([baseline, index, filesystem, target].map((entries) => planEntriesByIdentity(entries, async (oid) => required(await git(["cat-file", "blob", oid])))));
+  const [basePlans, indexPlans, fsPlans, targetPlans] = await Promise.all([baseline, index, filesystem, target].map((entries) => planEntriesByIdentity(entries, async (oid) => required(await git(["cat-file", "blob", oid], { maxBuffer: GIT_MAX_BINARY_BUFFER })))));
   const copies = { baseline: baseline.map((entry) => ({ ...entry })), index: index.map((entry) => ({ ...entry })), filesystem: filesystem.map((entry) => ({ ...entry })) };
   for (const [id, before] of basePlans) {
     const after = targetPlans.get(id);

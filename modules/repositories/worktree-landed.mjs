@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { inspectRawAttributes } from "./worktree-snapshot.mjs";
-import { runGitProcess } from "./git-exec.mjs";
+import { GIT_MAX_BINARY_BUFFER, runGitProcess } from "./git-exec.mjs";
 
 export const FIRST_PARENT_SCAN_LIMIT = 500;
 const GIT_TIMEOUT_MS = 10000;
@@ -25,30 +25,32 @@ async function inspectLanding(cwd, branch, { base = null, recorded = null, scanL
   if (!forkResult.ok) return verdict("fork unavailable", { base: baseRef, tip });
   const fork = forkResult.stdout.trim();
 
-  const reflog = await git(["reflog", "show", "--format=%H", `refs/heads/${branch}`]);
+  const reflog = await git(["reflog", "show", "--format=%H", `refs/heads/${branch}`], { maxBuffer: GIT_MAX_BINARY_BUFFER });
   const reflogEntries = reflog.ok ? lines(reflog.stdout) : [];
   // Without a reflog, a merged branch's original start cannot be reconstructed reliably. A
   // conservative empty own-work range keeps it available for manual review.
   const start = reflogEntries.at(-1) || tip;
-  const ownCommitsResult = await git(["rev-list", `${start}..${tip}`]);
-  const baseCommitsResult = await git(["rev-list", "--first-parent", baseRef]);
+  const ownCommitsResult = await git(["rev-list", `${start}..${tip}`], { maxBuffer: GIT_MAX_BINARY_BUFFER });
+  const baseCommitsResult = await git(["rev-list", "--first-parent", baseRef], { maxBuffer: GIT_MAX_BINARY_BUFFER });
   if (!ownCommitsResult.ok || !baseCommitsResult.ok) return verdict("history unavailable", { base: baseRef, tip, fork });
   const baseFirstParent = new Set(lines(baseCommitsResult.stdout));
   const ownWork = lines(ownCommitsResult.stdout).some((commit) => !baseFirstParent.has(commit));
   if (!ownWork) return verdict("no own work", { base: baseRef, tip, fork, start });
 
-  const candidatesResult = await git(["rev-list", "--first-parent", "--reverse", `${fork}..${baseRef}`]);
+  const candidatesResult = await git(["rev-list", "--first-parent", "--reverse", `${fork}..${baseRef}`], { maxBuffer: GIT_MAX_BINARY_BUFFER });
   if (!candidatesResult.ok) return verdict("history unavailable", { base: baseRef, tip, fork, start, ownWork });
   const candidates = lines(candidatesResult.stdout);
+  const inspectAttributes = async (source) => {
+    const files = await git(["ls-tree", "-r", "--name-only", "-z", source], { maxBuffer: GIT_MAX_BINARY_BUFFER });
+    if (!files.ok) return false;
+    try { await inspectRawAttributes(git, files.stdout.split("\0").filter(Boolean), source, { absorption: true }); return true; }
+    catch { return false; }
+  };
+  if (!await inspectAttributes(tip)) return verdict("scan unavailable", { base: baseRef, tip, fork, start, ownWork });
   const absorbs = async (commit) => {
-    for (const source of [commit, tip]) {
-      const files = await git(["ls-tree", "-r", "--name-only", "-z", source]);
-      if (!files.ok) return null;
-      try { await inspectRawAttributes(git, files.stdout.split("\0").filter(Boolean), source); }
-      catch { return null; }
-    }
+    if (!await inspectAttributes(commit)) return null;
     const [merged, tree] = await Promise.all([
-      git(["merge-tree", "--write-tree", commit, tip]),
+      git(["merge-tree", "--write-tree", commit, tip], { maxBuffer: GIT_MAX_BINARY_BUFFER }),
       git(["rev-parse", `${commit}^{tree}`]),
     ]);
     if (!tree.ok || (!merged.ok && merged.code !== 1)) return null;

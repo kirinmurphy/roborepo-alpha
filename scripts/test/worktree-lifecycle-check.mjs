@@ -83,6 +83,7 @@ try {
   }
   {
     const { main, worktree } = repository("squash");
+    commit(worktree, ".gitattributes", "* text=auto eol=lf\n");
     commit(worktree, "feature.txt", "feature\n");
     fs.mkdirSync(path.join(worktree, "docs/plans/active"), { recursive: true });
     commit(worktree, "docs/plans/active/story.md", "---\nid: story\n---\n");
@@ -130,12 +131,17 @@ try {
     const squash = git(main, "rev-parse", "HEAD");
     commit(main, "later.txt", "later base work\n");
     let mergeChecks = 0;
+    let tipInspections = 0;
+    const featureTip = git(worktree, "rev-parse", "HEAD");
     const counting = (cwd, args, options) => {
       if (args[0] === "merge-tree") mergeChecks += 1;
+      if (args[0] === "ls-tree" && args.at(-1) === featureTip) tipInspections += 1;
       return runGitProcess(cwd, args, options);
     };
 
-    const scanned = await inspectBranchLanding(main, "feature");
+    const scanned = await inspectBranchLanding(main, "feature", { runGit: counting });
+    assert.equal(tipInspections, 1, "the branch tip attributes are inspected once across landing candidates");
+    mergeChecks = 0;
     assert.equal(scanned.absorbingCommit, squash);
     assert.equal(scanned.reused, false, "without a recorded commit the scan finds the absorbing commit");
 
@@ -645,6 +651,12 @@ try {
     assert.ok(loadRegistry({ stateRoot }).repositories[repositoryId].localRoots.find((item) => item.rootId === worktreeRootId).lastRunningAt,
       "a running sighting is recorded");
     assert.equal((await observe()).state, "idle", "a recent running sighting counts as activity");
+    git(main, "merge", "--squash", "feature"); git(main, "commit", "-qm", "land observed work");
+    // These local attributes cannot be captured; a runtime survey should only inspect landing.
+    fs.writeFileSync(path.join(worktree, ".gitattributes"), "* filter=unsupported\n");
+    const landed = await observe();
+    assert.equal(landed.landing.landed, true, "runtime landing inspection does not depend on local inventory support");
+    assert.equal(landed.preservation, "unknown", "full preservation is assessed on demand");
   }
   {
     // A removed worktree leaves the registry on the next survey, so a repository with nothing

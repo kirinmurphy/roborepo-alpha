@@ -12,7 +12,7 @@ const ZERO = "0".repeat(40);
 // Raw inventories deliberately bypass add/checkout, filters, and the user's index. Preview callers
 // use an external object store; capture alone publishes objects in the common repository.
 export async function inventoryWorktree(cwd, { git = (args, options) => runGitProcess(cwd, args, options) } = {}) {
-  const read = async (args) => required(await git(args));
+  const read = async (args) => required(await git(args, args[0] === "ls-files" ? { maxBuffer: GIT_MAX_BINARY_BUFFER } : {}));
   const config = await read(["config", "--null", "--list"]);
   for (const record of config.split("\0")) {
     const [key, value] = record.split("\n");
@@ -73,14 +73,19 @@ export async function createWorktreeSnapshot(cwd, { expectedFingerprint = null }
     const inventory = await inventoryWorktree(cwd);
     if (expectedFingerprint && expectedFingerprint !== inventory.fingerprint) throw new Error("worktree changed before snapshot");
     const git = (args, options = {}) => runGitProcess(cwd, args, { timeoutMs: 10000, ...options });
-    const existing = required(await git(["for-each-ref", "--format=%(refname)", SNAPSHOT_PREFIX]));
+    const existing = required(await git(["for-each-ref", "--format=%(refname)", SNAPSHOT_PREFIX], { maxBuffer: GIT_MAX_BINARY_BUFFER }));
     for (const ref of existing.trim().split("\n").filter(Boolean)) {
-      const { manifest } = await readSnapshot(cwd, ref);
-      if (manifest.fingerprint === inventory.fingerprint) return { ok: true, id: manifest.id, ref, fingerprint: inventory.fingerprint, reused: true, restoreCommand: `roborepo git worktrees restore ${manifest.id} --destination <new-path> --apply` };
+      let manifest;
+      try {
+        manifest = JSON.parse(required(await git(["show", `${ref}:manifest.json`], { maxBuffer: GIT_MAX_BINARY_BUFFER })));
+        if (manifest?.fingerprint !== inventory.fingerprint) continue;
+        ({ manifest } = await readSnapshot(cwd, ref));
+      } catch { continue; }
+      return { ok: true, id: manifest.id, ref, fingerprint: inventory.fingerprint, reused: true, restoreCommand: `roborepo git worktrees restore ${manifest.id} --destination <new-path> --apply` };
     }
     const index = [];
     for (const entry of inventory.index) {
-      const bytes = required(await git(["cat-file", "blob", entry.oid], { binary: true }));
+      const bytes = required(await git(["cat-file", "blob", entry.oid], { binary: true, maxBuffer: GIT_MAX_BINARY_BUFFER }));
       index.push({ ...entry, checksum: checksum(bytes) });
     }
     const payload = [];
@@ -111,7 +116,7 @@ export async function createWorktreeSnapshot(cwd, { expectedFingerprint = null }
 }
 
 export async function listWorktreeSnapshots(cwd) {
-  const refs = required(await runGitProcess(cwd, ["for-each-ref", "--format=%(refname)", SNAPSHOT_PREFIX, "refs/roborepo/abandoned/"]));
+  const refs = required(await runGitProcess(cwd, ["for-each-ref", "--format=%(refname)", SNAPSHOT_PREFIX, "refs/roborepo/abandoned/"], { maxBuffer: GIT_MAX_BINARY_BUFFER }));
   const result = [];
   for (const ref of refs.trim().split("\n").filter(Boolean)) {
     if (!ref.startsWith(SNAPSHOT_PREFIX)) { result.push({ ref, kind: "committed-tip", localState: false }); continue; }
@@ -169,7 +174,7 @@ export async function restoreWorktreeSnapshot(cwd, id, destination, { apply = fa
 
 export async function readSnapshot(cwd, ref) {
   const git = (args, options) => runGitProcess(cwd, args, { timeoutMs: 10000, ...options });
-  const manifest = JSON.parse(required(await git(["show", `${ref}:manifest.json`])));
+  const manifest = JSON.parse(required(await git(["show", `${ref}:manifest.json`], { maxBuffer: GIT_MAX_BINARY_BUFFER })));
   if (manifest.version !== 1 || !Array.isArray(manifest.index) || !Array.isArray(manifest.entries) || !/^[a-f0-9]{40,64}$/.test(manifest.tip)) throw new Error("invalid snapshot manifest");
   validatePaths([...manifest.index, ...manifest.entries]);
   if (!/^[a-f0-9-]{36}$/.test(manifest.id)) throw new Error("invalid snapshot identity");
@@ -186,13 +191,13 @@ export async function readSnapshot(cwd, ref) {
   for (const entry of [...manifest.index, ...manifest.entries]) {
     if (entry.mode === "directory") continue;
     if (!MODES.has(entry.mode) || !/^[a-f0-9]{40,64}$/.test(entry.oid)) throw new Error(`invalid snapshot entry: ${entry.path}`);
-    const bytes = required(await git(["cat-file", "blob", entry.oid], { binary: true }));
+    const bytes = required(await git(["cat-file", "blob", entry.oid], { binary: true, maxBuffer: GIT_MAX_BINARY_BUFFER }));
     if (entry.checksum && checksum(bytes) !== entry.checksum) throw new Error(`snapshot checksum mismatch: ${entry.path}`);
     blobs.set(entry.oid, bytes);
   }
   for (const layer of ["index", "tracked", "untracked", "ignored"]) {
     const expected = layer === "index" ? manifest.index : manifest.entries.filter((entry) => entry.layer === layer && entry.mode !== "directory");
-    const tree = required(await git(["ls-tree", "-r", "-z", `${ref}:${layer}`]));
+    const tree = required(await git(["ls-tree", "-r", "-z", `${ref}:${layer}`], { maxBuffer: GIT_MAX_BINARY_BUFFER }));
     const actual = tree.split("\0").filter(Boolean).map((line) => {
       const match = /^(\d+) blob ([a-f0-9]+)\t([\s\S]+)$/.exec(line);
       if (!match) throw new Error("invalid snapshot payload tree");
@@ -256,7 +261,7 @@ function validatePaths(entries) {
   }
 }
 
-export async function inspectRawAttributes(git, paths, source = null) {
+export async function inspectRawAttributes(git, paths, source = null, { absorption = false } = {}) {
   if (!paths.length) return "";
   const temporary = source ? fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-attributes-")) : null;
   try {
@@ -265,7 +270,8 @@ export async function inspectRawAttributes(git, paths, source = null) {
     // so this read cannot create shared-index files in the repository.
     const plumbing = temporary ? { indexFile: path.join(temporary, "index") } : null;
     if (source) required(await git(["-c", "core.splitIndex=false", "-c", "core.sparseCheckout=false", "read-tree", source], { plumbing }));
-    const attributes = required(await git(["check-attr", ...(source ? ["--cached"] : []), "-z", "--stdin", "filter", "merge", "working-tree-encoding", "text", "eol"], { input: `${paths.join("\0")}\0`, plumbing }));
+    const names = absorption ? ["filter", "merge"] : ["filter", "merge", "working-tree-encoding", "text", "eol"];
+    const attributes = required(await git(["check-attr", ...(source ? ["--cached"] : []), "-z", "--stdin", ...names], { input: `${paths.join("\0")}\0`, plumbing, maxBuffer: GIT_MAX_BINARY_BUFFER }));
     const fields = attributes.split("\0");
     for (let i = 0; i + 2 < fields.length; i += 3) {
       const [file, attr, value] = fields.slice(i, i + 3);

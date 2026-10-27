@@ -1,5 +1,4 @@
 import path from "node:path";
-import fs from "node:fs";
 import { assessWorktreePreservation } from "../../modules/repositories/worktree-preservation.mjs";
 import { createWorktreeSnapshot, inventoryWorktree, listWorktreeSnapshots, restoreWorktreeSnapshot } from "../../modules/repositories/worktree-snapshot.mjs";
 import { discoverInstances } from "../../modules/developer-runtime/discovery.mjs";
@@ -29,13 +28,7 @@ export async function cleanupWorktrees({ cwd = process.cwd(), stateRoot = STATE_
   const selectedBranch = remove;
   if (archive && !remove) throw new Error("archive requires one selected worktree");
   if (remove && !confirm) throw new Error("confirmed removal requires --confirm");
-  let retiredTarget = false;
-  if (archive && selectedBranch) {
-    const archived = (await listWorktreeSnapshots(mainPath)).filter((entry) => entry.kind === "snapshot" && (entry.branch === selectedBranch || entry.worktree?.name === selectedBranch))
-      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
-    retiredTarget = Boolean(archived?.worktree?.path && !fs.existsSync(archived.worktree.path));
-  }
-  if (selectedBranch && (retiredTarget || !worktrees.some((item) => item.branch === selectedBranch || item.name === selectedBranch))) {
+  if (selectedBranch && !worktrees.some((item) => !item.prunable && (item.branch === selectedBranch || item.name === selectedBranch))) {
     if (!archive) throw new Error(`worktree not found: ${selectedBranch}`);
     const retry = async () => [await retryArchivedBranchRetirement(mainPath, selectedBranch, { apply, stateRoot })];
     if (!apply) return retry();

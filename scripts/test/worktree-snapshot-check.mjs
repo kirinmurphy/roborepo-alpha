@@ -5,9 +5,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { runGitProcess } from "../../modules/repositories/git-exec.mjs";
+import { GIT_MAX_BUFFER, GIT_MAX_BINARY_BUFFER, runGitProcessSync, runGitProcess } from "../../modules/repositories/git-exec.mjs";
 import { removeWorktree, retryArchivedBranchRetirement } from "../../modules/repositories/worktree-removal.mjs";
-import { createWorktreeSnapshot, restoreWorktreeSnapshot, listWorktreeSnapshots, inventoryWorktree } from "../../modules/repositories/worktree-snapshot.mjs";
+import { createWorktreeSnapshot, restoreWorktreeSnapshot, listWorktreeSnapshots, inventoryWorktree, readSnapshot } from "../../modules/repositories/worktree-snapshot.mjs";
 import { recordRepositoryDiscovery } from "../cli/repositories.mjs";
 import { archiveRepositoryWorktree, cleanupWorktrees } from "../cli/worktree-cleanup.mjs";
 import { assessWorktreePreservation } from "../../modules/repositories/worktree-preservation.mjs";
@@ -24,6 +24,16 @@ try {
   const main = path.join(root, "repo"); fs.mkdirSync(main);
   git(main, "init", "-qb", "main");
   write(main, "seed", "seed\n"); git(main, "add", "."); git(main, "commit", "-qm", "seed");
+  const largeText = "x".repeat(GIT_MAX_BUFFER + 1024);
+  const largeBlob = await runGitProcess(main, ["hash-object", "-w", "--stdin"], { input: largeText });
+  assert.equal(largeBlob.ok, true);
+  const blobArgs = ["cat-file", "blob", largeBlob.stdout.trim()];
+  assert.equal((await runGitProcess(main, blobArgs)).ok, false, "small reads retain the default bound");
+  for (const result of [await runGitProcess(main, blobArgs, { maxBuffer: GIT_MAX_BINARY_BUFFER }), runGitProcessSync(main, blobArgs, { maxBuffer: GIT_MAX_BINARY_BUFFER })]) {
+    assert.equal(result.ok, true, result.error);
+    assert.equal(result.stdout.length, largeText.length, "async and sync reads accept a larger bound");
+    assert.ok(result.stdout === largeText, "bulk blob bytes are preserved");
+  }
   const initialTip = git(main, "rev-parse", "HEAD");
   const explicitMergeBase = spawnSync("git", ["merge-tree", "--write-tree", `--merge-base=${initialTip}`, initialTip, initialTip], { cwd: main, encoding: "utf8" }).status === 0;
   const work = path.join(root, "feature"); git(main, "worktree", "add", "-qb", "feature", work);
@@ -45,15 +55,38 @@ try {
   assert.equal(assessment.state, explicitMergeBase ? "remaining" : "unknown", JSON.stringify(assessment));
   assert.equal(git(work, "count-objects", "-v"), objects, "assessment writes no persistent objects");
   assert.equal(git(work, "status", "--porcelain"), status, "assessment leaves index and files untouched");
+  const invalidRef = "refs/roborepo/worktree-archives/00000000-0000-4000-8000-000000000001";
+  git(main, "update-ref", invalidRef, initialTip);
   const snapshot = await createWorktreeSnapshot(work);
   assert.equal(snapshot.ok, true, snapshot.reason);
   assert.equal(git(work, "status", "--porcelain"), status);
+  git(main, "update-ref", "-d", invalidRef);
   const listed = await listWorktreeSnapshots(main);
   assert.equal(listed[0].id, snapshot.id);
   const symlinkParent = path.join(root, "destination-link"); fs.symlinkSync(main, symlinkParent);
   assert.equal((await restoreWorktreeSnapshot(main, snapshot.id, path.join(symlinkParent, "unsafe"), { apply: true })).ok, false);
   assert.equal(fs.existsSync(path.join(main, "unsafe")), false);
   const originalManifest = JSON.parse(git(main, "show", `${snapshot.ref}:manifest.json`));
+  const paddedManifest = { ...originalManifest, padding: largeText };
+  const paddedBlob = await runGitProcess(main, ["hash-object", "-w", "--stdin"], { input: JSON.stringify(paddedManifest) });
+  assert.equal(paddedBlob.ok, true);
+  const paddedTree = await runGitProcess(main, ["mktree"], { input: git(main, "ls-tree", snapshot.ref).replace(/([a-f0-9]+)(\tmanifest\.json)/, `${paddedBlob.stdout.trim()}$2`) + "\n" });
+  assert.equal(paddedTree.ok, true);
+  const paddedCommit = git(main, "commit-tree", paddedTree.stdout.trim(), "-p", originalManifest.tip, "-m", "large manifest");
+  assert.equal((await readSnapshot(main, paddedCommit)).manifest.padding.length, largeText.length, "large manifests can be fully verified");
+  // A matching fingerprint is only a candidate; invalid payloads cannot be reused.
+  const corruptManifest = structuredClone(originalManifest);
+  corruptManifest.index[0].checksum = "0".repeat(64);
+  const corruptBlob = await runGitProcess(main, ["hash-object", "-w", "--stdin"], { input: JSON.stringify(corruptManifest) });
+  assert.equal(corruptBlob.ok, true);
+  const corruptTree = await runGitProcess(main, ["mktree"], { input: git(main, "ls-tree", snapshot.ref).replace(/([a-f0-9]+)(\tmanifest\.json)/, `${corruptBlob.stdout.trim()}$2`) + "\n" });
+  assert.equal(corruptTree.ok, true);
+  git(main, "update-ref", invalidRef, git(main, "commit-tree", corruptTree.stdout.trim(), "-p", originalManifest.tip, "-m", "corrupt matching capture"));
+  const reused = await createWorktreeSnapshot(work);
+  assert.equal(reused.ok, true, reused.reason);
+  assert.equal(reused.ref, snapshot.ref, "only a fully verified capture is reused");
+  assert.equal(reused.reused, true);
+  git(main, "update-ref", "-d", invalidRef);
   for (const hostile of ["../escape", ".git/config", "CON", "Link/child"]) {
     const id = "00000000-0000-4000-8000-000000000000";
     const manifest = structuredClone(originalManifest); manifest.id = id;
@@ -127,6 +160,7 @@ try {
     if (shape === "conflict") { assert.equal(proof.state, "unknown", JSON.stringify(proof)); assert.match(proof.reason, /conflict/); continue; }
     assert.equal(proof.state, "preserved", `${shape}: ${JSON.stringify(proof)}`);
     assert.equal(proof.hasLocalContent, true);
+    assert.deepEqual(proof.remainingPaths, [], "absorbed local paths no longer remain");
     if (shape === "redundant") {
       const rows = await cleanupWorktrees({ cwd: repo, apply: true, stateRoot: path.join(root, "cleanup-state"), discover: async () => ({ instances: [] }) });
       assert.equal(rows[0].action, "removed", JSON.stringify(rows));
@@ -197,15 +231,33 @@ try {
       const next = git(repo, "commit-tree", git(repo, "rev-parse", "HEAD^{tree}"), "-p", tip, "-m", "concurrent branch work");
       git(repo, "update-ref", "refs/heads/feature", next, tip);
     }
-    if (outcome === "occupied") git(repo, "worktree", "add", path.join(root, "new-occupied-checkout"), "feature");
+    if (outcome === "occupied") {
+      const live = path.join(root, "new-occupied-checkout");
+      git(repo, "worktree", "add", live, "feature");
+      write(live, "new-work", "new local bytes\n");
+      const preview = await cleanupWorktrees({ cwd: repo, stateRoot, archive: true, remove: "feature", confirm: true, discover: async () => ({ instances: [] }) });
+      assert.equal(preview[0].path, live, "a live checkout takes precedence over old archive retirement");
+      assert.ok(preview[0].remainingPaths.includes("new-work"), JSON.stringify(preview));
+      // Keep this fixture occupied so the mutation path exercises its normal lock guard.
+      git(repo, "worktree", "lock", live);
+    }
     assert.equal((await listWorktreeSnapshots(repo))[0].kind, "snapshot", JSON.stringify(await listWorktreeSnapshots(repo)));
     const rows = await cleanupWorktrees({ cwd: repo, stateRoot, archive: true, remove: "feature", confirm: true, apply: true, discover: async () => ({ instances: [] }) });
     assert.equal(rows[0].action, outcome === "retry" ? "removed" : "kept", JSON.stringify(rows));
-    assert.equal(rows[0].snapshotRef, snapshot.ref);
+    if (outcome !== "occupied") assert.equal(rows[0].snapshotRef, snapshot.ref);
     if (outcome === "retry") {
       const again = await retryArchivedBranchRetirement(repo, "feature", { stateRoot, apply: true });
       assert.equal(again.action, "removed", "a completed retry is idempotent");
     } else assert.equal(git(repo, "show-ref", "--verify", "--quiet", "refs/heads/feature"), "");
+  }
+  {
+    const repo = path.join(root, "bulk-inventory"); fs.mkdirSync(repo);
+    git(repo, "init", "-qb", "main");
+    for (let i = 0; i < 4800; i++) write(repo, `${String(i).padStart(4, "0")}-${"p".repeat(185)}`, "same bytes\n");
+    git(repo, "add", "."); git(repo, "commit", "-qm", "many tracked paths");
+    const inventory = await inventoryWorktree(repo);
+    assert.equal(inventory.index.length, 4800, "repository-wide index reads exceed the small query bound");
+    assert.ok(inventory.attributes.length > GIT_MAX_BUFFER, "repository-wide attribute reads exceed the small query bound");
   }
   console.log("worktree snapshots: raw binary/staged/unstaged/ignored/symlink/mode round trip, preview nonmutation, refusal checks passed");
 } finally { restoreGitConfig(); fs.rmSync(root, { recursive: true, force: true }); }

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import { rootId as computeRootId } from "../../modules/repositories/identity.mjs";
 import { checkoutRootsFor, forgetWorktreeRoot, markLocalRootRunning, registerLocalRoot, registerLocalRootPath, updateRegistry } from "../../modules/repositories/registry.mjs";
 import { repositoryWorktrees } from "../../modules/repositories/worktree-inventory.mjs";
-import { assessWorktreePreservation } from "../../modules/repositories/worktree-preservation.mjs";
+import { inspectBranchLanding } from "../../modules/repositories/worktree-landed.mjs";
 import { deriveWorktreeState, resolveWorktreeStaleDays } from "../../modules/repositories/worktree-state.mjs";
 import { runGitProcess } from "../../modules/repositories/git-exec.mjs";
 import { checkWorktreeRemoval } from "../../modules/repositories/worktree-guards.mjs";
@@ -56,26 +56,25 @@ export async function collectKnownWorktrees(registry, { stateRoot, settings, now
       const rootId = computeRootId(worktree.path);
       const root = registry.repositories?.[repositoryId]?.localRoots?.find((item) => item.rootId === rootId);
       if (worktree.prunable) return { ...worktree, rootId, projectRoot: worktree.path, git: null, state: "stale", reason: "prunable worktree" };
-      const [git, preservation, lastCommit] = await Promise.all([
+      const [git, landing, lastCommit] = await Promise.all([
         readGit(worktree.path, repositoryId),
-        worktree.branch ? assessWorktreePreservation(worktree.path, { branch: worktree.branch }) : Promise.resolve({ state: "unknown", landing: null }),
+        worktree.branch ? inspectBranchLanding(worktree.path, worktree.branch) : Promise.resolve({ landed: false }),
         worktree.branch ? runGitProcess(worktree.path, ["log", "-1", "--format=%cI", worktree.branch]) : Promise.resolve({ ok: false }),
       ]);
-      const landing = preservation.landing || { landed: false };
       const activityAt = [root?.lastRunningAt, lastCommit.ok ? lastCommit.stdout.trim() : null, sessionActivity.get(`${repositoryId}\0${worktree.branch}`)].filter(Boolean);
       const state = deriveWorktreeState({ running: runningRootIds.has(rootId), landed: landing.landed, activityAt, staleDays: threshold.days, now });
       const guard = landing.landed ? await checkWorktreeRemoval({
         worktree, kind: "automatic", landed: true, worktreeRoot: policy.get(worktree.mainPath)?.root,
         mainPath: worktree.mainPath, currentPath: null,
-        activePlan: policy.get(worktree.mainPath)?.activePlans.has(worktree.name), running: runningRootIds.has(rootId), verifiedSnapshot: preservation.state === "preserved",
+        activePlan: policy.get(worktree.mainPath)?.activePlans.has(worktree.name), running: runningRootIds.has(rootId),
       }) : null;
       const count = worktree.branch && landing.base
         ? await runGitProcess(worktree.path, ["rev-list", "--count", `${landing.base}..${worktree.branch}`])
         : { ok: false };
       return {
-        ...worktree, rootId, projectRoot: worktree.path, git, ...state, landing, preservation: preservation.state, remainingPaths: preservation.remainingPaths || [], blockingPaths: preservation.blockingPaths || [], running: runningRootIds.has(rootId),
+        ...worktree, rootId, projectRoot: worktree.path, git, ...state, landing, preservation: "unknown", remainingPaths: [], blockingPaths: [], running: runningRootIds.has(rootId),
         mergedInto: landing.landed ? shortBranchName(landing.base) : null,
-        unmergedCommits: count.ok ? Number(count.stdout.trim()) : null, reason: guard?.reason || (preservation.state !== "preserved" ? preservation.reason : null) || null,
+        unmergedCommits: count.ok ? Number(count.stdout.trim()) : null, reason: guard?.reason || null,
       };
     }));
     byRepository.set(repositoryId, observations);

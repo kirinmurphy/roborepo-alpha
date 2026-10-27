@@ -126,7 +126,7 @@ export function mergeReadiness({ primary, record, base = "main" }) {
   const assessedBase = git(primary, ["rev-parse", base]).stdout;
   const markdown = resolved.markdown;
   const checks = [];
-  const check = (name, ok, observed, fix) => checks.push({ name, ok: Boolean(ok), observed, ...(ok ? {} : { fix }) });
+  const check = (name, ok, observed, fix) => checks.push({ n: checks.length + 1, name, ok: Boolean(ok), observed, ...(ok ? {} : { fix }) });
   const approval = approvalFreshness({ primary, record, base });
   const parsed = parsePlanMarkdown(markdown);
   const unfinished = openTasks(parsed);

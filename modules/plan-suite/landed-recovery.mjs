@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { parsePlanMarkdown } from "./index.mjs";
+import { parsePlanMarkdown, writeFrontmatterField } from "./index.mjs";
 import { blobId, producedBlobs } from "./plan-authority.mjs";
 import { canonicalRepositoryId, resolveProjectIdentity } from "../repositories/identity.mjs";
 import { runGitProcessSync } from "../repositories/git-exec.mjs";
@@ -59,10 +59,11 @@ export function verifiedLandedRecovery({ primary, relativePath, markdown, worktr
     const tip = checked(git(["rev-parse", `refs/heads/${worktree.branch}`])).trim();
     const primaryOid = blobId(Buffer.from(markdown), format);
     if (requireCommitted && checked(git(["rev-parse", `HEAD:${relativePath}`])).trim() !== primaryOid) return fail("primary recovery evidence is not committed");
-    if (blobId(Buffer.from(copy.markdown), format) !== record.worktreeBlob) return fail("worktree precursor changed");
+    const worktreePrecursor = checked(git(["cat-file", "blob", record.worktreeBlob]));
+    if (withoutPriority(copy.markdown) !== withoutPriority(worktreePrecursor)) return fail("worktree precursor changed");
     const precursor = checked(git(["cat-file", "blob", record.primaryBlob]));
     if (checked(git(["rev-parse", `${record.baseCommit}:${relativePath}`])).trim() !== record.primaryBlob) return fail("primary precursor not committed at assessed base");
-    if (evidenceExcluded(markdown) !== evidenceExcluded(precursor) || evidenceExcluded(copy.markdown) !== evidenceExcluded(precursor)) return fail("recovery changed requirements or conflicts with the worktree copy");
+    if (evidenceExcluded(markdown) !== evidenceExcluded(precursor) || evidenceExcluded(withoutPriority(copy.markdown)) !== evidenceExcluded(withoutPriority(precursor))) return fail("recovery changed requirements or conflicts with the worktree copy");
     for (const heading of ["## Review", "### Result", "### Approval", "### Post-merge recovery"]) {
       if (markdown.split("\n").filter((line) => line.trim().toLowerCase() === heading.toLowerCase()).length !== 1) return fail("duplicate or missing recovery review section");
     }
@@ -107,6 +108,11 @@ export function evidenceExcluded(markdown) {
     if (inReview && /^### /.test(heading)) omit = /^### (?:Result|Approval|Post-merge recovery)\s*$/i.test(heading);
     return !omit;
   }).join("\n").trimEnd();
+}
+
+// Priority remains editable in the assigned worktree after recovery evidence is committed.
+function withoutPriority(markdown) {
+  return writeFrontmatterField(markdown, "priority", "none");
 }
 
 function checked(result) {
