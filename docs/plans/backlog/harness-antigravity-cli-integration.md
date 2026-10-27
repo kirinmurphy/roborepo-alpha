@@ -1,6 +1,6 @@
 ---
 id: antigravity-cli-provider-integration
-priority: medium
+priority: low
 next_action: Refresh authenticated native capability/path evidence, then agree targeting and provider-delivery contracts before migration implementation.
 blocked_by: []
 depends_on: ["harness-capability-derived-resource-targeting", "7k3m9qd"]

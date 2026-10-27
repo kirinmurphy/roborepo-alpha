@@ -142,6 +142,8 @@ try {
   {
     const started = approved(plans(root, "start", "flow0001", "--worktree", flow.name), "start");
     assert.equal(started.fastForward.applied, true);
+    assert.match(read(path.join(root, "docs/plans/active/test-flow.md")), /^priority: none$/m, "starting clears priority on main");
+    assert.match(read(path.join(flow.path, "docs/plans/active/test-flow.md")), /^priority: none$/m, "the worktree receives the cleared priority");
     assert.match(read(path.join(flow.path, "docs/plans/active/test-flow.md")), new RegExp(`^worktree: ${flow.name}$`, "m"));
 
     const early = json(plans(root, "preflight", "flow0001"), "early preflight");

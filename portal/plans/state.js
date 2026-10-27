@@ -1,6 +1,6 @@
 // Filter state, matching, sorting, and facet counts — no DOM here. app.js owns wiring DOM events
 // to this module's functions; templates.js owns turning its output into markup.
-import { isLifecycle } from "./lifecycle.js";
+import { isLifecycle, showsPriority } from "./lifecycle.js";
 
 // `structure` (a plan's structural completeness) and `freshness` (whether the document was checked
 // against the code at `reviewed_commit`) are named so neither reads as the Ready or Review lifecycle,
@@ -70,7 +70,7 @@ export const FILTER_OPTION_DEFS = {
 // the one being counted, for facet-style "N remaining if you pick this" counts).
 export const FIELD_MATCHERS = {
   priority: (record, value) =>
-    value === "all" || record.plan.priority === value,
+    value === "all" || !showsPriority(record.plan.lifecycle) || record.plan.priority === value,
   blocked: (record, value) => {
     if (value === "blocked") return record.plan.blockers.length > 0;
     if (value === "unblocked") return record.plan.blockers.length === 0;
@@ -129,7 +129,7 @@ export function filteredPlans(plans, filters) {
 // every OTHER active filter stayed as-is. Excludes `id` itself so picking an option doesn't
 // shrink its own count relative to the other options.
 export function optionCounts(id, values, plans, filters) {
-  const pool = plans.filter((record) => matchesFilters(record, filters, id));
+  const pool = plans.filter((record) => matchesFilters(record, filters, id) && (id !== "priority" || showsPriority(record.plan.lifecycle)));
   const counts = new Map();
   for (const value of values) {
     counts.set(

@@ -26,9 +26,9 @@ export function lifecycleTabs() {
   return states.map(({ id, tab }) => ({ id, secondary: tab !== "primary" }));
 }
 
-// Priority no longer applies once a plan is done; the manifest says which states still show it.
+// Priority only applies before implementation; the manifest declares those states.
 export function showsPriority(id) {
-  return byId.get(id)?.showsPriority ?? true;
+  return byId.get(id)?.showsPriority ?? false;
 }
 
 // The copy-prompt actions a state offers: [{ command, label, description }].

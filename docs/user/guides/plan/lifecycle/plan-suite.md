@@ -475,8 +475,8 @@ A merged worktree shows a **merged** completion badge on its plan card and in th
 
 ## Current Limits
 
-- The portal edits plan files only to change the `priority` of a plan that is not yet completed or
-  archived. All other plan edits happen in your editor or through the suite.
+- The portal offers priority edits only for backlog and ready plans. Starting or reopening a plan
+  clears its priority to `none`. All other plan edits happen in your editor or through the suite.
 - Manual refresh is the v1 update model.
 - No database, daemon, cloud sync, direct editor, automatic merge, or automatic LLM prioritization
   is included.

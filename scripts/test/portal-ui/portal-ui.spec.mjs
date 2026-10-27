@@ -1260,6 +1260,35 @@ test.describe("repository-first portal Home", () => {
     await expect(row.locator(".worktree-state-badge")).toHaveText("merged");
   });
 
+  test("the copy dropdown confirms with green checks while keeping item labels", async ({ page }) => {
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.clock.install();
+    await planFixture(page);
+    await page.goto("/");
+    const menu = checkoutRow(roboRepoCard(page), "feature/loose").locator("portal-copy-menu");
+    await menu.getByRole("button", { name: "Copy", exact: true }).click();
+    const item = menu.getByRole("button", { name: "Copy branch name", exact: true });
+    await expect(item.locator('portal-icon[name="copy"]')).toBeVisible();
+    await item.click();
+    const copied = menu.getByRole("button", { name: "Copied", exact: true });
+    await expect(copied).toHaveText("Copy branch name");
+    await expect(copied.locator('portal-icon[name="check"]')).toBeVisible();
+    expect(await copied.evaluate((node) => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--ok)";
+      node.append(probe);
+      const matches = getComputedStyle(node).color === getComputedStyle(probe).color;
+      probe.remove();
+      return matches;
+    })).toBe(true);
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("feature/loose");
+    await page.clock.fastForward(600);
+    await expect(menu.locator(".copy-menu-panel")).toHaveCount(0);
+    await expect(menu.getByRole("button", { name: "Copied", exact: true }).locator('portal-icon[name="check"]')).toBeVisible();
+    await page.clock.fastForward(5000);
+    await expect(menu.getByRole("button", { name: "Copy", exact: true }).locator('portal-icon[name="copy"]')).toBeVisible();
+  });
+
   test("the worktree details dropdown copies each value in place and lists only non-default facts", async ({ page }) => {
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
     await planFixture(page);
@@ -2122,7 +2151,10 @@ test.describe("Plans card commands", () => {
       await expect(menu.getByRole("button", { name: "Update", exact: true })).toHaveCount(0);
       await expect(menu.getByRole("button", { name: "Portable prompt", exact: true })).toHaveCount(0);
       await expect(menu).not.toContainText("Copies a prompt");
-      await expect(menu.locator("portal-icon")).toHaveCount(0);
+      await expect(menu.locator('portal-icon[name="copy"]')).toHaveCount(await menu.getByRole("button").count());
+      expect(await menu.locator(".plan-menu-group").evaluate((node) => getComputedStyle(node).rowGap)).toBe("0px");
+      expect(await menu.evaluate((node) => getComputedStyle(node).rowGap)).toBe("0px");
+      expect(await menu.locator(".plan-menu-filename").evaluate((node) => getComputedStyle(node).paddingTop)).toBe("0px");
       await expect(menu.locator(".menu-button-item-desc")).toHaveCount(0);
       const filename = menu.getByRole("button", { name: "Copy Document Filename", exact: true });
       await expect(filename).toBeVisible();
@@ -2139,7 +2171,7 @@ test.describe("Plans card commands", () => {
         const drawerMenu = drawer.getByRole("group", { name: "Copy options", exact: true });
         await expect(drawerMenu.getByRole("button", { name: "Copy Document Filename", exact: true })).toBeVisible();
         await expect(drawerMenu.getByRole("button", { name: "Update", exact: true })).toHaveCount(0);
-        await expect(drawerMenu.locator("portal-icon")).toHaveCount(0);
+        await expect(drawerMenu.locator('portal-icon[name="copy"]')).toHaveCount(await drawerMenu.getByRole("button").count());
       }
     }
   });

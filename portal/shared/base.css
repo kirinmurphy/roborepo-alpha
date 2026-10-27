@@ -1157,11 +1157,8 @@ portal-close-button {
   background: var(--raised);
 }
 /* <portal-copy-button> — the shared copy-to-clipboard control (portal/shared/copy-button.js).
- * Copied state is an IN-PLACE face swap (icon → check, label → "Copied") inside the same button
- * box — no overlay, no second element whose alignment can drift (a prior floating-chip overlay
- * measured half-a-button-height off vertically). The wrapper never resizes unless the caller's
- * idle label is SHORTER than "Copied", in which case the box grows slightly — still no overlap.
- * .copy-button-copied turns the face green; copy-button.js owns the text/icon swap. */
+ * Confirmation swaps the copy icon for a green check, preserving the label and button size.
+ * .copy-button-copied supplies the success color; copy-button.js owns the icon swap. */
 .copy-button {
   display: inline-flex;
   position: relative;
@@ -1175,9 +1172,7 @@ portal-close-button {
   white-space: nowrap;
   font-weight: 600;
 }
-/* Success face: green text + green border, same box. The button also holds a min-width equal to
-   its idle face so the swap to the shorter "Copied" never visibly shrinks it mid-interaction —
-   set from JS (copy-button.js) after the idle label is known, since only it knows that width. */
+/* Success uses the same box and label as the idle control. */
 .copy-button.copy-button-copied { color: var(--ok); border-color: var(--ok); }
 /* Stays fully opaque while disabled: the button is only ever disabled during its own confirmation,
    and dimming it there would read as "unavailable" rather than "just did the thing". */
@@ -1263,9 +1258,9 @@ portal-copy-menu {
 .copy-menu-item {
   white-space: nowrap;
 }
-/* Disabled only while showing "Copied!", so it reads as confirmation rather than as unavailable. */
+/* Disabled only during the green-check confirmation. */
 .copy-menu-item:disabled {
-  color: var(--accent);
+  color: var(--ok);
   cursor: default;
 }
 portal-menu-button {

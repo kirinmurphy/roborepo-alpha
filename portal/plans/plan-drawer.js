@@ -60,6 +60,7 @@ export function createPlanDrawer(deps) {
   function render(doc) {
     openKey = doc.plan.key;
     const content = tmpl.drawerContent(doc, {
+      plans: deps.getPlans(),
       onCopyPath: copyText,
       onCopyRepoContext: (record) => copyText(repositoryContext(record)),
       onPlanAction: (key, command) => copyPrompt(command, [key], "repository-aware"),
@@ -96,6 +97,10 @@ export function createPlanDrawer(deps) {
       ctaEl.hidden = true;
       ctaEl.onclick = null;
     }
+    const dependencies = tmpl.planDependencies(doc.plan, deps.getPlans(), open);
+    const dependencyMount = document.getElementById("drawer-dependencies");
+    dependencyMount.replaceChildren(...(dependencies ? [dependencies] : []));
+    dependencyMount.hidden = !dependencies;
     document.getElementById("drawer-menu").panelContent = content.menu;
     if (!dialog.open) dialog.showModal();
   }

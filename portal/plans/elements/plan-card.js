@@ -6,6 +6,7 @@
 // detail drawer and stacked below the card's title and description in every lifecycle.
 import { portalTpl as tpl, portalFillSlots as fill } from "/portal/shared/api.js";
 import { cardActionMenu, cardPrimaryAction } from "/portal/plans/templates.js";
+import { incompleteDependencies } from "/portal/plans/plan-actions.js";
 
 // Card shows a shortened preview; full text (up to 500 chars) still lives in plan.excerpt
 // for copy-context/drawer use — only the on-card display is truncated further here.
@@ -42,7 +43,10 @@ class PlanCardElement extends HTMLElement {
     });
     const statusEl = document.createElement("plan-status");
     const primary = cardPrimaryAction(record, cardActions);
-    statusEl.actionContent = [...(primary ? [primary] : []), cardActionMenu(record, cardActions)];
+    const menu = cardActionMenu(record, cardActions);
+    statusEl.actionContent = plan.lifecycle === "backlog" && incompleteDependencies(record, cardActions.plans || []).length
+      ? [menu, primary]
+      : [...(primary ? [primary] : []), menu];
     statusEl.merge = cardActions.mergeFor?.(record.key) || null;
     statusEl.record = record;
     node.querySelector("[data-slot=status-mount]").replaceWith(statusEl);
