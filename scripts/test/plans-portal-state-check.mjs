@@ -5,6 +5,7 @@ import {
   replaceRecord,
   filteredListActionFor,
   matchesFilters,
+  optionCounts,
   resolveBlockers,
   resolveBlocking,
   mergedPlanBranches,
@@ -27,9 +28,11 @@ import { LIFECYCLE_MODEL, lifecycleProjection } from "../../modules/plan-suite/l
 // drives them directly the same way telemetry-portal-state-check.mjs exercises telemetry's URL
 // state helpers — no browser needed.
 
+setLifecycleModel(lifecycleProjection(LIFECYCLE_MODEL));
 testLifecycleMoveMakesVisibleCardInvisible();
 testPriorityChangeUnderMatchingFilterMakesInvisible();
 testPriorityChangeUnderAllKeepsVisible();
+testPriorityFiltersOnlyApplyToBacklogAndReady();
 testRecordNotPreviouslyVisibleStaysInvisible();
 testReplaceRecordSwapsOldKeyForNew();
 testReplaceRecordLeavesOtherRecordsUntouched();
@@ -56,6 +59,23 @@ testRecommendedCommandFollowsTheLifecycle();
 testFilterNamesNeverReadAsLifecycleOrApproval();
 console.log("ok: plans portal state checks passed");
 
+function testPriorityFiltersOnlyApplyToBacklogAndReady() {
+  setLifecycleModel(lifecycleProjection(LIFECYCLE_MODEL));
+  for (const lifecycle of LIFECYCLE_MODEL.stateIds) {
+    for (const priority of ["high", "medium", "low", "none"]) {
+      const item = record({ lifecycle, priority });
+      assert.equal(matchesFilters(item, { ...FILTER_DEFAULTS, priority }), true, `${lifecycle} with matching priority`);
+      const otherPriority = priority === "high" ? "low" : "high";
+      assert.equal(matchesFilters(item, { ...FILTER_DEFAULTS, priority: otherPriority }), !["backlog", "ready"].includes(lifecycle), `${lifecycle} ignores priority outside the queue`);
+      assert.equal(matchesFilters(item, FILTER_DEFAULTS), true, "all priorities keeps every lifecycle");
+    }
+  }
+  const counts = optionCounts("priority", ["all", "high", "none"], LIFECYCLE_MODEL.stateIds.map((lifecycle) => record({ lifecycle })), FILTER_DEFAULTS);
+  assert.equal(counts.get("all"), 2, "priority counts only include backlog and ready");
+  assert.equal(counts.get("high"), 2, "legacy active or completed priority does not inflate counts");
+  assert.equal(counts.get("none"), 0);
+}
+
 // The portal holds no lifecycle list of its own: everything below comes from the projection the
 // server publishes in the plans snapshot, built from the same manifest the domain module reads.
 function testLifecycleModelComesFromTheSnapshot() {
@@ -71,7 +91,7 @@ function testLifecycleModelComesFromTheSnapshot() {
   assert.deepEqual(lifecycleTabs().filter((tab) => tab.secondary).map((tab) => tab.id), ["completed", "archived", "unclassified"]);
   assert.equal(lifecycleLabel("ready"), "Ready");
   assert.ok(isLifecycle("unclassified"));
-  assert.equal(showsPriority("review"), true);
+  assert.equal(showsPriority("review"), false);
   assert.equal(showsPriority("completed"), false);
   assert.deepEqual(lifecycleActions("review").map((action) => action.label), ["Review", "Fix findings", "Close", "Archive"]);
 }
@@ -391,9 +411,10 @@ function testIncompleteDependencies() {
   const source = record({ repositoryId: "r1" });
   source.plan.dependencies = ["finished", "active01", "archived", "missing1", "otherrepo", "checked01"];
   const target = (id, lifecycle, repositoryId = "r1") => record({ id, lifecycle, repositoryId });
+  const checked = target("checked01", "review");
+  checked.plan.taskCounts = { total: 1, complete: 1, remaining: 0 };
   const plans = [target("finished", "completed"), target("active01", "active"),
-    target("archived", "archived"), target("otherrepo", "completed", "r2"),
-    { ...target("checked01", "review"), plan: { ...target("checked01", "review").plan, taskCounts: { total: 1, complete: 1, remaining: 0 } } }];
+    target("archived", "archived"), target("otherrepo", "completed", "r2"), checked];
   assert.deepEqual(incompleteDependencies(source, plans), ["active01", "archived", "missing1", "otherrepo", "checked01"]);
   assert.equal(source.plan.dependencies.length, 6, "relationship history is preserved");
   assert.deepEqual(incompleteDependencies(source, []), source.plan.dependencies, "missing records never imply completion");

@@ -114,10 +114,11 @@ class PlanStatusElement extends HTMLElement {
     if (plan.lifecycle === "review" && openFindings > 0) {
       node.querySelector("[data-slot=findings]").replaceWith(chip(`${openFindings} open finding${openFindings === 1 ? "" : "s"}`, "warn"));
     }
-    // Priority no longer applies once a plan is done; those plans keep the field for history, but
-    // the control does not offer to edit it.
+    // Priority is only relevant while deciding which plan to start.
+    const prioritySlot = node.querySelector("[data-slot=priority]");
+    prioritySlot.hidden = !showsPriority(plan.lifecycle);
     if (showsPriority(plan.lifecycle)) {
-      node.querySelector("[data-slot=priority]").append(
+      prioritySlot.append(
         readonly ? chip(`${plan.priority} priority`) : this.renderPriorityDropdown(record),
       );
     }

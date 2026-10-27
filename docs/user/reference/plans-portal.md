@@ -35,11 +35,13 @@ not lifecycle stages, and neither is a human's approval.
 
 ## What The Portal Writes
 
-The portal changes plan files only when you change the `priority` of a plan that is not completed
-or archived. It rewrites that frontmatter line after checking that the file has not changed since
+The portal offers priority edits only for backlog and ready plans.
+It rewrites that frontmatter line after checking that the file has not changed since
 the page loaded it. The plan suite's commands move plans between lifecycle folders, each with one
 commit in the main checkout. Which repositories Plans reads is RoboRepo state, not a property of
 any repository.
+
+Starting or reopening a plan clears its priority to `none`.
 
 ## Which Repositories Plans Reads
 
@@ -67,9 +69,9 @@ synchronization brings the rename into the worktree.
 | Plan | Plans page shows | Priority edits write to | Finding |
 | --- | --- | --- | --- |
 | Backlog, ready, completed, or archived | Main copy | Main checkout for backlog and ready; no priority control for completed or archived | None |
-| Active or review, no `worktree` | Main copy | Main checkout | None |
-| Active or review, its worktree holds a usable copy | Worktree copy, **From worktree `<name>`** in the drawer | That worktree | **Edited outside worktree** when the main copy holds a version the worktree never had |
-| Active or review, its worktree or the worktree's copy is not usable | Main copy | Main checkout | **Worktree copy unavailable**, with the reason |
+| Active or review, no `worktree` | Main copy | No priority control | None |
+| Active or review, its worktree holds a usable copy | Worktree copy, **From worktree `<name>`** in the drawer | No priority control | **Edited outside worktree** when the main copy holds a version the worktree never had |
+| Active or review, its worktree or the worktree's copy is not usable | Main copy | No priority control | **Worktree copy unavailable**, with the reason |
 | Only in a worktree | Worktree copy, labeled with the worktree name | That worktree | None |
 
 A copy in any other worktree is never shown and never produces a finding; those worktrees usually
@@ -127,6 +129,9 @@ instead of any plans, with an action to show all repos.
 **Filters** opens a popup (search, priority, blocked, structure, plan freshness, health). Changes are drafted there and
 applied by **Update**, which stays disabled until something differs from the filters in effect; **Cancel**,
 the close button, Esc, and the backdrop discard the draft.
+
+Priority filtering applies only to backlog and ready plans. Other views hide the priority control
+and filter pill and ignore its saved value; returning to backlog or ready restores it.
 
 ### Limits
 

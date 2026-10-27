@@ -80,8 +80,8 @@ test.describe("Plans card status", () => {
     const ring = card.getByRole("progressbar", { name: "Ring status plan completion" });
     await expect(ring).toHaveAttribute("aria-valuenow", "50");
     await expect(card.locator(".plan-percent")).toHaveText("50%");
-    // Priority is the strip's only control: lifecycle moves belong to the plan suite's commands.
-    await expect(card.locator("plan-status option-dropdown")).toHaveCount(1);
+    await expect(card.locator("plan-status option-dropdown")).toHaveCount(0);
+    await expect(card.locator("plan-status .priority-slot")).toBeHidden();
     await expect(card).not.toContainText("never-reviewed");
     await expect(card).not.toContainText("Ship the ring step");
     await expect(card).not.toContainText("Next up");
@@ -97,10 +97,28 @@ test.describe("Plans card status", () => {
     await expect(card).not.toContainText("approved");
   });
 
+  test("priority filtering is hidden and ignored outside backlog and ready", async ({ page }) => {
+    await page.goto("/plans?lifecycle=backlog");
+    await page.locator("#filters-toggle").click();
+    await page.getByLabel("Priority", { exact: true }).selectOption("high");
+    await page.locator("#filters-update").click();
+    await expect(page.locator('filter-chip[filter-id="priority"]')).toBeVisible();
+    await page.getByRole("button", { name: /^Active \(/ }).click();
+    await expect(page.locator("plan-card", { hasText: "Ring status plan" })).toBeVisible();
+    await expect(page.locator('filter-chip[filter-id="priority"]')).toHaveCount(0);
+    await page.locator("#filters-toggle").click();
+    await expect(page.getByLabel("Priority", { exact: true })).toBeHidden();
+    await page.locator("#filters-cancel").click();
+    await page.getByRole("button", { name: /^Backlog \(/ }).click();
+    await expect(page.locator('filter-chip[filter-id="priority"]')).toBeVisible();
+  });
+
   test("a finished task list shows the done badge in place of the ring", async ({ page }) => {
     await page.goto("/plans?lifecycle=backlog");
     const card = page.locator("plan-card", { hasText: "Done status plan" });
     await expect(card.locator(".plan-complete-badge")).toHaveText("done");
+    await expect(card.locator("plan-status option-dropdown")).toHaveCount(1);
+    await expect(card.locator("plan-status .priority-slot")).toBeVisible();
     await expect(card.getByRole("progressbar")).toHaveCount(0);
   });
 
@@ -212,6 +230,7 @@ test.describe("Plans card status", () => {
     await expect(meta).toContainText("Active");
     await expect(meta).toContainText("next action");
     await expect(meta).toContainText("Ship the ring step");
+    await expect(page.locator("dialog#drawer plan-status option-dropdown")).toHaveCount(0);
   });
 
   test("Home's read-only drawer shows the merged badge for a plan whose worktree has merged", async ({ page }) => {
