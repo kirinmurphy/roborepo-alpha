@@ -4,6 +4,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { runGitProcess } from "../../modules/repositories/git-exec.mjs";
+import { removeWorktree, retryArchivedBranchRetirement } from "../../modules/repositories/worktree-removal.mjs";
 import { createWorktreeSnapshot, restoreWorktreeSnapshot, listWorktreeSnapshots, inventoryWorktree } from "../../modules/repositories/worktree-snapshot.mjs";
 import { recordRepositoryDiscovery } from "../cli/repositories.mjs";
 import { archiveRepositoryWorktree, cleanupWorktrees } from "../cli/worktree-cleanup.mjs";
@@ -43,6 +45,25 @@ try {
   assert.equal(git(work, "status", "--porcelain"), status);
   const listed = await listWorktreeSnapshots(main);
   assert.equal(listed[0].id, snapshot.id);
+  const symlinkParent = path.join(root, "destination-link"); fs.symlinkSync(main, symlinkParent);
+  assert.equal((await restoreWorktreeSnapshot(main, snapshot.id, path.join(symlinkParent, "unsafe"), { apply: true })).ok, false);
+  assert.equal(fs.existsSync(path.join(main, "unsafe")), false);
+  const originalManifest = JSON.parse(git(main, "show", `${snapshot.ref}:manifest.json`));
+  for (const hostile of ["../escape", ".git/config", "CON", "Link/child"]) {
+    const id = "00000000-0000-4000-8000-000000000000";
+    const manifest = structuredClone(originalManifest); manifest.id = id;
+    manifest.entries[0].path = hostile;
+    if (hostile === "Link/child") manifest.entries.push({ path: "Link", mode: "120000", layer: "untracked", oid: manifest.index[0].oid, checksum: manifest.index[0].checksum });
+    const hash = spawnSync("git", ["hash-object", "-w", "--stdin"], { cwd: main, encoding: "utf8", input: JSON.stringify(manifest) });
+    assert.equal(hash.status, 0);
+    const payload = git(main, "ls-tree", snapshot.ref).replace(/([a-f0-9]+)(\tmanifest\.json)/, `${hash.stdout.trim()}$2`);
+    const tree = spawnSync("git", ["mktree"], { cwd: main, encoding: "utf8", input: payload + "\n" }); assert.equal(tree.status, 0, tree.stderr);
+    const forged = git(main, "commit-tree", tree.stdout.trim(), "-p", manifest.tip, "-m", "hostile snapshot fixture");
+    git(main, "update-ref", `refs/roborepo/worktree-archives/${id}`, forged);
+    const rejected = await restoreWorktreeSnapshot(main, id, path.join(root, "hostile-restore"), { apply: true });
+    assert.equal(rejected.ok, false, hostile); assert.equal(fs.existsSync(path.join(root, "hostile-restore")), false, hostile);
+    git(main, "update-ref", "-d", `refs/roborepo/worktree-archives/${id}`);
+  }
   const destination = path.join(root, "restored");
   const preview = await restoreWorktreeSnapshot(main, snapshot.id, destination);
   assert.equal(preview.action, "preview", JSON.stringify(preview));
@@ -142,6 +163,40 @@ try {
     assert.equal(git(restored.destination, "show", ":code"), "staged");
     assert.equal(fs.readFileSync(path.join(restored.destination, "code"), "utf8"), "unstaged\n");
     assert.equal(fs.readFileSync(path.join(restored.destination, "untracked"), "utf8"), "concurrent edit\n");
+  }
+  for (const outcome of ["retry", "moved", "occupied", "remove-failure"]) {
+    const repo = path.join(root, `partial-${outcome}`); fs.mkdirSync(repo);
+    git(repo, "init", "-qb", "main"); write(repo, "seed", "seed\n"); git(repo, "add", "."); git(repo, "commit", "-qm", "seed");
+    const checkout = path.join(root, `partial-${outcome}-work`); git(repo, "worktree", "add", "-qb", "feature", checkout);
+    write(checkout, "pending", "untracked bytes\n");
+    const tip = git(checkout, "rev-parse", "HEAD");
+    const snapshot = await createWorktreeSnapshot(checkout); assert.equal(snapshot.ok, true, snapshot.reason);
+    const before = git(checkout, "status", "--porcelain");
+    const stateRoot = path.join(root, `partial-${outcome}-state`);
+    const failStep = outcome === "remove-failure" ? "worktree" : "update-ref";
+    const runGit = (cwd, args, options) => args[0] === failStep
+      ? Promise.resolve({ ok: false, code: 1, stdout: "", error: "injected removal/retirement failure" }) : runGitProcess(cwd, args, options);
+    const result = await removeWorktree(repo, { path: checkout, branch: "feature", name: path.basename(checkout) }, { kind: "confirmed", stateRoot, tip, snapshot, runGit });
+    assert.equal(result.ok, false);
+    if (outcome === "remove-failure") {
+      assert.equal(fs.existsSync(checkout), true); assert.equal(git(checkout, "status", "--porcelain"), before);
+      assert.equal((await createWorktreeSnapshot(checkout)).ref, snapshot.ref, "retry reuses the verified capture");
+      continue;
+    }
+    assert.equal(fs.existsSync(checkout), false); assert.equal(git(repo, "rev-parse", "feature"), tip);
+    if (outcome === "moved") {
+      const next = git(repo, "commit-tree", git(repo, "rev-parse", "HEAD^{tree}"), "-p", tip, "-m", "concurrent branch work");
+      git(repo, "update-ref", "refs/heads/feature", next, tip);
+    }
+    if (outcome === "occupied") git(repo, "worktree", "add", path.join(root, "new-occupied-checkout"), "feature");
+    assert.equal((await listWorktreeSnapshots(repo))[0].kind, "snapshot", JSON.stringify(await listWorktreeSnapshots(repo)));
+    const rows = await cleanupWorktrees({ cwd: repo, stateRoot, archive: true, remove: "feature", confirm: true, apply: true, discover: async () => ({ instances: [] }) });
+    assert.equal(rows[0].action, outcome === "retry" ? "removed" : "kept", JSON.stringify(rows));
+    assert.equal(rows[0].snapshotRef, snapshot.ref);
+    if (outcome === "retry") {
+      const again = await retryArchivedBranchRetirement(repo, "feature", { stateRoot, apply: true });
+      assert.equal(again.action, "removed", "a completed retry is idempotent");
+    } else assert.equal(git(repo, "show-ref", "--verify", "--quiet", "refs/heads/feature"), "");
   }
   console.log("worktree snapshots: raw binary/staged/unstaged/ignored/symlink/mode round trip, preview nonmutation, refusal checks passed");
 } finally { fs.rmSync(root, { recursive: true, force: true }); }

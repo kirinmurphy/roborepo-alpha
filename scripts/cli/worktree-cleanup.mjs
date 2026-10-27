@@ -1,4 +1,5 @@
 import path from "node:path";
+import fs from "node:fs";
 import { assessWorktreePreservation } from "../../modules/repositories/worktree-preservation.mjs";
 import { createWorktreeSnapshot, inventoryWorktree, listWorktreeSnapshots, restoreWorktreeSnapshot } from "../../modules/repositories/worktree-snapshot.mjs";
 import { discoverInstances } from "../../modules/developer-runtime/discovery.mjs";
@@ -7,7 +8,7 @@ import { findProjectRoot, mainCheckoutPath, resolveGitDir } from "../../modules/
 import { linkedWorktrees } from "../../modules/repositories/worktree-inventory.mjs";
 import { inspectBranchLanding } from "../../modules/repositories/worktree-landed.mjs";
 import { checkWorktreeRemoval } from "../../modules/repositories/worktree-guards.mjs";
-import { appendRemoval, removeLandedBranch, removeWorktree, withCleanupLock } from "../../modules/repositories/worktree-removal.mjs";
+import { appendRemoval, removeLandedBranch, removeWorktree, retryArchivedBranchRetirement, withCleanupLock } from "../../modules/repositories/worktree-removal.mjs";
 import { runGitProcess } from "../../modules/repositories/git-exec.mjs";
 import { checkoutRootsFor, loadRegistry } from "../../modules/repositories/registry.mjs";
 import { activeWorktreeNames, findPlanAbsorbingCommit, findPlanWorktree, repositoryRecordFor, worktreeFolder } from "./worktree-policy.mjs";
@@ -28,7 +29,19 @@ export async function cleanupWorktrees({ cwd = process.cwd(), stateRoot = STATE_
   const selectedBranch = remove;
   if (archive && !remove) throw new Error("archive requires one selected worktree");
   if (remove && !confirm) throw new Error("confirmed removal requires --confirm");
-  if (selectedBranch && !worktrees.some((item) => item.branch === selectedBranch || item.name === selectedBranch)) throw new Error(`worktree not found: ${selectedBranch}`);
+  let retiredTarget = false;
+  if (archive && selectedBranch) {
+    const archived = (await listWorktreeSnapshots(mainPath)).filter((entry) => entry.kind === "snapshot" && (entry.branch === selectedBranch || entry.worktree?.name === selectedBranch))
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+    retiredTarget = Boolean(archived?.worktree?.path && !fs.existsSync(archived.worktree.path));
+  }
+  if (selectedBranch && (retiredTarget || !worktrees.some((item) => item.branch === selectedBranch || item.name === selectedBranch))) {
+    if (!archive) throw new Error(`worktree not found: ${selectedBranch}`);
+    const retry = async () => [await retryArchivedBranchRetirement(mainPath, selectedBranch, { apply, stateRoot })];
+    if (!apply) return retry();
+    const locked = await withCleanupLock(stateRoot, retry, { repositoryPath: mainPath });
+    return locked.locked ? [{ action: "kept", reason: "cleanup already running" }] : locked.result;
+  }
   const action = async () => {
     const running = await runningPaths(discover);
     const activePlans = activeWorktreeNames(mainPath);
@@ -262,11 +275,13 @@ export async function listRepositoryWorktreeArchives({ repositoryId, stateRoot =
 }
 
 export async function archiveRepositoryWorktree({ repositoryId, branch, confirm = false, apply = false, stateRoot = STATE_ROOT, stop = stopCheckoutServers, discover = discoverInstances }) {
-  const { main, worktree } = repositoryWorktree(repositoryId, branch, stateRoot);
+  const main = repositoryMainCheckout(repositoryId, stateRoot);
+  const worktree = linkedWorktrees(path.join(main, ".git")).find((item) => item.branch === branch || item.name === branch);
   if (apply && !confirm) throw new Error("Archive and remove requires explicit confirmation; stop writers before confirming");
   const options = { cwd: main, stateRoot, remove: branch, archive: true, confirm: true };
   const [preview] = await cleanupWorktrees({ ...options, discover: async () => ({ instances: [] }) });
   if (!apply || !preview?.eligible) return preview;
+  if (!worktree) return (await cleanupWorktrees({ ...options, apply: true, discover }))[0];
   const stopped = await stop(worktree.path);
   if (!stopped.ok) return { ...preview, eligible: false, reason: serversStillRunning(stopped) };
   const [result] = await cleanupWorktrees({ ...options, apply: true, discover });

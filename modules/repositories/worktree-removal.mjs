@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { inventoryWorktree, readSnapshot } from "./worktree-snapshot.mjs";
+import { inventoryWorktree, listWorktreeSnapshots, readSnapshot } from "./worktree-snapshot.mjs";
 import { runGitProcess } from "./git-exec.mjs";
 
 export function removalLogPath(stateRoot) {
@@ -119,4 +119,32 @@ async function retireBranch(mainPath, branch, tip, runGit) {
   const occupied = await runGit(mainPath, ["worktree", "list", "--porcelain"]);
   if (!occupied.ok || occupied.stdout.split("\n").includes(`branch refs/heads/${branch}`)) return { ok: false, error: "branch is occupied or worktree inventory unavailable" };
   return runGit(mainPath, ["update-ref", "-d", `refs/heads/${branch}`, tip], { timeoutMs: 10000 });
+}
+
+// A snapshot is also the durable checkpoint when removal succeeded but branch retirement did not.
+// Retrying never recreates capture or removes a new checkout that happens to use the old branch.
+export async function retryArchivedBranchRetirement(mainPath, selector, { apply = false, stateRoot, runGit = runGitProcess } = {}) {
+  const candidates = (await listWorktreeSnapshots(mainPath)).filter((entry) => entry.kind === "snapshot" && (entry.branch === selector || entry.worktree?.name === selector))
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  const snapshot = candidates[0];
+  if (!snapshot) return { action: "kept", eligible: false, reason: `worktree not found and no recovery snapshot: ${selector}` };
+  const row = { path: snapshot.worktree?.path || null, branch: snapshot.branch, name: snapshot.worktree?.name || null, snapshotRef: snapshot.ref, archiveRef: snapshot.ref,
+    restoreCommand: `roborepo git worktrees restore ${snapshot.id} --destination <new-path> --apply`, preservation: "remaining", state: "unknown", action: "kept", eligible: false,
+    outcomes: [{ step: "snapshot-created", ok: true, reused: true }] };
+  if (!row.path || fs.existsSync(row.path)) return { ...row, reason: "captured checkout still exists; inspect it before retrying" };
+  row.outcomes.push({ step: "checkout-removed", ok: true, reused: true });
+  const refs = await runGit(mainPath, ["worktree", "list", "--porcelain"]);
+  if (!refs.ok || (snapshot.branch && refs.stdout.split("\n").includes(`branch refs/heads/${snapshot.branch}`))) return { ...row, reason: "branch became occupied; retained with existing snapshot" };
+  const current = snapshot.branch ? await runGit(mainPath, ["rev-parse", "--verify", `refs/heads/${snapshot.branch}`]) : { ok: false };
+  if (current.ok && current.stdout.trim() !== snapshot.tip) return { ...row, reason: "branch moved; retained with existing snapshot" };
+  if (!current.ok && snapshot.branch) {
+    const exists = await runGit(mainPath, ["show-ref", "--verify", "--quiet", `refs/heads/${snapshot.branch}`]);
+    if (exists.code !== 1) return { ...row, reason: "branch state unavailable; retained with existing snapshot" };
+  }
+  row.eligible = true;
+  if (!apply) return { ...row, reason: null };
+  const retired = current.ok ? await retireBranch(mainPath, snapshot.branch, snapshot.tip, runGit) : { ok: true };
+  row.outcomes.push({ step: "branch-retired", ok: retired.ok, reused: !current.ok });
+  if (current.ok) appendRemoval(stateRoot, { at: new Date().toISOString(), outcome: "branch-retired", branch: snapshot.branch, snapshotRef: snapshot.ref, ok: retired.ok, retry: true });
+  return { ...row, action: retired.ok ? "removed" : "failed", reason: retired.ok ? null : "branch retirement failed; retained with existing snapshot" };
 }

@@ -9,7 +9,7 @@ import { verifiedLandedRecovery } from "../../modules/plan-suite/landed-recovery
 import { authoritativeMarkdown } from "../../modules/plan-suite/worktree-copy.mjs";
 import { approvalFreshness, mergeReadiness } from "../../modules/plan-suite/review-gates.mjs";
 import { worktreeCopyIntegration } from "../../modules/plan-suite/copy-integration.mjs";
-import { buildPlanSnapshot, repositoryRecord, readPlanRecord, updatePlanPriority } from "../../modules/plan-suite/index.mjs";
+import { buildPlanSnapshot, repositoryRecord, readPlanRecord, updatePlanPriority, parsePlanMarkdown } from "../../modules/plan-suite/index.mjs";
 import { recordRepositoryDiscovery } from "../cli/repositories.mjs";
 const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-recovery-check-")));
 function git(cwd, ...args) {
@@ -33,6 +33,15 @@ try {
   assert.equal(mergeReadiness({ primary: main, record: localRecord }).ok, false, "uncommitted review packet prevents merge readiness");
   git(work, "add", relativePath); git(work, "commit", "-qm", "commit review and explicit approval");
   assert.equal(mergeReadiness({ primary: main, record: localRecord }).ok, true, "committed approval with a clean checkout is ready before merge");
+  const approvedPacket = fs.readFileSync(path.join(work, relativePath), "utf8");
+  fs.writeFileSync(path.join(work, relativePath), approvedPacket.replace("- [x] Implement the behavior", "- [ ] Implement the behavior"));
+  git(work, "add", relativePath); git(work, "commit", "-qm", "reopen required task");
+  assert.equal(mergeReadiness({ primary: main, record: localRecord }).ok, false, "a committed unchecked task blocks readiness");
+  fs.writeFileSync(path.join(work, relativePath), approvedPacket.replace("blocked_by: []", "blocked_by: [external:decision]"));
+  git(work, "add", relativePath); git(work, "commit", "-qm", "record blocker");
+  assert.equal(mergeReadiness({ primary: main, record: localRecord }).ok, false, "a committed blocker blocks readiness");
+  fs.writeFileSync(path.join(work, relativePath), approvedPacket);
+  git(work, "add", relativePath); git(work, "commit", "-qm", "resolve task and blocker");
   fs.writeFileSync(path.join(work, "pending"), "pending");
   assert.equal(mergeReadiness({ primary: main, record: localRecord }).ok, false, "untracked work blocks readiness");
   fs.unlinkSync(path.join(work, "pending"));
@@ -45,6 +54,7 @@ try {
   fs.writeFileSync(path.join(main, relativePath), recovered);
   assert.equal(verifiedLandedRecovery(options).ok, false, "pending evidence is not durable");
   git(main, "add", relativePath); git(main, "commit", "-qm", "recover explicit approval");
+  assert.equal(parsePlanMarkdown(recovered).review.recovery.tip, tip, "the Review parser exposes recovery provenance");
   const proof = verifiedLandedRecovery(options);
   assert.equal(proof.ok, true, JSON.stringify(proof));
   const record = readPlanRecord(repositoryRecord(main), path.join(main, relativePath));

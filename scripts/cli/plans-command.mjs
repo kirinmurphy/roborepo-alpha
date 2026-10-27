@@ -295,7 +295,7 @@ function plansRepairCommand(args) {
 
 function plansMergeReadinessCommand(args) {
   const { flags, positional } = parseArgs(args, ["base"]);
-  if (positional.length !== 1 || Object.keys(flags).some((name) => !["base", "json"].includes(name)) || flags.base === true || flags.base?.startsWith("--")) {
+  if (positional.length !== 1 || Object.keys(flags).some((name) => !["base", "json"].includes(name)) || (Object.hasOwn(flags, "base") && (typeof flags.base !== "string" || !flags.base || flags.base.startsWith("--")))) {
     console.error("usage: roborepo plans merge-readiness <plan> [--base <branch>] [--json]");
     process.exit(2);
   }

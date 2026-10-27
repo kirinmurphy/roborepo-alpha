@@ -513,10 +513,22 @@ checkout intact.
 
 ### Findings
 
-None recorded yet; independent validation pending.
+- [x] Readiness accepted committed open tasks and blockers — reuse the shared open-task parser and
+  assert both refusal cases.
+- [x] Retry after checkout removal lacked a branch-retirement resume path — discover the immutable
+  snapshot and retain expected-tip/occupancy guards.
+- [x] Unlanded work omitted remaining paths — inventory local and committed paths before returning.
+- [x] Review parser contract omitted recovery metadata — update the assertion and cover parsed fields.
+- [x] Safety scenarios lacked direct assertions — add hostile paths, symlink parents, removal
+  failure, moved/occupied branches, and idempotent partial retries.
 
 ### Verification
 
+- Validation pass 1 (fresh-context subagent): five fix findings above; no documentation violations.
+  Corrective checks pass for snapshot/preservation, landed recovery/readiness, and parser contracts.
+- `main` CLI smoke comparison: 461 passed, three failed; all three are the pre-existing doctor
+  body-limit failure. Feature CLI smoke is rerun from committed changes to avoid its clean-diff
+  fixture assertion rejecting this session's pending skill edits.
 - Base failure: doctor rejects the unchanged `plan-execute/SKILL.md` body at 503 lines (limit 500).
   The same 507-line source including frontmatter is committed on `main`.
 - Base failure: `docs-reference-check.mjs` rejects the unchanged link at

@@ -16,7 +16,7 @@ const FIELDS = {
 const SHA = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/;
 
 export function parseRecoveryRecord(markdown) {
-  const lines = String(markdown).split("\n");
+  const lines = unfencedLines(markdown);
   const review = lines.findIndex((line) => /^## Review\s*$/i.test(line));
   if (review < 0) return null;
   let end = lines.findIndex((line, index) => index > review && /^#{1,2} /.test(line));
@@ -98,11 +98,13 @@ export function verifiedLandedRecovery({ primary, relativePath, markdown, worktr
 
 export function evidenceExcluded(markdown) {
   const lines = String(markdown).split("\n");
+  const visible = unfencedLines(markdown);
   let inReview = false;
   let omit = false;
-  return lines.filter((line) => {
-    if (/^#{1,2} /.test(line)) { inReview = /^## Review\s*$/i.test(line); omit = false; }
-    if (inReview && /^### /.test(line)) omit = /^### (?:Result|Approval|Post-merge recovery)\s*$/i.test(line);
+  return lines.filter((line, index) => {
+    const heading = visible[index];
+    if (/^#{1,2} /.test(heading)) { inReview = /^## Review\s*$/i.test(heading); omit = false; }
+    if (inReview && /^### /.test(heading)) omit = /^### (?:Result|Approval|Post-merge recovery)\s*$/i.test(heading);
     return !omit;
   }).join("\n").trimEnd();
 }
@@ -110,4 +112,17 @@ export function evidenceExcluded(markdown) {
 function checked(result) {
   if (!result.ok) throw new Error(String(result.stderr || result.error || "Git recovery verification unavailable").trim());
   return result.stdout;
+}
+
+function unfencedLines(markdown) {
+  let fence = null;
+  return String(markdown).split("\n").map((line) => {
+    const marker = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1];
+    if (marker && !fence) { fence = marker; return ""; }
+    if (fence) {
+      if (marker?.[0] === fence[0] && marker.length >= fence.length) fence = null;
+      return "";
+    }
+    return line;
+  });
 }

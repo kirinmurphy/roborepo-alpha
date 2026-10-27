@@ -33,8 +33,7 @@ export async function assessWorktreePreservation(cwd, { branch, base = null, rec
     const baseCommit = required(await git(["rev-parse", base])).trim();
     landing = await inspectBranchLanding(cwd, branch, { base, recorded, runGit });
     const result = (state, reason, extra = {}) => ({ state, reason, landing, fingerprint: inventory.fingerprint, tip: inventory.tip, baseCommit, baseRef: base, remainingPaths, blockingPaths: [], ...extra });
-    if (!landing.landed) return result(landing.reason === "not absorbed" || landing.reason === "no own work" ? "remaining" : "unknown", landing.reason);
-    if (landing.tip !== inventory.tip) throw new Error("branch changed during assessment");
+    if (landing.tip && landing.tip !== inventory.tip) throw new Error("branch changed during assessment");
     const baseline = parseTree(required(await git(["ls-tree", "-r", "-z", inventory.tip])));
     const filesystem = [];
     for (const entry of inventory.entries) {
@@ -50,6 +49,12 @@ export async function assessWorktreePreservation(cwd, { branch, base = null, rec
     }
     remainingPaths = [...new Set(remainingPaths)].sort();
     const hasLocalContent = !sameTree(baseline, inventory.index) || !sameTree(baseline, filesystem) || inventory.entries.some((entry) => entry.mode === "directory");
+    if (!landing.landed) {
+      // Committed differences are remaining work too; local paths alone omit an unlanded branch.
+      const committed = await git(["diff", "--name-only", "-z", baseCommit, inventory.tip]);
+      if (committed.ok) remainingPaths = [...new Set([...remainingPaths, ...committed.stdout.split("\0").filter(Boolean)])].sort();
+      return result(landing.reason === "not absorbed" || landing.reason === "no own work" ? "remaining" : "unknown", landing.reason, { hasLocalContent });
+    }
     if (!hasLocalContent) return result("preserved", null, { evidenceCommit: landing.absorbingCommit, hasLocalContent: false });
     const candidates = required(await git(["rev-list", "--first-parent", "--reverse", `${landing.fork}..${baseCommit}`])).trim().split("\n").filter(Boolean);
     if (candidates.length > FIRST_PARENT_SCAN_LIMIT) throw new Error("scan limit exceeded");

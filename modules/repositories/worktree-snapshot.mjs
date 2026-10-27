@@ -21,6 +21,7 @@ export async function inventoryWorktree(cwd, { git = (args, options) => runGitPr
   const shared = (await read(["rev-parse", "--shared-index-path"])).trim();
   if (shared) throw new Error("split index unsupported");
   const tip = (await read(["rev-parse", "HEAD"])).trim();
+  const worktree = { name: path.basename((await read(["rev-parse", "--absolute-git-dir"])).trim()), path: fs.realpathSync(cwd) };
   const branch = await git(["symbolic-ref", "--quiet", "HEAD"]);
   const indexRaw = await read(["ls-files", "--stage", "-z"]);
   const flags = await read(["ls-files", "-v", "-z"]);
@@ -61,7 +62,7 @@ export async function inventoryWorktree(cwd, { git = (args, options) => runGitPr
   validatePaths([...index, ...entries]);
   const paths = [...new Set([...index, ...entries].map((entry) => entry.path))];
   const attributes = await inspectRawAttributes(git, paths);
-  const identity = { tip, branch: branch.ok ? branch.stdout.trim() : null, config, attributes, index, entries: entries.map(({ bytes, ...entry }) => entry) };
+  const identity = { tip, worktree, branch: branch.ok ? branch.stdout.trim() : null, config, attributes, index, entries: entries.map(({ bytes, ...entry }) => entry) };
   return { ...identity, entries, fingerprint: checksum(Buffer.from(JSON.stringify(identity))) };
 }
 
@@ -88,7 +89,7 @@ export async function createWorktreeSnapshot(cwd, { expectedFingerprint = null }
       payload.push({ ...metadata, oid });
     }
     const id = randomUUID();
-    const manifest = { version: 1, id, createdAt: new Date().toISOString(), tip: inventory.tip, branch: inventory.branch, fingerprint: inventory.fingerprint, index, entries: payload };
+    const manifest = { version: 1, id, createdAt: new Date().toISOString(), tip: inventory.tip, worktree: inventory.worktree, branch: inventory.branch, fingerprint: inventory.fingerprint, index, entries: payload };
     const layers = [];
     for (const layer of ["index", "tracked", "untracked", "ignored"]) {
       const entries = layer === "index" ? manifest.index : payload.filter((entry) => entry.layer === layer && entry.mode !== "directory");
@@ -114,7 +115,7 @@ export async function listWorktreeSnapshots(cwd) {
     if (!ref.startsWith(SNAPSHOT_PREFIX)) { result.push({ ref, kind: "committed-tip", localState: false }); continue; }
     try {
       const { manifest } = await readSnapshot(cwd, ref);
-      result.push({ id: manifest.id, ref, kind: "snapshot", localState: true, tip: manifest.tip, branch: manifest.branch, createdAt: manifest.createdAt });
+      result.push({ id: manifest.id, ref, kind: "snapshot", localState: true, tip: manifest.tip, worktree: manifest.worktree, branch: manifest.branch?.replace(/^refs\/heads\//, "") || null, createdAt: manifest.createdAt });
     } catch (error) { result.push({ ref, kind: "invalid", reason: error.message }); }
   }
   return result;

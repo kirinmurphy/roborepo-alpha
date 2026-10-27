@@ -128,6 +128,11 @@ export function mergeReadiness({ primary, record, base = "main" }) {
   const checks = [];
   const check = (name, ok, observed, fix) => checks.push({ name, ok: Boolean(ok), observed, ...(ok ? {} : { fix }) });
   const approval = approvalFreshness({ primary, record, base });
+  const parsed = parsePlanMarkdown(markdown);
+  const unfinished = openTasks(parsed);
+  const blockers = parsed.frontmatter.blocked_by || [];
+  check("required tasks and blockers resolved", !unfinished.length && !blockers.length,
+    [...unfinished.map((task) => task.text), ...blockers].join("; ") || "all required tasks complete; no blockers", "finish required tasks and resolve blockers before merging");
   check("assigned branch available", assessedTip && resolved.authority.source === "worktree", resolved.authority.reason || assessedTip, "restore the assigned implementation worktree");
   check("explicit approval is fresh", approval.state === "fresh", approval.reason || approval.state, "record explicit human approval of the current implementation");
   check("review is complete and fresh", approval.review.state === "fresh", approval.review.reason || approval.review.state, "complete review and required checks for the current implementation");
