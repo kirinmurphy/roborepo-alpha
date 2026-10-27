@@ -1,7 +1,7 @@
 ---
 id: 4zyo2woj
 priority: high
-next_action: Finish the full local parity gate, run the independent validation loop, then submit for human review if preflight passes.
+next_action: Run /plan-review for human review; native desktop/tool and additional-platform checks remain unconfirmed under Not tested.
 blocked_by: []
 depends_on: ["hr78g4sj"]
 related: ["8bjltk2n", "wjlt1zvf", "ia1q1z9", "permva27", "permissions-ui-revamp", "codex-cmux-hook-trust-review", "46qth5z8", "harness-capability-derived-resource-targeting", "7k3m9qd", "o9zwxuav"]
@@ -461,7 +461,8 @@ Git administrative worktree `credential-protection`; this document contains no m
   establish its chosen surface's boundary.
 - Foreign-line, home-path, Gemini, root-config-write, hook-composition and live-render checks passed.
   Packed install passed with portable home anchors, read-only denial and idempotent reapply into a
-  different temporary home. Strict clean-machine permission checks also passed; full parity is still running.
+  different temporary home. Strict clean-machine permission checks also passed. Final gate results
+  and the independently reproduced base failure are recorded under Review below.
 - The started verification environment is the native synthetic sandbox runner, plus disposable
   packed-install/container fixtures. This configuration change has no persistent server or
   shareable URL; installed live settings were not rewritten.
@@ -484,7 +485,7 @@ Git administrative worktree `credential-protection`; this document contains no m
 
 - [x] Missing-denies native control omitted `--include-managed-config` while the main probe
       included it. Fixed: both runs now include managed policy; the same native matrix and
-      missing-denies mutation passed again after correction.
+      missing-denies mutation passed again after correction (`808681c7`).
 
 ### Verification
 
@@ -494,5 +495,24 @@ Git administrative worktree `credential-protection`; this document contains no m
   organization and supplied constraints. No renderer defect found; unverified surfaces were candid.
 - Full parity reached 57/61 deterministic suites; four browser suites could not import the absent
   Playwright development dependency in the new worktree. Locked dependencies were installed from
-  the local npm cache with `npm ci --offline --no-audit --no-fund`; rerun required. This is setup,
-  not a claimed base failure.
+  the local npm cache with `npm ci --offline --no-audit --no-fund`; the rerun passed 61/61. This was
+  setup, not a base failure.
+- October 27 final gate: `npm run check` ran doctor (107 passed) and the main suite (463 passed,
+  1 failed). The failure at `scripts/test/cli-surface-integration-check.mjs:361` expected another
+  cached ahead repository after a single-repo refresh; the screen remained at Press Enter. A
+  separate validator executed the same check on main and reproduced the identical assertion,
+  classifying it as a base failure. The focused feature-worktree rerun passed. No unrelated fix
+  was made; the aggregate command is recorded as failed, not green.
+- Every remaining available parity component was executed separately after that early exit:
+  install collisions passed; deterministic CI suites passed 61/61; packed installation passed;
+  strict clean-machine base, installation, permissions and onboarding suites passed; portal UI
+  passed 141/141. Windows installer parity was unavailable because PowerShell was absent.
+- Final current-state checks passed: doctor (107 checks), credential projection (15 patterns,
+  nine combinations), `git diff --check`, and plan validation (zero blocking findings, three
+  advisory Not tested entries).
+- Pass 2 (fresh-context validator at `808681c7`): no fix or escalate findings. Reviewed the full
+  main-to-feature diff, acceptance criteria, renderer, controls, coverage records, installation,
+  docs of record and gate evidence; independently reran projection and whitespace checks. The
+  base test failure above is recorded separately and does not block submission. Implementation
+  is complete within the measured native macOS command surface; unverified surfaces remain
+  explicit under Not tested. No policy decisions or implementation tasks remain blocked.
