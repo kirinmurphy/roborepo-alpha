@@ -6,7 +6,7 @@ blocked_by: []
 depends_on: ["hr78g4sj"]
 related: ["8bjltk2n", "wjlt1zvf", "ia1q1z9", "permva27", "permissions-ui-revamp", "codex-cmux-hook-trust-review", "46qth5z8", "harness-capability-derived-resource-targeting", "7k3m9qd", "o9zwxuav"]
 reviewed_commit: 60d2ba76e5a9ca0cc5dbb5d98ab73330c674d5de
-worktree:
+worktree: credential-protection
 ---
 
 # Keep local agent work within useful boundaries: Codex — Part 2: Credential protection
