@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "observations": [
+    {
+      "date": "2026-10-26",
+      "executableSource": "provider discovery: CLI and desktop resolve the same bundled executable",
+      "version": "codex-cli 0.163.0-alpha.11.2",
+      "platform": "darwin",
+      "policySource": "fresh synthetic CODEX_HOME/config.toml with managed requirements included",
+      "profiles": ["managed-workspace", "managed-read-only"],
+      "surface": "native sandbox commands and descendants",
+      "controls": ["unrestricted reads and writes", "missing-denies mutation", "all 15 credential forms", "public and template reads", "read-only writes", "symlinks", "deep paths", "new matching paths"],
+      "result": "passed"
+    }
+  ],
+  "unverified": ["desktop session policy", "product structured-read tools", "browser", "MCP", "escalated processes", "Linux", "Windows"],
+  "unsupported": ["Gemini credential path denial", "Codex path-specific ask"]
+}

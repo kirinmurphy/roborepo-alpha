@@ -10,6 +10,7 @@
 // bucket, same as an arbitrary command.
 
 import os from "node:os";
+import { codexCredentialPermissions } from "./codex/credential-permissions.mjs";
 
 const begin = "# BEGIN GENERATED AGENT PERMISSIONS";
 const end = "# END GENERATED AGENT PERMISSIONS";
@@ -75,22 +76,27 @@ function codexNetworkAccess(behaviors) {
   return findBehavior(behaviors, "go-online")?.bucket === "allow";
 }
 
-function renderCodexWorkspaceProfile(behaviors, workspaceRoots = []) {
+function renderCodexProfile(behaviors, workspaceRoots = [], credentials = { paths: [] }, readOnly = false) {
   const roots = [...new Set(workspaceRoots.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim()))];
-  const profile = "managed-workspace";
+  const profile = readOnly ? "managed-read-only" : "managed-workspace";
   const lines = [
     `default_permissions = ${quoteToml(profile)}`,
     "",
     `[permissions.${profile}]`,
-    `extends = ${quoteToml(":workspace")}`,
+    `extends = ${quoteToml(readOnly ? ":read-only" : ":workspace")}`,
   ];
 
-  if (roots.length > 0) {
+  if (!readOnly && roots.length > 0) {
     lines.push("", `[permissions.${profile}.workspace_roots]`);
     for (const root of roots) lines.push(`${quoteToml(root)} = true`);
   }
 
-  lines.push("", `[permissions.${profile}.network]`, `enabled = ${codexNetworkAccess(behaviors) ? "true" : "false"}`);
+  if (credentials.paths.length) {
+    lines.push("", `[permissions.${profile}.filesystem]`);
+    for (const credential of credentials.paths) lines.push(`${quoteToml(credential)} = "deny"`);
+  }
+
+  lines.push("", `[permissions.${profile}.network]`, `enabled = ${!readOnly && codexNetworkAccess(behaviors) ? "true" : "false"}`);
   return lines;
 }
 
@@ -98,8 +104,10 @@ function renderCodexPermissionBlock(behaviors, arbitraryCommands, { workspaceRoo
   const sandboxMode = codexSandboxMode(behaviors);
   const lines = [begin, "# Source: manifests/inventory/agent-permissions.json", `approval_policy = ${quoteToml(codexApprovalPolicy(behaviors, arbitraryCommands))}`];
 
-  if (sandboxMode === "workspace-write") {
-    lines.push(...renderCodexWorkspaceProfile(behaviors, workspaceRoots));
+  const credentials = codexCredentialPermissions(behaviors);
+  lines.push(...credentials.notes.map((note) => `# roborepo credential: ${note}`));
+  if (sandboxMode === "workspace-write" || credentials.paths.length) {
+    lines.push(...renderCodexProfile(behaviors, workspaceRoots, credentials, sandboxMode === "read-only"));
   } else {
     lines.push(`default_permissions = ${quoteToml(":read-only")}`);
   }
@@ -129,7 +137,7 @@ function foreignBlockContent(oldBlock) {
       if (depth <= 0) continuation = null;
       continue;
     }
-    if (trimmed === begin || trimmed === end || trimmed.startsWith("# BEGIN GENERATED") || trimmed === "# Source: manifests/inventory/agent-permissions.json") continue;
+    if (trimmed === begin || trimmed === end || trimmed.startsWith("# BEGIN GENERATED") || trimmed === "# Source: manifests/inventory/agent-permissions.json" || trimmed.startsWith("# roborepo credential: ")) continue;
     const header = trimmed.match(/^\[\[?\s*([^\]]+?)\s*\]\]?$/);
     if (header) {
       const name = header[1].replace(/"/g, "");
