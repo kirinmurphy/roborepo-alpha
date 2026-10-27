@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import { isolateGitConfig } from "./lib/git-config.mjs";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -12,6 +13,7 @@ import { worktreeCopyIntegration } from "../../modules/plan-suite/copy-integrati
 import { buildPlanSnapshot, repositoryRecord, readPlanRecord, updatePlanPriority, parsePlanMarkdown } from "../../modules/plan-suite/index.mjs";
 import { recordRepositoryDiscovery } from "../cli/repositories.mjs";
 const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-recovery-check-")));
+const restoreGitConfig = isolateGitConfig(root);
 function git(cwd, ...args) {
   const result = spawnSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", ...args], { cwd, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr); return result.stdout.trim();
@@ -75,4 +77,4 @@ try {
   fs.writeFileSync(path.join(work, "code"), "new implementation\n"); git(work, "add", "code"); git(work, "commit", "-qm", "new implementation");
   assert.equal(verifiedLandedRecovery(options).ok, false, "later implementation invalidates recovery");
   console.log("landed recovery: committed primary authority, approval/integration, portal agreement, old worktree unchanged, stale/conflicting refusal passed");
-} finally { fs.rmSync(root, { recursive: true, force: true }); }
+} finally { restoreGitConfig(); fs.rmSync(root, { recursive: true, force: true }); }

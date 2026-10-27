@@ -59,6 +59,7 @@ export async function assessWorktreePreservation(cwd, { branch, base = null, rec
     const candidates = required(await git(["rev-list", "--first-parent", "--reverse", `${landing.fork}..${baseCommit}`])).trim().split("\n").filter(Boolean);
     if (candidates.length > FIRST_PARENT_SCAN_LIMIT) throw new Error("scan limit exceeded");
     let reachedLanding = false;
+    let conflicted = false;
     for (const candidate of candidates) {
       if (candidate === landing.absorbingCommit) reachedLanding = true;
       if (!reachedLanding) continue;
@@ -74,6 +75,7 @@ export async function assessWorktreePreservation(cwd, { branch, base = null, rec
         const synthetic = await syntheticCommit(tree, inventory.tip, git);
         const merge = await git(["merge-tree", "--write-tree", `--merge-base=${parent}`, candidate, synthetic]);
         if (!merge.ok && merge.code !== 1) throw new Error(String(merge.stderr || "tree merge unavailable").trim());
+        if (merge.code === 1) conflicted = true;
         if (!merge.ok || merge.stdout.trim().split("\n")[0] !== candidateTree) { absorbs = false; break; }
       }
       if (absorbs) {
@@ -82,7 +84,7 @@ export async function assessWorktreePreservation(cwd, { branch, base = null, rec
         return result("preserved", null, { evidenceCommit: candidate, hasLocalContent: true });
       }
     }
-    return result("remaining", "local layers not absorbed within assessed history", { hasLocalContent: true });
+    return result(conflicted ? "unknown" : "remaining", conflicted ? "local layer merge conflicted within assessed history" : "local layers not absorbed within assessed history", { hasLocalContent: true });
   } catch (error) {
     return { state: "unknown", reason: error.message, landing, fingerprint: inventory?.fingerprint || null, hasLocalContent: null, remainingPaths, blockingPaths: [] };
   } finally { fs.rmSync(temporary, { recursive: true, force: true }); }

@@ -95,7 +95,7 @@ export async function inspectBranchLanding(cwd, branch, options = {}) {
     const runGit = (directory, args, settings = {}) => {
       const remaining = deadline - Date.now();
       if (remaining <= 0) return Promise.resolve({ ok: false, stdout: "", code: null, error: "assessment time limit exceeded" });
-      return execute(directory, args, { ...settings, timeoutMs: Math.min(GIT_TIMEOUT_MS, remaining), plumbing: { objectDirectory: path.join(temporary, "objects"), alternateObjects: path.join(objects.stdout.trim(), "objects") } });
+      return execute(directory, args, { ...settings, timeoutMs: Math.min(GIT_TIMEOUT_MS, remaining), plumbing: { ...settings.plumbing, objectDirectory: path.join(temporary, "objects"), alternateObjects: path.join(objects.stdout.trim(), "objects") } });
     };
     return await inspectLanding(cwd, branch, { ...options, runGit });
   } finally { fs.rmSync(temporary, { recursive: true, force: true }); }

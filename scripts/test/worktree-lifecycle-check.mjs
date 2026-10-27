@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import { isolateGitConfig } from "./lib/git-config.mjs";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -23,6 +24,7 @@ import { inspectWorktreeHook, manageWorktreeHook } from "../cli/worktree-hook.mj
 import { collectKnownWorktrees } from "../cli/worktree-observations.mjs";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-worktree-lifecycle-"));
+const restoreGitConfig = isolateGitConfig(root);
 
 function git(cwd, ...args) {
   const result = spawnSync("git", ["-c", "user.email=test@example.com", "-c", "user.name=Test", ...args], { cwd, encoding: "utf8" });
@@ -731,5 +733,6 @@ try {
   }
   console.log("worktree lifecycle: inventory and landing ok");
 } finally {
+  restoreGitConfig();
   fs.rmSync(root, { recursive: true, force: true });
 }

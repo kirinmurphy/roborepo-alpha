@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { runGitProcess } from "./git-exec.mjs";
@@ -256,12 +257,20 @@ function validatePaths(entries) {
 
 export async function inspectRawAttributes(git, paths, source = null) {
   if (!paths.length) return "";
-  const attributes = required(await git(["check-attr", ...(source ? [`--source=${source}`] : []), "-z", "--stdin", "filter", "merge", "working-tree-encoding", "text", "eol"], { input: `${paths.join("\0")}\0` }));
-  const fields = attributes.split("\0");
-  for (let i = 0; i + 2 < fields.length; i += 3) {
-    const [file, attr, value] = fields.slice(i, i + 3);
-    const allowed = attr === "merge" ? ["unspecified", "unset", "set", "text", "binary", "union"] : ["unspecified", "unset"];
-    if (!allowed.includes(value)) throw new Error(`unsupported attribute ${attr}=${value}: ${file}`);
-  }
-  return attributes;
+  const temporary = source ? fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-attributes-")) : null;
+  try {
+    // A temporary index gives check-attr the historical attributes on older Git versions too,
+    // without checking files out or changing the user's staged state. Split indexes must stay off
+    // so this read cannot create shared-index files in the repository.
+    const plumbing = temporary ? { indexFile: path.join(temporary, "index") } : null;
+    if (source) required(await git(["-c", "core.splitIndex=false", "-c", "core.sparseCheckout=false", "read-tree", source], { plumbing }));
+    const attributes = required(await git(["check-attr", ...(source ? ["--cached"] : []), "-z", "--stdin", "filter", "merge", "working-tree-encoding", "text", "eol"], { input: `${paths.join("\0")}\0`, plumbing }));
+    const fields = attributes.split("\0");
+    for (let i = 0; i + 2 < fields.length; i += 3) {
+      const [file, attr, value] = fields.slice(i, i + 3);
+      const allowed = attr === "merge" ? ["unspecified", "unset", "set", "text", "binary", "union"] : ["unspecified", "unset"];
+      if (!allowed.includes(value)) throw new Error(`unsupported attribute ${attr}=${value}: ${file}`);
+    }
+    return attributes;
+  } finally { if (temporary) fs.rmSync(temporary, { recursive: true, force: true }); }
 }

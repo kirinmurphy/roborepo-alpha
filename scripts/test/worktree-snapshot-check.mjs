@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import { isolateGitConfig } from "./lib/git-config.mjs";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -12,6 +13,7 @@ import { archiveRepositoryWorktree, cleanupWorktrees } from "../cli/worktree-cle
 import { assessWorktreePreservation } from "../../modules/repositories/worktree-preservation.mjs";
 
 const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-snapshot-test-")));
+const restoreGitConfig = isolateGitConfig(root);
 function git(cwd, ...args) {
   const result = spawnSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", ...args], { cwd, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
@@ -22,6 +24,8 @@ try {
   const main = path.join(root, "repo"); fs.mkdirSync(main);
   git(main, "init", "-qb", "main");
   write(main, "seed", "seed\n"); git(main, "add", "."); git(main, "commit", "-qm", "seed");
+  const initialTip = git(main, "rev-parse", "HEAD");
+  const explicitMergeBase = spawnSync("git", ["merge-tree", "--write-tree", `--merge-base=${initialTip}`, initialTip, initialTip], { cwd: main, encoding: "utf8" }).status === 0;
   const work = path.join(root, "feature"); git(main, "worktree", "add", "-qb", "feature", work);
   write(work, "code", "feature\n"); git(work, "add", "code"); git(work, "commit", "-qm", "feature");
   git(main, "merge", "--squash", "feature"); git(main, "commit", "-qm", "squash");
@@ -37,7 +41,7 @@ try {
   const status = git(work, "status", "--porcelain");
   const objects = git(work, "count-objects", "-v");
   const assessment = await assessWorktreePreservation(work, { branch: "feature" });
-  assert.equal(assessment.state, "remaining", JSON.stringify(assessment));
+  assert.equal(assessment.state, explicitMergeBase ? "remaining" : "unknown", JSON.stringify(assessment));
   assert.equal(git(work, "count-objects", "-v"), objects, "assessment writes no persistent objects");
   assert.equal(git(work, "status", "--porcelain"), status, "assessment leaves index and files untouched");
   const snapshot = await createWorktreeSnapshot(work);
@@ -80,7 +84,7 @@ try {
   assert.equal((await restoreWorktreeSnapshot(main, snapshot.id, destination, { apply: true })).ok, false);
   // An index-only unique version survives assessment even when the filesystem cancels it.
   write(work, "code", "feature\n");
-  assert.equal((await assessWorktreePreservation(work, { branch: "feature" })).state, "remaining");
+  assert.equal((await assessWorktreePreservation(work, { branch: "feature" })).state, explicitMergeBase ? "remaining" : "unknown");
   git(work, "config", "filter.evil.clean", `touch ${path.join(root, "executed")}`);
   const refused = await createWorktreeSnapshot(work);
   assert.equal(refused.ok, false); assert.match(refused.reason, /driver configuration/);
@@ -89,7 +93,7 @@ try {
   git(work, "update-index", "--assume-unchanged", "code");
   await assert.rejects(() => inventoryWorktree(work), /index flag/);
   git(work, "update-index", "--no-assume-unchanged", "code");
-  for (const shape of ["redundant", "deletion", "rename", "binary", "mode", "plan-move"]) {
+  for (const shape of ["redundant", "deletion", "rename", "binary", "mode", "plan-move", "conflict"]) {
     const repo = path.join(root, shape); fs.mkdirSync(repo);
     git(repo, "init", "-qb", "main");
     write(repo, "seed", "seed\n");
@@ -115,7 +119,10 @@ try {
     else if (shape === "mode") { fs.chmodSync(path.join(checkout, "code"), 0o755); git(checkout, "add", "code"); }
     else if (shape === "plan-move") write(checkout, "docs/plans/review/story.md", fs.readFileSync(path.join(repo, "docs/plans/completed/story.md")));
     else { write(checkout, "code", fs.readFileSync(path.join(repo, "code"))); git(checkout, "add", "code"); }
+    if (shape === "conflict") { write(checkout, "code", "conflicting local work\n"); git(checkout, "add", "code"); }
     const proof = await assessWorktreePreservation(checkout, { branch: "feature" });
+    if (!explicitMergeBase) { assert.equal(proof.state, "unknown", JSON.stringify(proof)); continue; }
+    if (shape === "conflict") { assert.equal(proof.state, "unknown", JSON.stringify(proof)); assert.match(proof.reason, /conflict/); continue; }
     assert.equal(proof.state, "preserved", `${shape}: ${JSON.stringify(proof)}`);
     assert.equal(proof.hasLocalContent, true);
     if (shape === "redundant") {
@@ -199,4 +206,4 @@ try {
     } else assert.equal(git(repo, "show-ref", "--verify", "--quiet", "refs/heads/feature"), "");
   }
   console.log("worktree snapshots: raw binary/staged/unstaged/ignored/symlink/mode round trip, preview nonmutation, refusal checks passed");
-} finally { fs.rmSync(root, { recursive: true, force: true }); }
+} finally { restoreGitConfig(); fs.rmSync(root, { recursive: true, force: true }); }

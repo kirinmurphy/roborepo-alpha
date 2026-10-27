@@ -501,8 +501,10 @@ checkout intact.
   recorded below. Catalog, command renderer, triggers, CLI surface, focused repository/plan suites,
   and whitespace checks passed. Package installation and installer collision suites passed.
 - All four available Docker clean-machine suites passed. Native Windows verification is unavailable.
-- `npm run check` was executed and stops on the pre-existing skill body limit recorded below.
-  Remaining gate stages were run separately. CLI smoke results are being reconciled after commit.
+- Initial `npm run check` stopped at the then-existing skill body limit. While validation was
+  running, current main was merged into this worktree in `a375a484`; the incoming
+  `c1d92150` extracts the report reference and resolves that limit. Rerun the gate on the new tree.
+  Remaining gate stages had already been run separately.
 
 ## Not tested
 
@@ -513,6 +515,10 @@ checkout intact.
 
 ### Findings
 
+- [x] Conflict comparisons returned remaining — track conflicts and require unknown when no
+  coherent candidate proves preservation; add a real-Git regression.
+- [x] Recorded doctor failure became stale after incoming main synchronization — refresh the
+  execution record and rerun the gate against the current tree.
 - [x] Readiness accepted committed open tasks and blockers — reuse the shared open-task parser and
   assert both refusal cases.
 - [x] Retry after checkout removal lacked a branch-retirement resume path — discover the immutable
@@ -524,13 +530,14 @@ checkout intact.
 
 ### Verification
 
-- Validation pass 1 (fresh-context subagent): five fix findings above; no documentation violations.
+- Validation pass 2 (fresh-context subagent): two fix findings above; no additional code or prose violations.
+- Validation pass 1 (fresh-context subagent): five fix findings above, corrected in `3b5f7100`; no documentation violations.
   Corrective checks pass for snapshot/preservation, landed recovery/readiness, and parser contracts.
 - `main` CLI smoke comparison: 461 passed, three failed; all three are the pre-existing doctor
   body-limit failure. Feature CLI smoke is rerun from committed changes to avoid its clean-diff
   fixture assertion rejecting this session's pending skill edits.
-- Base failure: doctor rejects the unchanged `plan-execute/SKILL.md` body at 503 lines (limit 500).
-  The same 507-line source including frontmatter is committed on `main`.
+- Historical base failure resolved by incoming main: the execution skill body limit no longer
+  fails at `c1d92150`; initial logs describe the earlier tree only.
 - Base failure: `docs-reference-check.mjs` rejects the unchanged link at
   `docs/internal/backlog-review.md:86` to the ready credential-protection plan; that target is
   already absent from `main`.
