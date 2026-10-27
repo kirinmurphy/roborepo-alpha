@@ -1,7 +1,7 @@
 ---
 id: 4zyo2woj
 priority: high
-next_action: Finish the synchronized review gate, then request human approval of the reviewed implementation; additional surfaces remain explicitly unverified.
+next_action: Await explicit human approval of reviewed implementation 85786aa84afd8f942f32e2550a5b57ad6e1d88e6, then merge the pull request and run /plan-close.
 blocked_by: []
 depends_on: ["hr78g4sj"]
 related: ["8bjltk2n", "wjlt1zvf", "ia1q1z9", "permva27", "permissions-ui-revamp", "codex-cmux-hook-trust-review", "46qth5z8", "harness-capability-derived-resource-targeting", "7k3m9qd", "o9zwxuav"]
@@ -483,9 +483,9 @@ Git administrative worktree `credential-protection`; this document contains no m
 
 ### Findings
 
-- [ ] Backlog audit links this plan at its former active path after submission to review;
-      update the link in `docs/internal/backlog-review.md:86`. The same input is stale on main
-      (its link names ready, while the committed plan is in review).
+- [x] Backlog audit linked this plan at its former active path after submission to review;
+      corrected `docs/internal/backlog-review.md:86` in `62777699`. Main's corresponding link
+      also named a missing ready path. The documentation reference check now passes.
 
 - [x] Missing-denies native control omitted `--include-managed-config` while the main probe
       included it. Fixed: both runs now include managed policy; the same native matrix and
@@ -540,12 +540,37 @@ Git administrative worktree `credential-protection`; this document contains no m
 - The three Not tested entries remain limitations on coverage claims, not required manual
   acceptance checks for the measured macOS native command surface. No protection claim is made
   for desktop/product tools, browser, MCP, unrestricted execution, Linux or Windows.
-- `npm run check` is running; aggregate verification is not yet complete.
+- First host `npm run check`: doctor passed 106 checks; main suite passed 464/464;
+  installation collisions passed; CI suites passed 60/61. The only failure was the selected
+  plan's stale lifecycle link, corrected in `62777699`; the failed documentation check then passed.
+  The canonical aggregate exited nonzero and was not reported green.
+- Components following that early exit were executed separately at `62777699` and passed:
+  `npm run test:package-install`, strict `test:clean-machine`, `test:clean-machine-install-sandbox`,
+  `test:clean-machine-permissions-sandbox`, `test:clean-machine-onboarding-sandbox`, and
+  `npm run test:portal-ui` (141/141). PowerShell is absent, so Windows installer parity is unavailable.
+- Main advanced to `977d29f04ab25f5191f21c832cb98709be99efae` during verification. Synchronized
+  it without conflicts as `85786aa84afd8f942f32e2550a5b57ad6e1d88e6`. Credential implementation,
+  native fixtures, coverage and generated configuration are byte-identical to the earlier result;
+  the passing native macOS evidence above is reused for those unchanged files.
+- Fresh-context Validator pass at `85786aa8` against `977d29f0`: clean. Independently passed
+  projection, foreign lines, live rendering, plan suite, lifecycle manifest, lifecycle transitions,
+  documentation references and whitespace checks. The link correction was also independently verified.
+- Final `npm run check` at `85786aa8` failed at doctor: the base branch's plan-execute skill has
+  a 503-line body, above its 500-line budget. `git diff main --` for that file is empty; main's
+  committed file is identical, confirming a base failure. Doctor otherwise passed 106 checks.
+  No unrelated skill edit was made. This is a base failure, not an implementation finding.
+- Main's subsequent `a68a9cc3` changes only another plan under `docs/plans/`; it changes no
+  implementation content relative to the synchronized base. Earlier component evidence is reused
+  for unchanged code; affected lifecycle checks passed independently as listed above.
+- `npm run test:portal-ui` against the newly synchronized base passed 146/146.
+- Full review is complete with the base failure above explicitly retained. No open implementation
+  findings or required human acceptance checks remain. This does not certify the additional
+  surfaces listed under Not tested, and no human approval has yet been received.
 
 ### Result
-- Status: pending
-- Reviewed implementation commit: 93d381987d9b01ddf999656e90ba3c125d27efd1
-- Base commit: 7d417ddf70b3d2aa6cd75d0d6b8576cd7b40745f
+- Status: complete
+- Reviewed implementation commit: 85786aa84afd8f942f32e2550a5b57ad6e1d88e6
+- Base commit: 977d29f04ab25f5191f21c832cb98709be99efae
 
 ### Approval
-- Decision: not requested
+- Decision: requested
