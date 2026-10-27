@@ -472,6 +472,13 @@ see `## Review` → `### Verification`.
 - **2026-10-26: Requires lists the transitive closure; Recommended skips what a row requires.** A
   two-level requirement is still visible from the package that pulls it in. A package both required
   and recommended is left out of the recommended list, since it turns on anyway.
+- **2026-10-26: Reconcile does not re-run the command-ownership check.** The old reconcile went
+  through `enablePackage --reconcile`, which ran `validatePackageCommandOwnership` per package.
+  That check compares `command` components, which come only from `cli-command` resources, and
+  `validatePackageCatalog` rejects any second package claiming one on every `loadPackageCatalog`
+  call. So two effective packages can never conflict by the time reconcile runs, and the check was
+  unreachable there before this change too. Alternatives: restore it as a typed error (dead code), or
+  skip-and-warn (same). Validation pass 3 raised this as an escalation; the evidence settles it.
 - **2026-10-26: Bulk disable skips derived-only members.** A bulk Deselect All member that is on
   only because another selection requires it is reported `skipped` instead of being refused, so a
   batch never fails on a package it cannot switch directly. Selection is re-read before each member.
@@ -512,11 +519,20 @@ see `## Review` → `### Verification`.
       listed as plain text instead, with a portal assertion
 - [ ] A telemetry-only selection now requires the hooks bundle it never applies — escalated, see
       Open Questions
+- [x] Reconcile no longer ran the command-ownership check that `enablePackage --reconcile` ran —
+      no change needed: the check could never fire (see Decision Log)
+- [ ] `coreHookBundle` reporting a required-only bundle as selected has no test — waits on the
+      telemetry hooks question, whose answer decides what that test asserts
+- [x] The config panel doc tied "no row" to `selectable: false` instead of
+      `presentation.visibility` — reworded
+- [x] The `PackageMutationError` comment left out the dependency-only refusal — added
 
 ### Verification
 
 - Validation pass 1 (fresh-context subagent): 6 fix, 1 escalate, 1 base.
 - Validation pass 2 (fresh-context subagent): 3 fix, 1 escalate, 1 base (the same docs link).
+- Validation pass 3 (fresh-context subagent): 3 fix, 1 escalate (resolved from evidence, see
+  Decision Log), 1 base (the same docs link).
 - Full gate after the user decision: `npm run check` 61/62 suites, the one failure being that base
   docs link.
 - Base failure: `docs-reference-check.mjs` reports `docs/internal/backlog-review.md:86`, a link to

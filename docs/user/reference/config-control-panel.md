@@ -48,8 +48,9 @@ A package may list `requires: [pkgId, ...]` and `recommends: [pkgId, ...]`:
   own, are enabled.
 - A recommended package is never turned on for you. When an enable leaves recommendations off, the
   panel asks which of them to enable too; **Continue without** enables none.
-- A **dependency-only** package (`selectable: false`) has no toggle of its own and no row in the
-  normal list; it turns on and off with the packages that require it.
+- A **dependency-only** package has no toggle of its own (`selectable: false`) and usually no row
+  either (`presentation.visibility: "dependency"`); it turns on and off with the packages that
+  require it. A non-selectable package left at the default visibility keeps a row, without a toggle.
 
 A required package is not a row on the page. Clicking a package's name opens its source popup,
 which lists what it requires under **Requires**; each name there opens that package's source, and
