@@ -1,7 +1,7 @@
 ---
 id: 4zyo2woj
 priority: high
-next_action: Run /plan-review for human review; native desktop/tool and additional-platform checks remain unconfirmed under Not tested.
+next_action: Finish the synchronized review gate, then request human approval of the reviewed implementation; additional surfaces remain explicitly unverified.
 blocked_by: []
 depends_on: ["hr78g4sj"]
 related: ["8bjltk2n", "wjlt1zvf", "ia1q1z9", "permva27", "permissions-ui-revamp", "codex-cmux-hook-trust-review", "46qth5z8", "harness-capability-derived-resource-targeting", "7k3m9qd", "o9zwxuav"]
@@ -516,3 +516,32 @@ Git administrative worktree `credential-protection`; this document contains no m
   base test failure above is recorded separately and does not block submission. Implementation
   is complete within the measured native macOS command surface; unverified surfaces remain
   explicit under Not tested. No policy decisions or implementation tasks remain blocked.
+
+### Human-review verification — October 27
+
+- Synchronized main `7d417ddf70b3d2aa6cd75d0d6b8576cd7b40745f` into the feature branch as
+  `93d381987d9b01ddf999656e90ba3c125d27efd1`, with the user's explicit merge permission;
+  no conflicts occurred. The primary checkout's unrelated pending edits were not included.
+- Fresh-context Validator pass at `93d381987d9b01ddf999656e90ba3c125d27efd1`: clean,
+  no fix or escalate findings. Independently inspected requirements, changed code, fixtures,
+  installation, documentation, and coverage limitations; projection, foreign-line preservation,
+  live-render characterization and `git diff --check` passed independently.
+- Seven focused checks passed on the synchronized result: credential projection (all 15 patterns,
+  nine intent/write combinations), live render, foreign lines, home paths, Gemini adapter,
+  root-config write policy, and hook composition. `git diff --check` passed.
+- `node scripts/test/codex-credential-enforcement-check.mjs` returned unavailable inside the chat
+  sandbox (`sandbox_apply: Operation not permitted`). Its explicitly permitted host launch passed:
+  both profiles, 31 synthetic file cases each, unrestricted controls, missing-denies mutation,
+  public/template reads, write boundaries, links, deep paths and newly created credential paths.
+- The three Not tested entries remain limitations on coverage claims, not required manual
+  acceptance checks for the measured macOS native command surface. No protection claim is made
+  for desktop/product tools, browser, MCP, unrestricted execution, Linux or Windows.
+- `npm run check` is running; aggregate verification is not yet complete.
+
+### Result
+- Status: pending
+- Reviewed implementation commit: 93d381987d9b01ddf999656e90ba3c125d27efd1
+- Base commit: 7d417ddf70b3d2aa6cd75d0d6b8576cd7b40745f
+
+### Approval
+- Decision: not requested
