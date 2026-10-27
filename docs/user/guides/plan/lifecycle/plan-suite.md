@@ -246,11 +246,15 @@ requirements. If implementation changed, it reviews the changes and runs the gat
 before renewing the Result. Older review records can be recovered from their recorded commits and
 verification; incomplete evidence requires only the missing review work.
 
-This approval recovery also works after landing while the plan remains in review. It records
-matching plan-only evidence commits in the worktree and primary checkout, keeping close integration
-checks intact. Later base changes do not require synchronizing the old feature branch just to
-record approval. A partly committed recovery resumes its missing write and preserves independent
-plan edits. Closure still requires its own passing test gate.
+This approval recovery also works after landing while the plan remains in review. It commits
+Result, Approval, and verified recovery provenance on primary only. The old worktree stays as it
+was. Both precursor documents must already be integrated and all other plan content must agree.
+Independent edits or a later implementation change refuse that exception. The human answer and
+complete review remain required; closure still runs its own test gate.
+
+Before merging, `roborepo plans merge-readiness <plan> --json` checks the committed review packet,
+clean worktree, exact implementation, and reviewed base. A failure names the repair; a pass names
+the assessed tips and grants no merge permission.
 
 `/plan-review` never merges your branch into the base branch. After approval, open and merge the
 pull request yourself. If base moves again before you merge, run `/plan-review` again.

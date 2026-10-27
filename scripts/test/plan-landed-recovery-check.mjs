@@ -1,0 +1,68 @@
+#!/usr/bin/env node
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+import { blobId } from "../../modules/plan-suite/plan-authority.mjs";
+import { verifiedLandedRecovery } from "../../modules/plan-suite/landed-recovery.mjs";
+import { authoritativeMarkdown } from "../../modules/plan-suite/worktree-copy.mjs";
+import { approvalFreshness, mergeReadiness } from "../../modules/plan-suite/review-gates.mjs";
+import { worktreeCopyIntegration } from "../../modules/plan-suite/copy-integration.mjs";
+import { buildPlanSnapshot, repositoryRecord, readPlanRecord, updatePlanPriority } from "../../modules/plan-suite/index.mjs";
+import { recordRepositoryDiscovery } from "../cli/repositories.mjs";
+const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-recovery-check-")));
+function git(cwd, ...args) {
+  const result = spawnSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", ...args], { cwd, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr); return result.stdout.trim();
+}
+try {
+  const main = path.join(root, "main"); fs.mkdirSync(main);
+  git(main, "init", "-qb", "main"); git(main, "remote", "add", "origin", "https://github.com/example/recovery.git");
+  const relativePath = "docs/plans/review/recovery.md";
+  fs.mkdirSync(path.dirname(path.join(main, relativePath)), { recursive: true });
+  const precursor = "---\nid: abc12345\npriority: high\nnext_action: Review\nblocked_by: []\ndepends_on: []\nrelated: []\nworktree: feature\n---\n\n# Recover the reviewed implementation\n\n## Implementation plan\n\n- [x] Implement the behavior\n\n## Review\n\n### Findings\n\nNone.\n";
+  fs.writeFileSync(path.join(main, relativePath), precursor);
+  git(main, "add", "."); git(main, "commit", "-qm", "seed"); const seed = git(main, "rev-parse", "HEAD");
+  const work = path.join(root, "feature"); git(main, "worktree", "add", "-qb", "feature", work);
+  fs.writeFileSync(path.join(work, "code"), "feature\n"); git(work, "add", "code"); git(work, "commit", "-qm", "feature");
+  const tip = git(work, "rev-parse", "HEAD");
+  const packet = `\n### Result\n\n- Status: complete\n- Reviewed implementation commit: ${tip}\n- Base commit: ${seed}\n\n### Approval\n\n- Decision: approved\n- Reviewed implementation commit: ${tip}\n- Confirmed by: User said yes on 2026-10-27\n`;
+  fs.writeFileSync(path.join(work, relativePath), precursor + packet);
+  const localRecord = readPlanRecord(repositoryRecord(main), path.join(main, relativePath));
+  assert.equal(mergeReadiness({ primary: main, record: localRecord }).ok, false, "uncommitted review packet prevents merge readiness");
+  git(work, "add", relativePath); git(work, "commit", "-qm", "commit review and explicit approval");
+  assert.equal(mergeReadiness({ primary: main, record: localRecord }).ok, true, "committed approval with a clean checkout is ready before merge");
+  fs.writeFileSync(path.join(work, "pending"), "pending");
+  assert.equal(mergeReadiness({ primary: main, record: localRecord }).ok, false, "untracked work blocks readiness");
+  fs.unlinkSync(path.join(work, "pending"));
+  fs.writeFileSync(path.join(work, relativePath), precursor);
+  git(work, "add", relativePath); git(work, "commit", "-qm", "fixture missing review evidence");
+  git(main, "merge", "--squash", "feature"); git(main, "commit", "-qm", "squash feature");
+  const base = git(main, "rev-parse", "HEAD");
+  const recovered = precursor + packet + `\n### Post-merge recovery\n\n- Repository identity: git:github.com/example/recovery\n- Worktree: feature\n- Branch: feature\n- Assessed branch tip: ${tip}\n- Base ref: refs/heads/main\n- Base commit: ${base}\n- Absorbing commit: ${base}\n- Primary precursor blob: ${blobId(Buffer.from(precursor))}\n- Worktree precursor blob: ${blobId(Buffer.from(precursor))}\n`;
+  const options = { primary: main, relativePath, markdown: recovered, worktree: { name: "feature", path: work, branch: "feature" }, copy: { markdown: precursor } };
+  fs.writeFileSync(path.join(main, relativePath), recovered);
+  assert.equal(verifiedLandedRecovery(options).ok, false, "pending evidence is not durable");
+  git(main, "add", relativePath); git(main, "commit", "-qm", "recover explicit approval");
+  const proof = verifiedLandedRecovery(options);
+  assert.equal(proof.ok, true, JSON.stringify(proof));
+  const record = readPlanRecord(repositoryRecord(main), path.join(main, relativePath));
+  assert.deepEqual(authoritativeMarkdown(main, record).authority, { source: "primary", reason: "verified-landed-recovery" });
+  assert.equal(approvalFreshness({ primary: main, record, base: "main" }).state, "fresh");
+  assert.equal(worktreeCopyIntegration(main, record).state, "integrated");
+  assert.equal(git(work, "status", "--porcelain"), "", "recovery never dirties the old worktree");
+  const stateRoot = path.join(root, "state");
+  recordRepositoryDiscovery({ repositoryId: "git:github.com/example/recovery", kind: "git", displayName: "recovery", source: "developer-runtime", evidence: "git-remote", confidence: "high", localRoot: "main", localRootKind: "clone", localRootPath: main, stateRoot });
+  const selected = buildPlanSnapshot({ stateRoot }).plans.find((entry) => entry.plan.id === "abc12345");
+  assert.equal(selected.plan.authority.reason, "verified-landed-recovery", "portal and canonical reader agree");
+  updatePlanPriority(buildPlanSnapshot({ stateRoot }), { key: selected.key, priority: "low", expectedPriority: "high", mtimeMs: selected.plan.mtimeMs, repositoryId: selected.repository.repositoryId });
+  assert.equal(fs.readFileSync(path.join(main, relativePath), "utf8"), recovered, "priority writes never redirect into primary recovery evidence");
+  assert.match(fs.readFileSync(path.join(work, relativePath), "utf8"), /priority: low/);
+  fs.writeFileSync(path.join(work, relativePath), precursor);
+  assert.equal(verifiedLandedRecovery({ ...options, markdown: recovered.replace("Implement the behavior", "Change requirements") }).ok, false);
+  assert.equal(verifiedLandedRecovery({ ...options, copy: { markdown: precursor + "\nIndependent edit\n" } }).ok, false);
+  fs.writeFileSync(path.join(work, "code"), "new implementation\n"); git(work, "add", "code"); git(work, "commit", "-qm", "new implementation");
+  assert.equal(verifiedLandedRecovery(options).ok, false, "later implementation invalidates recovery");
+  console.log("landed recovery: committed primary authority, approval/integration, portal agreement, old worktree unchanged, stale/conflicting refusal passed");
+} finally { fs.rmSync(root, { recursive: true, force: true }); }

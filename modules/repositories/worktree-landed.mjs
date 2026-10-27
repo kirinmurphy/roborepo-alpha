@@ -1,3 +1,7 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { inspectRawAttributes } from "./worktree-snapshot.mjs";
 import { runGitProcess } from "./git-exec.mjs";
 
 export const FIRST_PARENT_SCAN_LIMIT = 500;
@@ -10,8 +14,8 @@ const GIT_TIMEOUT_MS = 10000;
 // result to trust: when it is still a first-parent base commit after the fork and still absorbs the
 // branch's current tip, that one merge check replaces the scan (`reused: true`). Otherwise the full
 // scan runs as if nothing had been recorded.
-export async function inspectBranchLanding(cwd, branch, { base = null, recorded = null, scanLimit = FIRST_PARENT_SCAN_LIMIT, runGit = runGitProcess } = {}) {
-  const git = (args) => runGit(cwd, args, { timeoutMs: GIT_TIMEOUT_MS });
+async function inspectLanding(cwd, branch, { base = null, recorded = null, scanLimit = FIRST_PARENT_SCAN_LIMIT, runGit = runGitProcess } = {}) {
+  const git = (args, options = {}) => runGit(cwd, args, { timeoutMs: GIT_TIMEOUT_MS, ...options });
   const baseRef = base || await defaultBase(git);
   if (!baseRef) return verdict("base unavailable");
   const tipResult = await git(["rev-parse", `refs/heads/${branch}`]);
@@ -37,6 +41,12 @@ export async function inspectBranchLanding(cwd, branch, { base = null, recorded 
   if (!candidatesResult.ok) return verdict("history unavailable", { base: baseRef, tip, fork, start, ownWork });
   const candidates = lines(candidatesResult.stdout);
   const absorbs = async (commit) => {
+    for (const source of [commit, tip]) {
+      const files = await git(["ls-tree", "-r", "--name-only", "-z", source]);
+      if (!files.ok) return null;
+      try { await inspectRawAttributes(git, files.stdout.split("\0").filter(Boolean), source); }
+      catch { return null; }
+    }
     const [merged, tree] = await Promise.all([
       git(["merge-tree", "--write-tree", commit, tip]),
       git(["rev-parse", `${commit}^{tree}`]),
@@ -70,4 +80,23 @@ function verdict(reason, details = {}) {
 
 function lines(output) {
   return output.trim().split("\n").filter(Boolean);
+}
+
+export async function inspectBranchLanding(cwd, branch, options = {}) {
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-landing-"));
+  try {
+    const execute = options.runGit || runGitProcess;
+    const deadline = Date.now() + 30000;
+    const config = await execute(cwd, ["config", "--null", "--list"]);
+    if (!config.ok || /(?:^|\0)(?:merge\.[^\n]+\.driver|filter\.[^\n]+)\n/.test(config.stdout)) return verdict("unsupported Git drivers");
+    const objects = await execute(cwd, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+    if (!objects.ok) return verdict("object store unavailable");
+    fs.mkdirSync(path.join(temporary, "objects"));
+    const runGit = (directory, args, settings = {}) => {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) return Promise.resolve({ ok: false, stdout: "", code: null, error: "assessment time limit exceeded" });
+      return execute(directory, args, { ...settings, timeoutMs: Math.min(GIT_TIMEOUT_MS, remaining), plumbing: { objectDirectory: path.join(temporary, "objects"), alternateObjects: path.join(objects.stdout.trim(), "objects") } });
+    };
+    return await inspectLanding(cwd, branch, { ...options, runGit });
+  } finally { fs.rmSync(temporary, { recursive: true, force: true }); }
 }

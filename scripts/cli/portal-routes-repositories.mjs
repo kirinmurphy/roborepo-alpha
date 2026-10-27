@@ -40,6 +40,27 @@ export const repositoriesRoutes = defineRoutes([
   postRoute("/api/repositories/sources/wipe", (handlers) => handlers.wipeRepositoryList()),
   postRoute("/api/repositories/sources/:sourceId/enabled", (handlers, body, params) => handlers.setRepositorySourceEnabled({ id: params.sourceId, enabled: body.enabled })),
   postRoute("/api/repositories/sources/:sourceId/remove", (handlers, body, params) => handlers.removeRepositorySource({ id: params.sourceId })),
+  {
+    method: "GET",
+    path: "/api/repositories/:id/worktrees/:branch/assessment",
+    handler: (req, res, { params, handlers }) => {
+      Promise.resolve().then(() => handlers.assessRepositoryWorktree({ repositoryId: params.id, branch: params.branch }))
+        .then((result) => send(res, 200, "application/json", JSON.stringify(result)))
+        .catch((error) => send(res, 400, "application/json", JSON.stringify({ error: error.message })));
+      return true;
+    },
+  },
+  {
+    method: "GET",
+    path: "/api/repositories/:id/worktrees/archives",
+    handler: (req, res, { params, handlers }) => {
+      Promise.resolve().then(() => handlers.listRepositoryWorktreeArchives({ repositoryId: params.id }))
+        .then((result) => send(res, 200, "application/json", JSON.stringify(result)))
+        .catch((error) => send(res, 400, "application/json", JSON.stringify({ error: error.message })));
+      return true;
+    },
+  },
+  postRoute("/api/repositories/:id/worktrees/archive-remove", (handlers, body, params) => handlers.archiveRepositoryWorktree({ repositoryId: params.id, branch: body.branch, confirm: body.confirm === true, apply: body.apply === true })),
   postRoute("/api/repositories/:id/worktrees/remove", (handlers, body, params) => handlers.removeRepositoryWorktree({ repositoryId: params.id, branch: body.branch, discardChanges: body.discardChanges === true })),
   postRoute("/api/repositories/:id/worktrees/stop-servers", (handlers, body, params) => handlers.stopRepositoryWorktreeServers({ repositoryId: params.id, branch: body.branch })),
   postRoute("/api/repositories/:id/worktree-cleanup/enable", (handlers, body, params) => handlers.enableWorktreeCleanup({ repositoryId: params.id, folder: body.folder })),

@@ -59,6 +59,19 @@ function statPlanTree(dir, parts) {
 function headState(checkoutPath, parts) {
   const git = resolveGitDir(checkoutPath);
   if (!git) return;
+  // A base ref can move while every checkout stays on its own branch. Recovery evidence and
+  // readiness depend on these refs as well as the checked-out HEADs.
+  const refs = path.join(git.commonDir, "refs");
+  const visitRefs = (dir) => {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      const file = path.join(dir, entry.name);
+      if (entry.isDirectory()) visitRefs(file);
+      else parts.push(`base-ref\0${file}\0${readOrEmpty(file).trim()}`);
+    }
+  };
+  visitRefs(refs);
   const head = readOrEmpty(path.join(git.gitDir, "HEAD")).trim();
   parts.push(`head\0${head}`);
   const ref = head.startsWith("ref: ") ? head.slice("ref: ".length) : "";

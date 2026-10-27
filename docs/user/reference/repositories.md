@@ -220,7 +220,7 @@ permanently. The backup preserves committed work only. Otherwise the button is g
 back. Confirming stops the worktree's servers and removes it. Both live in the worktree dropdown on a plan's row and in the ⋮ menu on any
 other worktree row; no row shows them inline. If new local changes appear after the page loaded,
 the first deletion request keeps the worktree and reveals the warning; a second confirmation is
-required to discard them. Automatic cleanup and ordinary CLI cleanup still refuse dirty worktrees.
+required to discard them. This warned Delete choice keeps its committed-tip backup semantics.
 Deletion refuses a locked worktree, a worktree with valuable ignored files or submodules, a server that does not stop, and the current or
 main checkout, and the confirmation shows the reason. Servers stop only after those checks pass, so
 a refusal at that point stops nothing. The removal itself can still fail after the servers have
@@ -235,11 +235,53 @@ verifies the absorbing commit that plan's `## Verification` records instead of r
 `roborepo plans close`, it checks landing against the local `main` (or `--base <branch>`), so a
 closure commit that is not pushed yet still counts. Without `--plan`, landing is checked against
 `origin/HEAD` when the repository has one. The command also accepts `--remove <branch> --confirm --apply`. Automatic cleanup waits for an
-associated plan to leave `active`. It only removes a clean, unlocked, landed worktree beneath the
-repository's worktree folder, and never uses `git worktree remove --force`. The folder is
+associated plan to leave `active` or `review`. It removes an unlocked, landed worktree beneath the
+repository's worktree folder only when committed and local work are proven preserved. Dirty removal
+also requires a verified recoverable snapshot and unchanged final checks. The folder is
 `worktreeRoot` from `docs/plans/plans-config.json`, or else the folder confirmed when cleanup was
 turned on from Home. A worktree elsewhere is suggested for manual review. The command does not touch
 remote branches.
+
+**Archive and remove** in the same confirmation preserves local content before deleting the
+checkout and retiring its branch. Stop editors and agents writing in that folder first. The
+snapshot includes distinct staged and unstaged files, binaries, executable modes, symlinks,
+untracked files, valuable ignored content, and empty directories. Ignored `node_modules/` and
+`test-results/` are disposable and excluded. Unsupported files or index features keep the checkout
+with a reason. Archiving remaining work does not submit it or mean it was merged.
+
+| Preservation | Automatic cleanup | Your action |
+| --- | --- | --- |
+| `preserved` | Eligible through existing guards | Dirty content gets a snapshot |
+| `remaining` | Keeps checkout | Archive and remove, or commit work |
+| `unknown` | Keeps checkout | Inspect the reason; archive if supported |
+
+Preservation tests both the index and filesystem against one historical base commit, after proving
+committed landing. It understands ordinary code changes and uniquely identified plan lifecycle
+moves. It searches at most 500 first-parent commits within 30 seconds; unavailable history or
+unsupported Git behavior returns `unknown`. Preview creates no persistent objects or snapshot.
+
+To archive or restore from the command line:
+
+```sh
+roborepo git worktrees archive-remove <branch-or-name> --json
+roborepo git worktrees archive-remove <branch-or-name> --confirm --apply --json
+roborepo git worktrees archives --json
+roborepo git worktrees restore <archive-id> --destination <new-path> --apply --json
+```
+
+Archive removal and restore preview unless `--apply` is given; archive removal also needs
+`--confirm`. Restore requires a fresh destination and verifies filesystem and staged content.
+A failed restore leaves the snapshot intact and reports any incomplete destination; retry in a
+new folder. Recovery uses local Git refs under `refs/roborepo/worktree-archives/`, independent of
+the state-root log. They survive Git garbage collection while retained. Keep them until explicit
+deletion, including any secrets they contain. They share repository storage and are not an
+off-machine backup. Legacy `abandoned` refs below preserve only committed work.
+
+Cleanup rechecks target identity, local content, configuration, and base evidence. Checked changes
+keep the checkout; the cleanup lock serializes RoboRepo actions only. A write arriving after the
+last check can still be lost and absent from the snapshot. Stop writers before cleanup. If a
+snapshot succeeds but removal fails, use the returned recovery reference; branch retirement is a
+separate outcome and refuses a moved or occupied branch.
 
 With the plan-suite package enabled, `/plan-close` removes each story's worktree as its last step,
 and Home does not offer the hook. With it disabled, a repository card with linked worktrees and no

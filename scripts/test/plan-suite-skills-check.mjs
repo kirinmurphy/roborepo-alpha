@@ -328,8 +328,11 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "Approval only",
     "review.baseChangedPaths",
     "Record the existing answer immediately",
-    "finish only step 3",
-    "This recovery records approval; it does not close, merge, push, or waive tests",
+    "Do not edit, synchronize, or commit",
+    "Primary precursor blob:",
+    "Worktree precursor blob:",
+    "A retry reuses identical committed evidence",
+    "it does not close, merge, push, or waive tests",
   ]);
 }
 

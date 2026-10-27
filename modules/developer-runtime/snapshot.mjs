@@ -485,6 +485,9 @@ function buildRepositories({ projects, composeProjects, unmatchedInstances, repo
       root.isWorktree = true;
       root.worktreeState = worktree.state;
       root.worktreeReason = worktree.reason || null;
+      root.worktreePreservation = worktree.preservation || null;
+      root.remainingPaths = worktree.remainingPaths || [];
+      root.blockingPaths = worktree.blockingPaths || [];
       root.worktreeRunning = worktree.running === true;
       root.mergedInto = worktree.mergedInto || null;
       root.worktreeName = worktree.name;

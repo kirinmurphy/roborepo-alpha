@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
+import { inventoryWorktree, readSnapshot } from "./worktree-snapshot.mjs";
 import { runGitProcess } from "./git-exec.mjs";
 
 export function removalLogPath(stateRoot) {
@@ -44,23 +45,32 @@ export async function archiveBranchTip(mainPath, branch, tip, { runGit = runGitP
   return result.ok ? { ok: true, ref } : { ok: false, reason: result.error || "could not archive branch" };
 }
 
-export async function removeWorktree(mainPath, worktree, { kind, stateRoot, tip, discardChanges = false, runGit = runGitProcess, fsApi = fs } = {}) {
-  let archiveRef = null;
-  if (kind === "confirmed") {
+export async function removeWorktree(mainPath, worktree, { kind, stateRoot, tip, discardChanges = false, snapshot = null, runGit = runGitProcess, fsApi = fs } = {}) {
+  if (snapshot) {
+    try {
+      const { manifest } = await readSnapshot(mainPath, snapshot.ref);
+      const current = await inventoryWorktree(worktree.path);
+      if (manifest.tip !== tip || current.fingerprint !== manifest.fingerprint || current.tip !== tip) return { ok: false, reason: "snapshot no longer matches removal target", archiveRef: snapshot.ref };
+    } catch (error) { return { ok: false, reason: error.message, archiveRef: snapshot.ref || null }; }
+  }
+  let archiveRef = snapshot?.ref || null;
+  if (kind === "confirmed" && !snapshot) {
     const archived = await archiveBranchTip(mainPath, worktree.branch || worktree.name, tip, { runGit });
     if (!archived.ok) return { ok: false, reason: archived.reason };
     archiveRef = archived.ref;
   }
   const args = ["worktree", "remove"];
-  if (kind === "confirmed" && discardChanges === true) args.push("--force");
+  if ((kind === "confirmed" && discardChanges === true) || snapshot?.ok) args.push("--force");
   args.push(worktree.path);
   const removed = await runGit(mainPath, args, { timeoutMs: 120000 });
   if (!removed.ok) return { ok: false, reason: removed.error || "worktree remove failed", archiveRef };
+  if (snapshot) appendRemoval(stateRoot, { at: new Date().toISOString(), outcome: "checkout-removed", path: worktree.path, branch: worktree.branch, snapshotRef: snapshot.ref, ok: true }, fsApi);
   let branchDeleted = false;
   if (worktree.branch) {
-    const branch = await runGit(mainPath, ["branch", "-D", worktree.branch], { timeoutMs: 10000 });
+    const branch = await retireBranch(mainPath, worktree.branch, tip, runGit);
     branchDeleted = branch.ok;
   }
+  if (snapshot) appendRemoval(stateRoot, { at: new Date().toISOString(), outcome: "branch-retired", path: worktree.path, branch: worktree.branch, snapshotRef: snapshot.ref, ok: branchDeleted || !worktree.branch }, fsApi);
   const entry = { at: new Date().toISOString(), kind, path: worktree.path, branch: worktree.branch, commit: tip, archiveRef, branchDeleted, discardedChanges: discardChanges === true };
   appendRemoval(stateRoot, entry, fsApi);
   return branchDeleted || !worktree.branch
@@ -69,14 +79,14 @@ export async function removeWorktree(mainPath, worktree, { kind, stateRoot, tip,
 }
 
 export async function removeLandedBranch(mainPath, branch, { stateRoot, tip, runGit = runGitProcess, fsApi = fs } = {}) {
-  const removed = await runGit(mainPath, ["branch", "-D", branch], { timeoutMs: 10000 });
+  const removed = await retireBranch(mainPath, branch, tip, runGit);
   if (!removed.ok) return { ok: false, reason: removed.error || "branch deletion failed" };
   const entry = { at: new Date().toISOString(), kind: "automatic", path: null, branch, commit: tip, archiveRef: null, branchDeleted: true };
   appendRemoval(stateRoot, entry, fsApi);
   return { ok: true, entry };
 }
 
-function appendRemoval(stateRoot, entry, fsApi) {
+export function appendRemoval(stateRoot, entry, fsApi = fs) {
   const file = removalLogPath(stateRoot);
   fsApi.mkdirSync(path.dirname(file), { recursive: true });
   fsApi.appendFileSync(file, `${JSON.stringify(entry)}\n`);
@@ -103,4 +113,10 @@ function staleLock(file, fsApi) {
   } catch (err) {
     return err?.code === "ESRCH";
   }
+}
+
+async function retireBranch(mainPath, branch, tip, runGit) {
+  const occupied = await runGit(mainPath, ["worktree", "list", "--porcelain"]);
+  if (!occupied.ok || occupied.stdout.split("\n").includes(`branch refs/heads/${branch}`)) return { ok: false, error: "branch is occupied or worktree inventory unavailable" };
+  return runGit(mainPath, ["update-ref", "-d", `refs/heads/${branch}`, tip], { timeoutMs: 10000 });
 }

@@ -6,7 +6,7 @@ import path from "node:path";
 import { buildRepositoryPlanSnapshot, selectRepositoryPlan, validateRepositoryPlans } from "../../modules/plan-suite/index.mjs";
 import { LIFECYCLE_MODEL } from "../../modules/plan-suite/lifecycle-manifest.mjs";
 import { primaryCheckout } from "../../modules/plan-suite/plan-git.mjs";
-import { approvalFreshness, completionPreflight } from "../../modules/plan-suite/review-gates.mjs";
+import { approvalFreshness, completionPreflight, mergeReadiness } from "../../modules/plan-suite/review-gates.mjs";
 import { planLanding } from "../../modules/plan-suite/landing-gate.mjs";
 import { syncBase } from "../../modules/plan-suite/sync-base.mjs";
 import { transitionPlan } from "../../modules/plan-suite/transition.mjs";
@@ -30,6 +30,7 @@ export function plansCommand(args) {
   if (sub === "validate") return plansValidateCommand(rest);
   if (LIFECYCLE_MODEL.transition(sub)) return plansTransitionCommand(sub, rest);
   if (sub === "preflight") return plansPreflightCommand(rest);
+  if (sub === "merge-readiness") return plansMergeReadinessCommand(rest);
   if (sub === "approval") return plansApprovalCommand(rest);
   if (sub === "landed") return plansLandedCommand(rest);
   if (sub === "sync-base") return plansSyncBaseCommand(rest);
@@ -290,4 +291,21 @@ function plansRepairCommand(args) {
   }
   for (const err of errors) console.error(`warning: ${err.root || err.repository}: ${err.error}`);
   if (errors.length > 0) process.exit(1);
+}
+
+function plansMergeReadinessCommand(args) {
+  const { flags, positional } = parseArgs(args, ["base"]);
+  if (positional.length !== 1 || Object.keys(flags).some((name) => !["base", "json"].includes(name)) || flags.base === true || flags.base?.startsWith("--")) {
+    console.error("usage: roborepo plans merge-readiness <plan> [--base <branch>] [--json]");
+    process.exit(2);
+  }
+  let result;
+  try { result = runFromPrimary(positional[0], (context) => mergeReadiness({ ...context, base: flags.base || "main" })); }
+  catch (error) { return failDomain(error, flags.json); }
+  if (flags.json) console.log(JSON.stringify(result, null, 2));
+  else {
+    printFailedChecks(result.checks);
+    console.log(result.ok ? `ready at ${result.assessedTip}` : "merge readiness refused");
+  }
+  if (!result.ok) process.exit(1);
 }

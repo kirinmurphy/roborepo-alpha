@@ -1,7 +1,7 @@
 ---
 id: 4xc0gjuw
 priority: high
-next_action: Run /plan-execute to implement shared preservation assessment, recoverable archives, and landed review recovery.
+next_action: Run the independent validation loop, fix findings, and submit after the completion preflight passes.
 blocked_by: []
 depends_on: []
 related: ["hr78g4sj", "b2sgiejd", "a7bslb00", "gqzjlzgx"]
@@ -344,33 +344,33 @@ No automatic synchronization into the old squashed branch is needed for retireme
 
 ## Implementation plan
 
-- [ ] Add disposable Git regression fixtures for redundant and unique staged/unstaged states,
+- [x] Add disposable Git regression fixtures for redundant and unique staged/unstaged states,
       squash/cherry-pick merges, modes, binaries, deletion/rename context, untracked additions, and
       uniquely mapped plan lifecycle moves. Assert existing discard behavior remains unchanged.
-- [ ] Extend shared assessment under `modules/repositories/` with the coherent tree proof,
+- [x] Extend shared assessment under `modules/repositories/` with the coherent tree proof,
       explicit bounds, raw inventories, stable fingerprints, and conservative unknown reasons.
       Keep landing and local preservation fields separate; cover preview nonmutation.
-- [ ] Add versioned snapshot capture, immutable repository refs, manifest verification, archive
+- [x] Add versioned snapshot capture, immutable repository refs, manifest verification, archive
       discovery, and a filesystem/index restore round trip. Extend the hardened Git seam only for
       required binary plumbing and controlled temporary stores; test hooks/filters do not execute.
-- [ ] Integrate snapshot/guard/removal transactions into `worktree-removal.mjs` and
+- [x] Integrate snapshot/guard/removal transactions into `worktree-removal.mjs` and
       `scripts/cli/worktree-cleanup.mjs`; re-inventory inside the lock, preserve writer guards,
       outcome records, branch identity checks, partial failure, and retry recovery.
-- [ ] Register the new command definitions and CLI adapters. Extend repository projections,
+- [x] Register the new command definitions and CLI adapters. Extend repository projections,
       `portal-routes-repositories.mjs`, and `portal/home/` API, templates, and dialogs with separate
       Archive and remove and warned Delete choices. Assert equivalent CLI/portal archive results.
-- [ ] Implement the shared landed-recovery predicate and parser in `modules/plan-suite/`;
+- [x] Implement the shared landed-recovery predicate and parser in `modules/plan-suite/`;
       integrate `plan-authority.mjs`, `plan-copies.mjs`, `worktree-copy.mjs`, `copy-integration.mjs`,
       `review-record.mjs`, `review-gates.mjs`, `review-freshness.mjs`, `transition-rules.mjs`, and
       `snapshot-fingerprint.mjs`. Update the priority-write paths in `modules/plan-suite/index.mjs`
       and `scripts/cli/plans.mjs` so evidence selection cannot redirect ordinary portal mutations.
-- [ ] Add `plans merge-readiness` through `scripts/cli/plans-command.mjs` and command metadata;
+- [x] Add `plans merge-readiness` through `scripts/cli/plans-command.mjs` and command metadata;
       wire canonical plan-review approval commits and primary-only recovery to the shared checks.
-- [ ] Update plan-close's automatic cleanup and already-closed retry handoff. Preserve durable
+- [x] Update plan-close's automatic cleanup and already-closed retry handoff. Preserve durable
       closure when work remains; snapshots never satisfy approval, review, integration, or landing.
-- [ ] Update all documentation and canonical skill references listed below; regenerate command
+- [x] Update all documentation and canonical skill references listed below; regenerate command
       wrappers with the existing renderer. Register any new suites in existing test orchestration.
-- [ ] Run affected behavior suites, browser checks, command/skill checks, health checks, and the
+- [x] Run affected behavior suites, browser checks, command/skill checks, health checks, and the
       full local parity gate. Record evidence and any unavailable platform checks before review.
 
 ## Validation
@@ -473,3 +473,52 @@ checkout intact.
   document the remaining external-writer race. Do not require caller-provided proof that every
   writer has stopped. Stopping writers remains an operating requirement, and existing server
   guards and refusal on observed changes remain effective.
+
+### Execution decisions
+
+- Keep raw inventory, snapshot capture/discovery/restore, and preservation proof under the shared
+  repository owner. Reuse the plan parser for identity mapping rather than recognizing body text
+  as frontmatter. Thin CLI and portal adapters share the transaction.
+- Refuse configured external drivers and unsupported transformations conservatively; raw blobs
+  preserve binary data without invoking filters. Assessment and recovery merge objects use
+  temporary external stores, so read-only checks publish no recovery refs.
+- Keep primary recovery evidence separate from normal mutations. The shared verifier selects
+  committed primary evidence, while priority writes resolve the assigned worktree again.
+
+## Execution record
+
+- Start transition: `a68a9cc30aa00869403db47aa907fed50f8bf63a`, approved without correction.
+- Implementation branch: `codex/git-worktree-preservation-and-recovery`; base: `main`.
+- Starting implementation commit: `a68a9cc30aa00869403db47aa907fed50f8bf63a`.
+- Disposable real-Git regressions cover staged/unstaged separation, binaries, modes, symlinks,
+  valuable ignored files, deletion/rename absorption, lifecycle mapping, nonmutating previews,
+  automatic snapshots, shared CLI/portal archive requests, lost ledgers, and garbage collection.
+- Primary-only recovery tests cover committed evidence authority, approval and integration,
+  priority writes staying in the worktree, readiness, conflicting copies, and later code changes.
+- Portal test environment: hermetic local portal started by the browser runner; all 146 browser
+  checks passed, including archive recovery instructions and unchanged Delete/discard behavior.
+- CI behavior group: 61/62 suites passed; the documentation reference suite fails on the base input
+  recorded below. Catalog, command renderer, triggers, CLI surface, focused repository/plan suites,
+  and whitespace checks passed. Package installation and installer collision suites passed.
+- All four available Docker clean-machine suites passed. Native Windows verification is unavailable.
+- `npm run check` was executed and stops on the pre-existing skill body limit recorded below.
+  Remaining gate stages were run separately. CLI smoke results are being reconciled after commit.
+
+## Not tested
+
+- [ ] Native Windows snapshot restore and symlink/executable-mode behavior. This macOS host has no
+  Windows runtime or PowerShell; verify on a Windows machine before closing.
+
+## Review
+
+### Findings
+
+None recorded yet; independent validation pending.
+
+### Verification
+
+- Base failure: doctor rejects the unchanged `plan-execute/SKILL.md` body at 503 lines (limit 500).
+  The same 507-line source including frontmatter is committed on `main`.
+- Base failure: `docs-reference-check.mjs` rejects the unchanged link at
+  `docs/internal/backlog-review.md:86` to the ready credential-protection plan; that target is
+  already absent from `main`.

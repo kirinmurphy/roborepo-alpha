@@ -1,0 +1,19 @@
+{
+  "path": [
+    "git",
+    "worktrees",
+    "restore"
+  ],
+  "kind": "command",
+  "title": "Restore worktree archive",
+  "description": "Restore worktree archive",
+  "usage": "roborepo git worktrees restore <archive-id> --destination <new-path> [--apply] [--json]",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/worktree-cleanup.mjs",
+    "export": "worktreeArchiveCommand",
+    "prependArgs": [
+      "restore"
+    ]
+  }
+}
