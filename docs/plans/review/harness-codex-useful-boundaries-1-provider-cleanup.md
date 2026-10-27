@@ -1,7 +1,7 @@
 ---
 id: hr78g4sj
 priority: high
-next_action: Human approves reviewed implementation 9a21ab28df5a7e2c9481db66d0d7229f34785416, then runs /plan-close hr78g4sj.
+next_action: Run /plan-close hr78g4sj; the landed implementation has renewed explicit human approval.
 blocked_by: []
 depends_on: ["wjlt1zvf"]
 related: ["4zyo2woj", "8bjltk2n", "46qth5z8", "7k3m9qd", "harness-capability-derived-resource-targeting"]
@@ -328,17 +328,18 @@ No implementation fix or escalate findings in the validation passes.
 
 ### Approval
 - Decision: approved
-- Reviewed implementation commit: a8aa353fbb1b7cb45ad2822314385354b0f6f5f6
+- Reviewed implementation commit: 9a21ab28df5a7e2c9481db66d0d7229f34785416
 - Confirmed by: human
 - Evidence: October 26, 2026, the human answered "Approve this implementation" to the
-  approval prompt naming this plan and exact reviewed implementation commit.
+  post-merge recovery approval prompt naming this plan and exact commit
+  `9a21ab28df5a7e2c9481db66d0d7229f34785416`. The human directed that approval be recorded on main.
 - Previous decision: approved
-- Previous reviewed implementation commit: d62ba4d5b9f3f987c2be3eea4410efd1c51e78f6
+- Previous reviewed implementation commit: a8aa353fbb1b7cb45ad2822314385354b0f6f5f6
 - Previous confirmed by: human
-- Previous evidence: October 25, 2026, the human answered "Approve this implementation" to the
-  approval question naming this plan and exact reviewed implementation commit.
-- Reason: the October 26 feedback fixes changed implementation after that approval. The previous
-  reviewed commit and human answer above are historical evidence, not approval of the new fixes.
+- Previous evidence: October 26, 2026, the human answered "Approve this implementation" to the
+  earlier approval prompt naming that implementation. Subsequent base integration made it stale.
+- Earlier approval: d62ba4d5b9f3f987c2be3eea4410efd1c51e78f6, explicitly approved by the human
+  on October 25, 2026; superseded after feedback fixes. These prior approvals remain historical.
 
 ### Review evidence before PR feedback
 
@@ -476,7 +477,7 @@ No implementation fix or escalate findings in the validation passes.
   implementation and branch tip are unchanged. No worktree commit is made.
 - Findings: zero open, zero fixed in this recovery, zero escalated. No required manual checks
   remain. Lifecycle stays in review. Explicit human approval of the exact reviewed commit is
-  requested; approval has not yet been received for this implementation.
+  requested during review. The human subsequently approved this exact implementation; see Approval.
 
 ## Not tested
 
