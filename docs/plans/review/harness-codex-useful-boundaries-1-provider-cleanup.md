@@ -1,7 +1,7 @@
 ---
 id: hr78g4sj
 priority: high
-next_action: Human merges the PR, then runs /plan-close hr78g4sj.
+next_action: Human approves reviewed implementation 9a21ab28df5a7e2c9481db66d0d7229f34785416, then runs /plan-close hr78g4sj.
 blocked_by: []
 depends_on: ["wjlt1zvf"]
 related: ["4zyo2woj", "8bjltk2n", "46qth5z8", "7k3m9qd", "harness-capability-derived-resource-targeting"]
@@ -323,8 +323,8 @@ No implementation fix or escalate findings in the validation passes.
 
 ### Result
 - Status: complete
-- Reviewed implementation commit: a8aa353fbb1b7cb45ad2822314385354b0f6f5f6
-- Base commit: fb068616abc30baaaf6194e7ba6871f32e78e496
+- Reviewed implementation commit: 9a21ab28df5a7e2c9481db66d0d7229f34785416
+- Base commit: bb8209b55e069d657cf70b0f585199231c8f89a3
 
 ### Approval
 - Decision: approved
@@ -429,8 +429,223 @@ No implementation fix or escalate findings in the validation passes.
 - No required manual tests remain; native model synthesis stays explicitly optional. Human's
   statement that they are ready to approve is readiness, not explicit approval of a new commit.
 
+### Post-merge recovery review — October 26
+
+- Resume path: changes since review; recover approval after landing. The prior complete review
+  and approval covered `a8aa353fbb1b7cb45ad2822314385354b0f6f5f6`; the current reviewed
+  implementation is `9a21ab28df5a7e2c9481db66d0d7229f34785416`.
+- Landing evidence reused after fresh Git checks: repository `kirinmurphy/roborepo-alpha`, branch
+  `codex/harness-codex-provider-cleanup`, base `main`, unchanged branch tip `9a21ab28`, and
+  absorbing commit `b79bf35dac5f6c430c85b1352331a8c943d61038` still in main's first-parent
+  history. Post-merge recovery did not synchronize base or change implementation.
+- The tracked implementation comparison between feature `9a21ab28` and current base
+  `bb8209b55e069d657cf70b0f585199231c8f89a3` is empty outside `docs/plans/`. Main's
+  post-landing changes are plan-only. Pending portal edits in primary belong to other work and
+  are excluded from this review and its commits.
+- Reviewed the changes since approval: the incoming package consolidation updates plan-suite
+  enablement, package presentation and inspection, resource cost reporting, and generated command
+  ownership. The cleanup's provider sources, manifest row, argv templates, contract validation,
+  and invocation behavior are unchanged; the telemetry changes concern package onboarding.
+- Reused the full completion gate executed in the preceding closure attempt on this identical
+  implementation, rather than rerunning it: `npm run check` passed, exit 0; health 107 checks;
+  CLI 464 passed, zero failed; installation collisions all passed; grouped integration suites
+  60/60; package-install smoke passed; all four strict Docker scenarios passed; browser 133 passed.
+  The primary-only documentation link correction accommodates a later plan lifecycle move and
+  does not change the reviewed implementation. Its reference check passed separately.
+- Fresh-context independent Validator pass: clean, zero fix findings and zero escalations.
+  Checked every acceptance criterion against code and tests, original provider relocation,
+  standalone permission-manifest discovery, installed ownership/trust behavior, summary transport,
+  documentation, and incoming package interactions. Applied code-style, JavaScript/TypeScript,
+  test-harness, and RoboRepo development conventions, including flow/cohesion, data/state, and
+  comments/abstractions. React is not applicable.
+- Fresh Validator assertions passed: `node scripts/test/harness-registry-check.mjs`,
+  `node scripts/test/telemetry-synthetic-provider-check.mjs`,
+  `node scripts/test/harness-desktop-runtime-check.mjs`,
+  `node scripts/test/shared-target-rows-check.mjs`,
+  `node scripts/test/hook-composition-check.mjs`, and `git diff --check`.
+  `node scripts/test/docs-reference-check.mjs` passed in the worktree and primary checkout.
+- Reconciled only this chat's closure evidence from primary into the authoritative worktree after
+  verifying the worktree's committed plan matched the primary document before those notes.
+  Independent plan edits were absent. Review records preserve the preceding approval as history;
+  they do not renew it or imply approval of this commit.
+- Base failures: none in the reused gate. Windows installer parity (`pwsh` unavailable) and the
+  optional active-root fixture (`uvx` unavailable) were skipped and are not claimed as passed.
+  Native model synthesis remains explicitly optional; no real model call was made.
+- Human directed that renewed review evidence be committed on main only. The authoritative
+  worktree plan is kept byte-for-byte aligned as an uncommitted evidence-only edit; its
+  implementation and branch tip are unchanged. No worktree commit is made.
+- Findings: zero open, zero fixed in this recovery, zero escalated. No required manual checks
+  remain. Lifecycle stays in review. Explicit human approval of the exact reviewed commit is
+  requested; approval has not yet been received for this implementation.
+
 ## Not tested
 
 - Deferred, optional: native model synthesis using the real provider templates. Local help and synthetic processes
       verify syntax and transport; a real model call requires separate authorization and is not
       needed for the provider cleanup's automated acceptance checks.
+
+## Closure attempt — October 26
+
+Closure is blocked by stale human approval. The plan remains in review; no lifecycle transition,
+closure commit, server shutdown, or worktree removal was performed.
+
+- Primary and assigned-worktree plan bytes matched at the start of verification (blob
+  `03e23bb9d6c1d95d127a7892d93669f5c309995e`), confirming integration of the worktree's plan state.
+- The canonical validator reported zero findings and zero blocking findings.
+- The canonical approval check reported `stale`: approved implementation
+  `a8aa353fbb1b7cb45ad2822314385354b0f6f5f6` differs outside `docs/plans/` from branch tip
+  `9a21ab28df5a7e2c9481db66d0d7229f34785416` on
+  `codex/harness-codex-provider-cleanup` (114 paths). This command cannot renew approval.
+  Run `/plan-review hr78g4sj` for the current implementation and obtain explicit human approval.
+- The canonical landed check passed with newly scanned content-level evidence on local main.
+  Its first sandbox attempt returned `scan unavailable`; the authorized retry verified the merge.
+- Absorbing commit: b79bf35dac5f6c430c85b1352331a8c943d61038
+- Current code confirms provider-owned hook sources and the per-file `managed_files` platform row,
+  manifest-backed hook routing, schema/runtime template validation, registry-ordered enabled
+  provider selection, direct resolved-executable invocation, literal summary-only argv transport,
+  unchanged command-name report identifiers, and best-effort failures with a 60-second timeout.
+- Fresh focused assertions passed: `node scripts/test/hook-composition-check.mjs`,
+  `node scripts/test/harness-registry-check.mjs`,
+  `node scripts/test/telemetry-synthetic-provider-check.mjs`,
+  `node scripts/test/harness-desktop-runtime-check.mjs`, and
+  `node scripts/test/shared-target-rows-check.mjs` (all exit 0).
+- All eight documentation-impact references were checked against the current source ownership
+  and headless behavior. The documentation reference check initially found a stale link in
+  `docs/internal/backlog-review.md` to the package-state plan's former backlog path. Corrected
+  it to that plan's current active path; `node scripts/test/docs-reference-check.mjs` then passed.
+  The current source/test/reference-doc scan found no retired Codex hook source path.
+- The conditional worktree-folder field remains absent and explicitly deferred. No required
+  unchecked manual entries remain; native model synthesis is optional and was not run.
+- Full completion gate: `npm run check` passed, exit 0, in the authorized retry. Health:
+  107 checks; CLI: 464 assertions, zero failed; installation collisions: all passed; grouped
+  integration suites: 60/60; package-install smoke: passed; all four strict Docker clean-machine,
+  installation, permissions, and onboarding scenarios: passed; browser tests: 133 passed.
+  Windows installer parity was skipped because `pwsh` is unavailable and is not claimed as passed.
+  The initial sandbox gate exited 1 with `Claude Code has no validated CLI or desktop runtime`;
+  that run is not counted as passing. No cause beyond the observed output is asserted.
+- `git diff --check` and the primary plan's review-lifecycle content validation passed. The
+  canonical validator reports zero blocking findings and the expected advisory
+  `PLAN_EDITED_OUTSIDE_WORKTREE` for these closure notes in the primary checkout. The assigned
+  worktree's copy was left unchanged, as required after plan-integration verification.
+- Primary main advanced during verification with another plan's lifecycle-only commit
+  `bb8209b55e069d657cf70b0f585199231c8f89a3`; no branch was moved by this closure attempt.
+
+<details>
+<summary>Paths changed since the approved implementation (114)</summary>
+
+- `docs/internal/backlog-review.md`
+- `docs/internal/history/plan-lifecycle/README.md`
+- `docs/internal/plans-portal-internals.md`
+- `docs/internal/portal-architecture.md`
+- `docs/user/guides/plan/lifecycle/plan-suite.md`
+- `docs/user/guides/setup-and-daily-use.md`
+- `docs/user/reference/config-control-panel.md`
+- `docs/user/reference/plans-portal.md`
+- `docs/user/reference/repositories.md`
+- `docs/user/reference/roborepo-cli.md`
+- `generated/packages/plan-suite/claude/commands/plan-archive.md`
+- `generated/packages/plan-suite/claude/commands/plan-close.md`
+- `generated/packages/plan-suite/claude/commands/plan-execute.md`
+- `generated/packages/plan-suite/claude/commands/plan-promote.md`
+- `generated/packages/plan-suite/claude/commands/plan-review.md`
+- `generated/packages/plan-suite/claude/commands/plan-write.md`
+- `generated/packages/plan-suite/codex/commands/plan-archive.md`
+- `generated/packages/plan-suite/codex/commands/plan-close.md`
+- `generated/packages/plan-suite/codex/commands/plan-execute.md`
+- `generated/packages/plan-suite/codex/commands/plan-promote.md`
+- `generated/packages/plan-suite/codex/commands/plan-review.md`
+- `generated/packages/plan-suite/codex/commands/plan-write.md`
+- `generated/packages/plan-suite/gemini/commands/plan-archive.md`
+- `generated/packages/plan-suite/gemini/commands/plan-close.md`
+- `generated/packages/plan-suite/gemini/commands/plan-execute.md`
+- `generated/packages/plan-suite/gemini/commands/plan-promote.md`
+- `generated/packages/plan-suite/gemini/commands/plan-review.md`
+- `generated/packages/plan-suite/gemini/commands/plan-write.md`
+- `globals/packages/plan-archive/package.config.json`
+- `globals/packages/plan-archive/skill-triggers.json`
+- `globals/packages/plan-close/package.config.json`
+- `globals/packages/plan-close/skill-triggers.json`
+- `globals/packages/plan-execute/package.config.json`
+- `globals/packages/plan-execute/skill-triggers.json`
+- `globals/packages/plan-promote/package.config.json`
+- `globals/packages/plan-promote/skill-triggers.json`
+- `globals/packages/plan-review/package.config.json`
+- `globals/packages/plan-review/skill-triggers.json`
+- `globals/packages/plan-suite/package.config.json`
+- `globals/packages/plan-suite/rules.md`
+- `globals/packages/plan-suite/skill-triggers.json`
+- `globals/packages/plan-suite/skills/plan-archive/SKILL.md`
+- `globals/packages/plan-suite/skills/plan-archive/agents/openai.yaml`
+- `globals/packages/plan-suite/skills/plan-close/SKILL.md`
+- `globals/packages/plan-suite/skills/plan-close/agents/openai.yaml`
+- `globals/packages/plan-suite/skills/plan-close/references/verdict.md`
+- `globals/packages/plan-suite/skills/plan-execute/SKILL.md`
+- `globals/packages/plan-suite/skills/plan-execute/agents/openai.yaml`
+- `globals/packages/plan-suite/skills/plan-execute/references/start-validation.md`
+- `globals/packages/plan-suite/skills/plan-execute/references/validation-loop.md`
+- `globals/packages/plan-suite/skills/plan-promote/SKILL.md`
+- `globals/packages/plan-suite/skills/plan-promote/agents/openai.yaml`
+- `globals/packages/plan-suite/skills/plan-review/SKILL.md`
+- `globals/packages/plan-suite/skills/plan-review/agents/openai.yaml`
+- `globals/packages/plan-suite/skills/plan-review/references/resume-review.md`
+- `globals/packages/plan-suite/skills/plan-write/SKILL.md`
+- `globals/packages/plan-suite/skills/plan-write/agents/openai.yaml`
+- `globals/packages/plan-suite/skills/plan-write/references/lifecycle.md`
+- `globals/packages/plan-suite/skills/plan-write/references/plan-schema.md`
+- `globals/packages/plan-suite/skills/plan-write/references/prompt-contracts.md`
+- `globals/packages/plan-suite/skills/plan-write/references/workflow-create.md`
+- `globals/packages/plan-suite/skills/plan-write/references/workflow-update.md`
+- `globals/packages/plan-suite/skills/plan-write/references/workflow-validate.md`
+- `globals/packages/plan-suite/skills/plan-write/references/writing-guidelines.md`
+- `globals/packages/plan-write/package.config.json`
+- `globals/packages/plan-write/skill-triggers.json`
+- `local/skills/roborepo-development/SKILL.md`
+- `local/skills/roborepo-development/references/package-development.md`
+- `manifests/inventory/package-categories.json`
+- `manifests/platform/cli/command-definitions/package/dev-add-skill.command.json`
+- `modules/plan-suite/canonical-scan.mjs`
+- `portal/config/app.js`
+- `portal/config/elements/config-item.js`
+- `portal/config/index.html`
+- `portal/config/panels.js`
+- `portal/config/state.js`
+- `portal/config/styles.css`
+- `portal/config/templates.js`
+- `portal/home/app.js`
+- `portal/plans/api.js`
+- `portal/plans/app.js`
+- `portal/plans/elements/plan-card.js`
+- `portal/plans/plan-drawer-partial.html`
+- `portal/plans/plan-drawer.js`
+- `portal/plans/templates.js`
+- `scripts/cli/config-bulk.mjs`
+- `scripts/cli/config-cli-print.mjs`
+- `scripts/cli/config.mjs`
+- `scripts/cli/context-cost.mjs`
+- `scripts/cli/mock-home.mjs`
+- `scripts/cli/packages.mjs`
+- `scripts/cli/plans.mjs`
+- `scripts/cli/portal-routes-config.mjs`
+- `scripts/cli/repository-overview-projections.mjs`
+- `scripts/cli/telemetry.mjs`
+- `scripts/dev/docs-screenshots.mjs`
+- `scripts/test/config-bulk-toggle-check.mjs`
+- `scripts/test/context-cost-check.mjs`
+- `scripts/test/fixtures/multi-skill-package.mjs`
+- `scripts/test/package-catalog-check.mjs`
+- `scripts/test/package-lifecycle-check.mjs`
+- `scripts/test/package-retired-ids-check.mjs`
+- `scripts/test/plan-close-integration-check.mjs`
+- `scripts/test/plan-suite-check.mjs`
+- `scripts/test/plan-suite-commands-check.mjs`
+- `scripts/test/plan-suite-skills-check.mjs`
+- `scripts/test/portal-ui/helpers.mjs`
+- `scripts/test/portal-ui/portal-ui.spec.mjs`
+- `scripts/test/portal-ui/repository-scope.spec.mjs`
+- `scripts/test/portal-ui/repository-sources.spec.mjs`
+- `scripts/test/repository-overview-check.mjs`
+- `scripts/test/skill-reference-matrix-characterization-check.mjs`
+- `scripts/test/system-package-ownership-characterization-check.mjs`
+- `scripts/test/test-cli.sh`
+
+</details>
