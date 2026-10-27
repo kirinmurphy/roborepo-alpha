@@ -14,6 +14,7 @@
     "hook-readiness-check.mjs",
     "hook-review-launch-check.mjs",
     "hook-review-cli-check.mjs",
+    "codex-credential-projection-check.mjs",
     "permission-rule-home-path-check.mjs",
     "node-release-health-check.mjs",
     "telemetry-oracle-check.mjs",

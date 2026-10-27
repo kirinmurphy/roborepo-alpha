@@ -177,6 +177,18 @@ Two properties make this the security floor rather than one more preference:
 - **Deny is not a prompt.** There is no in-session override. If a denied path needs reading, carve
   it out of the behavior rather than working around it.
 
+When `read-secrets` resolves to `deny`, Codex renders native filesystem denies in both its
+writable `managed-workspace` profile and its `managed-read-only` profile. These prevent matching
+**reads and writes**, including credential-file edits. The enumerated environment-file patterns
+leave `.env.example` and `.env.sample` readable. Setting the behavior to `allow` removes these
+denies; `ask` also removes them and reports that path-specific prompting is unsupported.
+
+Native enforcement was verified on macOS with Codex CLI `0.163.0-alpha.11.2`, using synthetic
+files and freshly launched sandboxed commands. This covers commands and their descendants;
+desktop session tools, structured file tools, browser, MCP, and escalated processes remain
+unverified. Linux and Windows enforcement is unverified. Gemini cannot enforce this path boundary;
+Claude retains its tool permission rules. A rendered profile alone does not certify protection.
+
 A denylist only catches what it names. It cannot cover unknown-sensitive files — a tax PDF, a
 client repo under NDA — which is why it complements the scope perimeter instead of replacing it.
 

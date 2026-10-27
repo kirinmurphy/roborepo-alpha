@@ -67,6 +67,25 @@ function main() {
       "package install must include plans-config.json for package-mode workspace-root derivation",
     );
 
+    const codexHome = path.join(dirs.home, ".codex");
+    fs.mkdirSync(codexHome, { recursive: true });
+    const codexTarget = path.join(codexHome, "config.toml");
+    fs.writeFileSync(codexTarget, 'notify = ["personal"]\n');
+    // Import the installed provider, proving packed code projects into a different target home.
+    const packedProjection = `
+      import { renderPermissionsTo } from ${JSON.stringify(path.join(appRoot, "scripts/cli/permissions-render.mjs"))};
+      renderPermissionsTo(${JSON.stringify(dirs.home)}, { overrides: { behaviors: { "write-files": "deny" } } });
+    `;
+    runCommand(process.execPath, ["--input-type=module", "-e", packedProjection], dirs.cwd, env);
+    const projected = fs.readFileSync(codexTarget, "utf8");
+    assert.match(projected, /extends = ":read-only"/);
+    assert.match(projected, /"~\/\.ssh\/\*\*" = "deny"/);
+    assert.match(projected, /"\/\*\*\/\.env" = "deny"/);
+    assert.match(projected, /^notify =/m);
+    assert.ok(!projected.includes(dirs.home));
+    runCommand(process.execPath, ["--input-type=module", "-e", packedProjection], dirs.cwd, env);
+    assert.equal(fs.readFileSync(codexTarget, "utf8"), projected);
+
     const hashBefore = hashDirectory(appRoot);
 
     const versionOut = runCommand(binPath, ["version"], dirs.cwd, env);

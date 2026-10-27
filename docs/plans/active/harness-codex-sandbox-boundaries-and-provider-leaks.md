@@ -1,7 +1,7 @@
 ---
 id: 4zyo2woj
 priority: high
-next_action: Resolve supported Codex runtimes and effective permission layers, then add synthetic credential projection and enforcement fixtures before implementing native denial in writable and read-only profiles.
+next_action: Finish the full local parity gate, run the independent validation loop, then submit for human review if preflight passes.
 blocked_by: []
 depends_on: ["hr78g4sj"]
 related: ["8bjltk2n", "wjlt1zvf", "ia1q1z9", "permva27", "permissions-ui-revamp", "codex-cmux-hook-trust-review", "46qth5z8", "harness-capability-derived-resource-targeting", "7k3m9qd", "o9zwxuav"]
@@ -272,39 +272,39 @@ cannot satisfy Part 3's source-staging prerequisite by inference.
       review confirmed squash `b79bf35d` is an ancestor of main; current provider routing, relocated
       sources, ownership/trust safeguards, logging, and foreign-config preservation were checked.
       Five focused checks passed; see Preparation verification below.
-- [ ] Resolve desktop and CLI executables through `scripts/harnesses/discovery.mjs`
+- [x] Resolve desktop and CLI executables through `scripts/harnesses/discovery.mjs`
       (`selectedHarnessExecutable`) and their provider detection data. Record versions and effective
       permission layers separately for each claimed runtime; do not add a hardcoded binary picker.
       Retain historical fixture results as scoped evidence, not certification of a newer runtime.
-- [ ] Extend fixtures across every `read-secrets` pattern, template exception, deep/new paths,
+- [x] Extend fixtures across every `read-secrets` pattern, template exception, deep/new paths,
       links, and supported command/structured-read/nested-tool surface. Use synthetic files only.
-- [ ] Establish platform-specific glob behavior before claiming Linux or Windows enforcement;
+- [x] Establish platform-specific glob behavior before claiming Linux or Windows enforcement;
       list unsupported or unverified surfaces explicitly.
 
 ### Implement native credential protection
 
-- [ ] Add dedicated Codex native-projection and enforcement parity checks, with explicit unsupported
+- [x] Add dedicated Codex native-projection and enforcement parity checks, with explicit unsupported
       runtime/tool states. Preserve Gemini and the generic capability contract.
-- [ ] Add focused native-projection fixtures before implementation; assert missing denies fail.
+- [x] Add focused native-projection fixtures before implementation; assert missing denies fail.
       Cover all 15 manifest patterns, resolved deny/allow/ask intent, both write modes, TOML
       escaping, home and absolute anchors, templates, workspace roots, and idempotence.
       Extend `scripts/test/codex-permissions-foreign-lines-check.mjs` for both resulting profiles.
-- [ ] Add a synthetic native enforcement runner that consumes provider-rendered configuration,
+- [x] Add a synthetic native enforcement runner that consumes provider-rendered configuration,
       asserts an unrestricted positive control and sandboxed negative controls, and fails when
       denial is missing. A missing binary, unsupported platform, or unusable nested sandbox must
       report unavailable instead of passing. Record supported runtime/platform coverage separately.
-- [ ] Implement native filesystem denial from `read-secrets` in both writable and read-only Codex
+- [x] Implement native filesystem denial from `read-secrets` in both writable and read-only Codex
       profiles. Preserve resolved intent, workspace roots, foreign config, and safe reapply; leave
       command classification in `permission-check.mjs` unchanged.
-- [ ] Register deterministic projection/parity checks in `scripts/test/check-groups.json` using
+- [x] Register deterministic projection/parity checks in `scripts/test/check-groups.json` using
       existing group ownership. Missing or overstated coverage must fail; explicitly unsupported
       providers remain loadable without advertising protection. Keep native enforcement verification
       explicit so a skipped local probe cannot satisfy a claimed supported-runtime gate.
-- [ ] Pass any required target-home context through the existing live/build provider-render path,
+- [x] Pass any required target-home context through the existing live/build provider-render path,
       and extend live-render, packed-install, and clean-machine permission fixtures for target-home
       isolation, read-only denial, update/reapply, and preservation of unrelated settings.
-- [ ] Update every document listed under Documentation impact with the measured coverage and limits.
-- [ ] Verify live against the shipped Codex binary, since shell quoting and expansion only show up
+- [x] Update every document listed under Documentation impact with the measured coverage and limits.
+- [x] Verify live against the shipped Codex binary, since shell quoting and expansion only show up
       when a real shell runs the command.
 
 
@@ -408,3 +408,71 @@ No unresolved policy choice or implementation dependency blocker remains. Actual
 coverage is implementation verification; unsupported surfaces must be explicit, and Part 3 cannot
 use source staging until its native boundary is established. Historical runtime probes above were
 not rerun during preparation.
+
+
+## Execution evidence
+
+October 26 implementation on `codex/credential-protection`, based on main `9bd17f36`.
+Start transition `602a1bc4` was APPROVED without correction passes. The authoritative worktree is
+Git administrative worktree `credential-protection`; this document contains no machine-local path.
+
+- Discovery selected the same executable for CLI and desktop: Codex CLI `0.163.0-alpha.11.2`
+  bundled with ChatGPT on macOS. This records executable identity, not desktop tool inheritance.
+- The read-only native `config/read` query returned project, user and system layers, effective
+  `on-request`, `managed-workspace`, `sandbox_mode: null`, network disabled and no filesystem
+  entries. `configRequirements/read` returned `requirements: null`. The installed home was not
+  changed. The query timed out inside the chat sandbox and succeeded after an authorized
+  unrestricted launch without a model call.
+- A standalone temporary-home native probe asserted that `~/.ssh/**` resolves against the runtime
+  home. Thus neither build nor live rendering needs home expansion or a new target-home option.
+- The deterministic projection test initially failed on the missing `~/.ssh/**` entry before the
+  implementation. It now passes all 15 patterns across nine write/credential-intent combinations,
+  escaping, roots, templates, idempotence, unknown anchors and explicit coverage metadata.
+- Native enforcement ran the provider-rendered config in fresh synthetic homes with managed
+  requirements included. Both `managed-workspace` and `managed-read-only` passed 31 file cases:
+  all 15 independent patterns at shallow and ten-level paths, plus a symlink. Direct Node reads,
+  `cat`, shell, `xargs` and descendant Node reads were denied, as were writes. Public and template
+  reads passed; read-only public writes failed. Creating a directory and its new `.env` was also
+  tested in writable mode: directory allowed, credential write denied. The unrestricted control
+  passed, and removing denies made the same negative controls fail. No actual credentials were
+  accessed. The nested chat sandbox returned unavailable (`sandbox_apply: Operation not permitted`);
+  the explicitly authorized host launch of the same runner passed with native commands sandboxed.
+- Coverage metadata is recorded in `scripts/test/fixtures/codex-credentials/coverage.json`.
+  Desktop sessions, product structured-read tools, browser, MCP and escalated processes remain
+  unverified; Linux and Windows remain unverified. These do not inherit certification from the
+  native process checks. Part 3 must stage through a tested native command surface or separately
+  establish its chosen surface's boundary.
+- Foreign-line, home-path, Gemini, root-config-write, hook-composition and live-render checks passed.
+  Packed install passed with portable home anchors, read-only denial and idempotent reapply into a
+  different temporary home. Strict clean-machine permission checks also passed; full parity is still running.
+- The started verification environment is the native synthetic sandbox runner, plus disposable
+  packed-install/container fixtures. This configuration change has no persistent server or
+  shareable URL; installed live settings were not rewritten.
+
+### Implementation decisions
+
+- Preserve portable runtime `~/` anchors rather than materialize homes during live apply. The
+  native temporary-home assertion verified support; one projection serves generated, packed and
+  live paths without ambient-home coupling or a new render contract.
+- Keep read-only network disabled, matching the former built-in `:read-only` selection. The new
+  named profile adds denial without writable roots or a new network grant; the writable profile
+  retains its resolved network behavior.
+- Use provider-owned credential translation called by the existing pure render core, with no
+  universal permissions method. The alternative was generic provider enforcement API expansion,
+  which the approved scope explicitly excludes.
+- Keep native enforcement explicit rather than an availability-skipping CI check. Its unavailable
+  exit is `2`; deterministic CI checks cover projection and prevent broader tool/platform claims.
+  The test-orphan exemption records why the native runner is deliberately outside the CI group.
+- Preserve the existing documentation shapes and owner map. Updated the five docs of record and
+  repaired the related backlog-review link after the lifecycle move.
+
+## Not tested
+
+- [ ] Verify credential denial in a fresh desktop session and product structured-read tools after
+      applying the new profile. No disposable desktop session was configured; native subprocess
+      checks do not exercise desktop tool dispatch or inherited session policy.
+- [ ] Verify native enforcement on Linux and Windows before claiming either platform. No native
+      hosts for those platforms were used; the Linux container checks render/install behavior only.
+- [ ] Establish credential boundaries independently for browser, MCP and separately escalated
+      execution before using those surfaces for protected source staging. These tools were not
+      certified by the native subprocess runner and have separate execution boundaries.

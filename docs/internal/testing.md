@@ -173,3 +173,37 @@ still pass when statusline text formatting is not the subject under review.
 CI runs the main suite on macOS and Linux, plus a Windows PowerShell parser/parity check for the
 installer. A local macOS publish review does not prove Linux or Windows lifecycle behavior unless
 those CI jobs or equivalent local environments are run.
+
+## Codex credential verification
+
+Credential projection and native enforcement have different evidence requirements:
+
+| Check | What it establishes | Availability |
+| --- | --- | --- |
+| `node scripts/test/codex-credential-projection-check.mjs` | All 15 patterns, resolved buckets, write modes, portable anchors, roots, reapply | Deterministic CI group |
+| `node scripts/test/codex-credential-enforcement-check.mjs` | Native command boundary, controls and descendants | Explicit macOS probe |
+
+The native runner discovers the executable through the provider, renders into a temporary
+`CODEX_HOME`, and launches fresh native sandboxes for both profiles with managed requirements
+included. It uses synthetic credentials only. Its unrestricted control proves the files are
+accessible; removing denies must make the negative controls fail. Direct Node file reads,
+`cat`, shell, `xargs`, descendant Node processes, symlinks, ten-level paths, new matching files,
+public files, templates and read-only writes are asserted.
+
+On October 26, 2026, macOS Codex CLI `0.163.0-alpha.11.2` passed both profiles with 31 synthetic
+file cases each. CLI and desktop discovery resolved the same bundled executable; this does not
+certify desktop session tools. Product structured-read tools, browser, MCP, escalated processes,
+Linux and Windows are unverified. The probe emits these limits alongside executable/version,
+platform, policy source, profiles, controls and results.
+
+A missing binary, unverified platform or unusable nested sandbox exits `2` with `unavailable`;
+an assertion failure exits nonzero. Neither is a passing enforcement gate. In a chat sandbox,
+`sandbox_apply: Operation not permitted` requires an authorized host-side launch of the same
+runner, whose tested commands still run inside Codex's native sandbox. It is excluded from
+ordinary CI groups so skipping a local probe cannot imply supported-runtime certification.
+
+The read-only live configuration query on the same binary returned project, user and system
+layers, `on-request`, `managed-workspace`, network disabled, no filesystem denies and no managed
+requirements. That describes the installed configuration before apply, not this branch's rendered
+profile or an existing desktop session. For platform glob limits and configuration precedence,
+consult [official permission documentation](https://learn.chatgpt.com/docs/permissions).

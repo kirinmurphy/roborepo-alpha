@@ -350,3 +350,18 @@ JSON Schema (2020-12). Omission means ineligible. For example, Claude declares
 Verify each template against the selected runtime's own help before adding it. Selection uses
 `createHarnessRuntime().enabledProviders()` in registry order and `selectedHarnessExecutable`;
 the consumer substitutes the summary directly into argv and never invokes a shell.
+
+## Codex credential projection
+
+Known credential paths reach Codex through its existing `permissions.render` adapter. The pure
+render core delegates anchor translation to `scripts/harnesses/codex/credential-permissions.mjs`.
+The resolved `read-secrets` bucket controls projection: `deny` renders native filesystem entries;
+`allow` renders none; `ask` renders none and identifies unsupported path-specific prompting.
+Claude's rendering and Gemini's unsupported path-scoping state are unchanged.
+
+This provider-specific boundary has a dedicated deterministic check,
+`scripts/test/codex-credential-projection-check.mjs`, and an explicit native runner,
+`scripts/test/codex-credential-enforcement-check.mjs`. The generic capability contract has no
+new method. Projection checks do not establish enforcement: a coverage claim must name the
+binary/version, platform, policy source, profile, surface, and positive and negative controls.
+See [testing](testing.md#codex-credential-verification) for measured coverage and unavailable states.
