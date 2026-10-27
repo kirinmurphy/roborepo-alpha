@@ -354,14 +354,9 @@ rule:
 
 ## Not tested
 
-- [ ] The portal recommendations dialog appears after a real enable of a package whose
-      `recommends` names a disabled package, and **Enable selected** enables the checked ones. No
-      built-in package declares `recommends` yet ([[ejsc769o]] adds the first edges), so the portal
-      test drives the dialog with a stubbed toggle response; needs a browser session against a
-      workspace package that declares `recommends`.
-- [ ] The interactive terminal prompt (`package enable` on a TTY) asks about each off
-      recommendation and enables the ones answered yes. The test suite runs without a TTY, so only
-      the non-interactive listing is asserted; needs a manual run in a terminal.
+No entries. The two manual checks (the portal recommendations dialog after a real enable, and the
+interactive terminal prompt) were run against a workspace fixture during implementation; see
+`## Review` → `### Verification`.
 
 ## Decision Log
 
