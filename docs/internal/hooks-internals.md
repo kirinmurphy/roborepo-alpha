@@ -175,7 +175,7 @@ auto-loaded" unless a specific skill-load event or field is available.
 
 ## Codex Hooks
 
-Core scripts live in `globals/system/hooks/codex/`. Their hook definitions and native review
+Core scripts live in `globals/harnesses/codex/hooks/`. Their hook definitions and native review
 labels are authored in `globals/harnesses/codex/hooks-codex.json`;
 `scripts/build/render-agent-permissions.mjs` renders `generated/codex/hooks.json` from that source.
 Codex’s adapter reconciles `statusMessage` in place for matching event/command pairs, preserving
@@ -244,7 +244,7 @@ disabling telemetry removes these hooks.
 #### Shell-output minimization — PreToolUse (shell tools)
 
 Codex **does** minimize shell output via a PreToolUse hook, parallel to Claude's
-`minimize-bash-output.mjs`. `globals/system/hooks/codex/minimize-bash-output.mjs` acts on
+`minimize-bash-output.mjs`. `globals/harnesses/codex/hooks/minimize-bash-output.mjs` acts on
 Codex's shell tool (`exec_command` / `shell` / `local_shell`): it appends
 `2>&1 | tail -n 120` to noisy build/lint/typecheck commands, forces
 `tsc --pretty false`, and denies `--watch`/`--verbose`/`--debug` flags. Codex
@@ -268,7 +268,7 @@ shell-output minimization above is the first PreToolUse enforcement hook on Code
 
 #### Real per-command ask — PreToolUse (shell tools)
 
-`globals/system/hooks/codex/permission-check.mjs` re-implements the manifest's command
+`globals/harnesses/codex/hooks/permission-check.mjs` re-implements the manifest's command
 matching at runtime and emits a genuine `permissionDecision: "ask"` for any shell
 command that resolves to the `ask` bucket — closing the gap `renderCodexRules`
 otherwise leaves (a `prefix_rule` can only be `forbidden`/`allow`; an ask-bucket
@@ -379,7 +379,7 @@ prefix rules in `generated/codex/rules/default.rules`, and Claude
 A `deny`/`allow` behavior or arbitrary command maps straight to Codex
 `prefix_rule(... decision="forbidden"|"allow")` and Claude's deny/allow arrays. An
 `ask`-bucket entry gets no `prefix_rule` (that mechanism is binary) — instead
-`globals/system/hooks/codex/permission-check.mjs` (below) supplies a real per-command
+`globals/harnesses/codex/hooks/permission-check.mjs` (below) supplies a real per-command
 `ask` decision at runtime, and `approval_policy` is set to `on-request` as a
 fallback for anything the hook doesn't classify. On Claude the same entry lands
 directly in `permissions.ask`.

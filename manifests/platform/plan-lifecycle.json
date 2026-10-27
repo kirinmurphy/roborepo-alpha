@@ -32,7 +32,7 @@
       "folder": "active",
       "label": "Active",
       "tab": "primary",
-      "showsPriority": true,
+      "showsPriority": false,
       "worktreeBound": true,
       "actions": [
         { "command": "plan-execute", "label": "Continue", "description": "Resume implementation in this plan's worktree." },
@@ -46,12 +46,12 @@
       "folder": "review",
       "label": "Review",
       "tab": "primary",
-      "showsPriority": true,
+      "showsPriority": false,
       "worktreeBound": true,
       "actions": [
         { "command": "plan-review", "label": "Review", "description": "Recheck the work, fix what has a clear fix, and request your approval." },
         { "command": "plan-execute", "label": "Fix findings", "description": "Fix review findings in a separate session." },
-        { "command": "plan-close", "label": "Close after merge", "description": "After you merge the PR, verify it landed and complete the plan." },
+        { "command": "plan-close", "label": "Close", "description": "After you merge the PR, verify it landed and complete the plan." },
         { "command": "plan-archive", "label": "Archive", "description": "Retire this plan without losing unmerged work." }
       ]
     },
@@ -78,7 +78,7 @@
       "folder": null,
       "label": "Unclassified",
       "tab": "overflow",
-      "showsPriority": true,
+      "showsPriority": false,
       "worktreeBound": false,
       "actions": []
     }

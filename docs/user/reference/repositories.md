@@ -211,13 +211,17 @@ cleanup hook is installed.
 
 **Stop Server** stops the dev servers listening from that worktree, as `/plan-close` does.
 **Delete Worktree** opens a confirmation that says in plain words what is deleted (the worktree's
-folder and its local branch) and what that costs: nothing for merged work, or how many commits were
+folder and its local branch) and what that costs: no committed work for merged work, or how many commits were
 never merged and that a backup keeps them. A worktree an active or review plan claims, or one with something
-running, shows a warning and a red **Delete worktree** button; otherwise the button is green.
+running, shows a warning and a red **Delete worktree** button. Uncommitted edits or untracked
+files also show a warning before confirmation and turn the button red: confirming discards them
+permanently. The backup preserves committed work only. Otherwise the button is green.
 **Details and how to restore** shows the branch, folder, archive ref, and the commands that bring it
 back. Confirming stops the worktree's servers and removes it. Both live in the worktree dropdown on a plan's row and in the ⋮ menu on any
-other worktree row; no row shows them inline. Deletion refuses a locked or dirty worktree, a
-worktree with valuable ignored files or submodules, a server that does not stop, and the current or
+other worktree row; no row shows them inline. If new local changes appear after the page loaded,
+the first deletion request keeps the worktree and reveals the warning; a second confirmation is
+required to discard them. Automatic cleanup and ordinary CLI cleanup still refuse dirty worktrees.
+Deletion refuses a locked worktree, a worktree with valuable ignored files or submodules, a server that does not stop, and the current or
 main checkout, and the confirmation shows the reason. Servers stop only after those checks pass, so
 a refusal at that point stops nothing. The removal itself can still fail after the servers have
 stopped, for example when Git state changed in between; the confirmation shows that reason too.

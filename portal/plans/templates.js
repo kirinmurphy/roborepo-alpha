@@ -9,7 +9,7 @@ import {
 } from "/portal/shared/api.js";
 import { FILTER_LABELS, FRESHNESS_LABELS } from "./state.js";
 import { lifecycleActions, lifecycleLabel } from "./lifecycle.js";
-import { primaryPlanAction } from "./plan-actions.js";
+import { primaryPlanAction, incompleteDependencies } from "./plan-actions.js";
 
 export function rootChip(root, onRemove) {
   const node = fill(tpl("tpl-root-chip"), { path: root });
@@ -148,7 +148,7 @@ export function lifecycleTab(lifecycle, count, isSelected, onSelect) {
   return btn;
 }
 
-// cardActions: { onOpen, onCopyPath, onCopyContext, onCopyPortableContext, onPlanAction,
+// cardActions: { onOpen, onCopyPath, onCopyContext, onPlanAction,
 //                 planSuiteEnabled, planSuitePackage, skillModal,
 //                 onEnablePackage, onError }
 export function cardGrid(plans, cardActions) {
@@ -158,7 +158,7 @@ export function cardGrid(plans, cardActions) {
   return grid;
 }
 
-// drawerActions: { onCopyPath, onCopyRepoContext, onCopyPortableContext, onPlanAction,
+// drawerActions: { onCopyPath, onCopyRepoContext, onPlanAction,
 //                   onEnablePackage, planSuitePackage, skillModal, onError }
 export function drawerContent(doc, drawerActions) {
   const plan = doc.plan.plan;
@@ -167,20 +167,20 @@ export function drawerContent(doc, drawerActions) {
   const menu = planMenuBody({
     installed: Boolean(pkg.enabled),
     lifecycle: plan.lifecycle,
+    dependencies: incompleteDependencies(doc.plan, drawerActions.plans || []),
     planSuitePackage: pkg,
     skillModal: drawerActions.skillModal,
     onError: drawerActions.onError,
     onEnablePackage: drawerActions.onEnablePackage,
-    copyPath: () => drawerActions.onCopyPath(plan.relativePath),
+    copyPath: () => drawerActions.onCopyPath(plan.relativePath.split("/").pop()),
     copyPrompt: (command) => drawerActions.onPlanAction(key, command),
     copyRepoPrompt: () => drawerActions.onCopyRepoContext(doc.plan),
-    copyPortablePrompt: () => drawerActions.onCopyPortableContext(key),
   });
   return {
     title: plan.title,
     path: `${doc.plan.repository.name} / ${plan.relativePath}`,
     html: doc.html,
-    // Priority, readiness, blockers, and completion render in the shared <plan-status> section
+    // Priority, modified time, warnings, blockers, and completion render in the shared <plan-status> section
     // mounted alongside this metadata list. The next action is the agent's own pointer into the
     // plan, so it is shown here in the full document view and not on the card.
     meta: [
@@ -197,7 +197,7 @@ export function drawerContent(doc, drawerActions) {
     ],
     warnings: plan.validation.warnings,
     tasks: doc.parsed?.tasks || [],
-    cta: primaryPlanAction(plan),
+    cta: primaryPlanAction(plan, incompleteDependencies(doc.plan, drawerActions.plans || [])),
     menu,
   };
 }
@@ -212,14 +212,14 @@ export function cardActionMenu(record, cardActions) {
   menu.panelContent = planMenuBody({
     installed: Boolean(cardActions.planSuiteEnabled),
     lifecycle: plan.lifecycle,
+    dependencies: incompleteDependencies(record, cardActions.plans || []),
     planSuitePackage: cardActions.planSuitePackage,
     skillModal: cardActions.skillModal,
     onError: cardActions.onError,
     onEnablePackage: cardActions.onEnablePackage,
-    copyPath: () => cardActions.onCopyPath(plan.relativePath),
+    copyPath: () => cardActions.onCopyPath(plan.relativePath.split("/").pop()),
     copyPrompt: (command) => cardActions.onPlanAction(record.key, command),
     copyRepoPrompt: () => cardActions.onCopyContext(record),
-    copyPortablePrompt: () => cardActions.onCopyPortableContext(record.key),
   });
   return menu;
 }
@@ -228,7 +228,9 @@ export function cardActionMenu(record, cardActions) {
 // prompt; nothing on the card moves a plan between lifecycle folders, since the suite commands own
 // those moves and commit them.
 export function cardPrimaryAction(record, cardActions) {
-  const action = primaryPlanAction(record.plan);
+  const dependencies = planDependencies(record, cardActions.plans || [], cardActions.onOpen);
+  if (dependencies) return dependencies;
+  const action = primaryPlanAction(record.plan, incompleteDependencies(record, cardActions.plans || []));
   if (!action) return null;
   const btn = fill(tpl("tpl-recommended-cta"), { label: action.label });
   btn.title = `Copy the /${action.command} prompt`;
@@ -241,6 +243,32 @@ export function cardPrimaryAction(record, cardActions) {
     }
   });
   return btn;
+}
+
+// Resolve against all plans in the repository, including lifecycles hidden by the current tab.
+export function planDependencies(record, allPlans, onOpen) {
+  const dependencies = incompleteDependencies(record, allPlans);
+  if (record.plan.lifecycle !== "backlog" || !dependencies.length) return null;
+  const node = tpl("tpl-plan-dependencies");
+  const list = node.querySelector("[data-slot=dependencies]");
+  dependencies.forEach((id, index) => {
+    if (index) list.append(", ");
+    const target = allPlans.find((item) => item.plan.id === id && item.repository.id === record.repository.id);
+    if (!target) {
+      list.append(id);
+      return;
+    }
+    const link = document.createElement("button");
+    link.type = "button";
+    link.textContent = id;
+    link.title = target.plan.title;
+    link.addEventListener("click", (event) => {
+      event.stopPropagation();
+      onOpen(target.key);
+    });
+    list.append(link);
+  });
+  return node;
 }
 
 export function drawerTaskItems(tasks) {
@@ -277,16 +305,10 @@ function planCardElement(record, cardActions) {
   return node;
 }
 
-// One clickable menu item (icon + label + optional description) that runs copyFn on click. `run`
+// One copy-icon menu item that runs copyFn on click. `run`
 // wraps copyFn so a copy failure surfaces via onError instead of an unhandled rejection.
-function menuItem({ icon = "copy", label, description, run }) {
+function menuItem({ label, run }) {
   const item = fill(tpl("tpl-menu-item"), { label });
-  item.querySelector("[data-slot=icon]").setAttribute("name", icon);
-  const descSlot = item.querySelector("[data-slot=description]");
-  if (description) {
-    descSlot.textContent = description;
-    descSlot.hidden = false;
-  }
   item.addEventListener("click", async (event) => {
     event.stopPropagation();
     await run();
@@ -294,16 +316,12 @@ function menuItem({ icon = "copy", label, description, run }) {
   return item;
 }
 
-// The unified ⋯ menu body, shared by the drawer and the card. When plan-suite is installed it shows
-// the lifecycle's suite commands (each copies its prompt), then a portable prompt — a
-// self-contained summary for a chat without repo access. Copy path is always last. The recommended action gets
-// its own dedicated CTA button outside this menu (see primaryPlanAction/cardPrimaryAction) — it is
-// deliberately not called out again inside the menu, to avoid a second, redundant highlight.
-// When plan-suite is NOT installed there are no lifecycle actions, so it falls back to the generic
-// repo-aware / portable prompts plus the enable-skill banner.
+// Cards and the drawer share the lifecycle prompt menu, followed by the document filename.
+// Update is omitted here; the plan-write command remains available outside the portal.
+// Without plan-suite, offer repository context and the enable-skill banner instead.
 //
 // api: { installed, lifecycle, planSuitePackage, skillModal, onError,
-//        copyPath, copyPrompt(command), copyRepoPrompt, copyPortablePrompt, onEnablePackage }
+//        copyPath, copyPrompt(command), copyRepoPrompt, onEnablePackage }
 function planMenuBody(api) {
   const wrap = tpl("tpl-plan-menu");
   const run = (fn) => async () => {
@@ -314,33 +332,27 @@ function planMenuBody(api) {
     }
   };
 
-  const note = wrap.querySelector("[data-slot=note]");
   const group = wrap.querySelector("[data-slot=group]");
   const fallbackActions = wrap.querySelector("[data-slot=fallback-actions]");
 
   if (api.installed) {
-    note.textContent = "Copies a prompt to run in an agent chat.";
     group.hidden = false;
-    for (const { command, label, description } of lifecycleActions(api.lifecycle)) {
+    for (const { command, label } of lifecycleActions(api.lifecycle)) {
+      if (command === "plan-write" || (command === "plan-promote" && api.dependencies?.length)) continue;
       group.append(
-        menuItem({ icon: "agent-prompt", label, description, run: run(() => api.copyPrompt(command)) }),
+        menuItem({ label, run: run(() => api.copyPrompt(command)) }),
       );
     }
-    group.append(
-      menuItem({ icon: "agent-prompt", label: "Portable prompt", description: "Self-contained — works without repo access", run: run(() => api.copyPortablePrompt()) }),
-    );
   } else {
     // No lifecycle actions available — offer the generic prompts the actions would otherwise cover.
-    note.textContent = "Enable the plan suite for lifecycle actions. For now:";
     fallbackActions.hidden = false;
     fallbackActions.append(
-      menuItem({ icon: "agent-prompt", label: "Repo-aware prompt", description: "For an agent that already has this repo open", run: run(() => api.copyRepoPrompt()) }),
-      menuItem({ icon: "agent-prompt", label: "Portable prompt", description: "Self-contained — works without repo access", run: run(() => api.copyPortablePrompt()) }),
+      menuItem({ label: "Repo-aware prompt", run: run(() => api.copyRepoPrompt()) }),
     );
   }
 
   wrap.querySelector("[data-slot=copy-path]").append(
-    menuItem({ icon: "copy", label: "Copy path", run: run(() => api.copyPath()) }),
+    menuItem({ label: "Copy Document Filename", run: run(() => api.copyPath()) }),
   );
 
   if (api.installed === false && api.planSuitePackage) {

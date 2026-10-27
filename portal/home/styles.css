@@ -65,7 +65,39 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 /* A plan row's title takes the place of the branch label, so it reads at the row's size, not as a
  * footnote. Matched rows mount it in the shared checkout row; unmatched rows reuse that row's head. */
 .repository-root .plan-item { padding: 0; font-size: inherit; }
+/* Keep the controls together when they wrap below the title. */
+.plan-item { flex-wrap: wrap; }
+.plan-controls { display: inline-flex; align-items: center; gap: 10px; flex: none; white-space: nowrap; }
+.plan-controls:empty { display: none; }
+.plan-controls > portal-menu-button .menu-button-trigger { gap: 2px; }
+.home-main .plan-complete-badge { background: color-mix(in srgb, var(--chip-low-bg) 70%, #000); }
 .plan-identity { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.plan-next-action { display: inline-flex; align-items: center; gap: 4px; padding: 1px var(--space-sm); font-size: var(--text-2xs); white-space: nowrap; }
+.home-main .repository-root-head { align-items: start; }
+.home-main .repository-card { --checkout-links-width: 16px; }
+/* Raise open menus above neighboring cards while keeping them below the site header. */
+.home-main .repository-card.has-open-menu { z-index: 9; }
+/* Fixed worktree and Links panels also need to stay below the sticky site header. */
+.home-main .menu-button-panel { z-index: 9; }
+.home-main .checkout-links-cell { margin-left: 0; }
+.home-main .checkout-links-cell .menu-button-trigger {
+  width: var(--checkout-links-width);
+  height: var(--checkout-control-height);
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.home-main .repository-entrypoint {
+  border-radius: 5px;
+}
+.home-main .repository-entrypoint:hover,
+.home-main .repository-entrypoint:focus-visible,
+.home-main .checkout-links-cell .menu-button-trigger:hover,
+.home-main .checkout-links-cell .menu-button-trigger:focus-visible,
+.home-main .checkout-links-cell .menu-button-trigger[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
 /* Plain dim text, like the worktree state notes on checkout rows: it explains the row, it is not a
  * status to act on. */
 .plan-match-badge {
@@ -165,6 +197,10 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 }
 /* min-width: 0 lets the long restore commands scroll inside their box instead of widening the
  * dialog body (a grid item otherwise grows to fit its widest line). */
+#worktree-remove-dialog form { display: flex; flex-direction: column; max-height: calc(100dvh - 74px); }
+#worktree-remove-dialog .modal-head,
+#worktree-remove-dialog .modal-actions { flex-shrink: 0; }
+#worktree-remove-dialog .modal-body { min-height: 0; min-width: 0; overflow: auto; }
 .worktree-remove-details { min-width: 0; }
 .worktree-remove-details > summary { color: var(--dim); font-size: var(--text-sm); cursor: pointer; }
 .worktree-remove-details > :not(summary) { margin-top: 8px; }

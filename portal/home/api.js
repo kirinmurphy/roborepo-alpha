@@ -16,8 +16,8 @@ export function forgetRepository(payload) {
   return portalPostJson("/api/developer-runtime/repository-forget", payload);
 }
 
-export function removeWorktree({ repositoryId, branch }) {
-  return portalPostJson(`/api/repositories/${encodeURIComponent(repositoryId)}/worktrees/remove`, { branch });
+export function removeWorktree({ repositoryId, branch, discardChanges = false }) {
+  return portalPostJson(`/api/repositories/${encodeURIComponent(repositoryId)}/worktrees/remove`, { branch, ...(discardChanges ? { discardChanges: true } : {}) });
 }
 
 export function stopWorktreeServers({ repositoryId, branch }) {

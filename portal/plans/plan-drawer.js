@@ -60,9 +60,9 @@ export function createPlanDrawer(deps) {
   function render(doc) {
     openKey = doc.plan.key;
     const content = tmpl.drawerContent(doc, {
+      plans: deps.getPlans(),
       onCopyPath: copyText,
       onCopyRepoContext: (record) => copyText(repositoryContext(record)),
-      onCopyPortableContext: (key) => copyPrompt(null, [key], "portable"),
       onPlanAction: (key, command) => copyPrompt(command, [key], "repository-aware"),
       onEnablePackage: deps.onEnablePackage,
       planSuitePackage: deps.getPlanSuitePackage(),
@@ -82,6 +82,7 @@ export function createPlanDrawer(deps) {
     document.getElementById("drawer-tasks").replaceChildren(...tmpl.drawerTaskItems(content.tasks));
     renderBlockers(doc.plan);
     const statusEl = document.createElement("plan-status");
+    statusEl.actionContent = [document.getElementById("drawer-actions")];
     if (deps.readonly) statusEl.setAttribute("readonly", "");
     statusEl.merge = deps.mergeFor?.(doc.plan.key) || null;
     statusEl.record = doc.plan;
@@ -89,13 +90,17 @@ export function createPlanDrawer(deps) {
     // Recommended-next CTA (hidden when there's no clear recommendation) + the unified ⋯ menu.
     const ctaEl = document.getElementById("drawer-cta");
     if (content.cta) {
-      ctaEl.textContent = content.cta.label;
+      ctaEl.querySelector("[data-slot=label]").textContent = content.cta.label;
       ctaEl.hidden = false;
       ctaEl.onclick = () => copyPrompt(content.cta.command, [doc.plan.key], "repository-aware");
     } else {
       ctaEl.hidden = true;
       ctaEl.onclick = null;
     }
+    const dependencies = tmpl.planDependencies(doc.plan, deps.getPlans(), open);
+    const dependencyMount = document.getElementById("drawer-dependencies");
+    dependencyMount.replaceChildren(...(dependencies ? [dependencies] : []));
+    dependencyMount.hidden = !dependencies;
     document.getElementById("drawer-menu").panelContent = content.menu;
     if (!dialog.open) dialog.showModal();
   }

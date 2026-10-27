@@ -9,6 +9,7 @@ const AUTO_DISMISS_MS = 7000;
 export function createOutcomeToast(toastEl) {
   const messageEl = toastEl.querySelector('[data-slot="message"]');
   const actionsEl = toastEl.querySelector('[data-slot="actions"]');
+  const home = toastEl.parentElement;
 
   let dismissTimer = null;
   let remainingMs = AUTO_DISMISS_MS;
@@ -43,6 +44,16 @@ export function createOutcomeToast(toastEl) {
   function show({ message, actions = [] }) {
     clearTimeout(dismissTimer);
     paused = false;
+    // Modal dialogs paint above the document regardless of z-index. Keep the notification in
+    // their top layer while open, then restore it so closing the dialog does not hide the toast.
+    const modal = [...document.querySelectorAll("dialog:modal")].at(-1);
+    const host = modal || home;
+    if (toastEl.parentElement !== host) {
+      host.append(toastEl);
+      modal?.addEventListener("close", () => {
+        if (toastEl.parentElement === modal) home.append(toastEl);
+      }, { once: true });
+    }
     messageEl.textContent = message;
     actionsEl.replaceChildren(...actions.map((action) => {
       const button = document.createElement("button");

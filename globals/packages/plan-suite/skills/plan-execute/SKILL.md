@@ -53,6 +53,7 @@ Load these by subject matter while implementing; do not wait to be asked for the
 | `code-style` | The work places code: module boundaries, orchestration vs. execution, reuse | Ownership and layering constraints |
 | `javascript-typescript` | The work touches JS/TS — ESM, exports, types, framework-less DOM | Language and markup conventions |
 | `test-harness` | The work adds or changes tests, verification commands, or fixtures | Test selection and observable-behavior assertions |
+| `feature-verification` | Delivered UI, server, API, CLI, permission, or performance behavior needs a demonstration beyond routine test reporting | Select and show the fastest sufficient behavioral evidence; reuse existing captures and execution output |
 
 Each row is its own optional package, so check it before loading it. Run this check in Preflight,
 for every row the plan's subject matter calls for, before the start transition: it is a pre-run gate
@@ -206,7 +207,7 @@ then the run proceeds without questions.
     shareable URL or link when the environment exposes one. If the repository cannot expose a
     link, record what was started and why no link is available.
 12. Run completion-level verification, including manual verification against the started
-    environment when applicable.
+    environment when applicable. Apply the behavioral evidence handoff below before committing.
 13. Re-read Git status and the implementation diff in the target worktree, then commit the
     completed implementation changes there with a descriptive message, including the run's plan
     updates in the worktree's copy. Do not leave completed code
@@ -216,6 +217,20 @@ then the run proceeds without questions.
 14. Run the Validation Loop (below).
 15. Decide implementation completion (below).
 16. Report the final state.
+
+### Behavioral evidence handoff
+
+Before handing off completed implementation or review fixes, assess what the user needs to see to
+understand the delivered behavior. When the `feature-verification` pairing applies, load it before
+selecting evidence and follow its workflow. Reuse relevant native probes, command output, browser
+captures, or measured results already produced; do not rerun passing work merely for presentation.
+Show one primary evidence item in the final response, with a short walkthrough in the user's terms.
+Distinguish passed assertions, observed behavior, illustrative diagrams, and unavailable checks.
+
+Routine test-result reporting alone does not trigger the pairing. If it does not apply, state why
+in the handoff. If the skill is unavailable, report that limitation and still present the available
+evidence without widening execution permissions. A verification gap belongs in `## Not tested`;
+an explanatory diagram cannot close it.
 
 ## Validation Loop
 
@@ -267,7 +282,7 @@ A plan in `review/` returns here only to fix what review recorded.
    deciding an escalated question. A finding marked `fixed in review` is already resolved; leave it
    as it is.
 2. Fix each finding within the plan's existing requirements, with the same verification discipline
-   as the Implementation Workflow, then run the Validation Loop over the result.
+   as the Implementation Workflow, including the behavioral evidence handoff, then run the Validation Loop over the result.
 3. Check each fixed finding off and add its resolution after a dash, for example
    `- [x] Missing retry test — added and verified`. Never edit `### Approval`: a code change already
    makes a recorded approval stale, and only `/plan-review` records a new one.
@@ -426,53 +441,10 @@ Name the plan by its H1 title, with its id in parentheses on first mention only.
 stable reference for commands and frontmatter, not a name a person recognizes; the same goes for
 questions, review packets, and other prose in this run.
 
-Report:
-
-```text
-Implementation result
-- Plan: "<title>" (<id>), <repository-relative path>
-- Mode: start | resume | review findings
-- Worktree: <runtime path>
-- Worktree name: <Git administrative name recorded in the plan>
-- Start transition: <commit on the base branch, "already recorded", or "not applicable">
-- Start validator: APPROVED after <n> correction passes, refused with <checks>, or not applicable
-- Branch: <branch>
-- Base branch: <branch>
-- Starting commit: <commit>
-- Objectives completed: <count>
-- Objectives blocked: <count>
-- Findings fixed: <count, or "not applicable">
-- Validation: clean on pass <n> | stopped at the cap with <count> open | in-session (no subagent interface)
-- Base failures: <checks that fail on the base branch too, or "none">
-- Material decisions: <count>
-- Open questions: <count>
-- Not tested entries: <count>
-- Implementation commit: <commit and message, or "no implementation commit needed">
-- Completion preflight: passed | failed with <checks> | not run
-- Lifecycle: stays active | moved to review (<commit>) | stays review
-- Docs updated: <list> | none needed (<reason>)
-- Test/development environment: <what was started>
-- Shareable link: <URL/link, or why none is available>
-- Verification passed: yes/no/partial
-- Implementation complete: yes/no
-```
-
-Also include:
-
-- files changed;
-- the Decision Log: each autonomous decision, alternatives, and reasoning;
-- each Validation Loop pass's report, the clean one included;
-- tests and checks run;
-- manual verification;
-- the `## Not tested` entries, each with what to check and why no test covers it;
-- paired skills loaded, and any skipped with the reason;
-- Open Questions, asked together as the run's only question batch: each with its options, pros and
-  cons, recommendation, and the tasks it blocks;
-- deferred scope;
-- the plan validator's output for the worktree's copy of the plan;
-- current Git status;
-- whether anything was committed, pushed, merged, or published;
-- the next command the user runs: `/plan-execute` again to resume, or `/plan-review`.
+Before the final report in every execution mode (start, resume, and review findings), read
+[references/final-report.md](references/final-report.md) and follow its required template and
+reporting checklist. Include all applicable reporting obligations, behavioral evidence or its
+stated limitation, verification results, blockers, and the next user command.
 
 ## Boundaries
 

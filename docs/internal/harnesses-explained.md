@@ -211,7 +211,7 @@ of solution, just a renderer that knows two output shapes instead of one.
 Where the gap doesn't fully close: an `ask`-bucket entry has nowhere to go in Codex's rules file
 (binary forbidden/allow only), so the renderer must omit it there and fall back to a session-wide
 `approval_policy` — a real asymmetry the render step can't paper over on its own. Closing THAT gap
-took a different tool entirely: a runtime hook (`globals/system/hooks/codex/permission-check.mjs`) that
+took a different tool entirely: a runtime hook (`globals/harnesses/codex/hooks/permission-check.mjs`) that
 re-checks each shell command against the same source data and emits a genuine per-command `ask`
 decision — confirmed possible only after reverse-engineering the shipped Codex binary's wire schema,
 since Codex's hook protocol turned out to support a 3-state `permissionDecision` (`allow`/`deny`/`ask`)

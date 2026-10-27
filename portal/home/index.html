@@ -77,6 +77,7 @@
     <template id="tpl-plan-item">
       <div class="plan-item">
         <button type="button" class="plan-title" data-slot="title"></button>
+        <span class="plan-controls" data-slot="controls"></span>
       </div>
     </template>
     <template id="tpl-domain-note">
@@ -86,6 +87,9 @@
          worktree-details trigger), and a Home-owned row on the same glyph rail for an unmatched plan. -->
     <template id="tpl-plan-identity">
       <span class="plan-identity"></span>
+    </template>
+    <template id="tpl-plan-next-action">
+      <button type="button" class="plan-next-action" data-btn="cta"><portal-icon name="copy" size="sm" aria-hidden="true"></portal-icon><span data-slot="label"></span></button>
     </template>
     <template id="tpl-plan-row">
       <div class="repository-root home-plan-row">
@@ -141,6 +145,7 @@
         <div class="modal-body">
           <p class="worktree-remove-lead" data-slot="lead"></p>
           <p class="worktree-remove-status" data-slot="status"></p>
+          <p class="worktree-remove-warning" data-slot="dirty" role="alert" hidden>This worktree still has uncommitted or untracked changes. These changes and files cannot be retrieved after deletion. The backup only preserves committed work.</p>
           <p class="worktree-remove-warning" data-slot="plan" hidden></p>
           <p class="worktree-remove-warning" data-slot="running" hidden>Something is running in this worktree. It is stopped before the folder is deleted.</p>
           <details class="worktree-remove-details">

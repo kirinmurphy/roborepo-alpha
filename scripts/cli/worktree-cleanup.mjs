@@ -11,7 +11,7 @@ import { checkoutRootsFor, loadRegistry } from "../../modules/repositories/regis
 import { activeWorktreeNames, findPlanAbsorbingCommit, findPlanWorktree, repositoryRecordFor, worktreeFolder } from "./worktree-policy.mjs";
 import { STATE_ROOT } from "./paths.mjs";
 
-export async function cleanupWorktrees({ cwd = process.cwd(), stateRoot = STATE_ROOT, apply = false, plan = null, base = "main", remove = null, confirm = false, currentPath = cwd, discover = discoverInstances } = {}) {
+export async function cleanupWorktrees({ cwd = process.cwd(), stateRoot = STATE_ROOT, apply = false, plan = null, base = "main", remove = null, confirm = false, discardChanges = false, currentPath = cwd, discover = discoverInstances } = {}) {
   const mainPath = mainCheckout(cwd);
   if (!mainPath) throw new Error("a non-bare Git checkout is required");
   const gitDir = path.join(mainPath, ".git");
@@ -38,7 +38,7 @@ export async function cleanupWorktrees({ cwd = process.cwd(), stateRoot = STATE_
       const landing = worktree.branch ? await inspectBranchLanding(mainPath, worktree.branch, { base: landingBase, recorded }) : { landed: false, reason: "detached" };
       const guard = await checkWorktreeRemoval({
         worktree, kind, landed: landing.landed, worktreeRoot, mainPath, currentPath,
-        activePlan: activePlans.has(worktree.name), running: running.has(worktree.path),
+        activePlan: activePlans.has(worktree.name), running: running.has(worktree.path), discardChanges,
       });
       const row = { path: worktree.path, name: worktree.name, branch: worktree.branch, state: landing.landed ? "landed" : landing.reason === "scan unavailable" ? "unknown" : "not landed", eligible: guard.ok, reason: landing.reason === "scan unavailable" ? "landed scan unavailable" : guard.reason, warning: guard.warning, landingEvidence: landing.landed ? (landing.reused ? "reused" : "scanned") : null, action: "kept" };
       if (apply && guard.ok) {
@@ -50,11 +50,11 @@ export async function cleanupWorktrees({ cwd = process.cwd(), stateRoot = STATE_
         } else {
           const rechecked = await checkWorktreeRemoval({
             worktree: fresh, kind, landed: landing.landed, worktreeRoot, mainPath, currentPath,
-            activePlan: activeWorktreeNames(mainPath).has(fresh.name), running: running.has(fresh.path),
+            activePlan: activeWorktreeNames(mainPath).has(fresh.name), running: running.has(fresh.path), discardChanges,
           });
           if (!rechecked.ok) { row.reason = rechecked.reason; row.eligible = false; }
           else {
-            const result = await removeWorktree(mainPath, fresh, { kind, stateRoot, tip: freshTip });
+            const result = await removeWorktree(mainPath, fresh, { kind, stateRoot, tip: freshTip, discardChanges });
             row.action = result.ok ? "removed" : "failed";
             row.reason = result.reason || null;
             row.archiveRef = result.entry?.archiveRef || result.archiveRef || null;
@@ -142,16 +142,22 @@ export async function worktreeCleanupCommand(args) {
 
 // Home's Delete Worktree: confirmed removal of one worktree, through the same guards as the command.
 // Deleting stops the worktree's dev servers first, but only once every other guard has passed, so a
-// deletion that would be refused anyway (uncommitted changes, say) never stops anything.
-export async function removeRepositoryWorktree({ repositoryId, branch, stateRoot = STATE_ROOT, stop = stopCheckoutServers, discover = discoverInstances }) {
+// deletion refused by another safety guard never stops anything. Dirty deletion requires
+// explicit consent to discard local changes; the archive preserves committed work only.
+export async function removeRepositoryWorktree({ repositoryId, branch, discardChanges = false, stateRoot = STATE_ROOT, stop = stopCheckoutServers, discover = discoverInstances }) {
   const { main, worktree } = repositoryWorktree(repositoryId, branch, stateRoot);
-  const options = { cwd: main, stateRoot, remove: branch, confirm: true };
+  const options = { cwd: main, stateRoot, remove: branch, confirm: true, discardChanges: discardChanges === true };
   const [preview] = await cleanupWorktrees({ ...options, discover: async () => ({ instances: [] }) });
-  if (!preview?.eligible) return preview || { action: "kept", reason: "worktree unavailable" };
+  if (!preview?.eligible) {
+    if (preview?.reason === "uncommitted or untracked changes") return { ...preview, requiresDiscardConfirmation: true };
+    return preview || { action: "kept", reason: "worktree unavailable" };
+  }
   const stopped = await stop(worktree.path);
   if (!stopped.ok) return { action: "kept", reason: serversStillRunning(stopped) };
   const rows = await cleanupWorktrees({ ...options, apply: true, discover });
-  return rows[0] || { action: "kept", reason: "worktree unavailable" };
+  const result = rows[0] || { action: "kept", reason: "worktree unavailable" };
+  if (result.reason === "uncommitted or untracked changes") return { ...result, requiresDiscardConfirmation: true };
+  return result;
 }
 
 // Home's Stop Server: SIGTERM the dev servers listening from one worktree, as /plan-close does.

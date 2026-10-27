@@ -5,6 +5,7 @@ import {
   replaceRecord,
   filteredListActionFor,
   matchesFilters,
+  optionCounts,
   resolveBlockers,
   resolveBlocking,
   mergedPlanBranches,
@@ -19,7 +20,7 @@ import {
   lifecycleFromSearchParams,
 } from "../../portal/plans/state.js";
 import { isLifecycle, lifecycleActions, lifecycleLabel, lifecycleTabs, setLifecycleModel, showsPriority } from "../../portal/plans/lifecycle.js";
-import { primaryPlanAction, recommendedPlanCommand } from "../../portal/plans/plan-actions.js";
+import { primaryPlanAction, recommendedPlanCommand, incompleteDependencies } from "../../portal/plans/plan-actions.js";
 import { LIFECYCLE_MODEL, lifecycleProjection } from "../../modules/plan-suite/lifecycle-manifest.mjs";
 
 // Pure mutation-orchestration
@@ -27,9 +28,11 @@ import { LIFECYCLE_MODEL, lifecycleProjection } from "../../modules/plan-suite/l
 // drives them directly the same way telemetry-portal-state-check.mjs exercises telemetry's URL
 // state helpers — no browser needed.
 
+setLifecycleModel(lifecycleProjection(LIFECYCLE_MODEL));
 testLifecycleMoveMakesVisibleCardInvisible();
 testPriorityChangeUnderMatchingFilterMakesInvisible();
 testPriorityChangeUnderAllKeepsVisible();
+testPriorityFiltersOnlyApplyToBacklogAndReady();
 testRecordNotPreviouslyVisibleStaysInvisible();
 testReplaceRecordSwapsOldKeyForNew();
 testReplaceRecordLeavesOtherRecordsUntouched();
@@ -51,9 +54,27 @@ testActiveSortSinksUnstartedAndUntrackedToTheBottom();
 testActiveSortFallsBackToPlanSortOnTies();
 testSortForLifecycleOnlyChangesActive();
 testLifecycleModelComesFromTheSnapshot();
+testIncompleteDependencies();
 testRecommendedCommandFollowsTheLifecycle();
 testFilterNamesNeverReadAsLifecycleOrApproval();
 console.log("ok: plans portal state checks passed");
+
+function testPriorityFiltersOnlyApplyToBacklogAndReady() {
+  setLifecycleModel(lifecycleProjection(LIFECYCLE_MODEL));
+  for (const lifecycle of LIFECYCLE_MODEL.stateIds) {
+    for (const priority of ["high", "medium", "low", "none"]) {
+      const item = record({ lifecycle, priority });
+      assert.equal(matchesFilters(item, { ...FILTER_DEFAULTS, priority }), true, `${lifecycle} with matching priority`);
+      const otherPriority = priority === "high" ? "low" : "high";
+      assert.equal(matchesFilters(item, { ...FILTER_DEFAULTS, priority: otherPriority }), !["backlog", "ready"].includes(lifecycle), `${lifecycle} ignores priority outside the queue`);
+      assert.equal(matchesFilters(item, FILTER_DEFAULTS), true, "all priorities keeps every lifecycle");
+    }
+  }
+  const counts = optionCounts("priority", ["all", "high", "none"], LIFECYCLE_MODEL.stateIds.map((lifecycle) => record({ lifecycle })), FILTER_DEFAULTS);
+  assert.equal(counts.get("all"), 2, "priority counts only include backlog and ready");
+  assert.equal(counts.get("high"), 2, "legacy active or completed priority does not inflate counts");
+  assert.equal(counts.get("none"), 0);
+}
 
 // The portal holds no lifecycle list of its own: everything below comes from the projection the
 // server publishes in the plans snapshot, built from the same manifest the domain module reads.
@@ -70,9 +91,9 @@ function testLifecycleModelComesFromTheSnapshot() {
   assert.deepEqual(lifecycleTabs().filter((tab) => tab.secondary).map((tab) => tab.id), ["completed", "archived", "unclassified"]);
   assert.equal(lifecycleLabel("ready"), "Ready");
   assert.ok(isLifecycle("unclassified"));
-  assert.equal(showsPriority("review"), true);
+  assert.equal(showsPriority("review"), false);
   assert.equal(showsPriority("completed"), false);
-  assert.deepEqual(lifecycleActions("review").map((action) => action.label), ["Review", "Fix findings", "Close after merge", "Archive"]);
+  assert.deepEqual(lifecycleActions("review").map((action) => action.label), ["Review", "Fix findings", "Close", "Archive"]);
 }
 
 function testRecommendedCommandFollowsTheLifecycle() {
@@ -80,16 +101,26 @@ function testRecommendedCommandFollowsTheLifecycle() {
   const plan = (lifecycle, extra = {}) => ({ ...record({ lifecycle }).plan, ...extra });
   const tasks = (total, complete) => ({ taskCounts: { total, complete, remaining: total - complete } });
 
-  assert.deepEqual(primaryPlanAction(plan("backlog")), { command: "plan-promote", label: "Promote" });
-  assert.deepEqual(primaryPlanAction(plan("ready")), { command: "plan-execute", label: "Start" });
-  assert.deepEqual(primaryPlanAction(plan("active", { reviewState: "current", ...tasks(3, 1) })), { command: "plan-execute", label: "Continue" }, "unfinished work continues");
-  assert.equal(recommendedPlanCommand(plan("active", tasks(3, 3))), "plan-review", "finished tasks lead to review");
-  assert.equal(recommendedPlanCommand(plan("active", { ...tasks(3, 2), notTestedOpen: 1 })), "plan-review", "an open Not tested entry does not hold back review");
+  assert.equal(primaryPlanAction(plan("backlog", { dependencies: ["stblkr01"] })), null, "dependencies replace the promotion recommendation");
+  assert.deepEqual(primaryPlanAction(plan("backlog", { dependencies: ["stcmp001"] }), []), { command: "plan-promote", label: "Promote" }, "completed dependencies restore promotion");
+  for (const extra of [{}, { readiness: "draft" }, { blockers: ["external"] }]) {
+    assert.deepEqual(primaryPlanAction(plan("backlog", extra)), { command: "plan-promote", label: "Promote" });
+    assert.deepEqual(primaryPlanAction(plan("ready", extra)), { command: "plan-execute", label: "Start" });
+  }
+  assert.equal(primaryPlanAction(plan("active", { reviewState: "current", ...tasks(3, 1) })), null, "unfinished work has no primary action");
+  for (const reviewState of ["never-reviewed", "possibly-stale"]) {
+    assert.equal(primaryPlanAction(plan("active", { reviewState, ...tasks(3, 1) })), null, `${reviewState} plans have no primary action`);
+    assert.equal(recommendedPlanCommand(plan("active", { reviewState, ...tasks(3, 1) })), null, "freshness never recommends plan-write");
+  }
+  assert.equal(primaryPlanAction(plan("active", tasks(3, 3))), null, "checked tasks alone do not establish execution completion");
+  assert.equal(recommendedPlanCommand(plan("active", { ...tasks(3, 2), notTestedOpen: 1 })), null, "execution must reach the review lifecycle first");
   assert.equal(recommendedPlanCommand(plan("active", { ...tasks(3, 3), blockers: ["x"] })), null, "a blocked plan has no recommendation");
 
   assert.deepEqual(primaryPlanAction(plan("review", { qa: { openFindings: 2, decision: "" } })), { command: "plan-review", label: "Review" }, "open findings are fixed by /plan-review in its own session");
-  assert.deepEqual(primaryPlanAction(plan("review", { qa: { openFindings: 0, decision: "approved" } })), { command: "plan-close", label: "Close after merge" });
+  assert.deepEqual(primaryPlanAction(plan("review", { qa: { openFindings: 0, decision: "approved" } })), { command: "plan-close", label: "Close" });
   assert.deepEqual(primaryPlanAction(plan("review", { qa: { openFindings: 0, decision: "" } })), { command: "plan-review", label: "Review" });
+  assert.equal(primaryPlanAction(plan("review", { blockers: ["external"] })), null, "blocked plans have no primary action");
+  assert.equal(primaryPlanAction(plan("active", { qa: { decision: "approved" }, ...tasks(3, 3) })), null, "approval does not bypass the execution lifecycle");
   assert.equal(primaryPlanAction(plan("completed")), null);
   assert.equal(primaryPlanAction(plan("archived")), null);
 }
@@ -374,4 +405,17 @@ function testSortForLifecycleOnlyChangesActive() {
     assert.equal(sortForLifecycle(lifecycle), planSort,
       `${lifecycle} must keep the shared sort — completion ordering is Active-only`);
   }
+}
+
+function testIncompleteDependencies() {
+  const source = record({ repositoryId: "r1" });
+  source.plan.dependencies = ["finished", "active01", "archived", "missing1", "otherrepo", "checked01"];
+  const target = (id, lifecycle, repositoryId = "r1") => record({ id, lifecycle, repositoryId });
+  const checked = target("checked01", "review");
+  checked.plan.taskCounts = { total: 1, complete: 1, remaining: 0 };
+  const plans = [target("finished", "completed"), target("active01", "active"),
+    target("archived", "archived"), target("otherrepo", "completed", "r2"), checked];
+  assert.deepEqual(incompleteDependencies(source, plans), ["active01", "archived", "missing1", "otherrepo", "checked01"]);
+  assert.equal(source.plan.dependencies.length, 6, "relationship history is preserved");
+  assert.deepEqual(incompleteDependencies(source, []), source.plan.dependencies, "missing records never imply completion");
 }

@@ -120,8 +120,7 @@
         type="button"
         class="recommended-cta"
         data-btn="cta"
-        data-slot="label"
-      ></button>
+      ><portal-icon name="copy" size="sm" aria-hidden="true"></portal-icon><span data-slot="label"></span></button>
     </template>
     <!-- Active-filter chips (control bar) -->
     <template id="tpl-filter-chip">
@@ -147,10 +146,6 @@
             <span class="title-link" data-slot="title-link"></span>
           </h3>
           <p class="description-line" data-slot="description"></p>
-          <footer>
-            <div class="card-actions" data-slot="actions"></div>
-            <div class="chips" data-slot="chips"></div>
-          </footer>
         </div>
         <div data-slot="status-mount"></div>
       </article>

@@ -1,12 +1,12 @@
 // <plan-card> — set .record (plan record) and .actions (cardActions bag: onOpen, onCopyPath,
-// onCopyContext, onCopyPortableContext, onPlanAction, mergeFor, planSuiteEnabled, planSuitePackage,
+// onCopyContext, onPlanAction, mergeFor, planSuiteEnabled, planSuitePackage,
 // skillModal, onEnablePackage, onError) as properties right after creation, then append to the
-// DOM. The whole card triggers onOpen on click, except interactive widgets (the mounted
-// <plan-status>, the recommended-next CTA, and the ⋯ actions menu) inside it. The priority
-// control, readiness/blocked chips, and completion live in the mounted <plan-status> element
-// (shared with the detail drawer), stacked below the card's main content in every lifecycle.
+// DOM. The title/description trigger onOpen; the status component owns its separate controls. The priority
+// control, modified time, warnings, actions, and work status live in <plan-status>, shared with the
+// detail drawer and stacked below the card's title and description in every lifecycle.
 import { portalTpl as tpl, portalFillSlots as fill } from "/portal/shared/api.js";
-import { cardActionMenu, cardPrimaryAction, chip } from "/portal/plans/templates.js";
+import { cardActionMenu, cardPrimaryAction } from "/portal/plans/templates.js";
+import { incompleteDependencies } from "/portal/plans/plan-actions.js";
 
 // Card shows a shortened preview; full text (up to 500 chars) still lives in plan.excerpt
 // for copy-context/drawer use — only the on-card display is truncated further here.
@@ -37,32 +37,21 @@ class PlanCardElement extends HTMLElement {
     const record = this._record;
     const cardActions = this._actions;
     const plan = record.plan;
-    const warnings = plan.validation.warnings.length;
 
     const node = fill(tpl("tpl-plan-card"), {
       description: truncate(plan.excerpt || "No description", EXCERPT_DISPLAY_LENGTH),
     });
     const statusEl = document.createElement("plan-status");
+    const primary = cardPrimaryAction(record, cardActions);
+    const menu = cardActionMenu(record, cardActions);
+    statusEl.actionContent = plan.lifecycle === "backlog" && incompleteDependencies(record, cardActions.plans || []).length
+      ? [menu, primary]
+      : [...(primary ? [primary] : []), menu];
     statusEl.merge = cardActions.mergeFor?.(record.key) || null;
     statusEl.record = record;
     node.querySelector("[data-slot=status-mount]").replaceWith(statusEl);
-    node.querySelector("[data-slot=chips]").append(
-      warnings ? chip(`${warnings} warnings`, "warn") : chip("valid", "ok"),
-    );
     node.querySelector("[data-slot=title-link]").textContent = plan.title;
-    // One primary command (Start, Continue, Update, or Close) when the plan has a way forward,
-    // then the unified ⋯ menu shared with the drawer.
-    const primary = cardPrimaryAction(record, cardActions);
-    node.querySelector("[data-slot=actions]").append(
-      ...(primary ? [primary] : []),
-      cardActionMenu(record, cardActions),
-    );
-    // doc-details (title/description/footer) is the click surface — status-section (priority,
-    // completion) sits outside it as its own sibling, so it's naturally excluded rather than
-    // needing a manual closest() exclusion. Clicks/keypresses landing on an interactive widget
-    // inside doc-details (priority dropdown, action buttons) are still ignored so they only do
-    // their own thing. tabindex+role make doc-details itself keyboard-reachable now that
-    // title/description are plain text, not buttons.
+    // Only title/description open the document; metadata and actions are separate siblings.
     const docDetails = node.querySelector(".doc-details");
     docDetails.tabIndex = 0;
     docDetails.setAttribute("role", "button");

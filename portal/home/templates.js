@@ -96,7 +96,9 @@ function cardRows(domains, actions) {
     const target = { repositoryId: actions.repositoryId, checkout, plan };
     const identity = matchedPlanIdentity(plan, checkout, {
       mainCheckouts,
+      nextAction: actions.nextPlanAction(plan),
       onOpenPlan: actions.onOpenPlan,
+      onCopyPrompt: actions.onCopyPlanPrompt,
       onStopServers: () => actions.onStopServers(target),
       onDelete: () => actions.onRemoveWorktree(target),
     });

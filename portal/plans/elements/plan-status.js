@@ -1,6 +1,7 @@
 // <plan-status> — set .merge (optional, see below) and .record (plan record) right after creation,
 // then append to the DOM. Shared by <plan-card> and the detail drawer so both surfaces show the same
-// priority control, structure/QA/blocked chips, modified time, and completion.
+// document metadata above an actions/work row. Set .actionContent to the page's action nodes before
+// mounting; record updates move those same nodes into the fresh row to preserve their handlers.
 //
 // Completion is the shared planCompletion() ring/badge, at the far right. `.merge` is the plan's
 // `{ into }` when its worktree has merged (state.js's mergedPlanBranches), which adds the
@@ -20,7 +21,6 @@
 import { portalTpl as tpl, portalFillSlots as fill } from "/portal/shared/api.js";
 import { planCompletion } from "/portal/plans/plan-completion.js";
 import { showsPriority } from "/portal/plans/lifecycle.js";
-import { STRUCTURE_LABELS } from "/portal/plans/state.js";
 import { chip } from "/portal/plans/templates.js";
 
 const PRIORITY_OPTIONS = [
@@ -73,10 +73,17 @@ class PlanStatusElement extends HTMLElement {
     const plan = record.plan;
     const isBlocked = plan.blockers.length > 0;
 
-    const node = fill(tpl("tpl-plan-status"), {
-      meta: `modified ${formatRelativeTime(plan.modifiedAt)}`,
-    });
-    node.querySelector("[data-slot=meta]").title = new Date(plan.modifiedAt).toLocaleString();
+    const age = formatModifiedAge(plan.modifiedAt);
+    const node = fill(tpl("tpl-plan-status"), { meta: age });
+    const modified = node.querySelector("[data-slot=modified]");
+    const modifiedDate = new Date(plan.modifiedAt);
+    const knownDate = !Number.isNaN(modifiedDate.getTime());
+    modified.title = knownDate ? `Modified ${modifiedDate.toLocaleString()}` : "Modified time unknown";
+    modified.setAttribute("aria-label", knownDate ? `Modified ${age}${age === "now" ? "" : " ago"}` : "Modified time unknown");
+    if (knownDate) modified.dateTime = modifiedDate.toISOString();
+    node.querySelector("[data-slot=actions]").append(...(this.actionContent || []));
+    const warnings = plan.validation.warnings.length;
+    if (warnings) node.querySelector("[data-slot=warnings]").replaceWith(chip(`${warnings} warning${warnings === 1 ? "" : "s"}`, "warn"));
     const stateBadgeSlot = node.querySelector("[data-slot=state-badge]");
     // Read-only (a page without the Plans mutation orchestrator, e.g. Home): priority renders as a
     // plain chip and the blocked badge is static, since nothing would handle the plan-change /
@@ -103,17 +110,15 @@ class PlanStatusElement extends HTMLElement {
     }
     const completion = planCompletion(plan, { merge: this.merge || null });
     if (completion) node.querySelector("[data-slot=completion]").replaceWith(completion);
-    // Structure (complete/draft) only distinguishes actionable-vs-not within backlog; promotion to
-    // Ready requires a complete structure, so the chip is redundant past backlog.
-    const chips = node.querySelector("[data-slot=status-chips]");
-    if (plan.lifecycle === "backlog") {
-      chips.append(chip(STRUCTURE_LABELS[plan.readiness] || plan.readiness, plan.readiness === "ready" ? "ok" : ""));
+    const openFindings = plan.qa?.openFindings || 0;
+    if (plan.lifecycle === "review" && openFindings > 0) {
+      node.querySelector("[data-slot=findings]").replaceWith(chip(`${openFindings} open finding${openFindings === 1 ? "" : "s"}`, "warn"));
     }
-    if (plan.lifecycle === "review") chips.append(qaChip(plan));
-    // Priority no longer applies once a plan is done; those plans keep the field for history, but
-    // the control does not offer to edit it.
+    // Priority is only relevant while deciding which plan to start.
+    const prioritySlot = node.querySelector("[data-slot=priority]");
+    prioritySlot.hidden = !showsPriority(plan.lifecycle);
     if (showsPriority(plan.lifecycle)) {
-      node.querySelector("[data-slot=priority]").append(
+      prioritySlot.append(
         readonly ? chip(`${plan.priority} priority`) : this.renderPriorityDropdown(record),
       );
     }
@@ -123,43 +128,14 @@ class PlanStatusElement extends HTMLElement {
 
 customElements.define("plan-status", PlanStatusElement);
 
-// The QA outcome of a plan under review, kept apart from its task progress (the completion ring):
-// finishing the tasks moved it here, and only review findings and a human's approval move it on.
-function qaChip(plan) {
-  const open = plan.qa?.openFindings || 0;
-  if (open > 0) return chip(`${open} open finding${open === 1 ? "" : "s"}`, "warn");
-  if (plan.qa?.decision === "approved") return chip("approved", "ok");
-  return chip("awaiting review");
-}
-
-function isSameCalendarDay(a, b) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
-
-function formatRelativeTime(value) {
+function formatModifiedAge(value) {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "modified: unknown";
+  if (Number.isNaN(date.getTime())) return "unknown";
 
-  const now = new Date();
-  const elapsedMs = now.getTime() - date.getTime();
-  const elapsedMinutes = elapsedMs / MINUTE_MS;
-  const elapsedHours = elapsedMs / HOUR_MS;
-  const elapsedDays = elapsedMs / DAY_MS;
-
-  if (elapsedMinutes < 5) return "just now";
-  if (elapsedMinutes < 60) return "a few minutes ago";
-  if (elapsedHours < 5) return "a few hours ago";
-
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  if (isSameCalendarDay(date, now)) return "earlier today";
-  if (isSameCalendarDay(date, yesterday)) return "yesterday";
-
-  if (elapsedDays < 5) return "a few days ago";
-  if (elapsedDays < 11) return "a week ago";
-  if (elapsedDays < 28) return "a few weeks ago";
-  if (elapsedDays < 45) return "a month ago";
-  if (elapsedDays < 330) return "a few months ago";
-  if (elapsedDays < 550) return "a year ago";
-  return "a few years ago";
+  const elapsed = Math.max(0, Date.now() - date.getTime());
+  if (elapsed < MINUTE_MS) return "now";
+  const units = [[MINUTE_MS, "min"], [HOUR_MS, "hr"], [DAY_MS, "day"], [7 * DAY_MS, "week"], [30 * DAY_MS, "month"]];
+  const [duration, unit] = units.find((_, index) => index === units.length - 1 || elapsed < units[index + 1][0]);
+  const count = Math.floor(elapsed / duration);
+  return `${count} ${unit}${count === 1 ? "" : "s"}`;
 }

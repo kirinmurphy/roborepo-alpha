@@ -67,7 +67,7 @@ RoboRepo already has several useful foundations, but no incident domain:
 | --- | --- | --- |
 | Global state root | `scripts/cli/state-paths.mjs` | Provides the location pattern for machine-level incident history. |
 | CLI command catalog | `manifests/platform/cli/command-definitions/` | Registers built-in commands independently of optional packages. |
-| Permission enforcement | `globals/system/hooks/codex/permission-check.mjs` | Directly knows matched RoboRepo permission rules and missing-manifest failures. |
+| Permission enforcement | `globals/harnesses/codex/hooks/permission-check.mjs` | Directly knows matched RoboRepo permission rules and missing-manifest failures. |
 | Managed-write guidance | `globals/system/hooks/claude/roborepo-write-guard.mjs` | Directly knows when managed harness files are involved. |
 | Hook composition | `scripts/cli/hook-composition.mjs` | Defines how system and package hook fragments are installed. |
 | Transcript adapters | `scripts/harnesses/transcript-locate.mjs` and `scripts/harnesses/transcript-parse.mjs` | Can locate bounded session evidence when a harness exposes transcripts. |
@@ -304,7 +304,7 @@ flowchart TD
   F -->|folds events| G
 ```
 
-- Extend `globals/system/hooks/codex/permission-check.mjs` to emit incident observations for
+- Extend `globals/harnesses/codex/hooks/permission-check.mjs` to emit incident observations for
   missing or invalid RoboRepo policy state. Do not log normal matched decisions.
 - Add a small standalone incident-writer runtime asset usable by installed system hooks without
   importing the full CLI.
@@ -411,7 +411,7 @@ These are proposed budgets and require a benchmark fixture before becoming relea
 
 - [ ] Add a dependency-light incident writer suitable for copied system-hook assets.
 - [ ] Instrument missing or malformed permission policy in
-  `globals/system/hooks/codex/permission-check.mjs`.
+  `globals/harnesses/codex/hooks/permission-check.mjs`.
 - [ ] Define a system-hook wrapper contract for exit failure, invalid output, and missing assets.
 - [ ] Emit configuration-drift observations from the existing state-comparison paths.
 - [ ] Add a narrow fixture-backed signal registry; reject generic error text and arbitrary nonzero

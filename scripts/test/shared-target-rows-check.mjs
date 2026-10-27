@@ -16,10 +16,11 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 const cli = path.join(repoRoot, "scripts/cli/main.mjs");
 const rowsCli = path.join(repoRoot, "scripts/cli/shared-target-rows.mjs");
 const coreCodex = JSON.parse(fs.readFileSync(path.join(repoRoot, "generated/codex/hooks.json"), "utf8")).hooks;
-const coreScripts = fs.readdirSync(path.join(repoRoot, "globals/system/hooks/codex"));
+const coreScripts = fs.readdirSync(path.join(repoRoot, "globals/harnesses/codex/hooks"));
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-shared-target-rows-"));
 try {
+  standalonePermissionManifestDiscovery();
   coreHooksInstallAfterPackageHooks();
   scriptCopiesFollowConflictPolicy();
   linksOutsideTheCheckoutAreNeverWrittenThrough();
@@ -85,7 +86,7 @@ function coreHooksInstallAfterPackageHooks() {
 function scriptCopiesFollowConflictPolicy() {
   const { home, env } = makeHome("policy");
   const hooksDir = path.join(home, ".codex", "hooks");
-  const row = ["managed_files", "codex", "globals/system/hooks/codex", hooksDir];
+  const row = ["managed_files", "codex", "globals/harnesses/codex/hooks", hooksDir];
   const [first, second] = coreScripts;
   const statePath = path.join(env.ROBOREPO_STATE_DIR, "config-state", "managed-files.json");
 
@@ -123,7 +124,7 @@ function scriptCopiesFollowConflictPolicy() {
 function linksOutsideTheCheckoutAreNeverWrittenThrough() {
   const { home, env } = makeHome("links");
   const hooksDir = path.join(home, ".codex", "hooks");
-  const row = ["managed_files", "codex", "globals/system/hooks/codex", hooksDir];
+  const row = ["managed_files", "codex", "globals/harnesses/codex/hooks", hooksDir];
   const [script] = coreScripts;
   const external = path.join(tmp, "links-dotfiles", script);
   fs.mkdirSync(path.dirname(external), { recursive: true });
@@ -150,7 +151,7 @@ function linksOutsideTheCheckoutAreNeverWrittenThrough() {
 function retiredScriptsDoNotOutliveTheirSource() {
   const { home, env } = makeHome("retired");
   const hooksDir = path.join(home, ".codex", "hooks");
-  const row = ["managed_files", "codex", "globals/system/hooks/codex", hooksDir];
+  const row = ["managed_files", "codex", "globals/harnesses/codex/hooks", hooksDir];
   fs.mkdirSync(hooksDir, { recursive: true });
   const retired = path.join(hooksDir, "renamed-away.mjs");
   const edited = path.join(hooksDir, "dropped-but-edited.mjs");
@@ -208,7 +209,7 @@ function commands(fragment) {
 }
 
 function source(name) {
-  return fs.readFileSync(path.join(repoRoot, "globals/system/hooks/codex", name), "utf8");
+  return fs.readFileSync(path.join(repoRoot, "globals/harnesses/codex/hooks", name), "utf8");
 }
 
 function sha256(text) {
@@ -217,4 +218,32 @@ function sha256(text) {
 
 function escape(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function standalonePermissionManifestDiscovery() {
+  const { home, env } = makeHome("standalone");
+  const sourcePath = path.join(repoRoot, "globals/harnesses/codex/hooks/permission-check.mjs");
+  const installed = path.join(home, "permission-check.mjs");
+  fs.copyFileSync(sourcePath, installed);
+  const input = JSON.stringify({ tool_name: "exec_command", tool_input: { command: "git push --force origin main" } });
+  const cleanEnv = { ...env };
+  delete cleanEnv.REPO_ROOT;
+  delete cleanEnv.ROBOREPO_STATE_ROOT;
+  delete cleanEnv.ROBOREPO_STATE_DIR;
+  function decision(script, overrides) {
+    const result = spawnSync(process.execPath, [script], { env: { ...cleanEnv, ...overrides }, input, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    return JSON.parse(result.stdout).hookSpecificOutput.permissionDecision;
+  }
+  assert.equal(decision(sourcePath, {}), "deny", "provider source finds its checkout manifest without install state");
+  assert.equal(decision(installed, {}), "ask", "missing manifest retains conservative classification");
+  assert.equal(decision(installed, { REPO_ROOT: repoRoot }), "deny", "explicit repository root works for standalone copy");
+  for (const variable of ["ROBOREPO_STATE_ROOT", "ROBOREPO_STATE_DIR"]) {
+    for (const [file, key] of [["app-root.json", "appRoot"], ["install-state.json", "repo"]]) {
+      const state = path.join(home, variable, file.replace(".json", ""));
+      fs.mkdirSync(state, { recursive: true });
+      fs.writeFileSync(path.join(state, file), JSON.stringify({ [key]: repoRoot }));
+      assert.equal(decision(installed, { [variable]: state }), "deny", `${variable} discovers ${file}`);
+    }
+  }
 }

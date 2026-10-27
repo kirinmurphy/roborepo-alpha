@@ -23,7 +23,7 @@ Provider discovery/dispatch is registry-driven, but package declaration still mi
 Plan Write already enumerate Claude, Codex, and Gemini; the old seven closed-pair count is stale.
 A new provider can still require manual manifest updates.
 
-`globals/system/hooks/codex/permission-check.mjs` already emits per-command `ask` decisions. The
+`globals/harnesses/codex/hooks/permission-check.mjs` already emits per-command `ask` decisions. The
 static renderer omits ask rules and provider metadata still declares `perCommandAsk: false`.
 [[permva27]] owns verification of actual enforcement and [[permissions-ui-revamp]] consumes its
 fidelity findings. Source implementation is not proof that every installed native runtime runs it.

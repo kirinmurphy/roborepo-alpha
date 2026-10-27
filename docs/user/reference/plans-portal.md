@@ -35,11 +35,13 @@ not lifecycle stages, and neither is a human's approval.
 
 ## What The Portal Writes
 
-The portal changes plan files only when you change the `priority` of a plan that is not completed
-or archived. It rewrites that frontmatter line after checking that the file has not changed since
+The portal offers priority edits only for backlog and ready plans.
+It rewrites that frontmatter line after checking that the file has not changed since
 the page loaded it. The plan suite's commands move plans between lifecycle folders, each with one
 commit in the main checkout. Which repositories Plans reads is RoboRepo state, not a property of
 any repository.
+
+Starting or reopening a plan clears its priority to `none`.
 
 ## Which Repositories Plans Reads
 
@@ -67,9 +69,9 @@ synchronization brings the rename into the worktree.
 | Plan | Plans page shows | Priority edits write to | Finding |
 | --- | --- | --- | --- |
 | Backlog, ready, completed, or archived | Main copy | Main checkout for backlog and ready; no priority control for completed or archived | None |
-| Active or review, no `worktree` | Main copy | Main checkout | None |
-| Active or review, its worktree holds a usable copy | Worktree copy, **From worktree `<name>`** in the drawer | That worktree | **Edited outside worktree** when the main copy holds a version the worktree never had |
-| Active or review, its worktree or the worktree's copy is not usable | Main copy | Main checkout | **Worktree copy unavailable**, with the reason |
+| Active or review, no `worktree` | Main copy | No priority control | None |
+| Active or review, its worktree holds a usable copy | Worktree copy, **From worktree `<name>`** in the drawer | No priority control | **Edited outside worktree** when the main copy holds a version the worktree never had |
+| Active or review, its worktree or the worktree's copy is not usable | Main copy | No priority control | **Worktree copy unavailable**, with the reason |
 | Only in a worktree | Worktree copy, labeled with the worktree name | That worktree | None |
 
 A copy in any other worktree is never shown and never produces a finding; those worktrees usually
@@ -127,6 +129,9 @@ instead of any plans, with an action to show all repos.
 **Filters** opens a popup (search, priority, blocked, structure, plan freshness, health). Changes are drafted there and
 applied by **Update**, which stays disabled until something differs from the filters in effect; **Cancel**,
 the close button, Esc, and the backdrop discard the draft.
+
+Priority filtering applies only to backlog and ready plans. Other views hide the priority control
+and filter pill and ignore its saved value; returning to backlog or ready restores it.
 
 ### Limits
 
@@ -283,7 +288,7 @@ endpoint (`/api/config/packages/bulk`).
 When `plan-suite` is disabled:
 
 - `/plans` remains available, behind the onboarding banner
-- copy path and repository-aware or portable prompts remain available
+- copying the document filename and repository-aware context remains available
 - workflow prompt actions stay hidden
 
 When enabled:
@@ -297,16 +302,27 @@ When enabled:
 
   | Lifecycle | Actions |
   | --- | --- |
-  | backlog | Promote, Update, Archive |
+  | backlog | Promote, Archive |
   | ready | Start, Refine, Archive |
-  | active | Continue, Review, Update, Archive |
-  | review | Review, Fix findings, Close after merge, Archive |
+  | active | Continue, Review, Archive |
+  | review | Review, Fix findings, Close, Archive |
 
-- each card leads with one command button: Promote for backlog; Start for ready; Review, Update, or
-  Continue for active; and Close after merge or Review for review plans, from their recorded
-  approval (`/plan-review` fixes open findings in its own session, so open findings lead with Review)
-- a review plan shows its review outcome (open findings, **approved**, or **awaiting review**) as
-  a chip beside its task progress
+- backlog cards with unfinished `depends_on` entries show the Copy menu followed by **depends on** and linked
+  plan IDs instead of Promote; their card and popup menus omit Promote. IDs resolve within the
+  same repository, and missing dependencies remain plain text. Dependencies in the `completed`
+  lifecycle are omitted; when all dependencies are completed, Promote returns to the card and
+  popup menus. The frontmatter retains the dependency history. Other backlog cards lead with
+  Promote, and ready cards lead with Start. Unblocked review plans lead with Close
+  when approved, or Review otherwise. Active plans keep their commands in the Copy menu until
+  execution moves them to review. Close still verifies that the PR merged before completing a plan
+- priority, modified time, and document warnings sit in a compact, right-aligned column on wide
+  cards and a row below the description on smaller screens. Modified time uses a clock icon and
+  a short age such as **2 hrs**; its tooltip gives the exact date. The bottom row keeps the primary
+  action and Copy menu at the left, with blockers, open review findings, and task progress at the right
+- Copy menus use compact labels with copy icons and flush hover backgrounds. Update and Portable Prompt are
+  omitted. **Copy Document Filename** sits below a divider and copies only the filename; the
+  popup header's separate path button still copies the repository-relative path. Shared copy
+  controls confirm with a green check while keeping their original labels
 - an active or review plan whose worktree has merged shows a **merged** completion badge; the same
   status is visible in the detail drawer
 - every action copies a prompt; the page never runs a command or moves a plan for one
@@ -352,6 +368,7 @@ The Plans page uses the normalized package catalog state. It does not inspect sk
 - Repository sources scope repository discovery; their paths appear only in the Manage repositories
   dialog.
 - Plan records and `/api/plans` responses, including scan errors, do not expose absolute paths.
-- Portable prompts use repository name, relative path, metadata, warnings, and bounded excerpts.
+- Portable prompts requested through the API use repository name, relative path, metadata,
+  warnings, and bounded excerpts; the portal's Copy menus offer repository-aware prompts only.
 - The browser does not execute document scripts, and writes only the changes described in
   [What The Portal Writes](#what-the-portal-writes).

@@ -158,11 +158,7 @@ dialog#skill-modal::backdrop {
   color: var(--ok);
   border-color: var(--ok);
 }
-/* Card's ⋯/copy menu trigger sits beside the recommended-cta button and should match its height
- * (both share [data-btn="cta"]-equivalent padding, but a bare icon has a shorter line-box than
- * text) — align-items: stretch above plus box-sizing here closes that gap. Icon bumped up from the
- * component's 14px default since it's the row's only visual affordance now (no label text). Shared
- * with .drawer-actions below — same portal-menu-button widget, same trigger face, on both surfaces. */
+/* Copy triggers match the primary action's height on both cards and the drawer. */
 .plan-card .card-actions portal-menu-button,
 .drawer-actions portal-menu-button {
   display: inline-flex;
@@ -172,63 +168,68 @@ dialog#skill-modal::backdrop {
 .drawer-actions .menu-button-trigger {
   box-sizing: border-box;
   height: 100%;
+  font-size: var(--text-xs);
 }
-/* Sized from the shared scale (base.css / portal/shared/icon.js) rather than an off-scale 18px,
- * so these trigger icons match every other icon at the same visual weight. */
 .plan-card
   .card-actions
   .menu-button-trigger
   portal-icon:not(.menu-button-chevron)
   svg,
 .drawer-actions .menu-button-trigger portal-icon:not(.menu-button-chevron) svg {
-  width: var(--icon-lg);
-  height: var(--icon-lg);
+  width: var(--icon-md);
+  height: var(--icon-md);
 }
 /* Surface-neutral base: layout only, no chrome assumptions — <plan-status> renders inside both
  * the card (bottom of a rounded/bordered box) and the drawer (plain top border, no rounding), so
  * background/border/radius live in the modifiers below instead of here. */
 .status-section {
   padding: 8px 12px;
-  display: grid;
-  gap: 6px;
+  gap: 8px;
   overflow-wrap: anywhere;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
 }
 #drawer-status-mount .status-section {
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
   margin-bottom: 4px;
 }
-.status-section {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-}
 .status-trailing {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-left: auto;
-}
-.status-state-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
   flex-wrap: wrap;
-  gap: 4px 8px;
+  justify-content: flex-end;
+}
+.status-document {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding: 8px 12px;
 }
 /* Modified time steps down a size (it is the quiet half) while the completion ring and percent step
  * up one, so progress is what the eye lands on. Scoped here so Home's plan rows keep their sizing. */
-.status-trailing .meta-line { font-size: var(--text-xs); }
+.status-document .meta-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-2xs);
+  color: color-mix(in srgb, var(--dim) 90%, var(--panel));
+  white-space: nowrap;
+}
 .status-trailing .plan-completion { font-size: var(--text-xs); }
 .status-trailing .plan-percent { font-size: var(--text-sm); }
 /* Between --icon-sm and --icon-md: a step up from Home's ring without outgrowing the badges beside it. */
 .status-trailing .plan-progress { width: 18px; height: 18px; }
-.status-state-chips {
+.card-actions {
   display: flex;
   align-items: center;
-  gap: 5px;
-  flex-wrap: wrap;
+  gap: 6px;
+  flex-shrink: 0;
   min-width: 0;
 }
 .state-badge {
@@ -244,26 +245,23 @@ dialog#skill-modal::backdrop {
   color: var(--warn);
   border-color: var(--warn-line);
 }
-/* .state-badge is a <span> for readiness/review chips but a real <button> when it's the
+/* .state-badge is a <span> for status chips but a real <button> when it's the
    blocked-by trigger (plan-status.js) — reset button chrome so it keeps the chip's look. */
 .state-badge-blocked {
   background: none;
-  font: inherit;
+  font-family: inherit;
+  font-weight: inherit;
   cursor: pointer;
 }
 .state-badge-blocked:hover,
 .state-badge-blocked:focus-visible {
   background: color-mix(in srgb, var(--warn) 12%, transparent);
 }
-.status-state-row .meta-line {
-  font-size: var(--text-2xs);
-  min-width: 0;
-}
 .toast {
   position: fixed;
   bottom: 20px;
   right: 20px;
-  z-index: 20;
+  z-index: 100;
   max-width: min(360px, calc(100vw - 40px));
   background: var(--panel);
   border: 1px solid var(--line);
@@ -349,7 +347,7 @@ dialog#drawer::backdrop {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-  margin: 12px 0;
+  align-items: center;
 }
 .drawer-grid {
   display: grid;
@@ -371,23 +369,26 @@ dialog#drawer::backdrop {
 /* Unified plan ⋯ menu (drawer-menu / card ⋯ panel content, built in templates.js#planMenuBody) plus
    the recommended-next CTA that sits beside the ⋯ trigger. */
 .recommended-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-xs);
   white-space: nowrap;
 }
 .plan-menu {
   display: grid;
-  gap: 6px;
+  gap: 0;
   min-width: 0;
   width: 100%;
-}
-.plan-menu-note {
-  margin: 0;
-  padding: 4px 8px 8px;
   font-size: var(--text-xs);
-  color: var(--desc-dim);
+}
+.plan-menu-filename {
+  border-top: 1px solid var(--line);
+  padding-top: 0;
 }
 .plan-menu-group {
   display: grid;
-  gap: 2px;
+  gap: 0;
   width: 100%;
 }
 .drawer-warnings-section {
@@ -504,3 +505,17 @@ dialog#drawer::backdrop {
  * from the progress that follows, while the ring and its percent stay at the tighter gap. */
 .plan-merged-badge { background: var(--merged); margin-right: 5px; }
 .plan-complete-badge[hidden], .plan-merged-badge[hidden] { display: none; }
+
+.plan-dependencies {
+  color: var(--dim);
+  font-size: var(--text-xs);
+}
+.plan-dependencies button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

@@ -338,3 +338,15 @@ signal that something reintroduced a fixed-provider assumption.
 - [Supported Harnesses](../user/guides/harnesses/supported-harnesses.md) — the user-facing view
 - `scripts/harnesses/contract.mjs` — capability vocabulary and validation
 - `scripts/harnesses/gemini/` — the most recently added provider, and the clearest worked example
+
+### Optional headless summary arguments
+
+`extensions.app.headlessPromptArgs` makes a provider eligible for telemetry's optional synthesis.
+It is a nonempty array of nonempty strings containing exactly one whole argument `{prompt}`;
+embedded or repeated placeholders and nonstring values are rejected by the runtime contract and
+JSON Schema (2020-12). Omission means ineligible. For example, Claude declares
+`["-p", "--", "{prompt}"]` and Codex declares
+`["exec", "--skip-git-repo-check", "--", "{prompt}"]`.
+Verify each template against the selected runtime's own help before adding it. Selection uses
+`createHarnessRuntime().enabledProviders()` in registry order and `selectedHarnessExecutable`;
+the consumer substitutes the summary directly into argv and never invokes a shell.

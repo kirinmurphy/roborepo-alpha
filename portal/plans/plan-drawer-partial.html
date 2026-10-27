@@ -47,12 +47,13 @@
             id="drawer-cta"
             data-btn="cta"
             hidden
-          ></button>
+          ><portal-icon name="copy" size="sm" aria-hidden="true"></portal-icon><span data-slot="label"></span></button>
           <portal-menu-button
             id="drawer-menu"
             icon="copy"
             aria-label="Plan actions"
           ></portal-menu-button>
+          <span id="drawer-dependencies" hidden></span>
         </div>
         <section
           class="drawer-warnings-section drawer-blockers-section"
@@ -179,40 +180,37 @@
     <template id="tpl-blocker-unresolved">
       <span class="blockers-popover-item blockers-popover-item-unresolved" data-slot="title"></span>
     </template>
+    <template id="tpl-plan-dependencies">
+      <span class="plan-dependencies">depends on <span data-slot="dependencies"></span></span>
+    </template>
     <template id="tpl-menu-item">
       <button type="button" class="menu-button-item">
-        <portal-icon size="sm"
-          data-slot="icon"
-          class="menu-button-item-icon"
-        ></portal-icon>
-        <div class="menu-button-item-body">
-          <span data-slot="label"></span>
-          <span
-            class="menu-button-item-desc"
-            data-slot="description"
-            hidden
-          ></span>
-        </div>
+        <portal-icon name="copy" size="sm" aria-hidden="true"></portal-icon>
+        <span data-slot="label"></span>
       </button>
     </template>
     <template id="tpl-plan-menu">
-      <div class="plan-menu">
-        <p class="plan-menu-note" data-slot="note"></p>
+      <div class="plan-menu" role="group" aria-label="Copy options">
         <div class="plan-menu-group" data-slot="group" hidden></div>
         <div data-slot="fallback-actions" hidden></div>
-        <div data-slot="copy-path"></div>
+        <div class="plan-menu-filename" data-slot="copy-path"></div>
         <div data-slot="package-banner" hidden></div>
       </div>
     </template>
     <template id="tpl-plan-status">
-      <div class="status-section">
-        <div class="status-state-chips" data-slot="status-chips">
+      <div class="plan-status-content">
+        <div class="status-document" role="group" aria-label="Document status">
           <div class="priority-slot" data-slot="priority"></div>
-          <span class="state-badge" data-slot="state-badge" hidden></span>
+          <time class="meta-line" data-slot="modified"><portal-icon name="clock" size="sm" aria-hidden="true"></portal-icon><span data-slot="meta"></span></time>
+          <span data-slot="warnings" hidden></span>
         </div>
-        <div class="status-trailing">
-          <span class="meta-line" data-slot="meta"></span>
-          <span data-slot="completion" hidden></span>
+        <div class="status-section" role="group" aria-label="Plan actions and work status">
+          <div class="card-actions" data-slot="actions"></div>
+          <div class="status-trailing" role="group" aria-label="Work status">
+            <span class="state-badge" data-slot="state-badge" hidden></span>
+            <span data-slot="findings" hidden></span>
+            <span data-slot="completion" hidden></span>
+          </div>
         </div>
       </div>
     </template>

@@ -18,6 +18,9 @@ const appRoot = path.join(tmp, "app");
 
 fs.cpSync(path.resolve("scripts"), path.join(appRoot, "scripts"), { recursive: true });
 fs.cpSync(path.resolve("globals/harnesses"), path.join(appRoot, "globals", "harnesses"), { recursive: true });
+fs.cpSync(path.resolve("globals/packages"), path.join(appRoot, "globals", "packages"), { recursive: true });
+fs.cpSync(path.resolve("manifests"), path.join(appRoot, "manifests"), { recursive: true });
+fs.cpSync(path.resolve("portal/shared"), path.join(appRoot, "portal", "shared"), { recursive: true });
 fs.cpSync(path.resolve("modules"), path.join(appRoot, "modules"), { recursive: true });
 
 // A minimal third provider, "acme": declares telemetry-capture + telemetry-rate-limits (like
@@ -35,7 +38,8 @@ fs.writeFileSync(
     commandName: "acme",
     adapter: "acme",
     detection: { minimumConfidence: "possible" },
-    paths: {},
+    extensions: { app: { headlessPromptArgs: ["--input-type=module", "-e", "console.log(JSON.stringify(process.argv.slice(1)))", "--", "{prompt}"] } },
+    paths: { skills: { path: "~/.acme/skills", kind: "directory" }, home: { path: "~/.acme", kind: "directory" }, rootConfig: { path: "~/.acme/config.json", kind: "file" } },
     capabilities: ["telemetry-capture", "telemetry-rate-limits", "telemetry-transcripts"],
   }, null, 2),
 );
@@ -79,6 +83,7 @@ fs.writeFileSync(
     "  [acmeProvider.id, acmeProvider],",
     "]);",
     "",
+    "export function harnessDisplayName(id) { return PROVIDERS.get(id)?.manifest.displayName ?? id; }",
     "export function listHarnessProviders() { return [...PROVIDERS.values()]; }",
     "export function getHarnessProvider(id) {",
     "  const provider = PROVIDERS.get(id);",
@@ -140,6 +145,56 @@ fs.writeFileSync(
 const result = spawnSync(process.execPath, [probeScript], { encoding: "utf8" });
 assert.equal(result.status, 0, `synthetic third-provider probe failed:\n${result.stdout}\n${result.stderr}`);
 assert.match(result.stdout, /ok/);
+
+
+const headlessProbe = path.join(appRoot, "headless-probe.mjs");
+fs.writeFileSync(headlessProbe, `
+import assert from "node:assert/strict";
+import { findDeepReadProvider, runDeepRead } from "./scripts/cli/telemetry.mjs";
+import { getHarnessProvider } from "./scripts/harnesses/registry.mjs";
+import { createHarnessRuntime } from "./scripts/harnesses/harness-runtime.mjs";
+import { insightsSummary } from "./scripts/cli/telemetry-insights.mjs";
+const runtime = createHarnessRuntime({ state: { providers: { acme: { enabled: true }, claude: { enabled: false }, codex: { enabled: false } } } });
+const selection = { runtime, resolveExecutable: () => process.execPath };
+assert.equal(findDeepReadProvider(selection).cli, "acme");
+const special = ${JSON.stringify("--leading 'quoted' \"double\"\n$(touch should-not-exist); & | < > `echo no` $HOME")};
+const report = { capture_count: 0, group_cost: [{ group: special, calls: 1, avg_tokens: 1, total_tokens: 1 }], raw: "RAW_SECRET_MUST_NOT_LEAVE" };
+const result = runDeepRead(report, selection);
+assert.equal(result.ok, true);
+assert.equal(result.cli, "acme");
+const argv = JSON.parse(result.text);
+assert.equal(argv.length, 1);
+assert.ok(argv[0].endsWith(insightsSummary(report)));
+assert.ok(argv[0].includes(special));
+assert.ok(!argv[0].includes(report.raw));
+const manifest = getHarnessProvider("acme").manifest;
+const original = manifest.extensions.app.headlessPromptArgs;
+for (const args of [undefined, null, [], ["-p"], ["prefix{prompt}"], ["{prompt}", "{prompt}"], ["{prompt}", 1], ["{prompt}", ""]]) {
+  manifest.extensions.app.headlessPromptArgs = args;
+  assert.equal(findDeepReadProvider({ runtime, resolveExecutable: () => { throw new Error("must not resolve ineligible providers"); } }), null);
+  assert.equal(runDeepRead(report, selection).ok, false);
+}
+manifest.extensions.app.headlessPromptArgs = original;
+assert.equal(findDeepReadProvider({ ...selection, resolveExecutable: () => null }), null);
+const missing = runDeepRead(report, { ...selection, resolveExecutable: () => ${JSON.stringify(path.join(tmp, "missing-runtime"))} });
+assert.equal(missing.ok, false);
+assert.equal(missing.cli, "acme");
+assert.match(missing.note, /ENOENT/);
+assert.equal(findDeepReadProvider({ runtime: createHarnessRuntime({ state: { providers: {} } }), resolveExecutable: () => { throw new Error("disabled"); } }), null);
+const unavailable = { manifest: { id: "unavailable", commandName: "unavailable", extensions: { app: { headlessPromptArgs: ["{prompt}"] } } } };
+const ordered = { enabledProviders: () => [unavailable, getHarnessProvider("acme")] };
+assert.equal(findDeepReadProvider({ runtime: ordered, resolveExecutable: (m) => m.id === "acme" ? process.execPath : null }).cli, "acme");
+for (const [script, expected] of [["process.exit(7)", /exited 7/], ["", /returned no output/], ["setTimeout(() => {}, 10000)", /ETIMEDOUT/]]) {
+  manifest.extensions.app.headlessPromptArgs = ["-e", script || " ", "--", "{prompt}"];
+  const failure = runDeepRead(report, { ...selection, timeout: expected.source === "ETIMEDOUT" ? 100 : 5000 });
+  assert.equal(failure.ok, false);
+  assert.match(failure.note, expected);
+  assert.equal(failure.cli, "acme");
+}
+console.log("headless synthetic selection and process checks passed");
+`);
+const headlessResult = spawnSync(process.execPath, [headlessProbe], { encoding: "utf8", env: { ...process.env, HOME: tmp, ROBOREPO_STATE_ROOT: path.join(tmp, "state") } });
+assert.equal(headlessResult.status, 0, `${headlessResult.stdout}\n${headlessResult.stderr}`);
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log("telemetry synthetic third-provider checks passed");

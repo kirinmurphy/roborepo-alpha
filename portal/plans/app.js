@@ -11,7 +11,7 @@ import * as api from "./api.js";
 import * as tmpl from "./templates.js";
 import { createRepositorySourcesDialog } from "/portal/shared/repository-sources-dialog.js";
 import { createPlanDrawer } from "./plan-drawer.js";
-import { lifecycleLabel, lifecycleTabs, setLifecycleModel } from "./lifecycle.js";
+import { lifecycleLabel, lifecycleTabs, setLifecycleModel, showsPriority } from "./lifecycle.js";
 import { createBlockersPopover } from "./blockers-popover.js";
 import { mountOverflowNav } from "/portal/shared/overflow-nav.js";
 import { clearRepositoryScope, currentRepositoryScope, isRepositoryScopeUnavailable, onRepositoryScopeChange } from "/portal/shared/repository-scope.js";
@@ -313,6 +313,7 @@ function setOptions(id, options) {
 // that match nothing. Never touches `.value`, so it's safe to call on every render() without
 // disturbing the user's current selection.
 function refreshFilterCounts(snapshot, filters = filtersDialogEl.open ? draftFilters() : state.filters) {
+  if (!showsPriority(state.selectedLifecycle)) filters = { ...filters, priority: "all" };
   for (const id of Object.keys(FILTER_OPTION_DEFS)) {
     const select = document.getElementById(id);
     const options = FILTER_OPTION_DEFS[id](snapshot);
@@ -345,6 +346,7 @@ function render() {
   onboardingEl.hidden = true;
   lifecycleBarEl.dataset.board = "true";
   renderWarnings(snapshot);
+  document.getElementById("priority").closest(".filter-row").hidden = !showsPriority(state.selectedLifecycle);
   renderFilterChips(snapshot);
   refreshFilterCounts(snapshot);
   const allMatchingCurrentFilters = filteredPlans(snapshot.plans, state.filters);
@@ -360,10 +362,10 @@ function render() {
     return;
   }
   const cardActions = {
+    plans: snapshot.plans,
     onOpen: openPlan,
     onCopyPath: copyText,
     onCopyContext: (record) => copyText(repositoryContext(record)),
-    onCopyPortableContext: (key) => copyPrompt(null, [key], "portable"),
     onPlanAction: (key, command) => copyPrompt(command, [key], "repository-aware"),
     mergeFor: (key) => state.mergedPlans.get(key) || null,
     planSuiteEnabled: snapshot.planSuitePackage.enabled,
@@ -527,7 +529,8 @@ function applyFilteredListAction(action) {
 }
 
 function renderFilterChips(snapshot) {
-  const descriptors = tmpl.filterChipDescriptors(state.filters, FILTER_DEFAULTS, (id, value) =>
+  const filters = showsPriority(state.selectedLifecycle) ? state.filters : { ...state.filters, priority: "all" };
+  const descriptors = tmpl.filterChipDescriptors(filters, FILTER_DEFAULTS, (id, value) =>
     optionLabel(snapshot, id, value),
   );
   filterChipsEl.replaceChildren(...descriptors.map(tmpl.filterChip));
