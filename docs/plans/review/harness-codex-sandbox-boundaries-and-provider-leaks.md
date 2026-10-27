@@ -1,7 +1,7 @@
 ---
 id: 4zyo2woj
 priority: high
-next_action: Await explicit human approval of reviewed implementation 81ae9e362000c1a48574b1aeceda4c2302b19570, then merge the pull request and run /plan-close.
+next_action: Human approval is recorded; open and merge the pull request, then run /plan-close. Rerun /plan-review if base implementation changes before landing.
 blocked_by: []
 depends_on: ["hr78g4sj"]
 related: ["8bjltk2n", "wjlt1zvf", "ia1q1z9", "permva27", "permissions-ui-revamp", "codex-cmux-hook-trust-review", "46qth5z8", "harness-capability-derived-resource-targeting", "7k3m9qd", "o9zwxuav"]
@@ -590,4 +590,9 @@ Git administrative worktree `credential-protection`; this document contains no m
 - Base commit: 977d29f04ab25f5191f21c832cb98709be99efae
 
 ### Approval
-- Decision: requested
+- Decision: approved
+- Reviewed implementation commit: 81ae9e362000c1a48574b1aeceda4c2302b19570
+- Confirmed by: human
+- Evidence: October 27, 2026, the user selected "Approve this implementation" in response to
+  the exact-commit approval question for this plan, including the accepted coverage limits and
+  recorded base-branch skill-size failure. Review freshness was rechecked before recording.
