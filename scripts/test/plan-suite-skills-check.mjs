@@ -118,6 +118,10 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "| `review/` | Fix findings",
     "A command never repeats a transition that has already happened",
   ]);
+  includesAll("plan-execute final report routing", skill, [
+    "Before the final report in every execution mode (start, resume, and review findings), read",
+    "[references/final-report.md](references/final-report.md) and follow its required template and reporting checklist",
+  ]);
   assert.ok(skill.includes("Read `references/start-validation.md` before"), "plan-execute: SKILL.md must load the start-validation reference");
   assert.ok(skill.includes("canonical start transition command"), "plan-execute: SKILL.md must delegate the start transition");
   const order = ["## Start Transition", "## Enter the Worktree", "## Implementation Workflow", "## Validation Loop", "## Implementation Completion", "## Review Findings"].map((heading) => skill.indexOf(heading));
@@ -355,7 +359,12 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     const skill = readSkill(id);
     includesAll(`${id} paired skills`, skill, ["## Paired Skills", "host's skill/package manager", "Enable it, or skip it for this run?", "never describe a drifted package as loaded"]);
     if (id !== "session-close") includesAll(`${id} plan naming`, skill, ["Name the plan by its H1 title, with its id in parentheses on first mention only"]);
-    if (!["plan-write", "session-close"].includes(id)) includesAll(`${id} report names the plan`, skill, ['- Plan: "<title>" (<id>), <repository-relative path>']);
+    if (!["plan-write", "session-close"].includes(id)) {
+      const report = id === "plan-execute"
+        ? readPackageFile("plan-suite/skills/plan-execute/references/final-report.md")
+        : skill;
+      includesAll(`${id} report names the plan`, report, ['- Plan: "<title>" (<id>), <repository-relative path>']);
+    }
     for (const retired of RETIRED_COMMANDS) {
       assert.ok(!skill.includes(`/${retired}`), `${id}: SKILL.md still names the retired /${retired}`);
     }
