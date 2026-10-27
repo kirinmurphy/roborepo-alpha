@@ -6,7 +6,7 @@ blocked_by: []
 depends_on: []
 related: ["hr78g4sj", "b2sgiejd", "a7bslb00", "gqzjlzgx"]
 reviewed_commit: 1f4f3dbdac86a02781fe595ec8ae744162031faa
-worktree:
+worktree: git-worktree-preservation-and-recovery
 ---
 
 # Retire worktrees safely after merges and recover remaining work
