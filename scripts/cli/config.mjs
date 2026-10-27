@@ -339,7 +339,7 @@ export function buildBehaviorView(snap) {
     if ((item.presentation?.visibility || "catalog") !== "catalog") continue;
     const section = byCategory.get(item.presentation?.category);
     if (!section) continue;
-    section.items.push(presentationItem(item));
+    section.items.push({ ...presentationItem(item), requires: requiredReferences(item, snap.packages, presentationItem) });
   }
 
   const sections = categories
@@ -356,7 +356,7 @@ export function buildBehaviorView(snap) {
       footnote: section.footnote,
       items: section.items.sort((a, b) => a.order - b.order || a.label.localeCompare(b.label)),
       contextCost: sectionContextCost(section.items),
-      ...dependencySections(section.items, snap.packages, presentationItem),
+      recommendedDependencies: recommendedDependencies(section.items, snap.packages, presentationItem),
     }));
 
   const permItems = permissionItems(perms);
@@ -519,51 +519,52 @@ function labelRestatesCommand(label, command) {
   return [...labelWords].every((word) => commandWords.includes(word));
 }
 
-// The packages a section's visible rows require (transitively) or recommend (directly), as the
-// section's Required and Recommended dependency lists. A package already shown as a row in the
-// section, a hidden package, and an archived one are left out; a package both required and
-// recommended is listed as required. Each item is an ordinary row plus its relationship, the
-// labels of the rows that reference it, and whether it is selected directly or derived.
-function dependencySections(sectionItems, packages, presentationItem) {
+// Each row's required packages, as a reference its source popup lists: the transitive `requires`
+// of the package, minus hidden and archived packages. Each entry carries the inspect target and
+// cost its own row would have, so the popup can open its source. Required packages are never page
+// rows of their own (a dependency-only one has no switch, and a selectable one already has its own
+// row), so this is the only place they appear for the packages that pull them in.
+function requiredReferences(item, packages, presentationItem) {
+  const byId = new Map(packages.map((pkg) => [pkg.id, pkg]));
+  return requiredClosure(packages, [item.id])
+    .filter((id) => id !== item.id)
+    .map((id) => byId.get(id))
+    .filter((pkg) => pkg && !pkg.archived && pkg.presentation?.visibility !== "hidden")
+    .map((pkg) => {
+      const row = presentationItem(pkg);
+      return { id: pkg.id, label: pkg.label, active: pkg.enabled, inspect: row.inspect, contextCost: row.contextCost, builtIn: row.builtIn };
+    });
+}
+
+// The packages a section's rows recommend, as the section's Recommended dependencies list: each a
+// switchable row naming the rows that recommend it. A package already shown as a row in the
+// section, one a row requires (it turns on anyway), and a hidden, archived, or non-selectable one
+// are left out.
+function recommendedDependencies(sectionItems, packages, presentationItem) {
   const byId = new Map(packages.map((pkg) => [pkg.id, pkg]));
   const shown = new Set(sectionItems.map((item) => item.id));
-  const listable = (id) => {
-    const pkg = byId.get(id);
-    return pkg && !shown.has(id) && !pkg.archived && pkg.presentation?.visibility !== "hidden";
-  };
-  const required = new Map();
+  const required = new Set(sectionItems.flatMap((item) => requiredClosure(packages, [item.id])));
   const recommended = new Map();
-  const reference = (map, id, by) => {
-    if (!map.has(id)) map.set(id, new Set());
-    map.get(id).add(by);
-  };
   for (const item of sectionItems) {
     const label = byId.get(item.id)?.label || item.label;
-    for (const id of requiredClosure(packages, [item.id])) if (id !== item.id && listable(id)) reference(required, id, label);
-    for (const id of byId.get(item.id)?.recommends || []) if (listable(id)) reference(recommended, id, label);
+    for (const id of byId.get(item.id)?.recommends || []) {
+      const pkg = byId.get(id);
+      if (!pkg || shown.has(id) || required.has(id) || pkg.archived || !pkg.selectable) continue;
+      if (pkg.presentation?.visibility === "hidden") continue;
+      if (!recommended.has(id)) recommended.set(id, new Set());
+      recommended.get(id).add(label);
+    }
   }
-  for (const id of required.keys()) recommended.delete(id);
-  const items = (map, relationship) => [...map].map(([id, referencedBy]) => {
+  return [...recommended].map(([id, referencedBy]) => {
     const pkg = byId.get(id);
-    const row = presentationItem(pkg);
-    // A row on only because something requires it has no root to remove, so it gets no switch:
-    // a non-selectable package never does, and a derived one is controlled by its parents.
-    const switchable = pkg.selectable && !(relationship === "required" && pkg.selection === "required");
     return {
-      ...row,
+      ...presentationItem(pkg),
       label: pkg.label,
-      toggle: switchable ? row.toggle : null,
-      relationship,
+      relationship: "recommended",
       referencedBy: [...referencedBy],
-      relationText: `${relationship} by ${[...referencedBy].join(", ")}`,
-      selectable: pkg.selectable,
-      selection: pkg.selection,
+      relationText: `recommended by ${[...referencedBy].join(", ")}`,
     };
   }).sort((a, b) => a.label.localeCompare(b.label));
-  return {
-    requiredDependencies: items(required, "required"),
-    recommendedDependencies: items(recommended, "recommended"),
-  };
 }
 
 // A package with this many skills or more is a set: its card label opens a contents view listing
@@ -658,6 +659,7 @@ function packageItemBase(item, contextCost) {
     active: item.enabled,
     // A dependency-only package has no switch of its own.
     toggle: item.selectable === false ? null : "package",
+    selection: item.selection || "off",
     builtIn: item.origin === "built-in",
     urls: item.urls || [],
     resources: item.resources || item.components || [],

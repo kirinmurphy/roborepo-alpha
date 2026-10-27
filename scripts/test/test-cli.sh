@@ -613,7 +613,7 @@ assert "bundle apply: telemetry applies its required hooks bundle without record
 assert "bundle status: marks a derived bundle as required by its parent" \
   bash -c "${bundle_dep_env} node '${cli}' bundle status | grep -Eq '^hooks +required by telemetry +applied'"
 assert "bundle check: a missing required bundle names its rows" \
-  bash -c "mv '${bundle_dep_home}/.claude/hooks' '${bundle_dep_home}/.claude/hooks.moved' && out=\$(${bundle_dep_env} node '${cli}' bundle check 2>&1); status=\$?; mv '${bundle_dep_home}/.claude/hooks.moved' '${bundle_dep_home}/.claude/hooks'; test \$status -ne 0 && grep -q 'fail: hooks selected but not fully applied; missing: claude:hooks' <<<\"\$out\""
+  bash -c "mv '${bundle_dep_home}/.claude/hooks' '${bundle_dep_home}/.claude/hooks.moved' && out=\$(${bundle_dep_env} node '${cli}' bundle check 2>&1); status=\$?; mv '${bundle_dep_home}/.claude/hooks.moved' '${bundle_dep_home}/.claude/hooks'; test \$status -ne 0 && grep -q 'fail: hooks required by telemetry but not fully applied; missing: claude:hooks' <<<\"\$out\""
 assert "bundle remove: a required bundle stays applied and says why" \
   bash -c "${bundle_dep_env} node '${cli}' bundle remove hooks | grep -q 'kept: hooks stays applied; required by telemetry' && test -e '${bundle_dep_home}/.claude/hooks'"
 assert "bundle remove: removing telemetry removes the hooks it required" \

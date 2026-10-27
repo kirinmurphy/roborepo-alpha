@@ -1,7 +1,7 @@
 // <config-item></config-item> — one row in a standard config section (Token Optimization,
-// Commands, Code Conventions, Chat-Time Output), or in one of its dependency lists, where the row
-// also names the packages that require or recommend it and has no switch when it is not
-// directly selectable. Set .item (the behaviorView item) and .actions
+// Commands, Code Conventions, Chat-Time Output), or in a section's Recommended dependencies list,
+// where the row also names the packages that recommend it. A row's required packages travel with
+// its inspect click, so the source popup can list them. Set .item (the behaviorView item) and .actions
 // ({onInspect, onToggle}) as properties right after creation. Builds itself from the
 // tpl-config-item template, owns conditional listener wiring (inspect-click, toggle-swap)
 // internally, embeds <config-toggle> in its toggle slot when the item is mutable.
@@ -85,7 +85,7 @@ class ConfigItemElement extends HTMLElement {
     if (item.inspect) {
       labelEl.title = "view source";
       // Pass the item's cost along so the source popup can show its token chip.
-      labelEl.addEventListener("click", () => onInspect(item.inspect, item.contextCost, { builtIn: item.builtIn }));
+      labelEl.addEventListener("click", () => onInspect(item.inspect, item.contextCost, { builtIn: item.builtIn, requires: item.requires || [] }));
     }
 
     // Info URL (GitHub / docs / PyPI): a single inline icon on the label row, opening the FIRST

@@ -51,16 +51,14 @@ A package may list `requires: [pkgId, ...]` and `recommends: [pkgId, ...]`:
 - A **dependency-only** package (`selectable: false`) has no toggle of its own and no row in the
   normal list; it turns on and off with the packages that require it.
 
-Below its own rows, a section lists the packages its rows reference:
+A required package is not a row on the page. Clicking a package's name opens its source popup,
+which lists what it requires under **Requires**; each name there opens that package's source, and
+**Back** returns to the package that requires it.
 
-- **Required dependencies** — what its packages require, each row naming the packages that require
-  it (`required by Development Planning Lifecycle, Session Close`). A row that is on only because of
-  those packages has no toggle.
-- **Recommended dependencies** — what its packages recommend, with a toggle, naming the packages
-  that recommend it.
-
-Clicking a dependency row's name opens its source, like any other row. **Select All** and the Plans
-banner act on selectable packages only.
+Below its own rows, a section lists **Recommended dependencies**: what its packages recommend, each
+with a toggle and naming the packages that recommend it. A package a row already requires, or one
+the section already shows, is not repeated there. **Select All** and the Plans banner act on
+packages you can switch directly, and the group switch is hidden when none are left.
 
 A package may also hold several skills. They turn on and off together with the package's one
 toggle; there is no switch for a single skill inside it. Its card shows the package name, never one

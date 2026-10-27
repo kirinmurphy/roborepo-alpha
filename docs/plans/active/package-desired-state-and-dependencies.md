@@ -29,8 +29,8 @@ This plan gives package state one model with three layers, each with one owner:
 | Live state | What is actually installed in each harness? | The existing resource probes |
 
 On top of that model it adds `recommends` (offered, never automatic), non-selectable
-dependency-only packages, a verified result from every enable and disable, Required/Recommended
-dependency sections on the Config page, and the same roots-plus-derived-dependencies rule for
+dependency-only packages, a verified result from every enable and disable, required packages listed
+in each package's source popup and a Recommended dependencies list on the Config page, and the same roots-plus-derived-dependencies rule for
 install bundles.
 
 This plan merges two earlier backlog plans: the derived-dependency plan this file grew from, and
@@ -54,7 +54,7 @@ Verified on `main` at `69dea56`.
 | Status API | `scripts/cli/package-status.mjs` and `/api/config` `componentStatus` expose probe results | Already shipped |
 | Repair and adopt | `roborepo package reconcile` re-applies effective packages and drops ids missing from the catalog; `roborepo package adopt-live` marks external live packages as enabled | Already shipped |
 | Portal badges | `portal/config/elements/config-item.js` styles `partial` as a warning and `external` as informational | Already shipped |
-| Source popup | `openSource` in `portal/config/panels.js`, reached through `openSourceModal` in `portal/config/app.js` | Reused for dependency rows |
+| Source popup | `openSource` in `portal/config/panels.js`, reached through `openSourceModal` in `portal/config/app.js` | Reused to list and open a package's required packages |
 | Relationships | Catalog (`scripts/cli/package-catalog.mjs`) supports `requires` with cycle and missing-id checks. No built-in package uses it ([[o93hile]] removed the marker packages' dependency). `scripts/test/test-cli.sh` covers it with a workspace-only `test-composite` fixture that requires `jcodemunch` and `jdocmunch`, which now live in `globals/packages-archived/` but still load into the catalog | No `recommends`, selectability, or dependency visibility |
 | Install bundles | `manifests/platform/presets.json` defines `base`, `rules`, `hooks`, `commands` (no rows), and `telemetry` (no rows). `scripts/cli/presets.mjs` keeps the selection in `~/.roborepo/presets/state.json` (`selected[]`). `withDependencies` hard-codes telemetry → hooks and the result is written back to `selected`. `bundle check` (run by `scripts/doctor.sh` and `scripts/verify-install.sh`) prints `<id> selected but not fully applied` without naming the missing rows | The same sticky-dependency flaw, a dependency rule hidden in code, and a failure that does not say what is missing |
 
@@ -84,7 +84,8 @@ change in one place rather than per consumer.
 - Make enable and disable return the probed outcome (`enabled`, `partial`, or `blocked`) instead of
   assuming success.
 - Give package state its own module, so the rules renderer only renders.
-- Show Required and Recommended dependency sections on the Config page through the shared behavior
+- List each package's required packages in its source popup, and show a Recommended dependencies
+  list on the Config page, through the shared behavior
   view.
 - Store install bundle selections as roots too, declare the telemetry → hooks dependency in
   `presets.json`, and derive it through the same graph helper.
@@ -156,7 +157,7 @@ only ever be written under version 2, so in practice this affects workspace pack
 | `requires` | `[]` | The package is invalid without these; they join the effective set automatically |
 | `recommends` | `[]` | Useful companions; offered, never added automatically |
 | `selectable` | `true` | `false` rejects direct `package enable` and `package disable` |
-| `presentation.visibility` | `catalog` | `catalog`: normal row. `dependency`: shown only in dependency sections. `hidden`: no UI row |
+| `presentation.visibility` | `catalog` | `catalog`: normal row. `dependency`: no row; listed under Requires in the popup of each package that requires it. `hidden`: no UI row |
 
 `roborepo package validate` rejects unknown ids in either relationship, self-references, invalid
 values, and cycles in `requires`. `recommends` does not take part in cycle detection. A
@@ -213,12 +214,18 @@ When a selectable package is enabled and some of its recommendations are off:
 The package engine returns recommendation data; only the portal and the interactive CLI prompt.
 Graph and reconciliation functions never prompt.
 
-### 6. Config page dependency sections
+### 6. Config page dependencies
 
-`buildBehaviorView` in `scripts/cli/config.mjs` derives, for each section, the dependencies its
-visible packages reference, and exposes `requiredDependencies[]` and `recommendedDependencies[]`.
-Each item carries the ordinary row data plus its relationship, the referencing packages, whether it
-is selectable, and whether it is directly selected or derived.
+Required packages are a reference, not a package option: a dependency-only one has no switch, and a
+selectable one already has its own row. So they are not rows on the page. `buildBehaviorView` in
+`scripts/cli/config.mjs` gives each package row a `requires[]` list (its transitive required
+packages, each with the inspect target and cost its own row would have), and the source popup
+lists them under **Requires**. Each name opens that package's source, with **Back** to the package
+that requires it. `roborepo config status` prints a `requires:` line under the row.
+
+Recommended packages are offers the user acts on, so each section exposes
+`recommendedDependencies[]`: switchable rows below the section's own rows, each naming the packages
+that recommend it. A package the section already shows, or one a row requires, is left out.
 
 Illustration, using the edges [[ejsc769o]] is expected to add:
 
@@ -227,15 +234,14 @@ Development Workflows
   Development Planning Lifecycle     [toggle]
   Session Close                      [toggle]
 
-  Required dependencies
-    Implementation Review            required by Development Planning Lifecycle, Session Close
-
   Recommended dependencies
     Test Harness                     recommended by Session Close           [toggle]
+
+Session Close popup
+  Requires: Implementation Review    (opens its source; Back returns)
 ```
 
-Dependency rows open the existing source popup (`openSource`). A non-selectable dependency has no
-toggle. Terminal onboarding and the portal read the same behavior view. Bulk enable (a `bulkToggle`
+Terminal onboarding and the portal read the same behavior view. Bulk enable (a `bulkToggle`
 section's Select All and the Plans onboarding banner) acts on selectable roots only.
 
 ### 7. Install bundles
@@ -293,11 +299,12 @@ rule:
 
 - [x] Add selectability, visibility, derived-vs-selected state, and inverse relationships to the
       package snapshot in `scripts/cli/config.mjs`.
-- [x] Derive dependency sections in `buildBehaviorView`; omit `visibility: dependency` packages
-      from normal rows.
-- [x] Render the sections in `portal/config/elements/config-item.js` and its templates, following
-      the portal's template and light-DOM conventions, with no toggle for non-selectable rows;
-      dependency rows open `openSource`.
+- [x] Derive each row's required references and each section's recommended list in
+      `buildBehaviorView`; omit `visibility: dependency` packages from normal rows.
+- [x] List required packages under **Requires** in the source popup (`portal/config/panels.js`),
+      each opening its source with Back, and render the Recommended dependencies list through
+      `portal/config/elements/config-item.js` and its templates, following the portal's template
+      and light-DOM conventions.
 - [x] Make bulk enable skip non-selectable and derived-only rows.
 
 ### Phase 5: Install bundles
@@ -327,7 +334,8 @@ rule:
 | Reading a version-1 registry leaves the effective set unchanged and drops required ids from roots | `scripts/test/package-lifecycle-check.mjs` |
 | Defaults still apply and explicit disables still win | `scripts/test/package-default-enabled-check.mjs` |
 | Bulk enable skips dependency rows and returns per-package outcomes | `scripts/test/config-bulk-toggle-check.mjs` |
-| Dependency sections render, open the source popup, and show toggles only for selectable rows | `npm run test:portal-ui` |
+| Required packages appear only in the source popup and open their source; recommended rows render with a toggle | `npm run test:portal-ui` |
+| Row references are transitive; the recommended list skips shown and required packages; `config status` prints both | `scripts/test/config-dependency-sections-check.mjs` |
 | Telemetry bundle derives hooks; removing telemetry drops hooks unless selected; `bundle check` names missing rows | Bundle assertions in `scripts/test/test-cli.sh` |
 | Full gate, since package state reaches install, rules, and generated harness output | `npm run check` |
 
@@ -347,16 +355,41 @@ rule:
 | Doc | Update |
 | --- | --- |
 | `.claude/skills/roborepo-development/references/package-development.md` | `requires`, `recommends`, `selectable`, `presentation.visibility`; selected/effective/live model |
-| `docs/user/reference/config-control-panel.md` | Required and Recommended dependency sections; recommendation prompt |
+| `docs/user/reference/config-control-panel.md` | Requires line in the source popup; Recommended dependencies list; recommendation prompt |
 | `docs/internal/config-panel-internals.md` | Dependency sections in `buildBehaviorView`; per-package mutation outcomes |
 | `docs/user/reference/roborepo-cli.md` | `package enable`/`disable` outcomes, disable rules for dependencies, recommendation prompt |
 | `docs/internal/cli-internals.md` | `package-state.mjs`/`package-graph.mjs` ownership; bundle roots and derived dependencies |
 
 ## Not tested
 
-No entries. The two manual checks (the portal recommendations dialog after a real enable, and the
-interactive terminal prompt) were run against a workspace fixture during implementation; see
-`## Review` → `### Verification`.
+No entries. The portal recommendations dialog has a stubbed Playwright test for both buttons, and
+both it and the interactive terminal prompt were also run for real against a workspace fixture;
+see `## Review` → `### Verification`.
+
+## Open Questions
+
+### A failing `claude mcp add` still exits mid-enable
+
+- **Evidence:** `installMcpPreset` in `scripts/cli/packages.mjs` calls the Claude MCP adapter's
+  `addServer`, which reaches `runClaudeMcpAdd` in `scripts/harnesses/claude/mcp-claude-cli.mjs`.
+  That function calls `process.exit` when `claude mcp add` fails. In the portal this ends the
+  server; in the terminal the package never reports `blocked`. The path is unchanged from the base
+  branch. Proposed design §4 says `blocked` replaces mid-apply exits, but the Phase 2 task scoped
+  only the exits in `packages.mjs`, all of which are gone.
+- **Options:**
+  1. Make the adapter throw a typed error and have `roborepo mcp add` map it to the exit it uses
+     today. Pros: package enable reports `blocked`, the portal survives. Cons: changes a harness
+     adapter contract and touches the `mcp add` command, outside this plan's files.
+  2. Make `addServer` return `{ ok: false, message }` (which `installMcpPreset` already checks) and
+     move the exit into the `mcp add` caller. Pros: uses the result shape the adapter already
+     declares. Cons: same reach as option 1.
+  3. Leave it for a harness-adapter plan. Pros: keeps this plan to package state. Cons: the portal
+     can still be ended by one failing MCP install.
+- **Recommendation:** option 2, as its own small change: the adapter already returns `{ ok }` on
+  other paths, so only the failure branch and the `mcp add` caller move.
+- **Why blocked:** it changes a harness adapter contract and lands outside the files this plan
+  lists.
+- **Blocks:** nothing in this plan's task list; all Phase 2 tasks are complete without it.
 
 ## Decision Log
 
@@ -403,11 +436,15 @@ interactive terminal prompt) were run against a workspace fixture during impleme
   is read as "never prompts and never enables": scripts get one `recommended (not enabled): ...`
   line, and API callers get `recommendations[]` in the result. Alternative: print nothing, which
   hides the offer from scripted users entirely.
-- **2026-10-26: Dependency rows list transitive requirements, minus rows already in the section.**
-  A section's Required list holds the full required closure of its rows, so a two-level dependency
-  is visible; a package that already has a row in the same section is not repeated, and a package
-  both required and recommended is listed as required. A required row that is on only through its
-  parents has no switch, since deselecting it would be refused.
+- **2026-10-26 (user decision): Required packages live in the source popup, not on the page.**
+  The first build gave each section a Required dependencies list of rows. The user judged that a
+  required package that cannot be switched is a reference by another name, not a package option,
+  and asked for it to be called out in the package popup instead. Each row now carries its
+  transitive required packages; the popup lists them under **Requires**, each opening its source
+  with Back. The Recommended dependencies list stays on the page, since those rows have a switch.
+- **2026-10-26: Requires lists the transitive closure; Recommended skips what a row requires.** A
+  two-level requirement is still visible from the package that pulls it in. A package both required
+  and recommended is left out of the recommended list, since it turns on anyway.
 - **2026-10-26: Bulk disable skips derived-only members.** A bulk Deselect All member that is on
   only because another selection requires it is reported `skipped` instead of being refused, so a
   batch never fails on a package it cannot switch directly. Selection is re-read before each member.
@@ -424,6 +461,45 @@ interactive terminal prompt) were run against a workspace fixture during impleme
   enabled the telemetry package and then expected `bundle remove hooks` to remove the hooks bundle.
   Telemetry now requires hooks, so that removal is kept (as §7 specifies); the fixture now asserts
   the kept message and removes `hooks` and `telemetry` together.
+
+## Review
+
+### Findings
+
+- [x] `## Not tested` pointed to verification evidence the plan did not hold; the Enable selected
+      path had no assertion — recorded below and added a portal test for **Enable selected**
+- [x] `adopt-live` could record a dependency-only package as a root that no disable can remove —
+      skips non-selectable packages, with a lifecycle assertion (fails without the fix)
+- [x] A bulk group switch counted rows on only through another selection, so an all-derived
+      section was stuck on Deselect All — counts only switchable rows and hides when none remain,
+      with a portal test
+- [x] `bundle check` said "selected" for a bundle that is only required — names `required by
+      <bundle>`; test-cli assertion updated
+- [x] `recommendationOption` split the packages-intro comment from its function — moved below
+- [x] The terminal dependency lists and the view's closure, no-repeat, and required-over-recommended
+      rules had no direct test — added `scripts/test/config-dependency-sections-check.mjs`
+- [ ] A failing `claude mcp add` still exits mid-enable — escalated, see Open Questions
+
+### Verification
+
+- Validation pass 1 (fresh-context subagent): 6 fix, 1 escalate, 1 base.
+- Base failure: `docs-reference-check.mjs` reports `docs/internal/backlog-review.md:86`, a link to
+  another plan's old `backlog/` path. The same line fails at the branch's base commit `b0b5288b`;
+  `main` has since fixed it.
+- Manual, portal (2026-10-26): a hermetic portal on a workspace fixture (Demo Planner and Demo
+  Closer require a dependency-only Demo Review; Demo Closer recommends Demo Tester). The Integrations
+  section showed Demo Review only under a Required dependencies list (since replaced by the popup's
+  Requires line, re-verified below), with no switch. Turning on Demo Closer opened the recommendations dialog listing Demo
+  Tester; **Enable selected** left Demo Tester `selected` and Demo Review `required` in
+  `/api/config`.
+- Manual, portal after the user decision (2026-10-26): the Integrations section had no Required
+  list; Demo Planner's popup showed `Requires: Demo Review (dependency-only)`, the name opened Demo
+  Review with Back shown and no Requires line, and Back returned to Demo Planner. (The popup body
+  reads "path escapes repo" for workspace packages outside the app folder; `readSourceFile` is
+  unchanged by this branch, so that limit predates it.)
+- Manual, terminal (2026-10-26): `package enable demo-closer` under a pseudo-terminal asked
+  `Also enable recommended package Demo Tester (demo-tester)? [y/N]`; answering `y` enabled it and
+  the registry read `["demo-planner", "demo-closer", "demo-tester"]`.
 
 ## Coordination and completed baseline
 

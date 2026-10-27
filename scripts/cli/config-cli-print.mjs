@@ -113,10 +113,10 @@ export function printConfigStatus(view) {
         console.log(`  ${check(item.active)} ${item.label}${badges}`);
         if (item.description) console.log(`      ${item.description}`);
         if (item.note) console.log(`      ${item.note}`);
+        if (item.requires?.length) console.log(`      requires: ${item.requires.map((ref) => ref.label).join(", ")}`);
         if (!item.active && item.hint) console.log(`      → ${item.hint}`);
       }
     }
-    printDependencies("Required dependencies", section.requiredDependencies, check);
     printDependencies("Recommended dependencies", section.recommendedDependencies, check);
     if (section.footnote) console.log(`\n  * ${section.footnote}`);
   }
@@ -124,8 +124,7 @@ export function printConfigStatus(view) {
   console.log("");
 }
 
-// A section's dependency lists: rows that turn on through (or are offered by) the section's own
-// packages, each with the packages that reference it.
+// A section's recommended packages, each with the packages that recommend it.
 function printDependencies(title, items, check) {
   if (!items?.length) return;
   console.log(`\n  ${title}`);

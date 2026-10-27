@@ -104,7 +104,7 @@ test.describe("Agents page", () => {
     expect(warningButtonGrid.row).toBe("1");
   });
 
-  test("a section lists its required and recommended dependencies; only selectable ones get a switch", async ({ page }) => {
+  test("required packages are a reference in the package's popup, not page rows; recommended ones are switchable rows", async ({ page }) => {
     const snapshot = await (await page.request.get("/api/config")).json();
     const byId = new Map(snapshot.packages.map((pkg) => [pkg.id, pkg]));
     const planSuite = byId.get("plan-suite");
@@ -112,8 +112,8 @@ test.describe("Agents page", () => {
     const dependency = byId.get("technical-writing");
     const companion = byId.get("tighten");
     expect(planSuite && sessionClose && dependency && companion, "fixture packages exist").toBeTruthy();
-    // The edges a dependency-only package would add: one dependency shared by two selected rows,
-    // and one recommendation that is off.
+    // The edges a dependency-only package would add: one dependency shared by two rows, and one
+    // recommendation that is off.
     planSuite.requires = ["technical-writing"];
     sessionClose.requires = ["technical-writing"];
     sessionClose.recommends = ["tighten"];
@@ -127,41 +127,72 @@ test.describe("Agents page", () => {
 
     await page.goto("/agents");
     const section = page.locator("section.panel").filter({ has: page.getByRole("heading", { name: "Development Workflows" }) });
-    // The dependency-only package has no normal row anywhere.
-    await expect(page.locator("[data-slot=items] config-item").filter({ has: page.getByText(dependency.label, { exact: true }) })).toHaveCount(0);
-
-    const required = section.locator("[data-slot=required-group]");
-    await expect(required.locator(".dependency-head")).toHaveText("Required dependencies");
-    const requiredRow = required.locator("config-item");
-    await expect(requiredRow).toHaveCount(1);
-    await expect(requiredRow.locator(".item-label")).toHaveText(dependency.label);
-    await expect(requiredRow.locator("[data-slot=relation]")).toHaveText(`required by ${planSuite.label}, ${sessionClose.label}`);
-    await expect(requiredRow.locator("config-toggle")).toHaveCount(0);
+    // The dependency-only package has no row anywhere on the page.
+    await expect(page.locator("config-item").filter({ has: page.getByText(dependency.label, { exact: true }) })).toHaveCount(0);
+    await expect(page.getByText("Required dependencies")).toHaveCount(0);
 
     const recommendedRow = section.locator("[data-slot=recommended-group] config-item");
     await expect(recommendedRow).toHaveCount(1);
     await expect(recommendedRow.locator("[data-slot=relation]")).toHaveText(`recommended by ${sessionClose.label}`);
     await expect(recommendedRow.locator("config-toggle")).toHaveCount(1);
 
-    // Dependency rows open the same source popup a normal row does.
-    await requiredRow.locator(".item-label").click();
+    // A package's popup lists what it requires; each name opens that package's source, and Back
+    // returns to the package that requires it.
     const modal = page.locator("dialog#config-modal");
+    await section.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^\/session-close$/ }) }).locator(".item-label").click();
+    await expect(modal.locator("#modal-requires")).toBeVisible();
+    await expect(modal.locator(".modal-requires-item")).toHaveText([dependency.label]);
+    await modal.locator(".modal-requires-item").click();
     await expect(modal.locator("#modal-path")).toContainText("technical-writing/SKILL.md");
+    await expect(modal.locator("#modal-requires")).toBeHidden();
+    await modal.locator("#modal-back").click();
+    await expect(modal.locator("#modal-path")).toContainText("session-close/SKILL.md");
+    await expect(modal.locator(".modal-requires-item")).toHaveText([dependency.label]);
     await modal.locator("#modal-close").click();
+
+    // The contents view of a package with several skills lists them too.
+    await section.locator(".item-label", { hasText: /^Development Planning Lifecycle$/ }).click();
+    await expect(modal.locator(".modal-requires-item")).toHaveText([dependency.label]);
+    await modal.locator("#modal-close").click();
+
+    // A package with no requirements shows no Requires line.
+    await page.locator(".item-label", { hasText: companion.label }).first().click();
+    await expect(modal.locator("#modal-requires")).toBeHidden();
+    await modal.locator("#modal-close").click();
+  });
+
+  test("a group switch counts only rows it can act on, and hides when none are left", async ({ page }) => {
+    const snapshot = await (await page.request.get("/api/config")).json();
+    const section = snapshot.behaviorView.find((entry) => entry.categoryId === "skills-dev-lifecycle");
+    expect(section?.items.length, "fixture needs the Development Workflows rows").toBeGreaterThanOrEqual(2);
+    section.bulkToggle = true;
+    const [first, ...rest] = section.items;
+    Object.assign(first, { active: true, selection: "selected" });
+    for (const item of rest) Object.assign(item, { active: true, selection: "required" });
+    await page.route("**/api/config", (route) => route.fulfill({ json: snapshot }));
+    await page.goto("/agents");
+    const panel = page.locator("section.panel").filter({ has: page.getByRole("heading", { name: section.category }) });
+    await expect(panel.locator("[data-slot=bulk-label]")).toHaveText("Deselect All");
+
+    // Every row on only through another selection: nothing for the switch to do.
+    Object.assign(first, { selection: "required" });
+    await page.reload();
+    await expect(panel.locator("[data-slot=bulk]")).toBeHidden();
   });
 
   test("enabling a package with recommendations asks which to enable too, and enables nothing by itself", async ({ page }) => {
     const snapshot = await (await page.request.get("/api/config")).json();
     const shown = snapshot.behaviorView.flatMap((section) => section.items || []);
-    const target = shown.find((item) => item.toggle === "package" && !item.active && item.id !== "telemetry");
-    expect(target, "fixture needs a disabled package row").toBeTruthy();
+    const [target, second] = shown.filter((item) => item.toggle === "package" && !item.active && item.id !== "telemetry" && item.id !== "tighten");
+    expect(target && second, "fixture needs two disabled package rows").toBeTruthy();
     await page.route("**/api/config", (route) => route.fulfill({ json: snapshot }));
     const posts = [];
     await page.route("**/api/config/packages", (route) => {
       posts.push(route.request().postDataJSON());
+      const { id } = route.request().postDataJSON();
       route.fulfill({ json: {
-        ok: true, message: `enabled: ${target.id}`, outcomes: [], changedPackageIds: [target.id], config: snapshot,
-        recommendations: [{ id: "tighten", label: "Tighten", description: "Harden code against project patterns." }],
+        ok: true, message: `enabled: ${id}`, outcomes: [], changedPackageIds: [id], config: snapshot,
+        recommendations: id === "tighten" ? [] : [{ id: "tighten", label: "Tighten", description: "Harden code against project patterns." }],
       } });
     });
 
@@ -174,6 +205,15 @@ test.describe("Agents page", () => {
     await dialog.getByRole("button", { name: "Continue without" }).click();
     await expect(dialog).not.toBeVisible();
     expect(posts).toEqual([{ id: target.id, enabled: true }]);
+
+    // Enable selected turns on exactly the checked recommendations, each as its own toggle.
+    const secondRow = page.locator("[data-slot=items] config-item").filter({ has: page.locator(".item-label", { hasText: second.label }) }).first();
+    await secondRow.getByRole("checkbox").dispatchEvent("click");
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Enable selected" }).click();
+    await expect.poll(() => posts.length).toBe(3);
+    expect(posts.slice(1)).toEqual([{ id: second.id, enabled: true }, { id: "tighten", enabled: true }]);
+    await expect(dialog).not.toBeVisible();
   });
 
   test("explains a package whose pieces were installed outside RoboRepo", async ({ page }) => {

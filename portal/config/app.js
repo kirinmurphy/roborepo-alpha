@@ -31,24 +31,36 @@ function withoutPackagesControlledElsewhere(view) {
     .filter((section) => !section.categoryId || section.items.length > 0);
 }
 
-function openSourceModal(inspect, itemCost = null, { builtIn = false, back = null } = {}) {
-  if (inspect?.kind === "package-contents") return openContentsModal(inspect, itemCost, { builtIn });
+function openSourceModal(inspect, itemCost = null, { builtIn = false, back = null, requires = [] } = {}) {
+  if (inspect?.kind === "package-contents") return openContentsModal(inspect, itemCost, { builtIn, requires });
   const rules = lastSnapshot?.globals?.rules || {};
   const harnesses = lastSnapshot?.harnesses || [];
   const chips = inspectChipSpecs(inspect, itemCost, lastSnapshot, { builtIn });
-  return modal.openSource(inspect, { rules, harnesses, onDefaultClick: modal.openSnapshot, chips, back });
+  const reopen = () => openSourceModal(inspect, itemCost, { builtIn, back, requires });
+  return modal.openSource(inspect, {
+    rules, harnesses, onDefaultClick: modal.openSnapshot, chips, back, requires, onRequire: openRequiredSource(reopen),
+  });
+}
+
+// A required package listed in a popup opens its own source, with Back returning to the package
+// that requires it. One with nothing to show (no inspectable resource) is not offered.
+function openRequiredSource(reopen) {
+  return (ref) => {
+    if (!ref.inspect) return;
+    openSourceModal(ref.inspect, ref.contextCost, { builtIn: ref.builtIn, back: reopen });
+  };
 }
 
 // A package with several skills opens a list of its resources; each entry opens the same source
 // view a single-skill card would, with Back returning to the list.
-function openContentsModal(inspect, itemCost, { builtIn }) {
+function openContentsModal(inspect, itemCost, { builtIn, requires = [] }) {
+  const reopen = () => openContentsModal(inspect, itemCost, { builtIn, requires });
   modal.showContents(inspect, {
     chips: inspectChipSpecs(inspect, itemCost, lastSnapshot, { builtIn }),
     entryChipSpec: (entry) => contentsEntryChipSpec(entry, lastSnapshot, { builtIn }),
-    onSelect: (entry) => openSourceModal(entry.inspect, entry.contextCost, {
-      builtIn,
-      back: () => openContentsModal(inspect, itemCost, { builtIn }),
-    }),
+    onSelect: (entry) => openSourceModal(entry.inspect, entry.contextCost, { builtIn, back: reopen }),
+    requires,
+    onRequire: openRequiredSource(reopen),
   });
 }
 

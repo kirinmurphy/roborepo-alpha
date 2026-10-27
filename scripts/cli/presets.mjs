@@ -435,12 +435,16 @@ export function presetsCheck(args) {
   const state = readPresetState();
   const rows = manifestRowsByKey();
   let failed = 0;
-  for (const id of effectiveBundleIds(catalog.bundles, selectedBundleRoots(catalog.bundles, state))) {
+  const roots = selectedBundleRoots(catalog.bundles, state);
+  const selection = bundleSelectionStates(catalog.bundles, roots);
+  for (const id of effectiveBundleIds(catalog.bundles, roots)) {
     const missing = missingBundleRows(catalog.byId.get(id), rows);
     if (missing.length === 0) {
       console.log(`ok: ${id}`);
     } else {
-      console.error(`fail: ${id} selected but not fully applied; missing: ${missing.join(", ")}`);
+      const { state: mark, requiredBy } = selection.get(id);
+      const why = mark === "required" ? `required by ${requiredBy.join(", ")}` : "selected";
+      console.error(`fail: ${id} ${why} but not fully applied; missing: ${missing.join(", ")}`);
       console.error(`  repair: roborepo bundle apply ${id}`);
       failed = 1;
     }

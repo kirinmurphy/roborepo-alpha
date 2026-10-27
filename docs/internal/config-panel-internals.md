@@ -11,11 +11,15 @@ terminal flow render from. `buildBehaviorView()` maps that snapshot onto the pan
 Each snapshot package carries `selectable`, `selection` (`selected`, `required`, or `off`, from
 `packageSelectionStates` in `package-state.mjs`), `recommends`, and the inverse `requiredBy` /
 `recommendedBy` lists. `buildBehaviorView()` omits packages whose `presentation.visibility` is not
-`catalog` from the normal rows, and gives each section `requiredDependencies[]` (the transitive
-`requires` of its rows) and `recommendedDependencies[]` (their direct `recommends`). Each dependency
-item is an ordinary row plus `relationship`, `referencedBy`, `relationText`, `selectable`, and
-`selection`; it has no `toggle` when it is not selectable or is on only through its parents. The
-portal renders both lists below the section's rows, and `roborepo config status` prints them.
+`catalog` from the normal rows. Each package row carries `requires[]`: its transitive required
+packages as references (`id`, `label`, `active`, and the `inspect` target and cost their own row
+would have). Required packages are never rows of their own; the source popup lists a row's
+references under **Requires**, each opening that package's source with **Back** to the row, and
+`roborepo config status` prints them as a `requires:` line under the row. Each section also gets
+`recommendedDependencies[]` (its rows' direct `recommends`, minus rows it already shows and packages
+a row requires): ordinary switchable rows plus `relationship`, `referencedBy`, and `relationText`,
+rendered below the section's rows and printed by `config status`. Rows carry `selection` so the
+group switch counts only rows it can act on.
 
 Adding a feature of an existing resource shape is data, not code: declare its resources in the
 owning `package.config.json`. A new shape needs a new `case` in the enable/disable switch

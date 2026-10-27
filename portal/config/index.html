@@ -50,6 +50,12 @@
         <span class="modal-path" id="modal-path"></span>
       </div>
       <div class="modal-cost-row" id="modal-cost-row" hidden></div>
+      <!-- What the inspected package requires: turned on with it, never switched on its own. Each
+           name opens that package's source, with Back returning here. -->
+      <div class="modal-requires" id="modal-requires" hidden>
+        <span class="modal-requires-label">Requires</span>
+        <span class="modal-requires-list" id="modal-requires-list"></span>
+      </div>
       <div class="modal-body">
         <div class="markdown" id="modal-content"></div>
       </div>
@@ -73,6 +79,9 @@
         <button type="button" data-btn="cta" id="recommendations-enable">Enable selected</button>
       </div>
     </dialog>
+    <template id="tpl-required-reference">
+      <button type="button" data-btn="text" class="modal-requires-item"></button>
+    </template>
     <template id="tpl-recommendation-option">
       <label class="recommendation-option">
         <input type="checkbox" data-slot="check" checked />
@@ -242,12 +251,9 @@
         </div>
         <p class="panel-desc" data-slot="description" hidden></p>
         <div data-slot="items"></div>
-        <!-- Packages this section's rows require or recommend (buildBehaviorView's
-             requiredDependencies / recommendedDependencies), each row naming what references it. -->
-        <div class="dependency-group" data-slot="required-group" hidden>
-          <h3 class="dependency-head">Required dependencies</h3>
-          <div data-slot="required-items"></div>
-        </div>
+        <!-- Packages this section's rows recommend (buildBehaviorView's recommendedDependencies),
+             each row naming what recommends it. Required packages are not rows here: a package's
+             source popup lists what it requires. -->
         <div class="dependency-group" data-slot="recommended-group" hidden>
           <h3 class="dependency-head">Recommended dependencies</h3>
           <div data-slot="recommended-items"></div>

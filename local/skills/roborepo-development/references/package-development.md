@@ -91,7 +91,7 @@ Enforced by `normalizePackage`/`normalizeResource` in `scripts/cli/package-catal
 | `requires` | no | array of package IDs; they join the effective set automatically. Cycle-checked, missing-id-checked, no self-reference |
 | `recommends` | no | array of package IDs; offered after an enable, never turned on automatically, never a cause of `partial`. Missing-id-checked; not part of cycle detection |
 | `selectable` | no (defaults `true`) | boolean; `false` makes a dependency-only package that `package enable`/`disable` refuse. Cannot combine with `defaultEnabled: true` |
-| `presentation.visibility` | no (defaults `catalog`) | `catalog` (normal Config row), `dependency` (shown only in the dependency sections of the packages that reference it), or `hidden` (no UI row) |
+| `presentation.visibility` | no (defaults `catalog`) | `catalog` (normal Config row), `dependency` (no row; listed under **Requires** in the source popup of each package that requires it), or `hidden` (no UI row) |
 | `resources` | yes | array — see Resource types |
 | `urls` | no | optional array shown in portal (see e.g. `caveman`, `jcodemunch`) |
 

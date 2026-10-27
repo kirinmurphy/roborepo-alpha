@@ -767,7 +767,8 @@ export function adoptLivePackages({ dryRun = false } = {}) {
   const adopters = [];
 
   for (const pkg of catalog) {
-    if (alreadyEnabled.has(pkg.id)) continue;
+    // A dependency-only package can never be a root: recorded as one, no disable could remove it.
+    if (alreadyEnabled.has(pkg.id) || !pkg.selectable) continue;
     const state = liveState.get(pkg.id);
     const adoptable = (state?.components || []).some((component) =>
       component.state === "external" &&
