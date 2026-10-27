@@ -1,7 +1,7 @@
 ---
 id: hr78g4sj
 priority: high
-next_action: Run /plan-close hr78g4sj; the landed implementation has renewed explicit human approval.
+next_action:
 blocked_by: []
 depends_on: ["wjlt1zvf"]
 related: ["4zyo2woj", "8bjltk2n", "46qth5z8", "7k3m9qd", "harness-capability-derived-resource-targeting"]
@@ -650,3 +650,47 @@ closure commit, server shutdown, or worktree removal was performed.
 - `scripts/test/test-cli.sh`
 
 </details>
+
+
+## Completion summary
+
+Provider cleanup is complete and accepted. Codex hook sources are provider-owned while installed
+paths, per-file ownership, trust safeguards, and hook ordering remain intact. Headless telemetry
+uses validated provider argv templates, enabled-provider discovery, and literal summary transport.
+The optional worktree-folder declaration remains deferred until the companion contract exists.
+
+## Verification
+
+- October 26, 2026: `npm run check` passed, exit 0, from primary main
+  `3c04ac2f769ebaf20f33c2d6a8594a46f3c9394a`. Doctor: 107 checks; CLI: 464 assertions,
+  zero failed; install collisions: all passed; grouped integration suites: 60/60; package-install
+  smoke: passed; all four strict Docker scenarios: passed; browser tests: 139 passed.
+  The initial restricted run failed with localhost `listen EPERM`; the authorized retry above
+  passed. Windows installer parity was skipped because PowerShell is unavailable and is not
+  claimed as passed. Unrelated primary-checkout edits were present during the run and are excluded
+  from the closure commit; this gate result describes that checkout as tested.
+- Focused checks passed: `node scripts/test/hook-composition-check.mjs`,
+  `node scripts/test/harness-registry-check.mjs`,
+  `node scripts/test/telemetry-synthetic-provider-check.mjs`,
+  `node scripts/test/harness-desktop-runtime-check.mjs`,
+  `node scripts/test/shared-target-rows-check.mjs`,
+  `node scripts/test/docs-reference-check.mjs`, and `git diff --check`.
+- Checked every required implementation task against landed code and focused assertions. Shared
+  routing remains manifest-backed; schema and runtime validate templates; enabled-provider order,
+  executable discovery, literal argv, report identifiers, and best-effort failures are preserved.
+  No required unchecked tasks, review findings, or manual checks remain.
+- Checked all eight documentation-impact references against current code: architecture, hook
+  internals, harness anatomy, harness explanations, backlog review, provider interface, telemetry
+  reference, and telemetry internals. Source/test/reference-doc scan found no retired Codex source
+  path. Documentation reference assertions passed.
+- Integration: primary and linked-worktree plan bytes matched before verification, blob
+  `084f052d88f7d0fb5362bc0a8868041545acf1d6`. The primary copy owns these closure notes.
+- Human-approved implementation: 9a21ab28df5a7e2c9481db66d0d7229f34785416.
+  The canonical approval check reported fresh at that branch tip; approval was not altered here.
+- Landing: newly scanned content-level evidence confirmed the branch landed on local main.
+  The restricted attempt reported scan unavailable; the authorized retry passed.
+- Absorbing commit: b79bf35dac5f6c430c85b1352331a8c943d61038
+- Native model synthesis remains optional and was not performed. Local help and synthetic process
+  checks establish template syntax and transport, not successful native model synthesis.
+- The canonical plan validator reported zero findings before closure edits. The close transition
+  rechecks completed-document requirements, integration, approval freshness, and recorded landing.
