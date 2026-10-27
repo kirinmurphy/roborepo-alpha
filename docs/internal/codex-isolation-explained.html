@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>What Codex can reach — and what changes next</title>
+  <style>
+    :root{color-scheme:light;--ink:#152f38;--muted:#53676d;--paper:#f4f5ef;--line:#d2dbd5;--green:#146747;--amber:#875300;--blue:#285981}
+    *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.55 system-ui,sans-serif}main{max-width:1100px;margin:auto;padding:56px 30px 70px}h1{font-size:clamp(36px,5vw,64px);line-height:1.06;letter-spacing:-.04em;max-width:850px;margin:14px 0 24px}h2{font-size:29px;line-height:1.2;margin:0 0 22px}h3{font-size:20px;line-height:1.3;margin:0 0 10px}p{margin:0 0 16px}.eyebrow{font-size:12px;letter-spacing:.13em;text-transform:uppercase;font-weight:750;color:var(--green)}.intro{max-width:790px;font-size:21px}.muted,small{color:var(--muted)}section{margin-top:48px;padding-top:32px;border-top:1px solid var(--line)}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.two{grid-template-columns:repeat(2,minmax(0,1fr))}.card{padding:22px;background:white;border:1px solid var(--line);border-radius:14px}.card p:last-child{margin-bottom:0}.tag{display:inline-block;font-size:12px;font-weight:750;border-radius:20px;padding:4px 10px;margin-bottom:14px;background:#e2efe6;color:var(--green)}.pending{background:#fff0d7;color:var(--amber)}.future{background:#e5edf7;color:var(--blue)}.callout{padding:20px 24px;border-left:4px solid var(--green);background:#e4eee5;border-radius:0 12px 12px 0;margin:24px 0}.diagram{padding:24px;border:2px solid #94b8a4;border-radius:16px;background:#e9f1e9}.routes{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:20px 0}.route{background:white;border-radius:10px;padding:16px}.arrow{font-weight:750;color:var(--green)}.stop{font-weight:750;color:#933e29}.outside{border:2px dashed #b6a792;background:#f9f3e8;padding:16px;border-radius:10px}.flow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.flow .card{border-top:5px solid var(--blue)}.step{font-size:13px;text-transform:uppercase;letter-spacing:.06em;font-weight:750;color:var(--blue);margin-bottom:8px}table{width:100%;border-collapse:collapse;font-size:15px}caption{text-align:left;font-weight:700;margin-bottom:12px}th,td{text-align:left;vertical-align:top;padding:14px 12px;border-bottom:1px solid var(--line)}th{background:#e6ebe3}code{font: .88em ui-monospace,monospace;background:#e8ede7;padding:2px 4px;border-radius:3px;overflow-wrap:anywhere}a{color:#175c85;text-underline-offset:3px}ul,ol{padding-left:22px}li{margin:8px 0}.scroll{overflow-x:auto}.metric{font-size:36px;font-weight:750;line-height:1.1;margin-bottom:10px}.sources{font-size:14px}footer{margin-top:40px;color:var(--muted);font-size:14px}
+    @media(max-width:720px){main{padding:28px 18px}.grid,.two,.flow,.routes{grid-template-columns:1fr}h2{font-size:25px}th,td{padding:10px 8px}.diagram{padding:16px}.intro{font-size:19px}}
+    @media print{main{max-width:none;padding:10px}body{font-size:12px}h1{font-size:34px}section{margin-top:22px;padding-top:18px}.card,.diagram,tr{break-inside:avoid}a{color:inherit}.tag{border:1px solid #888}}
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">RoboRepo · Codex boundaries · Architecture explainer</div>
+    <h1>What Codex can reach.<br>What changes next.</h1>
+    <p class="intro">Let agents work on your code while limiting the files, services, and credentials their commands can reach. This work adds a credential boundary; a separate next step moves browser tests into an offline environment.</p>
+    <p class="muted">Status snapshot: October 27, 2026. Credential protection is implemented on its feature branch and awaiting human review. The isolated browser runner is still planned.</p>
+  </header>
+
+  <section aria-labelledby="series">
+    <h2 id="series">Three pieces, with different jobs</h2>
+    <div class="grid">
+      <article class="card"><span class="tag">Part 1 · Landed</span><h3>Put provider wiring in order</h3><p>Codex owns its hooks and invocation details. Shared code selects the correct provider.</p><p class="muted">Foundation for the later changes; this did not add credential denial.</p></article>
+      <article class="card"><span class="tag pending">Part 2 · Ready for review</span><h3>Block known credential files</h3><p>Translate RoboRepo’s credential patterns into native Codex filesystem rules. Covered sandbox commands cannot read or write matching files.</p><p class="muted">This is the implementation just delivered.</p></article>
+      <article class="card"><span class="tag future">Part 3 · Backlog</span><h3>Isolate app and browser tests</h3><p>Run one app/browser workflow in a disposable offline container, using a filtered source snapshot and controlled evidence output.</p><p class="muted">Depends on Parts 1 and 2 landing. Full integration is not built yet.</p></article>
+    </div>
+  </section>
+
+  <section aria-labelledby="boundary">
+    <h2 id="boundary">Part 2: a boundary around native commands</h2>
+    <p>A native sandbox is an operating-system restriction applied to a process and its children. These rules constrain commands independently of whether a command hook is trusted.</p>
+    <figure class="diagram" style="margin:20px 0">
+      <figcaption><strong>After applying the new profile, for the verified macOS command surface</strong></figcaption>
+      <div class="routes">
+        <div class="route"><strong>Sandboxed command</strong><p class="arrow">→ can read ordinary source</p><p class="arrow">→ can edit approved workspace files*</p><p class="arrow">→ can read .env.example / .env.sample</p></div>
+        <div class="route"><strong>Same command</strong><p class="stop">⊣ cannot read matching credentials</p><p class="stop">⊣ cannot write matching credentials</p><p><code>.env</code>, enumerated environment variants, <code>*.pem</code>, private-key names, SSH/cloud/keychain paths</p></div>
+      </div>
+      <p><small>*The read-only profile allows no workspace writes. Configured workspace/temp boundaries and the existing network policy remain in force.</small></p>
+      <div class="outside"><strong>Separate boundaries to verify:</strong> desktop file tools, browser, MCP connectors, and escalated processes. A command test does not establish what these tools can access.</div>
+    </figure>
+    <p class="muted">Illustration only. The measured result is narrower than “every Codex tool is isolated.”</p>
+  </section>
+
+  <section aria-labelledby="daily">
+    <h2 id="daily">What your development day looks like</h2>
+    <div class="scroll"><table>
+      <caption>Expected behavior after landing, applying, and selecting the new policy</caption>
+      <thead><tr><th scope="col">You ask an agent to…</th><th scope="col">What changes</th></tr></thead>
+      <tbody>
+        <tr><td>Read source and fix a component</td><td>Ordinary source reads continue; edits follow the configured workspace write boundary.</td></tr>
+        <tr><td>Use an environment template</td><td><code>.env.example</code> and <code>.env.sample</code> remain readable.</td></tr>
+        <tr><td>Inspect or edit a real <code>.env</code></td><td>A matching path is denied for both reads and writes in covered native commands. Use synthetic test configuration or make the real edit yourself outside that sandbox.</td></tr>
+        <tr><td>Run a test that reads a matching credential file</td><td>The test process inherits the denial. It needs nonsecret fixtures or another explicitly assessed workflow.</td></tr>
+        <tr><td>Run a local app/browser suite</td><td>This change adds no host-network allowance. Existing localhost restrictions can still interrupt the suite; Part 3 addresses that workflow.</td></tr>
+        <tr><td>Approve an escalated command</td><td>Its credential boundary needs separate assessment. Native sandbox evidence does not certify the unrestricted process.</td></tr>
+      </tbody>
+    </table></div>
+    <div class="callout"><strong>No automatic change to your current session.</strong> The implementation has not been merged or applied to your installed home configuration. Review and land it first, apply through the existing configuration workflow, then verify a fresh session’s effective policy.</div>
+    <p>Only resolved <code>read-secrets = deny</code> generates the credential rules. Choosing <code>allow</code> removes them; choosing <code>ask</code> also removes them and reports that path-specific prompting is unsupported. “Ask” does not provide the same protection.</p>
+  </section>
+
+  <section aria-labelledby="proof">
+    <h2 id="proof">What was proved, and what remains open</h2>
+    <div class="grid">
+      <article class="card"><div class="metric">15 patterns</div><h3>Rendered correctly</h3><p>Deterministic checks covered nine credential/write-intent combinations, escaping, profile selection, templates, and reapplication.</p></article>
+      <article class="card"><div class="metric">31 files × 2</div><h3>Native denial asserted</h3><p>Synthetic fixtures passed in writable and read-only profiles on macOS, using Codex CLI 0.163.0-alpha.11.2.</p></article>
+      <article class="card"><div class="metric">Controls</div><h3>The test could detect a leak</h3><p>Unrestricted access succeeded. Removing the denies made the negative test fail under otherwise identical managed-policy arguments.</p></article>
+    </div>
+    <p style="margin-top:18px">Native cases included direct reads, shell commands, xargs, child processes, symlinks, deep paths, and a newly created matching path. No real credentials were used.</p>
+    <div class="outside"><strong>Unverified:</strong> fresh desktop sessions, product structured-read tools, browser/MCP access, escalated execution, and Linux/Windows native enforcement. Gemini does not support this path boundary; Claude retains its own renderer.</div>
+    <p style="margin-top:18px">The aggregate repository gate had one independently reproduced base-branch failure. Its focused rerun passed, as did remaining available gate components. That aggregate run is still recorded as failed.</p>
+    <p class="muted">A path list protects only the names it covers. It does not discover every secret, remove secrets already in process environment variables, or prevent data copied into ordinary source from being read.</p>
+  </section>
+
+  <section aria-labelledby="next-boundary">
+    <h2 id="next-boundary">Part 3: move the test workload into a disposable box</h2>
+    <p>The goal is to let the app and browser talk to each other locally without giving their test code access to host services or credentials. This is a proposed workflow, not a delivered capability.</p>
+    <div class="flow" role="group" aria-label="Proposed isolated browser workflow">
+      <div class="card"><div class="step">1 · Stage source</div><h3>Host → filtered snapshot</h3><p>A trusted launcher stages needed files under verified native credential denial. Reject links and special files; exclude credentials, host caches, and Git metadata.</p></div>
+      <div class="card"><div class="step">2 · Execute tests</div><h3>Snapshot → offline container</h3><p>Copy the read-only snapshot into disposable working storage. App and browser share container-local localhost. No host ports, host home, credential mounts, or Docker socket.</p></div>
+      <div class="card"><div class="step">3 · Collect evidence</div><h3>Container → validated results</h3><p>Export bounded results and screenshots through a dedicated output. Clean up owned resources. Source changes do not automatically return to the host.</p></div>
+    </div>
+    <p style="margin-top:18px">Image preparation needs separate authorization. Routine runs use the already prepared image offline. Fewer approval interruptions are a goal to verify, not a benefit already delivered.</p>
+  </section>
+
+  <section aria-labelledby="options">
+    <h2 id="options">How this relates to containers, VMs, and Kubernetes</h2>
+    <div class="scroll"><table>
+      <caption>These are different layers, not a universal security ranking</caption>
+      <thead><tr><th scope="col">Layer</th><th scope="col">What it contributes</th><th scope="col">Where this work stands</th></tr></thead>
+      <tbody>
+        <tr><td>Native process sandbox</td><td>Restricts selected processes on the host.</td><td>Part 2 adds known credential denies; verified scope is macOS commands.</td></tr>
+        <tr><td>Disposable container</td><td>Separates a workload’s files/processes/network through its runtime and configuration.</td><td>Part 3 proposes an offline app/browser workload. It does not move the entire Codex agent into the container.</td></tr>
+        <tr><td>Virtual machine (VM)</td><td>Runs a guest operating system with its own kernel. Shared folders, credentials and network still need deliberate limits.</td><td>No VM runner is implemented or selected by this plan.</td></tr>
+        <tr><td>Kubernetes</td><td>Schedules and manages container workloads. Isolation depends on runtime, policy, mounts, credentials and network configuration.</td><td>No cluster is required by either part. A cluster alone would not close the tool-boundary gaps.</td></tr>
+      </tbody>
+    </table></div>
+    <p style="margin-top:18px"><strong>Direction:</strong> yes, toward isolating more execution. First protect known credential files; next isolate one complete test workflow. Running the whole agent in a disposable VM/container would be a further design decision covering model access, Git, dependencies, secrets, connectors, and review of returned changes.</p>
+  </section>
+
+  <section aria-labelledby="actions">
+    <h2 id="actions">The next decisions, in order</h2>
+    <ol>
+      <li><strong>Review Part 2.</strong> Run <code>/plan-review 4zyo2woj</code>. Inspect the implementation, evidence, and unverified surfaces before approval.</li>
+      <li><strong>Land and apply it through the existing workflow.</strong> Verify effective policy in a fresh session before relying on desktop/tool coverage; track the remaining manual checks for closure.</li>
+      <li><strong>Prepare Part 3.</strong> After Parts 1 and 2 land, promote the isolated-browser plan (<code>8bjltk2n</code>) and implement its single offline workflow.</li>
+    </ol>
+    <p>Recommendation: prove this bounded workflow before choosing whole-agent VM isolation or cluster infrastructure. The current next step is human review, not launching a container or broadening host permissions.</p>
+  </section>
+
+  <section class="sources" aria-labelledby="sources">
+    <h2 id="sources">Sources and scope</h2>
+    <p>This is a visual companion, not the policy source or a substitute for executed checks. Follow the two plan IDs through their lifecycle for current status.</p>
+    <ul>
+      <li>Repository intent: <a href="../../manifests/inventory/agent-permissions.json">credential patterns and permission behaviors</a>.</li>
+      <li>Implementation evidence: Part 2 plan <code>4zyo2woj</code>, feature commits <code>db965d67</code> and <code>808681c7</code>, validation record <code>04501991</code>. This snapshot describes that implementation, not a claim that main or your installed configuration includes it.</li>
+      <li>Future runner contract: Part 3 plan <code>8bjltk2n</code>. Existing <a href="docker-test-sandboxes.md">clean-machine containers</a> test installation; they do not establish the proposed browser runner.</li>
+      <li>Official background: <a href="https://docs.docker.com/engine/security/">Docker security and mount risks</a>; <a href="https://kubernetes.io/docs/concepts/security/multi-tenancy/">Kubernetes workload isolation</a>.</li>
+    </ul>
+  </section>
+  <footer>Self-contained HTML · no scripts, external fonts, or network requests needed to view this explainer.</footer>
+</main>
+</body>
+</html>
