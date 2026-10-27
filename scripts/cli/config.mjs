@@ -334,8 +334,8 @@ export function buildBehaviorView(snap) {
   const presentationItem = (item) => packagePresentationItem(item, toolsByPackage.get(item.id) || [], packageCosts[item.id] || null);
   for (const item of snap.packages) {
     if (item.archived) continue;
-    // Dependency-only and hidden packages get no row of their own; a dependency-only package
-    // appears in the dependency sections of the packages that reference it.
+    // Dependency-only and hidden packages get no row of their own; a dependency-only package is
+    // listed under Requires in the source popup of each package that requires it.
     if ((item.presentation?.visibility || "catalog") !== "catalog") continue;
     const section = byCategory.get(item.presentation?.category);
     if (!section) continue;

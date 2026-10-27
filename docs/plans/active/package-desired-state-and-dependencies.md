@@ -1,7 +1,7 @@
 ---
 id: o9zwxuav
 priority: high
-next_action: Run the Validation Loop over the implementation commit, fix any fix-class findings, then run the completion preflight and submit transition.
+next_action: Answer the two Open Questions (the telemetry-only hooks requirement and the mid-enable MCP exit), apply the chosen fixes, then run validation pass 3, the completion preflight, and the submit transition.
 blocked_by: []
 depends_on: ["bysyzl1e"]
 related: ["package-registry-live-state-reconciliation", "ejsc769o", "age4cm7r", "user-managed-packages-and-add-workflows"]
@@ -391,6 +391,33 @@ see `## Review` → `### Verification`.
   lists.
 - **Blocks:** nothing in this plan's task list; all Phase 2 tasks are complete without it.
 
+### A telemetry-only selection requires hooks it never applies
+
+- **Evidence:** `roborepo telemetry install` and the Settings telemetry toggle call
+  `markTelemetrySelected`, which records `telemetry` as a bundle root without applying any bundle
+  (telemetry install deliberately leaves operational hooks alone). With `telemetry` now requiring
+  `hooks` in `presets.json`, that selection makes `hooks` effective: `bundle check` fails with
+  `fail: hooks required by telemetry but not fully applied; missing: claude:hooks, codex:hooks.json,
+  codex:hooks` (reproduced in a temp home with `{"schemaVersion":2,"selected":["telemetry"]}`), and
+  `coreHookBundle("codex")` reports the hooks bundle selected, so hook readiness expects core hooks
+  that were never installed. On the base branch both read only the recorded list, which never held
+  `hooks` on this path.
+- **Options:**
+  1. Stop recording the bundle from the package paths: `markTelemetrySelected` no longer writes a
+     bundle root; the telemetry package keeps owning its own capture hooks, and the bundle (with its
+     `requires`) applies only through `bundle apply telemetry`. Pros: keeps §7's declared edge and
+     telemetry install's "leave operational hooks alone" rule. Cons: `bundle status` stops showing
+     telemetry as selected after a package-side enable.
+  2. Have the telemetry-only paths apply the hooks bundle. Pros: the declared dependency is always
+     honored. Cons: telemetry install starts installing core operational hooks, which it avoids on
+     purpose today.
+  3. Drop `requires: ["hooks"]` from the telemetry bundle. Pros: restores base behavior on every
+     path. Cons: reverses §7's decision and leaves the hard-coded rule's only case undeclared.
+- **Recommendation:** option 1; the bundle entry is bookkeeping for the package, and the package
+  already installs what telemetry needs.
+- **Why blocked:** each option changes either what telemetry install writes or a §7 requirement.
+- **Blocks:** submission to review (an open Review finding fails the completion preflight).
+
 ## Decision Log
 
 - **2026-10-12: Merged `package-registry-live-state-reconciliation` into this plan.** Both plans
@@ -467,22 +494,31 @@ see `## Review` → `### Verification`.
 ### Findings
 
 - [x] `## Not tested` pointed to verification evidence the plan did not hold; the Enable selected
-      path had no assertion — recorded below and added a portal test for **Enable selected**
+      path had no assertion — recorded below and added a portal test for **Enable selected** (bb2a435e)
 - [x] `adopt-live` could record a dependency-only package as a root that no disable can remove —
-      skips non-selectable packages, with a lifecycle assertion (fails without the fix)
+      skips non-selectable packages, with a lifecycle assertion (fails without the fix) (bb2a435e)
 - [x] A bulk group switch counted rows on only through another selection, so an all-derived
       section was stuck on Deselect All — counts only switchable rows and hides when none remain,
-      with a portal test
+      with a portal test (bb2a435e)
 - [x] `bundle check` said "selected" for a bundle that is only required — names `required by
-      <bundle>`; test-cli assertion updated
-- [x] `recommendationOption` split the packages-intro comment from its function — moved below
+      <bundle>`; test-cli assertion updated (bb2a435e)
+- [x] `recommendationOption` split the packages-intro comment from its function — moved below (bb2a435e)
 - [x] The terminal dependency lists and the view's closure, no-repeat, and required-over-recommended
-      rules had no direct test — added `scripts/test/config-dependency-sections-check.mjs`
+      rules had no direct test — added `scripts/test/config-dependency-sections-check.mjs` (bb2a435e)
 - [ ] A failing `claude mcp add` still exits mid-enable — escalated, see Open Questions
+- [x] Comments in `config.mjs` and `package-catalog.mjs` still described per-section dependency
+      lists that the user decision removed — reworded to the popup's Requires line
+- [x] A required package with no inspectable source rendered as a button that did nothing —
+      listed as plain text instead, with a portal assertion
+- [ ] A telemetry-only selection now requires the hooks bundle it never applies — escalated, see
+      Open Questions
 
 ### Verification
 
 - Validation pass 1 (fresh-context subagent): 6 fix, 1 escalate, 1 base.
+- Validation pass 2 (fresh-context subagent): 3 fix, 1 escalate, 1 base (the same docs link).
+- Full gate after the user decision: `npm run check` 61/62 suites, the one failure being that base
+  docs link.
 - Base failure: `docs-reference-check.mjs` reports `docs/internal/backlog-review.md:86`, a link to
   another plan's old `backlog/` path. The same line fails at the branch's base commit `b0b5288b`;
   `main` has since fixed it.

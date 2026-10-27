@@ -14,8 +14,8 @@ export const EXPERIMENTAL_PACKAGES_ENV = "LOAD_EXPERIMENTAL_PACKAGES";
 const PENDING_STATUS = "pending";
 const SUPPORTED_SCHEMA = 1;
 const PACKAGE_LIFECYCLES = new Set(["optional", "system"]);
-// catalog: a normal Config row. dependency: shown only in the dependency sections of the packages
-// that reference it. hidden: no Config row at all.
+// catalog: a normal Config row. dependency: no row; listed under Requires in the source popup of
+// each package that requires it. hidden: no Config row at all.
 const PACKAGE_VISIBILITIES = new Set(["catalog", "dependency", "hidden"]);
 const PACKAGE_RELATIONS = [["requires", "required"], ["recommends", "recommended"]];
 const RESOURCE_TYPES = new Set([

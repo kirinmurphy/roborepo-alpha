@@ -371,8 +371,15 @@ export function packagesIntro() {
   return tpl("tpl-packages-intro");
 }
 
-// One required package in a source popup's Requires line; clicking it calls onSelect(ref).
+// One required package in a source popup's Requires line: a button calling onSelect(ref) when the
+// package has a source to open (a skill, command, or rules), plain text otherwise (an MCP-only
+// package, for example).
 export function requiredReference(ref, onSelect) {
+  if (!ref.inspect) {
+    const text = tpl("tpl-required-reference-text");
+    text.textContent = ref.label;
+    return text;
+  }
   const button = tpl("tpl-required-reference");
   button.textContent = ref.label;
   button.addEventListener("click", () => onSelect(ref));

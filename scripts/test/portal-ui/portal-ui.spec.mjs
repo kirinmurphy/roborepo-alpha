@@ -155,6 +155,16 @@ test.describe("Agents page", () => {
     await expect(modal.locator(".modal-requires-item")).toHaveText([dependency.label]);
     await modal.locator("#modal-close").click();
 
+    // A required package with no source to open is listed as plain text, not a button.
+    const readOnly = snapshot.behaviorView.find((entry) => entry.categoryId === "skills-dev-lifecycle")
+      .items.find((item) => item.id === "session-close");
+    readOnly.requires = [{ id: "mcp-only", label: "MCP Only", active: true, inspect: null, contextCost: null, builtIn: true }];
+    await page.reload();
+    await section.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^\/session-close$/ }) }).locator(".item-label").click();
+    await expect(modal.locator("span.modal-requires-item")).toHaveText("MCP Only");
+    await expect(modal.locator("button.modal-requires-item")).toHaveCount(0);
+    await modal.locator("#modal-close").click();
+
     // A package with no requirements shows no Requires line.
     await page.locator(".item-label", { hasText: companion.label }).first().click();
     await expect(modal.locator("#modal-requires")).toBeHidden();

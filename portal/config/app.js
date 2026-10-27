@@ -43,12 +43,9 @@ function openSourceModal(inspect, itemCost = null, { builtIn = false, back = nul
 }
 
 // A required package listed in a popup opens its own source, with Back returning to the package
-// that requires it. One with nothing to show (no inspectable resource) is not offered.
+// that requires it. (One with no inspectable resource is listed as plain text, never a button.)
 function openRequiredSource(reopen) {
-  return (ref) => {
-    if (!ref.inspect) return;
-    openSourceModal(ref.inspect, ref.contextCost, { builtIn: ref.builtIn, back: reopen });
-  };
+  return (ref) => openSourceModal(ref.inspect, ref.contextCost, { builtIn: ref.builtIn, back: reopen });
 }
 
 // A package with several skills opens a list of its resources; each entry opens the same source
