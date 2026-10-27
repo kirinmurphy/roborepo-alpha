@@ -245,7 +245,8 @@ remote branches.
 **Archive and remove** in the same confirmation preserves local content before deleting the
 checkout and retiring its branch. Stop editors and agents writing in that folder first. The
 snapshot includes distinct staged and unstaged files, binaries, executable modes, symlinks,
-untracked files, valuable ignored content, and empty directories. Ignored `node_modules/` and
+untracked files, valuable ignored content, and empty directories. Each file may be up to 64 MiB;
+larger files keep the checkout with a named refusal. Ignored `node_modules/` and
 `test-results/` are disposable and excluded. Unsupported files or index features keep the checkout
 with a reason. Archiving remaining work does not submit it or mean it was merged.
 

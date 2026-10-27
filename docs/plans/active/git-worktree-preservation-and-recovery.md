@@ -1,7 +1,7 @@
 ---
 id: 4xc0gjuw
 priority: high
-next_action: Run the independent validation loop, fix findings, and submit after the completion preflight passes.
+next_action: Complete the current gate and independent validation pass, then submit for human review.
 blocked_by: []
 depends_on: []
 related: ["hr78g4sj", "b2sgiejd", "a7bslb00", "gqzjlzgx"]
@@ -476,6 +476,9 @@ checkout intact.
 
 ### Execution decisions
 
+- Keep the 1 MiB limit on ordinary Git text responses and use a separate 64 MiB binary limit for
+  snapshot assets. Raising the global limit would weaken unrelated background scans; a separate
+  bounded binary path supports ordinary assets without doing that.
 - Keep raw inventory, snapshot capture/discovery/restore, and preservation proof under the shared
   repository owner. Reuse the plan parser for identity mapping rather than recognizing body text
   as frontmatter. Thin CLI and portal adapters share the transaction.
@@ -497,8 +500,8 @@ checkout intact.
   priority writes staying in the worktree, readiness, conflicting copies, and later code changes.
 - Portal test environment: hermetic local portal started by the browser runner; all 146 browser
   checks passed, including archive recovery instructions and unchanged Delete/discard behavior.
-- CI behavior group: 61/62 suites passed; the documentation reference suite fails on the base input
-  recorded below. Catalog, command renderer, triggers, CLI surface, focused repository/plan suites,
+- Initial CI behavior group: 61/62 suites passed. The stale documentation link has since been
+  corrected at the user's explicit request; the refreshed CI group is running. Catalog, command renderer, triggers, CLI surface, focused repository/plan suites,
   and whitespace checks passed. Package installation and installer collision suites passed.
 - All four available Docker clean-machine suites passed. Native Windows verification is unavailable.
 - Initial `npm run check` stopped at the then-existing skill body limit. While validation was
@@ -538,6 +541,15 @@ checkout intact.
   fixture assertion rejecting this session's pending skill edits.
 - Historical base failure resolved by incoming main: the execution skill body limit no longer
   fails at `c1d92150`; initial logs describe the earlier tree only.
-- Base failure: `docs-reference-check.mjs` rejects the unchanged link at
-  `docs/internal/backlog-review.md:86` to the ready credential-protection plan; that target is
-  already absent from `main`.
+- Resolved prior base failure: at the user's request, update the stale credential-plan link in
+  `docs/internal/backlog-review.md:86` to its verified review-stage path. The documentation suite
+  now passes.
+- User-reported CI failures: reproduce all three Git-suite failures with an inherited global Git
+  LFS configuration. The fixture suites now isolate their own global/system Git configuration,
+  retaining explicit unsafe-driver refusal tests. All four requested suites pass with that host
+  configuration on macOS and in a Node 22/Linux container with Git 2.39.5.
+- Older Git compatibility: read historical attributes using a disposable index instead of the
+  newer `check-attr --source` option. Git without explicit merge-base support reports unknown for
+  dirty proofs; tests assert that conservative contract while still exercising capture/restore.
+- Binary regression: a 2 MiB asset exposed the text executor's small output bound. Binary reads
+  now have a separate 64 MiB bound; larger files refuse with their path before capture.

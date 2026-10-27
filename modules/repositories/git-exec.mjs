@@ -25,6 +25,7 @@ const execFileAsync = promisify(execFile);
 
 export const GIT_TIMEOUT_MS = 1500;
 export const GIT_MAX_BUFFER = 1024 * 1024;
+export const GIT_MAX_BINARY_BUFFER = 64 * 1024 * 1024;
 
 // Local reads allowed by defaultRunGit and defaultRunGitSync. Unknown subcommands are refused
 // because polling scans arbitrary repositories without requesting mutations or network access.
@@ -149,7 +150,8 @@ function execOptions(cwd, timeoutMs, { binary = false, plumbing = null } = {}) {
     cwd,
     timeout: timeoutMs,
     encoding: binary ? "buffer" : "utf8",
-    maxBuffer: GIT_MAX_BUFFER,
+    // Snapshot blobs need room for ordinary binary assets; text scans keep their smaller bound.
+    maxBuffer: binary ? GIT_MAX_BINARY_BUFFER : GIT_MAX_BUFFER,
     // Callers close the pipe immediately; only explicit raw plumbing supplies input.
     stdio: ["pipe", "pipe", "pipe"],
     env,

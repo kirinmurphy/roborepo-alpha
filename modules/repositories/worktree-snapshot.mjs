@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
-import { runGitProcess } from "./git-exec.mjs";
+import { GIT_MAX_BINARY_BUFFER, runGitProcess } from "./git-exec.mjs";
 
 export const SNAPSHOT_PREFIX = "refs/roborepo/worktree-archives/";
 export const DISPOSABLE_IGNORED = ["node_modules", "test-results"];
@@ -56,6 +56,7 @@ export async function inventoryWorktree(cwd, { git = (args, options) => runGitPr
       return;
     }
     if (!stat.isFile() && !stat.isSymbolicLink()) throw new Error(`unsupported special file: ${relative}`);
+    if (stat.isFile() && stat.size > GIT_MAX_BINARY_BUFFER) throw new Error(`file exceeds 64 MiB snapshot limit: ${relative}`);
     const bytes = stat.isSymbolicLink() ? Buffer.from(fs.readlinkSync(absolute)) : fs.readFileSync(absolute);
     entries.push({ path: relative, mode: stat.isSymbolicLink() ? "120000" : stat.mode & 0o111 ? "100755" : "100644", layer: isTracked ? "tracked" : isIgnored ? "ignored" : "untracked", checksum: checksum(bytes), bytes });
   };
@@ -228,7 +229,7 @@ export async function writeTree(entries, git) {
 }
 
 export function required(result) {
-  if (!result.ok) throw new Error(String(result.stderr || result.error || "Git command failed").trim());
+  if (!result.ok) throw new Error(String(result.stderr || "").trim() || result.error || "Git command failed");
   return result.stdout;
 }
 

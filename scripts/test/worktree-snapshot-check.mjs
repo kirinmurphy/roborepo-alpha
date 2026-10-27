@@ -33,6 +33,7 @@ try {
   assert.equal(cleanProof.state, "preserved", JSON.stringify(cleanProof));
   write(work, "code", "staged\n"); git(work, "add", "code"); write(work, "code", "unstaged\n");
   write(work, "binary", Buffer.from([0, 255, 254, 10]));
+  write(work, "large-binary", Buffer.alloc(2 * 1024 * 1024, 0xff));
   write(work, ".gitignore", "valuable/\nnode_modules/\n");
   write(work, "valuable/secret", "private bytes\n"); write(work, "node_modules/disposable", "excluded\n");
   fs.mkdirSync(path.join(work, "empty"));
@@ -77,6 +78,7 @@ try {
   assert.equal(fs.readFileSync(path.join(destination, "code"), "utf8"), "unstaged\n");
   assert.equal(git(destination, "show", ":code"), "staged");
   assert.deepEqual(fs.readFileSync(path.join(destination, "binary")), Buffer.from([0, 255, 254, 10]));
+  assert.deepEqual(fs.readFileSync(path.join(destination, "large-binary")), Buffer.alloc(2 * 1024 * 1024, 0xff));
   assert.equal(fs.readFileSync(path.join(destination, "valuable/secret"), "utf8"), "private bytes\n");
   assert.equal(fs.readlinkSync(path.join(destination, "link")), "/outside/target");
   assert.equal(fs.statSync(path.join(destination, "executable")).mode & 0o111, 0o111);
@@ -121,7 +123,7 @@ try {
     else { write(checkout, "code", fs.readFileSync(path.join(repo, "code"))); git(checkout, "add", "code"); }
     if (shape === "conflict") { write(checkout, "code", "conflicting local work\n"); git(checkout, "add", "code"); }
     const proof = await assessWorktreePreservation(checkout, { branch: "feature" });
-    if (!explicitMergeBase) { assert.equal(proof.state, "unknown", JSON.stringify(proof)); continue; }
+    if (!explicitMergeBase) { assert.equal(proof.state, "unknown", JSON.stringify(proof)); assert.match(proof.reason, /merge-base|unknown option/); continue; }
     if (shape === "conflict") { assert.equal(proof.state, "unknown", JSON.stringify(proof)); assert.match(proof.reason, /conflict/); continue; }
     assert.equal(proof.state, "preserved", `${shape}: ${JSON.stringify(proof)}`);
     assert.equal(proof.hasLocalContent, true);
