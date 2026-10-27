@@ -19,7 +19,7 @@ import {
   lifecycleFromSearchParams,
 } from "../../portal/plans/state.js";
 import { isLifecycle, lifecycleActions, lifecycleLabel, lifecycleTabs, setLifecycleModel, showsPriority } from "../../portal/plans/lifecycle.js";
-import { primaryPlanAction, recommendedPlanCommand } from "../../portal/plans/plan-actions.js";
+import { primaryPlanAction, recommendedPlanCommand, incompleteDependencies } from "../../portal/plans/plan-actions.js";
 import { LIFECYCLE_MODEL, lifecycleProjection } from "../../modules/plan-suite/lifecycle-manifest.mjs";
 
 // Pure mutation-orchestration
@@ -51,6 +51,7 @@ testActiveSortSinksUnstartedAndUntrackedToTheBottom();
 testActiveSortFallsBackToPlanSortOnTies();
 testSortForLifecycleOnlyChangesActive();
 testLifecycleModelComesFromTheSnapshot();
+testIncompleteDependencies();
 testRecommendedCommandFollowsTheLifecycle();
 testFilterNamesNeverReadAsLifecycleOrApproval();
 console.log("ok: plans portal state checks passed");
@@ -80,6 +81,8 @@ function testRecommendedCommandFollowsTheLifecycle() {
   const plan = (lifecycle, extra = {}) => ({ ...record({ lifecycle }).plan, ...extra });
   const tasks = (total, complete) => ({ taskCounts: { total, complete, remaining: total - complete } });
 
+  assert.equal(primaryPlanAction(plan("backlog", { dependencies: ["stblkr01"] })), null, "dependencies replace the promotion recommendation");
+  assert.deepEqual(primaryPlanAction(plan("backlog", { dependencies: ["stcmp001"] }), []), { command: "plan-promote", label: "Promote" }, "completed dependencies restore promotion");
   for (const extra of [{}, { readiness: "draft" }, { blockers: ["external"] }]) {
     assert.deepEqual(primaryPlanAction(plan("backlog", extra)), { command: "plan-promote", label: "Promote" });
     assert.deepEqual(primaryPlanAction(plan("ready", extra)), { command: "plan-execute", label: "Start" });
@@ -382,4 +385,16 @@ function testSortForLifecycleOnlyChangesActive() {
     assert.equal(sortForLifecycle(lifecycle), planSort,
       `${lifecycle} must keep the shared sort — completion ordering is Active-only`);
   }
+}
+
+function testIncompleteDependencies() {
+  const source = record({ repositoryId: "r1" });
+  source.plan.dependencies = ["finished", "active01", "archived", "missing1", "otherrepo", "checked01"];
+  const target = (id, lifecycle, repositoryId = "r1") => record({ id, lifecycle, repositoryId });
+  const plans = [target("finished", "completed"), target("active01", "active"),
+    target("archived", "archived"), target("otherrepo", "completed", "r2"),
+    { ...target("checked01", "review"), plan: { ...target("checked01", "review").plan, taskCounts: { total: 1, complete: 1, remaining: 0 } } }];
+  assert.deepEqual(incompleteDependencies(source, plans), ["active01", "archived", "missing1", "otherrepo", "checked01"]);
+  assert.equal(source.plan.dependencies.length, 6, "relationship history is preserved");
+  assert.deepEqual(incompleteDependencies(source, []), source.plan.dependencies, "missing records never imply completion");
 }

@@ -44,7 +44,7 @@ test.describe("Plans card status", () => {
   test.beforeAll(() => {
     planRoot = fs.mkdtempSync(path.join(os.tmpdir(), "portal-ui-status-"));
     fs.mkdirSync(path.join(planRoot, ".git"));
-    for (const lifecycle of ["backlog", "active", "review"]) fs.mkdirSync(path.join(planRoot, "docs", "plans", lifecycle), { recursive: true });
+    for (const lifecycle of ["backlog", "active", "review", "completed"]) fs.mkdirSync(path.join(planRoot, "docs", "plans", lifecycle), { recursive: true });
     fs.writeFileSync(path.join(planRoot, "docs", "plans", "review", "status-review.md"),
       plan({ id: "streview", title: "Review status plan", nextAction: "Fix the finding", tasks: ["- [x] One", "", "## Review", "", "### Findings", "", "- [ ] Missing retry test"] }));
     fs.writeFileSync(path.join(planRoot, "docs", "plans", "active", "status-ring.md"),
@@ -55,6 +55,14 @@ test.describe("Plans card status", () => {
       plan({ id: "stdone01", title: "Done status plan", nextAction: "Nothing left", tasks: ["- [x] One", "- [x] Two"] }));
     fs.writeFileSync(path.join(planRoot, "docs", "plans", "backlog", "status-blocker.md"),
       plan({ id: "stblkr01", title: "Blocker target plan", nextAction: "Land the prerequisite", tasks: ["- [ ] One"] }));
+    fs.writeFileSync(path.join(planRoot, "docs", "plans", "completed", "status-completed.md"),
+      plan({ id: "stcmp001", title: "Completed dependency plan", nextAction: "Done", tasks: ["- [x] One"] }));
+    fs.writeFileSync(path.join(planRoot, "docs", "plans", "backlog", "status-satisfied.md"),
+      plan({ id: "stsat001", title: "Satisfied dependency plan", nextAction: "Promote", tasks: ["- [ ] One"],
+        frontmatter: ['depends_on: [stcmp001]'] }));
+    fs.writeFileSync(path.join(planRoot, "docs", "plans", "backlog", "status-dependent.md"),
+      plan({ id: "stdep001", title: "Dependent status plan", nextAction: "Wait", tasks: ["- [ ] One"],
+        frontmatter: ['depends_on: [stblkr01, stcmp001, string01, missing1]'] }));
     fs.writeFileSync(path.join(planRoot, "docs", "plans", "backlog", "status-blocked.md"),
       plan({ id: "stblkd01", title: "Blocked status plan", nextAction: "Wait for the prerequisite", tasks: ["- [ ] One"],
         frontmatter: ['blocked_by: [stblkr01, "upstream: vendor API is not ready"]'] }));
@@ -134,6 +142,66 @@ test.describe("Plans card status", () => {
     await popover.getByRole("button", { name: "Blocker target plan" }).click();
     await expect(popover).toBeHidden();
     await expect(page.locator("dialog#drawer #drawer-title")).toHaveText("Blocker target plan");
+  });
+
+  test("backlog dependencies replace Promote with linked IDs on cards and in the drawer", async ({ page }, testInfo) => {
+    await page.goto("/plans?lifecycle=backlog");
+    const card = page.locator("plan-card", { hasText: "Dependent status plan" });
+    await expect(card).toContainText("depends on stblkr01, string01, missing1");
+    await expect(card).not.toContainText("stcmp001");
+    const menuBox = await card.getByRole("button", { name: "Plan actions", exact: true }).boundingBox();
+    const dependencyBox = await card.getByRole("button", { name: "stblkr01", exact: true }).boundingBox();
+    expect(menuBox.x + menuBox.width).toBeLessThan(dependencyBox.x);
+    await expect(card.getByRole("button", { name: "Promote", exact: true })).toHaveCount(0);
+    await expect(card.getByRole("button", { name: "missing1", exact: true })).toHaveCount(0);
+    await card.getByRole("button", { name: "Plan actions", exact: true }).click();
+    await expect(card.getByRole("group", { name: "Copy options" }).getByRole("button", { name: "Promote", exact: true })).toHaveCount(0);
+    await page.screenshot({ path: testInfo.outputPath("dependencies.png") });
+    await card.getByRole("button", { name: "Plan actions", exact: true }).click();
+    await card.getByRole("button", { name: "stblkr01", exact: true }).click();
+    await expect(page.locator("#drawer-title")).toHaveText("Blocker target plan");
+    await page.locator("#drawer-close").click();
+    await card.getByRole("button", { name: "string01", exact: true }).click();
+    await expect(page.locator("#drawer-title")).toHaveText("Ring status plan");
+    await page.locator("#drawer-close").click();
+    await card.getByText("Dependent status plan", { exact: true }).click();
+    const drawer = page.getByRole("dialog");
+    const drawerMenuBox = await drawer.getByRole("button", { name: "Plan actions", exact: true }).boundingBox();
+    const drawerDependencyBox = await drawer.getByRole("button", { name: "stblkr01", exact: true }).boundingBox();
+    expect(drawerMenuBox.x + drawerMenuBox.width).toBeLessThan(drawerDependencyBox.x);
+    await expect(drawer.getByRole("button", { name: "Promote", exact: true })).toHaveCount(0);
+    await drawer.getByRole("button", { name: "Plan actions", exact: true }).click();
+    await expect(drawer.getByRole("button", { name: "Promote", exact: true })).toHaveCount(0);
+  });
+
+  test("completed dependencies restore Promote on the card and in its popup", async ({ page }) => {
+    await page.goto("/plans?lifecycle=backlog");
+    const card = page.locator("plan-card", { hasText: "Satisfied dependency plan" });
+    await expect(card).not.toContainText("depends on");
+    await expect(card.getByRole("button", { name: "Promote", exact: true })).toBeVisible();
+    await card.getByRole("button", { name: "Plan actions", exact: true }).click();
+    await expect(card.getByRole("group", { name: "Copy options" }).getByRole("button", { name: "Promote", exact: true })).toBeVisible();
+    await card.getByRole("button", { name: "Plan actions", exact: true }).click();
+    await card.getByText("Satisfied dependency plan", { exact: true }).click();
+    const drawer = page.locator("#drawer");
+    await expect(drawer.locator("#drawer-dependencies")).toBeHidden();
+    await expect(drawer.getByRole("button", { name: "Promote", exact: true })).toBeVisible();
+    await drawer.getByRole("button", { name: "Plan actions", exact: true }).click();
+    await expect(drawer.getByRole("group", { name: "Copy options" }).getByRole("button", { name: "Promote", exact: true })).toBeVisible();
+    const snapshot = await (await page.request.get("/api/plans")).json();
+    expect(snapshot.plans.find((record) => record.plan.id === "stsat001").plan.dependencies).toEqual(["stcmp001"]);
+  });
+
+  test("copying the drawer path shows a green check without adding confirmation text", async ({ page }) => {
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.goto("/plans?lifecycle=backlog");
+    await page.locator("plan-card", { hasText: "Dependent status plan" }).getByText("Dependent status plan", { exact: true }).click();
+    const copy = page.locator("#drawer-path-copy");
+    await copy.getByRole("button", { name: "Copy path", exact: true }).click();
+    await expect(copy.getByRole("button", { name: "Copied", exact: true })).toBeVisible();
+    await expect(copy.locator('portal-icon[name="check"]')).toBeVisible();
+    await expect(copy).toHaveText("");
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("docs/plans/backlog/status-dependent.md");
   });
 
   test("the drawer keeps the lifecycle and next action the card leaves out", async ({ page }) => {

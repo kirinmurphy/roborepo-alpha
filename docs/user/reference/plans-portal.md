@@ -302,16 +302,22 @@ When enabled:
   | active | Continue, Review, Archive |
   | review | Review, Fix findings, Close, Archive |
 
-- cards lead with Promote for backlog and Start for ready. Unblocked review plans lead with Close
+- backlog cards with unfinished `depends_on` entries show the Copy menu followed by **depends on** and linked
+  plan IDs instead of Promote; their card and popup menus omit Promote. IDs resolve within the
+  same repository, and missing dependencies remain plain text. Dependencies in the `completed`
+  lifecycle are omitted; when all dependencies are completed, Promote returns to the card and
+  popup menus. The frontmatter retains the dependency history. Other backlog cards lead with
+  Promote, and ready cards lead with Start. Unblocked review plans lead with Close
   when approved, or Review otherwise. Active plans keep their commands in the Copy menu until
   execution moves them to review. Close still verifies that the PR merged before completing a plan
 - priority, modified time, and document warnings sit in a compact, right-aligned column on wide
   cards and a row below the description on smaller screens. Modified time uses a clock icon and
   a short age such as **2 hrs**; its tooltip gives the exact date. The bottom row keeps the primary
   action and Copy menu at the left, with blockers, open review findings, and task progress at the right
-- Copy menus use compact labels without icons or descriptions. Update and Portable Prompt are
+- Copy menus use compact labels with copy icons and flush hover backgrounds. Update and Portable Prompt are
   omitted. **Copy Document Filename** sits below a divider and copies only the filename; the
-  popup header's separate path button still copies the repository-relative path
+  popup header's separate path button still copies the repository-relative path. Shared copy
+  controls confirm with a green check while keeping their original labels
 - an active or review plan whose worktree has merged shows a **merged** completion badge; the same
   status is visible in the detail drawer
 - every action copies a prompt; the page never runs a command or moves a plan for one

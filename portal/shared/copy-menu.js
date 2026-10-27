@@ -1,7 +1,7 @@
 // <portal-copy-menu> — an icon-only copy trigger with a caret that opens a list of copy actions.
 //
 // The widget owns everything behavioral: the popover toggle, outside-click and Escape, per-item
-// clipboard writes, and the per-item "Copied!" confirmation. Call sites supply only DATA — an array
+// clipboard writes, and the per-item green check confirmation. Call sites supply only DATA — an array
 // of { label, value } — and never build markup or wire a listener:
 //
 //   const menu = document.createElement("portal-copy-menu");
@@ -23,7 +23,7 @@ import { positionPopoverPanel } from "/portal/shared/popover-position.js";
 // Matches portal-copy-button's COPIED_DURATION_MS so every copy affordance on the site confirms for
 // the same length of time.
 const COPIED_DURATION_MS = 5000;
-// How long the open panel holds its own "Copied!" before closing and handing the confirmation off
+// How long the open panel holds its own green check before closing and handing the confirmation off
 // to the trigger flash. Short — the panel has served its purpose once the value is on the
 // clipboard, and leaving it open for the full five seconds blocks the row underneath.
 const COPIED_FEEDBACK_MS = 600;
@@ -95,8 +95,9 @@ class PortalCopyMenu extends HTMLElement {
     await portalCopyText(text, () => {
       // Confirms in the item first — the panel is what the pointer is on, so that is where the
       // acknowledgement is looked for.
-      const label = button.querySelector("[data-slot=label]");
-      if (label) label.textContent = "Copied!";
+      button.querySelector("[data-slot=icon]").setAttribute("name", "check");
+      button.classList.add("copied");
+      button.setAttribute("aria-label", "Copied");
       button.disabled = true;
       clearTimeout(this._resetTimer);
       // Then closes and flashes over the trigger, so the confirmation survives the panel that was

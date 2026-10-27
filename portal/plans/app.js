@@ -360,6 +360,7 @@ function render() {
     return;
   }
   const cardActions = {
+    plans: snapshot.plans,
     onOpen: openPlan,
     onCopyPath: copyText,
     onCopyContext: (record) => copyText(repositoryContext(record)),
