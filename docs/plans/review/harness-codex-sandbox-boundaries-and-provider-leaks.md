@@ -1,7 +1,7 @@
 ---
 id: 4zyo2woj
 priority: high
-next_action: Await explicit human approval of reviewed implementation 85786aa84afd8f942f32e2550a5b57ad6e1d88e6, then merge the pull request and run /plan-close.
+next_action: Ask the human whether the three unverified surfaces remain documented coverage limits for this delivery or require verification before review approval.
 blocked_by: []
 depends_on: ["hr78g4sj"]
 related: ["8bjltk2n", "wjlt1zvf", "ia1q1z9", "permva27", "permissions-ui-revamp", "codex-cmux-hook-trust-review", "46qth5z8", "harness-capability-derived-resource-targeting", "7k3m9qd", "o9zwxuav"]
@@ -563,14 +563,18 @@ Git administrative worktree `credential-protection`; this document contains no m
   implementation content relative to the synchronized base. Earlier component evidence is reused
   for unchanged code; affected lifecycle checks passed independently as listed above.
 - `npm run test:portal-ui` against the newly synchronized base passed 146/146.
-- Full review is complete with the base failure above explicitly retained. No open implementation
-  findings or required human acceptance checks remain. This does not certify the additional
-  surfaces listed under Not tested, and no human approval has yet been received.
+- Code review and available verification are complete with the base failure above explicitly
+  retained. The approval check nevertheless reports review incomplete because all three unchecked
+  Not tested entries count as required manual checks. The earlier classification of these entries
+  as nonblocking limits was not accepted by that gate. No verification or human approval is inferred.
+  Ask the human whether to retain them as documented unverified coverage limits for this delivery
+  (with an explicit plan decision), or require their verification before approval. Do not check
+  them off without actual evidence.
 
 ### Result
-- Status: complete
+- Status: pending
 - Reviewed implementation commit: 85786aa84afd8f942f32e2550a5b57ad6e1d88e6
 - Base commit: 977d29f04ab25f5191f21c832cb98709be99efae
 
 ### Approval
-- Decision: requested
+- Decision: not requested
