@@ -3,6 +3,7 @@ import { renderHookReadiness } from "/portal/shared/hook-readiness.js";
 import { harnessSetupPromptElement } from "/portal/shared/harness-warning.js";
 import { createPlanDrawer } from "/portal/plans/plan-drawer.js";
 import { fetchSnapshot as fetchPlansSnapshot } from "/portal/plans/api.js";
+import { primaryPlanAction } from "/portal/plans/plan-actions.js";
 import { mergedPlanBranches } from "/portal/plans/state.js";
 import { setLifecycleModel } from "/portal/plans/lifecycle.js";
 import * as api from "./api.js";
@@ -31,6 +32,8 @@ let syncRetryTimer = null;
 let plansSnapshot = null;
 // Active plans whose worktree has merged, from the latest overview — the drawer shows them `merged`.
 let mergedPlans = new Map();
+// The command each worktree-matched plan leads with on the Plans page, by plan key.
+let nextPlanActions = new Map();
 
 // The same plan detail drawer the Plans page opens. Read-only here: priority edits go through the
 // Plans page's mutation flow, which Home does not carry.
@@ -70,6 +73,8 @@ const menuActions = {
   onToggleMenu: toggleActionMenu,
   onSelectMenu: selectRepositoryAction,
   onOpenPlan: openPlan,
+  nextPlanAction: (plan) => nextPlanActions.get(plan.key) || null,
+  onCopyPlanPrompt: (plan, command) => planDrawer.copyPrompt(command, [plan.key], "repository-aware").catch(showWarning),
   onRemoveWorktree: (target) => {
     closeActionMenus();
     removeDialog.open(target);
@@ -106,13 +111,32 @@ async function dismissCleanupNotice(repository) {
 // while a drawer is showing.
 async function openPlan(plan) {
   try {
-    plansSnapshot = await fetchPlansSnapshot();
-    setLifecycleModel(plansSnapshot.lifecycle);
+    await loadPlansSnapshot();
   } catch (error) {
     showWarning(error);
     return;
   }
   await planDrawer.open(plan.key);
+}
+
+async function loadPlansSnapshot() {
+  plansSnapshot = await fetchPlansSnapshot();
+  setLifecycleModel(plansSnapshot.lifecycle);
+  return plansSnapshot;
+}
+
+// Home's overview lacks the blockers, review state, and QA decision the Plans page picks its next
+// action from, so the plans snapshot is read alongside it, only while some plan has a worktree row
+// to show the action on. A failed read leaves the actions off rather than failing the overview.
+async function loadNextPlanActions(overview) {
+  const keys = new Set(overview.repositories.flatMap((repository) => (repository.domains?.plans?.data?.active || []).filter((plan) => plan.checkoutRootId).map((plan) => plan.key)));
+  if (!keys.size) return new Map();
+  try {
+    const { plans } = await loadPlansSnapshot();
+    return new Map(plans.filter((record) => keys.has(record.key)).map((record) => [record.key, primaryPlanAction(record.plan)]).filter(([, action]) => action));
+  } catch {
+    return nextPlanActions;
+  }
 }
 
 function showWarning(error) {
@@ -134,10 +158,11 @@ async function refresh({ force = false } = {}) {
   try {
     const overview = await api.loadHomeOverview();
     mergedPlans = mergedPlanBranches(overview);
+    nextPlanActions = await loadNextPlanActions(overview);
     homeAutoDiscoveryEnabled = overview.autoDiscovery?.enabled === true;
     setHomeSyncStatus(overview.sync?.state || "synced");
     scheduleSyncRefresh(overview.sync?.state);
-    const version = JSON.stringify(overview);
+    const version = JSON.stringify([overview, [...nextPlanActions]]);
     const hasActiveControl = !force && (content.contains(document.activeElement) || content.querySelector("details[open], .menu-button-panel, [data-menu]:not([hidden])") || document.querySelector("dialog[open]"));
     if (version !== renderedVersion && !hasActiveControl) {
       const known = overview.repositories.length > 0;

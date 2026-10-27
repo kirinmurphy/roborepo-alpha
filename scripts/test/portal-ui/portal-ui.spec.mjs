@@ -1129,6 +1129,112 @@ test.describe("repository-first portal Home", () => {
     await expect(card.locator(".status-dot")).toHaveCount(0);
   });
 
+  test("a long plan title is middle-truncated to 70 characters with the full title on hover", async ({ page }) => {
+    const title = "A very long plan title that keeps going well past the seventy-five character cap, by a fair bit";
+    await planFixture(page, (repository) => { repository.domains.plans.data.active[2].title = title; });
+    await page.goto("/");
+    const button = roboRepoCard(page).locator(".plan-title", { hasText: "A very long" });
+    await expect(button).toHaveText("A very long plan title that keeps g…-five character cap, by a fair bit");
+    await expect(button).toHaveAttribute("title", title);
+    await expect(roboRepoCard(page).locator(".plan-title", { hasText: "Plan A" })).not.toHaveAttribute("title", /./);
+    // Short on width, the row moves its controls down rather than wrapping the title in a column.
+    await page.setViewportSize({ width: 720, height: 800 });
+    const shortTitle = await roboRepoCard(page).locator(".plan-title", { hasText: "Plan A" }).boundingBox();
+    expect((await button.boundingBox()).height).toBe(shortTitle.height);
+  });
+
+  // Plan A is the worktree-matched plan; the Plans snapshot decides its next action.
+  async function routeNextAction(page, plan) {
+    await page.route("**/api/plans", async (route) => {
+      const data = await (await route.fetch()).json();
+      await route.fulfill({ json: { ...data, plans: [{ key: "a", plan: { blockers: [], qa: { decision: null }, taskCounts: { total: 4, complete: 4, remaining: 0 }, ...plan } }] } });
+    });
+    await page.route("**/api/plans/prompt", (route) => route.fulfill({ json: { prompt: `prompt for ${route.request().postDataJSON().action}` } }));
+  }
+
+  test("a worktree plan row shows its next action beside the details toggle and copies its prompt", async ({ page }) => {
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await planFixture(page);
+    await routeNextAction(page, { lifecycle: "review" });
+    await page.goto("/");
+    const identity = roboRepoCard(page).locator(".plan-identity").filter({ hasText: "Plan A" });
+    // The worktree toggle follows the title, ahead of the completion; the action closes the line.
+    await expect(identity.getByRole("button", { name: "Worktree details for Plan A" })).toBeVisible();
+    await expect(identity.getByRole("progressbar", { name: "Plan A completion" })).toBeVisible();
+    const action = identity.getByRole("button", { name: "Review", exact: true });
+    await expect(action).toHaveAttribute("title", "Copy the /plan-review prompt");
+    await expect(action).toHaveAttribute("data-btn", "cta");
+    await action.click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("prompt for plan-review");
+    // A row whose worktree has not merged keeps no merged badge to replace.
+    await expect(roboRepoCard(page).locator(".worktree-state-badge:visible")).toHaveCount(0);
+  });
+
+  for (const complete of [2, 4]) {
+    test(`an active plan with ${complete} of 4 tasks checked has no primary action before submission`, async ({ page }) => {
+      await planFixture(page);
+      await routeNextAction(page, { lifecycle: "active", taskCounts: { total: 4, complete, remaining: 4 - complete } });
+      await page.goto("/");
+      const row = planRowOf(roboRepoCard(page), "Plan A");
+      await expect(row.getByRole("button", { name: "Worktree details for Plan A" })).toBeVisible();
+      await expect(row.locator(".plan-next-action")).toHaveCount(0);
+    });
+  }
+
+  test("plan controls wrap together while the port and links stay at the top", async ({ page }, testInfo) => {
+    const title = "A longer plan title for checking row wrapping";
+    await planFixture(page, (repository) => { repository.domains.plans.data.active[0].title = title; });
+    await routeNextAction(page, { lifecycle: "review" });
+    await page.setViewportSize({ width: 1100, height: 800 });
+    await page.goto("/");
+    const card = roboRepoCard(page);
+    const row = planRowOf(card, title);
+    const titleButton = row.getByRole("button", { name: title, exact: true });
+    const toggle = row.getByRole("button", { name: `Worktree details for ${title}` });
+    const progress = row.getByRole("progressbar");
+    const action = row.getByRole("button", { name: "Review", exact: true });
+    const port = row.getByRole("link", { name: ":5173" });
+    const links = row.getByRole("button", { name: "Links", exact: true });
+    await expect(action).toBeVisible();
+    const wide = await Promise.all([titleButton, toggle, progress, action, port, links, row].map((item) => item.boundingBox()));
+    const centerY = (box) => box.y + box.height / 2;
+    expect(Math.abs(centerY(wide[0]) - centerY(wide[3]))).toBeLessThan(2);
+    await page.screenshot({ path: testInfo.outputPath("plan-row-wide.png") });
+    await page.setViewportSize({ width: 720, height: 800 });
+    const narrow = await Promise.all([titleButton, toggle, progress, action, port, links, row].map((item) => item.boundingBox()));
+    await page.screenshot({ path: testInfo.outputPath("plan-row-wrapped.png") });
+    expect(narrow[1].y).toBeGreaterThanOrEqual(narrow[0].y + narrow[0].height);
+    expect(Math.abs(centerY(narrow[1]) - centerY(narrow[2]))).toBeLessThan(2);
+    expect(Math.abs(centerY(narrow[1]) - centerY(narrow[3]))).toBeLessThan(2);
+    expect(narrow[4].y - narrow[6].y).toBeCloseTo(wide[4].y - wide[6].y, 0);
+    expect(narrow[5].y - narrow[6].y).toBeCloseTo(wide[5].y - wide[6].y, 0);
+    expect(narrow[0].height).toBe(wide[0].height);
+  });
+
+  test("a merged worktree's Close action replaces its merged badge", async ({ page }) => {
+    await planFixture(page, (repository) => {
+      Object.assign(repository.domains.runtime.data.checkouts.find((checkout) => checkout.rootId === "matched"), { worktreeState: "landed", mergedInto: "main" });
+    });
+    await routeNextAction(page, { lifecycle: "review", qa: { decision: "approved" } });
+    await page.goto("/");
+    const row = roboRepoCard(page).locator(".repository-root", { has: page.locator(".plan-identity", { hasText: "Plan A" }) });
+    const close = row.locator(".plan-next-action");
+    await expect(close).toHaveText("Close");
+    await expect(close).toHaveAttribute("title", "Merged — copy the /plan-close prompt");
+    await expect(row.locator(".worktree-state-badge")).toBeHidden();
+  });
+
+  test("a merged worktree keeps its merged badge while its plan still needs review", async ({ page }) => {
+    await planFixture(page, (repository) => {
+      Object.assign(repository.domains.runtime.data.checkouts.find((checkout) => checkout.rootId === "matched"), { worktreeState: "landed", mergedInto: "main" });
+    });
+    await routeNextAction(page, { lifecycle: "review" });
+    await page.goto("/");
+    const row = roboRepoCard(page).locator(".repository-root", { has: page.locator(".plan-identity", { hasText: "Plan A" }) });
+    await expect(row.locator(".plan-next-action")).toHaveText("Review");
+    await expect(row.locator(".worktree-state-badge")).toHaveText("merged");
+  });
+
   test("the worktree details dropdown copies each value in place and lists only non-default facts", async ({ page }) => {
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
     await planFixture(page);
@@ -1269,7 +1375,7 @@ test.describe("repository-first portal Home", () => {
     }
   });
 
-  test("Home Links renders its glyph, discovers routes and closes with Escape", async ({ page }) => {
+  test("Home Links shows only a bare caret, discovers routes and closes with Escape", async ({ page }) => {
     await homeFixture(page);
     await page.route("**/api/developer-runtime/metadata?*", (route) => route.fulfill({ json: { suggestions: [
       { kind: "page", source: "sitemap", path: "/docs" },
@@ -1278,7 +1384,9 @@ test.describe("repository-first portal Home", () => {
     await page.goto("/");
     const card = roboRepoCard(page);
     const links = card.getByRole("button", { name: "Links", exact: true });
-    await expect(links.locator("portal-icon[name=link] svg")).toBeVisible();
+    await expect(links.locator("portal-icon[name=link]")).toHaveCount(0);
+    await expect(links.locator("portal-icon[name=chevron] svg")).toBeVisible();
+    await expect(links).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await expect(card.locator(".checkout-control-cell")).toHaveCount(0);
     await links.click();
     await expect(card.getByRole("link", { name: /\/docs/ })).toHaveAttribute("href", "http://127.0.0.1:4317/docs");
@@ -1735,6 +1843,36 @@ test.describe("shared plan drawer", () => {
     await expect(drawer.locator("#drawer-meta")).not.toContainText("From worktree");
   });
 
+  test("copy notifications appear above the plan document popup", async ({ page }, testInfo) => {
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.route("**/api/plans", async (route) => {
+      const data = await (await route.fetch()).json();
+      data.planSuitePackage = { ...data.planSuitePackage, available: true, enabled: true };
+      await route.fulfill({ json: data });
+    });
+    await page.goto("/plans");
+    await page.getByText("Drawer fixture plan").first().click();
+    const drawer = page.locator("dialog#drawer");
+    await expect(drawer.locator("#drawer-cta")).toBeHidden();
+    await drawer.getByRole("button", { name: "Plan actions", exact: true }).click();
+    await drawer.getByRole("button", { name: /^Continue\b/ }).click();
+    const toast = page.locator("#toast");
+    await expect(toast).toContainText("Copied the /plan-execute prompt");
+    // Visibility alone misses a toast painted underneath the modal backdrop.
+    await expect.poll(() => toast.evaluate((node) => {
+      const box = node.getBoundingClientRect();
+      return node.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
+    })).toBe(true);
+    await expect(drawer).toBeVisible();
+    const box = await toast.boundingBox();
+    expect(box.x + box.width).toBeCloseTo(1260, 0);
+    expect(box.y + box.height).toBeCloseTo(780, 0);
+    await page.screenshot({ path: testInfo.outputPath("plan-copy-notification.png") });
+    await page.keyboard.press("Escape");
+    await expect(drawer).toBeHidden();
+    await expect(toast).toBeVisible();
+  });
+
   test("the drawer says when an active plan is read from its worktree", async ({ page }) => {
     await page.route("**/api/plans", async (route) => {
       const data = await (await route.fetch()).json();
@@ -1837,12 +1975,16 @@ test.describe("Plans card commands", () => {
       await page.goto("/plans");
       await page.getByText(new RegExp(`^${tab} \\(`)).first().click();
       const card = page.locator("plan-card", { hasText: title });
+      if (tab !== "Review") {
+        await expect(card.locator(".recommended-cta")).toHaveCount(0);
+        await card.getByRole("button", { name: "Plan actions", exact: true }).click();
+      }
       const prompt = page.waitForRequest((request) => request.url().endsWith("/api/plans/prompt"));
-      await card.getByRole("button", { name: label, exact: true }).click();
+      await card.getByRole("button", tab === "Review" ? { name: label, exact: true } : { name: new RegExp(`^${label}\\b`) }).click();
       expect((await prompt).postDataJSON().action).toBe(command);
       await expect(page.locator("#toast")).toContainText(`Copied the /${command} prompt`);
       expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(new RegExp(`^/${command}\\n`));
-      await expect(card.getByRole("button", { name: "Archive" })).toHaveCount(0);
+      if (tab === "Review") await expect(card.getByRole("button", { name: "Archive" })).toHaveCount(0);
       expect(fs.existsSync(path.join(planRoot, "docs", "plans", folder)), `${folder} stays where it was`).toBe(true);
     });
   }

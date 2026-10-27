@@ -80,16 +80,22 @@ function testRecommendedCommandFollowsTheLifecycle() {
   const plan = (lifecycle, extra = {}) => ({ ...record({ lifecycle }).plan, ...extra });
   const tasks = (total, complete) => ({ taskCounts: { total, complete, remaining: total - complete } });
 
-  assert.deepEqual(primaryPlanAction(plan("backlog")), { command: "plan-promote", label: "Promote" });
-  assert.deepEqual(primaryPlanAction(plan("ready")), { command: "plan-execute", label: "Start" });
-  assert.deepEqual(primaryPlanAction(plan("active", { reviewState: "current", ...tasks(3, 1) })), { command: "plan-execute", label: "Continue" }, "unfinished work continues");
-  assert.equal(recommendedPlanCommand(plan("active", tasks(3, 3))), "plan-review", "finished tasks lead to review");
-  assert.equal(recommendedPlanCommand(plan("active", { ...tasks(3, 2), notTestedOpen: 1 })), "plan-review", "an open Not tested entry does not hold back review");
+  assert.equal(primaryPlanAction(plan("backlog")), null);
+  assert.equal(primaryPlanAction(plan("ready")), null);
+  assert.equal(primaryPlanAction(plan("active", { reviewState: "current", ...tasks(3, 1) })), null, "unfinished work has no primary action");
+  for (const reviewState of ["never-reviewed", "possibly-stale"]) {
+    assert.equal(primaryPlanAction(plan("active", { reviewState, ...tasks(3, 1) })), null, `${reviewState} plans have no primary action`);
+    assert.equal(recommendedPlanCommand(plan("active", { reviewState, ...tasks(3, 1) })), null, "freshness never recommends plan-write");
+  }
+  assert.equal(primaryPlanAction(plan("active", tasks(3, 3))), null, "checked tasks alone do not establish execution completion");
+  assert.equal(recommendedPlanCommand(plan("active", { ...tasks(3, 2), notTestedOpen: 1 })), null, "execution must reach the review lifecycle first");
   assert.equal(recommendedPlanCommand(plan("active", { ...tasks(3, 3), blockers: ["x"] })), null, "a blocked plan has no recommendation");
 
   assert.deepEqual(primaryPlanAction(plan("review", { qa: { openFindings: 2, decision: "" } })), { command: "plan-review", label: "Review" }, "open findings are fixed by /plan-review in its own session");
   assert.deepEqual(primaryPlanAction(plan("review", { qa: { openFindings: 0, decision: "approved" } })), { command: "plan-close", label: "Close after merge" });
   assert.deepEqual(primaryPlanAction(plan("review", { qa: { openFindings: 0, decision: "" } })), { command: "plan-review", label: "Review" });
+  assert.equal(primaryPlanAction(plan("review", { blockers: ["external"] })), null, "blocked plans have no primary action");
+  assert.equal(primaryPlanAction(plan("active", { qa: { decision: "approved" }, ...tasks(3, 3) })), null, "approval does not bypass the execution lifecycle");
   assert.equal(primaryPlanAction(plan("completed")), null);
   assert.equal(primaryPlanAction(plan("archived")), null);
 }

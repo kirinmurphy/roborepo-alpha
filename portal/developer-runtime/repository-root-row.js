@@ -56,7 +56,8 @@ function worktreeStateNote(root) {
 // accessible label replace the checkout's, and its node replaces the branch label, checkout tooltip,
 // and copy control at the start of the identity line. Git drift and the actions column still come
 // from `root`, so the row behaves exactly like the checkout it is. Home names a worktree by the plan
-// it implements this way; the row stays agnostic about what the node holds.
+// it implements this way; the row stays agnostic about what the node holds. `identity.hideWorktreeBadge`
+// drops the lifecycle badge when the node already says the same thing.
 export function buildRootSection({ root, departed = [], repository, composeActions, instanceActions, mode = "runtime", onMountLinks, onMountWorktreeMenu, identity = null }) {
   const section = createRepositoryCheckoutRow({ controls: mode !== "home" });
   // Lets a rebuild find "this same checkout's" row across renders (see reconcileSection in app.js)
@@ -65,7 +66,7 @@ export function buildRootSection({ root, departed = [], repository, composeActio
   if (root?.isWorktree && root.worktreeState) {
     section.classList.add(`worktree-is-${root.worktreeState}`);
     const badge = section.querySelector("[data-slot=worktree-state]");
-    if (WORKTREE_BADGES[root.worktreeState]) {
+    if (WORKTREE_BADGES[root.worktreeState] && !identity?.hideWorktreeBadge) {
       badge.hidden = false;
       badge.textContent = WORKTREE_BADGES[root.worktreeState];
       if (root.worktreeState === "landed") badge.title = `Merged into ${root.mergedInto || "the base branch"}`;

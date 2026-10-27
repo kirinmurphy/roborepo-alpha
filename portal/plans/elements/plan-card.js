@@ -50,7 +50,7 @@ class PlanCardElement extends HTMLElement {
       warnings ? chip(`${warnings} warnings`, "warn") : chip("valid", "ok"),
     );
     node.querySelector("[data-slot=title-link]").textContent = plan.title;
-    // One primary command (Start, Continue, Update, or Close) when the plan has a way forward,
+    // One primary command when the plan has a way forward,
     // then the unified ⋯ menu shared with the drawer.
     const primary = cardPrimaryAction(record, cardActions);
     node.querySelector("[data-slot=actions]").append(

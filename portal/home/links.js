@@ -5,6 +5,7 @@ import { buildRoutesDropdown, fillApiRouteDialog } from "/portal/developer-runti
 export function mountHomeLinks(slot, entrypoint, { onStale } = {}) {
   const button = document.createElement("portal-menu-button");
   configureLinksTrigger(button);
+  button.icon = "";
   const toggle = button.toggle.bind(button);
   let pending = false;
   button.toggle = async () => {

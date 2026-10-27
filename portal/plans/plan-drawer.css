@@ -263,7 +263,7 @@ dialog#skill-modal::backdrop {
   position: fixed;
   bottom: 20px;
   right: 20px;
-  z-index: 20;
+  z-index: 100;
   max-width: min(360px, calc(100vw - 40px));
   background: var(--panel);
   border: 1px solid var(--line);
