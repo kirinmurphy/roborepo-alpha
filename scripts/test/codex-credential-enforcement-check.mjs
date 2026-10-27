@@ -76,7 +76,7 @@ try {
       // Removing the projection must make the SAME negative controls fail, proving they can see
       // a leak rather than merely observing unrelated read-only restrictions or a broken sandbox.
       fs.writeFileSync(configPath, config.replace(/^".*" = "deny"\n/gm, ""));
-      const mutation = run(executable, ["sandbox", "-P", profile, "-C", workspace, "--", process.execPath, path.join(root, "probe.mjs"), root, "deny", "workspace-write"]);
+      const mutation = run(executable, ["sandbox", "--include-managed-config", "-P", profile, "-C", workspace, "--", process.execPath, path.join(root, "probe.mjs"), root, "deny", "workspace-write"]);
       assert.notEqual(mutation.status, 0);
       assert.match(mutation.stderr, /credential readable/);
     }

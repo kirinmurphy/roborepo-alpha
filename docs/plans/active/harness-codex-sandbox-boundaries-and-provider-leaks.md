@@ -382,6 +382,23 @@ cannot satisfy Part 3's source-staging prerequisite by inference.
   implementation blocker. Part 1's separate lifecycle closure remains outstanding. No credential
   enforcement implementation or new runtime certification is inferred from its merge.
 
+### Implementation decisions
+
+- Preserve portable runtime `~/` anchors rather than materialize homes during live apply. The
+  native temporary-home assertion verified support; one projection serves generated, packed and
+  live paths without ambient-home coupling or a new render contract.
+- Keep read-only network disabled, matching the former built-in `:read-only` selection. The new
+  named profile adds denial without writable roots or a new network grant; the writable profile
+  retains its resolved network behavior.
+- Use provider-owned credential translation called by the existing pure render core, with no
+  universal permissions method. The alternative was generic provider enforcement API expansion,
+  which the approved scope explicitly excludes.
+- Keep native enforcement explicit rather than an availability-skipping CI check. Its unavailable
+  exit is `2`; deterministic CI checks cover projection and prevent broader tool/platform claims.
+  The test-orphan exemption records why the native runner is deliberately outside the CI group.
+- Preserve the existing documentation shapes and owner map. Updated the five docs of record and
+  repaired the related backlog-review link after the lifecycle move.
+
 ## Preparation verification
 
 Post-merge review on main `60d2ba76` passed:
@@ -449,23 +466,6 @@ Git administrative worktree `credential-protection`; this document contains no m
   packed-install/container fixtures. This configuration change has no persistent server or
   shareable URL; installed live settings were not rewritten.
 
-### Implementation decisions
-
-- Preserve portable runtime `~/` anchors rather than materialize homes during live apply. The
-  native temporary-home assertion verified support; one projection serves generated, packed and
-  live paths without ambient-home coupling or a new render contract.
-- Keep read-only network disabled, matching the former built-in `:read-only` selection. The new
-  named profile adds denial without writable roots or a new network grant; the writable profile
-  retains its resolved network behavior.
-- Use provider-owned credential translation called by the existing pure render core, with no
-  universal permissions method. The alternative was generic provider enforcement API expansion,
-  which the approved scope explicitly excludes.
-- Keep native enforcement explicit rather than an availability-skipping CI check. Its unavailable
-  exit is `2`; deterministic CI checks cover projection and prevent broader tool/platform claims.
-  The test-orphan exemption records why the native runner is deliberately outside the CI group.
-- Preserve the existing documentation shapes and owner map. Updated the five docs of record and
-  repaired the related backlog-review link after the lifecycle move.
-
 ## Not tested
 
 - [ ] Verify credential denial in a fresh desktop session and product structured-read tools after
@@ -476,3 +476,23 @@ Git administrative worktree `credential-protection`; this document contains no m
 - [ ] Establish credential boundaries independently for browser, MCP and separately escalated
       execution before using those surfaces for protected source staging. These tools were not
       certified by the native subprocess runner and have separate execution boundaries.
+
+
+## Review
+
+### Findings
+
+- [x] Missing-denies native control omitted `--include-managed-config` while the main probe
+      included it. Fixed: both runs now include managed policy; the same native matrix and
+      missing-denies mutation passed again after correction.
+
+### Verification
+
+- Pass 1 (fresh-context validator at `db965d67`): one fix finding above. Projection, foreign-line,
+  live-render and whitespace checks independently passed. Documentation review found no violations
+  under technical-writing core, shapes, section guidance, representation, anti-patterns, review loop,
+  organization and supplied constraints. No renderer defect found; unverified surfaces were candid.
+- Full parity reached 57/61 deterministic suites; four browser suites could not import the absent
+  Playwright development dependency in the new worktree. Locked dependencies were installed from
+  the local npm cache with `npm ci --offline --no-audit --no-fund`; rerun required. This is setup,
+  not a claimed base failure.
