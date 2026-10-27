@@ -4,6 +4,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { Readable } from "node:stream";
+import { repositoriesRoutes } from "../cli/portal-routes-repositories.mjs";
+import { dispatchRoutes } from "../cli/portal-router.mjs";
 import { inspectBranchLanding } from "../../modules/repositories/worktree-landed.mjs";
 import { runGitProcess } from "../../modules/repositories/git-exec.mjs";
 import { linkedWorktrees } from "../../modules/repositories/worktree-inventory.mjs";
@@ -323,6 +326,13 @@ try {
     fs.writeFileSync(path.join(worktree, "dirty.txt"), "dirty\n");
     assert.equal((await checkWorktreeRemoval(base)).reason, "uncommitted or untracked changes");
     assert.equal((await checkWorktreeRemoval({ ...base, kind: "confirmed" })).reason, "uncommitted or untracked changes");
+    assert.equal((await checkWorktreeRemoval({ ...base, discardChanges: true })).reason, "uncommitted or untracked changes", "automatic cleanup cannot discard local changes");
+    assert.equal((await checkWorktreeRemoval({ ...base, kind: "confirmed", discardChanges: true })).ok, true);
+    fs.writeFileSync(path.join(worktree, ".gitignore"), "valuable.txt\n");
+    fs.writeFileSync(path.join(worktree, "valuable.txt"), "valuable ignored content\n");
+    assert.equal((await checkWorktreeRemoval({ ...base, kind: "confirmed", discardChanges: true })).reason, "valuable ignored path: valuable.txt", "discard consent does not bypass ignored-file guards");
+    fs.rmSync(path.join(worktree, "valuable.txt"));
+    fs.rmSync(path.join(worktree, ".gitignore"));
     fs.rmSync(path.join(worktree, "dirty.txt"));
     git(main, "worktree", "lock", worktree);
     assert.equal((await checkWorktreeRemoval({ ...base, worktree: linkedWorktrees(path.join(main, ".git"))[0] })).reason, "worktree locked");
@@ -689,6 +699,35 @@ try {
     assert.equal(result.action, "removed", result.reason);
     assert.equal(fs.existsSync(worktree), false);
     assert.equal(stops.length, 3);
+  }
+  {
+    const { main, worktree } = repository("delete-dirty-confirmed");
+    const realMain = fs.realpathSync(main);
+    const stateRoot = path.join(root, "delete-dirty-confirmed-state");
+    const repositoryId = "git:example.com/test/delete-dirty-confirmed";
+    recordRepositoryDiscovery({ repositoryId, kind: "git", displayName: "delete-dirty-confirmed", source: "developer-runtime", evidence: "git-remote", confidence: "high", localRoot: rootId(realMain), localRootKind: "clone", localRootPath: realMain, stateRoot });
+    commit(worktree, "work.txt", "committed work\n");
+    const tip = git(worktree, "rev-parse", "HEAD");
+    fs.writeFileSync(path.join(worktree, "work.txt"), "uncommitted work\n");
+    fs.writeFileSync(path.join(worktree, "stray.txt"), "untracked work\n");
+    const options = { repositoryId, branch: "feature", stateRoot, stop: async () => ({ ok: true, servers: [], warnings: [] }), discover: async () => ({ instances: [] }) };
+    const removeThroughRoute = (body) => new Promise((resolve) => {
+      const req = Readable.from([JSON.stringify(body)]);
+      req.method = "POST";
+      const res = { writeHead(status) { assert.equal(status, 200); }, end(payload) { resolve(JSON.parse(payload)); } };
+      const handlers = { removeRepositoryWorktree: (params) => removeRepositoryWorktree({ ...options, ...params }) };
+      assert.equal(dispatchRoutes([repositoriesRoutes], req, res, `/api/repositories/${encodeURIComponent(repositoryId)}/worktrees/remove`, "", handlers), true);
+    });
+    const refused = await removeThroughRoute({ branch: "feature" });
+    assert.equal(refused.requiresDiscardConfirmation, true, "dirty deletion requires explicit loss confirmation");
+    assert.equal(fs.readFileSync(path.join(worktree, "work.txt"), "utf8"), "uncommitted work\n");
+    const invalidConsent = await removeThroughRoute({ branch: "feature", discardChanges: "true" });
+    assert.equal(invalidConsent.requiresDiscardConfirmation, true, "only an explicit boolean enables discarding changes");
+    const removed = await removeThroughRoute({ branch: "feature", discardChanges: true });
+    assert.equal(removed.action, "removed", removed.reason);
+    assert.equal(fs.existsSync(worktree), false);
+    assert.equal(git(main, "rev-parse", removed.archiveRef), tip, "committed work is still recoverable");
+    assert.equal(git(main, "show", `${removed.archiveRef}:work.txt`), "committed work");
   }
   console.log("worktree lifecycle: inventory and landing ok");
 } finally {

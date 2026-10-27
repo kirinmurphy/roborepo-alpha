@@ -5,8 +5,11 @@
 import { lifecycleActions } from "./lifecycle.js";
 
 // Best-effort single recommended next command, derived from plan state. Returns null when no rule
-// clearly applies (e.g. blocked, or mid-progress with no strong signal) rather than guessing.
+// clearly applies (e.g. blocked review, or mid-progress with no strong signal) rather than guessing.
 export function recommendedPlanCommand(plan) {
+  // These prompts prepare or validate the plan before changing its lifecycle, including blockers.
+  if (plan.lifecycle === "backlog") return "plan-promote";
+  if (plan.lifecycle === "ready") return "plan-execute";
   if (plan.blockers.length > 0) return null;
   // /plan-review fixes open findings in its own session, so a review plan leads with it until approved.
   if (plan.lifecycle === "review") return plan.qa?.decision === "approved" ? "plan-close" : "plan-review";

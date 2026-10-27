@@ -13,6 +13,13 @@ export function createWorktreeRemoveDialog({ onRemoved }) {
   const confirm = slot("confirm");
   confirm.addEventListener("click", () => run(dialog, confirm, "Deleting…", async () => {
     const result = await api.removeWorktree(target);
+    if (result.requiresDiscardConfirmation) {
+      target.discardChanges = true;
+      slot("dirty").hidden = false;
+      confirm.dataset.btn = "danger";
+      slot("status").textContent = "Only committed work can be restored from the backup.";
+      return;
+    }
     if (result.action !== "removed") throw new Error(result.reason || "The worktree was kept.");
     dialog.close();
     onRemoved();
@@ -24,7 +31,9 @@ export function createWorktreeRemoveDialog({ onRemoved }) {
       // Git's administrative name instead.
       const selector = branch || checkout.worktreeName;
       if (!repositoryId || !selector) return;
-      target = { repositoryId, branch: selector };
+      const dirty = checkout.git?.dirty === true || checkout.worktreeReason === "uncommitted or untracked changes";
+      target = { repositoryId, branch: selector, discardChanges: dirty };
+      slot("dirty").hidden = !dirty;
       // The ref ends in the tip's short SHA (archiveRefName in worktree-removal.mjs).
       const archive = `refs/roborepo/abandoned/${selector}-${checkout.git?.shortHead || "<commit>"}`;
       const folder = checkout.projectRoot || "<folder>";
@@ -42,9 +51,8 @@ export function createWorktreeRemoveDialog({ onRemoved }) {
       slot("plan").hidden = !plan;
       slot("plan").textContent = plan ? `The active plan "${plan.title}" is still using this worktree. Deleting it can lose work the plan still needs, and the plan stays active without it. The plan's progress recorded in this worktree will no longer be shown in Plans.` : "";
       slot("running").hidden = !running;
-      // Merged and stale worktrees are routine cleanup; one an active plan or a running server
-      // still uses is not, so its confirmation turns red alongside the warning that says why.
-      confirm.dataset.btn = plan || running ? "danger" : "cta";
+      // Local edits, an active plan, or a running server need the destructive confirmation.
+      confirm.dataset.btn = dirty || plan || running ? "danger" : "cta";
       dialog.querySelector(".worktree-remove-details").open = false;
       showError(dialog, null);
       dialog.showModal();
@@ -55,9 +63,9 @@ export function createWorktreeRemoveDialog({ onRemoved }) {
 // What deleting would cost, in one sentence. Every removal archives the tip, so even unmerged work
 // can be brought back; the sentence says so rather than leaving a commit count to interpret.
 function removalStatus(checkout) {
-  if (checkout.worktreeState === "landed") return `Its changes are already merged into ${checkout.mergedInto || "the main branch"}, so nothing is lost.`;
+  if (checkout.worktreeState === "landed") return `Its changes are already merged into ${checkout.mergedInto || "the main branch"}, so no committed work is lost.`;
   const count = checkout.unmergedCommits;
-  if (count === 0) return "It has no commits that aren't already on the main branch, so nothing is lost.";
+  if (count === 0) return "It has no commits that aren't already on the main branch, so no committed work is lost.";
   if (Number.isInteger(count)) {
     return count === 1
       ? "It has 1 commit that was never merged. A backup is kept so you can bring it back."

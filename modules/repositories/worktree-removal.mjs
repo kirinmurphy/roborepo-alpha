@@ -44,21 +44,24 @@ export async function archiveBranchTip(mainPath, branch, tip, { runGit = runGitP
   return result.ok ? { ok: true, ref } : { ok: false, reason: result.error || "could not archive branch" };
 }
 
-export async function removeWorktree(mainPath, worktree, { kind, stateRoot, tip, runGit = runGitProcess, fsApi = fs } = {}) {
+export async function removeWorktree(mainPath, worktree, { kind, stateRoot, tip, discardChanges = false, runGit = runGitProcess, fsApi = fs } = {}) {
   let archiveRef = null;
   if (kind === "confirmed") {
     const archived = await archiveBranchTip(mainPath, worktree.branch || worktree.name, tip, { runGit });
     if (!archived.ok) return { ok: false, reason: archived.reason };
     archiveRef = archived.ref;
   }
-  const removed = await runGit(mainPath, ["worktree", "remove", worktree.path], { timeoutMs: 120000 });
+  const args = ["worktree", "remove"];
+  if (kind === "confirmed" && discardChanges === true) args.push("--force");
+  args.push(worktree.path);
+  const removed = await runGit(mainPath, args, { timeoutMs: 120000 });
   if (!removed.ok) return { ok: false, reason: removed.error || "worktree remove failed", archiveRef };
   let branchDeleted = false;
   if (worktree.branch) {
     const branch = await runGit(mainPath, ["branch", "-D", worktree.branch], { timeoutMs: 10000 });
     branchDeleted = branch.ok;
   }
-  const entry = { at: new Date().toISOString(), kind, path: worktree.path, branch: worktree.branch, commit: tip, archiveRef, branchDeleted };
+  const entry = { at: new Date().toISOString(), kind, path: worktree.path, branch: worktree.branch, commit: tip, archiveRef, branchDeleted, discardedChanges: discardChanges === true };
   appendRemoval(stateRoot, entry, fsApi);
   return branchDeleted || !worktree.branch
     ? { ok: true, entry }

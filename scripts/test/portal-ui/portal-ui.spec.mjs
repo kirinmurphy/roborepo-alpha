@@ -935,12 +935,26 @@ test.describe("repository-first portal Home", () => {
     await expect(dialog).toBeHidden();
     await card.getByRole("button", { name: "Actions for feature/landed" }).click();
     await card.getByRole("button", { name: "Delete Worktree" }).click();
-    await expect(dialog).toContainText("Its changes are already merged into main, so nothing is lost.");
+    await expect(dialog).toContainText("Its changes are already merged into main, so no committed work is lost.");
     await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "cta");
     await dialog.getByRole("button", { name: "Cancel" }).click();
     expect(removals).toEqual([]);
 
-    removal = { action: "kept", reason: "uncommitted or untracked changes" };
+    await card.getByRole("button", { name: "Actions for feature/guarded" }).click();
+    await card.getByRole("button", { name: "Delete Worktree" }).click();
+    await expect(dialog.getByRole("alert")).toContainText("These changes and files cannot be retrieved after deletion.");
+    await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "danger");
+    await expect(dialog).not.toContainText("nothing is lost");
+    const deleteBounds = await dialog.getByRole("button", { name: "Delete worktree", exact: true }).boundingBox();
+    const dialogBounds = await dialog.boundingBox();
+    expect(deleteBounds.y + deleteBounds.height).toBeLessThanOrEqual(dialogBounds.y + dialogBounds.height);
+    expect(deleteBounds.y + deleteBounds.height).toBeLessThanOrEqual(420);
+    await page.screenshot({ path: "/tmp/worktree-dirty-delete-warning.png" });
+    await dialog.getByRole("button", { name: "Delete worktree", exact: true }).click();
+    await expect.poll(() => removals).toEqual([{ branch: "feature/guarded", discardChanges: true }]);
+    await expect(dialog).toBeHidden();
+
+    removal = { action: "kept", reason: "uncommitted or untracked changes", requiresDiscardConfirmation: true };
     let release;
     removalHeld = new Promise((resolve) => { release = resolve; });
     await card.getByRole("button", { name: "Actions for feature/stale" }).click();
@@ -955,10 +969,16 @@ test.describe("repository-first portal Home", () => {
     await expect(dialog.getByRole("button", { name: "Cancel" })).toBeDisabled();
     release();
     removalHeld = null;
-    await expect(dialog).toContainText("uncommitted or untracked changes");
+    await expect(dialog.getByRole("alert")).toContainText("uncommitted or untracked changes");
+    await expect(dialog.locator("[data-slot=error]")).toBeHidden();
+    await expect(confirm).toHaveAttribute("data-btn", "danger");
     await expect(confirm).toBeEnabled();
     await expect(confirm).toHaveText("Delete worktree");
-    await dialog.getByRole("button", { name: "Cancel" }).click();
+    expect(removals.at(-1)).toEqual({ branch: "feature/stale" });
+    removal = { action: "removed" };
+    await confirm.click();
+    await expect(dialog).toBeHidden();
+    expect(removals.at(-1)).toEqual({ branch: "feature/stale", discardChanges: true });
 
     removal = { action: "removed" };
     // The plan's dropdown: one status line, then the same drift warning the row shows.
@@ -1003,7 +1023,12 @@ test.describe("repository-first portal Home", () => {
     await expect(dialog.locator("[data-slot=restore]")).toBeHidden();
     await dialog.getByRole("button", { name: "Delete worktree" }).click();
     await expect(dialog).toBeHidden();
-    expect(removals).toEqual([{ branch: "feature/stale" }, { branch: "feature/idle" }]);
+    expect(removals).toEqual([
+      { branch: "feature/guarded", discardChanges: true },
+      { branch: "feature/stale" },
+      { branch: "feature/stale", discardChanges: true },
+      { branch: "feature/idle", discardChanges: true },
+    ]);
     // The deletion's follow-up refresh may still be in flight through the patched route.
     await page.unrouteAll({ behavior: "ignoreErrors" });
   });
@@ -1975,17 +2000,29 @@ test.describe("Plans card commands", () => {
       await page.goto("/plans");
       await page.getByText(new RegExp(`^${tab} \\(`)).first().click();
       const card = page.locator("plan-card", { hasText: title });
-      if (tab !== "Review") {
+      if (tab === "Active") {
         await expect(card.locator(".recommended-cta")).toHaveCount(0);
         await card.getByRole("button", { name: "Plan actions", exact: true }).click();
+      } else {
+        await expect(card.getByRole("button", { name: label, exact: true }).locator('portal-icon[name="copy"]')).toBeVisible();
       }
       const prompt = page.waitForRequest((request) => request.url().endsWith("/api/plans/prompt"));
-      await card.getByRole("button", tab === "Review" ? { name: label, exact: true } : { name: new RegExp(`^${label}\\b`) }).click();
+      await card.getByRole("button", tab === "Active" ? { name: new RegExp(`^${label}\\b`) } : { name: label, exact: true }).click();
       expect((await prompt).postDataJSON().action).toBe(command);
       await expect(page.locator("#toast")).toContainText(`Copied the /${command} prompt`);
       expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(new RegExp(`^/${command}\\n`));
       if (tab === "Review") await expect(card.getByRole("button", { name: "Archive" })).toHaveCount(0);
       expect(fs.existsSync(path.join(planRoot, "docs", "plans", folder)), `${folder} stays where it was`).toBe(true);
+      if (tab === "Backlog" || tab === "Ready") {
+        await card.getByRole("button", { name: title, exact: false }).first().click();
+        const drawer = page.getByRole("dialog").filter({ has: page.getByRole("heading", { name: title, exact: true }) });
+        const drawerAction = drawer.getByRole("button", { name: label, exact: true });
+        await expect(drawerAction).toBeVisible();
+        await expect(drawerAction.locator('portal-icon[name="copy"]')).toBeVisible();
+        const drawerPrompt = page.waitForRequest((request) => request.url().endsWith("/api/plans/prompt"));
+        await drawerAction.click();
+        expect((await drawerPrompt).postDataJSON().action).toBe(command);
+      }
     });
   }
 

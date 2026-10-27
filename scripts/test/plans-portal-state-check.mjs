@@ -80,8 +80,10 @@ function testRecommendedCommandFollowsTheLifecycle() {
   const plan = (lifecycle, extra = {}) => ({ ...record({ lifecycle }).plan, ...extra });
   const tasks = (total, complete) => ({ taskCounts: { total, complete, remaining: total - complete } });
 
-  assert.equal(primaryPlanAction(plan("backlog")), null);
-  assert.equal(primaryPlanAction(plan("ready")), null);
+  for (const extra of [{}, { readiness: "draft" }, { blockers: ["external"] }]) {
+    assert.deepEqual(primaryPlanAction(plan("backlog", extra)), { command: "plan-promote", label: "Promote" });
+    assert.deepEqual(primaryPlanAction(plan("ready", extra)), { command: "plan-execute", label: "Start" });
+  }
   assert.equal(primaryPlanAction(plan("active", { reviewState: "current", ...tasks(3, 1) })), null, "unfinished work has no primary action");
   for (const reviewState of ["never-reviewed", "possibly-stale"]) {
     assert.equal(primaryPlanAction(plan("active", { reviewState, ...tasks(3, 1) })), null, `${reviewState} plans have no primary action`);
