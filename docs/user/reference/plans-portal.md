@@ -283,7 +283,7 @@ endpoint (`/api/config/packages/bulk`).
 When `plan-suite` is disabled:
 
 - `/plans` remains available, behind the onboarding banner
-- copy path and repository-aware or portable prompts remain available
+- copying the document filename and repository-aware context remains available
 - workflow prompt actions stay hidden
 
 When enabled:
@@ -297,16 +297,21 @@ When enabled:
 
   | Lifecycle | Actions |
   | --- | --- |
-  | backlog | Promote, Update, Archive |
+  | backlog | Promote, Archive |
   | ready | Start, Refine, Archive |
-  | active | Continue, Review, Update, Archive |
-  | review | Review, Fix findings, Close after merge, Archive |
+  | active | Continue, Review, Archive |
+  | review | Review, Fix findings, Close, Archive |
 
-- each card leads with one command button: Promote for backlog; Start for ready; Review, Update, or
-  Continue for active; and Close after merge or Review for review plans, from their recorded
-  approval (`/plan-review` fixes open findings in its own session, so open findings lead with Review)
-- a review plan shows its review outcome (open findings, **approved**, or **awaiting review**) as
-  a chip beside its task progress
+- cards lead with Promote for backlog and Start for ready. Unblocked review plans lead with Close
+  when approved, or Review otherwise. Active plans keep their commands in the Copy menu until
+  execution moves them to review. Close still verifies that the PR merged before completing a plan
+- priority, modified time, and document warnings sit in a compact, right-aligned column on wide
+  cards and a row below the description on smaller screens. Modified time uses a clock icon and
+  a short age such as **2 hrs**; its tooltip gives the exact date. The bottom row keeps the primary
+  action and Copy menu at the left, with blockers, open review findings, and task progress at the right
+- Copy menus use compact labels without icons or descriptions. Update and Portable Prompt are
+  omitted. **Copy Document Filename** sits below a divider and copies only the filename; the
+  popup header's separate path button still copies the repository-relative path
 - an active or review plan whose worktree has merged shows a **merged** completion badge; the same
   status is visible in the detail drawer
 - every action copies a prompt; the page never runs a command or moves a plan for one
@@ -352,6 +357,7 @@ The Plans page uses the normalized package catalog state. It does not inspect sk
 - Repository sources scope repository discovery; their paths appear only in the Manage repositories
   dialog.
 - Plan records and `/api/plans` responses, including scan errors, do not expose absolute paths.
-- Portable prompts use repository name, relative path, metadata, warnings, and bounded excerpts.
+- Portable prompts requested through the API use repository name, relative path, metadata,
+  warnings, and bounded excerpts; the portal's Copy menus offer repository-aware prompts only.
 - The browser does not execute document scripts, and writes only the changes described in
   [What The Portal Writes](#what-the-portal-writes).

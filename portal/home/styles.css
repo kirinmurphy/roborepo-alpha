@@ -72,7 +72,7 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 .plan-controls > portal-menu-button .menu-button-trigger { gap: 2px; }
 .home-main .plan-complete-badge { background: color-mix(in srgb, var(--chip-low-bg) 70%, #000); }
 .plan-identity { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
-.plan-next-action { display: inline-flex; align-items: center; gap: 4px; padding: 1px var(--space-sm); font-size: var(--text-xs); white-space: nowrap; }
+.plan-next-action { display: inline-flex; align-items: center; gap: 4px; padding: 1px var(--space-sm); font-size: var(--text-2xs); white-space: nowrap; }
 .home-main .repository-root-head { align-items: start; }
 .home-main .repository-card { --checkout-links-width: 16px; }
 /* Raise open menus above neighboring cards while keeping them below the site header. */

@@ -51,7 +51,7 @@
       "actions": [
         { "command": "plan-review", "label": "Review", "description": "Recheck the work, fix what has a clear fix, and request your approval." },
         { "command": "plan-execute", "label": "Fix findings", "description": "Fix review findings in a separate session." },
-        { "command": "plan-close", "label": "Close after merge", "description": "After you merge the PR, verify it landed and complete the plan." },
+        { "command": "plan-close", "label": "Close", "description": "After you merge the PR, verify it landed and complete the plan." },
         { "command": "plan-archive", "label": "Archive", "description": "Retire this plan without losing unmerged work." }
       ]
     },

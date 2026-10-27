@@ -190,6 +190,8 @@ Run targeted checks.
   const prompt = buildPrompt("plan-execute", [ready], { mode: "repository-aware" });
   assert.match(prompt, /^\/plan-execute\n/);
   assert.match(prompt, /docs\/plans\/backlog\/ready.md/);
+  assert.doesNotMatch(prompt, /Verify material claims against the current repository/);
+  assert.doesNotMatch(buildPrompt(null, [ready]), /Verify material claims against the current repository/);
   const portablePrompt = buildPrompt(null, [ready], { mode: "portable" });
   assert.match(portablePrompt, /^Use this bounded portable plan context/);
   assert.doesNotMatch(buildPrompt("start", [ready]), /^\//m, "a retired mode name produces no slash command");

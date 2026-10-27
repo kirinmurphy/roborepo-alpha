@@ -62,7 +62,6 @@ export function createPlanDrawer(deps) {
     const content = tmpl.drawerContent(doc, {
       onCopyPath: copyText,
       onCopyRepoContext: (record) => copyText(repositoryContext(record)),
-      onCopyPortableContext: (key) => copyPrompt(null, [key], "portable"),
       onPlanAction: (key, command) => copyPrompt(command, [key], "repository-aware"),
       onEnablePackage: deps.onEnablePackage,
       planSuitePackage: deps.getPlanSuitePackage(),
@@ -82,6 +81,7 @@ export function createPlanDrawer(deps) {
     document.getElementById("drawer-tasks").replaceChildren(...tmpl.drawerTaskItems(content.tasks));
     renderBlockers(doc.plan);
     const statusEl = document.createElement("plan-status");
+    statusEl.actionContent = [document.getElementById("drawer-actions")];
     if (deps.readonly) statusEl.setAttribute("readonly", "");
     statusEl.merge = deps.mergeFor?.(doc.plan.key) || null;
     statusEl.record = doc.plan;

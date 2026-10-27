@@ -72,7 +72,7 @@ function testLifecycleModelComesFromTheSnapshot() {
   assert.ok(isLifecycle("unclassified"));
   assert.equal(showsPriority("review"), true);
   assert.equal(showsPriority("completed"), false);
-  assert.deepEqual(lifecycleActions("review").map((action) => action.label), ["Review", "Fix findings", "Close after merge", "Archive"]);
+  assert.deepEqual(lifecycleActions("review").map((action) => action.label), ["Review", "Fix findings", "Close", "Archive"]);
 }
 
 function testRecommendedCommandFollowsTheLifecycle() {
@@ -94,7 +94,7 @@ function testRecommendedCommandFollowsTheLifecycle() {
   assert.equal(recommendedPlanCommand(plan("active", { ...tasks(3, 3), blockers: ["x"] })), null, "a blocked plan has no recommendation");
 
   assert.deepEqual(primaryPlanAction(plan("review", { qa: { openFindings: 2, decision: "" } })), { command: "plan-review", label: "Review" }, "open findings are fixed by /plan-review in its own session");
-  assert.deepEqual(primaryPlanAction(plan("review", { qa: { openFindings: 0, decision: "approved" } })), { command: "plan-close", label: "Close after merge" });
+  assert.deepEqual(primaryPlanAction(plan("review", { qa: { openFindings: 0, decision: "approved" } })), { command: "plan-close", label: "Close" });
   assert.deepEqual(primaryPlanAction(plan("review", { qa: { openFindings: 0, decision: "" } })), { command: "plan-review", label: "Review" });
   assert.equal(primaryPlanAction(plan("review", { blockers: ["external"] })), null, "blocked plans have no primary action");
   assert.equal(primaryPlanAction(plan("active", { qa: { decision: "approved" }, ...tasks(3, 3) })), null, "approval does not bypass the execution lifecycle");
