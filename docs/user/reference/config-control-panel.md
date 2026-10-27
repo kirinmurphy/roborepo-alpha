@@ -177,8 +177,11 @@ Two properties make this the security floor rather than one more preference:
 - **Deny is not a prompt.** There is no in-session override. If a denied path needs reading, carve
   it out of the behavior rather than working around it.
 
-When `read-secrets` resolves to `deny`, Codex renders native filesystem denies in both its
-writable `managed-workspace` profile and its `managed-read-only` profile. These prevent matching
+When `read-secrets` resolves to `deny` and `~/.codex/config.toml` already exists, RoboRepo renders
+native filesystem denies in both Codex's writable `managed-workspace` profile and its
+`managed-read-only` profile. If that file is absent, RoboRepo skips Codex and renders no managed
+profile. Initialize Codex, apply RoboRepo's permission settings, then start a fresh session and
+verify the selected profile before relying on this boundary. These denies prevent matching
 **reads and writes**, including credential-file edits. The enumerated environment-file patterns
 leave `.env.example` and `.env.sample` readable. Setting the behavior to `allow` removes these
 denies; `ask` also removes them and reports that path-specific prompting is unsupported.

@@ -1893,7 +1893,8 @@ test.describe("shared plan drawer", () => {
     const drawer = page.locator("dialog#drawer");
     await expect(drawer).toBeVisible();
     await expect(drawer.locator("#drawer-title")).toHaveText("Drawer fixture plan");
-    await expect(drawer.locator("plan-status option-dropdown").first()).toBeVisible();
+    await expect(drawer.locator("plan-status option-dropdown")).toHaveCount(0);
+    await expect(drawer.getByLabel(/^Modified /)).toBeVisible();
     await expect(drawer.locator("#drawer-meta")).not.toContainText("From worktree");
   });
 
@@ -1961,7 +1962,7 @@ test.describe("shared plan drawer", () => {
     await expect(drawer.locator("#drawer-title")).toHaveText("Drawer fixture plan");
     await expect(drawer.locator("#drawer-tasks li")).toHaveCount(2);
     await expect(drawer.locator("plan-status option-dropdown")).toHaveCount(0);
-    await expect(drawer.getByText(`${record.plan.priority} priority`, { exact: true })).toBeVisible();
+    await expect(drawer.getByText(`${record.plan.priority} priority`, { exact: true })).toHaveCount(0);
     await page.keyboard.press("Escape");
     await expect(drawer).not.toBeVisible();
   });
@@ -2051,6 +2052,11 @@ test.describe("Plans card commands", () => {
         const drawerPrompt = page.waitForRequest((request) => request.url().endsWith("/api/plans/prompt"));
         await drawerAction.click();
         expect((await drawerPrompt).postDataJSON().action).toBe(command);
+        const documentStatus = drawer.getByRole("group", { name: "Document status", exact: true });
+        await documentStatus.getByRole("button", { name: "high", exact: true }).click();
+        await documentStatus.getByRole("option", { name: "low", exact: true }).click();
+        await expect(documentStatus.getByRole("button", { name: "low", exact: true })).toBeVisible();
+        await expect(drawerAction).toBeVisible();
       }
     });
   }
@@ -2062,17 +2068,14 @@ test.describe("Plans card commands", () => {
     await page.screenshot({ path: testInfo.outputPath("plans-layout.png") });
     const documentStatus = card.getByRole("group", { name: "Document status", exact: true });
     await expect(documentStatus.getByLabel(/^Modified /)).toContainText("now");
-    await expect(documentStatus.getByRole("button", { name: "high", exact: true })).toBeVisible();
-    const [detailsBox, priorityBox, modifiedBox, warningsBox] = await Promise.all([
+    await expect(documentStatus.getByRole("button", { name: "high", exact: true })).toHaveCount(0);
+    const [detailsBox, modifiedBox, warningsBox] = await Promise.all([
       card.getByRole("button", { name: /Findings card plan/ }).first().boundingBox(),
-      documentStatus.getByRole("button", { name: "high", exact: true }).boundingBox(),
       documentStatus.getByLabel(/^Modified /).boundingBox(),
       documentStatus.getByText(/^\d+ warnings$/).boundingBox(),
     ]);
-    expect(priorityBox.x).toBeGreaterThanOrEqual(detailsBox.x + detailsBox.width);
-    expect(modifiedBox.y).toBeGreaterThan(priorityBox.y);
+    expect(modifiedBox.x).toBeGreaterThanOrEqual(detailsBox.x + detailsBox.width);
     expect(warningsBox.y).toBeGreaterThan(modifiedBox.y);
-    expect(Math.abs(priorityBox.x + priorityBox.width - modifiedBox.x - modifiedBox.width)).toBeLessThan(2);
     expect(Math.abs(warningsBox.x + warningsBox.width - modifiedBox.x - modifiedBox.width)).toBeLessThan(2);
     expect(await documentStatus.evaluate((node) => getComputedStyle(node).borderLeftWidth)).toBe("0px");
     const row = card.getByRole("group", { name: "Plan actions and work status", exact: true });
@@ -2102,9 +2105,8 @@ test.describe("Plans card commands", () => {
     expect(drawerWorkBox.x).toBeGreaterThan(drawerMenuBox.x + drawerMenuBox.width);
     expect(drawerMenuBox.x).toBeGreaterThan(drawerActionBox.x + drawerActionBox.width);
     const drawerDocument = drawer.getByRole("group", { name: "Document status", exact: true });
-    await drawerDocument.getByRole("button", { name: "high", exact: true }).click();
-    await drawerDocument.getByRole("option", { name: "low", exact: true }).click();
-    await expect(drawerDocument.getByRole("button", { name: "low", exact: true })).toBeVisible();
+    await expect(drawerDocument.getByRole("button", { name: "high", exact: true })).toHaveCount(0);
+    await expect(drawerDocument.getByLabel(/^Modified /)).toBeVisible();
     await expect(drawerRow.getByRole("button", { name: "Review", exact: true })).toBeVisible();
     const prompt = page.waitForRequest((request) => request.url().endsWith("/api/plans/prompt"));
     await drawerRow.getByRole("button", { name: "Review", exact: true }).click();
