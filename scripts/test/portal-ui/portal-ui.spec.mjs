@@ -1994,7 +1994,7 @@ test.describe("Plans card commands", () => {
     ["Ready", "Ready card plan", "Start", "plan-execute", "ready/card-ready.md"],
     ["Active", "Finished card plan", "Review", "plan-review", "active/card-done.md"],
     ["Review", "Findings card plan", "Review", "plan-review", "review/card-findings.md"],
-    ["Review", "Approved card plan", "Close after merge", "plan-close", "review/card-approved.md"],
+    ["Review", "Approved card plan", "Close", "plan-close", "review/card-approved.md"],
   ]) {
     test(`a ${tab.toLowerCase()} card's ${label} copies the /${command} prompt and moves nothing`, async ({ page }) => {
       await page.goto("/plans");
@@ -2025,6 +2025,170 @@ test.describe("Plans card commands", () => {
       }
     });
   }
+
+  test("plan cards separate document metadata from actions and work", async ({ page }, testInfo) => {
+    await page.goto("/plans?lifecycle=review");
+    const card = page.locator("plan-card", { hasText: "Findings card plan" });
+    await expect(card).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("plans-layout.png") });
+    const documentStatus = card.getByRole("group", { name: "Document status", exact: true });
+    await expect(documentStatus.getByLabel(/^Modified /)).toContainText("now");
+    await expect(documentStatus.getByRole("button", { name: "high", exact: true })).toBeVisible();
+    const [detailsBox, priorityBox, modifiedBox, warningsBox] = await Promise.all([
+      card.getByRole("button", { name: /Findings card plan/ }).first().boundingBox(),
+      documentStatus.getByRole("button", { name: "high", exact: true }).boundingBox(),
+      documentStatus.getByLabel(/^Modified /).boundingBox(),
+      documentStatus.getByText(/^\d+ warnings$/).boundingBox(),
+    ]);
+    expect(priorityBox.x).toBeGreaterThanOrEqual(detailsBox.x + detailsBox.width);
+    expect(modifiedBox.y).toBeGreaterThan(priorityBox.y);
+    expect(warningsBox.y).toBeGreaterThan(modifiedBox.y);
+    expect(Math.abs(priorityBox.x + priorityBox.width - modifiedBox.x - modifiedBox.width)).toBeLessThan(2);
+    expect(Math.abs(warningsBox.x + warningsBox.width - modifiedBox.x - modifiedBox.width)).toBeLessThan(2);
+    expect(await documentStatus.evaluate((node) => getComputedStyle(node).borderLeftWidth)).toBe("0px");
+    const row = card.getByRole("group", { name: "Plan actions and work status", exact: true });
+    const review = row.getByRole("button", { name: "Review", exact: true });
+    const menu = row.getByRole("button", { name: "Plan actions", exact: true });
+    const work = row.getByRole("group", { name: "Work status", exact: true });
+    await expect(work).toContainText("1 open finding");
+    const [actionBox, menuBox, workBox, metadataBox] = await Promise.all([review.boundingBox(), menu.boundingBox(), work.boundingBox(), documentStatus.boundingBox()]);
+    expect(menuBox.x).toBeGreaterThan(actionBox.x + actionBox.width);
+    expect(workBox.x).toBeGreaterThan(menuBox.x + menuBox.width);
+    expect(Math.abs(actionBox.y + actionBox.height / 2 - workBox.y - workBox.height / 2)).toBeLessThan(2);
+    expect(metadataBox.y + metadataBox.height).toBeLessThanOrEqual(actionBox.y);
+    await expect(page.getByText("approved", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("awaiting review", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("valid", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("structure complete", { exact: true })).toHaveCount(0);
+    await card.getByRole("button", { name: /Findings card plan/ }).first().click();
+    const drawer = page.locator("dialog#drawer");
+    const drawerRow = drawer.getByRole("group", { name: "Plan actions and work status", exact: true });
+    await expect(drawerRow.getByRole("button", { name: "Review", exact: true })).toBeVisible();
+    await expect(drawerRow.getByRole("group", { name: "Work status", exact: true })).toContainText("1 open finding");
+    const [drawerWorkBox, drawerActionBox, drawerMenuBox] = await Promise.all([
+      drawerRow.getByRole("group", { name: "Work status", exact: true }).boundingBox(),
+      drawerRow.getByRole("button", { name: "Review", exact: true }).boundingBox(),
+      drawerRow.getByRole("button", { name: "Plan actions", exact: true }).boundingBox(),
+    ]);
+    expect(drawerWorkBox.x).toBeGreaterThan(drawerMenuBox.x + drawerMenuBox.width);
+    expect(drawerMenuBox.x).toBeGreaterThan(drawerActionBox.x + drawerActionBox.width);
+    const drawerDocument = drawer.getByRole("group", { name: "Document status", exact: true });
+    await drawerDocument.getByRole("button", { name: "high", exact: true }).click();
+    await drawerDocument.getByRole("option", { name: "low", exact: true }).click();
+    await expect(drawerDocument.getByRole("button", { name: "low", exact: true })).toBeVisible();
+    await expect(drawerRow.getByRole("button", { name: "Review", exact: true })).toBeVisible();
+    const prompt = page.waitForRequest((request) => request.url().endsWith("/api/plans/prompt"));
+    await drawerRow.getByRole("button", { name: "Review", exact: true }).click();
+    expect((await prompt).postDataJSON().action).toBe("plan-review");
+    await page.screenshot({ path: testInfo.outputPath("plan-popup-layout.png") });
+    await drawer.getByRole("button", { name: "Close", exact: true }).click();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(review).toBeVisible();
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    const [narrowDetails, narrowMetadata] = await Promise.all([
+      card.getByRole("button", { name: /Findings card plan/ }).first().boundingBox(),
+      documentStatus.boundingBox(),
+    ]);
+    expect(narrowMetadata.y).toBeGreaterThanOrEqual(narrowDetails.y + narrowDetails.height);
+    await page.screenshot({ path: testInfo.outputPath("plans-layout-narrow.png") });
+  });
+
+  test("hover highlights both document columns without highlighting the actions row", async ({ page }, testInfo) => {
+    await page.goto("/plans?lifecycle=review");
+    const card = page.locator("plan-card", { hasText: "Findings card plan" });
+    const main = card.getByRole("button", { name: /Findings card plan/ }).first();
+    const metadata = card.getByRole("group", { name: "Document status", exact: true });
+    const actions = card.getByRole("group", { name: "Plan actions and work status", exact: true });
+    const background = (node) => node.evaluate((element) => getComputedStyle(element).backgroundColor);
+    const mainBefore = await background(main);
+    const actionsBefore = await background(actions);
+    await main.hover();
+    expect(await background(main)).not.toBe(mainBefore);
+    expect(await background(metadata)).toBe(await background(main));
+    expect(await background(actions)).toBe(actionsBefore);
+    await page.screenshot({ path: testInfo.outputPath("plan-hover.png") });
+    await actions.getByRole("button", { name: "Review", exact: true }).hover();
+    expect(await background(main)).toBe(mainBefore);
+    expect(await background(metadata)).toBe(mainBefore);
+  });
+
+  test("copy menus show compact labels and separate the document filename", async ({ page }, testInfo) => {
+    for (const lifecycle of ["backlog", "ready", "active", "review"]) {
+      await page.goto(`/plans?lifecycle=${lifecycle}`);
+      const card = page.locator("plan-card").first();
+      await card.getByRole("button", { name: "Plan actions", exact: true }).click();
+      const menu = card.getByRole("group", { name: "Copy options", exact: true });
+      await expect(menu).toBeVisible();
+      await expect(menu.getByRole("button", { name: "Update", exact: true })).toHaveCount(0);
+      await expect(menu.getByRole("button", { name: "Portable prompt", exact: true })).toHaveCount(0);
+      await expect(menu).not.toContainText("Copies a prompt");
+      await expect(menu.locator("portal-icon")).toHaveCount(0);
+      await expect(menu.locator(".menu-button-item-desc")).toHaveCount(0);
+      const filename = menu.getByRole("button", { name: "Copy Document Filename", exact: true });
+      await expect(filename).toBeVisible();
+      expect(await filename.evaluate((node) => getComputedStyle(node.parentElement).borderTopWidth)).toBe("1px");
+      expect(await filename.evaluate((node) => getComputedStyle(node).fontSize)).toBe("15px");
+      if (lifecycle === "backlog") await page.screenshot({ path: testInfo.outputPath("copy-menu.png") });
+      await filename.click();
+      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toMatch(/^[^/\\]+\.md$/);
+      if (lifecycle === "backlog") {
+        await card.getByRole("button", { name: "Plan actions", exact: true }).click();
+        await card.getByRole("button", { name: /Backlog card plan/ }).first().click();
+        const drawer = page.locator("dialog#drawer");
+        await drawer.getByRole("button", { name: "Plan actions", exact: true }).click();
+        const drawerMenu = drawer.getByRole("group", { name: "Copy options", exact: true });
+        await expect(drawerMenu.getByRole("button", { name: "Copy Document Filename", exact: true })).toBeVisible();
+        await expect(drawerMenu.getByRole("button", { name: "Update", exact: true })).toHaveCount(0);
+        await expect(drawerMenu.locator("portal-icon")).toHaveCount(0);
+      }
+    }
+  });
+
+  test("modified age uses a clock and compact elapsed time while preserving the exact timestamp", async ({ page }) => {
+    const now = new Date("2026-10-27T12:00:00Z");
+    await page.clock.setFixedTime(now);
+    const hour = 60 * 60 * 1000;
+    const day = 24 * hour;
+    let timestamp;
+    await page.route("**/api/plans", async (route) => {
+      const data = await (await route.fetch()).json();
+      data.planSuitePackage = { ...data.planSuitePackage, available: true, enabled: true };
+      data.plans.find((record) => record.plan.title === "Findings card plan").plan.modifiedAt = timestamp;
+      await route.fulfill({ json: data });
+    });
+    for (const [age, label] of [[0, "now"], [59 * 60 * 1000, "59 mins"], [hour, "1 hr"], [2 * hour, "2 hrs"], [day, "1 day"], [7 * day, "1 week"], [30 * day, "1 month"], [null, "unknown"]]) {
+      timestamp = age === null ? "not a timestamp" : new Date(now.getTime() - age).toISOString();
+      await page.goto("/plans?lifecycle=review");
+      const modified = page.locator("plan-card", { hasText: "Findings card plan" }).getByLabel(/^Modified /);
+      await expect(modified).toHaveText(label);
+      await expect(modified.locator('portal-icon[name="clock"]')).toBeVisible();
+      if (age === null) {
+        await expect(modified).toHaveAttribute("title", "Modified time unknown");
+        await expect(modified).not.toHaveAttribute("datetime");
+      } else {
+        await expect(modified).toHaveAttribute("datetime", timestamp);
+        await expect(modified).toHaveAttribute("title", /^Modified /);
+      }
+    }
+  });
+
+  test("a structurally complete backlog card shows Promote without positive document badges", async ({ page }) => {
+    await page.route("**/api/plans", async (route) => {
+      const data = await (await route.fetch()).json();
+      data.planSuitePackage = { ...data.planSuitePackage, available: true, enabled: true };
+      const record = data.plans.find((record) => record.plan.title === "Backlog card plan");
+      record.plan.validation.warnings = [];
+      record.plan.readiness = "ready";
+      await route.fulfill({ json: data });
+    });
+    await page.goto("/plans?lifecycle=backlog");
+    const card = page.locator("plan-card", { hasText: "Backlog card plan" });
+    await expect(card.getByRole("button", { name: "Promote", exact: true })).toBeVisible();
+    await expect(card.getByRole("group", { name: "Document status", exact: true }).getByLabel(/^Modified /)).toContainText("now");
+    await expect(card).not.toContainText("structure complete");
+    await expect(card).not.toContainText("valid");
+    await expect(card).not.toContainText("warning");
+  });
 
   test("lifecycle tabs keep Completed, Archived and Unclassified behind the ⋮ menu", async ({ page }) => {
     await page.goto("/plans");

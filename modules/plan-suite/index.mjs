@@ -211,8 +211,6 @@ export function buildPrompt(command, selectedPlans, { mode = "repository-aware" 
   return [
     ...commandLines,
     ...plans.map((item) => `Work with plan \`${item.plan.id || item.plan.title}\` at \`${item.plan.relativePath}\` in repository \`${item.repository.name}\`.`),
-    "",
-    "Verify material claims against the current repository before changing lifecycle or marking work complete.",
   ].join("\n");
 }
 

@@ -15,9 +15,8 @@ export function matchedPlanIdentity(plan, checkout, { mainCheckouts = [], nextAc
 }
 
 // The command the Plans card leads with (Promote, Start, Review, Close); clicking copies its prompt.
-// On a row the merge is already implied, so "Close after merge" reads as just "Close".
 function nextActionButton(plan, action, { merged, onCopyPrompt }) {
-  const button = fill(tpl("tpl-plan-next-action"), { label: action.command === "plan-close" ? "Close" : action.label });
+  const button = fill(tpl("tpl-plan-next-action"), { label: action.label });
   button.title = merged ? `Merged — copy the /${action.command} prompt` : `Copy the /${action.command} prompt`;
   button.addEventListener("click", () => onCopyPrompt?.(plan, action.command));
   return button;

@@ -3,6 +3,10 @@
 // Renders inline (no shadow DOM) so page CSS can still target `svg`/`path` the way existing
 // call sites already do (e.g. developer-runtime's setRefreshing() toggles the icon via [hidden]).
 const ICONS = {
+  clock: {
+    viewBox: "0 0 16 16",
+    body: `<circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.3" /><path d="M8 4v4l2.5 1.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" />`,
+  },
   refresh: {
     viewBox: "0 0 16 16",
     body: `<path fill="currentColor" d="M8 2.5a5.5 5.5 0 1 0 5.163 3.588.75.75 0 0 1 1.406-.526A7 7 0 1 1 8 1v-.5a.5.5 0 0 1 .82-.385l2.25 1.875a.5.5 0 0 1 0 .77L8.82 4.635A.5.5 0 0 1 8 4.25V2.5Z" />`,

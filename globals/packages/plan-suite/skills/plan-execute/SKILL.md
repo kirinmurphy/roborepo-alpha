@@ -53,6 +53,7 @@ Load these by subject matter while implementing; do not wait to be asked for the
 | `code-style` | The work places code: module boundaries, orchestration vs. execution, reuse | Ownership and layering constraints |
 | `javascript-typescript` | The work touches JS/TS — ESM, exports, types, framework-less DOM | Language and markup conventions |
 | `test-harness` | The work adds or changes tests, verification commands, or fixtures | Test selection and observable-behavior assertions |
+| `feature-verification` | Delivered UI, server, API, CLI, permission, or performance behavior needs a demonstration beyond routine test reporting | Select and show the fastest sufficient behavioral evidence; reuse existing captures and execution output |
 
 Each row is its own optional package, so check it before loading it. Run this check in Preflight,
 for every row the plan's subject matter calls for, before the start transition: it is a pre-run gate
@@ -206,7 +207,7 @@ then the run proceeds without questions.
     shareable URL or link when the environment exposes one. If the repository cannot expose a
     link, record what was started and why no link is available.
 12. Run completion-level verification, including manual verification against the started
-    environment when applicable.
+    environment when applicable. Apply the behavioral evidence handoff below before committing.
 13. Re-read Git status and the implementation diff in the target worktree, then commit the
     completed implementation changes there with a descriptive message, including the run's plan
     updates in the worktree's copy. Do not leave completed code
@@ -216,6 +217,20 @@ then the run proceeds without questions.
 14. Run the Validation Loop (below).
 15. Decide implementation completion (below).
 16. Report the final state.
+
+### Behavioral evidence handoff
+
+Before handing off completed implementation or review fixes, assess what the user needs to see to
+understand the delivered behavior. When the `feature-verification` pairing applies, load it before
+selecting evidence and follow its workflow. Reuse relevant native probes, command output, browser
+captures, or measured results already produced; do not rerun passing work merely for presentation.
+Show one primary evidence item in the final response, with a short walkthrough in the user's terms.
+Distinguish passed assertions, observed behavior, illustrative diagrams, and unavailable checks.
+
+Routine test-result reporting alone does not trigger the pairing. If it does not apply, state why
+in the handoff. If the skill is unavailable, report that limitation and still present the available
+evidence without widening execution permissions. A verification gap belongs in `## Not tested`;
+an explanatory diagram cannot close it.
 
 ## Validation Loop
 
@@ -267,7 +282,7 @@ A plan in `review/` returns here only to fix what review recorded.
    deciding an escalated question. A finding marked `fixed in review` is already resolved; leave it
    as it is.
 2. Fix each finding within the plan's existing requirements, with the same verification discipline
-   as the Implementation Workflow, then run the Validation Loop over the result.
+   as the Implementation Workflow, including the behavioral evidence handoff, then run the Validation Loop over the result.
 3. Check each fixed finding off and add its resolution after a dash, for example
    `- [x] Missing retry test — added and verified`. Never edit `### Approval`: a code change already
    makes a recorded approval stale, and only `/plan-review` records a new one.
@@ -464,6 +479,7 @@ Also include:
 - each Validation Loop pass's report, the clean one included;
 - tests and checks run;
 - manual verification;
+- primary behavioral evidence and walkthrough, or why the feature-verification pairing did not apply;
 - the `## Not tested` entries, each with what to check and why no test covers it;
 - paired skills loaded, and any skipped with the reason;
 - Open Questions, asked together as the run's only question batch: each with its options, pros and

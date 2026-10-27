@@ -363,7 +363,6 @@ function render() {
     onOpen: openPlan,
     onCopyPath: copyText,
     onCopyContext: (record) => copyText(repositoryContext(record)),
-    onCopyPortableContext: (key) => copyPrompt(null, [key], "portable"),
     onPlanAction: (key, command) => copyPrompt(command, [key], "repository-aware"),
     mergeFor: (key) => state.mergedPlans.get(key) || null,
     planSuiteEnabled: snapshot.planSuitePackage.enabled,

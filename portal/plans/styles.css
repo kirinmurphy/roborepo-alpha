@@ -258,14 +258,9 @@ plan-card {
   grid-template-columns: 1fr;
   min-width: 0;
 }
-/* doc-details is the click surface (see plan-card.js) — hover feedback lives here instead of on
- * the title/description individually. Title still underlines on hover so it keeps reading as the
- * primary link; description doesn't need its own underline since it's not link-styled text.
- * :hover:not(:has(...)) suppresses the feedback when the pointer is over a nested interactive
- * widget (priority dropdown, action buttons) — those don't open the card, so they shouldn't look
- * like they will. status-section is a sibling of doc-details now (not a descendant), so it's
- * excluded automatically and needs no :has() clause here. */
-.plan-card .doc-details:hover:not(:has(button:hover, option-dropdown:hover)) {
+/* The title/description opens the document. Its hover highlight spans both document columns,
+ * while priority and actions keep their independent interaction states. */
+.plan-card:has(.doc-details:hover) :is(.doc-details, .status-document) {
   background: color-mix(in srgb, var(--accent) 4%, var(--panel));
 }
 
@@ -287,6 +282,7 @@ plan-card {
   min-width: 0;
   padding: 1rem;
   border: 1px solid var(--line);
+  border-bottom: none;
   background: var(--panel);
   cursor: pointer;
 }
@@ -334,15 +330,11 @@ plan-card {
   width: 100%;
 }
 
-.plan-card .doc-details footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-.plan-card .doc-details .card-actions {
-  margin-top: 2px;
-  align-items: stretch;
+.plan-card .status-document {
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  background: var(--panel);
+  padding: 0 1rem 0.75rem;
 }
 .plan-card plan-status .status-section {
   border: 1px solid var(--line);
@@ -350,11 +342,34 @@ plan-card {
   border-radius: 0 0 7px 7px;
   background: color-mix(in srgb, var(--ink) 3%, var(--panel));
 }
-.card-actions {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  align-self: end;
+@media (min-width: 900px) {
+  .plan-card {
+    grid-template-columns: minmax(0, 1fr) 9rem;
+  }
+  .plan-card > plan-status,
+  .plan-card .plan-status-content {
+    display: contents;
+  }
+  .plan-card .doc-details {
+    grid-column: 1;
+    grid-row: 1;
+    border-right: none;
+  }
+  .plan-card .status-document {
+    grid-column: 2;
+    grid-row: 1;
+    flex-direction: column;
+    align-items: flex-end;
+    text-align: right;
+    border: 1px solid var(--line);
+    border-left: none;
+    border-bottom: none;
+    padding: 1rem;
+  }
+  .plan-card plan-status .status-section {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
 }
 @media (max-width: 560px) {
   .plans-no-repositories-content {

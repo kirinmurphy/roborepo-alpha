@@ -117,10 +117,14 @@ test.describe("Plans card status", () => {
 
   // A blocker id that names a plan in the same repository is a link to that plan; an external
   // blocker names no plan, so it has nothing to open and stays plain text.
-  test("the blocked-by badge lists each blocker, and a known blocker opens its plan", async ({ page }) => {
+  test("the blocked-by badge lists each blocker, and a known blocker opens its plan", async ({ page }, testInfo) => {
     await page.goto("/plans?lifecycle=backlog");
     const card = page.locator("plan-card", { hasText: "Blocked status plan" });
-    await card.getByRole("button", { name: "blocked by 2" }).click();
+    const blocked = card.getByRole("button", { name: "blocked by 2" });
+    const warning = card.getByRole("group", { name: "Document status", exact: true }).getByText(/^\d+ warnings?$/);
+    expect(await blocked.evaluate((node) => getComputedStyle(node).fontSize)).toBe(await warning.evaluate((node) => getComputedStyle(node).fontSize));
+    await card.screenshot({ path: testInfo.outputPath("blocked-badge.png") });
+    await blocked.click();
     const popover = page.locator("#blockers-popover");
     await expect(popover).toBeVisible();
     await expect(popover.locator(".blockers-popover-title")).toHaveText("Blocked by 2");
