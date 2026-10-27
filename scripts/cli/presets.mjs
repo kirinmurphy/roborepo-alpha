@@ -474,19 +474,17 @@ export function presetsRemove(args) {
 }
 
 // Telemetry is intentionally listed in BOTH catalogs: a hollow bundle here (rows: []) AND a real
-// service component in packages.json. The bundle entry's only job is bookkeeping in presetState +
-// letting `presetsApply(["telemetry"])` pull in its required `hooks` bundle (presets.json) → link it
-// (belt-and-suspenders so capture-dense-bash.mjs in ~/.claude/hooks/ is reachable). On a full install
-// the base bundle already links those hooks, so this is redundant-but-harmless; the telemetry-only
-// install path (telemetryInstall) skips presetsApply deliberately. The real enable/disable lives in
-// telemetry.mjs setTelemetryEnabled. Safe to untangle into a single package-only path later.
-export function markTelemetrySelected(enabled) {
+// service component in packages.json. The bundle is selected only through `bundle apply telemetry`,
+// which also applies its required `hooks` bundle. Turning telemetry on from the package side
+// (`telemetry install`, the Settings toggle) records no bundle: the telemetry package wires its own
+// capture hooks, and recording the bundle would make `hooks` effective without applying it.
+// Turning telemetry off still drops a bundle root that `bundle apply` recorded.
+export function deselectTelemetryBundle() {
   const catalog = readPresetCatalog();
   const state = readPresetState();
-  const selected = new Set(selectedBundleRoots(catalog.bundles, state));
-  if (enabled) selected.add("telemetry");
-  else selected.delete("telemetry");
-  writePresetState(catalog, state, [...selected]);
+  const roots = selectedBundleRoots(catalog.bundles, state);
+  if (!roots.includes("telemetry")) return;
+  writePresetState(catalog, state, roots.filter((id) => id !== "telemetry"));
 }
 
 function isInstalledCore() {

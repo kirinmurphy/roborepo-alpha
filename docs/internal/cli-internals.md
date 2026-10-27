@@ -124,7 +124,16 @@ the bundles that were chosen, and a bundle's `requires` in `presets.json` (`tele
 act on the effective set. `bundle remove` of a bundle another selected bundle requires leaves it
 applied and says so; `bundle status` marks such a bundle `required by <bundle>`, and a failing
 `bundle check` names the missing rows. A state file without `schemaVersion` is read by dropping
-every listed bundle another listed bundle requires; the next write stores `schemaVersion: 2`.
+every listed bundle another listed bundle requires, and every listed bundle whose requirements are
+not all listed (it was recorded without being applied); the next write stores `schemaVersion: 2`.
+
+The `telemetry` bundle is selected only by `bundle apply telemetry`. `roborepo telemetry install`
+and the Settings telemetry toggle record no bundle, because the telemetry package wires its own
+capture hooks; turning telemetry off drops a `telemetry` root that `bundle apply` recorded.
+
+A failing `claude mcp add` returns `ok: false` from the Claude MCP adapter instead of exiting.
+Package enable reports the package `blocked`; `roborepo mcp add` and `mcp apply` exit with the
+Claude CLI's status.
 
 ## Portal Startup
 

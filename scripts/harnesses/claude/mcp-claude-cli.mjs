@@ -25,15 +25,16 @@ export function claudeMcpArgs(opts, spec) {
   return args;
 }
 
+// Returns { ok, status, message } instead of exiting: package enable runs inside the portal server,
+// where one failing install must report `blocked`, not end the process. `roborepo mcp add` maps a
+// failure back to its exit status.
 export function runClaudeMcpAdd(args) {
   const executable = selectedClaudeExecutable();
   if (!executable) throw new Error("Claude Code has no validated CLI or desktop runtime");
   const result = spawnSync(executable, args, { stdio: "inherit" });
-  if (result.error) {
-    console.error(`failed to run claude: ${result.error.message}`);
-    process.exit(1);
-  }
-  if ((result.status ?? 1) !== 0) process.exit(result.status ?? 1);
+  if (result.error) return { ok: false, status: 1, message: `failed to run claude: ${result.error.message}` };
+  const status = result.status ?? 1;
+  return status === 0 ? { ok: true, status, message: "" } : { ok: false, status, message: `claude mcp add exited with status ${status}` };
 }
 
 export function hasClaudeCli() {

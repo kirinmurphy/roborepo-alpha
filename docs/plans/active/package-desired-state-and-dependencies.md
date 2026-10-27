@@ -1,7 +1,7 @@
 ---
 id: o9zwxuav
 priority: high
-next_action: Answer the two Open Questions (the telemetry-only hooks requirement and the mid-enable MCP exit), apply the chosen fixes, then run validation pass 3, the completion preflight, and the submit transition.
+next_action: Run validation pass 4 over the telemetry and MCP fixes, then the completion preflight and the submit transition.
 blocked_by: []
 depends_on: ["bysyzl1e"]
 related: ["package-registry-live-state-reconciliation", "ejsc769o", "age4cm7r", "user-managed-packages-and-add-workflows"]
@@ -368,55 +368,7 @@ see `## Review` → `### Verification`.
 
 ## Open Questions
 
-### A failing `claude mcp add` still exits mid-enable
-
-- **Evidence:** `installMcpPreset` in `scripts/cli/packages.mjs` calls the Claude MCP adapter's
-  `addServer`, which reaches `runClaudeMcpAdd` in `scripts/harnesses/claude/mcp-claude-cli.mjs`.
-  That function calls `process.exit` when `claude mcp add` fails. In the portal this ends the
-  server; in the terminal the package never reports `blocked`. The path is unchanged from the base
-  branch. Proposed design §4 says `blocked` replaces mid-apply exits, but the Phase 2 task scoped
-  only the exits in `packages.mjs`, all of which are gone.
-- **Options:**
-  1. Make the adapter throw a typed error and have `roborepo mcp add` map it to the exit it uses
-     today. Pros: package enable reports `blocked`, the portal survives. Cons: changes a harness
-     adapter contract and touches the `mcp add` command, outside this plan's files.
-  2. Make `addServer` return `{ ok: false, message }` (which `installMcpPreset` already checks) and
-     move the exit into the `mcp add` caller. Pros: uses the result shape the adapter already
-     declares. Cons: same reach as option 1.
-  3. Leave it for a harness-adapter plan. Pros: keeps this plan to package state. Cons: the portal
-     can still be ended by one failing MCP install.
-- **Recommendation:** option 2, as its own small change: the adapter already returns `{ ok }` on
-  other paths, so only the failure branch and the `mcp add` caller move.
-- **Why blocked:** it changes a harness adapter contract and lands outside the files this plan
-  lists.
-- **Blocks:** nothing in this plan's task list; all Phase 2 tasks are complete without it.
-
-### A telemetry-only selection requires hooks it never applies
-
-- **Evidence:** `roborepo telemetry install` and the Settings telemetry toggle call
-  `markTelemetrySelected`, which records `telemetry` as a bundle root without applying any bundle
-  (telemetry install deliberately leaves operational hooks alone). With `telemetry` now requiring
-  `hooks` in `presets.json`, that selection makes `hooks` effective: `bundle check` fails with
-  `fail: hooks required by telemetry but not fully applied; missing: claude:hooks, codex:hooks.json,
-  codex:hooks` (reproduced in a temp home with `{"schemaVersion":2,"selected":["telemetry"]}`), and
-  `coreHookBundle("codex")` reports the hooks bundle selected, so hook readiness expects core hooks
-  that were never installed. On the base branch both read only the recorded list, which never held
-  `hooks` on this path.
-- **Options:**
-  1. Stop recording the bundle from the package paths: `markTelemetrySelected` no longer writes a
-     bundle root; the telemetry package keeps owning its own capture hooks, and the bundle (with its
-     `requires`) applies only through `bundle apply telemetry`. Pros: keeps §7's declared edge and
-     telemetry install's "leave operational hooks alone" rule. Cons: `bundle status` stops showing
-     telemetry as selected after a package-side enable.
-  2. Have the telemetry-only paths apply the hooks bundle. Pros: the declared dependency is always
-     honored. Cons: telemetry install starts installing core operational hooks, which it avoids on
-     purpose today.
-  3. Drop `requires: ["hooks"]` from the telemetry bundle. Pros: restores base behavior on every
-     path. Cons: reverses §7's decision and leaves the hard-coded rule's only case undeclared.
-- **Recommendation:** option 1; the bundle entry is bookkeeping for the package, and the package
-  already installs what telemetry needs.
-- **Why blocked:** each option changes either what telemetry install writes or a §7 requirement.
-- **Blocks:** submission to review (an open Review finding fails the completion preflight).
+None open. Both earlier questions were answered by the user on 2026-10-27; see Decision Log.
 
 ## Decision Log
 
@@ -482,19 +434,34 @@ see `## Review` → `### Verification`.
 - **2026-10-26: Bulk disable skips derived-only members.** A bulk Deselect All member that is on
   only because another selection requires it is reported `skipped` instead of being refused, so a
   batch never fails on a package it cannot switch directly. Selection is re-read before each member.
-- **2026-10-26: Turning telemetry off leaves the hooks bundle's files in place.** Under the new
-  rule, `hooks` stops being effective when the telemetry bundle is deselected (unless selected
-  directly), but `markTelemetrySelected` stays bookkeeping only, as before: it records the
-  selection and never applies or removes bundle rows. `bundle remove telemetry` is the path that
-  removes the hooks it required. Removing core hooks as a side effect of a telemetry toggle would
-  be a wider behavior change than this plan asks for.
+- **2026-10-26: Turning telemetry off leaves the hooks bundle's files in place.** Turning telemetry
+  off (`deselectTelemetryBundle`) only drops a recorded `telemetry` root; it never applies or
+  removes bundle rows. `bundle remove telemetry` is the path that removes the hooks it required.
+  Removing core hooks as a side effect of a telemetry toggle would be a wider behavior change than
+  this plan asks for.
 - **2026-10-26: Bundle selection lives in its own small module.** `bundle-selection.mjs` holds bundle
   roots and the effective set so hook readiness (`core-hook-bundle.mjs`), the Config snapshot, and
   `presets.mjs` share one rule without hook readiness importing the bundle-apply module.
 - **2026-10-26: Updated one fixture for the planned bundle behavior.** `shared-target-rows-check`
-  enabled the telemetry package and then expected `bundle remove hooks` to remove the hooks bundle.
-  Telemetry now requires hooks, so that removal is kept (as §7 specifies); the fixture now asserts
-  the kept message and removes `hooks` and `telemetry` together.
+  enables the telemetry package and then runs `bundle remove hooks`. After the 2026-10-27 telemetry
+  decision the package records no bundle, so the fixture asserts the removal is not kept, as on the
+  base branch.
+- **2026-10-27 (user decision): Package-side telemetry records no bundle.** Chosen over installing
+  the hooks bundle from `telemetry install` and over dropping the telemetry → hooks edge.
+  `telemetry install` and the Settings toggle no longer write a `telemetry` bundle root, so a
+  telemetry-only setup leaves `hooks` off and `bundle check` and hook readiness expect no core
+  hooks. Turning telemetry off still drops a root that `bundle apply telemetry` recorded.
+- **2026-10-27: Legacy telemetry-only records drop the unapplied root.** A record without
+  `schemaVersion` that lists a bundle but not all of its requirements came from the old
+  bookkeeping path (on the base branch `bundle apply telemetry` always recorded `hooks` too), so
+  the read drops that root instead of making `hooks` effective. Alternatives: a telemetry-specific
+  migration (same result, a named special case), or leaving such records failing `bundle check`.
+  The general rule needs no telemetry name and only touches bundles that were never applied.
+- **2026-10-27 (user decision): The Claude MCP adapter returns `ok: false`.** Chosen over a typed
+  error and over deferring to a harness-adapter plan. `runClaudeMcpAdd` returns its status, the
+  adapter's `addServer` returns `ok: false` with the message in `warnings` and the CLI status in
+  `exitStatus`, package enable reports the package `blocked` with that message, and `roborepo mcp
+  add` / `mcp apply` exit with the Claude CLI's status as before.
 
 ## Review
 
@@ -512,17 +479,20 @@ see `## Review` → `### Verification`.
 - [x] `recommendationOption` split the packages-intro comment from its function — moved below (bb2a435e)
 - [x] The terminal dependency lists and the view's closure, no-repeat, and required-over-recommended
       rules had no direct test — added `scripts/test/config-dependency-sections-check.mjs` (bb2a435e)
-- [ ] A failing `claude mcp add` still exits mid-enable — escalated, see Open Questions
+- [x] A failing `claude mcp add` still exits mid-enable — user chose `ok: false` from the adapter;
+      covered by `mcp-claude-add-failure-check.mjs` (adapter result, `mcp add` exit status, package
+      enable `blocked`)
 - [x] Comments in `config.mjs` and `package-catalog.mjs` still described per-section dependency
       lists that the user decision removed — reworded to the popup's Requires line
 - [x] A required package with no inspectable source rendered as a button that did nothing —
       listed as plain text instead, with a portal assertion
-- [ ] A telemetry-only selection now requires the hooks bundle it never applies — escalated, see
-      Open Questions
+- [x] A telemetry-only selection now requires the hooks bundle it never applies — user chose to
+      stop recording the bundle; test-cli asserts `telemetry enable` records none and a legacy
+      telemetry-only record reads as unselected
 - [x] Reconcile no longer ran the command-ownership check that `enablePackage --reconcile` ran —
       no change needed: the check could never fire (see Decision Log)
-- [ ] `coreHookBundle` reporting a required-only bundle as selected has no test — waits on the
-      telemetry hooks question, whose answer decides what that test asserts
+- [x] `coreHookBundle` reporting a required-only bundle as selected has no test — test-cli asserts
+      `selected: true` for a `telemetry` root and `false` for a legacy telemetry-only record
 - [x] The config panel doc tied "no row" to `selectable: false` instead of
       `presentation.visibility` — reworded
 - [x] The `PackageMutationError` comment left out the dependency-only refusal — added
@@ -533,6 +503,7 @@ see `## Review` → `### Verification`.
 - Validation pass 2 (fresh-context subagent): 3 fix, 1 escalate, 1 base (the same docs link).
 - Validation pass 3 (fresh-context subagent): 3 fix, 1 escalate (resolved from evidence, see
   Decision Log), 1 base (the same docs link).
+- After the 2026-10-27 decisions: `test-cli.sh` 476 passed, 0 failed.
 - Full gate after the user decision: `npm run check` 61/62 suites, the one failure being that base
   docs link.
 - Base failure: `docs-reference-check.mjs` reports `docs/internal/backlog-review.md:86`, a link to

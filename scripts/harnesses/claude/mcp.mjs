@@ -86,12 +86,13 @@ export function mcpRemove({ homePath, dryRun = false } = {}) {
 
 // Single-server add: shells to `claude mcp add` (the only way to register with Claude's own MCP
 // client state — there is no direct config file to write into, unlike Codex's TOML table). Thin
-// wrapper over the pure arg-construction/invocation in ./mcp-claude-cli.mjs; unchanged behavior
-// from scripts/cli/mcp.mjs's existing mcpAdd, ownership moved behind the contract.
+// wrapper over the pure arg-construction/invocation in ./mcp-claude-cli.mjs. A failing `claude mcp
+// add` returns ok:false with the CLI's exit status in `exitStatus`; callers decide whether to exit.
 export function mcpAddServer(spec, opts = {}) {
   const args = claudeMcpArgs({ scope: opts.scope || "user", transport: opts.transport || null }, spec);
   if (opts.dryRun) return { ok: true, changed: false, providerId: "claude", action: "mcp.addServer", paths: [], warnings: [`dry-run: claude ${args.join(" ")}`] };
-  runClaudeMcpAdd(args);
+  const run = runClaudeMcpAdd(args);
+  if (!run.ok) return { ok: false, changed: false, providerId: "claude", action: "mcp.addServer", paths: [], warnings: [run.message], exitStatus: run.status };
   return { ok: true, changed: true, providerId: "claude", action: "mcp.addServer", paths: [], warnings: [] };
 }
 

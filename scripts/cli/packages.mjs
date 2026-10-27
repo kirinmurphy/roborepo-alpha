@@ -493,7 +493,7 @@ function installMcpPreset(presetId) {
       console.log(`  ok: claude mcp ${spec.name} already present`);
     } else {
       const result = getHarnessProvider("claude").adapters.mcp.addServer(spec, { scope: "user", transport: null });
-      if (!result.ok) throw new Error(`mcp add failed for preset: ${presetId}`);
+      if (!result.ok) throw new Error(`mcp add failed for preset: ${presetId}${result.warnings.length ? ` (${result.warnings.join("; ")})` : ""}`);
       // The old subprocess call (`mcp add --builtin --only-claude`) never passed
       // --skip-claude-permission, so updateClaudePermission defaulted true -- preserve that grant.
       ensureClaudeMcpPermission(spec.name);
