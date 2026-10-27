@@ -32,7 +32,7 @@
       "folder": "active",
       "label": "Active",
       "tab": "primary",
-      "showsPriority": true,
+      "showsPriority": false,
       "worktreeBound": true,
       "actions": [
         { "command": "plan-execute", "label": "Continue", "description": "Resume implementation in this plan's worktree." },
@@ -46,7 +46,7 @@
       "folder": "review",
       "label": "Review",
       "tab": "primary",
-      "showsPriority": true,
+      "showsPriority": false,
       "worktreeBound": true,
       "actions": [
         { "command": "plan-review", "label": "Review", "description": "Recheck the work, fix what has a clear fix, and request your approval." },
@@ -78,7 +78,7 @@
       "folder": null,
       "label": "Unclassified",
       "tab": "overflow",
-      "showsPriority": true,
+      "showsPriority": false,
       "worktreeBound": false,
       "actions": []
     }

@@ -377,18 +377,18 @@ dialog#drawer::backdrop {
 }
 .plan-menu {
   display: grid;
-  gap: 6px;
+  gap: 0;
   min-width: 0;
   width: 100%;
   font-size: var(--text-xs);
 }
 .plan-menu-filename {
   border-top: 1px solid var(--line);
-  padding-top: 4px;
+  padding-top: 0;
 }
 .plan-menu-group {
   display: grid;
-  gap: 2px;
+  gap: 0;
   width: 100%;
 }
 .drawer-warnings-section {
@@ -505,3 +505,17 @@ dialog#drawer::backdrop {
  * from the progress that follows, while the ring and its percent stay at the tighter gap. */
 .plan-merged-badge { background: var(--merged); margin-right: 5px; }
 .plan-complete-badge[hidden], .plan-merged-badge[hidden] { display: none; }
+
+.plan-dependencies {
+  color: var(--dim);
+  font-size: var(--text-xs);
+}
+.plan-dependencies button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

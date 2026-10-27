@@ -53,6 +53,7 @@
             icon="copy"
             aria-label="Plan actions"
           ></portal-menu-button>
+          <span id="drawer-dependencies" hidden></span>
         </div>
         <section
           class="drawer-warnings-section drawer-blockers-section"
@@ -179,8 +180,12 @@
     <template id="tpl-blocker-unresolved">
       <span class="blockers-popover-item blockers-popover-item-unresolved" data-slot="title"></span>
     </template>
+    <template id="tpl-plan-dependencies">
+      <span class="plan-dependencies">depends on <span data-slot="dependencies"></span></span>
+    </template>
     <template id="tpl-menu-item">
       <button type="button" class="menu-button-item">
+        <portal-icon name="copy" size="sm" aria-hidden="true"></portal-icon>
         <span data-slot="label"></span>
       </button>
     </template>

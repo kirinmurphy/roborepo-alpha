@@ -15,6 +15,7 @@ import { LIFECYCLES, PLAN_SUITE_COMMANDS, lifecycleFromPath } from "../../module
 import { TRANSITION_RULES } from "../../modules/plan-suite/transition-rules.mjs";
 
 const manifest = loadLifecycleManifest();
+assert.deepEqual(LIFECYCLE_MODEL.states.filter((state) => state.showsPriority).map((state) => state.id), ["backlog", "ready"], "priority only applies before implementation starts");
 
 // The lifecycle itself.
 assert.deepEqual(LIFECYCLE_MODEL.stateIds, ["backlog", "ready", "active", "review", "completed", "archived", "unclassified"]);

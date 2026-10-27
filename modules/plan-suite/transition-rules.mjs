@@ -27,7 +27,9 @@ export const TRANSITION_RULES = {
     requires: ({ worktree }) => (worktree ? null : "A worktree name is required (--worktree <name>)."),
     // An active plan may be pointed at another worktree, for example when the first one was lost.
     reassigns: true,
-    prepare: ({ content, options }) => ({ content: writeFrontmatterField(content, "worktree", options.worktree) }),
+    prepare: ({ content, options }) => ({
+      content: writeFrontmatterField(writeFrontmatterField(content, "worktree", options.worktree), "priority", "none"),
+    }),
     bodyUnchanged: true,
     message: (name, { worktree }) => `Start plan ${name} in worktree ${worktree}`,
   },
@@ -41,6 +43,7 @@ export const TRANSITION_RULES = {
     message: (name) => `Submit plan ${name} for review`,
   },
   reopen: {
+    prepare: ({ content }) => ({ content: writeFrontmatterField(content, "priority", "none") }),
     bodyUnchanged: true,
     message: (name) => `Reopen plan ${name} for implementation`,
   },
