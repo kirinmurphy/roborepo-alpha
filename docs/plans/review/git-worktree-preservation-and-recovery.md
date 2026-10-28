@@ -1,7 +1,7 @@
 ---
 id: 4xc0gjuw
 priority: high
-next_action: Merge the approved implementation through the pull request, then run /plan-close.
+next_action: Resolve the late base-ref race and investigate the reported unexpected archive action before renewed human approval.
 blocked_by: []
 depends_on: []
 related: ["hr78g4sj", "b2sgiejd", "a7bslb00", "gqzjlzgx"]
@@ -530,6 +530,11 @@ blocking this plan's approval or closure. This deferral does not establish Windo
 
 ### Findings
 
+- [ ] Automatic dirty cleanup can remove a checkout when the base ref moves after the early
+  base check but during the final server survey; recheck assessed base immediately before removal.
+- [ ] User reported one Delete click, an ignored-path refusal, then disappearance. The original
+  ledger records archive removal, but the exact interaction is unexplained; isolated trusted-click
+  replay refuses Delete and retains the checkout. Preserve this as an unresolved investigation.
 - [x] Snapshot symlink targets were decoded as UTF-8 during capture/restore, losing raw target bytes;
   Buffer capture/restore and exact non-UTF-8 regression fixed in review (`fd9b3ce9`).
 - [x] Repository removal dialog ignored authoritative preview preservation and remaining paths;
@@ -609,7 +614,7 @@ blocking this plan's approval or closure. This deferral does not establish Windo
 
 ### Result
 
-- Status: complete
+- Status: pending
 - Reviewed implementation commit: fd9b3ce9598a13c29343fd5585a10d55d1144ce3
 - Base commit: 6eba62ad78ad37d0e3a62230869281378919cc04
 
