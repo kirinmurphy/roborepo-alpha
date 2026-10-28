@@ -55,6 +55,12 @@ export function createWorktreeRemoveDialog({ onRemoved }) {
       const openingTarget = target;
       api.previewWorktreeArchive(target).then((preview) => {
         if (target !== openingTarget) return;
+        slot("status").textContent = [
+          removalStatus(checkout),
+          `Local preservation: ${preview?.preservation || "unknown"}.`,
+          preview?.remainingPaths?.length ? `Remaining paths: ${preview.remainingPaths.join(", ")}` : "",
+          preview?.reason || "",
+        ].filter(Boolean).join(" ");
         archiveConfirm.hidden = !preview?.eligible;
         archiveConfirm.disabled = false;
         if (!preview?.eligible) {

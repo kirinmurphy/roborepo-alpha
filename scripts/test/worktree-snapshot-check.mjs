@@ -48,6 +48,8 @@ try {
   write(work, "valuable/secret", "private bytes\n"); write(work, "node_modules/disposable", "excluded\n");
   fs.mkdirSync(path.join(work, "empty"));
   fs.symlinkSync("/outside/target", path.join(work, "link"));
+  const rawLinkTarget = Buffer.from([0x66, 0x80]);
+  fs.symlinkSync(rawLinkTarget, path.join(work, "raw-link"));
   write(work, "executable", "#!/bin/sh\nexit 1\n"); fs.chmodSync(path.join(work, "executable"), 0o755);
   const status = git(work, "status", "--porcelain");
   const objects = git(work, "count-objects", "-v");
@@ -114,6 +116,7 @@ try {
   assert.deepEqual(fs.readFileSync(path.join(destination, "large-binary")), Buffer.alloc(2 * 1024 * 1024, 0xff));
   assert.equal(fs.readFileSync(path.join(destination, "valuable/secret"), "utf8"), "private bytes\n");
   assert.equal(fs.readlinkSync(path.join(destination, "link")), "/outside/target");
+  assert.deepEqual(fs.readlinkSync(path.join(destination, "raw-link"), { encoding: "buffer" }), rawLinkTarget);
   assert.equal(fs.statSync(path.join(destination, "executable")).mode & 0o111, 0o111);
   assert.equal(fs.existsSync(path.join(destination, "node_modules")), false);
   assert.equal((await restoreWorktreeSnapshot(main, snapshot.id, destination, { apply: true })).ok, false);

@@ -851,7 +851,7 @@ test.describe("repository-first portal Home", () => {
     const archives = [];
     await page.route("**/api/repositories/*/worktrees/archive-remove", async (route) => {
       const request = route.request().postDataJSON();
-      if (!request.apply) { await route.fulfill({ json: { eligible: true, action: "kept" } }); return; }
+      if (!request.apply) { await route.fulfill({ json: { eligible: true, action: "kept", preservation: "remaining", remainingPaths: ["notes/local.txt"], reason: "local layers not absorbed within assessed history" } }); return; }
       archives.push(request);
       await route.fulfill({ json: { action: "removed", snapshotRef: "refs/roborepo/worktree-archives/fixture", restoreCommand: "roborepo git worktrees restore fixture --destination <new-path> --apply" } });
     });
@@ -930,6 +930,8 @@ test.describe("repository-first portal Home", () => {
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText("its local branch, feature/stale.");
     await expect(dialog).toContainText("It has 3 commits that were never merged. A backup is kept so you can bring them back.");
+    await expect(dialog).toContainText("Local preservation: remaining.");
+    await expect(dialog).toContainText("Remaining paths: notes/local.txt");
     // The archive ref and restore commands sit behind Details, out of the way until asked for.
     const restore = dialog.locator("[data-slot=restore]");
     await expect(restore).toBeHidden();

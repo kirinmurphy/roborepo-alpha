@@ -57,7 +57,7 @@ export async function inventoryWorktree(cwd, { git = (args, options) => runGitPr
     }
     if (!stat.isFile() && !stat.isSymbolicLink()) throw new Error(`unsupported special file: ${relative}`);
     if (stat.isFile() && stat.size > GIT_MAX_BINARY_BUFFER) throw new Error(`file exceeds 64 MiB snapshot limit: ${relative}`);
-    const bytes = stat.isSymbolicLink() ? Buffer.from(fs.readlinkSync(absolute)) : fs.readFileSync(absolute);
+    const bytes = stat.isSymbolicLink() ? fs.readlinkSync(absolute, { encoding: "buffer" }) : fs.readFileSync(absolute);
     entries.push({ path: relative, mode: stat.isSymbolicLink() ? "120000" : stat.mode & 0o111 ? "100755" : "100644", layer: isTracked ? "tracked" : isIgnored ? "ignored" : "untracked", checksum: checksum(bytes), bytes });
   };
   for (const file of fs.readdirSync(cwd).sort()) walk(file);
@@ -158,7 +158,7 @@ export async function restoreWorktreeSnapshot(cwd, id, destination, { apply = fa
     for (const entry of manifest.entries.filter((entry) => entry.mode === "120000")) {
       const file = path.join(target, entry.path);
       fs.mkdirSync(path.dirname(file), { recursive: true });
-      fs.symlinkSync(blobs.get(entry.oid).toString(), file);
+      fs.symlinkSync(blobs.get(entry.oid), file);
     }
     const git = (args, options) => runGitProcess(target, args, options);
     required(await git(["read-tree", "--empty"]));
