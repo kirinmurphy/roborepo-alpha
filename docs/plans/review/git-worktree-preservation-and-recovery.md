@@ -1,11 +1,11 @@
 ---
 id: 4xc0gjuw
 priority: high
-next_action: Complete the implementation review, then request explicit human approval of the reviewed commit.
+next_action: Await explicit human approval of reviewed implementation fd9b3ce9, then merge through the pull request and run /plan-close.
 blocked_by: []
 depends_on: []
 related: ["hr78g4sj", "b2sgiejd", "a7bslb00", "gqzjlzgx"]
-reviewed_commit: 1f4f3dbdac86a02781fe595ec8ae744162031faa
+reviewed_commit: fd9b3ce9598a13c29343fd5585a10d55d1144ce3
 worktree: git-worktree-preservation-and-recovery
 ---
 
@@ -530,10 +530,10 @@ blocking this plan's approval or closure. This deferral does not establish Windo
 
 ### Findings
 
-- [ ] Snapshot symlink targets are decoded as UTF-8 during capture/restore, losing raw target bytes;
-  preserve Buffer targets and assert an exact non-UTF-8 round trip.
-- [ ] Repository removal dialog ignores authoritative preview preservation and remaining paths;
-  render that assessment and add browser assertions.
+- [x] Snapshot symlink targets were decoded as UTF-8 during capture/restore, losing raw target bytes;
+  Buffer capture/restore and exact non-UTF-8 regression fixed in review (`fd9b3ce9`).
+- [x] Repository removal dialog ignored authoritative preview preservation and remaining paths;
+  render that assessment and assert visible fields — fixed in review (`fd9b3ce9`).
 - [x] Conflict comparisons returned remaining — track conflicts and require unknown when no
   coherent candidate proves preservation; add a real-Git regression.
 - [x] Recorded doctor failure became stale after incoming main synchronization — refresh the
@@ -549,6 +549,34 @@ blocking this plan's approval or closure. This deferral does not establish Windo
 
 ### Verification
 
+- Final human-review gate at `fd9b3ce9598a13c29343fd5585a10d55d1144ce3`:
+  `npm run check` passed outside the sandbox. Doctor: 106 checks; CLI: 464 passed, zero failed;
+  CI behavior suites: 63/63; installer collision and package installation checks passed;
+  all four Docker clean-machine suites passed; Playwright: 151/151. PowerShell installer parity
+  was visibly skipped because `pwsh` is unavailable; native Windows checks are deferred as
+  explicitly directed above. This supersedes the historical partial-gate evidence below.
+- Base synchronization: `bdce97b091020133fa77541330155b19387adcb5` merged
+  `6eba62ad78ad37d0e3a62230869281378919cc04` without conflicts. Current base
+  `d148883dc2f2446ef2f1cab5b36b46b609026c54` differs only by the requested Windows-plan TODO;
+  an executed diff outside `docs/plans/` is empty. No current base failures were observed in
+  the passing feature gate.
+- October 27 human-review Validator pass 1: two fix findings above; no escalations. Pass 2:
+  clean after `fd9b3ce9`; independently asserted raw symlink bytes `6680` survive capture/restore.
+- Review regressions failed before the fixes: snapshot restore produced `66efbfbd` instead of
+  `6680`; the browser could not find the assessed preservation state. After the fixes,
+  `node scripts/test/worktree-snapshot-check.mjs` and
+  `npm run test:portal-ui -- --grep 'worktree rows show their state'` both passed.
+- `node --check modules/repositories/worktree-snapshot.mjs`,
+  `node --check portal/home/worktree-dialogs.js`, `git diff --check`,
+  `bin/roborepo skill render-commands --check` (11 wrappers), and
+  `bin/roborepo skill triggers --check` (9 fixtures) passed.
+- Windows transfer: primary commit `d148883d` adds the native restore TODO to [[l1mz96d9]];
+  `bin/roborepo plans validate l1mz96d9 --json` reports no findings and
+  `node scripts/test/docs-reference-check.mjs` passed. User direction in this review explicitly
+  requested the transfer and deferral; no Windows behavior was executed or confirmed.
+- The first full-gate attempt was blocked by sandbox localhost binding (`EPERM`, three CLI
+  checks failed). The successful rerun above resolves that environment blocker; the blocked
+  attempt is not a product defect or a passing gate.
 - Validation pass 3 at `1fde0cff` (fresh-context subagent): no additional implementation or prose
   findings. Reviewed the full diff, all safety/acceptance paths, regression evidence, shared
   consumers, code-style/JavaScript/support constraints, and technical-writing rules.
@@ -579,7 +607,49 @@ blocking this plan's approval or closure. This deferral does not establish Windo
 - Binary regression: a 2 MiB asset exposed the text executor's small output bound. Binary reads
   now have a separate 64 MiB bound; larger files refuse with their path before capture.
 
-## Implementation handoff
+### Result
+
+- Status: complete
+- Reviewed implementation commit: fd9b3ce9598a13c29343fd5585a10d55d1144ce3
+- Base commit: 6eba62ad78ad37d0e3a62230869281378919cc04
+
+### Approval
+
+- Decision: requested
+
+### Acceptance evidence
+
+The review checked these acceptance paths against the implementation and disposable fixtures.
+The final gate result below determines which checks executed successfully in this review.
+
+| Acceptance scenarios | Implementation and asserted evidence |
+| --- | --- |
+| Squash/cherry-pick and redundant local edits | `worktree-landed.mjs` and `worktree-preservation.mjs`; `worktree-lifecycle-check.mjs` proves squash/cherry-pick landing; `worktree-snapshot-check.mjs` proves redundant dirty cleanup with a verified restorable snapshot. |
+| Plan lifecycle rename with redundant evidence | Preservation's identity mapping; the snapshot suite's `plan-move` fixture compares review/completed copies and proves preservation. |
+| Unique/unknown work stays; archive remains explicit | Cleanup requires `preserved` for automatic removal; snapshot fixtures assert unique staged versions remain and explicit CLI/portal archive requests agree. |
+| Distinct staged/unstaged versions, untracked files | Snapshot manifest and raw filesystem/index restoration; round-trip assertions compare both versions and remaining files. |
+| Deletion, rename, modes, binary data, later base changes | Coherent synthetic-tree comparisons; snapshot shape fixtures and lifecycle historical landing assertions. |
+| Valuable ignored content and unsupported entries | Raw inventory captures ignored payloads and refuses unsupported paths/index/configuration; snapshot assertions recover ignored bytes and refuse unsafe shapes. |
+| Concurrent changes invalidate removal | Inventory fingerprints and final tip/base/configuration checks; snapshot regression rejects a changed expected fingerprint without removal. |
+| Moved/occupied branch and partial removal | Expected-tip ref deletion and occupancy checks; snapshot fixtures assert moved/occupied branches survive and removal failures retain checkout and archive. |
+| Crash/retry and durable recovery | Git-object archive refs and retry transaction; snapshot fixtures remove state ledger, run garbage collection, restore, and retry completed steps idempotently. |
+| Main/current/locked/submodule/server guards | Shared `worktree-guards.mjs`; lifecycle suite asserts guard refusals and server handling. |
+| Archive never grants approval, landing, or closure | Closure's approval/landing gates remain separate; `plan-close-integration-check.mjs` exercises those refusals. |
+| Dirty or stale pre-merge readiness | `mergeReadiness` checks committed packet, clean state, approval, base, tasks and blockers; `plan-landed-recovery-check.mjs` asserts readiness/refusal paths. |
+| Post-merge primary-only recovery | Shared `verifiedLandedRecovery`; recovery suite asserts committed primary authority, matching CLI/portal readers, unchanged old worktree, and integration. |
+| CLI/portal archive parity and restore instructions | Shared cleanup transaction; snapshot suite compares previews; browser test asserts archive confirmation and visible restore command. |
+| Warned Delete keeps its discard contract | Existing boolean consent remains separate; lifecycle and browser tests assert loss warning, consent payload, and committed-tip backup wording. |
+| Dirty automatic cleanup without writer-shutdown proof | Preserved-state proof plus verified snapshot and final guards; redundant fixture removes without an extra shutdown attestation. The documented external-writer race remains accepted. |
+| Recovery cannot change requirements or conflict with copies | Evidence-only comparison and fresh Git proof; recovery suite rejects changed requirements, independent edits, and later implementation commits. |
+| Lost ledger, GC, and legacy refs | Git refs own discoverability; snapshot restore survives ledger loss and GC, while legacy entries retain `committed-tip` kind. |
+| Hostile restore paths, symlink parents, existing target, filters/hooks | Hardened Git seam and path checks; snapshot suite asserts refusal without unsafe materialization or configured-filter execution; raw symlink target round trip is covered by the review regression. |
+
+Documentation of record was updated in the repositories, CLI, Plans portal and lifecycle user
+references, CLI/Plans internal references, and canonical plan-close, plan-review and schema
+instructions. The independent review checked those against the shared implementation. Native
+Windows results remain explicitly deferred to [[l1mz96d9]].
+
+## Implementation handoff (historical)
 
 - Mode: start; worktree administrative name: `git-worktree-preservation-and-recovery`.
 - Start validator: APPROVED without correction; start/base commit: `a68a9cc30aa00869403db47aa907fed50f8bf63a`.
