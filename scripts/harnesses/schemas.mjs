@@ -125,6 +125,8 @@ export function validateHarnessState(state) {
  * @property {string[]} warnings
  * @property {"unsupported"|"degraded"} [status] Present only when the operation could not fully
  *   complete for this provider — e.g. Codex has no direct equivalent for a Claude-only permission.
+ * @property {number} [exitStatus] On `ok: false` from a method that shells out (Claude's
+ *   mcp.addServer), the external CLI's exit status, for a terminal caller that exits with it.
  */
 
 export function validateAdapterActionResult(result) {

@@ -1,7 +1,7 @@
 ---
 id: o9zwxuav
 priority: high
-next_action: Run validation pass 4 over the telemetry and MCP fixes, then the completion preflight and the submit transition.
+next_action: Answer the Open Question on older bundle records with telemetry on, apply it, then run validation pass 5, the completion preflight, and the submit transition.
 blocked_by: []
 depends_on: ["bysyzl1e"]
 related: ["package-registry-live-state-reconciliation", "ejsc769o", "age4cm7r", "user-managed-packages-and-add-workflows"]
@@ -368,7 +368,34 @@ see `## Review` → `### Verification`.
 
 ## Open Questions
 
-None open. Both earlier questions were answered by the user on 2026-10-27; see Decision Log.
+The two earlier questions were answered by the user on 2026-10-27; see Decision Log.
+
+### An older bundle record with telemetry on loses the user's own hooks selection
+
+- **Evidence:** the default install selects only `base`, so `hooks` in a record without
+  `schemaVersion` was the user's choice. On `main`, enabling the telemetry package also recorded
+  `telemetry`, giving records like `{"selected":["base","hooks","telemetry"]}`. The legacy read drops
+  `hooks` from the roots because `telemetry` requires it. Turning telemetry off then leaves `hooks`
+  unselected: its files stay, but `bundle check` and hook readiness stop expecting core hooks. On
+  `main`, `hooks` stays selected. Reproduced in a scratch home by validation pass 4. The plan's §2
+  note that the lost "also chose it directly" signal matters only for workspace packages is wrong
+  for bundles.
+- **Options:**
+  1. Drop a `telemetry` root when reading an older record. Its bundle has no rows, so nothing is
+     lost, and `hooks` stays a root because nothing requires it any more. This replaces the
+     2026-10-27 "listed without its requirements" rule, since it covers the telemetry-only record
+     too. Pros: keeps every user's `hooks` choice and is the smallest change. Cons: a user who ran
+     `bundle apply telemetry` on `main` no longer sees `telemetry` as selected. Nothing changes on
+     disk.
+  2. For bundles only, keep every listed bundle as a root when reading an older record. Pros: no
+     telemetry special case. Cons: bundles stop following the packages' "older records drop required
+     ids" user decision, and `hooks` stays applied after `bundle remove telemetry` on those records.
+  3. Accept the cost and correct §2. Pros: no code change. Cons: users who chose hooks can quietly
+     stop being checked for them.
+- **Recommendation:** option 1.
+- **Why blocked:** it chooses between real designs, and option 2 would reverse part of a user
+  decision for bundles.
+- **Blocks:** submission to review.
 
 ## Decision Log
 
@@ -496,6 +523,9 @@ None open. Both earlier questions were answered by the user on 2026-10-27; see D
 - [x] The config panel doc tied "no row" to `selectable: false` instead of
       `presentation.visibility` — reworded
 - [x] The `PackageMutationError` comment left out the dependency-only refusal — added
+- [x] The `AdapterActionResult` typedef did not document the new `exitStatus` field — added
+- [ ] An older bundle record with telemetry on loses the user's own hooks selection — escalated,
+      see Open Questions
 
 ### Verification
 
@@ -504,6 +534,13 @@ None open. Both earlier questions were answered by the user on 2026-10-27; see D
 - Validation pass 3 (fresh-context subagent): 3 fix, 1 escalate (resolved from evidence, see
   Decision Log), 1 base (the same docs link).
 - After the 2026-10-27 decisions: `test-cli.sh` 476 passed, 0 failed.
+- Merged `main` at 8cb1cf20, resolving this plan's file (`main`'s copy matched the start
+  transition, so the worktree copy was kept) and the Codex sandbox plan's ready/review rename (kept
+  `main`'s `review/` file). `test-cli.sh` 476 passed on the merged tree. `npm run check` 61/62 on
+  the merged tree; the failure is `docs-reference-check` on `backlog-review.md:86`, which now names
+  the Codex sandbox plan's old `ready/` path. It fails the same way at the merge base, so it is a
+  base failure.
+- Validation pass 4 (fresh-context subagent): 1 fix, 1 escalate, 1 base (that docs link).
 - Full gate after the user decision: `npm run check` 61/62 suites, the one failure being that base
   docs link.
 - Base failure: `docs-reference-check.mjs` reports `docs/internal/backlog-review.md:86`, a link to
