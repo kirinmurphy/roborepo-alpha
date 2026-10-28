@@ -171,6 +171,12 @@ added without duplicating runner setup.
       dispatch and deferred this check to Windows coverage because no `pwsh` was available.
 - [ ] Add observable assertions for every expected-unsupported Windows behavior, including the
       current Runtime discovery capability message and source-path rejection behavior.
+- [ ] Verify native Windows worktree snapshot capture and restore for [[4xc0gjuw]]: restore
+      distinct staged/unstaged bytes, untracked and valuable ignored files, symlinks, and
+      executable modes in disposable repositories. Assert exact recovery where supported and
+      explicit safe refusal where Windows capabilities prevent it; record results in the ledger.
+      Deferred here by the user during that plan's October 27 review; macOS/Linux results do not
+      establish native Windows support.
 
 ### Phase 3 — Gap resolution and follow-up stories
 

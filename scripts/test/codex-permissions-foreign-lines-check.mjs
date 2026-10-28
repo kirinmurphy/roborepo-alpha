@@ -80,4 +80,12 @@ assert.equal(render(mixedOut), mixedOut, "the mixed case is stable on a second r
 const clean = render(`model = "x"\n${between(rendered)}# END GENERATED AGENT PERMISSIONS\n`);
 assert.equal(before(clean), 'model = "x"\n', "a clean block gains nothing above it");
 
+for (const bucket of ["allow", "deny"]) {
+  const renderProfile = (text) => renderCodexConfig(text, resolveBehaviors(manifest, { "write-files": bucket }), commands, "config.toml");
+  const output = renderProfile(mixed);
+  assert.match(output, /"~\/\.ssh\/\*\*" = "deny"/);
+  assert.match(after(output), /\[notice\.model_migrations\]/);
+  assert.match(before(renderProfile(realLayout)), /^notify =/m);
+  assert.equal(renderProfile(output), output);
+}
 console.log("codex-permissions-foreign-lines ok");

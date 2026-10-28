@@ -1,7 +1,7 @@
 ---
 id: 4zyo2woj
 priority: high
-next_action: Resolve supported Codex runtimes and effective permission layers, then add synthetic credential projection and enforcement fixtures before implementing native denial in writable and read-only profiles.
+next_action: Run /plan-review to review the post-approval changes and renew human approval, then rerun /plan-close with a passing completion gate. The branch landed; approval is stale and the aggregate gate timed out at portal startup although its focused retry passed.
 blocked_by: []
 depends_on: ["hr78g4sj"]
 related: ["8bjltk2n", "wjlt1zvf", "ia1q1z9", "permva27", "permissions-ui-revamp", "codex-cmux-hook-trust-review", "46qth5z8", "harness-capability-derived-resource-targeting", "7k3m9qd", "o9zwxuav"]
@@ -272,39 +272,39 @@ cannot satisfy Part 3's source-staging prerequisite by inference.
       review confirmed squash `b79bf35d` is an ancestor of main; current provider routing, relocated
       sources, ownership/trust safeguards, logging, and foreign-config preservation were checked.
       Five focused checks passed; see Preparation verification below.
-- [ ] Resolve desktop and CLI executables through `scripts/harnesses/discovery.mjs`
+- [x] Resolve desktop and CLI executables through `scripts/harnesses/discovery.mjs`
       (`selectedHarnessExecutable`) and their provider detection data. Record versions and effective
       permission layers separately for each claimed runtime; do not add a hardcoded binary picker.
       Retain historical fixture results as scoped evidence, not certification of a newer runtime.
-- [ ] Extend fixtures across every `read-secrets` pattern, template exception, deep/new paths,
+- [x] Extend fixtures across every `read-secrets` pattern, template exception, deep/new paths,
       links, and supported command/structured-read/nested-tool surface. Use synthetic files only.
-- [ ] Establish platform-specific glob behavior before claiming Linux or Windows enforcement;
+- [x] Establish platform-specific glob behavior before claiming Linux or Windows enforcement;
       list unsupported or unverified surfaces explicitly.
 
 ### Implement native credential protection
 
-- [ ] Add dedicated Codex native-projection and enforcement parity checks, with explicit unsupported
+- [x] Add dedicated Codex native-projection and enforcement parity checks, with explicit unsupported
       runtime/tool states. Preserve Gemini and the generic capability contract.
-- [ ] Add focused native-projection fixtures before implementation; assert missing denies fail.
+- [x] Add focused native-projection fixtures before implementation; assert missing denies fail.
       Cover all 15 manifest patterns, resolved deny/allow/ask intent, both write modes, TOML
       escaping, home and absolute anchors, templates, workspace roots, and idempotence.
       Extend `scripts/test/codex-permissions-foreign-lines-check.mjs` for both resulting profiles.
-- [ ] Add a synthetic native enforcement runner that consumes provider-rendered configuration,
+- [x] Add a synthetic native enforcement runner that consumes provider-rendered configuration,
       asserts an unrestricted positive control and sandboxed negative controls, and fails when
       denial is missing. A missing binary, unsupported platform, or unusable nested sandbox must
       report unavailable instead of passing. Record supported runtime/platform coverage separately.
-- [ ] Implement native filesystem denial from `read-secrets` in both writable and read-only Codex
+- [x] Implement native filesystem denial from `read-secrets` in both writable and read-only Codex
       profiles. Preserve resolved intent, workspace roots, foreign config, and safe reapply; leave
       command classification in `permission-check.mjs` unchanged.
-- [ ] Register deterministic projection/parity checks in `scripts/test/check-groups.json` using
+- [x] Register deterministic projection/parity checks in `scripts/test/check-groups.json` using
       existing group ownership. Missing or overstated coverage must fail; explicitly unsupported
       providers remain loadable without advertising protection. Keep native enforcement verification
       explicit so a skipped local probe cannot satisfy a claimed supported-runtime gate.
-- [ ] Pass any required target-home context through the existing live/build provider-render path,
+- [x] Pass any required target-home context through the existing live/build provider-render path,
       and extend live-render, packed-install, and clean-machine permission fixtures for target-home
       isolation, read-only denial, update/reapply, and preservation of unrelated settings.
-- [ ] Update every document listed under Documentation impact with the measured coverage and limits.
-- [ ] Verify live against the shipped Codex binary, since shell quoting and expansion only show up
+- [x] Update every document listed under Documentation impact with the measured coverage and limits.
+- [x] Verify live against the shipped Codex binary, since shell quoting and expansion only show up
       when a real shell runs the command.
 
 
@@ -358,6 +358,14 @@ cannot satisfy Part 3's source-staging prerequisite by inference.
 
 ## Decision Log
 
+- October 27 human review: the user explicitly selected "Accept documented coverage limits for
+  this delivery (Recommended)" for desktop/product file tools, browser/MCP/escalated execution,
+  and Linux/Windows. Reclassified the three unchecked Not tested tasks as coverage limitations
+  below because verification of those surfaces is not required for this delivery. None is marked
+  tested or protected. Future use of any unverified surface for protected source staging still
+  requires independent boundary verification. This decision accepts coverage limits; it does
+  not approve the implementation commit.
+
 - October 22: split the Codex boundary work from the Claude companion, retaining this id because
   the landed write-scope plan references its credential-read gap.
 - October 23: user selected native credential read-and-write denial and dedicated provider parity.
@@ -381,6 +389,23 @@ cannot satisfy Part 3's source-staging prerequisite by inference.
   `60d2ba76`, rechecked its source/headless contracts and five focused checks, and cleared the
   implementation blocker. Part 1's separate lifecycle closure remains outstanding. No credential
   enforcement implementation or new runtime certification is inferred from its merge.
+
+### Implementation decisions
+
+- Preserve portable runtime `~/` anchors rather than materialize homes during live apply. The
+  native temporary-home assertion verified support; one projection serves generated, packed and
+  live paths without ambient-home coupling or a new render contract.
+- Keep read-only network disabled, matching the former built-in `:read-only` selection. The new
+  named profile adds denial without writable roots or a new network grant; the writable profile
+  retains its resolved network behavior.
+- Use provider-owned credential translation called by the existing pure render core, with no
+  universal permissions method. The alternative was generic provider enforcement API expansion,
+  which the approved scope explicitly excludes.
+- Keep native enforcement explicit rather than an availability-skipping CI check. Its unavailable
+  exit is `2`; deterministic CI checks cover projection and prevent broader tool/platform claims.
+  The test-orphan exemption records why the native runner is deliberately outside the CI group.
+- Preserve the existing documentation shapes and owner map. Updated the five docs of record and
+  repaired the related backlog-review link after the lifecycle move.
 
 ## Preparation verification
 
@@ -408,3 +433,239 @@ No unresolved policy choice or implementation dependency blocker remains. Actual
 coverage is implementation verification; unsupported surfaces must be explicit, and Part 3 cannot
 use source staging until its native boundary is established. Historical runtime probes above were
 not rerun during preparation.
+
+
+## Execution evidence
+
+October 26 implementation on `codex/credential-protection`, based on main `9bd17f36`.
+Start transition `602a1bc4` was APPROVED without correction passes. The authoritative worktree is
+Git administrative worktree `credential-protection`; this document contains no machine-local path.
+
+- Discovery selected the same executable for CLI and desktop: Codex CLI `0.163.0-alpha.11.2`
+  bundled with ChatGPT on macOS. This records executable identity, not desktop tool inheritance.
+- The read-only native `config/read` query returned project, user and system layers, effective
+  `on-request`, `managed-workspace`, `sandbox_mode: null`, network disabled and no filesystem
+  entries. `configRequirements/read` returned `requirements: null`. The installed home was not
+  changed. The query timed out inside the chat sandbox and succeeded after an authorized
+  unrestricted launch without a model call.
+- A standalone temporary-home native probe asserted that `~/.ssh/**` resolves against the runtime
+  home. Thus neither build nor live rendering needs home expansion or a new target-home option.
+- The deterministic projection test initially failed on the missing `~/.ssh/**` entry before the
+  implementation. It now passes all 15 patterns across nine write/credential-intent combinations,
+  escaping, roots, templates, idempotence, unknown anchors and explicit coverage metadata.
+- Native enforcement ran the provider-rendered config in fresh synthetic homes with managed
+  requirements included. Both `managed-workspace` and `managed-read-only` passed 31 file cases:
+  all 15 independent patterns at shallow and ten-level paths, plus a symlink. Direct Node reads,
+  `cat`, shell, `xargs` and descendant Node reads were denied, as were writes. Public and template
+  reads passed; read-only public writes failed. Creating a directory and its new `.env` was also
+  tested in writable mode: directory allowed, credential write denied. The unrestricted control
+  passed, and removing denies made the same negative controls fail. No actual credentials were
+  accessed. The nested chat sandbox returned unavailable (`sandbox_apply: Operation not permitted`);
+  the explicitly authorized host launch of the same runner passed with native commands sandboxed.
+- Coverage metadata is recorded in `scripts/test/fixtures/codex-credentials/coverage.json`.
+  Desktop sessions, product structured-read tools, browser, MCP and escalated processes remain
+  unverified; Linux and Windows remain unverified. These do not inherit certification from the
+  native process checks. Part 3 must stage through a tested native command surface or separately
+  establish its chosen surface's boundary.
+- Foreign-line, home-path, Gemini, root-config-write, hook-composition and live-render checks passed.
+  Packed install passed with portable home anchors, read-only denial and idempotent reapply into a
+  different temporary home. Strict clean-machine permission checks also passed. Final gate results
+  and the independently reproduced base failure are recorded under Review below.
+- The started verification environment is the native synthetic sandbox runner, plus disposable
+  packed-install/container fixtures. This configuration change has no persistent server or
+  shareable URL; installed live settings were not rewritten.
+
+## Coverage limitations accepted for this delivery
+
+- Verify credential denial in a fresh desktop session and product structured-read tools after
+      applying the new profile. No disposable desktop session was configured; native subprocess
+      checks do not exercise desktop tool dispatch or inherited session policy.
+- Verify native enforcement on Linux and Windows before claiming either platform. No native
+      hosts for those platforms were used; the Linux container checks render/install behavior only.
+- Establish credential boundaries independently for browser, MCP and separately escalated
+      execution before using those surfaces for protected source staging. These tools were not
+      certified by the native subprocess runner and have separate execution boundaries.
+
+
+## Review
+
+### Findings
+
+- [x] Backlog audit linked this plan at its former active path after submission to review;
+      corrected `docs/internal/backlog-review.md:86` in `62777699`. Main's corresponding link
+      also named a missing ready path. The documentation reference check now passes.
+
+- [x] Missing-denies native control omitted `--include-managed-config` while the main probe
+      included it. Fixed: both runs now include managed policy; the same native matrix and
+      missing-denies mutation passed again after correction (`808681c7`).
+
+### Verification
+
+- Pass 1 (fresh-context validator at `db965d67`): one fix finding above. Projection, foreign-line,
+  live-render and whitespace checks independently passed. Documentation review found no violations
+  under technical-writing core, shapes, section guidance, representation, anti-patterns, review loop,
+  organization and supplied constraints. No renderer defect found; unverified surfaces were candid.
+- Full parity reached 57/61 deterministic suites; four browser suites could not import the absent
+  Playwright development dependency in the new worktree. Locked dependencies were installed from
+  the local npm cache with `npm ci --offline --no-audit --no-fund`; the rerun passed 61/61. This was
+  setup, not a base failure.
+- October 27 final gate: `npm run check` ran doctor (107 passed) and the main suite (463 passed,
+  1 failed). The failure at `scripts/test/cli-surface-integration-check.mjs:361` expected another
+  cached ahead repository after a single-repo refresh; the screen remained at Press Enter. A
+  separate validator executed the same check on main and reproduced the identical assertion,
+  classifying it as a base failure. The focused feature-worktree rerun passed. No unrelated fix
+  was made; the aggregate command is recorded as failed, not green.
+- Every remaining available parity component was executed separately after that early exit:
+  install collisions passed; deterministic CI suites passed 61/61; packed installation passed;
+  strict clean-machine base, installation, permissions and onboarding suites passed; portal UI
+  passed 141/141. Windows installer parity was unavailable because PowerShell was absent.
+- Final current-state checks passed: doctor (107 checks), credential projection (15 patterns,
+  nine combinations), `git diff --check`, and plan validation (zero blocking findings, three
+  advisory Not tested entries).
+- Pass 2 (fresh-context validator at `808681c7`): no fix or escalate findings. Reviewed the full
+  main-to-feature diff, acceptance criteria, renderer, controls, coverage records, installation,
+  docs of record and gate evidence; independently reran projection and whitespace checks. The
+  base test failure above is recorded separately and does not block submission. Implementation
+  is complete within the measured native macOS command surface; unverified surfaces remain
+  explicit under Not tested. No policy decisions or implementation tasks remain blocked.
+
+### Human-review verification — October 27
+
+- Synchronized main `7d417ddf70b3d2aa6cd75d0d6b8576cd7b40745f` into the feature branch as
+  `93d381987d9b01ddf999656e90ba3c125d27efd1`, with the user's explicit merge permission;
+  no conflicts occurred. The primary checkout's unrelated pending edits were not included.
+- Fresh-context Validator pass at `93d381987d9b01ddf999656e90ba3c125d27efd1`: clean,
+  no fix or escalate findings. Independently inspected requirements, changed code, fixtures,
+  installation, documentation, and coverage limitations; projection, foreign-line preservation,
+  live-render characterization and `git diff --check` passed independently.
+- Seven focused checks passed on the synchronized result: credential projection (all 15 patterns,
+  nine intent/write combinations), live render, foreign lines, home paths, Gemini adapter,
+  root-config write policy, and hook composition. `git diff --check` passed.
+- `node scripts/test/codex-credential-enforcement-check.mjs` returned unavailable inside the chat
+  sandbox (`sandbox_apply: Operation not permitted`). Its explicitly permitted host launch passed:
+  both profiles, 31 synthetic file cases each, unrestricted controls, missing-denies mutation,
+  public/template reads, write boundaries, links, deep paths and newly created credential paths.
+- The three Not tested entries remain limitations on coverage claims, not required manual
+  acceptance checks for the measured macOS native command surface. No protection claim is made
+  for desktop/product tools, browser, MCP, unrestricted execution, Linux or Windows.
+- First host `npm run check`: doctor passed 106 checks; main suite passed 464/464;
+  installation collisions passed; CI suites passed 60/61. The only failure was the selected
+  plan's stale lifecycle link, corrected in `62777699`; the failed documentation check then passed.
+  The canonical aggregate exited nonzero and was not reported green.
+- Components following that early exit were executed separately at `62777699` and passed:
+  `npm run test:package-install`, strict `test:clean-machine`, `test:clean-machine-install-sandbox`,
+  `test:clean-machine-permissions-sandbox`, `test:clean-machine-onboarding-sandbox`, and
+  `npm run test:portal-ui` (141/141). PowerShell is absent, so Windows installer parity is unavailable.
+- Main advanced to `977d29f04ab25f5191f21c832cb98709be99efae` during verification. Synchronized
+  it without conflicts as `85786aa84afd8f942f32e2550a5b57ad6e1d88e6`. Credential implementation,
+  native fixtures, coverage and generated configuration are byte-identical to the earlier result;
+  the passing native macOS evidence above is reused for those unchanged files.
+- Fresh-context Validator pass at `85786aa8` against `977d29f0`: clean. Independently passed
+  projection, foreign lines, live rendering, plan suite, lifecycle manifest, lifecycle transitions,
+  documentation references and whitespace checks. The link correction was also independently verified.
+- Final `npm run check` at `85786aa8` failed at doctor: the base branch's plan-execute skill has
+  a 503-line body, above its 500-line budget. `git diff main --` for that file is empty; main's
+  committed file is identical, confirming a base failure. Doctor otherwise passed 106 checks.
+  No unrelated skill edit was made. This is a base failure, not an implementation finding.
+- Main's subsequent `a68a9cc3` changes only another plan under `docs/plans/`; it changes no
+  implementation content relative to the synchronized base. Earlier component evidence is reused
+  for unchanged code; affected lifecycle checks passed independently as listed above.
+- `npm run test:portal-ui` against the newly synchronized base passed 146/146.
+- Code review and available verification are complete with the base failure above explicitly
+  retained. The approval check nevertheless reports review incomplete because all three unchecked
+  Not tested entries count as required manual checks. The earlier classification of these entries
+  as nonblocking limits was not accepted by that gate. No verification or human approval is inferred.
+  Ask the human whether to retain them as documented unverified coverage limits for this delivery
+  (with an explicit plan decision), or require their verification before approval. Do not check
+  them off without actual evidence.
+- Resumed after the user's explicit October 27 coverage decision recorded in the Decision Log.
+  Preserved all three limitations as unverified prose rather than checking off unperformed work.
+  Implementation and base content are unchanged from the verified result; earlier checks are
+  reused. No unresolved findings or required manual acceptance checks remain. Implementation
+  approval is requested separately for the exact reviewed commit below.
+
+### Result
+- Status: complete
+- Reviewed implementation commit: 81ae9e362000c1a48574b1aeceda4c2302b19570
+- Base commit: 977d29f04ab25f5191f21c832cb98709be99efae
+
+### Approval
+- Decision: approved
+- Reviewed implementation commit: 81ae9e362000c1a48574b1aeceda4c2302b19570
+- Confirmed by: human
+- Evidence: October 27, 2026, the user selected "Approve this implementation" in response to
+  the exact-commit approval question for this plan, including the accepted coverage limits and
+  recorded base-branch skill-size failure. Review freshness was rechecked before recording.
+
+## Verification
+
+### Closure attempt — October 27, 2026
+
+- Result: blocked; remains in review. No completion commit, server shutdown, or worktree cleanup.
+- Primary checkout: main at `6eba62ad78ad37d0e3a62230869281378919cc04`. The assigned worktree's
+  review document matched the primary document byte for byte before this attempt's evidence edits.
+- Plan validation: zero findings, zero blocking findings. No unchecked Not tested entries;
+  the previously accepted coverage limitations remain unverified and unchanged.
+- Seven focused checks passed: credential projection (15 patterns, nine intent/write combinations),
+  live rendering, foreign-line preservation, home paths, Gemini adapter, root-config write policy,
+  and hook composition. Whitespace validation passed.
+- Canonical `npm run check`: the sandboxed run failed with localhost `listen EPERM` restrictions.
+  The permitted host rerun passed doctor (106 checks), the main suite (464/464), installation
+  collisions, deterministic CI suites (61/61), packed installation, and all four strict
+  clean-machine suites. Windows installer parity was skipped because PowerShell is unavailable.
+  The aggregate exited 1 at portal UI startup: `error: timed out waiting for ready file`.
+  The runner waits 15 seconds for server readiness; the timeout's cause is unverified. No waiver
+  or aggregate pass is inferred from earlier successful components.
+- Focused `npm run test:portal-ui` host retry: passed 151/151. No code changes were needed.
+  This resolves verification of the UI assertions but does not change the aggregate exit status;
+  obtain a passing aggregate on the next review/close run or an explicit waiver of its failed
+  startup check. No unrelated startup behavior was changed during this credential-plan closure.
+- Native enforcement: the nested sandbox returned unavailable (`sandbox_apply: Operation not
+  permitted`). The permitted host launch passed with Codex `0.163.0-alpha.11.2` on macOS, fresh
+  synthetic configuration, and native sandbox commands/descendants: both profiles, 31 file cases
+  each, unrestricted controls, missing-denies mutation, public/template reads, write boundaries,
+  links, deep paths and newly created credential paths. No broader tool/platform claim is made.
+- Documentation impact: inspected all five named docs of record against credential projection,
+  profile rendering and coverage metadata; no unresolved required drift found. The control-panel
+  reference additionally documents that a missing Codex configuration skips profile rendering.
+- Approval: stale. Approved implementation `81ae9e362000c1a48574b1aeceda4c2302b19570` differs
+  from feature tip `f90412a258c6a1177ea33a6531581d53020f21db`. The canonical approval check
+  reports 28 changed paths outside plan documents. `/plan-review` must review the current result
+  and obtain renewed human approval; this attempt preserves the existing approval as historical evidence.
+- Landing: newly scanned by the canonical content-level check; the feature branch carried its own
+  work and is absorbed by the squash merge below. The first sandboxed scan was unavailable;
+  the permitted retry succeeded. Landing does not make the stale approval fresh.
+- Absorbing commit: 28932c1c85535759e8cf565ccdd096d6735e8946
+
+Changed paths reported by the approval check:
+
+```text
+docs/user/guides/plan/lifecycle/plan-suite.md
+docs/user/reference/config-control-panel.md
+docs/user/reference/plans-portal.md
+globals/packages/plan-suite/skills/plan-execute/SKILL.md
+globals/packages/plan-suite/skills/plan-execute/references/final-report.md
+manifests/platform/plan-lifecycle.json
+modules/plan-suite/transition-rules.mjs
+portal/plans/app.js
+portal/plans/elements/plan-card.js
+portal/plans/elements/plan-status.js
+portal/plans/lifecycle.js
+portal/plans/plan-actions.js
+portal/plans/plan-drawer-partial.html
+portal/plans/plan-drawer.css
+portal/plans/plan-drawer.js
+portal/plans/state.js
+portal/plans/templates.js
+portal/shared/base.css
+portal/shared/copy-button.js
+portal/shared/copy-menu.js
+portal/shared/widget-templates-partial.html
+scripts/test/plan-lifecycle-manifest-check.mjs
+scripts/test/plan-lifecycle-transitions-check.mjs
+scripts/test/plan-suite-skills-check.mjs
+scripts/test/plans-portal-state-check.mjs
+scripts/test/portal-ui/plans-status.spec.mjs
+scripts/test/portal-ui/portal-ui.spec.mjs
+scripts/test/portal-ui/repository-scope.spec.mjs
+```

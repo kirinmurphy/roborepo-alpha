@@ -188,3 +188,23 @@ tilde.
 - `portal/config/` — the config page HTML, CSS, and browser JavaScript.
 - `globals/packages/*/package.config.json` — built-in package configs.
 - workspace `packages/*/package.config.json` — imported or locally authored package configs.
+
+## Codex credential profiles
+
+The resolved `read-secrets` behavior supplies the 15 native deny patterns. Codex preserves `~/`
+anchors for runtime home resolution and translates Claude's absolute `//` anchor to `/`.
+Build and live rendering share this projection; neither embeds the builder's or a synthetic
+`/Users/you` home. A native probe with a temporary home verified portable home resolution, so
+live apply needs no separate target-home materialization option.
+
+Writable mode retains `managed-workspace`, its workspace roots, approval policy and network
+setting. With credential denial, read-only mode selects `managed-read-only`, extends `:read-only`,
+and adds filesystem denies without writable roots. Without credential denial it retains the
+built-in read-only profile. Reapply removes old owned profile tables, including previous denies,
+while preserving foreign root keys such as `notify` and unrelated tables.
+
+The rendered block describes unsupported prompting and unverified surfaces. It does not detect
+an older binary or override inherited policy. Native verification is explicit and exits unavailable
+when the runtime/platform cannot be tested. Linux/Windows global unbounded globs require separate
+platform characterization; there is no verified claim for those platforms. See
+[testing](testing.md#codex-credential-verification) before relying on a rendered boundary.
