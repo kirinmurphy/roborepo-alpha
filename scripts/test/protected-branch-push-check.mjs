@@ -115,6 +115,22 @@ const cases = [
   ["git push origin +:", "deny"],
   ["git push -o ci.skip origin feat", "allow"],
 ];
+// gh commands that skip git: denied in any flag position, since the prefix rules only see the
+// leading words. Other gh commands are left to the permission rules.
+cases.push(
+  ["gh -R owner/repo pr merge 12 --admin", "deny"],
+  ["gh --repo=owner/repo api -X PATCH repos/o/r/git/refs/heads/main", "deny"],
+  ["gh pr merge 12", "deny"],
+  ["git push origin feat && gh -R o/r pr merge 12", "deny"],
+  ["gh -R owner/repo pr create --head feat", "defer"],
+  ["gh pr view 12", "defer"],
+);
+// The hook's gh deny list must cover every command the manifest denies, in the flag-first form the
+// prefix rules miss.
+const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, "manifests/inventory/agent-permissions.json"), "utf8"));
+for (const command of manifest.behaviors.find((b) => b.id === "change-github-directly").commands) {
+  cases.push([`gh -R owner/repo ${command.slice(1).join(" ")} x`, "deny"]);
+}
 for (const [command, expected] of cases) {
   assert.equal(decide(command), expected, command);
 }

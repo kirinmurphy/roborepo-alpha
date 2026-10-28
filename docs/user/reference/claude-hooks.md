@@ -56,6 +56,35 @@ do not run in agent shells.
 A push from your own terminal is never blocked. Pair this with branch protection on the remote for
 a guard that does not depend on the local machine.
 
+## Opening Pull Requests With gh
+
+Agents can open pull requests and read them with the GitHub CLI. The protected-branch guards only
+see `git`, and `gh` talks to the GitHub API, so the permission settings sort `gh` commands by what
+they can reach:
+
+| Bucket | Commands |
+| --- | --- |
+| allow | `gh pr create`; read-only `gh pr view`, `pr list`, `pr status`, `pr checks`, `pr diff`, `gh run list`, `run view`, `gh repo view` |
+| ask | `gh pr comment`, `pr edit`, `pr ready`, `pr review`, `pr close`, `pr reopen`, `gh issue create`, `issue comment` |
+| deny | `gh pr merge`, `gh api`, `gh auth token`, `gh repo edit`, `repo delete`, `repo rename`, `gh secret`, `gh variable`, `gh release`, `gh workflow run` |
+
+The protected-branch hook also denies the deny-bucket commands when global flags come first
+(`gh -R owner/repo pr merge 12`), a form the prefix rules miss.
+
+The workflow an agent should follow:
+
+1. Push the branch on its own: `git push -u origin <branch>`. The protected-branch hook approves it.
+2. Open the pull request as a separate command:
+   `gh pr create --base main --head <branch> --title "…" --body-file <file>`. `--head` stops `gh`
+   from pushing or forking by itself.
+
+A push chained to anything else (`git push … && gh pr create …`) goes to the permission prompt
+as a whole. To read review comments, use `gh pr view --comments`; `gh api` is denied even for reads.
+
+`gh` acts with your GitHub token, so to GitHub an agent is you. These rules are local. Add a branch
+ruleset on GitHub for `main` that requires a pull request, blocks force pushes and deletion, and does
+not let administrators bypass it. That is the guard that holds if a local rule is too broad.
+
 ## When Installed Hooks Run
 
 Claude Code has no per-hook approval like Codex's. Instead, an interactive session holds every hook

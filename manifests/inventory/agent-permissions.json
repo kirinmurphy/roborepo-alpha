@@ -61,7 +61,7 @@
     {
       "id": "read-secrets",
       "label": "Read credential files",
-      "description": "Credential material that is never correct for an agent to read, denied everywhere including inside the current repository. This is the one layer the repository boundary cannot provide: a .env inside your checkout is in-bounds for repo-write-boundary, so only a deny rule stops it. Claude ranks deny above every allow, so these out-rank both the scope allows and the boundary hook. Deny is not a prompt \u2014 there is no in-session override; carve out a path here rather than working around it. The .env variants are enumerated rather than globbed as .env.* so that .env.example and .env.sample stay readable: they are committed template files carrying placeholder values, and are often the fastest way to learn what a project expects. Claude permission rules have no negation, so a readable exception must be expressed as a narrower deny, not an allow that would be out-ranked. A new secret-bearing variant therefore needs adding here explicitly.",
+      "description": "Credential material that is never correct for an agent to read, denied everywhere including inside the current repository. This is the one layer the repository boundary cannot provide: a .env inside your checkout is in-bounds for repo-write-boundary, so only a deny rule stops it. Claude ranks deny above every allow, so these out-rank both the scope allows and the boundary hook. Deny is not a prompt — there is no in-session override; carve out a path here rather than working around it. The .env variants are enumerated rather than globbed as .env.* so that .env.example and .env.sample stay readable: they are committed template files carrying placeholder values, and are often the fastest way to learn what a project expects. Claude permission rules have no negation, so a readable exception must be expressed as a narrower deny, not an allow that would be out-ranked. A new secret-bearing variant therefore needs adding here explicitly.",
       "kind": "tools-scoped",
       "tools": [
         "Read"
@@ -119,7 +119,7 @@
     {
       "id": "go-online",
       "label": "Go online",
-      "description": "Sandbox network access. Codex-only \u2014 Claude does not sandbox network egress.",
+      "description": "Sandbox network access. Codex-only — Claude does not sandbox network egress.",
       "kind": "network",
       "codexOnly": true,
       "bucket": "deny",
@@ -192,7 +192,7 @@
     {
       "id": "rewrite-history",
       "label": "Rewrite published history",
-      "description": "Force-push or otherwise overwrite remote history. Denied outright \u2014 recovery depends on someone else still holding the old objects.",
+      "description": "Force-push or otherwise overwrite remote history. Denied outright — recovery depends on someone else still holding the old objects.",
       "kind": "commands",
       "commands": [
         [
@@ -241,9 +241,180 @@
       "category": "git"
     },
     {
+      "id": "read-github",
+      "label": "Read GitHub",
+      "description": "Look at pull requests and CI runs (gh pr view/list/status/checks/diff, gh run list/view, gh repo view). Read-only.",
+      "kind": "commands",
+      "commands": [
+        [
+          "gh",
+          "pr",
+          "view"
+        ],
+        [
+          "gh",
+          "pr",
+          "list"
+        ],
+        [
+          "gh",
+          "pr",
+          "status"
+        ],
+        [
+          "gh",
+          "pr",
+          "checks"
+        ],
+        [
+          "gh",
+          "pr",
+          "diff"
+        ],
+        [
+          "gh",
+          "run",
+          "list"
+        ],
+        [
+          "gh",
+          "run",
+          "view"
+        ],
+        [
+          "gh",
+          "repo",
+          "view"
+        ]
+      ],
+      "bucket": "allow",
+      "category": "git"
+    },
+    {
+      "id": "open-prs",
+      "label": "Open pull requests",
+      "description": "Open a pull request (gh pr create). Allowed because opening a PR changes no branch: merging is denied by change-github-directly. Push the branch first with git push and pass --head, so gh neither pushes nor forks on its own.",
+      "kind": "commands",
+      "commands": [
+        [
+          "gh",
+          "pr",
+          "create"
+        ]
+      ],
+      "bucket": "allow",
+      "category": "git"
+    },
+    {
+      "id": "post-to-github",
+      "label": "Post to GitHub",
+      "description": "Write where other people read it: comment on, edit, review, close or reopen a pull request, or open and comment on issues. Prompts, since it speaks for you.",
+      "kind": "commands",
+      "commands": [
+        [
+          "gh",
+          "pr",
+          "comment"
+        ],
+        [
+          "gh",
+          "pr",
+          "edit"
+        ],
+        [
+          "gh",
+          "pr",
+          "ready"
+        ],
+        [
+          "gh",
+          "pr",
+          "review"
+        ],
+        [
+          "gh",
+          "pr",
+          "close"
+        ],
+        [
+          "gh",
+          "pr",
+          "reopen"
+        ],
+        [
+          "gh",
+          "issue",
+          "create"
+        ],
+        [
+          "gh",
+          "issue",
+          "comment"
+        ]
+      ],
+      "bucket": "ask",
+      "category": "git"
+    },
+    {
+      "id": "change-github-directly",
+      "label": "Change GitHub directly",
+      "description": "Act on GitHub without git: merge a pull request, call the API (which can rewrite main), print the auth token, or change repository settings, secrets, variables, releases, or workflows. Denied, because none of it passes through the protected-branch hooks; only GitHub branch protection covers it.",
+      "kind": "commands",
+      "commands": [
+        [
+          "gh",
+          "pr",
+          "merge"
+        ],
+        [
+          "gh",
+          "api"
+        ],
+        [
+          "gh",
+          "auth",
+          "token"
+        ],
+        [
+          "gh",
+          "repo",
+          "edit"
+        ],
+        [
+          "gh",
+          "repo",
+          "delete"
+        ],
+        [
+          "gh",
+          "repo",
+          "rename"
+        ],
+        [
+          "gh",
+          "secret"
+        ],
+        [
+          "gh",
+          "variable"
+        ],
+        [
+          "gh",
+          "release"
+        ],
+        [
+          "gh",
+          "workflow",
+          "run"
+        ]
+      ],
+      "bucket": "deny",
+      "category": "git"
+    },
+    {
       "id": "run-wrapped-commands",
       "label": "Run output-capped commands",
-      "description": "The agent-facing runner: `roborepo agent-run` caps output AND validates its argv against this manifest before spawning (see scripts/cli/agent-run-policy.mjs). Plain `roborepo run` is deliberately NOT listed here \u2014 it spawns whatever it is given, and Claude's prefix matcher cannot see past the wrapper, so allowlisting it would silently override every deny/ask bucket below.",
+      "description": "The agent-facing runner: `roborepo agent-run` caps output AND validates its argv against this manifest before spawning (see scripts/cli/agent-run-policy.mjs). Plain `roborepo run` is deliberately NOT listed here — it spawns whatever it is given, and Claude's prefix matcher cannot see past the wrapper, so allowlisting it would silently override every deny/ask bucket below.",
       "kind": "commands",
       "commands": [
         [
@@ -321,7 +492,7 @@
     {
       "id": "mutate-harness-config",
       "label": "Change harness configuration",
-      "description": "roborepo namespaces that rewrite generated config or installed state (update, maintenance, mcp, package enable/disable/reconcile/adopt-live/manage/dev, skill, config set). Prompts. Anything NOT listed here \u2014 including namespaces added later \u2014 falls through to a prompt by default, so new subcommands never silently gain access.",
+      "description": "roborepo namespaces that rewrite generated config or installed state (update, maintenance, mcp, package enable/disable/reconcile/adopt-live/manage/dev, skill, config set). Prompts. Anything NOT listed here — including namespaces added later — falls through to a prompt by default, so new subcommands never silently gain access.",
       "kind": "commands",
       "commands": [
         [

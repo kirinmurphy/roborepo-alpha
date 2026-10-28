@@ -20,6 +20,10 @@ import { fileURLToPath } from 'node:url'
 // This reads the command text, so it can be fooled by indirection it cannot see (an alias, a
 // script). The pre-push hook in ../git-hooks/ is the backstop: git hands it the exact refs.
 //
+// It also denies the gh commands that act on GitHub without git (merge, API calls, settings) in the
+// forms the permission prefix rules miss: global flags before the subcommand, as in
+// `gh -R owner/repo pr merge 12`. Those never reach either protected-branch guard.
+//
 // The same file is installed for Claude and Codex; both send PreToolUse input on stdin and accept
 // hookSpecificOutput.permissionDecision. Keep the two copies identical.
 
@@ -31,6 +35,13 @@ const UNCLASSIFIABLE_OPTIONS = new Set(['--all', '--branches', '--mirror'])
 // Skips the pre-push backstop, so a push carrying it is never allowed without a prompt.
 const SKIPS_BACKSTOP = new Set(['--no-verify'])
 const VERIFIED = { decision: 'allow', reason: 'roborepo: push to a non-protected branch, checked by the protected-branch hooks.' }
+// Mirrors the change-github-directly behavior in agent-permissions.json; a test keeps them equal.
+const GH_DENIED = [
+  ['pr', 'merge'], ['api'], ['auth', 'token'], ['repo', 'edit'], ['repo', 'delete'], ['repo', 'rename'],
+  ['secret'], ['variable'], ['release'], ['workflow', 'run'],
+]
+// gh options that take their value as the next word, before or between subcommands.
+const GH_VALUE_OPTIONS = new Set(['-R', '--repo', '--hostname'])
 const gitHooksDir = process.env.ROBOREPO_GIT_HOOKS_DIR
   || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'git-hooks')
 
@@ -218,6 +229,21 @@ function classifyPush(cwd, args) {
   return defaultKnown ? VERIFIED : unknownDefault(remote)
 }
 
+// gh with its options removed, matched against GH_DENIED.
+function classifyGh(args) {
+  const words = []
+  for (let i = 0; i < args.length; i += 1) {
+    if (GH_VALUE_OPTIONS.has(args[i])) i += 1
+    else if (!args[i].startsWith('-')) words.push(args[i])
+  }
+  const denied = GH_DENIED.find((prefix) => prefix.every((word, k) => words[k] === word))
+  if (!denied) return null
+  return {
+    decision: 'deny',
+    reason: `roborepo: \`gh ${denied.join(' ')}\` acts on GitHub without going through git, so the protected-branch guards cannot check it. Run it yourself.`,
+  }
+}
+
 function unknownDefault(remote) {
   return ask(`the default branch of \`${remote}\` is not recorded here, so this push may land on it. \`git remote set-head ${remote} --auto\` records it`)
 }
@@ -259,6 +285,10 @@ function classifyCommand(text, startCwd) {
       continue
     }
     onlyVerifiedPushes &&= program === 'git'
+    if (program === 'gh') {
+      result = stricter(result, classifyGh(words.slice(i + 1)))
+      continue
+    }
     if (SHELLS.has(program)) {
       const flag = words.findIndex((w, j) => j > i && /^-[a-z]*c[a-z]*$/.test(w))
       if (flag !== -1 && words[flag + 1]) result = stricter(result, withoutAllow(classifyCommand(words[flag + 1], cwd)))
@@ -306,7 +336,7 @@ const toolName = input.tool_name || input.toolName || ''
 const toolInput = input.tool_input || input.toolInput || {}
 const rawCommand = toolInput.command ?? toolInput.cmd
 const command = Array.isArray(rawCommand) ? rawCommand.map((w) => `'${String(w).replaceAll("'", "'\\''")}'`).join(' ') : rawCommand
-if (!SHELL_TOOLS.has(toolName) || typeof command !== 'string' || !/\bpush\b/.test(command)) process.exit(0)
+if (!SHELL_TOOLS.has(toolName) || typeof command !== 'string' || !/\b(push|gh)\b/.test(command)) process.exit(0)
 
 const cwd = toolInput.workdir || input.cwd || process.cwd()
 const result = classifyCommand(command, cwd)
