@@ -1,7 +1,7 @@
 ---
 id: 4xc0gjuw
 priority: high
-next_action: Await explicit human approval of reviewed implementation fd9b3ce9, then merge through the pull request and run /plan-close.
+next_action: Merge the approved implementation through the pull request, then run /plan-close.
 blocked_by: []
 depends_on: []
 related: ["hr78g4sj", "b2sgiejd", "a7bslb00", "gqzjlzgx"]
@@ -615,7 +615,14 @@ blocking this plan's approval or closure. This deferral does not establish Windo
 
 ### Approval
 
-- Decision: requested
+- Decision: approved
+- Reviewed implementation commit: fd9b3ce9598a13c29343fd5585a10d55d1144ce3
+- Confirmed by: human
+
+On October 28, 2026, the user answered "Approve this reviewed implementation" to the review
+question naming this plan and full implementation commit
+`fd9b3ce9598a13c29343fd5585a10d55d1144ce3`. Native Windows testing remains deferred to
+[[l1mz96d9]] at the user's explicit direction.
 
 ### Acceptance evidence
 
