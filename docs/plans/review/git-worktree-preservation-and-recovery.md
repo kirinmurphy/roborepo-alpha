@@ -1,11 +1,11 @@
 ---
 id: 4xc0gjuw
 priority: high
-next_action: Resolve the late base-ref race and investigate the reported unexpected archive action before renewed human approval.
+next_action: Investigate the reported unexpected archive action before renewed human approval; automated workflows and the late base-ref fix pass.
 blocked_by: []
 depends_on: []
 related: ["hr78g4sj", "b2sgiejd", "a7bslb00", "gqzjlzgx"]
-reviewed_commit: fd9b3ce9598a13c29343fd5585a10d55d1144ce3
+reviewed_commit: f7fe65c2ea093c556abc773f2e32672ffff940aa
 worktree: git-worktree-preservation-and-recovery
 ---
 
@@ -530,8 +530,8 @@ blocking this plan's approval or closure. This deferral does not establish Windo
 
 ### Findings
 
-- [ ] Automatic dirty cleanup can remove a checkout when the base ref moves after the early
-  base check but during the final server survey; recheck assessed base immediately before removal.
+- [x] Automatic dirty cleanup could remove a checkout when the base ref moved during the final
+  server survey — final base check and five concurrency regressions fixed in `f7fe65c2`.
 - [ ] User reported one Delete click, an ignored-path refusal, then disappearance. The original
   ledger records archive removal, but the exact interaction is unexplained; isolated trusted-click
   replay refuses Delete and retains the checkout. Preserve this as an unresolved investigation.
@@ -554,6 +554,28 @@ blocking this plan's approval or closure. This deferral does not establish Windo
 
 ### Verification
 
+- October 28 workflow verification at `f7fe65c2`: all six disposable use cases exercised against
+  the real portal and HTTP endpoints, with the reviewed CLI for automatic cleanup/restore.
+  Final recorded browser walkthrough: 10/10 assertions passed. It covers Delete refusal,
+  explicit archive/removal, exact recovery, repeated-destination refusal, restored Home visibility,
+  redundant and clean automatic removal, locked/filter refusals, and warned discard behavior.
+- The initial workflow run passed 9/10 assertions; its immediate restored-row assertion ran
+  before Runtime's normal refresh. The final run waits through that refresh and asserts the
+  restored detached checkout appears. No product visibility fix was made or claimed.
+- Five deterministic mutation cases change files, the index, branch tip, configuration, or base
+  during the final server survey. Four kept the checkout before the fix; the base case incorrectly
+  removed it. The permanent regression failed before `f7fe65c2`; all five now retain checkout
+  and verified snapshot. Independent Validator and snapshot suite passed; no additional fix
+  findings were reported.
+- `npm run check` passed after the source fix: 464 CLI checks, 63/63 CI behavior suites,
+  151/151 browser tests, installer collisions/package installation, and all four Docker suites.
+  Native Windows remains deferred; PowerShell parity was visibly skipped because unavailable.
+- Original manual occurrence remains unexplained. The user explicitly reported a single Delete
+  click, the valuable-ignored-path refusal, then disappearance. The original ledger records an
+  archive snapshot and successful removal at 19:18 UTC, but cannot establish the user interaction.
+  Isolated trusted-click replay and the full walkthrough produce only a Delete request, refusal,
+  and retained checkout until Archive and remove is explicitly clicked. These passes do not
+  resolve or disprove the original report; review stays pending and no new approval is requested.
 - Final human-review gate at `fd9b3ce9598a13c29343fd5585a10d55d1144ce3`:
   `npm run check` passed outside the sandbox. Doctor: 106 checks; CLI: 464 passed, zero failed;
   CI behavior suites: 63/63; installer collision and package installation checks passed;
@@ -615,7 +637,7 @@ blocking this plan's approval or closure. This deferral does not establish Windo
 ### Result
 
 - Status: pending
-- Reviewed implementation commit: fd9b3ce9598a13c29343fd5585a10d55d1144ce3
+- Reviewed implementation commit: f7fe65c2ea093c556abc773f2e32672ffff940aa
 - Base commit: 6eba62ad78ad37d0e3a62230869281378919cc04
 
 ### Approval
