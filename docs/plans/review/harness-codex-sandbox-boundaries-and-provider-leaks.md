@@ -1,7 +1,7 @@
 ---
 id: 4zyo2woj
 priority: high
-next_action: Human approval is recorded; open and merge the pull request, then run /plan-close. Rerun /plan-review if base implementation changes before landing.
+next_action: Run /plan-review to review the post-approval changes and renew human approval, then rerun /plan-close with a passing completion gate. The branch landed; approval is stale and the aggregate gate timed out at portal startup although its focused retry passed.
 blocked_by: []
 depends_on: ["hr78g4sj"]
 related: ["8bjltk2n", "wjlt1zvf", "ia1q1z9", "permva27", "permissions-ui-revamp", "codex-cmux-hook-trust-review", "46qth5z8", "harness-capability-derived-resource-targeting", "7k3m9qd", "o9zwxuav"]
@@ -596,3 +596,76 @@ Git administrative worktree `credential-protection`; this document contains no m
 - Evidence: October 27, 2026, the user selected "Approve this implementation" in response to
   the exact-commit approval question for this plan, including the accepted coverage limits and
   recorded base-branch skill-size failure. Review freshness was rechecked before recording.
+
+## Verification
+
+### Closure attempt — October 27, 2026
+
+- Result: blocked; remains in review. No completion commit, server shutdown, or worktree cleanup.
+- Primary checkout: main at `6eba62ad78ad37d0e3a62230869281378919cc04`. The assigned worktree's
+  review document matched the primary document byte for byte before this attempt's evidence edits.
+- Plan validation: zero findings, zero blocking findings. No unchecked Not tested entries;
+  the previously accepted coverage limitations remain unverified and unchanged.
+- Seven focused checks passed: credential projection (15 patterns, nine intent/write combinations),
+  live rendering, foreign-line preservation, home paths, Gemini adapter, root-config write policy,
+  and hook composition. Whitespace validation passed.
+- Canonical `npm run check`: the sandboxed run failed with localhost `listen EPERM` restrictions.
+  The permitted host rerun passed doctor (106 checks), the main suite (464/464), installation
+  collisions, deterministic CI suites (61/61), packed installation, and all four strict
+  clean-machine suites. Windows installer parity was skipped because PowerShell is unavailable.
+  The aggregate exited 1 at portal UI startup: `error: timed out waiting for ready file`.
+  The runner waits 15 seconds for server readiness; the timeout's cause is unverified. No waiver
+  or aggregate pass is inferred from earlier successful components.
+- Focused `npm run test:portal-ui` host retry: passed 151/151. No code changes were needed.
+  This resolves verification of the UI assertions but does not change the aggregate exit status;
+  obtain a passing aggregate on the next review/close run or an explicit waiver of its failed
+  startup check. No unrelated startup behavior was changed during this credential-plan closure.
+- Native enforcement: the nested sandbox returned unavailable (`sandbox_apply: Operation not
+  permitted`). The permitted host launch passed with Codex `0.163.0-alpha.11.2` on macOS, fresh
+  synthetic configuration, and native sandbox commands/descendants: both profiles, 31 file cases
+  each, unrestricted controls, missing-denies mutation, public/template reads, write boundaries,
+  links, deep paths and newly created credential paths. No broader tool/platform claim is made.
+- Documentation impact: inspected all five named docs of record against credential projection,
+  profile rendering and coverage metadata; no unresolved required drift found. The control-panel
+  reference additionally documents that a missing Codex configuration skips profile rendering.
+- Approval: stale. Approved implementation `81ae9e362000c1a48574b1aeceda4c2302b19570` differs
+  from feature tip `f90412a258c6a1177ea33a6531581d53020f21db`. The canonical approval check
+  reports 28 changed paths outside plan documents. `/plan-review` must review the current result
+  and obtain renewed human approval; this attempt preserves the existing approval as historical evidence.
+- Landing: newly scanned by the canonical content-level check; the feature branch carried its own
+  work and is absorbed by the squash merge below. The first sandboxed scan was unavailable;
+  the permitted retry succeeded. Landing does not make the stale approval fresh.
+- Absorbing commit: 28932c1c85535759e8cf565ccdd096d6735e8946
+
+Changed paths reported by the approval check:
+
+```text
+docs/user/guides/plan/lifecycle/plan-suite.md
+docs/user/reference/config-control-panel.md
+docs/user/reference/plans-portal.md
+globals/packages/plan-suite/skills/plan-execute/SKILL.md
+globals/packages/plan-suite/skills/plan-execute/references/final-report.md
+manifests/platform/plan-lifecycle.json
+modules/plan-suite/transition-rules.mjs
+portal/plans/app.js
+portal/plans/elements/plan-card.js
+portal/plans/elements/plan-status.js
+portal/plans/lifecycle.js
+portal/plans/plan-actions.js
+portal/plans/plan-drawer-partial.html
+portal/plans/plan-drawer.css
+portal/plans/plan-drawer.js
+portal/plans/state.js
+portal/plans/templates.js
+portal/shared/base.css
+portal/shared/copy-button.js
+portal/shared/copy-menu.js
+portal/shared/widget-templates-partial.html
+scripts/test/plan-lifecycle-manifest-check.mjs
+scripts/test/plan-lifecycle-transitions-check.mjs
+scripts/test/plan-suite-skills-check.mjs
+scripts/test/plans-portal-state-check.mjs
+scripts/test/portal-ui/plans-status.spec.mjs
+scripts/test/portal-ui/portal-ui.spec.mjs
+scripts/test/portal-ui/repository-scope.spec.mjs
+```
