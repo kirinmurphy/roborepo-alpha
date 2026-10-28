@@ -26,7 +26,8 @@
 // the whole argv, not just a fixed position, so `git -c x=y push --force` is caught too.
 const DESTRUCTIVE_GIT_FLAGS = new Set(["--force", "-f", "--force-with-lease", "--mirror", "--delete"]);
 
-// Denied outright regardless of the manifest: moving the working tree onto the trunk branch.
+// Denied outright regardless of the manifest: moving the working tree onto the trunk branch, or
+// pushing to it.
 const PROTECTED_BRANCHES = new Set(["main", "master"]);
 const BRANCH_MOVING = new Set(["checkout", "switch"]);
 
@@ -38,6 +39,7 @@ export const REFUSAL = {
   DENY_BUCKET: "denied",
   DESTRUCTIVE_GIT: "destructive-git",
   PROTECTED_BRANCH: "protected-branch",
+  UNRESOLVED_PUSH: "unresolved-push",
 };
 
 // Build {allow,ask,deny} token-prefix lists out of the same manifest that renders the harness
@@ -97,6 +99,10 @@ export function checkAgentRun(argv, manifest) {
         }
       }
     }
+    if (sub === "push") {
+      const refusal = pushRefusal(argv.slice(2));
+      if (refusal) return refusal;
+    }
   }
 
   const bucket = classify(argv, policyFromManifest(manifest));
@@ -118,6 +124,48 @@ export function checkAgentRun(argv, manifest) {
     };
   }
   return { ok: true };
+}
+
+// git push options that take their value as the next argument.
+const PUSH_VALUE_OPTIONS = new Set(["--repo", "-o", "--push-option", "--receive-pack", "--exec"]);
+
+// A push is only allowed when every destination is named and none is protected. This function
+// sees argv, not the repository, so it cannot resolve where a bare `git push` or a `HEAD` refspec
+// lands; those are refused rather than guessed.
+function pushRefusal(args) {
+  const positional = [];
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i] === "--all" || args[i] === "--branches") {
+      return unresolvedPush(`'${args[i]}' can include a protected branch`);
+    }
+    if (PUSH_VALUE_OPTIONS.has(args[i])) i += 1;
+    else if (!args[i].startsWith("-")) positional.push(args[i]);
+  }
+  const refspecs = positional.slice(1);
+  if (refspecs.length === 0) return unresolvedPush("a push with no refspec goes wherever the current branch is configured to go");
+  for (const refspec of refspecs) {
+    const spec = refspec.replace(/^\+/, "");
+    const colon = spec.indexOf(":");
+    let dst = colon === -1 || colon === spec.length - 1 ? spec.replace(/:$/, "") : spec.slice(colon + 1);
+    dst = dst.replace(/^refs\/heads\//, "");
+    if (dst === "HEAD" || dst === "@" || dst.includes("*")) return unresolvedPush(`'${refspec}' does not name its destination branch`);
+    if (PROTECTED_BRANCHES.has(dst)) {
+      return {
+        ok: false,
+        reason: REFUSAL.PROTECTED_BRANCH,
+        message: `blocked: refusing to push to '${dst}'. Push a feature branch and open a pull request instead.`,
+      };
+    }
+  }
+  return null;
+}
+
+function unresolvedPush(detail) {
+  return {
+    ok: false,
+    reason: REFUSAL.UNRESOLVED_PUSH,
+    message: `blocked: ${detail}. Name the remote and destination branch, e.g. 'git push origin my-branch'.`,
+  };
 }
 
 function startsWith(argv, prefix) {

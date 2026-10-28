@@ -144,15 +144,26 @@
       "category": "git"
     },
     {
-      "id": "push-pull-prs",
-      "label": "Push / pull / PRs",
-      "description": "Move code to or from a remote (git push, git pull). Prompts so a push can be approved in-session; force variants are denied separately by rewrite-history.",
+      "id": "push-code",
+      "label": "Push code",
+      "description": "Send commits to a remote (git push). Allowed because protected-branch hooks refuse pushes to main, master, or the remote default branch; harnesses without those hooks use unguardedBucket. Force variants are denied separately by rewrite-history.",
       "kind": "commands",
       "commands": [
         [
           "git",
           "push"
-        ],
+        ]
+      ],
+      "bucket": "allow",
+      "unguardedBucket": "ask",
+      "category": "git"
+    },
+    {
+      "id": "pull-code",
+      "label": "Pull code",
+      "description": "Bring remote changes into the working tree (git pull). Prompts because a pull can merge or rebase in-flight work.",
+      "kind": "commands",
+      "commands": [
         [
           "git",
           "pull"

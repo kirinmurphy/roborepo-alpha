@@ -11,6 +11,7 @@
     "plan-suite-skills-check.mjs",
     "worktree-lifecycle-check.mjs",
     "core-hook-wiring-check.mjs",
+    "protected-branch-push-check.mjs",
     "hook-readiness-check.mjs",
     "hook-review-launch-check.mjs",
     "hook-review-cli-check.mjs",

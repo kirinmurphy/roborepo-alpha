@@ -11,6 +11,16 @@
       ]
     },
     {
+      "_comment": "Denies pushes that land on a protected branch (main, master, the remote's default), so git push itself can be allowed. See globals/system/hooks/claude/protected-branch-push.mjs.",
+      "matcher": "Bash",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "node \"$HOME/.claude/hooks/protected-branch-push.mjs\""
+        }
+      ]
+    },
+    {
       "_comment": "repo-scope enforcement. Read is included deliberately: reads span the repository family (worktree + primary + siblings) while writes stay bounded to the checkout in use. See globals/harnesses/claude/hooks/repo-write-scope.mjs.",
       "matcher": "Read|Write|Edit",
       "hooks": [

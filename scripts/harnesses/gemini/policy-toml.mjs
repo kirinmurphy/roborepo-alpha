@@ -65,9 +65,12 @@ function renderShellCommandRule(pattern, bucket) {
 // has no sandbox network gate, same reason Claude's claudePermissions skips it. providerManifest is
 // only consulted for the tools-kind tool-name mapping (see geminiToolNames above).
 export function renderGeminiPolicyRules(providerManifest, behaviorManifest, overrides = {}) {
+  // `unguardedBucket` is the default for a harness that cannot run the hooks a behavior's default
+  // relies on — `git push` is allowed only because a hook refuses protected branches, and Gemini
+  // installs no such hook. A personal override still wins.
   const behaviors = (behaviorManifest.behaviors ?? []).map((b) => ({
     ...b,
-    bucket: overrides.behaviors?.[b.id] ?? b.bucket,
+    bucket: overrides.behaviors?.[b.id] ?? b.unguardedBucket ?? b.bucket,
   }));
 
   const commandsByKey = new Map();
