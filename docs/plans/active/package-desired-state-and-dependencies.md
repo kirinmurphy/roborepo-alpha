@@ -349,7 +349,7 @@ rule:
 | A dependency row makes a category look partly selected | Bulk enable and category state count selectable roots only |
 | Changing the meaning of `packages` turns off something a user relies on | The version-1 read rule keeps every currently effective package effective; a fixture asserts the effective set is unchanged across the upgrade |
 | Replacing `process.exit` changes CLI exit codes | The CLI entry point maps each typed error to the code the old exit used; existing `test-cli.sh` exit-code assertions stay unchanged |
-| Bundle state change breaks install or doctor | Unversioned bundle state is read with the same rule; `test-cli.sh` and `test-install-collisions.sh` bundle assertions stay green |
+| Bundle state change breaks install or doctor | Every listed bundle is read as a choice; `test-cli.sh` and `test-install-collisions.sh` bundle assertions stay green. A telemetry-only record from `main` fails `bundle check` until `bundle remove telemetry` (accepted, see Decision Log 2026-10-28) |
 
 ## Documentation impact
 
@@ -459,8 +459,12 @@ None open. Every question was answered by the user (2026-10-27 and 2026-10-28); 
   the cost. The user, not needing backwards compatibility, chose to remove compatibility reading for
   bundles: every listed bundle is a root and `schemaVersion` is written but not branched on. This
   replaces the 2026-10-27 rule that dropped a legacy root listed without its requirements. Accepted
-  cost: a telemetry-only record written by `main` makes `hooks` required until `bundle remove
-  telemetry` or `roborepo update`. The package registry keeps its version-1 rule.
+  cost: a telemetry-only record written by `main` (`["base","telemetry"]`) makes `hooks` required,
+  so `bundle check`, `doctor --installed`, and `verify-install` fail until `bundle remove telemetry`
+  or `bundle apply hooks`; `roborepo update` keeps the telemetry selection and does not clear it.
+  Validation pass 5 found the first statement of this cost wrong (it named `roborepo update` as a
+  remedy); the corrected cost stays within the user's "no backwards compatibility" choice, so the
+  decision stands. The package registry keeps its version-1 rule.
 - **2026-10-27 (user decision): The Claude MCP adapter returns `ok: false`.** Chosen over a typed
   error and over deferring to a harness-adapter plan. `runClaudeMcpAdd` returns its status, the
   adapter's `addServer` returns `ok: false` with the message in `warnings` and the CLI status in
@@ -500,6 +504,10 @@ None open. Every question was answered by the user (2026-10-27 and 2026-10-28); 
       `presentation.visibility` — reworded
 - [x] The `PackageMutationError` comment left out the dependency-only refusal — added
 - [x] The `AdapterActionResult` typedef did not document the new `exitStatus` field — added
+- [x] The 2026-10-28 accepted cost named `roborepo update` as a remedy it is not — corrected in
+      the Decision Log and Risks; the cost is within the user's no-compatibility choice
+- [x] `## Risks` and `### Verification` still described the removed bundle rule and an undated gate
+      run — reworded
 - [x] An older bundle record with telemetry on loses the user's own hooks selection — user chose
       to read bundle records as written; test-cli asserts `hooks` stays selected and applied after
       `bundle remove telemetry` on such a record
@@ -520,11 +528,12 @@ None open. Every question was answered by the user (2026-10-27 and 2026-10-28); 
 - Validation pass 4 (fresh-context subagent): 1 fix, 1 escalate, 1 base (that docs link).
 - After the 2026-10-28 bundle-record decision: `test-cli.sh` 474 passed, 0 failed (two older-record
   assertions removed, one replaced by the hooks-survives-telemetry assertion).
-- Full gate after the user decision: `npm run check` 61/62 suites, the one failure being that base
-  docs link.
-- Base failure: `docs-reference-check.mjs` reports `docs/internal/backlog-review.md:86`, a link to
-  another plan's old `backlog/` path. The same line fails at the branch's base commit `b0b5288b`;
-  `main` has since fixed it.
+- Full gate on 2026-10-26, after the Requires-popup user decision: `npm run check` 61/62 suites; the
+  failure was `docs-reference-check.mjs` on `docs/internal/backlog-review.md:86` (then a `backlog/`
+  path), which also failed at the base commit `b0b5288b`.
+- Validation pass 5 (fresh-context subagent): 2 fix (plan text), 1 escalate (the accepted cost was
+  misstated; corrected below), 1 base (the same docs link, `ready/` path at merge base `c1d92150`,
+  fixed on `main`).
 - Manual, portal (2026-10-26): a hermetic portal on a workspace fixture (Demo Planner and Demo
   Closer require a dependency-only Demo Review; Demo Closer recommends Demo Tester). The Integrations
   section showed Demo Review only under a Required dependencies list (since replaced by the popup's
