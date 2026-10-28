@@ -1,7 +1,7 @@
 ---
 id: o9zwxuav
 priority: high
-next_action: Decide whether to run validation pass 7 (past the five-pass cap) or take the plan to /plan-review from active; then the completion preflight and the submit transition.
+next_action: Run /plan-review for the human review of this plan.
 blocked_by: []
 depends_on: ["bysyzl1e"]
 related: ["package-registry-live-state-reconciliation", "ejsc769o", "age4cm7r", "user-managed-packages-and-add-workflows"]
@@ -542,6 +542,8 @@ None open. Every question was answered by the user (2026-10-27 and 2026-10-28); 
 - Validation pass 6 (fresh-context subagent): 3 fix (a stale `package-graph.mjs` header and plan
   text), 1 base (the same docs link). This pass is past the loop's five-pass cap, so the plan was
   not submitted.
+- Validation: clean on pass 7 at `e46240f9` (fresh-context subagent, run past the cap at the user's
+  request): no fix or escalate findings; 1 base (the same docs link, fixed on `main`).
 - Manual, portal (2026-10-26): a hermetic portal on a workspace fixture (Demo Planner and Demo
   Closer require a dependency-only Demo Review; Demo Closer recommends Demo Tester). The Integrations
   section showed Demo Review only under a Required dependencies list (since replaced by the popup's
