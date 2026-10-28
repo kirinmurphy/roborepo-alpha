@@ -1,5 +1,5 @@
 // Pure dependency-graph helpers over plain `{ id, requires, recommends }` nodes. Package state
-// (package-state.mjs) and install bundles (presets.mjs) both record only what the user selected and
+// (package-state.mjs) and install bundles (bundle-selection.mjs) both record only what the user selected and
 // derive everything those selections require through these functions, so the two records follow one
 // rule. Nothing here reads files, writes files, or prompts.
 //

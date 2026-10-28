@@ -1,7 +1,7 @@
 ---
 id: o9zwxuav
 priority: high
-next_action: Run validation pass 5 over the bundle-record change, then the completion preflight and the submit transition.
+next_action: Decide whether to run validation pass 7 (past the five-pass cap) or take the plan to /plan-review from active; then the completion preflight and the submit transition.
 blocked_by: []
 depends_on: ["bysyzl1e"]
 related: ["package-registry-live-state-reconciliation", "ejsc769o", "age4cm7r", "user-managed-packages-and-add-workflows"]
@@ -508,6 +508,9 @@ None open. Every question was answered by the user (2026-10-27 and 2026-10-28); 
       the Decision Log and Risks; the cost is within the user's no-compatibility choice
 - [x] `## Risks` and `### Verification` still described the removed bundle rule and an undated gate
       run — reworded
+- [x] `package-graph.mjs` header named `presets.mjs` as the bundle user — now `bundle-selection.mjs`
+- [x] `next_action`, a pass-5 cross-reference, and the latest gate run were stale or missing in the
+      plan — updated
 - [x] An older bundle record with telemetry on loses the user's own hooks selection — user chose
       to read bundle records as written; test-cli asserts `hooks` stays selected and applied after
       `bundle remove telemetry` on such a record
@@ -532,8 +535,13 @@ None open. Every question was answered by the user (2026-10-27 and 2026-10-28); 
   failure was `docs-reference-check.mjs` on `docs/internal/backlog-review.md:86` (then a `backlog/`
   path), which also failed at the base commit `b0b5288b`.
 - Validation pass 5 (fresh-context subagent): 2 fix (plan text), 1 escalate (the accepted cost was
-  misstated; corrected below), 1 base (the same docs link, `ready/` path at merge base `c1d92150`,
+  misstated; corrected above, in the Decision Log), 1 base (the same docs link, `ready/` path at merge base `c1d92150`,
   fixed on `main`).
+- Full gate at `e1a78593`: `npm run check` 61/62 suites; the failure is the same base docs link.
+  Later commits change only the plan document and one comment.
+- Validation pass 6 (fresh-context subagent): 3 fix (a stale `package-graph.mjs` header and plan
+  text), 1 base (the same docs link). This pass is past the loop's five-pass cap, so the plan was
+  not submitted.
 - Manual, portal (2026-10-26): a hermetic portal on a workspace fixture (Demo Planner and Demo
   Closer require a dependency-only Demo Review; Demo Closer recommends Demo Tester). The Integrations
   section showed Demo Review only under a Required dependencies list (since replaced by the popup's
