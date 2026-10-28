@@ -104,12 +104,20 @@ export function runCmd(rest) {
 // invisible to Claude's prefix matcher. See scripts/cli/agent-run-policy.mjs for the full
 // rationale and why spawnSync-without-a-shell is what makes the check enforceable.
 export function agentRunCmd(rest) {
-  const verdict = checkAgentRun(rest, loadPermissionManifest());
+  const verdict = checkAgentRun(rest, loadPermissionManifest(), { pushMappingFor: remotePushConfigured });
   if (!verdict.ok) {
     console.error(verdict.message);
     process.exit(2);
   }
   spawnTrimmed(rest);
+}
+
+// A source-only refspec follows remote.<remote>.push when one is set, so its destination is the
+// repository's call, not the argv's.
+function remotePushConfigured(remote) {
+  if (!remote) return false;
+  const r = spawnSync("git", ["config", "--get-all", `remote.${remote}.push`], { encoding: "utf8" });
+  return r.status === 0 && r.stdout.trim() !== "";
 }
 
 function spawnTrimmed(rest) {

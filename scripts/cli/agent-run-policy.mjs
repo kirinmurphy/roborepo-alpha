@@ -57,9 +57,10 @@ export function policyFromManifest(manifest) {
 
 /**
  * Decide whether `argv` may be executed.
+ * @param {(remote: string) => boolean} [options.pushMappingFor] whether remote.<remote>.push is set
  * @returns {{ok: true} | {ok: false, reason: string, message: string}}
  */
-export function checkAgentRun(argv, manifest) {
+export function checkAgentRun(argv, manifest, { pushMappingFor = () => false } = {}) {
   if (!Array.isArray(argv) || argv.length === 0) {
     return { ok: false, reason: REFUSAL.EMPTY, message: "usage: roborepo agent-run <cmd> [args...]" };
   }
@@ -100,7 +101,7 @@ export function checkAgentRun(argv, manifest) {
       }
     }
     if (sub === "push") {
-      const refusal = pushRefusal(argv.slice(2));
+      const refusal = pushRefusal(argv.slice(2), pushMappingFor);
       if (refusal) return refusal;
     }
   }
@@ -129,26 +130,41 @@ export function checkAgentRun(argv, manifest) {
 // git push options that take their value as the next argument.
 const PUSH_VALUE_OPTIONS = new Set(["--repo", "-o", "--push-option", "--receive-pack", "--exec"]);
 
+// A force push in a form the exact-flag check above does not see: `--force-with-lease=<ref>`, or a
+// short-option cluster such as `-uf`. Letters after `o` are -o's value, not options.
+function forcedPushOption(arg) {
+  if (arg.startsWith("--force-with-lease=")) return true;
+  const cluster = /^-([A-Za-z]+)$/.exec(arg)?.[1];
+  return Boolean(cluster) && cluster.split("o")[0].includes("f");
+}
+
 // A push is only allowed when every destination is named and none is protected. This function
 // sees argv, not the repository, so it cannot resolve where a bare `git push` or a `HEAD` refspec
-// lands; those are refused rather than guessed.
-function pushRefusal(args) {
+// lands; those are refused rather than guessed. `pushMappingFor(remote)` reports whether
+// remote.<remote>.push is configured, which redirects a source-only refspec.
+function pushRefusal(args, pushMappingFor) {
   const positional = [];
   for (let i = 0; i < args.length; i += 1) {
     if (args[i] === "--all" || args[i] === "--branches") {
       return unresolvedPush(`'${args[i]}' can include a protected branch`);
     }
+    if (forcedPushOption(args[i])) return destructivePush(args[i]);
     if (PUSH_VALUE_OPTIONS.has(args[i])) i += 1;
     else if (!args[i].startsWith("-")) positional.push(args[i]);
   }
-  const refspecs = positional.slice(1);
+  const [remote, ...refspecs] = positional;
   if (refspecs.length === 0) return unresolvedPush("a push with no refspec goes wherever the current branch is configured to go");
-  for (const refspec of refspecs) {
-    const spec = refspec.replace(/^\+/, "");
+  for (const spec of refspecs) {
+    if (spec.startsWith("+")) return destructivePush(spec);
+    // ':' pushes every branch that also exists on the remote, which can include a protected one.
+    if (spec === ":") return unresolvedPush("':' pushes every branch that also exists on the remote");
     const colon = spec.indexOf(":");
+    if (colon === -1 && pushMappingFor(remote)) {
+      return unresolvedPush(`remote.${remote}.push is configured, so '${spec}' may not land on a branch of that name`);
+    }
     let dst = colon === -1 || colon === spec.length - 1 ? spec.replace(/:$/, "") : spec.slice(colon + 1);
     dst = dst.replace(/^refs\/heads\//, "");
-    if (dst === "HEAD" || dst === "@" || dst.includes("*")) return unresolvedPush(`'${refspec}' does not name its destination branch`);
+    if (dst === "HEAD" || dst === "@" || dst.includes("*")) return unresolvedPush(`'${spec}' does not name its destination branch`);
     if (PROTECTED_BRANCHES.has(dst)) {
       return {
         ok: false,
@@ -158,6 +174,14 @@ function pushRefusal(args) {
     }
   }
   return null;
+}
+
+function destructivePush(arg) {
+  return {
+    ok: false,
+    reason: REFUSAL.DESTRUCTIVE_GIT,
+    message: `blocked: '${arg}' force-pushes, which rewrites published history. Run it directly if you truly intend it.`,
+  };
 }
 
 function unresolvedPush(detail) {

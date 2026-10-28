@@ -68,7 +68,7 @@ assert.equal(refusal(["git", "pull"]), REFUSAL.ASK_BUCKET);
 // --- pushes: allowed to a named feature branch, never to a protected or unresolved one ---------
 assert.equal(checkAgentRun(["git", "push", "origin", "feature/x"], manifest).ok, true, "a named feature-branch push runs");
 assert.equal(checkAgentRun(["git", "push", "-u", "origin", "feature/x"], manifest).ok, true, "flags do not hide the refspec");
-for (const refspec of ["main", "master", "HEAD:main", "feature/x:refs/heads/main", "+main", ":main", "main:"]) {
+for (const refspec of ["main", "master", "HEAD:main", "feature/x:refs/heads/main", ":main", "main:"]) {
   assert.equal(refusal(["git", "push", "origin", refspec]), REFUSAL.PROTECTED_BRANCH, `push ${refspec}`);
 }
 assert.equal(refusal(["git", "push", "origin", "feature/x", "main"]), REFUSAL.PROTECTED_BRANCH, "any protected refspec in the list refuses");
@@ -77,6 +77,23 @@ assert.equal(refusal(["git", "push", "origin"]), REFUSAL.UNRESOLVED_PUSH);
 assert.equal(refusal(["git", "push", "origin", "HEAD"]), REFUSAL.UNRESOLVED_PUSH);
 assert.equal(refusal(["git", "push", "--all", "origin"]), REFUSAL.UNRESOLVED_PUSH);
 assert.equal(refusal(["git", "push", "--repo", "origin", "main"]), REFUSAL.UNRESOLVED_PUSH, "--repo's value is not the remote positional");
+// Force pushes the exact-flag check misses are still destructive, whatever branch they target.
+for (const argv of [
+  ["git", "push", "origin", "+feature/x"],
+  ["git", "push", "origin", "+main"],
+  ["git", "push", "--force-with-lease=feature/x", "origin", "feature/x"],
+  ["git", "push", "-uf", "origin", "feature/x"],
+]) {
+  assert.equal(refusal(argv), REFUSAL.DESTRUCTIVE_GIT, argv.join(" "));
+}
+assert.equal(checkAgentRun(["git", "push", "-o", "ci.skip", "origin", "feature/x"], manifest).ok, true, "-o's value is not a force flag");
+// ':' and '+:' push every matching branch.
+assert.equal(refusal(["git", "push", "origin", ":"]), REFUSAL.UNRESOLVED_PUSH);
+assert.equal(refusal(["git", "push", "origin", "+:"]), REFUSAL.DESTRUCTIVE_GIT);
+// A configured remote.<remote>.push mapping decides where a source-only refspec lands.
+const mapped = { pushMappingFor: (remote) => remote === "origin" };
+assert.equal(checkAgentRun(["git", "push", "origin", "feature/x"], manifest, mapped).reason, REFUSAL.UNRESOLVED_PUSH, "source-only refspec under a push mapping");
+assert.equal(checkAgentRun(["git", "push", "origin", "feature/x:feature/x"], manifest, mapped).ok, true, "an explicit destination is unaffected by the mapping");
 
 // --- fail closed on anything unclassified -----------------------------------------------------
 assert.equal(refusal(["curl", "https://example.com"]), REFUSAL.NOT_ALLOWED);

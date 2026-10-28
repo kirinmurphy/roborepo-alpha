@@ -92,6 +92,15 @@ const cases = [
   ["git push --mirror origin", "ask"],
   ["git push origin $BRANCH", "ask"],
   ["git push origin 'refs/heads/*:refs/heads/*'", "ask"],
+  ["git push origin :", "ask"],
+  // Force pushes are denied wherever they land, in every spelling.
+  ["git push --force origin feat", "deny"],
+  ["git push origin feat --force", "deny"],
+  ["git push --force-with-lease=feat origin feat", "deny"],
+  ["git push -uf origin feat", "deny"],
+  ["git push origin +feat", "deny"],
+  ["git push origin +:", "deny"],
+  ["git push -o ci.skip origin feat", "defer"],
 ];
 for (const [command, expected] of cases) {
   assert.equal(decide(command), expected, command);
@@ -111,6 +120,10 @@ assert.equal(decide("git push"), "deny", "feature branch whose upstream is main,
 gitOk(work, "config", "push.default", "matching");
 assert.equal(decide("git push"), "ask", "push.default=matching");
 gitOk(work, "config", "--unset", "push.default");
+gitOk(work, "config", "remote.origin.push", "refs/heads/feat:refs/heads/main");
+assert.equal(decide("git push origin feat"), "ask", "a source-only refspec follows remote.<name>.push");
+assert.equal(decide("git push origin feat:feat"), "defer", "an explicit destination does not");
+gitOk(work, "config", "--unset", "remote.origin.push");
 
 // pre-push backstop: git hands it the real destination refs.
 gitOk(work, "switch", "-q", "-c", "feature");

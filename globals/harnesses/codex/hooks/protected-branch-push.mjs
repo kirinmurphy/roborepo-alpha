@@ -7,9 +7,11 @@ import path from 'node:path'
 // HEAD:main`, and `git push origin :main` all start with the same words as a feature-branch push.
 //
 // Protected: main, master, the remote's default branch (refs/remotes/<remote>/HEAD), and any names in
-// ROBOREPO_PROTECTED_BRANCHES (comma-separated). A push that lands on one is denied; a push this
-// parser cannot pin down (--all, --mirror, shell expansion, globbed or configured refspecs) asks.
-// Everything else emits nothing and falls through to the permission rules.
+// ROBOREPO_PROTECTED_BRANCHES (comma-separated). A push that lands on one is denied, and so is any
+// force push (a force option or a `+` refspec), since allowing `git push` would otherwise let one past
+// the prefix-only force rules. A push this parser cannot pin down (--all, --mirror, shell expansion,
+// globbed or configured refspecs) asks. Everything else emits nothing and falls through to the
+// permission rules.
 //
 // This reads the command text, so it can be fooled by indirection it cannot see (an alias, a
 // script). The pre-push git hook under hooks/git/ is the backstop: git hands it the exact refs.
@@ -122,8 +124,21 @@ function implicitDestination(cwd) {
   return slash === -1 ? currentBranch(cwd) : pushRef.slice(slash + 1)
 }
 
+// A force option in any spelling: --force, --force-with-lease[=...], or a short cluster holding f
+// (-f, -uf). Letters after o are -o's value, not options.
+function isForceOption(arg) {
+  if (arg === '--force' || arg === '--force-with-lease' || arg.startsWith('--force-with-lease=')) return true
+  const cluster = /^-([A-Za-z]+)$/.exec(arg)?.[1]
+  return Boolean(cluster) && cluster.split('o')[0].includes('f')
+}
+
 // Returns { decision, reason } for a `git push` word list (words after `push`), or null to stay out.
 function classifyPush(cwd, args) {
+  const end = args.indexOf('--')
+  const options = end === -1 ? args : args.slice(0, end)
+  const forceOption = options.find(isForceOption)
+  if (forceOption) return denyForce(`\`${forceOption}\``)
+
   const words = []
   let remote = null
   let deleteFlag = false
@@ -144,14 +159,17 @@ function classifyPush(cwd, args) {
   }
 
   remote ??= words.shift() ?? null
+  const forcedRefspec = words.find((word) => word.startsWith('+'))
+  if (forcedRefspec) return denyForce(`refspec \`${forcedRefspec}\``)
   const branch = currentBranch(cwd)
   remote ??= defaultRemote(cwd, branch)
   const protectedNames = protectedBranches(cwd, remote)
+  const mapped = Boolean(git(cwd, ['config', '--get-all', `remote.${remote}.push`]))
 
   if (words.length === 0) {
     if (deleteFlag) return null
     if (git(cwd, ['config', 'push.default']) === 'matching') return ask('push.default is "matching", which can include a protected branch')
-    if (git(cwd, ['config', '--get-all', `remote.${remote}.push`])) return ask(`remote.${remote}.push is configured; cannot tell where this push lands`)
+    if (mapped) return ask(`remote.${remote}.push is configured; cannot tell where this push lands`)
     const target = implicitDestination(cwd)
     if (target && protectedNames.has(target)) return deny(target, `\`git push\` from ${branch || 'this branch'} writes to ${remote}/${target}`)
     return null
@@ -159,6 +177,8 @@ function classifyPush(cwd, args) {
 
   for (const refspec of words) {
     if (refspec.includes('*')) return ask(`refspec \`${refspec}\` is a pattern and can include a protected branch`)
+    if (refspec === ':') return ask('refspec `:` pushes every branch that also exists on the remote')
+    if (mapped && !deleteFlag && !refspec.includes(':')) return ask(`remote.${remote}.push is configured, so \`${refspec}\` may not land on a branch of that name`)
     const destination = deleteFlag ? { branch: refspec.replace(/^refs\/heads\//, ''), deleting: true } : refspecDestination(cwd, refspec)
     if (destination && protectedNames.has(destination.branch)) {
       const verb = destination.deleting ? 'deletes' : 'writes to'
@@ -172,6 +192,13 @@ function deny(branch, detail) {
   return {
     decision: 'deny',
     reason: `roborepo: pushing to protected branch "${branch}" is blocked for agents (${detail}). Push a feature branch and open a pull request instead.`,
+  }
+}
+
+function denyForce(what) {
+  return {
+    decision: 'deny',
+    reason: `roborepo: force pushes are blocked for agents (${what} rewrites published history). Push without force, or run it yourself.`,
   }
 }
 

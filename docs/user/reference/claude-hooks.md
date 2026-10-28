@@ -28,13 +28,15 @@ Caveman mode on Claude comes from the `caveman` plugin, not a hook.
 
 Agents can push without a prompt, but not to a protected branch: `main`, `master`, the remote's
 default branch, and any names in the `ROBOREPO_PROTECTED_BRANCHES` environment variable
-(comma-separated). Force pushes stay denied by the permission settings.
+(comma-separated). Force pushes are denied to every branch: the permission settings deny
+`git push --force`, and the hook below denies the forms a prefix rule misses, such as
+`git push origin feat --force`, `--force-with-lease=<ref>`, `-uf`, and a `+` refspec.
 
 Two checks enforce this, for Claude and Codex alike:
 
 | Check | When it runs | What it catches |
 | --- | --- | --- |
-| Protected-branch push hook | Before the shell command runs | Named pushes (`git push origin main`, `HEAD:main`, `:main`) and a bare `git push` whose destination is protected. Asks when it cannot tell, for example `--all` or a `$VARIABLE` |
+| Protected-branch push hook | Before the shell command runs | Named pushes (`git push origin main`, `HEAD:main`, `:main`) and a bare `git push` whose destination is protected. Also denies any force push. Asks when it cannot tell, for example `--all`, `:`, a `$VARIABLE`, or a source-only refspec under a configured `remote.<name>.push` |
 | Git `pre-push` hook | When git pushes | Every push, from the exact refs git sends, including through aliases and scripts |
 
 The `pre-push` hook reaches only agent shells. RoboRepo sets `core.hooksPath` for agents through

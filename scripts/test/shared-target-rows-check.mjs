@@ -59,6 +59,9 @@ function coreHooksInstallAfterPackageHooks() {
   }
   for (const command of commands(coreCodex)) assert.ok(after.has(command), `core hook installed: ${command}`);
   for (const script of coreScripts) assert.ok(fs.existsSync(path.join(home, ".codex", "hooks", script)), `core script copied: ${script}`);
+  for (const script of coreScripts.filter((name) => fs.statSync(path.join(coreHooksSource, name)).mode & 0o111)) {
+    assert.ok(fs.statSync(path.join(home, ".codex", "hooks", script)).mode & 0o111, `core script stays executable: ${script}`);
+  }
   assert.equal(fs.readdirSync(path.join(home, ".codex")).some((name) => name.startsWith("hooks_update_")), false,
     "no staged merge-review copy: the core hooks installed instead of colliding");
   assert.match(run(env, cli, "bundle", "check", "hooks"), /ok: hooks/);

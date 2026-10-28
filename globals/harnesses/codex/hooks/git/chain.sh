@@ -17,8 +17,9 @@ roborepo_chain_hook() {
   name=$1
   shift
   dir=$(roborepo_repo_hooks_dir) || return 0
-  here=$(cd "$(dirname "$0")" && pwd -P)
-  there=$(cd "$dir" 2>/dev/null && pwd -P) || return 0
+  # CDPATH is cleared so cd resolves only the given path and prints nothing into the result.
+  here=$(CDPATH= cd -- "$(dirname "$0")" && pwd -P)
+  there=$(CDPATH= cd -- "$dir" 2>/dev/null && pwd -P) || return 0
   [ "$here" = "$there" ] && return 0
   [ -x "$there/$name" ] || return 0
   exec "$there/$name" "$@"
