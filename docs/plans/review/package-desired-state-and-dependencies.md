@@ -514,6 +514,13 @@ None open. Every question was answered by the user (2026-10-27 and 2026-10-28); 
 - [x] An older bundle record with telemetry on loses the user's own hooks selection — user chose
       to read bundle records as written; test-cli asserts `hooks` stays selected and applied after
       `bundle remove telemetry` on such a record
+- [ ] Human review: the terminal asks about recommendations after a `blocked` enable —
+      `offerRecommendations` in `scripts/cli/packages.mjs` runs whatever `result.ok` is
+- [ ] Human review: bulk Deselect All reporting a selectable required-only member `skipped`
+      (`scripts/cli/config-bulk.mjs`) has no test — only the non-selectable case is covered
+- [ ] Human review: terminal onboarding (`buildOnboardSteps`/`applyWizardChanges` in
+      `scripts/cli/presets.mjs`) neither shows nor offers recommendations, though §5–§6 say the
+      interactive CLI prompts and onboarding reads the same view — escalated to the human
 
 ### Verification
 
