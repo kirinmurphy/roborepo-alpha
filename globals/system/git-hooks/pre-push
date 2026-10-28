@@ -1,0 +1,62 @@
+#!/bin/sh
+# Refuses agent pushes that land on a protected branch or rewrite a remote ref, then runs the repo's
+# own pre-push hook. Git passes the exact refs on stdin, so this catches pushes the PreToolUse check
+# could not parse. Protected: main, master, the remote's default branch, and
+# ROBOREPO_PROTECTED_BRANCHES (comma-separated).
+
+. "$(dirname "$0")/chain.sh"
+
+remote=$1
+url=$2
+refuse() {
+  echo "roborepo: $1" >&2
+  exit 1
+}
+
+is_zero() {
+  case $1 in *[!0]*) return 1 ;; *) return 0 ;; esac
+}
+
+# The default branch comes from the recorded refs/remotes/<remote>/HEAD, or else from the remote
+# itself: this hook runs as part of a push, so the remote is reachable. Unknown means refuse, since
+# the push could be landing on it.
+remote_default() {
+  head=$(git symbolic-ref --quiet --short "refs/remotes/$remote/HEAD" 2>/dev/null)
+  if [ -n "$head" ]; then
+    printf '%s\n' "${head#"$remote"/}"
+    return 0
+  fi
+  advertised=$(git ls-remote --symref -- "$url" HEAD 2>/dev/null) || return 1
+  printf '%s\n' "$advertised" | awk '$1 == "ref:" && $3 == "HEAD" { sub("^refs/heads/", "", $2); print $2; found = 1 } END { exit !found }'
+}
+
+default_branch=$(remote_default) \
+  || refuse "cannot tell the default branch of $remote, so this push may land on it. Record it with 'git remote set-head $remote <branch>', or run the push yourself."
+protected="main master $default_branch $(printf '%s' "${ROBOREPO_PROTECTED_BRANCHES:-}" | tr ',' ' ')"
+
+input=$(cat)
+blocked=""
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ -n "$remote_ref" ] || continue
+  branch=${remote_ref#refs/heads/}
+  if [ "$branch" != "$remote_ref" ]; then
+    for name in $protected; do
+      [ "$branch" = "$name" ] && blocked="$blocked $branch"
+    done
+  fi
+  # A creation or a deletion rewrites nothing. An update must fast-forward: anything else is a force
+  # push, whatever flag or refspec produced it.
+  if ! is_zero "$local_sha" && ! is_zero "$remote_sha"; then
+    git cat-file -e "$remote_sha^{commit}" 2>/dev/null \
+      || refuse "$remote_ref on $remote has commits this repository does not have. Fetch and integrate them first; agents may not force-push."
+    git merge-base --is-ancestor "$remote_sha" "$local_sha" \
+      || refuse "updating $remote_ref on $remote is not a fast-forward, so it would rewrite published history. Agents may not force-push."
+  fi
+done <<EOF
+$input
+EOF
+
+[ -z "$blocked" ] \
+  || refuse "pushing to protected branch(es):$blocked is blocked for agents. Push a feature branch and open a pull request instead."
+
+printf '%s\n' "$input" | roborepo_chain_hook pre-push "$@"

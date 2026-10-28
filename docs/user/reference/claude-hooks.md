@@ -14,7 +14,7 @@ them. Turn a package's hooks off by disabling the package in `/agents` or with
 | SessionStart | jdocmunch index check | If `docs/` exists but is not indexed, reminds Claude to run `roborepo index docs docs/` | `jdocmunch` |
 | PreToolUse `Grep`, `Glob` | Search redirect | Blocks the call and tells Claude to use jcodemunch search tools instead | `jcodemunch` |
 | PreToolUse `Bash` | Source-exploration block | Blocks shell commands that read source files directly (see below) | `jcodemunch` |
-| PreToolUse `Bash` | Protected-branch push | Denies a `git push` that lands on a protected branch, so pushes to other branches need no prompt (see below) | always |
+| PreToolUse `Bash` | Protected-branch push | Allows a `git push` it verified lands on a feature branch; denies protected branches and force pushes (see below) | always |
 | PreToolUse `Bash` | Output minimizer | Trims noisy build, lint, and typecheck output; denies `--watch`, `--verbose`, and `--debug`; auto-allows a short list of safe read-only commands | always |
 | PreToolUse `Bash` | Dense command log | Records commands of three or more lines to `<stateRoot>/capture/claude/dense-bash.jsonl` so you can find ones worth scripting. Never blocks | `capture-dense-bash` |
 | PreToolUse `Read`, `Write`, `Edit` | Repository scope | Reads across the repository and its worktrees are quiet; writes outside the checkout in use prompt. See [Config Control Panel](config-control-panel.md#changing-path-scopes) | always |
@@ -26,26 +26,32 @@ Caveman mode on Claude comes from the `caveman` plugin, not a hook.
 
 ## Protected Branches
 
-Agents can push without a prompt, but not to a protected branch: `main`, `master`, the remote's
-default branch, and any names in the `ROBOREPO_PROTECTED_BRANCHES` environment variable
-(comma-separated). Force pushes are denied to every branch: the permission settings deny
-`git push --force`, and the hook below denies the forms a prefix rule misses, such as
-`git push origin feat --force`, `--force-with-lease=<ref>`, `-uf`, and a `+` refspec.
+Agents can push to feature branches without a prompt. They cannot push to a protected branch:
+`main`, `master`, the remote's default branch, and any names in the `ROBOREPO_PROTECTED_BRANCHES`
+environment variable (comma-separated). They cannot force-push to any branch.
+
+The permission settings leave `git push` at **ask**. The protected-branch hook is what approves a
+push, and only one it has checked. So an install without the hooks, a harness without them (Gemini),
+and `roborepo agent-run` all keep the prompt.
 
 Two checks enforce this, for Claude and Codex alike:
 
-| Check | When it runs | What it catches |
+| Check | When it runs | What it does |
 | --- | --- | --- |
-| Protected-branch push hook | Before the shell command runs | Named pushes (`git push origin main`, `HEAD:main`, `:main`) and a bare `git push` whose destination is protected. Also denies any force push. Asks when it cannot tell, for example `--all`, `:`, a `$VARIABLE`, or a source-only refspec under a configured `remote.<name>.push` |
-| Git `pre-push` hook | When git pushes | Every push, from the exact refs git sends, including through aliases and scripts |
+| Protected-branch push hook | Before the shell command runs | Allows a push it verified lands on non-protected branches, when the whole command is pushes and the `pre-push` hook is installed. Denies protected destinations and every force spelling (`--force` anywhere, `--force-with-lease=<ref>`, `-uf`, a `+` refspec). Asks when it cannot tell: `--all`, `:`, a `$VARIABLE`, `--no-verify`, an unrecorded remote default branch, or a source-only refspec under `remote.<name>.push` |
+| Git `pre-push` hook | When git pushes | Checks the exact refs git sends, including through aliases and scripts. Refuses protected destinations and any update that is not a fast-forward. Looks up the remote's default branch from the remote when it is not recorded locally, and refuses when it cannot |
+
+Anything else in the same command (`git push origin feat && npm publish`) leaves the whole command to
+the permission prompt, so the hook's approval never covers it.
 
 The `pre-push` hook reaches only agent shells. RoboRepo sets `core.hooksPath` for agents through
 `GIT_CONFIG_*` variables in `~/.claude/settings.json` (`env`) and `~/.codex/config.toml`
-(`shell_environment_policy.set`). They point at `~/.claude/hooks/git` or `~/.codex/hooks/git`.
-Your own terminal is unaffected. Those hooks then run the repo's own hooks (from `.git/hooks` or
-the repo's `core.hooksPath`), so tools like Husky keep working in agent sessions. Only the common
-client-side hooks are passed through: commit, merge, rebase, checkout, applypatch, push, gc and
-rewrite hooks. Others, such as `reference-transaction`, do not run in agent shells.
+(`shell_environment_policy.set`). They point at `~/.claude/git-hooks` or `~/.codex/git-hooks`, which
+install with the base configuration. Your own terminal is unaffected. Those hooks then run the
+repo's own hooks (from `.git/hooks` or the repo's `core.hooksPath`), so tools like Husky keep
+working in agent sessions. Only the common client-side hooks are passed through: commit, merge,
+rebase, checkout, applypatch, push, gc and rewrite hooks. Others, such as `reference-transaction`,
+do not run in agent shells.
 
 A push from your own terminal is never blocked. Pair this with branch protection on the remote for
 a guard that does not depend on the local machine.

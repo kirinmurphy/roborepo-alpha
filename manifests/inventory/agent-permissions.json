@@ -61,7 +61,7 @@
     {
       "id": "read-secrets",
       "label": "Read credential files",
-      "description": "Credential material that is never correct for an agent to read, denied everywhere including inside the current repository. This is the one layer the repository boundary cannot provide: a .env inside your checkout is in-bounds for repo-write-boundary, so only a deny rule stops it. Claude ranks deny above every allow, so these out-rank both the scope allows and the boundary hook. Deny is not a prompt — there is no in-session override; carve out a path here rather than working around it. The .env variants are enumerated rather than globbed as .env.* so that .env.example and .env.sample stay readable: they are committed template files carrying placeholder values, and are often the fastest way to learn what a project expects. Claude permission rules have no negation, so a readable exception must be expressed as a narrower deny, not an allow that would be out-ranked. A new secret-bearing variant therefore needs adding here explicitly.",
+      "description": "Credential material that is never correct for an agent to read, denied everywhere including inside the current repository. This is the one layer the repository boundary cannot provide: a .env inside your checkout is in-bounds for repo-write-boundary, so only a deny rule stops it. Claude ranks deny above every allow, so these out-rank both the scope allows and the boundary hook. Deny is not a prompt \u2014 there is no in-session override; carve out a path here rather than working around it. The .env variants are enumerated rather than globbed as .env.* so that .env.example and .env.sample stay readable: they are committed template files carrying placeholder values, and are often the fastest way to learn what a project expects. Claude permission rules have no negation, so a readable exception must be expressed as a narrower deny, not an allow that would be out-ranked. A new secret-bearing variant therefore needs adding here explicitly.",
       "kind": "tools-scoped",
       "tools": [
         "Read"
@@ -119,7 +119,7 @@
     {
       "id": "go-online",
       "label": "Go online",
-      "description": "Sandbox network access. Codex-only — Claude does not sandbox network egress.",
+      "description": "Sandbox network access. Codex-only \u2014 Claude does not sandbox network egress.",
       "kind": "network",
       "codexOnly": true,
       "bucket": "deny",
@@ -146,7 +146,7 @@
     {
       "id": "push-code",
       "label": "Push code",
-      "description": "Send commits to a remote (git push). Allowed because protected-branch hooks refuse pushes to main, master, or the remote default branch; harnesses without those hooks use unguardedBucket. Force variants are denied separately by rewrite-history.",
+      "description": "Send commits to a remote (git push). Prompts by default. Where the protected-branch hooks are installed, they approve pushes they verify land on a non-protected branch and deny the rest, so agents push to feature branches without a prompt; force variants are denied separately by rewrite-history.",
       "kind": "commands",
       "commands": [
         [
@@ -154,8 +154,7 @@
           "push"
         ]
       ],
-      "bucket": "allow",
-      "unguardedBucket": "ask",
+      "bucket": "ask",
       "category": "git"
     },
     {
@@ -193,7 +192,7 @@
     {
       "id": "rewrite-history",
       "label": "Rewrite published history",
-      "description": "Force-push or otherwise overwrite remote history. Denied outright — recovery depends on someone else still holding the old objects.",
+      "description": "Force-push or otherwise overwrite remote history. Denied outright \u2014 recovery depends on someone else still holding the old objects.",
       "kind": "commands",
       "commands": [
         [
@@ -244,7 +243,7 @@
     {
       "id": "run-wrapped-commands",
       "label": "Run output-capped commands",
-      "description": "The agent-facing runner: `roborepo agent-run` caps output AND validates its argv against this manifest before spawning (see scripts/cli/agent-run-policy.mjs). Plain `roborepo run` is deliberately NOT listed here — it spawns whatever it is given, and Claude's prefix matcher cannot see past the wrapper, so allowlisting it would silently override every deny/ask bucket below.",
+      "description": "The agent-facing runner: `roborepo agent-run` caps output AND validates its argv against this manifest before spawning (see scripts/cli/agent-run-policy.mjs). Plain `roborepo run` is deliberately NOT listed here \u2014 it spawns whatever it is given, and Claude's prefix matcher cannot see past the wrapper, so allowlisting it would silently override every deny/ask bucket below.",
       "kind": "commands",
       "commands": [
         [
@@ -322,7 +321,7 @@
     {
       "id": "mutate-harness-config",
       "label": "Change harness configuration",
-      "description": "roborepo namespaces that rewrite generated config or installed state (update, maintenance, mcp, package enable/disable/reconcile/adopt-live/manage/dev, skill, config set). Prompts. Anything NOT listed here — including namespaces added later — falls through to a prompt by default, so new subcommands never silently gain access.",
+      "description": "roborepo namespaces that rewrite generated config or installed state (update, maintenance, mcp, package enable/disable/reconcile/adopt-live/manage/dev, skill, config set). Prompts. Anything NOT listed here \u2014 including namespaces added later \u2014 falls through to a prompt by default, so new subcommands never silently gain access.",
       "kind": "commands",
       "commands": [
         [

@@ -109,4 +109,12 @@ assert.equal(
   "...and it must still refuse to invoke itself, or the allowlist entry becomes a laundering path",
 );
 
+// The protected-branch hooks approve a push by reading the shell command, which agent-run's
+// no-shell spawn never shows them. So the live manifest must keep `git push` out of the allow
+// bucket, or agent-run would run any push, to any branch, unchecked.
+const { REFUSAL } = await import("../cli/agent-run-policy.mjs");
+for (const branch of ["feature/x", "release"]) {
+  assert.equal(checkAgentRun(["git", "push", "origin", branch], manifest).reason, REFUSAL.ASK_BUCKET, `agent-run refuses git push origin ${branch}`);
+}
+
 console.log(`agent-run-coverage-check: ok (${topLevel.size} top-level commands, ${classified.size} classified)`);

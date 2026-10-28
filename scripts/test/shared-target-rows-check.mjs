@@ -27,6 +27,7 @@ const topLevelScripts = coreScripts.filter((name) => !name.includes(path.sep));
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-shared-target-rows-"));
 try {
   standalonePermissionManifestDiscovery();
+  baseInstallShipsTheGitHooksItsConfigPointsAt();
   coreHooksInstallAfterPackageHooks();
   scriptCopiesFollowConflictPolicy();
   linksOutsideTheCheckoutAreNeverWrittenThrough();
@@ -34,6 +35,22 @@ try {
   console.log("shared-target-rows-check: ok");
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
+}
+
+// The base root configs point agent git at <home>/git-hooks. A base-only install must ship that
+// directory, or agent shells would run no git hooks at all: not the push backstop, and not the
+// repo's own hooks either.
+function baseInstallShipsTheGitHooksItsConfigPointsAt() {
+  const { home, env } = makeHome("base-only");
+  run(env, cli, "bundle", "apply", "base");
+  const source = path.join(repoRoot, "globals/system/git-hooks");
+  for (const harness of [".claude", ".codex"]) {
+    for (const name of fs.readdirSync(source)) {
+      const installed = path.join(home, harness, "git-hooks", name);
+      assert.ok(fs.existsSync(installed), `base installs ${harness}/git-hooks/${name}`);
+      assert.equal(fs.statSync(installed).mode & 0o111, fs.statSync(path.join(source, name)).mode & 0o111, `${harness}/git-hooks/${name} keeps its mode`);
+    }
+  }
 }
 
 function coreHooksInstallAfterPackageHooks() {

@@ -80,17 +80,6 @@ function testPermissionsNetworkKindSkipped() {
   assert.equal(rendered.trim(), "", "network-kind behavior has no Gemini render target and must produce no rule");
 }
 
-// --- permissions: Gemini runs no guard hooks, so a behavior's unguardedBucket replaces its
-// hook-backed default; a personal override still wins ---
-function testPermissionsUnguardedBucket() {
-  const manifest = {
-    behaviors: [{ id: "push-code", kind: "commands", commands: [["git", "push"]], bucket: "allow", unguardedBucket: "ask" }],
-  };
-  assert.match(renderGeminiPolicyRules(geminiProvider.manifest, manifest), /decision = "ask_user"/, "unguardedBucket is Gemini's default");
-  const overridden = renderGeminiPolicyRules(geminiProvider.manifest, manifest, { behaviors: { "push-code": "allow" } });
-  assert.match(overridden, /decision = "allow"/, "a personal override wins over unguardedBucket");
-}
-
 // --- permissions: arbitrary commands render as run_shell_command + commandPrefix rules ---
 function testPermissionsArbitraryCommand() {
   const manifest = { commands: { allow: [["npm", "test"]] } };
@@ -169,7 +158,6 @@ testRootConfigRenderNormalizes();
 testPermissionsAskMapsToAskUser();
 testPermissionsToolsKindMapsToGeminiToolNames();
 testPermissionsNetworkKindSkipped();
-testPermissionsUnguardedBucket();
 testPermissionsArbitraryCommand();
 testPermissionsRenderIgnoresCurrent();
 testHooksMergeAndUnmerge();

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Proves agents can push feature branches but not protected ones (main, master, the remote's
-// default branch), through both guards:
-//   - the PreToolUse hook, which reads the command text before it runs, and
+// default branch), and never force-push, through both guards:
+//   - the PreToolUse hook, which reads the command text before it runs and is the only thing that
+//     approves a push without a prompt, and
 //   - the pre-push git hook, which agent shells reach through a core.hooksPath override and which
 //     must still run the repo's own hooks.
 // A permission prefix rule cannot express this, so it is only checkable by running the hooks.
@@ -16,14 +17,14 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 const claudeHooks = path.join(repoRoot, "globals/system/hooks/claude");
 const codexHooks = path.join(repoRoot, "globals/harnesses/codex/hooks");
 const hook = path.join(claudeHooks, "protected-branch-push.mjs");
-const gitHooks = path.join(claudeHooks, "git");
+const gitHooks = path.join(repoRoot, "globals/system/git-hooks");
 
-// Both harnesses install their own copy; a fix landed in one must land in the other.
-for (const relative of ["protected-branch-push.mjs", ...fs.readdirSync(gitHooks).map((name) => path.join("git", name))]) {
-  const codexCopy = path.join(codexHooks, relative);
-  assert.ok(fs.existsSync(codexCopy), `Codex is missing ${relative}`);
-  assert.equal(fs.readFileSync(codexCopy, "utf8"), fs.readFileSync(path.join(claudeHooks, relative), "utf8"), `${relative} differs between Claude and Codex`);
-  assert.equal(fs.statSync(codexCopy).mode & 0o111, fs.statSync(path.join(claudeHooks, relative)).mode & 0o111, `${relative} executable bit differs`);
+// Both harnesses install their own copy of the PreToolUse hook; a fix landed in one must land in the
+// other. The git hooks have one source, installed into each harness home.
+assert.equal(fs.readFileSync(path.join(codexHooks, "protected-branch-push.mjs"), "utf8"), fs.readFileSync(hook, "utf8"),
+  "protected-branch-push.mjs differs between Claude and Codex");
+for (const name of fs.readdirSync(gitHooks).filter((name) => name !== "chain.sh")) {
+  assert.ok(fs.statSync(path.join(gitHooks, name)).mode & 0o111, `git hook ${name} is executable`);
 }
 
 // Hermetic git: no user or system config, so a developer's own core.hooksPath cannot leak in.
@@ -63,7 +64,7 @@ function decide(command, { cwd = work, toolName = "Bash", env = {} } = {}) {
   const result = spawnSync(process.execPath, [hook], {
     input: JSON.stringify({ cwd, tool_name: toolName, tool_input: { command } }),
     encoding: "utf8",
-    env: { ...gitEnv, ...env },
+    env: { ...gitEnv, ROBOREPO_GIT_HOOKS_DIR: gitHooks, ...env },
   });
   assert.equal(result.status, 0, `hook exited ${result.status}: ${result.stderr}`);
   if (!result.stdout.trim()) return "defer";
@@ -71,10 +72,22 @@ function decide(command, { cwd = work, toolName = "Bash", env = {} } = {}) {
 }
 
 const cases = [
-  ["git push -u origin feat", "defer"],
-  ["git push origin HEAD", "defer"],
-  ["git push origin v1.0", "defer"],
+  // Verified pushes are allowed: the hook is what lets agents push without a prompt.
+  ["git push -u origin feat", "allow"],
+  ["git push origin HEAD", "allow"],
+  ["git push origin v1.0", "allow"],
+  ["git push origin feat 2>&1", "allow"],
+  [`cd ${work} && git push origin feat`, "allow"],
+  // Anything beyond pushes stays with the permission prompt, so the allow never covers it.
   ["git status && echo git push origin main", "defer"],
+  ["git push origin feat && rm -rf build", "defer"],
+  ["git push origin feat > push.log", "defer"],
+  ["bash -lc 'git push origin feat'", "defer"],
+  ["git push origin --delete feat", "defer"],
+  // Ways to point git away from the pre-push backstop are never approved silently.
+  ["GIT_CONFIG_COUNT=0 git push origin feat", "defer"],
+  ["git -c core.hooksPath=/dev/null push origin feat", "defer"],
+  ["git push --no-verify origin feat", "ask"],
   ["git push origin main", "deny"],
   ["git push origin HEAD:main", "deny"],
   ["git push origin feat:refs/heads/main", "deny"],
@@ -100,7 +113,7 @@ const cases = [
   ["git push -uf origin feat", "deny"],
   ["git push origin +feat", "deny"],
   ["git push origin +:", "deny"],
-  ["git push -o ci.skip origin feat", "defer"],
+  ["git push -o ci.skip origin feat", "allow"],
 ];
 for (const [command, expected] of cases) {
   assert.equal(decide(command), expected, command);
@@ -108,9 +121,18 @@ for (const [command, expected] of cases) {
 assert.equal(decide("git push origin release", { env: { ROBOREPO_PROTECTED_BRANCHES: "release, prod" } }), "deny", "extra protected names");
 assert.equal(decide("git push origin main", { toolName: "exec_command" }), "deny", "Codex shell tool");
 assert.equal(decide("git push origin main", { toolName: "Read" }), "defer", "non-shell tool");
+// Without the backstop installed, nothing approves a push: the permission prompt stays.
+assert.equal(decide("git push origin feat", { env: { ROBOREPO_GIT_HOOKS_DIR: path.join(tmp, "missing") } }), "defer", "no backstop, no allow");
+assert.equal(decide("git push origin main", { env: { ROBOREPO_GIT_HOOKS_DIR: path.join(tmp, "missing") } }), "deny", "a protected push is still denied");
+
+// With no recorded remote default branch, a push may land on it; this hook cannot ask the remote.
+gitOk(work, "remote", "set-head", "origin", "-d");
+assert.equal(decide("git push origin feat"), "ask", "unknown remote default branch asks");
+assert.equal(decide("git push origin main"), "deny", "main is protected regardless");
+gitOk(work, "remote", "set-head", "origin", "trunk");
 
 // A bare `git push` resolves where git itself would send it.
-assert.equal(decide("git push"), "defer", "bare push from a feature branch with no upstream");
+assert.equal(decide("git push"), "allow", "bare push from a feature branch with no upstream");
 gitOk(work, "switch", "-q", "main");
 assert.equal(decide("git push"), "deny", "bare push from main");
 assert.equal(decide("git push origin"), "deny", "bare push to a remote from main");
@@ -122,7 +144,7 @@ assert.equal(decide("git push"), "ask", "push.default=matching");
 gitOk(work, "config", "--unset", "push.default");
 gitOk(work, "config", "remote.origin.push", "refs/heads/feat:refs/heads/main");
 assert.equal(decide("git push origin feat"), "ask", "a source-only refspec follows remote.<name>.push");
-assert.equal(decide("git push origin feat:feat"), "defer", "an explicit destination does not");
+assert.equal(decide("git push origin feat:feat"), "allow", "an explicit destination does not");
 gitOk(work, "config", "--unset", "remote.origin.push");
 
 // pre-push backstop: git hands it the real destination refs.
@@ -136,6 +158,35 @@ for (const refspec of ["feature:main", "feature:refs/heads/master", "feature:tru
   assert.match(r.stderr, /protected branch/, refspec);
 }
 assert.notEqual(git(work, ["push", "-q", "origin", ":main"], agentEnv).status, 0, "deleting main should be refused");
+
+// Force pushes are refused from the refs themselves, however the command spelled them.
+gitOk(work, "commit", "-q", "--allow-empty", "-m", "published");
+assert.equal(git(work, ["push", "-q", "origin", "feature"], agentEnv).status, 0);
+gitOk(work, "reset", "-q", "--hard", "HEAD~1");
+gitOk(work, "commit", "-q", "--allow-empty", "-m", "rewritten");
+for (const args of [["origin", "--force", "feature"], ["origin", "+feature"], ["--force-with-lease", "origin", "feature"]]) {
+  r = git(work, ["push", "-q", ...args], agentEnv);
+  assert.notEqual(r.status, 0, `force push ${args.join(" ")} should be refused`);
+  assert.match(r.stderr, /not a fast-forward/, args.join(" "));
+}
+// A remote ref holding commits this repo lacks cannot be checked for fast-forward, so it is refused.
+const other = path.join(tmp, "other");
+gitOk(tmp, "clone", "-q", "-b", "feature", remote, other);
+gitOk(other, "commit", "-q", "--allow-empty", "-m", "elsewhere");
+gitOk(other, "push", "-q", "origin", "feature");
+r = git(work, ["push", "-q", "--force", "origin", "feature"], agentEnv);
+assert.notEqual(r.status, 0, "force over unknown remote commits should be refused");
+assert.match(r.stderr, /does not have/);
+gitOk(work, "pull", "-q", "--rebase", "origin", "feature");
+assert.equal(git(work, ["push", "-q", "origin", "feature"], agentEnv).status, 0, "a fast-forward after integrating is allowed");
+
+// With no recorded remote HEAD, the backstop asks the remote for its default branch.
+gitOk(work, "remote", "set-head", "origin", "-d");
+r = git(work, ["push", "-q", "origin", "feature:trunk"], agentEnv);
+assert.notEqual(r.status, 0, "the remote's default branch is protected without a recorded HEAD");
+assert.match(r.stderr, /protected branch/);
+assert.equal(git(work, ["push", "-q", "origin", "feature"], agentEnv).status, 0, "a feature push still passes");
+gitOk(work, "remote", "set-head", "origin", "trunk");
 // Without the agent override, the same push goes through: the backstop only applies to agent shells.
 r = git(work, ["push", "-q", "origin", "feature:main"]);
 assert.equal(r.status, 0, `a human push is not affected: ${r.stderr}`);

@@ -1,20 +1,24 @@
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-// Blocks agent pushes whose destination is a protected branch, so `git push` itself can be allowed
-// without a prompt. A permission prefix rule cannot do this: `git push` on main, `git push origin
-// HEAD:main`, and `git push origin :main` all start with the same words as a feature-branch push.
+// Decides agent `git push` commands, which the permission rules leave at "ask". A permission
+// prefix rule cannot tell them apart: `git push` on main, `git push origin HEAD:main`, and
+// `git push origin :main` all start with the same words as a feature-branch push.
 //
 // Protected: main, master, the remote's default branch (refs/remotes/<remote>/HEAD), and any names in
 // ROBOREPO_PROTECTED_BRANCHES (comma-separated). A push that lands on one is denied, and so is any
-// force push (a force option or a `+` refspec), since allowing `git push` would otherwise let one past
-// the prefix-only force rules. A push this parser cannot pin down (--all, --mirror, shell expansion,
-// globbed or configured refspecs) asks. Everything else emits nothing and falls through to the
-// permission rules.
+// force push (a force option or a `+` refspec). A push this parser cannot pin down (--all, --mirror,
+// shell expansion, globbed or configured refspecs, an unknown remote default branch) asks.
+//
+// A push it has verified is allowed, which is what lets agents push without a prompt. It allows only
+// when the whole command is pushes (and `cd`), so the approval never covers anything chained on, and
+// only when the git pre-push backstop is installed. The allow therefore exists only where both guards
+// do: an install without this hook, or without the backstop, keeps the permission prompt.
 //
 // This reads the command text, so it can be fooled by indirection it cannot see (an alias, a
-// script). The pre-push git hook under hooks/git/ is the backstop: git hands it the exact refs.
+// script). The pre-push hook in ../git-hooks/ is the backstop: git hands it the exact refs.
 //
 // The same file is installed for Claude and Codex; both send PreToolUse input on stdin and accept
 // hookSpecificOutput.permissionDecision. Keep the two copies identical.
@@ -24,6 +28,11 @@ const SHELLS = new Set(['sh', 'bash', 'zsh'])
 // git push options that take their value as the next word.
 const VALUE_OPTIONS = new Set(['--repo', '-o', '--push-option', '--receive-pack', '--exec'])
 const UNCLASSIFIABLE_OPTIONS = new Set(['--all', '--branches', '--mirror'])
+// Skips the pre-push backstop, so a push carrying it is never allowed without a prompt.
+const SKIPS_BACKSTOP = new Set(['--no-verify'])
+const VERIFIED = { decision: 'allow', reason: 'roborepo: push to a non-protected branch, checked by the protected-branch hooks.' }
+const gitHooksDir = process.env.ROBOREPO_GIT_HOOKS_DIR
+  || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'git-hooks')
 
 function readHookInput() {
   try {
@@ -64,6 +73,8 @@ function splitCommands(text) {
       word ??= ''
     } else if (ch === '\\' && i + 1 < text.length) {
       word = (word ?? '') + text[++i]
+    } else if (ch === '&' && word !== null && /[<>]$/.test(word)) {
+      word += ch // `2>&1`: a redirection, not a separator
     } else if (ch === ';' || ch === '&' || ch === '|' || ch === '\n') {
       endCommand()
     } else if (ch === ' ' || ch === '\t') {
@@ -84,14 +95,27 @@ function git(cwd, args) {
   }
 }
 
+// `defaultKnown` is false when no refs/remotes/<remote>/HEAD is recorded (a remote added but never
+// fetched, or a push to a URL): the remote's default branch is then unknown, and this hook has no
+// network access to ask the remote.
 function protectedBranches(cwd, remote) {
   const names = new Set(['main', 'master'])
   for (const name of (process.env.ROBOREPO_PROTECTED_BRANCHES || '').split(',')) {
     if (name.trim()) names.add(name.trim())
   }
   const remoteHead = git(cwd, ['symbolic-ref', '--quiet', '--short', `refs/remotes/${remote}/HEAD`])
-  if (remoteHead.startsWith(`${remote}/`)) names.add(remoteHead.slice(remote.length + 1))
-  return names
+  const defaultKnown = remoteHead.startsWith(`${remote}/`)
+  if (defaultKnown) names.add(remoteHead.slice(remote.length + 1))
+  return { names, defaultKnown }
+}
+
+function backstopInstalled() {
+  try {
+    fs.accessSync(path.join(gitHooksDir, 'pre-push'), fs.constants.X_OK)
+    return true
+  } catch {
+    return false
+  }
 }
 
 function currentBranch(cwd) {
@@ -132,7 +156,8 @@ function isForceOption(arg) {
   return Boolean(cluster) && cluster.split('o')[0].includes('f')
 }
 
-// Returns { decision, reason } for a `git push` word list (words after `push`), or null to stay out.
+// Returns { decision, reason } for a `git push` word list (words after `push`): VERIFIED for a push
+// that lands only on non-protected branches, or null to stay out.
 function classifyPush(cwd, args) {
   const end = args.indexOf('--')
   const options = end === -1 ? args : args.slice(0, end)
@@ -144,12 +169,15 @@ function classifyPush(cwd, args) {
   let deleteFlag = false
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i]
+    if (/^[0-9]?>&[0-9]$/.test(arg)) continue // 2>&1 only merges output streams
     if (/[$`]/.test(arg)) return ask(`cannot tell where this push lands: \`${arg}\` is expanded by the shell`)
     if (arg === '--') {
       words.push(...args.slice(i + 1))
       break
     }
     if (UNCLASSIFIABLE_OPTIONS.has(arg)) return ask(`\`git push ${arg}\` can include a protected branch`)
+    if (SKIPS_BACKSTOP.has(arg)) return ask(`\`${arg}\` skips the pre-push check`)
+    if (/[<>]/.test(arg)) return null
     if (arg === '--delete' || arg === '-d') deleteFlag = true
     else if (arg.startsWith('--repo=')) remote = arg.slice('--repo='.length)
     else if (VALUE_OPTIONS.has(arg)) {
@@ -163,16 +191,17 @@ function classifyPush(cwd, args) {
   if (forcedRefspec) return denyForce(`refspec \`${forcedRefspec}\``)
   const branch = currentBranch(cwd)
   remote ??= defaultRemote(cwd, branch)
-  const protectedNames = protectedBranches(cwd, remote)
+  const { names: protectedNames, defaultKnown } = protectedBranches(cwd, remote)
   const mapped = Boolean(git(cwd, ['config', '--get-all', `remote.${remote}.push`]))
 
   if (words.length === 0) {
+    // A delete of a non-protected branch is left to the permission prompt.
     if (deleteFlag) return null
     if (git(cwd, ['config', 'push.default']) === 'matching') return ask('push.default is "matching", which can include a protected branch')
     if (mapped) return ask(`remote.${remote}.push is configured; cannot tell where this push lands`)
     const target = implicitDestination(cwd)
     if (target && protectedNames.has(target)) return deny(target, `\`git push\` from ${branch || 'this branch'} writes to ${remote}/${target}`)
-    return null
+    return defaultKnown ? VERIFIED : unknownDefault(remote)
   }
 
   for (const refspec of words) {
@@ -185,7 +214,12 @@ function classifyPush(cwd, args) {
       return deny(destination.branch, `\`${refspec}\` ${verb} ${remote}/${destination.branch}`)
     }
   }
-  return null
+  if (deleteFlag) return null
+  return defaultKnown ? VERIFIED : unknownDefault(remote)
+}
+
+function unknownDefault(remote) {
+  return ask(`the default branch of \`${remote}\` is not recorded here, so this push may land on it. \`git remote set-head ${remote} --auto\` records it`)
 }
 
 function deny(branch, detail) {
@@ -207,37 +241,57 @@ function ask(detail) {
 }
 
 // Walks every simple command, following `cd` so a later `git push` is resolved in the right
-// directory, and descending into `sh -c '...'` strings.
+// directory, and descending into `sh -c '...'` strings. A deny or ask from any push wins. The result
+// is VERIFIED only when every simple command is a `cd` or a verified push run plainly: no leading
+// environment assignment and no `git -c` (either could point git away from the backstop), and not
+// inside a shell wrapper.
 function classifyCommand(text, startCwd) {
   let cwd = startCwd
   let result = null
+  let onlyVerifiedPushes = true
   for (const words of splitCommands(text)) {
     let i = 0
     while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i])) i += 1
+    const plain = i === 0
     const program = words[i] && path.basename(words[i])
-    if (program === 'cd' && words[i + 1] && !/[$`~]/.test(words[i + 1])) {
+    if (program === 'cd' && plain && words[i + 1] && !/[$`~<>]/.test(words[i + 1]) && words.length === 2) {
       cwd = path.resolve(cwd, words[i + 1])
       continue
     }
+    onlyVerifiedPushes &&= program === 'git'
     if (SHELLS.has(program)) {
       const flag = words.findIndex((w, j) => j > i && /^-[a-z]*c[a-z]*$/.test(w))
-      if (flag !== -1 && words[flag + 1]) result = stricter(result, classifyCommand(words[flag + 1], cwd))
+      if (flag !== -1 && words[flag + 1]) result = stricter(result, withoutAllow(classifyCommand(words[flag + 1], cwd)))
       continue
     }
     if (program !== 'git') continue
 
     let gitCwd = cwd
+    let configured = false
     let j = i + 1
     while (j < words.length && words[j].startsWith('-')) {
       if (words[j] === '-C') {
         gitCwd = path.resolve(gitCwd, words[j + 1] ?? '')
         j += 2
-      } else if (words[j] === '-c') j += 2
-      else j += 1
+      } else if (words[j] === '-c') {
+        configured = true
+        j += 2
+      } else j += 1
     }
-    if (words[j] === 'push') result = stricter(result, classifyPush(gitCwd, words.slice(j + 1)))
+    if (words[j] !== 'push') {
+      onlyVerifiedPushes = false
+      continue
+    }
+    const pushResult = classifyPush(gitCwd, words.slice(j + 1))
+    if (pushResult !== VERIFIED || !plain || configured) onlyVerifiedPushes = false
+    result = stricter(result, withoutAllow(pushResult))
   }
-  return result
+  if (result) return result
+  return onlyVerifiedPushes && backstopInstalled() ? VERIFIED : null
+}
+
+function withoutAllow(result) {
+  return result === VERIFIED ? null : result
 }
 
 function stricter(a, b) {
