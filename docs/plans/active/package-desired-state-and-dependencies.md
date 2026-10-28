@@ -1,7 +1,7 @@
 ---
 id: o9zwxuav
 priority: high
-next_action: Answer the Open Question on older bundle records with telemetry on, apply it, then run validation pass 5, the completion preflight, and the submit transition.
+next_action: Run validation pass 5 over the bundle-record change, then the completion preflight and the submit transition.
 blocked_by: []
 depends_on: ["bysyzl1e"]
 related: ["package-registry-live-state-reconciliation", "ejsc769o", "age4cm7r", "user-managed-packages-and-add-workflows"]
@@ -251,8 +251,9 @@ rule:
 
 - `presets.json` declares `"requires": ["hooks"]` on the `telemetry` bundle; `withDependencies` in
   `scripts/cli/presets.mjs` is replaced by the `package-graph.mjs` closure.
-- `selected[]` stores roots only. Apply, check, and status act on the effective set. A state file
-  without `schemaVersion` is read with the same drop-required rule as the package registry.
+- `selected[]` stores roots only. Apply, check, and status act on the effective set. Every listed
+  bundle is read as a root, whatever the file's `schemaVersion` (user decision 2026-10-28: no
+  compatibility reading for older bundle records).
 - `bundle remove hooks` while `telemetry` is selected removes the root but leaves hooks applied,
   and says telemetry still requires it.
 - `bundle status` marks each effective bundle as selected or `required by <bundle>`.
@@ -312,7 +313,7 @@ rule:
 - [x] Add `requires` to the bundle schema in `manifests/platform/presets.json` and declare
       `telemetry → hooks`.
 - [x] Replace `withDependencies` in `scripts/cli/presets.mjs` with the graph closure; store roots
-      only and read unversioned state with the drop-required rule.
+      only and read every listed bundle as a root.
 - [x] Show derived bundles in `bundle status` and name missing rows in `bundle check`.
 
 ### Phase 6: Catalog and docs
@@ -368,34 +369,7 @@ see `## Review` → `### Verification`.
 
 ## Open Questions
 
-The two earlier questions were answered by the user on 2026-10-27; see Decision Log.
-
-### An older bundle record with telemetry on loses the user's own hooks selection
-
-- **Evidence:** the default install selects only `base`, so `hooks` in a record without
-  `schemaVersion` was the user's choice. On `main`, enabling the telemetry package also recorded
-  `telemetry`, giving records like `{"selected":["base","hooks","telemetry"]}`. The legacy read drops
-  `hooks` from the roots because `telemetry` requires it. Turning telemetry off then leaves `hooks`
-  unselected: its files stay, but `bundle check` and hook readiness stop expecting core hooks. On
-  `main`, `hooks` stays selected. Reproduced in a scratch home by validation pass 4. The plan's §2
-  note that the lost "also chose it directly" signal matters only for workspace packages is wrong
-  for bundles.
-- **Options:**
-  1. Drop a `telemetry` root when reading an older record. Its bundle has no rows, so nothing is
-     lost, and `hooks` stays a root because nothing requires it any more. This replaces the
-     2026-10-27 "listed without its requirements" rule, since it covers the telemetry-only record
-     too. Pros: keeps every user's `hooks` choice and is the smallest change. Cons: a user who ran
-     `bundle apply telemetry` on `main` no longer sees `telemetry` as selected. Nothing changes on
-     disk.
-  2. For bundles only, keep every listed bundle as a root when reading an older record. Pros: no
-     telemetry special case. Cons: bundles stop following the packages' "older records drop required
-     ids" user decision, and `hooks` stays applied after `bundle remove telemetry` on those records.
-  3. Accept the cost and correct §2. Pros: no code change. Cons: users who chose hooks can quietly
-     stop being checked for them.
-- **Recommendation:** option 1.
-- **Why blocked:** it chooses between real designs, and option 2 would reverse part of a user
-  decision for bundles.
-- **Blocks:** submission to review.
+None open. Every question was answered by the user (2026-10-27 and 2026-10-28); see Decision Log.
 
 ## Decision Log
 
@@ -478,12 +452,15 @@ The two earlier questions were answered by the user on 2026-10-27; see Decision 
   `telemetry install` and the Settings toggle no longer write a `telemetry` bundle root, so a
   telemetry-only setup leaves `hooks` off and `bundle check` and hook readiness expect no core
   hooks. Turning telemetry off still drops a root that `bundle apply telemetry` recorded.
-- **2026-10-27: Legacy telemetry-only records drop the unapplied root.** A record without
-  `schemaVersion` that lists a bundle but not all of its requirements came from the old
-  bookkeeping path (on the base branch `bundle apply telemetry` always recorded `hooks` too), so
-  the read drops that root instead of making `hooks` effective. Alternatives: a telemetry-specific
-  migration (same result, a named special case), or leaving such records failing `bundle check`.
-  The general rule needs no telemetry name and only touches bundles that were never applied.
+- **2026-10-28 (user decision): Older bundle records are read as written.** Validation pass 4
+  found that the drop-required rule turned a user's own `hooks` choice into a dependency of a
+  `telemetry` root recorded by `main`'s package path, so turning telemetry off left `hooks`
+  unselected. Offered: drop a legacy `telemetry` root, keep every listed bundle as a root, or accept
+  the cost. The user, not needing backwards compatibility, chose to remove compatibility reading for
+  bundles: every listed bundle is a root and `schemaVersion` is written but not branched on. This
+  replaces the 2026-10-27 rule that dropped a legacy root listed without its requirements. Accepted
+  cost: a telemetry-only record written by `main` makes `hooks` required until `bundle remove
+  telemetry` or `roborepo update`. The package registry keeps its version-1 rule.
 - **2026-10-27 (user decision): The Claude MCP adapter returns `ok: false`.** Chosen over a typed
   error and over deferring to a harness-adapter plan. `runClaudeMcpAdd` returns its status, the
   adapter's `addServer` returns `ok: false` with the message in `warnings` and the CLI status in
@@ -514,18 +491,18 @@ The two earlier questions were answered by the user on 2026-10-27; see Decision 
 - [x] A required package with no inspectable source rendered as a button that did nothing —
       listed as plain text instead, with a portal assertion
 - [x] A telemetry-only selection now requires the hooks bundle it never applies — user chose to
-      stop recording the bundle; test-cli asserts `telemetry enable` records none and a legacy
-      telemetry-only record reads as unselected
+      stop recording the bundle; test-cli asserts `telemetry enable` records none
 - [x] Reconcile no longer ran the command-ownership check that `enablePackage --reconcile` ran —
       no change needed: the check could never fire (see Decision Log)
 - [x] `coreHookBundle` reporting a required-only bundle as selected has no test — test-cli asserts
-      `selected: true` for a `telemetry` root and `false` for a legacy telemetry-only record
+      `selected: true` for a `telemetry` root
 - [x] The config panel doc tied "no row" to `selectable: false` instead of
       `presentation.visibility` — reworded
 - [x] The `PackageMutationError` comment left out the dependency-only refusal — added
 - [x] The `AdapterActionResult` typedef did not document the new `exitStatus` field — added
-- [ ] An older bundle record with telemetry on loses the user's own hooks selection — escalated,
-      see Open Questions
+- [x] An older bundle record with telemetry on loses the user's own hooks selection — user chose
+      to read bundle records as written; test-cli asserts `hooks` stays selected and applied after
+      `bundle remove telemetry` on such a record
 
 ### Verification
 
@@ -541,6 +518,8 @@ The two earlier questions were answered by the user on 2026-10-27; see Decision 
   the Codex sandbox plan's old `ready/` path. It fails the same way at the merge base, so it is a
   base failure.
 - Validation pass 4 (fresh-context subagent): 1 fix, 1 escalate, 1 base (that docs link).
+- After the 2026-10-28 bundle-record decision: `test-cli.sh` 474 passed, 0 failed (two older-record
+  assertions removed, one replaced by the hooks-survives-telemetry assertion).
 - Full gate after the user decision: `npm run check` 61/62 suites, the one failure being that base
   docs link.
 - Base failure: `docs-reference-check.mjs` reports `docs/internal/backlog-review.md:86`, a link to

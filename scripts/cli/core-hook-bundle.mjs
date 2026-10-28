@@ -21,7 +21,7 @@ export function coreHookBundle(harness) {
   const bundle = bundles.find((entry) => (entry.rows ?? []).includes(key));
   if (!bundle) return null;
   // Effective, not just recorded: a bundle another selected bundle requires is installed too.
-  const roots = selectedBundleRoots(bundles, readJsonState(presetsStatePath, {}));
+  const roots = selectedBundleRoots(readJsonState(presetsStatePath, {}));
   return { id: bundle.id, selected: effectiveBundleIds(bundles, roots).includes(bundle.id) };
 }
 

@@ -2,27 +2,22 @@
 // (package-state.mjs), over the bundles in manifests/platform/presets.json and the record in
 // ~/.roborepo/presets/state.json.
 //
-// `selected[]` holds the bundles the user (or an install default) chose. A bundle's `requires`
-// joins the effective set through it and is never written to `selected`. A state file without
-// `schemaVersion` also listed those dependencies; reading one drops them from the roots, so they
-// stay effective through their parent and leave with it. A legacy root listed without its
-// dependencies was never applied as a bundle (telemetry install recorded `telemetry` that way), so
-// it is dropped too rather than making dependencies effective that were never installed.
+// `selected[]` holds the bundles the user (or an install default) chose, and is read as exactly
+// that. A bundle's `requires` joins the effective set through it and is never written to
+// `selected`.
 //
 // Kept free of the bundle-apply module's imports: hook readiness reads the effective set on every
 // status read.
-import { dropRequiredIds, requiredClosure, rootsRequiring } from "./package-graph.mjs";
+import { requiredClosure, rootsRequiring } from "./package-graph.mjs";
 
+// Written to the state file so a later format change can tell records apart; no reader branches on
+// it today.
 export const BUNDLE_STATE_SCHEMA_VERSION = 2;
 
 // Roots from a state object. `fallback` is used when the state records no selection at all (no
 // install has run yet); callers pass the catalog default or [] as they always have.
-export function selectedBundleRoots(bundles, state, fallback = []) {
-  const listed = state?.selected ?? fallback;
-  if ((state?.schemaVersion ?? 1) >= BUNDLE_STATE_SCHEMA_VERSION) return [...new Set(listed)];
-  const listedSet = new Set(listed);
-  const applied = listed.filter((id) => requiredClosure(bundles, [id]).every((dep) => listedSet.has(dep)));
-  return dropRequiredIds(bundles, applied);
+export function selectedBundleRoots(state, fallback = []) {
+  return [...new Set(state?.selected ?? fallback)];
 }
 
 // Roots plus their transitive `requires`, dependencies first.

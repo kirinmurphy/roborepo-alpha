@@ -164,7 +164,7 @@ export function readConfigSnapshot() {
 
   const bundleSelection = bundleSelectionStates(
     presetsCatalog.bundles,
-    selectedBundleRoots(presetsCatalog.bundles, presetState, presetsCatalog.default),
+    selectedBundleRoots(presetState, presetsCatalog.default),
   );
 
   const packageLiveState = buildPackageLiveState(availablePackages);

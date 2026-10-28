@@ -105,7 +105,7 @@ async function printOnboardingHookReviewHint() {
 function markOnboarded() {
   const catalog = readPresetCatalog();
   const state = readPresetState();
-  writePresetState(catalog, state, selectedBundleRoots(catalog.bundles, state, catalog.default), {
+  writePresetState(catalog, state, selectedBundleRoots(state, catalog.default), {
     onboardedAt: state.onboardedAt ?? new Date().toISOString(),
   });
 }
@@ -406,14 +406,14 @@ export function presetsApply(args) {
   const requested = [...requestedBundles(args, catalog)];
   applySelection(new Set(effectiveBundleIds(catalog.bundles, requested)), catalog, { reconcile: false });
   const state = readPresetState();
-  writePresetState(catalog, state, [...new Set([...selectedBundleRoots(catalog.bundles, state), ...requested])]);
+  writePresetState(catalog, state, [...new Set([...selectedBundleRoots(state), ...requested])]);
 }
 
 export function presetsStatus(args) {
   rejectUnknownFlags(args, new Set());
   const catalog = readPresetCatalog();
   const state = readPresetState();
-  const selection = bundleSelectionStates(catalog.bundles, selectedBundleRoots(catalog.bundles, state));
+  const selection = bundleSelectionStates(catalog.bundles, selectedBundleRoots(state));
   const rows = manifestRowsByKey();
   console.log(`onboarded: ${state.onboardedAt ? state.onboardedAt : "no"}`);
   const marks = new Map(catalog.bundles.map((bundle) => {
@@ -435,7 +435,7 @@ export function presetsCheck(args) {
   const state = readPresetState();
   const rows = manifestRowsByKey();
   let failed = 0;
-  const roots = selectedBundleRoots(catalog.bundles, state);
+  const roots = selectedBundleRoots(state);
   const selection = bundleSelectionStates(catalog.bundles, roots);
   for (const id of effectiveBundleIds(catalog.bundles, roots)) {
     const missing = missingBundleRows(catalog.byId.get(id), rows);
@@ -460,7 +460,7 @@ export function presetsRemove(args) {
   const requested = new Set(requestedBundles(args, catalog));
   const rows = manifestRowsByKey();
   const state = readPresetState();
-  const roots = selectedBundleRoots(catalog.bundles, state);
+  const roots = selectedBundleRoots(state);
   const nextRoots = roots.filter((id) => !requested.has(id));
   const before = effectiveBundleIds(catalog.bundles, roots);
   const after = new Set(effectiveBundleIds(catalog.bundles, nextRoots));
@@ -482,7 +482,7 @@ export function presetsRemove(args) {
 export function deselectTelemetryBundle() {
   const catalog = readPresetCatalog();
   const state = readPresetState();
-  const roots = selectedBundleRoots(catalog.bundles, state);
+  const roots = selectedBundleRoots(state);
   if (!roots.includes("telemetry")) return;
   writePresetState(catalog, state, roots.filter((id) => id !== "telemetry"));
 }

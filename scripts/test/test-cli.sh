@@ -620,17 +620,13 @@ assert "bundle remove: removing telemetry removes the hooks it required" \
   bash -c "${bundle_dep_env} node '${cli}' bundle remove telemetry >/dev/null && ! test -e '${bundle_dep_home}/.claude/hooks'"
 assert "bundle remove: a directly selected required bundle survives its parent" \
   bash -c "${bundle_dep_env} node '${cli}' bundle apply hooks telemetry >/dev/null && ${bundle_dep_env} node '${cli}' bundle remove telemetry >/dev/null && test -e '${bundle_dep_home}/.claude/hooks'"
-assert "bundle state: an unversioned record drops required bundles from its roots" \
-  bash -c "printf '{\"selected\":[\"base\",\"hooks\",\"telemetry\"]}\n' > '${bundle_dep_state}' && ${bundle_dep_env} node '${cli}' bundle status | grep -Eq '^hooks +required by telemetry'"
-assert "bundle state: an unversioned telemetry root listed without hooks was never applied and is dropped" \
-  bash -c "printf '{\"selected\":[\"telemetry\"]}\n' > '${bundle_dep_state}' && ${bundle_dep_env} node '${cli}' bundle status | grep -Eq '^telemetry +unselected' && ${bundle_dep_env} node '${cli}' bundle status | grep -Eq '^hooks +unselected'"
+assert "bundle state: every listed bundle is a choice, so hooks survives removing telemetry" \
+  bash -c "printf '{\"selected\":[\"base\",\"hooks\",\"telemetry\"]}\n' > '${bundle_dep_state}' && ${bundle_dep_env} node '${cli}' bundle remove telemetry >/dev/null && test -e '${bundle_dep_home}/.claude/hooks' && ${bundle_dep_env} node '${cli}' bundle status | grep -Eq '^hooks +selected'"
 # Hook readiness expects Codex core hooks when the hooks bundle is effective, including when it is
 # only required by a selected bundle.
 core_hook_bundle_probe="import('${repo_root}/scripts/cli/core-hook-bundle.mjs').then((m) => console.log(JSON.stringify(m.coreHookBundle('codex'))))"
 assert "hook readiness: a hooks bundle required by a selected telemetry bundle counts as selected" \
   bash -c "printf '{\"schemaVersion\":2,\"selected\":[\"telemetry\"]}\n' > '${bundle_dep_state}' && ${bundle_dep_env} node -e \"${core_hook_bundle_probe}\" | grep -qx '{\"id\":\"hooks\",\"selected\":true}'"
-assert "hook readiness: a legacy telemetry-only record does not expect core hooks" \
-  bash -c "printf '{\"selected\":[\"telemetry\"]}\n' > '${bundle_dep_state}' && ${bundle_dep_env} node -e \"${core_hook_bundle_probe}\" | grep -qx '{\"id\":\"hooks\",\"selected\":false}'"
 mkdir -p "${presets_home}/.claude/hooks"
 printf 'local hook file\n' > "${presets_home}/.claude/hooks/local.txt"
 printf '{"hooks":[]}\n' > "${presets_home}/.codex/hooks.json"

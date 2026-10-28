@@ -123,9 +123,8 @@ the bundles that were chosen, and a bundle's `requires` in `presets.json` (`tele
 `hooks`) is applied through it without being recorded. Apply, `bundle check`, and hook readiness
 act on the effective set. `bundle remove` of a bundle another selected bundle requires leaves it
 applied and says so; `bundle status` marks such a bundle `required by <bundle>`, and a failing
-`bundle check` names the missing rows. A state file without `schemaVersion` is read by dropping
-every listed bundle another listed bundle requires, and every listed bundle whose requirements are
-not all listed (it was recorded without being applied); the next write stores `schemaVersion: 2`.
+`bundle check` names the missing rows. Every bundle listed in `selected[]` is read as a choice,
+whatever the file's `schemaVersion`; writes store `schemaVersion: 2`, which no reader branches on.
 
 The `telemetry` bundle is selected only by `bundle apply telemetry`. `roborepo telemetry install`
 and the Settings telemetry toggle record no bundle, because the telemetry package wires its own
