@@ -1,7 +1,7 @@
 ---
 id: 4xc0gjuw
 priority: high
-next_action: Run /plan-review to review the completed implementation; confirm native Windows restore behavior before closure.
+next_action: Complete the implementation review, then request explicit human approval of the reviewed commit.
 blocked_by: []
 depends_on: []
 related: ["hr78g4sj", "b2sgiejd", "a7bslb00", "gqzjlzgx"]
@@ -476,6 +476,11 @@ checkout intact.
 
 ### Execution decisions
 
+- October 27 review: the user requested adding native Windows snapshot/restore testing to
+  [[l1mz96d9]] and deferring it here. Remove the unconfirmed checkbox from this plan; Windows
+  verification remains outstanding in that backlog plan and is no longer a closure prerequisite
+  here. No Windows result is claimed.
+
 - Keep the 1 MiB limit on ordinary Git text responses and use a separate 64 MiB binary limit for
   snapshot assets. Raising the global limit would weaken unrelated background scans; a separate
   bounded binary path supports ordinary assets without doing that.
@@ -517,13 +522,18 @@ checkout intact.
 
 ## Not tested
 
-- [ ] Native Windows snapshot restore and symlink/executable-mode behavior. This macOS host has no
-  Windows runtime or PowerShell; verify on a Windows machine before closing.
+Native Windows snapshot restore, symlinks, and executable modes remain unverified. At the user's
+explicit October 27 review request, the required testing item moved to [[l1mz96d9]] rather than
+blocking this plan's approval or closure. This deferral does not establish Windows support.
 
 ## Review
 
 ### Findings
 
+- [ ] Snapshot symlink targets are decoded as UTF-8 during capture/restore, losing raw target bytes;
+  preserve Buffer targets and assert an exact non-UTF-8 round trip.
+- [ ] Repository removal dialog ignores authoritative preview preservation and remaining paths;
+  render that assessment and add browser assertions.
 - [x] Conflict comparisons returned remaining — track conflicts and require unknown when no
   coherent candidate proves preservation; add a real-Git regression.
 - [x] Recorded doctor failure became stale after incoming main synchronization — refresh the
