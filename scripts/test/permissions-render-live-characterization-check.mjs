@@ -243,4 +243,30 @@ function makeHome() {
   }
 }
 
+// Portable home anchors survive rendering to unrelated target homes and mode changes.
+for (const write of ["allow", "deny"]) {
+  const home = makeHome();
+  try {
+    fs.mkdirSync(path.join(home, ".codex"));
+    const target = path.join(home, ".codex", "config.toml");
+    fs.writeFileSync(target, 'notify = ["personal"]\n[notice]\nhide = true\n');
+    const overrides = { behaviors: { "write-files": write } };
+    renderPermissionsTo(home, { manifest, overrides });
+    const output = fs.readFileSync(target, "utf8");
+    assert.match(output, /"~\/\.ssh\/\*\*" = "deny"/);
+    assert.match(output, /"\/\*\*\/\.env" = "deny"/);
+    assert.ok(!output.includes(home));
+    assert.match(output, /^notify = \["personal"\]/m);
+    assert.match(output, /\[notice\]\nhide = true/);
+    if (write === "deny") {
+      assert.match(output, /extends = ":read-only"/);
+      assert.doesNotMatch(output, /workspace_roots/);
+    }
+    renderPermissionsTo(home, { manifest, overrides });
+    assert.equal(fs.readFileSync(target, "utf8"), output);
+    renderPermissionsTo(home, { manifest, overrides: { behaviors: { "read-secrets": "allow" } } });
+    assert.doesNotMatch(fs.readFileSync(target, "utf8"), / = "deny"/);
+  } finally { fs.rmSync(home, { recursive: true, force: true }); }
+}
+
 console.log("permissions-render-live-characterization-check: ok");

@@ -123,7 +123,7 @@ generated rules in `~/.codex/AGENTS.md` and the command rules in `~/.codex/rules
 ## Permissions On Codex
 
 Your permission settings (see [Config Control Panel](config-control-panel.md#permissions)) reach
-Codex in two layers:
+Codex through command rules and hooks:
 
 | Bucket | How Codex enforces it |
 | --- | --- |
@@ -139,3 +139,18 @@ RoboRepo's version, `roborepo update` leaves them alone unless you choose `--on-
 drift.
 
 See [Hooks Internals](../../internal/hooks-internals.md) for script locations and protocol detail.
+
+### Native credential boundary
+
+Credential protection uses the selected native filesystem profile in `config.toml`. When
+`read-secrets` resolves to `deny`, it denies reads and writes to known credential paths in
+both writable and read-only profiles. `.env.example` and `.env.sample` remain readable.
+This enforcement does not depend on hook trust or command classification. The command hook still
+classifies commands; it does not scan shell text for secrets.
+
+A separately escalated process needs its own boundary assessment. Existing sessions and higher
+configuration layers may select different permissions. Start a fresh session and verify its
+selected profile before relying on the boundary. The measured coverage is macOS Codex CLI
+`0.163.0-alpha.11.2` sandboxed commands and descendants; product file tools, desktop sessions,
+browser, MCP, Linux, Windows, and unrestricted execution remain unverified. See
+[credential verification](../../internal/testing.md#codex-credential-verification) for controls.

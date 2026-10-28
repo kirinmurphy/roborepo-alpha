@@ -3,6 +3,9 @@ model_reasoning_effort = "medium"
 # BEGIN GENERATED AGENT PERMISSIONS
 # Source: manifests/inventory/agent-permissions.json
 approval_policy = "on-request"
+# roborepo credential: Credential denies block reads and writes inside the selected native sandbox.
+# roborepo credential: Enforcement requires runtime verification; browser, MCP and escalated processes are unverified.
+# roborepo credential: Unbounded deny globs require platform support; Linux and Windows coverage is unverified.
 default_permissions = "managed-workspace"
 
 [permissions.managed-workspace]
@@ -10,6 +13,23 @@ extends = ":workspace"
 
 [permissions.managed-workspace.workspace_roots]
 "~/.worktrees/roborepo" = true
+
+[permissions.managed-workspace.filesystem]
+"~/.ssh/**" = "deny"
+"~/.aws/**" = "deny"
+"~/.gnupg/**" = "deny"
+"~/.config/gcloud/**" = "deny"
+"~/Library/Keychains/**" = "deny"
+"/**/.env" = "deny"
+"/**/.env.local" = "deny"
+"/**/.env.*.local" = "deny"
+"/**/.env.development" = "deny"
+"/**/.env.production" = "deny"
+"/**/.env.staging" = "deny"
+"/**/.env.test" = "deny"
+"/**/*.pem" = "deny"
+"/**/id_rsa" = "deny"
+"/**/id_ed25519" = "deny"
 
 [permissions.managed-workspace.network]
 enabled = false

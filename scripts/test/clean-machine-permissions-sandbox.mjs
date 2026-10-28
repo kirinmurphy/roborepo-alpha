@@ -101,6 +101,32 @@ if grep -F 'sandbox_mode = "workspace-write"' "$codex_config" >/dev/null; then
   exit 1
 fi
 
+assert_contains '[permissions.managed-workspace.filesystem]' "$codex_config"
+assert_contains '"~/.ssh/**" = "deny"' "$codex_config"
+assert_contains '"/**/.env" = "deny"' "$codex_config"
+cp "$codex_config" "/tmp/codex-before-reapply.toml"
+roborepo config permissions
+cmp "$codex_config" "/tmp/codex-before-reapply.toml"
+
+node --input-type=module - "$prefix/lib/node_modules/${packageName}" <<'JS'
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+const { renderPermissionsTo } = await import(pathToFileURL(path.join(process.argv[2], "scripts/cli/permissions-render.mjs")));
+const target = path.join(process.env.HOME, ".codex/config.toml");
+const options = { overrides: { behaviors: { "write-files": "deny" } } };
+renderPermissionsTo(process.env.HOME, options);
+const text = fs.readFileSync(target, "utf8");
+assert.ok(text.includes('extends = ":read-only"'));
+assert.ok(text.includes('"~/.ssh/**" = "deny"'));
+assert.ok(text.includes('"/**/.env" = "deny"'));
+assert.ok(!text.includes("workspace_roots"));
+assert.ok(!text.includes(process.env.HOME));
+renderPermissionsTo(process.env.HOME, options);
+assert.equal(fs.readFileSync(target, "utf8"), text);
+JS
+
 echo "clean-machine[$label]: assert Gemini permissions"
 assert_contains 'toolName = ["write_file", "replace"]' "$gemini_policy"
 assert_contains 'toolName = "read_file"' "$gemini_policy"

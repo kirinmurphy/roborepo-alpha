@@ -128,7 +128,7 @@ test("changing the scope keeps Plans filters, and back, forward, and deep links 
   await expect(page.getByText("Alpha high plan")).toBeVisible();
   await expect(page.getByText("Beta high plan")).toHaveCount(0);
   await page.getByRole("button", { name: "Filters" }).click();
-  await page.locator("#priority").selectOption("high");
+  await page.getByLabel("Search", { exact: true }).fill("high");
   await page.locator("#filters-update").click();
   await expect(page.getByText("Alpha low plan")).toHaveCount(0);
 
@@ -137,7 +137,7 @@ test("changing the scope keeps Plans filters, and back, forward, and deep links 
   await expect(page.getByText("Beta high plan")).toBeVisible();
   await expect(page.getByText("Beta low plan")).toHaveCount(0);
   await expect(page.getByText("Alpha high plan")).toHaveCount(0);
-  await expect(page.locator("#priority")).toHaveValue("high");
+  await expect(page.getByLabel("Search", { exact: true })).toHaveValue("high");
 
   await page.goBack();
   expect(scopeParam(page)).toBe(ALPHA);
@@ -280,27 +280,27 @@ test("Plans filters draft in a popup: Update stays disabled until something chan
   await expect(update).toBeDisabled();
 
   // A draft does not filter, and putting it back disables Update again.
-  await dialog.locator("#priority").selectOption("high");
+  await dialog.getByLabel("Search", { exact: true }).fill("high");
   await expect(update).toBeEnabled();
   await expect(page.getByText("Alpha low plan")).toBeVisible();
-  await dialog.locator("#priority").selectOption("all");
+  await dialog.getByLabel("Search", { exact: true }).fill("");
   await expect(update).toBeDisabled();
 
   // Cancel throws the draft away.
-  await dialog.locator("#priority").selectOption("high");
+  await dialog.getByLabel("Search", { exact: true }).fill("high");
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await expect(dialog).toBeHidden();
   await expect(page.getByText("Alpha low plan")).toBeVisible();
   await page.getByRole("button", { name: "Filters" }).click();
-  await expect(dialog.locator("#priority")).toHaveValue("all");
+  await expect(dialog.getByLabel("Search", { exact: true })).toHaveValue("");
 
   // Update applies it, and the next open starts clean (disabled) from the applied state.
-  await dialog.locator("#priority").selectOption("high");
+  await dialog.getByLabel("Search", { exact: true }).fill("high");
   await update.click();
   await expect(dialog).toBeHidden();
   await expect(page.getByText("Alpha low plan")).toHaveCount(0);
   await page.getByRole("button", { name: "Filters" }).click();
-  await expect(dialog.locator("#priority")).toHaveValue("high");
+  await expect(dialog.getByLabel("Search", { exact: true })).toHaveValue("high");
   await expect(update).toBeDisabled();
 });
 
@@ -328,26 +328,26 @@ test("Plans filter option counts follow the unapplied draft while the board wait
   await expect(page.getByText("Alpha high plan")).toBeVisible();
   const dialog = page.locator("#filters-dialog");
   await page.getByRole("button", { name: "Filters" }).click();
-  const allPriority = dialog.locator("#priority option[value=all]");
-  await expect(allPriority).toHaveText("all priority (4)");
+  const allBlockers = dialog.locator("#blocked option[value=all]");
+  await expect(allBlockers).toHaveText("all blockers (4)");
   // Searching narrows the other filters' counts at once; the board itself is untouched.
   await dialog.locator("#search").fill("Alpha");
-  await expect(allPriority).toHaveText("all priority (2)");
+  await expect(allBlockers).toHaveText("all blockers (2)");
   await expect(page.getByText("Beta high plan")).toBeVisible();
   // Cancel returns the counts to the applied filters.
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await page.getByRole("button", { name: "Filters" }).click();
-  await expect(allPriority).toHaveText("all priority (4)");
+  await expect(allBlockers).toHaveText("all blockers (4)");
 });
 
 test("Plans filter options that match nothing are disabled, except the current choice", async ({ page }) => {
   await page.goto("/plans");
   await expect(page.getByText("Alpha high plan")).toBeVisible();
   await page.getByRole("button", { name: "Filters" }).click();
-  const options = await page.locator("#priority option").evaluateAll((nodes) =>
+  const options = await page.locator("#blocked option").evaluateAll((nodes) =>
     nodes.map((node) => ({ text: node.textContent, disabled: node.disabled, selected: node.selected })));
   const empty = options.filter((option) => /\(0\)$/.test(option.text));
-  expect(empty.length, "the fixture has priorities no plan uses").toBeGreaterThan(0);
+  expect(empty.length, "the fixture has blocker states no plan uses").toBeGreaterThan(0);
   for (const option of empty) expect(option.disabled, option.text).toBe(true);
   for (const option of options.filter((candidate) => !/\(0\)$/.test(candidate.text))) expect(option.disabled, option.text).toBe(false);
 });
