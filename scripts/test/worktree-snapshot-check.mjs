@@ -131,7 +131,7 @@ try {
   git(work, "update-index", "--assume-unchanged", "code");
   await assert.rejects(() => inventoryWorktree(work), /index flag/);
   git(work, "update-index", "--no-assume-unchanged", "code");
-  for (const shape of ["redundant", "deletion", "rename", "binary", "mode", "plan-move", "conflict"]) {
+  for (const shape of ["redundant", "deletion", "rename", "binary", "mode", "plan-move", "conflict", "concurrent-file", "concurrent-index", "concurrent-tip", "concurrent-config", "concurrent-base"]) {
     const repo = path.join(root, shape); fs.mkdirSync(repo);
     git(repo, "init", "-qb", "main");
     write(repo, "seed", "seed\n");
@@ -164,6 +164,31 @@ try {
     assert.equal(proof.state, "preserved", `${shape}: ${JSON.stringify(proof)}`);
     assert.equal(proof.hasLocalContent, true);
     assert.deepEqual(proof.remainingPaths, [], "absorbed local paths no longer remain");
+    if (shape.startsWith("concurrent-")) {
+      let surveys = 0;
+      const rows = await cleanupWorktrees({ cwd: repo, apply: true, stateRoot: path.join(root, `${shape}-state`), discover: async () => {
+        if (++surveys === 2) {
+          if (shape === "concurrent-file") write(checkout, "code", "new unsnapshotted work\n");
+          if (shape === "concurrent-index") {
+            const content = path.join(root, "unique-index-content"); fs.writeFileSync(content, "unique staged work\n");
+            const blob = git(checkout, "hash-object", "-w", content);
+            git(checkout, "update-index", "--cacheinfo", `100644,${blob},code`);
+          }
+          if (shape === "concurrent-tip") {
+            const tip = git(checkout, "rev-parse", "HEAD");
+            const next = git(checkout, "commit-tree", git(checkout, "rev-parse", "HEAD^{tree}"), "-p", tip, "-m", "concurrent commit");
+            git(checkout, "update-ref", "refs/heads/feature", next, tip);
+          }
+          if (shape === "concurrent-config") git(checkout, "config", "core.fileMode", "false");
+          if (shape === "concurrent-base") git(repo, "update-ref", "refs/heads/main", git(repo, "rev-list", "--max-parents=0", "HEAD"), git(repo, "rev-parse", "HEAD"));
+        }
+        return { instances: [] };
+      } });
+      assert.equal(surveys, 2, `${shape}: mutation occurs in the final survey`);
+      assert.equal(rows[0].action, "kept", `${shape}: ${JSON.stringify(rows)}`);
+      assert.equal(fs.existsSync(checkout), true, `${shape}: concurrent changes must retain checkout`);
+      assert.ok(rows[0].snapshotRef, `${shape}: verified snapshot remains discoverable`);
+    }
     if (shape === "redundant") {
       const rows = await cleanupWorktrees({ cwd: repo, apply: true, stateRoot: path.join(root, "cleanup-state"), discover: async () => ({ instances: [] }) });
       assert.equal(rows[0].action, "removed", JSON.stringify(rows));

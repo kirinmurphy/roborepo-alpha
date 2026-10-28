@@ -90,9 +90,11 @@ export async function cleanupWorktrees({ cwd = process.cwd(), stateRoot = STATE_
               const last = await inventoryWorktree(fresh.path).catch(() => null);
               if (last?.fingerprint !== snapshot.fingerprint) { row.reason = "state changed before removal"; row.eligible = false; rows.push(row); continue; }
             }
-            const result = await removeWorktree(mainPath, fresh, { kind, stateRoot, tip: freshTip, discardChanges, snapshot });
+            const baseEvidence = preservation?.baseCommit ? { ref: preservation.baseRef, commit: preservation.baseCommit } : null;
+            const result = await removeWorktree(mainPath, fresh, { kind, stateRoot, tip: freshTip, discardChanges, snapshot, baseEvidence });
             row.outcomes.push({ step: "checkout-removed", ok: Boolean(result.entry) }, { step: "branch-retired", ok: Boolean(result.entry?.branchDeleted) });
-            row.action = result.ok ? "removed" : "failed";
+            row.action = result.ok ? "removed" : result.kept ? "kept" : "failed";
+            if (result.kept) row.eligible = false;
             row.reason = result.reason || null;
             row.archiveRef = result.entry?.archiveRef || result.archiveRef || null;
           }

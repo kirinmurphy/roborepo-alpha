@@ -45,7 +45,7 @@ export async function archiveBranchTip(mainPath, branch, tip, { runGit = runGitP
   return result.ok ? { ok: true, ref } : { ok: false, reason: result.error || "could not archive branch" };
 }
 
-export async function removeWorktree(mainPath, worktree, { kind, stateRoot, tip, discardChanges = false, snapshot = null, runGit = runGitProcess, fsApi = fs } = {}) {
+export async function removeWorktree(mainPath, worktree, { kind, stateRoot, tip, discardChanges = false, snapshot = null, baseEvidence = null, runGit = runGitProcess, fsApi = fs } = {}) {
   if (snapshot) {
     try {
       const { manifest } = await readSnapshot(mainPath, snapshot.ref);
@@ -58,6 +58,10 @@ export async function removeWorktree(mainPath, worktree, { kind, stateRoot, tip,
     const archived = await archiveBranchTip(mainPath, worktree.branch || worktree.name, tip, { runGit });
     if (!archived.ok) return { ok: false, reason: archived.reason };
     archiveRef = archived.ref;
+  }
+  if (baseEvidence) {
+    const base = await runGit(mainPath, ["rev-parse", "--verify", `${baseEvidence.ref}^{commit}`]);
+    if (!base.ok || base.stdout.trim() !== baseEvidence.commit) return { ok: false, kept: true, reason: "base changed before removal", archiveRef };
   }
   const args = ["worktree", "remove"];
   if ((kind === "confirmed" && discardChanges === true) || snapshot?.ok) args.push("--force");
