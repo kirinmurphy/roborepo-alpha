@@ -1,7 +1,7 @@
 ---
 id: 4xc0gjuw
 priority: high
-next_action: Merge the approved implementation through the pull request, then run /plan-close.
+next_action: ""
 blocked_by: []
 depends_on: []
 related: ["hr78g4sj", "b2sgiejd", "a7bslb00", "gqzjlzgx"]
@@ -727,6 +727,54 @@ Documentation of record was updated in the repositories, CLI, Plans portal and l
 references, CLI/Plans internal references, and canonical plan-close, plan-review and schema
 instructions. The independent review checked those against the shared implementation. Native
 Windows results remain explicitly deferred to [[l1mz96d9]].
+
+## Completion summary
+
+Completed October 29, 2026 after the approved implementation landed on local `main` through
+pull request #47. CLI, repository-page actions, and plan closure share preservation assessment
+and guarded removal. Verified Git-object snapshots retain supported local state for restoration;
+unique or uncertain work remains in place until an explicit archive action. Approval and landing
+remain independent requirements. Pre-merge readiness and evidence-only landed-review recovery
+use the shared plan readers.
+
+All ten implementation tasks and required review findings are complete. Native Windows testing
+remains explicitly deferred to [[l1mz96d9]], and the original disappearance investigation remains
+explicitly deferred without a claimed cause or fix. Neither deferral is an open closure check.
+
+## Verification
+
+- `npm run check` passed on the landed implementation outside the sandbox: doctor 106 checks,
+  CLI 464/464, CI behavior suites 63/63, installer collisions, package installation, all four
+  Docker clean-machine suites, and browser tests 151/151. PowerShell installer parity was
+  visibly skipped because `pwsh` is unavailable; no native Windows result is claimed.
+- The first sandboxed attempt ended with 419 CLI checks passed and three failures caused by
+  `listen EPERM` on `127.0.0.1`. The passing outside-sandbox retry above resolves that verification
+  restriction; the initial attempt is not a passing gate.
+- Focused assertions included worktree lifecycle, snapshot/restore, landed recovery, plan closure
+  integration, plan commands, authority, lifecycle transitions, repository overview, CLI catalog,
+  CLI surface, and browser archive/discard behavior through the canonical gate.
+- Checked all ten tasks and acceptance scenarios against the shared preservation, snapshot,
+  removal, cleanup, landed-recovery, review-gate, authority, and portal implementations and their
+  regression fixtures. All required findings are resolved; open Not tested entries: zero.
+- Checked affected docs of record against landed code: repositories, CLI, Plans portal, plan-suite
+  lifecycle guide, CLI internals, Plans portal internals, plan schema, and canonical close/review
+  instructions. They describe preservation states, distinct archive/discard behavior, local recovery,
+  final-change guards, the accepted external-writer race, and evidence-only primary authority.
+- `bin/roborepo plans validate 4xc0gjuw --json` passed with zero findings before closure.
+  `bin/roborepo skill render-commands --check` passed for 11 wrappers;
+  `bin/roborepo skill triggers --check` passed for nine fixtures; `git diff --check` passed.
+- After writing closure evidence on primary, validation reported zero blocking findings and the
+  expected advisory `PLAN_EDITED_OUTSIDE_WORKTREE`. Closure evidence belongs on primary after
+  integration; the guarded close transition validates the completed destination separately.
+  `node scripts/test/docs-reference-check.mjs` also passed after these additions.
+- Primary and assigned-worktree plan bytes matched before closure edits, confirming integration.
+- Approved implementation commit: e7d4d82205a4ef2b67fbd85cd3b900abf18feac5
+- `bin/roborepo plans approval 4xc0gjuw --json` reported fresh human approval against branch tip
+  `d3e8a0e80f3f4a1bc92b42d5bbbed0858b4e77f0`.
+- `bin/roborepo plans landed 4xc0gjuw --json` newly scanned local `main` first-parent history
+  and verified content-level absorption of that branch tip. The close and cleanup commands
+  reverify the recorded evidence rather than trusting this statement.
+- Absorbing commit: c6d14d3299b931b47df86ffea08e7f640c3df575
 
 ## Implementation handoff (historical)
 
