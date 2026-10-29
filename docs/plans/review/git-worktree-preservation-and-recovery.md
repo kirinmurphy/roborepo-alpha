@@ -1,11 +1,11 @@
 ---
 id: 4xc0gjuw
 priority: high
-next_action: Request renewed human approval after recording the explicit investigation deferral and refreshed verification.
+next_action: Await explicit human approval of implementation e7d4d822, then merge the pull request and run /plan-close.
 blocked_by: []
 depends_on: []
 related: ["hr78g4sj", "b2sgiejd", "a7bslb00", "gqzjlzgx"]
-reviewed_commit: 2a4efc783e85ca37a6a7d9143b150926f2641f1b
+reviewed_commit: e7d4d82205a4ef2b67fbd85cd3b900abf18feac5
 worktree: git-worktree-preservation-and-recovery
 ---
 
@@ -565,6 +565,16 @@ request/response evidence together with the archive/removal ledger before resett
 
 ### Verification
 
+- October 29 refreshed review: `npm run check` passed on retry at the implementation in
+  `e7d4d82205a4ef2b67fbd85cd3b900abf18feac5`: doctor 106 checks, CLI 464/464,
+  CI behavior suites 63/63, installer collisions/package installation, all four Docker suites,
+  and browser tests 151/151. PowerShell parity was visibly skipped because unavailable; native
+  Windows remains deferred. `bin/roborepo plans preflight 4xc0gjuw --json` passed all six checks.
+- The first refreshed gate stopped at 463 CLI passes and one remote-sync menu assertion failure.
+  The unchanged `cli-surface-integration-check.mjs` and `git-remote-sync.mjs` also exist on main;
+  the standalone check passed there and the unchanged full retry passed here. No cause is claimed
+  and no unrelated menu code was changed. This is historical failed-attempt evidence, not a
+  claim that the first gate passed or that a base failure was reproduced.
 - October 28 deferral resumption: explicit user deferral removes the unexplained original
   disappearance from required findings while retaining the incident and uncertainty. All required
   findings are resolved or explicitly deferred; native Windows remains owned by [[l1mz96d9]].
@@ -606,7 +616,7 @@ request/response evidence together with the archive/removal ledger before resett
   was visibly skipped because `pwsh` is unavailable; native Windows checks are deferred as
   explicitly directed above. This supersedes the historical partial-gate evidence below.
 - Base synchronization: `bdce97b091020133fa77541330155b19387adcb5` merged
-  `6eba62ad78ad37d0e3a62230869281378919cc04` without conflicts. Current base
+  `6eba62ad78ad37d0e3a62230869281378919cc04` without conflicts. Then-current base
   `d148883dc2f2446ef2f1cab5b36b46b609026c54` differs only by the requested Windows-plan TODO;
   an executed diff outside `docs/plans/` is empty. No current base failures were observed in
   the passing feature gate.
@@ -630,9 +640,9 @@ request/response evidence together with the archive/removal ledger before resett
 - Validation pass 3 at `1fde0cff` (fresh-context subagent): no additional implementation or prose
   findings. Reviewed the full diff, all safety/acceptance paths, regression evidence, shared
   consumers, code-style/JavaScript/support constraints, and technical-writing rules.
-- Current completion preflight passed all six checks: assigned authority, complete tasks, no
+- Implementation handoff preflight passed all six checks: assigned authority, complete tasks, no
   blockers, clean worktree, feature commits, and review schema apart from the Windows entry.
-- Current full gate: doctor passed (106); CLI passed (464/464); CI suites passed (62/62); package,
+- Historical implementation gate: doctor passed (106); CLI passed (464/464); CI suites passed (62/62); package,
   collision, and all Docker checks passed. Browser stage: 144 passed, seven failed on unchanged
   main inputs. Base runs reproduce the Plans drawer/card assertions and four scope/filter
   assertions; the Home drawer's high-priority assertion also fails on main. No passing full-gate
@@ -659,8 +669,8 @@ request/response evidence together with the archive/removal ledger before resett
 
 ### Result
 
-- Status: pending
-- Reviewed implementation commit: 2a4efc783e85ca37a6a7d9143b150926f2641f1b
+- Status: complete
+- Reviewed implementation commit: e7d4d82205a4ef2b67fbd85cd3b900abf18feac5
 - Base commit: 3ef323270d1188a17cc3d0eda7c75914d6d28b2b
 
 ### Prior approval
