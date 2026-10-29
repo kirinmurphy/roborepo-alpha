@@ -100,6 +100,8 @@ change in one place rather than per consumer.
 - Ownership markers inside harness config files.
 - Plan-suite-specific behavior such as the `implementation-review` package and the actual
   `requires`/`recommends` edges on built-in packages; [[ejsc769o]] owns them.
+- Showing or offering recommendations in terminal onboarding. [[ejsc769o]], which adds the first
+  `recommends` edges, decides how the wizard presents them (user decision 2026-10-28).
 - Turning conditional, task-dependent skill pairing into static package relationships.
 
 ## Proposed design
@@ -470,6 +472,11 @@ None open. Every question was answered by the user (2026-10-27 and 2026-10-28); 
   adapter's `addServer` returns `ok: false` with the message in `warnings` and the CLI status in
   `exitStatus`, package enable reports the package `blocked` with that message, and `roborepo mcp
   add` / `mcp apply` exit with the Claude CLI's status as before.
+- **2026-10-28 (user decision, human review): Onboarding recommendations wait for [[ejsc769o]].**
+  The review found the terminal setup wizard neither shows nor offers recommendations. No built-in
+  package declares `recommends`, so nothing is affected yet. Offered: defer to the plan that adds
+  the first edges, prompt after the wizard applies, or print one line after it applies. The user
+  chose to defer ("Leave for later plan").
 
 ## Review
 
@@ -520,9 +527,10 @@ None open. Every question was answered by the user (2026-10-27 and 2026-10-28); 
 - [x] Human review: bulk Deselect All reporting a selectable required-only member `skipped`
       (`scripts/cli/config-bulk.mjs`) has no test — only the non-selectable case is covered — fixed
       in review (ab513c7a)
-- [ ] Human review: terminal onboarding (`buildOnboardSteps`/`applyWizardChanges` in
+- [x] Human review: terminal onboarding (`buildOnboardSteps`/`applyWizardChanges` in
       `scripts/cli/presets.mjs`) neither shows nor offers recommendations, though §5–§6 say the
-      interactive CLI prompts and onboarding reads the same view — escalated to the human
+      interactive CLI prompts and onboarding reads the same view — escalated; the user deferred it
+      to [[ejsc769o]] (see Decision Log and Non-goals)
 
 ### Verification
 
