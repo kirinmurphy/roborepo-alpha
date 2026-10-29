@@ -1,7 +1,7 @@
 ---
 id: o9zwxuav
 priority: high
-next_action: Run /plan-review for the human review of this plan.
+next_action: Open and merge the pull request, then run /plan-close.
 blocked_by: []
 depends_on: ["bysyzl1e"]
 related: ["package-registry-live-state-reconciliation", "ejsc769o", "age4cm7r", "user-managed-packages-and-add-workflows"]
@@ -591,7 +591,11 @@ None open. Every question was answered by the user (2026-10-27 and 2026-10-28); 
 
 ### Approval
 
-- Decision: requested
+- Decision: approved
+- Reviewed implementation commit: 28822b471e1a7a85eda3e297d74be62eb9d58410
+- Confirmed by: human
+- Evidence: the user answered "Approve" to "Do you approve "Package Management: Part 02" at
+  reviewed commit 28822b471e1a7a85eda3e297d74be62eb9d58410?" in the /plan-review chat (2026-10-29).
 
 ## Coordination and completed baseline
 
