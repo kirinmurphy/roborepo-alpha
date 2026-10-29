@@ -1,7 +1,7 @@
 ---
 id: 4xc0gjuw
 priority: high
-next_action: Await explicit human approval of implementation e7d4d822, then merge the pull request and run /plan-close.
+next_action: Merge the approved implementation through the pull request, then run /plan-close.
 blocked_by: []
 depends_on: []
 related: ["hr78g4sj", "b2sgiejd", "a7bslb00", "gqzjlzgx"]
@@ -686,7 +686,15 @@ question naming this plan and full implementation commit
 
 ### Approval
 
-- Decision: requested
+- Decision: approved
+- Reviewed implementation commit: e7d4d82205a4ef2b67fbd85cd3b900abf18feac5
+- Confirmed by: human
+
+On October 29, 2026, the user answered "Approve the updated implementation" to the review
+question naming this plan and full implementation commit
+`e7d4d82205a4ef2b67fbd85cd3b900abf18feac5`. This approval includes the concurrency fix and
+the separately recorded investigation deferral. Native Windows testing remains deferred to
+[[l1mz96d9]].
 
 ### Acceptance evidence
 
