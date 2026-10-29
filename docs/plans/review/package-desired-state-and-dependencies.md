@@ -582,20 +582,27 @@ None open. Every question was answered by the user (2026-10-27 and 2026-10-28); 
 - Human review (2026-10-28), after the review fixes: `npm run check` passed at a5a5d032 (all
   suites, portal UI 154 passed). Second review Validator pass (fresh-context subagent) over
   ab513c7a: clean.
+- Earlier result and approval (history): review complete at 28822b47 on base 3ef32327; the user
+  approved 28822b47 in the /plan-review chat (2026-10-29). Merges of `main` afterward (24a80344,
+  e7d64f25 by the user; 0fd97311 by review, plan-only) made it stale.
+- Re-review after those merges (2026-10-29): no conflict hunks. Five files changed on both sides
+  (`cli-internals.md`, `roborepo-cli.md`, `telemetry.mjs`, `check-groups.json`,
+  `portal-ui.spec.mjs`), and main's side of each is additive. Validator pass (fresh-context
+  subagent): clean; every line the branch added is still present, and nothing incoming reads
+  package or bundle state. The first `npm run check` at 0fd97311 failed one test-cli assertion
+  ("roborepo update preserves local hooks, trust, and enabled skills") while other package checks
+  ran at the same time; `test-cli.sh` alone then passed 474/0, and a rerun of `npm run check` at
+  0fd97311 passed (all suites, portal UI 154 passed).
 
 ### Result
 
 - Status: complete
-- Reviewed implementation commit: 28822b471e1a7a85eda3e297d74be62eb9d58410
-- Base commit: 3ef323270d1188a17cc3d0eda7c75914d6d28b2b
+- Reviewed implementation commit: 0fd97311f2c40085291b06020ac8c5b42e7354ce
+- Base commit: cd5ed4f49e3c3b25177f0a6b5e4aa146638792f2
 
 ### Approval
 
-- Decision: approved
-- Reviewed implementation commit: 28822b471e1a7a85eda3e297d74be62eb9d58410
-- Confirmed by: human
-- Evidence: the user answered "Approve" to "Do you approve "Package Management: Part 02" at
-  reviewed commit 28822b471e1a7a85eda3e297d74be62eb9d58410?" in the /plan-review chat (2026-10-29).
+- Decision: requested
 
 ## Coordination and completed baseline
 
