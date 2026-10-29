@@ -117,3 +117,35 @@ function openTasks(parsed) {
 function frontmatterLines(markdown) {
   return markdown.split("\n").length - parseFrontmatter(markdown).body.split("\n").length;
 }
+
+// Read-only merge preparation. Approval alone does not establish a committed, clean review packet
+// or a review against today's implementation base; none of these checks authorizes a merge.
+export function mergeReadiness({ primary, record, base = "main" }) {
+  const resolved = authoritativeMarkdown(primary, record);
+  const assessedTip = resolved.worktree?.branch ? git(primary, ["rev-parse", `refs/heads/${resolved.worktree.branch}`]).stdout : null;
+  const assessedBase = git(primary, ["rev-parse", base]).stdout;
+  const markdown = resolved.markdown;
+  const checks = [];
+  const check = (name, ok, observed, fix) => checks.push({ n: checks.length + 1, name, ok: Boolean(ok), observed, ...(ok ? {} : { fix }) });
+  const approval = approvalFreshness({ primary, record, base });
+  const parsed = parsePlanMarkdown(markdown);
+  const unfinished = openTasks(parsed);
+  const blockers = parsed.frontmatter.blocked_by || [];
+  check("required tasks and blockers resolved", !unfinished.length && !blockers.length,
+    [...unfinished.map((task) => task.text), ...blockers].join("; ") || "all required tasks complete; no blockers", "finish required tasks and resolve blockers before merging");
+  check("assigned branch available", assessedTip && resolved.authority.source === "worktree", resolved.authority.reason || assessedTip, "restore the assigned implementation worktree");
+  check("explicit approval is fresh", approval.state === "fresh", approval.reason || approval.state, "record explicit human approval of the current implementation");
+  check("review is complete and fresh", approval.review.state === "fresh", approval.review.reason || approval.review.state, "complete review and required checks for the current implementation");
+  const basePaths = approval.review.baseChangedPaths || [];
+  check("reviewed base implementation is current", approval.review.state === "fresh" && !basePaths.length, basePaths.join("; ") || "no implementation changes on base", "renew review against the current base implementation");
+  const workingPath = resolved.worktree?.path;
+  const status = workingPath ? git(workingPath, ["status", "--porcelain", "--untracked-files=all"]) : { ok: false };
+  check("worktree is clean", status.ok && !status.stdout, status.stdout || (status.ok ? "clean" : "unavailable"), "commit all staged, unstaged, and untracked changes, including plan evidence");
+  const committed = workingPath ? git(workingPath, ["show", `HEAD:${resolved.relativePath}`]) : { ok: false };
+  check("review packet is committed", committed.ok && committed.raw === markdown, committed.ok ? "compared to HEAD" : "unavailable", "commit the authoritative plan's Result and Approval");
+  const fresh = authoritativeMarkdown(primary, record);
+  const tipNow = resolved.worktree?.branch ? git(primary, ["rev-parse", `refs/heads/${resolved.worktree.branch}`]).stdout : null;
+  check("assessed state stayed stable", fresh.markdown === markdown && fresh.worktree?.branch === resolved.worktree?.branch && tipNow === assessedTip && git(primary, ["rev-parse", base]).stdout === assessedBase,
+    "branch, base, and plan compared again", "rerun readiness after concurrent changes stop");
+  return { ok: checks.every((item) => item.ok), assessedTip, assessedBase, branch: resolved.worktree?.branch || null, plan: { id: record.plan.id, path: resolved.relativePath }, checks };
+}

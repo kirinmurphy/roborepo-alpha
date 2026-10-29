@@ -1,0 +1,19 @@
+{
+  "path": [
+    "git",
+    "worktrees",
+    "archives"
+  ],
+  "kind": "command",
+  "title": "List worktree archives",
+  "description": "List worktree archives",
+  "usage": "roborepo git worktrees archives [--json]",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/worktree-cleanup.mjs",
+    "export": "worktreeArchiveCommand",
+    "prependArgs": [
+      "archives"
+    ]
+  }
+}

@@ -248,3 +248,22 @@ See [RoboRepo Skills Interface](roborepo-skills.md) for the managed/native bound
 
 > `roborepo dev …` exists only in a Git checkout of RoboRepo itself; the scripts it drives are not
 > published to npm, so an installed copy reports that it requires a development checkout.
+
+## Worktree preservation and recovery
+
+Use `git worktrees cleanup` to inspect committed landing and local preservation separately.
+The JSON rows retain their existing fields and include preservation state, remaining paths,
+assessed tips, evidence, snapshot/restore references, and individual removal outcomes.
+See [worktree states and cleanup](repositories.md#worktree-states-and-cleanup) for the safety rules.
+
+| Command | Behavior |
+| --- | --- |
+| `roborepo git worktrees archive-remove <branch-or-name> [--confirm --apply] [--json]` | Preview or explicitly snapshot and remove one worktree |
+| `roborepo git worktrees archives [--json]` | List local snapshots and legacy committed-tip backups |
+| `roborepo git worktrees restore <archive-id> --destination <new-path> [--apply] [--json]` | Preview or restore into a fresh detached worktree |
+| `roborepo plans merge-readiness <plan> [--base <branch>] [--json]` | Require committed fresh review/approval, a clean worktree, and current reviewed base |
+
+Stop writers before removal. Mutation failures return nonzero even when the snapshot was created;
+retain its recovery reference. Merge readiness is read-only: exit 0 means ready, 1 means refused,
+and 2 means usage error. It identifies assessed branch/base tips and repair instructions without
+authorizing a merge or observing remote pull-request protection.

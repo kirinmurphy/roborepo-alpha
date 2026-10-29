@@ -641,6 +641,7 @@ Prose before the subsections.
     findings: { open: 1, total: 2 },
     result: null,
     approval: { decision: "approved", commit: "abcdef0123", confirmedBy: "human" },
+    recovery: null,
   });
   const fenced = parsePlanMarkdown("---\nid: rev12345\n---\n\n# F\n\n```md\n## Review\n### Approval\n- Decision: approved\n```\n", {});
   assert.deepEqual(fenced.review, { present: false, findings: { open: 0, total: 0 }, result: null, approval: null }, "a fenced example is not a review record");

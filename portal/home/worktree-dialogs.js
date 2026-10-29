@@ -11,6 +11,21 @@ export function createWorktreeRemoveDialog({ onRemoved }) {
   let target = null;
   wireClose(dialog);
   const confirm = slot("confirm");
+  const archiveConfirm = slot("archive-confirm");
+  archiveConfirm.addEventListener("click", () => run(dialog, archiveConfirm, "Archiving…", async () => {
+    const result = await api.archiveWorktree(target);
+    const recovery = slot("snapshot-result");
+    if (result.snapshotRef) {
+      recovery.hidden = false;
+      recovery.textContent = `${result.snapshotRef}\n${result.restoreCommand}`;
+    }
+    if (result.action !== "removed") throw new Error(result.reason || "The worktree was kept.");
+    confirm.hidden = true;
+    archiveConfirm.hidden = true;
+    slot("status").textContent = "Worktree archived and removed. Its archived changes have not been submitted or merged.";
+    slot("dirty").hidden = true;
+    onRemoved();
+  }));
   confirm.addEventListener("click", () => run(dialog, confirm, "Deleting…", async () => {
     const result = await api.removeWorktree(target);
     if (result.requiresDiscardConfirmation) {
@@ -33,6 +48,31 @@ export function createWorktreeRemoveDialog({ onRemoved }) {
       if (!repositoryId || !selector) return;
       const dirty = checkout.git?.dirty === true || checkout.worktreeReason === "uncommitted or untracked changes";
       target = { repositoryId, branch: selector, discardChanges: dirty };
+      confirm.hidden = false;
+      archiveConfirm.hidden = false;
+      archiveConfirm.disabled = true;
+      slot("snapshot-result").hidden = true;
+      const openingTarget = target;
+      api.previewWorktreeArchive(target).then((preview) => {
+        if (target !== openingTarget) return;
+        slot("status").textContent = [
+          removalStatus(checkout),
+          `Local preservation: ${preview?.preservation || "unknown"}.`,
+          preview?.remainingPaths?.length ? `Remaining paths: ${preview.remainingPaths.join(", ")}` : "",
+          preview?.reason || "",
+        ].filter(Boolean).join(" ");
+        archiveConfirm.hidden = !preview?.eligible;
+        archiveConfirm.disabled = false;
+        if (!preview?.eligible) {
+          slot("snapshot-result").hidden = false;
+          slot("snapshot-result").textContent = `Archive unavailable: ${preview?.reason || "assessment unavailable"}`;
+        }
+      }).catch((error) => {
+        if (target !== openingTarget) return;
+        archiveConfirm.hidden = true;
+        slot("snapshot-result").hidden = false;
+        slot("snapshot-result").textContent = `Archive unavailable: ${error.message}`;
+      });
       slot("dirty").hidden = !dirty;
       // The ref ends in the tip's short SHA (archiveRefName in worktree-removal.mjs).
       const archive = `refs/roborepo/abandoned/${selector}-${checkout.git?.shortHead || "<commit>"}`;
@@ -42,7 +82,7 @@ export function createWorktreeRemoveDialog({ onRemoved }) {
         lead: branch
           ? `This deletes the worktree's folder on this computer and its local branch, ${branch}.`
           : `This deletes the worktree's folder on this computer. It is not on a branch (detached at ${checkout.git?.shortHead || "an unknown commit"}).`,
-        status: removalStatus(checkout),
+        status: [removalStatus(checkout), checkout.worktreePreservation ? `Local preservation: ${checkout.worktreePreservation}.` : "", checkout.remainingPaths?.length ? `Remaining paths: ${checkout.remainingPaths.join(", ")}` : ""].filter(Boolean).join(" "),
         branch: branch || "none (detached)",
         folder,
         archive,

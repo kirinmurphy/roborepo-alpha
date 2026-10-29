@@ -3,6 +3,8 @@
 //
 // Pure: reads the headings and tasks parsePlanMarkdown already found, plus the body's lines.
 
+import { parseRecoveryRecord } from "./landed-recovery.mjs";
+
 const APPROVAL_FIELDS = {
   decision: "Decision",
   commit: "Reviewed implementation commit",
@@ -49,6 +51,7 @@ export function reviewRecord(headings, tasks, lines) {
     findings: { open: findings.filter((task) => !task.done).length, total: findings.length },
     result,
     approval,
+    recovery: parseRecoveryRecord(lines.join("\n")),
   };
 }
 

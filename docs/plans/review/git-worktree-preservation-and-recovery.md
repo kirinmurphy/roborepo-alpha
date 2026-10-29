@@ -1,11 +1,11 @@
 ---
 id: 4xc0gjuw
 priority: high
-next_action: Run /plan-execute to implement shared preservation assessment, recoverable archives, and landed review recovery.
+next_action: Merge the approved implementation through the pull request, then run /plan-close.
 blocked_by: []
 depends_on: []
 related: ["hr78g4sj", "b2sgiejd", "a7bslb00", "gqzjlzgx"]
-reviewed_commit: 1f4f3dbdac86a02781fe595ec8ae744162031faa
+reviewed_commit: e7d4d82205a4ef2b67fbd85cd3b900abf18feac5
 worktree: git-worktree-preservation-and-recovery
 ---
 
@@ -344,33 +344,33 @@ No automatic synchronization into the old squashed branch is needed for retireme
 
 ## Implementation plan
 
-- [ ] Add disposable Git regression fixtures for redundant and unique staged/unstaged states,
+- [x] Add disposable Git regression fixtures for redundant and unique staged/unstaged states,
       squash/cherry-pick merges, modes, binaries, deletion/rename context, untracked additions, and
       uniquely mapped plan lifecycle moves. Assert existing discard behavior remains unchanged.
-- [ ] Extend shared assessment under `modules/repositories/` with the coherent tree proof,
+- [x] Extend shared assessment under `modules/repositories/` with the coherent tree proof,
       explicit bounds, raw inventories, stable fingerprints, and conservative unknown reasons.
       Keep landing and local preservation fields separate; cover preview nonmutation.
-- [ ] Add versioned snapshot capture, immutable repository refs, manifest verification, archive
+- [x] Add versioned snapshot capture, immutable repository refs, manifest verification, archive
       discovery, and a filesystem/index restore round trip. Extend the hardened Git seam only for
       required binary plumbing and controlled temporary stores; test hooks/filters do not execute.
-- [ ] Integrate snapshot/guard/removal transactions into `worktree-removal.mjs` and
+- [x] Integrate snapshot/guard/removal transactions into `worktree-removal.mjs` and
       `scripts/cli/worktree-cleanup.mjs`; re-inventory inside the lock, preserve writer guards,
       outcome records, branch identity checks, partial failure, and retry recovery.
-- [ ] Register the new command definitions and CLI adapters. Extend repository projections,
+- [x] Register the new command definitions and CLI adapters. Extend repository projections,
       `portal-routes-repositories.mjs`, and `portal/home/` API, templates, and dialogs with separate
       Archive and remove and warned Delete choices. Assert equivalent CLI/portal archive results.
-- [ ] Implement the shared landed-recovery predicate and parser in `modules/plan-suite/`;
+- [x] Implement the shared landed-recovery predicate and parser in `modules/plan-suite/`;
       integrate `plan-authority.mjs`, `plan-copies.mjs`, `worktree-copy.mjs`, `copy-integration.mjs`,
       `review-record.mjs`, `review-gates.mjs`, `review-freshness.mjs`, `transition-rules.mjs`, and
       `snapshot-fingerprint.mjs`. Update the priority-write paths in `modules/plan-suite/index.mjs`
       and `scripts/cli/plans.mjs` so evidence selection cannot redirect ordinary portal mutations.
-- [ ] Add `plans merge-readiness` through `scripts/cli/plans-command.mjs` and command metadata;
+- [x] Add `plans merge-readiness` through `scripts/cli/plans-command.mjs` and command metadata;
       wire canonical plan-review approval commits and primary-only recovery to the shared checks.
-- [ ] Update plan-close's automatic cleanup and already-closed retry handoff. Preserve durable
+- [x] Update plan-close's automatic cleanup and already-closed retry handoff. Preserve durable
       closure when work remains; snapshots never satisfy approval, review, integration, or landing.
-- [ ] Update all documentation and canonical skill references listed below; regenerate command
+- [x] Update all documentation and canonical skill references listed below; regenerate command
       wrappers with the existing renderer. Register any new suites in existing test orchestration.
-- [ ] Run affected behavior suites, browser checks, command/skill checks, health checks, and the
+- [x] Run affected behavior suites, browser checks, command/skill checks, health checks, and the
       full local parity gate. Record evidence and any unavailable platform checks before review.
 
 ## Validation
@@ -473,3 +473,270 @@ checkout intact.
   document the remaining external-writer race. Do not require caller-provided proof that every
   writer has stopped. Stopping writers remains an operating requirement, and existing server
   guards and refusal on observed changes remain effective.
+
+### Execution decisions
+
+- October 28 review: the user answered "let's explicitly defer" after being asked whether to keep
+  the unexplained disappearance as a merge blocker or defer it. Keep the report and uncertainty
+  below, but remove it from required work for this plan's approval and closure. This is an accepted
+  deferral, not a claim that the original occurrence was explained or fixed. Approval of the
+  updated implementation remains a separate explicit decision.
+- October 27 review: the user requested adding native Windows snapshot/restore testing to
+  [[l1mz96d9]] and deferring it here. Remove the unconfirmed checkbox from this plan; Windows
+  verification remains outstanding in that backlog plan and is no longer a closure prerequisite
+  here. No Windows result is claimed.
+
+- Keep the 1 MiB limit on ordinary Git text responses and use a separate 64 MiB binary limit for
+  snapshot assets. Raising the global limit would weaken unrelated background scans; a separate
+  bounded binary path supports ordinary assets without doing that.
+- Keep raw inventory, snapshot capture/discovery/restore, and preservation proof under the shared
+  repository owner. Reuse the plan parser for identity mapping rather than recognizing body text
+  as frontmatter. Thin CLI and portal adapters share the transaction.
+- Refuse configured external drivers and unsupported transformations conservatively; raw blobs
+  preserve binary data without invoking filters. Assessment and recovery merge objects use
+  temporary external stores, so read-only checks publish no recovery refs.
+- Keep primary recovery evidence separate from normal mutations. The shared verifier selects
+  committed primary evidence, while priority writes resolve the assigned worktree again.
+
+## Execution record
+
+- Start transition: `a68a9cc30aa00869403db47aa907fed50f8bf63a`, approved without correction.
+- Implementation branch: `codex/git-worktree-preservation-and-recovery`; base: `main`.
+- Starting implementation commit: `a68a9cc30aa00869403db47aa907fed50f8bf63a`.
+- Disposable real-Git regressions cover staged/unstaged separation, binaries, modes, symlinks,
+  valuable ignored files, deletion/rename absorption, lifecycle mapping, nonmutating previews,
+  automatic snapshots, shared CLI/portal archive requests, lost ledgers, and garbage collection.
+- Primary-only recovery tests cover committed evidence authority, approval and integration,
+  priority writes staying in the worktree, readiness, conflicting copies, and later code changes.
+- Portal test environment: hermetic local portal started by the browser runner; the initial 146
+  browser checks passed. After incoming main UI changes, the current full browser stage has
+  144 passed and seven failures independently reproduced on current main. The archive/discard
+  regression passes. The live disposable demo at `http://127.0.0.1:59439` runs current server code;
+  the dedicated real archive walkthrough passes both assertions and exposes a restore reference.
+- Current CI behavior group: 62/62 suites passed; CLI smoke: 464/464 checks passed. The stale
+  documentation link was corrected at the user's explicit request. Catalog, command renderer,
+  triggers, CLI surface, focused repository/plan suites,
+  and whitespace checks passed. Package installation and installer collision suites passed.
+- All four available Docker clean-machine suites passed. Native Windows verification is unavailable.
+- Initial `npm run check` stopped at the then-existing skill body limit. While validation was
+  running, current main was merged into this worktree in `a375a484`; the incoming
+  `c1d92150` extracts the report reference and resolves that limit. The gate was rerun against the new tree.
+  The refreshed full gate passes doctor (106 checks), CLI (464/464), all 62 CI behavior suites,
+  package installation, installer collisions, and all four Docker suites. Its browser stage has
+  144 passed and seven base failures, so the full gate is not passing.
+
+## Not tested
+
+Native Windows snapshot restore, symlinks, and executable modes remain unverified. At the user's
+explicit October 27 review request, the required testing item moved to [[l1mz96d9]] rather than
+blocking this plan's approval or closure. This deferral does not establish Windows support.
+
+## Review
+
+### Findings
+
+- [x] Automatic dirty cleanup could remove a checkout when the base ref moved during the final
+  server survey — final base check and five concurrency regressions fixed in `f7fe65c2`.
+- [x] Snapshot symlink targets were decoded as UTF-8 during capture/restore, losing raw target bytes;
+  Buffer capture/restore and exact non-UTF-8 regression fixed in review (`fd9b3ce9`).
+- [x] Repository removal dialog ignored authoritative preview preservation and remaining paths;
+  render that assessment and assert visible fields — fixed in review (`fd9b3ce9`).
+- [x] Conflict comparisons returned remaining — track conflicts and require unknown when no
+  coherent candidate proves preservation; add a real-Git regression.
+- [x] Recorded doctor failure became stale after incoming main synchronization — refresh the
+  execution record and rerun the gate against the current tree.
+- [x] Readiness accepted committed open tasks and blockers — reuse the shared open-task parser and
+  assert both refusal cases.
+- [x] Retry after checkout removal lacked a branch-retirement resume path — discover the immutable
+  snapshot and retain expected-tip/occupancy guards.
+- [x] Unlanded work omitted remaining paths — inventory local and committed paths before returning.
+- [x] Review parser contract omitted recovery metadata — update the assertion and cover parsed fields.
+- [x] Safety scenarios lacked direct assertions — add hostile paths, symlink parents, removal
+  failure, moved/occupied branches, and idempotent partial retries.
+
+### Deferred investigation
+
+The user reported one Delete click, the valuable-ignored-path refusal, then disappearance. The
+original ledger records archive removal, but the exact interaction remains unexplained. Isolated
+trusted-click replay refuses Delete and retains the checkout. The user confirmed that the recorded
+refusal matches what they saw, then explicitly deferred investigation on October 28. This no longer
+blocks approval or closure; no cause or fix is claimed. If it recurs, retain button-event and HTTP
+request/response evidence together with the archive/removal ledger before resetting the fixture.
+
+### Verification
+
+- October 29 refreshed review: `npm run check` passed on retry at the implementation in
+  `e7d4d82205a4ef2b67fbd85cd3b900abf18feac5`: doctor 106 checks, CLI 464/464,
+  CI behavior suites 63/63, installer collisions/package installation, all four Docker suites,
+  and browser tests 151/151. PowerShell parity was visibly skipped because unavailable; native
+  Windows remains deferred. `bin/roborepo plans preflight 4xc0gjuw --json` passed all six checks.
+- The first refreshed gate stopped at 463 CLI passes and one remote-sync menu assertion failure.
+  The unchanged `cli-surface-integration-check.mjs` and `git-remote-sync.mjs` also exist on main;
+  the standalone check passed there and the unchanged full retry passed here. No cause is claimed
+  and no unrelated menu code was changed. This is historical failed-attempt evidence, not a
+  claim that the first gate passed or that a base failure was reproduced.
+- October 28 deferral resumption: explicit user deferral removes the unexplained original
+  disappearance from required findings while retaining the incident and uncertainty. All required
+  findings are resolved or explicitly deferred; native Windows remains owned by [[l1mz96d9]].
+- Fresh independent Validator for the deferral resumption: clean, no fix or escalation findings.
+  `bin/roborepo plans validate 4xc0gjuw --json`,
+  `node scripts/test/docs-reference-check.mjs`, and `git diff --check` passed. The deferral
+  does not assert a cause, fix, Windows result, or renewed approval.
+- Base synchronization `2a4efc783e85ca37a6a7d9143b150926f2641f1b` merged
+  `3ef323270d1188a17cc3d0eda7c75914d6d28b2b` without conflicts. Since the previous review,
+  base changed plan records and one backlog-reference link in `docs/internal/backlog-review.md`;
+  no application or test code changed through this synchronization.
+- October 28 workflow verification at `f7fe65c2`: all six disposable use cases exercised against
+  the real portal and HTTP endpoints, with the reviewed CLI for automatic cleanup/restore.
+  Final recorded browser walkthrough: 10/10 assertions passed. It covers Delete refusal,
+  explicit archive/removal, exact recovery, repeated-destination refusal, restored Home visibility,
+  redundant and clean automatic removal, locked/filter refusals, and warned discard behavior.
+- The initial workflow run passed 9/10 assertions; its immediate restored-row assertion ran
+  before Runtime's normal refresh. The final run waits through that refresh and asserts the
+  restored detached checkout appears. No product visibility fix was made or claimed.
+- Five deterministic mutation cases change files, the index, branch tip, configuration, or base
+  during the final server survey. Four kept the checkout before the fix; the base case incorrectly
+  removed it. The permanent regression failed before `f7fe65c2`; all five now retain checkout
+  and verified snapshot. Independent Validator and snapshot suite passed; no additional fix
+  findings were reported.
+- `npm run check` passed after the source fix: 464 CLI checks, 63/63 CI behavior suites,
+  151/151 browser tests, installer collisions/package installation, and all four Docker suites.
+  Native Windows remains deferred; PowerShell parity was visibly skipped because unavailable.
+- Original manual occurrence remains unexplained. The user explicitly reported a single Delete
+  click, the valuable-ignored-path refusal, then disappearance. The original ledger records an
+  archive snapshot and successful removal at 19:18 UTC, but cannot establish the user interaction.
+  Isolated trusted-click replay and the full walkthrough produce only a Delete request, refusal,
+  and retained checkout until Archive and remove is explicitly clicked. These passes do not
+  resolve or disprove the original report. The later explicit user deferral above removes it as
+  a review blocker without claiming resolution.
+- Final human-review gate at `fd9b3ce9598a13c29343fd5585a10d55d1144ce3`:
+  `npm run check` passed outside the sandbox. Doctor: 106 checks; CLI: 464 passed, zero failed;
+  CI behavior suites: 63/63; installer collision and package installation checks passed;
+  all four Docker clean-machine suites passed; Playwright: 151/151. PowerShell installer parity
+  was visibly skipped because `pwsh` is unavailable; native Windows checks are deferred as
+  explicitly directed above. This supersedes the historical partial-gate evidence below.
+- Base synchronization: `bdce97b091020133fa77541330155b19387adcb5` merged
+  `6eba62ad78ad37d0e3a62230869281378919cc04` without conflicts. Then-current base
+  `d148883dc2f2446ef2f1cab5b36b46b609026c54` differs only by the requested Windows-plan TODO;
+  an executed diff outside `docs/plans/` is empty. No current base failures were observed in
+  the passing feature gate.
+- October 27 human-review Validator pass 1: two fix findings above; no escalations. Pass 2:
+  clean after `fd9b3ce9`; independently asserted raw symlink bytes `6680` survive capture/restore.
+- Review regressions failed before the fixes: snapshot restore produced `66efbfbd` instead of
+  `6680`; the browser could not find the assessed preservation state. After the fixes,
+  `node scripts/test/worktree-snapshot-check.mjs` and
+  `npm run test:portal-ui -- --grep 'worktree rows show their state'` both passed.
+- `node --check modules/repositories/worktree-snapshot.mjs`,
+  `node --check portal/home/worktree-dialogs.js`, `git diff --check`,
+  `bin/roborepo skill render-commands --check` (11 wrappers), and
+  `bin/roborepo skill triggers --check` (9 fixtures) passed.
+- Windows transfer: primary commit `d148883d` adds the native restore TODO to [[l1mz96d9]];
+  `bin/roborepo plans validate l1mz96d9 --json` reports no findings and
+  `node scripts/test/docs-reference-check.mjs` passed. User direction in this review explicitly
+  requested the transfer and deferral; no Windows behavior was executed or confirmed.
+- The first full-gate attempt was blocked by sandbox localhost binding (`EPERM`, three CLI
+  checks failed). The successful rerun above resolves that environment blocker; the blocked
+  attempt is not a product defect or a passing gate.
+- Validation pass 3 at `1fde0cff` (fresh-context subagent): no additional implementation or prose
+  findings. Reviewed the full diff, all safety/acceptance paths, regression evidence, shared
+  consumers, code-style/JavaScript/support constraints, and technical-writing rules.
+- Implementation handoff preflight passed all six checks: assigned authority, complete tasks, no
+  blockers, clean worktree, feature commits, and review schema apart from the Windows entry.
+- Historical implementation gate: doctor passed (106); CLI passed (464/464); CI suites passed (62/62); package,
+  collision, and all Docker checks passed. Browser stage: 144 passed, seven failed on unchanged
+  main inputs. Base runs reproduce the Plans drawer/card assertions and four scope/filter
+  assertions; the Home drawer's high-priority assertion also fails on main. No passing full-gate
+  claim is made. These base failures do not weaken preservation or archive safety checks.
+- Validation pass 2 (fresh-context subagent): two fix findings above; no additional code or prose violations.
+- Validation pass 1 (fresh-context subagent): five fix findings above, corrected in `3b5f7100`; no documentation violations.
+  Corrective checks pass for snapshot/preservation, landed recovery/readiness, and parser contracts.
+- Historical `main` CLI comparison was 461 passed / three old doctor failures. Superseding current
+  feature gate: 464 passed / zero failed.
+- Historical base failure resolved by incoming main: the execution skill body limit no longer
+  fails at `c1d92150`; initial logs describe the earlier tree only.
+- Resolved prior base failure: at the user's request, update the stale credential-plan link in
+  `docs/internal/backlog-review.md:86` to its verified review-stage path. The documentation suite
+  now passes.
+- User-reported CI failures: reproduce all three Git-suite failures with an inherited global Git
+  LFS configuration. The fixture suites now isolate their own global/system Git configuration,
+  retaining explicit unsafe-driver refusal tests. All four requested suites pass with that host
+  configuration on macOS and in a Node 22/Linux container with Git 2.39.5.
+- Older Git compatibility: read historical attributes using a disposable index instead of the
+  newer `check-attr --source` option. Git without explicit merge-base support reports unknown for
+  dirty proofs; tests assert that conservative contract while still exercising capture/restore.
+- Binary regression: a 2 MiB asset exposed the text executor's small output bound. Binary reads
+  now have a separate 64 MiB bound; larger files refuse with their path before capture.
+
+### Result
+
+- Status: complete
+- Reviewed implementation commit: e7d4d82205a4ef2b67fbd85cd3b900abf18feac5
+- Base commit: 3ef323270d1188a17cc3d0eda7c75914d6d28b2b
+
+### Prior approval
+
+- Decision: approved
+- Reviewed implementation commit: fd9b3ce9598a13c29343fd5585a10d55d1144ce3
+- Confirmed by: human
+
+On October 28, 2026, the user answered "Approve this reviewed implementation" to the review
+question naming this plan and full implementation commit
+`fd9b3ce9598a13c29343fd5585a10d55d1144ce3`. Native Windows testing remains deferred to
+[[l1mz96d9]] at the user's explicit direction.
+
+### Approval
+
+- Decision: approved
+- Reviewed implementation commit: e7d4d82205a4ef2b67fbd85cd3b900abf18feac5
+- Confirmed by: human
+
+On October 29, 2026, the user answered "Approve the updated implementation" to the review
+question naming this plan and full implementation commit
+`e7d4d82205a4ef2b67fbd85cd3b900abf18feac5`. This approval includes the concurrency fix and
+the separately recorded investigation deferral. Native Windows testing remains deferred to
+[[l1mz96d9]].
+
+### Acceptance evidence
+
+The review checked these acceptance paths against the implementation and disposable fixtures.
+The final gate result below determines which checks executed successfully in this review.
+
+| Acceptance scenarios | Implementation and asserted evidence |
+| --- | --- |
+| Squash/cherry-pick and redundant local edits | `worktree-landed.mjs` and `worktree-preservation.mjs`; `worktree-lifecycle-check.mjs` proves squash/cherry-pick landing; `worktree-snapshot-check.mjs` proves redundant dirty cleanup with a verified restorable snapshot. |
+| Plan lifecycle rename with redundant evidence | Preservation's identity mapping; the snapshot suite's `plan-move` fixture compares review/completed copies and proves preservation. |
+| Unique/unknown work stays; archive remains explicit | Cleanup requires `preserved` for automatic removal; snapshot fixtures assert unique staged versions remain and explicit CLI/portal archive requests agree. |
+| Distinct staged/unstaged versions, untracked files | Snapshot manifest and raw filesystem/index restoration; round-trip assertions compare both versions and remaining files. |
+| Deletion, rename, modes, binary data, later base changes | Coherent synthetic-tree comparisons; snapshot shape fixtures and lifecycle historical landing assertions. |
+| Valuable ignored content and unsupported entries | Raw inventory captures ignored payloads and refuses unsupported paths/index/configuration; snapshot assertions recover ignored bytes and refuse unsafe shapes. |
+| Concurrent changes invalidate removal | Inventory fingerprints and final tip/base/configuration checks; snapshot regression rejects a changed expected fingerprint without removal. |
+| Moved/occupied branch and partial removal | Expected-tip ref deletion and occupancy checks; snapshot fixtures assert moved/occupied branches survive and removal failures retain checkout and archive. |
+| Crash/retry and durable recovery | Git-object archive refs and retry transaction; snapshot fixtures remove state ledger, run garbage collection, restore, and retry completed steps idempotently. |
+| Main/current/locked/submodule/server guards | Shared `worktree-guards.mjs`; lifecycle suite asserts guard refusals and server handling. |
+| Archive never grants approval, landing, or closure | Closure's approval/landing gates remain separate; `plan-close-integration-check.mjs` exercises those refusals. |
+| Dirty or stale pre-merge readiness | `mergeReadiness` checks committed packet, clean state, approval, base, tasks and blockers; `plan-landed-recovery-check.mjs` asserts readiness/refusal paths. |
+| Post-merge primary-only recovery | Shared `verifiedLandedRecovery`; recovery suite asserts committed primary authority, matching CLI/portal readers, unchanged old worktree, and integration. |
+| CLI/portal archive parity and restore instructions | Shared cleanup transaction; snapshot suite compares previews; browser test asserts archive confirmation and visible restore command. |
+| Warned Delete keeps its discard contract | Existing boolean consent remains separate; lifecycle and browser tests assert loss warning, consent payload, and committed-tip backup wording. |
+| Dirty automatic cleanup without writer-shutdown proof | Preserved-state proof plus verified snapshot and final guards; redundant fixture removes without an extra shutdown attestation. The documented external-writer race remains accepted. |
+| Recovery cannot change requirements or conflict with copies | Evidence-only comparison and fresh Git proof; recovery suite rejects changed requirements, independent edits, and later implementation commits. |
+| Lost ledger, GC, and legacy refs | Git refs own discoverability; snapshot restore survives ledger loss and GC, while legacy entries retain `committed-tip` kind. |
+| Hostile restore paths, symlink parents, existing target, filters/hooks | Hardened Git seam and path checks; snapshot suite asserts refusal without unsafe materialization or configured-filter execution; raw symlink target round trip is covered by the review regression. |
+
+Documentation of record was updated in the repositories, CLI, Plans portal and lifecycle user
+references, CLI/Plans internal references, and canonical plan-close, plan-review and schema
+instructions. The independent review checked those against the shared implementation. Native
+Windows results remain explicitly deferred to [[l1mz96d9]].
+
+## Implementation handoff (historical)
+
+- Mode: start; worktree administrative name: `git-worktree-preservation-and-recovery`.
+- Start validator: APPROVED without correction; start/base commit: `a68a9cc30aa00869403db47aa907fed50f8bf63a`.
+- Objectives: ten complete, zero blocked. Validation findings: seven resolved; clean third pass.
+- Implementation commits: `4dad6d04`, `3b5f7100`, and `1fde0cff`. Incoming/user-recorded commits
+  `a375a484` and `920def11` preserve the base synchronization and CI fixes made during this run.
+- Open questions: none. Native Windows verification: one Not tested entry above.
+- No push, pull-request merge, publication, real worktree retirement, or skill installation was performed by
+  the implementation agent. Only disposable fixture worktrees were removed in verification.
+- The full gate remains partial solely for the seven verified base browser failures above.
+  Human review is the next lifecycle step; this record grants no approval or merge permission.

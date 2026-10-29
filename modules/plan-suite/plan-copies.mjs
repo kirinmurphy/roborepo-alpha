@@ -11,6 +11,7 @@
 // mostly carry identical copies. So only the selected copy gets a full record; every other copy is
 // matched from its frontmatter alone.
 import crypto from "node:crypto";
+import { verifiedLandedRecovery } from "./landed-recovery.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { finding, messagesOf } from "./findings.mjs";
@@ -57,9 +58,12 @@ function authoritativeRecords(primary, copy, worktrees) {
   const assignedEntry = copy.worktree ? worktrees.get(copy.worktree) : null;
   const assignedCopies = assignedEntry?.copies.filter((candidate) => candidate.key === copy.key) || [];
   const assignedCopy = assignedCopies.find((candidate) => isWorktreeBound(candidate.lifecycle) && candidate.worktree === copy.worktree) || assignedCopies[0] || null;
-  const authority = resolvePlanAuthority({ primary: copy, assigned: assignedEntry ? { copy: assignedCopy } : null });
+  const recovery = assignedCopy && assignedCopies.length === 1 ? verifiedLandedRecovery({ primary: primary.checkout.path, relativePath: copy.relativePath, markdown: copy.bytes.toString(),
+    worktree: { name: copy.worktree, path: assignedEntry.checkout.path, branch: assignedEntry.checkout.branch }, copy: { markdown: assignedCopy.bytes.toString() } }) : null;
+  const authority = resolvePlanAuthority({ primary: copy, assigned: assignedEntry ? { copy: assignedCopy } : null, recovery });
   if (authority.source === "primary") {
-    const record = fullRecord(primary, copy, { source: "primary" });
+    const record = fullRecord(primary, copy, { source: "primary", ...(recovery?.ok ? { reason: "verified-landed-recovery" } : {}) });
+    if (recovery?.ok) return [record];
     return [authority.reason ? withFinding(record, "PLAN_WORKTREE_COPY_UNAVAILABLE", { worktree: copy.worktree, reason: authority.reason }) : record];
   }
   const worktreeAuthority = { source: "worktree", worktree: copy.worktree };

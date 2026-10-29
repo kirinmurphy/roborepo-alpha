@@ -18,13 +18,14 @@ import { plannableRepositories } from "./canonical-scan.mjs";
 export function planSnapshotFingerprint({ stateRoot, registry = null } = {}) {
   const known = registry || loadRegistry({ stateRoot });
   const parts = [];
+  const visitedCommonDirs = new Set();
   for (const record of plannableRepositories(known)) {
     if (!checkoutRootsFor(known, record.id).length) continue;
     parts.push(`repo\0${record.id}\0${record.displayName}`);
     for (const checkout of repositoryCheckouts(known, record.id)) {
       parts.push(`checkout\0${checkout.path}\0${checkout.label ?? ""}\0${checkout.isWorktree}`);
       statPlanTree(path.join(checkout.path, "docs", "plans"), parts);
-      headState(checkout.path, parts);
+      headState(checkout.path, parts, visitedCommonDirs);
     }
   }
   return crypto.createHash("sha256").update(parts.join("\n")).digest("hex");
@@ -56,9 +57,25 @@ function statPlanTree(dir, parts) {
 // A loose ref holds its commit id, so its contents are read; a packed ref lives in packed-refs,
 // whose stat changes whenever Git rewrites it. A reftable repository keeps every ref, HEAD included,
 // in binary tables, and rewrites the shared and the per-worktree tables.list on each ref update.
-function headState(checkoutPath, parts) {
+function headState(checkoutPath, parts, visitedCommonDirs) {
   const git = resolveGitDir(checkoutPath);
   if (!git) return;
+  // A base ref can move while every checkout stays on its own branch. Recovery evidence and
+  // readiness depend on these refs as well as the checked-out HEADs.
+  const refs = path.join(git.commonDir, "refs");
+  const visitRefs = (dir) => {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      const file = path.join(dir, entry.name);
+      if (entry.isDirectory()) visitRefs(file);
+      else parts.push(`base-ref\0${file}\0${readOrEmpty(file).trim()}`);
+    }
+  };
+  if (!visitedCommonDirs.has(git.commonDir)) {
+    visitedCommonDirs.add(git.commonDir);
+    visitRefs(refs);
+  }
   const head = readOrEmpty(path.join(git.gitDir, "HEAD")).trim();
   parts.push(`head\0${head}`);
   const ref = head.startsWith("ref: ") ? head.slice("ref: ".length) : "";
