@@ -82,6 +82,8 @@ for (const argv of [
   ["git", "push", "origin", "+feature/x"],
   ["git", "push", "origin", "+main"],
   ["git", "push", "--force-with-lease=feature/x", "origin", "feature/x"],
+  ["git", "push", "origin", "--force-with-lease=feature/x:0123abc", "feature/x"],
+  ["git", "push", "origin", "+feature/x:feature/x"],
   ["git", "push", "-uf", "origin", "feature/x"],
 ]) {
   assert.equal(refusal(argv), REFUSAL.DESTRUCTIVE_GIT, argv.join(" "));

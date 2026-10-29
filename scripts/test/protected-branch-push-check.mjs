@@ -110,6 +110,7 @@ const cases = [
   ["git push --force origin feat", "deny"],
   ["git push origin feat --force", "deny"],
   ["git push --force-with-lease=feat origin feat", "deny"],
+  ["git push origin --force-with-lease=feat:0123abc feat", "deny"],
   ["git push -uf origin feat", "deny"],
   ["git push origin +feat", "deny"],
   ["git push origin +:", "deny"],
@@ -227,6 +228,12 @@ gitOk(work, "config", "core.hooksPath", ".custom-hooks");
 fs.writeFileSync(log, "");
 assert.equal(git(work, ["commit", "-q", "--allow-empty", "-m", "custom"], agentEnv).status, 0);
 assert.equal(fs.readFileSync(log, "utf8").trim(), "pre-commit 0", "repo-configured core.hooksPath is honored");
+
+// An exported CDPATH with its own .custom-hooks must not redirect the relative core.hooksPath.
+fs.mkdirSync(path.join(tmp, "decoy", ".custom-hooks"), { recursive: true });
+fs.writeFileSync(log, "");
+assert.equal(git(work, ["commit", "-q", "--allow-empty", "-m", "cdpath"], { ...agentEnv, CDPATH: path.join(tmp, "decoy") }).status, 0);
+assert.equal(fs.readFileSync(log, "utf8").trim(), "pre-commit 0", "CDPATH does not redirect the repo's hooks");
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log("protected-branch-push-check passed");
