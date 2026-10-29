@@ -514,10 +514,12 @@ None open. Every question was answered by the user (2026-10-27 and 2026-10-28); 
 - [x] An older bundle record with telemetry on loses the user's own hooks selection — user chose
       to read bundle records as written; test-cli asserts `hooks` stays selected and applied after
       `bundle remove telemetry` on such a record
-- [ ] Human review: the terminal asks about recommendations after a `blocked` enable —
-      `offerRecommendations` in `scripts/cli/packages.mjs` runs whatever `result.ok` is
-- [ ] Human review: bulk Deselect All reporting a selectable required-only member `skipped`
-      (`scripts/cli/config-bulk.mjs`) has no test — only the non-selectable case is covered
+- [x] Human review: the terminal asks about recommendations after a `blocked` enable —
+      `offerRecommendations` in `scripts/cli/packages.mjs` runs whatever `result.ok` is — fixed in
+      review (ab513c7a)
+- [x] Human review: bulk Deselect All reporting a selectable required-only member `skipped`
+      (`scripts/cli/config-bulk.mjs`) has no test — only the non-selectable case is covered — fixed
+      in review (ab513c7a)
 - [ ] Human review: terminal onboarding (`buildOnboardSteps`/`applyWizardChanges` in
       `scripts/cli/presets.mjs`) neither shows nor offers recommendations, though §5–§6 say the
       interactive CLI prompts and onboarding reads the same view — escalated to the human
@@ -551,6 +553,10 @@ None open. Every question was answered by the user (2026-10-27 and 2026-10-28); 
   not submitted.
 - Validation: clean on pass 7 at `e46240f9` (fresh-context subagent, run past the cap at the user's
   request): no fix or escalate findings; 1 base (the same docs link, fixed on `main`).
+- Human review (2026-10-28): merged `main` at 3ef32327 into the branch (218aaf3c, no conflicts).
+  `npm run check` passed at 218aaf3c (all suites, portal UI 154 passed); the earlier
+  `docs-reference-check` base failure no longer occurs. Review Validator pass (fresh-context
+  subagent): 2 fix, 1 escalate, 0 base.
 - Manual, portal (2026-10-26): a hermetic portal on a workspace fixture (Demo Planner and Demo
   Closer require a dependency-only Demo Review; Demo Closer recommends Demo Tester). The Integrations
   section showed Demo Review only under a Required dependencies list (since replaced by the popup's
