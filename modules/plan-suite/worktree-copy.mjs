@@ -4,6 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { lifecycleFromPath, parseFrontmatter, planFilesInRepository } from "./index.mjs";
+import { verifiedLandedRecovery } from "./landed-recovery.mjs";
 import { resolvePlanAuthority } from "./plan-authority.mjs";
 import { linkedWorktreeNamed } from "./plan-git.mjs";
 
@@ -14,7 +15,10 @@ export function assignedWorktreeCopy(primary, record) {
   const name = record.plan.worktree;
   const worktree = name ? linkedWorktreeNamed(primary, name) : null;
   const copy = worktree && record.plan.id ? copyWithId(worktree.path, record.plan.id) : null;
+  const recovery = worktree && copy ? verifiedLandedRecovery({ primary, relativePath: record.plan.relativePath,
+    markdown: fs.readFileSync(path.join(primary, record.plan.relativePath), "utf8"), worktree, copy }) : null;
   const authority = resolvePlanAuthority({
+    recovery,
     primary: { lifecycle: record.plan.lifecycle, worktree: name },
     assigned: worktree ? { copy } : null,
   });
@@ -30,6 +34,7 @@ export function authoritativeMarkdown(primary, record) {
 
 function copyWithId(checkoutPath, id) {
   const { files } = planFilesInRepository({ root: checkoutPath });
+  const matches = [];
   for (const absolutePath of files) {
     let markdown;
     try {
@@ -40,13 +45,13 @@ function copyWithId(checkoutPath, id) {
     const { frontmatter } = parseFrontmatter(markdown);
     if (frontmatter.id !== id) continue;
     const relativePath = path.relative(checkoutPath, absolutePath).split(path.sep).join("/");
-    return {
+    matches.push({
       relativePath,
       absolutePath,
       markdown,
       lifecycle: lifecycleFromPath(relativePath),
       worktree: typeof frontmatter.worktree === "string" ? frontmatter.worktree.trim() : "",
-    };
+    });
   }
-  return null;
+  return matches.length === 1 ? matches[0] : null;
 }
