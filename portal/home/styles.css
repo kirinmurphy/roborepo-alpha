@@ -52,11 +52,13 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 .domain-glyph { display: inline-flex; align-items: center; height: calc(var(--text-sm) * var(--line-height-normal)); color: var(--dim); }
 .home-domain-row.is-warning .domain-glyph { color: var(--warn); }
 .domain-body { display: grid; gap: 8px; min-width: 0; }
-.domain-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.domain-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 14px; }
 .domain-heading h4 { margin: 0; color: var(--ink); font-size: var(--text-sm); font-weight: 600; }
+.domain-range { color: var(--dim); font-size: var(--text-xs); }
+.domain-range[hidden] { display: none; }
 .domain-link { font-size: var(--text-xs); }
 /* Plain inline link: body ink and an underline, not the browser's blue/visited purple. */
-.domain-link { margin-left: auto; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+.domain-link { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
 .domain-link:hover { color: var(--accent); }
 .domain-details { display: grid; gap: 2px; }
 .domain-details[hidden] { display: none; }
@@ -73,7 +75,12 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 .home-main .plan-complete-badge { background: color-mix(in srgb, var(--chip-low-bg) 70%, #000); }
 .plan-identity { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
 .plan-next-action { display: inline-flex; align-items: center; gap: 4px; padding: 1px var(--space-sm); font-size: var(--text-2xs); white-space: nowrap; }
+/* Top-aligned so the port and Links stay on the first line when plan controls wrap. The glyph and the
+ * identity line's first line take the controls' height and center inside it, so a single-line row
+ * reads centered across glyph, title, and actions. */
 .home-main .repository-root-head { align-items: start; }
+.home-main .repository-root-glyph { height: var(--checkout-control-height); align-items: center; }
+.home-main .repository-root-identity-line { min-height: var(--checkout-control-height); }
 .home-main .repository-card { --checkout-links-width: 16px; }
 /* Raise open menus above neighboring cards while keeping them below the site header. */
 .home-main .repository-card.has-open-menu { z-index: 9; }

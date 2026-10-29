@@ -9,6 +9,7 @@ export function appendRepositoryDomains(host, repository) {
   if (tokens?.warningCount > 0) {
     const warnings = tokens.warnings || tokens.recent || [];
     host.append(domainRow("Recent Token Warnings", warningSummary(tokens.warningCount, warnings), {
+      range: warningRange(warnings),
       glyph: "warning",
       warning: true,
       href: hrefWithRepositoryScope("/tokens", repository.urlKey),
@@ -19,10 +20,11 @@ export function appendRepositoryDomains(host, repository) {
   host.hidden = !host.childElementCount;
 }
 
-function domainRow(label, summary, { glyph, href, linkLabel, warning = false, details }) {
-  // The heading reads "<label> … link"; the count and date range ride along as its tooltip.
-  const node = fill(tpl("tpl-domain-row"), { label });
+function domainRow(label, summary, { range = "", glyph, href, linkLabel, warning = false, details }) {
+  // The heading reads "<label> <range> <link>"; the count rides along as the label's tooltip.
+  const node = fill(tpl("tpl-domain-row"), { label, range });
   node.querySelector("[data-slot=label]").title = summary;
+  node.querySelector("[data-slot=range]").hidden = !range;
   const icon = node.querySelector("[data-slot=glyph]");
   icon.setAttribute("name", glyph);
   node.classList.toggle("is-warning", warning);
@@ -37,11 +39,22 @@ function domainRow(label, summary, { glyph, href, linkLabel, warning = false, de
 
 function warningSummary(count, warnings) {
   const label = `${count} warning${count === 1 ? "" : "s"}`;
+  const days = warningDays(warnings);
+  if (!days) return label;
+  return days.first === days.last ? `${label} on ${days.first}` : `${label} from ${days.first} to ${days.last}`;
+}
+
+// "MM/DD - MM/DD" beside the heading, or one date when every warning fell on the same day.
+function warningRange(warnings) {
+  const days = warningDays(warnings);
+  if (!days) return "";
+  return days.first === days.last ? days.first : `${days.first} - ${days.last}`;
+}
+
+function warningDays(warnings) {
   const days = warnings.map((warning) => warning.at).filter(Boolean).sort();
-  if (!days.length) return label;
-  const first = monthDay(days[0]);
-  const last = monthDay(days[days.length - 1]);
-  return first === last ? `${label} on ${first}` : `${label} from ${first} to ${last}`;
+  if (!days.length) return null;
+  return { first: monthDay(days[0]), last: monthDay(days[days.length - 1]) };
 }
 
 function monthDay(iso) {

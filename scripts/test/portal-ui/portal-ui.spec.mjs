@@ -1163,6 +1163,7 @@ test.describe("repository-first portal Home", () => {
     const warningsHeading = card.getByRole("heading", { name: "Recent Token Warnings" });
     await expect(warningsHeading).toBeVisible();
     await expect(warningsHeading).toHaveAttribute("title", /8 warnings from \d{2}\/\d{2} to \d{2}\/\d{2}/);
+    await expect(card.locator(".domain-range")).toHaveText(/^\d{2}\/\d{2} - \d{2}\/\d{2}$/);
     await expect(card.getByRole("list", { name: "Token warnings" }).getByRole("listitem")).toHaveText([
       "3 token spikes and 2 repeated tool loops in gpt-5-codex",
       "3 repeated tool loops in claude-opus-4-8",
@@ -1266,6 +1267,8 @@ test.describe("repository-first portal Home", () => {
     await expect(close).toHaveText("Close");
     await expect(close).toHaveAttribute("title", "Merged — copy the /plan-close prompt");
     await expect(row.locator(".worktree-state-badge")).toBeHidden();
+    // Close is only offered for approved work, so the completion beside it would repeat "done".
+    await expect(row.locator(".plan-completion")).toHaveCount(0);
   });
 
   test("a merged worktree keeps its merged badge while its plan still needs review", async ({ page }) => {
