@@ -1,0 +1,283 @@
+---
+id: f0jwe76j
+priority: medium
+next_action: After the protected-branch push guardrails (kirinmurphy/roborepo-alpha#48) merge, resolve the open questions, then verify the unverified harness behaviors in Phase 1
+blocked_by: []
+depends_on: []
+related: ["developer-runtime-remote-branch-status", "plan-session-launching-milestone-1", "permva27"]
+reviewed_commit:
+worktree:
+---
+
+# Agents Fix Their Own Pull Requests on Any Harness
+
+## Summary
+
+When an agent's pull request has failing CI checks, new review comments, or a merge conflict,
+an agent should be able to fix it and push to the PR branch. This plan recommends three layers,
+cheapest first:
+
+1. **A portable skill** that any harness runs on request: read the PR with allowed `gh` reads, fix,
+   and push through the existing push guard. It is the floor every harness gets.
+2. **Documentation of each harness's native auto-fix**, for users who want unattended watching.
+   The harness vendors already run that loop.
+3. **No roborepo watcher for now.** The plan records the evidence against building one and the
+   conditions that would justify revisiting it.
+
+The work stays inside roborepo's role: shared config, skills, and guardrails. The app or harness
+decides when an agent runs.
+
+## Goals
+
+- Any installed harness, including a future provider, can fix its own PR on request with no
+  per-harness code.
+- Fixes reach the PR branch only through the push guard and pre-push backstop. Nothing weakens
+  those guardrails.
+- Review comment text is handled as untrusted data, and only trusted authors' comments are acted on.
+- Users can find which harnesses offer native unattended auto-fix, how to turn it on, and how its
+  safety model differs from local runs.
+
+## Non-goals
+
+- Merging, approving, closing, or marking PRs ready. Agents never merge.
+- A background poller, scheduler, or webhook listener in roborepo or Runtime.
+- Turning on vendor features (GitHub Apps, cloud environments, Actions workflows) for the user.
+- Posting replies to review threads. Replies stay at the `ask` tier.
+
+## Context
+
+### The prerequisite: push and `gh` guardrails
+
+Pull request kirinmurphy/roborepo-alpha#48 (branch `claude/protected-branch-push`, open when this
+plan was written) adds the guardrails any fixer runs under. This plan assumes it has merged and
+does not change it.
+
+| Guard | Behavior |
+| --- | --- |
+| Push hook (PreToolUse, Claude and Codex) | Approves `git push` only to a non-protected branch it can verify; denies force pushes |
+| Git `pre-push` backstop | Installed for agent shells through a `core.hooksPath` override; refuses protected destinations and non-fast-forward updates |
+| `git push` permission | Stays `ask` in the manifest, so Gemini and installs without the hooks still prompt |
+| `gh` allow | `gh pr view`, `pr list`, `pr status`, `pr checks`, `pr diff`, `run list`, `run view`, `repo view`, `pr create` |
+| `gh` ask | `gh pr comment`, `pr edit`, `pr ready`, `pr review`, `pr close`, `pr reopen`, `issue create`, `issue comment` |
+| `gh` deny | `gh pr merge`, `gh api`, `gh auth token`, repo edit/delete/rename, `secret`, `variable`, `release`, `workflow run` |
+
+Source: `manifests/inventory/agent-permissions.json` on that branch.
+
+Two consequences shape this plan:
+
+- **Conflicts must be resolved by merging the base branch, not by rebasing.** A rebased branch needs
+  a force push, which both the hook and the backstop refuse.
+- **Inline review comments are not readable today.** `gh pr view --json` exposes `reviews` and
+  `comments` (review bodies and top-level comments) but has no field for line-level review threads.
+  Those need `gh api`, which is denied. Checked against `gh pr view --help` and a live
+  `gh pr view 48 --json reviews,comments` call.
+
+### What each harness already offers
+
+| Harness | Native PR follow-up | How it is turned on | Reacts to | Source |
+| --- | --- | --- | --- | --- |
+| Claude, desktop app (Code tab) | **Auto-fix** toggle on a local session's PR; wakes the session on events | The app's PR controls | CI failures, merge conflicts, review comments | Observed in the desktop app's session instructions; no public doc page found |
+| Claude, cloud sessions | **Auto-fix pull requests**: subscribes to PR activity, pushes clear fixes, asks when ambiguous | `/autofix-pr` from the CLI on the PR branch (spawns a cloud session), the session's Changes card, or a prompt | CI failures, review comments. **Not conflicts**: the docs say GitHub sends no webhook when the base advances | [Claude Code cloud docs](https://code.claude.com/docs/en/claude-code-on-the-web#auto-fix-pull-requests); needs the Claude GitHub App |
+| Claude Code CLI alone | No local watcher. `/autofix-pr` hands off to a cloud session | — | — | Same page |
+| Claude GitHub Action | `@claude` mention in a PR comment runs Claude in Actions; it can push commits | `/install-github-app` or a copied workflow plus a repo secret | Mentions, or any event with a `prompt` input | [Claude Code GitHub Actions](https://code.claude.com/docs/en/github-actions) |
+| Codex cloud | `@codex fix the CI failures` or `@codex fix the P1 issue` on a PR starts a cloud task; it "can push a fix back to the branch when it has permission" | Connect the repo in Codex settings | Mentions, plus optional automatic review. Watching for CI failures and conflicts is not documented | [Codex GitHub integration](https://learn.chatgpt.com/docs/third-party/github) |
+| Codex in Actions | Example workflow runs `openai/codex-action` after a failed `CI` run and opens a **new** PR with the patch | Copy the workflow; add `OPENAI_API_KEY` | Failed workflow runs | [Codex non-interactive mode](https://learn.chatgpt.com/docs/non-interactive-mode) |
+| Gemini CLI | `run-gemini-cli` Action: automatic PR review, triage, `@gemini-cli` requests | `/setup-github` in Gemini CLI, or copied workflows | Mentions and PR open. Pushing fixes and CI watching are not documented | [run-gemini-cli](https://github.com/google-github-actions/run-gemini-cli) |
+
+The desktop app's Auto-fix is the only unattended route that runs **on this machine**, in a local
+session that roborepo's hooks and permissions govern. Every other route runs in a vendor cloud or
+GitHub Actions, where roborepo's local hooks and `~/.claude` or `~/.codex` permissions do not apply. Cloud and Actions runs read
+the repository's checked-in config instead. Claude's docs say cloud sessions read the repo's
+`.claude/settings.json`; the Codex and Gemini equivalents are unverified.
+
+### What roborepo has to build on
+
+| Building block | State today | Evidence |
+| --- | --- | --- |
+| Provider capability contract | Capabilities map to required adapter methods; declaring one without its methods fails registration | `CAPABILITY_REQUIRED_METHODS` in `scripts/harnesses/contract.mjs` |
+| `session-launch` | Declared by Claude and Codex, but both adapters are `notYetMigrated` stubs | `stubAdapterGroups(... session: ["launch"])` in `scripts/harnesses/claude/index.mjs` and `scripts/harnesses/codex/index.mjs` |
+| `session-resume` | In the vocabulary; no provider declares it | `globals/harnesses/*/provider.json` |
+| Headless prompt template | `extensions.app.headlessPromptArgs` on Claude (`-p -- {prompt}`) and Codex (`exec --skip-git-repo-check -- {prompt}`); Gemini has none | `globals/harnesses/{claude,codex,gemini}/provider.json` |
+| Its one consumer | Telemetry's deep read sends a text summary and reads the reply. No tools, no worktree, no permission flags | `findDeepReadProvider` in `scripts/cli/telemetry.mjs`; `docs/internal/harness-provider-interface.md` |
+| Runtime network access | The git collection path is offline by design, enforced by an allow-list in `modules/repositories/git-exec.mjs` and asserted by `scripts/test/developer-runtime-git-check.mjs`. The forge lookup that would change this is still a backlog plan | Runtime Remote Branch Status (`developer-runtime-remote-branch-status`) |
+| Skill packaging | Optional packages ship skills with trigger fixtures | `globals/packages/feature-verification/`, `scripts/test/skill-trigger-fixtures-check.mjs` |
+
+The interface doc describes `extensions` as hints that "platform code reads generically", and
+telemetry already reads `headlessPromptArgs` there. Using it for an agent that edits and pushes
+would still be a new contract: permission mode, working directory, and failure semantics are all
+undefined in it today.
+
+## Proposed design
+
+### Recommendation
+
+Build the portable skill (option b), document native features (option a), and defer a watcher
+(option c). The comparison follows the diagram.
+
+```mermaid
+flowchart TD
+    E[PR has failing checks, comments, or a conflict] -- prompts --> Q{User wants it watched unattended?}
+    Q -- yes --> N{Harness has native auto-fix?}
+    N -- yes --> V[Use the vendor feature, as documented by roborepo]
+    N -- no --> S
+    Q -- no --> S[User or session runs the pr-followup skill]
+    S -- reads PR --> R[Read PR with allowed gh reads]
+    R -- leads to --> F[Fix, commit, merge base if conflicted]
+    F -- pushes via --> P[git push through push guard and pre-push backstop]
+```
+
+### Options compared
+
+| Dimension | (a) Native feature + capability flag | (b) Portable skill | (c) Runtime watcher + `headless-run` |
+| --- | --- | --- | --- |
+| Harness coverage | Whatever each vendor ships; uneven (table above) | Every harness that loads skills, including future ones | Only providers with a verified headless template; Gemini has none |
+| Unattended | Yes, where native | No; runs on request | Yes |
+| New roborepo code | A capability with no adapter methods, or docs only | One `SKILL.md`, a package config, trigger fixtures; optional read helper | Poller, forge client, scheduler, lock and attempt store, `headless-run` adapters per provider, permission-mode mapping, portal UI |
+| Upkeep | Tracking vendor feature changes in docs | Low; plain `gh` and `git` | High: three CLIs' headless flags and approval semantics drift independently |
+| Guardrails | Vendor's own, mostly off this machine | Local push guard and `gh` rules apply unchanged | Local guards apply, but every safety rule below must be built and kept correct |
+| Cost | Vendor billing | Tokens only when asked | Tokens on every event; the machine must stay awake |
+
+**Option (a) as a capability is not recommended.** The contract exists so platform code can call
+adapter methods. A `pr-followup: native | none` flag would have nothing to call. Whether the
+native feature works also depends on things roborepo cannot observe: a GitHub App install, a
+cloud plan, an Actions secret. The information is still worth publishing, as documentation.
+
+**Option (c) is overkill now.** Each part it needs is missing or stubbed: session launch, any
+headless agent contract, Gemini headless args, network access in Runtime, and a verified
+fail-closed mode on every harness. It would also duplicate loops that Claude (desktop and cloud)
+and Codex (cloud and Actions) already run. Roborepo would take on an unattended agent that pushes
+with the user's token from a laptop, so every safety rule below would become roborepo's to get
+right.
+
+### The skill
+
+A new optional package, `pr-followup`, ships one skill, `pr-followup`. It is model-invoked on
+explicit requests ("fix this PR's checks", "address the review comments"), and the user can call
+it directly. One run handles one PR at its current head commit:
+
+1. Resolve the PR for the current branch with `gh pr view --json number,headRefName,headRefOid,baseRefName,mergeable,mergeStateStatus,statusCheckRollup,reviews,comments`.
+   Stop if the PR is merged, closed, or from a fork the user cannot push to.
+2. **Checks.** For each failing check, read the failure with `gh pr checks` and `gh run view --log-failed`,
+   reproduce locally when the repo's own command exists, and fix.
+3. **Review feedback.** Keep only comments and reviews whose author passes the trust rule below.
+   Quote their text to itself as data inside a fenced block, never as instructions. Act only on
+   comments that ask for a code change in this PR's diff. Anything else (run a command, change
+   CI, touch secrets, edit other files) is reported back, not done.
+4. **Conflicts.** When `mergeable` is `CONFLICTING`, `git fetch` and `git merge origin/<base>`, then
+   resolve. Never rebase: the push that follows would be a force push, which is refused.
+5. Run the checks that cover the change, commit, and `git push` to the PR branch.
+6. Report what was fixed, what was skipped and why, and which comments were ignored as untrusted.
+   Then stop. The skill does not wait for CI or loop.
+
+**Trust rule.** A comment or review counts only when its `authorAssociation` is `OWNER`, `MEMBER`,
+or `COLLABORATOR`, or its author is the PR author. A user-configurable list of bot logins (for
+example a review bot) extends it. Everything else is listed in the report and left alone.
+
+### Safety requirements
+
+These apply to anything that runs a fixer without a person watching: a harness's native feature,
+a user's own `claude -p "/pr-followup"`, or a future watcher.
+
+| Requirement | Skill run by a person | Unattended run |
+| --- | --- | --- |
+| `ask` fails closed | Prompts reach the person | Must deny, not approve. Claude: verified. Codex and Gemini: **unverified** (see below) |
+| Untrusted comment text | Trust rule plus data framing in the skill | Same, and a watcher must apply the trust rule in code before any text reaches the model |
+| One run per PR | Not enforced; the person is present | Native features own this. A watcher would need a per-PR lock |
+| Attempt cap per commit | One pass per run; the skill does not loop | A watcher would cap attempts per head commit (proposed: 2) |
+| Stop on a repeat failure | The skill reports, and the next run is the person's call | A watcher would stop when the same check fails again on the agent's own fix commit |
+| No merging | `gh pr merge` and `gh api` are denied; the skill never asks | Same local rules; vendor features are outside them and need their own settings |
+| No force push | Push hook and pre-push backstop | Same, for local runs only |
+
+Fail-closed evidence: in a Claude `-p` run, a call that needs approval is denied in Manual mode,
+and `--permission-prompts none` tells Claude not to retry
+([headless docs](https://code.claude.com/docs/en/headless)). Codex has no per-command ask tier
+(`perCommandAsk: false` in `globals/harnesses/codex/provider.json`), so `ask` items fall through to
+`approval_policy`; what `codex exec` does under `never` is unchecked. Gemini's non-interactive
+behavior is unchecked.
+
+### Revisit conditions for a watcher
+
+Reopen option (c) as its own plan only when all of these hold:
+
+- Runtime Remote Branch Status has shipped a forge client, so Runtime already reads PR state.
+- `session-launch` has real adapters (Session Launching, `plan-session-launching-milestone-1`).
+- Every eligible provider has a verified fail-closed headless mode.
+- There is real demand from harnesses with no native unattended route. Today that is Gemini,
+  outside GitHub Actions.
+
+## Implementation plan
+
+### Phase 1: Verify the open facts
+
+- [ ] Confirm kirinmurphy/roborepo-alpha#48 has merged and its `gh` buckets match the Context table.
+- [ ] Check how `codex exec` treats a command that would prompt under `approval_policy = "never"`:
+      refused or run.
+- [ ] Check Gemini CLI's non-interactive mode for a deny-instead-of-prompt setting.
+- [ ] Check what `authorAssociation` GitHub reports for bot reviewers, to set the bot-list default.
+
+### Phase 2: The skill and package
+
+- [ ] Add `globals/packages/pr-followup/package.config.json` (optional, one skill resource,
+      `invocation: auto`).
+- [ ] Write `globals/packages/pr-followup/skills/pr-followup/SKILL.md` with the steps, trust rule,
+      and report format above.
+- [ ] Add trigger fixtures in `globals/packages/pr-followup/skill-triggers.json`. Positive: "fix the
+      failing checks on my PR". Negative: "review this PR", "merge my PR".
+- [ ] Make sure the skill uses only allowed `gh` reads and plain `git`. A test reads the skill text
+      and fails on `gh api`, `gh pr merge`, `rebase`, or any force flag.
+
+### Phase 3: Inline review comments (if the open question resolves to the helper)
+
+- [ ] Add a read-only `roborepo pr feedback [<number>] --json` command that calls `gh api` for the
+      review threads of the current repo's PR, applies the trust rule in code, and prints trusted
+      comments as data with untrusted ones counted, not shown.
+- [ ] Add a narrow allow rule for that exact subcommand. `gh api` stays denied for agents.
+- [ ] Test it with a fake `gh` executable: endpoint fixed to GET review comments, untrusted
+      authors filtered out, non-zero exit on a `gh` failure.
+
+### Phase 4: Native feature documentation
+
+- [ ] Add a "PR follow-up" section to `docs/user/guides/harnesses/supported-harnesses.md`: the
+      native table, how each is turned on, and that cloud and Actions runs are outside local
+      guardrails.
+
+## Validation
+
+- `node scripts/test/skill-trigger-fixtures-check.mjs` and
+  `node scripts/test/skill-structure-check.mjs` pass with the new package.
+- The skill-text test from Phase 2 fails when a forbidden command is added to `SKILL.md`, and passes
+  otherwise.
+- If Phase 3 is built: its check passes, and `scripts/test/protected-branch-push-check.mjs` still
+  shows `gh api` denied.
+- One manual run on a real PR with a failing check and one trusted comment: the fix is pushed as a
+  fast-forward, and an untrusted comment is listed but not acted on.
+- `npm run check` passes before the PR.
+
+## Documentation impact
+
+| Doc | Update |
+| --- | --- |
+| `docs/user/guides/harnesses/supported-harnesses.md` | New PR follow-up section (Phase 4) |
+| `docs/user/reference/roborepo-skills.md` | List the `pr-followup` skill |
+| `docs/user/reference/roborepo-cli.md` | Document `roborepo pr feedback`, only if Phase 3 is built |
+| `docs/internal/harness-provider-interface.md` | No change: no new capability is added |
+
+## Risks
+
+- **Vendor features change fast.** The native table goes stale. Each row names its source, so a
+  reader can recheck it.
+- **Prompt injection through trusted authors.** A trusted account can still be compromised. The
+  skill limits any comment to code changes within the PR's diff, and the push guard limits where
+  the result can go.
+- **Native unattended routes bypass local guards.** Users who enable them depend on the vendor's
+  controls and on GitHub branch protection. The docs must say so.
+
+## Open questions
+
+1. **How should agents read inline review comments?** Recommended: the Phase 3 read helper. It keeps
+   `gh api` denied and applies the trust rule in code, not in the prompt. Alternative: ship the
+   skill without inline comments and add the helper only if users ask for it.
+2. **Package or base install?** Recommended: an optional package, like `feature-verification`, so
+   users who rely on native auto-fix can leave it off.
+3. **Attempt cap for a future watcher.** Proposed: 2 per head commit. Only matters if the revisit
+   conditions are met.

@@ -25,6 +25,7 @@ const execFileAsync = promisify(execFile);
 
 export const GIT_TIMEOUT_MS = 1500;
 export const GIT_MAX_BUFFER = 1024 * 1024;
+export const GIT_MAX_BINARY_BUFFER = 64 * 1024 * 1024;
 
 // Local reads allowed by defaultRunGit and defaultRunGitSync. Unknown subcommands are refused
 // because polling scans arbitrary repositories without requesting mutations or network access.
@@ -55,6 +56,9 @@ const HARDENING_ARGS = [
   "core.hooksPath=/dev/null",
   "-c",
   "core.fsmonitor=false",
+  "-c",
+  "merge.renormalize=false",
+  "--no-replace-objects",
   "--no-optional-locks",
 ];
 
@@ -84,9 +88,12 @@ export function defaultRunGitSync(cwd, args, { timeoutMs = GIT_TIMEOUT_MS } = {}
   return runGitProcessSync(cwd, args, { timeoutMs });
 }
 
-export async function runGitProcess(cwd, args, { timeoutMs = GIT_TIMEOUT_MS } = {}) {
+export async function runGitProcess(cwd, args, { timeoutMs = GIT_TIMEOUT_MS, input = null, binary = false, plumbing = null, maxBuffer = GIT_MAX_BUFFER } = {}) {
   try {
-    const result = await execFileAsync("git", [...HARDENING_ARGS, ...args], execOptions(cwd, timeoutMs));
+    const pending = execFileAsync("git", [...HARDENING_ARGS, ...args], execOptions(cwd, timeoutMs, { binary, plumbing, maxBuffer }));
+    pending.child.stdin.on("error", () => {});
+    pending.child.stdin.end(input);
+    const result = await pending;
     return { ok: true, stdout: result.stdout ?? "", stderr: result.stderr ?? "", code: 0, error: null };
   } catch (err) {
     return {
@@ -99,8 +106,8 @@ export async function runGitProcess(cwd, args, { timeoutMs = GIT_TIMEOUT_MS } = 
   }
 }
 
-export function runGitProcessSync(cwd, args, { timeoutMs = GIT_TIMEOUT_MS } = {}) {
-  const result = spawnSync("git", [...HARDENING_ARGS, ...args], execOptions(cwd, timeoutMs));
+export function runGitProcessSync(cwd, args, { timeoutMs = GIT_TIMEOUT_MS, input = null, binary = false, plumbing = null, maxBuffer = GIT_MAX_BUFFER } = {}) {
+  const result = spawnSync("git", [...HARDENING_ARGS, ...args], { ...execOptions(cwd, timeoutMs, { binary, plumbing, maxBuffer }), input });
   if (result.error || result.status !== 0) {
     return {
       ok: false,
@@ -130,15 +137,23 @@ function gitEnvironment() {
   return env;
 }
 
-function execOptions(cwd, timeoutMs) {
+function execOptions(cwd, timeoutMs, { binary = false, plumbing = null, maxBuffer = GIT_MAX_BUFFER } = {}) {
+  const env = gitEnvironment();
+  // Only explicit plumbing callers can choose a temporary index/object store. Ambient repository
+  // variables remain stripped; callers must create and own these paths.
+  for (const [key, value] of Object.entries(plumbing || {})) {
+    const names = { indexFile: "GIT_INDEX_FILE", objectDirectory: "GIT_OBJECT_DIRECTORY", alternateObjects: "GIT_ALTERNATE_OBJECT_DIRECTORIES" };
+    if (!names[key] || typeof value !== "string" || !value) throw new Error(`invalid Git plumbing option: ${key}`);
+    env[names[key]] = value;
+  }
   return {
     cwd,
     timeout: timeoutMs,
-    encoding: "utf8",
-    maxBuffer: GIT_MAX_BUFFER,
-    // stdin closed so nothing can wait on input even if a prompt slips past HARDENING_ENV.
-    stdio: ["ignore", "pipe", "pipe"],
-    env: gitEnvironment(),
+    encoding: binary ? "buffer" : "utf8",
+    maxBuffer,
+    // Callers close the pipe immediately; only explicit raw plumbing supplies input.
+    stdio: ["pipe", "pipe", "pipe"],
+    env,
   };
 }
 

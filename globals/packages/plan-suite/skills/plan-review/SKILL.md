@@ -268,7 +268,10 @@ Approval needs every finding resolved and every required manual check confirmed 
    fails, report approval received but not durably recorded; resume this step on the next run.
 2. Run the repository's canonical approval check for `<plan>`; it must report `fresh`. Plan-only
    commits after approval keep it fresh; any change outside `docs/plans/` makes it stale.
-3. Tell the user to open and merge the pull request themselves, then run `/plan-close`. If the base
+3. Before landing, run `roborepo plans merge-readiness <plan> --json` after committing approval.
+   Require a clean worktree and committed fresh Result/Approval against the current reviewed base.
+   Report actionable failures and the assessed tips; a pass does not authorize a merge.
+   Tell the user to open and merge the pull request themselves, then run `/plan-close`. If the base
    branch moves before that merge, the user reruns `/plan-review`; `/plan-close` never
    synchronizes, and it refuses a stale approval.
 

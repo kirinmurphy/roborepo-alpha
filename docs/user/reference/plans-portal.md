@@ -372,3 +372,17 @@ The Plans page uses the normalized package catalog state. It does not inspect sk
   warnings, and bounded excerpts; the portal's Copy menus offer repository-aware prompts only.
 - The browser does not execute document scripts, and writes only the changes described in
   [What The Portal Writes](#what-the-portal-writes).
+
+## Landed review recovery and cleanup
+
+After verified landing, committed evidence-only recovery can select the primary plan with
+`authority.source: primary` and reason `verified-landed-recovery`. Result and Approval remain
+separate records. The shared verifier checks repository/worktree identity, integrated precursor
+blobs, exact implementation, and historical absorption. Conflicting records or missing/detached
+worktrees do not qualify. Priority edits still target the assigned worktree; primary recovery
+selection supplies evidence only.
+
+`roborepo plans merge-readiness <plan> --json` reports pre-merge readiness with repair instructions.
+After durable closure, cleanup uses the shared preservation assessment. Remaining or uncertain
+work keeps the checkout and offers explicit Archive and remove; closure stays committed even if
+cleanup fails. See [the recovery commands](repositories.md#worktree-states-and-cleanup).

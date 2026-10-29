@@ -970,6 +970,13 @@ test.describe("repository-first portal Home", () => {
       await removalHeld;
       await route.fulfill({ json: removal });
     });
+    const archives = [];
+    await page.route("**/api/repositories/*/worktrees/archive-remove", async (route) => {
+      const request = route.request().postDataJSON();
+      if (!request.apply) { await route.fulfill({ json: { eligible: true, action: "kept", preservation: "remaining", remainingPaths: ["notes/local.txt"], reason: "local layers not absorbed within assessed history" } }); return; }
+      archives.push(request);
+      await route.fulfill({ json: { action: "removed", snapshotRef: "refs/roborepo/worktree-archives/fixture", restoreCommand: "roborepo git worktrees restore fixture --destination <new-path> --apply" } });
+    });
     const stops = [];
     await page.route("**/api/repositories/*/worktrees/stop-servers", async (route) => {
       stops.push(route.request().postDataJSON());
@@ -1045,6 +1052,8 @@ test.describe("repository-first portal Home", () => {
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText("its local branch, feature/stale.");
     await expect(dialog).toContainText("It has 3 commits that were never merged. A backup is kept so you can bring them back.");
+    await expect(dialog).toContainText("Local preservation: remaining.");
+    await expect(dialog).toContainText("Remaining paths: notes/local.txt");
     // The archive ref and restore commands sit behind Details, out of the way until asked for.
     const restore = dialog.locator("[data-slot=restore]");
     await expect(restore).toBeHidden();
@@ -1075,6 +1084,16 @@ test.describe("repository-first portal Home", () => {
     await dialog.getByRole("button", { name: "Delete worktree", exact: true }).click();
     await expect.poll(() => removals).toEqual([{ branch: "feature/guarded", discardChanges: true }]);
     await expect(dialog).toBeHidden();
+
+    await card.getByRole("button", { name: "Actions for feature/stale" }).click();
+    await card.getByRole("button", { name: "Delete Worktree" }).click();
+    await expect(dialog).toContainText("Stop editors and agents writing here first");
+    await dialog.getByRole("button", { name: "Archive and remove", exact: true }).click();
+    await expect.poll(() => archives).toEqual([{ branch: "feature/stale", confirm: true, apply: true }]);
+    await expect(dialog).toContainText("Worktree archived and removed.");
+    await expect(dialog).toContainText("roborepo git worktrees restore fixture");
+    await page.screenshot({ path: "/tmp/worktree-archive-recovery.png" });
+    await dialog.getByRole("button", { name: "Cancel" }).click();
 
     removal = { action: "kept", reason: "uncommitted or untracked changes", requiresDiscardConfirmation: true };
     let release;

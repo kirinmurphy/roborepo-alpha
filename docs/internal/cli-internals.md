@@ -176,3 +176,24 @@ scaffolds, the native escape-hatch guide, the audit check, export/override/firew
 guards, slash-command render checks, `package manage`/`bundle` onboarding/apply/remove/status,
 `telemetry` enable/status/report, `run`, `mcp add` dry-runs plus real Codex/Claude writes against a
 throwaway harness root, lifecycle/rules dispatch, and menu fallback.
+
+## Worktree snapshot transactions
+
+`worktree-cleanup.mjs` coordinates CLI and repository-page requests through shared repository
+modules. `worktree-preservation.mjs` inventories index/filesystem layers and uses temporary objects
+for bounded coherent absorption proofs; `worktree-snapshot.mjs` owns capture, discovery,
+verification, and restore. The hardened Git seam accepts binary stdin/stdout and explicit temporary
+object/index paths while stripping inherited repository variables. Hooks, filesystem monitors,
+replacement objects, and merge renormalization are disabled. Unsupported drivers and index
+features refuse capture or proof.
+
+Snapshots are version-1 commits under create-only `refs/roborepo/worktree-archives/<uuid>` refs.
+The root parents the captured tip and retains a JSON manifest plus index/tracked/untracked/ignored
+payload trees. Listing and restore read those refs without depending on state-root records.
+Restore creates a fresh detached worktree without checkout, materializes raw blobs, rebuilds the
+index, and compares inventories. It refuses path collisions and symlink ancestors.
+
+The repository cleanup lock covers final surveys and removal. Snapshot, checkout removal, and
+expected-old-value branch retirement have separate outcomes. A snapshot remains discoverable
+through failure or retry; a changed or occupied branch is retained. The lock cannot prevent an
+external writer after the final survey, so callers must stop writers operationally.

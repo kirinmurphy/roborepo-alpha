@@ -77,7 +77,8 @@ matches nothing, and only active and review plans are joined at all.
 ## Plan authority
 
 A plan can have a copy in the primary checkout and another in a linked worktree. Exactly one copy is
-authoritative: the one the portal shows and every tool writes. Which copy it is follows from the
+authoritative: the one the portal shows and ordinary editing tools write, with the evidence-only
+landed recovery exception below. Which copy it is follows from the
 plan's lifecycle and its `worktree` field, never from which branch is ahead or behind.
 
 The primary checkout is the first `worktree` entry of `git worktree list --porcelain`. The primary
@@ -332,3 +333,17 @@ plan, and `/plan-review` adds to it and records the approval:
   including one a base merge brings in, makes it stale. `/plan-close` refuses a stale approval.
 - `reviewed_commit` in the frontmatter is unrelated: it records when the plan document was last
   checked against the repository, not what a human accepted.
+
+## Landed recovery evidence
+
+A parsed `### Post-merge recovery` subsection under `## Review` can make committed primary evidence
+authoritative after verified landing. Fields are Repository identity, Worktree, Branch, Assessed
+branch tip, Base ref, Base commit, Absorbing commit, Primary precursor blob, and Worktree precursor
+blob. Commit/blob ids are full ids; Base ref is a heads or remotes ref.
+
+Only Result, Approval, and this provenance subsection may differ from integrated precursor copies.
+The shared verifier checks repository/assignment identity, precursor integration, unchanged
+requirements and findings, complete review, explicit human approval, exact implementation, and
+historical base absorption. A later implementation change, conflict, or missing/detached assigned
+worktree invalidates the exception. Pending evidence is not durable approval. Portal priority
+writes still target the assigned worktree. See plan-review's resume reference for the procedure.

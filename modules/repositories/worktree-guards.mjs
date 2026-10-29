@@ -2,9 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { runGitProcess } from "./git-exec.mjs";
 
-const DISPOSABLE_IGNORED = ["node_modules/", "test-results/"];
+import { DISPOSABLE_IGNORED } from "./worktree-snapshot.mjs";
 
-export async function checkWorktreeRemoval({ worktree, kind, landed = false, worktreeRoot = null, mainPath, currentPath, activePlan = false, running = false, discardChanges = false, runGit = runGitProcess, fsApi = fs }) {
+export async function checkWorktreeRemoval({ worktree, kind, landed = false, worktreeRoot = null, mainPath, currentPath, activePlan = false, running = false, discardChanges = false, verifiedSnapshot = false, runGit = runGitProcess, fsApi = fs }) {
   if (worktree.prunable) return blocked("prunable worktree");
   if (kind === "automatic" && !landed) return blocked("not landed");
   if (kind === "automatic" && (!worktreeRoot || !inside(worktree.path, worktreeRoot))) return blocked("not in worktree folder");
@@ -16,7 +16,7 @@ export async function checkWorktreeRemoval({ worktree, kind, landed = false, wor
   if (running) return blocked("dev server running");
   const status = await runGit(worktree.path, ["status", "--porcelain=v1", "--untracked-files=all"], { timeoutMs: 10000 });
   if (!status.ok) return blocked("working tree status unavailable");
-  if (status.stdout.trim() && !(kind === "confirmed" && discardChanges === true)) return blocked("uncommitted or untracked changes");
+  if (status.stdout.trim() && !(kind === "confirmed" && discardChanges === true) && !verifiedSnapshot) return blocked("uncommitted or untracked changes");
   // Normal untracked mode reports a wholly ignored directory once (`!! node_modules/`); listing all
   // files would enumerate every installed dependency and overflow the Git output buffer.
   const ignored = await runGit(worktree.path, ["status", "--ignored", "--porcelain=v1"], { timeoutMs: 10000 });
@@ -24,8 +24,8 @@ export async function checkWorktreeRemoval({ worktree, kind, landed = false, wor
   const valuable = ignored.stdout.split("\n")
     .filter((line) => line.startsWith("!! "))
     .map((line) => line.slice(3).trim())
-    .find((file) => !DISPOSABLE_IGNORED.some((prefix) => file === prefix.slice(0, -1) || file.startsWith(prefix)));
-  if (valuable) return blocked(`valuable ignored path: ${valuable}`);
+    .find((file) => !DISPOSABLE_IGNORED.some((prefix) => file === prefix || file.startsWith(`${prefix}/`)));
+  if (valuable && !verifiedSnapshot) return blocked(`valuable ignored path: ${valuable}`);
   return { ok: true, reason: null, warning: kind === "confirmed" && activePlan ? "plan still active" : null };
 }
 

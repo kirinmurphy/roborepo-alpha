@@ -52,7 +52,7 @@ import { loadRegistry, updateRegistry, recordDiscoveryIfKnown, resolveRepository
 import { createRepositoryOverviewService } from "./repository-overview.mjs";
 import { MOCK_FIRST_RUN_VIEWS_ENABLED, mockHomeOverview } from "./mock-home.mjs";
 import { buildTelemetryRepositoryProjection, fixtureTelemetryRepositories, homeTelemetryProjection } from "./telemetry-repository-overview.mjs";
-import { removeRepositoryWorktree, stopRepositoryWorktreeServers } from "./worktree-cleanup.mjs";
+import { archiveRepositoryWorktree, assessRepositoryWorktree, listRepositoryWorktreeArchives, removeRepositoryWorktree, stopRepositoryWorktreeServers } from "./worktree-cleanup.mjs";
 import { dismissWorktreeCleanupNotice, enableWorktreeCleanup } from "./worktree-cleanup-optin.mjs";
 import { packageStatusSummary } from "./package-status.mjs";
 import { buildAnalysisPrompt } from "../harnesses/transcript-locate.mjs";
@@ -858,6 +858,9 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     loadHomeOverview: () => repositoryOverview.loadHome(),
     loadRepositoryOverview: (params) => repositoryOverview.loadDetail(params),
     patchRepository: (params) => patchRepository(params),
+    archiveRepositoryWorktree: (params) => afterWorktreeChange(archiveRepositoryWorktree(params)),
+    assessRepositoryWorktree,
+    listRepositoryWorktreeArchives,
     removeRepositoryWorktree: (params) => afterWorktreeChange(removeRepositoryWorktree(params)),
     stopRepositoryWorktreeServers: (params) => afterWorktreeChange(stopRepositoryWorktreeServers(params)),
     enableWorktreeCleanup: (params) => afterWorktreeChange(enableWorktreeCleanup(params)),
