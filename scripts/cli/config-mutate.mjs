@@ -255,7 +255,7 @@ function packageSkillSources() {
 // --------------------------------------------------------------------------- permissions
 //
 // Flat model: every behavior (named — write-files, delete-files, go-online, commit-code,
-// push-pull-prs — or arbitrary, user-added) is independently deny/ask/allow. Personal choices
+// push-code — or arbitrary, user-added) is independently deny/ask/allow. Personal choices
 // live in commandOverridesPath (state-paths.mjs), layered on top of the repo-tracked manifest's
 // defaults at render time, so `roborepo update` re-rendering the manifest never wipes them.
 // The write itself is global harness config. When the command is run from a repo that has

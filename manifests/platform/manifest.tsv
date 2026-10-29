@@ -42,6 +42,10 @@ claude	managed_copy	globals/harnesses/claude/MANAGED_BY_ROBOREPO.md	MANAGED_BY_R
 # install-lib.sh), not copied as one static repo-wide directory. See Phase 7 of the ownership plan.
 claude	managed_files	globals/system/hooks/claude	hooks	claude	-
 claude	managed_copy	globals/harnesses/claude/hooks	hooks/provider	claude	-
+# git-hooks/ installs with the base root config, whose env points agent git at it: if the config
+# shipped without these files, agent shells would run no git hooks at all, the repo's own included.
+# It is a sibling of hooks/, not inside it, because a managed_files row owns everything under its target.
+claude	managed_files	globals/system/git-hooks	git-hooks	claude	-
 claude	cleanup	-	MANAGED_BY_HARNESS_CONFIGS.md	claude	-
 claude	cleanup	-	plugins/known_marketplaces.json	claude	-
 claude	cleanup	-	plugins/installed_plugins.json	claude	-
@@ -60,6 +64,7 @@ codex	rendered_rules	-	AGENTS.md	codex	-
 codex	managed_copy	globals/harnesses/codex/MANAGED_BY_ROBOREPO.md	MANAGED_BY_ROBOREPO.md	codex	nodoctor
 codex	hook_fragment	generated/codex/hooks.json	hooks.json	codex	-
 codex	managed_files	globals/harnesses/codex/hooks	hooks	codex	-
+codex	managed_files	globals/system/git-hooks	git-hooks	codex	-
 codex	managed_copy	generated/codex/rules	rules	codex	-
 codex	cleanup	-	MANAGED_BY_HARNESS_CONFIGS.md	codex	-
 codex	cleanup	-	skills	codex	-

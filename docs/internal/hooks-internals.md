@@ -354,7 +354,7 @@ reads and will silently under-report Codex ones until Codex delivers the event.
 
 Agent permission policy is authored in `manifests/inventory/agent-permissions.json` as a
 flat list of **behaviors** — named (`write-files`, `delete-files`, `go-online`,
-`commit-code`, `push-pull-prs`) or arbitrary (any other command) — each independently
+`commit-code`, `push-code`) or arbitrary (any other command) — each independently
 `deny`/`ask`/`allow`. There is no profile-bundle concept anymore (a prior design with
 `readonly`/`interactive`/`workspace`/`networked` presets was replaced with this flat
 model). Personal overrides live in `~/.roborepo/command-overrides.json`, layered on top

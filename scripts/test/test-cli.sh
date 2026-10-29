@@ -984,7 +984,7 @@ else
 fi
 
 # Flat permission model — named behaviors (write-files, delete-files, go-online,
-# commit-code, push-pull-prs) and arbitrary commands are each independently deny/ask/allow, with
+# commit-code, push-code) and arbitrary commands are each independently deny/ask/allow, with
 # personal overrides layered on top of the manifest at render time. No profile bundles, no
 # project scope (global only — see manifests/inventory/agent-permissions.json).
 # Seed a codex config.toml so the renderer has a marker block to merge into.

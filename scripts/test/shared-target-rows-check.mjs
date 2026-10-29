@@ -16,11 +16,18 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 const cli = path.join(repoRoot, "scripts/cli/main.mjs");
 const rowsCli = path.join(repoRoot, "scripts/cli/shared-target-rows.mjs");
 const coreCodex = JSON.parse(fs.readFileSync(path.join(repoRoot, "generated/codex/hooks.json"), "utf8")).hooks;
-const coreScripts = fs.readdirSync(path.join(repoRoot, "globals/harnesses/codex/hooks"));
+// Every file the row installs, including ones in subdirectories (git/), as paths relative to hooks/.
+const coreHooksSource = path.join(repoRoot, "globals/harnesses/codex/hooks");
+const coreScripts = fs.readdirSync(coreHooksSource, { recursive: true, withFileTypes: true })
+  .filter((entry) => entry.isFile())
+  .map((entry) => path.relative(coreHooksSource, path.join(entry.parentPath, entry.name)));
+// The conflict cases edit top-level scripts.
+const topLevelScripts = coreScripts.filter((name) => !name.includes(path.sep));
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-shared-target-rows-"));
 try {
   standalonePermissionManifestDiscovery();
+  baseInstallShipsTheGitHooksItsConfigPointsAt();
   coreHooksInstallAfterPackageHooks();
   scriptCopiesFollowConflictPolicy();
   linksOutsideTheCheckoutAreNeverWrittenThrough();
@@ -28,6 +35,22 @@ try {
   console.log("shared-target-rows-check: ok");
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
+}
+
+// The base root configs point agent git at <home>/git-hooks. A base-only install must ship that
+// directory, or agent shells would run no git hooks at all: not the push backstop, and not the
+// repo's own hooks either.
+function baseInstallShipsTheGitHooksItsConfigPointsAt() {
+  const { home, env } = makeHome("base-only");
+  run(env, cli, "bundle", "apply", "base");
+  const source = path.join(repoRoot, "globals/system/git-hooks");
+  for (const harness of [".claude", ".codex"]) {
+    for (const name of fs.readdirSync(source)) {
+      const installed = path.join(home, harness, "git-hooks", name);
+      assert.ok(fs.existsSync(installed), `base installs ${harness}/git-hooks/${name}`);
+      assert.equal(fs.statSync(installed).mode & 0o111, fs.statSync(path.join(source, name)).mode & 0o111, `${harness}/git-hooks/${name} keeps its mode`);
+    }
+  }
 }
 
 function coreHooksInstallAfterPackageHooks() {
@@ -53,6 +76,9 @@ function coreHooksInstallAfterPackageHooks() {
   }
   for (const command of commands(coreCodex)) assert.ok(after.has(command), `core hook installed: ${command}`);
   for (const script of coreScripts) assert.ok(fs.existsSync(path.join(home, ".codex", "hooks", script)), `core script copied: ${script}`);
+  for (const script of coreScripts.filter((name) => fs.statSync(path.join(coreHooksSource, name)).mode & 0o111)) {
+    assert.ok(fs.statSync(path.join(home, ".codex", "hooks", script)).mode & 0o111, `core script stays executable: ${script}`);
+  }
   assert.equal(fs.readdirSync(path.join(home, ".codex")).some((name) => name.startsWith("hooks_update_")), false,
     "no staged merge-review copy: the core hooks installed instead of colliding");
   assert.match(run(env, cli, "bundle", "check", "hooks"), /ok: hooks/);
@@ -69,8 +95,8 @@ function coreHooksInstallAfterPackageHooks() {
   const labelled = JSON.parse(fs.readFileSync(hooksPath, "utf8"));
   const labels = Object.values(labelled.hooks).flatMap((entries) => entries.flatMap((entry) => entry.hooks || []))
     .map((hook) => hook.statusMessage).filter(Boolean);
-  assert.deepEqual(labels.sort(), ["RoboRepo: command permissions", "RoboRepo: concise command output", "RoboRepo: unmanaged skills check"].sort(),
-    "reapplying upgrades the three native review labels on existing core hooks");
+  assert.deepEqual(labels.sort(), ["RoboRepo: command permissions", "RoboRepo: concise command output", "RoboRepo: protected branch push", "RoboRepo: unmanaged skills check"].sort(),
+    "reapplying upgrades the native review labels on existing core hooks");
   assert.deepEqual([...handlerPositions(hooksPath)], [...after], "labelling preserves every hook's command and position");
   run(env, cli, "bundle", "apply", "hooks");
   assert.deepEqual(JSON.parse(fs.readFileSync(hooksPath, "utf8")), labelled, "label reconciliation is idempotent");
@@ -86,7 +112,7 @@ function scriptCopiesFollowConflictPolicy() {
   const { home, env } = makeHome("policy");
   const hooksDir = path.join(home, ".codex", "hooks");
   const row = ["managed_files", "codex", "globals/harnesses/codex/hooks", hooksDir];
-  const [first, second] = coreScripts;
+  const [first, second] = topLevelScripts;
   const statePath = path.join(env.ROBOREPO_STATE_DIR, "config-state", "managed-files.json");
 
   // An older copy RoboRepo wrote and nobody edited is updated in place.
@@ -124,7 +150,7 @@ function linksOutsideTheCheckoutAreNeverWrittenThrough() {
   const { home, env } = makeHome("links");
   const hooksDir = path.join(home, ".codex", "hooks");
   const row = ["managed_files", "codex", "globals/harnesses/codex/hooks", hooksDir];
-  const [script] = coreScripts;
+  const [script] = topLevelScripts;
   const external = path.join(tmp, "links-dotfiles", script);
   fs.mkdirSync(path.dirname(external), { recursive: true });
   fs.writeFileSync(external, "// my dotfiles copy\n");
