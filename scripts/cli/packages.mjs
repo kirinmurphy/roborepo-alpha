@@ -106,9 +106,10 @@ async function withHookReviewHint(rest, run) {
 }
 
 // Interactive terminals are asked about each recommendation the enable left off; a pipe, a script,
-// or --dry-run only lists them. The package engine itself never prompts.
+// or --dry-run only lists them. A blocked enable offers nothing, as the portal does. The package
+// engine itself never prompts.
 async function offerRecommendations(result, rest, changed) {
-  if (!result.recommendations?.length) return;
+  if (!result.ok || !result.recommendations?.length) return;
   const interactive = process.stdin.isTTY && process.stdout.isTTY && !rest.includes("--dry-run");
   if (!interactive) {
     console.log(`recommended (not enabled): ${result.recommendations.map((rec) => rec.id).join(", ")}`);

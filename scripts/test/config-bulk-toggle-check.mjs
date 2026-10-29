@@ -153,6 +153,8 @@ try {
   for (const [id, extra] of [
     ["bulk-parent", { requires: ["bulk-dep-only"] }],
     ["bulk-dep-only", { selectable: false, presentation: { category: "integrations", visibility: "dependency" } }],
+    ["bulk-shared-parent", { requires: ["bulk-shared"] }],
+    ["bulk-shared", {}],
   ]) {
     const dir = path.join(workspace, "packages", id);
     fs.mkdirSync(dir, { recursive: true });
@@ -190,6 +192,22 @@ try {
     offById.get("bulk-parent").outcomes.map((o) => [o.id, o.outcome]).sort(),
     [["bulk-dep-only", "disabled"], ["bulk-parent", "disabled"]],
     "disabling the parent turns its dependency off with it",
+  );
+
+  // A selectable member that is on only because another member requires it has no root to remove:
+  // bulk disable skips it instead of refusing the batch, and it turns off with its parent.
+  const sharedOn = await bulk.applyBulkPackageChange(["bulk-shared-parent"], true);
+  assert.equal(sharedOn.status, 200, `required-only fixture enable: ${sharedOn.message}`);
+  assert.ok(!registryIds().packages.has("bulk-shared"), "the selectable dependency is not recorded as a root");
+  const sharedOff = await bulk.applyBulkPackageChange(["bulk-shared", "bulk-shared-parent"], false);
+  assert.equal(sharedOff.status, 200, `required-only batch disable: ${sharedOff.message}`);
+  const sharedOffById = new Map(sharedOff.results.map((r) => [r.id, r]));
+  assert.equal(sharedOffById.get("bulk-shared").skipped, true, "a required-only selectable member is skipped by bulk disable");
+  assert.equal(sharedOffById.get("bulk-shared").message, "required by another selected package");
+  assert.deepEqual(
+    sharedOffById.get("bulk-shared-parent").outcomes.map((o) => [o.id, o.outcome]).sort(),
+    [["bulk-shared", "disabled"], ["bulk-shared-parent", "disabled"]],
+    "the required-only member turns off with its parent",
   );
 
   console.log("ok: section bulk toggle (enable/disable/no-op/mixed/lock/validation/individual coexistence/dependencies)");
