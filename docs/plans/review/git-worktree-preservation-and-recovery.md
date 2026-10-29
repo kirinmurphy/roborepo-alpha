@@ -1,11 +1,11 @@
 ---
 id: 4xc0gjuw
 priority: high
-next_action: Investigate the reported unexpected archive action before renewed human approval; automated workflows and the late base-ref fix pass.
+next_action: Request renewed human approval after recording the explicit investigation deferral and refreshed verification.
 blocked_by: []
 depends_on: []
 related: ["hr78g4sj", "b2sgiejd", "a7bslb00", "gqzjlzgx"]
-reviewed_commit: f7fe65c2ea093c556abc773f2e32672ffff940aa
+reviewed_commit: 2a4efc783e85ca37a6a7d9143b150926f2641f1b
 worktree: git-worktree-preservation-and-recovery
 ---
 
@@ -476,6 +476,11 @@ checkout intact.
 
 ### Execution decisions
 
+- October 28 review: the user answered "let's explicitly defer" after being asked whether to keep
+  the unexplained disappearance as a merge blocker or defer it. Keep the report and uncertainty
+  below, but remove it from required work for this plan's approval and closure. This is an accepted
+  deferral, not a claim that the original occurrence was explained or fixed. Approval of the
+  updated implementation remains a separate explicit decision.
 - October 27 review: the user requested adding native Windows snapshot/restore testing to
   [[l1mz96d9]] and deferring it here. Remove the unconfirmed checkbox from this plan; Windows
   verification remains outstanding in that backlog plan and is no longer a closure prerequisite
@@ -532,9 +537,6 @@ blocking this plan's approval or closure. This deferral does not establish Windo
 
 - [x] Automatic dirty cleanup could remove a checkout when the base ref moved during the final
   server survey — final base check and five concurrency regressions fixed in `f7fe65c2`.
-- [ ] User reported one Delete click, an ignored-path refusal, then disappearance. The original
-  ledger records archive removal, but the exact interaction is unexplained; isolated trusted-click
-  replay refuses Delete and retains the checkout. Preserve this as an unresolved investigation.
 - [x] Snapshot symlink targets were decoded as UTF-8 during capture/restore, losing raw target bytes;
   Buffer capture/restore and exact non-UTF-8 regression fixed in review (`fd9b3ce9`).
 - [x] Repository removal dialog ignored authoritative preview preservation and remaining paths;
@@ -552,8 +554,28 @@ blocking this plan's approval or closure. This deferral does not establish Windo
 - [x] Safety scenarios lacked direct assertions — add hostile paths, symlink parents, removal
   failure, moved/occupied branches, and idempotent partial retries.
 
+### Deferred investigation
+
+The user reported one Delete click, the valuable-ignored-path refusal, then disappearance. The
+original ledger records archive removal, but the exact interaction remains unexplained. Isolated
+trusted-click replay refuses Delete and retains the checkout. The user confirmed that the recorded
+refusal matches what they saw, then explicitly deferred investigation on October 28. This no longer
+blocks approval or closure; no cause or fix is claimed. If it recurs, retain button-event and HTTP
+request/response evidence together with the archive/removal ledger before resetting the fixture.
+
 ### Verification
 
+- October 28 deferral resumption: explicit user deferral removes the unexplained original
+  disappearance from required findings while retaining the incident and uncertainty. All required
+  findings are resolved or explicitly deferred; native Windows remains owned by [[l1mz96d9]].
+- Fresh independent Validator for the deferral resumption: clean, no fix or escalation findings.
+  `bin/roborepo plans validate 4xc0gjuw --json`,
+  `node scripts/test/docs-reference-check.mjs`, and `git diff --check` passed. The deferral
+  does not assert a cause, fix, Windows result, or renewed approval.
+- Base synchronization `2a4efc783e85ca37a6a7d9143b150926f2641f1b` merged
+  `3ef323270d1188a17cc3d0eda7c75914d6d28b2b` without conflicts. Since the previous review,
+  base changed plan records and one backlog-reference link in `docs/internal/backlog-review.md`;
+  no application or test code changed through this synchronization.
 - October 28 workflow verification at `f7fe65c2`: all six disposable use cases exercised against
   the real portal and HTTP endpoints, with the reviewed CLI for automatic cleanup/restore.
   Final recorded browser walkthrough: 10/10 assertions passed. It covers Delete refusal,
@@ -575,7 +597,8 @@ blocking this plan's approval or closure. This deferral does not establish Windo
   archive snapshot and successful removal at 19:18 UTC, but cannot establish the user interaction.
   Isolated trusted-click replay and the full walkthrough produce only a Delete request, refusal,
   and retained checkout until Archive and remove is explicitly clicked. These passes do not
-  resolve or disprove the original report; review stays pending and no new approval is requested.
+  resolve or disprove the original report. The later explicit user deferral above removes it as
+  a review blocker without claiming resolution.
 - Final human-review gate at `fd9b3ce9598a13c29343fd5585a10d55d1144ce3`:
   `npm run check` passed outside the sandbox. Doctor: 106 checks; CLI: 464 passed, zero failed;
   CI behavior suites: 63/63; installer collision and package installation checks passed;
@@ -637,10 +660,10 @@ blocking this plan's approval or closure. This deferral does not establish Windo
 ### Result
 
 - Status: pending
-- Reviewed implementation commit: f7fe65c2ea093c556abc773f2e32672ffff940aa
-- Base commit: 6eba62ad78ad37d0e3a62230869281378919cc04
+- Reviewed implementation commit: 2a4efc783e85ca37a6a7d9143b150926f2641f1b
+- Base commit: 3ef323270d1188a17cc3d0eda7c75914d6d28b2b
 
-### Approval
+### Prior approval
 
 - Decision: approved
 - Reviewed implementation commit: fd9b3ce9598a13c29343fd5585a10d55d1144ce3
@@ -650,6 +673,10 @@ On October 28, 2026, the user answered "Approve this reviewed implementation" to
 question naming this plan and full implementation commit
 `fd9b3ce9598a13c29343fd5585a10d55d1144ce3`. Native Windows testing remains deferred to
 [[l1mz96d9]] at the user's explicit direction.
+
+### Approval
+
+- Decision: requested
 
 ### Acceptance evidence
 
