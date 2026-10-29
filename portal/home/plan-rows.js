@@ -8,8 +8,10 @@ import { worktreeDetailsButton } from "./worktree-details.js";
 // worktree has merged, a Close action says so itself, so the row drops its merged badge.
 export function matchedPlanIdentity(plan, checkout, { mainCheckouts = [], nextAction = null, onOpenPlan, onCopyPrompt, onStopServers = null, onDelete = null } = {}) {
   const node = tpl("tpl-plan-identity");
-  node.append(planItem(plan, onOpenPlan, worktreeDetailsButton(plan, checkout, { mainCheckouts, onStopServers, onDelete })));
-  const closesMerged = nextAction?.command === "plan-close" && checkout.worktreeState === "landed";
+  // Close is only offered once review approved finished work, so the done badge beside it adds nothing.
+  const closes = nextAction?.command === "plan-close";
+  node.append(planItem(plan, onOpenPlan, worktreeDetailsButton(plan, checkout, { mainCheckouts, onStopServers, onDelete }), { showCompletion: !closes }));
+  const closesMerged = closes && checkout.worktreeState === "landed";
   if (nextAction) node.querySelector("[data-slot=controls]").append(nextActionButton(plan, nextAction, { merged: closesMerged, onCopyPrompt }));
   return { glyph: "plans", label: "Plan", node, hideWorktreeBadge: closesMerged };
 }
@@ -52,7 +54,7 @@ const PLAN_TITLE_MAX_LENGTH = 70;
 // drawer. The row's own worktree badge already says when the plan's worktree has merged, so the
 // completion here stays about tasks. `afterTitle` (a matched row's worktree toggle) sits between the
 // title and the completion.
-export function planItem(plan, onOpenPlan, afterTitle = null) {
+export function planItem(plan, onOpenPlan, afterTitle = null, { showCompletion = true } = {}) {
   const title = portalMiddleEllipsis(plan.title, PLAN_TITLE_MAX_LENGTH);
   const node = fill(tpl("tpl-plan-item"), { title });
   const button = node.querySelector("[data-slot=title]");
@@ -60,7 +62,7 @@ export function planItem(plan, onOpenPlan, afterTitle = null) {
   button.addEventListener("click", () => onOpenPlan?.(plan));
   const controls = node.querySelector("[data-slot=controls]");
   if (afterTitle) controls.append(afterTitle);
-  const completion = planCompletion(plan);
+  const completion = showCompletion && planCompletion(plan);
   if (completion) controls.append(completion);
   return node;
 }
