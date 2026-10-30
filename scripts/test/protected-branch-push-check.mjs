@@ -27,7 +27,9 @@ for (const name of fs.readdirSync(gitHooks).filter((name) => name !== "chain.sh"
   assert.ok(fs.statSync(path.join(gitHooks, name)).mode & 0o111, `git hook ${name} is executable`);
 }
 
-// Hermetic git: no user or system config, so a developer's own core.hooksPath cannot leak in.
+// Hermetic git: no user, system, or environment-injected config, so a developer's own
+// core.hooksPath cannot leak in. An agent shell injects the installed backstop through
+// GIT_CONFIG_COUNT/KEY/VALUE, which would refuse this test's own setup pushes.
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-protected-push-"));
 const gitEnv = {
   ...process.env,
@@ -36,6 +38,9 @@ const gitEnv = {
   GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@example.com",
   GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@example.com",
 };
+for (const key of Object.keys(gitEnv)) {
+  if (/^GIT_CONFIG_(?:COUNT|PARAMETERS|KEY_\d+|VALUE_\d+)$/.test(key)) delete gitEnv[key];
+}
 delete gitEnv.ROBOREPO_PROTECTED_BRANCHES;
 fs.writeFileSync(gitEnv.GIT_CONFIG_GLOBAL, "");
 const agentEnv = { ...gitEnv, GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.hooksPath", GIT_CONFIG_VALUE_0: gitHooks };
