@@ -637,6 +637,15 @@ Git administrative worktree `credential-protection`; this document contains no m
   Git status reports denied access to those paths, so their working contents were not compared
   or treated as verified clean. They were not read or changed. Status excluding those paths was
   clean after test-file cleanup; the primary checkout retains unrelated pre-existing edits.
+- Correction after the user's October 30 follow-up: main already includes
+  `fb3a32b568b8fecaf7203e3adb23c6a8ea403093`, which removes both tracked PEM fixtures and
+  generates disposable TLS credentials in memory through `scripts/test/lib/local-test-tls.mjs`.
+  The assigned historical feature tip does not include that commit and still reads the old
+  fixtures. The PEM-specific obstacle above concerns that older worktree, not current main.
+  The same main commit also makes inaccessible-file checks report unavailable rather than
+  treating unreadable files as verified edits. Neither correction was incorporated into the
+  older worktree used for this review; its cleanup and localhost errors remain separate observed
+  failures. Current main's disposable TLS implementation has not been rerun in this review.
 - Native enforcement was not rerun: its unrestricted positive controls read synthetic paths
   denied by this session's policy. Previously recorded macOS native-command evidence remains
   historical evidence for unchanged files, not a fresh runtime certification. The three human-
