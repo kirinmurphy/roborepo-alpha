@@ -4,7 +4,7 @@ import { repoRoot, rootConfigActive, harnessHome, workspacePackagesDir, packageM
 import { renderHomeRules, knownHarnessIds, harnessIdsWithCapability } from "./rules-render.mjs";
 import { forgetPackageIds, readEnabledPackagesRegistry, selectedRootIds, setPackageEnabled, effectiveEnabledIds, withPackageSelection } from "./package-state.mjs";
 import { requiredBy, requiredClosure, rootsRequiring } from "./package-graph.mjs";
-import { loadPackageCatalog, unavailablePackageMessage, validatePackageCatalog, BUILT_IN_PACKAGES_DIR, readPackageCategories } from "./package-catalog.mjs";
+import { loadPackageCatalog, unavailablePackageMessage, unavailablePackageReason, validatePackageCatalog, BUILT_IN_PACKAGES_DIR, readPackageCategories } from "./package-catalog.mjs";
 import { buildPackageLiveState } from "./package-probes.mjs";
 import { packageStatusSummary } from "./package-status.mjs";
 import { ensureClaudeMcpPermission } from "./mcp-claude.mjs";
@@ -376,7 +376,9 @@ function inspectPackage(rest) {
     lifecycle: pkg.lifecycle,
     status: pkg.status || "available",
     presentation: pkg.presentation,
+    selectable: pkg.selectable,
     requires: pkg.requires || [],
+    recommends: pkg.recommends || [],
     resources: pkg.resources || [],
     sourceRoot: pkg.sourceRoot,
   }, null, 2));
@@ -601,6 +603,7 @@ export async function enablePackage(rest, changed = new Set()) {
   if (!dryRun) assertHarnessWriteAllowed();
 
   const order = requiredClosure(catalog, [pkg.id]);
+  warnUnavailableRequirements(order, catalog);
   if (dryRun) {
     console.log(`[dry-run] would enable: ${pkg.label}`);
     console.log(`  [dry-run] mark package selected in registry`);
@@ -627,6 +630,20 @@ export async function enablePackage(rest, changed = new Set()) {
     recommendations: disabledRecommendations(pkg, catalog, effectiveEnabledIds(catalog)),
     changedPackageIds: [...changed],
   };
+}
+
+// The closure is taken over the available catalog, which leaves out pending packages, so a
+// requirement on one would otherwise be skipped without a word.
+function warnUnavailableRequirements(order, catalog) {
+  const available = new Set(catalog.map((p) => p.id));
+  const fullCatalog = loadPackageCatalog({ includeUnavailable: true });
+  for (const id of order) {
+    for (const dep of fullCatalog.find((p) => p.id === id)?.requires || []) {
+      if (available.has(dep)) continue;
+      const reason = unavailablePackageReason(fullCatalog.find((p) => p.id === dep) || {}) || "not in the catalog";
+      console.warn(`  warn: ${id} requires ${dep}, which is skipped (${reason})`);
+    }
+  }
 }
 
 // Selectable recommendations of `pkg` that are not effective. Offered, never applied here: only
@@ -824,12 +841,14 @@ export async function disablePackage(rest, changed = new Set()) {
   if (!pkgId) throw new PackageMutationError(packageIdUsage("disable", catalog));
   const pkg = findPackage(pkgId);
   if (!pkg) throw unknownPackageError(pkgId, catalog);
-  if (!pkg.selectable) throw notSelectableError(pkg, catalog, "disable");
 
   const dryRun = flags.includes("--dry-run");
   const cascade = flags.includes("--cascade");
   const roots = selectedRootIds(catalog);
   const isRoot = roots.includes(pkg.id);
+  // A non-selectable package can still be a recorded root (an older registry, or a manifest that
+  // later set `selectable: false`); disable is the only way to remove that root.
+  if (!pkg.selectable && !isRoot) throw notSelectableError(pkg, catalog, "disable");
   const keepers = rootsRequiring(catalog, pkg.id, roots);
   if (!isRoot && keepers.length && !cascade) {
     throw new PackageMutationError(

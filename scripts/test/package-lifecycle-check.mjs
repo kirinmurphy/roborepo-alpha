@@ -242,6 +242,8 @@ for (const pkgId of packageIds) {
   fixture("dep-only-parent", { requires: ["dep-only"] });
   fixture("dep-partial", { resources: [{ type: "mcp", preset: "skipped-preset" }] });
   fixture("dep-blocked", { resources: [{ type: "mcp", preset: "no-such-preset" }] });
+  fixture("dep-pending", { status: "pending" });
+  fixture("dep-needs-pending", { requires: ["dep-pending"] });
 
   const run = (...args) => spawnSync(process.execPath, [cli, ...args], { env, encoding: "utf8", input: "" });
   const ok = (...args) => {
@@ -343,6 +345,24 @@ for (const pkgId of packageIds) {
     fs.appendFileSync(path.join(tmp, ".claude", "CLAUDE.md"), "\n## Fixture rules dep-only\n");
     ok("package", "adopt-live");
     assert.ok(!registry().packages.includes("dep-only"), "adopt-live skips non-selectable packages");
+
+    // A non-selectable package recorded as a root (an older registry, or a manifest that later set
+    // `selectable: false`) can still be disabled, which is the only way to drop that root.
+    fs.writeFileSync(registryFile, JSON.stringify({ schemaVersion: 2, packages: ["dep-only"], disabled: [] }));
+    ok("package", "disable", "dep-only");
+    assert.ok(!registry().packages.includes("dep-only"), "disable removes a non-selectable root");
+
+    // A requirement on a package the catalog leaves out (pending) is named, not skipped silently.
+    out = ok("package", "enable", "dep-needs-pending");
+    assert.match(out, /warn: dep-needs-pending requires dep-pending, which is skipped \(pending package/);
+    assert.ok(liveRules("dep-needs-pending") && !liveRules("dep-pending"), "the available parent still enables");
+    ok("package", "disable", "dep-needs-pending");
+
+    // inspect reports the dependency fields a manifest declares.
+    const inspected = JSON.parse(ok("package", "inspect", "dep-parent-a"));
+    assert.equal(inspected.selectable, true);
+    assert.deepEqual(inspected.recommends, ["dep-helper"]);
+    assert.equal(JSON.parse(ok("package", "inspect", "dep-only")).selectable, false);
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
