@@ -47,7 +47,7 @@ function checkConditionalLines() {
 }
 
 function run(args = []) {
-  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_DIR: stateDir };
+  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_ROOT: stateDir };
   return spawnSync(process.execPath, [cli, "telemetry", "oracle", ...args], { cwd: repoRoot, env, encoding: "utf8" });
 }
 

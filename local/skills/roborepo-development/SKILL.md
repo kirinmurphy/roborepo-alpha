@@ -30,13 +30,17 @@ schema, resource-type validation depth, apply/reconcile behavior, and the comple
 |----------|-----|
 | Symlink map, sync flow | `docs/user/reference/architecture.md` |
 | Shared vs. internal skill layers | `docs/internal/skills-and-commands.md` |
-| The current `roborepo` CLI surface | `docs/user/reference/roborepo-cli.md`, `manifests/platform/cli/command-definitions/**`, `manifests/platform/cli/removed.json` |
+| The current `roborepo` CLI surface | `docs/user/reference/roborepo-cli.md`, `manifests/platform/cli/command-definitions/**` |
 | Detailed CLI internals | `docs/internal/cli-internals.md` |
 | Conflict / collision behavior on install | `docs/user/reference/config-collision-handling.md` |
 | Rules generation + layering | `docs/internal/rules-parity-and-layering.md` |
 | Provider registry, capability adapters, and new harnesses | `docs/internal/harness-provider-interface.md`, `scripts/harnesses/registry.mjs` |
 | Skill/command mechanisms and trigger fixtures | `docs/internal/skills-and-commands.md`, `docs/user/reference/roborepo-skills.md` |
-| Hook behavior (Claude / Codex) | `docs/user/reference/{claude,codex}-hooks.md` |
+| Where every doc lives | `docs/internal/docs-map.md` |
+| Hook behavior (Claude / Codex) | `docs/user/reference/{claude,codex}-hooks.md`, `docs/internal/hooks-internals.md` |
+| Test layout and which suite covers what | `docs/internal/testing.md`, `docs/internal/test-scenarios.md` |
+| Runtime service internals | `docs/internal/developer-runtime-internals.md` |
+| Agents/config panel and Plans portal | `docs/internal/config-panel-internals.md`, `docs/internal/plans-portal-internals.md` |
 | Portal pages, shared browser code, API routes, and checks | `docs/internal/portal-architecture.md`, `scripts/cli/portal-server.mjs`, `scripts/test/portal-ui/` |
 | NPM release workflow and maintainer doc placement | `docs/internal/npm-release.md` |
 | Install UX + daily commands | `docs/user/guides/setup-and-daily-use.md`, `docs/user/guides/install-workflows.md` |
@@ -71,8 +75,8 @@ Everything else (the two symlink levels, the layer table) lives in
   cross-harness behavior; Claude, Codex, and Gemini can implement the same capability differently.
   `validateCapabilityAdapters` checks that each declared capability has its required methods, but
   it cannot prove their behavior. Add behavior checks for the providers affected by the change.
-- **Adding any skill:** prefer `roborepo skill new`. Shared skill → a package under
-  `globals/packages/`, then run `roborepo skill sync-global` to refresh the machine-local cache and
+- **Adding any skill:** prefer `roborepo package dev create` / `package dev add-skill`. Shared skill →
+  a package under `globals/packages/`, then run `roborepo skill sync-global` to refresh the machine-local cache and
   harness views. Shared command surfaces are rendered from package `slash-command` resources; run
   `roborepo skill render-commands --check` and `roborepo skill triggers --check` when descriptions
   or command exposure change. Internal/
@@ -124,7 +128,8 @@ Everything else (the two symlink levels, the layer table) lives in
 - **Prose-only edits** to a skill, rules file, package description, or doc: run the checks that
   read the edited file (`git grep -l <path> -- scripts/test`), `roborepo skill triggers --check`
   when a skill description changed, and `docs-reference-check.mjs` for docs. No `doctor.sh`, no
-  `npm run check`.
+  `npm run check`. Skill shape limits (500-line `SKILL.md` body, `## Contents` in references over
+  100 lines, every reference linked) are enforced by `scripts/cli/skill-structure.mjs`.
 - **Full CI parity is expensive.** `npm run check` is the full local CI parity gate: main suite,
   install-collisions, package install, and Docker clean-machine checks when Docker is available.
   Do not use it as the default cleanup loop for ordinary review or CodeRabbit feedback. Prefer
@@ -199,39 +204,55 @@ Everything else (the two symlink levels, the layer table) lives in
 
 `roborepo` is the ONE command a consumer runs. `scripts/cli/main.mjs` is a thin composition root:
 load catalog, resolve command, run adapter. User-facing command metadata lives in schema v2 catalog
-files under `manifests/platform/cli/command-definitions/**`; retired command guidance lives in
-`manifests/platform/cli/removed.json`. Prefer fixing catalog definitions or docs over command
+files under `manifests/platform/cli/command-definitions/**`. Prefer fixing catalog definitions or docs over command
 execution code unless behavior is actually wrong. Subcommand impls live under `scripts/cli/`;
 `paths.mjs` defines app/workspace/state roots and package mode, while `skill-lib.mjs` holds shared
 Node primitives (zip, prompts, symlink helpers). Bash shim is `bin/roborepo`. No-arg = interactive
 menu (arrow keys + numbered fallback via `selectMenu` in `cli/skill-lib.mjs`).
 Subcommands, grouped by category:
 
-- `skill new` / `skill adopt` / `skill export-to-project` / `skill link-project` / `skill inspect` /
+- `skill adopt` / `skill export-to-project` / `skill link-project` / `skill inspect` /
   `skill audit` / `skill triggers` / `skill render-commands` / `skill native` — shared skill,
   slash-command, ownership, and invocation-policy tools. They operate on the shared/client-local
   layer — never `local/skills/`.
-- `index code|docs [path]`, `index code [path] --watch`, `run <cmd>` (`cli/index.mjs`) — package-owned
-  jcodemunch/jdocmunch wrappers + the trimmed-output runner. `[path]` is optional, defaults to cwd,
-  and resolves to absolute. Before changing the watch pidfile, check the jcodemunch package's
-  SessionStart hook and `docs/internal/hooks-internals.md`.
+- `run <cmd>` / `agent-run <cmd>` (`cli/run.mjs`) — the trimmed-output runner, and the same runner
+  behind an argv allowlist so it can be safely permission-listed.
 - `mcp add <name-or-url>` / `mcp apply` (`cli/mcp.mjs`) — register/apply MCP server config with
-  Claude and Codex. Presets live in `manifests/inventory/mcp-presets.json`; portable intent lives
-  in `manifests/inventory/mcp-servers.json`.
+  every MCP-capable harness. Presets live in `manifests/inventory/mcp-presets.json`; portable
+  intent lives in `manifests/inventory/mcp-servers.json` (both empty in the shipped catalog; tests
+  add fixture presets through `makeAppRoot({ fixturePackages: true })`).
 - `package enable <package-id>` / `package disable <package-id>` / `package manage` / `presets` — package and preset
   feature toggles. Package mode separates immutable app files, portable workspace resources, and
   machine-local state; do not collapse those roots.
-- `package dev create|dev add-skill|list|inspect|validate|enable|disable|reconcile|adopt-live` (`cli/packages.mjs`)
-  — full package lifecycle surface. See `references/package-development.md` for details on each subcommand.
+- `package list|inspect|status|validate|enable|disable|reconcile|adopt-live` and
+  `package dev create|add-skill|validate` (`cli/packages.mjs`) — full package lifecycle surface.
+  Authoring lives under `package dev`; the rest operate on the catalog and live state. See
+  `references/package-development.md` for details on each subcommand.
   `enable`/`disable` already apply live immediately — no `roborepo update` needed afterward.
-- `setup` / `apply` / `workspace` / `version` — package-mode setup and root inspection tools.
-- `web` / `telemetry ...` — local portal and telemetry capture/reporting.
+- `init` / `setup` / `workspace` / `version` — first-use setup, package-mode setup, and
+  root inspection tools. `library` opens the package browser.
+- `harness list|inspect|detected|enable|disable|refresh|withdraw` — harness provider discovery and
+  management. `disable` only stops RoboRepo managing a harness; `withdraw` actively unmerges what
+  RoboRepo already wrote into its live config.
+- `git inventory|remote-sync-check` and `git worktrees cleanup|archives|archive-remove|restore|hook
+  install|hook uninstall` — repo inventory plus guarded worktree retirement. Worktrees are archived
+  before removal so local work can be restored.
+- `plans ...` (`kind: "internal"`, `cli/plans-command.mjs`) — the lifecycle backend the plan-suite
+  skills and the Plans portal call (`start`, `submit`, `approval`, `close`, `archive`, ...).
+- `browser probe|run` — Playwright-backed evidence capture for local apps; needs the
+  feature-verification package.
+- `config status|apply|permissions|root inspect|rules check-home` — live harness config inspection
+  and application. `config rules --check` and `config permissions --render|--check` render or
+  verify the tracked generated baselines (development checkout).
+- `web` / `web stop` / `telemetry ...` / `runtime` — local portal, telemetry capture/reporting, and
+  the Runtime service.
 - `dev start|stop|status`, `dev fixture start|stop|status` (`cli/dev.mjs`) — development-checkout-only
   tooling, gated by `requireDevelopmentCheckout()`. See the `dev` namespace note above before adding
   to it.
-- `update`/`repair`/`uninstall`/`doctor`/`rules`/`permissions` — lifecycle verbs that
-  dispatch to the existing scripts. `update` re-runs `scripts/install/main.sh`; in package mode it
-  aliases to `apply`.
+- `update`/`uninstall`/`doctor` — lifecycle verbs that dispatch to the existing scripts. `update`
+  re-runs `scripts/install/main.sh`; in package mode it aliases to `config apply`.
+- `maintenance doctor|repair|repair local-config|repair skill-links|stores|portal-pids|uninstall|version`
+  — diagnosis and recovery. Repair lives here, not at the root.
 
 Client skill behavior details:
 - `skill export-to-project` / `skill link-project` / `skill native` — the
@@ -242,19 +263,21 @@ Client skill behavior details:
 
 Adding a new `roborepo` subcommand: add or extend the command definition under
 `manifests/platform/cli/command-definitions/**`, point it at the existing execution adapter where
-possible, and only write module code under `scripts/cli/` when the behavior is new. Add replaced or
-removed public commands to `manifests/platform/cli/removed.json` with direct replacement guidance.
+possible, and only write module code under `scripts/cli/` when the behavior is new. A removed
+command is simply deleted: there is no retired-command routing (see Pre-launch compatibility).
 Run `node scripts/test/cli-command-catalog-check.mjs` after catalog edits and
-`node scripts/test/cli-surface-integration-check.mjs` after resolver, adapter, help, menu, or
-retired-command behavior changes. Only ONE global command exists (`roborepo`), so the old
+`node scripts/test/cli-surface-integration-check.mjs` after resolver, adapter, help, or menu
+behavior changes. Only ONE global command exists (`roborepo`), so the old
 per-command 3-place wiring is gone — `install-global-commands.sh`, `doctor.sh`,
 `verify-install.sh` each reference only `roborepo`. MAINTAINER scripts (`render-rules.sh`,
 `link-skills.sh`, `test-*.sh`) stay OUT of `roborepo`.
 
 **Tests:** `scripts/test/cli-command-catalog-check.mjs` validates schema v2 command catalog
-definitions and removed-command mappings. `scripts/test/cli-surface-integration-check.mjs` exercises
-help, namespace fallbacks, retired command guidance, concise/verbose doctor output, and detached
-portal routing. `scripts/test/test-cli.sh` smoke-tests the subcommands (skill link-project/prune/
+definitions. `scripts/test/cli-surface-integration-check.mjs` exercises help, namespace fallbacks,
+concise/verbose doctor output, and detached portal routing. Tests that need a built-in MCP,
+tool-approval, or hook-script package use the test-only fixture packages
+(`scripts/test/fixtures/packages/`) through `makeAppRoot({ fixturePackages: true })` or, in shell
+suites, `scripts/test/make-fixture-app-root.mjs`; no shipped package carries those resource types. `scripts/test/test-cli.sh` smoke-tests the subcommands (skill link-project/prune/
 uninstall/conflict, export-to-project/override/firewall/self-pollution guard, sync-global, inspect,
 native, trigger checks, run, `mcp add/apply`, lifecycle dispatch, menu fallback, package/workspace
 paths) against throwaway temp repos. Run it after behavior changes under `scripts/cli/`. `doctor.sh`

@@ -2,13 +2,12 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { createHash } from "node:crypto";
 import { readEvidenceSnapshot } from "../cli/telemetry-oracle-evidence.mjs";
 import { runOracleCheck } from "../cli/telemetry-oracle-command.mjs";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "oracle-evidence-"));
 const paths = { spoolDir: path.join(root, "spool"), markersPath: path.join(root, "markers.jsonl"),
-  snapshotsDir: path.join(root, "snapshots"), registryPath: path.join(root, "registry.json") };
+  snapshotsDir: path.join(root, "snapshots") };
 const secret = "PRIVATE-PROMPT /private/path SECRET-COMMAND";
 const snapshot = { schema: 2, snapshot_id: "cfg", packages: [], skills: [], evaluability: { packages: true, skills: true } };
 const event = { schema: 3, capture_id: "capture", call_id: "call", harness: "claude", session_id: "session",
@@ -37,16 +36,8 @@ try {
   assert.deepEqual(read.spool_provenance, { source: "spool:capture.jsonl", sequence: 1 });
   assert.equal(Object.keys(read).includes("spool_provenance"), false, "provenance never becomes a persisted field");
 
-  const remote = "example/repo";
-  write(paths.registryPath, { repositories: { repo: { id: "git:example/repo", normalizedRemote: remote } } });
-  write(spoolFile, { ...event, repo: { normalized_remote_hash: createHash("sha256").update(remote).digest("hex").slice(0, 24) } });
-  assert.equal(run().status, "partial", "registry hashes do not associate legacy telemetry");
-  fs.rmSync(paths.registryPath);
-  assert.equal(run().status, "partial", "unresolved legacy identity cannot pass");
-  write(spoolFile, event);
-
   const stores = [[spoolFile, "malformed_events"], [paths.markersPath, "malformed_markers"],
-    [path.join(paths.snapshotsDir, "broken.json"), "malformed_snapshots"], [paths.registryPath, "malformed_repository_registry"]];
+    [path.join(paths.snapshotsDir, "broken.json"), "malformed_snapshots"]];
   for (const [file, category] of stores) {
     fs.appendFileSync(file, "{broken JSON\n");
     assert.equal(readEvidenceSnapshot(paths).options.skippedEvidence[category], 1, `${category} is counted per store`);

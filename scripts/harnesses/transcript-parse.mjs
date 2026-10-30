@@ -332,35 +332,11 @@ function safeLen(value) {
   }
 }
 
-// Bare MCP tool names → server. Codex logs MCP tools two ways: prefixed (mcp__jcodemunch__foo) AND
-// bare (foo). Claude always prefixes, but Codex transcripts often drop the prefix, so a bare name
-// like "search_symbols" or "get_file_content" would otherwise be misattributed to a native group.
-// This table maps the known jcodemunch/jdocmunch tool names so attribution is correct for both
-// harnesses. Sourced from generated/codex/config.toml MCP tool declarations.
-const BARE_MCP_TOOLS = {
-  jcodemunch: new Set([
-    "resolve_repo", "search_text", "search_symbols", "find_references", "get_file_content",
-    "get_file_outline", "get_file_tree", "get_repo_outline", "get_context_bundle", "get_ranked_context",
-    "get_symbol_source", "get_symbol_importance", "get_related_symbols", "get_changed_symbols",
-    "get_project_intel", "get_session_context", "get_watch_status", "get_pr_risk_profile",
-    "index_file", "index_folder", "index_repo", "register_edit", "plan_turn", "list_repos",
-    "audit_agent_config", "link_code_to_symbols", "load_workspace_dependencies",
-  ]),
-  jdocmunch: new Set([
-    "search_sections", "get_section", "get_sections", "get_section_context", "get_toc", "get_toc_tree",
-    "get_document_outline", "get_doc_coverage", "get_broken_links", "doc_list_repos", "list_docs",
-    "list_repo_groups", "index_local", "index_repo", "delete_index",
-  ]),
-};
-
 // The MCP server a tool belongs to, or null for a native tool. Handles both the prefixed wire name
-// (mcp__server__tool) and bare jcodemunch/jdocmunch tool names that Codex logs without the prefix.
+// (mcp__server__tool).
 export function mcpServerOf(toolName) {
   if (typeof toolName !== "string" || !toolName) return null;
   if (toolName.startsWith(MCP_TOOL_PREFIX)) return toolName.slice(MCP_TOOL_PREFIX.length).split("__")[0] || null;
-  for (const [server, tools] of Object.entries(BARE_MCP_TOOLS)) {
-    if (tools.has(toolName)) return server;
-  }
   return null;
 }
 

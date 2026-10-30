@@ -40,7 +40,6 @@ function isDevelopmentCheckout(root) {
 export const appRoot = envPath("ROBOREPO_APP_ROOT") || defaultAppRoot();
 export const STATE_ROOT =
   envPath("ROBOREPO_STATE_ROOT") ||
-  envPath("ROBOREPO_STATE_DIR") ||
   path.join(os.homedir(), ".roborepo");
 export const developmentMode = isDevelopmentCheckout(appRoot);
 export const packageMode = !developmentMode;

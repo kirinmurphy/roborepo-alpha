@@ -62,7 +62,7 @@ function makeFixture() {
         if (!enabledIds.includes(pkg.id)) continue;
         for (const comp of pkg.components) {
           if (comp.type !== "rules") continue;
-          if (comp.harness !== "both" && comp.harness !== harness) continue;
+          if (comp.harness && comp.harness !== harness) continue;
           parts.push(files.get(`${REPO}/${comp.source}`).trimEnd(), "");
         }
       }
@@ -82,7 +82,7 @@ function makeFixture() {
   };
 
   const catalog = [
-    { id: "alpha", label: "Alpha", sourceFile: `${REPO}/pkgs/alpha/package.config.json`, components: [{ type: "rules", harness: "both", source: "pkgs/alpha/rules.md" }], resources: [{ type: "rules" }] },
+    { id: "alpha", label: "Alpha", sourceFile: `${REPO}/pkgs/alpha/package.config.json`, components: [{ type: "rules", source: "pkgs/alpha/rules.md" }], resources: [{ type: "rules" }] },
     { id: "beta", sourceFile: `${REPO}/pkgs/beta/package.config.json`, components: [{ type: "rules", harness: "codex", source: "pkgs/beta/rules.md" }], resources: [{ type: "rules" }] },
     { id: "gamma", sourceFile: `${REPO}/pkgs/gamma/package.config.json`, components: [{ type: "skill", id: "gamma" }], resources: [{ type: "skill", id: "gamma" }] },
     { id: "solo", sourceFile: `${REPO}/pkgs/solo/package.config.json`, components: [], resources: [{ type: "slash-command", name: "solo" }] },
@@ -308,7 +308,7 @@ check("several skills in one package: totals sum every resource; each resource k
     id: "duo",
     label: "Duo",
     sourceFile: `${REPO}/pkgs/duo/package.config.json`,
-    components: [{ type: "skill", id: "duo-lead" }, { type: "skill", id: "duo-helper" }, { type: "rules", harness: "both", source: "pkgs/duo/rules.md" }],
+    components: [{ type: "skill", id: "duo-lead" }, { type: "skill", id: "duo-helper" }, { type: "rules", source: "pkgs/duo/rules.md" }],
     resources: [{ type: "skill", id: "duo-lead" }, { type: "skill", id: "duo-helper" }, { type: "rules" }],
   });
   const result = build(fixture, ["duo"]);

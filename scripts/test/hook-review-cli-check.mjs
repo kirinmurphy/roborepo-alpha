@@ -162,7 +162,7 @@ function makeMachine(name) {
   const env = {
     ...process.env,
     HOME: home,
-    ROBOREPO_STATE_DIR: state,
+    ROBOREPO_STATE_ROOT: state,
     ROBOREPO_WORKSPACE_ROOT: path.join(root, "workspace"),
     ROBOREPO_ON_CONFLICT: "keep",
     PATH: [path.join(root, "bin"), "/usr/bin", "/bin"].join(path.delimiter),

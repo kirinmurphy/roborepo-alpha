@@ -4,7 +4,6 @@ import { repoRoot } from "./paths.mjs";
 import { loadPackageCatalog } from "./package-catalog.mjs";
 import {
   GENERATED_COMMAND_MARKER,
-  LEGACY_GENERATED_COMMAND_MARKER,
   packageOwnerMarker,
   slashCommandGenDir,
   slashCommandLiveDir,
@@ -184,7 +183,7 @@ function expectedCommands(commands) {
 
 function hasGeneratedMarker(filePath) {
   const content = readIfExists(filePath);
-  return content !== null && (content.includes(GENERATED_COMMAND_MARKER) || content.includes(LEGACY_GENERATED_COMMAND_MARKER));
+  return content !== null && content.includes(GENERATED_COMMAND_MARKER);
 }
 
 function renderPackageHarness(harnessName, packageId, expected, { checkOnly = false, quiet = false } = {}) {

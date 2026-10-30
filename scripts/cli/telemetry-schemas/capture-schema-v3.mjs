@@ -1,7 +1,6 @@
 import { generateId, isValidId } from "./id.mjs";
 import { validateObjectKeys } from "./validators.mjs";
 
-export const CAPTURE_SCHEMA_V2 = 2;
 export const CAPTURE_SCHEMA_V3 = 3;
 
 export const OPERATION_CATEGORIES = new Set([
@@ -19,16 +18,10 @@ export function generateCaptureId() {
   return generateId("cap");
 }
 
-// v2 records pass through unvalidated by this module (telemetry-capture.mjs already governs their
-// shape) — this function's job is only to validate the v3-additive fields when present, and to
-// leave a record with schema 2 (or no v3 fields at all) alone. Schema-v2 read compatibility is a
-// hard requirement; this validator must never reject a plain v2 record.
+// Validates the v3 fields when present; the base record shape is governed by telemetry-capture.mjs.
 export function validateCaptureV3(record) {
   if (!record || typeof record !== "object" || Array.isArray(record)) throw new Error("capture record must be an object");
-  if (record.schema !== CAPTURE_SCHEMA_V2 && record.schema !== CAPTURE_SCHEMA_V3) {
-    throw new Error(`unsupported capture schema version: ${record.schema}`);
-  }
-  if (record.schema === CAPTURE_SCHEMA_V2) return record;
+  if (record.schema !== CAPTURE_SCHEMA_V3) throw new Error(`unsupported capture schema version: ${record.schema}`);
 
   if (record.capture_id != null && !isValidId(record.capture_id, "cap")) throw new Error(`invalid capture_id: ${record.capture_id}`);
   if (record.call_id != null && typeof record.call_id !== "string") throw new Error("capture call_id must be a string");

@@ -7,8 +7,7 @@ and harness-protocol findings. User-facing summaries are in
 ## Claude Hooks
 
 System hooks are configured in `globals/system/hooks/claude/`, wired through the generated
-`generated/claude/settings.json` under `"hooks"`. Package-owned hooks (JDocMunch's index check,
-telemetry's capture hooks, JCodeMunch's Grep/Glob and Bash blockers) are authored under their
+`generated/claude/settings.json` under `"hooks"`. Package-owned hooks (for example telemetry's capture hooks) are authored under their
 owning package (e.g. `globals/packages/<package>/hooks-claude.json`) and composed into the live
 Claude hook config only when that package is enabled.
 
@@ -35,21 +34,6 @@ hook** — it comes from the `caveman` plugin (`enabledPlugins` in `settings.jso
 which installs its own SessionStart behavior. Same outcome (terse default output),
 different mechanism.
 
-#### jdocmunch index check — SessionStart
-
-**Trigger:** every new session or resume.
-
-Checks for the `docs/.jdm-indexed` marker in the current repo. If `docs/` exists
-but the marker is absent, injects a reminder to run `roborepo index docs docs/`.
-If the marker is present, confirms docs are indexed. The marker is written by
-`roborepo index docs` after a successful run and is excluded from git via the
-global gitignore. Package-owned: authored at
-`globals/packages-archived/jdocmunch/hooks-claude.json` and composed into the live Claude
-hook config only when `jdocmunch` is enabled.
-
-This is the one hook duplicated near-identically on both harnesses — only the
-output protocol differs (JSON `systemMessage` here, plain text on Codex).
-
 #### Telemetry capture — SessionStart / PreToolUse / PostToolUse / UserPromptSubmit / Stop
 
 When telemetry is enabled, these hook events call `roborepo telemetry capture`
@@ -68,59 +52,6 @@ disabling telemetry removes these hooks.
 ### Part 2 — Claude-specific
 
 These act on tools or output protocols that exist only on Claude.
-
-#### jcodemunch status — SessionStart
-
-**Trigger:** every new session or resume.
-
-Probes the jcodemunch server for its repository index. The system message reports whether the
-server is unavailable, the repository is not indexed, or its index is stale. It also reports
-whether the watcher is running; an idle watcher alone does not prove that the index is stale.
-
-Also reminds the model to use jcodemunch tools (`resolve_repo`, `search_symbols`,
-etc.) for code exploration instead of `Grep`/`Read`. (Codex gets a jcodemunch SessionStart nudge from the same package.) The `index code` and `index code --watch`
-commands are package-owned; enable `jcodemunch` first if the CLI reports that no
-owning package is enabled. This hook is authored at
-`globals/packages-archived/jcodemunch/hooks-claude.json` and composed into the live
-Claude hook config only when `jcodemunch` is enabled.
-
-#### Block Grep/Glob — PreToolUse: Grep|Glob
-
-**Trigger:** model attempts to call `Grep` or `Glob`.
-
-Hard-blocks the call with `"continue": false`. The stop reason instructs the model
-to retry using jcodemunch (`search_symbols`, `get_file_outline`, `find_references`,
-`get_context_bundle`). Treated as a redirect, not an error — the model should
-immediately retry via jcodemunch. These tools do not exist on Codex. Package-owned:
-authored at `globals/packages-archived/jcodemunch/hooks-claude.json`, composed into the
-live Claude hook config only when `jcodemunch` is enabled.
-
-#### Block Bash source-exploration — PreToolUse: Bash
-
-**Trigger:** model attempts a `Bash` command. Runs **first** in the Bash chain.
-
-`block-source-exploration.mjs` closes the route-around left by the Grep/Glob tool
-block: the agent can otherwise shell out (`grep src/...`, `cat file.ts`,
-`find . -name '*.ts'`) to read source without touching jcodemunch. Package-owned:
-the script lives at `globals/packages-archived/jcodemunch/hooks/block-source-exploration.mjs`
-and is wired only when `jcodemunch` is enabled.
-
-It **denies** a command only when **all** hold, and **allows** everything else:
-
-- verb is `grep`/`rg`/`ag`/`cat`/`head`/`tail`/`find`
-- there is an explicit file-path argument (no pipe anywhere in the command)
-- the path is inside the repo
-- the path has a source extension (`.ts`, `.py`, `.go`, …)
-- the path is not under `node_modules`/`dist`/`build`/`.next`/`coverage`/`vendor`
-
-This is **deliberately conservative ("allow when unsure")** because Bash
-legitimately does things jcodemunch cannot — grep a log, cat a json/lockfile,
-pipe `git log | grep`, inspect `/tmp`. Those must never be blocked. The cost is
-that a determined agent can still leak (e.g. `grep` with no path argument); that
-is the accepted trade for never breaking legitimate Bash work. The deny message
-redirects to `search_text`, `search_symbols`, `get_file_outline`,
-`find_references`, `get_context_bundle`. Ordering matters: it runs before
-`minimize-bash-output.mjs` (which auto-allows bare `grep`), so its deny is final.
 
 #### Minimize Bash output — PreToolUse: Bash
 
@@ -179,7 +110,7 @@ Core scripts live in `globals/harnesses/codex/hooks/`. Their hook definitions an
 labels are authored in `globals/harnesses/codex/hooks-codex.json`;
 `scripts/build/render-agent-permissions.mjs` renders `generated/codex/hooks.json` from that source.
 Codex’s adapter reconciles `statusMessage` in place for matching event/command pairs, preserving
-commands, positions, and all other handler fields. Labels participate in native approval hashes. Package-owned hooks (Caveman and JDocMunch's `SessionStart` hooks,
+commands, positions, and all other handler fields. Labels participate in native approval hashes. Package-owned hooks (Caveman's `SessionStart` hook,
 telemetry's capture hooks) are authored under their owning package
 (`globals/packages/<package>/hooks-codex.json`) and composed into the live Codex hook config only
 when that package is enabled.
@@ -211,18 +142,6 @@ commits, and security output stays normal. The user can say "stop caveman" or
 plugin instead of a hook.) Package-owned: authored at
 `globals/packages/caveman/hooks-codex.json` and composed into the live Codex hook
 config only when `caveman` is enabled — disabling the package removes this hook.
-
-#### jdocmunch index check — SessionStart (startup|resume)
-
-**Trigger:** session start or resume matching `startup|resume`.
-
-Checks for the `docs/.jdm-indexed` marker in the current repo. If `docs/` exists
-but the marker is absent, prints a reminder to run `roborepo index docs docs/`.
-If the marker is present, confirms docs are indexed. This is duplicated
-near-identically on Claude — only the output protocol differs (plain text here,
-JSON `systemMessage` on Claude). Package-owned: authored at
-`globals/packages-archived/jdocmunch/hooks-codex.json` and composed into the live Codex
-hook config only when `jdocmunch` is enabled.
 
 #### Telemetry capture — SessionStart / PreToolUse / PostToolUse / UserPromptSubmit / Stop
 
@@ -256,15 +175,6 @@ shared in intent with the Claude hook.
 This was added after telemetry showed uncapped Codex shell output was the dominant
 token cost (~22.8M tok of shell results vs ~49K on Claude, where this minimization
 already ran).
-
-#### jcodemunch enforcement still lives in rules
-
-Unlike Claude, Codex does not block `Grep`/`Glob` or guard writes via tool hooks —
-jcodemunch enforcement in Codex relies on rules in
-`generated/codex/rules/default.rules` and the generated `generated/codex/AGENTS.md`.
-See [jcodemunch.md](../user/reference/jcodemunch.md) for full details. (Porting the
-source-exploration nudge to a Codex hook is a possible future parity step; the
-shell-output minimization above is the first PreToolUse enforcement hook on Codex.)
 
 #### Real per-command ask — PreToolUse (shell tools)
 
@@ -305,7 +215,7 @@ Codex documents support for `SessionStart`, `PreToolUse`, `PermissionRequest`,
 `SubagentStop`, and `Stop` events. Matchers are not honored by every event;
 `UserPromptSubmit` and `Stop` ignore matcher values. Current repo config uses
 `SessionStart`, `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, and `Stop` when
-telemetry is enabled, plus the existing `SessionStart` caveman/jdocmunch nudges.
+telemetry is enabled, plus the existing `SessionStart` caveman nudge.
 
 ---
 
@@ -362,8 +272,8 @@ of the manifest at render time so `roborepo update` never wipes a personal choic
 Rendered/checked with:
 
 ```sh
-roborepo permissions
-roborepo permissions --check
+roborepo config permissions --render
+roborepo config permissions --check
 ```
 
 Edit behaviors and arbitrary commands via the web portal (`roborepo web`) — the only

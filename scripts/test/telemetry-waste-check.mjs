@@ -38,7 +38,7 @@ import { analyzeTelemetry } from "../cli/telemetry-analyze.mjs";
   const base = Date.parse("2026-06-10T00:00:00.000Z");
   let n = 0;
   const event = (session, tool, delta, extra = {}) => ({
-    schema: 2, harness: "claude", event: "PostToolUse", session_id: session, ts: new Date(base + (n++) * 60000).toISOString(),
+    schema: 3, harness: "claude", event: "PostToolUse", session_id: session, ts: new Date(base + (n++) * 60000).toISOString(),
     repo: { label: "demo" }, tool: { name: tool, is_mcp: false }, delta_tokens: delta,
     tokens: { input: delta, output: 0, cache_creation: 0, cache_read: 0, total: delta }, ...extra,
   });
@@ -63,7 +63,7 @@ import { analyzeTelemetry } from "../cli/telemetry-analyze.mjs";
   const base = Date.parse("2026-06-10T00:00:00.000Z");
   let n = 0;
   const event = (session, delta, extra = {}) => ({
-    schema: 2, harness: "claude", event: "PostToolUse", session_id: session, ts: new Date(base + (n++) * 60000).toISOString(),
+    schema: 3, harness: "claude", event: "PostToolUse", session_id: session, ts: new Date(base + (n++) * 60000).toISOString(),
     repo: { label: "demo" }, tool: { name: "Bash", is_mcp: false }, delta_tokens: delta,
     tokens: { input: delta, output: 0, cache_creation: 0, cache_read: 0, total: delta }, ...extra,
   });

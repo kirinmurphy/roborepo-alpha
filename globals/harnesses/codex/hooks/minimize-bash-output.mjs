@@ -2,7 +2,7 @@ import fs from 'node:fs'
 
 // --- Minimize Codex shell output (PreToolUse) ----------------------------------------------------
 //
-// Codex parallel of globals/claude/hooks/minimize-bash-output.mjs. Codex's shell output is uncapped
+// Codex parallel of globals/system/hooks/claude/minimize-bash-output.mjs. Codex's shell output is uncapped
 // by default, which telemetry showed to be the dominant token cost (~22.8M tok of Bash results vs
 // 49K on Claude, where this minimization already runs). Codex PreToolUse hooks support the same
 // hookSpecificOutput { permissionDecision, updatedInput } protocol as Claude (verified against the

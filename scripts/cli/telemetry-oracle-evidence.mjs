@@ -5,7 +5,7 @@ import path from "node:path";
 // and persistence readers, which normalize or silently discard evidence the oracle must account for:
 // every unparseable record is counted per store instead.
 export function readEvidenceSnapshot(paths) {
-  const skippedEvidence = { malformed_events: 0, malformed_markers: 0, malformed_snapshots: 0, malformed_repository_registry: 0 };
+  const skippedEvidence = { malformed_events: 0, malformed_markers: 0, malformed_snapshots: 0 };
   const events = filesIn(paths.spoolDir, ".jsonl").flatMap((file) =>
     readJsonl(path.join(paths.spoolDir, file), skippedEvidence, "malformed_events", file));
   const markers = readJsonl(paths.markersPath, skippedEvidence, "malformed_markers", null, true);
@@ -13,10 +13,7 @@ export function readEvidenceSnapshot(paths) {
     const parsed = parseJson(fs.readFileSync(path.join(paths.snapshotsDir, file), "utf8"), skippedEvidence, "malformed_snapshots");
     return parsed.ok ? [parsed.value] : [];
   });
-  const registryText = readOptionalFile(paths.registryPath);
-  const registry = registryText === null ? { ok: true, value: null }
-    : parseJson(registryText, skippedEvidence, "malformed_repository_registry");
-  return { events, options: { markers, snapshots, repositoryRegistry: registry.ok ? registry.value : {}, skippedEvidence } };
+  return { events, options: { markers, snapshots, skippedEvidence } };
 }
 
 function filesIn(directory, extension) {

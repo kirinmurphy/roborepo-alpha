@@ -3,7 +3,6 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import {
   DEFAULT_PREFERENCES,
-  LEGACY_SETTINGS_VERSION,
   SETTINGS_VERSION,
   assertAliasGraph,
   defaultSettings,
@@ -17,7 +16,6 @@ import {
   safeIdentity,
   safeLabel,
   slugify,
-  validateLegacySettings,
   validateSettings,
 } from "./settings-schema.mjs";
 import { safeAbsolutePath } from "../repositories/schema.mjs";
@@ -38,12 +36,9 @@ export function loadSettings({ stateRoot, fsApi = fs } = {}) {
   const filePath = settingsPathFor(stateRoot);
   try {
     const parsed = JSON.parse(fsApi.readFileSync(filePath, "utf8"));
-    const migrated = migrateSettings(parsed);
-    if (parsed.version !== SETTINGS_VERSION) {
-      backupSettingsFile(filePath, parsed.version, fsApi);
-      writeSettings({ stateRoot, settings: migrated, fsApi });
-    }
-    return validateSettings(migrated);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("settings must be an object");
+    if (parsed.version !== SETTINGS_VERSION) throw new Error(`unsupported developer-runtime settings version: ${parsed.version}`);
+    return validateSettings(parsed);
   } catch (err) {
     if (err && err.code === "ENOENT") return defaultSettings();
     if (err instanceof SyntaxError) throw new Error("developer-runtime settings contain malformed JSON");
@@ -172,48 +167,6 @@ function mutateAlias(settings, input) {
   mergeAliasedProject(settings, from, to);
   repointAssociations(settings, from, to);
   settings.aliases[from] = to;
-}
-
-function migrateSettings(settings) {
-  if (!settings || typeof settings !== "object" || Array.isArray(settings)) throw new Error("settings must be an object");
-  // composeProjects is new within SETTINGS_VERSION 2 itself (added after the initial v2 rollout),
-  // so an on-disk v2 file from before this field existed still needs a default backfilled here —
-  // a version bump alone wouldn't have caught it since migrateSettings only branches on version.
-  if (settings.version === SETTINGS_VERSION) return validateSettings({ composeProjects: {}, ...settings });
-  if (settings.version !== LEGACY_SETTINGS_VERSION) throw new Error(`unsupported developer-runtime settings version: ${settings.version}`);
-  validateLegacySettings(settings);
-  return validateSettings({
-    version: SETTINGS_VERSION,
-    revision: settings.revision,
-    projects: Object.fromEntries(Object.entries(settings.projects).map(([identity, project]) => [identity, migrateProject(project)])),
-    associations: { ...settings.associations },
-    aliases: {},
-    composeProjects: {},
-    preferences: { ...DEFAULT_PREFERENCES },
-  });
-}
-
-function migrateProject(project) {
-  return {
-    ...project,
-    favorite: project.favorite === true,
-    hidden: project.hidden === true,
-    apps: Object.fromEntries(Object.entries(project.apps).map(([appId, app]) => [appId, migrateApp(app)])),
-  };
-}
-
-function migrateApp(app) {
-  return {
-    ...app,
-    favorite: app.favorite === true,
-    hidden: app.hidden === true,
-  };
-}
-
-function backupSettingsFile(filePath, version, fsApi) {
-  const backupPath = path.join(path.dirname(filePath), `settings.v${version}.backup.json`);
-  if (fsApi.existsSync?.(backupPath)) return;
-  fsApi.copyFileSync(filePath, backupPath);
 }
 
 function mergeAliasedProject(settings, from, to) {

@@ -1,14 +1,14 @@
 // `roborepo telemetry oracle`: one on-demand comparison of the production analyzer and the
 // independent oracle over the developer's real local evidence. A short-lived CLI process has no
 // event loop to protect, so the comparison runs in-process.
-import { telemetrySpoolDir, telemetryMarkersPath, telemetrySnapshotsDir, repositoriesRegistryPath } from "./state-paths.mjs";
+import { telemetrySpoolDir, telemetryMarkersPath, telemetrySnapshotsDir } from "./state-paths.mjs";
 import { readEvidenceSnapshot } from "./telemetry-oracle-evidence.mjs";
 import { compareTelemetryOracle } from "./telemetry-oracle-compare.mjs";
 import { createOracleResult, emptyOracleResult } from "./telemetry-schemas/oracle-result-schema.mjs";
 
 const USAGE = "usage: roborepo telemetry oracle [--json]";
 const EVIDENCE_PATHS = Object.freeze({ spoolDir: telemetrySpoolDir, markersPath: telemetryMarkersPath,
-  snapshotsDir: telemetrySnapshotsDir, registryPath: repositoriesRegistryPath });
+  snapshotsDir: telemetrySnapshotsDir });
 
 // Exit code 2 is inconclusive: the check neither passed nor found a disagreement.
 const EXIT_CODES = Object.freeze({ passed: 0, failed: 1, partial: 2, unavailable: 2 });

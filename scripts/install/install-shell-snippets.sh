@@ -58,9 +58,8 @@ for snippet in "${source_snippets[@]+"${source_snippets[@]}"}"; do
   fi
 done
 
-# Prune stale snippet `source` lines from a prior install. Earlier versions sourced
-# shell/jcodemunch.zsh and shell/jdocmunch.zsh; those helpers were folded into roborepo, so any
-# stale `source ".../shell/*.zsh"` line that is no longer in source_snippets is removed.
+# Prune stale snippet `source` lines: any `source ".../shell/*.zsh"` line from this checkout that is
+# no longer in source_snippets is removed.
 # Also drops the "# Harness config shell helpers" marker comment that preceded each.
 prune_stale_snippets() {
   [[ -e "${zshrc}" ]] || return 0

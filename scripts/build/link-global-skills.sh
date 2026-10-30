@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Materialize package-owned shared skills, plus the base roborepo-support system skill, into the
 # machine-local skill cache and link each present harness's native skills dir to that cache.
-# Called by skill-new.mjs after a new global package skill is created.
+# Run after a new global package skill is created (`roborepo skill sync-global`).
 # Also safe to run manually: idempotent, skips native-installed skills.
 #
 # Exits 0 silently if the install infrastructure (install-lib.sh, manifests-data.sh) is not

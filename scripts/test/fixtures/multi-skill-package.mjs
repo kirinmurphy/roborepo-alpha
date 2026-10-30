@@ -39,7 +39,7 @@ export function writeMultiSkillPackage(packagesDir) {
         entrypoints: [{ type: "slash-command", name: MULTI_SKILL_COMMAND, description: "Run the duo lead.", harnesses: ["claude", "codex"] }],
       },
       { type: "skill", id: "duo-helper", source: "skills/duo-helper", invocation: "auto", risk: "low" },
-      { type: "rules", source: "rules.md", harness: "both" },
+      { type: "rules", source: "rules.md" },
     ],
   }, null, 2)}\n`);
   return packageDir;

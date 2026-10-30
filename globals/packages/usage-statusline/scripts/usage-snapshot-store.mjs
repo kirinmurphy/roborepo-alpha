@@ -2,7 +2,7 @@
 // in TWO places: imported by the CLI/portal, and copied into ~/.roborepo/package-runtime/ as part of the
 // installed Claude status-line command. So it CANNOT import scripts/cli/state-paths.mjs (that path
 // does not exist beside the copied package-runtime asset) — it resolves the state dir itself, with the same
-// env precedence as scripts/cli/paths.mjs (ROBOREPO_STATE_ROOT > ROBOREPO_STATE_DIR > ~/.roborepo).
+// env precedence as scripts/cli/paths.mjs (ROBOREPO_STATE_ROOT > ~/.roborepo).
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -15,7 +15,6 @@ const MIN_WRITE_INTERVAL_MS = 5000; // bound Claude's high-frequency invocation 
 function stateRoot() {
   return (
     process.env.ROBOREPO_STATE_ROOT ||
-    process.env.ROBOREPO_STATE_DIR ||
     path.join(os.homedir(), ".roborepo")
   );
 }

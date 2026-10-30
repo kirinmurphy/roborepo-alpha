@@ -167,7 +167,7 @@ function scriptCopiesFollowConflictPolicy() {
   const hooksDir = path.join(home, ".codex", "hooks");
   const row = ["managed_files", "codex", "globals/harnesses/codex/hooks", hooksDir];
   const [first, second] = topLevelScripts;
-  const statePath = path.join(env.ROBOREPO_STATE_DIR, "config-state", "managed-files.json");
+  const statePath = path.join(env.ROBOREPO_STATE_ROOT, "config-state", "managed-files.json");
 
   // An older copy RoboRepo wrote and nobody edited is updated in place.
   fs.mkdirSync(hooksDir, { recursive: true });
@@ -251,7 +251,7 @@ function retiredScriptsDoNotOutliveTheirSource() {
 }
 
 function recordHashes(env, files) {
-  const statePath = path.join(env.ROBOREPO_STATE_DIR, "config-state", "managed-files.json");
+  const statePath = path.join(env.ROBOREPO_STATE_ROOT, "config-state", "managed-files.json");
   let current = {};
   try { current = JSON.parse(fs.readFileSync(statePath, "utf8")).files; } catch {}
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
@@ -262,7 +262,7 @@ function makeHome(name) {
   const home = path.join(tmp, name);
   fs.mkdirSync(path.join(home, ".claude"), { recursive: true });
   fs.mkdirSync(path.join(home, ".codex"), { recursive: true });
-  return { home, env: { ...process.env, HOME: home, ROBOREPO_STATE_DIR: path.join(home, ".roborepo"), ROBOREPO_ON_CONFLICT: "keep" } };
+  return { home, env: { ...process.env, HOME: home, ROBOREPO_STATE_ROOT: path.join(home, ".roborepo"), ROBOREPO_ON_CONFLICT: "keep" } };
 }
 
 function run(env, script, ...args) {
@@ -308,7 +308,7 @@ function standalonePermissionManifestDiscovery() {
   const cleanEnv = { ...env };
   delete cleanEnv.REPO_ROOT;
   delete cleanEnv.ROBOREPO_STATE_ROOT;
-  delete cleanEnv.ROBOREPO_STATE_DIR;
+  delete cleanEnv.ROBOREPO_STATE_ROOT;
   function decision(script, overrides) {
     const result = spawnSync(process.execPath, [script], { env: { ...cleanEnv, ...overrides }, input, encoding: "utf8" });
     assert.equal(result.status, 0, result.stderr);
@@ -317,7 +317,7 @@ function standalonePermissionManifestDiscovery() {
   assert.equal(decision(sourcePath, {}), "deny", "provider source finds its checkout manifest without install state");
   assert.equal(decision(installed, {}), "ask", "missing manifest retains conservative classification");
   assert.equal(decision(installed, { REPO_ROOT: repoRoot }), "deny", "explicit repository root works for standalone copy");
-  for (const variable of ["ROBOREPO_STATE_ROOT", "ROBOREPO_STATE_DIR"]) {
+  for (const variable of ["ROBOREPO_STATE_ROOT"]) {
     for (const [file, key] of [["app-root.json", "appRoot"], ["install-state.json", "repo"]]) {
       const state = path.join(home, variable, file.replace(".json", ""));
       fs.mkdirSync(state, { recursive: true });

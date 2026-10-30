@@ -111,16 +111,13 @@ place while preserving commands, handler positions, and unrelated hooks.
 | --- | --- | --- | --- |
 | SessionStart | Unmanaged skills notice | Counts skills in `~/.claude/skills` and `~/.codex/skills` that RoboRepo does not manage and suggests `roborepo skill adopt <name>` | core (`hooks` bundle) |
 | SessionStart | Caveman mode | Turns on terse output; say "stop caveman" or "normal mode" to turn it off | `caveman` |
-| SessionStart | jcodemunch nudge | Reminds Codex to explore code with jcodemunch tools | `jcodemunch` |
-| SessionStart | jdocmunch index check | If `docs/` exists but is not indexed, reminds Codex to run `roborepo index docs docs/` | `jdocmunch` |
 | PreToolUse (shell) | Protected-branch push | Allows a `git push` it verified lands on a feature branch; denies protected branches and any force push, backed by a git `pre-push` hook. Denies every push it cannot verify (`--no-verify`, `--all`, a `$VARIABLE`, an unrecorded remote default branch), where Claude would ask. See [Protected Branches](claude-hooks.md#protected-branches) | core (`hooks` bundle) |
 | PreToolUse (shell) | Command permissions | Applies your permission settings' `allow`, `ask`, and `deny` buckets to shell commands by their leading words. An `allow` covers a single command only: a command with `;`, `&&`, `\|`, a redirection, or `$(...)` keeps Codex's own approval (see below) | core (`hooks` bundle) |
 | PreToolUse (shell) | Output minimizer | Appends `2>&1 \| tail -n 120` to noisy build, lint, and typecheck commands, forces `tsc --pretty false`, and denies `--watch`, `--verbose`, and `--debug`. Leaves chained, piped, or redirected commands unchanged, since a rewrite also approves the command | core (`hooks` bundle) |
 | PostToolUse | Skill reference observer | Tells Codex which skill reference files it just read, for the skills-loaded line. Codex does not yet deliver this event after shell reads, so Codex reads are under-counted | `skill-visibility` |
 | SessionStart, PreToolUse, PostToolUse, UserPromptSubmit, Stop | Telemetry capture | Records token and tool usage locally | `telemetry`, once token tracking is enabled in the portal or CLI |
 
-Codex has no `Grep`/`Glob` block or write guard; jcodemunch preference on Codex comes from the
-generated rules in `~/.codex/AGENTS.md` and the command rules in `~/.codex/rules/`.
+Codex has no write guard.
 
 ## Permissions On Codex
 

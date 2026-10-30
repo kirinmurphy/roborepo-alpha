@@ -1398,8 +1398,6 @@ function readWarningLabel(type) {
   const labels = {
     "large_document_read": "Large document read",
     "repeated_document_read": "Repeated document read",
-    "stale_doc_lookup": "Stale doc lookup",
-    "mixed_code_lookup": "Mixed code lookup",
   };
   return labels[type] || type;
 }
