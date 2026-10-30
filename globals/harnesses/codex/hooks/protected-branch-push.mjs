@@ -26,6 +26,12 @@ import { fileURLToPath } from 'node:url'
 //
 // The same file is installed for Claude and Codex; both send PreToolUse input on stdin and accept
 // hookSpecificOutput.permissionDecision. Keep the two copies identical.
+//
+// Codex runs a command whose hook result is "ask" without prompting, so under Codex every ask
+// becomes a deny. The copy knows it is Codex's from where it lives: <codex home>/hooks/, both
+// installed (~/.codex/hooks) and in this repo (globals/harnesses/codex/hooks). The hooks.json
+// command carries no flag for it because Codex trusts a hook by its exact definition, and a changed
+// command would switch the guard off until the user reviewed it again.
 
 const SHELL_TOOLS = new Set(['Bash', 'exec_command', 'shell', 'local_shell', 'bash'])
 const SHELLS = new Set(['sh', 'bash', 'zsh'])
@@ -42,8 +48,9 @@ const GH_DENIED = [
 ]
 // gh options that take their value as the next word, before or between subcommands.
 const GH_VALUE_OPTIONS = new Set(['-R', '--repo', '--hostname'])
-const gitHooksDir = process.env.ROBOREPO_GIT_HOOKS_DIR
-  || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'git-hooks')
+const hookDir = path.dirname(fileURLToPath(import.meta.url))
+const gitHooksDir = process.env.ROBOREPO_GIT_HOOKS_DIR || path.join(hookDir, '..', 'git-hooks')
+const forCodex = ['.codex', 'codex'].includes(path.basename(path.dirname(hookDir)))
 
 function readHookInput() {
   try {
@@ -263,6 +270,12 @@ function denyForce(what) {
 }
 
 function ask(detail) {
+  if (forCodex) {
+    return {
+      decision: 'deny',
+      reason: `roborepo: ${detail}. Codex cannot ask you to confirm it, so agents may not run it. Run the push yourself after checking it does not reach main.`,
+    }
+  }
   return { decision: 'ask', reason: `roborepo: ${detail}. Confirm this push does not reach main.` }
 }
 

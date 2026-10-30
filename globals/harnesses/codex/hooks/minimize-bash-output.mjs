@@ -33,7 +33,10 @@ const input = readHookInput()
 if (!input) process.exit(0)
 const toolName = input.tool_name || input.toolName || input.tool || ''
 const toolInput = input.tool_input || input.toolInput || {}
-const command = toolInput.command || ''
+// exec_command sends the command as `cmd`; older shell tools send `command`. A rewrite goes back
+// under the same key.
+const commandKey = toolInput.command === undefined ? 'cmd' : 'command'
+const command = toolInput[commandKey] || ''
 
 // Codex's shell tool goes by a few names depending on version/config. Act only on those; anything
 // else passes through untouched.
@@ -45,7 +48,12 @@ if (!SHELL_TOOLS.has(toolName) || typeof command !== 'string' || !command) {
 const hasTail = s => /\|\s*tail\b/.test(s)
 const addTail = s => hasTail(s) ? s : `${s} 2>&1 | tail -n 120`
 
+// A rewrite is also an allow, and the pattern only describes part of the command: anything chained,
+// piped, redirected, or substituted beside it would be approved too, so those are left alone.
+const compound = /[;&|<>`\n]|\$\(/.test(command)
+
 const allow = (nextCommand, reason = 'Rewriting shell command to a lower-noise form') => {
+  if (compound) return
   process.stdout.write(JSON.stringify({
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
@@ -53,7 +61,7 @@ const allow = (nextCommand, reason = 'Rewriting shell command to a lower-noise f
       permissionDecisionReason: reason,
       updatedInput: {
         ...toolInput,
-        command: nextCommand
+        [commandKey]: nextCommand
       }
     }
   }))

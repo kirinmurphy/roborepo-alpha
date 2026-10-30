@@ -113,9 +113,9 @@ place while preserving commands, handler positions, and unrelated hooks.
 | SessionStart | Caveman mode | Turns on terse output; say "stop caveman" or "normal mode" to turn it off | `caveman` |
 | SessionStart | jcodemunch nudge | Reminds Codex to explore code with jcodemunch tools | `jcodemunch` |
 | SessionStart | jdocmunch index check | If `docs/` exists but is not indexed, reminds Codex to run `roborepo index docs docs/` | `jdocmunch` |
-| PreToolUse (shell) | Protected-branch push | Allows a `git push` it verified lands on a feature branch; denies protected branches and any force push, backed by a git `pre-push` hook. See [Protected Branches](claude-hooks.md#protected-branches) | core (`hooks` bundle) |
-| PreToolUse (shell) | Per-command ask | Prompts before shell commands your permission settings put in the `ask` bucket (see below) | core (`hooks` bundle) |
-| PreToolUse (shell) | Output minimizer | Appends `2>&1 \| tail -n 120` to noisy build, lint, and typecheck commands, forces `tsc --pretty false`, and denies `--watch`, `--verbose`, and `--debug` | core (`hooks` bundle) |
+| PreToolUse (shell) | Protected-branch push | Allows a `git push` it verified lands on a feature branch; denies protected branches and any force push, backed by a git `pre-push` hook. Denies every push it cannot verify (`--no-verify`, `--all`, a `$VARIABLE`, an unrecorded remote default branch), where Claude would ask. See [Protected Branches](claude-hooks.md#protected-branches) | core (`hooks` bundle) |
+| PreToolUse (shell) | Command permissions | Applies your permission settings' `allow`, `ask`, and `deny` buckets to shell commands by their leading words. An `allow` covers a single command only: a command with `;`, `&&`, `\|`, a redirection, or `$(...)` keeps Codex's own approval (see below) | core (`hooks` bundle) |
+| PreToolUse (shell) | Output minimizer | Appends `2>&1 \| tail -n 120` to noisy build, lint, and typecheck commands, forces `tsc --pretty false`, and denies `--watch`, `--verbose`, and `--debug`. Leaves chained, piped, or redirected commands unchanged, since a rewrite also approves the command | core (`hooks` bundle) |
 | PostToolUse | Skill reference observer | Tells Codex which skill reference files it just read, for the skills-loaded line. Codex does not yet deliver this event after shell reads, so Codex reads are under-counted | `skill-visibility` |
 | SessionStart, PreToolUse, PostToolUse, UserPromptSubmit, Stop | Telemetry capture | Records token and tool usage locally | `telemetry`, once token tracking is enabled in the portal or CLI |
 
@@ -130,9 +130,13 @@ Codex through command rules and hooks:
 | Bucket | How Codex enforces it |
 | --- | --- |
 | `allow` / `deny` | A command rule in `~/.codex/rules/default.rules`. These hold even if a hook fails to load |
-| `ask` | The per-command ask hook above, since command rules can only allow or forbid |
+| `ask` | The command permissions hook above, since command rules can only allow or forbid |
 
 A command no rule or hook classifies falls through to Codex's `approval_policy`.
+
+Codex has been seen running a command whose hook result was `ask` without prompting, so treat `ask`
+on Codex as advisory. The protected-branch push hook does not rely on it: under Codex it denies
+instead.
 
 `~/.codex/rules/` and `~/.codex/config.toml` are live files that Codex itself can change — for
 example, approving "always allow this command" in a session appends a rule. Once they differ from

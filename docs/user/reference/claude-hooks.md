@@ -44,6 +44,10 @@ Two checks enforce this, for Claude and Codex alike:
 Anything else in the same command (`git push origin feat && npm publish`) leaves the whole command to
 the permission prompt, so the hook's approval never covers it.
 
+On Codex, every push the hook would ask about is denied instead, with a message to run it yourself.
+Codex has been seen running commands whose hook result was ask without prompting, and a push with
+`--no-verify` skips the `pre-push` hook, so an unchecked ask could reach `main`. Claude still asks.
+
 The `pre-push` hook reaches only agent shells. RoboRepo sets `core.hooksPath` for agents through
 `GIT_CONFIG_*` variables in `~/.claude/settings.json` (`env`) and `~/.codex/config.toml`
 (`shell_environment_policy.set`). They point at `~/.claude/git-hooks` or `~/.codex/git-hooks`, which
