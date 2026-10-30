@@ -154,6 +154,7 @@ try {
     ["bulk-dep-only", { selectable: false, presentation: { category: "integrations", visibility: "dependency" } }],
     ["bulk-shared-parent", { requires: ["bulk-shared"] }],
     ["bulk-shared", {}],
+    ["bulk-transient", { resources: [{ type: "hooks", harness: "claude", source: "hooks.json" }] }],
   ]) {
     const dir = path.join(workspace, "packages", id);
     fs.mkdirSync(dir, { recursive: true });
@@ -163,6 +164,10 @@ try {
       resources: [{ type: "rules", harness: "claude", source: "rules.md" }], ...extra,
     }));
   }
+  const transientHooks = path.join(workspace, "packages", "bulk-transient", "hooks.json");
+  fs.writeFileSync(transientHooks, JSON.stringify({
+    SessionStart: [{ hooks: [{ type: "command", command: "echo bulk-transient" }] }],
+  }));
   const bulk = await import(path.join(repoRoot, "scripts/cli/config-bulk.mjs"));
   // Start from all-off so the first batch has real work and stays in flight across the check.
   await bulk.applyBulkPackageChange(SECTION_IDS, false);
@@ -170,6 +175,26 @@ try {
   const second = await bulk.applyBulkPackageChange(SECTION_IDS, true);
   assert.equal(second.status, 409, `overlapping batch must 409 (got ${second.status})`);
   assert.equal((await first).status, 200, "first batch completes once the lock frees");
+
+  const readFileSync = fs.readFileSync;
+  fs.readFileSync = function (file, ...args) {
+    if (String(file) === transientHooks) {
+      fs.readFileSync = readFileSync;
+      throw Object.assign(new Error("transient hook read failure"), { code: "EIO" });
+    }
+    return readFileSync.call(this, file, ...args);
+  };
+  let recovered;
+  try {
+    recovered = await bulk.applyBulkPackageChange(["bulk-transient"], true);
+  } finally {
+    fs.readFileSync = readFileSync;
+  }
+  assert.equal(recovered.results[0].ok, false, "the member retains its failed mutation result");
+  assert.equal(recovered.ok, true, "the batch succeeds when its final reconciliation completes");
+  assert.equal(recovered.status, 200);
+  const recoveredSettings = JSON.parse(fs.readFileSync(path.join(home, ".claude", "settings.json"), "utf8"));
+  assert.match(JSON.stringify(recoveredSettings.hooks), /echo bulk-transient/, "reconciliation installs the recovered hook");
 
   // ── dependency rows: a bulk switch acts on selectable packages only, and each changed member
   // carries the probed outcome of every package it applied.
