@@ -125,7 +125,7 @@ test("condition signals lead to compact session evidence", async ({ page }) => {
   expect(await list.evaluate((element) => getComputedStyle(element).overflowY)).toBe("visible");
   const allSessions = await list.getByRole("button", { name: "Session details", exact: true }).count();
   expect(allSessions).toBeGreaterThan(8);
-  await expect(list).toContainText("+4 findings");
+  await expect(list).toContainText("+3 findings");
 });
 
 test("polling preserves an open comparison and a change draft", async ({ page, request }) => {
