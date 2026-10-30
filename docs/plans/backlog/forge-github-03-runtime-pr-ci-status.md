@@ -1,19 +1,25 @@
 ---
 id: developer-runtime-remote-branch-status
 priority: medium
-next_action: Decide the open questions in "Open Questions", then build the forge provider seam in modules/developer-runtime/forge.mjs
+next_action: Decide the opt-in and TTL questions in Open Questions, then build the GitHub lookup in modules/forge/github.mjs, the host module GitHub Integration Part 01 introduces
 blocked_by: []
-depends_on: []
-related: ["developer-runtime-metadata-suggestions", "git-exec-consolidation", "zdhivxtb"]
-reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
+depends_on: ["w7vls1yk"]
+related: ["developer-runtime-metadata-suggestions", "git-exec-consolidation", "zdhivxtb", "f0jwe76j"]
+reviewed_commit: 7c65c2e730a656e1eb5cd23173de34cbc07e79c0
+worktree:
 ---
 
-# Runtime Remote Branch Status
+# GitHub Integration Part 03: Runtime Shows Pull Request and CI Status per Checkout
 
 ## Summary
 
 Surface, per checkout row, whether the checkout's branch has an open pull request and whether its
 latest commit passed CI — sourced from the hosting forge rather than local Git state.
+
+This is the third plan in the GitHub Integration series. Part 01 (`w7vls1yk`) gives agents their own
+GitHub identity and introduces `modules/forge/`, the one module allowed to call the host. This plan
+puts its GitHub lookup there. Part 02 (`f0jwe76j`) lists this plan's forge client as a condition
+for revisiting an unattended PR watcher. Parts 02 and 03 do not depend on each other.
 
 ## Context
 
@@ -34,7 +40,7 @@ Git collection is deliberately, and enforceably, offline:
   contacts a remote.
 - `modules/repositories/git-exec.mjs` enforces this with a strict allow-list —
   `GIT_READONLY_COMMANDS` currently holds `status`, `rev-list`, `symbolic-ref`, `rev-parse`,
-  `merge-base`, `log` — and refuses anything else at the seam, before the subprocess runs.
+  `merge-base`, `log`, `for-each-ref` — and refuses anything else at the seam, before the subprocess runs.
 - `scripts/test/developer-runtime-git-check.mjs` asserts both that only allow-listed subcommands run and
   that `fetch`/`pull` never appear.
 
@@ -68,7 +74,7 @@ flowchart LR
     B -->|reads| C["local refs<br/>+ .git/FETCH_HEAD"]
   end
   subgraph next["Proposed — second, isolated source"]
-    D["forge.mjs<br/>new"] -->|invokes| E["gh CLI"]
+    D["modules/forge<br/>github.mjs, new"] -->|invokes| E["gh CLI"]
     E -->|queries| F["forge API"]
     D -->|caches results in| G["TTL cache"]
   end
@@ -94,9 +100,13 @@ gh pr list --head <branch> --json number,title,state,isDraft,statusCheckRollup
 status come from a single request. For a branch with no PR — including the base branch itself —
 CI status needs a separate lookup against the commit.
 
-**`gh` is not installed on this machine.** That is not an edge case to handle later: absent-CLI is
-the default state and must be the first path built, degrading to a card that looks exactly like
-today's.
+An absent or logged-out `gh` is still the first path to build, degrading to a card that looks
+exactly like today's. `gh` is installed on the development machine now (2.103.1), but it is not
+a roborepo dependency and many machines lack it.
+
+**Identity.** Runtime runs in the portal server, a process the user starts, not an agent shell, so
+it uses the user's own `gh` login. The agent-only `GH_CONFIG_DIR` from Part 01 does not reach it.
+Runtime only reads, so the user's identity is fine here.
 
 ### State model
 
@@ -132,8 +142,8 @@ the remote's verdict, not the user's divergence — so it should be its own indi
 new rung on that ladder.
 
 Git is per checkout: each repository card has one row per checkout (main, then each linked
-worktree), and each row shows its own branch. The Repository Rows plan (`zdhivxtb`) removes the
-branch icon from those rows and gives each row an icon column instead: a home glyph for the main
+worktree), and each row shows its own branch. The completed Repository Rows plan (`zdhivxtb`)
+replaced the branch icon in those rows with an icon column: a home glyph for the main
 checkout and a tree glyph for each linked worktree. CI status tints that glyph:
 
 - Each row shows the verdict for its own branch. How several checkouts' branches share the
@@ -152,8 +162,8 @@ and its branch icon, and get no CI indicator in this plan.
 
 Four phases, each independently shippable.
 
-- [ ] **Phase 1 — provider seam and degradation.** New `modules/developer-runtime/forge.mjs`, structurally
-      mirroring `docker.mjs`: an orchestrator that shells out, pure exported parsers, an explicit
+- [ ] **Phase 1 — provider seam and degradation.** A GitHub lookup in `modules/forge/github.mjs`, behind
+      the host-name entry point from Part 01, structurally mirroring `modules/developer-runtime/docker.mjs`: an orchestrator that shells out, pure exported parsers, an explicit
       timeout, and a warning classifier that distinguishes missing CLI, unauthenticated,
       rate-limited, and timed-out. Ships returning `unknown` for everything. No UI change.
 - [ ] **Phase 2 — cache and scan integration.** TTL cache, stale-while-revalidate, backoff. Wire
@@ -161,12 +171,8 @@ Four phases, each independently shippable.
 - [ ] **Phase 3 — PR surfacing.** Show open-PR presence, number, and draft state on the card.
       Valuable alone, and independent of any CI verdict.
 - [ ] **Phase 4 — CI status indicator.** Tint each checkout row's glyph, and add a CI line to the
-      checkout tooltip, as described under Placement, with `unknown` rendering nothing. Needs the
-      icon column from the Repository Rows plan (`zdhivxtb`).
-- [ ] **Phase 5 (optional) — baseline CI workflow.** A minimal GitHub Actions workflow in this repo,
-      purely as a live fixture. Note that it only produces status for *this* repository; the feature
-      must work against arbitrary repos with arbitrary workflows, so this is a test aid, not
-      coverage.
+      checkout tooltip, as described under Placement, with `unknown` rendering nothing. Uses the
+      icon column that shipped with Repository Rows (`zdhivxtb`).
 
 ## Validation
 
@@ -179,15 +185,23 @@ Four phases, each independently shippable.
   editing that test, the isolation has been broken.
 - `npm run check`.
 - Manual: a repo with passing CI, one with failing CI, one with no CI, and one with `gh` logged out.
+  This repo's own `.github/workflows/ci.yml` serves as the live passing-or-failing case.
+
+## Documentation impact
+
+| Doc | Update |
+| --- | --- |
+| `docs/user/reference/runtime.md` | PR and CI indicators, the opt-in setting, and what `unknown` looks like |
+| `docs/internal/docs-map.md` | Runtime as the second caller of `modules/forge/` (Part 01 adds the module) |
 
 ## Risks
 
 - **Stating a stale verdict as current.** A cached `passing` shown after a later failing push is the
   most damaging failure here, because it is the one a user would act on. Cache entries must carry
   the commit SHA they describe and be discarded when HEAD moves.
-- **Rate-limit exhaustion affecting the user's other tools.** The 5,000/hr budget is shared with the
-  user's own `gh` usage. A poorly bounded poll could break their terminal workflow, not just this
-  dashboard.
+- **Rate-limit exhaustion affecting the user's other tools.** The 5,000/hr budget is per account and
+  shared with the user's own `gh` usage. A poorly bounded poll could break their terminal workflow,
+  not just this dashboard. Part 01 helps: agent `gh` traffic moves to the bot account's budget.
 - **Scope creep into a general forge integration.** The seam invites "while we're here" additions
   (issues, reviewers, checks detail). Each is a separate plan.
 - **Latency on the scan path.** Docker discovery was measured at 2.1–4.0s on this machine and

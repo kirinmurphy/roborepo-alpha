@@ -106,7 +106,7 @@ sessions read the repo's `.claude/settings.json`; the Codex and Gemini equivalen
 | `session-resume` | In the vocabulary; no provider declares it | `globals/harnesses/*/provider.json` |
 | Headless prompt template | `extensions.app.headlessPromptArgs` on Claude (`-p -- {prompt}`) and Codex (`exec --skip-git-repo-check -- {prompt}`); Gemini has none | `globals/harnesses/{claude,codex,gemini}/provider.json` |
 | Its one consumer | Telemetry's deep read sends a text summary and reads the reply. No tools, no worktree, no permission flags | `findDeepReadProvider` in `scripts/cli/telemetry.mjs`; `docs/internal/harness-provider-interface.md` |
-| Runtime network access | The git collection path is offline by design, enforced by an allow-list in `modules/repositories/git-exec.mjs` and asserted by `scripts/test/developer-runtime-git-check.mjs`. The forge lookup that would change this is still a backlog plan | Runtime Remote Branch Status (`developer-runtime-remote-branch-status`) |
+| Runtime network access | The git collection path is offline by design, enforced by an allow-list in `modules/repositories/git-exec.mjs` and asserted by `scripts/test/developer-runtime-git-check.mjs`. The forge lookup that would change this is still a backlog plan | GitHub Integration Part 03 (`developer-runtime-remote-branch-status`) |
 | Skill packaging | Optional packages ship skills with trigger fixtures | `globals/packages/feature-verification/`, `scripts/test/skill-trigger-fixtures-check.mjs` |
 
 The interface doc describes `extensions` as hints that "platform code reads generically", and
@@ -213,7 +213,8 @@ behavior is unchecked.
 
 Reopen option (c) as its own plan only when all of these hold:
 
-- Runtime Remote Branch Status has shipped a forge client, so Runtime already reads PR state.
+- GitHub Integration Part 03 (`developer-runtime-remote-branch-status`) has shipped its lookup in
+  `modules/forge/`, so Runtime already reads PR state.
 - `session-launch` has real adapters (Session Launching, `plan-session-launching-milestone-1`).
 - Every eligible provider has a verified fail-closed headless mode.
 - There is real demand from harnesses with no native unattended route. Today that is Gemini,
