@@ -101,9 +101,9 @@ Each `<harness>.jsonl` spool is capped at ~25 MB: when exceeded, the oldest reco
 the newest ~70% kept. Per-session token cursors live under `~/.roborepo/telemetry/collector/` and
 back the `delta_tokens` computation.
 
-MCP tool attribution resolves both the prefixed wire name (`mcp__<server>__<tool>`) and the bare
-tool names Codex sometimes logs (e.g. `search_symbols`), via a known-tool table in
-`telemetry-transcript.mjs` — without it, Codex MCP usage is undercounted.
+MCP tool attribution (`mcpServerOf()` in `scripts/harnesses/transcript-parse.mjs`) recognizes only
+the prefixed wire name (`mcp__<server>__<tool>`). A bare tool name with no prefix is attributed to
+the native group.
 
 For demos and dashboard development, `node scripts/cli/telemetry-seed-demo.mjs` writes synthetic
 sessions to a dedicated `spool/demo.jsonl`, picked up alongside real spools; rerun with `--clear` to

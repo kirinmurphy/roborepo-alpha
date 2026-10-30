@@ -11,6 +11,8 @@
 //
 // Skips (exit 0) with a visible `skip:` line when the Chromium browser is not installed, so a
 // machine that has never run `npx playwright install chromium` still gets a green, honest result.
+// Under CI (CI=true) a missing browser fails instead: CI installs it, so a skip there would hide
+// that the suite never ran.
 
 import fs from "node:fs";
 import os from "node:os";
@@ -32,6 +34,10 @@ const repoRoot = path.resolve(here, "..", "..", "..");
 
 const browserPath = chromium.executablePath();
 if (!fs.existsSync(browserPath)) {
+  if (process.env.CI === "true") {
+    console.error(`FAIL: portal UI browser suite cannot run: chromium not installed on a CI runner (${browserPath})`);
+    process.exit(1);
+  }
   console.log(
     "skip: portal UI browser suite (chromium not installed; run `npx playwright install chromium`)",
   );

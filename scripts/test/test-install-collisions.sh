@@ -750,6 +750,32 @@ test_uninstall_stops_repo_owned_processes() {
   pass "uninstall stops repo-owned portal process"
 }
 
+# A portal PID file that outlived its process can name a PID the OS has since handed to an
+# unrelated program. Uninstall must check what the PID is running before signalling it.
+test_uninstall_ignores_stale_portal_pid_file() {
+  local home_dir pid
+  home_dir="$(make_home)"
+
+  if ! ps -ax -o pid=,command= >/dev/null 2>&1; then
+    pass "uninstall leaves process named by stale PID file running (skipped: process list unavailable)"
+    return
+  fi
+
+  sleep 30 &
+  pid=$!
+  mkdir -p "$home_dir/.roborepo/portal"
+  printf '%s\n' "$pid" > "$home_dir/.roborepo/portal/server-4317.pid"
+  HOME="$home_dir" "$repo_root/scripts/install/uninstall.sh" >"$home_dir/uninstall.out"
+  sleep 0.3
+
+  if kill -0 "$pid" 2>/dev/null; then
+    kill "$pid" 2>/dev/null || true
+    pass "uninstall leaves process named by stale PID file running"
+  else
+    fail "uninstall leaves process named by stale PID file running" "$home_dir/uninstall.out"
+  fi
+}
+
 test_install_writes_durable_original_snapshot() {
   local home_dir archive
   home_dir="$(make_home)"
@@ -1185,6 +1211,7 @@ test_uninstall_prunes_stale_shell_wiring
 test_uninstall_check_clean_reports_remnant
 test_cli_entry_points_run_through_symlinked_path
 test_uninstall_stops_repo_owned_processes
+test_uninstall_ignores_stale_portal_pid_file
 test_idempotency_no_extra_backups
 test_root_config_drift_silent_update_vs_real_collision
 test_root_config_keep_policy_merges_drifted_file

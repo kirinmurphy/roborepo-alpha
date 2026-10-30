@@ -497,6 +497,15 @@ cli_process_pids() {
   '
 }
 
+# True when ${pid} is running a roborepo portal. A PID file outlives a portal that crashed or was
+# killed, and the OS reuses PIDs, so a stale file can name an unrelated process. Matched on the
+# entry point rather than the process root: a portal started from another checkout or the npm
+# package shares this state root and is still ours to stop.
+is_portal_pid() {
+  local pid="$1"
+  ps -o command= -p "${pid}" 2>/dev/null | grep -q '/scripts/cli/main\.mjs web'
+}
+
 stop_cli_processes() {
   local pids=()
   local pid
@@ -505,7 +514,7 @@ stop_cli_processes() {
   for path in "${ROBOREPO_PORTAL_PID_PATH:-}" "${state_dir}"/portal/server-*.pid; do
     if [[ -f "${path}" ]]; then
       pid="$(tr -cd '0-9' < "${path}" 2>/dev/null || true)"
-      [[ -n "${pid}" && "${pid}" != "$$" ]] && pids+=("${pid}")
+      [[ -n "${pid}" && "${pid}" != "$$" ]] && is_portal_pid "${pid}" && pids+=("${pid}")
     fi
   done
   while IFS= read -r pid; do
