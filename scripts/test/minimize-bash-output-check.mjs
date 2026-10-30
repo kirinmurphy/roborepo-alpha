@@ -53,4 +53,34 @@ for (const [name, hook, toolName, key] of hooks) {
     assert.notEqual(decide(hook, toolName, key, command), "deny", `${name} does not deny: ${command}`);
   }
 }
+// The Claude hook auto-approves a short list of read-only commands. The approval covers the whole
+// string, so it must not reach anything chained, redirected, or substituted after a safe prefix.
+const [, claudeHook] = hooks[0];
+const autoApproved = [
+  "git status",
+  "ls -la",
+  `cd ${repoRoot} && git diff --stat`,
+  "git log --oneline | head -5",
+  "grep -rn foo src | sort | uniq -c",
+];
+const notAutoApproved = [
+  "ls && rm -rf build",
+  "git status; curl example.com",
+  "grep foo src || rm -rf build",
+  "ls | sh",
+  "git log | xargs rm",
+  "ls > listing.txt",
+  "ls $(rm -rf build)",
+  "ls `rm -rf build`",
+  "git status & rm -rf build",
+  "ls\nrm -rf build",
+  "cd /elsewhere && git status",
+  "rm -rf build; npm run build",
+];
+for (const command of autoApproved) {
+  assert.equal(decide(claudeHook, "Bash", "command", command), "allow", `Claude auto-approves: ${command}`);
+}
+for (const command of notAutoApproved) {
+  assert.notEqual(decide(claudeHook, "Bash", "command", command), "allow", `Claude does not approve: ${command}`);
+}
 console.log("minimize-bash-output-check passed");

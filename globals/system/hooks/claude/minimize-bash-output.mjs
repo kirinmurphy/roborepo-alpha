@@ -8,7 +8,13 @@ const cwd = input.cwd || process.cwd()
 const hasTail = s => /\|\s*tail\b/.test(s)
 const addTail = s => hasTail(s) ? s : `${s} 2>&1 | tail -n 120`
 
-const allow = (nextCommand, reason = 'Rewriting Bash command to a lower-noise form') => {
+// A rewrite of a noisy command is also an allow, and its pattern only describes part of the
+// command: anything chained, piped, redirected, or substituted beside it would be approved too, so
+// those are left alone. The auto-approve branch below checks every command itself.
+const compound = /[;&|<>`\n]|\$\(/.test(command)
+
+const allow = (nextCommand, reason = 'Rewriting Bash command to a lower-noise form', { checked = false } = {}) => {
+  if (compound && !checked) return
   process.stdout.write(JSON.stringify({
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
@@ -29,8 +35,7 @@ const allow = (nextCommand, reason = 'Rewriting Bash command to a lower-noise fo
 // though the Bash tool already persists cwd — defeats every entry, forcing a prompt. Pipes
 // and `&&` chains break matching too. This branch normalizes the command: if it is one of a
 // short list of read-only / repo-local safe commands (optionally prefixed by a no-op
-// `cd <cwd> &&`), strip the cd and auto-allow. `allow` cannot loosen deny/ask rules (hooks
-// only tighten), so this is bounded to commands that are already safe by construction.
+// `cd <cwd> &&`), strip the cd and auto-allow, but only when nothing else is chained on.
 //
 // SAFE = read-only inspection (grep/git status|diff|log/ls/cat-of-known) or this repo's own
 // maintenance scripts and CLI. Anything with rm/mv/write redirection beyond /tmp is NOT here.
@@ -55,9 +60,17 @@ const stripRedundantCd = s => {
   return s
 }
 
+// A prefix only describes the first command. The approval covers the whole string, so it holds only
+// when every command in it is safe: a pipeline of safe commands and read-only filters, with no
+// `;`, `&&`, `||`, background `&`, redirection, or substitution. A `|` inside quotes splits a
+// pattern apart, which only ever fails closed.
+const READ_ONLY_FILTERS = /^(head|tail|wc|sort|uniq|cut|grep)\b/
+const onlySafeCommands = s => !/[;&<>`\n]|\$\(|\|\|/.test(s)
+  && s.split('|').every((part, i) => (i === 0 ? SAFE_PREFIXES : [...SAFE_PREFIXES, READ_ONLY_FILTERS]).some(re => re.test(part.trim())))
+
 const normalized = stripRedundantCd(command.trim())
-if (SAFE_PREFIXES.some(re => re.test(normalized))) {
-  allow(normalized, 'Auto-approved known-safe Bash command (cd-normalized)')
+if (onlySafeCommands(normalized)) {
+  allow(normalized, 'Auto-approved known-safe Bash command (cd-normalized)', { checked: true })
   process.exit(0)
 }
 

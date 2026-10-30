@@ -11,7 +11,7 @@ them. Turn a package's hooks off by disabling the package in `/agents` or with
 | --- | --- | --- | --- |
 | SessionStart | Unmanaged skills notice | Counts skills in `~/.claude/skills` and `~/.codex/skills` that RoboRepo does not manage and suggests `roborepo skill adopt <name>` | always |
 | PreToolUse `Bash` | Protected-branch push | Allows a `git push` it verified lands on a feature branch; denies protected branches and force pushes (see below) | always |
-| PreToolUse `Bash` | Output minimizer | Trims noisy build, lint, and typecheck output; denies `--watch`, `--verbose`, and `--debug`; auto-allows a short list of safe read-only commands | always |
+| PreToolUse `Bash` | Output minimizer | Trims noisy build, lint, and typecheck output; denies `--watch`, `--verbose`, and `--debug`; auto-allows a short list of safe read-only commands, alone or piped into read-only filters such as `head` or `wc`, never with anything chained or redirected | always |
 | PreToolUse `Bash` | Dense command log | Records commands of three or more lines to `<stateRoot>/capture/claude/dense-bash.jsonl` so you can find ones worth scripting. Never blocks | `capture-dense-bash` |
 | PreToolUse `Read`, `Write`, `Edit` | Repository scope | Reads across the repository and its worktrees are quiet; writes outside the checkout in use prompt. See [Config Control Panel](config-control-panel.md#changing-path-scopes) | always |
 | PreToolUse `Write`, `Edit` | Write guard | When Claude edits under `~/.claude` or `~/.codex`, adds a reminder about which files RoboRepo manages. `settings.local.json` is exempt | always |
