@@ -401,7 +401,7 @@ async function maybeLaunchPortal() {
 }
 
 export function presetsApply(args) {
-  rejectUnknownFlags(args, new Set(["--default", "--all"]));
+  rejectUnknownFlags(args, new Set(["--default", "--all", "--selected"]));
   assertHarnessWriteAllowed();
   const catalog = readPresetCatalog();
   const requested = withDependencies(requestedBundles(args, catalog));
@@ -541,6 +541,11 @@ function requestedBundles(args, catalog) {
   const positional = args.filter((arg) => !arg.startsWith("--"));
   if (args.includes("--all") || positional.includes("all")) {
     return new Set(catalog.bundles.map((bundle) => bundle.id));
+  }
+  // Every bundle the user has chosen, plus the defaults: what `update` refreshes, so a file added
+  // to a selected bundle such as hooks reaches machines that already selected it.
+  if (args.includes("--selected")) {
+    return new Set([...catalog.default, ...(readPresetState().selected ?? [])].filter((id) => catalog.byId.has(id)));
   }
   if (args.includes("--default") || positional.includes("default") || positional.length === 0) {
     return new Set(catalog.default);

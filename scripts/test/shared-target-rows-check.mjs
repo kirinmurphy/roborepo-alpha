@@ -29,6 +29,7 @@ try {
   standalonePermissionManifestDiscovery();
   baseInstallShipsTheGitHooksItsConfigPointsAt();
   coreHooksInstallAfterPackageHooks();
+  updateShipsHooksNewToASelectedBundle();
   scriptCopiesFollowConflictPolicy();
   linksOutsideTheCheckoutAreNeverWrittenThrough();
   retiredScriptsDoNotOutliveTheirSource();
@@ -106,6 +107,57 @@ function coreHooksInstallAfterPackageHooks() {
   assert.deepEqual([...removed], [...before], "removal leaves exactly the package hooks, at their positions");
   assert.ok(fs.existsSync(path.join(home, ".codex", "hooks", "package-script.mjs")), "package script survives removal");
   for (const script of coreScripts) assert.ok(!fs.existsSync(path.join(home, ".codex", "hooks", script)), `core script removed: ${script}`);
+}
+
+// `update` applies the selected bundles. A machine that selected hooks before a release added a
+// handler to an existing core group must get the new script and only the new handler: the group's
+// installed handlers keep their trust positions and are not added a second time.
+function updateShipsHooksNewToASelectedBundle() {
+  const { home, env } = makeHome("upgrade");
+  run(env, cli, "bundle", "apply", "--selected");
+  assert.ok(fs.existsSync(path.join(home, ".codex", "git-hooks", "pre-push")), "first install applies the defaults");
+  assert.ok(!fs.existsSync(path.join(home, ".codex", "hooks.json")), "first install selects no hooks yet");
+
+  run(env, cli, "bundle", "apply", "hooks");
+  const hooksPath = path.join(home, ".codex", "hooks.json");
+  const added = "protected-branch-push.mjs";
+  const userCommand = "node my-own-check.mjs";
+  // The install as an older release left it: the core group without the newer handler, and a
+  // handler of the user's own in that group.
+  const older = JSON.parse(fs.readFileSync(hooksPath, "utf8"));
+  for (const group of older.hooks.PreToolUse) {
+    if (group.hooks.some((hook) => hook.command.includes(added))) {
+      group.hooks = [...group.hooks.filter((hook) => !hook.command.includes(added)), { type: "command", command: userCommand }];
+    }
+  }
+  fs.writeFileSync(hooksPath, JSON.stringify(older));
+  for (const harness of [".claude", ".codex"]) fs.rmSync(path.join(home, harness, "hooks", added));
+  const before = handlerPositions(hooksPath);
+
+  run(env, cli, "bundle", "apply", "--selected");
+  for (const harness of [".claude", ".codex"]) {
+    assert.ok(fs.existsSync(path.join(home, harness, "hooks", added)), `update ships the new script to ${harness}`);
+  }
+  const after = handlerPositions(hooksPath);
+  for (const [command, position] of before) assert.equal(after.get(command), position, `kept its trust position: ${command}`);
+  const installed = commands(JSON.parse(fs.readFileSync(hooksPath, "utf8")).hooks);
+  assert.equal(installed.filter((command) => command.includes(added)).length, 1, "the new handler is installed once");
+  assert.equal(installed.length, new Set(installed).size, "no handler is installed twice");
+
+  // An older merge re-added the whole grown group, so the core handlers it already had appear twice.
+  // The next update keeps each one's first copy, where its trust is, and drops the rest.
+  const duplicated = JSON.parse(fs.readFileSync(hooksPath, "utf8"));
+  const coreGroup = coreCodex.PreToolUse.find((group) => group.hooks.some((hook) => hook.command.includes(added)));
+  duplicated.hooks.PreToolUse.push(structuredClone(coreGroup));
+  fs.writeFileSync(hooksPath, JSON.stringify(duplicated));
+  run(env, cli, "bundle", "apply", "--selected");
+  const collapsed = commands(JSON.parse(fs.readFileSync(hooksPath, "utf8")).hooks);
+  assert.equal(collapsed.length, new Set(collapsed).size, "update removes repeated core handlers");
+  assert.deepEqual([...handlerPositions(hooksPath)], [...after], "every first copy keeps its trust position");
+
+  run(env, cli, "bundle", "remove", "hooks");
+  const left = fs.existsSync(hooksPath) ? commands(JSON.parse(fs.readFileSync(hooksPath, "utf8")).hooks) : [];
+  assert.deepEqual(left, [userCommand], "removal takes every core handler and leaves the user's, even in a shared group");
 }
 
 function scriptCopiesFollowConflictPolicy() {

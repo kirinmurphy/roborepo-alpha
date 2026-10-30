@@ -37,6 +37,8 @@ const gitEnv = {
   GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@example.com",
 };
 delete gitEnv.ROBOREPO_PROTECTED_BRANCHES;
+// An agent shell carries the core.hooksPath override itself; the "human" git here must not.
+for (const key of Object.keys(gitEnv)) if (/^GIT_CONFIG_(COUNT|KEY_\d+|VALUE_\d+)$/.test(key)) delete gitEnv[key];
 fs.writeFileSync(gitEnv.GIT_CONFIG_GLOBAL, "");
 const agentEnv = { ...gitEnv, GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.hooksPath", GIT_CONFIG_VALUE_0: gitHooks };
 

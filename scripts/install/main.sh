@@ -203,11 +203,13 @@ run_post_install_onboarding() {
     return 0
   fi
 
-  # Always land the minimal baseline first, so update can refresh rendered rules even when the
-  # machine has already been onboarded. The onboarding wizard itself does not re-apply defaults.
+  # Always land the minimal baseline, plus every bundle the user already selected, so update
+  # refreshes rendered rules and ships files new to those bundles even when the machine has already
+  # been onboarded. On a first install nothing is selected yet, so this is the default set. The
+  # onboarding wizard itself does not re-apply defaults.
   install_section "Base Configuration"
   node "${repo_root}/scripts/cli/main.mjs" package adopt-live
-  node "${repo_root}/scripts/cli/main.mjs" bundle apply --default
+  node "${repo_root}/scripts/cli/main.mjs" bundle apply --selected
   node "${repo_root}/scripts/cli/main.mjs" package reconcile
   if [[ "${#present_harness_rows[@]}" -gt 0 ]]; then
     for row in "${present_harness_rows[@]}"; do

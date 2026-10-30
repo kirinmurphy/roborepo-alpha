@@ -117,8 +117,8 @@ try {
   // The update script runs these steps in this order; if it stops reconciling, this test no longer
   // describes `roborepo update`.
   const install = fs.readFileSync(path.join(repoRoot, "scripts/install/main.sh"), "utf8");
-  const steps = ["package adopt-live", "bundle apply --default", "package reconcile"].map((step) => install.indexOf(`main.mjs" ${step}`));
-  assert.ok(steps.every((at, i) => at > 0 && (i === 0 || at > steps[i - 1])), "scripts/install/main.sh runs adopt-live, the default bundle, then reconcile");
+  const steps = ["package adopt-live", "bundle apply --selected", "package reconcile"].map((step) => install.indexOf(`main.mjs" ${step}`));
+  assert.ok(steps.every((at, i) => at > 0 && (i === 0 || at > steps[i - 1])), "scripts/install/main.sh runs adopt-live, the selected bundles, then reconcile");
 } finally {
   fs.rmSync(home, { recursive: true, force: true });
 }
