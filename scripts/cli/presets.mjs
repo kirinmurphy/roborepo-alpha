@@ -464,8 +464,9 @@ export function presetsRemove(args) {
   const nextRoots = roots.filter((id) => !requested.has(id));
   const before = effectiveBundleIds(catalog.bundles, roots);
   const after = new Set(effectiveBundleIds(catalog.bundles, nextRoots));
+  const retainedRows = new Set([...after].flatMap((id) => catalog.byId.get(id).rows));
   const leaving = new Set([...before.filter((id) => !after.has(id)), ...[...requested].filter((id) => !after.has(id))]);
-  for (const id of [...leaving].reverse()) removeBundle(catalog.byId.get(id), rows);
+  for (const id of [...leaving].reverse()) removeBundle(catalog.byId.get(id), rows, retainedRows);
   const selection = bundleSelectionStates(catalog.bundles, nextRoots);
   for (const id of requested) {
     if (after.has(id)) console.log(`kept: ${id} stays applied; required by ${selection.get(id).requiredBy.join(", ")}`);
@@ -511,6 +512,9 @@ function readPresetCatalog() {
     for (const dep of bundle.requires) {
       if (dep === bundle.id || !byId.has(dep)) errors.push(`bundle ${bundle.id}: unknown required bundle: ${dep}`);
     }
+  }
+  for (const id of raw.default ?? []) {
+    if (!byId.has(id)) errors.push(`default: unknown bundle: ${id}`);
   }
   for (const cycle of requiresCycles(bundles)) errors.push(`bundle dependency cycle: ${cycle.join(" -> ")}`);
   if (errors.length) throw new Error(`${PRESET_MANIFEST}: ${errors.join("; ")}`);
@@ -599,9 +603,10 @@ function applyBundle(bundle, rows, policy) {
   }
 }
 
-function removeBundle(bundle, rows) {
+function removeBundle(bundle, rows, retainedRows = new Set()) {
   const policy = readInstallPolicy();
   for (const key of bundle.rows) {
+    if (retainedRows.has(key)) continue;
     const row = rows.get(key);
     if (!row) continue;
     removeRow(row, policy);
