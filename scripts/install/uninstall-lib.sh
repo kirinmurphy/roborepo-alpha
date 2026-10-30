@@ -524,7 +524,8 @@ cli_process_pids() {
     index($0, process_root "/scripts/cli/main.mjs serve") > 0 ||
     index($0, process_root "/scripts/install/main.sh") > 0 ||
     index($0, process_root "/scripts/cli/main.mjs mcp apply") > 0 ||
-    index($0, process_root "/scripts/cli/main.mjs bundle apply --selected") > 0 {
+    index($0, process_root "/scripts/cli/main.mjs bundle apply --selected") > 0 ||
+    index($0, process_root "/scripts/cli/main.mjs bundle apply --default") > 0 {
       print $1
     }
   '

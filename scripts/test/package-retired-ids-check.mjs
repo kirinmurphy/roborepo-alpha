@@ -4,8 +4,8 @@
 // `plan-start`, which `plan-execute` replaced, and the six per-skill plan packages that became
 // `plan-suite`), and their skills and slash commands are still projected into the harness homes.
 //
-// Runs the package steps `roborepo update` runs (scripts/install/main.sh: adopt-live, the default
-// bundle, then reconcile) against a hermetic HOME, and pins the outcome: the retired IDs leave
+// Runs the package steps `roborepo update` runs (scripts/install/main.sh: adopt-live, the selected
+// bundles, then reconcile) against a hermetic HOME, and pins the outcome: the retired IDs leave
 // both registry lists, their projections are removed, the renamed packages install, and a second
 // reconcile has nothing left to do.
 //
@@ -78,7 +78,7 @@ try {
   }
 
   roborepo("package", "adopt-live");
-  roborepo("bundle", "apply", "--default");
+  roborepo("bundle", "apply", "--selected");
   const reconcile = roborepo("package", "reconcile");
 
   const registry = readRegistry();

@@ -142,6 +142,8 @@ function updateShipsHooksNewToASelectedBundle() {
   for (const [command, position] of before) assert.equal(after.get(command), position, `kept its trust position: ${command}`);
   const installed = commands(JSON.parse(fs.readFileSync(hooksPath, "utf8")).hooks);
   assert.equal(installed.filter((command) => command.includes(added)).length, 1, "the new handler is installed once");
+  const claudeInstalled = commands(JSON.parse(fs.readFileSync(path.join(home, ".claude", "settings.json"), "utf8")).hooks);
+  assert.equal(claudeInstalled.filter((command) => command.includes(added)).length, 1, "the new handler is registered once for Claude");
   assert.equal(installed.length, new Set(installed).size, "no handler is installed twice");
 
   // An older merge re-added the whole grown group, so the core handlers it already had appear twice.

@@ -545,6 +545,10 @@ function requestedBundles(args, catalog) {
   // Every bundle the user has chosen, plus the defaults: what `update` refreshes, so a file added
   // to a selected bundle such as hooks reaches machines that already selected it.
   if (args.includes("--selected")) {
+    if (positional.length) {
+      console.error(`--selected applies the recorded selection; it takes no bundle ids (got: ${positional.join(", ")})`);
+      process.exit(2);
+    }
     return new Set([...catalog.default, ...(readPresetState().selected ?? [])].filter((id) => catalog.byId.has(id)));
   }
   if (args.includes("--default") || positional.includes("default") || positional.length === 0) {
