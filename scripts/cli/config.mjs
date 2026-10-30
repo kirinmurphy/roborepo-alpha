@@ -530,7 +530,10 @@ function requiredReferences(item, packages, presentationItem) {
     .filter((pkg) => pkg && pkg.presentation?.visibility !== "hidden")
     .map((pkg) => {
       const row = presentationItem(pkg);
-      return { id: pkg.id, label: pkg.label, active: pkg.enabled, inspect: row.inspect, contextCost: row.contextCost, builtIn: row.builtIn };
+      // Ids only: the parent's list already holds this package's whole closure, so the popup
+      // resolves a chain (A requires B requires C) from it without nesting closures.
+      const requiredIds = requiredClosure(packages, [pkg.id]).filter((id) => id !== pkg.id);
+      return { id: pkg.id, label: pkg.label, active: pkg.enabled, inspect: row.inspect, contextCost: row.contextCost, builtIn: row.builtIn, requiredIds };
     });
 }
 
@@ -561,6 +564,7 @@ function recommendedDependencies(sectionItems, packages, presentationItem) {
       relationship: "recommended",
       referencedBy: [...referencedBy],
       relationText: `recommended by ${[...referencedBy].join(", ")}`,
+      requires: requiredReferences(pkg, packages, presentationItem),
     };
   }).sort((a, b) => a.label.localeCompare(b.label));
 }

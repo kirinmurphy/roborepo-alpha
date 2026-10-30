@@ -35,13 +35,13 @@ function fixture(id, config = {}) {
 
 // deps-planner -> deps-review (dependency-only) -> deps-leaf (other category, transitive)
 // deps-closer -> deps-review; recommends deps-companion (other category) and deps-leaf (also required)
-// deps-sibling is a row in the same section that deps-closer recommends
+// deps-sibling is a row in the same section that deps-closer recommends; deps-companion -> deps-leaf
 fixture("deps-planner", { requires: ["deps-review"] });
 fixture("deps-closer", { requires: ["deps-review"], recommends: ["deps-companion", "deps-leaf", "deps-sibling"] });
 fixture("deps-sibling");
 fixture("deps-review", { selectable: false, requires: ["deps-leaf"], presentation: { visibility: "dependency" } });
 fixture("deps-leaf", { presentation: { category: "token-optimization" } });
-fixture("deps-companion", { presentation: { category: "token-optimization" } });
+fixture("deps-companion", { requires: ["deps-leaf"], presentation: { category: "token-optimization" } });
 fixture("deps-hidden", { presentation: { visibility: "hidden" } });
 
 function run(...args) {
@@ -71,6 +71,9 @@ try {
   assert.equal(review.active, true, "a derived requirement reads as on");
   assert.deepEqual(review.inspect, { kind: "rules", id: "deps-review", label: "Deps deps-review" },
     "a requirement carries the inspect target its source popup opens");
+  assert.deepEqual(review.requiredIds, ["deps-leaf"],
+    "a requirement names its own requirements, so its popup can show the next link of the chain");
+  assert.deepEqual(byId.get("deps-planner").requires.find((ref) => ref.id === "deps-leaf").requiredIds, []);
   assert.deepEqual(byId.get("deps-sibling").requires, [], "a row with no requirements references none");
   assert.equal(section.requiredDependencies, undefined, "required packages get no page list of their own");
 
@@ -79,6 +82,8 @@ try {
     "recommended skips rows already in the section and packages a row requires");
   assert.equal(section.recommendedDependencies[0].toggle, "package", "an off recommendation can be switched on");
   assert.equal(section.recommendedDependencies[0].relationText, "recommended by Deps deps-closer");
+  assert.deepEqual(section.recommendedDependencies[0].requires.map((ref) => ref.id), ["deps-leaf"],
+    "a recommended row references its requirements like any other row");
 
   const printed = run(cli, "config", "status");
   assert.doesNotMatch(printed, /Required dependencies/, "config status prints no required list");

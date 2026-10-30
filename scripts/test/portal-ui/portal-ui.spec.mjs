@@ -111,11 +111,13 @@ test.describe("Agents page", () => {
     const sessionClose = byId.get("session-close");
     const dependency = byId.get("technical-writing");
     const companion = byId.get("tighten");
-    expect(planSuite && sessionClose && dependency && companion, "fixture packages exist").toBeTruthy();
-    // The edges a dependency-only package would add: one dependency shared by two rows, and one
-    // recommendation that is off.
+    const chained = byId.get("code-style");
+    expect(planSuite && sessionClose && dependency && companion && chained, "fixture packages exist").toBeTruthy();
+    // The edges a dependency-only package would add: one dependency shared by two rows, a chain
+    // past it (session-close -> technical-writing -> code-style), and one recommendation that is off.
     planSuite.requires = ["technical-writing"];
     sessionClose.requires = ["technical-writing"];
+    dependency.requires = ["code-style"];
     sessionClose.recommends = ["tighten"];
     Object.assign(dependency, {
       selectable: false, selection: "required", enabled: true,
@@ -141,18 +143,25 @@ test.describe("Agents page", () => {
     const modal = page.locator("dialog#config-modal");
     await section.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^\/session-close$/ }) }).locator(".item-label").click();
     await expect(modal.locator("#modal-requires")).toBeVisible();
-    await expect(modal.locator(".modal-requires-item")).toHaveText([dependency.label]);
-    await modal.locator(".modal-requires-item").click();
+    await expect(modal.locator(".modal-requires-item")).toHaveText([chained.label, dependency.label]);
+    await modal.locator(".modal-requires-item", { hasText: dependency.label }).click();
     await expect(modal.locator("#modal-path")).toContainText("technical-writing/SKILL.md");
+    // A required package's popup keeps its own requirement, so each link of the chain is reachable.
+    await expect(modal.locator(".modal-requires-item")).toHaveText([chained.label]);
+    await modal.locator(".modal-requires-item").click();
+    await expect(modal.locator("#modal-path")).toContainText("code-style/SKILL.md");
     await expect(modal.locator("#modal-requires")).toBeHidden();
     await modal.locator("#modal-back").click();
+    await expect(modal.locator("#modal-path")).toContainText("technical-writing/SKILL.md");
+    await expect(modal.locator(".modal-requires-item")).toHaveText([chained.label]);
+    await modal.locator("#modal-back").click();
     await expect(modal.locator("#modal-path")).toContainText("session-close/SKILL.md");
-    await expect(modal.locator(".modal-requires-item")).toHaveText([dependency.label]);
+    await expect(modal.locator(".modal-requires-item")).toHaveText([chained.label, dependency.label]);
     await modal.locator("#modal-close").click();
 
     // The contents view of a package with several skills lists them too.
     await section.locator(".item-label", { hasText: /^Development Planning Lifecycle$/ }).click();
-    await expect(modal.locator(".modal-requires-item")).toHaveText([dependency.label]);
+    await expect(modal.locator(".modal-requires-item")).toHaveText([chained.label, dependency.label]);
     await modal.locator("#modal-close").click();
 
     // A required package with no source to open is listed as plain text, not a button.

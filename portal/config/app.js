@@ -38,14 +38,18 @@ function openSourceModal(inspect, itemCost = null, { builtIn = false, back = nul
   const chips = inspectChipSpecs(inspect, itemCost, lastSnapshot, { builtIn });
   const reopen = () => openSourceModal(inspect, itemCost, { builtIn, back, requires });
   return modal.openSource(inspect, {
-    rules, harnesses, onDefaultClick: modal.openSnapshot, chips, back, requires, onRequire: openRequiredSource(reopen),
+    rules, harnesses, onDefaultClick: modal.openSnapshot, chips, back, requires, onRequire: openRequiredSource(reopen, requires),
   });
 }
 
 // A required package listed in a popup opens its own source, with Back returning to the package
 // that requires it. (One with no inspectable resource is listed as plain text, never a button.)
-function openRequiredSource(reopen) {
-  return (ref) => openSourceModal(ref.inspect, ref.contextCost, { builtIn: ref.builtIn, back: reopen });
+function openRequiredSource(reopen, requires) {
+  return (ref) => openSourceModal(ref.inspect, ref.contextCost, {
+    builtIn: ref.builtIn,
+    back: reopen,
+    requires: requires.filter((other) => ref.requiredIds?.includes(other.id)),
+  });
 }
 
 // A package with several skills opens a list of its resources; each entry opens the same source
@@ -57,7 +61,7 @@ function openContentsModal(inspect, itemCost, { builtIn, requires = [] }) {
     entryChipSpec: (entry) => contentsEntryChipSpec(entry, lastSnapshot, { builtIn }),
     onSelect: (entry) => openSourceModal(entry.inspect, entry.contextCost, { builtIn, back: reopen }),
     requires,
-    onRequire: openRequiredSource(reopen),
+    onRequire: openRequiredSource(reopen, requires),
   });
 }
 
