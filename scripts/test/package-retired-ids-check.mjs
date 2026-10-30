@@ -4,8 +4,8 @@
 // `plan-start`, which `plan-execute` replaced, and the six per-skill plan packages that became
 // `plan-suite`), and their skills and slash commands are still projected into the harness homes.
 //
-// Runs the package steps `roborepo update` runs (scripts/install/main.sh: adopt-live, the default
-// bundle, then reconcile) against a hermetic HOME, and pins the outcome: the retired IDs leave
+// Runs the package steps `roborepo update` runs (scripts/install/main.sh: adopt-live, the selected
+// bundles, then reconcile) against a hermetic HOME, and pins the outcome: the retired IDs leave
 // both registry lists, their projections are removed, the renamed packages install, and a second
 // reconcile has nothing left to do.
 //
@@ -78,7 +78,7 @@ try {
   }
 
   roborepo("package", "adopt-live");
-  roborepo("bundle", "apply", "--default");
+  roborepo("bundle", "apply", "--selected");
   const reconcile = roborepo("package", "reconcile");
 
   const registry = readRegistry();
@@ -117,8 +117,8 @@ try {
   // The update script runs these steps in this order; if it stops reconciling, this test no longer
   // describes `roborepo update`.
   const install = fs.readFileSync(path.join(repoRoot, "scripts/install/main.sh"), "utf8");
-  const steps = ["package adopt-live", "bundle apply --default", "package reconcile"].map((step) => install.indexOf(`main.mjs" ${step}`));
-  assert.ok(steps.every((at, i) => at > 0 && (i === 0 || at > steps[i - 1])), "scripts/install/main.sh runs adopt-live, the default bundle, then reconcile");
+  const steps = ["package adopt-live", "bundle apply --selected", "package reconcile"].map((step) => install.indexOf(`main.mjs" ${step}`));
+  assert.ok(steps.every((at, i) => at > 0 && (i === 0 || at > steps[i - 1])), "scripts/install/main.sh runs adopt-live, the selected bundles, then reconcile");
 } finally {
   fs.rmSync(home, { recursive: true, force: true });
 }

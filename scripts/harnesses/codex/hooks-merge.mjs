@@ -4,7 +4,7 @@ import { mergeHooksMap } from "../hooks-merge.mjs";
 // metadata in place: moving handlers would also invalidate unrelated hooks' positional trust.
 export function mergeCodexHooks(hooks, fragment) {
   const merged = mergeHooksMap(hooks, fragment, { append: true });
-  let changed = merged.added > 0;
+  let changed = merged.added > 0 || merged.duplicatesRemoved > 0;
   const next = { ...merged.hooks };
   for (const [event, entries] of Object.entries(fragment)) {
     if (event.startsWith("_") || !Array.isArray(entries)) continue;
