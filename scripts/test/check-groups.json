@@ -15,6 +15,7 @@
     "worktree-snapshot-check.mjs",
     "plan-landed-recovery-check.mjs",
     "core-hook-wiring-check.mjs",
+    "protected-branch-push-check.mjs",
     "hook-readiness-check.mjs",
     "hook-review-launch-check.mjs",
     "hook-review-cli-check.mjs",

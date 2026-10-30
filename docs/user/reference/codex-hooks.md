@@ -88,18 +88,19 @@ Codex cannot report its status. Returning to the page refreshes status after ext
 The native ChatGPT desktop review uses each command hook’s `statusMessage` as its label.
 Every shipped RoboRepo Codex hook has a native name, including package hooks. **Why?** uses
 the name and contextual explanation recorded beside that hook’s definition. The core definitions
-provide these three labels:
+provide these four labels:
 
 | Event | Native review label |
 | --- | --- |
 | `SessionStart` | RoboRepo: unmanaged skills check |
+| `PreToolUse` | RoboRepo: protected branch push |
 | `PreToolUse` | RoboRepo: command permissions |
 | `PreToolUse` | RoboRepo: concise command output |
 
 If an existing desktop review dialog still shows numbered titles after an update, open
 **Settings → Hooks**, select **Reload hooks**, and reopen the review dialog.
 
-These are three core hooks under two event types. Packages such as Telemetry install separate
+These are four core hooks under two event types. Packages such as Telemetry install separate
 hooks with their own names and contextual help. Adding or changing a label changes the definition
 Codex approves, so it can require review again. Reapplying the Hooks bundle updates labels in
 place while preserving commands, handler positions, and unrelated hooks.
@@ -112,6 +113,7 @@ place while preserving commands, handler positions, and unrelated hooks.
 | SessionStart | Caveman mode | Turns on terse output; say "stop caveman" or "normal mode" to turn it off | `caveman` |
 | SessionStart | jcodemunch nudge | Reminds Codex to explore code with jcodemunch tools | `jcodemunch` |
 | SessionStart | jdocmunch index check | If `docs/` exists but is not indexed, reminds Codex to run `roborepo index docs docs/` | `jdocmunch` |
+| PreToolUse (shell) | Protected-branch push | Allows a `git push` it verified lands on a feature branch; denies protected branches and any force push, backed by a git `pre-push` hook. See [Protected Branches](claude-hooks.md#protected-branches) | core (`hooks` bundle) |
 | PreToolUse (shell) | Per-command ask | Prompts before shell commands your permission settings put in the `ask` bucket (see below) | core (`hooks` bundle) |
 | PreToolUse (shell) | Output minimizer | Appends `2>&1 \| tail -n 120` to noisy build, lint, and typecheck commands, forces `tsc --pretty false`, and denies `--watch`, `--verbose`, and `--debug` | core (`hooks` bundle) |
 | PostToolUse | Skill reference observer | Tells Codex which skill reference files it just read, for the skills-loaded line. Codex does not yet deliver this event after shell reads, so Codex reads are under-counted | `skill-visibility` |

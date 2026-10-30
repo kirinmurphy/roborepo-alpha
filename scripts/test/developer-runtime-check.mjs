@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import http from "node:http";
 import https from "node:https";
+import { createPrivateKey, X509Certificate } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
+import { createLocalTestTls } from "./lib/local-test-tls.mjs";
 import {
   buildDeveloperRuntimeSnapshot,
   capabilityForPlatform,
@@ -542,10 +544,13 @@ try {
     await new Promise((resolve) => server.close(resolve));
   }
 
-  const secureServer = https.createServer({
-    key: fs.readFileSync(new URL("./fixtures/runtime-tls/localhost-key.pem", import.meta.url)),
-    cert: fs.readFileSync(new URL("./fixtures/runtime-tls/localhost-cert.pem", import.meta.url)),
-  }, (req, res) => {
+  const credentials = createLocalTestTls();
+  const certificate = new X509Certificate(credentials.cert);
+  assert.ok(certificate.verify(certificate.publicKey), "the disposable certificate is self-signed");
+  assert.ok(certificate.checkPrivateKey(createPrivateKey(credentials.key)), "the disposable key matches the certificate");
+  assert.ok(Date.parse(certificate.validFrom) <= Date.now() && Date.parse(certificate.validTo) > Date.now(), "the certificate is currently valid");
+  assert.notEqual(createLocalTestTls().key, credentials.key, "each test server gets a fresh private key");
+  const secureServer = https.createServer(credentials, (req, res) => {
     if (req.url === "/external") {
       res.writeHead(302, { Location: "https://example.com/out" });
       res.end();

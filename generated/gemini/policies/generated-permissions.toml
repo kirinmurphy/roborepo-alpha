@@ -96,6 +96,168 @@ priority = 500
 
 [[rule]]
 toolName = "run_shell_command"
+commandPrefix = "gh pr view"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh pr list"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh pr status"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh pr checks"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh pr diff"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh run list"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh run view"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh repo view"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh pr create"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh pr comment"
+decision = "ask_user"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh pr edit"
+decision = "ask_user"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh pr ready"
+decision = "ask_user"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh pr review"
+decision = "ask_user"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh pr close"
+decision = "ask_user"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh pr reopen"
+decision = "ask_user"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh issue create"
+decision = "ask_user"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh issue comment"
+decision = "ask_user"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh pr merge"
+decision = "deny"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh api"
+decision = "deny"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh auth token"
+decision = "deny"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh repo edit"
+decision = "deny"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh repo delete"
+decision = "deny"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh repo rename"
+decision = "deny"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh secret"
+decision = "deny"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh variable"
+decision = "deny"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh release"
+decision = "deny"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh workflow run"
+decision = "deny"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
 commandPrefix = "roborepo agent-run"
 decision = "allow"
 priority = 500

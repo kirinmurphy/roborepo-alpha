@@ -9,9 +9,11 @@
         "claude:settings.json",
         "claude:CLAUDE.md",
         "claude:MANAGED_BY_ROBOREPO.md",
+        "claude:git-hooks",
         "codex:config.toml",
         "codex:AGENTS.md",
-        "codex:MANAGED_BY_ROBOREPO.md"
+        "codex:MANAGED_BY_ROBOREPO.md",
+        "codex:git-hooks"
       ]
     },
     {

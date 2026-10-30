@@ -12,6 +12,15 @@
       "Edit(//private/var/folders/**)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr status:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh pr diff:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)",
+      "Bash(gh repo view:*)",
+      "Bash(gh pr create:*)",
       "Bash(roborepo agent-run:*)",
       "Bash(roborepo doctor:*)",
       "Bash(roborepo telemetry:*)",
@@ -72,7 +81,17 @@
       "Bash(git push --force-with-lease:*)",
       "Bash(git checkout main:*)",
       "Bash(git switch main:*)",
-      "Bash(git checkout -B main:*)"
+      "Bash(git checkout -B main:*)",
+      "Bash(gh pr merge:*)",
+      "Bash(gh api:*)",
+      "Bash(gh auth token:*)",
+      "Bash(gh repo edit:*)",
+      "Bash(gh repo delete:*)",
+      "Bash(gh repo rename:*)",
+      "Bash(gh secret:*)",
+      "Bash(gh variable:*)",
+      "Bash(gh release:*)",
+      "Bash(gh workflow run:*)"
     ],
     "ask": [
       "Bash(rm:*)",
@@ -81,6 +100,14 @@
       "Bash(git pull:*)",
       "Bash(git checkout:*)",
       "Bash(git switch:*)",
+      "Bash(gh pr comment:*)",
+      "Bash(gh pr edit:*)",
+      "Bash(gh pr ready:*)",
+      "Bash(gh pr review:*)",
+      "Bash(gh pr close:*)",
+      "Bash(gh pr reopen:*)",
+      "Bash(gh issue create:*)",
+      "Bash(gh issue comment:*)",
       "Bash(roborepo update:*)",
       "Bash(roborepo maintenance:*)",
       "Bash(roborepo mcp:*)",
@@ -122,6 +149,16 @@
     ],
     "PreToolUse": [
       {
+        "_comment": "Denies pushes that land on a protected branch (main, master, the remote's default), so git push itself can be allowed. See globals/system/hooks/claude/protected-branch-push.mjs.",
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.claude/hooks/protected-branch-push.mjs\""
+          }
+        ]
+      },
+      {
         "matcher": "Bash",
         "hooks": [
           {
@@ -151,5 +188,10 @@
     ]
   },
   "alwaysThinkingEnabled": false,
-  "awaySummaryEnabled": false
+  "awaySummaryEnabled": false,
+  "env": {
+    "GIT_CONFIG_COUNT": "1",
+    "GIT_CONFIG_KEY_0": "core.hooksPath",
+    "GIT_CONFIG_VALUE_0": "~/.claude/git-hooks"
+  }
 }
