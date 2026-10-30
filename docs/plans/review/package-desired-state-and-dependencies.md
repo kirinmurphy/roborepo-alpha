@@ -531,13 +531,14 @@ None open. Every question was answered by the user (2026-10-27 and 2026-10-28); 
       `scripts/cli/presets.mjs`) neither shows nor offers recommendations, though §5–§6 say the
       interactive CLI prompts and onboarding reads the same view — escalated; the user deferred it
       to [[ejsc769o]] (see Decision Log and Non-goals)
-- [ ] Re-review after main 88d00172 (2e3492ce): "ownership conflict"/"ownership checks" wording
+- [x] Re-review after main 88d00172 (2e3492ce): "ownership conflict"/"ownership checks" wording
       survives in `packages.mjs:509`, `package-state.mjs:59`, `config-panel-internals.md:56`, though
-      main removed the command-ownership check — fix
-- [ ] Re-review: `bundle apply --selected` (`presets.mjs:564`, from main) reads
-      `readPresetState().selected` instead of `selectedBundleRoots` — fix
+      main removed the command-ownership check — fixed in review (73dcf8c6)
+- [x] Re-review: `bundle apply --selected` (`presets.mjs:564`, from main) reads
+      `readPresetState().selected` instead of `selectedBundleRoots` — fixed in review (73dcf8c6)
 - [ ] Re-review: the `dep-partial` fixture in `package-lifecycle-check.mjs:243,323` names the
-      `jcodemunch` MCP preset main deleted; passes only because `SKIP_MCP` returns first — fix
+      `jcodemunch` MCP preset main deleted; passes only because `SKIP_MCP` returns first — fixed in
+      review (73dcf8c6)
 - [ ] Re-review: main 7c65c2e7 made `roborepo update` run `bundle apply --selected`, which applies
       `hooks` as telemetry's dependency, so the 2026-10-28 accepted cost (checks fail until
       `bundle remove telemetry`; update is not a remedy) no longer holds — escalated to the human
@@ -614,6 +615,11 @@ None open. Every question was answered by the user (2026-10-27 and 2026-10-28); 
   `cli-internals.md:81`, both also on main). It ran the package checks (all pass), `test-cli.sh`
   419 passed, 0 failed (main #50 removed tests), every branch-added `test-cli.sh` assertion still
   present, and the portal dependency specs 5/5.
+- `npm run check` passed at 2e3492ce (66/66 suites, local).
+- PR 46 CI at 2e3492ce: `check (macos-latest)` failed `browser-lifecycle-check.mjs`; a base failure
+  (macOS returns `EPERM` for a process group holding only zombies, and `signalGroup` in
+  `scripts/cli/browser/local-service.mjs`, unchanged from main, rethrew it). Fixed at the user's
+  request (2571d380).
 
 ### Result
 
