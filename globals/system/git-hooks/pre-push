@@ -40,8 +40,12 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   [ -n "$remote_ref" ] || continue
   branch=${remote_ref#refs/heads/}
   if [ "$branch" != "$remote_ref" ]; then
+    # The default branch is usually main too: stop at the first match so it is reported once.
     for name in $protected; do
-      [ "$branch" = "$name" ] && blocked="$blocked $branch"
+      if [ "$branch" = "$name" ]; then
+        blocked="$blocked $branch"
+        break
+      fi
     done
   fi
   # A creation or a deletion rewrites nothing. An update must fast-forward: anything else is a force
