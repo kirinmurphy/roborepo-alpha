@@ -77,9 +77,16 @@ const deny = reason => {
   }))
 }
 
+// Flags count only where the shell reads them as words. Quoted strings and heredoc bodies (commit
+// messages, PR bodies, grep patterns) only mention them. A flag needs whitespace or the start of the
+// command before it: `\b--watch` never matches after a space, since `-` is not a word character.
+const shellWords = command
+  .replace(/<<-?\s*(['"]?)(\w+)\1[^\n]*\n[\s\S]*?\n\s*\2(?=\n|$)/g, '')
+  .replace(/'[^']*'|"(?:\\.|[^"\\])*"/g, "''")
+
 if (
-  /\b(--watch|--verbose|--debug)\b/.test(command) ||
-  /\b(vitest|jest|tsx|ts-node)\b.*\b(--watch|watch)\b/.test(command)
+  /(^|\s)--(watch|verbose|debug)(?=[\s=]|$)/.test(shellWords) ||
+  /\b(vitest|jest|tsx|ts-node)\b.*(^|\s)(--watch|watch)(?=\s|$)/.test(shellWords)
 ) {
   deny('Do not use watch, verbose, or debug flags unless explicitly requested.')
   process.exit(0)
