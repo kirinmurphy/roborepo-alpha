@@ -86,8 +86,8 @@ RoboRepo configuration in place. See [Uninstall](../guides/install-workflows.md#
 | --- | --- |
 | `roborepo package list` | Lists packages grouped by category with live enabled/disabled status. |
 | `roborepo package inspect <id>` | Prints the full manifest for one package. |
-| `roborepo package enable <id>` | Enables a package and applies it immediately — permissions, hooks, rules, MCP, and commands install without a separate `roborepo update`. |
-| `roborepo package disable <id>` | Disables a package and removes its owned contributions immediately. |
+| `roborepo package enable <id>` | Enables a package and applies it immediately — permissions, hooks, rules, MCP, and commands install without a separate `roborepo update`. Packages it requires turn on with it. Prints one checked result per package: `enabled`, `partial` (some pieces did not land; named), or `blocked` (applying stopped on an error; exits 1). |
+| `roborepo package disable <id> [--cascade]` | Disables a package and removes its owned contributions immediately, along with any package that was on only because it required it. See [Dependencies](#package-dependencies). |
 | `roborepo package reconcile` | Re-applies every enabled package and drops enabled-but-unknown stale entries. |
 | `roborepo package adopt-live [--dry-run]` | Detects externally installed package behavior and marks it enabled without reinstalling it. |
 | `roborepo package validate [id]` | Validates one package or the whole catalog against the manifest schema. |
@@ -95,6 +95,20 @@ RoboRepo configuration in place. See [Uninstall](../guides/install-workflows.md#
 | `roborepo package dev add-skill <package-id> <skill-id> [--command] [--description=...]` | Adds a skill to an existing package: its `SKILL.md`, its resource entry (with a slash command under `--command`, which installs only for built-in packages), and an empty trigger fixture to fill. Refuses a skill ID or command another package already claims, and leaves the package unchanged if the result does not validate. |
 
 Most users only need `list`, `inspect`, `enable`, and `disable`.
+
+### Package dependencies
+
+A package can **require** other packages (they turn on with it) or **recommend** them (they are
+offered, never turned on for you). RoboRepo records only the packages you turned on; a required
+package stays on while any package you turned on still requires it, and turns off with the last
+one.
+
+| You run | What happens |
+| --- | --- |
+| `package enable <id>` | `<id>` and everything it requires turn on. In a terminal you are asked about each recommendation that is off; in a script they are only listed. |
+| `package disable <id>` for a package you turned on | It is turned off, unless another package you turned on requires it. Then it stays on and the result names that package. |
+| `package disable <id>` for a package that is on only because another requires it | Refused, naming the packages that keep it on. `--cascade` turns those off too, and it goes with them. |
+| `package enable` or `disable` on a dependency-only package | Refused: it has no switch of its own and follows the packages that require it. |
 
 ## Local Portal
 

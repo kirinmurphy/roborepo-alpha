@@ -371,4 +371,63 @@ try {
   fs.rmSync(devRoot, { recursive: true, force: true });
 }
 
+// Package relationships and selectability: valid graphs pass; unknown or self-referencing ids,
+// `requires` cycles, and a non-selectable default-enabled package fail. `recommends` cycles are fine.
+{
+  const node = (id, extra = {}) => ({
+    id, presentation: { category: "code-conventions" }, resources: [], requires: [], recommends: [], selectable: true, ...extra,
+  });
+  const rejects = (packages, fragment, label) => {
+    let message = "";
+    try { validatePackageCatalog(packages); } catch (err) { message = String(err.message); }
+    assert(message.includes(fragment), `${label}: expected "${fragment}", got "${message}"`);
+  };
+  validatePackageCatalog([
+    node("parent", { requires: ["dep"], recommends: ["companion"] }),
+    node("dep", { selectable: false }),
+    node("companion", { recommends: ["parent"] }),
+  ]);
+  rejects([node("a", { requires: ["ghost"] })], "a: missing required package: ghost", "unknown required id");
+  rejects([node("a", { recommends: ["ghost"] })], "a: missing recommended package: ghost", "unknown recommended id");
+  rejects([node("a", { recommends: ["Bad Id"] })], "a: invalid recommended package id", "invalid recommended id");
+  rejects([node("a", { requires: ["a"] })], "a: package cannot list itself in requires", "self-required");
+  rejects([node("a", { recommends: ["a"] })], "a: package cannot list itself in recommends", "self-recommended");
+  rejects([node("a", { requires: ["b"] }), node("b", { requires: ["a"] })], "package dependency cycle: a -> b -> a", "requires cycle");
+  rejects([node("a", { selectable: false, defaultEnabled: true })], "a: a package with selectable: false cannot be defaultEnabled", "non-selectable default");
+
+  for (const pkg of catalog) {
+    assert(pkg.selectable === true || pkg.selectable === false, `${pkg.id}: selectable should normalize to a boolean`);
+    assert(["catalog", "dependency", "hidden"].includes(pkg.presentation.visibility), `${pkg.id}: visibility should normalize`);
+    assert(Array.isArray(pkg.recommends), `${pkg.id}: recommends should normalize to an array`);
+  }
+
+  const shapeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-package-shape-"));
+  try {
+    fs.cpSync(path.resolve("manifests"), path.join(shapeRoot, "manifests"), { recursive: true });
+    fs.cpSync(path.resolve("globals/harnesses"), path.join(shapeRoot, "globals", "harnesses"), { recursive: true });
+    const loadWith = (config) => {
+      const dir = path.join(shapeRoot, "globals", "packages", "shape-check");
+      fs.rmSync(dir, { recursive: true, force: true });
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, "package.config.json"), JSON.stringify({
+        schemaVersion: 1, id: "shape-check", label: "Shape Check", description: "Shape check.",
+        presentation: { category: "code-conventions" }, resources: [], ...config,
+      }));
+      return spawnSync(process.execPath, [
+        "-e",
+        `import(${JSON.stringify(path.resolve("scripts/cli/package-catalog.mjs"))}).then((m) => { const p = m.loadPackageCatalog({ includeUnavailable: true })[0]; console.log(JSON.stringify([p.selectable, p.presentation.visibility, p.recommends])); }).catch((err) => { console.error(err.message); process.exit(1); })`,
+      ], { env: { ...process.env, ROBOREPO_APP_ROOT: shapeRoot, ROBOREPO_STATE_ROOT: path.join(shapeRoot, "state") }, encoding: "utf8" });
+    };
+    const defaults = loadWith({});
+    assert(defaults.status === 0 && defaults.stdout.trim() === JSON.stringify([true, "catalog", []]), `defaults: ${defaults.stderr}${defaults.stdout}`);
+    const dependencyOnly = loadWith({ selectable: false, presentation: { category: "code-conventions", visibility: "dependency" } });
+    assert(dependencyOnly.stdout.trim() === JSON.stringify([false, "dependency", []]), `dependency-only: ${dependencyOnly.stderr}`);
+    assert(loadWith({ selectable: "no" }).stderr.includes("selectable must be a boolean"), "a non-boolean selectable should be rejected");
+    assert(loadWith({ presentation: { category: "code-conventions", visibility: "secret" } }).stderr.includes("presentation.visibility must be one of"), "an unknown visibility should be rejected");
+    assert(loadWith({ recommends: "test-harness" }).stderr.includes("recommends must be an array"), "a non-array recommends should be rejected");
+  } finally {
+    fs.rmSync(shapeRoot, { recursive: true, force: true });
+  }
+}
+
 console.log("ok: package catalog behavior");

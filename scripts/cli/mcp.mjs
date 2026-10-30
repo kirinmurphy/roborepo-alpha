@@ -92,6 +92,16 @@ function claudeHasMcp(serverName) {
   return names.includes(serverName);
 }
 
+// The terminal `mcp` commands stop at the first failing Claude install with the CLI's own exit
+// status, as they always have; package enable checks the adapter's ok:false instead.
+function addClaudeServerOrExit(spec, opts) {
+  const result = getHarnessProvider("claude").adapters.mcp.addServer(spec, opts);
+  validateAdapterActionResult(result);
+  if (result.ok) return;
+  for (const warning of result.warnings) console.error(warning);
+  process.exit(result.exitStatus ?? 1);
+}
+
 export function mcpApply({ dryRun = false } = {}) {
   const data = readMcpServers();
   const configFileProviders = configFileMcpProviders();
@@ -111,7 +121,7 @@ export function mcpApply({ dryRun = false } = {}) {
       if (claudeHasMcp(spec.name)) {
         console.log(`claude MCP already present: ${server.name}`);
       } else {
-        validateAdapterActionResult(getHarnessProvider("claude").adapters.mcp.addServer(spec, { scope: "user", transport: null }));
+        addClaudeServerOrExit(spec, { scope: "user", transport: null });
       }
     }
     for (const provider of configFileProviders) {
@@ -138,7 +148,7 @@ export function mcpAdd(rest) {
   }
 
   if (applyClaude) {
-    validateAdapterActionResult(getHarnessProvider("claude").adapters.mcp.addServer(spec, { scope: opts.scope, transport: opts.transport }));
+    addClaudeServerOrExit(spec, { scope: opts.scope, transport: opts.transport });
     if (opts.updateClaudePermission) ensureClaudeMcpPermission(spec.name);
   }
   for (const provider of targetProviders) ensureConfigFileMcp(provider, spec);

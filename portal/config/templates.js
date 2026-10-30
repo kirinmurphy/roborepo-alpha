@@ -317,9 +317,18 @@ export function standardSection(section, { onInspectClick, onToggle, onBulkToggl
     ...section.items.map((item) => configItemElement(item, { onInspect: onInspectClick, onToggle, contextCost })),
   );
 
+  if (section.recommendedDependencies?.length) {
+    panel.querySelector('[data-slot="recommended-items"]').replaceChildren(
+      ...section.recommendedDependencies.map((item) => configItemElement(item, { onInspect: onInspectClick, onToggle, contextCost })),
+    );
+    panel.querySelector('[data-slot="recommended-group"]').hidden = false;
+  }
+
   const bulkWrap = panel.querySelector('[data-slot="bulk"]');
-  if (section.bulkToggle && typeof onBulkToggle === "function") {
-    const toggleableItems = section.items.filter((item) => item.toggle);
+  // Only rows the batch can act on count: a row on only because another selection requires it
+  // has no root of its own, so the batch skips it and it must not make the group read as on.
+  const toggleableItems = section.items.filter((item) => item.toggle && item.selection !== "required");
+  if (section.bulkToggle && typeof onBulkToggle === "function" && toggleableItems.length > 0) {
     const activeCount = toggleableItems.filter((item) => item.active).length;
     const allOn = toggleableItems.length > 0 && activeCount === toggleableItems.length;
     const label = panel.querySelector('[data-slot="bulk-label"]');
@@ -360,6 +369,29 @@ export function harnessWarning(snap, options) {
 // banner) — it explains what the package manager provides, whatever the onboarding state.
 export function packagesIntro() {
   return tpl("tpl-packages-intro");
+}
+
+// One required package in a source popup's Requires line: a button calling onSelect(ref) when the
+// package has a source to open (a skill, command, or rules), plain text otherwise (an MCP-only
+// package, for example).
+export function requiredReference(ref, onSelect) {
+  if (!ref.inspect) {
+    const text = tpl("tpl-required-reference-text");
+    text.textContent = ref.label;
+    return text;
+  }
+  const button = tpl("tpl-required-reference");
+  button.textContent = ref.label;
+  button.addEventListener("click", () => onSelect(ref));
+  return button;
+}
+
+// One choosable recommendation in the post-enable recommendations dialog.
+export function recommendationOption(rec) {
+  const node = tpl("tpl-recommendation-option");
+  fill(node, { label: rec.label, description: rec.description || "" });
+  node.querySelector('[data-slot="check"]').value = rec.id;
+  return node;
 }
 
 export function repositorySplash(onRemoveFilter) {

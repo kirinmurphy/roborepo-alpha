@@ -4,6 +4,7 @@ import { repoRoot, workspacePackagesDir } from "./paths.mjs";
 import { experimentalStatePath } from "./state-paths.mjs";
 import { readWorkspaceOverrides, hasReplaceOverride } from "./workspace-resources.mjs";
 import { hasHarnessProvider, getHarnessProvider } from "../harnesses/registry.mjs";
+import { requiresCycles } from "./package-graph.mjs";
 
 export const PACKAGE_CATEGORIES_PATH = path.join(repoRoot, "manifests", "inventory", "package-categories.json");
 export const BUILT_IN_PACKAGES_DIR = path.join(repoRoot, "globals", "packages");
@@ -12,6 +13,10 @@ export const EXPERIMENTAL_PACKAGES_ENV = "LOAD_EXPERIMENTAL_PACKAGES";
 const PENDING_STATUS = "pending";
 const SUPPORTED_SCHEMA = 1;
 const PACKAGE_LIFECYCLES = new Set(["optional", "system"]);
+// catalog: a normal Config row. dependency: no row; listed under Requires in the source popup of
+// each package that requires it. hidden: no Config row at all.
+const PACKAGE_VISIBILITIES = new Set(["catalog", "dependency", "hidden"]);
+const PACKAGE_RELATIONS = [["requires", "required"], ["recommends", "recommended"]];
 const RESOURCE_TYPES = new Set([
   "skill",
   "slash-command",
@@ -192,8 +197,16 @@ export function validatePackageCatalog(packages) {
     if (!categories.has(pkg.presentation.category)) {
       errors.push(`${pkg.id}: unknown presentation category: ${pkg.presentation.category}`);
     }
-    for (const dep of pkg.requires || []) {
-      if (!isSlug(dep)) errors.push(`${pkg.id}: invalid required package id: ${dep}`);
+    for (const [relation, label] of PACKAGE_RELATIONS) {
+      for (const dep of pkg[relation] || []) {
+        if (!isSlug(dep)) errors.push(`${pkg.id}: invalid ${label} package id: ${dep}`);
+        else if (dep === pkg.id) errors.push(`${pkg.id}: package cannot list itself in ${relation}`);
+      }
+    }
+    // Nothing could ever turn such a package off: it is not directly selectable, and a default
+    // selection is only undone by a direct disable.
+    if (pkg.selectable === false && pkg.defaultEnabled) {
+      errors.push(`${pkg.id}: a package with selectable: false cannot be defaultEnabled`);
     }
     for (const resource of pkg.resources) {
       if (resource.type === "skill") {
@@ -208,11 +221,14 @@ export function validatePackageCatalog(packages) {
   }
 
   for (const pkg of packages) {
-    for (const dep of pkg.requires || []) {
-      if (!packageIds.has(dep)) errors.push(`${pkg.id}: missing required package: ${dep}`);
+    for (const [relation, label] of PACKAGE_RELATIONS) {
+      for (const dep of pkg[relation] || []) {
+        if (isSlug(dep) && dep !== pkg.id && !packageIds.has(dep)) errors.push(`${pkg.id}: missing ${label} package: ${dep}`);
+      }
     }
   }
-  errors.push(...dependencyCycleErrors(packages));
+  // `recommends` never takes part: two packages may recommend each other.
+  for (const cycle of requiresCycles(packages)) errors.push(`package dependency cycle: ${cycle.join(" -> ")}`);
   if (errors.length > 0) throw new Error(errors.join("\n"));
   return { ok: true };
 }
@@ -230,6 +246,9 @@ function normalizePackage(pkg, { file, root, origin }) {
   if (pkg.defaultEnabled !== undefined && typeof pkg.defaultEnabled !== "boolean") {
     throw new Error(`${pkg.id}: defaultEnabled must be a boolean`);
   }
+  if (pkg.selectable !== undefined && typeof pkg.selectable !== "boolean") {
+    throw new Error(`${pkg.id}: selectable must be a boolean`);
+  }
   const presentation = normalizePresentation(pkg);
   const resources = normalizeResources(pkg.resources, { pkgId: pkg.id, file, root });
   // Self-declared behavior capabilities (e.g. "doc-lookup", "code-lookup") — how consumers match
@@ -244,7 +263,9 @@ function normalizePackage(pkg, { file, root, origin }) {
     defaultEnabled: pkg.defaultEnabled === true,
     capabilities,
     presentation,
-    requires: Array.isArray(pkg.requires) ? [...pkg.requires] : [],
+    selectable: pkg.selectable !== false,
+    requires: normalizeRelation(pkg, "requires"),
+    recommends: normalizeRelation(pkg, "recommends"),
     resources,
     components: resources.map((resource) => componentResource(resource, root)).filter(Boolean),
     sourceRoot: root,
@@ -259,7 +280,17 @@ function normalizePresentation(pkg) {
   if (!isSlug(category)) throw new Error(`${pkg.id}: presentation.category is required`);
   const order = presentation.order === undefined ? 0 : Number(presentation.order);
   if (!Number.isFinite(order)) throw new Error(`${pkg.id}: presentation.order must be numeric`);
-  return { category, order };
+  const visibility = presentation.visibility === undefined ? "catalog" : presentation.visibility;
+  if (!PACKAGE_VISIBILITIES.has(visibility)) {
+    throw new Error(`${pkg.id}: presentation.visibility must be one of: ${[...PACKAGE_VISIBILITIES].join(", ")}`);
+  }
+  return { category, order, visibility };
+}
+
+function normalizeRelation(pkg, relation) {
+  if (pkg[relation] === undefined) return [];
+  if (!Array.isArray(pkg[relation])) throw new Error(`${pkg.id}: ${relation} must be an array of package ids`);
+  return [...pkg[relation]];
 }
 
 function normalizeResources(resources, { pkgId, file, root }) {
@@ -402,28 +433,6 @@ function claim(map, id, owner, errors, label) {
   const previous = map.get(id);
   if (previous && previous !== owner) errors.push(`${label} ${id} owned by multiple packages: ${previous}, ${owner}`);
   map.set(id, owner);
-}
-
-function dependencyCycleErrors(packages) {
-  const byId = new Map(packages.map((pkg) => [pkg.id, pkg]));
-  const errors = [];
-  const visiting = new Set();
-  const visited = new Set();
-  function visit(id, stack = []) {
-    if (visited.has(id)) return;
-    if (visiting.has(id)) {
-      errors.push(`package dependency cycle: ${[...stack, id].join(" -> ")}`);
-      return;
-    }
-    visiting.add(id);
-    for (const dep of byId.get(id)?.requires || []) {
-      if (byId.has(dep)) visit(dep, [...stack, id]);
-    }
-    visiting.delete(id);
-    visited.add(id);
-  }
-  for (const pkg of packages) visit(pkg.id);
-  return errors;
 }
 
 function packageSort(a, b) {

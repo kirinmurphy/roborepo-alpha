@@ -12,12 +12,13 @@ import { portalSetUpdatedAt, portalHideLoading } from "/portal/shared/api.js";
 import { offerHookReview } from "/portal/shared/hook-review-offer.js";
 import * as api from "./api.js";
 import * as tmpl from "./templates.js";
-import { createConfigModal } from "./panels.js";
+import { createConfigModal, createRecommendationsDialog } from "./panels.js";
 import { snapshotChanged, inspectChipSpecs, contentsEntryChipSpec, setBulkInFlight, isBulkInFlight } from "./state.js";
 import { clearRepositoryScope, currentRepositoryScope } from "/portal/shared/repository-scope.js";
 import { onRepositoryScopeResolved, repositoryScopeUnavailableNotice } from "/portal/shared/repository-scope-selector.js";
 
 const modal = createConfigModal();
+const recommendationsDialog = createRecommendationsDialog();
 // Packages whose on/off control lives on another page. Settings owns token telemetry, so a second
 // toggle here would only duplicate it; the terminal `roborepo config` view still lists it.
 const PACKAGES_CONTROLLED_ELSEWHERE = new Set(["telemetry"]);
@@ -30,24 +31,33 @@ function withoutPackagesControlledElsewhere(view) {
     .filter((section) => !section.categoryId || section.items.length > 0);
 }
 
-function openSourceModal(inspect, itemCost = null, { builtIn = false, back = null } = {}) {
-  if (inspect?.kind === "package-contents") return openContentsModal(inspect, itemCost, { builtIn });
+function openSourceModal(inspect, itemCost = null, { builtIn = false, back = null, requires = [] } = {}) {
+  if (inspect?.kind === "package-contents") return openContentsModal(inspect, itemCost, { builtIn, requires });
   const rules = lastSnapshot?.globals?.rules || {};
   const harnesses = lastSnapshot?.harnesses || [];
   const chips = inspectChipSpecs(inspect, itemCost, lastSnapshot, { builtIn });
-  return modal.openSource(inspect, { rules, harnesses, onDefaultClick: modal.openSnapshot, chips, back });
+  const reopen = () => openSourceModal(inspect, itemCost, { builtIn, back, requires });
+  return modal.openSource(inspect, {
+    rules, harnesses, onDefaultClick: modal.openSnapshot, chips, back, requires, onRequire: openRequiredSource(reopen),
+  });
+}
+
+// A required package listed in a popup opens its own source, with Back returning to the package
+// that requires it. (One with no inspectable resource is listed as plain text, never a button.)
+function openRequiredSource(reopen) {
+  return (ref) => openSourceModal(ref.inspect, ref.contextCost, { builtIn: ref.builtIn, back: reopen });
 }
 
 // A package with several skills opens a list of its resources; each entry opens the same source
 // view a single-skill card would, with Back returning to the list.
-function openContentsModal(inspect, itemCost, { builtIn }) {
+function openContentsModal(inspect, itemCost, { builtIn, requires = [] }) {
+  const reopen = () => openContentsModal(inspect, itemCost, { builtIn, requires });
   modal.showContents(inspect, {
     chips: inspectChipSpecs(inspect, itemCost, lastSnapshot, { builtIn }),
     entryChipSpec: (entry) => contentsEntryChipSpec(entry, lastSnapshot, { builtIn }),
-    onSelect: (entry) => openSourceModal(entry.inspect, entry.contextCost, {
-      builtIn,
-      back: () => openContentsModal(inspect, itemCost, { builtIn }),
-    }),
+    onSelect: (entry) => openSourceModal(entry.inspect, entry.contextCost, { builtIn, back: reopen }),
+    requires,
+    onRequire: openRequiredSource(reopen),
   });
 }
 
@@ -70,6 +80,21 @@ async function handleToggle(item, enabled) {
   const data = await api.toggleItem(item.toggle, item.id, enabled);
   if (data.config) applySnapshot(data.config); // re-render from the authoritative post-mutation snapshot
   void offerHookReview(data.hookHarnesses);
+  if (enabled && data.recommendations?.length) void offerRecommendations(item, data.recommendations);
+}
+
+// An enable that left recommended packages off asks which to enable too; each chosen one is an
+// ordinary package toggle, so it reports and re-renders the same way.
+async function offerRecommendations(item, recommendations) {
+  const chosen = await recommendationsDialog.ask(item.label, recommendations);
+  for (const id of chosen) {
+    try {
+      await handleToggle({ toggle: "package", id, label: id }, true);
+    } catch (err) {
+      showError(err);
+      return;
+    }
+  }
 }
 
 // Section-level batch (bulkToggle sections): one request for the whole section, server applies

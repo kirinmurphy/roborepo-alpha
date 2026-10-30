@@ -17,6 +17,9 @@ thin composition root; commands are declared as JSON under
 | `scripts/cli/browser.mjs` + `scripts/cli/browser/` | `browser probe\|run`: package gate, provider contract and validation, Playwright and stub providers, evidence store, local-service lifecycle |
 | `scripts/cli/mcp.mjs` | `mcp add` (registration with every MCP-capable harness) |
 | `scripts/cli/presets.mjs` | `library` / `package manage` (one shared `packageLibrary` execution preset), `bundle status\|apply\|check\|remove` |
+| `scripts/cli/package-state.mjs` | the only reader and writer of `~/.roborepo/enabled-packages.json`: selected roots, the effective set, version-1 upgrade reads |
+| `scripts/cli/package-graph.mjs` | pure dependency-graph helpers (required closure, `requiredBy`, `recommendedBy`, `requires` cycles) shared by packages and install bundles |
+| `scripts/cli/bundle-selection.mjs` | install bundle roots and effective set over `presets.json` and `~/.roborepo/presets/state.json` |
 | `scripts/cli/initialize.mjs` | `init` — orchestrates setup, harness discovery, the Package Library handoff, and apply |
 | `scripts/cli/initialization-state.mjs` | reads/writes `<stateRoot>/initialization.json`; owns the missing / in-progress / complete distinction |
 | `scripts/cli/first-run-routing.mjs` | decides whether a bare `roborepo` enters `init`; pure function of (argv, phase, tty) |
@@ -77,6 +80,22 @@ The install-time file operations (root config baselines, command links, hook lin
 have no user-facing verb: `roborepo update` re-applies them and `roborepo uninstall` reverses them.
 The internal `roborepo bundle` verb exists only for `scripts/install/main.sh` and back-compat
 scripts, and is intentionally absent from the usage and menu.
+
+Bundles follow the same rule as packages: `selected[]` in `~/.roborepo/presets/state.json` holds
+the bundles that were chosen, and a bundle's `requires` in `presets.json` (`telemetry` requires
+`hooks`) is applied through it without being recorded. Apply, `bundle check`, and hook readiness
+act on the effective set. `bundle remove` of a bundle another selected bundle requires leaves it
+applied and says so; `bundle status` marks such a bundle `required by <bundle>`, and a failing
+`bundle check` names the missing rows. Every bundle listed in `selected[]` is read as a choice,
+whatever the file's `schemaVersion`; writes store `schemaVersion: 2`, which no reader branches on.
+
+The `telemetry` bundle is selected only by `bundle apply telemetry`. `roborepo telemetry install`
+and the Settings telemetry toggle record no bundle, because the telemetry package wires its own
+capture hooks; turning telemetry off drops a `telemetry` root that `bundle apply` recorded.
+
+A failing `claude mcp add` returns `ok: false` from the Claude MCP adapter instead of exiting.
+Package enable reports the package `blocked`; `roborepo mcp add` and `mcp apply` exit with the
+Claude CLI's status.
 
 ## Portal Startup
 

@@ -8,6 +8,19 @@ User-facing behavior is in [Config Control Panel](../user/reference/config-contr
 `readConfigSnapshot()` (`scripts/cli/config.mjs`) assembles the state both the web view and the
 terminal flow render from. `buildBehaviorView()` maps that snapshot onto the panel's sections.
 
+Each snapshot package carries `selectable`, `selection` (`selected`, `required`, or `off`, from
+`packageSelectionStates` in `package-state.mjs`), `recommends`, and the inverse `requiredBy` /
+`recommendedBy` lists. `buildBehaviorView()` omits packages whose `presentation.visibility` is not
+`catalog` from the normal rows. Each package row carries `requires[]`: its transitive required
+packages as references (`id`, `label`, `active`, and the `inspect` target and cost their own row
+would have). Required packages are never rows of their own; the source popup lists a row's
+references under **Requires**, each opening that package's source with **Back** to the row, and
+`roborepo config status` prints them as a `requires:` line under the row. Each section also gets
+`recommendedDependencies[]` (its rows' direct `recommends`, minus rows it already shows and packages
+a row requires): ordinary switchable rows plus `relationship`, `referencedBy`, and `relationText`,
+rendered below the section's rows and printed by `config status`. Rows carry `selection` so the
+group switch counts only rows it can act on.
+
 Adding a feature of an existing resource shape is data, not code: declare its resources in the
 owning `package.config.json`. A new shape needs a new `case` in the enable/disable switch
 (`scripts/cli/packages.mjs`).
@@ -36,7 +49,14 @@ Every mutation goes through one of the `{ ok, message }` primitives in
 `scripts/cli/config-mutate.mjs` (or the package enable/disable path), so the web server
 and terminal flow share one implementation:
 
-- `mutatePackage(id, enabled)` → `enablePackage` / `disablePackage`
+- `mutatePackage(id, enabled)` → `enablePackage` / `disablePackage`. Beyond `{ ok, message }` it
+  returns `outcomes[]` (one probed result per package the mutation applied or removed: `enabled`,
+  `partial`, `blocked`, or `disabled`, with the probe's per-component detail), `recommendations[]`
+  (recommended packages an enable left off, for the portal to offer), and `keptOnBy[]` (the selected
+  packages that keep a deselected package on). A refused mutation (unknown id, ownership conflict,
+  dependency-only package, derived-only disable) is a `PackageMutationError` returned as
+  `{ ok: false, message }`; nothing has changed when it is. The bulk endpoint returns the same
+  `outcomes[]` per member and skips dependency-only members.
 - `setSkillInstalled(id, enabled)` → materializes/removes the cache entry in `~/.roborepo/skills`
   and links/unlinks the skill in each installed harness's skill directory
 - `setBehaviorBucket(behaviorId, bucket)` → writes a personal behavior override, then re-renders live global permissions

@@ -177,12 +177,29 @@ export async function mutatePackage(id, enabled, { dryRun = false } = {}) {
   const changed = new Set();
   try {
     const flags = dryRun ? ["--dry-run"] : [];
-    if (enabled) await enablePackage([id, ...flags], changed);
-    else await disablePackage([id, ...flags], changed);
-    return { ok: true, message: `${enabled ? "enabled" : "disabled"}: ${id}`, changedPackageIds: [...changed] };
+    const result = enabled
+      ? await enablePackage([id, ...flags], changed)
+      : await disablePackage([id, ...flags], changed);
+    return {
+      ok: result.ok,
+      message: mutationMessage(id, enabled, result),
+      outcomes: result.outcomes,
+      recommendations: result.recommendations || [],
+      keptOnBy: result.keptOnBy || [],
+      changedPackageIds: [...changed],
+    };
   } catch (err) {
-    return { ok: false, message: String(err?.message || err), changedPackageIds: [...changed] };
+    return { ok: false, message: String(err?.message || err), outcomes: [], recommendations: [], keptOnBy: [], changedPackageIds: [...changed] };
   }
+}
+
+// One line for the portal toast: the target's own outcome, plus what kept it on or went wrong.
+function mutationMessage(id, enabled, result) {
+  const own = result.outcomes.find((entry) => entry.id === id);
+  if (result.keptOnBy?.length) return `${id} stays on: required by ${result.keptOnBy.join(", ")}`;
+  const failed = result.outcomes.find((entry) => entry.outcome === "blocked" || entry.outcome === "partial");
+  if (failed) return `${failed.outcome}: ${failed.id}${failed.message ? ` (${failed.message})` : ""}`;
+  return `${own?.outcome || (enabled ? "enabled" : "disabled")}: ${id}`;
 }
 
 // --------------------------------------------------------------------------- skills

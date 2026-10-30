@@ -1,7 +1,7 @@
 ---
 id: o9zwxuav
 priority: high
-next_action: Add scripts/cli/package-graph.mjs (selected roots, required closure, requiredBy/recommendedBy) with fixtures, then move the enabled-packages registry out of scripts/cli/rules-render.mjs into scripts/cli/package-state.mjs and repoint every importer.
+next_action: Open and merge the pull request, then run /plan-close.
 blocked_by: []
 depends_on: ["bysyzl1e"]
 related: ["package-registry-live-state-reconciliation", "ejsc769o", "age4cm7r", "user-managed-packages-and-add-workflows"]
@@ -29,8 +29,8 @@ This plan gives package state one model with three layers, each with one owner:
 | Live state | What is actually installed in each harness? | The existing resource probes |
 
 On top of that model it adds `recommends` (offered, never automatic), non-selectable
-dependency-only packages, a verified result from every enable and disable, Required/Recommended
-dependency sections on the Config page, and the same roots-plus-derived-dependencies rule for
+dependency-only packages, a verified result from every enable and disable, required packages listed
+in each package's source popup and a Recommended dependencies list on the Config page, and the same roots-plus-derived-dependencies rule for
 install bundles.
 
 This plan merges two earlier backlog plans: the derived-dependency plan this file grew from, and
@@ -54,7 +54,7 @@ Verified on `main` at `69dea56`.
 | Status API | `scripts/cli/package-status.mjs` and `/api/config` `componentStatus` expose probe results | Already shipped |
 | Repair and adopt | `roborepo package reconcile` re-applies effective packages and drops ids missing from the catalog; `roborepo package adopt-live` marks external live packages as enabled | Already shipped |
 | Portal badges | `portal/config/elements/config-item.js` styles `partial` as a warning and `external` as informational | Already shipped |
-| Source popup | `openSource` in `portal/config/panels.js`, reached through `openSourceModal` in `portal/config/app.js` | Reused for dependency rows |
+| Source popup | `openSource` in `portal/config/panels.js`, reached through `openSourceModal` in `portal/config/app.js` | Reused to list and open a package's required packages |
 | Relationships | Catalog (`scripts/cli/package-catalog.mjs`) supports `requires` with cycle and missing-id checks. No built-in package uses it ([[o93hile]] removed the marker packages' dependency). `scripts/test/test-cli.sh` covers it with a workspace-only `test-composite` fixture that requires `jcodemunch` and `jdocmunch`, which now live in `globals/packages-archived/` but still load into the catalog | No `recommends`, selectability, or dependency visibility |
 | Install bundles | `manifests/platform/presets.json` defines `base`, `rules`, `hooks`, `commands` (no rows), and `telemetry` (no rows). `scripts/cli/presets.mjs` keeps the selection in `~/.roborepo/presets/state.json` (`selected[]`). `withDependencies` hard-codes telemetry → hooks and the result is written back to `selected`. `bundle check` (run by `scripts/doctor.sh` and `scripts/verify-install.sh`) prints `<id> selected but not fully applied` without naming the missing rows | The same sticky-dependency flaw, a dependency rule hidden in code, and a failure that does not say what is missing |
 
@@ -84,7 +84,8 @@ change in one place rather than per consumer.
 - Make enable and disable return the probed outcome (`enabled`, `partial`, or `blocked`) instead of
   assuming success.
 - Give package state its own module, so the rules renderer only renders.
-- Show Required and Recommended dependency sections on the Config page through the shared behavior
+- List each package's required packages in its source popup, and show a Recommended dependencies
+  list on the Config page, through the shared behavior
   view.
 - Store install bundle selections as roots too, declare the telemetry → hooks dependency in
   `presets.json`, and derive it through the same graph helper.
@@ -99,6 +100,8 @@ change in one place rather than per consumer.
 - Ownership markers inside harness config files.
 - Plan-suite-specific behavior such as the `implementation-review` package and the actual
   `requires`/`recommends` edges on built-in packages; [[ejsc769o]] owns them.
+- Showing or offering recommendations in terminal onboarding. [[ejsc769o]], which adds the first
+  `recommends` edges, decides how the wizard presents them (user decision 2026-10-28).
 - Turning conditional, task-dependent skill pairing into static package relationships.
 
 ## Proposed design
@@ -156,7 +159,7 @@ only ever be written under version 2, so in practice this affects workspace pack
 | `requires` | `[]` | The package is invalid without these; they join the effective set automatically |
 | `recommends` | `[]` | Useful companions; offered, never added automatically |
 | `selectable` | `true` | `false` rejects direct `package enable` and `package disable` |
-| `presentation.visibility` | `catalog` | `catalog`: normal row. `dependency`: shown only in dependency sections. `hidden`: no UI row |
+| `presentation.visibility` | `catalog` | `catalog`: normal row. `dependency`: no row; listed under Requires in the popup of each package that requires it. `hidden`: no UI row |
 
 `roborepo package validate` rejects unknown ids in either relationship, self-references, invalid
 values, and cycles in `requires`. `recommends` does not take part in cycle detection. A
@@ -213,12 +216,18 @@ When a selectable package is enabled and some of its recommendations are off:
 The package engine returns recommendation data; only the portal and the interactive CLI prompt.
 Graph and reconciliation functions never prompt.
 
-### 6. Config page dependency sections
+### 6. Config page dependencies
 
-`buildBehaviorView` in `scripts/cli/config.mjs` derives, for each section, the dependencies its
-visible packages reference, and exposes `requiredDependencies[]` and `recommendedDependencies[]`.
-Each item carries the ordinary row data plus its relationship, the referencing packages, whether it
-is selectable, and whether it is directly selected or derived.
+Required packages are a reference, not a package option: a dependency-only one has no switch, and a
+selectable one already has its own row. So they are not rows on the page. `buildBehaviorView` in
+`scripts/cli/config.mjs` gives each package row a `requires[]` list (its transitive required
+packages, each with the inspect target and cost its own row would have), and the source popup
+lists them under **Requires**. Each name opens that package's source, with **Back** to the package
+that requires it. `roborepo config status` prints a `requires:` line under the row.
+
+Recommended packages are offers the user acts on, so each section exposes
+`recommendedDependencies[]`: switchable rows below the section's own rows, each naming the packages
+that recommend it. A package the section already shows, or one a row requires, is left out.
 
 Illustration, using the edges [[ejsc769o]] is expected to add:
 
@@ -227,15 +236,14 @@ Development Workflows
   Development Planning Lifecycle     [toggle]
   Session Close                      [toggle]
 
-  Required dependencies
-    Implementation Review            required by Development Planning Lifecycle, Session Close
-
   Recommended dependencies
     Test Harness                     recommended by Session Close           [toggle]
+
+Session Close popup
+  Requires: Implementation Review    (opens its source; Back returns)
 ```
 
-Dependency rows open the existing source popup (`openSource`). A non-selectable dependency has no
-toggle. Terminal onboarding and the portal read the same behavior view. Bulk enable (a `bulkToggle`
+Terminal onboarding and the portal read the same behavior view. Bulk enable (a `bulkToggle`
 section's Select All and the Plans onboarding banner) acts on selectable roots only.
 
 ### 7. Install bundles
@@ -245,8 +253,9 @@ rule:
 
 - `presets.json` declares `"requires": ["hooks"]` on the `telemetry` bundle; `withDependencies` in
   `scripts/cli/presets.mjs` is replaced by the `package-graph.mjs` closure.
-- `selected[]` stores roots only. Apply, check, and status act on the effective set. A state file
-  without `schemaVersion` is read with the same drop-required rule as the package registry.
+- `selected[]` stores roots only. Apply, check, and status act on the effective set. Every listed
+  bundle is read as a root, whatever the file's `schemaVersion` (user decision 2026-10-28: no
+  compatibility reading for older bundle records).
 - `bundle remove hooks` while `telemetry` is selected removes the root but leaves hooks applied,
   and says telemetry still requires it.
 - `bundle status` marks each effective bundle as selected or `required by <bundle>`.
@@ -257,60 +266,61 @@ rule:
 
 ### Phase 1: State module and graph helpers
 
-- [ ] Add `scripts/cli/package-graph.mjs` with pure functions over `{ id, requires, recommends }`
+- [x] Add `scripts/cli/package-graph.mjs` with pure functions over `{ id, requires, recommends }`
       nodes: selected roots, required closure, `requiredBy`, and `recommendedBy`.
-- [ ] Add `scripts/cli/package-state.mjs`; move `readEnabledPackagesRegistry`,
+- [x] Add `scripts/cli/package-state.mjs`; move `readEnabledPackagesRegistry`,
       `setPackageEnabled`, `forgetPackageIds`, and `effectiveEnabledIds` out of
       `scripts/cli/rules-render.mjs`, and update every importer listed under Current state.
-- [ ] Extend `scripts/cli/package-catalog.mjs` to normalize and validate `recommends`,
+- [x] Extend `scripts/cli/package-catalog.mjs` to normalize and validate `recommends`,
       `selectable`, and `presentation.visibility`, including the non-selectable default-enabled
       rejection.
-- [ ] Fixtures: shared, transitive, and directly selected dependencies; non-selectable packages;
+- [x] Fixtures: shared, transitive, and directly selected dependencies; non-selectable packages;
       missing recommendation ids; a `requires` cycle.
 
 ### Phase 2: Derived activation and verified results
 
-- [ ] Remove the recursive `enablePackage` call for `requires`; enable and disable change roots,
+- [x] Remove the recursive `enablePackage` call for `requires`; enable and disable change roots,
       then reconcile the before/after effective difference.
-- [ ] Apply the disable rules in Proposed design §4 (root removal, derived-only refusal,
+- [x] Apply the disable rules in Proposed design §4 (root removal, derived-only refusal,
       `--cascade`).
-- [ ] Reject direct mutation of `selectable: false` packages.
-- [ ] Replace mid-apply `process.exit` calls in `packages.mjs` with typed errors the CLI entry
+- [x] Reject direct mutation of `selectable: false` packages.
+- [x] Replace mid-apply `process.exit` calls in `packages.mjs` with typed errors the CLI entry
       point maps to exit codes.
-- [ ] Probe changed packages after each mutation and return `enabled`, `partial`, or `blocked`
+- [x] Probe changed packages after each mutation and return `enabled`, `partial`, or `blocked`
       from `enablePackage`/`disablePackage`, `mutatePackage`, and the `config-bulk.mjs` batch.
-- [ ] Read version-1 registries with the drop-required rule, and write `schemaVersion: 2`.
-- [ ] Confirm rules rendering, command ownership, probes, `reconcile`, `adopt-live`, hook
+- [x] Read version-1 registries with the drop-required rule, and write `schemaVersion: 2`.
+- [x] Confirm rules rendering, command ownership, probes, `reconcile`, `adopt-live`, hook
       readiness, and the browser gate read the effective set from `package-state.mjs`, and that
       no other module reads `enabled-packages.json`.
 
 ### Phase 3: Recommendations
 
-- [ ] Return disabled recommendations from the enable result.
-- [ ] Add the portal prompt and the interactive CLI prompt; keep the non-interactive path silent.
+- [x] Return disabled recommendations from the enable result.
+- [x] Add the portal prompt and the interactive CLI prompt; keep the non-interactive path silent.
 
 ### Phase 4: Config presentation
 
-- [ ] Add selectability, visibility, derived-vs-selected state, and inverse relationships to the
+- [x] Add selectability, visibility, derived-vs-selected state, and inverse relationships to the
       package snapshot in `scripts/cli/config.mjs`.
-- [ ] Derive dependency sections in `buildBehaviorView`; omit `visibility: dependency` packages
-      from normal rows.
-- [ ] Render the sections in `portal/config/elements/config-item.js` and its templates, following
-      the portal's template and light-DOM conventions, with no toggle for non-selectable rows;
-      dependency rows open `openSource`.
-- [ ] Make bulk enable skip non-selectable and derived-only rows.
+- [x] Derive each row's required references and each section's recommended list in
+      `buildBehaviorView`; omit `visibility: dependency` packages from normal rows.
+- [x] List required packages under **Requires** in the source popup (`portal/config/panels.js`),
+      each opening its source with Back, and render the Recommended dependencies list through
+      `portal/config/elements/config-item.js` and its templates, following the portal's template
+      and light-DOM conventions.
+- [x] Make bulk enable skip non-selectable and derived-only rows.
 
 ### Phase 5: Install bundles
 
-- [ ] Add `requires` to the bundle schema in `manifests/platform/presets.json` and declare
+- [x] Add `requires` to the bundle schema in `manifests/platform/presets.json` and declare
       `telemetry → hooks`.
-- [ ] Replace `withDependencies` in `scripts/cli/presets.mjs` with the graph closure; store roots
-      only and read unversioned state with the drop-required rule.
-- [ ] Show derived bundles in `bundle status` and name missing rows in `bundle check`.
+- [x] Replace `withDependencies` in `scripts/cli/presets.mjs` with the graph closure; store roots
+      only and read every listed bundle as a root.
+- [x] Show derived bundles in `bundle status` and name missing rows in `bundle check`.
 
 ### Phase 6: Catalog and docs
 
-- [ ] Update the docs listed under Documentation impact.
+- [x] Update the docs listed under Documentation impact.
 
 ## Validation
 
@@ -327,7 +337,8 @@ rule:
 | Reading a version-1 registry leaves the effective set unchanged and drops required ids from roots | `scripts/test/package-lifecycle-check.mjs` |
 | Defaults still apply and explicit disables still win | `scripts/test/package-default-enabled-check.mjs` |
 | Bulk enable skips dependency rows and returns per-package outcomes | `scripts/test/config-bulk-toggle-check.mjs` |
-| Dependency sections render, open the source popup, and show toggles only for selectable rows | `npm run test:portal-ui` |
+| Required packages appear only in the source popup and open their source; recommended rows render with a toggle | `npm run test:portal-ui` |
+| Row references are transitive; the recommended list skips shown and required packages; `config status` prints both | `scripts/test/config-dependency-sections-check.mjs` |
 | Telemetry bundle derives hooks; removing telemetry drops hooks unless selected; `bundle check` names missing rows | Bundle assertions in `scripts/test/test-cli.sh` |
 | Full gate, since package state reaches install, rules, and generated harness output | `npm run check` |
 
@@ -340,17 +351,27 @@ rule:
 | A dependency row makes a category look partly selected | Bulk enable and category state count selectable roots only |
 | Changing the meaning of `packages` turns off something a user relies on | The version-1 read rule keeps every currently effective package effective; a fixture asserts the effective set is unchanged across the upgrade |
 | Replacing `process.exit` changes CLI exit codes | The CLI entry point maps each typed error to the code the old exit used; existing `test-cli.sh` exit-code assertions stay unchanged |
-| Bundle state change breaks install or doctor | Unversioned bundle state is read with the same rule; `test-cli.sh` and `test-install-collisions.sh` bundle assertions stay green |
+| Bundle state change breaks install or doctor | Every listed bundle is read as a choice; `test-cli.sh` and `test-install-collisions.sh` bundle assertions stay green. A telemetry-only record from `main` fails `bundle check` until `bundle remove telemetry` (accepted, see Decision Log 2026-10-28) |
 
 ## Documentation impact
 
 | Doc | Update |
 | --- | --- |
 | `.claude/skills/roborepo-development/references/package-development.md` | `requires`, `recommends`, `selectable`, `presentation.visibility`; selected/effective/live model |
-| `docs/user/reference/config-control-panel.md` | Required and Recommended dependency sections; recommendation prompt |
+| `docs/user/reference/config-control-panel.md` | Requires line in the source popup; Recommended dependencies list; recommendation prompt |
 | `docs/internal/config-panel-internals.md` | Dependency sections in `buildBehaviorView`; per-package mutation outcomes |
 | `docs/user/reference/roborepo-cli.md` | `package enable`/`disable` outcomes, disable rules for dependencies, recommendation prompt |
 | `docs/internal/cli-internals.md` | `package-state.mjs`/`package-graph.mjs` ownership; bundle roots and derived dependencies |
+
+## Not tested
+
+No entries. The portal recommendations dialog has a stubbed Playwright test for both buttons, and
+both it and the interactive terminal prompt were also run for real against a workspace fixture;
+see `## Review` → `### Verification`.
+
+## Open Questions
+
+None open. Every question was answered by the user (2026-10-27 and 2026-10-28); see Decision Log.
 
 ## Decision Log
 
@@ -370,6 +391,244 @@ rule:
   depend on it" refusal and let a user deselect a still-required root. Resolved: deselecting a root
   always succeeds and the package stays effective if required; refusal and `--cascade` apply only to
   a package that is effective solely through a parent.
+
+- **2026-10-26: Disable reports its own outcomes.** The plan's outcome table names `enabled`,
+  `partial`, and `blocked` for enables. Disable needed a success state too, so each removed package
+  probes as `disabled` (nothing it owns is present), `partial` (something it owns is still there,
+  named), or `blocked`. Alternatives: reuse `enabled` for "change applied" (misleading), or return
+  no outcomes from disable (the plan asks for one per changed package).
+- **2026-10-26: `partial` exits 0, `blocked` exits 1.** A partial apply already happened before
+  this change (with exit 0) and is common in fake homes (an MCP preset skipped with `SKIP_MCP`); a
+  non-zero exit would break every scripted enable while adding nothing the printed warning does
+  not. `blocked` replaces the uncaught error that already exited 1. Refusals keep exit 2.
+- **2026-10-26: Enable re-applies the whole required closure.** Enable applies every package in
+  the selected root's closure, not only the newly effective ones, matching the old recursive
+  enable that re-applied each dependency. Re-applying is idempotent and repairs a dependency with
+  a missing resource; applying only the difference would leave such a dependency broken.
+- **2026-10-26: `--cascade` on a selected root also deselects the parents that require it.** The
+  design text covers `--cascade` for a derived-only package. For a root a parent also requires,
+  `--cascade` deselects those parents too, so the package actually turns off — the same meaning
+  `--cascade` has always had ("disable dependents first"). Without it, the root is deselected and
+  stays on, as §4 specifies.
+- **2026-10-26: Reconcile applies effective packages directly.** `reconcile` used to call
+  `enablePackage --reconcile`, an internal flag. It now applies each effective package's components
+  in dependency order through the same component-apply function enable uses, and the internal flag
+  is gone.
+- **2026-10-26: The non-interactive enable lists recommendations in one line.** "Silent" in Phase 3
+  is read as "never prompts and never enables": scripts get one `recommended (not enabled): ...`
+  line, and API callers get `recommendations[]` in the result. Alternative: print nothing, which
+  hides the offer from scripted users entirely.
+- **2026-10-26 (user decision): Required packages live in the source popup, not on the page.**
+  The first build gave each section a Required dependencies list of rows. The user judged that a
+  required package that cannot be switched is a reference by another name, not a package option,
+  and asked for it to be called out in the package popup instead. Each row now carries its
+  transitive required packages; the popup lists them under **Requires**, each opening its source
+  with Back. The Recommended dependencies list stays on the page, since those rows have a switch.
+- **2026-10-26: Requires lists the transitive closure; Recommended skips what a row requires.** A
+  two-level requirement is still visible from the package that pulls it in. A package both required
+  and recommended is left out of the recommended list, since it turns on anyway.
+- **2026-10-26: Reconcile does not re-run the command-ownership check.** The old reconcile went
+  through `enablePackage --reconcile`, which ran `validatePackageCommandOwnership` per package.
+  That check compares `command` components, which come only from `cli-command` resources, and
+  `validatePackageCatalog` rejects any second package claiming one on every `loadPackageCatalog`
+  call. So two effective packages can never conflict by the time reconcile runs, and the check was
+  unreachable there before this change too. Alternatives: restore it as a typed error (dead code), or
+  skip-and-warn (same). Validation pass 3 raised this as an escalation; the evidence settles it.
+- **2026-10-26: Bulk disable skips derived-only members.** A bulk Deselect All member that is on
+  only because another selection requires it is reported `skipped` instead of being refused, so a
+  batch never fails on a package it cannot switch directly. Selection is re-read before each member.
+- **2026-10-26: Turning telemetry off leaves the hooks bundle's files in place.** Turning telemetry
+  off (`deselectTelemetryBundle`) only drops a recorded `telemetry` root; it never applies or
+  removes bundle rows. `bundle remove telemetry` is the path that removes the hooks it required.
+  Removing core hooks as a side effect of a telemetry toggle would be a wider behavior change than
+  this plan asks for.
+- **2026-10-26: Bundle selection lives in its own small module.** `bundle-selection.mjs` holds bundle
+  roots and the effective set so hook readiness (`core-hook-bundle.mjs`), the Config snapshot, and
+  `presets.mjs` share one rule without hook readiness importing the bundle-apply module.
+- **2026-10-26: Updated one fixture for the planned bundle behavior.** `shared-target-rows-check`
+  enables the telemetry package and then runs `bundle remove hooks`. After the 2026-10-27 telemetry
+  decision the package records no bundle, so the fixture asserts the removal is not kept, as on the
+  base branch.
+- **2026-10-27 (user decision): Package-side telemetry records no bundle.** Chosen over installing
+  the hooks bundle from `telemetry install` and over dropping the telemetry → hooks edge.
+  `telemetry install` and the Settings toggle no longer write a `telemetry` bundle root, so a
+  telemetry-only setup leaves `hooks` off and `bundle check` and hook readiness expect no core
+  hooks. Turning telemetry off still drops a root that `bundle apply telemetry` recorded.
+- **2026-10-28 (user decision): Older bundle records are read as written.** Validation pass 4
+  found that the drop-required rule turned a user's own `hooks` choice into a dependency of a
+  `telemetry` root recorded by `main`'s package path, so turning telemetry off left `hooks`
+  unselected. Offered: drop a legacy `telemetry` root, keep every listed bundle as a root, or accept
+  the cost. The user, not needing backwards compatibility, chose to remove compatibility reading for
+  bundles: every listed bundle is a root and `schemaVersion` is written but not branched on. This
+  replaces the 2026-10-27 rule that dropped a legacy root listed without its requirements. Accepted
+  cost: a telemetry-only record written by `main` (`["base","telemetry"]`) makes `hooks` required,
+  so `bundle check`, `doctor --installed`, and `verify-install` fail until `bundle remove telemetry`
+  or `bundle apply hooks`; `roborepo update` keeps the telemetry selection and does not clear it.
+  Validation pass 5 found the first statement of this cost wrong (it named `roborepo update` as a
+  remedy); the corrected cost stays within the user's "no backwards compatibility" choice, so the
+  decision stands. The package registry keeps its version-1 rule.
+- **2026-10-27 (user decision): The Claude MCP adapter returns `ok: false`.** Chosen over a typed
+  error and over deferring to a harness-adapter plan. `runClaudeMcpAdd` returns its status, the
+  adapter's `addServer` returns `ok: false` with the message in `warnings` and the CLI status in
+  `exitStatus`, package enable reports the package `blocked` with that message, and `roborepo mcp
+  add` / `mcp apply` exit with the Claude CLI's status as before.
+- **2026-10-28 (user decision, human review): Onboarding recommendations wait for [[ejsc769o]].**
+  The review found the terminal setup wizard neither shows nor offers recommendations. No built-in
+  package declares `recommends`, so nothing is affected yet. Offered: defer to the plan that adds
+  the first edges, prompt after the wizard applies, or print one line after it applies. The user
+  chose to defer ("Leave for later plan").
+
+## Review
+
+### Findings
+
+- [x] `## Not tested` pointed to verification evidence the plan did not hold; the Enable selected
+      path had no assertion — recorded below and added a portal test for **Enable selected** (bb2a435e)
+- [x] `adopt-live` could record a dependency-only package as a root that no disable can remove —
+      skips non-selectable packages, with a lifecycle assertion (fails without the fix) (bb2a435e)
+- [x] A bulk group switch counted rows on only through another selection, so an all-derived
+      section was stuck on Deselect All — counts only switchable rows and hides when none remain,
+      with a portal test (bb2a435e)
+- [x] `bundle check` said "selected" for a bundle that is only required — names `required by
+      <bundle>`; test-cli assertion updated (bb2a435e)
+- [x] `recommendationOption` split the packages-intro comment from its function — moved below (bb2a435e)
+- [x] The terminal dependency lists and the view's closure, no-repeat, and required-over-recommended
+      rules had no direct test — added `scripts/test/config-dependency-sections-check.mjs` (bb2a435e)
+- [x] A failing `claude mcp add` still exits mid-enable — user chose `ok: false` from the adapter;
+      covered by `mcp-claude-add-failure-check.mjs` (adapter result, `mcp add` exit status, package
+      enable `blocked`)
+- [x] Comments in `config.mjs` and `package-catalog.mjs` still described per-section dependency
+      lists that the user decision removed — reworded to the popup's Requires line
+- [x] A required package with no inspectable source rendered as a button that did nothing —
+      listed as plain text instead, with a portal assertion
+- [x] A telemetry-only selection now requires the hooks bundle it never applies — user chose to
+      stop recording the bundle; test-cli asserts `telemetry enable` records none
+- [x] Reconcile no longer ran the command-ownership check that `enablePackage --reconcile` ran —
+      no change needed: the check could never fire (see Decision Log)
+- [x] `coreHookBundle` reporting a required-only bundle as selected has no test — test-cli asserts
+      `selected: true` for a `telemetry` root
+- [x] The config panel doc tied "no row" to `selectable: false` instead of
+      `presentation.visibility` — reworded
+- [x] The `PackageMutationError` comment left out the dependency-only refusal — added
+- [x] The `AdapterActionResult` typedef did not document the new `exitStatus` field — added
+- [x] The 2026-10-28 accepted cost named `roborepo update` as a remedy it is not — corrected in
+      the Decision Log and Risks; the cost is within the user's no-compatibility choice
+- [x] `## Risks` and `### Verification` still described the removed bundle rule and an undated gate
+      run — reworded
+- [x] `package-graph.mjs` header named `presets.mjs` as the bundle user — now `bundle-selection.mjs`
+- [x] `next_action`, a pass-5 cross-reference, and the latest gate run were stale or missing in the
+      plan — updated
+- [x] An older bundle record with telemetry on loses the user's own hooks selection — user chose
+      to read bundle records as written; test-cli asserts `hooks` stays selected and applied after
+      `bundle remove telemetry` on such a record
+- [x] Human review: the terminal asks about recommendations after a `blocked` enable —
+      `offerRecommendations` in `scripts/cli/packages.mjs` runs whatever `result.ok` is — fixed in
+      review (ab513c7a)
+- [x] Human review: bulk Deselect All reporting a selectable required-only member `skipped`
+      (`scripts/cli/config-bulk.mjs`) has no test — only the non-selectable case is covered — fixed
+      in review (ab513c7a)
+- [x] Human review: terminal onboarding (`buildOnboardSteps`/`applyWizardChanges` in
+      `scripts/cli/presets.mjs`) neither shows nor offers recommendations, though §5–§6 say the
+      interactive CLI prompts and onboarding reads the same view — escalated; the user deferred it
+      to [[ejsc769o]] (see Decision Log and Non-goals)
+- [ ] Re-review after main 88d00172 (2e3492ce): "ownership conflict"/"ownership checks" wording
+      survives in `packages.mjs:509`, `package-state.mjs:59`, `config-panel-internals.md:56`, though
+      main removed the command-ownership check — fix
+- [ ] Re-review: `bundle apply --selected` (`presets.mjs:564`, from main) reads
+      `readPresetState().selected` instead of `selectedBundleRoots` — fix
+- [ ] Re-review: the `dep-partial` fixture in `package-lifecycle-check.mjs:243,323` names the
+      `jcodemunch` MCP preset main deleted; passes only because `SKIP_MCP` returns first — fix
+- [ ] Re-review: main 7c65c2e7 made `roborepo update` run `bundle apply --selected`, which applies
+      `hooks` as telemetry's dependency, so the 2026-10-28 accepted cost (checks fail until
+      `bundle remove telemetry`; update is not a remedy) no longer holds — escalated to the human
+- [ ] Re-review: the registry's version-1 read rule (`package-state.mjs:38-43`) now reaches only
+      old workspace-package registries, while main #50 dropped similar compatibility reads —
+      escalated to the human (keep as decided 2026-10-26/28, or drop)
+
+### Verification
+
+- Validation pass 1 (fresh-context subagent): 6 fix, 1 escalate, 1 base.
+- Validation pass 2 (fresh-context subagent): 3 fix, 1 escalate, 1 base (the same docs link).
+- Validation pass 3 (fresh-context subagent): 3 fix, 1 escalate (resolved from evidence, see
+  Decision Log), 1 base (the same docs link).
+- After the 2026-10-27 decisions: `test-cli.sh` 476 passed, 0 failed.
+- Merged `main` at 8cb1cf20, resolving this plan's file (`main`'s copy matched the start
+  transition, so the worktree copy was kept) and the Codex sandbox plan's ready/review rename (kept
+  `main`'s `review/` file). `test-cli.sh` 476 passed on the merged tree. `npm run check` 61/62 on
+  the merged tree; the failure is `docs-reference-check` on `backlog-review.md:86`, which now names
+  the Codex sandbox plan's old `ready/` path. It fails the same way at the merge base, so it is a
+  base failure.
+- Validation pass 4 (fresh-context subagent): 1 fix, 1 escalate, 1 base (that docs link).
+- After the 2026-10-28 bundle-record decision: `test-cli.sh` 474 passed, 0 failed (two older-record
+  assertions removed, one replaced by the hooks-survives-telemetry assertion).
+- Full gate on 2026-10-26, after the Requires-popup user decision: `npm run check` 61/62 suites; the
+  failure was `docs-reference-check.mjs` on `docs/internal/backlog-review.md:86` (then a `backlog/`
+  path), which also failed at the base commit `b0b5288b`.
+- Validation pass 5 (fresh-context subagent): 2 fix (plan text), 1 escalate (the accepted cost was
+  misstated; corrected above, in the Decision Log), 1 base (the same docs link, `ready/` path at merge base `c1d92150`,
+  fixed on `main`).
+- Full gate at `e1a78593`: `npm run check` 61/62 suites; the failure is the same base docs link.
+  Later commits change only the plan document and one comment.
+- Validation pass 6 (fresh-context subagent): 3 fix (a stale `package-graph.mjs` header and plan
+  text), 1 base (the same docs link). This pass is past the loop's five-pass cap, so the plan was
+  not submitted.
+- Validation: clean on pass 7 at `e46240f9` (fresh-context subagent, run past the cap at the user's
+  request): no fix or escalate findings; 1 base (the same docs link, fixed on `main`).
+- Human review (2026-10-28): merged `main` at 3ef32327 into the branch (218aaf3c, no conflicts).
+  `npm run check` passed at 218aaf3c (all suites, portal UI 154 passed); the earlier
+  `docs-reference-check` base failure no longer occurs. Review Validator pass (fresh-context
+  subagent): 2 fix, 1 escalate, 0 base.
+- Manual, portal (2026-10-26): a hermetic portal on a workspace fixture (Demo Planner and Demo
+  Closer require a dependency-only Demo Review; Demo Closer recommends Demo Tester). The Integrations
+  section showed Demo Review only under a Required dependencies list (since replaced by the popup's
+  Requires line, re-verified below), with no switch. Turning on Demo Closer opened the recommendations dialog listing Demo
+  Tester; **Enable selected** left Demo Tester `selected` and Demo Review `required` in
+  `/api/config`.
+- Manual, portal after the user decision (2026-10-26): the Integrations section had no Required
+  list; Demo Planner's popup showed `Requires: Demo Review (dependency-only)`, the name opened Demo
+  Review with Back shown and no Requires line, and Back returned to Demo Planner. (The popup body
+  reads "path escapes repo" for workspace packages outside the app folder; `readSourceFile` is
+  unchanged by this branch, so that limit predates it.)
+- Manual, terminal (2026-10-26): `package enable demo-closer` under a pseudo-terminal asked
+  `Also enable recommended package Demo Tester (demo-tester)? [y/N]`; answering `y` enabled it and
+  the registry read `["demo-planner", "demo-closer", "demo-tester"]`.
+- Human review (2026-10-28), after the review fixes: `npm run check` passed at a5a5d032 (all
+  suites, portal UI 154 passed). Second review Validator pass (fresh-context subagent) over
+  ab513c7a: clean.
+- Earlier result and approval (history): review complete at 28822b47 on base 3ef32327; the user
+  approved 28822b47 in the /plan-review chat (2026-10-29). Merges of `main` afterward (24a80344,
+  e7d64f25 by the user; 0fd97311 by review, plan-only) made it stale.
+- Re-review after those merges (2026-10-29): no conflict hunks. Five files changed on both sides
+  (`cli-internals.md`, `roborepo-cli.md`, `telemetry.mjs`, `check-groups.json`,
+  `portal-ui.spec.mjs`), and main's side of each is additive. Validator pass (fresh-context
+  subagent): clean; every line the branch added is still present, and nothing incoming reads
+  package or bundle state. The first `npm run check` at 0fd97311 failed one test-cli assertion
+  ("roborepo update preserves local hooks, trust, and enabled skills") while other package checks
+  ran at the same time; `test-cli.sh` alone then passed 474/0, and a rerun of `npm run check` at
+  0fd97311 passed (all suites, portal UI 154 passed).
+- Re-review after main merges 4974e7dd (clean) and 2e3492ce (2026-10-30): `plans sync-base`
+  up-to-date at 2e3492ce on base 88d00172. 2e3492ce resolved conflicts in seven files and a
+  modify/delete of `package-commands.mjs` (deleted on main; the branch's edits there only fed the
+  ownership check main removed). Validator pass (fresh-context subagent): 3 fix, 2 escalate, 2 base
+  (dead `case "command"` branches in `packages.mjs`; "back-compat scripts" in
+  `cli-internals.md:81`, both also on main). It ran the package checks (all pass), `test-cli.sh`
+  419 passed, 0 failed (main #50 removed tests), every branch-added `test-cli.sh` assertion still
+  present, and the portal dependency specs 5/5.
+
+### Result
+
+- Status: pending
+- Reviewed implementation commit: 0fd97311f2c40085291b06020ac8c5b42e7354ce
+- Base commit: cd5ed4f49e3c3b25177f0a6b5e4aa146638792f2
+
+### Approval
+
+- Decision: approved
+- Reviewed implementation commit: 0fd97311f2c40085291b06020ac8c5b42e7354ce
+- Confirmed by: human
+- Evidence: the user answered "Approve" to "Do you approve "Package Management: Part 02" at
+  reviewed commit 0fd97311f2c40085291b06020ac8c5b42e7354ce (the branch with your main merges)?" in
+  the /plan-review chat (2026-10-29).
 
 ## Coordination and completed baseline
 

@@ -1,5 +1,5 @@
-// Wiring for the Config page's single self-contained chrome panel: the source-inspect /
-// snapshot-view <dialog>. app.js calls into this controller instead of owning the modal's DOM
+// Wiring for the Config page's self-contained chrome panels: the source-inspect /
+// snapshot-view <dialog>, and the post-enable recommendations <dialog>. app.js calls into this controller instead of owning the modal's DOM
 // refs and listeners itself. This is a
 // panel-factory (like createInfoModal in plans/panels.js), not a custom element: the modal is a
 // page singleton referenced by id, never declaratively instantiated or cloned.
@@ -16,6 +16,8 @@ export function createConfigModal() {
   const costRowEl = document.getElementById("modal-cost-row");
   const contentEl = document.getElementById("modal-content");
   const footerEl = document.getElementById("modal-footer");
+  const requiresEl = document.getElementById("modal-requires");
+  const requiresListEl = document.getElementById("modal-requires-list");
   const backEl = document.getElementById("modal-back");
   let onBack = null;
   // Bumped by every view change, so a source fetch that resolves after the user moved on (Back
@@ -69,6 +71,13 @@ export function createConfigModal() {
     }
   }
 
+  // The inspected package's required packages, each opening its own source via onSelect.
+  function setRequires(requires = [], onSelect = null) {
+    const refs = onSelect ? requires : [];
+    requiresListEl.replaceChildren(...refs.map((ref) => tmpl.requiredReference(ref, onSelect)));
+    requiresEl.hidden = refs.length === 0;
+  }
+
   function setFooter(node) {
     if (node) {
       footerEl.replaceChildren(node);
@@ -88,9 +97,10 @@ export function createConfigModal() {
   }
 
   // fetch-then-show: the source-inspect entry point (inspect-click, config-files grid click).
-  async function openSource(inspect, { rules, harnesses, onDefaultClick, chips = [], back = null }) {
+  async function openSource(inspect, { rules, harnesses, onDefaultClick, chips = [], back = null, requires = [], onRequire = null }) {
     const seq = ++viewSeq;
     setBack(back);
+    setRequires(requires, onRequire);
     setHeader(inspect.label || inspect.id, "loading…");
     contentEl.innerHTML = "";
     setFooter(null);
@@ -118,9 +128,10 @@ export function createConfigModal() {
   // The contents view of a package with several skills. Everything it lists is already in the
   // snapshot, so nothing is fetched; selecting an entry calls `onSelect(entry)`, which opens that
   // entry's source view with a Back that calls showContents again.
-  function showContents(inspect, { chips = [], entryChipSpec, onSelect }) {
+  function showContents(inspect, { chips = [], entryChipSpec, onSelect, requires = [], onRequire = null }) {
     viewSeq += 1;
     setBack(null);
+    setRequires(requires, onRequire);
     setHeader(inspect.label || inspect.id, "", chips);
     contentEl.replaceChildren(tmpl.packageContents(inspect, { entryChipSpec, onSelect }));
     setFooter(null);
@@ -131,6 +142,7 @@ export function createConfigModal() {
   function openSnapshot(title, pathText, data) {
     viewSeq += 1;
     setBack(null);
+    setRequires();
     setHeader(title, pathText);
     setContent(data);
     setFooter(null);
@@ -138,4 +150,39 @@ export function createConfigModal() {
   }
 
   return { openSource, openSnapshot, showContents };
+}
+
+// The recommendations dialog: after an enable that left some recommended packages off, ask which
+// to enable too. Resolves to the chosen ids, or [] when the user continues without them (closing
+// the dialog counts as that). Never enables anything itself; app.js does, with the user's choice.
+export function createRecommendationsDialog() {
+  const dialogEl = document.getElementById("recommendations-modal");
+  const titleEl = document.getElementById("recommendations-title");
+  const listEl = document.getElementById("recommendations-list");
+  let settle = null;
+
+  function finish(ids) {
+    const resolve = settle;
+    settle = null;
+    if (dialogEl.open) dialogEl.close();
+    resolve?.(ids);
+  }
+
+  document.getElementById("recommendations-close").addEventListener("click", () => finish([]));
+  document.getElementById("recommendations-skip").addEventListener("click", () => finish([]));
+  document.getElementById("recommendations-enable").addEventListener("click", () => {
+    finish([...listEl.querySelectorAll('input[type="checkbox"]:checked')].map((input) => input.value));
+  });
+  dialogEl.addEventListener("cancel", () => finish([]));
+  portalWireBackdropClose(dialogEl, () => finish([]));
+
+  function ask(packageLabel, recommendations) {
+    finish([]);
+    titleEl.textContent = `${packageLabel} is on`;
+    listEl.replaceChildren(...recommendations.map((rec) => tmpl.recommendationOption(rec)));
+    dialogEl.showModal();
+    return new Promise((resolve) => { settle = resolve; });
+  }
+
+  return { ask };
 }

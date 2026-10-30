@@ -37,13 +37,28 @@ applies each installable resource; the enable/disable switch dispatches on `reso
 
 ### Package composition
 
-A package may list `requires: [pkgId, ...]`:
+A package may list `requires: [pkgId, ...]` and `recommends: [pkgId, ...]`:
 
-- Enabling it enables each required package first (deduplicated and cycle-safe), then its own
-  resources.
+- Enabling it turns on each required package (dependencies first) and then its own resources. Only
+  the package you turned on is recorded; a required package stays on while any package you turned
+  on still requires it, and turns off with the last one.
 - A **composite** package lists only `requires`, so it bundles other packages under one toggle.
 - A composite reports itself enabled only when every required package, and any resources of its
   own, are enabled.
+- A recommended package is never turned on for you. When an enable leaves recommendations off, the
+  panel asks which of them to enable too; **Continue without** enables none.
+- A **dependency-only** package has no toggle of its own (`selectable: false`) and usually no row
+  either (`presentation.visibility: "dependency"`); it turns on and off with the packages that
+  require it. A non-selectable package left at the default visibility keeps a row, without a toggle.
+
+A required package is not a row on the page. Clicking a package's name opens its source popup,
+which lists what it requires under **Requires**; each name there opens that package's source, and
+**Back** returns to the package that requires it.
+
+Below its own rows, a section lists **Recommended dependencies**: what its packages recommend, each
+with a toggle and naming the packages that recommend it. A package a row already requires, or one
+the section already shows, is not repeated there. **Select All** and the Plans banner act on
+packages you can switch directly, and the group switch is hidden when none are left.
 
 A package may also hold several skills. They turn on and off together with the package's one
 toggle; there is no switch for a single skill inside it. Its card shows the package name, never one
