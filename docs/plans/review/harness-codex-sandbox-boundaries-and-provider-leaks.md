@@ -701,6 +701,40 @@ findings and one advisory outside-worktree evidence edit; this primary-only pend
 an authority override. Complete review, renewed exact-commit human approval, closure, and worktree
 cleanup remain unchecked outcomes. No approval, waiver, or broader runtime coverage is inferred.
 
+
+#### Verification failure diagnosis — October 30, 2026
+
+The user requested resolution of verification before the next implementation-approval prompt.
+Isolated reproductions now establish the immediate causes of the three CLI assertion failures:
+
+- Both ownership-conflict cases restore their original package configuration and trigger contents,
+  then fail at `scripts/cli/packages.mjs:184` while removing the new skill directory. Executed
+  diagnostic assertions verified the restored bytes, `EPERM` at that operation, and the directory
+  left behind. The cleanup error replaces the ownership-validation message expected by the tests.
+- The empty-package conflict likewise fails at the same cleanup operation and leaves its skills
+  directory behind. This directly explains the third failing assertion. No speculative package
+  behavior change was made to hide incomplete rollback.
+- An independent, newly created empty directory owned by the current user with mode `0700` could
+  not be removed by either Node's `rmdirSync` or `/bin/rmdir`, including a permitted retry. Controls
+  under both the system temporary directory and the repository-family worktree root returned
+  `EPERM`. The particular policy/runtime layer responsible for denying removal is not established.
+- An independent TCP server on `127.0.0.1`, requesting an ephemeral port and no external connection,
+  also returned `EPERM` on its permitted retry. This reproduces the browser startup obstacle
+  without the browser runner.
+- Read-only discovery currently selects Codex CLI `0.166.0`; the discovered desktop executable is
+  `0.166.0-alpha.5.1`. The historical native coverage at `0.163.0-alpha.11.2` is not silently
+  extended to either newer runtime.
+- Existing remote CI evidence was sought read-only with `gh run list`; normal and permitted
+  attempts could not connect to `api.github.com`. No remote pass is claimed.
+
+The full gate remains unpassed. A verification environment must first permit ordinary temporary
+folder removal and loopback listeners while preserving credential-read restrictions. Then rerun
+`npm run check` and the remaining plan-relevant checks, resolve any actual failures, finish the
+post-merge review evidence, and request approval of the exact reviewed implementation. These
+control failures are execution prerequisites; neither passing diagnostics nor an already-merged
+branch substitutes for a passing gate. No credential denial, installed configuration, implementation
+approval, or unrelated pending edit was changed by this diagnosis.
+
 ### Approval
 - Decision: approved
 - Reviewed implementation commit: 81ae9e362000c1a48574b1aeceda4c2302b19570
