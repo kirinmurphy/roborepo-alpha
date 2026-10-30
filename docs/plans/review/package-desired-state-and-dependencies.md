@@ -531,6 +531,19 @@ None open. Every question was answered by the user (2026-10-27 and 2026-10-28); 
       `scripts/cli/presets.mjs`) neither shows nor offers recommendations, though §5–§6 say the
       interactive CLI prompts and onboarding reads the same view — escalated; the user deferred it
       to [[ejsc769o]] (see Decision Log and Non-goals)
+- [ ] Re-review after main 88d00172 (2e3492ce): "ownership conflict"/"ownership checks" wording
+      survives in `packages.mjs:509`, `package-state.mjs:59`, `config-panel-internals.md:56`, though
+      main removed the command-ownership check — fix
+- [ ] Re-review: `bundle apply --selected` (`presets.mjs:564`, from main) reads
+      `readPresetState().selected` instead of `selectedBundleRoots` — fix
+- [ ] Re-review: the `dep-partial` fixture in `package-lifecycle-check.mjs:243,323` names the
+      `jcodemunch` MCP preset main deleted; passes only because `SKIP_MCP` returns first — fix
+- [ ] Re-review: main 7c65c2e7 made `roborepo update` run `bundle apply --selected`, which applies
+      `hooks` as telemetry's dependency, so the 2026-10-28 accepted cost (checks fail until
+      `bundle remove telemetry`; update is not a remedy) no longer holds — escalated to the human
+- [ ] Re-review: the registry's version-1 read rule (`package-state.mjs:38-43`) now reaches only
+      old workspace-package registries, while main #50 dropped similar compatibility reads —
+      escalated to the human (keep as decided 2026-10-26/28, or drop)
 
 ### Verification
 
@@ -593,10 +606,18 @@ None open. Every question was answered by the user (2026-10-27 and 2026-10-28); 
   ("roborepo update preserves local hooks, trust, and enabled skills") while other package checks
   ran at the same time; `test-cli.sh` alone then passed 474/0, and a rerun of `npm run check` at
   0fd97311 passed (all suites, portal UI 154 passed).
+- Re-review after main merges 4974e7dd (clean) and 2e3492ce (2026-10-30): `plans sync-base`
+  up-to-date at 2e3492ce on base 88d00172. 2e3492ce resolved conflicts in seven files and a
+  modify/delete of `package-commands.mjs` (deleted on main; the branch's edits there only fed the
+  ownership check main removed). Validator pass (fresh-context subagent): 3 fix, 2 escalate, 2 base
+  (dead `case "command"` branches in `packages.mjs`; "back-compat scripts" in
+  `cli-internals.md:81`, both also on main). It ran the package checks (all pass), `test-cli.sh`
+  419 passed, 0 failed (main #50 removed tests), every branch-added `test-cli.sh` assertion still
+  present, and the portal dependency specs 5/5.
 
 ### Result
 
-- Status: complete
+- Status: pending
 - Reviewed implementation commit: 0fd97311f2c40085291b06020ac8c5b42e7354ce
 - Base commit: cd5ed4f49e3c3b25177f0a6b5e4aa146638792f2
 
