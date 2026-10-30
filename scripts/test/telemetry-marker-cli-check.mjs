@@ -25,7 +25,7 @@ try {
 }
 
 function run(args) {
-  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_DIR: path.join(tmp, ".roborepo") };
+  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_ROOT: path.join(tmp, ".roborepo") };
   return spawnSync(process.execPath, [cli, ...args], { cwd: repoRoot, env, encoding: "utf8" });
 }
 

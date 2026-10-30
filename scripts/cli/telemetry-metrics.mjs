@@ -5,7 +5,7 @@
 // events (the cohort) and returns a plain number or null (null = not computable for this cohort,
 // never a guessed zero).
 //
-// A metric's `compute(captures)` operates over CAPTURE records (schema v2/v3 spool events), the
+// A metric's `compute(captures)` operates over CAPTURE records (schema v3 spool events), the
 // same array shape telemetry-analyze.mjs's analyzeTelemetry() already receives. Marker/experiment
 // records are not passed to metric formulas directly — cohort selection (telemetry-cohort.mjs) is
 // what turns "captures relative to a marker" into the array a metric formula consumes.

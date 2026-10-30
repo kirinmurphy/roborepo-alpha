@@ -60,8 +60,8 @@ Capture runs from the harness hooks `SessionStart`, `PreToolUse`, `PostToolUse`,
   recently entered context (size only, never content).
 
 Records are appended to per-harness JSONL spools (`telemetry/spool/<harness>.jsonl`), capped at
-~25MB each (oldest lines trimmed, newest ~70% kept). Older schema-v2 records remain readable
-— every reader treats the spool structurally rather than gating on `.schema`.
+~25MB each (oldest lines trimmed, newest ~70% kept). Readers accept only the current capture schema;
+records in any other version are ignored.
 
 ## Markers
 
@@ -262,9 +262,9 @@ the way to remove every telemetry store at once, and `purge --backup` keeps a re
 
 | Record | Schema field | Current version | Notes |
 | --- | --- | --- | --- |
-| Capture | `schema` | 3 | v2 records remain readable; readers never gate on `.schema`. |
-| Marker | `schema` | 1 | |
-| Configuration snapshot | `schema` | 1 | Content-addressed id (`cfg_<24-hex>`). |
+| Capture | `schema` | 3 | Other versions are ignored. |
+| Marker | `schema` | 2 | Other versions are rejected. |
+| Configuration snapshot | `schema` | 2 | Content-addressed id (`cfg_<24-hex>`); other versions are skipped. |
 | Experiment | `schema` | 1 | |
 
 ## Related

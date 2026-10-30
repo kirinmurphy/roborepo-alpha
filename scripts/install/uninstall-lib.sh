@@ -156,9 +156,8 @@ reclaim_link_target() {
 }
 
 # Reclaim a rendered_rules target (CLAUDE.md / AGENTS.md):
-#   1) Remove any legacy repo symlink (older installs).
-#   2) Remove only Roborepo managed blocks from normal files.
-#   3) For legacy whole-file rendered output, remove the file and restore the user's pre-install
+#   1) Remove a symlink into the checkout.
+#   2) Remove only Roborepo managed blocks from normal files, then restore the user's pre-install
 #      backup if one was saved.
 reclaim_rendered_rules_target() {
   local home_abs="$1"
@@ -167,7 +166,7 @@ reclaim_rendered_rules_target() {
   remove_repo_symlink "${home_abs}"
 
   if [[ -e "${home_abs}" && ! -L "${home_abs}" ]]; then
-    if grep -Eq "BEGIN managed:builtin-code-style|BEGIN managed:managed-agents-import" "${home_abs}" 2>/dev/null; then
+    if grep -Eq "BEGIN managed:builtin-code-style" "${home_abs}" 2>/dev/null; then
       if command -v node >/dev/null 2>&1; then
         if [[ "${dry_run}" -eq 1 ]]; then
           node "${repo_root}/scripts/cli/rules-render.mjs" --remove-managed --dry-run "${harness}"
@@ -178,15 +177,6 @@ reclaim_rendered_rules_target() {
         echo "skip: cannot remove managed rules blocks without node: ${home_abs}" >&2
       fi
       return 0
-    fi
-
-    if is_builtin_authored "${home_abs}"; then
-      if [[ "${dry_run}" -eq 1 ]]; then
-        echo "remove (rendered_rules): ${home_abs}"
-      else
-        rm -f "${home_abs}"
-        echo "remove (rendered_rules): ${home_abs}"
-      fi
     fi
   fi
 
@@ -219,8 +209,8 @@ remove_root_config() {
   # and we do not know which parts are safe to touch — leave it in place and report the path rather
   # than deleting user-modified content (even though is_builtin_authored below would still match the
   # roborepo markers the user's edit sits on top of). Only "clean"/"unwritten"/"missing" fall
-  # through to the content-based removal logic; "unwritten" preserves backward compatibility with
-  # installs that predate the sidecar (removal then relies on is_builtin_authored/content match).
+  # through to the content-based removal logic; for "unwritten" (no sidecar recorded) removal relies
+  # on is_builtin_authored/content match alone.
   if [[ -n "${harness}" ]] && [[ "$(root_config_drift_status "${harness}" "${home_abs}")" == "drifted" ]]; then
     echo "skip drifted root_config (edited since roborepo last wrote it): ${home_abs}"
     return 0
@@ -294,7 +284,7 @@ import(process.argv[1] + "/scripts/harnesses/claude/index.mjs").then(async ({ cl
 }
 
 # Strip package-injected hooks and permissions from ~/.claude/settings.json after the backup
-# restore/reset above. Packages (jcodemunch, jdocmunch, …) merge hooks directly into settings.json
+# restore/reset above. Packages merge hooks directly into settings.json
 # via mergeHooks; remove_root_config restores the pre-install backup verbatim, which can contain
 # those hooks from a previous install cycle ("poisoned backup"). This pass removes whatever the
 # package enablers put in, leaving only the user's genuine pre-install content.
@@ -325,28 +315,6 @@ import(process.argv[1] + "/scripts/harnesses/claude/index.mjs").then(async ({ cl
   process.exit(1);
 });
 ' "${repo_root}" || true
-}
-
-# Reverse install-gitignore-globals.sh: drop the .jdm-indexed entry it appended to
-# ~/.gitignore_global. Leave git core.excludesfile alone — it may have been the user's own setting,
-# and an otherwise-empty global gitignore is harmless.
-remove_gitignore_globals() {
-  local gitignore_global="${HOME}/.gitignore_global"
-  [[ -f "${gitignore_global}" ]] || return 0
-  grep -Fqx ".jdm-indexed" "${gitignore_global}" || return 0
-
-  if [[ "${dry_run}" -eq 1 ]]; then
-    echo "prune: would remove .jdm-indexed from ${gitignore_global}"
-    return 0
-  fi
-
-  local tmp
-  tmp="$(mktemp "${TMPDIR:-/tmp}/roborepo-gitignore.XXXXXX")"
-  # grep -v exits 1 when nothing remains (".jdm-indexed" was the only line); that is success here —
-  # the resulting empty global gitignore is harmless (see header) — so don't let set -e abort.
-  grep -Fvx ".jdm-indexed" "${gitignore_global}" > "${tmp}" || true
-  mv "${tmp}" "${gitignore_global}"
-  echo "prune: removed .jdm-indexed from ${gitignore_global}"
 }
 
 remove_install_backups() {
@@ -507,11 +475,10 @@ remove_runtime_state() {
   # unrecognized user content) still lives inside it.
   remove_empty_dir "${state_dir}"
 
-  local pid_path="${ROBOREPO_PORTAL_PID_PATH:-${ROBOREPO_TELEMETRY_PID_PATH:-${HOME}/.local/state/cli/portal-server.pid}}"
-  local legacy_pid_path="${ROBOREPO_TELEMETRY_PID_PATH:-${HOME}/.local/state/cli/telemetry-server.pid}"
-  remove_path "${pid_path}" "remove"
-  remove_path "${legacy_pid_path}" "remove"
-  remove_empty_dir "$(dirname "${pid_path}")"
+  # Per-port PID files live under ${state_dir}/portal (removed above); a sandbox override is one file.
+  if [[ -n "${ROBOREPO_PORTAL_PID_PATH:-}" ]]; then
+    remove_path "${ROBOREPO_PORTAL_PID_PATH}" "remove"
+  fi
 }
 
 remove_durable_install_backups() {
@@ -521,25 +488,34 @@ remove_durable_install_backups() {
 cli_process_pids() {
   local process_root="${ROBOREPO_UNINSTALL_PROCESS_ROOT:-${repo_root}}"
   ps -ax -o pid=,command= 2>/dev/null | awk -v process_root="${process_root}" '
-    index($0, process_root "/scripts/cli/main.mjs serve") > 0 ||
+    index($0, process_root "/scripts/cli/main.mjs web") > 0 ||
     index($0, process_root "/scripts/install/main.sh") > 0 ||
     index($0, process_root "/scripts/cli/main.mjs mcp apply") > 0 ||
+    index($0, process_root "/scripts/cli/main.mjs bundle apply --selected") > 0 ||
     index($0, process_root "/scripts/cli/main.mjs bundle apply --default") > 0 {
       print $1
     }
   '
 }
 
+# True when ${pid} is running a roborepo portal. A PID file outlives a portal that crashed or was
+# killed, and the OS reuses PIDs, so a stale file can name an unrelated process. Matched on the
+# entry point rather than the process root: a portal started from another checkout or the npm
+# package shares this state root and is still ours to stop.
+is_portal_pid() {
+  local pid="$1"
+  ps -o command= -p "${pid}" 2>/dev/null | grep -q '/scripts/cli/main\.mjs web'
+}
+
 stop_cli_processes() {
   local pids=()
   local pid
-  local pid_path legacy_pid_path
-  pid_path="${ROBOREPO_PORTAL_PID_PATH:-${ROBOREPO_TELEMETRY_PID_PATH:-${HOME}/.local/state/cli/portal-server.pid}}"
-  legacy_pid_path="${ROBOREPO_TELEMETRY_PID_PATH:-${HOME}/.local/state/cli/telemetry-server.pid}"
-  for path in "${pid_path}" "${legacy_pid_path}"; do
+  local state_dir
+  state_dir="$(cli_state_dir)"
+  for path in "${ROBOREPO_PORTAL_PID_PATH:-}" "${state_dir}"/portal/server-*.pid; do
     if [[ -f "${path}" ]]; then
       pid="$(tr -cd '0-9' < "${path}" 2>/dev/null || true)"
-      [[ -n "${pid}" && "${pid}" != "$$" ]] && pids+=("${pid}")
+      [[ -n "${pid}" && "${pid}" != "$$" ]] && is_portal_pid "${pid}" && pids+=("${pid}")
     fi
   done
   while IFS= read -r pid; do
@@ -608,8 +584,8 @@ check_no_active_remnants() {
     "${state_dir}/backups" \
     "${HOME}/.cli-backups" \
     "${state_dir}/initialization.json" \
-    "${ROBOREPO_PORTAL_PID_PATH:-${ROBOREPO_TELEMETRY_PID_PATH:-${HOME}/.local/state/cli/portal-server.pid}}" \
-    "${ROBOREPO_TELEMETRY_PID_PATH:-${HOME}/.local/state/cli/telemetry-server.pid}"; do
+    "${state_dir}/portal" \
+    "${ROBOREPO_PORTAL_PID_PATH:-}"; do
     if [[ -n "${package_bin}" && "${path}" == "${package_bin}" ]]; then
       continue
     fi
@@ -646,11 +622,6 @@ check_no_active_remnants() {
     failed=1
   done < <(cli_process_pids || true)
 
-  if [[ -f "${HOME}/.gitignore_global" ]] && grep -Fqx ".jdm-indexed" "${HOME}/.gitignore_global"; then
-    echo "remnant: ${HOME}/.gitignore_global contains .jdm-indexed" >&2
-    failed=1
-  fi
-
   local profile line
   line='export PATH="${HOME}/.local/bin:${PATH}"'
   for profile in "${HOME}/.zshrc" "${HOME}/.bashrc" "${HOME}/.bash_profile" "${HOME}/.profile"; do
@@ -669,12 +640,6 @@ check_no_active_remnants() {
           failed=1
         elif [[ "${src_rel}" != "-" && -e "${home_abs}" && ! -L "${home_abs}" ]] \
           && content_matches_repo_source "${repo_root}/${src_rel}" "${home_abs}"; then
-          echo "remnant: ${home_abs}" >&2
-          failed=1
-        fi
-        ;;
-      cleanup)
-        if [[ -L "${home_abs}" ]] && is_managed_link "${home_abs}"; then
           echo "remnant: ${home_abs}" >&2
           failed=1
         fi
@@ -746,38 +711,20 @@ check_no_active_remnants() {
   return "${failed}"
 }
 
-# Per-skill global skill links: not in manifest, so manifest_rows won't remove them.
+# Per-skill global skill links: not in manifest, so manifest_rows won't remove them. Every managed
+# harness skill link points into the machine-local cache, dangling or not.
 is_builtin_skill_link() {
   local link="$1"
-  local target
   [[ -L "${link}" ]] || return 1
-  target="$(readlink "${link}")"
-  # Current or recorded-prior checkout. globals/agents/skills is the pre-migration path (kept here
-  # so uninstall can still reclaim links from an install predating the system/package/generated split).
-  case "${target}" in
-    "${repo_root}"/globals/system/skills/*|"${repo_root}"/globals/agents/skills/*) return 0 ;;
-  esac
-  if [[ -n "${recorded_repo}" ]]; then
-    case "${target}" in
-      "${recorded_repo}"/globals/system/skills/*|"${recorded_repo}"/globals/agents/skills/*) return 0 ;;
-    esac
-  fi
-  case "${target}" in
+  case "$(readlink "${link}")" in
     */$(cli_state_dirname)/skills/*) return 0 ;;
   esac
-  # Dangling link that points into globals/system/skills/, the legacy globals/agents/skills/, or
-  # ~/.roborepo/skills/ of any roborepo checkout / install.
-  if [[ ! -e "${link}" ]]; then
-    case "${target}" in
-      */globals/system/skills/*|*/globals/agents/skills/*|*/$(cli_state_dirname)/skills/*) return 0 ;;
-    esac
-  fi
   return 1
 }
 
 # Remove builtin-managed skills: cache entries carrying the '.builtin-managed' marker, plus
-# symlinks that point into the builtin-managed cache or legacy repo source. Never touches a
-# user's native skill (a real dir without the marker).
+# symlinks that point into the builtin-managed cache. Never touches a user's native skill (a real
+# dir without the marker).
 remove_skill_links() {
   local skills_home="$1"
   [[ -d "${skills_home}" ]] || return 0

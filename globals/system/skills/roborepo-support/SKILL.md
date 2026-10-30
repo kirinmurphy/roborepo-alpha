@@ -3,7 +3,7 @@ name: roborepo-support
 description: >
   Work with builtin-managed global agent config from any repo. Use when adding or editing
   shared/exportable skills, skill-backed slash commands, global rules, hooks, settings,
-  package-enabled behaviors, MCP entries, or Claude/Codex parity. Triggers: "add a skill",
+  package-enabled behaviors, MCP entries, or cross-harness parity. Triggers: "add a skill",
   "edit global rules", "roborepo support", "harness config", "skill authoring",
   "skill triggers", "roborepo update", "roborepo doctor". SKIP for changing roborepo's
   own installer, CLI internals, package/apply engine, portal, telemetry, or local/skills/;
@@ -12,7 +12,7 @@ description: >
 
 # Roborepo Support & Skill Authoring
 
-For work with builtin-managed Claude + Codex configuration: shared skills, generated
+For work with builtin-managed Claude, Codex, and Gemini configuration: shared skills, generated
 rules, hooks, settings, MCP registration, package-enabled behaviors, and cross-harness
 parity. This skill is shared/exportable; it should help users operate roborepo from a
 local machine without pulling in the repo-internal platform manual.
@@ -34,28 +34,32 @@ the repo-local `roborepo-development` skill instead.
 The canonical shared source is a package-owned skill resource at
 **`globals/packages/<package>/skills/<name>/`**. The required base support skill is the only current
 system skill under **`globals/system/skills/roborepo-support/`**. Roborepo materializes shared
-skills into the machine-local cache at `~/.roborepo/skills/<name>`, then both harnesses read from
-their native skill dir via symlink:
+skills into the machine-local cache at `~/.roborepo/skills/<name>`, then every enabled harness that
+supports skills (currently Claude, Codex, and Gemini) reads it from its native skill dir via symlink:
 
 - `~/.claude/skills/<name>` -> `~/.roborepo/skills/<name>`
 - `~/.codex/skills/<name>` -> `~/.roborepo/skills/<name>`
+- `~/.gemini/skills/<name>` -> `~/.roborepo/skills/<name>`
 
 These managed cache entries are created by the installer's enumerate-step
 (`install-lib.sh:link_global_skills`), called from `install-harness.sh` (once per detected harness),
-and `scripts/build/link-global-skills.sh` (run by `skill new`). Each managed cache entry carries a
-`.builtin-managed` marker. There is no intermediate `globals/claude/skills/` directory.
+and `scripts/build/link-global-skills.sh` (run by `roborepo skill sync-global`). Each managed cache
+entry carries a `.builtin-managed` marker.
 
 `roborepo doctor --installed` verifies the live cache entry and harness symlinks are current.
 `roborepo doctor` (without `--installed`) checks that source dirs exist in the repo.
 
 ## Adding a shared skill
 
-Use `roborepo skill new` — it scaffolds the package config, registers resources, and fans out to
-both harnesses in one step:
+Scaffold with `roborepo package dev`, then refresh the shared cache and every supporting harness:
 ```bash
-roborepo skill new
+roborepo package dev create <id> --kind=auto-skill    # or skill-command / standalone-command / empty
+roborepo package dev add-skill <package-id> <skill-id> [--command]
+roborepo skill sync-global
+roborepo skill render-commands                       # when a slash command was added
 ```
-It can create automatic helper skills, skill-backed slash commands, or standalone slash commands.
+`package dev create` makes a new package with an automatic helper skill, a skill-backed slash
+command, or a standalone slash command; `package dev add-skill` adds a skill to an existing package.
 For medium-risk skill descriptions, add/update trigger fixtures in the package's
 `globals/packages/<package-id>/skill-triggers.json` and run:
 ```bash
@@ -79,8 +83,8 @@ Manual add (for reference only — prefer the commands above):
 5. Update README/docs tables when the user-facing surface changes
 6. Verify: `scripts/doctor.sh --installed --quiet`
 
-A `Write|Edit` PreToolUse hook (`globals/claude/hooks/write-guard.mjs`,
-registered in `globals/claude/settings.json`) fires from any repo when a path under
+A `Write|Edit` PreToolUse hook (`globals/system/hooks/claude/write-guard.mjs`,
+registered in `globals/harnesses/claude/hooks-claude.json`) fires from any repo when a path under
 `~/.claude` or `~/.codex` is written. For roborepo-owned assets, it reminds that the
 repo source is canonical and `roborepo update` refreshes HOME. For mutable root config (`~/.claude/settings.json`,
 `~/.codex/config.toml`), it reminds that the active file is local and only portable
@@ -93,6 +97,16 @@ defaults should be merged back into the repo baseline. It is a reminder, not a b
   it (include trigger phrases and clear skip conditions). The description is the only
   thing the agent sees when deciding to load the skill — make it discriminating, not
   generic. Body holds the actual instructions, loaded only on invocation.
+
+## Skill structure limits
+
+`roborepo doctor` checks every skill's shape (`scripts/cli/skill-structure.mjs`). It fails on a
+built-in skill in a development checkout and warns on a workspace skill:
+
+- `SKILL.md` body stays under 500 lines; move detail into reference files.
+- A reference over 100 lines starts with a `## Contents` section, because an agent may preview it
+  with a partial read.
+- Every file under `references/` is linked from `SKILL.md`.
 
 ## References provide depth; SKILL.md provides gates
 
@@ -155,16 +169,18 @@ and document authoring differ from recording findings, test results, decisions, 
 
 ## Editing global rules / behavior
 
-- Generated global rules: edit fragments under `globals/rules/shared/`,
-  `globals/rules/claude/`, or `globals/rules/codex/`, then run
-  `roborepo rules --check` or `roborepo rules`.
-- Hooks: `globals/claude/hooks/` + `globals/claude/settings.json`; `globals/codex/hooks.json`. Automated
+- Generated global rules: edit fragments under `globals/system/rules/shared/`,
+  `globals/system/rules/claude/`, or `globals/system/rules/codex/`, then run
+  `roborepo config rules --check` (render with `scripts/build/render-rules.sh`).
+- Hooks: scripts under `globals/system/hooks/<harness>/` and `globals/harnesses/<harness>/hooks/`,
+  registered in `globals/harnesses/claude/hooks-claude.json` and
+  `globals/harnesses/codex/hooks-codex.json`. Automated
   "always do X" behaviors must be hooks — the harness runs them, not the model.
-- Settings/permissions: portable baselines live in `globals/claude/settings.json`,
-  `globals/codex/config.toml`, and `manifests/inventory/agent-permissions.json`; render/check
-  permission outputs with `roborepo permissions --check`.
+- Settings/permissions: portable baselines live in `globals/harnesses/claude/settings.starter.json`,
+  `globals/harnesses/codex/config.starter.toml`, and `manifests/inventory/agent-permissions.json`; render/check
+  permission outputs with `roborepo config permissions --render` / `--check`.
 - After editing a copied/read-mostly asset in repo source, run `roborepo update` to refresh HOME.
-  Mutable root config (`globals/claude/settings.json`, `globals/codex/config.toml`) is exported into HOME as
+  Mutable root config (`settings.starter.json`, `config.starter.toml`) is exported into HOME as
   active local files, not symlinked.
 - On collisions between HOME and repo, follow
   `docs/user/reference/config-collision-handling.md` — flag conflicts, don't guess.
@@ -177,10 +193,16 @@ and document authoring differ from recording findings, test results, decisions, 
 - `roborepo config root inspect` reports drift between portable baselines and active root config.
 - `roborepo web` opens the local portal for config and telemetry.
 - `roborepo package enable <package-id>` / `package disable <package-id>` wires package-owned MCP, hooks, rules,
-  permissions, and command behavior.
+  permissions, and command behavior. `roborepo package status <package-id>` shows desired vs. live state.
+- `roborepo library` browses and manages packages.
+- `roborepo harness list` / `harness enable <id>` / `harness disable <id>` control which harnesses
+  RoboRepo manages; `harness withdraw <id>` removes what RoboRepo already wrote into one.
+- `roborepo skill audit` reports skill reference-routing problems;
+  `roborepo maintenance repair skill-links` removes harness skill links whose cache entry is gone.
 
 ## Parity principle
 
-This repo's whole point is Claude/Codex parity. When you add or change a capability
-on one harness, ask whether the other needs the mirror, and say so explicitly if you
-intentionally leave them different.
+This repo's whole point is parity across every registered harness (currently Claude, Codex,
+and Gemini). When you add or change a capability on one harness, ask whether the others need
+the mirror, and say so explicitly if you intentionally leave them different. Parity is in
+outcome, not mechanism: each harness may implement the same guarantee its own way.

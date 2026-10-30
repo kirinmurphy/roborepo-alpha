@@ -181,25 +181,24 @@ seed, disagreement, metadata, and minimized replayable JSONL.
 The independent acceptance rules follow the analyzer's raw acceptance boundary in
 `telemetry-observations.mjs`, repository resolution in `telemetry-repository.mjs` and
 `modules/repositories/associations.mjs`, and snapshot/marker condition semantics in
-`telemetry-conditions.mjs` and `telemetry-boundaries.mjs`. Bare tool attribution was checked against
+`telemetry-conditions.mjs` and `telemetry-boundaries.mjs`. MCP attribution was checked against
 `mcpServerOf()` in `scripts/harnesses/transcript-parse.mjs`. These are reference sources, not imports
 of the independent calculation modules.
 
 | Raw evidence form | Independent handling and coverage |
 | --- | --- |
-| Capture schema absent/null, `2`, or `3` | Supported. Exact v3 calls deduplicate by harness/session/call; derived or missing calls use capture/content fallback. |
-| Explicit schema `1`, other versions, non-object rows, unidentified sessions, invalid timestamps, malformed token fields | Explicit unsupported/malformed categories; live comparison is `unavailable`. Such rows never disappear into a pass. |
-| Direct `repo.repository_id` | Supported and takes precedence over legacy hashes. Malformed values are unsupported. |
-| `repo.normalized_remote_hash` with raw registry evidence | Not associated with a registry identity, even when a registry `normalizedRemote` hashes to it: only a direct `repository_id` enters repository comparisons, so agreeing calculations remain `partial`. A registry whose `normalizedRemote` values hash to conflicting identities makes the input unavailable. |
-| Missing repository data, unmatched normalized hash, `remote_hash`, `git_root_hash`, basename/label, or path-only evidence | Unresolved. Neither a label nor a path hash establishes canonical identity; agreeing calculations remain `partial`. |
+| Capture schema `3` | Supported. Exact calls deduplicate by harness/session/call; derived or missing calls use capture/content fallback. |
+| Capture schema absent, `1`, `2`, other versions, non-object rows, unidentified sessions, invalid timestamps, malformed token fields | Explicit unsupported/malformed categories; live comparison is `unavailable`. Such rows never disappear into a pass. |
+| Direct `repo.repository_id` | Supported. Malformed values are unsupported. |
+| Missing repository data, `normalized_remote_hash`, `remote_hash`, `git_root_hash`, basename/label, or path-only evidence | Unresolved. Neither a label nor a path hash establishes canonical identity; agreeing calculations remain `partial`. |
 | Token data absent/null | Supported absence; session and token-session counts remain distinct. |
 | Missing model, missing referenced snapshot, unknown snapshot evaluability, or conflicting session condition evidence | Counted coverage gaps; agreeing calculations remain `partial`. A session that changes snapshot IDs is conservatively partial. |
-| Snapshot schemas `1` and `2` | Independently evaluate package/skill arrays and v2 evaluability. Unknown schemas, malformed arrays, and duplicate IDs make input unavailable. |
-| Native tool names (any bare name such as `Read`, `Bash`, `Skill`, `Agent`, or `apply_patch`) and prefixed `mcp__...` tool names | Supported. A bare jcodemunch or jdocmunch tool name in `tool.name` or `last_result.tool`, which production attributes to an MCP server, is `unsupported_bare_tool` and makes the input unavailable. The oracle keeps its own copy of those names. `tool.mcp_tool` is not checked, because it is the bare suffix of a prefixed name whose server is already known. |
-| Marker schemas `1` and `2` | Supported arithmetic for active change markers watching spike, loop, and read-warning. Unknown scope, missing watched kinds, or unresolved supersede references prevent a pass. |
+| Snapshot schema `2` | Independently evaluate package/skill arrays and their evaluability. Other schemas, malformed arrays, and duplicate IDs make input unavailable. |
+| Native tool names (any bare name such as `Read`, `Bash`, `Skill`, `Agent`, or `apply_patch`) and prefixed `mcp__...` tool names | Supported. Only a prefixed `mcp__<server>__<tool>` name is attributed to an MCP server; every bare name is a native tool on both sides. |
+| Marker schema `2` | Supported arithmetic for active change markers watching spike, loop, and read-warning. Unknown scope, missing watched kinds, or unresolved supersede references prevent a pass. |
 | Unsupported watched kinds such as `over-testing`, malformed/unknown markers, or duplicate marker IDs | Input unavailable. Phase, outcome, experiment, and note markers have no covered change projection. |
-| Filtered analysis options or a caller-supplied production hash index | Unsupported. The live boundary accepts an unfiltered snapshot plus raw repository registry evidence. |
-| Reader-skipped or malformed persisted records | The evidence reader supplies nonnegative parse-failure counts for events, markers, snapshots, and registry evidence through `skippedEvidence`; any positive count prevents a pass. Parsed unsafe shapes remain in the supplied evidence. |
+| Filtered analysis options | Unsupported. The live boundary accepts an unfiltered evidence snapshot. |
+| Reader-skipped or malformed persisted records | The evidence reader supplies nonnegative parse-failure counts for events, markers, and snapshots through `skippedEvidence`; any positive count prevents a pass. Parsed unsafe shapes remain in the supplied evidence. |
 
 `inspectOracleEvidence()` counts supplied event rows and fixed coverage categories before analysis.
 `compareTelemetryOracle()` compares the same full in-memory event array on both sides when its

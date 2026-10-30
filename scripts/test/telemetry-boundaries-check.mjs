@@ -11,7 +11,7 @@ assert.equal(split.before.length, 1); assert.equal(split.after.length, 1); asser
 const ordered = normalizeObservations([row("tie", marker.effective_at, { sequence_domain: "common", sequence: 4 })]).sessions;
 assert.equal(splitObservationBoundary(ordered, { ...marker, sequence_domain: "common", sequence: 5 }).before.length, 1);
 assert.equal(splitObservationBoundary(ordered, { ...marker, sequence_domain: "separate", sequence: 5 }).ambiguous.length, 1);
-assert.equal(compareObservationBoundary(observations, { ...marker, schema: 1 }, new Set()).state, "can't compare fairly");
+assert.equal(compareObservationBoundary(observations, { ...marker, scope: "unknown" }, new Set()).state, "can't compare fairly");
 assert.equal(compareObservationBoundary(observations, marker, new Set(), { condition: { dimension: "harness", value: "codex" } }).state, "recorded");
 const config = (enabled, resources = ["hooks"]) => ({ packages: [{ id: "pkg", enabled, resources }], tools: [] });
 const a = buildEffectiveSnapshot(config(false), { harness: "claude", appVersion: "1" });

@@ -1,0 +1,17 @@
+{
+  "SessionStart": [
+    {
+      "matcher": "startup|resume",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "echo 'fixture-tool: session started'",
+          "statusMessage": "RoboRepo: fixture session reminder"
+        }
+      ]
+    }
+  ],
+  "_descriptions": {
+    "RoboRepo: fixture session reminder": "Prints a fixed line when a session starts while the fixture-tool package is enabled."
+  }
+}

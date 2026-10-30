@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { createHash } from "node:crypto";
 import { planEntriesByIdentity } from "../plan-suite/copy-integration.mjs";
 import os from "node:os";
 import path from "node:path";
@@ -8,20 +9,20 @@ import { inventoryWorktree, inspectRawAttributes, required, writeTree } from "./
 
 // Every proof object is disposable. Neither preview nor a failed proof creates repository refs or
 // writes the user's index. Both staged and filesystem versions must be absorbed by ONE candidate.
-export async function assessWorktreePreservation(cwd, { branch, base = null, recorded = null, timeoutMs = 30000 } = {}) {
+export async function assessWorktreePreservation(cwd, { branch, base = null, recorded = null, timeoutMs = 30000, runGit: executeGit = runGitProcess } = {}) {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-preservation-"));
   const deadline = Date.now() + timeoutMs;
   let landing = null;
   let inventory = null;
   let remainingPaths = [];
   try {
-    const objects = path.resolve(cwd, required(await runGitProcess(cwd, ["rev-parse", "--git-path", "objects"])).trim());
+    const objects = path.resolve(cwd, required(await executeGit(cwd, ["rev-parse", "--git-path", "objects"])).trim());
     fs.mkdirSync(path.join(temporary, "objects"));
     const plumbing = { objectDirectory: path.join(temporary, "objects"), alternateObjects: objects };
     const runGit = (directory, args, options = {}) => {
       const remaining = deadline - Date.now();
       if (remaining <= 0) throw new Error("assessment time limit exceeded");
-      return runGitProcess(directory, args, { ...options, plumbing: { ...plumbing, ...options.plumbing }, timeoutMs: Math.min(10000, remaining) });
+      return executeGit(directory, args, { ...options, plumbing: { ...plumbing, ...options.plumbing }, timeoutMs: Math.min(10000, remaining) });
     };
     const git = (args, options) => runGit(cwd, args, options);
     inventory = await inventoryWorktree(cwd, { git });
@@ -35,10 +36,21 @@ export async function assessWorktreePreservation(cwd, { branch, base = null, rec
     const result = (state, reason, extra = {}) => ({ state, reason, landing, fingerprint: inventory.fingerprint, tip: inventory.tip, baseCommit, baseRef: base, remainingPaths, blockingPaths: [], ...extra });
     if (landing.tip && landing.tip !== inventory.tip) throw new Error("branch changed during assessment");
     const baseline = parseTree(required(await git(["ls-tree", "-r", "-z", inventory.tip], { maxBuffer: GIT_MAX_BINARY_BUFFER })));
+    const objectFormat = required(await git(["rev-parse", "--show-object-format"])).trim();
+    if (!["sha1", "sha256"].includes(objectFormat)) throw new Error("unsupported Git object format");
+    const knownBlobs = new Set([...baseline, ...inventory.index].map((entry) => entry.oid));
     const filesystem = [];
     for (const entry of inventory.entries) {
       if (entry.mode === "directory") continue;
-      filesystem.push({ path: entry.path, mode: entry.mode, oid: required(await git(["hash-object", "-w", "--stdin"], { input: entry.bytes })).trim() });
+      // Inventory has already refused filters and conversions. Reuse raw blobs present in the
+      // baseline or index; only new bytes need writing to the disposable object store.
+      const oid = createHash(objectFormat).update(`blob ${entry.bytes.length}\0`).update(entry.bytes).digest("hex");
+      if (!knownBlobs.has(oid)) {
+        const written = required(await git(["hash-object", "-w", "--stdin"], { input: entry.bytes })).trim();
+        if (written !== oid) throw new Error("filesystem blob identity changed while hashing");
+        knownBlobs.add(oid);
+      }
+      filesystem.push({ path: entry.path, mode: entry.mode, oid });
     }
     const before = new Map(baseline.map((entry) => [entry.path, entry]));
     for (const layer of [inventory.index, filesystem]) {

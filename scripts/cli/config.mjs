@@ -178,7 +178,6 @@ export function readConfigSnapshot() {
     id: pkg.id,
     label: pkg.label,
     origin: pkg.origin,
-    archived: pkg.archived === true,
     description: pkg.description || null,
     status: packageLiveState.get(pkg.id)?.status || "disabled",
     catalogStatus: pkg.status || "available",
@@ -333,7 +332,6 @@ export function buildBehaviorView(snap) {
   const packageCosts = snap.contextCost?.packages || {};
   const presentationItem = (item) => packagePresentationItem(item, toolsByPackage.get(item.id) || [], packageCosts[item.id] || null);
   for (const item of snap.packages) {
-    if (item.archived) continue;
     // Dependency-only and hidden packages get no row of their own; a dependency-only package is
     // listed under Requires in the source popup of each package that requires it.
     if ((item.presentation?.visibility || "catalog") !== "catalog") continue;
@@ -520,7 +518,7 @@ function labelRestatesCommand(label, command) {
 }
 
 // Each row's required packages, as a reference its source popup lists: the transitive `requires`
-// of the package, minus hidden and archived packages. Each entry carries the inspect target and
+// of the package, minus hidden packages. Each entry carries the inspect target and
 // cost its own row would have, so the popup can open its source. Required packages are never page
 // rows of their own (a dependency-only one has no switch, and a selectable one already has its own
 // row), so this is the only place they appear for the packages that pull them in.
@@ -529,7 +527,7 @@ function requiredReferences(item, packages, presentationItem) {
   return requiredClosure(packages, [item.id])
     .filter((id) => id !== item.id)
     .map((id) => byId.get(id))
-    .filter((pkg) => pkg && !pkg.archived && pkg.presentation?.visibility !== "hidden")
+    .filter((pkg) => pkg && pkg.presentation?.visibility !== "hidden")
     .map((pkg) => {
       const row = presentationItem(pkg);
       return { id: pkg.id, label: pkg.label, active: pkg.enabled, inspect: row.inspect, contextCost: row.contextCost, builtIn: row.builtIn };
@@ -538,7 +536,7 @@ function requiredReferences(item, packages, presentationItem) {
 
 // The packages a section's rows recommend, as the section's Recommended dependencies list: each a
 // switchable row naming the rows that recommend it. A package already shown as a row in the
-// section, one a row requires (it turns on anyway), and a hidden, archived, or non-selectable one
+// section, one a row requires (it turns on anyway), and a hidden or non-selectable one
 // are left out.
 function recommendedDependencies(sectionItems, packages, presentationItem) {
   const byId = new Map(packages.map((pkg) => [pkg.id, pkg]));
@@ -549,7 +547,7 @@ function recommendedDependencies(sectionItems, packages, presentationItem) {
     const label = byId.get(item.id)?.label || item.label;
     for (const id of byId.get(item.id)?.recommends || []) {
       const pkg = byId.get(id);
-      if (!pkg || shown.has(id) || required.has(id) || pkg.archived || !pkg.selectable) continue;
+      if (!pkg || shown.has(id) || required.has(id) || !pkg.selectable) continue;
       if (pkg.presentation?.visibility === "hidden") continue;
       if (!recommended.has(id)) recommended.set(id, new Set());
       recommended.get(id).add(label);

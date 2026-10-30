@@ -13,7 +13,7 @@ process.on("exit", () => fs.rmSync(home, { recursive: true, force: true }));
 // os.homedir() reads $HOME on macOS/Linux; set it before importing the modules that snapshot it.
 process.env.HOME = home;
 const stateDir = path.join(home, ".roborepo");
-process.env.ROBOREPO_STATE_DIR = stateDir;
+process.env.ROBOREPO_STATE_ROOT = stateDir;
 fs.mkdirSync(path.join(home, ".claude"), { recursive: true });
 fs.mkdirSync(path.join(home, ".codex"), { recursive: true });
 

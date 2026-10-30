@@ -117,19 +117,6 @@ for (const [name, args] of [["validate", ["age4cm7r", "--json"]], ["start", ["ag
 }
 assert.doesNotMatch(rootHelp, /plans validate|plans start|plans stop-servers/, "internal plans commands stay out of root help");
 
-const removed = resolveCommand(catalog, ["watch", "code", "."]);
-assert.equal(removed.kind, "removed");
-assert.deepEqual(removed.replacement.replacement, ["index", "code", "--watch"]);
-assert.equal(resolveCommand(catalog, ["onboard"]).kind, "removed");
-assert.equal(resolveCommand(catalog, ["verify", "--verbose"]).kind, "removed");
-assert.equal(resolveCommand(catalog, ["enable"]).kind, "removed");
-assert.equal(resolveCommand(catalog, ["disable"]).kind, "removed");
-
-const watch = resolveCommand(catalog, ["index", "code", ".", "--watch"]);
-assert.equal(watch.kind, "command");
-assert.deepEqual(watch.tokens, ["index", "code"]);
-assert.deepEqual(watch.args, [".", "--watch"]);
-
 const namespaceWithDefaultExecution = resolveCommand(catalog, ["config", "rules", "--check"]);
 assert.equal(namespaceWithDefaultExecution.kind, "command");
 assert.deepEqual(namespaceWithDefaultExecution.tokens, ["config", "rules"]);
@@ -265,42 +252,6 @@ assert.ok(catalog.nodes.package.children.dev, "package dev is a separate namespa
     fs.rmSync(stateRoot, { recursive: true, force: true });
     fs.rmSync(workspaceRoot, { recursive: true, force: true });
   }
-}
-
-const activeDocPaths = [
-  "README.md",
-  "docs/user/reference/roborepo-cli.md",
-  "docs/internal/cli-internals.md",
-  "docs/user/guides/setup-and-daily-use.md",
-  "docs/user/guides/install-workflows.md",
-  "docs/user/guides/first-time-setup.md",
-  "docs/user/guides/telemetry.md",
-  "docs/user/reference/jcodemunch.md",
-  "docs/user/reference/jdocmunch.md",
-  "docs/internal/portal-architecture.md",
-  "docs/user/reference/plans-portal.md",
-  "docs/user/reference/claude-hooks.md",
-  "docs/user/reference/codex-hooks.md",
-  "docs/user/reference/config-control-panel.md",
-  "docs/user/reference/architecture.md",
-  "docs/internal/harness-anatomy.md",
-  "docs/architecture/documentation-map-and-audit.md",
-  "docs/user/guides/plan/lifecycle/plan-suite.md",
-  "local/skills/roborepo-development/SKILL.md",
-  "local/skills/roborepo-development/references/package-development.md",
-  "globals/system/skills/roborepo-support/SKILL.md",
-  "globals/packages/telemetry/package.config.json",
-  "scripts/install/main.sh",
-  "scripts/cli/config.mjs",
-  "scripts/cli/package-probes.mjs",
-  "scripts/cli/presets.mjs",
-  "scripts/cli/telemetry.mjs",
-  "scripts/cli/telemetry-seed-demo.mjs",
-];
-const removedCommandPattern = /cli (?:onboard|serve|verify|watch code|enable|disable)\b(?!-)(?!` was replaced)/;
-for (const docPath of activeDocPaths) {
-  const content = fs.readFileSync(path.join(repoRoot, docPath), "utf8");
-  assert.doesNotMatch(content, removedCommandPattern, `${docPath} documents removed top-level package commands`);
 }
 
 console.log("cli-command-catalog-check passed");

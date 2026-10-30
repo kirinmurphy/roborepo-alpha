@@ -656,6 +656,85 @@ Git administrative worktree `credential-protection`; this document contains no m
   temporary directories. This record changes only the primary plan's Result; it does not alter
   the landed worktree, recover approval, close the plan, or authorize cleanup.
 
+
+#### Merged implementation verification — October 30, 2026
+
+Checked current main at `0cf40deb9fd39f7113390b2c0ac3e1b776479a60`, following the user's request
+to review the landed work and mark only supported items complete. The original implementation
+checklist was already checked; these are newly verified results, not renewed approval.
+
+- [x] Confirm the original branch tip and absorbing squash remain valid historical landing
+  evidence: the tip is still `f90412a258c6a1177ea33a6531581d53020f21db`, and
+  `28932c1c85535759e8cf565ccdd096d6735e8946` remains on main's first-parent history.
+  Git assertions passed. The credential translator, shared permission renderer, projection/native
+  tests, and native coverage fixtures are unchanged from the squash and have no pending edits.
+- [x] Review the credential implementation present on main. The separate read-only Validator
+  reported no actionable findings after checking requirements, docs of record, resolved intent,
+  portable anchors, both profiles, foreign-config preservation, and the three convention rubrics.
+  Native runtime coverage remains historical, with the accepted tool/platform limits unchanged.
+- [x] Verify disposable TLS credentials without reading persistent secret files. Git asserts no
+  runtime TLS fixture files remain tracked. Executed in-memory assertions passed for distinct
+  generated keys, certificate signature, matching key, and current validity; the Validator also
+  passed localhost-subject and TLS-context assertions. This does not claim that the full HTTPS
+  discovery suite or its listeners ran successfully.
+- [x] Rerun focused current-main checks: credential projection (15 patterns, nine combinations),
+  foreign lines, home-path rules, and documentation references passed. The Validator independently
+  passed portal state, lifecycle manifest, plan-suite skills, whitespace, and duplicate-only Codex
+  hook reconciliation, including input preservation and stable reapply.
+- [x] Recheck repository health: doctor passed all 107 checks during `npm run check`.
+
+Remaining verification is explicit. `npm run check`, started on main `7c65c2e7`, exited nonzero at
+three package add-skill assertions and temporary cleanup (`EPERM`); the checkout advanced through
+an unrelated plan-organization/test-fixture commit while the gate ran. No passing aggregate for a
+single committed snapshot is claimed. Three unrelated pending implementation paths remain:
+`modules/repositories/worktree-preservation.mjs`, `scripts/test/slash-commands-characterization-check.mjs`,
+and `scripts/test/worktree-snapshot-check.mjs`. They were not changed or certified by this review.
+Live-render, Gemini-adapter, and root-config-write checks still exited nonzero during their own
+fixture cleanup. An independent empty-directory deletion control also returned `EPERM`.
+
+`npm run test:portal-ui` and its permitted retry both failed to bind `127.0.0.1` and clean their
+temporary directories; no browser assertions ran. The current canonical landed command also failed
+temporary-directory cleanup, so only the independently revalidated historical landing evidence
+above is counted as passed. The approval reader still resolves the historical worktree and reports
+stale approval plus unavailable working-file inspection. The plan validator reports zero blocking
+findings and one advisory outside-worktree evidence edit; this primary-only pending record is not
+an authority override. Complete review, renewed exact-commit human approval, closure, and worktree
+cleanup remain unchecked outcomes. No approval, waiver, or broader runtime coverage is inferred.
+
+
+#### Verification failure diagnosis — October 30, 2026
+
+The user requested resolution of verification before the next implementation-approval prompt.
+Isolated reproductions now establish the immediate causes of the three CLI assertion failures:
+
+- Both ownership-conflict cases restore their original package configuration and trigger contents,
+  then fail at `scripts/cli/packages.mjs:184` while removing the new skill directory. Executed
+  diagnostic assertions verified the restored bytes, `EPERM` at that operation, and the directory
+  left behind. The cleanup error replaces the ownership-validation message expected by the tests.
+- The empty-package conflict likewise fails at the same cleanup operation and leaves its skills
+  directory behind. This directly explains the third failing assertion. No speculative package
+  behavior change was made to hide incomplete rollback.
+- An independent, newly created empty directory owned by the current user with mode `0700` could
+  not be removed by either Node's `rmdirSync` or `/bin/rmdir`, including a permitted retry. Controls
+  under both the system temporary directory and the repository-family worktree root returned
+  `EPERM`. The particular policy/runtime layer responsible for denying removal is not established.
+- An independent TCP server on `127.0.0.1`, requesting an ephemeral port and no external connection,
+  also returned `EPERM` on its permitted retry. This reproduces the browser startup obstacle
+  without the browser runner.
+- Read-only discovery currently selects Codex CLI `0.166.0`; the discovered desktop executable is
+  `0.166.0-alpha.5.1`. The historical native coverage at `0.163.0-alpha.11.2` is not silently
+  extended to either newer runtime.
+- Existing remote CI evidence was sought read-only with `gh run list`; normal and permitted
+  attempts could not connect to `api.github.com`. No remote pass is claimed.
+
+The full gate remains unpassed. A verification environment must first permit ordinary temporary
+folder removal and loopback listeners while preserving credential-read restrictions. Then rerun
+`npm run check` and the remaining plan-relevant checks, resolve any actual failures, finish the
+post-merge review evidence, and request approval of the exact reviewed implementation. These
+control failures are execution prerequisites; neither passing diagnostics nor an already-merged
+branch substitutes for a passing gate. No credential denial, installed configuration, implementation
+approval, or unrelated pending edit was changed by this diagnosis.
+
 ### Approval
 - Decision: approved
 - Reviewed implementation commit: 81ae9e362000c1a48574b1aeceda4c2302b19570

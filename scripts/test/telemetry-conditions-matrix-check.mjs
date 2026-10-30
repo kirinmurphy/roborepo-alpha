@@ -47,16 +47,16 @@ for (const [withN, withoutN, withAffected, withoutAffected, expected] of goldenR
   scenarios++;
 }
 
-for (const schema of [1, 2]) for (const dimension of ["packages", "skills"]) {
+for (const dimension of ["packages", "skills"]) {
   for (const [payload, expected] of [
     [{ [dimension]: ["target"] }, "present"], [{ [dimension]: [] }, "absent"],
     [{}, "unknown"], [{ [dimension]: ["target"], unavailable: [dimension] }, "unknown"],
   ]) {
-    const snapshot = { schema, snapshot_id: "snapshot", evaluability: { [dimension]: true }, ...payload };
+    const snapshot = { schema: 2, snapshot_id: "snapshot", evaluability: { [dimension]: true }, ...payload };
     const observation = { rows: [{ config_snapshot_id: "snapshot" }] };
     assert.equal(evaluateCondition(observation, { dimension, value: "target" }, [snapshot]).state, expected);
     assert.equal(evaluateCondition(observation, { dimension, value: "target" }, []).state, "unknown");
-    if (schema === 2) assert.equal(evaluateCondition(observation, { dimension, value: "target" }, [{ ...snapshot, evaluability: { [dimension]: false } }]).state, "unknown");
+    assert.equal(evaluateCondition(observation, { dimension, value: "target" }, [{ ...snapshot, evaluability: { [dimension]: false } }]).state, "unknown");
     scenarios++;
   }
 }

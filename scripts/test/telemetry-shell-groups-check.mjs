@@ -12,7 +12,7 @@ let n = 0;
 const row = (harness, session, event, toolName, { category = null, result = null } = {}) => {
   n += 1;
   return {
-    schema: 2, harness, session_id: session, event, capture_id: `cap-${n}`, call_id: `call-${n}`,
+    schema: 3, harness, session_id: session, event, capture_id: `cap-${n}`, call_id: `call-${n}`,
     ts: new Date(base + n * 1000).toISOString(), repo: { label: "demo" },
     tool: { name: toolName, is_mcp: false },
     operation: category ? { category, scope: "unknown", classifier_version: 2 } : null,

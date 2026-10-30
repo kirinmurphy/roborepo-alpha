@@ -35,7 +35,7 @@ function run(args) {
     HOME: tmp,
     PATH: fakeBin,
     FAKE_HARNESS_BIN: fakeBin,
-    ROBOREPO_STATE_DIR: path.join(tmp, ".roborepo"),
+    ROBOREPO_STATE_ROOT: path.join(tmp, ".roborepo"),
     NODE_ENV: "test",
     ROBOREPO_TEST_DESKTOP_ROOTS: JSON.stringify({
       "/Applications": path.join(tmp, "Applications"),

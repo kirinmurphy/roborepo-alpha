@@ -2,7 +2,7 @@
 //
 // WHY THIS EXISTS: appRoot is where roborepo reads built-ins AND writes build output — notably
 // generated/<harness>/<rootConfig> (see cli/paths.mjs's rootConfigBaseline). A test that isolates
-// only HOME and ROBOREPO_STATE_DIR still has appRoot pointing at the real checkout, so any command
+// only HOME and ROBOREPO_STATE_ROOT still has appRoot pointing at the real checkout, so any command
 // touching root config writes to TRACKED files, stamping a temp path into
 // generated/claude/settings.json. That has reached a merge candidate before.
 //
@@ -25,13 +25,32 @@ const APP_ROOT_CONTENTS = ["manifests", "globals", "scripts", "modules"];
 // A .git dir is what makes isDevelopmentCheckout() report development mode (cli/roots.mjs), which
 // is what these tests are exercising. Without it the fixture runs in package mode and behaves
 // differently from the checkout under test.
-export function makeAppRoot({ prefix = "roborepo-app-" } = {}) {
+export function makeAppRoot({ prefix = "roborepo-app-", fixturePackages = false, includeGenerated = false } = {}) {
   const appRoot = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
   fs.mkdirSync(path.join(appRoot, ".git"), { recursive: true });
-  for (const entry of APP_ROOT_CONTENTS) {
+  for (const entry of [...APP_ROOT_CONTENTS, ...(includeGenerated ? ["generated"] : [])]) {
     fs.cpSync(path.join(repoRoot, entry), path.join(appRoot, entry), { recursive: true });
   }
+  if (fixturePackages) installFixturePackages(appRoot);
   return appRoot;
+}
+
+// Test-only packages (scripts/test/fixtures/packages) that exercise the live-config resource types
+// no shipped package uses: MCP servers, Codex tool approvals, and hooks with scripts. They are
+// copied into the isolated app root as built-ins, with their MCP presets merged into its inventory,
+// so the real catalog never carries them.
+const FIXTURE_PACKAGES_DIR = path.join(repoRoot, "scripts", "test", "fixtures", "packages");
+const FIXTURE_MCP_INVENTORY = path.join(repoRoot, "scripts", "test", "fixtures", "mcp-inventory.json");
+
+function installFixturePackages(appRoot) {
+  fs.cpSync(FIXTURE_PACKAGES_DIR, path.join(appRoot, "globals", "packages"), { recursive: true });
+  const fixture = JSON.parse(fs.readFileSync(FIXTURE_MCP_INVENTORY, "utf8"));
+  for (const [file, key] of [["mcp-presets.json", "presets"], ["mcp-servers.json", "servers"]]) {
+    const target = path.join(appRoot, "manifests", "inventory", file);
+    const current = JSON.parse(fs.readFileSync(target, "utf8"));
+    current[key] = [...(current[key] || []), ...fixture[key]];
+    fs.writeFileSync(target, `${JSON.stringify(current, null, 2)}\n`);
+  }
 }
 
 // Harness config files start empty rather than absent because several code paths read the existing
@@ -53,7 +72,7 @@ export function makeCliEnv({ appRoot, home, skipMcp = true, extra = {} } = {}) {
     ...process.env,
     HOME: home,
     ROBOREPO_APP_ROOT: appRoot,
-    ROBOREPO_STATE_DIR: path.join(home, ".roborepo"),
+    ROBOREPO_STATE_ROOT: path.join(home, ".roborepo"),
     ROBOREPO_MODE: "development",
     ...(skipMcp ? { SKIP_MCP: "1" } : {}),
     ...extra,

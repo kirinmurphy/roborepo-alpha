@@ -229,7 +229,7 @@ test.describe("Agents page", () => {
   test("explains a package whose pieces were installed outside RoboRepo", async ({ page }) => {
     const snapshot = await (await page.request.get("/api/config")).json();
     const shown = new Set(snapshot.behaviorView.flatMap((section) => section.items || []).map((item) => item.id));
-    const pkg = snapshot.packages.find((entry) => !entry.enabled && !entry.archived && shown.has(entry.id));
+    const pkg = snapshot.packages.find((entry) => !entry.enabled && shown.has(entry.id));
     expect(pkg, "fixture needs a disabled package on the Agents page").toBeTruthy();
     // What the probes report when another tool configured this package's MCP server and status
     // line: two status line components (Claude and Codex) must read as one "status line".

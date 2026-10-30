@@ -15,9 +15,6 @@ export function resultToolLabel(toolName) {
 
 export function toolGroup(toolName, shellCategory = null) {
   const server = mcpServerOf(toolName);
-  // Groups named by the REAL package when the bucket is a single known server (the user reads
-  // "jcodemunch", not a made-up category); generic bucket only for other/unrecognized servers.
-  if (server === "jcodemunch" || server === "jdocmunch") return server;
   if (server) return "mcp-other";
   if (toolName === "Read" || toolName === "Grep" || toolName === "Glob") return "native-read";
   if (toolName === "Edit" || toolName === "Write" || toolName === "NotebookEdit") return "edit";

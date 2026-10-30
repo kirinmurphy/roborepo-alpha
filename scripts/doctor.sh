@@ -254,32 +254,6 @@ check_skill_lib_parity() {
   fi
 }
 
-check_package_command_catalog() {
-  if ! command -v node >/dev/null 2>&1; then
-    ok "node unavailable; skipped package command catalog check"
-    return 0
-  fi
-  local output
-  if output="$(node -e '
-    import(process.argv[1]).then((m) => {
-      const result = m.validatePackageCommandCatalog();
-      if (result.ok) return;
-      for (const line of result.errors) console.error(line);
-      process.exit(1);
-    }).catch((err) => {
-      console.error(err?.stack || String(err));
-      process.exit(1);
-    });
-  ' "${repo_root}/scripts/cli/package-commands.mjs" 2>&1)"; then
-    ok "package-owned CLI command catalog valid"
-  else
-    fail "package-owned CLI command catalog invalid"
-    while IFS= read -r line; do
-      [[ -n "${line}" ]] && echo "  ${line}" >&2
-    done <<< "${output}"
-  fi
-}
-
 # Harness provider manifests:
 # validate every globals/harnesses/<id>/provider.json against the shared contract so a malformed
 # manifest fails doctor instead of surfacing later as a confusing runtime error.
@@ -519,13 +493,6 @@ while IFS=$'\t' read -r req_file req_scope; do
   [[ "${req_scope}" == "dev" && "${package_mode}" -eq 1 ]] && continue
   check_file "${req_file}"
 done < <(source_files)
-for old_root in agents claude codex skills-local; do
-  if [[ -e "${repo_root}/${old_root}" || -L "${repo_root}/${old_root}" ]]; then
-    fail "${old_root}/ legacy source root still exists"
-  else
-    ok "${old_root}/ legacy source root absent"
-  fi
-done
 # Derive the shared-skill list from package skill resources plus system support skills so this
 # never goes stale. The installer fans each skill into ~/.roborepo/skills/<n> and symlinks each
 # present harness view there. An installed cache copy that differs from its source is stale: agents
@@ -561,19 +528,12 @@ for skill_src in "${repo_root}"/local/skills/*/SKILL.md; do
   done
 done
 check_skill_lib_parity
-check_package_command_catalog
 check_manifest_sources
 check_harness_manifests
 check_harness_registry
 check_json "generated/codex/hooks.json"
 check_json "generated/claude/settings.json"
 check_toml "generated/codex/config.toml"
-
-if command -v uvx >/dev/null 2>&1; then
-  ok "uvx available"
-else
-  ok "uvx unavailable; skipped (optional, only needed for jcodemunch/jdocmunch MCP setup)"
-fi
 
 check_node_release
 
@@ -677,7 +637,6 @@ if [[ "${check_installed}" -eq 1 ]]; then
       skill_name="$(basename "${skill_dir%/}")"
       case "${skill_name}" in .*) continue ;; esac  # skip dotfolders
       [[ -L "${skills_home}/${skill_name}" ]] && continue  # managed view
-      [[ -e "${skills_home}/${skill_name}/.builtin-managed" ]] && continue  # legacy managed copy
       echo "drift: ${skill_dir} is unmanaged — run: roborepo skill adopt ${skill_name}"
       drift_count=$((drift_count + 1))
     done

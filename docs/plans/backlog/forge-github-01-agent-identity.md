@@ -1,7 +1,7 @@
 ---
 id: w7vls1yk
 priority: high
-next_action: Run the Phase 1 checks (gh keyring per config dir, GH_CONFIG_DIR tilde expansion, credential helper reset, Gemini env delivery), then create the bot account and token
+next_action: Create the bot account and classic token (Phase 2), then run the three checks that need them
 blocked_by: []
 depends_on: []
 related: ["f0jwe76j", "permva27", "developer-runtime-remote-branch-status"]
@@ -39,7 +39,7 @@ is not an option for this repo (see Context).
 
 ## Non-goals
 
-- A full git-host adapter (`roborepo pr …` commands, GitLab or Bitbucket providers). See
+- A full forge adapter (`roborepo pr …` commands, GitLab or Bitbucket providers). See
   [Future work](#future-work).
 - Moving the repo into a GitHub organization.
 - Stopping an agent that deliberately goes around the setup, for example by using the user's SSH
@@ -102,7 +102,7 @@ placed in them is effectively public. The token itself can never go there.
 | GitHub App installation tokens last one hour, are minted from a JWT signed by the App's private key, and can be narrowed to repos and permissions | Verified | [Generating an installation access token](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app) |
 | "Require approval of the most recent reviewable push" requires approval from someone other than the last pusher | Verified | [Available rules for rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets) |
 | GraphQL `PullRequestReviewThread.isResolved`, `viewerCanResolve`, and `addPullRequestReviewThreadReply` exist | Verified | [GraphQL pulls reference](https://docs.github.com/en/graphql/reference/pulls) |
-| Which permission `resolveReviewThread` needs | **Unverified.** The docs page was not read that far. Expected: Pull requests write | — |
+| Which permission `resolveReviewThread` needs | **Not stated.** The mutation reference lists its inputs (`threadId`) but no permission. Phase 2 tests it with the bot | [GraphQL pulls reference](https://docs.github.com/en/graphql/reference/pulls) |
 
 The fine-grained limitation changes the original idea. A bot user added as a collaborator to a
 personal-account repo cannot use a fine-grained token there. What limits the bot is its
@@ -175,15 +175,17 @@ One-time setup by the user:
 GH_CONFIG_DIR="$HOME/.roborepo/github-agent/gh" gh auth login --hostname github.com --with-token < token.txt
 ```
 
-The design rests on four assumptions that Phase 1 checks:
+Local checks of the assumptions this rests on, run on 2026-10-30 with `gh` 2.103.1:
 
-- `gh` stores a token per account in the keychain, so logging in under the second config dir does
-  not replace the user's entry.
-- `gh` does not expand `~` in `GH_CONFIG_DIR`. If so, the install step writes an absolute path
-  into the copied-in config, not into the tracked `generated/` file.
-- An empty `credential.helper` at environment scope stops `osxkeychain` from answering.
-- Gemini CLI can take environment variables, for example from `~/.gemini/.env`. Until it can,
-  Gemini keeps the user's identity and `gh api` stays denied for it.
+| Assumption | Result | How it was checked |
+| --- | --- | --- |
+| An empty `credential.helper` at environment scope stops `osxkeychain` from answering | **Holds.** Only the `github.com` helper ran | `git credential fill` under `GIT_TRACE=1` with the `GIT_CONFIG_*` pairs above; `osxkeychain` comes from Xcode's system `gitconfig` and did not run |
+| `gh` expands `~` in `GH_CONFIG_DIR` | **It does not.** `GH_CONFIG_DIR='~/x'` created a literal `./~/x` | `gh config set` in a scratch directory. The install step must write an absolute path into the copied-in config, never `~` and never into the tracked `generated/` file |
+| Logging the bot in under a second config dir leaves the user's identity alone | **Holds for current `gh`, with one side effect** | `gh` source (`internal/config/config.go`): tokens are stored per login under service `gh:github.com`, and `ActiveToken` reads the active login's own entry first. Login also rewrites a shared blank-login "active" entry, which `gh` reads only as a fallback. The user's per-login entry exists, so the user's `gh` keeps the user's token. A tool that reads only the blank entry would get the bot's token |
+| Gemini CLI can take environment variables | **Not reliable enough.** Gemini loads only the first `.env` it finds, searching from the working directory upward before `~/.gemini/.env`, so any repo with its own `.env` hides roborepo's file. Whether those values reach the shell tool is undocumented | Gemini CLI configuration docs. Gemini is not installed on this machine, so nothing was run |
+
+Gemini therefore keeps the user's identity, and `gh api` stays denied for it, until Gemini offers
+a settings-level env mechanism that roborepo can render.
 
 The identity entries are rendered only when the user turns the identity on (see Open questions).
 Without it, nothing changes and `gh api` stays denied.
@@ -207,9 +209,10 @@ already treats hosts generically. Keep a seam, not an adapter:
 - **Tag GitHub pieces by host.** Each `gh` behavior in `agent-permissions.json` gets
   `"host": "github"`. In both hooks, the deny list becomes one `github` entry in a host table
   (`{ github: { cli: "gh", denied: [...] } }`), so a second host is a new entry, not a rewrite.
-- **One module for host calls.** The only new roborepo code that talks to GitHub is the doctor
-  check below. It goes in `modules/git-host/`, with an entry point that takes a host name and a
-  `github.mjs` beside it. Nothing outside that module runs `gh`.
+- **One module for host calls.** Roborepo code that talks to GitHub goes in `modules/forge/`, with an
+  entry point that takes a host name and a `github.mjs` beside it. Nothing outside that module runs
+  `gh`. The doctor check below is its first caller; Runtime's PR and CI lookup (Part 03) is the
+  second.
 - **Pattern for a future adapter.** The harness provider registry in `scripts/harnesses/`
   (`registry.mjs` and `contract.mjs`, with one folder per provider) is the model to copy when a
   real second host arrives.
@@ -225,22 +228,25 @@ already treats hosts generically. Keep a seam, not an adapter:
 
 ## Implementation plan
 
-### Phase 1: Check the open facts
+### Phase 1: Check the open facts locally
 
-- [ ] A classic token for a collaborator on a personal-account repo can push a branch and call
-      `gh api` for that repo.
-- [ ] Logging in under a second `GH_CONFIG_DIR` keeps the user's keychain entry: `gh auth status`
-      in the user's terminal still shows the user afterward.
-- [ ] Whether `gh` expands `~` in `GH_CONFIG_DIR`.
-- [ ] An empty `credential.helper` through `GIT_CONFIG_*` stops `osxkeychain` from answering a push.
-- [ ] Which permission `resolveReviewThread` needs, and that the bot can resolve threads on a PR.
-- [ ] Whether Gemini CLI reads environment variables from a file roborepo can render.
+- [x] Whether `gh` expands `~` in `GH_CONFIG_DIR`. It does not (see the results table).
+- [x] An empty `credential.helper` through `GIT_CONFIG_*` stops `osxkeychain` from answering.
+- [x] How `gh` keys keychain entries per login (read from source).
+- [x] Whether Gemini CLI reads environment variables from a file roborepo can render. Not reliably.
 
 ### Phase 2: Account and GitHub settings (by the user, documented by roborepo)
+
+The remaining checks need the bot account, which only a person can create.
 
 - [ ] Create the bot account and invite it as a collaborator on `kirinmurphy/roborepo-alpha`.
 - [ ] Create a classic token with `repo` only and an expiry, then log it in under the agent
       `GH_CONFIG_DIR`.
+- [ ] `gh auth status` in the user's terminal still shows the user after the bot login.
+- [ ] A classic token for a collaborator on a personal-account repo can push a branch and call
+      `gh api` for that repo.
+- [ ] The bot can reply to and resolve a review thread. GitHub's docs do not state which
+      permission `resolveReviewThread` needs.
 - [ ] Update `no-push-to-main` to require one approval of the most recent push. Keep the admin
       bypass.
 
@@ -248,8 +254,9 @@ already treats hosts generically. Keep a seam, not an adapter:
 
 - [ ] Add the identity entries to the rendering step that writes `GIT_CONFIG_*` for Claude and
       Codex, behind the on/off setting.
-- [ ] Write an absolute `GH_CONFIG_DIR` at install if Phase 1 shows no `~` expansion.
-- [ ] Add Gemini delivery if Phase 1 finds an env mechanism. Otherwise record Gemini as not covered.
+- [ ] Write an absolute `GH_CONFIG_DIR` into the copied-in config at install, since `gh` does not
+      expand `~`.
+- [ ] Record Gemini as not covered in the docs, with the `.env` lookup order as the reason.
 
 ### Phase 4: Permissions
 
@@ -262,7 +269,7 @@ already treats hosts generically. Keep a seam, not an adapter:
 
 ### Phase 5: Host module and doctor
 
-- [ ] Add `modules/git-host/` with a host-name entry point and `github.mjs`.
+- [ ] Add `modules/forge/` with a host-name entry point and `github.mjs`.
 - [ ] Add the doctor check, tested with a fake `gh` executable for: bot is admin, bot is the
       user, ruleset without last-push approval, and a healthy setup.
 
@@ -294,7 +301,7 @@ Manual, on the real repo, after Phase 3:
 | `docs/user/reference/codex-hooks.md` | Same identity and `gh api` change for Codex |
 | `docs/user/guides/setup-and-daily-use.md` | One-time bot setup: account, collaborator invite, token, `gh auth login` under the agent config dir, ruleset change |
 | `docs/user/reference/roborepo-cli.md` | The new doctor check |
-| `docs/internal/docs-map.md` | Add `modules/git-host/` |
+| `docs/internal/docs-map.md` | Add `modules/forge/` |
 
 ## Risks
 
@@ -324,7 +331,7 @@ Manual, on the real repo, after Phase 3:
 
 ## Future work
 
-- A full git-host adapter: `roborepo pr …` commands, with GitHub as one provider and GitLab or
+- A full forge adapter: `roborepo pr …` commands, with GitHub as one provider and GitLab or
   Bitbucket as others, modeled on `scripts/harnesses/`. Build it only when a second host is
   actually used.
 - A GitHub App identity, if the repo moves to an organization or long-lived tokens are ruled out.

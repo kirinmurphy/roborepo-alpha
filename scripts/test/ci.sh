@@ -12,6 +12,13 @@ cd "${repo_root}"
 # unreachable host cannot change its timing or output; node-release-health-check.mjs covers the logic.
 export ROBOREPO_SKIP_NODE_RELEASE_CHECK=1
 
+# An agent shell points git at RoboRepo's agent hooks through GIT_CONFIG_* (see
+# docs/user/reference/claude-hooks.md). Fixture repositories push to bare remotes with no default
+# branch, which that pre-push hook refuses, so a gate run by an agent would fail where CI passes.
+while IFS='=' read -r name _; do
+  [[ "${name}" =~ ^GIT_CONFIG_(COUNT|KEY_[0-9]+|VALUE_[0-9]+)$ ]] && unset "${name}"
+done < <(env)
+
 run() {
   echo ""
   echo "==> $*"
@@ -55,6 +62,12 @@ fi
 # `npm run test:portal-ui` is safe to invoke directly on a machine without the browser.
 if node scripts/test/portal-ui/has-browser.mjs >/dev/null 2>&1; then
   run npm run --silent test:portal-ui
+elif [[ "${CI:-}" == "true" ]]; then
+  # CI installs Chromium before this gate. A skip there would report green with no UI coverage, so
+  # a missing browser is a failure, not a skip.
+  echo "" >&2
+  echo "FAIL: portal UI browser suite cannot run: chromium not installed on a CI runner" >&2
+  exit 1
 else
   echo ""
   echo "skip: portal UI browser suite (chromium not installed; run npx playwright install chromium)"

@@ -263,8 +263,8 @@ with that installer behavior.
 
 ## Step 5 — When rendering doesn't fit: MCP servers
 
-An _MCP server_ is an external tool the agent can call — `jcodemunch` for code search, `jdocmunch`
-for docs. Registering one isn't editing a file you can re-render at will; it's an _action_ that mutates
+An _MCP server_ is an external tool the agent can call, such as a code-search or docs-lookup server.
+Registering one isn't editing a file you can re-render at will; it's an _action_ that mutates
 each harness's tool registry, and on Claude it also requires adding matching permission entries before
 the agent will call the tool without prompting.
 
@@ -298,7 +298,7 @@ The divergence is on every axis at once — name, format, _and semantics_:
   JSON control object the harness _obeys_:
 
   ```jsonc
-  {"continue": false, "stopReason": "Grep and Glob are blocked. Use jcodemunch tools instead."}
+  {"continue": false, "stopReason": "This tool is blocked in this repository."}
   ```
 
 - **Codex** declares hooks in a _separate_ `hooks.json`, with its own fields (like `statusMessage`),

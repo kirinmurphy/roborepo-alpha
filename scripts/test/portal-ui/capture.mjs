@@ -57,7 +57,7 @@ if (seedTokens) {
   console.log(`seeded /tokens mock spool → ${spoolDir}/claude.jsonl`);
 }
 
-const serverEnv = { ...process.env, HOME: tmp, ROBOREPO_STATE_DIR: stateDir };
+const serverEnv = { ...process.env, HOME: tmp, ROBOREPO_STATE_ROOT: stateDir };
 process.on("exit", () => {
   try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* best effort */ }
 });

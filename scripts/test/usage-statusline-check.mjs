@@ -32,7 +32,7 @@ function runFormatter(input, env = {}) {
   try {
     const run = runFormatter(
       JSON.stringify({ context_window: { used_percentage: 70 } }),
-      { NO_COLOR: "", ROBOREPO_STATE_DIR: path.join(home, ".roborepo") },
+      { NO_COLOR: "", ROBOREPO_STATE_ROOT: path.join(home, ".roborepo") },
     );
     assert.equal(run.status, 0, "formatter succeeds with NO_COLOR");
     // Matches the format the implementation plan specifies ("Context: 42% · 5h: — · Weekly: —").
@@ -59,7 +59,7 @@ function runFormatter(input, env = {}) {
 {
   const home = makeHome();
   try {
-    const env = { ...process.env, HOME: home, ROBOREPO_STATE_DIR: path.join(home, ".roborepo"), SKIP_MCP: "1" };
+    const env = { ...process.env, HOME: home, ROBOREPO_STATE_ROOT: path.join(home, ".roborepo"), SKIP_MCP: "1" };
     const enable = spawnSync(process.execPath, [cli, "package", "enable", "usage-statusline"], { env, encoding: "utf8" });
     assert.equal(enable.status, 0, `enable should succeed:\n${enable.stderr}\n${enable.stdout}`);
 
@@ -109,7 +109,7 @@ function runFormatter(input, env = {}) {
       path.join(home, ".claude", "settings.json"),
       `${JSON.stringify({ statusLine: { type: "command", command: "custom-status" } }, null, 2)}\n`,
     );
-    const env = { ...process.env, HOME: home, ROBOREPO_STATE_DIR: path.join(home, ".roborepo"), SKIP_MCP: "1" };
+    const env = { ...process.env, HOME: home, ROBOREPO_STATE_ROOT: path.join(home, ".roborepo"), SKIP_MCP: "1" };
     const enable = spawnSync(process.execPath, [cli, "package", "enable", "usage-statusline"], { env, encoding: "utf8" });
     assert.equal(enable.status, 0, `conflict enable should report but not fail:\n${enable.stderr}\n${enable.stdout}`);
     const settings = JSON.parse(fs.readFileSync(path.join(home, ".claude", "settings.json"), "utf8"));

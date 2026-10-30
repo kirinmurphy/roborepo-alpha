@@ -29,7 +29,7 @@ export function deriveInsights(report) {
   // --- native read/grep vs each MCP package (agnostic to which MCP) ----------------------------
   // The "is the MCP cheaper than the read/grep it replaces" question, generalized: compare the
   // native-read group against EVERY MCP package present in the data (keyed by server name, whatever
-  // it is), so this fires for jcodemunch today and any future exploration MCP with no code change.
+  // it is), so this fires for any exploration MCP with no code change.
   const groups = indexBy(report.group_cost, "group");
   const nativeRead = groups["native-read"];
   if (nativeRead && nativeRead.calls >= MIN_CALLS) {

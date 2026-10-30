@@ -155,7 +155,7 @@ try {
 
   setOverride("deny");
   assert.equal(
-    decide(repoA, outsideEverything, { ROBOREPO_STATE_DIR: stateDir }),
+    decide(repoA, outsideEverything, { ROBOREPO_STATE_ROOT: stateDir }),
     "deny",
     "a personal override on repo-write-boundary should change the outside-repo decision",
   );
@@ -164,7 +164,7 @@ try {
   // allow, which would out-rank the static rules it is meant to defer to.
   setOverride("allow");
   assert.equal(
-    decide(repoA, outsideEverything, { ROBOREPO_STATE_DIR: stateDir }),
+    decide(repoA, outsideEverything, { ROBOREPO_STATE_ROOT: stateDir }),
     "defer",
     "setting repo-write-boundary to allow should disable the hook's decision entirely",
   );
@@ -181,7 +181,7 @@ try {
     const result = spawnSync(process.execPath, [installedHook], {
       input: JSON.stringify({ cwd: repoA, tool_name: "Write", tool_input: { file_path: outsideEverything } }),
       encoding: "utf8",
-      env: { ...process.env, REPO_ROOT: "", ROBOREPO_STATE_DIR: "", ROBOREPO_STATE_ROOT: packageState },
+      env: { ...process.env, REPO_ROOT: "", ROBOREPO_STATE_ROOT: packageState },
     });
     if (!result.stdout.trim()) return "defer";
     return JSON.parse(result.stdout).hookSpecificOutput.permissionDecision;

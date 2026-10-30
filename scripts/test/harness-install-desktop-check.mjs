@@ -26,7 +26,7 @@ try {
     HOME: home,
     PATH: `${fakeBin}${path.delimiter}${process.env.PATH ?? ""}`,
     FAKE_HARNESS_BIN: fakeBin,
-    ROBOREPO_STATE_DIR: path.join(home, ".roborepo"),
+    ROBOREPO_STATE_ROOT: path.join(home, ".roborepo"),
     ROBOREPO_ASSUME_INTERACTIVE: "0",
     ROBOREPO_ON_CONFLICT: "overwrite",
     ROBOREPO_PRESETS_ONBOARD: "skip",
@@ -50,7 +50,7 @@ try {
 
   const leftoverHome = path.join(temp, "leftover-home");
   fs.mkdirSync(path.join(leftoverHome, ".claude"), { recursive: true });
-  const leftoverEnv = { ...env, HOME: leftoverHome, ROBOREPO_STATE_DIR: path.join(leftoverHome, ".roborepo") };
+  const leftoverEnv = { ...env, HOME: leftoverHome, ROBOREPO_STATE_ROOT: path.join(leftoverHome, ".roborepo") };
   const leftoverInstalled = spawnSync("bash", ["scripts/install/main.sh"], { cwd: repo, env: leftoverEnv, encoding: "utf8", timeout: 60_000 });
   assert.equal(leftoverInstalled.status, 0, `${leftoverInstalled.stdout}\n${leftoverInstalled.stderr}`);
   assert.match(leftoverInstalled.stdout, /Claude Code.*configuration present, runtime unavailable/);
@@ -60,7 +60,7 @@ try {
   const claudeContents = path.join(temp, "Applications", "Claude.app", "Contents");
   fs.mkdirSync(claudeContents, { recursive: true });
   fs.writeFileSync(path.join(claudeContents, "Info.plist"), '<?xml version="1.0"?><plist><dict><key>CFBundleIdentifier</key><string>com.anthropic.claudefordesktop</string></dict></plist>');
-  const claudeEnv = { ...env, HOME: claudeHome, ROBOREPO_STATE_DIR: path.join(claudeHome, ".roborepo") };
+  const claudeEnv = { ...env, HOME: claudeHome, ROBOREPO_STATE_ROOT: path.join(claudeHome, ".roborepo") };
   const claudeInstalled = spawnSync("bash", ["scripts/install/main.sh"], { cwd: repo, env: claudeEnv, encoding: "utf8", timeout: 60_000 });
   assert.equal(claudeInstalled.status, 0, `${claudeInstalled.stdout}\n${claudeInstalled.stderr}`);
   if (process.platform === "darwin") {

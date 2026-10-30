@@ -201,8 +201,8 @@ paths_equivalent_for_copy() {
   _paths_have_identical_content "${src}" "${dest}"
 }
 
-# Uninstall/backup-side: is ${dest} a builtin-authored copy (adopt-mode install, or a legacy
-# materialized link) rather than genuine user content? Additionally requires ${src} to exist —
+# Uninstall/backup-side: is ${dest} a builtin-authored copy (an adopt-mode install) rather than
+# genuine user content? Additionally requires ${src} to exist —
 # with no repo source to compare against there is no basis to call ${dest} roborepo's.
 content_matches_repo_source() {
   local src="$1"
@@ -352,13 +352,11 @@ stage_update_item() {
 # Backing such a file up as a "pre-install" original would poison the backup: a later uninstall would
 # restore roborepo hooks into a supposedly-clean file. Detect the install-injected signatures so we
 # only ever back up a genuine pre-install file. Conservative: any hit means do-not-back-up.
-# Package hook signatures (jcmwatch = jcodemunch, jdm-indexed = jdocmunch) guard against a partial-
-# uninstall state where package hooks survive in settings.json without the main roborepo markers.
 # Single source of truth: uninstall.sh sources this file rather than keeping its own copy.
 is_builtin_authored() {
   local file="$1"
   [[ -f "${file}" ]] || return 1
-  grep -Eq "roborepo telemetry capture|write-guard|BEGIN GENERATED AGENT PERMISSIONS|MANAGED_BY_ROBOREPO|# Generated Harness Rules|BEGIN managed:builtin-code-style|BEGIN managed:managed-agents-import|jcmwatch|jdm-indexed" "${file}" 2>/dev/null
+  grep -Eq "roborepo telemetry capture|write-guard|BEGIN GENERATED AGENT PERMISSIONS|MANAGED_BY_ROBOREPO|# Generated Harness Rules|BEGIN managed:builtin-code-style" "${file}" 2>/dev/null
 }
 
 # Persist the user's genuine pre-install file/dir at ${home_path} to
@@ -387,8 +385,8 @@ save_pre_install_backup() {
     return 0
   fi
   if content_matches_repo_source "${src}" "${home_path}"; then
-    # The live path is byte-identical to what roborepo installs (a prior adopt-mode copy / legacy
-    # materialized link). It is roborepo's, not a user original — skip so we don't capture it as one.
+    # The live path is byte-identical to what roborepo installs (a prior adopt-mode copy). It is
+    # roborepo's, not a user original — skip so we don't capture it as one.
     echo "skip pre-install backup: ${home_path} matches repo source (roborepo copy, not a user original)"
     return 0
   fi
@@ -425,7 +423,7 @@ snapshot_pre_install_original() {
   done < <(manifest_rows)
 
   local extra
-  for extra in "${HOME}/.zshrc" "${HOME}/.bashrc" "${HOME}/.bash_profile" "${HOME}/.profile" "${HOME}/.gitignore_global"; do
+  for extra in "${HOME}/.zshrc" "${HOME}/.bashrc" "${HOME}/.bash_profile" "${HOME}/.profile"; do
     [[ -f "${extra}" && ! -L "${extra}" ]] && candidates+=("${extra}")
   done
 
@@ -881,28 +879,6 @@ preflight_clean_item() {
   return 1
 }
 
-remove_repo_link() {
-  local home_path="$1"
-
-  if [[ ! -L "${home_path}" ]]; then
-    return 0
-  fi
-
-  local current
-  current="$(readlink "${home_path}")"
-  case "${current}" in
-    "${repo_root}"/*)
-      local backup_path
-      backup_path="$(unique_backup_path "${home_path}")"
-      if [[ "${dry_run}" -eq 0 ]]; then
-        mkdir -p "$(dirname "${backup_path}")"
-        mv "${home_path}" "${backup_path}"
-      fi
-      echo "cleanup: ${home_path} -> ${backup_path}"
-      ;;
-  esac
-}
-
 # Copy a shared skill into the machine-local cache at ~/.roborepo/skills/<name>.
 # The cache is the derived machine state; harness skill dirs symlink to it.
 link_skill_item() {
@@ -1015,37 +991,6 @@ link_skill_view() {
   say link "${home_path} -> ${cache_path}"
 }
 
-# One-shot migration: tear down the legacy ~/.agents/skills runtime tree.
-# Pre-native-alignment, roborepo fanned skills into ~/.agents/skills via a single dir-level managed
-# symlink (agents link globals/agents/skills -> ~/.agents/skills), and Codex also scans ~/.agents.
-# Now that skills are linked per-skill into each harness's native dir, a leftover ~/.agents/skills
-# link makes Codex discover the same skills twice. Reclaim it only when it is a builtin-managed
-# symlink into the repo (back up first, mirroring remove_repo_link); never touch a user's real
-# ~/.agents content (a real dir/file is left alone). Idempotent: a no-op once removed.
-# Self-contained (provides defaults for backup_root/dry_run) so it is safe from every call site.
-remove_legacy_agents_skills() {
-  local legacy="${HOME}/.agents/skills"
-
-  [[ -L "${legacy}" ]] || return 0
-  local current
-  current="$(readlink "${legacy}")"
-  case "${current}" in
-    "${repo_root}"/*) ;;
-    *) return 0 ;;
-  esac
-
-  local backup_root="${backup_root:-${HOME}/.cli-backups/$(date +%Y%m%d-%H%M%S)}"
-  local dry_run="${dry_run:-0}"
-  local backup_path
-  backup_path="$(unique_backup_path "${legacy}")"
-  if [[ "${dry_run}" -eq 0 ]]; then
-    mkdir -p "$(dirname "${backup_path}")"
-    mv "${legacy}" "${backup_path}"
-    rmdir "${HOME}/.agents" 2>/dev/null || true  # remove ~/.agents only if now empty
-  fi
-  echo "cleanup (legacy ~/.agents/skills): ${legacy} -> ${backup_path}"
-}
-
 # Enumerate package-owned skills plus system support skills, materialize each into ~/.roborepo/skills/<name>,
 # then symlink each present harness skill dir entry to the cache copy.
 # Also prunes stale managed cache entries and stale harness symlinks.
@@ -1061,10 +1006,6 @@ link_global_skills() {
   local skills_home="${home_dir}/skills"
   local cache_home="${HOME}/$(cli_state_dirname)/skills"
   local allowed_names=("$@")
-
-  # Migrate off the legacy ~/.agents/skills location before linking. Idempotent and global, so the
-  # redundant second call (this runs once per harness) is a cheap no-op.
-  remove_legacy_agents_skills
 
   local name repo_rel cache_path
   while IFS=$'\t' read -r name repo_rel; do

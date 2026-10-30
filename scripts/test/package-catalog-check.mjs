@@ -6,7 +6,6 @@ import { spawnSync } from "node:child_process";
 // The rest of this repo derives the directory this way.
 import { fileURLToPath } from "node:url";
 import { loadPackageCatalog, validatePackageCatalog } from "../cli/package-catalog.mjs";
-import { listPackageCommands } from "../cli/package-commands.mjs";
 import { loadSlashCommandPlan } from "../cli/slash-commands.mjs";
 import { readConfigSnapshot } from "../cli/config.mjs";
 import { buildOnboardSteps } from "../cli/presets.mjs";
@@ -26,21 +25,13 @@ assert(
   !catalog.some((pkg) => pkg.origin === "built-in" && pkg.defaultEnabled),
   "built-in packages should all be off by default",
 );
-for (const id of ["jcodemunch", "jdocmunch", "telemetry", "caveman", "plan-suite", "session-close"]) {
+for (const id of ["telemetry", "caveman", "plan-suite", "session-close"]) {
   assert(packageIds.has(id), `missing package: ${id}`);
-}
-for (const id of ["jcodemunch", "jdocmunch"]) {
-  assert(catalog.find((pkg) => pkg.id === id)?.archived, `${id} should be marked archived`);
 }
 const planSuite = catalog.find((pkg) => pkg.id === "plan-suite");
 assert(planSuite, "missing package: plan-suite");
 assert(!(planSuite.urls || []).length, "Plan Suite should not expose external links");
 assert(!packageIds.has("code-intel"), "Code Intelligence composite package should not be present");
-
-const commands = listPackageCommands({ includeUnavailable: true }).map((command) => command.name).sort();
-for (const name of ["index code", "index docs", "watch code"]) {
-  assert(commands.includes(name), `missing package CLI command: ${name}`);
-}
 
 const slashNames = loadSlashCommandPlan().commands.map((command) => command.name).sort();
 for (const name of ["case-study", "plan-write", "tighten", "session-close", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive"]) {
@@ -80,7 +71,6 @@ for (const label of ["Permissions", "Local Stores"]) {
   assert(sections.has(label), `missing ${label} section`);
 }
 
-assert(!sections.get("Token Optimization").items.some((item) => ["jcodemunch", "jdocmunch"].includes(item.id)), "archived indexers should not appear in the Agents UI");
 assert(sections.get("Writing Assistants"), "Writing Assistants category label should be updated");
 assert(snapshot.behaviorView.findIndex((section) => section.category === "Writing Assistants")
   > snapshot.behaviorView.findIndex((section) => section.category === "Code Conventions"),
@@ -289,7 +279,7 @@ try {
     "-e",
     `import(${JSON.stringify(path.resolve("scripts/cli/package-catalog.mjs"))}).then((m) => { try { m.loadPackageCatalog({ includeUnavailable: true }); process.exit(1); } catch (err) { process.exit(String(err.message).includes("resources must be an array") ? 0 : 1); } })`,
   ], {
-    env: { ...process.env, ROBOREPO_APP_ROOT: tempRoot, ROBOREPO_STATE_DIR: path.join(tempRoot, "state") },
+    env: { ...process.env, ROBOREPO_APP_ROOT: tempRoot, ROBOREPO_STATE_ROOT: path.join(tempRoot, "state") },
     stdio: "ignore",
   });
   assert(result.status === 0, "package configs with legacy components should be rejected");
@@ -309,7 +299,7 @@ try {
     "-e",
     `import(${JSON.stringify(path.resolve("scripts/cli/package-catalog.mjs"))}).then((m) => { try { const c = m.loadPackageCatalog({ includeUnavailable: true }); m.validatePackageCatalog(c); console.log(JSON.stringify(c.map((p) => [p.id, p.resources.filter((r) => r.type === "skill").map((r) => r.id)]))); } catch (err) { console.error(err.message); process.exit(1); } })`,
   ], {
-    env: { ...process.env, ROBOREPO_APP_ROOT: multiSkillRoot, ROBOREPO_STATE_DIR: path.join(multiSkillRoot, "state") },
+    env: { ...process.env, ROBOREPO_APP_ROOT: multiSkillRoot, ROBOREPO_STATE_ROOT: path.join(multiSkillRoot, "state") },
     encoding: "utf8",
   });
   const clean = validateIn();
@@ -339,7 +329,7 @@ try {
 const scaffoldWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-package-scaffold-"));
 try {
   const cliPath = path.resolve("scripts/cli/main.mjs");
-  const env = { ...process.env, ROBOREPO_MODE: "package", ROBOREPO_WORKSPACE_ROOT: scaffoldWorkspace, ROBOREPO_STATE_DIR: path.join(scaffoldWorkspace, "state") };
+  const env = { ...process.env, ROBOREPO_MODE: "package", ROBOREPO_WORKSPACE_ROOT: scaffoldWorkspace, ROBOREPO_STATE_ROOT: path.join(scaffoldWorkspace, "state") };
   const create = spawnSync(process.execPath, [cliPath, "package", "dev", "create", "scaffold-check", "--kind=auto-skill"], { env, encoding: "utf8" });
   assert(create.status === 0, `package dev create should succeed: ${create.stderr}\n${create.stdout}`);
   assert(create.stdout.includes("next: roborepo package validate scaffold-check"), "create should print the next validate command");
@@ -355,8 +345,7 @@ try {
 }
 
 // Development-checkout mode: `roborepo package dev create` must scaffold directly into
-// globals/packages/ (the real shared source), not a workspace dir — mirrors skill-new.mjs's
-// packageMode ? workspaceSkillsDir : sharedSkillsDir branch.
+// globals/packages/ (the real shared source), not a workspace dir.
 const devRoot = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-package-scaffold-dev-"));
 try {
   fs.mkdirSync(path.join(devRoot, ".git"), { recursive: true });
@@ -371,7 +360,7 @@ try {
   fs.mkdirSync(path.join(devRoot, "globals"), { recursive: true });
   fs.cpSync(path.resolve("globals/harnesses"), path.join(devRoot, "globals", "harnesses"), { recursive: true });
   const cliPath = path.resolve("scripts/cli/main.mjs");
-  const env = { ...process.env, ROBOREPO_MODE: "development", ROBOREPO_APP_ROOT: devRoot, ROBOREPO_STATE_DIR: path.join(devRoot, "state") };
+  const env = { ...process.env, ROBOREPO_MODE: "development", ROBOREPO_APP_ROOT: devRoot, ROBOREPO_STATE_ROOT: path.join(devRoot, "state") };
   const create = spawnSync(process.execPath, [cliPath, "package", "dev", "create", "dev-scaffold-check", "--kind=empty"], { env, encoding: "utf8" });
   assert(create.status === 0, `dev-mode package dev create should succeed: ${create.stderr}\n${create.stdout}`);
   assert(
@@ -427,7 +416,7 @@ try {
       return spawnSync(process.execPath, [
         "-e",
         `import(${JSON.stringify(path.resolve("scripts/cli/package-catalog.mjs"))}).then((m) => { const p = m.loadPackageCatalog({ includeUnavailable: true })[0]; console.log(JSON.stringify([p.selectable, p.presentation.visibility, p.recommends])); }).catch((err) => { console.error(err.message); process.exit(1); })`,
-      ], { env: { ...process.env, ROBOREPO_APP_ROOT: shapeRoot, ROBOREPO_STATE_DIR: path.join(shapeRoot, "state") }, encoding: "utf8" });
+      ], { env: { ...process.env, ROBOREPO_APP_ROOT: shapeRoot, ROBOREPO_STATE_ROOT: path.join(shapeRoot, "state") }, encoding: "utf8" });
     };
     const defaults = loadWith({});
     assert(defaults.status === 0 && defaults.stdout.trim() === JSON.stringify([true, "catalog", []]), `defaults: ${defaults.stderr}${defaults.stdout}`);

@@ -1,8 +1,0 @@
-{
-  "path": ["permissions"],
-  "kind": "internal",
-  "title": "Permissions",
-  "description": "Legacy permissions renderer entrypoint",
-  "usage": "roborepo permissions [--check]",
-  "execution": { "adapter": "repoScript", "script": "permissions" }
-}

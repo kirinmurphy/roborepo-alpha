@@ -424,7 +424,7 @@ for (const row of fixtureSpool) {
 const fixtureRepositories = fixtureTelemetryRepositories(fixtureSpool);
 assert.deepEqual(
   Object.fromEntries(Object.entries(fixtureRepositories).map(([id, summary]) => [id, summary.warningCount])),
-  { [SHARED_FIXTURE]: 2, [MULTI_FIXTURE]: 6, [IDLE_FIXTURE]: 0 },
+  { [SHARED_FIXTURE]: 2, [MULTI_FIXTURE]: 5, [IDLE_FIXTURE]: 0 },
   "the fixture spool runs through the real analysis and lands on the three dev fixtures",
 );
 const relabeled = fixtureSpool.map((row) => ({ ...row, repo: { ...row.repo, repository_id: TOKENS_REAL } }));

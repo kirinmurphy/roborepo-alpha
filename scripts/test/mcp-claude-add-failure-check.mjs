@@ -7,7 +7,6 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
 import { makeAppRoot } from "./app-root-fixture.mjs";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-mcp-claude-fail-"));
@@ -27,7 +26,7 @@ fs.writeFileSync(path.join(tmp, ".claude", "settings.json"), "{}");
 
 process.env.HOME = tmp;
 process.env.PATH = `${bin}${path.delimiter}${process.env.PATH}`;
-process.env.ROBOREPO_STATE_DIR = path.join(tmp, ".roborepo");
+process.env.ROBOREPO_STATE_ROOT = path.join(tmp, ".roborepo");
 
 const { getHarnessProvider } = await import("../harnesses/registry.mjs");
 const spec = { name: "fail-test", commandOrUrl: "uvx", args: ["fail-test-mcp"] };
@@ -50,10 +49,11 @@ fs.mkdirSync(path.join(pkgHome, ".claude"), { recursive: true });
 fs.mkdirSync(path.join(pkgHome, ".codex"), { recursive: true });
 fs.writeFileSync(path.join(pkgHome, ".claude", "settings.json"), '{"permissions":{"allow":[]}}\n');
 fs.writeFileSync(path.join(pkgHome, ".codex", "config.toml"), "");
-const pkgEnv = { ...process.env, HOME: pkgHome, ROBOREPO_MODE: "package", ROBOREPO_STATE_DIR: path.join(pkgHome, ".roborepo") };
-const repoCli = fileURLToPath(new URL("../cli/main.mjs", import.meta.url));
-spawnSync(process.execPath, [repoCli, "setup"], { env: pkgEnv, encoding: "utf8" });
-const enable = spawnSync(process.execPath, [repoCli, "package", "enable", "jcodemunch"], { env: pkgEnv, encoding: "utf8" });
+// No shipped package carries an MCP server, so the test-only fixture-tool package supplies one.
+const fixtureAppRoot = makeAppRoot({ fixturePackages: true });
+const pkgEnv = { ...process.env, HOME: pkgHome, ROBOREPO_APP_ROOT: fixtureAppRoot, ROBOREPO_MODE: "development", ROBOREPO_STATE_ROOT: path.join(pkgHome, ".roborepo") };
+const fixtureCli = path.join(fixtureAppRoot, "scripts", "cli", "main.mjs");
+const enable = spawnSync(process.execPath, [fixtureCli, "package", "enable", "fixture-tool"], { env: pkgEnv, encoding: "utf8" });
 const enableOutput = `${enable.stdout}${enable.stderr}`;
 assert.equal(enable.status, 1, `a blocked enable exits 1: ${enableOutput}`);
 assert.match(enableOutput, /blocked/, "package enable reports the package blocked");

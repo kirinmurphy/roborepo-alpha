@@ -86,14 +86,14 @@ Enforced by `normalizePackage`/`normalizeResource` in `scripts/cli/package-catal
 | `description` | yes | non-empty; shown in portal |
 | `lifecycle` | no (defaults `optional`) | `optional` or `system` (`PACKAGE_LIFECYCLES`) |
 | `defaultEnabled` | no (defaults `false`) | boolean; see Default-selection semantics below |
-| `presentation.category` | yes | must exist in `manifests/inventory/package-categories.json` (including `token-optimization`, `skills-dev-lifecycle`, `skills-writing`, `skills-code-quality`, `code-conventions`, `chat-time-output`, `additional-agents-md-rules`, and `integrations`) |
+| `presentation.category` | yes | must exist in `manifests/inventory/package-categories.json` (including `token-optimization`, `monitoring`, `skills-dev-lifecycle`, `skills-writing`, `skills-code-quality`, `code-conventions`, `chat-time-output`, `additional-agents-md-rules`, and `integrations`) |
 | `presentation.order` | no (defaults `0`) | numeric, controls sort within category |
 | `requires` | no | array of package IDs; they join the effective set automatically. Cycle-checked, missing-id-checked, no self-reference |
 | `recommends` | no | array of package IDs; offered after an enable, never turned on automatically, never a cause of `partial`. Missing-id-checked; not part of cycle detection |
 | `selectable` | no (defaults `true`) | boolean; `false` makes a dependency-only package that `package enable`/`disable` refuse. Cannot combine with `defaultEnabled: true` |
 | `presentation.visibility` | no (defaults `catalog`) | `catalog` (normal Config row), `dependency` (no row; listed under **Requires** in the source popup of each package that requires it), or `hidden` (no UI row) |
 | `resources` | yes | array — see Resource types |
-| `urls` | no | optional array shown in portal (see e.g. `caveman`, `jcodemunch`) |
+| `urls` | no | optional array shown in portal (see e.g. `caveman`) |
 
 There is no `.schema.json` file — validation is hand-rolled JS, not JSON Schema. Do not add one
 speculatively; the current approach is deliberate (see `validatePackageCatalog`).
@@ -101,8 +101,9 @@ speculatively; the current approach is deliberate (see `validatePackageCatalog`)
 ## Resource types
 
 `RESOURCE_TYPES` (package-catalog.mjs): `skill`, `slash-command`, `rules`, `hooks`, `permissions`,
-`codex_tool_approvals`, `mcp`, `plugin`, `service`, `cli-command`, `harness-config`,
-`package-runtime-asset`.
+`codex_tool_approvals`, `mcp`, `plugin`, `service`, `harness-config`, `package-runtime-asset`.
+No shipped package uses `mcp` or `codex_tool_approvals` today; the test-only fixture packages in
+`scripts/test/fixtures/packages/` cover them.
 
 Validation depth differs by type — know this before assuming everything is checked:
 
@@ -110,9 +111,8 @@ Validation depth differs by type — know this before assuming everything is che
 | --- | --- | --- |
 | `skill` | Yes — slug id, `source` inside package dir, `SKILL.md` exists, valid `invocation` (`auto`/`manual`), optional `risk` (`low`/`medium`/`high`), manual invocation requires a slash-command entrypoint | `setSkillComponent`, `installPackageCommands` in `packages.mjs` |
 | `slash-command` | Yes — slug name, source path shape, source file exists on disk, harnesses array shape | rendered via `slash-commands.mjs` |
-| `rules` | Yes — source exists on disk; target is a registered rules-capable harness or `both` | `renderHomeRules()` |
+| `rules` | Yes — source exists on disk; `harness` is optional (absent = every rules-capable harness) or a registered rules-capable harness | `renderHomeRules()` |
 | `hooks` | Yes — source exists, valid harness, `scripts[]` entries exist on disk if present | `mergeHooksInto`/`unmergeHooksFrom`, `installHookScripts` |
-| `cli-command` | Minimal — just requires a `name` | `packageCommandNames` |
 | `permissions` | Yes — non-empty `.allow` array of non-empty strings | `mergePermissions(path, component.allow)` — expects `.allow: string[]` |
 | `codex_tool_approvals` | Yes — non-empty `.server` string, non-empty `.approvals` object | `mergeCodexToolApprovals` — expects `.server: string`, `.approvals: {toolName: approvalMode}` |
 | `mcp` | Yes — non-empty `.preset` string | `installMcpPreset(component.preset)` — expects `.preset: string` matching `manifests/inventory/mcp-servers.json`/`mcp-presets.json` |
@@ -234,8 +234,7 @@ which the terminal command maps to its exit code.
 
 Every call site that needs to know what's actually live — `buildPackageLiveState` (portal/CLI
 status), `renderHomeRules`/`checkHomeRules`/`renderedRulesMatches` (rules rendering and drift
-checks), `validatePackageCommandOwnership`/`resolveEnabledCommand` (command conflict/dispatch),
-`reconcileEnabledPackages`, hook readiness, the browser gate, and `adoptLivePackages` — reads
+checks), `reconcileEnabledPackages`, hook readiness, the browser gate, and `adoptLivePackages` — reads
 through `effectiveEnabledIds`. If you add a new call site that needs to know package on/off state,
 use `effectiveEnabledIds` from `package-state.mjs`; never read the registry file directly.
 
@@ -278,7 +277,9 @@ accurate `package.config.json` automatically renders a complete portal card.
 | `roborepo package dev add-skill <package-id> <skill-id> [--command] [--description=...]` | Adds a skill to an existing package: `skills/<skill-id>/SKILL.md`, a `skill` resource placed after the package's other skills (manual with a slash-command entrypoint under `--command`, auto otherwise; a workspace package's command never installs, since only built-in packages get generated wrappers, and the command says so), and an empty `skill-triggers.json` entry to fill. Refuses a skill ID, or with `--command` a command name, that any package already claims, and a built-in package in package mode. Restores the package if the result does not validate. |
 | `roborepo package list` | Lists packages grouped by category with concise live enabled/disabled status. |
 | `roborepo package inspect <id>` | Prints full manifest JSON for one package. |
+| `roborepo package status <id> [--json]` | Shows one package's desired and live state. |
 | `roborepo package validate [id]` | Runs `validatePackageCatalog`; scope to one package or the whole catalog. |
+| `roborepo package dev validate [id]` | Validates package source while developing. |
 | `roborepo package enable <id>` | Records `<id>` as a selected root and **applies live immediately**, with everything it requires — see Apply behavior below. Prints a probed outcome per package; lists (or, in a terminal, offers) recommendations that are off. |
 | `roborepo package disable <id> [--cascade]` | Removes the root and **applies live immediately**, removing packages that leave the effective set. Refuses a package that is on only through a parent unless `--cascade`. |
 | `roborepo package reconcile` | Re-applies every currently-enabled package (full reconciliation entry point — see Apply behavior). |
@@ -296,7 +297,7 @@ installed/removed, skill commands installed via `installPackageCommands`. **Ther
 apply/sync step required after enable or disable** — this already matches the goal of "package
 enable/disable takes effect immediately without `roborepo update`."
 
-The portal's package toggle (`portal/config/config-toggle.js` →
+The portal's package toggle (`portal/config/elements/config-toggle.js` →
 `scripts/cli/config-mutate.mjs:mutatePackage()`) calls the exact same `enablePackage`/
 `disablePackage` functions — CLI and portal share one apply path, not two.
 
@@ -314,15 +315,13 @@ last write) — a legitimate, distinct reconciliation case, not a gap in the ena
 - `scripts/test/package-catalog-check.mjs` (`npm run test:packages`) — loads the real catalog,
   asserts known packages/commands exist, and builds a temp-dir fixture package (`legacy-shape`
   pattern) to test malformed/edge-case shapes against the loader.
-- `scripts/test/system-package-ownership-characterization-check.mjs` — package-ownership /
-  generated-output regression guard; spawns the real CLI against a temp `HOME`, round-trips
-  enable/disable, and asserts Codex-side hook/config ownership.
 - `scripts/test/context-cost-check.mjs` (`npm run test:context-cost`) — token-cost estimator
   correctness, independent of any one package.
 - `scripts/test/package-default-enabled-check.mjs` (`npm run test:package-default-enabled`) —
   default-selection provenance precedence, independent of any one package.
 - `scripts/test/package-lifecycle-check.mjs` — enables, re-enables, and disables catalog packages
-  in a temporary home to check for stale live state.
+  in a temporary home to check for stale live state, and round-trips the `fixture-tool` package to
+  check that every live-config resource type appears on enable and is fully removed on disable.
 - `scripts/test/test-cli.sh` — broad CLI smoke test; covers package/workspace paths.
 
 Minimum test bar for a new or changed package: it must load cleanly through
@@ -348,6 +347,6 @@ enable/disable must round-trip without leaving stale live state (covered generic
 [ ] If defaultEnabled: true, confirmed explicit disable survives being still-default-enabled
     (see scripts/test/package-default-enabled-check.mjs)
 [ ] Ran `npm test` (or the narrowest relevant subset — package-catalog-check, context-cost-check,
-    package-default-enabled-check, system-package-ownership-characterization-check) before calling
+    package-default-enabled-check, package-lifecycle-check) before calling
     it done
 ```

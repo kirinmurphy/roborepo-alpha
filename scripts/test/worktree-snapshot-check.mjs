@@ -41,6 +41,23 @@ try {
   git(main, "merge", "--squash", "feature"); git(main, "commit", "-qm", "squash");
   const cleanProof = await assessWorktreePreservation(work, { branch: "feature" });
   assert.equal(cleanProof.state, "preserved", JSON.stringify(cleanProof));
+  {
+    fs.mkdirSync(path.join(work, "directory-only"));
+    const before = (await inventoryWorktree(work)).fingerprint;
+    let hashes = 0;
+    let merges = 0;
+    const proof = await assessWorktreePreservation(work, { branch: "feature", runGit: (cwd, args, options) => {
+      if (args[0] === "hash-object") hashes++;
+      if (args[0] === "merge-tree") merges++;
+      return runGitProcess(cwd, args, options);
+    } });
+    assert.equal(proof.state, explicitMergeBase ? "preserved" : "unknown", JSON.stringify(proof));
+    assert.equal(proof.hasLocalContent, explicitMergeBase ? true : null, "empty directories still require preservation");
+    assert.ok(merges >= (explicitMergeBase ? 3 : 1), "landing and both local layers are still checked");
+    assert.equal(hashes, 0, "unchanged filesystem blobs already exist in the assessed trees");
+    assert.equal((await inventoryWorktree(work)).fingerprint, before, "assessment does not change local state");
+    fs.rmdirSync(path.join(work, "directory-only"));
+  }
   write(work, "code", "staged\n"); git(work, "add", "code"); write(work, "code", "unstaged\n");
   write(work, "binary", Buffer.from([0, 255, 254, 10]));
   write(work, "large-binary", Buffer.alloc(2 * 1024 * 1024, 0xff));
@@ -118,6 +135,7 @@ try {
   assert.equal(fs.readlinkSync(path.join(destination, "link")), "/outside/target");
   assert.deepEqual(fs.readlinkSync(path.join(destination, "raw-link"), { encoding: "buffer" }), rawLinkTarget);
   assert.equal(fs.statSync(path.join(destination, "executable")).mode & 0o111, 0o111);
+  assert.equal(fs.statSync(path.join(destination, "empty")).isDirectory(), true, "meaningful empty directories survive restore");
   assert.equal(fs.existsSync(path.join(destination, "node_modules")), false);
   assert.equal((await restoreWorktreeSnapshot(main, snapshot.id, destination, { apply: true })).ok, false);
   // An index-only unique version survives assessment even when the filesystem cancels it.
@@ -131,7 +149,7 @@ try {
   git(work, "update-index", "--assume-unchanged", "code");
   await assert.rejects(() => inventoryWorktree(work), /index flag/);
   git(work, "update-index", "--no-assume-unchanged", "code");
-  for (const shape of ["redundant", "deletion", "rename", "binary", "mode", "plan-move", "conflict", "concurrent-file", "concurrent-index", "concurrent-tip", "concurrent-config", "concurrent-base"]) {
+  for (const shape of ["redundant", "directory-only", "deletion", "rename", "binary", "mode", "plan-move", "conflict", "concurrent-file", "concurrent-index", "concurrent-tip", "concurrent-config", "concurrent-base"]) {
     const repo = path.join(root, shape); fs.mkdirSync(repo);
     git(repo, "init", "-qb", "main");
     write(repo, "seed", "seed\n");
@@ -156,6 +174,10 @@ try {
     else if (shape === "rename") git(checkout, "mv", "code", "renamed");
     else if (shape === "mode") { fs.chmodSync(path.join(checkout, "code"), 0o755); git(checkout, "add", "code"); }
     else if (shape === "plan-move") write(checkout, "docs/plans/review/story.md", fs.readFileSync(path.join(repo, "docs/plans/completed/story.md")));
+    else if (shape === "directory-only") {
+      fs.mkdirSync(path.join(checkout, "generated/packages/__char_test_pkg__/claude"), { recursive: true });
+      assert.equal(git(checkout, "status", "--porcelain"), "", "directory-only local content is invisible to Git status");
+    }
     else { write(checkout, "code", fs.readFileSync(path.join(repo, "code"))); git(checkout, "add", "code"); }
     if (shape === "conflict") { write(checkout, "code", "conflicting local work\n"); git(checkout, "add", "code"); }
     const proof = await assessWorktreePreservation(checkout, { branch: "feature" });
@@ -189,13 +211,14 @@ try {
       assert.equal(fs.existsSync(checkout), true, `${shape}: concurrent changes must retain checkout`);
       assert.ok(rows[0].snapshotRef, `${shape}: verified snapshot remains discoverable`);
     }
-    if (shape === "redundant") {
-      const rows = await cleanupWorktrees({ cwd: repo, apply: true, stateRoot: path.join(root, "cleanup-state"), discover: async () => ({ instances: [] }) });
+    if (["redundant", "directory-only"].includes(shape)) {
+      const rows = await cleanupWorktrees({ cwd: repo, apply: true, stateRoot: path.join(root, `${shape}-cleanup-state`), discover: async () => ({ instances: [] }) });
       assert.equal(rows[0].action, "removed", JSON.stringify(rows));
       assert.ok(rows[0].snapshotRef, "automatic dirty cleanup creates a verified snapshot");
       assert.equal(fs.existsSync(checkout), false);
-      const after = await restoreWorktreeSnapshot(repo, rows[0].snapshotRef, path.join(root, "automatic-restored"), { apply: true });
+      const after = await restoreWorktreeSnapshot(repo, rows[0].snapshotRef, path.join(root, `${shape}-automatic-restored`), { apply: true });
       assert.equal(after.ok, true, after.reason);
+      if (shape === "directory-only") assert.equal(fs.statSync(path.join(after.destination, "generated/packages/__char_test_pkg__/claude")).isDirectory(), true);
     }
   }
   {
@@ -286,6 +309,45 @@ try {
     const inventory = await inventoryWorktree(repo);
     assert.equal(inventory.index.length, 4800, "repository-wide index reads exceed the small query bound");
     assert.ok(inventory.attributes.length > GIT_MAX_BUFFER, "repository-wide attribute reads exceed the small query bound");
+  }
+  for (const format of ["sha1", "sha256"]) {
+    const repo = path.join(root, `raw-identities-${format}`); fs.mkdirSync(repo);
+    git(repo, "init", "-qb", "main", `--object-format=${format}`);
+    write(repo, "seed", "seed\n"); git(repo, "add", "."); git(repo, "commit", "-qm", "seed");
+    const checkout = path.join(root, `raw-identities-${format}-work`);
+    git(repo, "worktree", "add", "-qb", "feature", checkout);
+    write(checkout, "code", "feature\n"); git(checkout, "add", "."); git(checkout, "commit", "-qm", "feature");
+    git(repo, "merge", "--squash", "feature"); git(repo, "commit", "-qm", "squash");
+    const binary = Buffer.from([0, 255, 128, 13, 10]);
+    write(checkout, "code", binary); git(checkout, "add", "code");
+    // Identical raw bytes at another path already exist in the index, regardless of file mode.
+    write(checkout, "same-bytes", binary); fs.chmodSync(path.join(checkout, "same-bytes"), 0o755);
+    write(checkout, "empty", "");
+    fs.symlinkSync("raw-target", path.join(checkout, "link"));
+    write(checkout, "code", Buffer.from([0, 254, 129, 13, 10]));
+    write(checkout, "duplicate-unstaged", Buffer.from([0, 254, 129, 13, 10]));
+    const before = (await inventoryWorktree(checkout)).fingerprint;
+    const objects = git(checkout, "count-objects", "-v");
+    const hashes = [];
+    const proof = await assessWorktreePreservation(checkout, { branch: "feature", runGit: async (cwd, args, options) => {
+      const result = await runGitProcess(cwd, args, options);
+      if (args[0] === "hash-object") {
+        assert.equal(result.ok, true, result.error);
+        const expected = await runGitProcess(cwd, ["hash-object", "--stdin"], { input: options.input });
+        assert.equal(expected.ok, true, expected.error);
+        assert.equal(result.stdout.trim(), expected.stdout.trim(), "raw blob identities match Git");
+        hashes.push(Buffer.from(options.input));
+      }
+      return result;
+    } });
+    assert.equal(proof.state, explicitMergeBase ? "remaining" : "unknown", JSON.stringify(proof));
+    assert.equal(hashes.length, 3, "only unstaged binary, empty file, and symlink bytes require new objects");
+    assert.ok(!hashes.some((bytes) => bytes.equals(binary)), "index blobs are reused across paths and modes");
+    const [row] = await cleanupWorktrees({ cwd: repo, apply: true, stateRoot: path.join(root, `${format}-remaining-state`), discover: async () => ({ instances: [] }) });
+    assert.equal(row.preservation, explicitMergeBase ? "remaining" : "unknown", JSON.stringify(row));
+    assert.equal(row.action, "kept", "automatic cleanup keeps genuinely distinct staged and unstaged versions");
+    assert.equal((await inventoryWorktree(checkout)).fingerprint, before);
+    assert.equal(git(checkout, "count-objects", "-v"), objects, "raw identity checks publish no objects");
   }
   console.log("worktree snapshots: raw binary/staged/unstaged/ignored/symlink/mode round trip, preview nonmutation, refusal checks passed");
 } finally { restoreGitConfig(); fs.rmSync(root, { recursive: true, force: true }); }

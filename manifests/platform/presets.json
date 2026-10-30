@@ -29,12 +29,6 @@
       "rows": ["claude:hooks", "codex:hooks.json", "codex:hooks"]
     },
     {
-      "id": "commands",
-      "label": "Slash commands",
-      "description": "Slash command wrappers are now composed per-package at enable/disable time, not installed as one bundle. Kept as a no-op selectable for backward compatibility with existing onboarding selections.",
-      "rows": []
-    },
-    {
       "id": "telemetry",
       "label": "Telemetry",
       "description": "Local cross-repo metadata capture and reports. Installed off unless selected.",

@@ -13,7 +13,6 @@
 // portal server is single-process, so a module flag is a real lock here.
 import { loadPackageCatalog, unavailablePackageMessage } from "./package-catalog.mjs";
 import { effectiveEnabledIds, packageSelectionStates } from "./package-state.mjs";
-import { validatePackageCommandOwnership } from "./package-commands.mjs";
 import { mutatePackage } from "./config-mutate.mjs";
 
 let batchInFlight = false;
@@ -31,25 +30,12 @@ async function reconcileOnce() {
   return reconcileEnabledPackages([]);
 }
 
-// Validate the whole batch BEFORE touching anything, so an ownership conflict rejects the batch as
-// one unit instead of leaving it half-applied. Every member is checked against the SIMULATED target
-// set (current + this batch's enables), so a conflict inside the batch or with the outside world is
-// caught upfront with a per-id failure.
+// Validate the whole batch BEFORE touching anything, so an unknown or unavailable id is reported
+// per id instead of failing partway through the batch.
 function preflight(catalog, targetEnabled) {
-  const baseline = new Set(effectiveEnabledIds(catalog));
-  const target = new Set(targetEnabled);
   const failures = new Map();
   for (const id of targetEnabled) {
-    const pkg = catalog.find((p) => p.id === id);
-    if (!pkg) {
-      failures.set(id, unavailablePackageMessage(id));
-      continue;
-    }
-    // effectiveEnabledIds for the simulation: baseline enabled ∪ target, minus nothing (the batch
-    // only enables here — disables never create ownership conflicts, so they skip this check).
-    const simulatedIds = [...new Set([...baseline, ...target])];
-    const ownership = validatePackageCommandOwnership(pkg, { catalog, enabledIds: simulatedIds });
-    if (!ownership.ok) failures.set(id, ownership.message);
+    if (!catalog.some((p) => p.id === id)) failures.set(id, unavailablePackageMessage(id));
   }
   return failures;
 }

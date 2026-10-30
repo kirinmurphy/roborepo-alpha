@@ -1,5 +1,4 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { STATE_ROOT, appRoot } from "./roots.mjs";
 
@@ -60,7 +59,7 @@ export const stateSkillsDir = path.join(stateDir, "skills");
 export const commandOverridesPath = path.join(stateDir, "command-overrides.json");
 export const experimentalStatePath = path.join(stateDir, "experimental.json");
 // Canonical repository registry — machine-local, versioned. modules/repositories owns the atomic
-// read/write; this is just the resolved path (respects ROBOREPO_STATE_DIR).
+// read/write; this is just the resolved path (respects ROBOREPO_STATE_ROOT).
 export const repositoriesRegistryPath = path.join(stateDir, "repositories", "registry.json");
 // Latest normalized usage snapshots, one file per harness (usage/latest/<harness>.json). Written
 // best-effort by the status-line command (Claude) / app-server collector (Codex); read by the
@@ -91,10 +90,6 @@ export const telemetryExperimentsDir = path.join(telemetryDir, "experiments");
 // Backups live OUTSIDE telemetryDir so `purge --all` (which removes telemetryDir) can't delete the
 // snapshot it just took.
 export const telemetryBackupDir = path.join(stateDir, "telemetry-backups");
-// PID file for the detached portal server. The legacy env/path stay readable so older installs can
-// be stopped and cleaned up after the server rename.
-export const legacyTelemetryPidPath = process.env.ROBOREPO_TELEMETRY_PID_PATH
-  || path.join(os.homedir(), ".local", "state", "roborepo", "telemetry-server.pid");
 // Keyed by port, not a single fixed path: the portal server is inherently per-repo (it serves
 // whatever repoRoot the invoking `roborepo web` resolves to), so two different checkouts/
 // worktrees running on two different ports are legitimately two independent servers, not one
@@ -111,10 +106,8 @@ export const portalStateDir = path.join(stateDir, "portal");
 
 export function portalPidPathForPort(port) {
   if (process.env.ROBOREPO_PORTAL_PID_PATH) return process.env.ROBOREPO_PORTAL_PID_PATH;
-  if (process.env.ROBOREPO_TELEMETRY_PID_PATH) return process.env.ROBOREPO_TELEMETRY_PID_PATH;
-  // Routes through stateDir (respects ROBOREPO_STATE_DIR), unlike the legacy fixed path
-  // above, so tests can sandbox per-port PID files the same way they already sandbox every other
-  // piece of roborepo state.
+  // Routes through stateDir (respects ROBOREPO_STATE_ROOT), so tests can sandbox per-port PID files
+  // the same way they already sandbox every other piece of roborepo state.
   return path.join(stateDir, "portal", `server-${port}.pid`);
 }
 // Registry of enabled packages — source of truth for rules rendering.
@@ -136,6 +129,6 @@ export const managedFilesStatePath = path.join(stateDir, "config-state", "manage
 // Discovered/enabled harness provider state — which providers were found, their evidence and
 // confidence, and whether the user (or discovery, or migration) enabled or disabled each one. See
 // scripts/harnesses/state.mjs, which owns read/write and the "preserve explicit disable across
-// refresh" policy; this is just the resolved path (respects ROBOREPO_STATE_DIR like every other
+// refresh" policy; this is just the resolved path (respects ROBOREPO_STATE_ROOT like every other
 // path in this file).
 export const harnessStatePath = path.join(stateDir, "harnesses", "state.json");

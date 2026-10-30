@@ -133,35 +133,10 @@ try {
   assert.equal(loadSettings({ stateRoot: repoPathStateRoot }).composeProjects.stack.repoPath, "/work/../repo");
   const renamedStack = updateSettings({ stateRoot: repoPathStateRoot, input: { revision: 1, type: "composeProject", composeProject: "stack", name: "Stack" } });
   assert.equal(renamedStack.composeProjects.stack.repoPath, "/work/../repo", "an unrelated edit must not be blocked by a stored traversal path");
-  const legacyStateRoot = path.join(tempRoot, "legacy-state");
-  fs.mkdirSync(path.dirname(settingsPathFor(legacyStateRoot)), { recursive: true });
-  fs.writeFileSync(settingsPathFor(legacyStateRoot), `${JSON.stringify({
-    version: 1,
-    revision: 7,
-    projects: {
-      "git:github.com/kirinmurphy/legacy": {
-        name: "Legacy",
-        apps: {
-          web: {
-            name: "Web",
-            originPreference: "localhost",
-            links: [{ id: "home", label: "Home", path: "/" }],
-          },
-        },
-      },
-    },
-    associations: { alegacy: { projectIdentity: "git:github.com/kirinmurphy/legacy", appId: "web" } },
-  })}\n`);
-  const migrated = loadSettings({ stateRoot: legacyStateRoot });
-  assert.equal(migrated.version, 2);
-  assert.equal(migrated.revision, 7);
-  assert.equal(migrated.projects["git:github.com/kirinmurphy/legacy"].favorite, false);
-  assert.equal(migrated.projects["git:github.com/kirinmurphy/legacy"].hidden, false);
-  assert.equal(migrated.projects["git:github.com/kirinmurphy/legacy"].apps.web.favorite, false);
-  assert.equal(migrated.projects["git:github.com/kirinmurphy/legacy"].apps.web.hidden, false);
-  assert.deepEqual(migrated.aliases, {});
-  assert.ok(fs.existsSync(path.join(legacyStateRoot, "developer-runtime", "settings.v1.backup.json")));
-  assert.equal(loadSettings({ stateRoot: legacyStateRoot }).revision, 7);
+  const olderStateRoot = path.join(tempRoot, "older-state");
+  fs.mkdirSync(path.dirname(settingsPathFor(olderStateRoot)), { recursive: true });
+  fs.writeFileSync(settingsPathFor(olderStateRoot), `${JSON.stringify({ version: 1, revision: 7, projects: {}, associations: {} })}\n`);
+  assert.throws(() => loadSettings({ stateRoot: olderStateRoot }), /unsupported developer-runtime settings version: 1/);
   const updated = updateSettings({
     stateRoot,
     input: {

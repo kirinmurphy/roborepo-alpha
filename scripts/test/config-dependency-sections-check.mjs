@@ -19,7 +19,7 @@ fs.mkdirSync(path.join(tmp, ".claude"), { recursive: true });
 fs.mkdirSync(path.join(tmp, ".codex"), { recursive: true });
 fs.writeFileSync(path.join(tmp, ".claude", "settings.json"), "{}");
 fs.writeFileSync(path.join(tmp, ".codex", "config.toml"), "");
-const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_DIR: path.join(tmp, ".roborepo"), ROBOREPO_WORKSPACE_ROOT: workspace, SKIP_MCP: "1" };
+const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_ROOT: path.join(tmp, ".roborepo"), ROBOREPO_WORKSPACE_ROOT: workspace, SKIP_MCP: "1" };
 
 function fixture(id, config = {}) {
   const dir = path.join(workspace, "packages", id);

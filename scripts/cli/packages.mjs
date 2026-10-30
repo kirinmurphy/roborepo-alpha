@@ -5,7 +5,6 @@ import { renderHomeRules, knownHarnessIds, harnessIdsWithCapability } from "./ru
 import { forgetPackageIds, readEnabledPackagesRegistry, selectedRootIds, setPackageEnabled, effectiveEnabledIds, withPackageSelection } from "./package-state.mjs";
 import { requiredBy, requiredClosure, rootsRequiring } from "./package-graph.mjs";
 import { loadPackageCatalog, unavailablePackageMessage, validatePackageCatalog, BUILT_IN_PACKAGES_DIR, readPackageCategories } from "./package-catalog.mjs";
-import { packageCommandNames, validatePackageCommandOwnership } from "./package-commands.mjs";
 import { buildPackageLiveState } from "./package-probes.mjs";
 import { packageStatusSummary } from "./package-status.mjs";
 import { ensureClaudeMcpPermission } from "./mcp-claude.mjs";
@@ -130,7 +129,7 @@ async function offerRecommendations(result, rest, changed) {
 
 function createPackage(rest) {
   const opts = parseCreateArgs(rest);
-  // Mirrors skill-new.mjs: package mode scaffolds into the portable workspace; a development
+  // Package mode scaffolds into the portable workspace; a development
   // checkout scaffolds directly into the real shared source (globals/packages/), matching where
   // `roborepo package validate`/the built-in catalog actually reads from.
   const packagesDir = packageMode ? workspacePackagesDir : BUILT_IN_PACKAGES_DIR;
@@ -601,9 +600,6 @@ export async function enablePackage(rest, changed = new Set()) {
   if (!pkg.selectable) throw notSelectableError(pkg, catalog, "enable");
   if (!dryRun) assertHarnessWriteAllowed();
 
-  const ownership = validatePackageCommandOwnership(pkg, { catalog, enabledIds: effectiveEnabledIds(catalog) });
-  if (!ownership.ok) throw new PackageMutationError(ownership.message);
-
   const order = requiredClosure(catalog, [pkg.id]);
   if (dryRun) {
     console.log(`[dry-run] would enable: ${pkg.label}`);
@@ -625,10 +621,6 @@ export async function enablePackage(rest, changed = new Set()) {
   const outcomes = probeOutcomes(catalog, order, blocked);
   printOutcomes(outcomes);
 
-  const commandNames = packageCommandNames(pkg);
-  if (commandNames.length && !blocked.size) {
-    console.log(`\ncli commands available: ${commandNames.map((c) => `roborepo ${c}`).join(", ")}`);
-  }
   return {
     ok: blocked.size === 0,
     outcomes,
@@ -666,8 +658,8 @@ async function applyPackageComponents(pkg, { dryRun = false } = {}) {
         mergeCodexToolApprovals(USER_CODEX_CONFIG, component);
         break;
       case "rules": {
-        if (dryRun) { console.log(`  [dry-run] register rules from ${component.source} (${component.harness})`); break; }
-        renderHomeRules({ harness: component.harness === "both" ? undefined : component.harness });
+        if (dryRun) { console.log(`  [dry-run] register rules from ${component.source} (${component.harness || "all harnesses"})`); break; }
+        renderHomeRules({ harness: component.harness });
         break;
       }
       case "command":
@@ -726,7 +718,6 @@ async function applyPackageComponents(pkg, { dryRun = false } = {}) {
   // Service/skill components run async handlers (lazy-imported to avoid import cycles); await them so
   // the function doesn't resolve before the side effects land.
   if (servicePromises.length) await Promise.all(servicePromises);
-
 }
 
 export async function reconcileEnabledPackages(rest = []) {
@@ -898,8 +889,8 @@ async function removePackageComponents(pkg, { dryRun = false } = {}) {
         unmergeCodexToolApprovals(USER_CODEX_CONFIG, component);
         break;
       case "rules": {
-        if (dryRun) { console.log(`  [dry-run] deregister rules from ${component.source} (${component.harness})`); break; }
-        renderHomeRules({ harness: component.harness === "both" ? undefined : component.harness });
+        if (dryRun) { console.log(`  [dry-run] deregister rules from ${component.source} (${component.harness || "all harnesses"})`); break; }
+        renderHomeRules({ harness: component.harness });
         break;
       }
       case "command":
