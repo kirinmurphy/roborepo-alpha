@@ -42,18 +42,21 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "portal-ui-"));
 const readyFile = path.join(tmp, "portal.ready");
 const stateDir = path.join(tmp, ".roborepo");
 const registry = defaultRegistry();
+// The portal hides repositories not seen in 30 days, measured against the real clock, so a fixed
+// date here would age the fixture out of every Home test.
+const seenAt = new Date().toISOString();
 upsertRepository(registry, {
   id: "git:github.com/example/roborepo",
   kind: "git",
   displayName: "RoboRepo",
   providerUrl: "https://github.com/example/roborepo",
-  now: "2026-09-30T12:00:00.000Z",
+  now: seenAt,
 });
 recordDiscovery(registry, "git:github.com/example/roborepo", {
   source: "manual",
   evidence: "configured-source",
   confidence: "high",
-  now: "2026-09-30T12:00:00.000Z",
+  now: seenAt,
 });
 writeRegistry({ stateRoot: stateDir, registry });
 const cli = path.join(repoRoot, "scripts", "cli", "main.mjs");
