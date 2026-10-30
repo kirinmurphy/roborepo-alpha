@@ -33,7 +33,10 @@ const input = readHookInput()
 if (!input) process.exit(0)
 const toolName = input.tool_name || input.toolName || input.tool || ''
 const toolInput = input.tool_input || input.toolInput || {}
-const command = toolInput.command || ''
+// exec_command sends the command as `cmd`; older shell tools send `command`. A rewrite goes back
+// under the same key.
+const commandKey = toolInput.command === undefined ? 'cmd' : 'command'
+const command = toolInput[commandKey] || ''
 
 // Codex's shell tool goes by a few names depending on version/config. Act only on those; anything
 // else passes through untouched.
@@ -45,7 +48,12 @@ if (!SHELL_TOOLS.has(toolName) || typeof command !== 'string' || !command) {
 const hasTail = s => /\|\s*tail\b/.test(s)
 const addTail = s => hasTail(s) ? s : `${s} 2>&1 | tail -n 120`
 
+// A rewrite is also an allow, and the pattern only describes part of the command: anything chained,
+// piped, redirected, or substituted beside it would be approved too, so those are left alone.
+const compound = /[;&|<>`\n]|\$\(/.test(command)
+
 const allow = (nextCommand, reason = 'Rewriting shell command to a lower-noise form') => {
+  if (compound) return
   process.stdout.write(JSON.stringify({
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
@@ -53,7 +61,7 @@ const allow = (nextCommand, reason = 'Rewriting shell command to a lower-noise f
       permissionDecisionReason: reason,
       updatedInput: {
         ...toolInput,
-        command: nextCommand
+        [commandKey]: nextCommand
       }
     }
   }))
@@ -69,9 +77,16 @@ const deny = reason => {
   }))
 }
 
+// Flags count only where the shell reads them as words. Quoted strings and heredoc bodies (commit
+// messages, PR bodies, grep patterns) only mention them. A flag needs whitespace or the start of the
+// command before it: `\b--watch` never matches after a space, since `-` is not a word character.
+const shellWords = command
+  .replace(/<<-?\s*(['"]?)(\w+)\1[^\n]*\n[\s\S]*?\n\s*\2(?=\n|$)/g, '')
+  .replace(/'[^']*'|"(?:\\.|[^"\\])*"/g, "''")
+
 if (
-  /\b(--watch|--verbose|--debug)\b/.test(command) ||
-  /\b(vitest|jest|tsx|ts-node)\b.*\b(--watch|watch)\b/.test(command)
+  /(^|\s)--(watch|verbose|debug)(?=[\s=]|$)/.test(shellWords) ||
+  /\b(vitest|jest|tsx|ts-node)\b.*(^|\s)(--watch|watch)(?=\s|$)/.test(shellWords)
 ) {
   deny('Do not use watch, verbose, or debug flags unless explicitly requested.')
   process.exit(0)

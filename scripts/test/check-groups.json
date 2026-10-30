@@ -16,6 +16,7 @@
     "plan-landed-recovery-check.mjs",
     "core-hook-wiring-check.mjs",
     "protected-branch-push-check.mjs",
+    "minimize-bash-output-check.mjs",
     "hook-readiness-check.mjs",
     "hook-review-launch-check.mjs",
     "hook-review-cli-check.mjs",

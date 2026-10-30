@@ -67,9 +67,9 @@ gitOk(work, "remote", "set-head", "origin", "trunk");
 gitOk(work, "branch", "-q", "--set-upstream-to=origin/main");
 gitOk(work, "switch", "-q", "-c", "feat");
 
-function decide(command, { cwd = work, toolName = "Bash", env = {} } = {}) {
-  const result = spawnSync(process.execPath, [hook], {
-    input: JSON.stringify({ cwd, tool_name: toolName, tool_input: { command } }),
+function decide(command, { cwd = work, toolName = "Bash", env = {}, hookPath = hook, key = "command" } = {}) {
+  const result = spawnSync(process.execPath, [hookPath], {
+    input: JSON.stringify({ cwd, tool_name: toolName, tool_input: { [key]: command } }),
     encoding: "utf8",
     env: { ...gitEnv, ROBOREPO_GIT_HOOKS_DIR: gitHooks, ...env },
   });
@@ -142,6 +142,31 @@ for (const command of manifest.behaviors.find((b) => b.id === "change-github-dir
 for (const [command, expected] of cases) {
   assert.equal(decide(command), expected, command);
 }
+// Codex runs a command whose hook result is "ask" without prompting, so its copy turns every ask
+// into a deny. It knows it is Codex's from its directory, in this repo and where it is installed.
+const codexHook = path.join(codexHooks, "protected-branch-push.mjs");
+const installedHome = path.join(tmp, "home");
+for (const dir of [".codex", ".claude"]) {
+  fs.mkdirSync(path.join(installedHome, dir, "hooks"), { recursive: true });
+  fs.copyFileSync(hook, path.join(installedHome, dir, "hooks", "protected-branch-push.mjs"));
+}
+const askCases = [
+  ...cases.filter(([, expected]) => expected === "ask").map(([command]) => command),
+  "git push origin feat --no-verify",
+  `sh -c 'b=main; git push origin "$b"'`,
+];
+for (const command of askCases) {
+  assert.equal(decide(command), "ask", `Claude asks: ${command}`);
+  assert.equal(decide(command, { toolName: "exec_command", hookPath: codexHook, key: "cmd" }), "deny", `Codex denies: ${command}`);
+}
+const installedCodex = path.join(installedHome, ".codex", "hooks", "protected-branch-push.mjs");
+const installedClaude = path.join(installedHome, ".claude", "hooks", "protected-branch-push.mjs");
+assert.equal(decide("git push --no-verify origin feat", { toolName: "exec_command", hookPath: installedCodex }), "deny", "installed Codex copy denies an ask");
+assert.equal(decide("git push --no-verify origin feat", { hookPath: installedClaude }), "ask", "installed Claude copy still asks");
+// Codex keeps its other decisions: exec_command sends the command as `cmd`.
+for (const [command, expected] of [["git push origin feat", "allow"], ["git push origin main", "deny"], ["gh pr view 12", "defer"]]) {
+  assert.equal(decide(command, { toolName: "exec_command", hookPath: codexHook, key: "cmd" }), expected, `Codex cmd: ${command}`);
+}
 assert.equal(decide("git push origin release", { env: { ROBOREPO_PROTECTED_BRANCHES: "release, prod" } }), "deny", "extra protected names");
 assert.equal(decide("git push origin main", { toolName: "exec_command" }), "deny", "Codex shell tool");
 assert.equal(decide("git push origin main", { toolName: "Read" }), "defer", "non-shell tool");
@@ -152,6 +177,7 @@ assert.equal(decide("git push origin main", { env: { ROBOREPO_GIT_HOOKS_DIR: pat
 // With no recorded remote default branch, a push may land on it; this hook cannot ask the remote.
 gitOk(work, "remote", "set-head", "origin", "-d");
 assert.equal(decide("git push origin feat"), "ask", "unknown remote default branch asks");
+assert.equal(decide("git push origin feat", { toolName: "exec_command", hookPath: codexHook, key: "cmd" }), "deny", "Codex denies an unknown remote default branch");
 assert.equal(decide("git push origin main"), "deny", "main is protected regardless");
 gitOk(work, "remote", "set-head", "origin", "trunk");
 
@@ -182,6 +208,11 @@ for (const refspec of ["feature:main", "feature:refs/heads/master", "feature:tru
   assert.match(r.stderr, /protected branch/, refspec);
 }
 assert.notEqual(git(work, ["push", "-q", "origin", ":main"], agentEnv).status, 0, "deleting main should be refused");
+// main is protected by name and, here, as the remote's default branch too; it is reported once.
+gitOk(work, "remote", "set-head", "origin", "main");
+r = git(work, ["push", "-q", "origin", "feature:main"], agentEnv);
+assert.match(r.stderr, /protected branch\(es\): main is blocked/, "each blocked branch is named once");
+gitOk(work, "remote", "set-head", "origin", "trunk");
 
 // Force pushes are refused from the refs themselves, however the command spelled them.
 gitOk(work, "commit", "-q", "--allow-empty", "-m", "published");
