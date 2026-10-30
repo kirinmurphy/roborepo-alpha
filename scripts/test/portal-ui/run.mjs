@@ -41,19 +41,22 @@ if (!fs.existsSync(browserPath)) {
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "portal-ui-"));
 const readyFile = path.join(tmp, "portal.ready");
 const stateDir = path.join(tmp, ".roborepo");
+// Seeded as seen now: a fixed date ages the repository out of Home's list 30 days later
+// (AGE_OUT_MS in modules/repositories/lifecycle.mjs) and every Home test then fails.
+const seededAt = new Date().toISOString();
 const registry = defaultRegistry();
 upsertRepository(registry, {
   id: "git:github.com/example/roborepo",
   kind: "git",
   displayName: "RoboRepo",
   providerUrl: "https://github.com/example/roborepo",
-  now: "2026-09-30T12:00:00.000Z",
+  now: seededAt,
 });
 recordDiscovery(registry, "git:github.com/example/roborepo", {
   source: "manual",
   evidence: "configured-source",
   confidence: "high",
-  now: "2026-09-30T12:00:00.000Z",
+  now: seededAt,
 });
 writeRegistry({ stateRoot: stateDir, registry });
 const cli = path.join(repoRoot, "scripts", "cli", "main.mjs");
