@@ -33,6 +33,7 @@ export function runClaudeMcpAdd(args) {
   if (!executable) throw new Error("Claude Code has no validated CLI or desktop runtime");
   const result = spawnSync(executable, args, { stdio: "inherit" });
   if (result.error) return { ok: false, status: 1, message: `failed to run claude: ${result.error.message}` };
+  if (result.signal) return { ok: false, status: 1, message: `claude mcp add was terminated by signal ${result.signal}` };
   const status = result.status ?? 1;
   return status === 0 ? { ok: true, status, message: "" } : { ok: false, status, message: `claude mcp add exited with status ${status}` };
 }

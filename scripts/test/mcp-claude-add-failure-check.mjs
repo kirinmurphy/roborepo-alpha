@@ -18,6 +18,8 @@ const bin = path.join(tmp, "bin");
 fs.mkdirSync(bin);
 fs.writeFileSync(path.join(bin, "claude"), `#!/bin/sh
 if [ "$1" = "--version" ]; then echo "1.0.0 (Claude Code)"; exit 0; fi
+if [ "$1" = "--signal" ]; then kill -TERM $$; fi
+if [ "$1" = "--success" ]; then exit 0; fi
 echo 'fake claude failure' >&2
 exit 3
 `, { mode: 0o755 });
@@ -35,6 +37,14 @@ assert.equal(result.ok, false, "a failing claude mcp add returns ok:false");
 assert.equal(result.changed, false);
 assert.equal(result.exitStatus, 3, "the CLI's exit status rides on the result");
 assert.match(result.warnings.join("\n"), /status 3/);
+
+const { runClaudeMcpAdd } = await import("../harnesses/claude/mcp-claude-cli.mjs");
+const signaled = runClaudeMcpAdd(["--signal"]);
+assert.equal(signaled.ok, false, "signal termination is reported as a failure");
+assert.match(signaled.message, /terminated.*SIGTERM/, "the actual signal identifies the failure");
+assert.doesNotMatch(signaled.message, /exited with status/, "a signaled child has no exit status to report");
+assert.deepEqual(runClaudeMcpAdd(["--success"]), { ok: true, status: 0, message: "" },
+  "a successful child remains successful");
 
 const appRoot = makeAppRoot();
 const cli = path.join(appRoot, "scripts", "cli", "main.mjs");
