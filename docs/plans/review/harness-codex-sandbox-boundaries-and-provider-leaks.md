@@ -585,9 +585,155 @@ Git administrative worktree `credential-protection`; this document contains no m
   approval is requested separately for the exact reviewed commit below.
 
 ### Result
-- Status: complete
-- Reviewed implementation commit: 81ae9e362000c1a48574b1aeceda4c2302b19570
-- Base commit: 977d29f04ab25f5191f21c832cb98709be99efae
+- Status: pending
+- Reviewed implementation commit: f90412a258c6a1177ea33a6531581d53020f21db
+- Base commit: ac7c6bb207f3431b0e4c3a308c973adc9717424f
+
+#### Re-review — October 30, 2026
+
+- Resume path: changes since review, after landing. The prior complete review covered
+  `81ae9e362000c1a48574b1aeceda4c2302b19570` against base
+  `977d29f04ab25f5191f21c832cb98709be99efae`; its explicit approval below remains historical.
+  This pending result does not renew that approval.
+- The 28 changed paths since approval cover plan priority/lifecycle rules, dependency actions,
+  shared copy controls, tests, the plan-execute report reference, and the control-panel guidance
+  for absent Codex configuration. Credential rendering, generated Codex configuration, and native
+  enforcement fixtures are unchanged. The feature implementation is byte-identical outside
+  `docs/plans/` to squash `28932c1c85535759e8cf565ccdd096d6735e8946`.
+- The canonical `node scripts/cli/main.mjs plans landed 4zyo2woj --json` retry passed, revalidating
+  that squash as the absorbing commit at the exact feature/base tips above. Base synchronization
+  was not run on the already-landed branch. Its worktree and branch were not changed.
+- Fresh-context Validator: no actionable fix or escalate findings in the changed and directly
+  affected code. Checked acceptance criteria, observable tests, documentation of record, coverage
+  limits, flow/cohesion, data/state, and comments/abstractions. No review fix commits were needed.
+- Passed: `node scripts/test/codex-credential-projection-check.mjs` (15 patterns, nine combinations),
+  `node scripts/test/codex-permissions-foreign-lines-check.mjs`,
+  `node scripts/test/permission-rule-home-path-check.mjs`,
+  `node scripts/test/plans-portal-state-check.mjs`,
+  `node scripts/test/plan-lifecycle-manifest-check.mjs`, and
+  `node scripts/test/plan-suite-skills-check.mjs`. The Validator independently passed projection,
+  foreign lines, portal state, lifecycle manifest, skill checks, and documentation references.
+  Whitespace validation excluding the two inaccessible TLS fixtures passed; plan validation
+  reported zero findings.
+- `npm run check` did not pass: doctor passed 106 checks, then the CLI suite reported three
+  package add-skill assertion failures and failed temporary-fixture cleanup with `EPERM`.
+  These failures are not classified as base failures; their cause was not established. Later
+  aggregate components were not reached. No aggregate pass or waiver is inferred.
+- `node scripts/test/permissions-render-live-characterization-check.mjs`,
+  `node scripts/test/gemini-adapter-characterization-check.mjs`,
+  `node scripts/test/root-config-write-policy-check.mjs`,
+  `node scripts/test/hook-composition-check.mjs`, and
+  `node scripts/test/plan-lifecycle-transitions-check.mjs` exited nonzero while removing their
+  temporary fixtures (`EPERM`). Available isolated retries retained that failure; printed
+  assertion-success messages are not counted as passing commands. Test-created untracked
+  hook-composition files were removed without changing tracked implementation.
+- `npm run test:portal-ui` could not bind `127.0.0.1` (`listen EPERM`) and also failed temporary
+  cleanup. Its separately permitted retry failed with the same two errors; no browser assertions
+  ran in either attempt.
+- The canonical approval reader still reports stale approval (28 implementation paths since
+  the old approved commit). It also lists the inaccessible
+  `scripts/test/fixtures/runtime-tls/localhost-cert.pem` and
+  `scripts/test/fixtures/runtime-tls/localhost-key.pem` as pending implementation changes.
+  Git status reports denied access to those paths, so their working contents were not compared
+  or treated as verified clean. They were not read or changed. Status excluding those paths was
+  clean after test-file cleanup; the primary checkout retains unrelated pre-existing edits.
+- Correction after the user's October 30 follow-up: main already includes
+  `fb3a32b568b8fecaf7203e3adb23c6a8ea403093`, which removes both tracked PEM fixtures and
+  generates disposable TLS credentials in memory through `scripts/test/lib/local-test-tls.mjs`.
+  The assigned historical feature tip does not include that commit and still reads the old
+  fixtures. The PEM-specific obstacle above concerns that older worktree, not current main.
+  The same main commit also makes inaccessible-file checks report unavailable rather than
+  treating unreadable files as verified edits. Neither correction was incorporated into the
+  older worktree used for this review; its cleanup and localhost errors remain separate observed
+  failures. Current main's disposable TLS implementation has not been rerun in this review.
+- Native enforcement was not rerun: its unrestricted positive controls read synthetic paths
+  denied by this session's policy. Previously recorded macOS native-command evidence remains
+  historical evidence for unchanged files, not a fresh runtime certification. The three human-
+  accepted coverage limitations remain unchanged; no new manual acceptance task is inferred.
+- Approval is not requested while required verification and trustworthy freshness checking remain
+  unavailable. Resume with a passing `npm run check` and canonical approval-reader output from
+  an environment permitted to inspect the repository's synthetic test fixtures and clean up its
+  temporary directories. This record changes only the primary plan's Result; it does not alter
+  the landed worktree, recover approval, close the plan, or authorize cleanup.
+
+
+#### Merged implementation verification — October 30, 2026
+
+Checked current main at `0cf40deb9fd39f7113390b2c0ac3e1b776479a60`, following the user's request
+to review the landed work and mark only supported items complete. The original implementation
+checklist was already checked; these are newly verified results, not renewed approval.
+
+- [x] Confirm the original branch tip and absorbing squash remain valid historical landing
+  evidence: the tip is still `f90412a258c6a1177ea33a6531581d53020f21db`, and
+  `28932c1c85535759e8cf565ccdd096d6735e8946` remains on main's first-parent history.
+  Git assertions passed. The credential translator, shared permission renderer, projection/native
+  tests, and native coverage fixtures are unchanged from the squash and have no pending edits.
+- [x] Review the credential implementation present on main. The separate read-only Validator
+  reported no actionable findings after checking requirements, docs of record, resolved intent,
+  portable anchors, both profiles, foreign-config preservation, and the three convention rubrics.
+  Native runtime coverage remains historical, with the accepted tool/platform limits unchanged.
+- [x] Verify disposable TLS credentials without reading persistent secret files. Git asserts no
+  runtime TLS fixture files remain tracked. Executed in-memory assertions passed for distinct
+  generated keys, certificate signature, matching key, and current validity; the Validator also
+  passed localhost-subject and TLS-context assertions. This does not claim that the full HTTPS
+  discovery suite or its listeners ran successfully.
+- [x] Rerun focused current-main checks: credential projection (15 patterns, nine combinations),
+  foreign lines, home-path rules, and documentation references passed. The Validator independently
+  passed portal state, lifecycle manifest, plan-suite skills, whitespace, and duplicate-only Codex
+  hook reconciliation, including input preservation and stable reapply.
+- [x] Recheck repository health: doctor passed all 107 checks during `npm run check`.
+
+Remaining verification is explicit. `npm run check`, started on main `7c65c2e7`, exited nonzero at
+three package add-skill assertions and temporary cleanup (`EPERM`); the checkout advanced through
+an unrelated plan-organization/test-fixture commit while the gate ran. No passing aggregate for a
+single committed snapshot is claimed. Three unrelated pending implementation paths remain:
+`modules/repositories/worktree-preservation.mjs`, `scripts/test/slash-commands-characterization-check.mjs`,
+and `scripts/test/worktree-snapshot-check.mjs`. They were not changed or certified by this review.
+Live-render, Gemini-adapter, and root-config-write checks still exited nonzero during their own
+fixture cleanup. An independent empty-directory deletion control also returned `EPERM`.
+
+`npm run test:portal-ui` and its permitted retry both failed to bind `127.0.0.1` and clean their
+temporary directories; no browser assertions ran. The current canonical landed command also failed
+temporary-directory cleanup, so only the independently revalidated historical landing evidence
+above is counted as passed. The approval reader still resolves the historical worktree and reports
+stale approval plus unavailable working-file inspection. The plan validator reports zero blocking
+findings and one advisory outside-worktree evidence edit; this primary-only pending record is not
+an authority override. Complete review, renewed exact-commit human approval, closure, and worktree
+cleanup remain unchecked outcomes. No approval, waiver, or broader runtime coverage is inferred.
+
+
+#### Verification failure diagnosis — October 30, 2026
+
+The user requested resolution of verification before the next implementation-approval prompt.
+Isolated reproductions now establish the immediate causes of the three CLI assertion failures:
+
+- Both ownership-conflict cases restore their original package configuration and trigger contents,
+  then fail at `scripts/cli/packages.mjs:184` while removing the new skill directory. Executed
+  diagnostic assertions verified the restored bytes, `EPERM` at that operation, and the directory
+  left behind. The cleanup error replaces the ownership-validation message expected by the tests.
+- The empty-package conflict likewise fails at the same cleanup operation and leaves its skills
+  directory behind. This directly explains the third failing assertion. No speculative package
+  behavior change was made to hide incomplete rollback.
+- An independent, newly created empty directory owned by the current user with mode `0700` could
+  not be removed by either Node's `rmdirSync` or `/bin/rmdir`, including a permitted retry. Controls
+  under both the system temporary directory and the repository-family worktree root returned
+  `EPERM`. The particular policy/runtime layer responsible for denying removal is not established.
+- An independent TCP server on `127.0.0.1`, requesting an ephemeral port and no external connection,
+  also returned `EPERM` on its permitted retry. This reproduces the browser startup obstacle
+  without the browser runner.
+- Read-only discovery currently selects Codex CLI `0.166.0`; the discovered desktop executable is
+  `0.166.0-alpha.5.1`. The historical native coverage at `0.163.0-alpha.11.2` is not silently
+  extended to either newer runtime.
+- Existing remote CI evidence was sought read-only with `gh run list`; normal and permitted
+  attempts could not connect to `api.github.com`. No remote pass is claimed.
+
+The full gate remains unpassed. A verification environment must first permit ordinary temporary
+folder removal and loopback listeners while preserving credential-read restrictions. Then rerun
+`npm run check` and the remaining plan-relevant checks, resolve any actual failures, finish the
+post-merge review evidence, and request approval of the exact reviewed implementation. These
+control failures are execution prerequisites; neither passing diagnostics nor an already-merged
+branch substitutes for a passing gate. No credential denial, installed configuration, implementation
+approval, or unrelated pending edit was changed by this diagnosis.
 
 ### Approval
 - Decision: approved

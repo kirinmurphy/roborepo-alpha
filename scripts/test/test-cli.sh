@@ -11,6 +11,10 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cli="${repo_root}/scripts/cli/main.mjs"
 # Every doctor run below stays off the network; node-release-health-check.mjs covers that check.
 export ROBOREPO_SKIP_NODE_RELEASE_CHECK=1
+# Run fixture git as a human would, without the agent hooks an agent shell carries (see ci.sh).
+while IFS='=' read -r name _; do
+  [[ "${name}" =~ ^GIT_CONFIG_(COUNT|KEY_[0-9]+|VALUE_[0-9]+)$ ]] && unset "${name}"
+done < <(env)
 pass=0
 fail=0
 quiet=0

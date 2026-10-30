@@ -1,7 +1,7 @@
 ---
 id: z3j2x3x1
 priority: high
-next_action: Run /plan-execute to eliminate redundant preservation work and verify first-attempt cleanup within the existing budget.
+next_action:
 blocked_by: []
 depends_on: []
 related: ["4xc0gjuw", "b2sgiejd", "git-exec-consolidation", "developer-runtime-remote-branch-status", "l1mz96d9"]
@@ -314,3 +314,7 @@ None. Fix redundant work directly; retain bounded failure reporting and existing
 - Historical incident causation remains strongly supported rather than proven: the original
   failed run had no termination metadata. No worktree was retired and no feature code changed
   during promotion.
+
+## Archived
+
+2026-10-30: Abandoned the remaining broader diagnostics, UI/workflow changes, and speculative optimizations after the focused hashing and fixture-cleanup fix landed in f101af0212b8981db55eac688f6074dac27ff620; this retires the unimplemented scope rather than claiming the full plan completed, and the original incident cause remains unproven.

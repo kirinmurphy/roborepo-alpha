@@ -31,9 +31,9 @@ export function hookRecordsFromFile(filePath, { trust }) {
 
 export function mergeRootConfigHooks(settingsPath, hooksFragment) {
   const { settings, hooks } = readRootConfigHooks(settingsPath);
-  const { hooks: nextHooks, added } = mergeHooksMap(hooks, hooksFragment);
+  const { hooks: nextHooks, added, duplicatesRemoved } = mergeHooksMap(hooks, hooksFragment);
   const nextSettings = { ...settings, hooks: nextHooks };
-  return { changed: added > 0, content: `${JSON.stringify(nextSettings, null, 2)}\n` };
+  return { changed: added > 0 || duplicatesRemoved > 0, content: `${JSON.stringify(nextSettings, null, 2)}\n` };
 }
 
 export function unmergeRootConfigHooks(settingsPath, hooksFragment) {
