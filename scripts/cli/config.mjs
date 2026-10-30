@@ -171,7 +171,6 @@ export function readConfigSnapshot() {
     id: pkg.id,
     label: pkg.label,
     origin: pkg.origin,
-    archived: pkg.archived === true,
     description: pkg.description || null,
     status: packageLiveState.get(pkg.id)?.status || "disabled",
     catalogStatus: pkg.status || "available",
@@ -317,7 +316,6 @@ export function buildBehaviorView(snap) {
   }
   const packageCosts = snap.contextCost?.packages || {};
   for (const item of snap.packages) {
-    if (item.archived) continue;
     const section = byCategory.get(item.presentation?.category);
     if (!section) continue;
     section.items.push(packagePresentationItem(item, toolsByPackage.get(item.id) || [], packageCosts[item.id] || null));

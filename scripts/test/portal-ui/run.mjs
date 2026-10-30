@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Portal UI browser suite driver.
 //
-// Boots the REAL portal server the hermetic way — temp HOME + ROBOREPO_STATE_DIR, a
+// Boots the REAL portal server the hermetic way — temp HOME + ROBOREPO_STATE_ROOT, a
 // PORTAL_READY_FILE ready-file, and `web --no-open --port 0 --allow-zero-port` — the
 // same recipe scripts/test/test-cli.sh uses around its portal HTTP block. The server is a
 // sibling process (not a Playwright webServer fixture), so the suite exercises the exact startup
@@ -11,6 +11,8 @@
 //
 // Skips (exit 0) with a visible `skip:` line when the Chromium browser is not installed, so a
 // machine that has never run `npx playwright install chromium` still gets a green, honest result.
+// Under CI (CI=true) a missing browser fails instead: CI installs it, so a skip there would hide
+// that the suite never ran.
 
 import fs from "node:fs";
 import os from "node:os";
@@ -32,6 +34,10 @@ const repoRoot = path.resolve(here, "..", "..", "..");
 
 const browserPath = chromium.executablePath();
 if (!fs.existsSync(browserPath)) {
+  if (process.env.CI === "true") {
+    console.error(`FAIL: portal UI browser suite cannot run: chromium not installed on a CI runner (${browserPath})`);
+    process.exit(1);
+  }
   console.log(
     "skip: portal UI browser suite (chromium not installed; run `npx playwright install chromium`)",
   );
@@ -41,19 +47,22 @@ if (!fs.existsSync(browserPath)) {
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "portal-ui-"));
 const readyFile = path.join(tmp, "portal.ready");
 const stateDir = path.join(tmp, ".roborepo");
+// Seeded as seen now: a fixed date ages the repository out of Home's list 30 days later
+// (AGE_OUT_MS in modules/repositories/lifecycle.mjs) and every Home test then fails.
+const seededAt = new Date().toISOString();
 const registry = defaultRegistry();
 upsertRepository(registry, {
   id: "git:github.com/example/roborepo",
   kind: "git",
   displayName: "RoboRepo",
   providerUrl: "https://github.com/example/roborepo",
-  now: "2026-09-30T12:00:00.000Z",
+  now: seededAt,
 });
 recordDiscovery(registry, "git:github.com/example/roborepo", {
   source: "manual",
   evidence: "configured-source",
   confidence: "high",
-  now: "2026-09-30T12:00:00.000Z",
+  now: seededAt,
 });
 writeRegistry({ stateRoot: stateDir, registry });
 const cli = path.join(repoRoot, "scripts", "cli", "main.mjs");
@@ -66,7 +75,7 @@ const server = spawn(
       ...process.env,
       ...hostHarnessIsolationEnv(tmp),
       HOME: tmp,
-      ROBOREPO_STATE_DIR: stateDir,
+      ROBOREPO_STATE_ROOT: stateDir,
       PORTAL_READY_FILE: readyFile,
     },
     stdio: ["ignore", "inherit", "inherit"],

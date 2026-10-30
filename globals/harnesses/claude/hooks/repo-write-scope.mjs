@@ -78,7 +78,7 @@ function readJson(p, fallback) {
 
 function outsideRepoBucket() {
   const stateDir =
-    process.env.ROBOREPO_STATE_ROOT || process.env.ROBOREPO_STATE_DIR || path.join(os.homedir(), '.roborepo')
+    process.env.ROBOREPO_STATE_ROOT || path.join(os.homedir(), '.roborepo')
   const candidates = []
   if (process.env.REPO_ROOT) candidates.push(process.env.REPO_ROOT)
   const recorded = readJson(path.join(stateDir, 'app-root.json'), {})

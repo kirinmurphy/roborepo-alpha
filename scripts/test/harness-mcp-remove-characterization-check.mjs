@@ -10,6 +10,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import { makeAppRoot } from "./app-root-fixture.mjs";
+
+// The adapter reads the app root's MCP inventory, so point it at an isolated copy carrying the
+// fixture servers (fixture-tool, fixture-docs) before loading it.
+const appRoot = makeAppRoot({ prefix: "roborepo-mcp-remove-app-", fixturePackages: true });
+process.env.ROBOREPO_APP_ROOT = appRoot;
+process.on("exit", () => fs.rmSync(appRoot, { recursive: true, force: true }));
 const { claudeProvider } = await import("../harnesses/claude/index.mjs");
 
 function testPrunesKnownServersOnly() {
@@ -19,11 +26,11 @@ function testPrunesKnownServersOnly() {
   const claudeJsonPath = path.join(tmp, ".claude.json");
   fs.writeFileSync(claudeJsonPath, JSON.stringify({
     mcpServers: {
-      jcodemunch: { command: "uvx", args: ["jcodemunch-mcp"] },
+      "fixture-tool": { command: "uvx", args: ["fixture-tool-mcp"] },
       "unrelated-server": { command: "foo" },
     },
     projects: {
-      "/some/project": { mcpServers: { jdocmunch: { command: "uvx", args: ["jdocmunch-mcp"] } } },
+      "/some/project": { mcpServers: { "fixture-docs": { command: "uvx", args: ["fixture-docs-mcp"] } } },
     },
   }));
 
@@ -56,7 +63,7 @@ function testDryRunMakesNoChange() {
   const homePath = path.join(tmp, ".claude");
   fs.mkdirSync(homePath, { recursive: true });
   const claudeJsonPath = path.join(tmp, ".claude.json");
-  const before = JSON.stringify({ mcpServers: { jcodemunch: { command: "uvx" } } });
+  const before = JSON.stringify({ mcpServers: { "fixture-tool": { command: "uvx" } } });
   fs.writeFileSync(claudeJsonPath, before);
 
   const result = claudeProvider.adapters.mcp.remove({ homePath, dryRun: true });

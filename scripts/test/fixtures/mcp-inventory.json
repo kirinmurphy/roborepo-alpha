@@ -1,0 +1,10 @@
+{
+  "presets": [
+    { "aliases": ["fixture-tool", "fixture-tool-mcp"], "name": "fixture-tool", "commandOrUrl": "uvx", "args": ["fixture-tool-mcp"] },
+    { "aliases": ["fixture-docs", "fixture-docs-mcp"], "name": "fixture-docs", "commandOrUrl": "uvx", "args": ["fixture-docs-mcp"] }
+  ],
+  "servers": [
+    { "name": "fixture-tool", "commandOrUrl": "uvx", "args": ["fixture-tool-mcp"], "harnesses": ["claude", "codex"] },
+    { "name": "fixture-docs", "commandOrUrl": "uvx", "args": ["fixture-docs-mcp"], "harnesses": ["claude", "codex"] }
+  ]
+}

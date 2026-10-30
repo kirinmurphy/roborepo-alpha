@@ -62,6 +62,12 @@ fi
 # `npm run test:portal-ui` is safe to invoke directly on a machine without the browser.
 if node scripts/test/portal-ui/has-browser.mjs >/dev/null 2>&1; then
   run npm run --silent test:portal-ui
+elif [[ "${CI:-}" == "true" ]]; then
+  # CI installs Chromium before this gate. A skip there would report green with no UI coverage, so
+  # a missing browser is a failure, not a skip.
+  echo "" >&2
+  echo "FAIL: portal UI browser suite cannot run: chromium not installed on a CI runner" >&2
+  exit 1
 else
   echo ""
   echo "skip: portal UI browser suite (chromium not installed; run npx playwright install chromium)"

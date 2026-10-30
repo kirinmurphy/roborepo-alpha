@@ -119,9 +119,9 @@ function markOnboarded() {
 async function applyItemToggle(section, item, enabled) {
   if (item.toggle === "package") return mutatePackage(item.id, enabled);
   if (section.category === "Token Optimization") {
-    // jcodemunch / jdocmunch / caveman / telemetry are all packages now (telemetry via a service
-    // component), so they route through the one generic package mutate.
-    if (["jcodemunch", "jdocmunch", "caveman", "telemetry"].includes(item.id)) return mutatePackage(item.id, enabled);
+    // caveman and telemetry are packages (telemetry via a service component), so they route through
+    // the one generic package mutate.
+    if (["caveman", "telemetry"].includes(item.id)) return mutatePackage(item.id, enabled);
     return { ok: false, message: `${item.label} is managed elsewhere (not toggleable here)` };
   }
   if (section.category === "Chat-Time Output") {
@@ -366,7 +366,7 @@ function printIntroWelcome() {
   console.log("Main commands");
   console.log("  roborepo web        manage your settings online");
   console.log("  roborepo package manage    choose which behaviors are enabled");
-  console.log("  roborepo package enable X   turn on a package (jcodemunch, telemetry, ...)");
+  console.log("  roborepo package enable X   turn on a package (caveman, telemetry, ...)");
   console.log("  roborepo update     re-apply config after pulling changes");
   console.log("");
   console.log("Run `roborepo --help` for all commands.");
@@ -603,7 +603,6 @@ function removeBundle(bundle, rows) {
 
 function applyRow(row, policy) {
   if (!harnessAvailable(row.harness)) return;
-  if (row.kind === "cleanup") return cleanupRow(row);
   if (row.kind === "rendered_rules") return renderRulesItem(row);
   if (row.kind === "managed_copy" || row.kind === "link") return copyItem(row, policy);
   if (row.kind === "root_config") return copyItem(row, policy);
@@ -625,15 +624,6 @@ function renderRulesItem(row) {
   renderHomeRules({ harness: row.harness });
 }
 
-function cleanupRow(row) {
-  const target = readlink(row.homeAbs);
-  if (target && resolvesInsideRepo(row.homeAbs)) {
-    fs.unlinkSync(row.homeAbs);
-    console.log(`cleanup: ${row.homeAbs}`);
-  }
-}
-
-
 // A root_config file is "builtin-authored" once install has written its hooks/markers in. Backing
 // such a file up as a "pre-install" original poisons the backup — a later uninstall would restore
 // roborepo hooks into a supposedly-clean file. Only ever back up a genuine pre-install file.
@@ -641,7 +631,7 @@ function cleanupRow(row) {
 function isBuiltInAuthored(file) {
   try {
     const text = fs.readFileSync(file, "utf8");
-    return /roborepo telemetry capture|write-guard|BEGIN GENERATED AGENT PERMISSIONS|MANAGED_BY_ROBOREPO|# Generated Harness Rules|BEGIN managed:builtin-code-style|BEGIN managed:managed-agents-import/.test(text);
+    return /roborepo telemetry capture|write-guard|BEGIN GENERATED AGENT PERMISSIONS|MANAGED_BY_ROBOREPO|# Generated Harness Rules|BEGIN managed:builtin-code-style/.test(text);
   } catch {
     return false;
   }
@@ -777,7 +767,7 @@ function restorePreInstallBackup(row) {
 }
 
 function removeRenderedRulesRow(row) {
-  // Unlink a legacy repo symlink if present (older installs).
+  // A symlink into the checkout is never user content.
   const link = readlink(row.homeAbs);
   if (link && resolvesInsideRepo(row.homeAbs)) {
     fs.unlinkSync(row.homeAbs);
@@ -788,11 +778,6 @@ function removeRenderedRulesRow(row) {
     return;
   }
   removeHomeRules({ harness: row.harness });
-
-  // Leave genuine user files. Remove only files we rendered.
-  if (!isBuiltInAuthored(row.homeAbs)) return;
-  fs.rmSync(row.homeAbs, { recursive: true, force: true });
-  console.log(`unlink: ${row.homeAbs}`);
   restorePreInstallBackup(row);
 }
 

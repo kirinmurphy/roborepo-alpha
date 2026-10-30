@@ -49,22 +49,11 @@ async function dispatch(args) {
   if (resolved.kind === "command") {
     return dispatchCommand(resolved.node, resolved.tokens, resolved.args);
   }
-  if (resolved.kind === "removed") {
-    return removedCommandError(resolved);
-  }
   return invalidCommandError(resolved);
 }
 
 async function dispatchCommand(node, tokens, args) {
   return executeCommand({ catalog, node, tokens, args });
-}
-
-function removedCommandError({ replacement }) {
-  console.error(replacement.message || "command removed");
-  if (replacement.replacement?.length) {
-    console.error(`Try: ${catalog.commandName} ${replacement.replacement.join(" ")}`);
-  }
-  process.exit(2);
 }
 
 function invalidCommandError({ tokens, suggestions }) {

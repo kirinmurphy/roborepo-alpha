@@ -40,7 +40,6 @@ while IFS=$'\t' read -r _h kind src_rel home_abs _flags; do
     managed_copy)    reclaim_link_target          "${src_rel}" "${home_abs}" "${_h}" ;;
     hook_fragment|managed_files) shared_target_row remove "${kind}" "${_h}" "${src_rel}" "${home_abs}" ;;
     link)            reclaim_link_target          "${src_rel}" "${home_abs}" "${_h}" ;;
-    cleanup)         remove_repo_symlink          "${home_abs}" ;;
     root_config)     remove_root_config           "${home_abs}" "${_h}" "${src_rel}" ;;
     rendered_rules)  reclaim_rendered_rules_target "${home_abs}" "${_h}" ;;
   esac
@@ -74,7 +73,6 @@ if [[ -f "${state_file}" ]]; then
 fi
 
 remove_mcp_servers
-remove_gitignore_globals
 remove_preset_state
 remove_rules_state
 remove_install_backups

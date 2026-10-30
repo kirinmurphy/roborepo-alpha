@@ -29,11 +29,15 @@ const markersWritten = 120;
 let newestMarkerId = null;
 for (let i = 0; i < markersWritten; i += 1) {
   newestMarkerId = hexId("mark", i);
+  const markerTs = new Date(Date.UTC(2026, 0, 1, 0, 0, i % 60)).toISOString();
   appendMarker({
-    schema: 1,
+    schema: 2,
     marker_id: newestMarkerId,
     type: "note",
-    ts: new Date(Date.UTC(2026, 0, 1, 0, 0, i % 60)).toISOString(),
+    ts: markerTs,
+    effective_at: markerTs,
+    scope: "all",
+    watching_kinds: [],
     title: "bulk marker",
     description: "x".repeat(PAD),
   });
@@ -44,11 +48,14 @@ const markers = readMarkers();
 const snapshotsWritten = 120;
 for (let i = 0; i < snapshotsWritten; i += 1) {
   writeSnapshot({
-    schema: 1,
+    schema: 2,
     snapshot_id: `cfg_${i.toString(16).padStart(24, "0")}`,
     created_at: new Date().toISOString(),
     harness: "claude",
     packages: ["y".repeat(PAD)],
+    revision_contract: 1,
+    evaluability: { packages: true, skills: true },
+    ambient: { evaluable: false, packages: [] },
   });
 }
 

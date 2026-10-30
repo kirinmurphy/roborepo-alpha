@@ -1,16 +1,3 @@
 {
-  "presets": [
-    {
-      "aliases": ["jcodemunch", "jcodemunch-mcp"],
-      "name": "jcodemunch",
-      "commandOrUrl": "uvx",
-      "args": ["jcodemunch-mcp"]
-    },
-    {
-      "aliases": ["jdocmunch", "jdocmunch-mcp"],
-      "name": "jdocmunch",
-      "commandOrUrl": "uvx",
-      "args": ["jdocmunch-mcp"]
-    }
-  ]
+  "presets": []
 }

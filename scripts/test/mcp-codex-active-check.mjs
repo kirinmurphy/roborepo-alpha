@@ -7,7 +7,7 @@ import path from "node:path";
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-mcp-codex-"));
 process.on("exit", () => fs.rmSync(tmp, { recursive: true, force: true }));
 process.env.HOME = tmp;
-process.env.ROBOREPO_STATE_DIR = path.join(tmp, ".roborepo");
+process.env.ROBOREPO_STATE_ROOT = path.join(tmp, ".roborepo");
 
 const codexDir = path.join(tmp, ".codex");
 const codexConfig = path.join(codexDir, "config.toml");

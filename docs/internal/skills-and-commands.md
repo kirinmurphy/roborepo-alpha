@@ -133,25 +133,6 @@ Standalone commands are valid, but they should be rarer than skill-backed
 commands. If the same workflow should run from both chat phrasing and slash
 syntax, prefer a skill-backed command.
 
-## Capture Convention
-
-Convention capture has three parts:
-
-| Part                                        | Mechanism           | Why                                                                                |
-| ------------------------------------------- | ------------------- | ---------------------------------------------------------------------------------- |
-| Flag possible captures during normal work   | Always-on rule      | The agent should notice confirmed decisions without writing files                  |
-| Run the capture workflow when the user asks | Normal chat request | The user can say where to write the capture, such as `CLAUDE.md`, a skill, or docs |
-
-Capture does not currently need a slash command. The useful product behavior is
-the observer: the agent flags likely capture candidates. Once the user sees that
-flag, they can make an ordinary chat request such as "update CLAUDE.md with
-this" or "add this to the plan-write skill."
-
-If capture later grows a stricter multi-step workflow that users should invoke
-by name, make it a skill-backed command. The observer shipped as the
-convention-capture rules package, now archived under
-`globals/packages-archived/`.
-
 ## Plan And Tighten
 
 These two ideas resolved into different mechanisms, not two parallel commands.
@@ -165,7 +146,7 @@ fixes, and verifies. It must not silently trigger from vague prompts such as
 **Plan** did not become a command. The useful product behavior — surfacing how a
 proposed change collides with or duplicates existing functionality — is the
 **Impact Awareness** convention (a `> 🧭 Impact:` inline flag), a default-on
-toggleable observer behavior with the same shape as convention capture. It needs
+toggleable observer behavior. It needs
 no slash command because the value is the proactive flag, not a named workflow. The deeper architecture-fit
 analysis happens conversationally once the flag surfaces.
 
@@ -211,17 +192,20 @@ roborepo skill render-commands --check
 For new entries, prefer the scaffold:
 
 ```sh
-roborepo skill new
+roborepo package dev create <id> --kind=auto-skill
+roborepo package dev add-skill <package-id> <skill-id> [--command]
 ```
 
-The scaffold asks whether to create:
+`package dev create --kind` picks the shape:
 
-- `auto`: an automatic helper skill with no slash command
+- `auto-skill`: an automatic helper skill with no slash command
 - `skill-command`: a skill plus a slash-command entry point
-- `standalone`: a slash command with no skill
+- `standalone-command`: a slash command with no skill
+- `empty`: a package with no resources yet
 
-It updates package config, source files, README tables, generated outputs, and
-generated command files together.
+`package dev add-skill` adds one more skill (and, with `--command`, its slash command) to an
+existing package. Then run `roborepo skill sync-global` and `roborepo skill render-commands` to
+refresh the cache, harness links, and generated wrappers.
 
 ## Skill Storage and Fan-Out
 
@@ -229,9 +213,9 @@ Package-owned skills live at `globals/packages/<package>/skills/<name>/SKILL.md`
 The required base support skill remains a system skill at
 `globals/system/skills/roborepo-support/SKILL.md`.
 At install/update time, enabled shared skills are materialized into
-`~/.roborepo/skills/<name>` and each harness's native skills dir symlinks to that cache entry:
-`~/.claude/skills/<name>` and `~/.codex/skills/<name>`. Roborepo-owned cache entries carry a
-`.builtin-managed` marker. There is no intermediate `globals/claude/skills/` directory.
+`~/.roborepo/skills/<name>` and each supporting harness's native skills dir symlinks to that cache entry:
+`~/.claude/skills/<name>`, `~/.codex/skills/<name>`, and `~/.gemini/skills/<name>`. Roborepo-owned
+cache entries carry a `.builtin-managed` marker.
 
 Roborepo manages only the skill names it owns. Skills created out-of-band (via
 native `init_skill.py` or `skill-installer`) at unrecognized names are left

@@ -36,7 +36,7 @@ async function listedAfterStartup() {
   let output = "";
   const child = spawn(process.execPath, [path.join(root, "scripts/cli/main.mjs"), "web", "--no-open", "--port", "0", "--allow-zero-port"], {
     cwd: root,
-    env: { ...process.env, HOME: tmp, ROBOREPO_STATE_DIR: state, PORTAL_READY_FILE: ready },
+    env: { ...process.env, HOME: tmp, ROBOREPO_STATE_ROOT: state, PORTAL_READY_FILE: ready },
     stdio: ["ignore", "pipe", "pipe"],
   });
   child.stdout.on("data", (part) => { output += part; });

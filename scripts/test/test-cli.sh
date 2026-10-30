@@ -30,6 +30,10 @@ for arg in "$@"; do
 done
 
 work="$(mktemp -d "${TMPDIR:-/tmp}/cli-test.XXXXXX")"
+# An isolated app root carrying the test-only fixture packages (fixture-tool, fixture-docs): the
+# built-in MCP / tool-approval / hook-script packages no shipped package provides.
+fixture_app="$(node "${repo_root}/scripts/test/make-fixture-app-root.mjs")"
+fixture_cli="${fixture_app}/scripts/cli/main.mjs"
 # Baseline for the generated/ guard below. Captured BEFORE any test runs so the guard reports what
 # THIS run changed: a developer who is mid-edit on generated/ would otherwise see their own
 # uncommitted work reported as a suite defect on every invocation.
@@ -47,6 +51,7 @@ cleanup() {
   fi
   chmod -R u+rwx "${work}" 2>/dev/null || true
   rm -rf "${work}" 2>/dev/null || true
+  rm -rf "${fixture_app}" 2>/dev/null || true
   # Tests run the real CLI against a temp HOME, but appRoot still points at this checkout, so
   # anything rendering root config writes to TRACKED files under generated/ — stamping a temp path
   # into generated/claude/settings.json, which then gets committed by accident. Report it here (in
@@ -106,12 +111,6 @@ assert "source layout: globals harnesses Claude source exists" test -d "${repo_r
 assert "source layout: globals harnesses Codex source exists" test -d "${repo_root}/globals/harnesses/codex"
 assert "source layout: generated per-package Codex commands exist" test -d "${repo_root}/generated/packages/plan-suite/codex/commands"
 assert "source layout: local internal skills exist" test -d "${repo_root}/local/skills"
-assert "source layout: legacy agents root absent" bash -c "! test -e '${repo_root}/agents'"
-assert "source layout: legacy claude root absent" bash -c "! test -e '${repo_root}/claude'"
-assert "source layout: legacy codex root absent" bash -c "! test -e '${repo_root}/codex'"
-assert "source layout: legacy skills-local root absent" bash -c "! test -e '${repo_root}/skills-local'"
-assert "source layout: legacy globals/agents absent" bash -c "! test -e '${repo_root}/globals/agents'"
-assert "source layout: legacy globals/rules absent" bash -c "! test -e '${repo_root}/globals/rules'"
 
 pkg_app="${work}/pkg-app"
 pkg_state="${work}/pkg-state"
@@ -133,26 +132,23 @@ assert "package mode: version reports package roots" \
   bash -c "ROBOREPO_APP_ROOT='${pkg_app}' ROBOREPO_STATE_ROOT='${pkg_state}' ROBOREPO_WORKSPACE_ROOT='${pkg_workspace}' node '${cli}' version >'${work}/pkg-version.out' && grep -Fq 'mode: package' '${work}/pkg-version.out' && grep -Eq '^workspaceRoot: .*/pkg-workspace$' '${work}/pkg-version.out'"
 assert "package mode: setup initializes workspace format" \
   bash -c "ROBOREPO_APP_ROOT='${pkg_app}' ROBOREPO_STATE_ROOT='${pkg_state}' ROBOREPO_WORKSPACE_ROOT='${pkg_workspace}' node '${cli}' setup >/dev/null && test -f '${pkg_workspace}/workspace.json' && test -d '${pkg_workspace}/skills' && test -f '${pkg_workspace}/mcp/servers.json'"
-legacy_state="${work}/legacy-state"
-assert "package mode: ROBOREPO_STATE_DIR remains state alias" \
-  bash -c "ROBOREPO_APP_ROOT='${pkg_app}' ROBOREPO_STATE_DIR='${legacy_state}' node '${cli}' version >'${work}/pkg-legacy-state.out' && grep -Eq '^stateRoot: .*/legacy-state$' '${work}/pkg-legacy-state.out'"
 assert "package mode: built-in render command refuses appRoot writes" \
-  bash -c "ROBOREPO_APP_ROOT='${pkg_app}' ROBOREPO_STATE_ROOT='${pkg_state}' node '${cli}' rules >/dev/null 2>'${work}/pkg-rules.err' && exit 1 || grep -q 'requires development checkout' '${work}/pkg-rules.err'"
+  bash -c "ROBOREPO_APP_ROOT='${pkg_app}' ROBOREPO_STATE_ROOT='${pkg_state}' node '${cli}' config rules --check >/dev/null 2>'${work}/pkg-rules.err' && exit 1 || grep -q 'requires development checkout' '${work}/pkg-rules.err'"
 
 workspace_resource_home="${work}/workspace-resource-home"
 workspace_resource_root="${work}/workspace-resource"
 mkdir -p "${workspace_resource_home}" "${workspace_resource_root}/skills/custom-skill" "${workspace_resource_root}/commands" "${workspace_resource_root}/packages/workspace-pack"
 printf -- '---\nname: custom-skill\ndescription: custom\n---\n' > "${workspace_resource_root}/skills/custom-skill/SKILL.md"
 printf 'custom command\n' > "${workspace_resource_root}/commands/custom-command.md"
-printf '%s\n' '{"schemaVersion":1,"id":"workspace-pack","label":"Workspace Pack","description":"Workspace pack.","lifecycle":"optional","presentation":{"category":"skills-dev-lifecycle","order":100},"resources":[{"type":"cli-command","name":"workspace index","commandOrUrl":"node","args":["--version"],"mode":"index"}]}' > "${workspace_resource_root}/packages/workspace-pack/package.config.json"
+printf '%s\n' '{"schemaVersion":1,"id":"workspace-pack","label":"Workspace Pack","description":"Workspace pack.","lifecycle":"optional","presentation":{"category":"skills-dev-lifecycle","order":100},"resources":[{"type":"permissions","allow":["Bash(echo:*)"]}]}' > "${workspace_resource_root}/packages/workspace-pack/package.config.json"
 assert "workspace resources: validate accepts custom typed resources" \
   bash -c "HOME='${workspace_resource_home}' ROBOREPO_STATE_ROOT='${workspace_resource_home}/.roborepo' ROBOREPO_WORKSPACE_ROOT='${workspace_resource_root}' node '${cli}' workspace validate >/dev/null"
 assert "workspace resources: package catalog includes workspace package" \
   bash -c "HOME='${workspace_resource_home}' ROBOREPO_STATE_ROOT='${workspace_resource_home}/.roborepo' ROBOREPO_WORKSPACE_ROOT='${workspace_resource_root}' node -e \"import('${repo_root}/scripts/cli/package-catalog.mjs').then(m=>{process.exit(m.loadPackageCatalog({includeUnavailable:true}).some(p=>p.id==='workspace-pack')?0:1)})\""
-mkdir -p "${workspace_resource_root}/packages/jcodemunch"
-printf '%s\n' '{"schemaVersion":1,"id":"jcodemunch","label":"Bad Replace","description":"Bad replace.","lifecycle":"optional","presentation":{"category":"skills-dev-lifecycle","order":100},"resources":[]}' > "${workspace_resource_root}/packages/jcodemunch/package.config.json"
+mkdir -p "${workspace_resource_root}/packages/fixture-tool"
+printf '%s\n' '{"schemaVersion":1,"id":"fixture-tool","label":"Bad Replace","description":"Bad replace.","lifecycle":"optional","presentation":{"category":"skills-dev-lifecycle","order":100},"resources":[]}' > "${workspace_resource_root}/packages/fixture-tool/package.config.json"
 assert "workspace resources: package collision requires typed override" \
-  bash -c "! env HOME='${workspace_resource_home}' ROBOREPO_STATE_ROOT='${workspace_resource_home}/.roborepo' ROBOREPO_WORKSPACE_ROOT='${workspace_resource_root}' node '${cli}' workspace validate >/dev/null 2>'${work}/workspace-package-collision.err' && grep -q 'conflicts with a built-in package' '${work}/workspace-package-collision.err'"
+  bash -c "! env HOME='${workspace_resource_home}' ROBOREPO_STATE_ROOT='${workspace_resource_home}/.roborepo' ROBOREPO_WORKSPACE_ROOT='${workspace_resource_root}' node '${fixture_cli}' workspace validate >/dev/null 2>'${work}/workspace-package-collision.err' && grep -q 'conflicts with a built-in package' '${work}/workspace-package-collision.err'"
 workspace_shape_home="${work}/workspace-shape-home"
 workspace_shape_root="${work}/workspace-shape"
 mkdir -p "${workspace_shape_root}/packages/legacy-shape"
@@ -166,15 +162,15 @@ printf -- '---\nname: code-style\ndescription: override\n---\n' > "${workspace_s
 assert "workspace resources: package-owned skill collision rejected" \
   bash -c "! env HOME='${workspace_skill_collision_home}' ROBOREPO_STATE_ROOT='${workspace_skill_collision_home}/.roborepo' ROBOREPO_WORKSPACE_ROOT='${workspace_skill_collision_root}' node '${cli}' workspace validate >/dev/null 2>'${work}/workspace-skill-collision.err' && grep -q 'conflicts with a built-in skill' '${work}/workspace-skill-collision.err'"
 mkdir -p "${workspace_resource_root}/overrides"
-printf '%s\n' '{"schemaVersion":1,"overrides":[{"type":"package","id":"jcodemunch","mode":"replace"}]}' > "${workspace_resource_root}/overrides/resources.json"
+printf '%s\n' '{"schemaVersion":1,"overrides":[{"type":"package","id":"fixture-tool","mode":"replace"}]}' > "${workspace_resource_root}/overrides/resources.json"
 assert "workspace resources: typed package replace override validates" \
-  bash -c "HOME='${workspace_resource_home}' ROBOREPO_STATE_ROOT='${workspace_resource_home}/.roborepo' ROBOREPO_WORKSPACE_ROOT='${workspace_resource_root}' node '${cli}' workspace validate >/dev/null"
-printf '%s\n' '{"servers":[{"name":"jcodemunch","commandOrUrl":"uvx","args":["custom"],"harnesses":["codex"]}]}' > "${workspace_resource_root}/mcp/servers.json"
+  bash -c "HOME='${workspace_resource_home}' ROBOREPO_STATE_ROOT='${workspace_resource_home}/.roborepo' ROBOREPO_WORKSPACE_ROOT='${workspace_resource_root}' node '${fixture_cli}' workspace validate >/dev/null"
+printf '%s\n' '{"servers":[{"name":"fixture-tool","commandOrUrl":"uvx","args":["custom"],"harnesses":["codex"]}]}' > "${workspace_resource_root}/mcp/servers.json"
 assert "workspace resources: MCP collision requires typed override" \
-  bash -c "! env HOME='${workspace_resource_home}' ROBOREPO_STATE_ROOT='${workspace_resource_home}/.roborepo' ROBOREPO_WORKSPACE_ROOT='${workspace_resource_root}' node '${cli}' workspace validate >/dev/null 2>'${work}/workspace-mcp-collision.err' && grep -q 'conflicts with a built-in server' '${work}/workspace-mcp-collision.err'"
-printf '%s\n' '{"schemaVersion":1,"overrides":[{"type":"package","id":"jcodemunch","mode":"replace"},{"type":"mcp-server","id":"jcodemunch","mode":"replace"}]}' > "${workspace_resource_root}/overrides/resources.json"
+  bash -c "! env HOME='${workspace_resource_home}' ROBOREPO_STATE_ROOT='${workspace_resource_home}/.roborepo' ROBOREPO_WORKSPACE_ROOT='${workspace_resource_root}' node '${fixture_cli}' workspace validate >/dev/null 2>'${work}/workspace-mcp-collision.err' && grep -q 'conflicts with a built-in server' '${work}/workspace-mcp-collision.err'"
+printf '%s\n' '{"schemaVersion":1,"overrides":[{"type":"package","id":"fixture-tool","mode":"replace"},{"type":"mcp-server","id":"fixture-tool","mode":"replace"}]}' > "${workspace_resource_root}/overrides/resources.json"
 assert "workspace resources: typed MCP replace override validates" \
-  bash -c "HOME='${workspace_resource_home}' ROBOREPO_STATE_ROOT='${workspace_resource_home}/.roborepo' ROBOREPO_WORKSPACE_ROOT='${workspace_resource_root}' node '${cli}' workspace validate >/dev/null"
+  bash -c "HOME='${workspace_resource_home}' ROBOREPO_STATE_ROOT='${workspace_resource_home}/.roborepo' ROBOREPO_WORKSPACE_ROOT='${workspace_resource_root}' node '${fixture_cli}' workspace validate >/dev/null"
 
 add_skill_home="${work}/add-skill-home"
 add_skill_root="${work}/add-skill-workspace"
@@ -210,26 +206,6 @@ assert "package dev add-skill: a failed add to a package without skills leaves n
     && test ! -e '${add_skill_root}/packages/add-skill-empty/skills' && test ! -e '${add_skill_root}/packages/add-skill-empty/skill-triggers.json'"
 assert "package dev add-skill: refuses a built-in package in package mode" \
   bash -c "! env ${add_skill_env} node '${cli}' package dev add-skill plan-suite add-skill-extra >/dev/null 2>'${work}/add-skill-builtin.err' && grep -q 'package plan-suite is built in' '${work}/add-skill-builtin.err' && test ! -d '${repo_root}/globals/packages/plan-suite/skills/add-skill-extra' && git -C '${repo_root}' diff --quiet -- globals/packages/plan-suite"
-
-workspace_import_home="${work}/workspace-import-home"
-workspace_import_root="${work}/workspace-import"
-workspace_import_source="${work}/workspace-import-source"
-mkdir -p \
-  "${workspace_import_home}" \
-  "${workspace_import_source}/globals/agents/skills/custom-import" \
-  "${workspace_import_source}/globals/agents/skills/case-study" \
-  "${workspace_import_source}/globals/commands" \
-  "${workspace_import_source}/globals/packages/workspace-import" \
-  "${workspace_import_source}/globals/packages/jcodemunch" \
-  "${workspace_import_source}/manifests/inventory"
-printf -- '---\nname: custom-import\ndescription: custom\n---\n' > "${workspace_import_source}/globals/agents/skills/custom-import/SKILL.md"
-printf -- '---\nname: case-study\ndescription: changed builtin\n---\n' > "${workspace_import_source}/globals/agents/skills/case-study/SKILL.md"
-printf 'custom import command\n' > "${workspace_import_source}/globals/commands/custom-import.md"
-printf '%s\n' '{"schemaVersion":1,"id":"workspace-import","label":"Workspace Import","description":"Workspace import.","lifecycle":"optional","presentation":{"category":"skills-dev-lifecycle","order":100},"resources":[]}' > "${workspace_import_source}/globals/packages/workspace-import/package.config.json"
-printf '%s\n' '{"schemaVersion":1,"id":"jcodemunch","label":"Changed Builtin","description":"Changed builtin.","lifecycle":"optional","presentation":{"category":"skills-dev-lifecycle","order":100},"resources":[]}' > "${workspace_import_source}/globals/packages/jcodemunch/package.config.json"
-printf '%s\n' '{"servers":[{"name":"custom-server","commandOrUrl":"node","args":["x"],"harnesses":["codex"]},{"name":"jcodemunch","commandOrUrl":"node","args":["changed"],"harnesses":["codex"]}]}' > "${workspace_import_source}/manifests/inventory/mcp-servers.json"
-assert "workspace import: copies package configs and reports changed built-ins" \
-  bash -c "HOME='${workspace_import_home}' ROBOREPO_STATE_ROOT='${workspace_import_home}/.roborepo' ROBOREPO_WORKSPACE_ROOT='${workspace_import_root}' node '${cli}' workspace import '${workspace_import_source}' >'${work}/workspace-import.out' && test -f '${workspace_import_root}/skills/custom-import/SKILL.md' && ! test -e '${workspace_import_root}/skills/case-study' && test -f '${workspace_import_root}/commands/custom-import.md' && test -f '${workspace_import_root}/packages/workspace-import/package.config.json' && grep -q 'custom-server' '${workspace_import_root}/mcp/servers.json' && grep -q 'changed built-ins left for review: skill:case-study' '${work}/workspace-import.out'"
 
 # Codex PreToolUse hooks must never surface a hook failure just because Codex passes an empty or
 # malformed payload, and installed hooks must find the repo manifest from install-state.json rather
@@ -362,44 +338,30 @@ assert "skill link-project: missing .codex/skills exits non-zero" \
 assert "skill link-project: re-run after missing-source checks works" \
   bash -c "cd '${local_repo}' && node '${cli}' skill link-project >/dev/null"
 
-assert "skill install: removed alias rejected" \
-  bash -c "cd '${local_repo}' && ! node '${cli}' skill install >/dev/null 2>&1"
-assert "skill link: removed alias rejected" \
-  bash -c "cd '${local_repo}' && ! node '${cli}' skill link >/dev/null 2>&1"
-assert "skill link-local: removed alias rejected" \
-  bash -c "cd '${local_repo}' && ! node '${cli}' skill link-local >/dev/null 2>&1"
-assert "skill symlink-repo: removed name rejected" \
-  bash -c "cd '${local_repo}' && ! node '${cli}' skill symlink-repo >/dev/null 2>&1"
 
 sync_home="${work}/sync-global-home"
 mkdir -p "${sync_home}/.claude" "${sync_home}/.codex"
 assert "skill sync-global: refreshes cache and harness links" \
-  bash -c "cd '${repo_root}' && HOME='${sync_home}' ROBOREPO_STATE_DIR='${sync_home}/.roborepo' node '${cli}' skill sync-global >/dev/null"
+  bash -c "cd '${repo_root}' && HOME='${sync_home}' ROBOREPO_STATE_ROOT='${sync_home}/.roborepo' node '${cli}' skill sync-global >/dev/null"
 assert "skill sync-global: Claude skill cache link created" \
   assert_skill_cache_link "${sync_home}" "claude" "case-study" "${repo_root}/globals/packages/case-study-pack/skills/case-study" "skill sync-global: Claude skill cache link created"
 assert "skill sync-global: Codex skill cache link created" \
   assert_skill_cache_link "${sync_home}" "codex" "case-study" "${repo_root}/globals/packages/case-study-pack/skills/case-study" "skill sync-global: Codex skill cache link created"
 assert "skill inspect: reports managed source and harness state" \
-  bash -c "HOME='${sync_home}' ROBOREPO_STATE_DIR='${sync_home}/.roborepo' node '${cli}' skill inspect case-study >'${work}/inspect-managed.out' && grep -q 'ownership: managed' '${work}/inspect-managed.out' && grep -q 'claude: managed' '${work}/inspect-managed.out' && grep -q 'codex: managed' '${work}/inspect-managed.out'"
+  bash -c "HOME='${sync_home}' ROBOREPO_STATE_ROOT='${sync_home}/.roborepo' node '${cli}' skill inspect case-study >'${work}/inspect-managed.out' && grep -q 'ownership: managed' '${work}/inspect-managed.out' && grep -q 'claude: managed' '${work}/inspect-managed.out' && grep -q 'codex: managed' '${work}/inspect-managed.out'"
 mkdir -p "${sync_home}/.claude/skills/native-only/agents"
 printf -- '---\nname: native-only\ndescription: native-only skill\n---\n' > "${sync_home}/.claude/skills/native-only/SKILL.md"
 printf 'model: test\n' > "${sync_home}/.claude/skills/native-only/agents/openai.yaml"
 assert "skill inspect: reports native-only unmanaged metadata" \
-  bash -c "HOME='${sync_home}' ROBOREPO_STATE_DIR='${sync_home}/.roborepo' node '${cli}' skill inspect native-only >'${work}/inspect-native.out' && grep -q 'ownership: unmanaged' '${work}/inspect-native.out' && grep -q 'claude: unmanaged' '${work}/inspect-native.out' && grep -q 'native metadata: agents/openai.yaml' '${work}/inspect-native.out'"
+  bash -c "HOME='${sync_home}' ROBOREPO_STATE_ROOT='${sync_home}/.roborepo' node '${cli}' skill inspect native-only >'${work}/inspect-native.out' && grep -q 'ownership: unmanaged' '${work}/inspect-native.out' && grep -q 'claude: unmanaged' '${work}/inspect-native.out' && grep -q 'native metadata: agents/openai.yaml' '${work}/inspect-native.out'"
 rm "${sync_home}/.claude/skills/case-study"
 mkdir -p "${sync_home}/.claude/skills/case-study/agents"
 printf -- '---\nname: case-study\ndescription: local collision\n---\n' > "${sync_home}/.claude/skills/case-study/SKILL.md"
 printf 'model: collision\n' > "${sync_home}/.claude/skills/case-study/agents/openai.yaml"
 assert "skill inspect: reports native collision without flattening metadata" \
-  bash -c "HOME='${sync_home}' ROBOREPO_STATE_DIR='${sync_home}/.roborepo' node '${cli}' skill inspect case-study >'${work}/inspect-collision.out' && grep -q 'native collision: claude' '${work}/inspect-collision.out' && grep -q 'claude: unmanaged' '${work}/inspect-collision.out' && grep -q 'native metadata: agents/openai.yaml' '${work}/inspect-collision.out'"
+  bash -c "HOME='${sync_home}' ROBOREPO_STATE_ROOT='${sync_home}/.roborepo' node '${cli}' skill inspect case-study >'${work}/inspect-collision.out' && grep -q 'native collision: claude' '${work}/inspect-collision.out' && grep -q 'claude: unmanaged' '${work}/inspect-collision.out' && grep -q 'native metadata: agents/openai.yaml' '${work}/inspect-collision.out'"
 assert "skill inspect: unknown skill exits non-zero" \
-  bash -c "! env HOME='${sync_home}' ROBOREPO_STATE_DIR='${sync_home}/.roborepo' node '${cli}' skill inspect does-not-exist >/dev/null 2>&1"
-assert "skill sync: removed alias rejected" \
-  bash -c "cd '${repo_root}' && ! node '${cli}' skill sync --check >/dev/null 2>&1"
-assert "skill link-global: removed alias rejected" \
-  bash -c "cd '${repo_root}' && ! node '${cli}' skill link-global --check >/dev/null 2>&1"
-assert "skill symlink-globals: removed name rejected" \
-  bash -c "cd '${repo_root}' && ! node '${cli}' skill symlink-globals >/dev/null 2>&1"
+  bash -c "! env HOME='${sync_home}' ROBOREPO_STATE_ROOT='${sync_home}/.roborepo' node '${cli}' skill inspect does-not-exist >/dev/null 2>&1"
 native_bin="${work}/native-bin"
 mkdir -p "${native_bin}"
 node_path="$(command -v node)"
@@ -431,10 +393,6 @@ assert "skill render-commands: generated Claude wrapper exists" \
   grep -q 'Use the `plan-write` skill' "${repo_root}/generated/packages/plan-suite/claude/commands/plan-write.md"
 assert "skill render-commands: generated Codex wrapper uses codex skill path" \
   grep -q '~/.codex/skills/plan-write/SKILL.md' "${repo_root}/generated/packages/plan-suite/codex/commands/plan-write.md"
-assert "skill render-commands: capture observer has no slash command" \
-  bash -c "! test -e '${repo_root}/generated/packages/convention-capture/claude/commands/capture-convention.md'"
-assert "skill render-commands: capture observer absent from Codex commands" \
-  bash -c "! test -e '${repo_root}/generated/packages/convention-capture/codex/commands/capture-convention.md'"
 assert "skill render-commands: implicit helper did not get command wrapper" \
   bash -c "! test -e '${repo_root}/generated/packages/javascript-typescript/claude/commands/javascript-typescript.md'"
 assert "skill audit: generated audit is current" \
@@ -443,96 +401,6 @@ assert "skill triggers: medium-risk trigger fixtures pass" \
   bash -c "cd '${repo_root}' && node '${cli}' skill triggers --check >/dev/null"
 assert "package validation: manual-only skill requires an entrypoint" \
   bash -c "d=\$(mktemp -d); trap 'rm -rf \"\$d\"' EXIT; mkdir -p \"\$d/globals/packages/manual-only/skills/manual-only\" \"\$d/manifests/inventory\"; cp '${repo_root}/manifests/inventory/package-categories.json' \"\$d/manifests/inventory/package-categories.json\"; printf '%s\n' '{\"schemaVersion\":1,\"id\":\"manual-only\",\"label\":\"Manual Only\",\"description\":\"Manual only.\",\"lifecycle\":\"optional\",\"presentation\":{\"category\":\"skills-dev-lifecycle\",\"order\":1},\"resources\":[{\"type\":\"skill\",\"id\":\"manual-only\",\"source\":\"skills/manual-only\",\"invocation\":\"manual\",\"risk\":\"medium\"}]}' > \"\$d/globals/packages/manual-only/package.config.json\"; printf -- '---\nname: manual-only\ndescription: Manual only.\n---\n' > \"\$d/globals/packages/manual-only/skills/manual-only/SKILL.md\"; ROBOREPO_APP_ROOT=\"\$d\" node -e \"import('${repo_root}/scripts/cli/package-catalog.mjs').then(m=>{try{m.loadPackageCatalog({includeUnavailable:true});process.exit(1)}catch(e){process.exit(String(e.message).includes('manual-only')?0:1)}})\""
-
-# skill new: scaffold shared skills/commands against a throwaway harness root, never this repo.
-new_harness="${work}/new-harness"
-mkdir -p \
-  "${new_harness}/scripts/cli" \
-  "${new_harness}/scripts/harnesses" \
-  "${new_harness}/scripts/build" \
-  "${new_harness}/manifests/inventory" \
-  "${new_harness}/manifests/platform" \
-  "${new_harness}/globals/system/skills" \
-  "${new_harness}/globals/packages" \
-  "${new_harness}/globals/harnesses" \
-  "${new_harness}/local/skills"
-cp -R "${repo_root}/scripts/cli/." "${new_harness}/scripts/cli/"
-# modules/ travels with scripts/cli/: maintenance-stores.mjs imports modules/developer-runtime/settings.mjs
-# and modules/retention/, so a fixture without it dies at import time before any assertion runs.
-mkdir -p "${new_harness}/modules"
-cp -R "${repo_root}/modules/." "${new_harness}/modules/"
-# See the mcp_harness copy below for why scripts/harnesses/ and globals/harnesses/ must travel
-# with scripts/cli/ now that paths.mjs derives harness paths from the provider registry.
-cp -R "${repo_root}/scripts/harnesses/." "${new_harness}/scripts/harnesses/"
-cp -R "${repo_root}/globals/harnesses/." "${new_harness}/globals/harnesses/"
-cp "${repo_root}/scripts/build/link-skills.sh" "${new_harness}/scripts/build/link-skills.sh"
-cp "${repo_root}/scripts/build/link-global-skills.sh" "${new_harness}/scripts/build/link-global-skills.sh"
-cp "${repo_root}/scripts/build/skill-lib.sh" "${new_harness}/scripts/build/skill-lib.sh"
-cp "${repo_root}/scripts/build/render-slash-commands.mjs" "${new_harness}/scripts/build/render-slash-commands.mjs"
-cp "${repo_root}/manifests/platform/cli-commands.json" "${new_harness}/manifests/platform/cli-commands.json"
-cp "${repo_root}/manifests/platform/context-cost-thresholds.json" "${new_harness}/manifests/platform/context-cost-thresholds.json"
-cp -R "${repo_root}/manifests/platform/cli" "${new_harness}/manifests/platform/cli"
-cp "${repo_root}/manifests/inventory/mcp-presets.json" "${new_harness}/manifests/inventory/mcp-presets.json"
-cp "${repo_root}/manifests/inventory/package-categories.json" "${new_harness}/manifests/inventory/package-categories.json"
-cat > "${new_harness}/README.md" <<'EOF_README'
-# Test Harness
-
-### Automatic Helpers
-
-##### Repo
-
-| | |
-| --- | --- |
-
-### Commands
-
-| | | |
-| --- | --- | --- |
-EOF_README
-
-( cd "${work}" && node "${new_harness}/scripts/cli/main.mjs" skill new --kind=auto --name=demo-helper --description="Demo helper workflow." --category=repo >"${work}/skill-new-auto.out" )
-assert "skill new: auto helper creates skill" \
-  test -f "${new_harness}/globals/packages/demo-helper/skills/demo-helper/SKILL.md"
-assert "skill new: auto helper writes package policy" \
-  grep -q '"invocation": "auto"' "${new_harness}/globals/packages/demo-helper/package.config.json"
-assert "skill new: auto helper updates README Automatic Helpers" \
-  grep -q 'demo-helper' "${new_harness}/README.md"
-assert "skill new: low-risk skill does not prompt for trigger fixtures" \
-  bash -c "! grep -q 'skill-triggers.json' '${work}/skill-new-auto.out'"
-
-( cd "${work}" && node "${new_harness}/scripts/cli/main.mjs" skill new --kind=skill-command --name=demo-plan --command=demo-plan --description="Demo planning workflow." --risk=medium >"${work}/skill-new-medium.out" )
-assert "skill new: skill-command creates command wrapper" \
-  grep -q 'Use the `demo-plan` skill' "${new_harness}/generated/packages/demo-plan/claude/commands/demo-plan.md"
-assert "skill new: skill-command updates slash manifest" \
-  grep -q '"entrypoints"' "${new_harness}/globals/packages/demo-plan/package.config.json"
-assert "skill new: medium-risk skill names its package trigger fixture file" \
-  grep -q 'globals/packages/demo-plan/skill-triggers.json' "${work}/skill-new-medium.out"
-assert "skill new: medium-risk skill does not write a stub trigger fixture" \
-  test ! -e "${new_harness}/globals/packages/demo-plan/skill-triggers.json"
-
-( cd "${work}" && node "${new_harness}/scripts/cli/main.mjs" skill new --kind=standalone --name=demo-command --description="Demo command workflow." --harnesses=claude >/dev/null )
-assert "skill new: standalone creates shared command source" \
-  test -f "${new_harness}/globals/packages/demo-command/commands/demo-command.md"
-assert "skill new: standalone renders selected harness only" \
-  bash -c "test -f '${new_harness}/generated/packages/demo-command/claude/commands/demo-command.md' && ! test -e '${new_harness}/generated/packages/demo-command/codex/commands/demo-command.md'"
-assert "skill new: duplicate harness rejected" \
-  bash -c "cd '${work}' && ! node '${new_harness}/scripts/cli/main.mjs' skill new --kind=standalone --name=dupe-harness --description='Duplicate harness workflow.' --harnesses=claude,claude >/dev/null 2>&1"
-assert "skill new: duplicate command rejected before partial skill write" \
-  bash -c "cd '${work}' && ! node '${new_harness}/scripts/cli/main.mjs' skill new --kind=skill-command --name=partial-skill --command=demo-command --description='Partial write guard.' >/dev/null 2>&1 && ! test -e '${new_harness}/globals/packages/partial-skill'"
-assert "skill new: standalone rejects irrelevant risk flag" \
-  bash -c "cd '${work}' && ! node '${new_harness}/scripts/cli/main.mjs' skill new --kind=standalone --name=bad-risk --description='Bad risk workflow.' --risk=medium >/dev/null 2>&1"
-assert "skill new: skill-command rejects irrelevant category flag" \
-  bash -c "cd '${work}' && ! node '${new_harness}/scripts/cli/main.mjs' skill new --kind=skill-command --name=bad-category --description='Bad category workflow.' --category=repo >/dev/null 2>&1"
-assert "skill new: auto rejects irrelevant harnesses flag" \
-  bash -c "cd '${work}' && ! node '${new_harness}/scripts/cli/main.mjs' skill new --kind=auto --name=bad-harnesses --description='Bad harness workflow.' --harnesses=claude >/dev/null 2>&1"
-assert "skill new: auto rejects irrelevant command flag" \
-  bash -c "cd '${work}' && ! node '${new_harness}/scripts/cli/main.mjs' skill new --kind=auto --name=bad-command-auto --command=ignored --description='Bad command workflow.' >/dev/null 2>&1"
-assert "skill new: standalone rejects irrelevant command flag" \
-  bash -c "cd '${work}' && ! node '${new_harness}/scripts/cli/main.mjs' skill new --kind=standalone --name=bad-command-standalone --command=ignored --description='Bad command workflow.' >/dev/null 2>&1"
-mkdir -p "${new_harness}/globals/system/skills/existing-dir"
-printf 'support only\n' > "${new_harness}/globals/system/skills/existing-dir/notes.txt"
-assert "skill new: refuses existing skill dir without partial write" \
-  bash -c "cd '${work}' && ! node '${new_harness}/scripts/cli/main.mjs' skill new --kind=auto --name=existing-dir --description='Existing dir guard.' >/dev/null 2>&1 && ! test -e '${new_harness}/globals/packages/existing-dir'"
 
 # ---------------------------------------------------------------------------
 # roborepo skill export-to-project
@@ -580,10 +448,6 @@ assert "skill export-to-project: refuses to run in source repo" \
 
 assert "skill export-to-project: unknown flag rejected" \
   bash -c "cd '${export_repo}' && ! node '${cli}' skill export-to-project --yes --nonsense >/dev/null 2>&1"
-assert "skill export: removed alias rejected" \
-  bash -c "cd '${export_repo}' && ! node '${cli}' skill export --yes >/dev/null 2>&1"
-assert "skill export-to-local: removed name rejected" \
-  bash -c "cd '${export_repo}' && ! node '${cli}' skill export-to-local --yes >/dev/null 2>&1"
 
 # ---------------------------------------------------------------------------
 # roborepo run
@@ -601,16 +465,16 @@ assert "run: no command exits non-zero" \
 presets_home="${work}/presets-home"
 mkdir -p "${presets_home}/.claude" "${presets_home}/.codex"
 assert "bundle apply: selected bundles apply into harness homes" \
-  bash -c "HOME='${presets_home}' ROBOREPO_STATE_DIR='${presets_home}/.roborepo' node '${cli}' bundle apply base hooks commands >/dev/null"
+  bash -c "HOME='${presets_home}' ROBOREPO_STATE_ROOT='${presets_home}/.roborepo' node '${cli}' bundle apply base hooks >/dev/null"
 assert "bundle check: selected bundles verify" \
-  bash -c "HOME='${presets_home}' ROBOREPO_STATE_DIR='${presets_home}/.roborepo' node '${cli}' bundle check >/dev/null"
+  bash -c "HOME='${presets_home}' ROBOREPO_STATE_ROOT='${presets_home}/.roborepo' node '${cli}' bundle check >/dev/null"
 assert "bundle remove: unlinks owned link bundle" \
-  bash -c "HOME='${presets_home}' ROBOREPO_STATE_DIR='${presets_home}/.roborepo' node '${cli}' bundle remove hooks >/dev/null && ! test -e '${presets_home}/.claude/hooks'"
+  bash -c "HOME='${presets_home}' ROBOREPO_STATE_ROOT='${presets_home}/.roborepo' node '${cli}' bundle remove hooks >/dev/null && ! test -e '${presets_home}/.claude/hooks'"
 mkdir -p "${presets_home}/.claude/hooks"
 printf 'local hook file\n' > "${presets_home}/.claude/hooks/local.txt"
 printf '{"hooks":[]}\n' > "${presets_home}/.codex/hooks.json"
 assert "telemetry enable: creates local state dirs" \
-  bash -c "HOME='${presets_home}' ROBOREPO_STATE_DIR='${presets_home}/.roborepo' node '${cli}' telemetry enable >/dev/null && test -d '${presets_home}/.roborepo/telemetry/spool'"
+  bash -c "HOME='${presets_home}' ROBOREPO_STATE_ROOT='${presets_home}/.roborepo' node '${cli}' telemetry enable >/dev/null && test -d '${presets_home}/.roborepo/telemetry/spool'"
 assert "telemetry enable: does not replace existing root hook directory" \
   bash -c "test -f '${presets_home}/.claude/hooks/local.txt' && ! compgen -G '${presets_home}/.claude/hooks_original_*' >/dev/null"
 # Telemetry declares hooks/codex, so `telemetry enable` wires capture hooks into this file
@@ -618,7 +482,7 @@ assert "telemetry enable: does not replace existing root hook directory" \
 assert "telemetry enable: wires capture hooks into existing Codex hooks config" \
   bash -c "grep -q 'roborepo telemetry capture --harness codex' '${presets_home}/.codex/hooks.json' && ! compgen -G '${presets_home}/.codex/hooks_original_*.json' >/dev/null"
 assert "telemetry enable: marks package desired state" \
-  bash -c "HOME='${presets_home}' ROBOREPO_STATE_DIR='${presets_home}/.roborepo' node -e \"import('${repo_root}/scripts/cli/config.mjs').then(c=>{const p=c.readConfigSnapshot().packages.find(x=>x.id==='telemetry');process.exit(p?.enabled===true&&p?.desired===true&&p?.status==='enabled'&&p.componentStatus?.[0]?.state==='present'?0:1)})\""
+  bash -c "HOME='${presets_home}' ROBOREPO_STATE_ROOT='${presets_home}/.roborepo' node -e \"import('${repo_root}/scripts/cli/config.mjs').then(c=>{const p=c.readConfigSnapshot().packages.find(x=>x.id==='telemetry');process.exit(p?.enabled===true&&p?.desired===true&&p?.status==='enabled'&&p.componentStatus?.[0]?.state==='present'?0:1)})\""
 
 # ---------------------------------------------------------------------------
 # Interactive config controls — enable/disable package round-trip,
@@ -634,39 +498,37 @@ printf '' > "${cfg_home}/.codex/config.toml"
 # TRACKED repo source (generated/claude/settings.json + manifests/inventory/mcp-servers.json) and the
 # real `claude` CLI. Skip that step so the test exercises perms/hooks/rules without polluting the
 # working tree or depending on global mcp state.
-cfg_env="HOME='${cfg_home}' ROBOREPO_STATE_DIR='${cfg_home}/.roborepo' ROBOREPO_WORKSPACE_ROOT='${cfg_workspace}' SKIP_MCP=1"
+cfg_env="HOME='${cfg_home}' ROBOREPO_STATE_ROOT='${cfg_home}/.roborepo' ROBOREPO_WORKSPACE_ROOT='${cfg_workspace}' SKIP_MCP=1"
 
 # Guard: enabling a package must not mutate tracked repo source (it writes the consumer's home only).
 cfg_settings_before="$(git -C "${repo_root}" status --porcelain generated/claude/settings.json manifests/inventory/mcp-servers.json)"
 
 # disable on a fresh home is a clean no-op (idempotent); dry-run never writes.
 assert "config: disable dry-run does not write settings" \
-  bash -c "${cfg_env} node '${cli}' package disable jcodemunch --dry-run >/dev/null && [ \"\$(node -e \"console.log((require('${cfg_home}/.claude/settings.json').permissions?.allow||[]).length)\")\" = 0 ]"
+  bash -c "${cfg_env} node '${fixture_cli}' package disable fixture-tool --dry-run >/dev/null && [ \"\$(node -e \"console.log((require('${cfg_home}/.claude/settings.json').permissions?.allow||[]).length)\")\" = 0 ]"
 assert "config: disable unknown package exits non-zero" \
   bash -c "! ${cfg_env} node '${cli}' package disable nope-pkg >/dev/null 2>&1"
 
 # enable writes perms+hooks+rules; disable reverses them. (mcp add fails gracefully w/o claude CLI.)
-bash -c "${cfg_env} node '${cli}' package enable jcodemunch >/dev/null 2>&1" || true
+bash -c "${cfg_env} node '${fixture_cli}' package enable fixture-tool >/dev/null 2>&1" || true
 assert "config: enable wires package permissions" \
   bash -c "[ \"\$(node -e \"console.log((require('${cfg_home}/.claude/settings.json').permissions?.allow||[]).length)\")\" -gt 0 ]"
 assert "config: enable wires package-owned Codex tool approvals" \
-  bash -c "grep -A1 '^\\[mcp_servers\\.jcodemunch\\.tools\\.register_edit\\]' '${cfg_home}/.codex/config.toml' | grep -q 'approval_mode = \"auto\"'"
+  bash -c "grep -A1 '^\\[mcp_servers\\.fixture-tool\\.tools\\.register_edit\\]' '${cfg_home}/.codex/config.toml' | grep -q 'approval_mode = \"auto\"'"
 assert "config: enable wires CLAUDE.md rules" test -f "${cfg_home}/.claude/CLAUDE.md"
 assert "config: Claude rules use managed inline block" \
   bash -c "grep -q 'BEGIN managed:builtin-code-style' '${cfg_home}/.claude/CLAUDE.md' && grep -q 'Generated Harness Rules' '${cfg_home}/.claude/CLAUDE.md'"
-assert "config: Claude rules no longer use managed import block" \
-  bash -c "! grep -q 'BEGIN managed:managed-agents-import' '${cfg_home}/.claude/CLAUDE.md' && ! test -e '${cfg_home}/.roborepo/rules/generated-rules.md'"
 assert "config: package snapshot includes runtime status and component status" \
-  bash -c "${cfg_env} node -e \"import('${repo_root}/scripts/cli/config.mjs').then(c=>{const p=c.readConfigSnapshot().packages.find(x=>x.id==='jcodemunch');process.exit(p?.enabled===true&&p?.status==='partial'&&Array.isArray(p.componentStatus)&&p.componentStatus.some(x=>x.type==='mcp'&&x.state==='missing')?0:1)})\""
+  bash -c "${cfg_env} node -e \"import('${fixture_app}/scripts/cli/config.mjs').then(c=>{const p=c.readConfigSnapshot().packages.find(x=>x.id==='fixture-tool');process.exit(p?.enabled===true&&p?.status==='partial'&&Array.isArray(p.componentStatus)&&p.componentStatus.some(x=>x.type==='mcp'&&x.state==='missing')?0:1)})\""
 assert "config: package snapshot tracks package-owned Codex tool approvals" \
-  bash -c "${cfg_env} node -e \"import('${repo_root}/scripts/cli/config.mjs').then(c=>{const p=c.readConfigSnapshot().packages.find(x=>x.id==='jcodemunch');process.exit(p?.componentStatus?.some(x=>x.type==='codex_tool_approvals'&&x.state==='present')?0:1)})\""
-bash -c "${cfg_env} node '${cli}' package disable jcodemunch >/dev/null 2>&1" || true
+  bash -c "${cfg_env} node -e \"import('${fixture_app}/scripts/cli/config.mjs').then(c=>{const p=c.readConfigSnapshot().packages.find(x=>x.id==='fixture-tool');process.exit(p?.componentStatus?.some(x=>x.type==='codex_tool_approvals'&&x.state==='present')?0:1)})\""
+bash -c "${cfg_env} node '${fixture_cli}' package disable fixture-tool >/dev/null 2>&1" || true
 assert "config: disable removes package permissions" \
   bash -c "[ \"\$(node -e \"console.log((require('${cfg_home}/.claude/settings.json').permissions?.allow||[]).length)\")\" = 0 ]"
 assert "config: disable removes package hooks" \
   bash -c "[ \"\$(node -e \"console.log(Object.keys(require('${cfg_home}/.claude/settings.json').hooks||{}).length)\")\" = 0 ]"
 assert "config: disable removes package-owned Codex tool approvals" \
-  bash -c "! grep -q '^\\[mcp_servers\\.jcodemunch\\.tools\\.register_edit\\]' '${cfg_home}/.codex/config.toml'"
+  bash -c "! grep -q '^\\[mcp_servers\\.fixture-tool\\.tools\\.register_edit\\]' '${cfg_home}/.codex/config.toml'"
 assert "config: enable/disable did not mutate tracked repo source" \
   bash -c "[ \"\$(git -C '${repo_root}' status --porcelain generated/claude/settings.json manifests/inventory/mcp-servers.json)\" = '${cfg_settings_before}' ]"
 
@@ -687,24 +549,24 @@ recon_home="${work}/reconcile-home"
 mkdir -p "${recon_home}/.claude" "${recon_home}/.codex"
 echo '{}' > "${recon_home}/.claude/settings.json"
 printf '' > "${recon_home}/.codex/config.toml"
-recon_env="HOME='${recon_home}' ROBOREPO_STATE_DIR='${recon_home}/.roborepo' SKIP_MCP=1"
-bash -c "${recon_env} node '${cli}' package enable jcodemunch >/dev/null 2>&1 && ${recon_env} node '${cli}' package enable caveman >/dev/null 2>&1" || true
+recon_env="HOME='${recon_home}' ROBOREPO_STATE_ROOT='${recon_home}/.roborepo' SKIP_MCP=1"
+bash -c "${recon_env} node '${fixture_cli}' package enable fixture-tool >/dev/null 2>&1 && ${recon_env} node '${fixture_cli}' package enable caveman >/dev/null 2>&1" || true
 cp "${repo_root}/generated/claude/settings.json" "${recon_home}/.claude/settings.json"
 cp "${repo_root}/generated/codex/config.toml" "${recon_home}/.codex/config.toml"
-bash -c "${recon_env} node '${cli}' package reconcile >/dev/null 2>&1" || true
+bash -c "${recon_env} node '${fixture_cli}' package reconcile >/dev/null 2>&1" || true
 assert "package reconcile restores enabled Claude plugin settings after root overwrite" \
   bash -c "node -e \"const s=require('${recon_home}/.claude/settings.json');process.exit(s.enabledPlugins?.['caveman@caveman']===true&&!!s.extraKnownMarketplaces?.caveman?0:1)\""
 assert "package reconcile restores enabled package hooks and permissions after root overwrite" \
-  bash -c "node -e \"const s=require('${recon_home}/.claude/settings.json');const allow=s.permissions?.allow||[];const hooks=JSON.stringify(s.hooks||{});process.exit(allow.includes('mcp__jcodemunch__resolve_repo')&&hooks.includes('Grep and Glob')&&hooks.includes('block-source-exploration.mjs')?0:1)\""
+  bash -c "node -e \"const s=require('${recon_home}/.claude/settings.json');const allow=s.permissions?.allow||[];const hooks=JSON.stringify(s.hooks||{});process.exit(allow.includes('mcp__fixture-tool__lookup')&&hooks.includes('fixture-session.mjs')?0:1)\""
 assert "package reconcile restores package-owned Codex approvals after root overwrite" \
-  bash -c "grep -A1 '^\\[mcp_servers\\.jcodemunch\\.tools\\.register_edit\\]' '${recon_home}/.codex/config.toml' | grep -q 'approval_mode = \"auto\"'"
+  bash -c "grep -A1 '^\\[mcp_servers\\.fixture-tool\\.tools\\.register_edit\\]' '${recon_home}/.codex/config.toml' | grep -q 'approval_mode = \"auto\"'"
 
 adopt_home="${work}/adopt-live-home"
 mkdir -p "${adopt_home}/.claude" "${adopt_home}/.codex" "${adopt_home}/.roborepo/telemetry"
 echo '{}' > "${adopt_home}/.claude/settings.json"
 printf '' > "${adopt_home}/.codex/config.toml"
 printf '{"enabled":true}\n' > "${adopt_home}/.roborepo/telemetry/state.json"
-adopt_env="HOME='${adopt_home}' ROBOREPO_STATE_DIR='${adopt_home}/.roborepo' SKIP_MCP=1"
+adopt_env="HOME='${adopt_home}' ROBOREPO_STATE_ROOT='${adopt_home}/.roborepo' SKIP_MCP=1"
 assert "package adopt-live marks external telemetry service as enabled" \
   bash -c "${adopt_env} node '${cli}' package adopt-live >/dev/null && grep -q '\"telemetry\"' '${adopt_home}/.roborepo/enabled-packages.json'"
 
@@ -714,13 +576,13 @@ echo '{}' > "${adopt_skill_home}/.claude/settings.json"
 printf '' > "${adopt_skill_home}/.codex/config.toml"
 cp -R "${repo_root}/globals/packages/case-study-pack/skills/case-study" "${adopt_skill_home}/.roborepo/skills/case-study"
 touch "${adopt_skill_home}/.roborepo/skills/case-study/.builtin-managed"
-adopt_skill_env="HOME='${adopt_skill_home}' ROBOREPO_STATE_DIR='${adopt_skill_home}/.roborepo' SKIP_MCP=1"
+adopt_skill_env="HOME='${adopt_skill_home}' ROBOREPO_STATE_ROOT='${adopt_skill_home}/.roborepo' SKIP_MCP=1"
 assert "package adopt-live marks external skill-component package as enabled" \
   bash -c "${adopt_skill_env} node '${cli}' package adopt-live >/dev/null && grep -q '\"case-study-pack\"' '${adopt_skill_home}/.roborepo/enabled-packages.json'"
 
-# Chat-Time Output: rules-only packages with harness "both" — enable merges rules inline into both
+# Chat-Time Output: rules-only packages with no harness (every harness) — enable merges rules inline into both
 # CLAUDE.md and AGENTS.md; snapshot reports enabled; toggles are independent; disable removes from
-# both paths. The throwaway home has .claude and .codex dirs, so "both" targets both harnesses.
+# both paths. The throwaway home has .claude and .codex dirs, so the rules land in both harnesses.
 printf 'override custom\n' > "${cfg_home}/.codex/AGENTS.override.md"
 bash -c "${cfg_env} node '${cli}' package enable impact-awareness >/dev/null 2>&1" || true
 assert "config: rules pkg merges into Claude CLAUDE.md" \
@@ -757,17 +619,10 @@ broken_home="${work}/broken-rules-home"
 mkdir -p "${broken_home}/.codex"
 printf '<!-- BEGIN managed:builtin-code-style -->\n' > "${broken_home}/.codex/AGENTS.md"
 assert "config: managed rules fail safely on broken marker" \
-  bash -c "! HOME='${broken_home}' ROBOREPO_STATE_DIR='${broken_home}/.roborepo' node '${cli}' package enable impact-awareness >'${broken_home}/out' 2>&1 && grep -q 'incomplete Roborepo managed block' '${broken_home}/out'"
+  bash -c "! HOME='${broken_home}' ROBOREPO_STATE_ROOT='${broken_home}/.roborepo' node '${cli}' package enable impact-awareness >'${broken_home}/out' 2>&1 && grep -q 'incomplete Roborepo managed block' '${broken_home}/out'"
 printf '<!-- END managed:builtin-code-style -->\nuser text\n<!-- BEGIN managed:builtin-code-style -->\n' > "${broken_home}/.codex/AGENTS.md"
 assert "config: managed rules fail safely on reversed markers" \
-  bash -c "! HOME='${broken_home}' ROBOREPO_STATE_DIR='${broken_home}/.roborepo' node '${cli}' package enable impact-awareness >'${broken_home}/out-reversed' 2>&1 && grep -q 'incomplete Roborepo managed block' '${broken_home}/out-reversed'"
-
-legacy_import_home="${work}/legacy-import-home"
-mkdir -p "${legacy_import_home}/.claude" "${legacy_import_home}/.roborepo/rules"
-printf '<!-- BEGIN managed:managed-agents-import -->\n@~/.roborepo/rules/generated-rules.md\n<!-- END managed:managed-agents-import -->\nuser text\n' > "${legacy_import_home}/.claude/CLAUDE.md"
-printf '# Generated Harness Rules\n\nold render\n' > "${legacy_import_home}/.roborepo/rules/generated-rules.md"
-assert "config: Claude legacy import block migrates to inline rules" \
-  bash -c "HOME='${legacy_import_home}' ROBOREPO_STATE_DIR='${legacy_import_home}/.roborepo' node '${cli}' rules render >/dev/null && grep -q 'BEGIN managed:builtin-code-style' '${legacy_import_home}/.claude/CLAUDE.md' && ! grep -q 'BEGIN managed:managed-agents-import' '${legacy_import_home}/.claude/CLAUDE.md' && grep -q 'user text' '${legacy_import_home}/.claude/CLAUDE.md' && ! test -e '${legacy_import_home}/.roborepo/rules/generated-rules.md'"
+  bash -c "! HOME='${broken_home}' ROBOREPO_STATE_ROOT='${broken_home}/.roborepo' node '${cli}' package enable impact-awareness >'${broken_home}/out-reversed' 2>&1 && grep -q 'incomplete Roborepo managed block' '${broken_home}/out-reversed'"
 
 # Service component (telemetry as a package): enable via the generic package path flips its state +
 # snapshot, disable reverses. The service handler owns telemetry's bespoke install (hooks + spool).
@@ -815,19 +670,19 @@ cat > "${cfg_workspace}/packages/test-composite/package.config.json" <<'JSON'
     "category": "token-optimization",
     "order": 99
   },
-  "requires": ["jcodemunch", "jdocmunch"],
+  "requires": ["impact-awareness", "response-output"],
   "resources": []
 }
 JSON
 bash -c "${cfg_env} node '${cli}' package enable test-composite >/dev/null 2>&1" || true
 assert "config: enabling a composite package enables its required packages" \
-  bash -c "${cfg_env} node -e \"import('${repo_root}/scripts/cli/config.mjs').then(c=>{const s=c.readConfigSnapshot();const e=id=>s.packages.find(p=>p.id===id)?.enabled;process.exit(e('jcodemunch')&&e('jdocmunch')&&e('test-composite')?0:1)})\""
+  bash -c "${cfg_env} node -e \"import('${repo_root}/scripts/cli/config.mjs').then(c=>{const s=c.readConfigSnapshot();const e=id=>s.packages.find(p=>p.id===id)?.enabled;process.exit(e('impact-awareness')&&e('response-output')&&e('test-composite')?0:1)})\""
 assert "config: disabling dependency required by enabled package is rejected" \
-  bash -c "! ${cfg_env} node '${cli}' package disable jdocmunch >/dev/null 2>&1"
+  bash -c "! ${cfg_env} node '${cli}' package disable response-output >/dev/null 2>&1"
 assert "config: cascade disables dependent package and dependency" \
-  bash -c "${cfg_env} node '${cli}' package disable jdocmunch --cascade >/dev/null 2>&1 && ${cfg_env} node -e \"import('${repo_root}/scripts/cli/config.mjs').then(c=>{const s=c.readConfigSnapshot();const e=id=>s.packages.find(p=>p.id===id)?.enabled;process.exit(!e('jdocmunch')&&!e('test-composite')?0:1)})\""
+  bash -c "${cfg_env} node '${cli}' package disable response-output --cascade >/dev/null 2>&1 && ${cfg_env} node -e \"import('${repo_root}/scripts/cli/config.mjs').then(c=>{const s=c.readConfigSnapshot();const e=id=>s.packages.find(p=>p.id===id)?.enabled;process.exit(!e('response-output')&&!e('test-composite')?0:1)})\""
 assert "config: snapshot exposes a package's requires list" \
-  bash -c "${cfg_env} node -e \"import('${repo_root}/scripts/cli/config.mjs').then(c=>{const p=c.readConfigSnapshot().packages.find(x=>x.id==='test-composite');process.exit(Array.isArray(p.requires)&&p.requires.includes('jcodemunch')&&p.requires.includes('jdocmunch')?0:1)})\""
+  bash -c "${cfg_env} node -e \"import('${repo_root}/scripts/cli/config.mjs').then(c=>{const p=c.readConfigSnapshot().packages.find(x=>x.id==='test-composite');process.exit(Array.isArray(p.requires)&&p.requires.includes('impact-awareness')&&p.requires.includes('response-output')?0:1)})\""
 
 # Skill toggle links into the machine-local cache plus both harness views, then removes only owned links.
 cfg_skill="case-study"
@@ -850,7 +705,7 @@ assert "config: setSkillInstalled skips native skill dir (real dir collision)" \
 if node -e 'const s=require("node:net").createServer();s.once("error",()=>process.exit(1));s.listen(0,"127.0.0.1",()=>s.close(()=>process.exit(0)))'; then
   # Dashboard POST endpoints: start the loopback server, exercise both routes, assert JSON contract.
   cfg_ready="${cfg_home}/portal.ready"
-  env HOME="${cfg_home}" ROBOREPO_STATE_DIR="${cfg_home}/.roborepo" PORTAL_READY_FILE="${cfg_ready}" \
+  env HOME="${cfg_home}" ROBOREPO_STATE_ROOT="${cfg_home}/.roborepo" PORTAL_READY_FILE="${cfg_ready}" \
     node "${cli}" web --no-open --port 0 --allow-zero-port >"${cfg_home}/portal.log" 2>&1 &
   cfg_srv=$!
   # The EXIT trap stops the server on every exit it gets to run on, but a SIGKILLed suite (the usual
@@ -885,7 +740,7 @@ if node -e 'const s=require("node:net").createServer();s.once("error",()=>proces
   # suite forever and outlive it. run_web_expecting_exit bounds that and guards it like cfg_srv.
   run_web_expecting_exit() {
     local log="$1"; shift
-    env HOME="${cfg_home}" ROBOREPO_STATE_DIR="${cfg_home}/.roborepo" \
+    env HOME="${cfg_home}" ROBOREPO_STATE_ROOT="${cfg_home}/.roborepo" \
       ROBOREPO_WORKSPACE_ROOT="${cfg_workspace}" SKIP_MCP=1 \
       node "${cli}" web "$@" >"${log}" 2>&1 &
     local web_pid=$!
@@ -951,8 +806,6 @@ if node -e 'const s=require("node:net").createServer();s.once("error",()=>proces
     bash -c "curl -s -X POST 'http://127.0.0.1:${cfg_port}/api/config/skills' -H 'Content-Type: application/json' -H 'X-Cli-Portal-Token: ${cfg_token}' -d '{\"id\":\"zzz\",\"enabled\":true}' | node -e \"let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);process.exit(j.ok===false?0:1)})\""
   assert "config: GET /agents served" \
     bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' 'http://127.0.0.1:${cfg_port}/agents')\" = 200 ]"
-  assert "config: the old Agents URL /config is gone (404, no redirect)" \
-    bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' 'http://127.0.0.1:${cfg_port}/config')\" = 404 ]"
   assert "developer-runtime: GET /runtime served with token" \
     bash -c "curl -s 'http://127.0.0.1:${cfg_port}/runtime' | grep -q 'cli-portal-token'"
   assert "developer-runtime: notice template includes docs link target" \
@@ -1062,12 +915,12 @@ fi
 # live agent session.
 tele_home="${work}/telemetry-home"
 mkdir -p "${tele_home}/.roborepo"
-tele_env=( "HOME=${tele_home}" "ROBOREPO_STATE_DIR=${tele_home}/.roborepo" )
+tele_env=( "HOME=${tele_home}" "ROBOREPO_STATE_ROOT=${tele_home}/.roborepo" )
 tele_transcript="${tele_home}/transcript.jsonl"
 cat > "${tele_transcript}" <<'TRANSCRIPT'
 {"type":"assistant","message":{"model":"claude-opus-4-8","usage":{"input_tokens":1000,"output_tokens":200,"cache_creation_input_tokens":500,"cache_read_input_tokens":300},"content":[{"type":"tool_use","id":"tu_read","name":"Read"}]}}
 {"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu_read","content":"a small read result"}]}}
-{"type":"assistant","message":{"model":"claude-opus-4-8","usage":{"input_tokens":5000,"output_tokens":800,"cache_creation_input_tokens":40000,"cache_read_input_tokens":20000},"content":[{"type":"tool_use","id":"tu_mcp","name":"mcp__jcodemunch__search_text"}]}}
+{"type":"assistant","message":{"model":"claude-opus-4-8","usage":{"input_tokens":5000,"output_tokens":800,"cache_creation_input_tokens":40000,"cache_read_input_tokens":20000},"content":[{"type":"tool_use","id":"tu_mcp","name":"mcp__code-search__search_text"}]}}
 {"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu_mcp","content":"MCPRESULTPADDING"}]}}
 TRANSCRIPT
 env "${tele_env[@]}" node "${cli}" telemetry enable >/dev/null
@@ -1075,21 +928,18 @@ echo "{\"session_id\":\"sess-x\",\"cwd\":\"${repo_root}\",\"transcript_path\":\"
   | env "${tele_env[@]}" node "${cli}" telemetry capture --harness claude --event Stop
 assert "telemetry capture: records token totals from transcript" \
   bash -c "grep -q '\"total\":67800' '${tele_home}/.roborepo/telemetry/spool/claude.jsonl'"
-# Capture writes schema 3 (capture_id/call_id/config_snapshot_id/operation/phase
-# added; schema-v2 records elsewhere in the spool remain readable — see the "legacy" assertion below).
+# Capture writes schema 3 (capture_id/call_id/config_snapshot_id/operation/phase).
 assert "telemetry capture: writes schema v3 records" \
   bash -c "grep -q '\"schema\":3' '${tele_home}/.roborepo/telemetry/spool/claude.jsonl'"
 # Spike attribution: capture sizes the tool result that most recently entered context (last_result)
 # and the heaviest result of the session (biggest_result), tying a spike back to what caused it.
 assert "telemetry capture: records last tool result for spike attribution" \
-  bash -c "grep -q '\"last_result\":{\"tool\":\"mcp__jcodemunch__search_text\"' '${tele_home}/.roborepo/telemetry/spool/claude.jsonl'"
+  bash -c "grep -q '\"last_result\":{\"tool\":\"mcp__code-search__search_text\"' '${tele_home}/.roborepo/telemetry/spool/claude.jsonl'"
 # spikeCause classifies a heavy MCP result into the mcp-bundle bucket with an actionable hint.
 assert "telemetry analyze: classifies spike cause from result size" \
-  bash -c "node -e 'import(\"${repo_root}/scripts/cli/telemetry-analyze.mjs\").then(m=>{const r=m.spikeCause({last_result:{tool:\"mcp__jcodemunch__get_context_bundle\",chars:500000},tool:{is_mcp:true},delta_tokens:900000});process.exit(r.cause===\"mcp-bundle\"?0:1)})'"
+  bash -c "node -e 'import(\"${repo_root}/scripts/cli/telemetry-analyze.mjs\").then(m=>{const r=m.spikeCause({last_result:{tool:\"mcp__code-search__get_context_bundle\",chars:500000},tool:{is_mcp:true},delta_tokens:900000});process.exit(r.cause===\"mcp-bundle\"?0:1)})'"
 assert "telemetry report: shows token sections when token data exists" \
   bash -c "env ${tele_env[*]} node '${cli}' telemetry report | grep -q 'token spikes'"
-assert "telemetry report: legacy metadata-only records still report" \
-  bash -c "printf '%s\n' '{\"ts\":\"2026-06-10T01:00:00Z\",\"harness\":\"claude\",\"event\":\"Stop\",\"repo\":{\"label\":\"legacy\"},\"tool\":{\"name\":\"Read\"}}' >> '${tele_home}/.roborepo/telemetry/spool/claude.jsonl' && env ${tele_env[*]} node '${cli}' telemetry report | grep -q 'legacy'"
 # Server-read performance guardrails: the
 # shared incremental byte-tail reader and the spool store's equality with a full re-read. These are
 # self-contained (own temp dirs), so they need no tele_env.
@@ -1118,22 +968,22 @@ printf 'local hooks\n' > "${adopt_keep_home}/.claude/hooks"
 node -e 'const fs = require("fs"); fs.writeFileSync(process.argv[1], JSON.stringify({ repo: process.argv[2], onConflict: "keep" }));' \
   "${adopt_keep_home}/.roborepo/install-state.json" "${repo_root}"
 assert "bundle apply: adopt keep policy stages repo item" \
-  bash -c "HOME='${adopt_keep_home}' ROBOREPO_STATE_DIR='${adopt_keep_home}/.roborepo' ROBOREPO_INSTALL_TIMESTAMP=20260615-101500 node '${cli}' bundle apply hooks >'${adopt_keep_home}/out' && grep -q 'local hooks' '${adopt_keep_home}/.claude/hooks' && test -d '${adopt_keep_home}/.claude/hooks_update_20260615-101500' && grep -q 'stage: .*hooks_update_20260615-101500' '${adopt_keep_home}/out'"
+  bash -c "HOME='${adopt_keep_home}' ROBOREPO_STATE_ROOT='${adopt_keep_home}/.roborepo' ROBOREPO_INSTALL_TIMESTAMP=20260615-101500 node '${cli}' bundle apply hooks >'${adopt_keep_home}/out' && grep -q 'local hooks' '${adopt_keep_home}/.claude/hooks' && test -d '${adopt_keep_home}/.claude/hooks_update_20260615-101500' && grep -q 'stage: .*hooks_update_20260615-101500' '${adopt_keep_home}/out'"
 assert "bundle remove: adopt keep policy removes staged item only" \
-  bash -c "HOME='${adopt_keep_home}' ROBOREPO_STATE_DIR='${adopt_keep_home}/.roborepo' node '${cli}' bundle remove hooks >/dev/null && grep -q 'local hooks' '${adopt_keep_home}/.claude/hooks' && ! test -e '${adopt_keep_home}/.claude/hooks_update_20260615-101500'"
+  bash -c "HOME='${adopt_keep_home}' ROBOREPO_STATE_ROOT='${adopt_keep_home}/.roborepo' node '${cli}' bundle remove hooks >/dev/null && grep -q 'local hooks' '${adopt_keep_home}/.claude/hooks' && ! test -e '${adopt_keep_home}/.claude/hooks_update_20260615-101500'"
 
 root_keep_home="${work}/root-keep-home"
 mkdir -p "${root_keep_home}/.claude" "${root_keep_home}/.codex" "${root_keep_home}/.roborepo"
 node -e 'const fs = require("fs"); fs.writeFileSync(process.argv[1], JSON.stringify({ repo: process.argv[2], onConflict: "keep" }));' \
   "${root_keep_home}/.roborepo/install-state.json" "${repo_root}"
 assert "bundle apply: records root-config writes" \
-  bash -c "HOME='${root_keep_home}' ROBOREPO_STATE_DIR='${root_keep_home}/.roborepo' node '${cli}' bundle apply base >/dev/null && HOME='${root_keep_home}' ROBOREPO_STATE_DIR='${root_keep_home}/.roborepo' node '${repo_root}/scripts/cli/root-config-state.mjs' check claude '${root_keep_home}/.claude/settings.json' | grep -q '^clean$'"
+  bash -c "HOME='${root_keep_home}' ROBOREPO_STATE_ROOT='${root_keep_home}/.roborepo' node '${cli}' bundle apply base >/dev/null && HOME='${root_keep_home}' ROBOREPO_STATE_ROOT='${root_keep_home}/.roborepo' node '${repo_root}/scripts/cli/root-config-state.mjs' check claude '${root_keep_home}/.claude/settings.json' | grep -q '^clean$'"
 printf '{"MANAGED_BY_ROBOREPO":true,"user":"drifted edit"}\n' > "${root_keep_home}/.claude/settings.json"
 # keep on a drifted root config backs it up and merges (the user's own key survives), records the
 # merged file as clean, stages no candidate, and removes one an earlier release left behind.
 printf '{"baseline":true}\n' > "${root_keep_home}/.claude/settings_update_20260101-000000.json"
 assert "bundle apply: local config keep policy backs up and merges a drifted file" \
-  bash -c "HOME='${root_keep_home}' ROBOREPO_STATE_DIR='${root_keep_home}/.roborepo' node '${repo_root}/scripts/cli/root-config-state.mjs' check claude '${root_keep_home}/.claude/settings.json' | grep -q '^drifted$' && HOME='${root_keep_home}' ROBOREPO_STATE_DIR='${root_keep_home}/.roborepo' ROBOREPO_INSTALL_TIMESTAMP=20260615-101500 node '${cli}' bundle apply base >'${root_keep_home}/out' && grep -q 'drifted edit' '${root_keep_home}/.claude/settings.json' && grep -q 'backup: .*settings_original_20260615-101500.json' '${root_keep_home}/out' && test -f '${root_keep_home}/.claude/settings_original_20260615-101500.json' && ! ls '${root_keep_home}/.claude/' | grep -q 'settings_update_' && HOME='${root_keep_home}' ROBOREPO_STATE_DIR='${root_keep_home}/.roborepo' node '${repo_root}/scripts/cli/root-config-state.mjs' check claude '${root_keep_home}/.claude/settings.json' | grep -q '^clean$'"
+  bash -c "HOME='${root_keep_home}' ROBOREPO_STATE_ROOT='${root_keep_home}/.roborepo' node '${repo_root}/scripts/cli/root-config-state.mjs' check claude '${root_keep_home}/.claude/settings.json' | grep -q '^drifted$' && HOME='${root_keep_home}' ROBOREPO_STATE_ROOT='${root_keep_home}/.roborepo' ROBOREPO_INSTALL_TIMESTAMP=20260615-101500 node '${cli}' bundle apply base >'${root_keep_home}/out' && grep -q 'drifted edit' '${root_keep_home}/.claude/settings.json' && grep -q 'backup: .*settings_original_20260615-101500.json' '${root_keep_home}/out' && test -f '${root_keep_home}/.claude/settings_original_20260615-101500.json' && ! ls '${root_keep_home}/.claude/' | grep -q 'settings_update_' && HOME='${root_keep_home}' ROBOREPO_STATE_ROOT='${root_keep_home}/.roborepo' node '${repo_root}/scripts/cli/root-config-state.mjs' check claude '${root_keep_home}/.claude/settings.json' | grep -q '^clean$'"
 
 adopt_overwrite_home="${work}/adopt-overwrite-home"
 mkdir -p "${adopt_overwrite_home}/.claude" "${adopt_overwrite_home}/.roborepo"
@@ -1141,9 +991,9 @@ printf 'local hooks\n' > "${adopt_overwrite_home}/.claude/hooks"
 node -e 'const fs = require("fs"); fs.writeFileSync(process.argv[1], JSON.stringify({ repo: process.argv[2], onConflict: "overwrite" }));' \
   "${adopt_overwrite_home}/.roborepo/install-state.json" "${repo_root}"
 assert "bundle apply: adopt overwrite policy backs up local item" \
-  bash -c "HOME='${adopt_overwrite_home}' ROBOREPO_STATE_DIR='${adopt_overwrite_home}/.roborepo' ROBOREPO_INSTALL_TIMESTAMP=20260615-101500 node '${cli}' bundle apply hooks >'${adopt_overwrite_home}/out' && grep -q 'local hooks' '${adopt_overwrite_home}/.claude/hooks_original_20260615-101500' && test -d '${adopt_overwrite_home}/.claude/hooks' && grep -q 'backup: .*hooks_original_20260615-101500' '${adopt_overwrite_home}/out'"
+  bash -c "HOME='${adopt_overwrite_home}' ROBOREPO_STATE_ROOT='${adopt_overwrite_home}/.roborepo' ROBOREPO_INSTALL_TIMESTAMP=20260615-101500 node '${cli}' bundle apply hooks >'${adopt_overwrite_home}/out' && grep -q 'local hooks' '${adopt_overwrite_home}/.claude/hooks_original_20260615-101500' && test -d '${adopt_overwrite_home}/.claude/hooks' && grep -q 'backup: .*hooks_original_20260615-101500' '${adopt_overwrite_home}/out'"
 assert "bundle remove: adopt overwrite policy restores backed up item" \
-  bash -c "HOME='${adopt_overwrite_home}' ROBOREPO_STATE_DIR='${adopt_overwrite_home}/.roborepo' node '${cli}' bundle remove hooks >/dev/null && grep -q 'local hooks' '${adopt_overwrite_home}/.claude/hooks' && ! test -e '${adopt_overwrite_home}/.claude/hooks_original_20260615-101500'"
+  bash -c "HOME='${adopt_overwrite_home}' ROBOREPO_STATE_ROOT='${adopt_overwrite_home}/.roborepo' node '${cli}' bundle remove hooks >/dev/null && grep -q 'local hooks' '${adopt_overwrite_home}/.claude/hooks' && ! test -e '${adopt_overwrite_home}/.claude/hooks_original_20260615-101500'"
 
 # Onboarding gate disabled (in-progress feature): install auto-applies defaults, so no command is
 # gated on onboarding. These two assertions are kept here, disabled, for reinstatement.
@@ -1153,118 +1003,68 @@ assert "bundle remove: adopt overwrite policy restores backed up item" \
 # node -e 'const fs = require("fs"); fs.writeFileSync(process.argv[1], JSON.stringify({ repo: process.argv[2], mode: "managed" }));' \
 #   "${gate_home}/.roborepo/install-state.json" "${repo_root}"
 # assert "onboard gate: noninteractive command fails before onboarding" \
-#   bash -c "cd '${repo_root}' && HOME='${gate_home}' ROBOREPO_STATE_DIR='${gate_home}/.roborepo' ROBOREPO_PRESETS_ONBOARD= node '${cli}' run true >/dev/null 2>&1; test \$? -eq 2"
+#   bash -c "cd '${repo_root}' && HOME='${gate_home}' ROBOREPO_STATE_ROOT='${gate_home}/.roborepo' ROBOREPO_PRESETS_ONBOARD= node '${cli}' run true >/dev/null 2>&1; test \$? -eq 2"
 # assert "onboard gate: explicit bypass allows command" \
-#   bash -c "cd '${repo_root}' && HOME='${gate_home}' ROBOREPO_STATE_DIR='${gate_home}/.roborepo' ROBOREPO_PRESETS_ONBOARD= node '${cli}' --no-presets-onboard run true >/dev/null"
+#   bash -c "cd '${repo_root}' && HOME='${gate_home}' ROBOREPO_STATE_ROOT='${gate_home}/.roborepo' ROBOREPO_PRESETS_ONBOARD= node '${cli}' --no-presets-onboard run true >/dev/null"
 
 # ---------------------------------------------------------------------------
 # roborepo mcp add
 # ---------------------------------------------------------------------------
-# Dedicated HOME with jdocmunch/jcodemunch pre-registered in Codex config: the assertions below
+# Dedicated HOME with the fixture MCP servers pre-registered in Codex config: the assertions below
 # check the dry-run print format for "already present" presets, which must not depend on whether
 # the machine actually running the suite happens to have these MCP servers configured for real.
 mcp_dry_home="${work}/mcp-dry-home"
 mkdir -p "${mcp_dry_home}/.codex"
-printf '[mcp_servers.jdocmunch]\ncommand = "uvx"\nargs = ["jdocmunch-mcp"]\n\n[mcp_servers.jcodemunch]\ncommand = "uvx"\nargs = ["jcodemunch-mcp"]\n' > "${mcp_dry_home}/.codex/config.toml"
-mcp_dry_env="HOME='${mcp_dry_home}' ROBOREPO_STATE_DIR='${mcp_dry_home}/.roborepo'"
+printf '[mcp_servers.fixture-docs]\ncommand = "uvx"\nargs = ["fixture-docs-mcp"]\n\n[mcp_servers.fixture-tool]\ncommand = "uvx"\nargs = ["fixture-tool-mcp"]\n' > "${mcp_dry_home}/.codex/config.toml"
+mcp_dry_env="HOME='${mcp_dry_home}' ROBOREPO_STATE_ROOT='${mcp_dry_home}/.roborepo'"
 
-mcp_jdoc="$( bash -c "${mcp_dry_env} node '${cli}' mcp add jdocmunch --dry-run" )"
-assert "mcp add: jdocmunch preset maps to Claude user-scope uvx command" \
-  bash -c "echo '${mcp_jdoc}' | grep -Fq 'claude mcp add --scope user jdocmunch -- uvx jdocmunch-mcp' && echo '${mcp_jdoc}' | grep -Fq 'would add permission: mcp__jdocmunch -> generated/claude/settings.json' && echo '${mcp_jdoc}' | grep -Fq 'codex MCP already present: jdocmunch' && echo '${mcp_jdoc}' | grep -Fq 'would add Gemini MCP: jdocmunch -> '"$( printf '%s' "${mcp_dry_home}" | tr -s / )"'/.gemini/settings.json'"
+mcp_docs="$( bash -c "${mcp_dry_env} node '${fixture_cli}' mcp add fixture-docs --dry-run" )"
+assert "mcp add: fixture-docs preset maps to Claude user-scope uvx command" \
+  bash -c "echo '${mcp_docs}' | grep -Fq 'claude mcp add --scope user fixture-docs -- uvx fixture-docs-mcp' && echo '${mcp_docs}' | grep -Fq 'would add permission: mcp__fixture-docs -> generated/claude/settings.json' && echo '${mcp_docs}' | grep -Fq 'codex MCP already present: fixture-docs' && echo '${mcp_docs}' | grep -Fq 'would add Gemini MCP: fixture-docs -> '"$( printf '%s' "${mcp_dry_home}" | tr -s / )"'/.gemini/settings.json'"
 
-mcp_jcode="$( bash -c "${mcp_dry_env} node '${cli}' mcp add jcodemunch --dry-run" )"
-assert "mcp add: jcodemunch preset maps to Claude user-scope uvx command" \
-  bash -c "echo '${mcp_jcode}' | grep -Fq 'claude mcp add --scope user jcodemunch -- uvx jcodemunch-mcp' && echo '${mcp_jcode}' | grep -Fq 'would add permission: mcp__jcodemunch -> generated/claude/settings.json' && echo '${mcp_jcode}' | grep -Fq 'codex MCP already present: jcodemunch' && echo '${mcp_jcode}' | grep -Fq 'would add Gemini MCP: jcodemunch -> '"$( printf '%s' "${mcp_dry_home}" | tr -s / )"'/.gemini/settings.json'"
+mcp_tool="$( bash -c "${mcp_dry_env} node '${fixture_cli}' mcp add fixture-tool --dry-run" )"
+assert "mcp add: fixture-tool preset maps to Claude user-scope uvx command" \
+  bash -c "echo '${mcp_tool}' | grep -Fq 'claude mcp add --scope user fixture-tool -- uvx fixture-tool-mcp' && echo '${mcp_tool}' | grep -Fq 'would add permission: mcp__fixture-tool -> generated/claude/settings.json' && echo '${mcp_tool}' | grep -Fq 'codex MCP already present: fixture-tool' && echo '${mcp_tool}' | grep -Fq 'would add Gemini MCP: fixture-tool -> '"$( printf '%s' "${mcp_dry_home}" | tr -s / )"'/.gemini/settings.json'"
 
-assert "mcp add: addMCP alias removed" \
-  bash -c "! node '${cli}' addMCP jdocmunch --dry-run >/dev/null 2>&1"
 
 mcp_pkg_home="${work}/mcp-pkg-home"
 mkdir -p "${mcp_pkg_home}/.codex"
 printf '' > "${mcp_pkg_home}/.codex/config.toml"
-mcp_pkg="$( HOME="${mcp_pkg_home}" ROBOREPO_STATE_DIR="${mcp_pkg_home}/.roborepo" node "${cli}" mcp add example-mcp --name=example --dry-run -- --flag value )"
+mcp_pkg="$( HOME="${mcp_pkg_home}" ROBOREPO_STATE_ROOT="${mcp_pkg_home}/.roborepo" node "${cli}" mcp add example-mcp --name=example --dry-run -- --flag value )"
 assert "mcp add: generic package supports name override and passthrough args" \
   bash -c "echo '${mcp_pkg}' | grep -q 'claude mcp add --scope user example -- uvx example-mcp --flag value' && echo '${mcp_pkg}' | grep -q 'would add Codex MCP: example -> .*/\\.codex/config.toml' && echo '${mcp_pkg}' | grep -q 'args = \\[\"example-mcp\", \"--flag\", \"value\"\\]'"
 
-mcp_url="$( HOME="${mcp_pkg_home}" ROBOREPO_STATE_DIR="${mcp_pkg_home}/.roborepo" node "${cli}" mcp add https://mcp.example.com/mcp --name=example --dry-run )"
+mcp_url="$( HOME="${mcp_pkg_home}" ROBOREPO_STATE_ROOT="${mcp_pkg_home}/.roborepo" node "${cli}" mcp add https://mcp.example.com/mcp --name=example --dry-run )"
 assert "mcp add: URL defaults to http transport" \
   bash -c "echo '${mcp_url}' | grep -q 'claude mcp add --scope user --transport http example https://mcp.example.com/mcp' && echo '${mcp_url}' | grep -q 'would add Codex MCP: example -> .*/\\.codex/config.toml' && echo '${mcp_url}' | grep -q 'url = \"https://mcp.example.com/mcp\"'"
 
-mcp_skip_permission="$( bash -c "${mcp_dry_env} node '${cli}' mcp add jdocmunch --dry-run --skip-claude-permission" )"
+mcp_skip_permission="$( bash -c "${mcp_dry_env} node '${fixture_cli}' mcp add fixture-docs --dry-run --skip-claude-permission" )"
 assert "mcp add: --skip-claude-permission skips settings update" \
-  bash -c "echo '${mcp_skip_permission}' | grep -Fq 'claude mcp add --scope user jdocmunch -- uvx jdocmunch-mcp' && ! echo '${mcp_skip_permission}' | grep -Fq 'would add permission' && echo '${mcp_skip_permission}' | grep -Fq 'codex MCP already present: jdocmunch' && echo '${mcp_skip_permission}' | grep -Fq 'would add Gemini MCP: jdocmunch -> '"$( printf '%s' "${mcp_dry_home}" | tr -s / )"'/.gemini/settings.json'"
+  bash -c "echo '${mcp_skip_permission}' | grep -Fq 'claude mcp add --scope user fixture-docs -- uvx fixture-docs-mcp' && ! echo '${mcp_skip_permission}' | grep -Fq 'would add permission' && echo '${mcp_skip_permission}' | grep -Fq 'codex MCP already present: fixture-docs' && echo '${mcp_skip_permission}' | grep -Fq 'would add Gemini MCP: fixture-docs -> '"$( printf '%s' "${mcp_dry_home}" | tr -s / )"'/.gemini/settings.json'"
 
-mcp_only_claude="$( bash -c "${mcp_dry_env} node '${cli}' mcp add jdocmunch --dry-run --harness claude" )"
+mcp_only_claude="$( bash -c "${mcp_dry_env} node '${fixture_cli}' mcp add fixture-docs --dry-run --harness claude" )"
 assert "mcp add: --harness claude skips Codex config update" \
-  test "${mcp_only_claude}" = $'claude mcp add --scope user jdocmunch -- uvx jdocmunch-mcp\nwould add permission: mcp__jdocmunch -> generated/claude/settings.json'
+  test "${mcp_only_claude}" = $'claude mcp add --scope user fixture-docs -- uvx fixture-docs-mcp\nwould add permission: mcp__fixture-docs -> generated/claude/settings.json'
 
-mcp_only_codex="$( bash -c "${mcp_dry_env} node '${cli}' mcp add jdocmunch --dry-run --harness codex" )"
+mcp_only_codex="$( bash -c "${mcp_dry_env} node '${fixture_cli}' mcp add fixture-docs --dry-run --harness codex" )"
 assert "mcp add: --harness codex skips Claude registration and settings update" \
-  test "${mcp_only_codex}" = "codex MCP already present: jdocmunch"
+  test "${mcp_only_codex}" = "codex MCP already present: fixture-docs"
 
-mcp_harness_repeated="$( bash -c "${mcp_dry_env} node '${cli}' mcp add jdocmunch --dry-run --harness claude --harness codex" )"
+mcp_harness_repeated="$( bash -c "${mcp_dry_env} node '${fixture_cli}' mcp add fixture-docs --dry-run --harness claude --harness codex" )"
 assert "mcp add: repeated --harness claude --harness codex narrows to exactly those two, not every registered harness" \
-  test "${mcp_harness_repeated}" = $'claude mcp add --scope user jdocmunch -- uvx jdocmunch-mcp\nwould add permission: mcp__jdocmunch -> generated/claude/settings.json\ncodex MCP already present: jdocmunch'
+  test "${mcp_harness_repeated}" = $'claude mcp add --scope user fixture-docs -- uvx fixture-docs-mcp\nwould add permission: mcp__fixture-docs -> generated/claude/settings.json\ncodex MCP already present: fixture-docs'
 
 assert "mcp add: --harness with no value is rejected" \
-  bash -c "! node '${cli}' mcp add jdocmunch --harness --dry-run >/dev/null 2>&1"
+  bash -c "! node '${fixture_cli}' mcp add fixture-docs --harness --dry-run >/dev/null 2>&1"
 
 assert "mcp add: unregistered --harness id is rejected" \
-  bash -c "! node '${cli}' mcp add jdocmunch --harness nonexistent --dry-run >/dev/null 2>&1"
+  bash -c "! node '${fixture_cli}' mcp add fixture-docs --harness nonexistent --dry-run >/dev/null 2>&1"
 
 assert "mcp add: invalid scope rejected" \
-  bash -c "! node '${cli}' mcp add jdocmunch --scope=team --dry-run >/dev/null 2>&1"
+  bash -c "! node '${fixture_cli}' mcp add fixture-docs --scope=team --dry-run >/dev/null 2>&1"
 
 assert "mcp add: invalid transport rejected" \
   bash -c "! node '${cli}' mcp add https://mcp.example.com/mcp --transport=websocket --dry-run >/dev/null 2>&1"
-
-# ---------------------------------------------------------------------------
-# roborepo package-owned commands
-# ---------------------------------------------------------------------------
-command_home="${work}/command-home"
-mkdir -p "${command_home}/.claude" "${command_home}/.codex"
-mkdir -p "${command_home}/repo" "${command_home}/docs"
-printf 'file\n' > "${command_home}/repo/file.ts"
-command_bin="${work}/fake-uvx-bin"
-mkdir -p "${command_bin}"
-cat > "${command_bin}/uvx" <<'EOF'
-#!/usr/bin/env bash
-if [[ "$1" == "--version" ]]; then
-  echo "uvx 0.0"
-  exit 0
-fi
-printf '%s\n' "$*" > "$UVX_ARGS_FILE"
-EOF
-chmod +x "${command_bin}/uvx"
-
-cat > "${work}/package-command-duplicate-check.mjs" <<EOF
-import { validatePackageCommandOwnership } from "${repo_root}/scripts/cli/package-commands.mjs";
-
-const pkg = { id: "alpha", components: [{ type: "command", name: "index code" }], requires: ["beta"] };
-const catalog = [pkg, { id: "beta", components: [{ type: "command", name: "index code" }] }];
-const r = validatePackageCommandOwnership(pkg, { catalog, enabledIds: [] });
-process.exit(r.ok ? 1 : 0);
-EOF
-
-assert "package command: duplicate command ownership in same enable set is rejected" \
-  bash -c "cd '${repo_root}' && node '${work}/package-command-duplicate-check.mjs'"
-
-bash -c "HOME='${command_home}' ROBOREPO_STATE_DIR='${command_home}/.roborepo' SKIP_MCP=1 node '${cli}' package enable jcodemunch >/dev/null 2>&1" || true
-bash -c "HOME='${command_home}' ROBOREPO_STATE_DIR='${command_home}/.roborepo' SKIP_MCP=1 node '${cli}' package enable jdocmunch >/dev/null 2>&1" || true
-
-UVX_ARGS_FILE="${command_home}/index-args.txt" PATH="${command_bin}:$PATH" HOME="${command_home}" ROBOREPO_STATE_DIR="${command_home}/.roborepo" node "${cli}" index code "${command_home}/repo/file.ts" >/dev/null
-assert "package command: index code uses package-owned command recipe" \
-  grep -Fq "jcodemunch-mcp index-file --no-ai-summaries" "${command_home}/index-args.txt"
-
-UVX_ARGS_FILE="${command_home}/watch-args.txt" PATH="${command_bin}:$PATH" HOME="${command_home}" ROBOREPO_STATE_DIR="${command_home}/.roborepo" node "${cli}" index code "${command_home}/repo" --watch >/dev/null
-assert "package command: index code --watch uses package-owned command recipe" \
-  grep -Fq -- "--with watchfiles jcodemunch-mcp watch" "${command_home}/watch-args.txt"
-
-UVX_ARGS_FILE="${command_home}/docs-args.txt" PATH="${command_bin}:$PATH" HOME="${command_home}" ROBOREPO_STATE_DIR="${command_home}/.roborepo" node "${cli}" index docs "${command_home}/docs" >/dev/null
-assert "package command: index docs uses package-owned command recipe" \
-  grep -Fq "jdocmunch-mcp index-local --path" "${command_home}/docs-args.txt"
-assert "package command: index docs preserves marker contract" \
-  test -f "${command_home}/docs/.jdm-indexed"
 
 # Real write tests run against a throwaway harness root. roborepo derives repoRoot from
 # scripts/cli/paths.mjs (two levels up), so copying scripts/cli/ (which holds the entry main.mjs
@@ -1293,17 +1093,17 @@ printf '{"permissions":{"allow":["Read"]}}\n' > "${mcp_harness}/generated/claude
 printf '[features]\nhooks = true\n' > "${mcp_home}/.codex/config.toml"
 printf '{"permissions":{"allow":["Read"]}}\n' > "${mcp_home}/.claude/settings.json"
 
-( cd "${work}" && HOME="${mcp_home}" ROBOREPO_STATE_DIR="${mcp_home}/.roborepo" node "${mcp_harness}/scripts/cli/main.mjs" mcp add https://mcp.example.com/mcp --name=example --harness codex >/dev/null )
+( cd "${work}" && HOME="${mcp_home}" ROBOREPO_STATE_ROOT="${mcp_home}/.roborepo" node "${mcp_harness}/scripts/cli/main.mjs" mcp add https://mcp.example.com/mcp --name=example --harness codex >/dev/null )
 assert "mcp add: writes Codex HTTP url block" \
   grep -q 'url = "https://mcp.example.com/mcp"' "${mcp_home}/.codex/config.toml"
 
-( cd "${work}" && HOME="${mcp_home}" ROBOREPO_STATE_DIR="${mcp_home}/.roborepo" node "${mcp_harness}/scripts/cli/main.mjs" mcp add example-mcp --name=stdio-example --harness codex -- --flag value >/dev/null )
+( cd "${work}" && HOME="${mcp_home}" ROBOREPO_STATE_ROOT="${mcp_home}/.roborepo" node "${mcp_harness}/scripts/cli/main.mjs" mcp add example-mcp --name=stdio-example --harness codex -- --flag value >/dev/null )
 assert "mcp add: writes Codex stdio command block" \
   grep -q 'command = "uvx"' "${mcp_home}/.codex/config.toml"
 assert "mcp add: writes Codex stdio args block" \
   grep -q 'args = \["example-mcp", "--flag", "value"\]' "${mcp_home}/.codex/config.toml"
 
-( cd "${work}" && HOME="${mcp_home}" ROBOREPO_STATE_DIR="${mcp_home}/.roborepo" node "${mcp_harness}/scripts/cli/main.mjs" mcp add https://mcp.example.com/mcp --name=example --harness codex >/dev/null )
+( cd "${work}" && HOME="${mcp_home}" ROBOREPO_STATE_ROOT="${mcp_home}/.roborepo" node "${mcp_harness}/scripts/cli/main.mjs" mcp add https://mcp.example.com/mcp --name=example --harness codex >/dev/null )
 assert "mcp add: Codex write is idempotent" \
   bash -c "test \"\$(grep -c '^\\[mcp_servers.example\\]' '${mcp_home}/.codex/config.toml')\" = 1"
 
@@ -1314,7 +1114,7 @@ mkdir -p "${fake_bin}"
   printf 'printf "%%s\\n" "$*" > "%s"\n' "${work}/fake-claude-args.txt"
 } > "${fake_bin}/claude"
 chmod +x "${fake_bin}/claude"
-( cd "${work}" && HOME="${mcp_home}" ROBOREPO_STATE_DIR="${mcp_home}/.roborepo" PATH="${fake_bin}:${PATH}" node "${mcp_harness}/scripts/cli/main.mjs" mcp add perm-mcp --name=permtest --harness claude >/dev/null )
+( cd "${work}" && HOME="${mcp_home}" ROBOREPO_STATE_ROOT="${mcp_home}/.roborepo" PATH="${fake_bin}:${PATH}" node "${mcp_harness}/scripts/cli/main.mjs" mcp add perm-mcp --name=permtest --harness claude >/dev/null )
 assert "mcp add: Claude registration command invoked" \
   grep -q 'mcp add --scope user permtest -- uvx perm-mcp' "${work}/fake-claude-args.txt"
 # The grant targets the ACTIVE settings the harness reads (~/.claude/settings.json), never the repo
@@ -1324,7 +1124,7 @@ assert "mcp add: Claude permission written to active settings after successful r
 assert "mcp add: Claude permission does not touch the repo baseline" \
   bash -c "! grep -q '\"mcp__permtest\"' '${mcp_harness}/generated/claude/settings.json'"
 
-( cd "${work}" && HOME="${mcp_home}" ROBOREPO_STATE_DIR="${mcp_home}/.roborepo" PATH="${fake_bin}:${PATH}" node "${mcp_harness}/scripts/cli/main.mjs" mcp add all-mcp --name=alltest -- --all-flag >/dev/null )
+( cd "${work}" && HOME="${mcp_home}" ROBOREPO_STATE_ROOT="${mcp_home}/.roborepo" PATH="${fake_bin}:${PATH}" node "${mcp_harness}/scripts/cli/main.mjs" mcp add all-mcp --name=alltest -- --all-flag >/dev/null )
 assert "mcp add: default target invokes Claude registration" \
   grep -q 'mcp add --scope user alltest -- uvx all-mcp --all-flag' "${work}/fake-claude-args.txt"
 assert "mcp add: default target writes Claude permission to active settings" \
@@ -1338,7 +1138,7 @@ assert "mcp add: default target writes Codex config" \
 } > "${fake_bin}/claude"
 chmod +x "${fake_bin}/claude"
 assert "mcp add: Claude registration failure exits non-zero" \
-  bash -c "cd '${work}' && ! env HOME='${mcp_home}' ROBOREPO_STATE_DIR='${mcp_home}/.roborepo' PATH='${fake_bin}':\"\${PATH}\" node '${mcp_harness}/scripts/cli/main.mjs' mcp add fail-mcp --name=failtest >/dev/null 2>&1"
+  bash -c "cd '${work}' && ! env HOME='${mcp_home}' ROBOREPO_STATE_ROOT='${mcp_home}/.roborepo' PATH='${fake_bin}':\"\${PATH}\" node '${mcp_harness}/scripts/cli/main.mjs' mcp add fail-mcp --name=failtest >/dev/null 2>&1"
 assert "mcp add: Claude failure does not write permission to active settings" \
   bash -c "! grep -q '\"mcp__failtest\"' '${mcp_home}/.claude/settings.json'"
 assert "mcp add: Claude failure does not write Codex config" \
@@ -1380,7 +1180,7 @@ ln -s "${repo_root}/generated/codex/rules" "${update_home}/.codex/rules"
 # Skills and commands are linked/composed per-package by the installer's enumerate-step, not as
 # dir-level links (commands no longer use the old whole-directory copy).
 assert "lifecycle: setup package skills before update" \
-  bash -c "HOME='${update_home}' ROBOREPO_STATE_DIR='${update_home}/.roborepo' SKIP_MCP=1 node '${cli}' package enable jcodemunch >/dev/null 2>&1 && HOME='${update_home}' ROBOREPO_STATE_DIR='${update_home}/.roborepo' SKIP_MCP=1 node '${cli}' package enable case-study-pack >/dev/null 2>&1 && test -L '${update_home}/.claude/skills/case-study' && test -L '${update_home}/.codex/skills/case-study'"
+  bash -c "HOME='${update_home}' ROBOREPO_STATE_ROOT='${update_home}/.roborepo' SKIP_MCP=1 node '${cli}' package enable case-study-pack >/dev/null 2>&1 && test -L '${update_home}/.claude/skills/case-study' && test -L '${update_home}/.codex/skills/case-study'"
 
 # The mcp-add tests above intentionally exercise source mutation for Claude permissions. Normalize
 # generated permission output before lifecycle doctor, which checks generated source drift.
@@ -1423,7 +1223,7 @@ assert "lifecycle: roborepo update --dry-run dispatches and reports changes" \
 assert "lifecycle: roborepo update --verbose reports unchanged detail" \
   bash -c "HOME='${update_home}' node '${cli}' update --dry-run --verbose >'${update_out}.verbose' 2>&1 && grep -q '━━━ Shell & PATH' '${update_out}.verbose' && grep -q 'unchanged: .*package registry' '${update_out}.verbose'"
 assert "lifecycle: roborepo update preserves local hooks, trust, and enabled skills" \
-  bash -c "HOME='${update_home}' ROBOREPO_STATE_DIR='${update_home}/.roborepo' node '${cli}' update >/dev/null 2>&1 && node -e \"const fs=require('fs');const s=JSON.parse(fs.readFileSync('${update_home}/.claude/settings.json','utf8'));process.exit((s.hooks?.PreToolUse||[]).some(e=>(e.hooks||[]).some(h=>h.command.includes('capture-dense-bash.mjs')))?0:1)\" && grep -q '\\[projects\\.\"/Users/kirinmurphy/projects/activedev/roborepo\"\\]' '${update_home}/.codex/config.toml' && test -L '${update_home}/.claude/skills/case-study' && test -L '${update_home}/.codex/skills/case-study'"
+  bash -c "HOME='${update_home}' ROBOREPO_STATE_ROOT='${update_home}/.roborepo' node '${cli}' update >/dev/null 2>&1 && node -e \"const fs=require('fs');const s=JSON.parse(fs.readFileSync('${update_home}/.claude/settings.json','utf8'));process.exit((s.hooks?.PreToolUse||[]).some(e=>(e.hooks||[]).some(h=>h.command.includes('capture-dense-bash.mjs')))?0:1)\" && grep -q '\\[projects\\.\"/Users/kirinmurphy/projects/activedev/roborepo\"\\]' '${update_home}/.codex/config.toml' && test -L '${update_home}/.claude/skills/case-study' && test -L '${update_home}/.codex/skills/case-study'"
 assert "lifecycle: update writes nothing into the source tree" globals_unchanged_since_fixture
 assert "lifecycle: package enable and update leave the tracked Codex hooks baseline unchanged" \
   bash -c "[[ \"\$(shasum '${repo_root}/generated/codex/hooks.json')\" == '${codex_hooks_baseline_before}' ]]"
@@ -1433,30 +1233,18 @@ stale_cache="${update_home}/.roborepo/skills/case-study"
 printf '\nstale local edit\n' >> "${stale_cache}/SKILL.md"
 stale_digest="$(cd "${stale_cache}" && find . -type f -exec shasum {} + | sort | shasum)"
 assert "lifecycle: update --dry-run previews a stale skill refresh without writing it" \
-  bash -c "HOME='${update_home}' ROBOREPO_STATE_DIR='${update_home}/.roborepo' node '${cli}' update --dry-run >'${update_out}.stale' 2>&1 && grep -q -- '- would update skill case-study' '${update_out}.stale' && ! grep -q 'changed: none' '${update_out}.stale' && [[ \"\$(cd '${stale_cache}' && find . -type f -exec shasum {} + | sort | shasum)\" == '${stale_digest}' ]]"
+  bash -c "HOME='${update_home}' ROBOREPO_STATE_ROOT='${update_home}/.roborepo' node '${cli}' update --dry-run >'${update_out}.stale' 2>&1 && grep -q -- '- would update skill case-study' '${update_out}.stale' && ! grep -q 'changed: none' '${update_out}.stale' && [[ \"\$(cd '${stale_cache}' && find . -type f -exec shasum {} + | sort | shasum)\" == '${stale_digest}' ]]"
 assert "lifecycle: update refreshes the skill the dry run previewed" \
-  bash -c "HOME='${update_home}' ROBOREPO_STATE_DIR='${update_home}/.roborepo' node '${cli}' update >'${update_out}.refresh' 2>&1 && grep -q -- '- updated skill case-study' '${update_out}.refresh' && ! grep -q 'stale local edit' '${stale_cache}/SKILL.md'"
+  bash -c "HOME='${update_home}' ROBOREPO_STATE_ROOT='${update_home}/.roborepo' node '${cli}' update >'${update_out}.refresh' 2>&1 && grep -q -- '- updated skill case-study' '${update_out}.refresh' && ! grep -q 'stale local edit' '${stale_cache}/SKILL.md'"
 
-update_legacy_home="${work}/update-legacy-home"
-mkdir -p "${update_legacy_home}/.claude" "${update_legacy_home}/.codex" "${update_legacy_home}/.roborepo/rules"
-cp "${repo_root}/generated/claude/settings.json" "${update_legacy_home}/.claude/settings.json"
-cp "${repo_root}/generated/codex/config.toml" "${update_legacy_home}/.codex/config.toml"
-printf '<!-- BEGIN managed:managed-agents-import -->\n@~/.roborepo/rules/generated-rules.md\n<!-- END managed:managed-agents-import -->\n' > "${update_legacy_home}/.claude/CLAUDE.md"
-printf '# Generated Harness Rules\n\nlegacy render\n' > "${update_legacy_home}/.roborepo/rules/generated-rules.md"
-assert "lifecycle: roborepo update rewrites legacy Claude import wrapper" \
-  bash -c "HOME='${update_legacy_home}' ROBOREPO_STATE_DIR='${update_legacy_home}/.roborepo' node '${cli}' update >/dev/null 2>&1 && grep -q 'BEGIN managed:builtin-code-style' '${update_legacy_home}/.claude/CLAUDE.md' && ! grep -q 'BEGIN managed:managed-agents-import' '${update_legacy_home}/.claude/CLAUDE.md' && ! test -e '${update_legacy_home}/.roborepo/rules/generated-rules.md'"
-assert "lifecycle: roborepo sync alias removed" \
-  bash -c "! HOME='${update_home}' node '${cli}' sync --bad-flag >/dev/null 2>&1"
-assert "lifecycle: roborepo install verb removed (first install is the shell bootstrap)" \
-  bash -c "! node '${cli}' install --dry-run >/dev/null 2>&1"
-assert "lifecycle: roborepo verify is removed" \
-  bash -c "! HOME='${work}/not-installed-home' node '${cli}' verify >'${work}/verify.err' 2>&1 && grep -q 'roborepo doctor --installed' '${work}/verify.err'"
-assert "lifecycle: CLI surface help/menu/removed routes work in sandbox" \
+assert "lifecycle: CLI surface help and menu routes work in sandbox" \
   node "${repo_root}/scripts/test/cli-surface-integration-check.mjs"
 assert "lifecycle: roborepo doctor --installed is concise by default" \
-  bash -c "HOME='${update_home}' node '${cli}' doctor --installed >'${work}/doctor-installed.out' 2>&1 || true; ! grep -q 'globals/codex/AGENTS.md exists' '${work}/doctor-installed.out'"
-assert "lifecycle: roborepo rules --check dispatches render verifier" \
-  bash -c "cd '${repo_root}' && node '${cli}' rules --check >/dev/null"
+  bash -c "HOME='${update_home}' node '${cli}' doctor --installed >'${work}/doctor-installed.out' 2>&1 || true; ! grep -q '^ *ok:' '${work}/doctor-installed.out'"
+assert "lifecycle: roborepo config rules --check dispatches render verifier" \
+  bash -c "cd '${repo_root}' && node '${cli}' config rules --check >/dev/null"
+assert "lifecycle: roborepo config permissions --check verifies generated outputs" \
+  bash -c "cd '${repo_root}' && node '${cli}' config permissions --check >/dev/null"
 
 # ---------------------------------------------------------------------------
 # roborepo menu (numbered fallback via pipe)
@@ -1469,7 +1257,6 @@ assert "menu: shows promoted web action" grep -q "Open web portal" "${menu_out}"
 assert "menu: shows promoted package manager action" grep -q "Package Library" "${menu_out}"
 assert "menu: shows agent config section" grep -q "Agent Config" "${menu_out}"
 assert "menu: shows package namespace" grep -q "Packages" "${menu_out}"
-assert "menu: shows indexing namespace" grep -q "Indexing" "${menu_out}"
 assert "menu: shows skills namespace" grep -q "Skills" "${menu_out}"
 assert "menu: shows telemetry namespace" grep -q "Telemetry" "${menu_out}"
 assert "menu: shows maintenance namespace" grep -q "Maintenance" "${menu_out}"
@@ -1534,16 +1321,16 @@ mkdir -p "${shome}"
   echo "alias ll='ls -la'"
   echo ""
   echo "# Harness config shell helpers"
-  echo "source \"${repo_root}/shell/jcodemunch.zsh\""
+  echo "source \"${repo_root}/shell/retired-helper.zsh\""
   echo ""
   echo "# Harness config shell helpers"
-  echo "source \"${repo_root}/shell/jdocmunch.zsh\""
+  echo "source \"${repo_root}/shell/another-retired-helper.zsh\""
 } > "${shome}/.zshrc"
 HOME="${shome}" bash "${iss}" >/dev/null 2>&1 || true
-assert "prune: stale jcodemunch.zsh source line removed" \
-  bash -c "! grep -q 'shell/jcodemunch.zsh' '${shome}/.zshrc'"
-assert "prune: stale jdocmunch.zsh source line removed" \
-  bash -c "! grep -q 'shell/jdocmunch.zsh' '${shome}/.zshrc'"
+assert "prune: stale retired-helper.zsh source line removed" \
+  bash -c "! grep -q 'shell/retired-helper.zsh' '${shome}/.zshrc'"
+assert "prune: stale another-retired-helper.zsh source line removed" \
+  bash -c "! grep -q 'shell/another-retired-helper.zsh' '${shome}/.zshrc'"
 assert "prune: user's own .zshrc content preserved" \
   grep -q "alias ll='ls -la'" "${shome}/.zshrc"
 
@@ -1569,10 +1356,10 @@ un_old="${reloc_root}/reloc-uninstall/harness_configs"
 un_new="${reloc_root}/reloc-uninstall/roborepo"
 mkdir -p "${un_home}/.claude" "${un_home}/.codex" "${un_home}/.local/bin"
 cp -R "${repo_root}" "${un_old}"
-HOME="${un_home}" ROBOREPO_STATE_DIR="${un_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 \
+HOME="${un_home}" ROBOREPO_STATE_ROOT="${un_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 \
   ROBOREPO_ON_CONFLICT=overwrite bash "${un_old}/scripts/install/main.sh" >/dev/null 2>&1 || true
 mv "${un_old}" "${un_new}"   # rename -> all managed links now dangle to the old path
-HOME="${un_home}" ROBOREPO_STATE_DIR="${un_home}/.roborepo" \
+HOME="${un_home}" ROBOREPO_STATE_ROOT="${un_home}/.roborepo" \
   bash "${un_new}/scripts/install/uninstall.sh" >/dev/null 2>&1 || true
 assert "repair: stale uninstall removes dangling prior-path managed links" \
   bash -c "test \"\$(find '${un_home}/.claude' '${un_home}/.codex' '${un_home}/.local/bin' -maxdepth 2 -type l 2>/dev/null | wc -l | tr -d ' ')\" = 0"
@@ -1584,12 +1371,12 @@ rp_new="${reloc_root}/reloc-repair/roborepo"
 rp_state="${rp_home}/.roborepo"
 mkdir -p "${rp_home}/.claude" "${rp_home}/.codex" "${rp_home}/.local/bin"
 cp -R "${repo_root}" "${rp_old}"
-HOME="${rp_home}" ROBOREPO_STATE_DIR="${rp_state}" ROBOREPO_ASSUME_INTERACTIVE=0 \
+HOME="${rp_home}" ROBOREPO_STATE_ROOT="${rp_state}" ROBOREPO_ASSUME_INTERACTIVE=0 \
   ROBOREPO_ON_CONFLICT=overwrite bash "${rp_old}/scripts/install/main.sh" >/dev/null 2>&1 || true
 mv "${rp_old}" "${rp_new}"
 assert "repair: bin link dangles after relocation (precondition)" \
   bash -c "! test -e '${rp_home}/.local/bin/roborepo'"
-HOME="${rp_home}" ROBOREPO_STATE_DIR="${rp_state}" \
+HOME="${rp_home}" ROBOREPO_STATE_ROOT="${rp_state}" \
   bash "${rp_new}/scripts/install/repair.sh" >/dev/null 2>&1 || true
 assert "repair: bin link healed to new checkout" \
   bash -c "test \"\$(readlink '${rp_home}/.local/bin/roborepo')\" = '${rp_new}/bin/roborepo'"
@@ -1600,14 +1387,14 @@ assert "repair: base Codex support skill cache link created after repair" \
 assert "repair: install state records the new checkout path" \
   grep -q "\"repo\": \"${rp_new}\"" "${rp_state}/install-state.json"
 # Idempotent: a second repair reclaims nothing (everything already points at the new checkout).
-reclaim2="$(HOME="${rp_home}" ROBOREPO_STATE_DIR="${rp_state}" bash "${rp_new}/scripts/install/repair.sh" 2>&1 | grep -cE '^reclaim' || true)"
+reclaim2="$(HOME="${rp_home}" ROBOREPO_STATE_ROOT="${rp_state}" bash "${rp_new}/scripts/install/repair.sh" 2>&1 | grep -cE '^reclaim' || true)"
 assert "repair: idempotent re-run reclaims nothing" test "${reclaim2}" = "0"
 
 # Single-harness repair must not create the missing harness home as a side effect.
 rp_codex_only_home="${reloc_root}/repair-codex-only/home"
 rp_codex_only_state="${rp_codex_only_home}/.roborepo"
 mkdir -p "${rp_codex_only_home}/.codex" "${rp_codex_only_home}/.local/bin"
-HOME="${rp_codex_only_home}" ROBOREPO_STATE_DIR="${rp_codex_only_state}" \
+HOME="${rp_codex_only_home}" ROBOREPO_STATE_ROOT="${rp_codex_only_state}" \
   bash "${repo_root}/scripts/install/repair.sh" >/dev/null 2>&1 || true
 assert "repair: Codex-only repair does not create Claude home" \
   bash -c "! test -e '${rp_codex_only_home}/.claude'"
@@ -1621,12 +1408,12 @@ rp_keep_new="${reloc_root}/reloc-repair-keep/roborepo"
 rp_keep_state="${rp_keep_home}/.roborepo"
 mkdir -p "${rp_keep_home}/.claude" "${rp_keep_home}/.codex" "${rp_keep_home}/.local/bin"
 cp -R "${repo_root}" "${rp_keep_old}"
-HOME="${rp_keep_home}" ROBOREPO_STATE_DIR="${rp_keep_state}" ROBOREPO_ASSUME_INTERACTIVE=0 \
+HOME="${rp_keep_home}" ROBOREPO_STATE_ROOT="${rp_keep_state}" ROBOREPO_ASSUME_INTERACTIVE=0 \
   ROBOREPO_ON_CONFLICT=overwrite bash "${rp_keep_old}/scripts/install/main.sh" >/dev/null 2>&1 || true
 mv "${rp_keep_old}" "${rp_keep_new}"
 mkdir -p "${rp_keep_home}/.claude/commands"
 echo "local command" > "${rp_keep_home}/.claude/commands/local.txt"
-repair_keep_out="$(HOME="${rp_keep_home}" ROBOREPO_STATE_DIR="${rp_keep_state}" \
+repair_keep_out="$(HOME="${rp_keep_home}" ROBOREPO_STATE_ROOT="${rp_keep_state}" \
   bash "${rp_keep_new}/scripts/install/repair.sh" 2>&1 || true)"
 assert "repair: copied commands dir survives a repair run" \
   bash -c "test -d '${rp_keep_home}/.claude/commands' && test -f '${rp_keep_home}/.claude/commands/local.txt'"
@@ -1642,32 +1429,6 @@ ln -s "${reloc_root}/heal-bin/gone/bin/roborepo" "${heal_home}/.local/bin/robore
 heal_out="$(HOME="${heal_home}" bash "${repo_root}/scripts/install/install-global-commands.sh" --dry-run 2>&1 || true)"
 assert "install: dangling bin link is reclaimed, not a conflict" \
   bash -c "echo '${heal_out}' | grep -q 'was dangling' && ! echo '${heal_out}' | grep -q 'conflict:'"
-
-# ---------------------------------------------------------------------------
-# legacy ~/.agents/skills teardown (native-alignment item 0.5 migration).
-# Pre-native-alignment installs fanned skills via a dir-level ~/.agents/skills managed symlink that
-# Codex also scanned. After migrating to cache-backed skill views, that leftover causes duplicate
-# discovery. install must reclaim the managed legacy link (and only the managed one).
-# Copy-free: the checkout never moves here, so install runs against the real repo_root into an
-# isolated HOME (no repo copy needed, unlike the relocation tests above).
-# ---------------------------------------------------------------------------
-la_home="${reloc_root}/legacy-agents/home"
-mkdir -p "${la_home}/.claude" "${la_home}/.codex" "${la_home}/.local/bin" "${la_home}/.agents"
-ln -s "${repo_root}/globals/system/skills" "${la_home}/.agents/skills"  # the old dir-level managed link
-HOME="${la_home}" ROBOREPO_STATE_DIR="${la_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 \
-  ROBOREPO_ON_CONFLICT=overwrite bash "${repo_root}/scripts/install/main.sh" >/dev/null 2>&1 || true
-assert "legacy: managed ~/.agents/skills link removed after install" \
-  bash -c "! test -L '${la_home}/.agents/skills'"
-assert "legacy: base Codex support skill cache link created in place of the legacy dir link" \
-  bash -c "test -d '${la_home}/.codex/skills/roborepo-support' && test -e '${la_home}/.codex/skills/roborepo-support/.builtin-managed' && diff -rq -x .builtin-managed '${repo_root}/globals/system/skills/roborepo-support' '${la_home}/.codex/skills/roborepo-support' >/dev/null 2>&1 && ! test -e '${la_home}/.codex/skills/case-study'"
-
-# A user's real ~/.agents/skills (not a managed symlink) must be left untouched.
-lu_home="${reloc_root}/legacy-agents-userdir/home"
-mkdir -p "${lu_home}/.claude" "${lu_home}/.codex" "${lu_home}/.local/bin" "${lu_home}/.agents/skills/mine"
-HOME="${lu_home}" ROBOREPO_STATE_DIR="${lu_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 \
-  ROBOREPO_ON_CONFLICT=overwrite bash "${repo_root}/scripts/install/main.sh" >/dev/null 2>&1 || true
-assert "legacy: real ~/.agents/skills user dir is preserved, not reclaimed" \
-  bash -c "test -d '${lu_home}/.agents/skills/mine'"
 
 # ---------------------------------------------------------------------------
 # main.sh presence-scenario coverage: zero, Claude-only, and
@@ -1689,7 +1450,7 @@ chmod +x "${presence_bin}/which"
 presence_path="${presence_bin}:$(dirname "$(command -v node)"):/usr/bin:/bin"
 zero_home="${reloc_root}/presence-zero/home"
 mkdir -p "${zero_home}/.local/bin"
-zero_out="$(HOME="${zero_home}" PATH="${presence_path}" ROBOREPO_STATE_DIR="${zero_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 NODE_ENV=test ROBOREPO_TEST_DESKTOP_ROOTS='{}' \
+zero_out="$(HOME="${zero_home}" PATH="${presence_path}" ROBOREPO_STATE_ROOT="${zero_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 NODE_ENV=test ROBOREPO_TEST_DESKTOP_ROOTS='{}' \
   ROBOREPO_ON_CONFLICT=overwrite bash "${repo_root}/scripts/install/main.sh" 2>&1)"
 assert "install: zero harnesses present does not crash (no unbound variable)" \
   bash -c "! echo '${zero_out}' | grep -q 'unbound variable'"
@@ -1698,7 +1459,7 @@ assert "install: zero-harness summary shows both as not installed" \
 
 claude_only_home="${reloc_root}/presence-claude-only/home"
 mkdir -p "${claude_only_home}/.claude" "${claude_only_home}/.local/bin"
-claude_only_out="$(HOME="${claude_only_home}" PATH="${presence_path}" ROBOREPO_STATE_DIR="${claude_only_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 NODE_ENV=test ROBOREPO_TEST_DESKTOP_ROOTS='{}' \
+claude_only_out="$(HOME="${claude_only_home}" PATH="${presence_path}" ROBOREPO_STATE_ROOT="${claude_only_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 NODE_ENV=test ROBOREPO_TEST_DESKTOP_ROOTS='{}' \
   ROBOREPO_ON_CONFLICT=overwrite bash "${repo_root}/scripts/install/main.sh" 2>&1)"
 assert "install: Claude-only presence does not crash" \
   bash -c "! echo '${claude_only_out}' | grep -q 'unbound variable'"
@@ -1709,7 +1470,7 @@ assert "install: Claude-only links the base skill into .claude" \
 
 codex_only_home="${reloc_root}/presence-codex-only/home"
 mkdir -p "${codex_only_home}/.codex" "${codex_only_home}/.local/bin"
-codex_only_out="$(HOME="${codex_only_home}" PATH="${presence_path}" ROBOREPO_STATE_DIR="${codex_only_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 NODE_ENV=test ROBOREPO_TEST_DESKTOP_ROOTS='{}' \
+codex_only_out="$(HOME="${codex_only_home}" PATH="${presence_path}" ROBOREPO_STATE_ROOT="${codex_only_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 NODE_ENV=test ROBOREPO_TEST_DESKTOP_ROOTS='{}' \
   ROBOREPO_ON_CONFLICT=overwrite bash "${repo_root}/scripts/install/main.sh" 2>&1)"
 assert "install: Codex-only presence does not crash" \
   bash -c "! echo '${codex_only_out}' | grep -q 'unbound variable'"
@@ -1726,13 +1487,13 @@ assert "install: Codex-only links the base skill into .codex" \
 # ---------------------------------------------------------------------------
 wd_home="${reloc_root}/withdraw/home"
 mkdir -p "${wd_home}/.claude" "${wd_home}/.codex" "${wd_home}/.local/bin"
-HOME="${wd_home}" ROBOREPO_STATE_DIR="${wd_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 \
+HOME="${wd_home}" ROBOREPO_STATE_ROOT="${wd_home}/.roborepo" ROBOREPO_ASSUME_INTERACTIVE=0 \
   ROBOREPO_ON_CONFLICT=overwrite bash "${repo_root}/scripts/install/main.sh" >/dev/null 2>&1 || true
 assert "harness withdraw: unknown id is rejected" \
-  bash -c "! HOME='${wd_home}' ROBOREPO_STATE_DIR='${wd_home}/.roborepo' node '${cli}' harness withdraw bogus-harness >/dev/null 2>&1"
+  bash -c "! HOME='${wd_home}' ROBOREPO_STATE_ROOT='${wd_home}/.roborepo' node '${cli}' harness withdraw bogus-harness >/dev/null 2>&1"
 assert "harness withdraw: dry-run makes no change" \
-  bash -c "HOME='${wd_home}' ROBOREPO_STATE_DIR='${wd_home}/.roborepo' node '${cli}' harness withdraw claude --dry-run >/dev/null 2>&1 && test -f '${wd_home}/.claude/settings.json'"
-HOME="${wd_home}" ROBOREPO_STATE_DIR="${wd_home}/.roborepo" node "${cli}" harness withdraw claude --yes >/dev/null 2>&1
+  bash -c "HOME='${wd_home}' ROBOREPO_STATE_ROOT='${wd_home}/.roborepo' node '${cli}' harness withdraw claude --dry-run >/dev/null 2>&1 && test -f '${wd_home}/.claude/settings.json'"
+HOME="${wd_home}" ROBOREPO_STATE_ROOT="${wd_home}/.roborepo" node "${cli}" harness withdraw claude --yes >/dev/null 2>&1
 assert "harness withdraw: removes the target provider's root config" \
   bash -c "! test -f '${wd_home}/.claude/settings.json'"
 assert "harness withdraw: leaves the sibling provider's root config untouched" \
@@ -1741,7 +1502,7 @@ assert "harness withdraw: removes the target provider's linked base skill" \
   bash -c "! test -e '${wd_home}/.claude/skills/roborepo-support'"
 assert "harness withdraw: leaves the sibling provider's linked base skill untouched" \
   bash -c "test -e '${wd_home}/.codex/skills/roborepo-support'"
-withdraw_codex_out="$(HOME="${wd_home}" ROBOREPO_STATE_DIR="${wd_home}/.roborepo" node "${cli}" harness withdraw codex --yes 2>&1)"
+withdraw_codex_out="$(HOME="${wd_home}" ROBOREPO_STATE_ROOT="${wd_home}/.roborepo" node "${cli}" harness withdraw codex --yes 2>&1)"
 assert "harness withdraw: unsupported hooks.write capability is reported for codex" \
   bash -c "echo '${withdraw_codex_out}' | grep -q 'unsupported: hooks.write has no codex adapter'"
 assert "harness withdraw: unsupported mcp.remove capability is reported for codex" \
@@ -1756,7 +1517,7 @@ assert "onboard: presets.json default is base-only" \
 # no hang). Run in an isolated HOME/state so it never touches the real machine.
 ob_home="$(mktemp -d "${work}/onboard-home.XXXXXX")"
 mkdir -p "${ob_home}/.claude" "${ob_home}/.codex"
-HOME="${ob_home}" ROBOREPO_STATE_DIR="${ob_home}/.roborepo" \
+HOME="${ob_home}" ROBOREPO_STATE_ROOT="${ob_home}/.roborepo" \
   node "${cli}" package manage < /dev/null > "${ob_home}/out.txt" 2>&1 || true
 assert "package manage: non-TTY reports headless apply" \
   grep -q "applying the default configuration" "${ob_home}/out.txt"
@@ -1857,7 +1618,7 @@ assert "harness: package-catalog harness validation is registry-backed" \
 # registry-driven lookups (provider manifest "rules"/"rulesOverride" paths, globals/system/rules/
 # <id> convention). Pins Codex's AGENTS.override.md mirror and Claude's legacy-file cleanup
 # byte-for-byte across the refactor.
-assert "harness: rules rendering is registry-backed (Codex override mirror, Claude legacy cleanup)" \
+assert "harness: rules rendering is registry-backed (Codex override mirror)" \
   node "${repo_root}/scripts/test/rules-render-characterization-check.mjs"
 
 # Slash-command rendering through provider command adapters: SLASH_COMMAND_HARNESSES'
@@ -2052,11 +1813,6 @@ assert "doctor: warns when an installed skill copy is out of date" \
   bash -c "HOME='${stale_skill_home}' ROBOREPO_SKIP_NODE_RELEASE_CHECK=1 bash '${repo_root}/scripts/doctor.sh' --quiet 2>&1 | grep -q 'warn: installed skills are out of date (plan-write) — run: roborepo update'"
 assert "root-config-view: per-harness drift state covers every user-facing case" \
   node "${repo_root}/scripts/test/root-config-view-check.mjs"
-
-# Regression suite for package-owned generated output. Originally characterization tests asserting
-# the leaky behavior on purpose; every assertion has since been inverted as its leak was fixed — see the file's own header.
-assert "ownership refactor: every confirmed leakage case stays fixed" \
-  node "${repo_root}/scripts/test/system-package-ownership-characterization-check.mjs"
 
 # Cross-harness hook composition module round-trips for both Claude and Codex
 # (install/reapply/disable/reapply, unrelated user hooks survive throughout).

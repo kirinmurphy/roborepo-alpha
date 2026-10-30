@@ -22,8 +22,12 @@ console.log("telemetry compare checks passed");
 
 function marker(overrides) {
   return {
+    schema: 2,
     marker_id: "mark_test",
     ts: "2026-01-10T00:00:00.000Z",
+    effective_at: "2026-01-10T00:00:00.000Z",
+    scope: "all",
+    watching_kinds: [],
     type: "change",
     title: "Test-harness guidance v2",
     packages: ["test-harness"],
@@ -34,7 +38,7 @@ function marker(overrides) {
 
 function event({ sessionId, minutesFromMarker, tokensTotal = 10 }) {
   const ts = new Date(Date.parse("2026-01-10T00:00:00.000Z") + minutesFromMarker * 60_000).toISOString();
-  return { session_id: sessionId, ts, harness: "claude", tokens: { total: tokensTotal }, event: "PostToolUse", tool: { name: "Bash" } };
+  return { schema: 3, session_id: sessionId, ts, harness: "claude", tokens: { total: tokensTotal }, event: "PostToolUse", tool: { name: "Bash" } };
 }
 
 function testSplitCohortsExcludesSpanningSessions() {

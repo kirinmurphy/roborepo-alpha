@@ -32,7 +32,7 @@ try {
 }
 
 function env() {
-  return { ...process.env, HOME: tmp, ROBOREPO_STATE_DIR: path.join(tmp, ".roborepo") };
+  return { ...process.env, HOME: tmp, ROBOREPO_STATE_ROOT: path.join(tmp, ".roborepo") };
 }
 
 function enable() {

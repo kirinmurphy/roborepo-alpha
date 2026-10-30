@@ -8,7 +8,7 @@ assert.deepEqual(report.conditions, analyzeTelemetry([...events].reverse(), {}).
 const duplicates = analyzeTelemetry([...events, { ...events[0], capture_id: "mirror" }], {});
 assert.equal(duplicates.conditions.data_quality.sessions, 3);
 assert.deepEqual(duplicates.conditions.comparisons, report.conditions.comparisons);
-const snapshot = { schema: 1, snapshot_id: "cfg", packages: ["p"], skills: [] };
+const snapshot = { schema: 2, snapshot_id: "cfg", packages: ["p"], skills: [], evaluability: { packages: true, skills: true } };
 const joined = analyzeTelemetry(events, { snapshots: [snapshot] });
 assert.notEqual(joined.version, report.version);
 assert.equal(joined.conditions.comparisons.find((row) => row.dimension === "packages").unknown_condition, 2);

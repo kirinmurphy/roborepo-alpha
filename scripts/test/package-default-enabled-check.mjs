@@ -77,13 +77,13 @@ try {
     lifecycle: "optional",
     defaultEnabled: true,
     presentation: { category: "code-conventions", order: 999 },
-    resources: [{ type: "rules", source: "rules/rules.md", harness: "both" }],
+    resources: [{ type: "rules", source: "rules/rules.md" }],
   }, null, 2));
 
   const home1 = makeHome();
-  const env1 = { ...process.env, ROBOREPO_MODE: "development", ROBOREPO_APP_ROOT: appRoot, HOME: home1, ROBOREPO_STATE_DIR: path.join(home1, ".roborepo"), SKIP_MCP: "1" };
+  const env1 = { ...process.env, ROBOREPO_MODE: "development", ROBOREPO_APP_ROOT: appRoot, HOME: home1, ROBOREPO_STATE_ROOT: path.join(home1, ".roborepo"), SKIP_MCP: "1" };
   try {
-    // renderHomeRules() directly, not `roborepo rules` (that shells out to the repo-tracked
+    // renderHomeRules() directly, not `roborepo config rules` (that shells out to the repo-tracked
     // scripts/build/render-rules.sh baseline renderer, which this synthetic app root doesn't
     // carry) — this is exactly the function enable/disable call, invoked here with zero prior
     // enable/disable calls to prove a default-enabled package's rules are live from a cold state.
@@ -101,7 +101,7 @@ try {
   // Explicit disable, once, then re-render: the package must stay off even though it's still
   // default-enabled in the catalog.
   const home2 = makeHome();
-  const env2 = { ...process.env, ROBOREPO_MODE: "development", ROBOREPO_APP_ROOT: appRoot, HOME: home2, ROBOREPO_STATE_DIR: path.join(home2, ".roborepo"), SKIP_MCP: "1" };
+  const env2 = { ...process.env, ROBOREPO_MODE: "development", ROBOREPO_APP_ROOT: appRoot, HOME: home2, ROBOREPO_STATE_ROOT: path.join(home2, ".roborepo"), SKIP_MCP: "1" };
   try {
     const disable = spawnSync(process.execPath, [cli, "package", "disable", "always-on-check"], { env: env2, encoding: "utf8" });
     assert.equal(disable.status, 0, `disable should succeed: ${disable.stderr}\n${disable.stdout}`);

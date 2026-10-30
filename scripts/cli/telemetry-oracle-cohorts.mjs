@@ -58,7 +58,7 @@ function splitBoundary(sessions, marker) {
 export function changeRows(sessions, snapshots, markers, affectedByKind) {
   const superseded = new Set(markers.map((marker) => marker.supersedes).filter(Boolean));
   return markers.filter((marker) => marker.type === "change" && !superseded.has(marker.marker_id)).map((marker) => {
-    const scopeKnown = marker.schema >= 2 && (marker.repository_id || marker.scope === "all");
+    const scopeKnown = marker.repository_id || marker.scope === "all";
     const scoped = scopeKnown ? sessions.filter((session) => !marker.repository_id || session.repository_id === marker.repository_id) : [];
     return { marker_id: marker.marker_id, comparisons: (marker.watching_kinds ?? []).map((eventKind) => {
       const split = splitBoundary(scoped, marker), affected = affectedByKind.get(eventKind) ?? new Set();
@@ -89,9 +89,9 @@ export function snapshotSupport(snapshot) {
     || (snapshot.unavailable != null && !Array.isArray(snapshot.unavailable))) {
     return { issues: ["malformed_snapshot"], comparable: false };
   }
-  if (![1, 2].includes(snapshot.schema)) return { issues: ["unsupported_snapshot_schema"], comparable: false };
+  if (snapshot.schema !== 2) return { issues: ["unsupported_snapshot_schema"], comparable: false };
   const unknown = ["packages", "skills"].some((key) => snapshot.unavailable?.includes(key)
-    || (snapshot.schema === 2 && snapshot.evaluability?.[key] !== true));
+    || snapshot.evaluability?.[key] !== true);
   return { issues: unknown ? ["unknown_snapshot_condition"] : [], comparable: true };
 }
 
@@ -103,16 +103,16 @@ export function markerSupport(marker) {
     || (marker.watching_kinds != null && !Array.isArray(marker.watching_kinds))) {
     return { issues: ["malformed_marker"], comparable: false };
   }
-  if (![1, 2].includes(marker.schema)) return { issues: ["unsupported_marker_schema"], comparable: false };
+  if (marker.schema !== 2) return { issues: ["unsupported_marker_schema"], comparable: false };
   if (!["change", "phase", "outcome", "experiment-start", "experiment-end", "note"].includes(marker.type)) {
     return { issues: ["unsupported_marker_type"], comparable: false };
   }
   if (marker.type !== "change") return { issues: [], comparable: true };
-  if (marker.schema === 2 && !Array.isArray(marker.watching_kinds)) return { issues: ["missing_marker_kinds"], comparable: true };
+  if (!Array.isArray(marker.watching_kinds)) return { issues: ["missing_marker_kinds"], comparable: true };
   if ((marker.watching_kinds ?? []).some((kind) => !["spike", "loop", "read-warning"].includes(kind))) {
     return { issues: ["unsupported_marker_kind"], comparable: false };
   }
-  return { issues: marker.schema < 2 || (!marker.repository_id && marker.scope !== "all") ? ["unknown_marker_scope"] : [], comparable: true };
+  return { issues: !marker.repository_id && marker.scope !== "all" ? ["unknown_marker_scope"] : [], comparable: true };
 }
 
 export function sessionSupport(sessions) {
@@ -129,8 +129,8 @@ function evaluateCondition(session, condition, snapshotIndex) {
   if (field) return session[field] == null ? "unknown" : session[field] === condition.value ? "present" : "absent";
   const states = session.rows.map((row) => {
     const snapshot = snapshotIndex.get(row.config_snapshot_id);
-    if (!snapshot || ![1, 2].includes(snapshot.schema) || !["packages", "skills"].includes(condition.dimension)
-      || (snapshot.schema === 2 && snapshot.evaluability?.[condition.dimension] !== true)
+    if (!snapshot || snapshot.schema !== 2 || !["packages", "skills"].includes(condition.dimension)
+      || snapshot.evaluability?.[condition.dimension] !== true
       || snapshot.unavailable?.includes(condition.dimension) || !Array.isArray(snapshot[condition.dimension])) return null;
     return snapshot[condition.dimension].includes(condition.value);
   });

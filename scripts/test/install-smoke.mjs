@@ -24,7 +24,7 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const home = os.homedir();
-const stateRoot = process.env.ROBOREPO_STATE_ROOT || process.env.ROBOREPO_STATE_DIR || path.join(home, ".roborepo");
+const stateRoot = process.env.ROBOREPO_STATE_ROOT || path.join(home, ".roborepo");
 
 const results = [];
 const check = (label, detail, ok) => results.push({ label, detail, ok });
@@ -100,7 +100,7 @@ function readJson(file) {
     const config = readJson(path.join(packagesDir, id, "package.config.json"));
     for (const resource of config?.resources || []) {
       if (resource.type !== "hooks" || !resource.scripts?.length) continue;
-      const harnesses = resource.harness === "both" ? ["claude", "codex"] : [resource.harness];
+      const harnesses = resource.harness ? [resource.harness] : ["claude", "codex"];
       for (const harness of harnesses) {
         for (const script of resource.scripts) {
           expected.push({

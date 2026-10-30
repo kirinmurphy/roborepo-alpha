@@ -37,7 +37,7 @@ const rootConfigPaths = new Set([
 const reminder = rootConfigPaths.has(abs)
   ? `This is mutable active root config, not a repo symlink. Keep user/project trust, hook approvals, profiles, and machine-local state here; merge only intentional portable defaults into the repo baseline.`
   : isNewFile
-    ? `This path symlinks into the version-controlled roborepo. Do NOT create a new file directly here. Create it in the repo (for a skill: use roborepo skill new, or create globals/packages/<package>/skills/<name>/SKILL.md and run roborepo skill sync-global). See the roborepo-support skill.`
+    ? `This path symlinks into the version-controlled roborepo. Do NOT create a new file directly here. Create it in the repo (for a skill: use roborepo package dev create or package dev add-skill, then run roborepo skill sync-global). See the roborepo-support skill.`
     : `This file is a symlink into the version-controlled source repo. Editing here is fine — it resolves to the root file — but commit the change in that repo, not from the current working dir.`
 
 process.stdout.write(

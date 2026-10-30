@@ -16,7 +16,7 @@ changing `HOME` alone does not prove desktop-harness discovery is isolated.
 | Behavior | Current command family | Verification owner |
 | --- | --- | --- |
 | Inspect roots | `roborepo version`, `roborepo workspace status` | Root/package smoke tests |
-| Create skill source | `roborepo skill new` | Skill CLI fixtures; apply/inspect establish actual materialization |
+| Create skill source | `roborepo package dev create` / `package dev add-skill` | Skill CLI fixtures; apply/inspect establish actual materialization |
 | Add MCP intent | `roborepo mcp add` | MCP package lifecycle fixtures; native registration may require a provider |
 | Enable/disable | `roborepo package enable`, `roborepo package disable` | Package lifecycle and live probes |
 | Inspect/reconcile | `roborepo package inspect`, `roborepo package status`, `roborepo package reconcile` | Desired versus observed state tests |

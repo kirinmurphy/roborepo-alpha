@@ -1,10 +1,13 @@
 {
-  "path": ["config", "permissions"],
+  "path": [
+    "config",
+    "permissions"
+  ],
   "kind": "command",
   "title": "Permissions",
   "description": "Apply agent permission outputs to live harness config",
   "order": 40,
-  "usage": "roborepo config permissions",
+  "usage": "roborepo config permissions [--render|--check]",
   "execution": {
     "adapter": "module",
     "module": "scripts/cli/config-mutate.mjs",

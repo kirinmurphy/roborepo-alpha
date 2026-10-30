@@ -1,6 +1,6 @@
-// `roborepo browser` is a core namespace, because package `cli-command` resources can only wrap an
-// external process and cannot register one. The feature still belongs to the feature-verification
-// package, so every browser command checks that the package is effective before doing anything.
+// `roborepo browser` is a core namespace, because a package cannot register CLI commands. The
+// feature still belongs to the feature-verification package, so every browser command checks that
+// the package is effective before doing anything.
 
 import { loadPackageCatalog } from "../package-catalog.mjs";
 import { effectiveEnabledIds } from "../rules-render.mjs";

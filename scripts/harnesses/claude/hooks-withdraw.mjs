@@ -6,10 +6,7 @@ import path from "node:path";
 import { repoRoot } from "../../cli/roots.mjs";
 import { recordConfigWrite } from "../../cli/write-log.mjs";
 
-const PACKAGE_DIRS = [
-  path.join(repoRoot, "globals", "packages"),
-  path.join(repoRoot, "globals", "packages-archived"),
-];
+const PACKAGE_DIRS = [path.join(repoRoot, "globals", "packages")];
 
 // Ported from scripts/install/uninstall-lib.sh's strip_package_hooks (characterization test:
 // scripts/test/harness-hooks-write-remove-characterization-check.mjs). Strips BOTH package-
