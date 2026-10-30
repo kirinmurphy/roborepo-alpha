@@ -97,6 +97,13 @@ These conditions must hold before a new plan can be called created. The full rul
   lifecycle, naming, and cross-plan relationships, and `workflow-validate.md` adds the repository
   consistency checks no command can make; the `technical-writing` Validator covers prose quality and
   every paired skill that applied. A clean report from one does not excuse the other.
+- **Challenge the design before delivering.** Validation includes the simplicity check in
+  `workflow-validate.md`, which asks whether the approach is engineered beyond the core problem and
+  whether a simpler one would solve it. Adopt a strictly simpler alternative directly. When the
+  simpler options have different outcomes or tradeoffs, stop and talk them through with the user:
+  name the core problem, compare the plan with each alternative (what it gains, what it loses,
+  effort, risk), and recommend one. Do not deliver until the user picks one. The same gate applies
+  to a substantive revision of scope or design.
 - **Creation ends in backlog.** If the user also asked to start the work, deliver the validated
   backlog plan and hand off to `/plan-promote`, which moves the same stable `id` into
   `docs/plans/ready/` for `/plan-execute` to start.
