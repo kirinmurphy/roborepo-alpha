@@ -585,9 +585,67 @@ Git administrative worktree `credential-protection`; this document contains no m
   approval is requested separately for the exact reviewed commit below.
 
 ### Result
-- Status: complete
-- Reviewed implementation commit: 81ae9e362000c1a48574b1aeceda4c2302b19570
-- Base commit: 977d29f04ab25f5191f21c832cb98709be99efae
+- Status: pending
+- Reviewed implementation commit: f90412a258c6a1177ea33a6531581d53020f21db
+- Base commit: ac7c6bb207f3431b0e4c3a308c973adc9717424f
+
+#### Re-review — October 30, 2026
+
+- Resume path: changes since review, after landing. The prior complete review covered
+  `81ae9e362000c1a48574b1aeceda4c2302b19570` against base
+  `977d29f04ab25f5191f21c832cb98709be99efae`; its explicit approval below remains historical.
+  This pending result does not renew that approval.
+- The 28 changed paths since approval cover plan priority/lifecycle rules, dependency actions,
+  shared copy controls, tests, the plan-execute report reference, and the control-panel guidance
+  for absent Codex configuration. Credential rendering, generated Codex configuration, and native
+  enforcement fixtures are unchanged. The feature implementation is byte-identical outside
+  `docs/plans/` to squash `28932c1c85535759e8cf565ccdd096d6735e8946`.
+- The canonical `node scripts/cli/main.mjs plans landed 4zyo2woj --json` retry passed, revalidating
+  that squash as the absorbing commit at the exact feature/base tips above. Base synchronization
+  was not run on the already-landed branch. Its worktree and branch were not changed.
+- Fresh-context Validator: no actionable fix or escalate findings in the changed and directly
+  affected code. Checked acceptance criteria, observable tests, documentation of record, coverage
+  limits, flow/cohesion, data/state, and comments/abstractions. No review fix commits were needed.
+- Passed: `node scripts/test/codex-credential-projection-check.mjs` (15 patterns, nine combinations),
+  `node scripts/test/codex-permissions-foreign-lines-check.mjs`,
+  `node scripts/test/permission-rule-home-path-check.mjs`,
+  `node scripts/test/plans-portal-state-check.mjs`,
+  `node scripts/test/plan-lifecycle-manifest-check.mjs`, and
+  `node scripts/test/plan-suite-skills-check.mjs`. The Validator independently passed projection,
+  foreign lines, portal state, lifecycle manifest, skill checks, and documentation references.
+  Whitespace validation excluding the two inaccessible TLS fixtures passed; plan validation
+  reported zero findings.
+- `npm run check` did not pass: doctor passed 106 checks, then the CLI suite reported three
+  package add-skill assertion failures and failed temporary-fixture cleanup with `EPERM`.
+  These failures are not classified as base failures; their cause was not established. Later
+  aggregate components were not reached. No aggregate pass or waiver is inferred.
+- `node scripts/test/permissions-render-live-characterization-check.mjs`,
+  `node scripts/test/gemini-adapter-characterization-check.mjs`,
+  `node scripts/test/root-config-write-policy-check.mjs`,
+  `node scripts/test/hook-composition-check.mjs`, and
+  `node scripts/test/plan-lifecycle-transitions-check.mjs` exited nonzero while removing their
+  temporary fixtures (`EPERM`). Available isolated retries retained that failure; printed
+  assertion-success messages are not counted as passing commands. Test-created untracked
+  hook-composition files were removed without changing tracked implementation.
+- `npm run test:portal-ui` could not bind `127.0.0.1` (`listen EPERM`) and also failed temporary
+  cleanup. Its separately permitted retry failed with the same two errors; no browser assertions
+  ran in either attempt.
+- The canonical approval reader still reports stale approval (28 implementation paths since
+  the old approved commit). It also lists the inaccessible
+  `scripts/test/fixtures/runtime-tls/localhost-cert.pem` and
+  `scripts/test/fixtures/runtime-tls/localhost-key.pem` as pending implementation changes.
+  Git status reports denied access to those paths, so their working contents were not compared
+  or treated as verified clean. They were not read or changed. Status excluding those paths was
+  clean after test-file cleanup; the primary checkout retains unrelated pre-existing edits.
+- Native enforcement was not rerun: its unrestricted positive controls read synthetic paths
+  denied by this session's policy. Previously recorded macOS native-command evidence remains
+  historical evidence for unchanged files, not a fresh runtime certification. The three human-
+  accepted coverage limitations remain unchanged; no new manual acceptance task is inferred.
+- Approval is not requested while required verification and trustworthy freshness checking remain
+  unavailable. Resume with a passing `npm run check` and canonical approval-reader output from
+  an environment permitted to inspect the repository's synthetic test fixtures and clean up its
+  temporary directories. This record changes only the primary plan's Result; it does not alter
+  the landed worktree, recover approval, close the plan, or authorize cleanup.
 
 ### Approval
 - Decision: approved
