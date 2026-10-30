@@ -1,26 +1,3 @@
 {
-  "servers": [
-    {
-      "name": "jcodemunch",
-      "commandOrUrl": "uvx",
-      "args": [
-        "jcodemunch-mcp"
-      ],
-      "harnesses": [
-        "claude",
-        "codex"
-      ]
-    },
-    {
-      "name": "jdocmunch",
-      "commandOrUrl": "uvx",
-      "args": [
-        "jdocmunch-mcp"
-      ],
-      "harnesses": [
-        "claude",
-        "codex"
-      ]
-    }
-  ]
+  "servers": []
 }

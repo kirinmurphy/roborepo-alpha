@@ -114,7 +114,6 @@ case "$(uname -s 2>/dev/null || echo unknown)" in
     fi
     # Shell snippets and global commands still need bash in checkout mode. In package mode npm owns
     # command exposure, so applying harness config must not mutate PATH or ~/.local/bin.
-    run_with_dry_args "${repo_root}/scripts/install/install-gitignore-globals.sh"
     if [[ $dry_run -eq 0 && "${package_mode}" != "1" ]]; then
       "${repo_root}/scripts/install/install-global-commands.sh"
       "${repo_root}/scripts/install/install-shell-snippets.sh"
@@ -161,9 +160,6 @@ if [[ "${package_mode}" == "1" ]]; then
 else
   preflight_shell_setup
 fi
-
-# Harness-agnostic setup
-run_with_dry_args "${repo_root}/scripts/install/install-gitignore-globals.sh"
 
 # Shell and PATH setup (harness-agnostic, bash only)
 if [[ $dry_run -eq 0 && "${package_mode}" != "1" ]]; then

@@ -24,10 +24,6 @@ const READ_WARNING_SUMMARY = {
     `Loaded a very large document straight into context — ${formatTokenCount(agg.tokens)} tokens across ${agg.reads} read${agg.reads > 1 ? "s" : ""}.`,
   repeated_document_read: (agg) =>
     `Re-read the same large document ${agg.list.length} time${agg.list.length > 1 ? "s" : ""} — ${formatTokenCount(agg.tokens)} tokens spent re-reading content already in context.`,
-  stale_doc_lookup: () =>
-    "Docs were read repeatedly without any doc-index lookups — the session worked around a missing lookup tool.",
-  mixed_code_lookup: (agg) =>
-    `Used the code index but still made ${agg.reads} native source reads — the lookup habit isn't sticking yet.`,
 };
 
 // One finding per rule, gathered from the session's own rows. Findings are ordered worst-first by

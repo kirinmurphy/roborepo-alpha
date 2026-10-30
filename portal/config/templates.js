@@ -79,7 +79,7 @@ export function modalDefaults(rules, harnesses, onDefaultClick) {
   const slot = defaults.querySelector("[data-slot=\"per-harness\"]");
   for (const harness of harnesses || []) {
     const btn = tpl("tpl-modal-defaults-harness-button");
-    wireDefaultButton(btn, harness.id, `globals/rules/${harness.id}`, `${harness.displayName} specifics`, rules, onDefaultClick);
+    wireDefaultButton(btn, harness.id, `globals/system/rules/${harness.id}`, `${harness.displayName} specifics`, rules, onDefaultClick);
     slot.append(btn);
   }
   return defaults;

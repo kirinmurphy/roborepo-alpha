@@ -7,7 +7,7 @@ import { createHash } from "node:crypto";
 import { spawnSync, spawn } from "node:child_process";
 import { markTelemetrySelected } from "./presets.mjs";
 import { repoRoot, stateRoot, harnessHome, rootConfigActive } from "./paths.mjs";
-import { portalPidPathForPort, legacyTelemetryPidPath, telemetryBackupDir, telemetryCollectorDir, telemetryDir, telemetrySpoolDir, telemetryMarkersPath, telemetryExperimentsDir, telemetrySnapshotsDir, repositoriesRegistryPath } from "./state-paths.mjs";
+import { portalPidPathForPort, telemetryBackupDir, telemetryCollectorDir, telemetryDir, telemetrySpoolDir, telemetryMarkersPath, telemetryExperimentsDir, telemetrySnapshotsDir, repositoriesRegistryPath } from "./state-paths.mjs";
 import { conditionDemoEvidence } from "./telemetry-conditions-demo.mjs";
 import { analyzeTelemetry } from "./telemetry-analyze.mjs";
 import { readMarkers, readSnapshot, readSnapshots, readExperiments } from "./telemetry-schemas/persistence.mjs";
@@ -1385,7 +1385,7 @@ export function loadTelemetryRepositoryProjection() {
 // Mock analysis for the /tokens page: reads the bundled mock spool file
 // (portal/tokens/mock-spool.jsonl) and runs it through the same analyzeTelemetry()
 // pipeline as real data. The mock spool is a committed .jsonl file with the same
-// schema-2 record shape telemetryCapture() writes, so the only difference from real
+// schema-3 record shape telemetryCapture() writes, so the only difference from real
 // data is the source file — analyzeTelemetry() processes it identically. Cached so
 // repeated requests don't re-parse the file.
 let _mockAnalysisJson = null;
@@ -1873,12 +1873,6 @@ function writeTelemetryState(patch) {
 function readPid(port) {
   try {
     return parseInt(fs.readFileSync(portalPidPathForPort(port), "utf8").trim(), 10) || null;
-  } catch {}
-  // The legacy single-file path predates per-port tracking, so it could only ever have recorded a
-  // default-port (4317) server — never consult it for any other port.
-  if (port !== 4317) return null;
-  try {
-    return parseInt(fs.readFileSync(legacyTelemetryPidPath, "utf8").trim(), 10) || null;
   } catch {
     return null;
   }
@@ -1896,9 +1890,6 @@ function writePid(port, pid) {
 
 function clearPid(port) {
   try { fs.rmSync(portalPidPathForPort(port), { force: true }); } catch {}
-  if (port === 4317) {
-    try { fs.rmSync(legacyTelemetryPidPath, { force: true }); } catch {}
-  }
 }
 
 // Kill any existing detached server ON THIS PORT (stale or live) and wait for it to actually exit

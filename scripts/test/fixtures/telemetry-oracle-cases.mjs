@@ -15,7 +15,7 @@ export function regressionTieCase({ allSameTime = false } = {}) {
   return { events: [
     row("25-0", "codex", "shared-12", "Edit", at, 25_000),
     row("26-1", "claude", "shared-13", "Edit", at, 2_498),
-    row("26-2", "claude", "shared-13", "mcp__jcodemunch__search", at, 2_632),
+    row("26-2", "claude", "shared-13", "mcp__code-search__search", at, 2_632),
     row("27-0", "codex", "shared-13", "Bash", later, 4_395),
   ], snapshots: [], markers: [] };
 }
@@ -46,7 +46,7 @@ export function seededCase(seed) {
       else if (index < 12) time = Date.parse(boundary) - (index + 1) * 3_600_000 + call * 1_000;
       else time = Date.parse(boundary) + (index - 11) * 3_600_000 + call * 1_000;
       const isDoc = index % 5 === 0 && call < 2;
-      const toolName = index === 2 ? "Read" : ["Read", "Edit", "Bash", "mcp__jcodemunch__search"][Math.floor(next() * 4)];
+      const toolName = index === 2 ? "Read" : ["Read", "Edit", "Bash", "mcp__code-search__search"][Math.floor(next() * 4)];
       const tokenless = index % 8 === 0 || (index === 27 && call === calls - 1);
       const spike = [3, 5, 17, 19, 23, 27].includes(index) && call === calls - 1;
       const base = {

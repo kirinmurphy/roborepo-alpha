@@ -13,7 +13,7 @@ try {
   });
   assert.equal(result.status, 0, result.stderr);
   const summary = fs.readFileSync(summaryPath, "utf8");
-  assert.match(summary, /^## Telemetry analytics oracle\n\n✅ Passed\n\n9 cases · 879 raw events · 204 condition rows · 21 marker comparisons · 32 regression groups\n$/);
+  assert.match(summary, /^## Telemetry analytics oracle\n\n✅ Passed\n\n9 cases · 879 raw events · 204 condition rows · 21 marker comparisons · 31 regression groups\n$/);
   assert.match(result.stdout, /telemetry oracle: PASS/);
   console.log("telemetry oracle job summary: ok");
 } finally {

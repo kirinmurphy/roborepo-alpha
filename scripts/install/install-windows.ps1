@@ -131,29 +131,6 @@ function Link-Item {
   }
 }
 
-function Remove-RepoLink {
-  param($HomePath)
-
-  $existing = Get-Item $HomePath -Force -ErrorAction SilentlyContinue
-  if ($null -eq $existing -or $existing.LinkType -ne "SymbolicLink") {
-    return
-  }
-
-  $target = [System.IO.Path]::GetFullPath($existing.Target)
-  $root = [System.IO.Path]::GetFullPath($repoRoot)
-  if (-not $target.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)) {
-    return
-  }
-
-  if ($DryRun) {
-    Write-Host "cleanup: $HomePath"
-    return
-  }
-
-  Remove-Item $HomePath -Force
-  Write-Host "cleanup: $HomePath"
-}
-
 function Write-AgentMergePrompt {
   param($Harness, $Mode, $RepoRel, $HomePath)
   $src = Join-Path $repoRoot $RepoRel
@@ -658,9 +635,6 @@ function Invoke-ManifestRows {
       }
       "rendered_rules" {
         # Render after the manifest loop for this harness.
-      }
-      "cleanup" {
-        Remove-RepoLink $row.HomePath
       }
     }
   }

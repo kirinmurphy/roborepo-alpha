@@ -57,7 +57,7 @@ fs.writeFileSync(path.join(home, ".codex", "config.toml"), "");
 const env = {
   ...process.env,
   HOME: home,
-  ROBOREPO_STATE_DIR: path.join(home, ".roborepo"),
+  ROBOREPO_STATE_ROOT: path.join(home, ".roborepo"),
   SKIP_MCP: "1",
 };
 
@@ -236,7 +236,7 @@ try {
     fs.symlinkSync(trackedCodexHooks, liveCodexHooks);
 
     const enable = run(["package", "enable", "hook-composition-fixture"], {
-      ...env, HOME: linkedHome, ROBOREPO_STATE_DIR: path.join(linkedHome, ".roborepo"),
+      ...env, HOME: linkedHome, ROBOREPO_STATE_ROOT: path.join(linkedHome, ".roborepo"),
     });
     assert.equal(enable.status, 0, `enable through legacy links failed: ${enable.stderr}`);
     assert.equal(fs.readFileSync(trackedSettings, "utf8"), "{}\n", "tracked Claude settings target is not written through");

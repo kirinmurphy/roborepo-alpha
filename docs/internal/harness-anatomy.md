@@ -23,13 +23,13 @@ section links the matching step in [the teaching doc](harnesses-explained.md).
 
 | Element | What it is | Source | Maintain with |
 | --- | --- | --- | --- |
-| Global rules | The always-on instruction file each harness reads at startup. | Claude: `generated/claude/CLAUDE.md` (tracked snapshot)<br>Codex: `generated/codex/AGENTS.md` (tracked snapshot)<br>Gemini: live `~/.gemini/GEMINI.md` (no tracked snapshot) | `roborepo rules [--check]` |
-| Skills | On-demand capability/instruction bundles the agent loads when relevant. | Package-owned `globals/packages/<package>/skills/<name>/SKILL.md`, plus system `globals/system/skills/roborepo-support/SKILL.md` — materialized into `~/.roborepo/skills/<name>` and linked from harness skill dirs | `roborepo skill new`, `roborepo skill adopt <name>`, `roborepo skill inspect <name>`, `roborepo skill sync-global` |
+| Global rules | The always-on instruction file each harness reads at startup. | Claude: `generated/claude/CLAUDE.md` (tracked snapshot)<br>Codex: `generated/codex/AGENTS.md` (tracked snapshot)<br>Gemini: live `~/.gemini/GEMINI.md` (no tracked snapshot) | `roborepo config rules --check` |
+| Skills | On-demand capability/instruction bundles the agent loads when relevant. | Package-owned `globals/packages/<package>/skills/<name>/SKILL.md`, plus system `globals/system/skills/roborepo-support/SKILL.md` — materialized into `~/.roborepo/skills/<name>` and linked from harness skill dirs | `roborepo package dev create`, `roborepo package dev add-skill`, `roborepo skill adopt <name>`, `roborepo skill inspect <name>`, `roborepo skill sync-global` |
 | Slash commands | Named workflows the user starts explicitly (`/case-study`, etc.). | Package-scoped generated wrappers under `generated/packages/<package>/<harness>/commands/`, composed live for enabled packages | `roborepo skill render-commands [--check]` |
 | Install bundles | Named groups of install-time file operations applied at install/update. Internal to the install pipeline — not a user-facing verb. | `manifests/platform/presets.json` | `roborepo update` (applies them); `roborepo bundle …` is an internal verb called by `scripts/install/main.sh` |
-| Hooks | Scripts the harness runs on lifecycle/tool events. | System hooks: `globals/system/hooks/claude/*.mjs` + `settings.json` wiring, `globals/harnesses/codex/hooks/*.mjs` + `hooks.json`. Package-owned hooks (e.g. Caveman/JDocMunch Codex `SessionStart`, telemetry capture, JCodeMunch's Bash blocker) live under `globals/packages/<package>/hooks*` and are composed in only when that package is enabled | edit source, then `roborepo update` |
-| MCP servers | External tool servers (jcodemunch, jdocmunch, …) registered with every enabled harness. | Claude: native live store<br>Codex: active `~/.codex/config.toml`, fully owned by each package's `mcp`/`codex_tool_approvals` components<br>Gemini: `mcpServers` key in `~/.gemini/settings.json`, direct JSON read/write | `roborepo mcp add <name-or-url>` |
-| Permissions | Allowed, denied, and ask-before-run behavior for commands, tools, and network defaults. | Claude: `settings.json` `permissions.*`<br>Codex: `config.toml` + `rules/default.rules` + runtime ask hook<br>Gemini: `~/.gemini/policies/generated-permissions.toml`, one fully-owned file in the Policy Engine's rule directory | `roborepo permissions [--check]` |
+| Hooks | Scripts the harness runs on lifecycle/tool events. | System hooks: `globals/system/hooks/claude/*.mjs` + `settings.json` wiring, `globals/harnesses/codex/hooks/*.mjs` + `hooks.json`. Package-owned hooks (e.g. Caveman's Codex `SessionStart`, telemetry capture) live under `globals/packages/<package>/hooks*` and are composed in only when that package is enabled | edit source, then `roborepo update` |
+| MCP servers | External tool servers registered with every enabled harness. | Claude: native live store<br>Codex: active `~/.codex/config.toml`, fully owned by each package's `mcp`/`codex_tool_approvals` components<br>Gemini: `mcpServers` key in `~/.gemini/settings.json`, direct JSON read/write | `roborepo mcp add <name-or-url>` |
+| Permissions | Allowed, denied, and ask-before-run behavior for commands, tools, and network defaults. | Claude: `settings.json` `permissions.*`<br>Codex: `config.toml` + `rules/default.rules` + runtime ask hook<br>Gemini: `~/.gemini/policies/generated-permissions.toml`, one fully-owned file in the Policy Engine's rule directory | `roborepo config permissions [--render\|--check]` |
 | Telemetry | Local capture + analysis of sessions, tools, MCP, and token usage; spike detection + cause attribution + dashboard; backup/reset. | Package-owned hooks (`globals/packages/telemetry/hooks-{claude,codex}.json`) feed `~/.roborepo/telemetry`. Gemini sessions can appear in capture/analysis (harness id is a free-form CLI flag), but the package declares no Gemini hook wiring yet, so capture isn't wired in for it | `roborepo telemetry enable\|disable\|status\|report\|backup\|purge` |
 | Root config | Mutable, machine-local settings (model, trust, hook approvals). | Claude: `generated/claude/settings.json` (baseline)<br>Codex: `generated/codex/config.toml` (baseline)<br>Gemini: `~/.gemini/settings.json`, merged with the same recursive-object-merge rule as Claude's | `roborepo update` (export/merge) |
 
@@ -53,8 +53,8 @@ Gemini's home exists. Edit the source fragments, not the rendered files. (Why a 
 **To change behavior in every harness:** edit a fragment in `globals/system/rules/shared/`, then render:
 
 ```sh
-roborepo rules          # render generated/claude/CLAUDE.md and generated/codex/AGENTS.md
-roborepo rules --check  # verify no drift (also run by roborepo doctor)
+bash scripts/build/render-rules.sh  # render generated/claude/CLAUDE.md and generated/codex/AGENTS.md
+roborepo config rules --check       # verify no drift (also run by roborepo doctor)
 ```
 
 For Claude-only or Codex-only behavior, edit `globals/system/rules/claude/` or `globals/system/rules/codex/`
@@ -80,8 +80,8 @@ generator: [explained.md Step 4](harnesses-explained.md#step-4--when-the-files-a
 **To add or change a skill:**
 
 ```sh
-roborepo skill new            # scaffold package-owned skill/command + update package config, links, README
-                              # (wraps native init_skill.py when present; roborepo template otherwise)
+roborepo package dev create <id> --kind=auto-skill   # scaffold a package with one skill (or --kind=skill-command / standalone-command)
+roborepo package dev add-skill <package-id> <skill-id>  # add a skill to an existing package
 roborepo skill adopt <name>   # move an out-of-band skill into version control
 roborepo skill sync-global    # refresh ~/.roborepo/skills and harness skill views
 roborepo skill inspect <name> # report ownership, native metadata, collisions, and harness state
@@ -118,8 +118,8 @@ roborepo skill render-commands         # render into every harness's command dir
 roborepo skill render-commands --check
 ```
 
-A skill-backed command is wired by `roborepo skill new` when you pick that kind, so you usually
-do not hand-edit the manifest.
+A skill-backed command is wired by `package dev create --kind=skill-command` or
+`package dev add-skill --command`, so you usually do not hand-edit the manifest.
 
 ## Hooks
 
@@ -128,9 +128,8 @@ startup, broad-read nudges, noisy-Bash trimming, the write guard.
 
 **Parity model:** no shared generator — a behavior wanted on both sides is authored twice. Mandatory
 system hooks are `.mjs` scripts under `globals/system/hooks/claude/` wired through `settings.json`,
-and `globals/harnesses/codex/hooks/` wired through `hooks.json`. Package-owned hooks (Caveman's and
-JDocMunch's Codex `SessionStart` hooks, telemetry's capture hooks, JCodeMunch's Bash blocker) are
-authored under their owning package and composed into live hook config only when that package is
+and `globals/harnesses/codex/hooks/` wired through `hooks.json`. Package-owned hooks (Caveman's Codex
+`SessionStart` hook, telemetry's capture hooks) are authored under their owning package and composed into live hook config only when that package is
 enabled. Telemetry capture uses the same hook-composition layer when it is
 enabled, writing token-usage and context records into `~/.roborepo/telemetry`. (Why parity stops here:
 [explained.md Step 6](harnesses-explained.md#step-6--when-automation-gives-up-hooks).)
@@ -146,8 +145,8 @@ Hook details: [Hooks Internals](hooks-internals.md); user summaries in [Claude H
 
 ## MCP servers
 
-**What they do:** external tool servers the agents call — `jcodemunch-mcp` for code,
-`jdocmunch-mcp` for docs, plus anything you add.
+**What they do:** external tool servers the agents call, registered with `roborepo mcp add` or by
+a package's `mcp` resource.
 
 **Parity model:** one command registers a server with **every enabled harness**: writes the intent to
 `manifests/inventory/mcp-servers.json` (state — "what is installed"), applies live to each harness
@@ -186,8 +185,8 @@ shapes: [explained.md Step 3](harnesses-explained.md#step-3--bridging-a-structur
 **To change permissions:** edit `manifests/inventory/agent-permissions.json`, then:
 
 ```sh
-roborepo permissions          # render every harness's output
-roborepo permissions --check
+roborepo config permissions --render  # render every harness's output
+roborepo config permissions --check
 ```
 
 ## Root config (`settings.json` / `config.toml`)

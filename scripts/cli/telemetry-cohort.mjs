@@ -91,7 +91,7 @@ function snapshotLookup() {
   };
 }
 
-// Applies a normalized cohort filter to an array of capture events (schema v2/v3). Sessions with no
+// Applies a normalized cohort filter to an array of capture events (schema v3). Sessions with no
 // explicit outcome marker are excluded only when an `outcomes` filter is active (there is nothing to
 // match against otherwise) — callers filtering by outcome must pass `markers` so session_id -> status
 // can be resolved; omitting markers while filtering by outcome degrades to "no restriction" rather

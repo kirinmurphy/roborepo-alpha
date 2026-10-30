@@ -38,7 +38,7 @@ const steps = [
   {
     title: "Token Optimization",
     items: [
-      row("jcodemunch", { active: false, wasActive: true }),  // changed -> disable
+      row("caveman", { active: false, wasActive: true }),  // changed -> disable
       row("telemetry", { active: true, wasActive: true }),    // unchanged -> skip
     ],
   },
@@ -62,7 +62,7 @@ const pending = pendingWizardChanges(steps);
 
 assert.deepEqual(
   pending.map((r) => r.item.id),
-  ["jcodemunch", "verify", "delete-files"],
+  ["caveman", "verify", "delete-files"],
   "selects only changed, toggleable rows (boolean active or N-state), in order",
 );
 assert.equal(pending[0].active, false, "carries the desired final state for a disable");
@@ -71,7 +71,7 @@ assert.equal(pending[2].state, "allow", "carries the desired final state for an 
 
 // No changes -> empty selection (the 'No changes.' path).
 const unchanged = pendingWizardChanges([
-  { title: "x", items: [row("jcodemunch", { active: true, wasActive: true })] },
+  { title: "x", items: [row("caveman", { active: true, wasActive: true })] },
 ]);
 assert.equal(unchanged.length, 0, "an all-unchanged wizard yields no pending work");
 

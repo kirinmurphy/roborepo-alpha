@@ -28,5 +28,3 @@ These docs are for people installing and using the RoboRepo package.
 | Repository Home and detail | [Repositories in the Portal](reference/repositories.md) |
 | Runtime | [Runtime](reference/runtime.md) |
 | Telemetry | [Telemetry Service Reference](reference/telemetry.md) |
-| Indexing | [jcodemunch](reference/jcodemunch.md), [jdocmunch](reference/jdocmunch.md) |
-| Chat-time behaviors | [Convention Capture](reference/convention-capture.md) |

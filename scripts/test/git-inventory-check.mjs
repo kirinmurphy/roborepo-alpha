@@ -4,9 +4,11 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { isolateGitConfig } from "./lib/git-config.mjs";
 
 const appRoot = path.resolve(".");
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-git-inventory-"));
+isolateGitConfig(tempRoot);
 
 try {
   const home = path.join(tempRoot, "home");

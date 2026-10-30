@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "fixture-tool",
+  "label": "Fixture Tool",
+  "description": "Test-only package exercising every live-config resource type: an MCP server, Codex tool approvals, permissions, rules, and hooks with a script.",
+  "lifecycle": "optional",
+  "presentation": {
+    "category": "integrations",
+    "order": 900
+  },
+  "resources": [
+    { "type": "mcp", "preset": "fixture-tool" },
+    { "type": "rules", "source": "rules.md" },
+    {
+      "type": "hooks",
+      "source": "hooks-claude.json",
+      "harness": "claude",
+      "scripts": ["hooks/fixture-session.mjs"]
+    },
+    { "type": "hooks", "source": "hooks-codex.json", "harness": "codex" },
+    {
+      "type": "permissions",
+      "allow": ["mcp__fixture-tool__lookup", "mcp__fixture-tool__register_edit"]
+    },
+    {
+      "type": "codex_tool_approvals",
+      "server": "fixture-tool",
+      "approvals": { "register_edit": "auto", "lookup": "approve" }
+    }
+  ]
+}

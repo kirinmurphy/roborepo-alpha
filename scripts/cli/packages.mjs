@@ -3,7 +3,6 @@ import path from "node:path";
 import { repoRoot, rootConfigActive, harnessHome, workspacePackagesDir, packageMode, initializeWorkspace } from "./paths.mjs";
 import { forgetPackageIds, readEnabledPackagesRegistry, setPackageEnabled, renderHomeRules, effectiveEnabledIds, knownHarnessIds, harnessIdsWithCapability } from "./rules-render.mjs";
 import { loadPackageCatalog, unavailablePackageMessage, validatePackageCatalog, BUILT_IN_PACKAGES_DIR, readPackageCategories } from "./package-catalog.mjs";
-import { packageCommandNames, validatePackageCommandOwnership } from "./package-commands.mjs";
 import { buildPackageLiveState } from "./package-probes.mjs";
 import { packageStatusSummary } from "./package-status.mjs";
 import { ensureClaudeMcpPermission } from "./mcp-claude.mjs";
@@ -89,7 +88,7 @@ async function withHookReviewHint(rest, run) {
 
 function createPackage(rest) {
   const opts = parseCreateArgs(rest);
-  // Mirrors skill-new.mjs: package mode scaffolds into the portable workspace; a development
+  // Package mode scaffolds into the portable workspace; a development
   // checkout scaffolds directly into the real shared source (globals/packages/), matching where
   // `roborepo package validate`/the built-in catalog actually reads from.
   const packagesDir = packageMode ? workspacePackagesDir : BUILT_IN_PACKAGES_DIR;
@@ -488,13 +487,6 @@ export async function enablePackage(rest, _seen = new Set()) {
   if (_seen.has(pkg.id)) return; // already handled in this enable pass (cycle / shared dependency)
   _seen.add(pkg.id);
 
-  const enabledIds = effectiveEnabledIds(catalog);
-  const ownership = validatePackageCommandOwnership(pkg, { catalog, enabledIds });
-  if (!ownership.ok) {
-    console.error(ownership.message);
-    process.exit(2);
-  }
-
   // A package can compose others via `requires`: enable its dependencies first (deduped, cycle-safe).
   // A composite package (one with `requires`) bundles the component-packages it depends on. NOTE:
   // distinct from an install "bundle" (manifests/platform/presets.json), which groups file-copy rows
@@ -532,8 +524,8 @@ export async function enablePackage(rest, _seen = new Set()) {
         mergeCodexToolApprovals(USER_CODEX_CONFIG, component);
         break;
       case "rules": {
-        if (dryRun) { console.log(`  [dry-run] register rules from ${component.source} (${component.harness})`); break; }
-        renderHomeRules({ harness: component.harness === "both" ? undefined : component.harness });
+        if (dryRun) { console.log(`  [dry-run] register rules from ${component.source} (${component.harness || "all harnesses"})`); break; }
+        renderHomeRules({ harness: component.harness });
         break;
       }
       case "command":
@@ -592,13 +584,6 @@ export async function enablePackage(rest, _seen = new Set()) {
   // Service/skill components run async handlers (lazy-imported to avoid import cycles); await them so
   // the function doesn't resolve before the side effects land.
   if (servicePromises.length) await Promise.all(servicePromises);
-
-  if (!dryRun && !reconcile) {
-    const commandNames = packageCommandNames(pkg);
-    if (commandNames.length) {
-      console.log(`\ncli commands available: ${commandNames.map((c) => `roborepo ${c}`).join(", ")}`);
-    }
-  }
 }
 
 export async function reconcileEnabledPackages(rest = []) {
@@ -741,8 +726,8 @@ export async function disablePackage(rest, _seen = new Set()) {
         unmergeCodexToolApprovals(USER_CODEX_CONFIG, component);
         break;
       case "rules": {
-        if (dryRun) { console.log(`  [dry-run] deregister rules from ${component.source} (${component.harness})`); break; }
-        renderHomeRules({ harness: component.harness === "both" ? undefined : component.harness });
+        if (dryRun) { console.log(`  [dry-run] deregister rules from ${component.source} (${component.harness || "all harnesses"})`); break; }
+        renderHomeRules({ harness: component.harness });
         break;
       }
       case "command":

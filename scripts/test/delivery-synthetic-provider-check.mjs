@@ -162,7 +162,7 @@ try {
 
   const result = spawnSync(process.execPath, [probeScript], {
     encoding: "utf8",
-    env: { ...process.env, HOME: home, USERPROFILE: home, ROBOREPO_APP_ROOT: appRoot, ROBOREPO_STATE_DIR: path.join(home, ".roborepo") },
+    env: { ...process.env, HOME: home, USERPROFILE: home, ROBOREPO_APP_ROOT: appRoot, ROBOREPO_STATE_ROOT: path.join(home, ".roborepo") },
   });
 
   assert.equal(result.status, 0, `synthetic third-provider delivery probe failed:\n${result.stdout}\n${result.stderr}`);

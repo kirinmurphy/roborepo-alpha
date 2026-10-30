@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Smoke test: portal PID stale detection and clean stop.
-# Sandboxed via ROBOREPO_STATE_DIR and ROBOREPO_PORTAL_PID_PATH so no real state is touched.
+# Sandboxed via ROBOREPO_STATE_ROOT and ROBOREPO_PORTAL_PID_PATH so no real state is touched.
 # Uses port 14317 to avoid conflicting with a running dashboard on 4317.
 #
 # Usage: scripts/test/test-telemetry-pid.sh [--quiet|-q]
@@ -22,7 +22,7 @@ work="$(mktemp -d "${TMPDIR:-/tmp}/cli-pid-test.XXXXXX")"
 trap 'rm -rf "${work}"' EXIT
 
 pidfile="${work}/portal-server.pid"
-export ROBOREPO_STATE_DIR="${work}/state"
+export ROBOREPO_STATE_ROOT="${work}/state"
 export ROBOREPO_PORTAL_PID_PATH="${pidfile}"
 
 pass=0; fail=0
@@ -89,7 +89,7 @@ wait "${foreign_pid}" 2>/dev/null || true
 # second `serve` on a different port SIGTERM'd whatever the first one had recorded, even though the
 # first server wasn't occupying the port the second one was starting on. Runs WITHOUT
 # ROBOREPO_PORTAL_PID_PATH so portalPidPathForPort's real per-port scheme is exercised, still
-# sandboxed under ROBOREPO_STATE_DIR from the top of this script; restored afterward so later
+# sandboxed under ROBOREPO_STATE_ROOT from the top of this script; restored afterward so later
 # assertions in this file (if any were appended below) keep the single-file sandbox.
 saved_pid_path="${ROBOREPO_PORTAL_PID_PATH}"
 unset ROBOREPO_PORTAL_PID_PATH
@@ -97,11 +97,11 @@ unset ROBOREPO_PORTAL_PID_PATH
 port_a=14319
 port_b=14320
 node "${cli}" web --detach --no-open --port "${port_a}" > /dev/null 2>&1 || true
-pid_a_file="${ROBOREPO_STATE_DIR}/portal/server-${port_a}.pid"
+pid_a_file="${ROBOREPO_STATE_ROOT}/portal/server-${port_a}.pid"
 pid_a="$(cat "${pid_a_file}" 2>/dev/null || echo "")"
 
 node "${cli}" web --detach --no-open --port "${port_b}" > /dev/null 2>&1 || true
-pid_b_file="${ROBOREPO_STATE_DIR}/portal/server-${port_b}.pid"
+pid_b_file="${ROBOREPO_STATE_ROOT}/portal/server-${port_b}.pid"
 pid_b="$(cat "${pid_b_file}" 2>/dev/null || echo "")"
 
 assert "two ports: server A still running after server B starts" pid_running "${pid_a}"

@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { analyzeTelemetry } from "../cli/telemetry-analyze.mjs";
 import { compareTelemetryOracle } from "../cli/telemetry-oracle-compare.mjs";
-import { runTelemetryOracle } from "../cli/telemetry-oracle-run.mjs";
 
 const snapshot = { schema: 2, snapshot_id: "cfg", packages: [], skills: [],
   evaluability: { packages: true, skills: true } };
@@ -21,9 +19,7 @@ function hasIssue(result, category) {
 
 assert.equal(compare().status, "passed");
 assert.equal(compare({ ...event, tokens: null }).status, "passed", "known absence of token data is supported");
-for (const schema of [undefined, null, 2, 3]) {
-  assert.equal(compare({ ...event, schema, call_id: "derived_call" }).status, "passed", `capture schema ${schema}`);
-}
+assert.equal(compare({ ...event, call_id: "derived_call" }).status, "passed", "a derived call id is still comparable");
 const shellRows = ["read", "read", "test", "test"].map((category, index) => ({
   ...event, call_id: `shell-${index}`, ts: `2026-09-15T00:0${index}:00.000Z`,
   tool: { name: "Bash" }, operation: { category },
@@ -41,50 +37,39 @@ assert.deepEqual(brokenShellGroups.differences, ["regression"], "oracle detects 
 
 assert.equal(compareTelemetryOracle([], options).status, "unavailable");
 
-const remote = "example/repo";
-const remoteHash = createHash("sha256").update(remote).digest("hex").slice(0, 24);
-const repositoryRegistry = { repositories: { repo: { id: "git:example/repo", normalizedRemote: remote } } };
-const legacy = { ...event, repo: { normalized_remote_hash: remoteHash } };
-assert.equal(compare(legacy, { repositoryRegistry }).status, "partial", "legacy hashes remain unassociated");
-assert.ok(!runTelemetryOracle([legacy], { repositoryRegistry }).conditions.some((row) => row.dimension === "repo"),
-  "only explicit repository identities enter repository comparisons");
-assert.equal(compare({ ...legacy, repo: { ...legacy.repo, repository_id: "local:direct" } }, { repositoryRegistry }).status,
-  "passed", "direct identity wins over a conflicting legacy hash");
 for (const repo of [null, {}, { label: "repo" }, { git_root_hash: "opaque" }, { remote_hash: "opaque" }, { cwd: "/private/repo" },
-  { normalized_remote_hash: "unmatched" }]) {
-  const result = compare({ ...event, repo }, { repositoryRegistry });
+  { normalized_remote_hash: "opaque" }]) {
+  const result = compare({ ...event, repo });
   assert.equal(result.status, "partial");
   hasIssue(result, "unresolved_repository");
 }
 hasIssue(compare({ ...event, session: { model: null } }), "unknown_model");
 hasIssue(compare({ ...event, config_snapshot_id: "missing" }), "missing_snapshot");
 hasIssue(compare(event, { snapshots: [{ ...snapshot, evaluability: { packages: false, skills: true } }] }), "unknown_snapshot_condition");
-assert.equal(compare(event, { snapshots: [{ ...snapshot, schema: 1, evaluability: undefined }] }).status, "passed");
+hasIssue(compare(event, { snapshots: [{ ...snapshot, schema: 1 }] }), "unsupported_snapshot_schema");
 
 for (const [row, category] of [
   [null, "malformed_event"],
-  [{ ...event, schema: 1 }, "unsupported_event_schema"],
+  [{ ...event, schema: undefined }, "unsupported_event_schema"],
+  [{ ...event, schema: 2 }, "unsupported_event_schema"],
   [{ ...event, schema: 99 }, "unsupported_event_schema"],
   [{ ...event, session_id: null }, "unidentified_session"],
   [{ ...event, ts: "bad" }, "invalid_timestamp"],
   [{ ...event, tokens: { total: "100" } }, "malformed_tokens"],
   [{ ...event, tokens: { input: Number.MAX_SAFE_INTEGER, output: 1, total: Number.MAX_SAFE_INTEGER } }, "malformed_tokens"],
   [{ ...event, repo: { repository_id: "unknown" } }, "malformed_repository"],
-  [{ ...event, last_result: { tool: "search_symbols", chars: 10 } }, "unsupported_bare_tool"],
-  [{ ...event, tool: { name: "get_section" }, last_result: { tool: "get_section", chars: 10 } }, "unsupported_bare_tool"],
 ]) {
   const result = compare(row);
   assert.equal(result.status, "unavailable");
   hasIssue(result, category);
 }
-// Bare names outside the jcodemunch/jdocmunch inventory are native tools on both sides, so ordinary
-// harness tools must not make real evidence incomparable.
-const nativeToolRows = ["Skill", "Agent", "ToolSearch", "browser_batch", "apply_patch", "wait"].map((name, index) => ({
+// Bare tool names are native tools on both sides, so ordinary harness tools stay comparable.
+const nativeToolRows = ["Skill", "Agent", "ToolSearch", "browser_batch", "apply_patch", "search_symbols"].map((name, index) => ({
   ...event, capture_id: `native-${index}`, call_id: `native-${index}`, ts: `2026-09-15T12:0${index}:00.000Z`,
   tool: { name }, last_result: { tool: name, chars: 10 + index },
 }));
 assert.equal(compareTelemetryOracle(nativeToolRows, options).status, "passed", "ordinary bare tool names stay comparable");
-// A prefixed name already names its server, even when its bare suffix matches a jcodemunch tool.
+// A prefixed name already names its server.
 const prefixedRow = { ...event, tool: { name: "mcp__codex_app__load_workspace_dependencies", is_mcp: true,
   mcp_server: "codex_app", mcp_tool: "load_workspace_dependencies" } };
 assert.equal(compare(prefixedRow).status, "passed", "a prefixed MCP name with a colliding suffix stays comparable");
@@ -92,13 +77,12 @@ const mixed = compareTelemetryOracle([event, { ...event, schema: 99 }], options)
 assert.equal(mixed.coverage.supported_events, 1);
 assert.equal(mixed.coverage.unsupported_events, 1);
 assert.notEqual(mixed.status, "passed", "unsupported rows cannot disappear into a green result");
-hasIssue(compare(event, { repositoryRegistry: { repositories: { a: repositoryRegistry.repositories.repo,
-  b: { id: "git:other/repo", normalizedRemote: remote } } } }), "ambiguous_repository_registry");
 
 const marker = { schema: 2, marker_id: "marker", type: "change", scope: "all",
   ts: "2026-09-15T00:00:00.000Z", watching_kinds: ["spike", "loop", "read-warning"] };
 assert.equal(compare(event, { markers: [marker] }).status, "passed");
-hasIssue(compare(event, { markers: [{ ...marker, schema: 1, scope: "unknown" }] }), "unknown_marker_scope");
+hasIssue(compare(event, { markers: [{ ...marker, scope: "unknown" }] }), "unknown_marker_scope");
+hasIssue(compare(event, { markers: [{ ...marker, schema: 1 }] }), "unsupported_marker_schema");
 hasIssue(compare(event, { markers: [{ ...marker, watching_kinds: ["over-testing"] }] }), "unsupported_marker_kind");
 hasIssue(compare(event, { snapshots: [{ ...snapshot, packages: "malformed" }] }), "malformed_snapshot");
 hasIssue(compare(event, { snapshots: [snapshot, { ...snapshot, packages: ["conflict"] }] }), "duplicate_snapshot_id");

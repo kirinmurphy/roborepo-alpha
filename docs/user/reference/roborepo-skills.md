@@ -18,7 +18,7 @@ management, plugin enable/disable state, updates, validation, or one-session plu
 
 | Command | What it does |
 | --- | --- |
-| `roborepo skill new` | Scaffolds a shared automatic helper, skill-backed slash command, or standalone slash command. |
+| `roborepo package dev create` / `package dev add-skill` | Scaffolds a package with a shared automatic helper, skill-backed slash command, or standalone slash command, or adds a skill to an existing package. |
 | `roborepo skill adopt <name>` | Moves an unmanaged native skill from `~/.codex/skills` or `~/.claude/skills` into shared RoboRepo source. |
 | `roborepo skill sync-global` | Refreshes `~/.roborepo/skills` and the installed harness skill views from shared skill source. |
 | `roborepo skill inspect <name>` | Reports source, ownership, managed marker/cache state, native collision state, harness install state, frontmatter, context files, and native-only metadata. |

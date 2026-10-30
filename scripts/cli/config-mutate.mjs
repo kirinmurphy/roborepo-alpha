@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { repoRoot } from "./paths.mjs";
+import { requireDevelopmentCheckout } from "./roots.mjs";
 import { enablePackage, disablePackage, findPackage } from "./packages.mjs";
 import { loadPackageCatalog, unavailablePackageMessage } from "./package-catalog.mjs";
 import { listSourceSkills } from "./skill-files.mjs";
@@ -34,16 +36,10 @@ const HARNESS_SKILL_DIRS = listHarnessProviders().map((provider) => resolveHarne
 // roborepo copy apart from a user's native skill of the same name.
 const MANAGED_MARKER = ".builtin-managed";
 
-// A target is a builtin-managed skill if it carries our marker inside the machine-local cache or
-// is a legacy symlink into the shared source (a pre-cache install we should migrate or remove).
+// A harness skill entry is builtin-managed when it is a symlink into the machine-local cache.
 function isManagedSkill(target) {
   try {
-    const stat = fs.lstatSync(target);
-    if (stat.isSymbolicLink()) {
-      const linkTarget = fs.readlinkSync(target);
-      return linkTarget.startsWith(SKILLS_DIR) || linkTarget.startsWith(SHARED_SKILLS_DIR);
-    }
-    return fs.existsSync(path.join(target, MANAGED_MARKER));
+    return fs.lstatSync(target).isSymbolicLink() && fs.readlinkSync(target).startsWith(SKILLS_DIR);
   } catch {
     return false;
   }
@@ -121,7 +117,7 @@ function linkSkillView(cacheAbs, target, { dryRun = false } = {}) {
     if (stat.isSymbolicLink()) {
       const current = fs.readlinkSync(target);
       if (current === cacheAbs) return { state: "ok" };
-      if (current.startsWith(SKILLS_DIR) || current.startsWith(SHARED_SKILLS_DIR)) {
+      if (current.startsWith(SKILLS_DIR)) {
         if (!dryRun) {
           fs.unlinkSync(target);
           fs.symlinkSync(cacheAbs, target);
@@ -129,13 +125,6 @@ function linkSkillView(cacheAbs, target, { dryRun = false } = {}) {
         return { state: "linked" };
       }
       return { state: "conflict" };
-    }
-    if (stat.isDirectory() && fs.existsSync(path.join(target, MANAGED_MARKER))) {
-      if (!dryRun) {
-        fs.rmSync(target, { recursive: true, force: true });
-        fs.symlinkSync(cacheAbs, target);
-      }
-      return { state: "linked" };
     }
     return { state: "conflict" };
   } catch {
@@ -165,7 +154,7 @@ function pruneSkillViews(dir, allowedNames = [], dryRun = false) {
     } catch {
       continue;
     }
-    if (!target.startsWith(SKILLS_DIR) && !target.startsWith(SHARED_SKILLS_DIR)) continue;
+    if (!target.startsWith(SKILLS_DIR)) continue;
     if (live.size > 0 && !live.has(ent.name)) {
       if (!dryRun) fs.unlinkSync(link);
       console.log(`prune: ${link} (not in base skill set)`);
@@ -336,15 +325,19 @@ export function setCommandBucket(tokens, bucket) {
   return applyOverrides(manifest, overrides);
 }
 
+// --render and --check work on the tracked generated outputs (a development-checkout concern);
+// without a flag the command applies permissions to live harness config.
 export function permissionsCommand(args = []) {
-  const invalid = args.filter((arg) => arg !== "--check");
-  if (invalid.length > 0) {
-    console.error(`unknown flag for config permissions: ${invalid.join(" ")}`);
+  const invalid = args.filter((arg) => arg !== "--check" && arg !== "--render");
+  if (invalid.length > 0 || args.length > 1) {
+    console.error("usage: roborepo config permissions [--render|--check]");
     process.exit(2);
   }
-  if (args.includes("--check")) {
-    console.error("roborepo config permissions writes live harness config; use `roborepo permissions --check` from a development checkout to check generated source artifacts.");
-    process.exit(2);
+  if (args.length === 1) {
+    requireDevelopmentCheckout("rendering generated permission outputs");
+    const scriptArgs = args[0] === "--check" ? ["--check"] : [];
+    const result = spawnSync(process.execPath, [path.join(repoRoot, "scripts/build/render-agent-permissions.mjs"), ...scriptArgs], { stdio: "inherit" });
+    process.exit(result.status ?? 1);
   }
   let manifest;
   try {

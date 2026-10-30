@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // Generic per-package lifecycle contract: every catalog package must enable, re-enable (idempotent),
 // disable, and re-disable (idempotent) without error, and the enabled-packages registry must reflect
-// the expected state after each step. Complements system-package-ownership-characterization-check.mjs
-// (which hand-asserts specific Codex hook content for 2 packages) by covering every package generically
-// rather than by name.
+// the expected state after each step. The fixture-tool block then checks that every live-config
+// resource type (MCP, Codex tool approvals, permissions, rules, hooks with a script) appears on
+// enable and leaves nothing behind on disable.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -11,6 +11,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { loadPackageCatalog } from "../cli/package-catalog.mjs";
+import { makeAppRoot } from "./app-root-fixture.mjs";
 import { MULTI_SKILL_COMMAND, MULTI_SKILL_IDS, MULTI_SKILL_PACKAGE_ID, writeMultiSkillPackage } from "./fixtures/multi-skill-package.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -48,7 +49,7 @@ assert.ok(packageIds.length > 0, "expected at least one package in the catalog")
 
 for (const pkgId of packageIds) {
   const tmp = makeHome();
-  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_DIR: path.join(tmp, ".roborepo"), SKIP_MCP: "1" };
+  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_ROOT: path.join(tmp, ".roborepo"), SKIP_MCP: "1" };
   try {
     const enable1 = spawnSync(process.execPath, [cli, "package", "enable", pkgId], { env, encoding: "utf8" });
     assert.equal(enable1.status, 0, `${pkgId}: enable should succeed\n${enable1.stderr}`);
@@ -73,8 +74,47 @@ for (const pkgId of packageIds) {
 }
 
 {
+  const appRoot = makeAppRoot({ prefix: "roborepo-package-lifecycle-app-", fixturePackages: true });
   const tmp = makeHome();
-  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_DIR: path.join(tmp, ".roborepo"), SKIP_MCP: "1" };
+  // PATH without a `claude` binary: Codex MCP wiring must still happen (and be undone) on its own.
+  const env = { ...process.env, HOME: tmp, ROBOREPO_APP_ROOT: appRoot, ROBOREPO_STATE_ROOT: path.join(tmp, ".roborepo"), PATH: "/usr/bin:/bin" };
+  const fixtureCli = path.join(appRoot, "scripts", "cli", "main.mjs");
+  const read = (...parts) => fs.readFileSync(path.join(tmp, ...parts), "utf8");
+  const exists = (...parts) => fs.existsSync(path.join(tmp, ...parts));
+  try {
+    const enable = spawnSync(process.execPath, [fixtureCli, "package", "enable", "fixture-tool"], { env, encoding: "utf8" });
+    assert.equal(enable.status, 0, `fixture-tool: enable should succeed\n${enable.stdout}${enable.stderr}`);
+    const settings = JSON.parse(read(".claude", "settings.json"));
+    assert.ok(settings.permissions?.allow?.includes("mcp__fixture-tool__lookup"), "enable merges the package permissions into Claude settings");
+    assert.match(JSON.stringify(settings.hooks || {}), /fixture-session\.mjs/, "enable merges the Claude hook entry");
+    assert.ok(exists(".claude", "hooks", "fixture-session.mjs"), "enable installs the Claude hook script");
+    const codexToml = read(".codex", "config.toml");
+    assert.match(codexToml, /\[mcp_servers\.fixture-tool\]/, "enable registers the MCP server with Codex");
+    assert.match(codexToml, /\[mcp_servers\.fixture-tool\.tools\.register_edit\]\s*\napproval_mode = "auto"/, "enable writes the Codex tool approvals");
+    assert.match(read(".codex", "hooks.json"), /fixture-tool: session started/, "enable merges the Codex hook entry");
+    assert.match(read(".claude", "CLAUDE.md"), /Fixture rule fragment/, "enable renders the package rules for Claude");
+    assert.match(read(".codex", "AGENTS.md"), /Fixture rule fragment/, "enable renders the package rules for Codex");
+
+    const disable = spawnSync(process.execPath, [fixtureCli, "package", "disable", "fixture-tool"], { env, encoding: "utf8" });
+    assert.equal(disable.status, 0, `fixture-tool: disable should succeed\n${disable.stdout}${disable.stderr}`);
+    const settingsAfter = JSON.parse(read(".claude", "settings.json"));
+    assert.ok(!(settingsAfter.permissions?.allow || []).some((entry) => entry.startsWith("mcp__fixture-tool")), "disable removes the package permissions");
+    assert.doesNotMatch(JSON.stringify(settingsAfter.hooks || {}), /fixture-session\.mjs/, "disable removes the Claude hook entry");
+    assert.ok(!exists(".claude", "hooks", "fixture-session.mjs"), "disable removes the Claude hook script");
+    const codexAfter = read(".codex", "config.toml");
+    assert.doesNotMatch(codexAfter, /mcp_servers\.fixture-tool/, "disable removes the Codex MCP server and its tool approvals");
+    assert.doesNotMatch(exists(".codex", "hooks.json") ? read(".codex", "hooks.json") : "", /fixture-tool/, "disable removes the Codex hook entry");
+    assert.doesNotMatch(exists(".claude", "CLAUDE.md") ? read(".claude", "CLAUDE.md") : "", /Fixture rule fragment/, "disable removes the Claude rules");
+    assert.doesNotMatch(exists(".codex", "AGENTS.md") ? read(".codex", "AGENTS.md") : "", /Fixture rule fragment/, "disable removes the Codex rules");
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+    fs.rmSync(appRoot, { recursive: true, force: true });
+  }
+}
+
+{
+  const tmp = makeHome();
+  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_ROOT: path.join(tmp, ".roborepo"), SKIP_MCP: "1" };
   try {
     const staleSkillCache = path.join(tmp, ".roborepo", "skills", "vanished-package-skill");
     fs.mkdirSync(staleSkillCache, { recursive: true });
@@ -100,7 +140,7 @@ for (const pkgId of packageIds) {
 
 {
   const tmp = makeHome();
-  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_DIR: path.join(tmp, ".roborepo"), SKIP_MCP: "1" };
+  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_ROOT: path.join(tmp, ".roborepo"), SKIP_MCP: "1" };
   try {
     const leakedCommand = writeOwnedCommand(tmp, "claude", "leaked-command", "technical-writing");
     const preflight = spawnSync("bash", [uninstall, "--check-clean"], { env, encoding: "utf8" });
@@ -129,7 +169,7 @@ for (const pkgId of packageIds) {
   }
   writeMultiSkillPackage(path.join(appRoot, "globals", "packages"));
   const stateDir = path.join(tmp, ".roborepo");
-  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_DIR: stateDir, ROBOREPO_APP_ROOT: appRoot, ROBOREPO_MODE: "development", SKIP_MCP: "1" };
+  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_ROOT: stateDir, ROBOREPO_APP_ROOT: appRoot, ROBOREPO_MODE: "development", SKIP_MCP: "1" };
   const run = (...args) => spawnSync(process.execPath, [cli, ...args], { env, encoding: "utf8" });
   const status = () => JSON.parse(run("package", "status", MULTI_SKILL_PACKAGE_ID, "--json").stdout).status;
   const pkgId = MULTI_SKILL_PACKAGE_ID;

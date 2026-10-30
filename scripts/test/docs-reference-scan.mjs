@@ -9,7 +9,6 @@ const REFERENCE_LINK = /!?\[([^\]]+)\]\[([^\]]*)\]/g;
 const SHORTCUT_LINK = /(?<!\\)\[([^\]]+)\]/g;
 const REFERENCE_DEFINITION = /^\s*\[([^\]]+)\]:\s*(<[^>]+>|\S+)/;
 const HISTORICAL = /\b(?:no longer exists?|does not exist|do not exist|there is no|did not exist|never (?:existed|written)|removed|deleted|retired|previously|formerly|historical|dated|legacy|proposed|candidate|old path|before migration|was replaced|were replaced|superseded|no .+ candidate exists)\b/i;
-const GENERATED_OUTPUT = /^(?:docs\/\.jdm-indexed(?:\/|$)|docs\/\.jcm-indexed(?:\/|$))/;
 
 export function readerDocs(root) {
   const files = ["README.md", "manifests/inventory/README.md"];
@@ -21,7 +20,6 @@ export function readerDocs(root) {
 }
 
 export function scanDocs(root, files = readerDocs(root)) {
-  const removed = JSON.parse(fs.readFileSync(path.join(root, "manifests/platform/cli/removed.json"), "utf8"));
   const findings = [];
   for (const file of files) {
     const absolute = path.join(root, file);
@@ -29,14 +27,10 @@ export function scanDocs(root, files = readerDocs(root)) {
     const refs = referenceDefinitions(lines);
     const datedSnapshot = lines.slice(0, 5).some((line) => /^Snapshot date:/i.test(line));
     let fence = null;
-    let historicalFence = false;
-    let precedingProse = "";
     for (let index = 0; index < lines.length; index++) {
       const line = lines[index];
       const marker = fenceMarker(line);
       if (!fence && marker) {
-        historicalFence = HISTORICAL.test(precedingProse);
-        precedingProse = "";
         fence = marker;
         continue;
       }
@@ -66,10 +60,6 @@ export function scanDocs(root, files = readerDocs(root)) {
             if (!historicalClause(line, match.index)) checkPath(root, file, index + 1, match[1], findings);
           }
         }
-      }
-      if (!fence && line.trim()) precedingProse = line;
-      if (!(fence && historicalFence)) {
-        checkRemoved(file, index + 1, line, removed, findings);
       }
     }
   }
@@ -150,21 +140,10 @@ function closesFence(marker, opening) {
 
 function checkPath(root, file, line, raw, findings) {
   const cited = raw.replace(/[.,;:]$/, "");
-  if (/[<>{}*$?]/.test(cited) || GENERATED_OUTPUT.test(cited)) return;
+  if (/[<>{}*$?]/.test(cited)) return;
   const pathname = cited.split("#", 1)[0].replace(/:\d+(?:-\d+)?$/, "");
   if (!fs.existsSync(path.join(root, pathname))) {
     findings.push({ file, line, reason: `missing repository path: ${cited}` });
-  }
-}
-
-function checkRemoved(file, line, content, removed, findings) {
-  for (const command of Object.keys(removed)) {
-    const expression = new RegExp(`\\broborepo\\s+${command.replace(/ /g, "\\s+")}(?![\\w-])`, "g");
-    for (const match of content.matchAll(expression)) {
-      if (!historicalClause(content, match.index)) {
-        findings.push({ file, line, reason: `removed CLI command: roborepo ${command}` });
-      }
-    }
   }
 }
 

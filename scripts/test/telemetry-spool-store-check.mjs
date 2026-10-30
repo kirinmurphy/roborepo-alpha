@@ -14,7 +14,7 @@ import os from "node:os";
 import path from "node:path";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "spool-store-"));
-process.env.ROBOREPO_STATE_DIR = tmp;
+process.env.ROBOREPO_STATE_ROOT = tmp;
 const spoolDir = path.join(tmp, "telemetry", "spool");
 fs.mkdirSync(spoolDir, { recursive: true });
 

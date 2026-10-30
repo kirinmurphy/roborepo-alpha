@@ -10,7 +10,7 @@ import { fakeResponse } from "./lib/fake-response.mjs";
 // Managed uninstall workspace policy.
 //
 // The behavior under test is the one that can destroy user data, so these run the real CLI and the
-// real shell uninstall against sandboxed HOME/ROBOREPO_STATE_DIR fixtures rather than asserting on
+// real shell uninstall against sandboxed HOME/ROBOREPO_STATE_ROOT fixtures rather than asserting on
 // a plan object. Before this phase, remove_runtime_state() ended with `remove_path "${state_dir}"`
 // — an rm -rf that took <stateRoot>/workspace with it.
 
@@ -83,7 +83,7 @@ function fixture({ relocated = false } = {}) {
 }
 
 function env(f, extra = {}) {
-  return { ...process.env, HOME: f.home, ROBOREPO_STATE_DIR: f.stateDir, ...extra };
+  return { ...process.env, HOME: f.home, ROBOREPO_STATE_ROOT: f.stateDir, ...extra };
 }
 
 function runCli(f, args, extra) {

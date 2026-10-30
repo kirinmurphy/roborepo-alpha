@@ -1,6 +1,6 @@
 # Using the `roborepo` CLI
 
-`roborepo` is the single front door for setup, packages, indexing, skills, telemetry, and
+`roborepo` is the single front door for setup, packages, skills, telemetry, and
 maintenance. Run it with no arguments for an interactive menu, or call a command directly:
 
 ```sh
@@ -68,8 +68,8 @@ From a development checkout, two more commands render generated files after you 
 
 | Command | What it does |
 | --- | --- |
-| `roborepo rules [--check]` | Renders generated Claude/Codex global instruction files, or verifies them with `--check`. |
-| `roborepo permissions [--check]` | Renders harness permission outputs from `manifests/inventory/agent-permissions.json`, or verifies them with `--check`. |
+| `roborepo config rules --check` | Verifies generated Claude/Codex global instruction files. |
+| `roborepo config permissions [--render\|--check]` | Applies permissions to live harness config; `--render` / `--check` render or verify the generated outputs from `manifests/inventory/agent-permissions.json` (development checkout). |
 
 ## Uninstall
 
@@ -127,22 +127,6 @@ Telemetry is local and opt-in. See [Telemetry](telemetry.md) for what is capture
 | `roborepo telemetry backup` | Snapshots telemetry data to `~/.roborepo/telemetry-backups/`. |
 | `roborepo telemetry purge --all [--backup]` | Deletes all telemetry data; `--backup` snapshots it first. |
 | `roborepo telemetry install` | Wires only the capture hooks, for measuring usage before adopting the rest of RoboRepo. |
-
-## Indexing
-
-Indexing commands are owned by packages, so enable the owning package first. If it is not enabled,
-RoboRepo prints which package to enable.
-
-| Command | Package | What it does |
-| --- | --- | --- |
-| `roborepo index code [path]` | `jcodemunch` | Indexes code in the current directory or `[path]`. |
-| `roborepo index code [path] --watch` | `jcodemunch` | Keeps the code index current while files change. |
-| `roborepo index docs [path]` | `jdocmunch` | Indexes documentation in the current directory or `[path]`. |
-
-```sh
-roborepo package enable jcodemunch
-roborepo index code --watch
-```
 
 ## Browser Evidence
 
@@ -208,7 +192,6 @@ appears in `roborepo maintenance stores` as `browser-evidence`.
 
 | Command | What it does |
 | --- | --- |
-| `roborepo skill new` | Scaffolds a package-owned skill or slash command and updates package config, generated outputs, commands, and README. |
 | `roborepo skill adopt <name>` | Moves an unmanaged native skill into shared RoboRepo source and refreshes the managed harness views. |
 | `roborepo skill export-to-project` | Copies shared skills into the current project and leaves a shareable zip bundle. |
 | `roborepo skill link-project` | Links a project's `.codex/skills` into existing `.claude/skills` folders. |
@@ -230,7 +213,7 @@ See [RoboRepo Skills Interface](roborepo-skills.md) for the managed/native bound
 
 | You pass | Registered as |
 | --- | --- |
-| `jcodemunch` or `jdocmunch` | A built-in preset |
+| A preset name from `manifests/inventory/mcp-presets.json` | That preset |
 | Any other name | A `uvx` package |
 | An HTTP URL | An HTTP server |
 

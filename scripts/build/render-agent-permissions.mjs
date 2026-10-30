@@ -11,7 +11,7 @@ import { GENERATED_POLICY_FILENAME } from "../harnesses/gemini/policy-toml.mjs";
 // candidate (generated/<provider-id>/). Per-provider rendering goes through each provider's own
 // `permissions.render` adapter (scripts/harnesses/{claude,codex,gemini}/index.mjs) so this script
 // stays generic over the provider registry instead of hardcoding Claude/Codex; the config controls
-// render the same adapter logic into a consumer's LIVE home config. `roborepo permissions` and
+// render the same adapter logic into a consumer's LIVE home config. `roborepo config permissions --render` and
 // doctor --check run this script. The generated candidate never carries personal overrides — it
 // always renders the manifest's own default buckets, unmodified.
 //

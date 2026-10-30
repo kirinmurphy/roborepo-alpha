@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Portal UI browser suite driver.
 //
-// Boots the REAL portal server the hermetic way — temp HOME + ROBOREPO_STATE_DIR, a
+// Boots the REAL portal server the hermetic way — temp HOME + ROBOREPO_STATE_ROOT, a
 // PORTAL_READY_FILE ready-file, and `web --no-open --port 0 --allow-zero-port` — the
 // same recipe scripts/test/test-cli.sh uses around its portal HTTP block. The server is a
 // sibling process (not a Playwright webServer fixture), so the suite exercises the exact startup
@@ -66,7 +66,7 @@ const server = spawn(
       ...process.env,
       ...hostHarnessIsolationEnv(tmp),
       HOME: tmp,
-      ROBOREPO_STATE_DIR: stateDir,
+      ROBOREPO_STATE_ROOT: stateDir,
       PORTAL_READY_FILE: readyFile,
     },
     stdio: ["ignore", "inherit", "inherit"],

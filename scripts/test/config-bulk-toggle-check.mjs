@@ -30,7 +30,6 @@ fs.writeFileSync(path.join(home, ".codex", "config.toml"), "");
 const env = {
   ...process.env,
   HOME: home,
-  ROBOREPO_STATE_DIR: path.join(home, ".roborepo"),
   ROBOREPO_STATE_ROOT: path.join(home, ".roborepo"),
   SKIP_MCP: "1",
   ROBOREPO_PRESETS_ONBOARD: "skip",
@@ -143,7 +142,7 @@ try {
   // module flag synchronously before its first await, so the second must get 409. Runs under the
   // fixture env (set before import) against the same fixture state dir.
   process.env.HOME = home;
-  process.env.ROBOREPO_STATE_DIR = path.join(home, ".roborepo");
+  process.env.ROBOREPO_STATE_ROOT = path.join(home, ".roborepo");
   process.env.ROBOREPO_STATE_ROOT = path.join(home, ".roborepo");
   const bulk = await import(path.join(repoRoot, "scripts/cli/config-bulk.mjs"));
   // Start from all-off so the first batch has real work and stays in flight across the check.

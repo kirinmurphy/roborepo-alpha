@@ -7,7 +7,6 @@ import { hasHarnessProvider, getHarnessProvider } from "../harnesses/registry.mj
 
 export const PACKAGE_CATEGORIES_PATH = path.join(repoRoot, "manifests", "inventory", "package-categories.json");
 export const BUILT_IN_PACKAGES_DIR = path.join(repoRoot, "globals", "packages");
-export const ARCHIVED_PACKAGES_DIR = path.join(repoRoot, "globals", "packages-archived");
 export const EXPERIMENTAL_PACKAGES_ENV = "LOAD_EXPERIMENTAL_PACKAGES";
 
 const PENDING_STATUS = "pending";
@@ -23,7 +22,6 @@ const RESOURCE_TYPES = new Set([
   "mcp",
   "plugin",
   "service",
-  "cli-command",
   "harness-config",
   "package-runtime-asset",
 ]);
@@ -100,8 +98,7 @@ export function readPackageCategories() {
 }
 
 function readBuiltInPackageConfigs() {
-  return [BUILT_IN_PACKAGES_DIR, ARCHIVED_PACKAGES_DIR]
-    .flatMap((root) => packageConfigFiles(root))
+  return packageConfigFiles(BUILT_IN_PACKAGES_DIR)
     .map((file) => readPackageConfig(file, "built-in"));
 }
 
@@ -188,7 +185,6 @@ export function validatePackageCatalog(packages) {
   const packageIds = new Set();
   const skillIds = new Map();
   const slashNames = new Map();
-  const cliCommands = new Map();
 
   for (const pkg of packages) {
     if (packageIds.has(pkg.id)) errors.push(`duplicate package id: ${pkg.id}`);
@@ -207,8 +203,6 @@ export function validatePackageCatalog(packages) {
         }
       } else if (resource.type === "slash-command") {
         claim(slashNames, resource.name, pkg.id, errors, "slash command");
-      } else if (resource.type === "cli-command" || resource.type === "command") {
-        claim(cliCommands, resource.name, pkg.id, errors, "CLI command");
       }
     }
   }
@@ -256,7 +250,6 @@ function normalizePackage(pkg, { file, root, origin }) {
     sourceRoot: root,
     sourceFile: file,
     origin,
-    archived: path.resolve(root).startsWith(`${path.resolve(ARCHIVED_PACKAGES_DIR)}${path.sep}`),
   };
 }
 
@@ -326,7 +319,10 @@ function normalizeResource(resource, { pkgId, root, index }) {
   } else if (next.type === "rules" || next.type === "hooks") {
     next.source = validateInsideSource(root, next.source, `${pkgId}:${next.type}`);
     if (!fs.existsSync(path.join(root, next.source))) throw new Error(`${pkgId}:${next.type} source missing: ${next.source}`);
-    validateHarness(next.harness, `${pkgId}:${next.type}`, { allowBoth: true, requiredCapability: next.type });
+    // A rules resource without a harness renders into every rules-capable harness.
+    if (next.type === "hooks" || next.harness !== undefined) {
+      validateHarness(next.harness, `${pkgId}:${next.type}`, { requiredCapability: next.type });
+    }
     if (next.type === "hooks" && next.scripts !== undefined) {
       if (!Array.isArray(next.scripts)) throw new Error(`${pkgId}:hooks scripts must be an array`);
       next.scripts = next.scripts.map((script) => {
@@ -335,8 +331,6 @@ function normalizeResource(resource, { pkgId, root, index }) {
         return rel;
       });
     }
-  } else if (next.type === "cli-command") {
-    if (!isCommandName(next.name)) throw new Error(`${pkgId}: CLI command resource needs name`);
   }
   return next;
 }
@@ -357,7 +351,6 @@ function normalizeSlashEntrypoint(entrypoint, pkgId, skillId) {
 }
 
 function componentResource(resource, root) {
-  if (resource.type === "cli-command") return { ...resource, type: "command" };
   if (resource.type === "slash-command") return null;
   if (resource.type === "skill") return { type: "skill", id: resource.id };
   if (resource.source) {
@@ -387,10 +380,7 @@ function validateInsideSource(root, relSource, label) {
 // requiredCapability, when given, is checked against the target harness's provider manifest so a
 // resource can't silently target a harness that doesn't support what the resource type needs (e.g.
 // a hooks resource pointed at a harness whose manifest doesn't declare the "hooks" capability).
-// With today's two providers (claude/codex) both declaring the same capability set this never
-// fires, but it becomes real protection the moment a narrower-capability harness is registered.
-function validateHarness(harness, label, { allowBoth = false, requiredCapability } = {}) {
-  if (allowBoth && harness === "both") return;
+function validateHarness(harness, label, { requiredCapability } = {}) {
   if (!hasHarnessProvider(harness)) throw new Error(`${label} unknown harness: ${harness || "(missing)"}`);
   if (requiredCapability && !getHarnessProvider(harness).manifest.capabilities.includes(requiredCapability)) {
     throw new Error(`${label} harness "${harness}" does not support required capability: ${requiredCapability}`);
@@ -447,10 +437,6 @@ function packageSort(a, b) {
 
 function isSlug(value) {
   return SLUG_RE.test(String(value || ""));
-}
-
-function isCommandName(value) {
-  return typeof value === "string" && value.trim() !== "" && value.split(/\s+/).every(isSlug);
 }
 
 function isSafeRelativeTarget(value) {
