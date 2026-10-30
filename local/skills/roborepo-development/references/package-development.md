@@ -302,8 +302,10 @@ The portal's package toggle (`portal/config/elements/config-toggle.js` →
 `disablePackage` functions — CLI and portal share one apply path, not two.
 
 `roborepo package reconcile` (→ `reconcileEnabledPackages()`) is the full-reconciliation entry
-point: re-applies every enabled package and removes any enabled-but-no-longer-in-catalog stale
-entries. This is the command to reach for if "apply everything currently selected" is needed —
+point: re-applies every enabled package, removes installed packages that left the effective set,
+and forgets no-longer-in-catalog stale entries. Machine-local `applied-packages.json` tracks which
+packages RoboRepo applied, so cleanup preserves untracked external configuration. This is the
+command to reach for if "apply everything currently selected" is needed —
 don't invent a new name for it.
 
 The one place a user is still told to run `roborepo update` is unrelated to enable/disable:

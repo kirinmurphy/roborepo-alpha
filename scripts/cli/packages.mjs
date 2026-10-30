@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { repoRoot, rootConfigActive, harnessHome, workspacePackagesDir, packageMode, initializeWorkspace } from "./paths.mjs";
 import { renderHomeRules, knownHarnessIds, harnessIdsWithCapability } from "./rules-render.mjs";
-import { forgetPackageIds, readEnabledPackagesRegistry, selectedRootIds, setPackageEnabled, effectiveEnabledIds, withPackageSelection } from "./package-state.mjs";
+import { forgetPackageIds, readEnabledPackagesRegistry, readAppliedPackageIds, selectedRootIds, setPackageApplied, setPackageEnabled, effectiveEnabledIds, withPackageSelection } from "./package-state.mjs";
 import { requiredBy, requiredClosure, rootsRequiring } from "./package-graph.mjs";
 import { loadPackageCatalog, unavailablePackageMessage, unavailablePackageReason, validatePackageCatalog, BUILT_IN_PACKAGES_DIR, readPackageCategories } from "./package-catalog.mjs";
 import { buildPackageLiveState } from "./package-probes.mjs";
@@ -659,6 +659,7 @@ function disabledRecommendations(pkg, catalog, effectiveIds) {
 // Apply one package's resources to every harness. Used by enable and by reconcile, which
 // re-applies effective packages without touching the registry.
 async function applyPackageComponents(pkg, { dryRun = false } = {}) {
+  if (!dryRun) setPackageApplied(pkg.id, true);
   const servicePromises = [];
   for (const component of pkg.components) {
     switch (component.type) {
@@ -752,6 +753,15 @@ export async function reconcileEnabledPackages(rest = []) {
   }
   let reconciled = 0;
   const changedPackageIds = new Set();
+  const effective = new Set(enabledIds);
+  const applied = new Set(readAppliedPackageIds());
+  const leaving = requiredClosure(catalog, [...applied])
+    .filter((id) => applied.has(id) && !effective.has(id)).reverse();
+  for (const id of leaving) {
+    console.log(`${dryRun ? "[dry-run] would remove" : "remove"} no longer required package: ${id}`);
+    await removePackageComponents(catalog.find((pkg) => pkg.id === id), { dryRun });
+    changedPackageIds.add(id);
+  }
   // Effective ids come dependencies first, so a package is never re-applied ahead of what it needs.
   for (const id of enabledIds) {
     const pkg = catalog.find((entry) => entry.id === id);
@@ -965,6 +975,7 @@ async function removePackageComponents(pkg, { dryRun = false } = {}) {
     }
   }
   if (servicePromises.length) await Promise.all(servicePromises);
+  if (!dryRun) setPackageApplied(pkg.id, false);
 }
 
 // --------------------------------------------------------------------------- service component

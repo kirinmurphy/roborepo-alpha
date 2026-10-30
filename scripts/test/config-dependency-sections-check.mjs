@@ -43,6 +43,25 @@ fixture("deps-review", { selectable: false, requires: ["deps-leaf"], presentatio
 fixture("deps-leaf", { presentation: { category: "token-optimization" } });
 fixture("deps-companion", { requires: ["deps-leaf"], presentation: { category: "token-optimization" } });
 fixture("deps-hidden", { presentation: { visibility: "hidden" } });
+fixture("status-parent", { requires: ["status-middle"], presentation: { order: -30 } });
+fixture("status-middle", { requires: ["status-leaf"], resources: [], presentation: { order: -20 } });
+fixture("status-leaf", {
+  presentation: { order: -10 },
+  resources: [{ type: "permissions", allow: ["ReviewFixtureMissingPermission"] }],
+});
+fixture("orphan-parent-a", { requires: ["orphan-dependency"] });
+fixture("orphan-parent-b", { requires: ["orphan-dependency"] });
+fixture("orphan-dependency", {
+  resources: [
+    { type: "permissions", allow: ["ReviewFixtureOrphanPermission"] },
+    { type: "hooks", harness: "claude", source: "hooks.json" },
+    { type: "plugin", id: "review-fixture@review-market", marketplace: { name: "review-market", source: { source: "github", repo: "example/review-fixture" } } },
+  ],
+});
+fs.writeFileSync(path.join(workspace, "packages", "orphan-dependency", "hooks.json"), JSON.stringify({
+  SessionStart: [{ hooks: [{ type: "command", command: "echo review-orphan-hook" }] }],
+}));
+fixture("orphan-external", { resources: [{ type: "permissions", allow: ["ReviewFixtureExternalPermission"] }] });
 
 function run(...args) {
   const result = spawnSync(process.execPath, args, { env, cwd: repoRoot, encoding: "utf8", input: "" });
@@ -91,6 +110,46 @@ try {
     "config status names a row's requirements under it");
   assert.match(printed, /\n {2}Recommended dependencies\n {4}\[ \] Deps deps-companion {2}\(recommended by Deps deps-closer\)/,
     "config status prints the recommended list");
+
+  run(cli, "package", "enable", "status-parent");
+  const settingsPath = path.join(tmp, ".claude", "settings.json");
+  const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+  settings.permissions.allow = settings.permissions.allow.filter((entry) => entry !== "ReviewFixtureMissingPermission");
+  fs.writeFileSync(settingsPath, JSON.stringify(settings));
+  const livePackages = JSON.parse(run("-e", `
+    import(${JSON.stringify(path.join(repoRoot, "scripts/cli/config.mjs"))}).then((c) => {
+      console.log(JSON.stringify(c.readConfigSnapshot().packages));
+    });
+  `));
+  for (const id of ["status-leaf", "status-middle", "status-parent"]) {
+    const status = livePackages.find((pkg) => pkg.id === id);
+    assert.equal(status.desired, true, "missing components do not change the selected dependency closure");
+    assert.equal(status.status, "partial", `${id} reports a missing transitive requirement regardless of catalog order`);
+  }
+  assert.equal(JSON.parse(run(cli, "package", "status", "status-parent", "--json")).status, "partial");
+
+  run(cli, "package", "enable", "orphan-parent-a");
+  run(cli, "package", "enable", "orphan-parent-b");
+  const external = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+  external.permissions.allow.push("ReviewFixtureExternalPermission");
+  fs.writeFileSync(settingsPath, JSON.stringify(external));
+  for (const [index, id] of ["orphan-parent-a", "orphan-parent-b"].entries()) {
+    const manifestPath = path.join(workspace, "packages", id, "package.config.json");
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    manifest.requires = [];
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+    run(cli, "package", "reconcile");
+    const current = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+    const retained = index === 0;
+    assert.equal(current.permissions.allow.includes("ReviewFixtureOrphanPermission"), retained,
+      "permissions stay until the dependency's last effective parent drops its edge");
+    assert.equal(JSON.stringify(current.hooks || {}).includes("echo review-orphan-hook"), retained,
+      "reconciliation uses hook cleanup after the last dependency edge disappears");
+    assert.equal(current.enabledPlugins?.["review-fixture@review-market"] === true, retained,
+      "reconciliation cleans the orphan's plugin alongside its other components");
+    assert.ok(current.permissions.allow.includes("ReviewFixtureExternalPermission"),
+      "untracked external configuration is preserved");
+  }
 
   console.log("ok: config dependencies (row references, recommended list, terminal print)");
 } finally {
