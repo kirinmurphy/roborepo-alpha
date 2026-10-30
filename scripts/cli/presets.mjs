@@ -561,7 +561,7 @@ function requestedBundles(args, catalog) {
       console.error(`--selected applies the recorded selection; it takes no bundle ids (got: ${positional.join(", ")})`);
       process.exit(2);
     }
-    return new Set([...catalog.default, ...(readPresetState().selected ?? [])].filter((id) => catalog.byId.has(id)));
+    return new Set([...catalog.default, ...selectedBundleRoots(readPresetState())].filter((id) => catalog.byId.has(id)));
   }
   if (args.includes("--default") || positional.includes("default") || positional.length === 0) {
     return new Set(catalog.default);

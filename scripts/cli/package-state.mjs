@@ -56,8 +56,8 @@ export function selectedRootIds(catalog, registry = readEnabledPackagesRegistry(
 }
 
 // Effective set: the selected roots plus their transitive `requires`, dependencies first. This is
-// the "should this package's behavior be live" answer — rendering, probing, ownership checks, and
-// reconciliation all read it. A dependency stays effective while any selected root requires it,
+// the "should this package's behavior be live" answer — rendering, probing, and reconciliation all
+// read it. A dependency stays effective while any selected root requires it,
 // even when the user also deselected it directly. Root ids missing from the catalog are kept, so a
 // retired package still reads as wanted until `package reconcile` forgets it.
 export function effectiveEnabledIds(catalog, registry = readEnabledPackagesRegistry()) {

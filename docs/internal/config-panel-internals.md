@@ -53,8 +53,8 @@ and terminal flow share one implementation:
   returns `outcomes[]` (one probed result per package the mutation applied or removed: `enabled`,
   `partial`, `blocked`, or `disabled`, with the probe's per-component detail), `recommendations[]`
   (recommended packages an enable left off, for the portal to offer), and `keptOnBy[]` (the selected
-  packages that keep a deselected package on). A refused mutation (unknown id, ownership conflict,
-  dependency-only package, derived-only disable) is a `PackageMutationError` returned as
+  packages that keep a deselected package on). A refused mutation (unknown id, dependency-only
+  package, derived-only disable) is a `PackageMutationError` returned as
   `{ ok: false, message }`; nothing has changed when it is. The bulk endpoint returns the same
   `outcomes[]` per member and skips dependency-only members.
 - `setSkillInstalled(id, enabled)` → materializes/removes the cache entry in `~/.roborepo/skills`

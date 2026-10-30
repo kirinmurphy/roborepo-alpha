@@ -240,7 +240,7 @@ for (const pkgId of packageIds) {
   fixture("dep-lonely");
   fixture("dep-only", { selectable: false, presentation: { category: "integrations", visibility: "dependency" } });
   fixture("dep-only-parent", { requires: ["dep-only"] });
-  fixture("dep-partial", { resources: [{ type: "mcp", preset: "jcodemunch" }] });
+  fixture("dep-partial", { resources: [{ type: "mcp", preset: "skipped-preset" }] });
   fixture("dep-blocked", { resources: [{ type: "mcp", preset: "no-such-preset" }] });
 
   const run = (...args) => spawnSync(process.execPath, [cli, ...args], { env, encoding: "utf8", input: "" });
@@ -320,7 +320,7 @@ for (const pkgId of packageIds) {
 
     // A component that does not land reads partial; an apply error reads blocked and exits 1.
     out = ok("package", "enable", "dep-partial");
-    assert.match(out, /partial: dep-partial \(missing: mcp jcodemunch\)/, "a missing component reports partial, not enabled");
+    assert.match(out, /partial: dep-partial \(missing: mcp skipped-preset\)/, "a missing component reports partial, not enabled");
     const blocked = spawnSync(process.execPath, [cli, "package", "enable", "dep-blocked"], { env: { ...env, SKIP_MCP: "0" }, encoding: "utf8", input: "" });
     assert.equal(blocked.status, 1, `an apply error exits 1\n${blocked.stdout}${blocked.stderr}`);
     assert.match(blocked.stderr, /blocked: dep-blocked \(mcp add failed for preset: no-such-preset \(unknown preset\)\)/);

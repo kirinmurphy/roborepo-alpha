@@ -505,9 +505,9 @@ function installMcpPreset(presetId) {
   for (const provider of configFileMcpProviders()) ensureConfigFileMcp(provider, spec);
 }
 
-// Typed failure for a package mutation that cannot start: a usage error, an unknown package, an
-// ownership conflict, a direct enable or disable of a dependency-only package, or a disable the
-// dependency rules refuse. Nothing has changed when it is thrown. The terminal commands print the message and exit with `exitCode`; the portal returns it.
+// Typed failure for a package mutation that cannot start: a usage error, an unknown package, a
+// direct enable or disable of a dependency-only package, or a disable the dependency rules
+// refuse. Nothing has changed when it is thrown. The terminal commands print the message and exit with `exitCode`; the portal returns it.
 export class PackageMutationError extends Error {
   constructor(message, { exitCode = 2 } = {}) {
     super(message);
