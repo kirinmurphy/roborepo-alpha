@@ -42,6 +42,9 @@ whether to make one or stay on the current branch.
 
 Need a different base (once the user agrees)? `git worktree add -b <name> <path> <base>` — isolated tree, checkout untouched.
 
+Once work belongs in a worktree, whether you created it or the user named it, move the session into
+it before the first edit, so the user approves the folder once rather than every file in it.
+
 Uncommitted changes you did not make belong to someone else. Never revert or stash them, and stage
 explicit paths rather than `-A`/`.` so they cannot ride along in your commit.
 
@@ -101,4 +104,5 @@ blocked, say so and give the exact command not run; do not describe that work as
 ## Claude Specifics
 
 - Optional package hooks may block broad tools and nudge toward package-specific alternatives. Treat that as redirect, not failure.
+- In the desktop app, entering a worktree means calling `change_directory` on its path, not only `request_directory`: access alone leaves the session in the old folder, and edits there still prompt.
 
