@@ -194,7 +194,7 @@ a user's own `claude -p "/pr-followup"`, or a future watcher.
 
 | Requirement | Skill run by a person | Unattended run |
 | --- | --- | --- |
-| `ask` fails closed | Prompts reach the person | Must deny, not approve. Claude: verified. Codex and Gemini: **unverified** (see below) |
+| `ask` fails closed | Prompts reach the person | Must deny, not approve. Claude: verified. Codex: refuses sandbox escalation, but has no ask tier (see below). Gemini: **unverified** |
 | Untrusted comment text | Trust rule plus data framing in the skill | Same, and a watcher must apply the trust rule in code before any text reaches the model |
 | One run per PR | Not enforced; the person is present | Native features own this. A watcher would need a per-PR lock |
 | Attempt cap per commit | One pass per run; the skill does not loop | A watcher would cap attempts per head commit (proposed: 2) |
@@ -206,8 +206,12 @@ Fail-closed evidence: in a Claude `-p` run, a call that needs approval is denied
 and `--permission-prompts none` tells Claude not to retry
 ([headless docs](https://code.claude.com/docs/en/headless)). Codex has no per-command ask tier
 (`perCommandAsk: false` in `globals/harnesses/codex/provider.json`), so `ask` items fall through to
-`approval_policy`; what `codex exec` does under `never` is unchecked. Gemini's non-interactive
-behavior is unchecked.
+`approval_policy` and the sandbox. Checked on 2026-10-30 with `codex-cli` 0.166.0: under
+`codex exec -c approval_policy="never" -s workspace-write`, a write outside the workspace failed
+with "Operation not permitted" and was not escalated. So Codex fails closed on anything the
+sandbox blocks, and `forbidden` rules still deny. But an `ask`-bucket command the sandbox allows
+just runs: Codex has no way to stop and ask for one command. Gemini's non-interactive behavior is
+unchecked. Gemini is not installed on this machine.
 
 ### Revisit conditions for a watcher
 
@@ -226,8 +230,9 @@ Reopen option (c) as its own plan only when all of these hold:
 
 - [ ] With Part 01 in place, Claude desktop Auto-fix on a PR with an inline thread reads it, pushes
       a fix as the bot, and resolves the thread.
-- [ ] Check how `codex exec` treats a command that would prompt under `approval_policy = "never"`:
-      refused or run.
+- [x] Check how `codex exec` treats a command that would prompt under `approval_policy = "never"`:
+      sandbox-blocked commands are refused, not escalated; `ask`-bucket commands the sandbox allows
+      run without a prompt.
 - [ ] Check Gemini CLI's non-interactive mode for a deny-instead-of-prompt setting.
 - [ ] Check what `authorAssociation` GitHub reports for bot reviewers, to set the bot-list default.
 
