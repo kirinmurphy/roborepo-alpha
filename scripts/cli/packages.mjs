@@ -759,7 +759,7 @@ export async function reconcileEnabledPackages(rest = []) {
   const leaving = requiredClosure(catalog, [...applied])
     .filter((id) => applied.has(id) && !effective.has(id)).reverse();
   for (const id of leaving) {
-    console.log(`${dryRun ? "[dry-run] would remove" : "remove"} no longer required package: ${id}`);
+    console.log(`${dryRun ? "[dry-run] would remove" : "remove"} no longer enabled package: ${id}`);
     await removePackageComponents(catalog.find((pkg) => pkg.id === id), { dryRun });
     changedPackageIds.add(id);
   }

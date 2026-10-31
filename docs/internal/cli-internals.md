@@ -17,7 +17,7 @@ thin composition root; commands are declared as JSON under
 | `scripts/cli/browser.mjs` + `scripts/cli/browser/` | `browser probe\|run`: package gate, provider contract and validation, Playwright and stub providers, evidence store, local-service lifecycle |
 | `scripts/cli/mcp.mjs` | `mcp add` (registration with every MCP-capable harness) |
 | `scripts/cli/presets.mjs` | `library` / `package manage` (one shared `packageLibrary` execution preset), `bundle status\|apply\|check\|remove` |
-| `scripts/cli/package-state.mjs` | the only reader and writer of `~/.roborepo/enabled-packages.json`: selected roots, the effective set, version-1 upgrade reads |
+| `scripts/cli/package-state.mjs` | the only reader and writer of `~/.roborepo/enabled-packages.json` (selected roots, the effective set, version-1 upgrade reads) and the machine-local `~/.roborepo/applied-packages.json` (packages RoboRepo installed, so reconcile can remove one that left the effective set) |
 | `scripts/cli/package-graph.mjs` | pure dependency-graph helpers (required closure, `requiredBy`, `recommendedBy`, `requires` cycles) shared by packages and install bundles |
 | `scripts/cli/bundle-selection.mjs` | install bundle roots and effective set over `presets.json` and `~/.roborepo/presets/state.json` |
 | `scripts/cli/initialize.mjs` | `init` — orchestrates setup, harness discovery, the Package Library handoff, and apply |

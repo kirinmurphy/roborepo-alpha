@@ -198,6 +198,13 @@ Package state has three layers, each with one owner:
 | Effective set | What must be active because of those choices? | Derived on every read: roots plus their `requires` closure (`scripts/cli/package-graph.mjs`) |
 | Live state | What is actually installed in each harness? | The probes in `scripts/cli/package-probes.mjs` |
 
+Beside the layers, `package-state.mjs` also owns the machine-local `~/.roborepo/applied-packages.json`:
+the packages RoboRepo applied on this machine. Enable/apply adds an id and component removal drops
+it. Reconcile removes an applied package that is no longer effective (a dropped `requires` edge, a
+`defaultEnabled` flip to `false`, a hand-edited registry), so it never touches configuration
+RoboRepo did not apply. Packages installed before the record existed and already out of the effective set
+were never recorded, so reconcile leaves them alone.
+
 The registry tracks two lists:
 
 ```json

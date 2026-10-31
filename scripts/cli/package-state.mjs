@@ -1,4 +1,6 @@
-// Package selection state: the only module that reads or writes ~/.roborepo/enabled-packages.json.
+// Package selection and installation state: the only module that reads or writes
+// ~/.roborepo/enabled-packages.json (what is selected) and ~/.roborepo/applied-packages.json (what
+// RoboRepo installed on this machine).
 //
 // Three layers, computed in one direction:
 //   selected roots — what the user (or a catalog default) chose; the registry records only these
@@ -18,8 +20,8 @@ import { dropRequiredIds, requiredClosure } from "./package-graph.mjs";
 
 export const REGISTRY_SCHEMA_VERSION = 2;
 
-// Installation ownership is separate from selection: losing a dependency edge must not lose
-// the knowledge needed to remove its installed components, or adopt external configuration.
+// Installation ownership is separate from selection: losing a dependency edge must not lose the
+// knowledge needed to remove its installed components, nor touch configuration RoboRepo never applied.
 export function readAppliedPackageIds() {
   try {
     const data = JSON.parse(fs.readFileSync(appliedPackagesPath, "utf8"));
