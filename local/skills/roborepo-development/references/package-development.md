@@ -201,9 +201,10 @@ Package state has three layers, each with one owner:
 Beside the layers, `package-state.mjs` also owns the machine-local `~/.roborepo/applied-packages.json`:
 the packages RoboRepo applied on this machine. Enable/apply adds an id and component removal drops
 it. Reconcile removes an applied package that is no longer effective (a dropped `requires` edge, a
-`defaultEnabled` flip to `false`, a hand-edited registry), so it never touches configuration
-RoboRepo did not apply. Packages installed before the record existed and already out of the effective set
-were never recorded, so reconcile leaves them alone.
+`defaultEnabled` flip to `false`, a hand-edited registry), and never a package the record does not
+name. The guarantee is per package, not per entry: removal takes out every entry the package's
+manifest lists, the same as `package disable`. Packages installed before the record existed and
+already out of the effective set were never recorded, so reconcile leaves them alone.
 
 The registry tracks two lists:
 
@@ -311,7 +312,7 @@ The portal's package toggle (`portal/config/elements/config-toggle.js` →
 `roborepo package reconcile` (→ `reconcileEnabledPackages()`) is the full-reconciliation entry
 point: re-applies every enabled package, removes installed packages that left the effective set,
 and forgets no-longer-in-catalog stale entries. Machine-local `applied-packages.json` tracks which
-packages RoboRepo applied, so cleanup preserves untracked external configuration. This is the
+packages RoboRepo applied, so cleanup never removes a package RoboRepo did not install. This is the
 command to reach for if "apply everything currently selected" is needed —
 don't invent a new name for it.
 

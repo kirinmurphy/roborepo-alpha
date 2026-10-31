@@ -21,7 +21,7 @@ import { dropRequiredIds, requiredClosure } from "./package-graph.mjs";
 export const REGISTRY_SCHEMA_VERSION = 2;
 
 // Installation ownership is separate from selection: losing a dependency edge must not lose the
-// knowledge needed to remove its installed components, nor touch configuration RoboRepo never applied.
+// knowledge needed to remove its installed components, nor remove a package RoboRepo never applied.
 export function readAppliedPackageIds() {
   try {
     const data = JSON.parse(fs.readFileSync(appliedPackagesPath, "utf8"));

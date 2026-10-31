@@ -113,7 +113,7 @@ export function portalPidPathForPort(port) {
 // Registry of enabled packages — source of truth for rules rendering.
 export const enabledPackagesPath = path.join(stateDir, "enabled-packages.json");
 // Packages RoboRepo installed on this machine, kept apart from selection so reconcile can remove a
-// package that left the effective set without touching configuration RoboRepo never applied.
+// package that left the effective set without removing one RoboRepo never applied.
 export const appliedPackagesPath = path.join(stateDir, "applied-packages.json");
 // Content hash of root config (settings.json / config.toml) as of roborepo's last write, keyed by
 // harness. Lets update/repair tell "unchanged since we last wrote it" apart from "something else

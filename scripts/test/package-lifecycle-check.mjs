@@ -5,7 +5,7 @@
 // resource type (MCP, Codex tool approvals, permissions, rules, hooks with a script) appears on
 // enable and leaves nothing behind on disable. Later blocks cover a several-skill package, derived
 // dependencies and their status, and reconcile removing an installed package that left the
-// effective set while preserving configuration RoboRepo never applied.
+// effective set while leaving alone a package RoboRepo never applied.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
