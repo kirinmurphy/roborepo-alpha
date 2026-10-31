@@ -1,0 +1,6 @@
+#!/bin/sh
+# Runs the fast pre-push check with the refs git passes on stdin. Installed for the primary checkout
+# and every linked worktree with: git config core.hooksPath scripts/git-hooks
+# Agent pushes reach it through RoboRepo's agent pre-push hook, which chains to this directory.
+
+exec bash "$(dirname "$0")/../test/pre-push-check.sh" "$@"

@@ -57,7 +57,8 @@ Resolve:
 - the worktree the plan names, its branch, and the worktree's copy of the plan — the authoritative
   copy while the plan is in `active/` or `review/`;
 - the repository's canonical completion gate and the plan's own tests, from `package.json` scripts,
-  a `Makefile`, `justfile`, `pyproject.toml`, or CI config — never an invented one.
+  a `Makefile`, `justfile`, `pyproject.toml`, or CI config — never an invented one — and where the
+  repository's CI result for a commit can be read, from its forge when available.
 
 | Folder | This run |
 | --- | --- |
@@ -142,11 +143,13 @@ of it. The human's review is the independent check; this step makes sure they re
 - Read the plan's requirements, acceptance criteria, `## Documentation impact`, Decision Log, Open
   Questions, and the `## Review` record the Validation Loop left. A plan without a clean validation
   record was submitted without one; say so in the record.
-- Run the repository's canonical completion gate and the plan's own tests. Record each command and
-  result.
-- For each failure, rerun the failing check on the base branch, or show its failing input exists
-  there. A failure the base branch has too is a **base failure**: record it under
-  `### Verification`, and it is neither a finding nor a blocker.
+- Read the repository's CI result for the reviewed commit, from its forge when available. Run the
+  canonical completion gate locally, once, only when no CI result exists for that commit. Run the
+  plan's own tests. Record each command or CI run and its result.
+- For each failure, read the base branch's CI result for the base commit; when it has none, rerun
+  the failing check on the base branch, or show its failing input exists there. A failure the base
+  branch has too is a **base failure**: record it under `### Verification`, and it is neither a
+  finding nor a blocker.
 - Run one Validator pass over the merged result: a fresh-context subagent where the environment has
   one, otherwise a separate read-only step in this session. Give it the plan, the base branch, and
   the gate output if the gate has finished, never an account of the work. It applies the same rubric as `/plan-execute`'s
@@ -220,8 +223,9 @@ protects is the human's decision, and escalated findings still go to them.
 
 For each finding fixed here:
 
-1. Make the fix in the worktree, then run the checks it affects. After any code or test change,
-   rerun the repository's canonical completion gate.
+1. Make the fix in the worktree, then run the checks it affects. A code or test change needs the
+   full gate on the fixed commit: CI's result once the branch is pushed, which this skill never
+   does itself, or the canonical completion gate locally, once, when no CI result can exist.
 2. Commit the fix on its own, separate from the plan record, so the human can read exactly what the
    review changed.
 3. Check the finding off with its commit: `- [x] Missing retry test — fixed in review (<short commit>)`.

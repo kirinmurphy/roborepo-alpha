@@ -74,12 +74,14 @@ async function waitForGroupExit(pid) {
   return false;
 }
 
-function signalGroup(pid, signal) {
+export function signalGroup(pid, signal) {
   try {
     process.kill(-pid, signal);
     return true;
   } catch (error) {
-    if (error.code === "ESRCH") return false;
+    // macOS reports EPERM, not ESRCH, for a group whose only members are exited processes not yet
+    // reaped (a server that just died, before its parent collects it). Nothing in it can serve.
+    if (error.code === "ESRCH" || error.code === "EPERM") return false;
     throw error;
   }
 }

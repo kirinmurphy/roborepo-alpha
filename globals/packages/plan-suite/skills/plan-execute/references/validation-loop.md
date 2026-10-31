@@ -26,7 +26,9 @@ target worktree, on the session's own model; never pass `isolation: "worktree"`.
 
 - the plan's path in the worktree;
 - the base branch, so it reads the full diff with `git diff <base>...HEAD`;
-- the repository's completion gate command and the output of its latest run;
+- the gate evidence: the repository's CI result for the branch's head commit, from its forge when
+  available; otherwise the affected checks' commands and output. Do not run the full local gate to
+  produce it;
 - the paired skills this run loaded;
 - the rubric below and its report format.
 

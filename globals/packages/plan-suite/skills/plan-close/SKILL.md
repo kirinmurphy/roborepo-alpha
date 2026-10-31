@@ -22,7 +22,8 @@ Resolve:
 - the repository root and base branch (`main` unless repository policy names another);
 - the selected plan, by id or path;
 - the repository's canonical completion gate and any plan-specific tests, from `package.json`
-  scripts, a `Makefile`, `justfile`, `pyproject.toml`, or CI config — never an invented one. A
+  scripts, a `Makefile`, `justfile`, `pyproject.toml`, or CI config — never an invented one — and
+  where the repository's CI result for a commit can be read, from its forge when available. A
   release or publication check is not a universal closure requirement unless the plan owns
   release or publication behavior;
 - current Git state, including the plan's `worktree` and that worktree's branch.
@@ -124,15 +125,18 @@ transition command repeats this check before it commits.
 
 ### 1. Run the tests
 
-Run the repository's canonical completion gate from the checkout that holds the plan's landed work,
-then run focused tests named by the plan. Prefer the repository's canonical CI command over a broad
-discovery command when that command also includes release-only or
-optional environment suites. Tests run first because a red plan-relevant suite changes the code the
-verdict would judge.
+Read the repository's CI result for the landed commit on the base branch, from its forge when
+available; it stands in for the completion gate. Run the canonical completion gate locally, once,
+from the checkout that holds the plan's landed work, only when no CI result exists for that commit.
+Then run the focused tests named by the plan. When the gate runs locally, prefer the repository's
+canonical CI command over a broad discovery command that also includes release-only or optional
+environment suites. Tests run first because a red plan-relevant suite changes the code the verdict
+would judge.
 
 On a plan-relevant failure, inspect the cause and fix it when the change is within the selected
 plan's scope and can be made autonomously. Add a missing regression test when needed, rerun the
-affected checks, and rerun the completion gate after code or test changes. If the failure needs a
+affected checks; after code or test changes, the full gate comes from CI's result for the fix commit,
+or one local completion gate run when no CI result can exist. If the failure needs a
 user decision or an external dependency, record the failing output, continue independent
 agent-resolvable work, and refuse at the verdict if it remains. For an unrelated, pre-existing
 failure, report the exact output and continue only when the user explicitly waives it;
@@ -173,8 +177,8 @@ change instead of requiring a plan migration.
 You must fix agent-resolvable gaps before the verdict: correct in-scope code or plan claims, add a
 missing regression test for untested observable behavior, and perform available UI
 checks. Keep the fix within the selected plan and existing authorization. Rerun the affected checks,
-the canonical completion gate after code or test changes, and the plan validator after document
-changes. Only leave an issue open when it needs a user decision, manual confirmation, an external
+the full gate after code or test changes (CI's result for the fix commit, or one local completion
+gate run when none can exist), and the plan validator after document changes. Only leave an issue open when it needs a user decision, manual confirmation, an external
 dependency, or work outside this plan.
 
 ### 4. Decide the verdict
@@ -192,7 +196,7 @@ Follow `references/verdict.md`:
 Unchecked `## Not tested` entries are built work nobody confirmed. Attempt each check the agent
 can perform: run an existing test, add a missing regression test for observable behavior, or use an
 available UI. Check off an entry only after recording the concrete passing evidence in the plan.
-If this changes code or tests, rerun the affected checks and canonical completion gate; rerun the
+If this changes code or tests, rerun the affected checks and the full gate as in step 1; rerun the
 plan validator after changing the document. Never check off manual-only `## Not tested` entries
 without the user's confirmation. A user may instead defer an entry to another plan; record that
 scope decision and its reason in the `## Decision Log` before removing the entry. While any
