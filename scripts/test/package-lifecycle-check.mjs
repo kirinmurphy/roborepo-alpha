@@ -347,8 +347,7 @@ for (const pkgId of packageIds) {
     ok("package", "disable", "dep-parent-a");
     assert.deepEqual(effective(), [], "an upgraded dependency turns off with its last parent");
 
-    // adopt-live never records a dependency-only package as a root, even when its pieces are live:
-    // no disable could ever remove such a root.
+    // Live components do not make a dependency-only package a direct selection for adopt-live.
     fs.appendFileSync(path.join(tmp, ".claude", "CLAUDE.md"), "\n## Fixture rules dep-only\n");
     ok("package", "adopt-live");
     assert.ok(!registry().packages.includes("dep-only"), "adopt-live skips non-selectable packages");
