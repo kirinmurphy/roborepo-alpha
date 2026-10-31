@@ -83,8 +83,8 @@ change in one place rather than per consumer.
   inspectable where they are referenced.
 - Let each package's author choose its dependency form: selectable (its own row), dependency-only
   (listed only under Requires), or hidden (shown nowhere).
-- Remove a package RoboRepo installed once it leaves the effective set, without touching
-  configuration RoboRepo did not apply.
+- Remove a package RoboRepo installed once it leaves the effective set, and never a package
+  RoboRepo did not install.
 - Make enable and disable return the probed outcome (`enabled`, `partial`, or `blocked`) instead of
   assuming success.
 - Give package state its own module, so the rules renderer only renders.
@@ -227,8 +227,10 @@ stateDiagram-v2
   the applied record that is no longer effective, dependencies after the packages that required
   them, then re-applies the effective set. A package leaves the effective set this way when a
   parent drops its `requires` edge, a `defaultEnabled` default flips to `false`, or the registry is
-  edited by hand. Configuration RoboRepo did not apply is never touched, because only applied ids
-  are removed. Installs from before the record have no entries, so their existing leftovers are
+  edited by hand. Only applied ids are removed, so a package RoboRepo did not install is never
+  touched. The guarantee is per package: removing one takes out every entry its manifest lists,
+  as `package disable` does, because harness config carries no per-entry ownership markers
+  (Non-goals). Installs from before the record have no entries, so their existing leftovers are
   left alone. Ids the catalog no longer has are dropped from the record with the registry's stale
   entries. Uninstall removes the record.
 
@@ -389,11 +391,11 @@ rule:
 
 | Doc | Update |
 | --- | --- |
-| `.claude/skills/roborepo-development/references/package-development.md` | `requires`, `recommends`, `selectable`, `presentation.visibility`; selected/effective/live model |
-| `docs/user/reference/config-control-panel.md` | Requires line in the source popup; Recommended dependencies list; recommendation prompt |
+| `.claude/skills/roborepo-development/references/package-development.md` | `requires`, `recommends`, `selectable`, `presentation.visibility`; selected/effective/live model and the applied record; reconcile cleanup; the three dependency forms |
+| `docs/user/reference/config-control-panel.md` | Requires line in the source popup; Recommended dependencies list; recommendation prompt; dependency-only and hidden forms |
 | `docs/internal/config-panel-internals.md` | Dependency sections in `buildBehaviorView`; per-package mutation outcomes |
-| `docs/user/reference/roborepo-cli.md` | `package enable`/`disable` outcomes, disable rules for dependencies, recommendation prompt |
-| `docs/internal/cli-internals.md` | `package-state.mjs`/`package-graph.mjs` ownership; bundle roots and derived dependencies |
+| `docs/user/reference/roborepo-cli.md` | `package enable`/`disable` outcomes, disable rules for dependencies, recommendation prompt; `package reconcile` removing installed packages that left the effective set |
+| `docs/internal/cli-internals.md` | `package-state.mjs`/`package-graph.mjs` ownership, including the applied record; bundle roots and derived dependencies |
 
 ## Not tested
 
@@ -622,6 +624,16 @@ Earlier questions were answered by the user (2026-10-27 and 2026-10-28); see Dec
 - [x] Validator over 82d2ae70: probe-status and reconcile-cleanup assertions sat in the Config
       dependency-sections check, outside its header's scope — moved to
       `package-lifecycle-check.mjs` (2ca33cf7)
+- [x] Human review (2026-10-30): the catalog accepted `selectable: false` with `catalog`
+      visibility, a row with no switch — user asked to reject it (see Decision Log) (4c31f6e9)
+- [x] Review Validator pass 1 (2026-10-30): reconcile cleanup had no test for a dry run, a plain
+      disable dropping the applied entry, a package installed before the record, or a corrupt
+      record — added to `package-lifecycle-check.mjs` with a hand-edited-registry case (a33caf3c)
+- [x] Review Validator pass 1: "cleanup never touches configuration RoboRepo did not apply"
+      overstated the guarantee; removal takes out every entry the manifest lists — reworded per
+      package in docs, comments, and §4 (1ad59fd1)
+- [x] Review Validator pass 1: `## Validation` and `## Documentation impact` had no rows for the
+      applied record — Validation rows added (bd18059e), Documentation impact updated
 
 ### Verification
 
@@ -697,6 +709,14 @@ Earlier questions were answered by the user (2026-10-27 and 2026-10-28); see Dec
   (macOS returns `EPERM` for a process group holding only zombies, and `signalGroup` in
   `scripts/cli/browser/local-service.mjs`, unchanged from main, rethrew it). Fixed at the user's
   request (2571d380).
+- Human review (2026-10-30): `plans sync-base` merged local `main` at 8adee1aa (af4f3423, no
+  conflicts; main brought plan-write skill prose and other plans only). Base failure:
+  `docs-reference-check.mjs` reports `docs/internal/backlog-review.md:139` linking to
+  `plans/backlog/test-validation-tiers-and-diff-scoping.md`, which main's 8adee1aa archived; the
+  branch does not touch that file.
+- Review Validator pass 1 (fresh-context subagent, over `2e3492ce..af4f3423`): 3 fix, 0 escalate,
+  0 base; ran the package lifecycle, retired-ids, managed-uninstall, bulk-toggle, and
+  dependency-sections checks (all pass).
 
 ### Result
 
