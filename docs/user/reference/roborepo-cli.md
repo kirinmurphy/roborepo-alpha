@@ -108,7 +108,7 @@ one.
 | `package enable <id>` | `<id>` and everything it requires turn on. In a terminal you are asked about each recommendation that is off; in a script they are only listed. |
 | `package disable <id>` for a package you turned on | It is turned off, unless another package you turned on requires it. Then it stays on and the result names that package. |
 | `package disable <id>` for a package that is on only because another requires it | Refused, naming the packages that keep it on. `--cascade` turns those off too, and it goes with them. |
-| `package enable` or `disable` on a dependency-only package | Refused: it has no switch of its own and follows the packages that require it. |
+| `package enable` or `disable` on a dependency-only package | Refused: it has no switch of its own and follows the packages that require it. One exception: `disable` removes it when the registry records it as a selected package (an older registry, or a package that later became dependency-only). |
 
 ## Local Portal
 

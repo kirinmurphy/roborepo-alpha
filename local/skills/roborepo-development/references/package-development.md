@@ -90,7 +90,7 @@ Enforced by `normalizePackage`/`normalizeResource` in `scripts/cli/package-catal
 | `presentation.order` | no (defaults `0`) | numeric, controls sort within category |
 | `requires` | no | array of package IDs; they join the effective set automatically. Cycle-checked, missing-id-checked, no self-reference |
 | `recommends` | no | array of package IDs; offered after an enable, never turned on automatically, never a cause of `partial`. Missing-id-checked; not part of cycle detection |
-| `selectable` | no (defaults `true`) | boolean; `false` makes a dependency-only package that `package enable`/`disable` refuse. Cannot combine with `defaultEnabled: true`, and needs `presentation.visibility` `dependency` or `hidden` (a `catalog` row would have no switch) |
+| `selectable` | no (defaults `true`) | boolean; `false` makes a dependency-only package that `package enable`/`disable` refuse, except that `disable` removes one still recorded as a root (an older registry, or a manifest that later set `selectable: false`). Cannot combine with `defaultEnabled: true`, and needs `presentation.visibility` `dependency` or `hidden` (a `catalog` row would have no switch) |
 | `presentation.visibility` | no (defaults `catalog`) | `catalog` (normal Config row), `dependency` (no row; listed under **Requires** in the source popup of each package that requires it), or `hidden` (no UI row) |
 | `resources` | yes | array — see Resource types |
 | `urls` | no | optional array shown in portal (see e.g. `caveman`) |
