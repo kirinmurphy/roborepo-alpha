@@ -25,14 +25,14 @@ test.describe("Agents page", () => {
     await page.goto("/agents");
     const suite = page.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^Development Planning Lifecycle$/ }) });
     await expect(suite).toHaveCount(1);
-    await expect(suite.locator(".badge", { hasText: /^6 skills$/ })).toBeVisible();
+    await expect(suite.locator(".badge", { hasText: /^7 skills$/ })).toBeVisible();
 
     await suite.locator(".item-label").click();
     const modal = page.locator("dialog#config-modal");
     await expect(modal).toBeVisible();
     await expect(modal.locator("#modal-title")).toHaveText("Development Planning Lifecycle");
-    await expect(modal.locator(".package-contents-summary")).toHaveText("6 skills · 1 rules fragment");
-    await expect(modal.locator(".package-contents-label")).toHaveText(["/plan-write", "/plan-promote", "/plan-execute", "/plan-review", "/plan-close", "/plan-archive", "Rules"]);
+    await expect(modal.locator(".package-contents-summary")).toHaveText("7 skills · 1 rules fragment");
+    await expect(modal.locator(".package-contents-label")).toHaveText(["/plan-suite-init", "/plan-write", "/plan-promote", "/plan-execute", "/plan-review", "/plan-close", "/plan-archive", "Rules"]);
     // Every row shows its own cost: a skill's when-loaded size, the rules fragment's startup size.
     const chips = modal.locator(".package-contents-entry token-chip");
     await expect(chips).toHaveCount(7);

@@ -19,10 +19,11 @@ Use it when you want to:
 | Piece | Always available? | What it does |
 | --- | --- | --- |
 | Plans page | Yes | Local `/plans` portal view for discovering, filtering, rendering, and copying plan context |
-| Plan suite | Optional packages: `plan-suite` and `session-close` | Seven slash commands: six for the lifecycle steps, plus `/session-close` |
+| Plan suite | Optional packages: `plan-suite` and `session-close` | Eight slash commands: one-time setup, six for the lifecycle steps, plus `/session-close` |
 
 | Command | What you get |
 | --- | --- |
+| `/plan-suite-init` | Set up a repo for the suite once: the `docs/plans` folders and `plans-config.json` with your plan-name namespaces. `/plan-write` runs it for you when the config is missing |
 | `/plan-write` | Create a plan with its initial checklist, or revise an existing one, including bringing it up to date with the repository |
 | `/plan-promote` | Review and prepare a plan for development, then move it to `ready/` |
 | `/plan-execute` | Start or resume implementation in an isolated worktree, check it with a validator and fix what it finds, then move the plan to `review/`; or fix findings a review sent back |
