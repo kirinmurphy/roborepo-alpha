@@ -73,6 +73,9 @@ listing each skill, then its rules or hooks, with each entry's own cost; each en
 source view a single-skill card does, and Back returns to the list. `buildBehaviorView` and
 `packagePresentationItem` in `scripts/cli/config.mjs` build that `package-contents` inspect
 target, and `context-cost.mjs` reports each resource's share under `contextCost.packages[<id>].resources`.
+A package with no source of its own (no skill, command, or rules) gets the same target with no
+entries when it has a visible requirement, so its label opens a contents view that lists only
+its **Requires**; when every requirement is hidden, the label opens nothing.
 
 ## Manifest schema (`package.config.json`)
 

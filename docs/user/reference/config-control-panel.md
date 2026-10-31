@@ -56,7 +56,9 @@ A package may list `requires: [pkgId, ...]` and `recommends: [pkgId, ...]`:
 A selectable required package with `catalog` visibility keeps its own row. Dependency-only
 packages appear under **Requires** in their parents' source popups instead. Clicking a package's
 name opens its source popup, which lists its visible requirements; each name there opens that
-package's source, and **Back** returns to the package that requires it.
+package's source, and **Back** returns to the package that requires it. A package with no source
+of its own opens a contents view that lists only its requirements; if all of them are hidden, its
+name opens nothing.
 
 Below its own rows, a section lists **Recommended dependencies**: what its packages recommend, each
 with a toggle and naming the packages that recommend it. A package a row already requires, or one
