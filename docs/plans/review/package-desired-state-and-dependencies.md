@@ -1,7 +1,7 @@
 ---
 id: o9zwxuav
 priority: high
-next_action: Open and merge the pull request, then run /plan-close.
+next_action: The human decides the two open escalations (Open Questions), then approves the reviewed commit in /plan-review.
 blocked_by: []
 depends_on: ["bysyzl1e"]
 related: ["package-registry-live-state-reconciliation", "ejsc769o", "age4cm7r", "user-managed-packages-and-add-workflows"]
@@ -371,7 +371,18 @@ see `## Review` → `### Verification`.
 
 ## Open Questions
 
-None open. Every question was answered by the user (2026-10-27 and 2026-10-28); see Decision Log.
+Two escalations from the 2026-10-30 re-review wait for the human (pending; not decided):
+
+- **Telemetry-only bundle records after `roborepo update` change.** Main 7c65c2e7 made
+  `roborepo update` run `bundle apply --selected`, which applies `hooks` as telemetry's dependency,
+  so the 2026-10-28 accepted cost (checks fail until `bundle remove telemetry`; update is not a
+  remedy) no longer holds. Recommendation: accept, and correct that Decision Log entry and the
+  `## Risks` bundle row to say `roborepo update` now applies `hooks` for such a record.
+- **The registry's version-1 read rule.** It now reaches only old workspace-package registries,
+  while main #50 removed similar compatibility reads. Keep it as decided on 2026-10-26/28, or drop
+  it and read every listed id as a root.
+
+Earlier questions were answered by the user (2026-10-27 and 2026-10-28); see Decision Log.
 
 ## Decision Log
 
@@ -477,6 +488,14 @@ None open. Every question was answered by the user (2026-10-27 and 2026-10-28); 
   package declares `recommends`, so nothing is affected yet. Offered: defer to the plan that adds
   the first edges, prompt after the wizard applies, or print one line after it applies. The user
   chose to defer ("Leave for later plan").
+- **2026-10-30 (user decision, human review): Reconcile garbage-collects packages that left the
+  effective set.** After walking through the user experience, the user chose to keep a
+  machine-local applied-packages record (`~/.roborepo/applied-packages.json`, owned by
+  `package-state.mjs`) so `package reconcile` and `roborepo update` remove a package RoboRepo
+  installed once it is no longer effective (a dropped `requires` edge, a `defaultEnabled` flip to
+  `false`, a hand-edited registry): a package that exists only behind the scenes should not
+  linger. Cleanup never touches configuration RoboRepo did not apply. Installs from before this
+  record have no entries, so their existing leftovers are left alone.
 
 ## Review
 
@@ -536,7 +555,7 @@ None open. Every question was answered by the user (2026-10-27 and 2026-10-28); 
       main removed the command-ownership check — fixed in review (73dcf8c6)
 - [x] Re-review: `bundle apply --selected` (`presets.mjs:564`, from main) reads
       `readPresetState().selected` instead of `selectedBundleRoots` — fixed in review (73dcf8c6)
-- [ ] Re-review: the `dep-partial` fixture in `package-lifecycle-check.mjs:243,323` names the
+- [x] Re-review: the `dep-partial` fixture in `package-lifecycle-check.mjs:243,323` names the
       `jcodemunch` MCP preset main deleted; passes only because `SKIP_MCP` returns first — fixed in
       review (73dcf8c6)
 - [ ] Re-review: main 7c65c2e7 made `roborepo update` run `bundle apply --selected`, which applies
@@ -545,6 +564,23 @@ None open. Every question was answered by the user (2026-10-27 and 2026-10-28); 
 - [ ] Re-review: the registry's version-1 read rule (`package-state.mjs:38-43`) now reaches only
       old workspace-package registries, while main #50 dropped similar compatibility reads —
       escalated to the human (keep as decided 2026-10-26/28, or drop)
+- [x] Re-review: a dependency that leaves the effective set (dropped `requires` edge, default
+      flipped off) kept its installed components, and `package status` did not probe transitive
+      requirements — user chose to garbage-collect through an applied record (see Decision Log
+      2026-10-30) (82d2ae70)
+- [x] Validator over 82d2ae70: uninstall left `applied-packages.json` behind and `--check-clean`
+      did not list it — fixed in review (152e685e)
+- [x] Validator over 82d2ae70: reconcile never pruned retired ids from the applied record — fixed
+      in review (e5ba52f2)
+- [x] Validator over 82d2ae70: `package status <dep>` read a required-only dependency as
+      `enabled: false` because it probes a subset that cannot see the parent root — fixed in review
+      (2f219bc7)
+- [x] Validator over 82d2ae70: the reconcile log said "no longer required" for any removed
+      package, and the package-state header, `cli-internals.md`, the package-development layers
+      table, and the CLI reference did not describe the applied record — fixed in review (e60a3336)
+- [x] Validator over 82d2ae70: probe-status and reconcile-cleanup assertions sat in the Config
+      dependency-sections check, outside its header's scope — moved to
+      `package-lifecycle-check.mjs` (2ca33cf7)
 
 ### Verification
 
