@@ -1,11 +1,11 @@
 ---
 id: o9zwxuav
 priority: high
-next_action: The human decides the two open escalations (Open Questions), then approves the reviewed commit in /plan-review.
+next_action: Finish verification and base-freshness checks for the current implementation, then request renewed approval in /plan-review; the earlier design decisions remain in force.
 blocked_by: []
 depends_on: ["bysyzl1e"]
 related: ["package-registry-live-state-reconciliation", "ejsc769o", "age4cm7r", "user-managed-packages-and-add-workflows"]
-reviewed_commit: 69dea56f35677f1b657de8de084e365cc3d1341e
+reviewed_commit: f748fe76cecdad4974a22faab00d3392cf683692
 worktree: package-desired-state-and-dependencies
 ---
 
@@ -387,7 +387,7 @@ rule:
 | A dependency row makes a category look partly selected | Bulk enable and category state count selectable roots only |
 | Changing the meaning of `packages` turns off something a user relies on | The version-1 read rule keeps every currently effective package effective; a fixture asserts the effective set is unchanged across the upgrade |
 | Replacing `process.exit` changes CLI exit codes | The CLI entry point maps each typed error to the code the old exit used; existing `test-cli.sh` exit-code assertions stay unchanged |
-| Bundle state change breaks install or doctor | Every listed bundle is read as a choice; `test-cli.sh` and `test-install-collisions.sh` bundle assertions stay green. A telemetry-only record from `main` fails `bundle check` until `bundle remove telemetry` (accepted, see Decision Log 2026-10-28) |
+| Bundle state change breaks install or doctor | Every listed bundle is read as a choice. A telemetry-only record from `main` requires `hooks`; checks can fail until those rows are applied. `roborepo update` now applies the required hooks while preserving the selected roots; `bundle remove telemetry` remains the way to remove that selection (see Decision Log 2026-10-28 and correction 2026-10-31) |
 
 ## Documentation impact
 
@@ -407,18 +407,15 @@ see `## Review` → `### Verification`.
 
 ## Open Questions
 
-Two escalations from the 2026-10-30 re-review wait for the human (pending; not decided):
+None. The existing user decisions remain requirements:
 
-- **Telemetry-only bundle records after `roborepo update` change.** Main 7c65c2e7 made
-  `roborepo update` run `bundle apply --selected`, which applies `hooks` as telemetry's dependency,
-  so the 2026-10-28 accepted cost (checks fail until `bundle remove telemetry`; update is not a
-  remedy) no longer holds. Recommendation: accept, and correct that Decision Log entry and the
-  `## Risks` bundle row to say `roborepo update` now applies `hooks` for such a record.
-- **The registry's version-1 read rule.** It now reaches only old workspace-package registries,
-  while main #50 removed similar compatibility reads. Keep it as decided on 2026-10-26/28, or drop
-  it and read every listed id as a root.
+- Every recorded bundle is a selected root. Update applies those roots and their requirements;
+  the changed update path corrects the old warning, without changing the chosen selection rule.
+- The package registry keeps its version-1 read rule, as explicitly retained on 2026-10-28.
+  Its narrower relevance to old workspace packages does not change that decision.
 
-Earlier questions were answered by the user (2026-10-27 and 2026-10-28); see Decision Log.
+The re-review entries below are resolved from those recorded decisions, without asking the user
+to choose them again. Verification and approval of the changed implementation remain separate.
 
 ## Decision Log
 
@@ -509,11 +506,11 @@ Earlier questions were answered by the user (2026-10-27 and 2026-10-28); see Dec
   bundles: every listed bundle is a root and `schemaVersion` is written but not branched on. This
   replaces the 2026-10-27 rule that dropped a legacy root listed without its requirements. Accepted
   cost: a telemetry-only record written by `main` (`["base","telemetry"]`) makes `hooks` required,
-  so `bundle check`, `doctor --installed`, and `verify-install` fail until `bundle remove telemetry`
-  or `bundle apply hooks`; `roborepo update` keeps the telemetry selection and does not clear it.
-  Validation pass 5 found the first statement of this cost wrong (it named `roborepo update` as a
-  remedy); the corrected cost stays within the user's "no backwards compatibility" choice, so the
-  decision stands. The package registry keeps its version-1 rule.
+  so `bundle check`, `doctor --installed`, and `verify-install` fail until the required hooks are
+  applied or that telemetry selection is removed. Correction on 2026-10-31: main 7c65c2e7 made
+  `roborepo update` run `bundle apply --selected`, so update now applies those hooks while keeping
+  the selected roots. The earlier warning that update was not a remedy is obsolete. The user's
+  bundle-selection decision stands. The package registry keeps its version-1 rule.
 - **2026-10-27 (user decision): The Claude MCP adapter returns `ok: false`.** Chosen over a typed
   error and over deferring to a harness-adapter plan. `runClaudeMcpAdd` returns its status, the
   adapter's `addServer` returns `ok: false` with the message in `warnings` and the CLI status in
@@ -549,6 +546,11 @@ Earlier questions were answered by the user (2026-10-27 and 2026-10-28); see Dec
 
 ### Findings
 
+- [x] Review Validator pass 5: a required multi-skill package loses the Back callback in
+      `portal/config/app.js` and `panels.js` — preserved through contents and nested source views,
+      with a browser regression (85a51bd5)
+- [x] Review Validator pass 5: `disabledRecommendations` includes hidden packages — filtered from
+      the shared enable result, with a terminal recommendation regression (f748fe76)
 - [x] `## Not tested` pointed to verification evidence the plan did not hold; the Enable selected
       path had no assertion — recorded below and added a portal test for **Enable selected** (bb2a435e)
 - [x] `adopt-live` could record a dependency-only package as a root that no disable can remove —
@@ -606,12 +608,10 @@ Earlier questions were answered by the user (2026-10-27 and 2026-10-28); see Dec
 - [x] Re-review: the `dep-partial` fixture in `package-lifecycle-check.mjs:243,323` names the
       `jcodemunch` MCP preset main deleted; passes only because `SKIP_MCP` returns first — fixed in
       review (73dcf8c6)
-- [ ] Re-review: main 7c65c2e7 made `roborepo update` run `bundle apply --selected`, which applies
-      `hooks` as telemetry's dependency, so the 2026-10-28 accepted cost (checks fail until
-      `bundle remove telemetry`; update is not a remedy) no longer holds — escalated to the human
-- [ ] Re-review: the registry's version-1 read rule (`package-state.mjs:38-43`) now reaches only
-      old workspace-package registries, while main #50 dropped similar compatibility reads —
-      escalated to the human (keep as decided 2026-10-26/28, or drop)
+- [x] Re-review: main 7c65c2e7 made update apply selected bundles and their required hooks —
+      corrected the obsolete warning; retained the 2026-10-28 bundle-selection decision
+- [x] Re-review: the version-1 package-registry rule now reaches only old workspace packages —
+      retained the explicit 2026-10-26/28 decision; removal elsewhere does not reopen that choice
 - [x] Re-review: a dependency that leaves the effective set (dropped `requires` edge, default
       flipped off) kept its installed components, and `package status` did not probe transitive
       requirements — user chose to garbage-collect through an applied record (see Decision Log
@@ -743,17 +743,52 @@ Earlier questions were answered by the user (2026-10-27 and 2026-10-28); see Dec
   this branch) stops every `<repo>/scripts/install/main.sh` process on the machine, so concurrent
   install and uninstall tests from one checkout interfere. A fresh install alone exited 0.
 - `npm run check` at aa976114, nothing else running from this checkout: 66/67 suites; the one
-  failure is the base `docs-reference-check.mjs` link above. Later commits change only docs and
-  this plan.
+  failure is the base `docs-reference-check.mjs` link above. This is historical evidence; it does
+  not cover the later fifth-pass source and test fixes.
 - Review Validator pass 4 (fresh-context subagent, read-only, no install/uninstall tests, at
   aa976114): 1 fix (docs), 0 escalate, 1 base (the same docs link); ran the lifecycle, catalog,
   retired-ids, and dependency-sections checks (all pass).
+- Review resumption (2026-10-31): carried forward the recorded package-registry and bundle
+  decisions, corrected the stale update warning, and closed the two reopened escalations without
+  changing behavior. A direct version-1 registry assertion preserved the effective package set;
+  an isolated `bundle apply --selected` followed by `bundle check` applied telemetry's required
+  hooks while leaving selected roots `["base", "telemetry"]` unchanged. Both checks passed.
+- Fixed the inherited archived-plan link in 90f2f326. `node scripts/test/docs-reference-check.mjs`
+  and `git diff --check` passed after the fix.
+- Review Validator pass 5 (fresh-context, read-only, at 90f2f326 plus the pending record): 2 fix,
+  0 escalate, 0 newly identified base defects. Both reproduced against the then-current code and
+  were fixed in 85a51bd5 and f748fe76. This reaches the five-pass limit; a clean post-fix Validator
+  result has not been established.
+- Back-navigation source-controller and panel assertions failed before 85a51bd5 and passed after
+  it, covering entry source → contents → parent and required source → contents → parent. These
+  are source-wiring assertions, not a browser-suite pass. The permanent browser regression is
+  in `portal-ui.spec.mjs`.
+- The hidden-recommendation regression in `config-dependency-sections-check.mjs` failed before
+  f748fe76 and reached all assertions afterward. Final fixture cleanup still raised `EPERM`;
+  diagnostic execution retained nonzero exit 2, so the suite is not recorded as passed.
+- Standalone isolated CLI assertions at f748fe76 passed: enable offered a visible recommendation
+  and omitted its hidden sibling; inspection fields, unavailable-requirement warnings, and
+  non-selectable-root disable behavior also passed. These checks left their disposable fixtures
+  in place and do not establish suite cleanup or browser coverage.
+- `npm run check` attempted with the fifth-pass fixes: health passed (96 checks); `test-cli.sh`
+  then reported three add-skill rollback assertions and an `EPERM` cleanup error. It exited 1
+  before the later aggregate stages. The captured output does not establish the cause of those
+  three assertion failures; no current full-gate pass is claimed.
+- Elevated standalone lifecycle and bulk-toggle attempts also remained blocked: lifecycle at
+  fixture-directory removal, bulk toggle at `listen EPERM` on `127.0.0.1`. A headless Chromium
+  probe using a disposable profile failed macOS Mach-port registration, including an elevated
+  retry. `docker info` with elevation could not connect to the Docker socket. Connected PR
+  diagnostics were unavailable. Credential-read restrictions were not changed.
+- Base freshness: the last integrated main commit remains 8adee1aa. Local main advanced to
+  5c76d9f9 with a plan-review skill clarification and another plan's start record; no package
+  runtime changes are incoming. No merge or checkout change was performed. A concurrent
+  lifecycle-test edit was preserved and is outside the historical gate evidence.
 
 ### Result
 
 - Status: pending
-- Reviewed implementation commit: 0fd97311f2c40085291b06020ac8c5b42e7354ce
-- Base commit: cd5ed4f49e3c3b25177f0a6b5e4aa146638792f2
+- Reviewed implementation commit: f748fe76cecdad4974a22faab00d3392cf683692
+- Base commit: 8adee1aa089d8b354aa58e728fb56448fcbaf42b
 
 ### Approval
 
