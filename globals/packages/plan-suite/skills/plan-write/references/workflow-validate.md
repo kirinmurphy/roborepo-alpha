@@ -1,7 +1,8 @@
 # Validate Workflow
 
-Validation has a deterministic half that a command owns and a judgment half that only reading the
-repository can do. Run both; a clean command result is not evidence the second half ran.
+Validation has a deterministic part that a command owns and two judgment parts that only reading
+the repository can do: consistency and simplicity. Run all of them; a clean command result is not
+evidence the judgment parts ran.
 
 ## Deterministic findings
 
@@ -39,5 +40,30 @@ No command can check these, so read the repository:
 - checked tasks and completed claims have evidence;
 - dependency cycles, and completed dependencies distinguished from unresolved ones.
 
-Report findings from both halves. Apply fixes only when the user requested changes or the fix is a
-safe normalization.
+## Simplicity
+
+Run this check when creating a plan or substantively revising its scope or design. Skip it for
+sync-only updates. Read the plan's core problem statement first, then ask: is the proposed approach
+engineered beyond what that problem needs, and is there a simpler approach that solves the same core
+problem?
+
+Signs of over-engineering:
+
+- New modules, layers, abstractions, config, or state for a case that existing code could handle
+  with a small change.
+- Generality, extensibility, or edge-case handling that the stated problem does not call for.
+- Phases or migrations that a smaller first step would make unnecessary.
+- Building something the repository, platform, or an existing dependency already provides.
+
+For each simpler candidate, report what it drops or changes compared with the plan: lost
+capability, risk, effort, and what would become harder later. A finding needs a concrete
+alternative. "This could be simpler" is not a finding.
+
+Classify each finding:
+
+- **Strictly simpler:** it solves the same problem with no meaningful loss. The Creator adopts it.
+- **Tradeoff:** the alternatives lead to different outcomes. This goes to the user (see the
+  "Challenge the design" creation gate in `SKILL.md`).
+
+Report findings from all three parts. Apply fixes only when the user requested changes or the
+fix is a safe normalization.
