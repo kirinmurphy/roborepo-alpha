@@ -376,9 +376,9 @@ for (const pkgId of packageIds) {
 }
 // Live state of a dependency chain, and reconcile cleanup of a package that left the effective set.
 // A missing component deep in the chain reads partial at every level, whatever the catalog order.
-// When the last parent drops its `requires` edge, reconcile removes the orphan's components because
-// the applied record says RoboRepo installed them, and leaves matching configuration it never
-// applied alone.
+// Reconcile removes a package that left the effective set (its last `requires` edge dropped, or its
+// root edited out of the registry) only when the applied record says RoboRepo installed it, and
+// never a package the record does not name: one never enabled, or one installed before the record.
 {
   const tmp = makeHome();
   const workspace = path.join(tmp, "workspace");
@@ -412,6 +412,8 @@ for (const pkgId of packageIds) {
     SessionStart: [{ hooks: [{ type: "command", command: "echo review-orphan-hook" }] }],
   }));
   fixture("orphan-external", { resources: [{ type: "permissions", allow: ["ReviewFixtureExternalPermission"] }] });
+  fixture("gc-edited", { resources: [{ type: "permissions", allow: ["ReviewFixtureEditedPermission"] }] });
+  fixture("gc-legacy", { resources: [{ type: "permissions", allow: ["ReviewFixtureLegacyPermission"] }] });
 
   const ok = (...args) => {
     const result = spawnSync(process.execPath, args, { env, cwd: repoRoot, encoding: "utf8", input: "" });
@@ -420,6 +422,15 @@ for (const pkgId of packageIds) {
   };
   const settingsPath = path.join(tmp, ".claude", "settings.json");
   const readSettings = () => JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+  const appliedPath = path.join(stateDir, "applied-packages.json");
+  const readApplied = () => JSON.parse(fs.readFileSync(appliedPath, "utf8")).packages;
+  const allowed = (entry) => readSettings().permissions.allow.includes(entry);
+  const registryPath = path.join(stateDir, "enabled-packages.json");
+  const dropRoot = (id) => {
+    const registry = JSON.parse(fs.readFileSync(registryPath, "utf8"));
+    registry.packages = registry.packages.filter((entry) => entry !== id);
+    fs.writeFileSync(registryPath, JSON.stringify(registry));
+  };
   try {
     ok(cli, "package", "enable", "status-parent");
     const settings = readSettings();
@@ -447,6 +458,13 @@ for (const pkgId of packageIds) {
       const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
       manifest.requires = [];
       fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+      if (index === 1) {
+        const appliedBefore = fs.readFileSync(appliedPath, "utf8");
+        const dry = ok(cli, "package", "reconcile", "--dry-run");
+        assert.match(dry, /\[dry-run\] would remove no longer enabled package: orphan-dependency/, "a dry run names the removal");
+        assert.ok(allowed("ReviewFixtureOrphanPermission"), "a dry run leaves the orphan's components in place");
+        assert.equal(fs.readFileSync(appliedPath, "utf8"), appliedBefore, "a dry run leaves the applied record unchanged");
+      }
       const out = ok(cli, "package", "reconcile");
       const current = readSettings();
       const retained = index === 0;
@@ -461,11 +479,41 @@ for (const pkgId of packageIds) {
       assert.equal(JSON.parse(fs.readFileSync(path.join(stateDir, "telemetry", "state.json"), "utf8")).enabled, retained,
         "reconciliation disables the orphan's service after its last parent leaves");
       assert.ok(current.permissions.allow.includes("ReviewFixtureExternalPermission"),
-        "untracked external configuration is preserved");
+        "configuration of a package RoboRepo never applied is preserved");
     }
-    const applied = JSON.parse(fs.readFileSync(path.join(stateDir, "applied-packages.json"), "utf8")).packages;
+    const applied = readApplied();
     assert.ok(!applied.includes("orphan-dependency"), "the removed package leaves the applied record");
     assert.ok(!applied.includes("orphan-external"), "a package RoboRepo never applied is never recorded");
+
+    // A plain disable drops the package from the applied record as well as removing it.
+    ok(cli, "package", "enable", "gc-edited");
+    assert.ok(readApplied().includes("gc-edited"), "enable records the package as applied");
+    ok(cli, "package", "disable", "gc-edited");
+    assert.ok(!readApplied().includes("gc-edited") && !allowed("ReviewFixtureEditedPermission"), "disable removes it and its record");
+
+    // A hand-edited registry that drops an applied root: reconcile removes the package.
+    ok(cli, "package", "enable", "gc-edited");
+    dropRoot("gc-edited");
+    ok(cli, "package", "reconcile");
+    assert.ok(!allowed("ReviewFixtureEditedPermission") && !readApplied().includes("gc-edited"),
+      "reconcile removes an applied package the registry no longer selects");
+
+    // Installed before the record existed: no applied entry, so reconcile leaves it alone even
+    // after it leaves the effective set.
+    ok(cli, "package", "enable", "gc-legacy");
+    fs.writeFileSync(appliedPath, JSON.stringify({ packages: readApplied().filter((id) => id !== "gc-legacy") }));
+    dropRoot("gc-legacy");
+    ok(cli, "package", "reconcile");
+    assert.ok(allowed("ReviewFixtureLegacyPermission"), "a package with no applied entry is never removed");
+
+    // An unreadable record reads as empty: reconcile removes nothing, and re-applying the effective
+    // set writes a readable record again.
+    fs.writeFileSync(appliedPath, "not json");
+    ok(cli, "package", "reconcile");
+    assert.ok(allowed("ReviewFixtureLegacyPermission"), "a corrupt record removes nothing");
+    const rewritten = readApplied();
+    assert.ok(rewritten.includes("status-parent") && !rewritten.includes("gc-legacy"),
+      "reconcile rewrites the record from the effective set");
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
