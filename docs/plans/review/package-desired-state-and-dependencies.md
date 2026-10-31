@@ -1,11 +1,11 @@
 ---
 id: o9zwxuav
 priority: high
-next_action: Run the current full gate in a permitted verification environment, then request renewed approval; code review is clean on pass 11 and the earlier design decisions remain in force.
+next_action: The human approves the reviewed commit in /plan-review, then merges the pull request and runs /plan-close.
 blocked_by: []
 depends_on: ["bysyzl1e"]
 related: ["package-registry-live-state-reconciliation", "ejsc769o", "age4cm7r", "user-managed-packages-and-add-workflows"]
-reviewed_commit: 2c06b05df53a1517a721fa84b166cb4db976ea70
+reviewed_commit: c22ca1829ac7bcc9e8a26ec3ff2082886a521742
 worktree: package-desired-state-and-dependencies
 ---
 
@@ -551,6 +551,15 @@ to choose them again. Verification and approval of the changed implementation re
 
 ### Findings
 
+- [x] Re-review at the synced tip (2026-10-31): a package with no source of its own got a
+      contents target whenever it listed `requires`, so one whose requirements are all hidden
+      opened an empty popup — keyed on visible requirements, with a hidden-only fixture that fails
+      without the fix (aff4c7b0)
+- [x] Re-review at the synced tip: `package-development.md` and `config-control-panel.md` still
+      limited the contents view to packages with two or more skills — documented the source-less
+      case (c22ca182)
+- [x] Re-review at the synced tip: Verification and Result did not record the merge of main
+      9849eba1 (e3e2bb69) — recorded below
 - [x] Review Validator pass 10: the required-reference comments still equate inspect targets
       with source files — described contents targets and plain-text references accurately,
       without changing executable lines or markup (744d480a)
@@ -888,11 +897,33 @@ to choose them again. Verification and approval of the changed implementation re
   passing gate predates the latest runtime fixes. No human-only test or UX/architecture decision
   is open, and no renewed approval has been requested.
 
+- Re-review at the synced tip (2026-10-31): the user asked this session to finish the review
+  after the parallel session's passes 7-11. `plans sync-base` merged local `main` at 9849eba1
+  (e3e2bb69, no conflicts). Main added the `plan-suite-init` skill and updated the plan-suite
+  counts in `package-catalog-check.mjs` and `portal-ui.spec.mjs`; nothing in this branch's hunks
+  collides.
+- Validator pass (fresh-context subagent, read-only, at e3e2bb69): 3 fix (one code, two docs, plus
+  this record), 0 escalate, 1 base. Validator pass after the fixes (at c22ca182): clean; it ran
+  the lifecycle, catalog, retired-ids, dependency-sections, bulk-toggle, graph, and docs-reference
+  checks (all pass).
+- Base failure: `portal-ui.spec.mjs:38` ("a package with several skills opens a contents view")
+  expects 7 contents-entry chips, but 8 render. Main's own b5d93625 added the eighth entry
+  (`/plan-suite-init`) and updated the label list and counts two lines above, but not the chip
+  count. `git show main:` has the same assertion. That commit is only on local `main`
+  (origin/main bd85fcae), so CI has not run it yet. The branch does not change how entry chips
+  render.
+- `npm run check` at c22ca182: every check suite passed (67/67), along with `test-cli.sh` 422/0,
+  `test-install-collisions.sh`, the package-install and clean-machine sandboxes, and `doctor.sh`.
+  Portal UI was 155 passed and 1 failed, the base failure above. An earlier run at c22ca182 failed
+  one `test-cli.sh` update assertion while a Validator ran `package-lifecycle-check.mjs`, which
+  calls `uninstall.sh` and so stops this checkout's install processes. The rerun, with nothing
+  else running, passed it. At e3e2bb69 the gate had the same single portal failure.
+
 ### Result
 
-- Status: pending (code review clean on pass 11; current full-gate verification remains blocked)
-- Reviewed implementation commit: 2c06b05df53a1517a721fa84b166cb4db976ea70
-- Base commit: 5c76d9f9117e425d8b4fa9613c17795108b3d2f7
+- Status: complete
+- Reviewed implementation commit: c22ca1829ac7bcc9e8a26ec3ff2082886a521742
+- Base commit: 9849eba1a67f3e367c19492c6121d44c4eae2f19
 
 ### Approval
 
