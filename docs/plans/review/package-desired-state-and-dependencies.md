@@ -1,11 +1,11 @@
 ---
 id: o9zwxuav
 priority: high
-next_action: Finish verification and base-freshness checks for the current implementation, then request renewed approval in /plan-review; the earlier design decisions remain in force.
+next_action: Finish extended validation and current full-gate verification in a permitted runner, then request renewed approval; the earlier design decisions remain in force.
 blocked_by: []
 depends_on: ["bysyzl1e"]
 related: ["package-registry-live-state-reconciliation", "ejsc769o", "age4cm7r", "user-managed-packages-and-add-workflows"]
-reviewed_commit: f748fe76cecdad4974a22faab00d3392cf683692
+reviewed_commit: 744d480af093b7218e8b5450c21b627374160ecb
 worktree: package-desired-state-and-dependencies
 ---
 
@@ -168,7 +168,7 @@ only ever be written under version 2, so in practice this affects workspace pack
 | --- | --- | --- |
 | `requires` | `[]` | The package is invalid without these; they join the effective set automatically |
 | `recommends` | `[]` | Useful companions; offered, never added automatically |
-| `selectable` | `true` | `false` rejects direct `package enable` and `package disable` |
+| `selectable` | `true` | `false` rejects direct `package enable`; disable can remove an existing selected root |
 | `presentation.visibility` | `catalog` | `catalog`: normal row. `dependency`: no row; listed under Requires in the popup of each package that requires it. `hidden`: no UI row |
 
 A required package takes one of three forms, chosen by its author per package (user decision
@@ -176,14 +176,14 @@ A required package takes one of three forms, chosen by its author per package (u
 
 | Form | Manifest | Config page | Switching |
 | --- | --- | --- | --- |
-| Selectable (default) | `selectable` omitted or `true`; any visibility | Its own row, and listed under Requires on each package that requires it | Enable alone, or on through a parent |
+| Selectable (default) | `selectable` omitted or `true`; any visibility | `catalog`: own row and Requires reference; `dependency`: Requires reference only; `hidden`: shown nowhere | Enable alone, or on through a parent |
 | Dependency-only | `selectable: false`, `presentation.visibility: "dependency"` | No row; listed only under Requires | On and off with its parents only |
 | Hidden | `presentation.visibility: "hidden"` | Shown nowhere | As its `selectable` value allows |
 
 `roborepo package validate` rejects unknown ids in either relationship, self-references, invalid
 values, and cycles in `requires`. `recommends` does not take part in cycle detection. A
-`selectable: false` package with `defaultEnabled: true` is rejected, since nothing could ever turn
-it off. A `selectable: false` package with `catalog` visibility is rejected too, since it would be
+`selectable: false` package with `defaultEnabled: true` is rejected so dependency-only packages
+are not selected by catalog defaults. A `selectable: false` package with `catalog` visibility is rejected too, since it would be
 a page row with no switch: `<id>: a package with selectable: false must use presentation.visibility
 "dependency" or "hidden"`.
 
@@ -251,9 +251,9 @@ Graph and reconciliation functions never prompt.
 
 ### 6. Config page dependencies
 
-Required packages are a reference, not a package option: a dependency-only one has no switch, and a
-selectable one already has its own row. So they are not rows on the page. `buildBehaviorView` in
-`scripts/cli/config.mjs` gives each package row a `requires[]` list (its transitive required
+Dependency-only packages are references in their parents' source popups, while selectable
+catalog-visible requirements keep their own rows. No separate Required dependencies section is
+added. `buildBehaviorView` in `scripts/cli/config.mjs` gives each package row a `requires[]` list (its transitive required
 packages, each with the inspect target and cost its own row would have), and the source popup
 lists them under **Requires**. Each name opens that package's source, with **Back** to the package
 that requires it. `roborepo config status` prints a `requires:` line under the row.
@@ -370,7 +370,7 @@ rule:
 | Reading a version-1 registry leaves the effective set unchanged and drops required ids from roots | `scripts/test/package-lifecycle-check.mjs` |
 | Defaults still apply and explicit disables still win | `scripts/test/package-default-enabled-check.mjs` |
 | Bulk enable skips dependency rows and returns per-package outcomes | `scripts/test/config-bulk-toggle-check.mjs` |
-| Required packages appear only in the source popup and open their source; recommended rows render with a toggle | `npm run test:portal-ui` |
+| Visible requirements appear in the source popup and open their source; catalog-visible packages retain their rows, dependency-only packages have none, and recommended rows render with a toggle | `npm run test:portal-ui` |
 | Catalog rejects `selectable: false` with `catalog` visibility; dependency-only and hidden forms load | `scripts/test/package-catalog-check.mjs` |
 | Reconcile removes an applied package that left the effective set (last `requires` edge dropped, or its root edited out of the registry), keeps it while another parent requires it, never removes a package with no applied entry (never enabled, or installed before the record), and drops it from the applied record; a dry run changes nothing, a plain disable drops the entry, and a corrupt record removes nothing; `package status` reports a required-only dependency as enabled | `scripts/test/package-lifecycle-check.mjs` |
 | Reconcile drops retired ids from the applied record; uninstall removes the record | `scripts/test/package-retired-ids-check.mjs`, `scripts/test/managed-uninstall-check.mjs`, `scripts/test/test-install-collisions.sh` |
@@ -551,6 +551,28 @@ to choose them again. Verification and approval of the changed implementation re
 
 ### Findings
 
+- [x] Review Validator pass 10: the required-reference comments still equate inspect targets
+      with source files — described contents targets and plain-text references accurately,
+      without changing executable lines or markup (744d480a)
+- [x] Review Validator pass 9: packages with only requirements receive no inspect target, so their
+      dependency-only children cannot be reached — exposed their requirements through the existing
+      contents popup, with API and browser regressions (f111d1fe)
+- [x] Review Validator pass 9: enabling several recommendations replaces unanswered nested
+      recommendation dialogs — awaited each flow before enabling the next choice, with a browser
+      regression (e07d0083)
+- [x] Review Validator pass 9: the catalog's non-selectable-default comment wrongly says no
+      disable can turn it off — corrected the dependency-only selection rationale (c49ba1fc)
+- [x] Review Validator pass 8: a service removal returning `ok: false` is treated as successful
+      and its applied id is forgotten — propagated the failure and added a failed-write/successful
+      retry regression (677673a1)
+- [x] Review Validator pass 8: the Requires HTML comment says every required package is never
+      switched directly — qualified it as dependency-only behavior (802d4533)
+- [x] Review Validator pass 7: adoption comments in `packages.mjs` and the lifecycle test wrongly
+      claim a recorded dependency-only root cannot be disabled — corrected the selection rationale
+      without changing executable lines (dc83dea2)
+- [x] Review Validator pass 7: the Config panel docs and dependency-reference comments wrongly
+      hide every required package — distinguished selectable catalog rows from dependency-only
+      rows, without changing executable lines (2aa59381)
 - [x] Review Validator pass 5: a required multi-skill package loses the Back callback in
       `portal/config/app.js` and `panels.js` — preserved through contents and nested source views,
       with a browser regression (85a51bd5)
@@ -805,11 +827,63 @@ to choose them again. Verification and approval of the changed implementation re
   Result status), resolved by this Result. It confirmed 85a51bd5, f748fe76, and 714d4402 and the
   earlier wording fixes, and ran the lifecycle, catalog, retired-ids, dependency-sections,
   bulk-toggle, and docs-reference checks (all pass). Implementation is unchanged from ce08b99a.
+- Extended review (2026-10-31): the user explicitly requested "keep running plan-review" and
+  "use as many passes as possible", overriding the default five-pass limit. The prior decisions
+  and the requirement for explicit approval are unchanged.
+- Review Validator pass 7 (fresh-context subagent, read-only, at 1a18e67e): 2 wording fixes,
+  0 escalations, 0 newly identified base defects. Corrected adoption's rationale in dc83dea2 and
+  required-row visibility wording in 2aa59381. A direct comparison confirmed all four affected
+  JavaScript files changed only comment lines. Syntax, docs references, and whitespace checks
+  passed. Those prose commits did not change runtime/test execution, so the gate at 714d4402 and
+  the post-sync checks at ce08b99a covered that result; no fresh full-gate pass is claimed for the
+  prose edits.
+- The plan's manifest tables, Config presentation description, and validation row were also
+  aligned with the existing selectable-root disable exception and visibility-based normal rows;
+  these clarify the recorded requirements without changing behavior.
+- Review Validator pass 8 (fresh-context subagent, read-only, at 2aa59381 plus the pending record):
+  2 fixes, 0 escalations, 0 newly identified base defects. Service cleanup could lose its retry
+  record after a handler returned `ok: false`; fixed in 677673a1. The HTML Requires comment's
+  switching claim was corrected in 802d4533.
+- The new cleanup-retry regression failed before 677673a1 because reconciliation exited 0 after
+  the injected service write failure. After the fix, every assertion in the current lifecycle
+  cleanup/status block completed, including retained ownership on failure and successful retry;
+  final fixture cleanup remained blocked, and the diagnostic retained exit 2. This is not a
+  completed lifecycle-suite pass. Syntax, docs-reference, and whitespace checks passed. The
+  earlier passing full gate predates this runtime change and is not current verification for it.
+- Standalone assertions using the real package APIs passed after 677673a1: a failed service enable
+  returned a blocked outcome, a subsequent enable succeeded, a failed removal retained its applied
+  entry and enabled service state, and the next reconciliation disabled it and removed the entry.
+  Disposable fixtures were retained; this does not establish full-suite cleanup coverage.
+- `npm run check` with the eighth-pass fixes passed health (97 checks), then stopped at the same
+  three add-skill rollback assertions and an `EPERM` fixture-cleanup error. Later stages did not
+  run; the three assertion failures' cause is not established by that output. A current full-gate
+  pass is still missing.
+- Review Validator pass 9 (fresh-context subagent, read-only, at 802d4533 plus the pending record):
+  3 fixes, 0 escalations, 0 newly identified base defects. Pure composites had no inspectable
+  popup (f111d1fe); nested recommendation questions could replace each other before an answer
+  (e07d0083); a catalog comment gave an obsolete default-selection rationale (c49ba1fc).
+- The pure-composite regression failed before f111d1fe and reached all assertions afterward,
+  including transitive references and an empty contents entry list. Final fixture cleanup remained
+  blocked, retaining diagnostic exit 2. Real controller/dialog assertions failed before e07d0083
+  because the second nested offer replaced the first, and passed afterward: each question remained
+  until answered and only the chosen packages were enabled. These used a DOM stub, not a browser.
+  Both cases have permanent browser regressions; no UX or architectural choice was changed.
+- Review Validator pass 10 (fresh-context subagent, read-only, at c49ba1fc plus the pending record):
+  1 comment fix, 0 escalations, 0 newly identified base defects, and no new runtime defect. Updated
+  inspection comments in 744d480a. A direct comparison confirmed executable JavaScript and
+  rendered HTML were unchanged; syntax, documentation references, and whitespace checks passed.
+- The ninth-pass full-gate attempt again passed health (97 checks) and stopped at the three
+  add-skill rollback assertions and `EPERM` cleanup. Targeted reproductions now establish the
+  cause of all three assertions in this environment: the skill-collision, command-collision,
+  and empty-package cases restore their manifests, then report `EPERM` removing their temporary
+  skill directories, leaving the directories the assertions expect absent. The exact
+  `addSkillToPackage` implementation was compared with `main` and is unchanged. This explains
+  the rollback failures; it does not establish that the later gate stages passed.
 
 ### Result
 
-- Status: complete
-- Reviewed implementation commit: 59130e641eaccb72e16cf1598ce52260bf3d1604
+- Status: pending (post-fix extended validation and current full-gate verification)
+- Reviewed implementation commit: 744d480af093b7218e8b5450c21b627374160ecb
 - Base commit: 5c76d9f9117e425d8b4fa9613c17795108b3d2f7
 
 ### Approval
