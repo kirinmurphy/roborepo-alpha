@@ -208,6 +208,10 @@ export function validatePackageCatalog(packages) {
     if (pkg.selectable === false && pkg.defaultEnabled) {
       errors.push(`${pkg.id}: a package with selectable: false cannot be defaultEnabled`);
     }
+    // A normal row needs a switch; a package without one is listed under Requires or not at all.
+    if (pkg.selectable === false && (pkg.presentation.visibility ?? "catalog") === "catalog") {
+      errors.push(`${pkg.id}: a package with selectable: false must use presentation.visibility "dependency" or "hidden"`);
+    }
     for (const resource of pkg.resources) {
       if (resource.type === "skill") {
         claim(skillIds, resource.id, pkg.id, errors, "skill");

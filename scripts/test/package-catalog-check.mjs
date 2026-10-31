@@ -372,7 +372,8 @@ try {
 }
 
 // Package relationships and selectability: valid graphs pass; unknown or self-referencing ids,
-// `requires` cycles, and a non-selectable default-enabled package fail. `recommends` cycles are fine.
+// `requires` cycles, a non-selectable default-enabled package, and a non-selectable package with a
+// normal row fail. `recommends` cycles are fine.
 {
   const node = (id, extra = {}) => ({
     id, presentation: { category: "code-conventions" }, resources: [], requires: [], recommends: [], selectable: true, ...extra,
@@ -384,8 +385,9 @@ try {
   };
   validatePackageCatalog([
     node("parent", { requires: ["dep"], recommends: ["companion"] }),
-    node("dep", { selectable: false }),
-    node("companion", { recommends: ["parent"] }),
+    node("dep", { selectable: false, presentation: { category: "code-conventions", visibility: "dependency" } }),
+    node("hidden-dep", { selectable: false, presentation: { category: "code-conventions", visibility: "hidden" } }),
+    node("companion", { recommends: ["parent", "hidden-dep"] }),
   ]);
   rejects([node("a", { requires: ["ghost"] })], "a: missing required package: ghost", "unknown required id");
   rejects([node("a", { recommends: ["ghost"] })], "a: missing recommended package: ghost", "unknown recommended id");
@@ -394,6 +396,9 @@ try {
   rejects([node("a", { recommends: ["a"] })], "a: package cannot list itself in recommends", "self-recommended");
   rejects([node("a", { requires: ["b"] }), node("b", { requires: ["a"] })], "package dependency cycle: a -> b -> a", "requires cycle");
   rejects([node("a", { selectable: false, defaultEnabled: true })], "a: a package with selectable: false cannot be defaultEnabled", "non-selectable default");
+  rejects([node("a", { selectable: false })], 'a: a package with selectable: false must use presentation.visibility "dependency" or "hidden"', "non-selectable row, visibility omitted");
+  rejects([node("a", { selectable: false, presentation: { category: "code-conventions", visibility: "catalog" } })],
+    'a: a package with selectable: false must use presentation.visibility "dependency" or "hidden"', "non-selectable row, catalog visibility");
 
   for (const pkg of catalog) {
     assert(pkg.selectable === true || pkg.selectable === false, `${pkg.id}: selectable should normalize to a boolean`);
