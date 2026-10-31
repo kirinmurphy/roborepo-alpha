@@ -85,7 +85,7 @@ async function handleToggle(item, enabled) {
   const data = await api.toggleItem(item.toggle, item.id, enabled);
   if (data.config) applySnapshot(data.config); // re-render from the authoritative post-mutation snapshot
   void offerHookReview(data.hookHarnesses);
-  if (enabled && data.recommendations?.length) void offerRecommendations(item, data.recommendations);
+  if (enabled && data.recommendations?.length) await offerRecommendations(item, data.recommendations);
 }
 
 // An enable that left recommended packages off asks which to enable too; each chosen one is an

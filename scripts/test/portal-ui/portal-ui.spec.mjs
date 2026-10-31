@@ -277,6 +277,39 @@ test.describe("Agents page", () => {
     await expect(dialog).not.toBeVisible();
   });
 
+  test("selected recommendations finish their nested prompts in order", async ({ page }) => {
+    const snapshot = await (await page.request.get("/api/config")).json();
+    const rows = snapshot.behaviorView.flatMap((section) => section.items || [])
+      .filter((item) => item.toggle === "package" && !item.active && item.id !== "telemetry");
+    const [parent, first, second, firstChild, secondChild] = rows;
+    expect(secondChild, "fixture needs five disabled packages").toBeTruthy();
+    const offers = new Map([[parent.id, [first, second]], [first.id, [firstChild]], [second.id, [secondChild]]]);
+    const posts = [];
+    await page.route("**/api/config", (route) => route.fulfill({ json: snapshot }));
+    await page.route("**/api/config/packages", (route) => {
+      const change = route.request().postDataJSON();
+      posts.push(change);
+      route.fulfill({ json: {
+        ok: true, message: `enabled: ${change.id}`, outcomes: [], changedPackageIds: [change.id], config: snapshot,
+        recommendations: offers.get(change.id) || [],
+      } });
+    });
+    await page.goto("/agents");
+    const row = page.locator("[data-slot=items] config-item").filter({ has: page.locator(".item-label", { hasText: parent.label }) }).first();
+    await row.getByRole("checkbox").dispatchEvent("click");
+    const dialog = page.locator("dialog#recommendations-modal");
+    await expect(dialog.locator(".recommendation-label")).toHaveText([first.label, second.label]);
+    await dialog.getByRole("button", { name: "Enable selected" }).click();
+    await expect(dialog.locator(".recommendation-label")).toHaveText([firstChild.label]);
+    expect(posts.map((change) => change.id)).toEqual([parent.id, first.id]);
+    await dialog.getByRole("button", { name: "Continue without" }).click();
+    await expect(dialog.locator(".recommendation-label")).toHaveText([secondChild.label]);
+    expect(posts.map((change) => change.id)).toEqual([parent.id, first.id, second.id]);
+    await dialog.getByRole("button", { name: "Enable selected" }).click();
+    await expect.poll(() => posts.map((change) => change.id)).toEqual([parent.id, first.id, second.id, secondChild.id]);
+    await expect(dialog).not.toBeVisible();
+  });
+
   test("explains a package whose pieces were installed outside RoboRepo", async ({ page }) => {
     const snapshot = await (await page.request.get("/api/config")).json();
     const shown = new Set(snapshot.behaviorView.flatMap((section) => section.items || []).map((item) => item.id));
