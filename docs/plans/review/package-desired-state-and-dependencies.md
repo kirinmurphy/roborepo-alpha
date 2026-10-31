@@ -131,8 +131,8 @@ Nothing reads the raw registry except that module.
 Beside the three layers, the same module keeps a machine-local applied record,
 `~/.roborepo/applied-packages.json`: the packages RoboRepo installed on this machine. Applying a
 package adds it; removing its components drops it. The record is not a selection and never feeds
-the effective set. It exists so cleanup can tell what RoboRepo put in place from configuration that
-only looks the same.
+the effective set. It exists so cleanup removes only packages RoboRepo installed, never one it did
+not; removing a package still takes out every entry its manifest lists (§4).
 
 ### 2. Registry ownership and shape
 
@@ -370,7 +370,7 @@ rule:
 | Bulk enable skips dependency rows and returns per-package outcomes | `scripts/test/config-bulk-toggle-check.mjs` |
 | Required packages appear only in the source popup and open their source; recommended rows render with a toggle | `npm run test:portal-ui` |
 | Catalog rejects `selectable: false` with `catalog` visibility; dependency-only and hidden forms load | `scripts/test/package-catalog-check.mjs` |
-| Reconcile removes an applied package that left the effective set (last `requires` edge dropped), keeps it while another parent requires it, preserves matching configuration RoboRepo did not apply, and drops it from the applied record; `package status` reports a required-only dependency as enabled | `scripts/test/package-lifecycle-check.mjs` |
+| Reconcile removes an applied package that left the effective set (last `requires` edge dropped, or its root edited out of the registry), keeps it while another parent requires it, never removes a package with no applied entry (never enabled, or installed before the record), and drops it from the applied record; a dry run changes nothing, a plain disable drops the entry, and a corrupt record removes nothing; `package status` reports a required-only dependency as enabled | `scripts/test/package-lifecycle-check.mjs` |
 | Reconcile drops retired ids from the applied record; uninstall removes the record | `scripts/test/package-retired-ids-check.mjs`, `scripts/test/managed-uninstall-check.mjs`, `scripts/test/test-install-collisions.sh` |
 | Row references are transitive; the recommended list skips shown and required packages; `config status` prints both | `scripts/test/config-dependency-sections-check.mjs` |
 | Telemetry bundle derives hooks; removing telemetry drops hooks unless selected; `bundle check` names missing rows | Bundle assertions in `scripts/test/test-cli.sh` |
@@ -532,6 +532,9 @@ Earlier questions were answered by the user (2026-10-27 and 2026-10-28); see Dec
   record have no entries, so their existing leftovers are left alone. The user then asked for it
   as a stated requirement (Goals, §1, §4, Validation): "if a skill exists only behind the scenes
   then we should do garbage collection and make sure that the skill no longer exists."
+  Correction (review Validator pass 1): "never touching configuration RoboRepo did not apply"
+  holds per package, not per entry. Removing a package takes out every entry its manifest lists,
+  as `package disable` does, so §1 and §4 state it per package.
 - **2026-10-30 (user decision, human review): Package authors choose a dependency form.** A
   required package is selectable (the default: own row, also under Requires), dependency-only
   (`selectable: false` with `dependency` visibility: no row, only under Requires, on and off with
@@ -634,6 +637,9 @@ Earlier questions were answered by the user (2026-10-27 and 2026-10-28); see Dec
       package in docs, comments, and §4 (1ad59fd1)
 - [x] Review Validator pass 1: `## Validation` and `## Documentation impact` had no rows for the
       applied record — Validation rows added (bd18059e), Documentation impact updated
+- [x] Review Validator pass 2: the reconcile Validation row and §1 still used the per-entry
+      wording and the row omitted the newly tested edges — reworded, with a correction note on the
+      2026-10-30 Decision Log entry
 
 ### Verification
 
@@ -717,6 +723,10 @@ Earlier questions were answered by the user (2026-10-27 and 2026-10-28); see Dec
 - Review Validator pass 1 (fresh-context subagent, over `2e3492ce..af4f3423`): 3 fix, 0 escalate,
   0 base; ran the package lifecycle, retired-ids, managed-uninstall, bulk-toggle, and
   dependency-sections checks (all pass).
+- Review Validator pass 2 (fresh-context subagent, over `2e3492ce..266d7ff3`): 2 fix (plan prose),
+  0 escalate, 1 base (the same docs link). Confirmed the catalog rule's exact message on every load
+  path (`package validate`, `list`, `enable`), no built-in package or fixture violating it, and ran
+  the catalog, lifecycle, dependency-sections, and bulk-toggle checks (all pass).
 
 ### Result
 
