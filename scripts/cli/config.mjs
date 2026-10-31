@@ -330,7 +330,9 @@ export function buildBehaviorView(snap) {
     toolsByPackage.get(tool.packageId).push(tool);
   }
   const packageCosts = snap.contextCost?.packages || {};
-  const presentationItem = (item) => packagePresentationItem(item, toolsByPackage.get(item.id) || [], packageCosts[item.id] || null);
+  const presentationItem = (item) => packagePresentationItem(item, toolsByPackage.get(item.id) || [], packageCosts[item.id] || null, {
+    hasVisibleRequirements: visibleRequiredPackages(item, snap.packages).length > 0,
+  });
   for (const item of snap.packages) {
     // Dependency-only and hidden packages get no row of their own; a dependency-only package is
     // listed under Requires in the source popup of each package that requires it.
@@ -522,11 +524,7 @@ function labelRestatesCommand(label, command) {
 // row would have, so the popup can open its source. Visibility controls normal rows independently:
 // dependency-only packages appear here, while catalog-visible requirements also keep their rows.
 function requiredReferences(item, packages, presentationItem) {
-  const byId = new Map(packages.map((pkg) => [pkg.id, pkg]));
-  return requiredClosure(packages, [item.id])
-    .filter((id) => id !== item.id)
-    .map((id) => byId.get(id))
-    .filter((pkg) => pkg && pkg.presentation?.visibility !== "hidden")
+  return visibleRequiredPackages(item, packages)
     .map((pkg) => {
       const row = presentationItem(pkg);
       // Ids only: the parent's list already holds this package's whole closure, so the popup
@@ -534,6 +532,15 @@ function requiredReferences(item, packages, presentationItem) {
       const requiredIds = requiredClosure(packages, [pkg.id]).filter((id) => id !== pkg.id);
       return { id: pkg.id, label: pkg.label, active: pkg.enabled, inspect: row.inspect, contextCost: row.contextCost, builtIn: row.builtIn, requiredIds };
     });
+}
+
+// The transitive `requires` of a package that the page may show: hidden packages appear nowhere.
+function visibleRequiredPackages(item, packages) {
+  const byId = new Map(packages.map((pkg) => [pkg.id, pkg]));
+  return requiredClosure(packages, [item.id])
+    .filter((id) => id !== item.id)
+    .map((id) => byId.get(id))
+    .filter((pkg) => pkg && pkg.presentation?.visibility !== "hidden");
 }
 
 // The packages a section's rows recommend, as the section's Recommended dependencies list: each a
@@ -572,7 +579,7 @@ function recommendedDependencies(sectionItems, packages, presentationItem) {
 // each resource instead of one source file.
 const CONTENTS_VIEW_MIN_SKILLS = 2;
 
-function packagePresentationItem(item, tools, contextCost = null) {
+function packagePresentationItem(item, tools, contextCost = null, { hasVisibleRequirements = false } = {}) {
   const skillCount = item.skillIds?.length || 0;
   if (skillCount >= CONTENTS_VIEW_MIN_SKILLS) return multiSkillPresentationItem(item, tools, contextCost);
   const tool = tools[0];
@@ -597,7 +604,9 @@ function packagePresentationItem(item, tools, contextCost = null) {
       ? { kind: "skill", id: item.skillIds[0], label: item.label }
       : resources.includes("rules")
         ? { kind: "rules", id: item.id, label: item.label }
-        : item.requires?.length
+        // No source of its own: the contents view lists only what it requires, so it opens only
+        // when one of those is visible.
+        : hasVisibleRequirements
           ? { kind: "package-contents", id: item.id, label: item.label, entries: [] }
           : null;
   return {

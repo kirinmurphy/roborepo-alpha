@@ -44,6 +44,7 @@ fixture("deps-leaf", { presentation: { category: "token-optimization" } });
 fixture("deps-companion", { requires: ["deps-leaf"], presentation: { category: "token-optimization" } });
 fixture("deps-hidden", { presentation: { visibility: "hidden" } });
 fixture("pure-parent", { requires: ["deps-review"], resources: [] });
+fixture("pure-hidden-parent", { requires: ["deps-hidden"], resources: [] });
 function run(...args) {
   const result = spawnSync(process.execPath, args, { env, cwd: repoRoot, encoding: "utf8", input: "" });
   assert.equal(result.status, 0, `${args.join(" ")} failed\n${result.stdout}${result.stderr}`);
@@ -68,6 +69,9 @@ try {
   assert.equal(pureParent.inspect?.kind, "package-contents", "a pure composite exposes its requirement references");
   assert.deepEqual(pureParent.inspect.entries, [], "the pure composite has no source entries of its own");
   assert.deepEqual(pureParent.requires.map((ref) => ref.id), ["deps-leaf", "deps-review"]);
+  const pureHiddenParent = byId.get("pure-hidden-parent");
+  assert.equal(pureHiddenParent.inspect, null, "a pure composite whose requirements are all hidden has nothing to open");
+  assert.deepEqual(pureHiddenParent.requires, []);
   assert.deepEqual(byId.get("deps-planner").requires.map((ref) => ref.id), ["deps-leaf", "deps-review"],
     "a row references its transitive requirements, dependencies first");
   const review = byId.get("deps-planner").requires.find((ref) => ref.id === "deps-review");
