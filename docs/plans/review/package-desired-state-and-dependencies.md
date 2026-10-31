@@ -81,6 +81,10 @@ change in one place rather than per consumer.
 - Add `selectable: false` so a dependency-only package cannot be toggled directly.
 - Add `presentation.visibility` so dependency-only packages leave the normal rows but stay
   inspectable where they are referenced.
+- Let each package's author choose its dependency form: selectable (its own row), dependency-only
+  (listed only under Requires), or hidden (shown nowhere).
+- Remove a package RoboRepo installed once it leaves the effective set, without touching
+  configuration RoboRepo did not apply.
 - Make enable and disable return the probed outcome (`enabled`, `partial`, or `blocked`) instead of
   assuming success.
 - Give package state its own module, so the rules renderer only renders.
@@ -124,6 +128,12 @@ effective     = selectedRoots + transitive requires of selectedRoots
 Every consumer that today calls `effectiveEnabledIds` reads `effective` from the new module.
 Nothing reads the raw registry except that module.
 
+Beside the three layers, the same module keeps a machine-local applied record,
+`~/.roborepo/applied-packages.json`: the packages RoboRepo installed on this machine. Applying a
+package adds it; removing its components drops it. The record is not a selection and never feeds
+the effective set. It exists so cleanup can tell what RoboRepo put in place from configuration that
+only looks the same.
+
 ### 2. Registry ownership and shape
 
 Move registry read, write, `forgetPackageIds`, and the effective-set computation from
@@ -161,10 +171,21 @@ only ever be written under version 2, so in practice this affects workspace pack
 | `selectable` | `true` | `false` rejects direct `package enable` and `package disable` |
 | `presentation.visibility` | `catalog` | `catalog`: normal row. `dependency`: no row; listed under Requires in the popup of each package that requires it. `hidden`: no UI row |
 
+A required package takes one of three forms, chosen by its author per package (user decision
+2026-10-30: some skills make sense on their own, others do not):
+
+| Form | Manifest | Config page | Switching |
+| --- | --- | --- | --- |
+| Selectable (default) | `selectable` omitted or `true`; any visibility | Its own row, and listed under Requires on each package that requires it | Enable alone, or on through a parent |
+| Dependency-only | `selectable: false`, `presentation.visibility: "dependency"` | No row; listed only under Requires | On and off with its parents only |
+| Hidden | `presentation.visibility: "hidden"` | Shown nowhere | As its `selectable` value allows |
+
 `roborepo package validate` rejects unknown ids in either relationship, self-references, invalid
 values, and cycles in `requires`. `recommends` does not take part in cycle detection. A
 `selectable: false` package with `defaultEnabled: true` is rejected, since nothing could ever turn
-it off.
+it off. A `selectable: false` package with `catalog` visibility is rejected too, since it would be
+a page row with no switch: `<id>: a package with selectable: false must use presentation.visibility
+"dependency" or "hidden"`.
 
 ### 4. Enable and disable
 
@@ -202,6 +223,14 @@ stateDiagram-v2
 
   Returning `blocked` means the apply path throws a typed error that the CLI entry point turns into
   the exit code, instead of calling `process.exit` mid-apply.
+- `package reconcile`, which `roborepo update` runs, removes the components of every package in
+  the applied record that is no longer effective, dependencies after the packages that required
+  them, then re-applies the effective set. A package leaves the effective set this way when a
+  parent drops its `requires` edge, a `defaultEnabled` default flips to `false`, or the registry is
+  edited by hand. Configuration RoboRepo did not apply is never touched, because only applied ids
+  are removed. Installs from before the record have no entries, so their existing leftovers are
+  left alone. Ids the catalog no longer has are dropped from the record with the registry's stale
+  entries. Uninstall removes the record.
 
 ### 5. Recommendations
 
@@ -338,6 +367,9 @@ rule:
 | Defaults still apply and explicit disables still win | `scripts/test/package-default-enabled-check.mjs` |
 | Bulk enable skips dependency rows and returns per-package outcomes | `scripts/test/config-bulk-toggle-check.mjs` |
 | Required packages appear only in the source popup and open their source; recommended rows render with a toggle | `npm run test:portal-ui` |
+| Catalog rejects `selectable: false` with `catalog` visibility; dependency-only and hidden forms load | `scripts/test/package-catalog-check.mjs` |
+| Reconcile removes an applied package that left the effective set (last `requires` edge dropped), keeps it while another parent requires it, preserves matching configuration RoboRepo did not apply, and drops it from the applied record; `package status` reports a required-only dependency as enabled | `scripts/test/package-lifecycle-check.mjs` |
+| Reconcile drops retired ids from the applied record; uninstall removes the record | `scripts/test/package-retired-ids-check.mjs`, `scripts/test/managed-uninstall-check.mjs`, `scripts/test/test-install-collisions.sh` |
 | Row references are transitive; the recommended list skips shown and required packages; `config status` prints both | `scripts/test/config-dependency-sections-check.mjs` |
 | Telemetry bundle derives hooks; removing telemetry drops hooks unless selected; `bundle check` names missing rows | Bundle assertions in `scripts/test/test-cli.sh` |
 | Full gate, since package state reaches install, rules, and generated harness output | `npm run check` |
@@ -495,7 +527,16 @@ Earlier questions were answered by the user (2026-10-27 and 2026-10-28); see Dec
   installed once it is no longer effective (a dropped `requires` edge, a `defaultEnabled` flip to
   `false`, a hand-edited registry): a package that exists only behind the scenes should not
   linger. Cleanup never touches configuration RoboRepo did not apply. Installs from before this
-  record have no entries, so their existing leftovers are left alone.
+  record have no entries, so their existing leftovers are left alone. The user then asked for it
+  as a stated requirement (Goals, §1, §4, Validation): "if a skill exists only behind the scenes
+  then we should do garbage collection and make sure that the skill no longer exists."
+- **2026-10-30 (user decision, human review): Package authors choose a dependency form.** A
+  required package is selectable (the default: own row, also under Requires), dependency-only
+  (`selectable: false` with `dependency` visibility: no row, only under Requires, on and off with
+  its parents), or hidden (`hidden` visibility: nowhere). The user: "sometimes it doesn't make
+  sense to have a skill exist by itself, other times it may." The catalog now rejects
+  `selectable: false` with `catalog` visibility, the one combination that would give a row with no
+  switch (§3).
 
 ## Review
 
