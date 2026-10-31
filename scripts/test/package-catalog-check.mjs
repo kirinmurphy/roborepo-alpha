@@ -34,7 +34,7 @@ assert(!(planSuite.urls || []).length, "Plan Suite should not expose external li
 assert(!packageIds.has("code-intel"), "Code Intelligence composite package should not be present");
 
 const slashNames = loadSlashCommandPlan().commands.map((command) => command.name).sort();
-for (const name of ["case-study", "plan-write", "tighten", "session-close", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive"]) {
+for (const name of ["case-study", "plan-write", "tighten", "session-close", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive", "plan-suite-init"]) {
   assert(slashNames.includes(name), `missing slash command: ${name}`);
 }
 
@@ -109,13 +109,13 @@ assert(!sections.get("Development Workflows").bulkToggle, "Development Workflows
   const suite = items.get("plan-suite");
   assert(suite.label === "Development Planning Lifecycle", `plan-suite card label should be its package label, got ${suite.label}`);
   assert(suite.description !== sections.get("Development Workflows").description, "the package and its category describe different things");
-  assert(suite.badges.includes("6 skills"), `plan-suite card should carry a 6 skills badge: ${suite.badges}`);
+  assert(suite.badges.includes("7 skills"), `plan-suite card should carry a 7 skills badge: ${suite.badges}`);
   assert(suite.inspect?.kind === "package-contents", "plan-suite card label should open the contents view");
-  assert(suite.inspect.summary === "6 skills · 1 rules fragment", `contents summary: ${suite.inspect.summary}`);
+  assert(suite.inspect.summary === "7 skills · 1 rules fragment", `contents summary: ${suite.inspect.summary}`);
   const entries = suite.inspect.entries;
-  assert(entries.map((entry) => entry.label).join(",") === "/plan-write,/plan-promote,/plan-execute,/plan-review,/plan-close,/plan-archive,Rules",
+  assert(entries.map((entry) => entry.label).join(",") === "/plan-suite-init,/plan-write,/plan-promote,/plan-execute,/plan-review,/plan-close,/plan-archive,Rules",
     `contents entries: ${entries.map((entry) => entry.label)}`);
-  for (const entry of entries.slice(0, 6)) {
+  for (const entry of entries.slice(0, 7)) {
     const id = entry.label.slice(1);
     assert(entry.inspect.kind === "command-skill" && entry.inspect.id === id && entry.inspect.skill === id, `${id} entry opens its command and skill`);
     assert(entry.description && !/\n/.test(entry.description), `${id} entry has a one-line description`);

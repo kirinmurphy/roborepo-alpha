@@ -142,6 +142,30 @@
         "cleaning up worktrees",
         "deleting branches"
       ]
+    },
+    {
+      "skill": "plan-suite-init",
+      "match": [
+        "set up the plan suite in this repo",
+        "/plan-suite-init",
+        "set up the plan suite and plan folders for this new project"
+      ],
+      "nearMiss": [
+        "create an implementation plan for package reconciliation",
+        "add a billing namespace to plans-config",
+        "rename this plan file"
+      ],
+      "triggerPhrases": [
+        "/plan-suite-init",
+        "set up the plan suite",
+        "plan folders"
+      ],
+      "skipPhrases": [
+        "creating or revising a plan",
+        "renaming plans",
+        "adding one namespace",
+        "lifecycle step"
+      ]
     }
   ]
 }
