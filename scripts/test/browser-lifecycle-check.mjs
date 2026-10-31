@@ -90,9 +90,10 @@ try {
     }
   }
 
-  if (process.platform !== "win32") {
+  if (process.platform === "darwin") {
     // A group whose only member has exited but is not yet reaped: macOS answers EPERM rather than
-    // ESRCH. Cleanup must read that as "nothing left to stop", not throw before the report prints.
+    // ESRCH (Linux still signals it). Cleanup must read that as "nothing left to stop", not throw
+    // before the report prints.
     const exited = spawn("sleep", ["100"], { detached: true, stdio: "ignore" });
     await waitFor(async () => exited.pid !== undefined);
     process.kill(-exited.pid, "SIGKILL");
