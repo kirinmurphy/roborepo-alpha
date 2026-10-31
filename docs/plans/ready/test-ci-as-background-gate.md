@@ -50,10 +50,13 @@ The checks that would have caught both main breakages above take about 2 seconds
 `bash scripts/doctor.sh --quiet` and `node scripts/test/docs-reference-check.mjs`.
 
 Agent shells override `core.hooksPath` with RoboRepo's agent hooks (`~/.claude/git-hooks` in
-Claude). Their `pre-push` refuses agent pushes
-to protected branches, then calls `roborepo_chain_hook` (`globals/system/git-hooks/chain.sh`) to run
-the repository's own `pre-push` hook. The repository has no hook of its own, so nothing runs checks
-before a push, whether the user or an agent pushes.
+Claude), set in the `command` config scope. Their `pre-push` (`globals/system/git-hooks/pre-push`)
+refuses agent pushes to protected branches and force pushes, then pipes the same ref lines on stdin
+to `roborepo_chain_hook` (`globals/system/git-hooks/chain.sh`). The chain finds the repository's own
+hooks directory from `core.hooksPath` in every scope except `command`, falling back to
+`.git/hooks`, and `exec`s that directory's `pre-push`, so the repository hook's exit status decides
+the push. The repository has no hook of its own and no `core.hooksPath` outside the agent override,
+so nothing runs checks before a push, whether the user or an agent pushes.
 
 ### Why agents run the full gate so often
 
@@ -113,8 +116,22 @@ main-breaking mistakes:
 - `node scripts/test/docs-reference-check.mjs`
 - `git diff --check` over the commits being pushed
 
+Measured on 2026-10-30 on a development checkout: doctor took 2.0 s and the docs reference check
+0.1 s.
+
 It sets `ROBOREPO_SKIP_NODE_RELEASE_CHECK=1` as `ci.sh` does, so the check stays off the network,
-and the whole script must stay under 10 seconds. A tracked `scripts/git-hooks/pre-push` calls it.
+and the whole script must stay under 10 seconds. A tracked `scripts/git-hooks/pre-push` reads the
+`<local ref> <local sha> <remote ref> <remote sha>` lines git passes on stdin and calls the script.
+For each pushed ref, `git diff --check` covers `<remote sha>..<local sha>`; a new branch (zero
+remote sha) diffs from its merge base with the remote's default branch, and a deletion (zero local
+sha) is skipped. The doctor and docs checks read the working tree, not the pushed commits, so they
+run once per push; a dirty tree can make them disagree with what is pushed, which is an accepted
+limit of a fast check that CI covers.
+
+The check does not run the plan validator. CI does not validate repository plans, so a plan schema
+mistake cannot turn main red, and the lifecycle transition commands already validate each plan they
+move. `roborepo plans validate` also takes about 5 s per call, which would more than triple the
+hook.
 One command installs it for the primary checkout and every linked worktree, since they share the
 repository's config:
 
@@ -127,9 +144,11 @@ reads `core.hooksPath` from every scope except the agent's `command`-scope overr
 
 ### Flake fixes
 
-- `scripts/test/browser-lifecycle-check.mjs:83` parses a CLI run's stdout that is sometimes empty
-  on macOS. Find why the run exits without JSON, then fix the cause, or assert on the exit status
-  and stderr before parsing so the failure says what happened.
+- `scripts/test/browser-lifecycle-check.mjs:83` parses the stdout of the forced-shutdown scenario,
+  a `--serve` service that ignores `SIGTERM`, and that stdout is sometimes empty on macOS. Find why
+  the run exits without JSON (for example, cleanup's escalation to `SIGKILL` racing the run's own
+  exit), then fix the cause, or assert on the exit status and stderr before parsing so the failure
+  says what happened.
 - The portal UI helpers in `scripts/test/portal-ui/helpers.mjs` call `route.fetch()` against the
   real portal and fail with `ECONNRESET`. Find why the connection drops, then fix the cause, or
   retry that fetch once inside the helper.
@@ -149,34 +168,58 @@ shared module's callers.
 | `globals/packages/test-harness/skills/test-harness/SKILL.md` | Drop "before a push" from the full-check list in step 4, and add reading the CI result as the pre-merge check. |
 | `local/skills/roborepo-development/SKILL.md` | Update "Full CI parity is expensive": local `npm run check` is for CI or test-orchestration changes; pushes rely on the pre-push check and CI. |
 | `globals/packages/plan-suite/skills/plan-execute/references/validation-loop.md` | The Validator receives the CI result for the branch's head commit when one exists, otherwise the output of the affected checks. |
-| `globals/packages/plan-suite/skills/plan-review/SKILL.md` | Read the pull request's CI result for the reviewed commit; run the local gate once only when no CI result exists. Classify a base failure from the base branch's CI result instead of rerunning on base. After a fix, rerun the affected checks and push; CI reruns the full gate. |
+| `globals/packages/plan-suite/skills/plan-review/SKILL.md` | Read the pull request's CI result for the reviewed commit; run the local gate once only when no CI result exists. Classify a base failure from the base branch's CI result instead of rerunning on base. After a fix, rerun the affected checks and push; CI reruns the full gate. Keep the existing "A long gate does not hold up work that cannot change its result" paragraph, which `plan-suite-skills-check.mjs` asserts, and the pull request feedback paragraph that records a CI failure as one `### Verification` line. |
 | `globals/packages/plan-suite/skills/plan-close/SKILL.md` | The landed commit's CI result on the base branch replaces the local gate run; run focused plan tests only. |
 
 The plan-suite skills ship to client repositories, so their wording stays forge-neutral: "the
 repository's CI result for the commit, from its forge when available; otherwise the repository's
 canonical completion gate, once."
 
+## Related plans
+
+| Plan | Relationship | Effect on this plan |
+| --- | --- | --- |
+| Tier and Diff-Scope Validation (`q6lj4w96`, backlog) | Plan-vs-plan conflict, unlanded | Its task "Update internal development guidance so agents use targeted tiers during iteration and full `npm run check` before merge-ready handoff" contradicts this plan's rule that CI is the full gate. This plan rewrites that task (see the checklist); tiers and path filters stay there. |
+| GitHub Integration Part 02 (`f0jwe76j`, backlog) | Unlanded, independent | Owns agents fixing their own pull requests. Nothing here waits on it. |
+| GitHub Integration Part 03 (`developer-runtime-remote-branch-status`, backlog) | Unlanded, independent | Shows a checkout's CI result in Runtime. Agents here read CI through the forge directly, not through Runtime. |
+
 ## Implementation plan
 
-- [ ] Fix or harden the `browser-lifecycle-check.mjs:83` empty-stdout failure.
-- [ ] Fix or retry the portal UI `route.fetch` `ECONNRESET` in `scripts/test/portal-ui/helpers.mjs`.
-- [ ] Add CI-only Playwright retries in `scripts/test/portal-ui/playwright.config.mjs`.
-- [ ] Add `scripts/test/pre-push-check.sh` and `scripts/git-hooks/pre-push`.
-- [ ] Update the validation-gates rule and re-render generated rules.
-- [ ] Update the test-harness and roborepo-development skills.
-- [ ] Update the plan-execute validation loop, plan-review, and plan-close wording, and the
-      phrases `scripts/test/plan-suite-skills-check.mjs` asserts.
-- [ ] Remove the agent-guidance task from Tier and Diff-Scope Validation (`q6lj4w96`), since this
-      plan now owns it.
-- [ ] Update `docs/internal/testing.md`.
+Flakes first, so the CI results the later steps lean on are trustworthy.
+
+- [ ] Reproduce the `browser-lifecycle-check.mjs:83` empty stdout (loop the check on macOS until it
+      fails, capturing the run's exit status and stderr), then fix the cause or assert on status
+      and stderr before parsing. Done when 20 consecutive runs pass.
+- [ ] Find why `route.fetch()` in `scripts/test/portal-ui/helpers.mjs` (both route handlers) drops
+      the connection, then fix the cause or retry that fetch once inside the helper.
+- [ ] Set `retries: process.env.CI ? 1 : 0` in `scripts/test/portal-ui/playwright.config.mjs`.
+- [ ] Add `scripts/test/pre-push-check.sh` (doctor, docs reference check, per-ref
+      `git diff --check` as described in Proposed design) and an executable
+      `scripts/git-hooks/pre-push` that calls it with git's stdin. Time it.
+- [ ] Prove the hook wiring with a local remote, not the real one:
+      `git clone --bare . <tmp>/remote.git`, push a throwaway branch with a broken doc reference to
+      it from the user's shell and from an agent shell, and confirm both are refused while the same
+      branch without that commit pushes.
+- [ ] Edit `globals/system/rules/shared/08-validation-gates.md`, then run
+      `bash scripts/build/render-rules.sh` to regenerate the rendered rules.
+- [ ] Edit the test-harness skill and `local/skills/roborepo-development/SKILL.md`.
+- [ ] Edit the plan-execute validation loop, plan-review, and plan-close, keeping the wording
+      forge-neutral; update any phrase `scripts/test/plan-suite-skills-check.mjs` asserts that the
+      edits change.
+- [ ] Rewrite the agent-guidance task in Tier and Diff-Scope Validation (`q6lj4w96`) so it no longer
+      sends agents to a local full `npm run check` before handoff, and add `ja44k85c` to its
+      `related` list.
+- [ ] Update `docs/internal/testing.md` and `docs/internal/hooks-internals.md`.
+- [ ] Run the checks in Validation, including one `npm run check`.
 
 ## Validation
 
 - `scripts/test/pre-push-check.sh` finishes in under 10 seconds on a development checkout.
-- With the hook installed, pushing a throwaway branch whose commit adds a broken doc reference is
-  refused, from the user's shell and from an agent shell; the same branch without that commit
-  pushes. The checks the script runs already have their own tests, so this manual push proves only
-  the hook wiring.
+- With the hook installed, pushing a throwaway branch whose commit adds a broken doc reference to a
+  local bare clone is refused, from the user's shell and from an agent shell; the same branch
+  without that commit pushes. A bare clone keeps `HEAD` pointing at `main`, which the agent hook
+  needs to name the default branch. The checks the script runs already have their own tests, so
+  this manual push proves only the hook wiring.
 - `node scripts/test/browser-lifecycle-check.mjs` passes 20 consecutive runs on macOS.
 - `npm run test:portal-ui` passes on both CI legs, with any retried test listed as flaky.
 - `node scripts/test/plan-suite-skills-check.mjs`, the generated-rules check run by
@@ -199,10 +242,14 @@ canonical completion gate, once."
 - **Linux-only failures still reach CI.** This plan does not add a local Linux run; those failures
   stay CI's to catch.
 
+- **Another session is editing `plan-review/SKILL.md` and `docs/internal/hooks-internals.md`.** As
+  of 2026-10-30 both have uncommitted changes in the primary checkout. Start the skill and doc edits
+  from a base that includes those changes once they land, and keep their wording.
+
 ## Open questions
 
-- Should the pre-push check also run the plan validator over plans changed in the pushed range? It
-  would catch plan schema mistakes on lifecycle commits, at the cost of a few more seconds.
+None. Whether the pre-push check should also run the plan validator was decided against; Proposed
+design gives the reasons.
 
 ## Documentation impact
 
