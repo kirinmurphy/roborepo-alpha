@@ -203,8 +203,7 @@ export function validatePackageCatalog(packages) {
         else if (dep === pkg.id) errors.push(`${pkg.id}: package cannot list itself in ${relation}`);
       }
     }
-    // Nothing could ever turn such a package off: it is not directly selectable, and a default
-    // selection is only undone by a direct disable.
+    // Dependency-only packages must become effective through parents, not catalog defaults.
     if (pkg.selectable === false && pkg.defaultEnabled) {
       errors.push(`${pkg.id}: a package with selectable: false cannot be defaultEnabled`);
     }
