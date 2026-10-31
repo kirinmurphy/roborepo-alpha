@@ -744,10 +744,11 @@ export async function reconcileEnabledPackages(rest = []) {
   const catalog = loadPackageCatalog({ includeUnavailable: true });
   const enabledIds = effectiveEnabledIds(catalog);
   const known = new Set(catalog.map((pkg) => pkg.id));
-  // A retired or renamed package can sit in either registry list. Both are dropped, not moved to
-  // `disabled`: the catalog no longer has the package, so there is nothing left to disable.
+  // A retired or renamed package can sit in either registry list or the applied record. All are
+  // dropped, not moved to `disabled`: the catalog no longer has the package, so there is nothing
+  // left to disable.
   const registry = readEnabledPackagesRegistry();
-  const stale = [...new Set([...registry.packages, ...registry.disabled])].filter((id) => !known.has(id));
+  const stale = [...new Set([...registry.packages, ...registry.disabled, ...readAppliedPackageIds()])].filter((id) => !known.has(id));
   for (const id of stale) {
     console.warn(`${dryRun ? "  [dry-run] would remove" : "  remove"} stale package not in catalog: ${id}`);
   }

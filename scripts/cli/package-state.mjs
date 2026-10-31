@@ -34,9 +34,13 @@ export function setPackageApplied(id, applied) {
   if (ids.has(id) === applied) return;
   if (applied) ids.add(id);
   else ids.delete(id);
+  writeAppliedPackageIds([...ids], `${applied ? "apply" : "remove"} package ${id}`);
+}
+
+function writeAppliedPackageIds(ids, reason) {
   fs.mkdirSync(path.dirname(appliedPackagesPath), { recursive: true });
-  fs.writeFileSync(appliedPackagesPath, JSON.stringify({ packages: [...ids] }, null, 2) + "\n");
-  recordConfigWrite(appliedPackagesPath, `${applied ? "apply" : "remove"} package ${id}`);
+  fs.writeFileSync(appliedPackagesPath, JSON.stringify({ packages: ids }, null, 2) + "\n");
+  recordConfigWrite(appliedPackagesPath, reason);
 }
 
 // Returns { exists, schemaVersion, packages, disabled } exactly as stored. `exists` distinguishes
@@ -139,13 +143,19 @@ export function setPackageEnabled(id, enabled, catalog = loadPackageCatalog({ in
   return next.packages;
 }
 
-// Drop package IDs from both registry lists. Used for IDs the catalog no longer contains (a
-// retired or renamed package): an explicit disable of a package that does not exist protects
-// nothing, and parking the ID in `disabled` would keep it in the registry forever.
+// Drop package IDs from both registry lists and the applied record. Used for IDs the catalog no
+// longer contains (a retired or renamed package): an explicit disable of a package that does not
+// exist protects nothing, parking the ID in `disabled` would keep it in the registry forever, and
+// reconcile cannot remove components it no longer has a manifest for.
 export function forgetPackageIds(ids, catalog = loadPackageCatalog({ includeUnavailable: true })) {
   const drop = new Set(ids);
   if (drop.size === 0) return;
   const registry = readEnabledPackagesRegistry();
   const packages = explicitRootIds(catalog, registry);
-  writeRegistry(packages.filter((id) => !drop.has(id)), registry.disabled.filter((id) => !drop.has(id)));
+  const remaining = (list) => list.filter((id) => !drop.has(id));
+  if ([...registry.packages, ...registry.disabled].some((id) => drop.has(id))) {
+    writeRegistry(remaining(packages), remaining(registry.disabled));
+  }
+  const applied = readAppliedPackageIds();
+  if (applied.some((id) => drop.has(id))) writeAppliedPackageIds(remaining(applied), `forget packages ${[...drop].join(", ")}`);
 }
