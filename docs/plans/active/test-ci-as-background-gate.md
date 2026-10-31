@@ -1,7 +1,7 @@
 ---
 id: ja44k85c
 priority: none
-next_action: Fix the browser-lifecycle and portal UI flakes so a red CI result means a real failure
+next_action: Run the Validation Loop over the implementation commit, then the completion preflight
 blocked_by: []
 depends_on: []
 related: ["f0jwe76j", "developer-runtime-remote-branch-status"]
@@ -187,27 +187,27 @@ canonical completion gate, once."
 
 Flakes first, so the CI results the later steps lean on are trustworthy.
 
-- [ ] Reproduce the `browser-lifecycle-check.mjs:83` empty stdout (loop the check on macOS until it
+- [x] Reproduce the `browser-lifecycle-check.mjs:83` empty stdout (loop the check on macOS until it
       fails, capturing the run's exit status and stderr), then fix the cause or assert on status
       and stderr before parsing. Done when 20 consecutive runs pass.
-- [ ] Find why `route.fetch()` in `scripts/test/portal-ui/helpers.mjs` (both route handlers) drops
+- [x] Find why `route.fetch()` in `scripts/test/portal-ui/helpers.mjs` (both route handlers) drops
       the connection, then fix the cause or retry that fetch once inside the helper.
-- [ ] Set `retries: process.env.CI ? 1 : 0` in `scripts/test/portal-ui/playwright.config.mjs`.
-- [ ] Add `scripts/test/pre-push-check.sh` (doctor, docs reference check, per-ref
+- [x] Set `retries: process.env.CI ? 1 : 0` in `scripts/test/portal-ui/playwright.config.mjs`.
+- [x] Add `scripts/test/pre-push-check.sh` (doctor, docs reference check, per-ref
       `git diff --check` as described in Proposed design) and an executable
       `scripts/git-hooks/pre-push` that calls it with git's stdin. Time it.
-- [ ] Prove the hook wiring with a local remote, not the real one:
+- [x] Prove the hook wiring with a local remote, not the real one:
       `git clone --bare . <tmp>/remote.git`, push a throwaway branch with a broken doc reference to
       it from the user's shell and from an agent shell, and confirm both are refused while the same
       branch without that commit pushes.
-- [ ] Edit `globals/system/rules/shared/08-validation-gates.md`, then run
+- [x] Edit `globals/system/rules/shared/08-validation-gates.md`, then run
       `bash scripts/build/render-rules.sh` to regenerate the rendered rules.
-- [ ] Edit the test-harness skill and `local/skills/roborepo-development/SKILL.md`.
-- [ ] Edit the plan-execute validation loop, plan-review, and plan-close, keeping the wording
+- [x] Edit the test-harness skill and `local/skills/roborepo-development/SKILL.md`.
+- [x] Edit the plan-execute validation loop, plan-review, and plan-close, keeping the wording
       forge-neutral; update any phrase `scripts/test/plan-suite-skills-check.mjs` asserts that the
       edits change.
-- [ ] Update `docs/internal/testing.md` and `docs/internal/hooks-internals.md`.
-- [ ] Run the checks in Validation, including one `npm run check`.
+- [x] Update `docs/internal/testing.md` and `docs/internal/hooks-internals.md`.
+- [x] Run the checks in Validation, including one `npm run check`.
 
 ## Validation
 
@@ -249,6 +249,79 @@ Flakes first, so the CI results the later steps lean on are trustworthy.
 
 None. Whether the pre-push check should also run the plan validator was decided against; Proposed
 design gives the reasons.
+
+## Review
+
+### Findings
+- [x] Unreaped-group assertion in `browser-lifecycle-check.mjs` ran on Linux, where `kill(-pgid, 0)` succeeds on a zombie-only group, so it would fail on CI's Ubuntu leg — limited to macOS (0e592b1b)
+- [x] test-harness step 4 told agents to push; reworded to "after a push" (e62a2a2b)
+- [x] Validation-gates rule had no fallback for a repo without CI; added one local full gate (e62a2a2b)
+- [x] `plan-review/references/resume-review.md` still sent a changed implementation to the local completion gate; now reads CI first (e62a2a2b)
+- [x] plan-review and plan-close did not say a CI run in progress is waited for, not reproduced locally (e62a2a2b)
+- [x] Validation-gates rule's no-CI fallback applied to every change, contradicting the prose-only and module rows; scoped to the rows that leave the full gate to CI (fc53001d)
+- [x] Plan `### Verification` lacked the pre-push timing, 20-run, and hook-wiring evidence — recorded
+- [x] test-harness step 4 still sent dependency, generated-type, and build changes to a local full run, contradicting the rule; aligned (a8b164d0)
+
+### Verification
+- Validation pass 1 (fresh-context subagent): 1 fix finding, fixed above. Linux behavior confirmed by the Validator in `node:22-bookworm-slim`.
+- Validation pass 2 (fresh-context subagent): 4 fix findings, fixed above.
+- Validation pass 3 (fresh-context subagent): 2 fix findings, fixed above.
+- Validation pass 4 (fresh-context subagent): 1 fix finding, fixed above.
+- `bash scripts/test/pre-push-check.sh origin` on a development checkout: 4.2 s (Validator: 4.0 s), under the 10 s limit.
+- `node scripts/test/browser-lifecycle-check.mjs`: 20/20 consecutive passes on macOS after the fix; the unreaped-group assertion fails with `kill EPERM` when the fix is reverted.
+- Hook wiring, driven with git's argv and stdin in a scratch clone with `core.hooksPath scripts/git-hooks`: the agent hook (`~/.claude/git-hooks/pre-push`) and the repository hook each exit 1 on a branch adding a broken doc link (naming the docs reference check) and 0 on the branch without it; whitespace in pushed commits is refused for a new branch and an update; a deletion is skipped.
+- `node scripts/test/plan-suite-skills-check.mjs`, `bash scripts/doctor.sh --quiet` (generated rules in sync), and `roborepo skill triggers --check` pass.
+- `npm run check` passed at fc53001d on macOS: 65/65 check suites, package install, all four Docker clean-machine sandboxes, and 151/151 portal UI specs. A first run failed only because the new worktree had no `node_modules`; `npm ci` fixed it.
+- Base failure, fixed on the branch: `docs-reference-check.mjs` fails on main (stale link in `docs/internal/backlog-review.md`).
+
+## Decision Log
+
+- **Browser-lifecycle flake: fixed the cause, plus a reporting guard.** The run's empty stdout was
+  the CLI crashing in its cleanup `finally`: on macOS, `kill(-pgid, 0)` on a group whose only
+  members have exited but are not yet reaped returns `EPERM`, not `ESRCH`, and `signalGroup`
+  rethrew it. Reproduced locally (1 of 25 runs, at the backgrounded `--serve` case, not only line
+  83) and isolated with a zombie-group probe that prints `EPERM`. `signalGroup` now treats `EPERM`
+  as "nothing left to signal"; a deterministic regression assertion fails without the fix. The
+  check also asserts a report exists before parsing, so any future empty run prints its status and
+  stderr. Alternative: only the reporting guard; rejected because the cause was found.
+- **Portal UI `ECONNRESET`: retry once, not a server change.** All eight hits in the last 40 failed
+  CI runs were GETs (seven `route.fetch` of `/api/home`, one `page.request.get` of
+  `/api/repositories/sources`) that reused a keep-alive socket the portal was closing as idle. The
+  cause is a client/server keep-alive timing race; changing the portal's `keepAliveTimeout` would
+  alter product behavior to suit a test client. The retry covers the `page.request.get` site as well
+  as both route handlers, since it fails the same way.
+- **Validation-gates rule: split the last tier row.** The plan narrows the full local gate to CI,
+  workflow, and test-orchestration changes; install, package-default, harness, generated-output, and
+  dependency changes moved to a new row (affected-flow tests plus the health check; CI runs the full
+  gate) rather than losing a row.
+- **plan-review and plan-close do not push.** The plan's "after a fix, rerun the affected checks and
+  push" conflicts with plan-review's boundary against pushing. The skills now say the fixed commit's
+  full gate is CI's result once the branch is pushed, which they never do themselves, or one local
+  gate run when no CI result can exist. Keeping the boundary avoids changing the skill's contract.
+- **Base failure fixed on the branch.** `docs/internal/backlog-review.md` linked to the plan
+  `q6lj4w96` at its old `backlog/` path after `8adee1aa` archived it, so the docs reference check
+  fails on main today; the pre-push check found it. The link now points at `archived/`.
+- **`pre-push-check.sh` is exempt in the orphan-test check.** It is a hook runner, not a suite; the
+  checks it runs have their own tests.
+- **Hook wiring proved by driving the hooks, not `git push`.** This session's permissions deny
+  `git push`, even to a local bare clone. The proof ran in a scratch clone with
+  `core.hooksPath scripts/git-hooks`, invoking `~/.claude/git-hooks/pre-push` (agent shell, with
+  the command-scope override) and the repository hook directly (user shell, override removed) with
+  the argv and stdin git passes. Both refused the broken-doc branch (exit 1, naming the docs check)
+  and passed the branch without it (exit 0). A real `git push` is a Not tested entry.
+- **`hooks-internals.md` edit appended as its own section.** The primary checkout still has
+  another session's uncommitted edits to that file, in the Codex permission section; the new
+  section is at the end, away from them, so the two merge cleanly.
+
+## Not tested
+
+- [ ] A real `git push` runs the hook: from the user's terminal and from an agent shell, push a
+      throwaway branch with a broken doc link to a local bare clone and see it refused. This
+      session's permissions deny `git push`; the hooks were driven directly with git's argv and stdin.
+- [ ] `npm run test:portal-ui` passes on both CI legs, with any retried test listed as flaky. Needs
+      the branch pushed so CI runs it.
+- [ ] The hook is installed in the primary checkout (`git config core.hooksPath scripts/git-hooks`).
+      It changes the repository's persistent git config, so the user runs it after merge.
 
 ## Documentation impact
 
