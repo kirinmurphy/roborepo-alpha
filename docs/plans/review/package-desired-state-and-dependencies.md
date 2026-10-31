@@ -541,6 +541,11 @@ to choose them again. Verification and approval of the changed implementation re
   sense to have a skill exist by itself, other times it may." The catalog now rejects
   `selectable: false` with `catalog` visibility, the one combination that would give a row with no
   switch (§3).
+- **2026-10-31 (user decision, human review): The re-review escalations stay closed.** A parallel
+  review session closed both in 6c2ffb3b from earlier decisions: the 2026-10-28 telemetry-only
+  bundle cost is corrected, since `roborepo update` now applies the required hooks, and the
+  version-1 registry read rule is retained. Asked whether to accept those closures or drop the
+  version-1 rule, the user chose "Accept both".
 
 ## Review
 
