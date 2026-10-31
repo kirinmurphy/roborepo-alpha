@@ -4,7 +4,7 @@ priority: high
 next_action: Fix the browser-lifecycle and portal UI flakes so a red CI result means a real failure
 blocked_by: []
 depends_on: []
-related: ["q6lj4w96", "f0jwe76j", "developer-runtime-remote-branch-status"]
+related: ["f0jwe76j", "developer-runtime-remote-branch-status"]
 reviewed_commit: bd85fcaeb90c56c831973812a8039cc86b88b7d6
 worktree:
 ---
@@ -87,8 +87,9 @@ times locally, plus once per fix, and CI runs it again on the pull request and o
 ## Non-goals
 
 - Requiring pull requests for every commit to main. Plan lifecycle commits land on main by design.
-- Diff-scoped tier selection and CI path filters. Tier and Diff-Scope Validation (`q6lj4w96`) owns
-  them as a later optimization of CI time.
+- Diff-scoped tier selection and CI path filters. They are deferred with no owning plan: write a
+  CI-speed plan only if the CI run times measured after this plan lands (see Validation) show CI
+  time matters.
 - Agents fixing their own pull requests on every harness. GitHub Integration Part 02 (`f0jwe76j`)
   owns that; this plan only tells agents to read the CI result.
 - Removing any check from `npm run check` or from CI.
@@ -179,7 +180,6 @@ canonical completion gate, once."
 
 | Plan | Relationship | Effect on this plan |
 | --- | --- | --- |
-| Tier and Diff-Scope Validation (`q6lj4w96`, backlog) | Plan-vs-plan conflict, unlanded | Its task "Update internal development guidance so agents use targeted tiers during iteration and full `npm run check` before merge-ready handoff" contradicts this plan's rule that CI is the full gate. This plan rewrites that task (see the checklist); tiers and path filters stay there. |
 | GitHub Integration Part 02 (`f0jwe76j`, backlog) | Unlanded, independent | Owns agents fixing their own pull requests. Nothing here waits on it. |
 | GitHub Integration Part 03 (`developer-runtime-remote-branch-status`, backlog) | Unlanded, independent | Shows a checkout's CI result in Runtime. Agents here read CI through the forge directly, not through Runtime. |
 
@@ -206,9 +206,6 @@ Flakes first, so the CI results the later steps lean on are trustworthy.
 - [ ] Edit the plan-execute validation loop, plan-review, and plan-close, keeping the wording
       forge-neutral; update any phrase `scripts/test/plan-suite-skills-check.mjs` asserts that the
       edits change.
-- [ ] Rewrite the agent-guidance task in Tier and Diff-Scope Validation (`q6lj4w96`) so it no longer
-      sends agents to a local full `npm run check` before handoff, and add `ja44k85c` to its
-      `related` list.
 - [ ] Update `docs/internal/testing.md` and `docs/internal/hooks-internals.md`.
 - [ ] Run the checks in Validation, including one `npm run check`.
 
@@ -228,8 +225,10 @@ Flakes first, so the CI results the later steps lean on are trustworthy.
 - One `npm run check` run passes before the pull request, because this change touches test
   orchestration.
 - Two weeks after merge, compare against the baseline in Context: the share of failed CI runs
-  (baseline 66 of 183 completed), failures inherited from a red main (baseline 15 of 30), and local
-  gate runs per session (baseline 430 across 94 sessions in 10 days).
+  (baseline 66 of 183 completed), failures inherited from a red main (baseline 15 of 30), local
+  gate runs per session (baseline 430 across 94 sessions in 10 days), and median CI run time per
+  leg (baseline about 10 minutes on Linux and 15 on macOS). The run times decide whether a CI-speed
+  plan is worth writing.
 
 ## Risks
 
