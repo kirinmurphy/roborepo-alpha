@@ -205,7 +205,9 @@ stateDiagram-v2
 ```
 
 - `enable` and `disable` on a `selectable: false` package fail without changing state, and name
-  the packages that control it.
+  the packages that control it. The exception: `disable` removes such a package when it is a
+  recorded root (an older registry, or a manifest that later set `selectable: false`), since no
+  other action could remove that root.
 - `disable` on a selectable package that is a selected root removes the root. If a selected parent
   still requires it, it stays effective and the result says which parents keep it on.
 - `disable` on a selectable package that is effective only because a parent requires it has no
@@ -363,7 +365,7 @@ rule:
 | Two parents share a dependency; disabling one keeps it, disabling both removes it | `scripts/test/package-lifecycle-check.mjs` |
 | A directly selected dependency survives its parents being disabled; deselecting it while a parent remains keeps it effective | `scripts/test/package-lifecycle-check.mjs` |
 | Disabling a derived-only dependency is refused; `--cascade` turns it off with its parents | `scripts/test/package-lifecycle-check.mjs` and the existing `test-composite` assertions in `scripts/test/test-cli.sh` |
-| Direct enable/disable of a non-selectable package fails and changes nothing | `scripts/test/package-lifecycle-check.mjs` |
+| Direct enable/disable of a non-selectable package fails and changes nothing, except that disable removes one recorded as a root | `scripts/test/package-lifecycle-check.mjs` |
 | A forced component failure returns `partial`, and an apply error returns `blocked`, not `enabled` | `scripts/test/package-lifecycle-check.mjs` |
 | Reading a version-1 registry leaves the effective set unchanged and drops required ids from roots | `scripts/test/package-lifecycle-check.mjs` |
 | Defaults still apply and explicit disables still win | `scripts/test/package-default-enabled-check.mjs` |
@@ -640,6 +642,12 @@ Earlier questions were answered by the user (2026-10-27 and 2026-10-28); see Dec
 - [x] Review Validator pass 2: the reconcile Validation row and §1 still used the per-entry
       wording and the row omitted the newly tested edges — reworded, with a correction note on the
       2026-10-30 Decision Log entry
+- [x] Review Validator pass 3: the package-development CLI table's reconcile row omitted cleanup —
+      fixed in review (aa976114)
+- [x] Review Validator pass 4: §4, the Validation row, `roborepo-cli.md`, and the
+      package-development manifest table said disable always refuses a non-selectable package,
+      though `packages.mjs` removes one recorded as a root (asserted in the lifecycle check) —
+      docs fixed in review (43a0d6a1), plan prose reworded
 
 ### Verification
 
@@ -727,6 +735,19 @@ Earlier questions were answered by the user (2026-10-27 and 2026-10-28); see Dec
   0 escalate, 1 base (the same docs link). Confirmed the catalog rule's exact message on every load
   path (`package validate`, `list`, `enable`), no built-in package or fixture violating it, and ran
   the catalog, lifecycle, dependency-sections, and bulk-toggle checks (all pass).
+- Review Validator pass 3 (fresh-context subagent, at e5811714): 1 fix (docs), 0 escalate, 1 base
+  (the same docs link).
+- `npm run check` at 266d7ff3 was cut short: `test-install-collisions.sh` fresh installs were
+  killed with SIGTERM while Validator subagents ran uninstall checks from this checkout at the
+  same time. Uninstall's `cli_process_pids` (`scripts/install/uninstall-lib.sh:489`, unchanged by
+  this branch) stops every `<repo>/scripts/install/main.sh` process on the machine, so concurrent
+  install and uninstall tests from one checkout interfere. A fresh install alone exited 0.
+- `npm run check` at aa976114, nothing else running from this checkout: 66/67 suites; the one
+  failure is the base `docs-reference-check.mjs` link above. Later commits change only docs and
+  this plan.
+- Review Validator pass 4 (fresh-context subagent, read-only, no install/uninstall tests, at
+  aa976114): 1 fix (docs), 0 escalate, 1 base (the same docs link); ran the lifecycle, catalog,
+  retired-ids, and dependency-sections checks (all pass).
 
 ### Result
 
