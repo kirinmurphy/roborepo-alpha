@@ -32,7 +32,7 @@ function withoutPackagesControlledElsewhere(view) {
 }
 
 function openSourceModal(inspect, itemCost = null, { builtIn = false, back = null, requires = [] } = {}) {
-  if (inspect?.kind === "package-contents") return openContentsModal(inspect, itemCost, { builtIn, requires });
+  if (inspect?.kind === "package-contents") return openContentsModal(inspect, itemCost, { builtIn, back, requires });
   const rules = lastSnapshot?.globals?.rules || {};
   const harnesses = lastSnapshot?.harnesses || [];
   const chips = inspectChipSpecs(inspect, itemCost, lastSnapshot, { builtIn });
@@ -54,9 +54,10 @@ function openRequiredSource(reopen, requires) {
 
 // A package with several skills opens a list of its resources; each entry opens the same source
 // view a single-skill card would, with Back returning to the list.
-function openContentsModal(inspect, itemCost, { builtIn, requires = [] }) {
-  const reopen = () => openContentsModal(inspect, itemCost, { builtIn, requires });
+function openContentsModal(inspect, itemCost, { builtIn, back = null, requires = [] }) {
+  const reopen = () => openContentsModal(inspect, itemCost, { builtIn, back, requires });
   modal.showContents(inspect, {
+    back,
     chips: inspectChipSpecs(inspect, itemCost, lastSnapshot, { builtIn }),
     entryChipSpec: (entry) => contentsEntryChipSpec(entry, lastSnapshot, { builtIn }),
     onSelect: (entry) => openSourceModal(entry.inspect, entry.contextCost, { builtIn, back: reopen }),

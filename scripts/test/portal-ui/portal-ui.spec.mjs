@@ -164,6 +164,26 @@ test.describe("Agents page", () => {
     await expect(modal.locator(".modal-requires-item")).toHaveText([chained.label, dependency.label]);
     await modal.locator("#modal-close").click();
 
+    // A multi-skill required target keeps Back through its contents and nested source views.
+    sessionClose.requires = ["plan-suite"];
+    snapshot.behaviorView = buildBehaviorView(snapshot);
+    await page.reload();
+    await section.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^\/session-close$/ }) }).locator(".item-label").click();
+    await modal.locator(".modal-requires-item", { hasText: planSuite.label }).click();
+    await expect(modal.locator("#modal-title")).toHaveText(planSuite.label);
+    await expect(modal.locator("#modal-back")).toBeVisible();
+    await modal.locator(".package-contents-entry", { hasText: "/plan-execute" }).click();
+    await expect(modal.locator("#modal-path")).toContainText("plan-execute/SKILL.md");
+    await modal.locator("#modal-back").click();
+    await expect(modal.locator("#modal-title")).toHaveText(planSuite.label);
+    await modal.locator(".modal-requires-item", { hasText: dependency.label }).click();
+    await expect(modal.locator("#modal-path")).toContainText("technical-writing/SKILL.md");
+    await modal.locator("#modal-back").click();
+    await expect(modal.locator("#modal-title")).toHaveText(planSuite.label);
+    await modal.locator("#modal-back").click();
+    await expect(modal.locator("#modal-path")).toContainText("session-close/SKILL.md");
+    await modal.locator("#modal-close").click();
+
     // A required package with no source to open is listed as plain text, not a button.
     const readOnly = snapshot.behaviorView.find((entry) => entry.categoryId === "skills-dev-lifecycle")
       .items.find((item) => item.id === "session-close");

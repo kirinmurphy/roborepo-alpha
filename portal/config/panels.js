@@ -28,8 +28,6 @@ export function createConfigModal() {
   portalWireBackdropClose(dialogEl, close);
   backEl.addEventListener("click", () => onBack?.());
 
-  // Back shows only on a source view opened from a package's contents view, and re-renders that
-  // view in this same dialog rather than stacking a second one.
   function setBack(handler) {
     onBack = handler || null;
     backEl.hidden = !onBack;
@@ -128,9 +126,9 @@ export function createConfigModal() {
   // The contents view of a package with several skills. Everything it lists is already in the
   // snapshot, so nothing is fetched; selecting an entry calls `onSelect(entry)`, which opens that
   // entry's source view with a Back that calls showContents again.
-  function showContents(inspect, { chips = [], entryChipSpec, onSelect, requires = [], onRequire = null }) {
+  function showContents(inspect, { chips = [], entryChipSpec, onSelect, back = null, requires = [], onRequire = null }) {
     viewSeq += 1;
-    setBack(null);
+    setBack(back);
     setRequires(requires, onRequire);
     setHeader(inspect.label || inspect.id, "", chips);
     contentEl.replaceChildren(tmpl.packageContents(inspect, { entryChipSpec, onSelect }));
