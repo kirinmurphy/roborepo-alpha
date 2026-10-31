@@ -37,7 +37,7 @@ function fixture(id, config = {}) {
 // deps-closer -> deps-review; recommends deps-companion (other category) and deps-leaf (also required)
 // deps-sibling is a row in the same section that deps-closer recommends; deps-companion -> deps-leaf
 fixture("deps-planner", { requires: ["deps-review"] });
-fixture("deps-closer", { requires: ["deps-review"], recommends: ["deps-companion", "deps-leaf", "deps-sibling"] });
+fixture("deps-closer", { requires: ["deps-review"], recommends: ["deps-companion", "deps-leaf", "deps-sibling", "deps-hidden"] });
 fixture("deps-sibling");
 fixture("deps-review", { selectable: false, requires: ["deps-leaf"], presentation: { visibility: "dependency" } });
 fixture("deps-leaf", { presentation: { category: "token-optimization" } });
@@ -90,6 +90,11 @@ try {
     "config status names a row's requirements under it");
   assert.match(printed, /\n {2}Recommended dependencies\n {4}\[ \] Deps deps-companion {2}\(recommended by Deps deps-closer\)/,
     "config status prints the recommended list");
+
+  const enabledCloser = run(cli, "package", "enable", "deps-closer");
+  assert.match(enabledCloser, /recommended \(not enabled\): .*deps-companion/);
+  assert.doesNotMatch(enabledCloser, /recommended \(not enabled\): .*deps-hidden/,
+    "hidden recommendations stay out of the enable result shown by the terminal and portal dialog");
 
   console.log("ok: config dependencies (row references, recommended list, terminal print)");
 } finally {

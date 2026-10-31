@@ -646,13 +646,13 @@ function warnUnavailableRequirements(order, catalog) {
   }
 }
 
-// Selectable recommendations of `pkg` that are not effective. Offered, never applied here: only
+// Visible selectable recommendations of `pkg` that are not effective. Offered, never applied here: only
 // the portal and the interactive terminal command ask the user.
 function disabledRecommendations(pkg, catalog, effectiveIds) {
   const effective = new Set(effectiveIds);
   return (pkg.recommends || [])
     .map((id) => catalog.find((p) => p.id === id))
-    .filter((dep) => dep && dep.selectable && !effective.has(dep.id))
+    .filter((dep) => dep && dep.selectable && dep.presentation?.visibility !== "hidden" && !effective.has(dep.id))
     .map((dep) => ({ id: dep.id, label: dep.label, description: dep.description }));
 }
 
