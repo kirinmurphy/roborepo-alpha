@@ -44,7 +44,7 @@ export function labeledTokenChip({ label, spec }) {
   return wrap;
 }
 
-// Contents view of a package with several skills (inspect.kind "package-contents"): the summary
+// Contents view (inspect.kind "package-contents"): an optional summary
 // line and one button per resource. `entryChipSpec(entry)` gives the entry's cost chip spec, or
 // null to hide it; `onSelect(entry)` opens that entry's source view.
 export function packageContents(inspect, { entryChipSpec, onSelect }) {
@@ -371,9 +371,8 @@ export function packagesIntro() {
   return tpl("tpl-packages-intro");
 }
 
-// One required package in a source popup's Requires line: a button calling onSelect(ref) when the
-// package has a source to open (a skill, command, or rules), plain text otherwise (an MCP-only
-// package, for example).
+// A required reference opens its source or contents when it has an inspect target; otherwise its
+// label stays plain text.
 export function requiredReference(ref, onSelect) {
   if (!ref.inspect) {
     const text = tpl("tpl-required-reference-text");

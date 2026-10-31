@@ -123,8 +123,8 @@ export function createConfigModal() {
     }
   }
 
-  // The contents view of a package with several skills. Everything it lists is already in the
-  // snapshot, so nothing is fetched; selecting an entry calls `onSelect(entry)`, which opens that
+  // Contents entries and requirements are already in the snapshot, so nothing is fetched;
+  // selecting an entry calls `onSelect(entry)`, which opens that
   // entry's source view with a Back that calls showContents again.
   function showContents(inspect, { chips = [], entryChipSpec, onSelect, back = null, requires = [], onRequire = null }) {
     viewSeq += 1;
