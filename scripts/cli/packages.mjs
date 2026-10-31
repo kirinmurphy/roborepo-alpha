@@ -993,8 +993,9 @@ async function setService(id, enabled) {
   const loader = SERVICE_HANDLERS[id];
   if (!loader) { console.log(`  skip: unknown service: ${id}`); return; }
   const handler = await loader();
-  const result = handler(enabled);
+  const result = await handler(enabled);
   if (result?.message) console.log(`  ${result.message}`);
+  if (result?.ok === false) throw new Error(result.message || `failed to ${enabled ? "enable" : "disable"} service ${id}`);
   return result;
 }
 

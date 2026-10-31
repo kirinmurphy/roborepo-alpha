@@ -411,6 +411,8 @@ for (const pkgId of packageIds) {
     SessionStart: [{ hooks: [{ type: "command", command: "echo review-orphan-hook" }] }],
   }));
   fixture("orphan-external", { resources: [{ type: "permissions", allow: ["ReviewFixtureExternalPermission"] }] });
+  fixture("gc-service-parent", { requires: ["gc-service"] });
+  fixture("gc-service", { resources: [{ type: "service", id: "telemetry" }] });
   fixture("gc-edited", { resources: [{ type: "permissions", allow: ["ReviewFixtureEditedPermission"] }] });
   fixture("gc-legacy", { resources: [{ type: "permissions", allow: ["ReviewFixtureLegacyPermission"] }] });
 
@@ -483,6 +485,35 @@ for (const pkgId of packageIds) {
     const applied = readApplied();
     assert.ok(!applied.includes("orphan-dependency"), "the removed package leaves the applied record");
     assert.ok(!applied.includes("orphan-external"), "a package RoboRepo never applied is never recorded");
+
+    // Failed service cleanup must keep its applied entry so the next reconcile can retry it.
+    ok(cli, "package", "enable", "gc-service-parent");
+    const serviceParentPath = path.join(workspace, "packages", "gc-service-parent", "package.config.json");
+    const serviceParent = JSON.parse(fs.readFileSync(serviceParentPath, "utf8"));
+    serviceParent.requires = [];
+    fs.writeFileSync(serviceParentPath, JSON.stringify(serviceParent));
+    const serviceStatePath = path.join(stateDir, "telemetry", "state.json");
+    const failedCleanup = spawnSync(process.execPath, ["--input-type=module", "-e", `
+      import fs from "node:fs";
+      const { reconcileEnabledPackages } = await import(${JSON.stringify(path.join(repoRoot, "scripts/cli/packages.mjs"))});
+      const write = fs.writeFileSync;
+      fs.writeFileSync = function (file, ...args) {
+        if (String(file) === ${JSON.stringify(serviceStatePath)}) {
+          throw Object.assign(new Error("fixture service write failure"), { code: "EACCES" });
+        }
+        return write.call(this, file, ...args);
+      };
+      try { await reconcileEnabledPackages(); }
+      finally { fs.writeFileSync = write; }
+    `], { env, cwd: repoRoot, encoding: "utf8" });
+    assert.notEqual(failedCleanup.status, 0, "a service write failure fails reconciliation");
+    assert.match(failedCleanup.stdout + failedCleanup.stderr, /fixture service write failure/);
+    assert.ok(readApplied().includes("gc-service"), "failed cleanup retains the package's retry record");
+    assert.equal(JSON.parse(fs.readFileSync(serviceStatePath, "utf8")).enabled, true);
+    ok(cli, "package", "reconcile");
+    assert.equal(JSON.parse(fs.readFileSync(serviceStatePath, "utf8")).enabled, false,
+      "a later successful reconciliation retries service cleanup");
+    assert.ok(!readApplied().includes("gc-service"), "successful cleanup removes the retry record");
 
     // A plain disable drops the package from the applied record as well as removing it.
     ok(cli, "package", "enable", "gc-edited");
