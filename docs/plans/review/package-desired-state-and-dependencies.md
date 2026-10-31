@@ -783,12 +783,25 @@ to choose them again. Verification and approval of the changed implementation re
   5c76d9f9 with a plan-review skill clarification and another plan's start record; no package
   runtime changes are incoming. No merge or checkout change was performed. A concurrent
   lifecycle-test edit was preserved and is outside the historical gate evidence.
+- A second review session worked in parallel and numbered its passes separately. Its last pass,
+  also called pass 5 (fresh-context subagent, read-only, at 90f2f326), found 1 fix (test): the
+  corrupt-record case had no package both applied and out of the effective set, so its assertion
+  could not fail. Fixed in 714d4402, which now corrupts the record after an applied root is
+  dropped; a mutant with a readable record fails it. Neither session has a clean Validator pass
+  after its fifth-pass fixes.
+- `npm run check` passed at 714d4402 (all suites, portal UI 154 passed), run with nothing else
+  from this checkout. It includes 85a51bd5 and f748fe76, so it supersedes the blocked attempt
+  above.
+- `plans sync-base` merged local `main` at 5c76d9f9 (ce08b99a, no conflicts; main brought
+  `plan-review` skill prose and another plan's move). Skill structure, trigger, slash-command, and
+  docs-reference checks and `doctor.sh` (97 checks) passed at ce08b99a.
 
 ### Result
 
-- Status: pending
-- Reviewed implementation commit: f748fe76cecdad4974a22faab00d3392cf683692
-- Base commit: 8adee1aa089d8b354aa58e728fb56448fcbaf42b
+- Status: pending (no clean Validator pass after the fifth-pass fixes; the human confirms the two
+  re-review escalations closed in 6c2ffb3b)
+- Reviewed implementation commit: ce08b99a503208cc5d11a49e32174e2931bc85b7
+- Base commit: 5c76d9f9117e425d8b4fa9613c17795108b3d2f7
 
 ### Approval
 
