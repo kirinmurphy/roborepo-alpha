@@ -13,9 +13,10 @@ Each snapshot package carries `selectable`, `selection` (`selected`, `required`,
 `recommendedBy` lists. `buildBehaviorView()` omits packages whose `presentation.visibility` is not
 `catalog` from the normal rows. Each package row carries `requires[]`: its transitive required
 packages as references (`id`, `label`, `active`, and the `inspect` target and cost their own row
-would have). Required packages are never rows of their own; the source popup lists a row's
-references under **Requires**, each opening that package's source with **Back** to the row, and
-`roborepo config status` prints them as a `requires:` line under the row. Each section also gets
+would have). These references do not suppress a selectable catalog-visible package's own row.
+The source popup lists a row's references under **Requires**, each opening that package's source
+with **Back** to the row. `roborepo config status` prints them as a `requires:` line under the row.
+Each section also gets
 `recommendedDependencies[]` (its rows' direct `recommends`, minus rows it already shows and packages
 a row requires): ordinary switchable rows plus `relationship`, `referencedBy`, and `relationText`,
 rendered below the section's rows and printed by `config status`. Rows carry `selection` so the

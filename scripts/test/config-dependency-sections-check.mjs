@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Config page dependencies, as buildBehaviorView derives them and `roborepo config status` prints
-// them: required packages are never page rows, only a reference on each row that requires them
-// (transitive, for its source popup); a section lists its rows' direct `recommends` as switchable
+// them: each row references its transitive requirements for the source popup, independently of
+// whether they keep their own catalog rows; a section lists its direct `recommends` as switchable
 // rows, without repeating a row it already shows or a package a row requires; dependency-only and
 // hidden packages have no normal row. Workspace fixtures in a throwaway home.
 import assert from "node:assert/strict";

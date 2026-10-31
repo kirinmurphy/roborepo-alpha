@@ -53,9 +53,10 @@ A package may list `requires: [pkgId, ...]` and `recommends: [pkgId, ...]`:
   non-selectable package must be one of these two: the catalog rejects one that would keep a row
   without a toggle.
 
-A required package is not a row on the page. Clicking a package's name opens its source popup,
-which lists what it requires under **Requires**; each name there opens that package's source, and
-**Back** returns to the package that requires it.
+A selectable required package with `catalog` visibility keeps its own row. Dependency-only
+packages appear under **Requires** in their parents' source popups instead. Clicking a package's
+name opens its source popup, which lists its visible requirements; each name there opens that
+package's source, and **Back** returns to the package that requires it.
 
 Below its own rows, a section lists **Recommended dependencies**: what its packages recommend, each
 with a toggle and naming the packages that recommend it. A package a row already requires, or one

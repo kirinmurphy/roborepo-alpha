@@ -518,10 +518,9 @@ function labelRestatesCommand(label, command) {
 }
 
 // Each row's required packages, as a reference its source popup lists: the transitive `requires`
-// of the package, minus hidden packages. Each entry carries the inspect target and
-// cost its own row would have, so the popup can open its source. Required packages are never page
-// rows of their own (a dependency-only one has no switch, and a selectable one already has its own
-// row), so this is the only place they appear for the packages that pull them in.
+// of the package, minus hidden packages. Each entry carries the inspect target and cost its own
+// row would have, so the popup can open its source. Visibility controls normal rows independently:
+// dependency-only packages appear here, while catalog-visible requirements also keep their rows.
 function requiredReferences(item, packages, presentationItem) {
   const byId = new Map(packages.map((pkg) => [pkg.id, pkg]));
   return requiredClosure(packages, [item.id])
