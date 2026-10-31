@@ -306,6 +306,21 @@ plan-card {
   gap: 8px;
   min-width: 0;
 }
+/* Names the plan's repo, so cards stay identifiable when no repo filter is applied. */
+.repo-badge {
+  flex: 0 0 auto;
+  max-width: 40%;
+  padding: var(--pill-padding);
+  /* Mixing the text color into the card surface lifts the fill in dark mode and darkens it in light. */
+  background: color-mix(in srgb, var(--ink) 22%, var(--panel));
+  border-radius: 5px;
+  color: var(--ink);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .title-link {
   color: inherit;
   font: inherit;
