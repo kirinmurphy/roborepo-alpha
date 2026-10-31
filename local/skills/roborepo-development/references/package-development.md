@@ -290,7 +290,7 @@ accurate `package.config.json` automatically renders a complete portal card.
 | `roborepo package dev validate [id]` | Validates package source while developing. |
 | `roborepo package enable <id>` | Records `<id>` as a selected root and **applies live immediately**, with everything it requires — see Apply behavior below. Prints a probed outcome per package; lists (or, in a terminal, offers) recommendations that are off. |
 | `roborepo package disable <id> [--cascade]` | Removes the root and **applies live immediately**, removing packages that leave the effective set. Refuses a package that is on only through a parent unless `--cascade`. |
-| `roborepo package reconcile` | Re-applies every currently-enabled package (full reconciliation entry point — see Apply behavior). |
+| `roborepo package reconcile` | Re-applies every currently-enabled package and removes each package RoboRepo installed that left the effective set, never one it did not install (full reconciliation entry point — see Apply behavior). |
 | `roborepo package adopt-live [--dry-run]` | Detects externally-installed (unmanaged) package behavior and marks it enabled in the registry without re-installing it. |
 
 Add these rows to `docs/user/reference/roborepo-cli.md` and to
