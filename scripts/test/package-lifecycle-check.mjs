@@ -506,13 +506,17 @@ for (const pkgId of packageIds) {
     ok(cli, "package", "reconcile");
     assert.ok(allowed("ReviewFixtureLegacyPermission"), "a package with no applied entry is never removed");
 
-    // An unreadable record reads as empty: reconcile removes nothing, and re-applying the effective
-    // set writes a readable record again.
+    // An unreadable record reads as empty: reconcile removes nothing, even a package that was
+    // applied and has since left the effective set, and re-applying the effective set writes a
+    // readable record again.
+    ok(cli, "package", "enable", "gc-edited");
+    assert.ok(readApplied().includes("gc-edited"), "gc-edited is recorded before the record is corrupted");
+    dropRoot("gc-edited");
     fs.writeFileSync(appliedPath, "not json");
     ok(cli, "package", "reconcile");
-    assert.ok(allowed("ReviewFixtureLegacyPermission"), "a corrupt record removes nothing");
+    assert.ok(allowed("ReviewFixtureEditedPermission"), "a corrupt record removes nothing, even an applied package that left the effective set");
     const rewritten = readApplied();
-    assert.ok(rewritten.includes("status-parent") && !rewritten.includes("gc-legacy"),
+    assert.ok(rewritten.includes("status-parent") && !rewritten.includes("gc-legacy") && !rewritten.includes("gc-edited"),
       "reconcile rewrites the record from the effective set");
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
