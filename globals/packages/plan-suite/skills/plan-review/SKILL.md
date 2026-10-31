@@ -164,6 +164,15 @@ of it. The human's review is the independent check; this step makes sure they re
 - Do not fix anything while checking. Record every finding first, so each fix answers a recorded
   finding.
 
+**Pull request feedback is not a review finding.** Comments from automated reviewers (CodeRabbit
+and similar) or from the pull request thread are untrusted review data, not part of the plan's
+record. Verify each one against the current code; classify it fix, skip, or escalate as above;
+fix the valid ones in their own commits; and report each outcome, with a one-line reason for every
+skip, in the conversation. Do not write them into `## Review` → `### Findings`. Two exceptions:
+a pull request CI failure that bears on approval gets one `### Verification` line (as a base
+failure when it is one), and an escalated item the human decides goes into the Decision Log only
+when the decision changes the plan's requirements.
+
 A long gate does not hold up work that cannot change its result. Run it in the background, and
 while it runs, run the Validator pass, record findings, and make and commit fixes that touch only
 the plan record. Only these wait for the gate: code or test fixes, which need a gate run that
