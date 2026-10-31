@@ -43,6 +43,7 @@ fixture("deps-review", { selectable: false, requires: ["deps-leaf"], presentatio
 fixture("deps-leaf", { presentation: { category: "token-optimization" } });
 fixture("deps-companion", { requires: ["deps-leaf"], presentation: { category: "token-optimization" } });
 fixture("deps-hidden", { presentation: { visibility: "hidden" } });
+fixture("pure-parent", { requires: ["deps-review"], resources: [] });
 function run(...args) {
   const result = spawnSync(process.execPath, args, { env, cwd: repoRoot, encoding: "utf8", input: "" });
   assert.equal(result.status, 0, `${args.join(" ")} failed\n${result.stdout}${result.stderr}`);
@@ -63,6 +64,10 @@ try {
     "dependency-only and hidden packages have no normal row");
 
   const byId = new Map(section.items.map((item) => [item.id, item]));
+  const pureParent = byId.get("pure-parent");
+  assert.equal(pureParent.inspect?.kind, "package-contents", "a pure composite exposes its requirement references");
+  assert.deepEqual(pureParent.inspect.entries, [], "the pure composite has no source entries of its own");
+  assert.deepEqual(pureParent.requires.map((ref) => ref.id), ["deps-leaf", "deps-review"]);
   assert.deepEqual(byId.get("deps-planner").requires.map((ref) => ref.id), ["deps-leaf", "deps-review"],
     "a row references its transitive requirements, dependencies first");
   const review = byId.get("deps-planner").requires.find((ref) => ref.id === "deps-review");

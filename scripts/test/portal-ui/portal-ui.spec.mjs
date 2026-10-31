@@ -200,6 +200,28 @@ test.describe("Agents page", () => {
     await modal.locator("#modal-close").click();
   });
 
+  test("a package with only requirements opens its dependency references", async ({ page }) => {
+    const snapshot = await (await page.request.get("/api/config")).json();
+    const parent = snapshot.packages.find((pkg) => pkg.id === "session-close");
+    const dependency = snapshot.packages.find((pkg) => pkg.id === "technical-writing");
+    Object.assign(parent, { requires: [dependency.id], resources: [], components: [], skillIds: [] });
+    Object.assign(dependency, { selectable: false, presentation: { ...dependency.presentation, visibility: "dependency" } });
+    snapshot.tools = snapshot.tools.filter((tool) => tool.packageId !== parent.id);
+    snapshot.behaviorView = buildBehaviorView(snapshot);
+    await page.route("**/api/config", (route) => route.fulfill({ json: snapshot }));
+    await page.goto("/agents");
+    const row = page.locator("[data-slot=items] config-item").filter({ has: page.getByText(parent.label, { exact: true }) });
+    await row.locator(".item-label").click();
+    const modal = page.locator("dialog#config-modal");
+    await expect(modal.locator("#modal-title")).toHaveText(parent.label);
+    await expect(modal.locator(".package-contents-entry")).toHaveCount(0);
+    await modal.locator(".modal-requires-item", { hasText: dependency.label }).click();
+    await expect(modal.locator("#modal-path")).toContainText("technical-writing/SKILL.md");
+    await modal.locator("#modal-back").click();
+    await expect(modal.locator("#modal-title")).toHaveText(parent.label);
+    await expect(modal.locator(".modal-requires-item")).toHaveText([dependency.label]);
+  });
+
   test("a group switch counts only rows it can act on, and hides when none are left", async ({ page }) => {
     const snapshot = await (await page.request.get("/api/config")).json();
     const section = snapshot.behaviorView.find((entry) => entry.categoryId === "skills-dev-lifecycle");

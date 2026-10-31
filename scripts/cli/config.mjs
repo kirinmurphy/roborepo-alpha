@@ -597,7 +597,9 @@ function packagePresentationItem(item, tools, contextCost = null) {
       ? { kind: "skill", id: item.skillIds[0], label: item.label }
       : resources.includes("rules")
         ? { kind: "rules", id: item.id, label: item.label }
-        : null;
+        : item.requires?.length
+          ? { kind: "package-contents", id: item.id, label: item.label, entries: [] }
+          : null;
   return {
     ...packageItemBase(item, contextCost),
     label: showCommandLabel ? `/${command}` : item.label,
