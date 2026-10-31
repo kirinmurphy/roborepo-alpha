@@ -3,7 +3,9 @@
 // disable, and re-disable (idempotent) without error, and the enabled-packages registry must reflect
 // the expected state after each step. The fixture-tool block then checks that every live-config
 // resource type (MCP, Codex tool approvals, permissions, rules, hooks with a script) appears on
-// enable and leaves nothing behind on disable.
+// enable and leaves nothing behind on disable. Later blocks cover a several-skill package, derived
+// dependencies and their status, and reconcile removing an installed package that left the
+// effective set while preserving configuration RoboRepo never applied.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -372,4 +374,100 @@ for (const pkgId of packageIds) {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 }
-console.log(`ok: package lifecycle contract (${packageIds.length} packages, a several-skill package, and derived dependencies)`);
+// Live state of a dependency chain, and reconcile cleanup of a package that left the effective set.
+// A missing component deep in the chain reads partial at every level, whatever the catalog order.
+// When the last parent drops its `requires` edge, reconcile removes the orphan's components because
+// the applied record says RoboRepo installed them, and leaves matching configuration it never
+// applied alone.
+{
+  const tmp = makeHome();
+  const workspace = path.join(tmp, "workspace");
+  const stateDir = path.join(tmp, ".roborepo");
+  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_ROOT: stateDir, ROBOREPO_WORKSPACE_ROOT: workspace, SKIP_MCP: "1" };
+  const fixture = (id, config = {}) => {
+    const dir = path.join(workspace, "packages", id);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "package.config.json"), JSON.stringify({
+      schemaVersion: 1, id, label: `Fixture ${id}`, description: "Reconcile fixture",
+      resources: [], ...config, presentation: { category: "integrations", ...(config.presentation || {}) },
+    }));
+  };
+  fixture("status-parent", { requires: ["status-middle"], presentation: { order: -30 } });
+  fixture("status-middle", { requires: ["status-leaf"], presentation: { order: -20 } });
+  fixture("status-leaf", {
+    presentation: { order: -10 },
+    resources: [{ type: "permissions", allow: ["ReviewFixtureMissingPermission"] }],
+  });
+  fixture("orphan-parent-a", { requires: ["orphan-dependency"] });
+  fixture("orphan-parent-b", { requires: ["orphan-dependency"] });
+  fixture("orphan-dependency", {
+    resources: [
+      { type: "permissions", allow: ["ReviewFixtureOrphanPermission"] },
+      { type: "hooks", harness: "claude", source: "hooks.json" },
+      { type: "plugin", id: "review-fixture@review-market", marketplace: { name: "review-market", source: { source: "github", repo: "example/review-fixture" } } },
+      { type: "service", id: "telemetry" },
+    ],
+  });
+  fs.writeFileSync(path.join(workspace, "packages", "orphan-dependency", "hooks.json"), JSON.stringify({
+    SessionStart: [{ hooks: [{ type: "command", command: "echo review-orphan-hook" }] }],
+  }));
+  fixture("orphan-external", { resources: [{ type: "permissions", allow: ["ReviewFixtureExternalPermission"] }] });
+
+  const ok = (...args) => {
+    const result = spawnSync(process.execPath, args, { env, cwd: repoRoot, encoding: "utf8", input: "" });
+    assert.equal(result.status, 0, `${args.join(" ")} failed\n${result.stdout}${result.stderr}`);
+    return result.stdout;
+  };
+  const settingsPath = path.join(tmp, ".claude", "settings.json");
+  const readSettings = () => JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+  try {
+    ok(cli, "package", "enable", "status-parent");
+    const settings = readSettings();
+    settings.permissions.allow = settings.permissions.allow.filter((entry) => entry !== "ReviewFixtureMissingPermission");
+    fs.writeFileSync(settingsPath, JSON.stringify(settings));
+    const livePackages = JSON.parse(ok("-e", `
+      import(${JSON.stringify(path.join(repoRoot, "scripts/cli/config.mjs"))}).then((c) => {
+        console.log(JSON.stringify(c.readConfigSnapshot().packages));
+      });
+    `));
+    for (const id of ["status-leaf", "status-middle", "status-parent"]) {
+      const status = livePackages.find((pkg) => pkg.id === id);
+      assert.equal(status.desired, true, "missing components do not change the selected dependency closure");
+      assert.equal(status.status, "partial", `${id} reports a missing transitive requirement regardless of catalog order`);
+    }
+    assert.equal(JSON.parse(ok(cli, "package", "status", "status-parent", "--json")).status, "partial");
+
+    ok(cli, "package", "enable", "orphan-parent-a");
+    ok(cli, "package", "enable", "orphan-parent-b");
+    const external = readSettings();
+    external.permissions.allow.push("ReviewFixtureExternalPermission");
+    fs.writeFileSync(settingsPath, JSON.stringify(external));
+    for (const [index, id] of ["orphan-parent-a", "orphan-parent-b"].entries()) {
+      const manifestPath = path.join(workspace, "packages", id, "package.config.json");
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+      manifest.requires = [];
+      fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+      const out = ok(cli, "package", "reconcile");
+      const current = readSettings();
+      const retained = index === 0;
+      assert.equal(/remove no longer enabled package: orphan-dependency/.test(out), !retained,
+        "reconcile names the package it removes once the last edge is gone");
+      assert.equal(current.permissions.allow.includes("ReviewFixtureOrphanPermission"), retained,
+        "permissions stay until the dependency's last effective parent drops its edge");
+      assert.equal(JSON.stringify(current.hooks || {}).includes("echo review-orphan-hook"), retained,
+        "reconciliation uses hook cleanup after the last dependency edge disappears");
+      assert.equal(current.enabledPlugins?.["review-fixture@review-market"] === true, retained,
+        "reconciliation cleans the orphan's plugin alongside its other components");
+      assert.equal(JSON.parse(fs.readFileSync(path.join(stateDir, "telemetry", "state.json"), "utf8")).enabled, retained,
+        "reconciliation disables the orphan's service after its last parent leaves");
+      assert.ok(current.permissions.allow.includes("ReviewFixtureExternalPermission"),
+        "untracked external configuration is preserved");
+    }
+    const applied = JSON.parse(fs.readFileSync(path.join(stateDir, "applied-packages.json"), "utf8")).packages;
+    assert.ok(!applied.includes("orphan-dependency"), "the removed package leaves the applied record");
+    assert.ok(!applied.includes("orphan-external"), "a package RoboRepo never applied is never recorded");
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+console.log(`ok: package lifecycle contract (${packageIds.length} packages, a several-skill package, derived dependencies, and reconcile cleanup)`);
