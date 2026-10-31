@@ -252,11 +252,13 @@ test("Home's Token Warnings link opens Tokens scoped to that repository", async 
   await patchHomeOverview(page, (data) => {
     const repository = data.repositories.find((candidate) => candidate.displayName === "RoboRepo");
     repository.domains.tokens = { status: "available", data: {
-      warningCount: 1,
-      warnings: [{ kind: "spike", model: "gpt-5-codex", at: "2026-09-24T12:00:00.000Z", severity: "high", sessionId: "s", harness: "codex" }],
+      warningCount: 3,
+      warnings: Array.from({ length: 3 }, (_, index) => ({ kind: "spike", model: "gpt-5-codex", at: "2026-09-24T12:00:00.000Z", severity: "high", sessionId: `s${index}`, harness: "codex" })),
     } };
   });
   await page.goto("/");
+  // The link lives in the Tokens shortcut's hover panel.
+  await roboRepoCard(page).locator(".repository-shortcut.is-warning .repository-shortcut-link").hover();
   await roboRepoCard(page).getByRole("link", { name: "all activity", exact: true }).click();
   await expect(page).toHaveURL(/\/tokens\?repo=[a-z0-9-]+$/);
   await expect(selector(page)).toHaveAccessibleName("Repo: RoboRepo");

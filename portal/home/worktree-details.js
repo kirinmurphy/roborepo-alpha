@@ -13,6 +13,8 @@ const WORKTREE_PATH_MAX_LENGTH = 50;
 export function worktreeDetailsButton(plan, checkout, { mainCheckouts = [], onStopServers = null, onDelete = null } = {}) {
   const button = document.createElement("portal-menu-button");
   button.setAttribute("icon", "tree");
+  // The same size as the icons inside its panel.
+  button.setAttribute("icon-size", "md");
   button.setAttribute("aria-label", `Worktree details for ${plan.title}`);
   button.title = "Worktree details";
   const closing = (action) => action && (() => {
