@@ -11,13 +11,12 @@
 // drops those ids from the roots, so they stay effective through their parent and turn off with it.
 import fs from "node:fs";
 import path from "node:path";
-import { enabledPackagesPath, stateDir } from "./state-paths.mjs";
+import { appliedPackagesPath, enabledPackagesPath } from "./state-paths.mjs";
 import { recordConfigWrite } from "./write-log.mjs";
 import { loadPackageCatalog } from "./package-catalog.mjs";
 import { dropRequiredIds, requiredClosure } from "./package-graph.mjs";
 
 export const REGISTRY_SCHEMA_VERSION = 2;
-const appliedPackagesPath = path.join(stateDir, "applied-packages.json");
 
 // Installation ownership is separate from selection: losing a dependency edge must not lose
 // the knowledge needed to remove its installed components, or adopt external configuration.
