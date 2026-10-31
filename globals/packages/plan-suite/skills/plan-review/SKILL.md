@@ -144,7 +144,8 @@ of it. The human's review is the independent check; this step makes sure they re
   Questions, and the `## Review` record the Validation Loop left. A plan without a clean validation
   record was submitted without one; say so in the record.
 - Read the repository's CI result for the reviewed commit, from its forge when available. Run the
-  canonical completion gate locally, once, only when no CI result exists for that commit. Run the
+  canonical completion gate locally, once, only when no CI result exists for that commit; a CI run
+  still in progress is waited for, not reproduced locally. Run the
   plan's own tests. Record each command or CI run and its result.
 - For each failure, read the base branch's CI result for the base commit; when it has none, rerun
   the failing check on the base branch, or show its failing input exists there. A failure the base

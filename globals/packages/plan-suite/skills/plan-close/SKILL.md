@@ -127,7 +127,8 @@ transition command repeats this check before it commits.
 
 Read the repository's CI result for the landed commit on the base branch, from its forge when
 available; it stands in for the completion gate. Run the canonical completion gate locally, once,
-from the checkout that holds the plan's landed work, only when no CI result exists for that commit.
+from the checkout that holds the plan's landed work, only when no CI result exists for that commit;
+a CI run still in progress is waited for, not reproduced locally.
 Then run the focused tests named by the plan. When the gate runs locally, prefer the repository's
 canonical CI command over a broad discovery command that also includes release-only or optional
 environment suites. Tests run first because a red plan-relevant suite changes the code the verdict
