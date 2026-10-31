@@ -1,12 +1,12 @@
 ---
 id: ja44k85c
-priority: high
+priority: none
 next_action: Fix the browser-lifecycle and portal UI flakes so a red CI result means a real failure
 blocked_by: []
 depends_on: []
 related: ["f0jwe76j", "developer-runtime-remote-branch-status"]
 reviewed_commit: bd85fcaeb90c56c831973812a8039cc86b88b7d6
-worktree:
+worktree: test-ci-as-background-gate
 ---
 
 # Keep Main Green and Let CI Run the Full Gate
