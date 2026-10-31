@@ -271,6 +271,11 @@ for (const pkgId of packageIds) {
     assert.equal(registry().schemaVersion, 2, "writes mark the registry as roots-only");
     assert.deepEqual(effective(), ["dep-leaf", "dep-parent-a", "dep-shared"]);
     assert.ok(liveRules("dep-shared") && liveRules("dep-leaf"), "required packages are applied");
+    // Status probes only the package and what it requires, so the root that turned it on sits
+    // outside the probed set; a required-only dependency must still read as wanted and installed.
+    assert.deepEqual(JSON.parse(ok("package", "status", "dep-shared", "--json")),
+      { id: "dep-shared", available: true, enabled: true, status: "enabled" },
+      "status of a required-only dependency reports it on through its parent");
     assert.match(out, /^ {2}enabled: dep-shared$/m, "enable reports one probed outcome per applied package");
     assert.match(out, /recommended \(not enabled\): dep-helper/, "a non-interactive enable lists recommendations");
     assert.ok(!effective().includes("dep-helper"), "a recommendation is never enabled without a user choice");

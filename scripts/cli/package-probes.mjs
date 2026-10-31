@@ -342,8 +342,10 @@ function packageStatus({ desired, components }) {
   return components.some((component) => component.state === "external") ? "external" : "disabled";
 }
 
-export function buildPackageLiveState(packages, { hookRecords = null } = {}) {
-  const enabledIds = new Set(effectiveEnabledIds(packages));
+// `effectiveIds` is for callers probing a subset of the catalog: the subset cannot see a selected
+// root outside it, so a dependency that root requires would read as not desired.
+export function buildPackageLiveState(packages, { hookRecords = null, effectiveIds = effectiveEnabledIds(packages) } = {}) {
+  const enabledIds = new Set(effectiveIds);
   const settings = readJson(CLAUDE_SETTINGS, {});
   const telemetryState = readJson(path.join(telemetryDir, "state.json"), null);
   const byId = new Map();
