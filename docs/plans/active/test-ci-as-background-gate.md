@@ -1,7 +1,7 @@
 ---
 id: ja44k85c
 priority: none
-next_action: Run the Validation Loop over the implementation commit, then the completion preflight
+next_action: Run /plan-review; push the branch so CI runs both legs, and confirm the Not tested entries
 blocked_by: []
 depends_on: []
 related: ["f0jwe76j", "developer-runtime-remote-branch-status"]
@@ -267,6 +267,7 @@ design gives the reasons.
 - Validation pass 2 (fresh-context subagent): 4 fix findings, fixed above.
 - Validation pass 3 (fresh-context subagent): 2 fix findings, fixed above.
 - Validation pass 4 (fresh-context subagent): 1 fix finding, fixed above.
+- Validation: clean on pass 5 at 0e577a17 (fresh-context subagent).
 - `bash scripts/test/pre-push-check.sh origin` on a development checkout: 4.2 s (Validator: 4.0 s), under the 10 s limit.
 - `node scripts/test/browser-lifecycle-check.mjs`: 20/20 consecutive passes on macOS after the fix; the unreaped-group assertion fails with `kill EPERM` when the fix is reverted.
 - Hook wiring, driven with git's argv and stdin in a scratch clone with `core.hooksPath scripts/git-hooks`: the agent hook (`~/.claude/git-hooks/pre-push`) and the repository hook each exit 1 on a branch adding a broken doc link (naming the docs reference check) and 0 on the branch without it; whitespace in pushed commits is refused for a new branch and an update; a deletion is skipped.
