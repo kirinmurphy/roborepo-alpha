@@ -1,0 +1,3 @@
+interface:
+  display_name: "Plan Suite Init"
+  short_description: "Set up docs/plans folders and plans-config.json"
