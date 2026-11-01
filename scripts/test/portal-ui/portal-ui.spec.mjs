@@ -836,6 +836,40 @@ test.describe("hook readiness warning", () => {
 });
 
 test.describe("repository-first portal Home", () => {
+  for (const { label, ageHours, ahead = 3, warning = null } of [
+    { label: "today's local commits", ageHours: 1 },
+    { label: "the one-day boundary", ageHours: 24 },
+    { label: "older local commits", ageHours: 72, warning: "3d unpushed" },
+    { label: "missing local commit dates", ageHours: null },
+    { label: "a synchronized clone", ageHours: 72, ahead: 0 },
+  ]) {
+    test(`unpushed warning uses local commit age: ${label}`, async ({ page }) => {
+      const now = Date.parse("2026-10-31T16:00:00Z");
+      await page.clock.setFixedTime(new Date(now));
+      await patchRoboRepo(page, (repository) => {
+        repository.domains.plans = { status: "available", data: { active: [], recent: [], counts: {} } };
+        repository.domains.runtime = { status: "available", data: { checkouts: [{
+          rootId: "main", name: "main", isWorktree: false,
+          git: { branch: "main", ahead, behind: 0, upstream: "origin/main",
+            upstreamTipAt: now / 1000 - 39 * 7 * 24 * 60 * 60,
+            oldestUnpushedAt: ageHours === null ? null : now / 1000 - ageHours * 60 * 60,
+            provider: { ok: true } },
+        }] } };
+      });
+      await page.goto("/");
+      const card = roboRepoCard(page);
+      await expect(card).toBeVisible();
+      if (warning) {
+        await expect(card.getByText(`⚠ ${warning}`, { exact: true })).toBeVisible();
+        await expect(card.getByText(`⚠ ${warning}`, { exact: true })).toHaveAttribute(
+          "title", "3 commits not on origin/main — oldest unpushed commit is 3d old",
+        );
+      } else {
+        await expect(card.getByText(/\d+[hdw] unpushed/)).toHaveCount(0);
+      }
+    });
+  }
+
   test("worktree rows show their state; Stop Server and Delete Worktree live in row menus", async ({ page }) => {
     // Short enough that the card scrolls, so the open dropdown has a page to follow.
     await page.setViewportSize({ width: 1280, height: 420 });

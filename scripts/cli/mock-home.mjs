@@ -549,6 +549,7 @@ function checkout(rootId, branch, projectRoot, { port = null, kind = null, workt
       baseBehind: 0,
       baseMergeBaseAt: null,
       upstreamTipAt: null,
+      oldestUnpushedAt: null,
       fetchedAt: null,
       provider: { ok: true },
     },
