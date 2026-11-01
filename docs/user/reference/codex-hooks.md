@@ -127,13 +127,20 @@ Codex through command rules and hooks:
 | Bucket | How Codex enforces it |
 | --- | --- |
 | `allow` / `deny` | A command rule in `~/.codex/rules/default.rules`. These hold even if a hook fails to load |
-| `ask` | The command permissions hook above, since command rules can only allow or forbid |
+| `ask` | The command permissions hook denies the command and tells you to run it manually. A generic `git push` uses the dedicated push guard's verified decision instead |
 
 A command no rule or hook classifies falls through to Codex's `approval_policy`.
 
-Codex has been seen running a command whose hook result was `ask` without prompting, so treat `ask`
-on Codex as advisory. The protected-branch push hook does not rely on it: under Codex it denies
-instead.
+Codex has been seen running a command whose hook result was `ask` without prompting. RoboRepo
+therefore denies commands in that bucket: for example, `rm scratch.txt` must be run manually.
+A normal feature-branch push can still run without a prompt after the dedicated guard verifies it.
+If that guard is missing or inconclusive, the permission hook denies the push. A more specific
+personal `ask` override also remains denied. Claude keeps its native `ask` behavior.
+
+This is a temporary blocking fallback, not an approve-and-continue workflow. Codex's
+[native rules](https://learn.chatgpt.com/docs/agent-configuration/rules) support a `prompt`
+decision, but RoboRepo's native approval integration is unfinished. Human versus automatic review
+is a separate Codex setting; a native approval request does not always mean a human sees a dialog.
 
 `~/.codex/rules/` and `~/.codex/config.toml` are live files that Codex itself can change — for
 example, approving "always allow this command" in a session appends a rule. Once they differ from

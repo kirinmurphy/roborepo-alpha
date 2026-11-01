@@ -167,6 +167,20 @@ assert.equal(decide("git push --no-verify origin feat", { hookPath: installedCla
 for (const [command, expected] of [["git push origin feat", "allow"], ["git push origin main", "deny"], ["gh pr view 12", "defer"]]) {
   assert.equal(decide(command, { toolName: "exec_command", hookPath: codexHook, key: "cmd" }), expected, `Codex cmd: ${command}`);
 }
+// General command permissions deny ask-bucket commands, while verified pushes keep the branch
+// guard's decision. Chaining another command or losing the backstop must never inherit an allow.
+const permissionHook = path.join(codexHooks, "permission-check.mjs");
+for (const [toolName, key] of [["Bash", "command"], ["exec_command", "cmd"]]) {
+  const options = { toolName, key, hookPath: permissionHook, env: { REPO_ROOT: repoRoot, ROBOREPO_STATE_ROOT: path.join(tmp, "permission-state") } };
+  for (const [command, expected] of [
+    ["git push origin feat", "allow"],
+    ["git push origin main", "deny"],
+    ["git push origin feat --no-verify", "deny"],
+    ["git push --all origin", "deny"],
+    ["git push origin feat && touch chained.txt", "deny"],
+  ]) assert.equal(decide(command, options), expected, `command permissions ${toolName}: ${command}`);
+  assert.equal(decide("git push origin feat", { ...options, env: { ...options.env, ROBOREPO_GIT_HOOKS_DIR: path.join(tmp, "missing") } }), "deny", "command permissions deny without the push backstop");
+}
 assert.equal(decide("git push origin release", { env: { ROBOREPO_PROTECTED_BRANCHES: "release, prod" } }), "deny", "extra protected names");
 assert.equal(decide("git push origin main", { toolName: "exec_command" }), "deny", "Codex shell tool");
 assert.equal(decide("git push origin main", { toolName: "Read" }), "defer", "non-shell tool");

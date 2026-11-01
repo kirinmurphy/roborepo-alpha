@@ -228,7 +228,7 @@ assert "codex hooks: permission-check decides exec_command's cmd" \
   bash -c "$(declare -f codex_permission_decision); codex_hook_home='${codex_hook_home}'; codex_permission_decision 'git push --force origin main' | grep -q '\"permissionDecision\":\"deny\"' && codex_permission_decision 'git status' | grep -q '\"permissionDecision\":\"allow\"'"
 # An allow covers the leading command only, so it never approves what is chained after it.
 assert "codex hooks: permission-check does not allow a chained command" \
-  bash -c "$(declare -f codex_permission_decision); codex_hook_home='${codex_hook_home}'; test -z \"\$(codex_permission_decision 'git status && rm -rf build')\" && codex_permission_decision 'rm -rf build && git status' | grep -q '\"permissionDecision\":\"ask\"'"
+  bash -c "$(declare -f codex_permission_decision); codex_hook_home='${codex_hook_home}'; test -z \"\$(codex_permission_decision 'git status && rm -rf build')\" && codex_permission_decision 'rm -rf build && git status' | grep -q '\"permissionDecision\":\"deny\"'"
 assert "codex hooks: minimize-bash-output rewrites cmd in place and leaves compound commands alone" \
   bash -c "printf '%s\n' '{\"tool_name\":\"exec_command\",\"tool_input\":{\"cmd\":\"npm run lint\"}}' | node '${repo_root}/globals/harnesses/codex/hooks/minimize-bash-output.mjs' | grep -q '\"updatedInput\":{\"cmd\":\"npm run lint 2>&1 | tail -n 120\"}' && test -z \"\$(printf '%s\n' '{\"tool_name\":\"exec_command\",\"tool_input\":{\"cmd\":\"rm -rf x; npm run build\"}}' | node '${repo_root}/globals/harnesses/codex/hooks/minimize-bash-output.mjs')\""
 # An npm install writes no install-state.json; the CLI records the app root under the state root

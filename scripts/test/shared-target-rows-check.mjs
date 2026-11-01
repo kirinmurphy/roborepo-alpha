@@ -315,7 +315,7 @@ function standalonePermissionManifestDiscovery() {
     return JSON.parse(result.stdout).hookSpecificOutput.permissionDecision;
   }
   assert.equal(decision(sourcePath, {}), "deny", "provider source finds its checkout manifest without install state");
-  assert.equal(decision(installed, {}), "ask", "missing manifest retains conservative classification");
+  assert.equal(decision(installed, {}), "deny", "missing manifest denies instead of relying on a confirmation prompt");
   assert.equal(decision(installed, { REPO_ROOT: repoRoot }), "deny", "explicit repository root works for standalone copy");
   for (const variable of ["ROBOREPO_STATE_ROOT"]) {
     for (const [file, key] of [["app-root.json", "appRoot"], ["install-state.json", "repo"]]) {

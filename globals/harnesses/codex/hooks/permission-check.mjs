@@ -1,24 +1,13 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
+import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-// --- Real per-command ask on Codex, via a PreToolUse hook ---------------------------------------
-//
-// Codex's shell prefix rules (generated/codex/rules/default.rules) are binary — forbidden/allow only,
-// confirmed against the shipped Codex 0.140 wire schema (`strings` on the compiled binary): the
-// PreToolUseDecisionWire enum used by the OLDER approve/block mechanism is 2-valued, but the
-// CURRENT one — PreToolUsePermissionDecisionWire, the one hookSpecificOutput.permissionDecision
-// actually serializes to — has THREE values: allow, deny, ask. Codex hooks can genuinely prompt
-// per-command, the same as Claude; `prefix_rule` alone just can't express it. This hook is the
-// missing piece: it re-implements the manifest's command matching at runtime and emits a real
-// permissionDecision for any command that matches a deny/ask/allow-bucketed behavior or arbitrary
-// command, closing the gap `renderCodexRules` leaves (which must omit a rule entirely for "ask").
-//
-// Unmatched commands: no hookSpecificOutput is emitted, so the tool call falls through unchanged
-// to whatever `approval_policy` and any other PreToolUse hook decide — this hook only tightens
-// (or clarifies) the classified subset, mirroring the "hooks only tighten" convention already
-// documented in minimize-bash-output.mjs.
+// Codex has been observed executing commands whose hook result is "ask" without prompting.
+// Ask-bucket commands therefore fail closed here. Generic git pushes use the dedicated branch
+// guard's verified decision, so feature pushes stay possible without weakening other ask buckets.
+// Unmatched commands fall through to Codex's own approval policy and the other hooks.
 
 // The state root resolves the way the CLI's own does. The app root the CLI records there is what an
 // npm install depends on: this file runs as a copy under the harness home, so walking back from its
@@ -121,23 +110,38 @@ function matchesPrefix(commandTokens, ruleTokens) {
   return ruleTokens.every((t, i) => commandTokens[i] === t)
 }
 
+function verifiedPushDecision(input) {
+  const hook = path.join(path.dirname(fileURLToPath(import.meta.url)), 'protected-branch-push.mjs')
+  const result = spawnSync(process.execPath, [hook], {
+    input: JSON.stringify(input), encoding: 'utf8', timeout: 10000,
+  })
+  if (result.status !== 0) return null
+  try {
+    const output = JSON.parse(result.stdout).hookSpecificOutput
+    return ['allow', 'deny'].includes(output?.permissionDecision)
+      && typeof output.permissionDecisionReason === 'string' ? output : null
+  } catch {
+    return null
+  }
+}
+
 const input = readHookInput()
 if (!input) process.exit(0)
 const toolName = input.tool_name || input.toolName || input.tool || ''
 const toolInput = input.tool_input || input.toolInput || {}
-// exec_command sends the command as `cmd`; older shell tools send `command`.
+// Desktop shell calls arrive as Bash/command; exec_command uses cmd.
 const rawCommand = toolInput.command ?? toolInput.cmd
 const command = typeof rawCommand === 'string' ? rawCommand : ''
 
-const SHELL_TOOLS = new Set(['exec_command', 'shell', 'local_shell', 'bash'])
+const SHELL_TOOLS = new Set(['Bash', 'exec_command', 'shell', 'local_shell', 'bash'])
 if (!SHELL_TOOLS.has(toolName) || !command) process.exit(0)
 
 if (!permissionManifestFound) {
   process.stdout.write(JSON.stringify({
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
-      permissionDecision: 'ask',
-      permissionDecisionReason: `roborepo permissions: manifest not found at ${manifestPath}`,
+      permissionDecision: 'deny',
+      permissionDecisionReason: `roborepo permissions: manifest not found at ${manifestPath}, so this command cannot be checked. Run the command yourself.`,
     },
   }))
   process.exit(0)
@@ -158,10 +162,22 @@ if (!rule) process.exit(0) // unclassified — fall through to approval_policy /
 // tighten, and stand.
 if (rule.bucket === 'allow' && /[;&|<>`\n]|\$\(/.test(command)) process.exit(0)
 
+// Only the generic push bucket delegates. A more specific personal ask rule still requires the
+// user to run it manually, and a missing or inconclusive branch guard must not approve the push.
+if (rule.bucket === 'ask' && rule.tokens.length === 2 && rule.tokens[0] === 'git' && rule.tokens[1] === 'push') {
+  const output = verifiedPushDecision(input)
+  if (output) {
+    process.stdout.write(JSON.stringify({ hookSpecificOutput: output }))
+    process.exit(0)
+  }
+}
+
 process.stdout.write(JSON.stringify({
   hookSpecificOutput: {
     hookEventName: 'PreToolUse',
-    permissionDecision: rule.bucket,
-    permissionDecisionReason: `roborepo permissions: "${rule.tokens.join(' ')}" is ${rule.bucket}`,
+    permissionDecision: rule.bucket === 'ask' ? 'deny' : rule.bucket,
+    permissionDecisionReason: rule.bucket === 'ask'
+      ? `roborepo permissions: "${rule.tokens.join(' ')}" requires confirmation, but Codex cannot ask through this hook. Agents may not run it. Run the command yourself.`
+      : `roborepo permissions: "${rule.tokens.join(' ')}" is ${rule.bucket}`,
   },
 }))
