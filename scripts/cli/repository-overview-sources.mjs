@@ -129,6 +129,7 @@ function projectWorkspace(repository) {
         baseBehind: root.git.baseBehind ?? null,
         baseMergeBaseAt: root.git.baseMergeBaseAt ?? null,
         upstreamTipAt: root.git.upstreamTipAt ?? null,
+        oldestUnpushedAt: root.git.oldestUnpushedAt ?? null,
         fetchedAt: root.git.fetchedAt ?? null,
         provider: root.git.provider ? { ok: root.git.provider.ok !== false } : { ok: true },
       } : null,

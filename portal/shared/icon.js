@@ -154,22 +154,23 @@ const ICONS = {
     viewBox: "0 0 16 16",
     body: `<path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round" d="M2.5 7.6 8 3l5.5 4.6" /><path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" d="M4 6.8V13h8V6.8" /><path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" d="M6.5 13v-3h3v3" />`,
   },
-  // Agents: a small robot head — the harness/prompt side of the portal. A neutral bot mark rather
-  // than a vendor silhouette, so it can't be misread as a brand logo.
+  // Agents: a chat bubble holding a sparkle — an AI assistant you talk to. Deliberately not a robot,
+  // which is the site's own logo.
   agents: {
-    viewBox: "0 0 16 16",
-    body: `<rect x="3.5" y="6" width="9" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="1.3" /><path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" d="M8 3.5V6" /><circle cx="8" cy="2.8" r="1.1" fill="none" stroke="currentColor" stroke-width="1.3" /><path fill="currentColor" d="M6.4 9.3h.01M9.6 9.3h.01" />`,
+    viewBox: "0 0 24 24",
+    body: `<path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" d="M5 3.5h14a2 2 0 0 1 2 2v9.5a2 2 0 0 1-2 2h-6.5l-4.75 3.75V17H5a2 2 0 0 1-2-2V5.5a2 2 0 0 1 2-2Z" /><path fill="currentColor" d="M12 6.2c.4 2.35 1.45 3.4 3.8 3.8-2.35.4-3.4 1.45-3.8 3.8-.4-2.35-1.45-3.4-3.8-3.8 2.35-.4 3.4-1.45 3.8-3.8Z" />`,
   },
-  // Plans: a checklist document — a bordered sheet with a check, read as "implementation plan".
+  // Plans: a checklist document — a bordered sheet with a check, read as "implementation plan". The
+  // check spans most of the sheet so it still reads at the small steps.
   plans: {
     viewBox: "0 0 16 16",
-    body: `<rect x="3" y="2.5" width="10" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3" /><path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" d="M5.6 6.6l1.3 1.3 2.6-2.8" />`,
+    body: `<rect x="3" y="2.5" width="10" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3" /><path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" d="M5.3 8.1l2 2 3.6-4" />`,
   },
-  // Tokens: a coin — a token unit. The inner "T" notches read as a minted value without needing a
-  // currency glyph.
+  // Tokens: a coin — a token unit — with a raised rim and a "T" struck in its face. Drawn on a 24 grid
+  // so the rim and the letter stay distinct at the small steps instead of blurring into one circle.
   tokens: {
-    viewBox: "0 0 16 16",
-    body: `<circle cx="8" cy="8" r="5.4" fill="none" stroke="currentColor" stroke-width="1.3" /><path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" d="M6.4 6.4h3.2M8 6.4v3.2" />`,
+    viewBox: "0 0 24 24",
+    body: `<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7" /><circle cx="12" cy="12" r="6.3" fill="none" stroke="currentColor" stroke-width="1.1" /><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" d="M9.3 9.4h5.4M12 9.4v5.4" />`,
   },
   // Runtime: a bare `>_` prompt — the dev-server / local process side of the portal. No terminal
   // frame, so the prompt fills the box and reads at the same weight as its neighbors.

@@ -5,6 +5,7 @@
 //
 // Usage: set `.panelContent` to a Node right after creation. `icon`/`label` configure the trigger
 // face — set as plain HTML attributes for static markup, or as JS properties to change them later.
+// `icon-size` (attribute only) sets the trigger icon's portal-icon step; it defaults to `sm`.
 // The panel is only mounted while open, matching option-dropdown's re-render-on-toggle approach.
 import { positionPopoverPanel } from "/portal/shared/popover-position.js";
 import { portalTpl as tpl } from "/portal/shared/api.js";
@@ -92,11 +93,12 @@ class PortalMenuButton extends HTMLElement {
     trigger.setAttribute("aria-expanded", String(this._open));
     // `size`, not width/height: portal-icon only observes `name` and `size`, so the width/height
     // attributes this used to set were silently ignored and every trigger icon rendered at the
-    // default step anyway.
+    // default step anyway. An `icon-size` attribute picks another step for the trigger icon (the
+    // chevron stays small).
     if (this._icon) {
       const icon = document.createElement("portal-icon");
       icon.setAttribute("name", this._icon);
-      icon.setAttribute("size", "sm");
+      icon.setAttribute("size", this.getAttribute("icon-size") || "sm");
       trigger.append(icon);
     }
     if (this._label) trigger.append(document.createTextNode(this._label));

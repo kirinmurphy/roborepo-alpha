@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 // Git context collection: ref parsing from local plumbing files, the hardened subprocess seam, and
-// the per-scan cache. Fixtures are hand-synthesized .git directories rather than real `git init`
-// repositories (matching repositories-check.mjs) so the checks stay fast and hermetic.
+// the per-scan cache. Parser fixtures use synthetic .git directories; unpushed-age coverage uses
+// a real local clone so Git supplies the history and tracking counts without network access.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import {
   collectGitContext,
@@ -14,6 +15,7 @@ import {
   parsePackedRefs,
   parseUpstreamFromConfig,
 } from "../../modules/developer-runtime/index.mjs";
+import { runtimeByRepository } from "../cli/repository-overview-sources.mjs";
 import { createScanCache, defaultRunGit } from "../../modules/repositories/index.mjs";
 
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "developer-runtime-git-"));
@@ -179,6 +181,42 @@ try {
   assert.equal(byRoot.has(null), false, "instances with no project root contribute nothing");
   console.log("ok  per-scan cache dedupes by repository root");
 
+  // A fresh clone of old history must not make today's local work look months old.
+  const source = path.join(tempRoot, "old-source");
+  const clone = path.join(tempRoot, "fresh-clone");
+  fs.mkdirSync(source);
+  const remoteTime = "2026-01-30T12:00:00Z";
+  const firstLocalTime = "2026-10-31T12:00:00Z";
+
+  git(source, ["init", "-b", "main"]);
+  git(source, ["commit", "--allow-empty", "-m", "Old remote history"], remoteTime);
+  git(tempRoot, ["clone", "--no-local", source, clone]);
+  const justCloned = await collectGitContext(clone);
+  assert.equal(justCloned.ahead, 0);
+  assert.equal(justCloned.oldestUnpushedAt, null);
+  git(clone, ["commit", "--allow-empty", "-m", "First local work"]);
+  git(clone, ["commit", "--allow-empty", "-m", "More local work"], "2026-10-31T13:00:00Z");
+  const localWork = await collectGitContext(clone);
+  assert.equal(localWork.ahead, 2);
+  assert.equal(localWork.upstreamTipAt, Date.parse(remoteTime) / 1000);
+  assert.equal(localWork.oldestUnpushedAt, Date.parse(firstLocalTime) / 1000);
+  const projected = runtimeByRepository({ repositories: [{
+    repositoryId: "test", roots: [{ rootId: "main", git: localWork }],
+  }] }, { repositories: { test: {} } });
+  assert.equal(projected.get("test").checkouts[0].git.oldestUnpushedAt, localWork.oldestUnpushedAt,
+    "Home receives the local commit date collected by Runtime");
+  // Commit timestamps can be out of order; use the oldest date in the whole unpushed range.
+  git(clone, ["commit", "--allow-empty", "-m", "Earlier committer clock"], "2026-10-29T12:00:00Z");
+  assert.equal((await collectGitContext(clone)).oldestUnpushedAt, Date.parse("2026-10-29T12:00:00Z") / 1000);
+  const unreadableTime = await collectGitContext(clone, {
+    runGit: (cwd, args, options) => args[0] === "log" && args.includes("origin/main..HEAD")
+      ? { ok: false, stdout: "", error: "unreadable history" }
+      : defaultRunGit(cwd, args, options),
+  });
+  assert.equal(unreadableTime.ahead, 3);
+  assert.equal(unreadableTime.oldestUnpushedAt, null, "failed history reads never fall back to the old remote date");
+  console.log("ok  fresh clone measures unpushed age from local commits, not old remote history");
+
   console.log("\ndeveloper-runtime-git checks passed");
 } finally {
   fs.rmSync(tempRoot, { recursive: true, force: true });
@@ -242,4 +280,13 @@ function spyGit(responses) {
       return inner(cwd, args, options);
     },
   };
+}
+
+function git(cwd, args, date = "2026-10-31T12:00:00Z") {
+  return execFileSync("git", ["-c", "core.hooksPath=/dev/null", ...args], {
+    cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    env: { ...process.env, GIT_AUTHOR_NAME: "Test", GIT_AUTHOR_EMAIL: "test@example.invalid",
+      GIT_COMMITTER_NAME: "Test", GIT_COMMITTER_EMAIL: "test@example.invalid",
+      GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date },
+  }).trim();
 }
