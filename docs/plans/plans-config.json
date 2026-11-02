@@ -10,6 +10,7 @@
     "package": "The package system: definitions, enable/disable lifecycle, catalog, apply engine.",
     "portal": "The local web portal, any surface.",
     "developer-runtime": "Local dev server discovery, Docker/Compose grouping, repository cards.",
+    "forge": "Git hosting service (forge) integration, GitHub first: agent identity on the host, pull request and CI workflows, host-specific permission rules, and the host module.",
     "telemetry": "Agent session telemetry: capture, classification, phase inference, metrics, cohorts, experiments, analysis. Tokens are one captured field among ~30 (alongside test-failure streaks, edit/read counts, phase signals), which is why the namespace is not named for them. The portal routes this at /tokens because token cost is what a user goes there to read.",
     "usage-statusline": "Live token/cost readout in the harness statusline. Distinct from telemetry: reads transcripts directly and shares no code with the capture pipeline.",
     "context-cost": "Context window cost measurement and reporting.",

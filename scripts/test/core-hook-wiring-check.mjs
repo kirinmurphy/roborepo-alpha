@@ -38,7 +38,7 @@ function findEntryByCommand(event, command) {
 
 // Source-only explanations and supported native labels are required for every shipped Codex hook.
 const codexFragments = [readJson("globals/harnesses/codex/hooks-codex.json").hooks];
-for (const root of ["globals/packages", "globals/packages-archived"]) {
+for (const root of ["globals/packages"]) {
   for (const entry of fs.readdirSync(path.join(repoRoot, root), { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
     const directory = path.join(repoRoot, root, entry.name);

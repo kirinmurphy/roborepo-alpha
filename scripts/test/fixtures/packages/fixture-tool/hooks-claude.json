@@ -1,0 +1,13 @@
+{
+  "SessionStart": [
+    {
+      "matcher": "",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "node \"$HOME/.claude/hooks/fixture-session.mjs\""
+        }
+      ]
+    }
+  ]
+}

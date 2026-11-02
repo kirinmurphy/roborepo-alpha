@@ -4,15 +4,19 @@ import { repoRoot, workspacePackagesDir } from "./paths.mjs";
 import { experimentalStatePath } from "./state-paths.mjs";
 import { readWorkspaceOverrides, hasReplaceOverride } from "./workspace-resources.mjs";
 import { hasHarnessProvider, getHarnessProvider } from "../harnesses/registry.mjs";
+import { requiresCycles } from "./package-graph.mjs";
 
 export const PACKAGE_CATEGORIES_PATH = path.join(repoRoot, "manifests", "inventory", "package-categories.json");
 export const BUILT_IN_PACKAGES_DIR = path.join(repoRoot, "globals", "packages");
-export const ARCHIVED_PACKAGES_DIR = path.join(repoRoot, "globals", "packages-archived");
 export const EXPERIMENTAL_PACKAGES_ENV = "LOAD_EXPERIMENTAL_PACKAGES";
 
 const PENDING_STATUS = "pending";
 const SUPPORTED_SCHEMA = 1;
 const PACKAGE_LIFECYCLES = new Set(["optional", "system"]);
+// catalog: a normal Config row. dependency: no row; listed under Requires in the source popup of
+// each package that requires it. hidden: no Config row at all.
+const PACKAGE_VISIBILITIES = new Set(["catalog", "dependency", "hidden"]);
+const PACKAGE_RELATIONS = [["requires", "required"], ["recommends", "recommended"]];
 const RESOURCE_TYPES = new Set([
   "skill",
   "slash-command",
@@ -23,7 +27,6 @@ const RESOURCE_TYPES = new Set([
   "mcp",
   "plugin",
   "service",
-  "cli-command",
   "harness-config",
   "package-runtime-asset",
 ]);
@@ -100,8 +103,7 @@ export function readPackageCategories() {
 }
 
 function readBuiltInPackageConfigs() {
-  return [BUILT_IN_PACKAGES_DIR, ARCHIVED_PACKAGES_DIR]
-    .flatMap((root) => packageConfigFiles(root))
+  return packageConfigFiles(BUILT_IN_PACKAGES_DIR)
     .map((file) => readPackageConfig(file, "built-in"));
 }
 
@@ -188,7 +190,6 @@ export function validatePackageCatalog(packages) {
   const packageIds = new Set();
   const skillIds = new Map();
   const slashNames = new Map();
-  const cliCommands = new Map();
 
   for (const pkg of packages) {
     if (packageIds.has(pkg.id)) errors.push(`duplicate package id: ${pkg.id}`);
@@ -196,8 +197,19 @@ export function validatePackageCatalog(packages) {
     if (!categories.has(pkg.presentation.category)) {
       errors.push(`${pkg.id}: unknown presentation category: ${pkg.presentation.category}`);
     }
-    for (const dep of pkg.requires || []) {
-      if (!isSlug(dep)) errors.push(`${pkg.id}: invalid required package id: ${dep}`);
+    for (const [relation, label] of PACKAGE_RELATIONS) {
+      for (const dep of pkg[relation] || []) {
+        if (!isSlug(dep)) errors.push(`${pkg.id}: invalid ${label} package id: ${dep}`);
+        else if (dep === pkg.id) errors.push(`${pkg.id}: package cannot list itself in ${relation}`);
+      }
+    }
+    // Dependency-only packages must become effective through parents, not catalog defaults.
+    if (pkg.selectable === false && pkg.defaultEnabled) {
+      errors.push(`${pkg.id}: a package with selectable: false cannot be defaultEnabled`);
+    }
+    // A normal row needs a switch; a package without one is listed under Requires or not at all.
+    if (pkg.selectable === false && (pkg.presentation.visibility ?? "catalog") === "catalog") {
+      errors.push(`${pkg.id}: a package with selectable: false must use presentation.visibility "dependency" or "hidden"`);
     }
     for (const resource of pkg.resources) {
       if (resource.type === "skill") {
@@ -207,18 +219,19 @@ export function validatePackageCatalog(packages) {
         }
       } else if (resource.type === "slash-command") {
         claim(slashNames, resource.name, pkg.id, errors, "slash command");
-      } else if (resource.type === "cli-command" || resource.type === "command") {
-        claim(cliCommands, resource.name, pkg.id, errors, "CLI command");
       }
     }
   }
 
   for (const pkg of packages) {
-    for (const dep of pkg.requires || []) {
-      if (!packageIds.has(dep)) errors.push(`${pkg.id}: missing required package: ${dep}`);
+    for (const [relation, label] of PACKAGE_RELATIONS) {
+      for (const dep of pkg[relation] || []) {
+        if (isSlug(dep) && dep !== pkg.id && !packageIds.has(dep)) errors.push(`${pkg.id}: missing ${label} package: ${dep}`);
+      }
     }
   }
-  errors.push(...dependencyCycleErrors(packages));
+  // `recommends` never takes part: two packages may recommend each other.
+  for (const cycle of requiresCycles(packages)) errors.push(`package dependency cycle: ${cycle.join(" -> ")}`);
   if (errors.length > 0) throw new Error(errors.join("\n"));
   return { ok: true };
 }
@@ -236,6 +249,9 @@ function normalizePackage(pkg, { file, root, origin }) {
   if (pkg.defaultEnabled !== undefined && typeof pkg.defaultEnabled !== "boolean") {
     throw new Error(`${pkg.id}: defaultEnabled must be a boolean`);
   }
+  if (pkg.selectable !== undefined && typeof pkg.selectable !== "boolean") {
+    throw new Error(`${pkg.id}: selectable must be a boolean`);
+  }
   const presentation = normalizePresentation(pkg);
   const resources = normalizeResources(pkg.resources, { pkgId: pkg.id, file, root });
   // Self-declared behavior capabilities (e.g. "doc-lookup", "code-lookup") — how consumers match
@@ -250,13 +266,14 @@ function normalizePackage(pkg, { file, root, origin }) {
     defaultEnabled: pkg.defaultEnabled === true,
     capabilities,
     presentation,
-    requires: Array.isArray(pkg.requires) ? [...pkg.requires] : [],
+    selectable: pkg.selectable !== false,
+    requires: normalizeRelation(pkg, "requires"),
+    recommends: normalizeRelation(pkg, "recommends"),
     resources,
     components: resources.map((resource) => componentResource(resource, root)).filter(Boolean),
     sourceRoot: root,
     sourceFile: file,
     origin,
-    archived: path.resolve(root).startsWith(`${path.resolve(ARCHIVED_PACKAGES_DIR)}${path.sep}`),
   };
 }
 
@@ -266,7 +283,17 @@ function normalizePresentation(pkg) {
   if (!isSlug(category)) throw new Error(`${pkg.id}: presentation.category is required`);
   const order = presentation.order === undefined ? 0 : Number(presentation.order);
   if (!Number.isFinite(order)) throw new Error(`${pkg.id}: presentation.order must be numeric`);
-  return { category, order };
+  const visibility = presentation.visibility === undefined ? "catalog" : presentation.visibility;
+  if (!PACKAGE_VISIBILITIES.has(visibility)) {
+    throw new Error(`${pkg.id}: presentation.visibility must be one of: ${[...PACKAGE_VISIBILITIES].join(", ")}`);
+  }
+  return { category, order, visibility };
+}
+
+function normalizeRelation(pkg, relation) {
+  if (pkg[relation] === undefined) return [];
+  if (!Array.isArray(pkg[relation])) throw new Error(`${pkg.id}: ${relation} must be an array of package ids`);
+  return [...pkg[relation]];
 }
 
 function normalizeResources(resources, { pkgId, file, root }) {
@@ -326,7 +353,10 @@ function normalizeResource(resource, { pkgId, root, index }) {
   } else if (next.type === "rules" || next.type === "hooks") {
     next.source = validateInsideSource(root, next.source, `${pkgId}:${next.type}`);
     if (!fs.existsSync(path.join(root, next.source))) throw new Error(`${pkgId}:${next.type} source missing: ${next.source}`);
-    validateHarness(next.harness, `${pkgId}:${next.type}`, { allowBoth: true, requiredCapability: next.type });
+    // A rules resource without a harness renders into every rules-capable harness.
+    if (next.type === "hooks" || next.harness !== undefined) {
+      validateHarness(next.harness, `${pkgId}:${next.type}`, { requiredCapability: next.type });
+    }
     if (next.type === "hooks" && next.scripts !== undefined) {
       if (!Array.isArray(next.scripts)) throw new Error(`${pkgId}:hooks scripts must be an array`);
       next.scripts = next.scripts.map((script) => {
@@ -335,8 +365,6 @@ function normalizeResource(resource, { pkgId, root, index }) {
         return rel;
       });
     }
-  } else if (next.type === "cli-command") {
-    if (!isCommandName(next.name)) throw new Error(`${pkgId}: CLI command resource needs name`);
   }
   return next;
 }
@@ -357,7 +385,6 @@ function normalizeSlashEntrypoint(entrypoint, pkgId, skillId) {
 }
 
 function componentResource(resource, root) {
-  if (resource.type === "cli-command") return { ...resource, type: "command" };
   if (resource.type === "slash-command") return null;
   if (resource.type === "skill") return { type: "skill", id: resource.id };
   if (resource.source) {
@@ -387,10 +414,7 @@ function validateInsideSource(root, relSource, label) {
 // requiredCapability, when given, is checked against the target harness's provider manifest so a
 // resource can't silently target a harness that doesn't support what the resource type needs (e.g.
 // a hooks resource pointed at a harness whose manifest doesn't declare the "hooks" capability).
-// With today's two providers (claude/codex) both declaring the same capability set this never
-// fires, but it becomes real protection the moment a narrower-capability harness is registered.
-function validateHarness(harness, label, { allowBoth = false, requiredCapability } = {}) {
-  if (allowBoth && harness === "both") return;
+function validateHarness(harness, label, { requiredCapability } = {}) {
   if (!hasHarnessProvider(harness)) throw new Error(`${label} unknown harness: ${harness || "(missing)"}`);
   if (requiredCapability && !getHarnessProvider(harness).manifest.capabilities.includes(requiredCapability)) {
     throw new Error(`${label} harness "${harness}" does not support required capability: ${requiredCapability}`);
@@ -414,28 +438,6 @@ function claim(map, id, owner, errors, label) {
   map.set(id, owner);
 }
 
-function dependencyCycleErrors(packages) {
-  const byId = new Map(packages.map((pkg) => [pkg.id, pkg]));
-  const errors = [];
-  const visiting = new Set();
-  const visited = new Set();
-  function visit(id, stack = []) {
-    if (visited.has(id)) return;
-    if (visiting.has(id)) {
-      errors.push(`package dependency cycle: ${[...stack, id].join(" -> ")}`);
-      return;
-    }
-    visiting.add(id);
-    for (const dep of byId.get(id)?.requires || []) {
-      if (byId.has(dep)) visit(dep, [...stack, id]);
-    }
-    visiting.delete(id);
-    visited.add(id);
-  }
-  for (const pkg of packages) visit(pkg.id);
-  return errors;
-}
-
 function packageSort(a, b) {
   return (
     a.presentation.category.localeCompare(b.presentation.category) ||
@@ -447,10 +449,6 @@ function packageSort(a, b) {
 
 function isSlug(value) {
   return SLUG_RE.test(String(value || ""));
-}
-
-function isCommandName(value) {
-  return typeof value === "string" && value.trim() !== "" && value.split(/\s+/).every(isSlug);
 }
 
 function isSafeRelativeTarget(value) {

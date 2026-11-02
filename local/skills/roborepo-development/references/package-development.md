@@ -48,7 +48,7 @@ Four ways skills relate, by what the user controls:
 | **Package** | One switch. Every resource in it turns on and off together. | `plan-suite`, `caveman` | `package.config.json` |
 | **Collection** | Each member has its own switch, plus Select All / Deselect All for the group | None built in today; the portal still renders the switch for any such category | A category with `bulkToggle: true` in `manifests/inventory/package-categories.json` |
 | **Category** | Each member has its own switch, with no group switch | Code Conventions; Development Workflows (`plan-suite` and `session-close`) | A category without `bulkToggle` |
-| **Dependency** | Nothing directly. It turns on because a selected package `requires` it. | A package named in another's `requires` | `requires` in the parent manifest |
+| **Dependency** | Nothing directly. It turns on because a selected package `requires` it, and off with the last one. A `selectable: false` package is only ever a dependency. | A package named in another's `requires` | `requires` in the parent manifest |
 
 **A package holds skills that are only correct together; a collection holds skills that are useful
 together.** Only the author knows whether a skill does its job without its siblings, so the author
@@ -73,6 +73,9 @@ listing each skill, then its rules or hooks, with each entry's own cost; each en
 source view a single-skill card does, and Back returns to the list. `buildBehaviorView` and
 `packagePresentationItem` in `scripts/cli/config.mjs` build that `package-contents` inspect
 target, and `context-cost.mjs` reports each resource's share under `contextCost.packages[<id>].resources`.
+A package with no source of its own (no skill, command, or rules) gets the same target with no
+entries when it has a visible requirement, so its label opens a contents view that lists only
+its **Requires**; when every requirement is hidden, the label opens nothing.
 
 ## Manifest schema (`package.config.json`)
 
@@ -86,11 +89,14 @@ Enforced by `normalizePackage`/`normalizeResource` in `scripts/cli/package-catal
 | `description` | yes | non-empty; shown in portal |
 | `lifecycle` | no (defaults `optional`) | `optional` or `system` (`PACKAGE_LIFECYCLES`) |
 | `defaultEnabled` | no (defaults `false`) | boolean; see Default-selection semantics below |
-| `presentation.category` | yes | must exist in `manifests/inventory/package-categories.json` (including `token-optimization`, `skills-dev-lifecycle`, `skills-writing`, `skills-code-quality`, `code-conventions`, `chat-time-output`, `additional-agents-md-rules`, and `integrations`) |
+| `presentation.category` | yes | must exist in `manifests/inventory/package-categories.json` (including `token-optimization`, `monitoring`, `skills-dev-lifecycle`, `skills-writing`, `skills-code-quality`, `code-conventions`, `chat-time-output`, `additional-agents-md-rules`, and `integrations`) |
 | `presentation.order` | no (defaults `0`) | numeric, controls sort within category |
-| `requires` | no | array of package IDs; cycle-checked, missing-dep-checked |
+| `requires` | no | array of package IDs; they join the effective set automatically. Cycle-checked, missing-id-checked, no self-reference |
+| `recommends` | no | array of package IDs; offered after an enable, never turned on automatically, never a cause of `partial`. Missing-id-checked; not part of cycle detection |
+| `selectable` | no (defaults `true`) | boolean; `false` makes a dependency-only package that `package enable`/`disable` refuse, except that `disable` removes one still recorded as a root (an older registry, or a manifest that later set `selectable: false`). Cannot combine with `defaultEnabled: true`, and needs `presentation.visibility` `dependency` or `hidden` (a `catalog` row would have no switch) |
+| `presentation.visibility` | no (defaults `catalog`) | `catalog` (normal Config row), `dependency` (no row; listed under **Requires** in the source popup of each package that requires it), or `hidden` (no UI row) |
 | `resources` | yes | array — see Resource types |
-| `urls` | no | optional array shown in portal (see e.g. `caveman`, `jcodemunch`) |
+| `urls` | no | optional array shown in portal (see e.g. `caveman`) |
 
 There is no `.schema.json` file — validation is hand-rolled JS, not JSON Schema. Do not add one
 speculatively; the current approach is deliberate (see `validatePackageCatalog`).
@@ -98,8 +104,9 @@ speculatively; the current approach is deliberate (see `validatePackageCatalog`)
 ## Resource types
 
 `RESOURCE_TYPES` (package-catalog.mjs): `skill`, `slash-command`, `rules`, `hooks`, `permissions`,
-`codex_tool_approvals`, `mcp`, `plugin`, `service`, `cli-command`, `harness-config`,
-`package-runtime-asset`.
+`codex_tool_approvals`, `mcp`, `plugin`, `service`, `harness-config`, `package-runtime-asset`.
+No shipped package uses `mcp` or `codex_tool_approvals` today; the test-only fixture packages in
+`scripts/test/fixtures/packages/` cover them.
 
 Validation depth differs by type — know this before assuming everything is checked:
 
@@ -107,9 +114,8 @@ Validation depth differs by type — know this before assuming everything is che
 | --- | --- | --- |
 | `skill` | Yes — slug id, `source` inside package dir, `SKILL.md` exists, valid `invocation` (`auto`/`manual`), optional `risk` (`low`/`medium`/`high`), manual invocation requires a slash-command entrypoint | `setSkillComponent`, `installPackageCommands` in `packages.mjs` |
 | `slash-command` | Yes — slug name, source path shape, source file exists on disk, harnesses array shape | rendered via `slash-commands.mjs` |
-| `rules` | Yes — source exists on disk; target is a registered rules-capable harness or `both` | `renderHomeRules()` |
+| `rules` | Yes — source exists on disk; `harness` is optional (absent = every rules-capable harness) or a registered rules-capable harness | `renderHomeRules()` |
 | `hooks` | Yes — source exists, valid harness, `scripts[]` entries exist on disk if present | `mergeHooksInto`/`unmergeHooksFrom`, `installHookScripts` |
-| `cli-command` | Minimal — just requires a `name` | `packageCommandNames` |
 | `permissions` | Yes — non-empty `.allow` array of non-empty strings | `mergePermissions(path, component.allow)` — expects `.allow: string[]` |
 | `codex_tool_approvals` | Yes — non-empty `.server` string, non-empty `.approvals` object | `mergeCodexToolApprovals` — expects `.server: string`, `.approvals: {toolName: approvalMode}` |
 | `mcp` | Yes — non-empty `.preset` string | `installMcpPreset(component.preset)` — expects `.preset: string` matching `manifests/inventory/mcp-servers.json`/`mcp-presets.json` |
@@ -187,39 +193,68 @@ A package opts into default-enabled by setting `defaultEnabled: true` in `packag
 (validated as a boolean by `normalizePackage`; absent/`false` is the default, matching every
 package that predates this field). Scaffold with `roborepo package dev create <id> --default-enabled=true`.
 
-The enabled-packages registry (`scripts/cli/rules-render.mjs`) tracks two lists, not one:
+Package state has three layers, each with one owner:
+
+| Layer | Answers | Owner |
+| --- | --- | --- |
+| Selected roots | What did the user (or a default) choose? | `~/.roborepo/enabled-packages.json`, read and written only by `scripts/cli/package-state.mjs` |
+| Effective set | What must be active because of those choices? | Derived on every read: roots plus their `requires` closure (`scripts/cli/package-graph.mjs`) |
+| Live state | What is actually installed in each harness? | The probes in `scripts/cli/package-probes.mjs` |
+
+Beside the layers, `package-state.mjs` also owns the machine-local `~/.roborepo/applied-packages.json`:
+the packages RoboRepo applied on this machine. Enable/apply adds an id and component removal drops
+it. Reconcile removes an applied package that is no longer effective (a dropped `requires` edge, a
+`defaultEnabled` flip to `false`, a hand-edited registry), and never a package the record does not
+name. The guarantee is per package, not per entry: removal takes out every entry the package's
+manifest lists, the same as `package disable`. Packages installed before the record existed and
+already out of the effective set were never recorded, so reconcile leaves them alone.
+
+The registry tracks two lists:
 
 ```json
-{ "packages": ["explicit-enable ids"], "disabled": ["explicit-disable ids"] }
+{ "schemaVersion": 2, "packages": ["selected roots"], "disabled": ["explicit-disable ids"] }
 ```
 
-`effectiveEnabledIds(catalog, registry)` is the single source of truth for "is this package
-actually active" — explicit-enable OR (`defaultEnabled` AND NOT explicit-disable), with
-explicit-disable winning over everything else:
+`selectedRootIds(catalog, registry)` is explicit-enable OR (`defaultEnabled` AND NOT
+explicit-disable), with explicit-disable winning over everything else:
 
 ```text
 explicit-disable > explicit-enable > current defaults
 ```
 
-`setPackageEnabled(id, true)` clears any prior explicit-disable for that id; `setPackageEnabled(id,
-false)` clears any prior explicit-enable and records an explicit-disable — recorded
-unconditionally (even for a package that isn't default-enabled today), so a package that later
-becomes default-enabled doesn't silently re-enable itself for someone who already turned it off.
+`effectiveEnabledIds(catalog, registry)` adds every package those roots require, dependencies
+first, and is the single source of truth for "is this package actually active". A required package
+stays effective while any root requires it, even if the user also deselected it directly.
+
+`setPackageEnabled(id, true)` records a root and clears any prior explicit-disable;
+`setPackageEnabled(id, false)` clears the root and records an explicit-disable — recorded
+unconditionally, so a package that later becomes default-enabled doesn't silently re-enable itself
+for someone who already turned it off. `withPackageSelection` is the same change as a pure function,
+for computing a mutation's before/after effective sets without writing.
+
+A file without `schemaVersion` (version 1) listed dependencies next to the packages that pulled
+them in. Reading one drops every listed id another listed, non-disabled id requires; those stay
+effective through their parent, so nothing turns off on upgrade. The next write stores version 2.
+
+`package enable` records one root and applies the root's required closure; `package disable`
+removes roots and removes the resources of every package that left the effective set, dependents
+first. A package effective only through a parent cannot be disabled on its own (refused, or
+`--cascade` disables those parents). Both return `{ ok, outcomes[] }`, one probed outcome per
+package (`enabled`, `partial`, `blocked`, or `disabled`); refusals throw `PackageMutationError`,
+which the terminal command maps to its exit code.
 
 Every call site that needs to know what's actually live — `buildPackageLiveState` (portal/CLI
 status), `renderHomeRules`/`checkHomeRules`/`renderedRulesMatches` (rules rendering and drift
-checks), `validatePackageCommandOwnership`/`resolveEnabledCommand` (command conflict/dispatch),
-`reconcileEnabledPackages`, `enabledDependents` — reads through `effectiveEnabledIds`, not the raw
-registry. The one deliberate exception is `adoptLivePackages`'s "is this already known" check,
-which also now uses `effectiveEnabledIds` (a default-enabled package should never be offered for
-adoption). If you add a new call site that needs to know package on/off state, use
-`effectiveEnabledIds` — reading `registry.packages` directly will silently miss default-enabled
-packages.
+checks), `reconcileEnabledPackages`, hook readiness, the browser gate, and `adoptLivePackages` — reads
+through `effectiveEnabledIds`. If you add a new call site that needs to know package on/off state,
+use `effectiveEnabledIds` from `package-state.mjs`; never read the registry file directly.
 
 Test coverage: `scripts/test/package-default-enabled-check.mjs`
 (`npm run test:package-default-enabled`) — pure precedence computation plus a live CLI round-trip
 proving a default-enabled package's rules render with zero `enable` calls, and that one explicit
-disable survives being still-default-enabled in the catalog.
+disable survives being still-default-enabled in the catalog. `scripts/test/package-graph-check.mjs`
+covers the graph helpers; the dependency block in `scripts/test/package-lifecycle-check.mjs` covers
+shared, transitive, directly selected, dependency-only, partial, blocked, and version-1 cases.
 
 ## Token-cost: computed, not declared
 
@@ -253,10 +288,12 @@ accurate `package.config.json` automatically renders a complete portal card.
 | `roborepo package dev add-skill <package-id> <skill-id> [--command] [--description=...]` | Adds a skill to an existing package: `skills/<skill-id>/SKILL.md`, a `skill` resource placed after the package's other skills (manual with a slash-command entrypoint under `--command`, auto otherwise; a workspace package's command never installs, since only built-in packages get generated wrappers, and the command says so), and an empty `skill-triggers.json` entry to fill. Refuses a skill ID, or with `--command` a command name, that any package already claims, and a built-in package in package mode. Restores the package if the result does not validate. |
 | `roborepo package list` | Lists packages grouped by category with concise live enabled/disabled status. |
 | `roborepo package inspect <id>` | Prints full manifest JSON for one package. |
+| `roborepo package status <id> [--json]` | Shows one package's desired and live state. |
 | `roborepo package validate [id]` | Runs `validatePackageCatalog`; scope to one package or the whole catalog. |
-| `roborepo package enable <id>` | Enables a package and **applies live immediately** — see Apply behavior below. |
-| `roborepo package disable <id>` | Disables a package and **applies live immediately**. |
-| `roborepo package reconcile` | Re-applies every currently-enabled package (full reconciliation entry point — see Apply behavior). |
+| `roborepo package dev validate [id]` | Validates package source while developing. |
+| `roborepo package enable <id>` | Records `<id>` as a selected root and **applies live immediately**, with everything it requires — see Apply behavior below. Prints a probed outcome per package; lists (or, in a terminal, offers) recommendations that are off. |
+| `roborepo package disable <id> [--cascade]` | Removes the root and **applies live immediately**, removing packages that leave the effective set. Refuses a package that is on only through a parent unless `--cascade`. |
+| `roborepo package reconcile` | Re-applies every currently-enabled package and removes each package RoboRepo installed that left the effective set, never one it did not install (full reconciliation entry point — see Apply behavior). |
 | `roborepo package adopt-live [--dry-run]` | Detects externally-installed (unmanaged) package behavior and marks it enabled in the registry without re-installing it. |
 
 Add these rows to `docs/user/reference/roborepo-cli.md` and to
@@ -271,13 +308,15 @@ installed/removed, skill commands installed via `installPackageCommands`. **Ther
 apply/sync step required after enable or disable** — this already matches the goal of "package
 enable/disable takes effect immediately without `roborepo update`."
 
-The portal's package toggle (`portal/config/config-toggle.js` →
+The portal's package toggle (`portal/config/elements/config-toggle.js` →
 `scripts/cli/config-mutate.mjs:mutatePackage()`) calls the exact same `enablePackage`/
 `disablePackage` functions — CLI and portal share one apply path, not two.
 
 `roborepo package reconcile` (→ `reconcileEnabledPackages()`) is the full-reconciliation entry
-point: re-applies every enabled package and removes any enabled-but-no-longer-in-catalog stale
-entries. This is the command to reach for if "apply everything currently selected" is needed —
+point: re-applies every enabled package, removes installed packages that left the effective set,
+and forgets no-longer-in-catalog stale entries. Machine-local `applied-packages.json` tracks which
+packages RoboRepo applied, so cleanup never removes a package RoboRepo did not install. This is the
+command to reach for if "apply everything currently selected" is needed —
 don't invent a new name for it.
 
 The one place a user is still told to run `roborepo update` is unrelated to enable/disable:
@@ -289,15 +328,13 @@ last write) — a legitimate, distinct reconciliation case, not a gap in the ena
 - `scripts/test/package-catalog-check.mjs` (`npm run test:packages`) — loads the real catalog,
   asserts known packages/commands exist, and builds a temp-dir fixture package (`legacy-shape`
   pattern) to test malformed/edge-case shapes against the loader.
-- `scripts/test/system-package-ownership-characterization-check.mjs` — package-ownership /
-  generated-output regression guard; spawns the real CLI against a temp `HOME`, round-trips
-  enable/disable, and asserts Codex-side hook/config ownership.
 - `scripts/test/context-cost-check.mjs` (`npm run test:context-cost`) — token-cost estimator
   correctness, independent of any one package.
 - `scripts/test/package-default-enabled-check.mjs` (`npm run test:package-default-enabled`) —
   default-selection provenance precedence, independent of any one package.
 - `scripts/test/package-lifecycle-check.mjs` — enables, re-enables, and disables catalog packages
-  in a temporary home to check for stale live state.
+  in a temporary home to check for stale live state, and round-trips the `fixture-tool` package to
+  check that every live-config resource type appears on enable and is fully removed on disable.
 - `scripts/test/test-cli.sh` — broad CLI smoke test; covers package/workspace paths.
 
 Minimum test bar for a new or changed package: it must load cleanly through
@@ -323,6 +360,6 @@ enable/disable must round-trip without leaving stale live state (covered generic
 [ ] If defaultEnabled: true, confirmed explicit disable survives being still-default-enabled
     (see scripts/test/package-default-enabled-check.mjs)
 [ ] Ran `npm test` (or the narrowest relevant subset — package-catalog-check, context-cost-check,
-    package-default-enabled-check, system-package-ownership-characterization-check) before calling
+    package-default-enabled-check, package-lifecycle-check) before calling
     it done
 ```

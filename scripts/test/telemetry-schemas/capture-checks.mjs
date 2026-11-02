@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import { generateId } from "../../cli/telemetry-schemas/id.mjs";
 import { validateCaptureV3 } from "../../cli/telemetry-schemas/capture-schema-v3.mjs";
 
-export function testCaptureV3Compat() {
-  const v2Record = { schema: 2, ts: new Date().toISOString(), harness: "claude", event: "PostToolUse" };
-  assert.deepEqual(validateCaptureV3(v2Record), v2Record, "a plain v2 record must pass through unchanged");
+export function testCaptureV3Validation() {
+  const baseRecord = { schema: 3, ts: new Date().toISOString(), harness: "claude", event: "PostToolUse" };
+  assert.deepEqual(validateCaptureV3(baseRecord), baseRecord, "a v3 record without optional fields is valid");
+  assert.throws(() => validateCaptureV3({ ...baseRecord, schema: 2 }), /unsupported capture schema version/);
 
   const v3Record = {
-    ...v2Record,
-    schema: 3,
+    ...baseRecord,
     capture_id: generateId("cap"),
     call_id: "toolu_abc123",
     operation: { category: "test", scope: "targeted", exit_status: "pass" },
@@ -28,7 +28,7 @@ export function testCaptureV3Compat() {
     () => validateCaptureV3({ ...v3Record, operation: { ...v3Record.operation, category: "nonsense" } }),
     /unknown operation category/,
   );
-  assert.throws(() => validateCaptureV3({ ...v2Record, schema: 4 }), /unsupported capture schema version/);
+  assert.throws(() => validateCaptureV3({ ...baseRecord, schema: 4 }), /unsupported capture schema version/);
   assert.throws(
     () => validateCaptureV3({ ...v3Record, intervening: { ...v3Record.intervening, changed_file_count: "two" } }),
     /changed_file_count must be an integer/,

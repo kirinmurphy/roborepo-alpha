@@ -83,51 +83,6 @@ fi
 recorded_repo="$(read_install_repo 2>/dev/null || true)"
 export ROBOREPO_RECORDED_REPO="${recorded_repo}"
 
-# Reclaim cleanup rows that are now stale because the checkout moved or the symlink dangles.
-repair_cleanup_target() {
-  local home_abs="$1"
-  if [[ ! -L "${home_abs}" ]]; then
-    return 0
-  fi
-
-  local current
-  current="$(readlink "${home_abs}" 2>/dev/null || true)"
-
-  if [[ -n "${recorded_repo}" ]]; then
-    case "${current}" in
-      "${recorded_repo}"/*) ;;
-      "${repo_root}"/*) ;;
-      *)
-        if [[ -e "${home_abs}" ]]; then
-          return 0
-        fi
-        ;;
-    esac
-  elif [[ -e "${home_abs}" ]]; then
-    case "${current}" in
-      "${repo_root}"/*) ;;
-      *)
-        return 0
-        ;;
-    esac
-  fi
-
-  if [[ "${dry_run}" -eq 1 ]]; then
-    echo "remove: ${home_abs}"
-  else
-    rm "${home_abs}"
-    echo "remove: ${home_abs}"
-  fi
-}
-
-repair_cleanup_rows() {
-  local harness="$1"
-  while IFS=$'\t' read -r _h kind src_rel home_abs _flags; do
-    [[ "${kind}" == "cleanup" ]] || continue
-    repair_cleanup_target "${home_abs}"
-  done < <(manifest_rows "$1")
-}
-
 # Per-skill copies: repair only re-materializes the base support skill. Optional skills are
 # controlled by onboarding/package toggles.
 repair_skill_links() {
@@ -136,11 +91,6 @@ repair_skill_links() {
 
 # Iterates every registered provider instead of a fixed Claude/Codex pair. home_path is always the resolved manifest location
 # regardless of presence, so the -d guard still decides whether repair touches this machine's copy.
-while IFS=$'\t' read -r id home_path _present _display_name _root_config_path _confidence; do
-  [[ -z "${id}" ]] && continue
-  [[ -d "${home_path}" ]] && repair_cleanup_rows "${id}"
-done < <(harness_detected_rows)
-
 while IFS=$'\t' read -r id home_path _present _display_name _root_config_path _confidence; do
   [[ -z "${id}" ]] && continue
   [[ -d "${home_path}" ]] && repair_skill_links "${home_path}/skills"

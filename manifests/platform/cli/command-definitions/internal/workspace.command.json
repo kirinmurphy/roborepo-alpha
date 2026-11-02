@@ -3,7 +3,7 @@
   "kind": "internal",
   "title": "Workspace",
   "description": "Inspect or select workspace roots",
-  "usage": "roborepo workspace status|use|validate|import",
+  "usage": "roborepo workspace status|use|validate",
   "execution": {
     "adapter": "module",
     "module": "scripts/cli/workspace.mjs",

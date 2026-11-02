@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 // Characterizes rules-render.mjs's per-harness behavior through provider rule
-// targets. Pins the genuine harness-specific special cases so the refactor can be
-// checked byte-for-byte: Codex's AGENTS.override.md mirror write, Claude's legacy rules-file
-// cleanup, and the shared+harness fragment render order for both harnesses.
+// targets. Pins the genuine harness-specific special cases byte-for-byte: Codex's
+// AGENTS.override.md mirror write and the shared+harness fragment render order.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -21,7 +20,7 @@ function makeHome() {
 }
 
 function runRender(appRoot, home, extra = "") {
-  const env = { ...process.env, ROBOREPO_MODE: "development", ROBOREPO_APP_ROOT: appRoot, HOME: home, ROBOREPO_STATE_DIR: path.join(home, ".roborepo"), SKIP_MCP: "1" };
+  const env = { ...process.env, ROBOREPO_MODE: "development", ROBOREPO_APP_ROOT: appRoot, HOME: home, ROBOREPO_STATE_ROOT: path.join(home, ".roborepo"), SKIP_MCP: "1" };
   const result = spawnSync(process.execPath, [
     "-e",
     `import(${JSON.stringify(path.join(appRoot, "scripts", "cli", "rules-render.mjs"))}).then((m) => m.renderHomeRules(${extra}))`,
@@ -62,20 +61,6 @@ try {
     }
   }
 
-  // --- Claude: legacy rules file cleanup only fires for the claude harness ---
-  {
-    const home = makeHome();
-    try {
-      const stateDir = path.join(home, ".roborepo");
-      const legacyFile = path.join(stateDir, "rules", "generated-rules.md");
-      fs.mkdirSync(path.dirname(legacyFile), { recursive: true });
-      fs.writeFileSync(legacyFile, "# Generated Harness Rules\n\nstale legacy content\n");
-      runRender(appRoot, home);
-      assert.equal(fs.existsSync(legacyFile), false, "legacy rules file must be removed when Claude is rendered");
-    } finally {
-      fs.rmSync(home, { recursive: true, force: true });
-    }
-  }
 
   // --- Both harnesses render independently: only present home dirs get written ---
   {

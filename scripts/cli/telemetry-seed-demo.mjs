@@ -7,14 +7,14 @@ import { telemetrySpoolDir } from "./state-paths.mjs";
 
 // Seeds the telemetry spool with synthetic demo sessions so `roborepo web` shows the
 // full range of dashboard outputs (quiet sessions, Bash/MCP-heavy sessions, token spikes, multiple
-// repos and models) without needing real conversations. Records are schema v2 and match the shape
+// repos and models) without needing real conversations. Records are schema v3 and match the shape
 // telemetryCapture() writes, so the analyze/dashboard path treats them exactly like real captures.
 //
 // All demo records land in a dedicated DEMO_FILE inside the spool dir. readSpoolEvents() globs every
 // *.jsonl in that dir, so the file is picked up automatically and can be removed in one delete to
 // undo the seed (run with `--clear`). This never touches the real claude.jsonl / codex.jsonl spools.
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const DEMO_FILE = "demo.jsonl";
 
 // Demo records must hash identically to real captures, or the dashboard treats them as a separate
@@ -162,7 +162,7 @@ function demoRecords() {
     }),
   );
 
-  // 3. MCP-heavy exploration — large jcodemunch/jdocmunch deltas that trip the spike threshold and
+  // 3. MCP-heavy exploration — large code-search/doc-search MCP deltas that trip the spike threshold and
   //    fill the "token by MCP server" panel and the spike-vs-normal MCP rate.
   records.push(
     ...session({
@@ -172,11 +172,11 @@ function demoRecords() {
       model: "claude-opus-4-8",
       startMinutesAgo: 360,
       steps: [
-        { tool: "mcp__jcodemunch__resolve_repo", delta: 120_000 },
+        { tool: "mcp__code-search__resolve_repo", delta: 120_000 },
         // Oversized context bundle pulled the whole module tree in — an mcp-bundle spike.
-        { tool: "mcp__jcodemunch__get_context_bundle", delta: 1_120_000 },
-        { tool: "mcp__jcodemunch__find_references", delta: 260_000 },
-        { tool: "mcp__jdocmunch__search_sections", delta: 340_000 },
+        { tool: "mcp__code-search__get_context_bundle", delta: 1_120_000 },
+        { tool: "mcp__code-search__find_references", delta: 260_000 },
+        { tool: "mcp__doc-search__search_sections", delta: 340_000 },
         { tool: "Read", delta: 60_000 },
       ],
     }),
@@ -196,7 +196,7 @@ function demoRecords() {
         { tool: "Grep", delta: 38_000 },
         // Read of a generated/minified file — the large-file-read spike.
         { tool: "Read", delta: 1_180_000 },
-        { tool: "mcp__jcodemunch__get_blast_radius", delta: 1_200_000 },
+        { tool: "mcp__code-search__get_blast_radius", delta: 1_200_000 },
         { tool: "Edit", delta: 61_000 },
         { tool: "Bash", delta: 47_000, command: "npm run typecheck" },
       ],

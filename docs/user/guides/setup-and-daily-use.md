@@ -33,27 +33,6 @@ you merge it, `/plan-archive` to retire one you will not finish, and `/session-c
 
 See [Plan Suite Walkthrough](plan/lifecycle/plan-suite.md) for the full user flow.
 
-## Index and watch a repo
-
-Keep the package-owned code index current so Claude can navigate your codebase. Start this when opening a project you'll be actively coding in. The watcher runs continuously — edits are picked up automatically within the session.
-
-```sh
-roborepo package enable jcodemunch       # once per machine, if not already enabled
-roborepo index code --watch       # watch the current dir (runs continuously)
-roborepo index code path/to/dir --watch
-roborepo index code path/to/dir   # one-shot index instead of watching
-```
-
-## Index docs
-
-Index a project's documentation so Claude can search sections and headings rather than reading full files. Run once per project to initialize. After that, edits to existing files are picked up automatically via mtime detection — no manual reindex needed. Re-run only when doc files are added or deleted.
-
-```sh
-roborepo package enable jdocmunch        # once per machine, if not already enabled
-roborepo index docs               # index docs in the current dir
-roborepo index docs path/to/dir
-```
-
 ## Work with skills
 
 ```sh
@@ -97,13 +76,15 @@ These change the defaults RoboRepo ships, so they apply when you installed from 
 
 ### Add a shared skill
 
-Use `roborepo skill new` — it scaffolds a package-owned skill resource and refreshes the shared
-skill cache plus both `~/.claude/skills/<name>` and `~/.codex/skills/<name>` in one step. The
-canonical source lives once in `globals/packages/<package>/skills/<name>/`.
+Use `roborepo package dev create` for a new package, or `roborepo package dev add-skill` to add a
+skill to an existing one. The canonical source lives once in
+`globals/packages/<package>/skills/<name>/`; `roborepo skill sync-global` then refreshes the shared
+skill cache and every supporting harness's `skills/<name>` view.
 
 ```sh
-roborepo skill new              # scaffold + refresh shared skill cache + every harness view
-roborepo skill sync-global      # refresh after adding or removing skills by hand
+roborepo package dev create <id> --kind=auto-skill    # scaffold a package with one skill
+roborepo package dev add-skill <package-id> <skill-id> # add a skill to an existing package
+roborepo skill sync-global      # refresh the shared skill cache + every harness view
 roborepo doctor --installed     # verify the live skill cache and harness links are current
 ```
 
@@ -140,8 +121,8 @@ Day to day, change permissions in the `/agents` page or `roborepo library`. To c
 every machine starts from, edit `manifests/inventory/agent-permissions.json`, then render and check:
 
 ```sh
-roborepo permissions
-roborepo permissions --check
+roborepo config permissions --render
+roborepo config permissions --check
 ```
 
 The rendered defaults reach an existing machine on the next `roborepo update`.

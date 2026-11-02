@@ -122,7 +122,7 @@ function envFor({ home, stateRoot, workspaceRoot }) {
   return {
     ...process.env,
     HOME: home,
-    ROBOREPO_STATE_DIR: stateRoot,
+    ROBOREPO_STATE_ROOT: stateRoot,
     ROBOREPO_WORKSPACE_ROOT: workspaceRoot,
     // Never let a dry run open the interactive wizard: it would block on input rather than preview.
     ROBOREPO_PRESETS_ONBOARD: "skip",

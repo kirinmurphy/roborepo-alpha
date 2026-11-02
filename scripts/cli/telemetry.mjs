@@ -5,9 +5,9 @@ import path from "node:path";
 import net from "node:net";
 import { createHash } from "node:crypto";
 import { spawnSync, spawn } from "node:child_process";
-import { markTelemetrySelected } from "./presets.mjs";
+import { deselectTelemetryBundle } from "./presets.mjs";
 import { repoRoot, stateRoot, harnessHome, rootConfigActive } from "./paths.mjs";
-import { portalPidPathForPort, legacyTelemetryPidPath, telemetryBackupDir, telemetryCollectorDir, telemetryDir, telemetrySpoolDir, telemetryMarkersPath, telemetryExperimentsDir, telemetrySnapshotsDir, repositoriesRegistryPath } from "./state-paths.mjs";
+import { portalPidPathForPort, telemetryBackupDir, telemetryCollectorDir, telemetryDir, telemetrySpoolDir, telemetryMarkersPath, telemetryExperimentsDir, telemetrySnapshotsDir, repositoriesRegistryPath } from "./state-paths.mjs";
 import { conditionDemoEvidence } from "./telemetry-conditions-demo.mjs";
 import { analyzeTelemetry } from "./telemetry-analyze.mjs";
 import { readMarkers, readSnapshot, readSnapshots, readExperiments } from "./telemetry-schemas/persistence.mjs";
@@ -52,7 +52,7 @@ import { loadRegistry, updateRegistry, recordDiscoveryIfKnown, resolveRepository
 import { createRepositoryOverviewService } from "./repository-overview.mjs";
 import { MOCK_FIRST_RUN_VIEWS_ENABLED, mockHomeOverview } from "./mock-home.mjs";
 import { buildTelemetryRepositoryProjection, fixtureTelemetryRepositories, homeTelemetryProjection } from "./telemetry-repository-overview.mjs";
-import { removeRepositoryWorktree, stopRepositoryWorktreeServers } from "./worktree-cleanup.mjs";
+import { archiveRepositoryWorktree, assessRepositoryWorktree, listRepositoryWorktreeArchives, removeRepositoryWorktree, stopRepositoryWorktreeServers } from "./worktree-cleanup.mjs";
 import { dismissWorktreeCleanupNotice, enableWorktreeCleanup } from "./worktree-cleanup-optin.mjs";
 import { packageStatusSummary } from "./package-status.mjs";
 import { buildAnalysisPrompt } from "../harnesses/transcript-locate.mjs";
@@ -340,7 +340,6 @@ function telemetryInstall(args) {
   // Write state directly — no presetsApply, so operational hooks are not touched.
   ensureTelemetryDirs();
   writeTelemetryState({ enabled: true });
-  markTelemetrySelected(true);
   // Wire capture hooks into whichever registered providers are actually installed on this machine.
   for (const provider of listHarnessProviders()) {
     if (!provider.manifest.capabilities.includes("telemetry-capture")) continue;
@@ -417,7 +416,7 @@ async function telemetryDisable(args) {
 }
 
 // Programmatic capture-state toggle, shared by the CLI verbs and the config controls. Only flips the
-// service's own enabled flag/selection state — hook install/removal is a separate `hooks` component
+// service's own enabled flag (and, on disable, drops a recorded telemetry bundle) — hook install/removal is a separate `hooks` component
 // on the telemetry package, handled by the generic enable/disable switch in packages.mjs. Does not
 // start/stop the portal server — the dashboard toggle is about capture, not the server. Returns
 // { ok, message }.
@@ -425,7 +424,7 @@ export function setTelemetryEnabled(enabled) {
   try {
     ensureTelemetryDirs();
     writeTelemetryState({ enabled });
-    markTelemetrySelected(enabled);
+    if (!enabled) deselectTelemetryBundle();
     return { ok: true, message: `telemetry ${enabled ? "enabled" : "disabled"}` };
   } catch (err) {
     return { ok: false, message: String(err?.message || err) };
@@ -859,6 +858,9 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     loadHomeOverview: () => repositoryOverview.loadHome(),
     loadRepositoryOverview: (params) => repositoryOverview.loadDetail(params),
     patchRepository: (params) => patchRepository(params),
+    archiveRepositoryWorktree: (params) => afterWorktreeChange(archiveRepositoryWorktree(params)),
+    assessRepositoryWorktree,
+    listRepositoryWorktreeArchives,
     removeRepositoryWorktree: (params) => afterWorktreeChange(removeRepositoryWorktree(params)),
     stopRepositoryWorktreeServers: (params) => afterWorktreeChange(stopRepositoryWorktreeServers(params)),
     enableWorktreeCleanup: (params) => afterWorktreeChange(enableWorktreeCleanup(params)),
@@ -982,7 +984,7 @@ function telemetryPurge(args) {
     else console.log("backup:  nothing to back up (no telemetry data)");
   }
   fs.rmSync(telemetryDir, { recursive: true, force: true });
-  markTelemetrySelected(false);
+  deselectTelemetryBundle();
   console.log(`purged: ${telemetryDir}`);
 }
 
@@ -1382,7 +1384,7 @@ export function loadTelemetryRepositoryProjection() {
 // Mock analysis for the /tokens page: reads the bundled mock spool file
 // (portal/tokens/mock-spool.jsonl) and runs it through the same analyzeTelemetry()
 // pipeline as real data. The mock spool is a committed .jsonl file with the same
-// schema-2 record shape telemetryCapture() writes, so the only difference from real
+// schema-3 record shape telemetryCapture() writes, so the only difference from real
 // data is the source file — analyzeTelemetry() processes it identically. Cached so
 // repeated requests don't re-parse the file.
 let _mockAnalysisJson = null;
@@ -1870,12 +1872,6 @@ function writeTelemetryState(patch) {
 function readPid(port) {
   try {
     return parseInt(fs.readFileSync(portalPidPathForPort(port), "utf8").trim(), 10) || null;
-  } catch {}
-  // The legacy single-file path predates per-port tracking, so it could only ever have recorded a
-  // default-port (4317) server — never consult it for any other port.
-  if (port !== 4317) return null;
-  try {
-    return parseInt(fs.readFileSync(legacyTelemetryPidPath, "utf8").trim(), 10) || null;
   } catch {
     return null;
   }
@@ -1893,9 +1889,6 @@ function writePid(port, pid) {
 
 function clearPid(port) {
   try { fs.rmSync(portalPidPathForPort(port), { force: true }); } catch {}
-  if (port === 4317) {
-    try { fs.rmSync(legacyTelemetryPidPath, { force: true }); } catch {}
-  }
 }
 
 // Kill any existing detached server ON THIS PORT (stale or live) and wait for it to actually exit

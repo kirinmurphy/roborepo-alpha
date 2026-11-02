@@ -10,23 +10,26 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import { makeAppRoot } from "./app-root-fixture.mjs";
+
+// hooksWriteRemove reads packages from the app root, so point it at an isolated copy carrying the
+// fixture-tool package (a claude hooks resource plus a permissions resource) before loading it.
+const appRoot = makeAppRoot({ prefix: "roborepo-hooks-write-remove-app-", fixturePackages: true });
+process.env.ROBOREPO_APP_ROOT = appRoot;
+process.on("exit", () => fs.rmSync(appRoot, { recursive: true, force: true }));
+const FIXTURE_DIR = path.join(appRoot, "globals", "packages", "fixture-tool");
 const { claudeProvider } = await import("../harnesses/claude/index.mjs");
 
-// hooksWriteRemove reads packages from a fixed repoRoot-relative path (globals/packages), not a
-// parameter, so a fully isolated unit test can't substitute fixture packages without chdir'ing the
-// whole process. Exercise it against a real package already in this repo (jcodemunch, which
-// declares both a claude hooks resource and a permissions resource) instead.
 function testStripsRealPackageHooksAndPermissions() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-hooks-write-remove-real-"));
   const homePath = path.join(tmp, ".claude");
   fs.mkdirSync(homePath, { recursive: true });
   const settingsPath = path.join(homePath, "settings.json");
 
-  const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
-  const pkgConfig = JSON.parse(fs.readFileSync(path.join(repoRoot, "globals", "packages-archived", "jcodemunch", "package.config.json"), "utf8"));
+  const pkgConfig = JSON.parse(fs.readFileSync(path.join(FIXTURE_DIR, "package.config.json"), "utf8"));
   const hooksResource = pkgConfig.resources.find((r) => r.type === "hooks" && r.harness === "claude");
   const permissionsResource = pkgConfig.resources.find((r) => r.type === "permissions");
-  const fragment = JSON.parse(fs.readFileSync(path.join(repoRoot, "globals", "packages-archived", "jcodemunch", hooksResource.source), "utf8"));
+  const fragment = JSON.parse(fs.readFileSync(path.join(FIXTURE_DIR, hooksResource.source), "utf8"));
   const firstEvent = Object.keys(fragment)[0];
   const firstCommand = fragment[firstEvent][0].hooks[0].command;
 
@@ -55,8 +58,7 @@ function testStrippingEveryAllowEntryKeepsOtherPermissionKeys() {
   fs.mkdirSync(homePath, { recursive: true });
   const settingsPath = path.join(homePath, "settings.json");
 
-  const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
-  const pkgConfig = JSON.parse(fs.readFileSync(path.join(repoRoot, "globals", "packages-archived", "jcodemunch", "package.config.json"), "utf8"));
+  const pkgConfig = JSON.parse(fs.readFileSync(path.join(FIXTURE_DIR, "package.config.json"), "utf8"));
   const permissionsResource = pkgConfig.resources.find((r) => r.type === "permissions");
 
   fs.writeFileSync(settingsPath, JSON.stringify({

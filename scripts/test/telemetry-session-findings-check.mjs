@@ -16,16 +16,6 @@ const cases = [
     summary: "Re-read the same large document 1 time — 12k tokens spent re-reading content already in context.",
   },
   {
-    type: "stale_doc_lookup",
-    severity: "high",
-    summary: "Docs were read repeatedly without any doc-index lookups — the session worked around a missing lookup tool.",
-  },
-  {
-    type: "mixed_code_lookup",
-    severity: "high",
-    summary: "Used the code index but still made 2 native source reads — the lookup habit isn't sticking yet.",
-  },
-  {
     type: "unrecognized_warning",
     severity: "high",
     summary: "Large or repeated document reads added 12k tokens of context.",

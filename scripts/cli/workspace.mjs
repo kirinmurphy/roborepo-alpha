@@ -9,7 +9,7 @@ import {
   workspaceRoot,
 } from "./paths.mjs";
 import { writeJsonState } from "./state-paths.mjs";
-import { importLegacyWorkspace, validateWorkspace } from "./workspace-resources.mjs";
+import { validateWorkspace } from "./workspace-resources.mjs";
 
 const WORKSPACE_POINTER = "workspace-root.json";
 
@@ -39,9 +39,8 @@ export function workspaceCommand(args) {
   if (sub === "status" || sub === undefined) return workspaceStatus();
   if (sub === "use") return workspaceUse(rest);
   if (sub === "validate") return workspaceValidate(rest);
-  if (sub === "import") return workspaceImport(rest);
   console.error(`unknown: roborepo workspace ${sub}`);
-  console.error("usage: roborepo workspace status | use <path> | validate | import <path> [--dry-run]");
+  console.error("usage: roborepo workspace status | use <path> | validate");
   process.exit(2);
 }
 
@@ -76,16 +75,6 @@ function workspaceValidate(args) {
   }
   validateWorkspace();
   console.log(`workspace valid: ${workspaceRoot}`);
-}
-
-function workspaceImport(args) {
-  const dryRun = args.includes("--dry-run");
-  const paths = args.filter((arg) => arg !== "--dry-run");
-  if (paths.length !== 1) {
-    console.error("usage: roborepo workspace import <path> [--dry-run]");
-    process.exit(2);
-  }
-  importLegacyWorkspace(paths[0], { dryRun });
 }
 
 export function setupCommand(args) {

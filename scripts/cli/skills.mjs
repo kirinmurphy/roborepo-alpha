@@ -197,7 +197,8 @@ export function skillNative(args) {
   console.log(note("Native skill/plugin escape hatch. Roborepo stays parity-focused; native CLIs own harness-specific plugin lifecycle."));
   console.log("");
   console.log(section("Roborepo Parity Actions"));
-  console.log(`  ${command("roborepo skill new")}                scaffold shared skills or commands`);
+  console.log(`  ${command("roborepo package dev create")}       scaffold a package with a skill or command`);
+  console.log(`  ${command("roborepo package dev add-skill")}    add a skill to an existing package`);
   console.log(`  ${command("roborepo skill adopt <name>")}       bring a native skill under roborepo management`);
   console.log(`  ${command("roborepo skill sync-global")}        refresh shared skill cache + harness links`);
   console.log(`  ${command("roborepo skill export-to-project")}  copy shared skills into this project`);
@@ -205,7 +206,7 @@ export function skillNative(args) {
   console.log(`  ${command("roborepo skill render-commands")}    render generated slash commands`);
   console.log("");
   console.log(section("Decision Rule"));
-  console.log(`  ${label("Use roborepo")} when behavior should become shared, version-controlled, and available in both harnesses.`);
+  console.log(`  ${label("Use roborepo")} when behavior should become shared, version-controlled, and available in every supporting harness.`);
   console.log(`  ${label("Use native CLIs")} for harness-specific marketplaces, installs, updates, enable/disable state, validation, and troubleshooting.`);
   console.log(`  ${label("Promote native -> roborepo")} with ${command("roborepo skill adopt <name>")}.`);
 

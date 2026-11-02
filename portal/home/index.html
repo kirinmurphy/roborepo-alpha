@@ -46,10 +46,12 @@
               </span>
             </div>
           </div>
-          <span data-slot="repository-menu"></span>
+          <span class="repository-head-actions">
+            <span class="repository-shortcuts" data-slot="repository-shortcuts"></span>
+            <span data-slot="repository-menu"></span>
+          </span>
         </div>
         <div class="repository-roots" data-slot="checkouts"></div>
-        <div class="home-domain-rows" data-slot="domains"></div>
         <div data-slot="cleanup-notice"></div>
       </article>
     </template>
@@ -62,26 +64,38 @@
         <button type="button" data-btn="text" data-action="dismiss">Dismiss</button>
       </div>
     </template>
-    <template id="tpl-domain-row">
-      <section class="home-domain-row">
-        <portal-icon class="domain-glyph" data-slot="glyph" aria-hidden="true"></portal-icon>
-        <div class="domain-body">
-          <div class="domain-heading">
-            <h4 data-slot="label"></h4>
-            <a class="domain-link" data-slot="link"></a>
-          </div>
-          <div class="domain-details" data-slot="details" hidden></div>
+    <!-- repository-shortcuts.js: the Plans / Agents / Tokens icon links beside the repo's menu, and
+         the hover panels Plans and Tokens open. -->
+    <template id="tpl-repository-shortcut">
+      <span class="repository-shortcut">
+        <a class="repository-shortcut-link"><portal-icon data-slot="icon" size="lg" aria-hidden="true"></portal-icon></a>
+      </span>
+    </template>
+    <template id="tpl-plans-shortcut-panel">
+      <div class="shortcut-panel">
+        <div class="shortcut-panel-title">Plans</div>
+        <div class="shortcut-panel-stages" data-slot="stages"></div>
+      </div>
+    </template>
+    <template id="tpl-plans-shortcut-stage">
+      <a class="shortcut-panel-stage"><span class="shortcut-panel-count" data-slot="count"></span> <span data-slot="stage"></span></a>
+    </template>
+    <template id="tpl-token-warnings-panel">
+      <div class="shortcut-panel token-warnings-panel">
+        <div class="domain-heading">
+          <portal-icon class="token-warnings-glyph" name="warning" size="sm" aria-hidden="true"></portal-icon>
+          <h4 data-slot="label"></h4>
+          <span class="domain-range" data-slot="range" hidden></span>
+          <a class="domain-link" data-slot="link">all activity</a>
         </div>
-      </section>
+        <div class="domain-details" data-slot="details"></div>
+      </div>
     </template>
     <template id="tpl-plan-item">
       <div class="plan-item">
         <button type="button" class="plan-title" data-slot="title"></button>
         <span class="plan-controls" data-slot="controls"></span>
       </div>
-    </template>
-    <template id="tpl-domain-note">
-      <p class="domain-note" data-slot="message"></p>
     </template>
     <!-- plan-rows.js: a matched plan's identity inside the shared checkout row (title, completion,
          worktree-details trigger), and a Home-owned row on the same glyph rail for an unmatched plan. -->
@@ -94,7 +108,7 @@
     <template id="tpl-plan-row">
       <div class="repository-root home-plan-row">
         <div class="repository-root-head">
-          <portal-icon class="repository-root-glyph" name="plans" role="img" aria-label="Plan"></portal-icon>
+          <portal-icon class="repository-root-glyph" name="plans" size="lg" role="img" aria-label="Plan"></portal-icon>
           <div class="repository-root-identity-line" data-slot="identity"></div>
         </div>
       </div>
@@ -108,20 +122,20 @@
         <div class="worktree-details-identity" data-slot="identity"></div>
         <ul class="worktree-details-facts" data-slot="facts" aria-label="Worktree status" hidden></ul>
         <div class="worktree-details-actions" data-slot="actions" hidden>
-          <button type="button" data-action="stop-servers" hidden><portal-icon class="menu-item-icon" name="stop" size="sm" aria-hidden="true"></portal-icon>Stop Server</button>
-          <button type="button" class="menu-item-danger" data-action="delete-worktree"><portal-icon class="menu-item-icon" name="trash" size="sm" aria-hidden="true"></portal-icon>Delete Worktree</button>
+          <button type="button" data-action="stop-servers" hidden><portal-icon class="menu-item-icon" name="stop" size="md" aria-hidden="true"></portal-icon>Stop Server</button>
+          <button type="button" class="menu-item-danger" data-action="delete-worktree"><portal-icon class="menu-item-icon" name="trash" size="md" aria-hidden="true"></portal-icon>Delete Worktree</button>
         </div>
       </div>
     </template>
     <template id="tpl-worktree-detail-row">
       <div class="worktree-detail-row">
-        <portal-icon data-slot="icon" size="sm" aria-hidden="true"></portal-icon>
+        <portal-icon data-slot="icon" size="md" aria-hidden="true"></portal-icon>
         <span class="worktree-detail-value" data-slot="value"></span>
         <portal-copy-button icon="copy"></portal-copy-button>
       </div>
     </template>
     <template id="tpl-worktree-detail-fact">
-      <li class="worktree-detail-fact"><portal-icon data-slot="icon" size="sm" aria-hidden="true"></portal-icon><span data-slot="text"></span></li>
+      <li class="worktree-detail-fact"><portal-icon data-slot="icon" size="md" aria-hidden="true"></portal-icon><span data-slot="text"></span></li>
     </template>
     <template id="tpl-token-warnings">
       <ul class="token-warnings" aria-label="Token warnings"></ul>
@@ -145,6 +159,8 @@
         <div class="modal-body">
           <p class="worktree-remove-lead" data-slot="lead"></p>
           <p class="worktree-remove-status" data-slot="status"></p>
+          <p class="worktree-dialog-help">Archive and remove preserves staged, unstaged, untracked, and valuable ignored files in a verified local snapshot. Installed node_modules and test-results are excluded. Stop editors and agents writing here first: a write after the final check may be lost. Archives stay in this repo until explicitly deleted; they are not an off-machine backup.</p>
+          <pre class="worktree-remove-restore" data-slot="snapshot-result" hidden></pre>
           <p class="worktree-remove-warning" data-slot="dirty" role="alert" hidden>This worktree still has uncommitted or untracked changes. These changes and files cannot be retrieved after deletion. The backup only preserves committed work.</p>
           <p class="worktree-remove-warning" data-slot="plan" hidden></p>
           <p class="worktree-remove-warning" data-slot="running" hidden>Something is running in this worktree. It is stopped before the folder is deleted.</p>
@@ -163,6 +179,7 @@
         </div>
         <div class="modal-actions">
           <button type="button" data-btn="secondary" data-close>Cancel</button>
+          <button type="button" data-btn="secondary" data-slot="archive-confirm">Archive and remove</button>
           <button type="button" data-btn="cta" data-slot="confirm">Delete worktree</button>
         </div>
       </form>

@@ -218,7 +218,7 @@ const result = spawnSync(process.execPath, [probeScript], {
     USERPROFILE: probeHome,
     PATH: ["/usr/bin", "/bin"].join(path.delimiter),
     ROBOREPO_APP_ROOT: appRoot,
-    ROBOREPO_STATE_DIR: stateDir,
+    ROBOREPO_STATE_ROOT: stateDir,
     ROBOREPO_WORKSPACE_ROOT: path.join(tmp, "workspace"),
   },
 });
@@ -278,7 +278,7 @@ const liveFallbackResult = spawnSync(process.execPath, [liveProbeScript], {
     USERPROFILE: liveProbeHome,
     PATH: [toolBin, "/usr/bin", "/bin"].join(path.delimiter),
     ROBOREPO_APP_ROOT: appRoot,
-    ROBOREPO_STATE_DIR: stateDir,
+    ROBOREPO_STATE_ROOT: stateDir,
     ROBOREPO_WORKSPACE_ROOT: path.join(tmp, "workspace-live"),
   },
 });

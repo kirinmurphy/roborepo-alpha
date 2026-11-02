@@ -144,15 +144,25 @@
       "category": "git"
     },
     {
-      "id": "push-pull-prs",
-      "label": "Push / pull / PRs",
-      "description": "Move code to or from a remote (git push, git pull). Prompts so a push can be approved in-session; force variants are denied separately by rewrite-history.",
+      "id": "push-code",
+      "label": "Push code",
+      "description": "Send commits to a remote (git push). Prompts by default. Where the protected-branch hooks are installed, they approve pushes they verify land on a non-protected branch and deny the rest, so agents push to feature branches without a prompt; force variants are denied separately by rewrite-history.",
       "kind": "commands",
       "commands": [
         [
           "git",
           "push"
-        ],
+        ]
+      ],
+      "bucket": "ask",
+      "category": "git"
+    },
+    {
+      "id": "pull-code",
+      "label": "Pull code",
+      "description": "Bring remote changes into the working tree (git pull). Prompts because a pull can merge or rebase in-flight work.",
+      "kind": "commands",
+      "commands": [
         [
           "git",
           "pull"
@@ -225,6 +235,177 @@
           "checkout",
           "-B",
           "main"
+        ]
+      ],
+      "bucket": "deny",
+      "category": "git"
+    },
+    {
+      "id": "read-github",
+      "label": "Read GitHub",
+      "description": "Look at pull requests and CI runs (gh pr view/list/status/checks/diff, gh run list/view, gh repo view). Read-only.",
+      "kind": "commands",
+      "commands": [
+        [
+          "gh",
+          "pr",
+          "view"
+        ],
+        [
+          "gh",
+          "pr",
+          "list"
+        ],
+        [
+          "gh",
+          "pr",
+          "status"
+        ],
+        [
+          "gh",
+          "pr",
+          "checks"
+        ],
+        [
+          "gh",
+          "pr",
+          "diff"
+        ],
+        [
+          "gh",
+          "run",
+          "list"
+        ],
+        [
+          "gh",
+          "run",
+          "view"
+        ],
+        [
+          "gh",
+          "repo",
+          "view"
+        ]
+      ],
+      "bucket": "allow",
+      "category": "git"
+    },
+    {
+      "id": "open-prs",
+      "label": "Open pull requests",
+      "description": "Open a pull request (gh pr create). Allowed because opening a PR changes no branch: merging is denied by change-github-directly. Push the branch first with git push and pass --head, so gh neither pushes nor forks on its own.",
+      "kind": "commands",
+      "commands": [
+        [
+          "gh",
+          "pr",
+          "create"
+        ]
+      ],
+      "bucket": "allow",
+      "category": "git"
+    },
+    {
+      "id": "post-to-github",
+      "label": "Post to GitHub",
+      "description": "Write where other people read it: comment on, edit, review, close or reopen a pull request, or open and comment on issues. Prompts, since it speaks for you.",
+      "kind": "commands",
+      "commands": [
+        [
+          "gh",
+          "pr",
+          "comment"
+        ],
+        [
+          "gh",
+          "pr",
+          "edit"
+        ],
+        [
+          "gh",
+          "pr",
+          "ready"
+        ],
+        [
+          "gh",
+          "pr",
+          "review"
+        ],
+        [
+          "gh",
+          "pr",
+          "close"
+        ],
+        [
+          "gh",
+          "pr",
+          "reopen"
+        ],
+        [
+          "gh",
+          "issue",
+          "create"
+        ],
+        [
+          "gh",
+          "issue",
+          "comment"
+        ]
+      ],
+      "bucket": "ask",
+      "category": "git"
+    },
+    {
+      "id": "change-github-directly",
+      "label": "Change GitHub directly",
+      "description": "Act on GitHub without git: merge a pull request, call the API (which can rewrite main), print the auth token, or change repository settings, secrets, variables, releases, or workflows. Denied, because none of it passes through the protected-branch hooks; only GitHub branch protection covers it.",
+      "kind": "commands",
+      "commands": [
+        [
+          "gh",
+          "pr",
+          "merge"
+        ],
+        [
+          "gh",
+          "api"
+        ],
+        [
+          "gh",
+          "auth",
+          "token"
+        ],
+        [
+          "gh",
+          "repo",
+          "edit"
+        ],
+        [
+          "gh",
+          "repo",
+          "delete"
+        ],
+        [
+          "gh",
+          "repo",
+          "rename"
+        ],
+        [
+          "gh",
+          "secret"
+        ],
+        [
+          "gh",
+          "variable"
+        ],
+        [
+          "gh",
+          "release"
+        ],
+        [
+          "gh",
+          "workflow",
+          "run"
         ]
       ],
       "bucket": "deny",

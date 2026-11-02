@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 // Generic per-package lifecycle contract: every catalog package must enable, re-enable (idempotent),
 // disable, and re-disable (idempotent) without error, and the enabled-packages registry must reflect
-// the expected state after each step. Complements system-package-ownership-characterization-check.mjs
-// (which hand-asserts specific Codex hook content for 2 packages) by covering every package generically
-// rather than by name.
+// the expected state after each step. The fixture-tool block then checks that every live-config
+// resource type (MCP, Codex tool approvals, permissions, rules, hooks with a script) appears on
+// enable and leaves nothing behind on disable. Later blocks cover a several-skill package, derived
+// dependencies and their status, and reconcile removing an installed package that left the
+// effective set while leaving alone a package RoboRepo never applied.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -11,6 +13,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { loadPackageCatalog } from "../cli/package-catalog.mjs";
+import { makeAppRoot } from "./app-root-fixture.mjs";
 import { MULTI_SKILL_COMMAND, MULTI_SKILL_IDS, MULTI_SKILL_PACKAGE_ID, writeMultiSkillPackage } from "./fixtures/multi-skill-package.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -48,7 +51,7 @@ assert.ok(packageIds.length > 0, "expected at least one package in the catalog")
 
 for (const pkgId of packageIds) {
   const tmp = makeHome();
-  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_DIR: path.join(tmp, ".roborepo"), SKIP_MCP: "1" };
+  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_ROOT: path.join(tmp, ".roborepo"), SKIP_MCP: "1" };
   try {
     const enable1 = spawnSync(process.execPath, [cli, "package", "enable", pkgId], { env, encoding: "utf8" });
     assert.equal(enable1.status, 0, `${pkgId}: enable should succeed\n${enable1.stderr}`);
@@ -73,8 +76,47 @@ for (const pkgId of packageIds) {
 }
 
 {
+  const appRoot = makeAppRoot({ prefix: "roborepo-package-lifecycle-app-", fixturePackages: true });
   const tmp = makeHome();
-  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_DIR: path.join(tmp, ".roborepo"), SKIP_MCP: "1" };
+  // PATH without a `claude` binary: Codex MCP wiring must still happen (and be undone) on its own.
+  const env = { ...process.env, HOME: tmp, ROBOREPO_APP_ROOT: appRoot, ROBOREPO_STATE_ROOT: path.join(tmp, ".roborepo"), PATH: "/usr/bin:/bin" };
+  const fixtureCli = path.join(appRoot, "scripts", "cli", "main.mjs");
+  const read = (...parts) => fs.readFileSync(path.join(tmp, ...parts), "utf8");
+  const exists = (...parts) => fs.existsSync(path.join(tmp, ...parts));
+  try {
+    const enable = spawnSync(process.execPath, [fixtureCli, "package", "enable", "fixture-tool"], { env, encoding: "utf8" });
+    assert.equal(enable.status, 0, `fixture-tool: enable should succeed\n${enable.stdout}${enable.stderr}`);
+    const settings = JSON.parse(read(".claude", "settings.json"));
+    assert.ok(settings.permissions?.allow?.includes("mcp__fixture-tool__lookup"), "enable merges the package permissions into Claude settings");
+    assert.match(JSON.stringify(settings.hooks || {}), /fixture-session\.mjs/, "enable merges the Claude hook entry");
+    assert.ok(exists(".claude", "hooks", "fixture-session.mjs"), "enable installs the Claude hook script");
+    const codexToml = read(".codex", "config.toml");
+    assert.match(codexToml, /\[mcp_servers\.fixture-tool\]/, "enable registers the MCP server with Codex");
+    assert.match(codexToml, /\[mcp_servers\.fixture-tool\.tools\.register_edit\]\s*\napproval_mode = "auto"/, "enable writes the Codex tool approvals");
+    assert.match(read(".codex", "hooks.json"), /fixture-tool: session started/, "enable merges the Codex hook entry");
+    assert.match(read(".claude", "CLAUDE.md"), /Fixture rule fragment/, "enable renders the package rules for Claude");
+    assert.match(read(".codex", "AGENTS.md"), /Fixture rule fragment/, "enable renders the package rules for Codex");
+
+    const disable = spawnSync(process.execPath, [fixtureCli, "package", "disable", "fixture-tool"], { env, encoding: "utf8" });
+    assert.equal(disable.status, 0, `fixture-tool: disable should succeed\n${disable.stdout}${disable.stderr}`);
+    const settingsAfter = JSON.parse(read(".claude", "settings.json"));
+    assert.ok(!(settingsAfter.permissions?.allow || []).some((entry) => entry.startsWith("mcp__fixture-tool")), "disable removes the package permissions");
+    assert.doesNotMatch(JSON.stringify(settingsAfter.hooks || {}), /fixture-session\.mjs/, "disable removes the Claude hook entry");
+    assert.ok(!exists(".claude", "hooks", "fixture-session.mjs"), "disable removes the Claude hook script");
+    const codexAfter = read(".codex", "config.toml");
+    assert.doesNotMatch(codexAfter, /mcp_servers\.fixture-tool/, "disable removes the Codex MCP server and its tool approvals");
+    assert.doesNotMatch(exists(".codex", "hooks.json") ? read(".codex", "hooks.json") : "", /fixture-tool/, "disable removes the Codex hook entry");
+    assert.doesNotMatch(exists(".claude", "CLAUDE.md") ? read(".claude", "CLAUDE.md") : "", /Fixture rule fragment/, "disable removes the Claude rules");
+    assert.doesNotMatch(exists(".codex", "AGENTS.md") ? read(".codex", "AGENTS.md") : "", /Fixture rule fragment/, "disable removes the Codex rules");
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+    fs.rmSync(appRoot, { recursive: true, force: true });
+  }
+}
+
+{
+  const tmp = makeHome();
+  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_ROOT: path.join(tmp, ".roborepo"), SKIP_MCP: "1" };
   try {
     const staleSkillCache = path.join(tmp, ".roborepo", "skills", "vanished-package-skill");
     fs.mkdirSync(staleSkillCache, { recursive: true });
@@ -100,7 +142,7 @@ for (const pkgId of packageIds) {
 
 {
   const tmp = makeHome();
-  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_DIR: path.join(tmp, ".roborepo"), SKIP_MCP: "1" };
+  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_ROOT: path.join(tmp, ".roborepo"), SKIP_MCP: "1" };
   try {
     const leakedCommand = writeOwnedCommand(tmp, "claude", "leaked-command", "technical-writing");
     const preflight = spawnSync("bash", [uninstall, "--check-clean"], { env, encoding: "utf8" });
@@ -129,7 +171,7 @@ for (const pkgId of packageIds) {
   }
   writeMultiSkillPackage(path.join(appRoot, "globals", "packages"));
   const stateDir = path.join(tmp, ".roborepo");
-  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_DIR: stateDir, ROBOREPO_APP_ROOT: appRoot, ROBOREPO_MODE: "development", SKIP_MCP: "1" };
+  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_ROOT: stateDir, ROBOREPO_APP_ROOT: appRoot, ROBOREPO_MODE: "development", SKIP_MCP: "1" };
   const run = (...args) => spawnSync(process.execPath, [cli, ...args], { env, encoding: "utf8" });
   const status = () => JSON.parse(run("package", "status", MULTI_SKILL_PACKAGE_ID, "--json").stdout).status;
   const pkgId = MULTI_SKILL_PACKAGE_ID;
@@ -174,4 +216,340 @@ for (const pkgId of packageIds) {
   }
 }
 
-console.log(`ok: package lifecycle contract (${packageIds.length} packages, plus a several-skill package)`);
+// Derived dependencies: the registry records selected roots only, and every package a root
+// requires is effective through it. Fixture packages live in a throwaway workspace and each carries
+// a rules fragment, so "effective" is also visible as live rules in CLAUDE.md.
+{
+  const tmp = makeHome();
+  const workspace = path.join(tmp, "workspace");
+  const stateDir = path.join(tmp, ".roborepo");
+  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_ROOT: stateDir, ROBOREPO_WORKSPACE_ROOT: workspace, SKIP_MCP: "1" };
+  const fixture = (id, config = {}, { rules = true } = {}) => {
+    const dir = path.join(workspace, "packages", id);
+    fs.mkdirSync(dir, { recursive: true });
+    const resources = [...(rules ? [{ type: "rules", harness: "claude", source: "rules.md" }] : []), ...(config.resources || [])];
+    if (rules) fs.writeFileSync(path.join(dir, "rules.md"), `## Fixture rules ${id}\n`);
+    fs.writeFileSync(path.join(dir, "package.config.json"), JSON.stringify({
+      schemaVersion: 1, id, label: `Fixture ${id}`, description: "Dependency fixture",
+      presentation: { category: "integrations" }, ...config, resources,
+    }));
+  };
+  fixture("dep-parent-a", { requires: ["dep-shared"], recommends: ["dep-helper"] });
+  fixture("dep-parent-b", { requires: ["dep-shared"] });
+  fixture("dep-shared", { requires: ["dep-leaf"] });
+  fixture("dep-leaf");
+  fixture("dep-helper");
+  fixture("dep-lonely");
+  fixture("dep-only", { selectable: false, presentation: { category: "integrations", visibility: "dependency" } });
+  fixture("dep-only-parent", { requires: ["dep-only"] });
+  fixture("dep-partial", { resources: [{ type: "mcp", preset: "skipped-preset" }] });
+  fixture("dep-blocked", { resources: [{ type: "mcp", preset: "no-such-preset" }] });
+  fixture("dep-pending", { status: "pending" });
+  fixture("dep-needs-pending", { requires: ["dep-pending"] });
+
+  const run = (...args) => spawnSync(process.execPath, [cli, ...args], { env, encoding: "utf8", input: "" });
+  const ok = (...args) => {
+    const result = run(...args);
+    assert.equal(result.status, 0, `${args.join(" ")} should succeed\n${result.stdout}${result.stderr}`);
+    return `${result.stdout}${result.stderr}`;
+  };
+  const registryFile = path.join(stateDir, "enabled-packages.json");
+  const registry = () => JSON.parse(fs.readFileSync(registryFile, "utf8"));
+  const stateScript = (expr) => {
+    const result = spawnSync(process.execPath, ["-e",
+      `Promise.all([import(${JSON.stringify(path.join(repoRoot, "scripts/cli/package-state.mjs"))}), import(${JSON.stringify(path.join(repoRoot, "scripts/cli/package-catalog.mjs"))})]).then(([s, c]) => { const catalog = c.loadPackageCatalog({ includeUnavailable: true }); console.log(JSON.stringify(${expr})); })`,
+    ], { env, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    return JSON.parse(result.stdout);
+  };
+  const effective = () => stateScript("s.effectiveEnabledIds(catalog).filter((id) => id.startsWith('dep-')).sort()");
+  const liveRules = (id) => {
+    try { return fs.readFileSync(path.join(tmp, ".claude", "CLAUDE.md"), "utf8").includes(`## Fixture rules ${id}`); } catch { return false; }
+  };
+  try {
+    // Enabling a package makes its transitive requirements effective without recording them.
+    let out = ok("package", "enable", "dep-parent-a");
+    assert.deepEqual(registry().packages, ["dep-parent-a"], "only the selected root is recorded");
+    assert.equal(registry().schemaVersion, 2, "writes mark the registry as roots-only");
+    assert.deepEqual(effective(), ["dep-leaf", "dep-parent-a", "dep-shared"]);
+    assert.ok(liveRules("dep-shared") && liveRules("dep-leaf"), "required packages are applied");
+    // Status probes only the package and what it requires, so the root that turned it on sits
+    // outside the probed set; a required-only dependency must still read as wanted and installed.
+    assert.deepEqual(JSON.parse(ok("package", "status", "dep-shared", "--json")),
+      { id: "dep-shared", available: true, enabled: true, status: "enabled" },
+      "status of a required-only dependency reports it on through its parent");
+    assert.match(out, /^ {2}enabled: dep-shared$/m, "enable reports one probed outcome per applied package");
+    assert.match(out, /recommended \(not enabled\): dep-helper/, "a non-interactive enable lists recommendations");
+    assert.ok(!effective().includes("dep-helper"), "a recommendation is never enabled without a user choice");
+
+    // A shared dependency stays until the last selected root that requires it is turned off.
+    ok("package", "enable", "dep-parent-b");
+    out = ok("package", "disable", "dep-parent-a");
+    assert.deepEqual(effective(), ["dep-leaf", "dep-parent-b", "dep-shared"], "the other parent keeps the shared dependency");
+    assert.ok(liveRules("dep-shared"), "the shared dependency's resources stay");
+    assert.ok(!liveRules("dep-parent-a"), "the deselected parent's resources go");
+    ok("package", "disable", "dep-parent-b");
+    assert.deepEqual(effective(), [], "the last parent takes its dependencies with it");
+    assert.ok(!liveRules("dep-shared") && !liveRules("dep-leaf"), "dependency resources are removed");
+
+    // A directly selected dependency survives its parents; deselecting it while a parent remains
+    // keeps it effective.
+    ok("package", "enable", "dep-shared");
+    ok("package", "enable", "dep-parent-a");
+    ok("package", "disable", "dep-parent-a");
+    assert.deepEqual(effective(), ["dep-leaf", "dep-shared"], "a directly selected dependency survives its parent");
+    ok("package", "enable", "dep-parent-a");
+    out = ok("package", "disable", "dep-shared");
+    assert.match(out, /dep-shared stays on: required by dep-parent-a/);
+    assert.ok(!registry().packages.includes("dep-shared"), "the root is removed");
+    assert.deepEqual(effective(), ["dep-leaf", "dep-parent-a", "dep-shared"], "the dependency stays effective through its parent");
+
+    // A dependency effective only through a parent has no root to remove: refused, or --cascade.
+    const before = fs.readFileSync(registryFile, "utf8");
+    const refused = run("package", "disable", "dep-leaf");
+    assert.equal(refused.status, 2, "disabling a derived-only dependency is refused");
+    assert.match(refused.stderr, /it is on because selected packages require it: dep-parent-a/);
+    assert.equal(fs.readFileSync(registryFile, "utf8"), before, "a refused disable changes nothing");
+    out = ok("package", "disable", "dep-leaf", "--cascade");
+    assert.deepEqual(effective(), [], "--cascade turns the dependency off with its parents");
+    assert.ok(!liveRules("dep-parent-a") && !liveRules("dep-leaf"), "cascade removes resources");
+
+    // A dependency-only package cannot be switched directly.
+    for (const verb of ["enable", "disable"]) {
+      const snapshot = fs.readFileSync(registryFile, "utf8");
+      const direct = run("package", verb, "dep-only");
+      assert.equal(direct.status, 2, `${verb} of a non-selectable package fails`);
+      assert.match(direct.stderr, new RegExp(`cannot ${verb} dep-only directly: it is a dependency-only package; it turns on and off with: dep-only-parent`));
+      assert.equal(fs.readFileSync(registryFile, "utf8"), snapshot, `${verb} of a non-selectable package changes nothing`);
+    }
+    ok("package", "enable", "dep-only-parent");
+    assert.ok(effective().includes("dep-only") && liveRules("dep-only"), "a dependency-only package turns on with its parent");
+    ok("package", "disable", "dep-only-parent");
+    assert.ok(!effective().includes("dep-only"), "and off with it");
+
+    // A component that does not land reads partial; an apply error reads blocked and exits 1.
+    out = ok("package", "enable", "dep-partial");
+    assert.match(out, /partial: dep-partial \(missing: mcp skipped-preset\)/, "a missing component reports partial, not enabled");
+    const blocked = spawnSync(process.execPath, [cli, "package", "enable", "dep-blocked"], { env: { ...env, SKIP_MCP: "0" }, encoding: "utf8", input: "" });
+    assert.equal(blocked.status, 1, `an apply error exits 1\n${blocked.stdout}${blocked.stderr}`);
+    assert.match(blocked.stderr, /blocked: dep-blocked \(mcp add failed for preset: no-such-preset \(unknown preset\)\)/);
+    ok("package", "disable", "dep-partial");
+    ok("package", "disable", "dep-blocked");
+
+    // A version-1 registry listed dependencies as if they were chosen: reading one keeps the same
+    // effective set and drops the required ids from the roots; the next write stores version 2.
+    fs.writeFileSync(registryFile, JSON.stringify({ packages: ["dep-parent-a", "dep-shared", "dep-leaf", "dep-lonely"], disabled: [] }));
+    assert.deepEqual(effective(), ["dep-leaf", "dep-lonely", "dep-parent-a", "dep-shared"], "upgrade leaves the effective set unchanged");
+    assert.deepEqual(stateScript("s.selectedRootIds(catalog).filter((id) => id.startsWith('dep-')).sort()"), ["dep-lonely", "dep-parent-a"]);
+    ok("package", "disable", "dep-lonely");
+    assert.deepEqual(registry().packages, ["dep-parent-a"], "the first write stores roots only");
+    assert.equal(registry().schemaVersion, 2);
+    ok("package", "disable", "dep-parent-a");
+    assert.deepEqual(effective(), [], "an upgraded dependency turns off with its last parent");
+
+    // Live components do not make a dependency-only package a direct selection for adopt-live.
+    fs.appendFileSync(path.join(tmp, ".claude", "CLAUDE.md"), "\n## Fixture rules dep-only\n");
+    ok("package", "adopt-live");
+    assert.ok(!registry().packages.includes("dep-only"), "adopt-live skips non-selectable packages");
+
+    // A non-selectable package recorded as a root (an older registry, or a manifest that later set
+    // `selectable: false`) can still be disabled, which is the only way to drop that root.
+    fs.writeFileSync(registryFile, JSON.stringify({ schemaVersion: 2, packages: ["dep-only"], disabled: [] }));
+    ok("package", "disable", "dep-only");
+    assert.ok(!registry().packages.includes("dep-only"), "disable removes a non-selectable root");
+
+    // A requirement on a package the catalog leaves out (pending) is named, not skipped silently.
+    out = ok("package", "enable", "dep-needs-pending");
+    assert.match(out, /warn: dep-needs-pending requires dep-pending, which is skipped \(pending package/);
+    assert.ok(liveRules("dep-needs-pending") && !liveRules("dep-pending"), "the available parent still enables");
+    ok("package", "disable", "dep-needs-pending");
+
+    // inspect reports the dependency fields a manifest declares.
+    const inspected = JSON.parse(ok("package", "inspect", "dep-parent-a"));
+    assert.equal(inspected.selectable, true);
+    assert.deepEqual(inspected.recommends, ["dep-helper"]);
+    assert.equal(JSON.parse(ok("package", "inspect", "dep-only")).selectable, false);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+// Live state of a dependency chain, and reconcile cleanup of a package that left the effective set.
+// A missing component deep in the chain reads partial at every level, whatever the catalog order.
+// Reconcile removes a package that left the effective set (its last `requires` edge dropped, or its
+// root edited out of the registry) only when the applied record says RoboRepo installed it, and
+// never a package the record does not name: one never enabled, or one installed before the record.
+{
+  const tmp = makeHome();
+  const workspace = path.join(tmp, "workspace");
+  const stateDir = path.join(tmp, ".roborepo");
+  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_ROOT: stateDir, ROBOREPO_WORKSPACE_ROOT: workspace, SKIP_MCP: "1" };
+  const fixture = (id, config = {}) => {
+    const dir = path.join(workspace, "packages", id);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "package.config.json"), JSON.stringify({
+      schemaVersion: 1, id, label: `Fixture ${id}`, description: "Reconcile fixture",
+      resources: [], ...config, presentation: { category: "integrations", ...(config.presentation || {}) },
+    }));
+  };
+  fixture("status-parent", { requires: ["status-middle"], presentation: { order: -30 } });
+  fixture("status-middle", { requires: ["status-leaf"], presentation: { order: -20 } });
+  fixture("status-leaf", {
+    presentation: { order: -10 },
+    resources: [{ type: "permissions", allow: ["ReviewFixtureMissingPermission"] }],
+  });
+  fixture("orphan-parent-a", { requires: ["orphan-dependency"] });
+  fixture("orphan-parent-b", { requires: ["orphan-dependency"] });
+  fixture("orphan-dependency", {
+    resources: [
+      { type: "permissions", allow: ["ReviewFixtureOrphanPermission"] },
+      { type: "hooks", harness: "claude", source: "hooks.json" },
+      { type: "plugin", id: "review-fixture@review-market", marketplace: { name: "review-market", source: { source: "github", repo: "example/review-fixture" } } },
+      { type: "service", id: "telemetry" },
+    ],
+  });
+  fs.writeFileSync(path.join(workspace, "packages", "orphan-dependency", "hooks.json"), JSON.stringify({
+    SessionStart: [{ hooks: [{ type: "command", command: "echo review-orphan-hook" }] }],
+  }));
+  fixture("orphan-external", { resources: [{ type: "permissions", allow: ["ReviewFixtureExternalPermission"] }] });
+  fixture("gc-service-parent", { requires: ["gc-service"] });
+  fixture("gc-service", { resources: [{ type: "service", id: "telemetry" }] });
+  fixture("gc-edited", { resources: [{ type: "permissions", allow: ["ReviewFixtureEditedPermission"] }] });
+  fixture("gc-legacy", { resources: [{ type: "permissions", allow: ["ReviewFixtureLegacyPermission"] }] });
+
+  const ok = (...args) => {
+    const result = spawnSync(process.execPath, args, { env, cwd: repoRoot, encoding: "utf8", input: "" });
+    assert.equal(result.status, 0, `${args.join(" ")} failed\n${result.stdout}${result.stderr}`);
+    return result.stdout;
+  };
+  const settingsPath = path.join(tmp, ".claude", "settings.json");
+  const readSettings = () => JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+  const appliedPath = path.join(stateDir, "applied-packages.json");
+  const readApplied = () => JSON.parse(fs.readFileSync(appliedPath, "utf8")).packages;
+  const allowed = (entry) => readSettings().permissions.allow.includes(entry);
+  const registryPath = path.join(stateDir, "enabled-packages.json");
+  const dropRoot = (id) => {
+    const registry = JSON.parse(fs.readFileSync(registryPath, "utf8"));
+    registry.packages = registry.packages.filter((entry) => entry !== id);
+    fs.writeFileSync(registryPath, JSON.stringify(registry));
+  };
+  try {
+    ok(cli, "package", "enable", "status-parent");
+    const settings = readSettings();
+    settings.permissions.allow = settings.permissions.allow.filter((entry) => entry !== "ReviewFixtureMissingPermission");
+    fs.writeFileSync(settingsPath, JSON.stringify(settings));
+    const livePackages = JSON.parse(ok("-e", `
+      import(${JSON.stringify(path.join(repoRoot, "scripts/cli/config.mjs"))}).then((c) => {
+        console.log(JSON.stringify(c.readConfigSnapshot().packages));
+      });
+    `));
+    for (const id of ["status-leaf", "status-middle", "status-parent"]) {
+      const status = livePackages.find((pkg) => pkg.id === id);
+      assert.equal(status.desired, true, "missing components do not change the selected dependency closure");
+      assert.equal(status.status, "partial", `${id} reports a missing transitive requirement regardless of catalog order`);
+    }
+    assert.equal(JSON.parse(ok(cli, "package", "status", "status-parent", "--json")).status, "partial");
+
+    ok(cli, "package", "enable", "orphan-parent-a");
+    ok(cli, "package", "enable", "orphan-parent-b");
+    const external = readSettings();
+    external.permissions.allow.push("ReviewFixtureExternalPermission");
+    fs.writeFileSync(settingsPath, JSON.stringify(external));
+    for (const [index, id] of ["orphan-parent-a", "orphan-parent-b"].entries()) {
+      const manifestPath = path.join(workspace, "packages", id, "package.config.json");
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+      manifest.requires = [];
+      fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+      if (index === 1) {
+        const appliedBefore = fs.readFileSync(appliedPath, "utf8");
+        const dry = ok(cli, "package", "reconcile", "--dry-run");
+        assert.match(dry, /\[dry-run\] would remove no longer enabled package: orphan-dependency/, "a dry run names the removal");
+        assert.ok(allowed("ReviewFixtureOrphanPermission"), "a dry run leaves the orphan's components in place");
+        assert.equal(fs.readFileSync(appliedPath, "utf8"), appliedBefore, "a dry run leaves the applied record unchanged");
+      }
+      const out = ok(cli, "package", "reconcile");
+      const current = readSettings();
+      const retained = index === 0;
+      assert.equal(/remove no longer enabled package: orphan-dependency/.test(out), !retained,
+        "reconcile names the package it removes once the last edge is gone");
+      assert.equal(current.permissions.allow.includes("ReviewFixtureOrphanPermission"), retained,
+        "permissions stay until the dependency's last effective parent drops its edge");
+      assert.equal(JSON.stringify(current.hooks || {}).includes("echo review-orphan-hook"), retained,
+        "reconciliation uses hook cleanup after the last dependency edge disappears");
+      assert.equal(current.enabledPlugins?.["review-fixture@review-market"] === true, retained,
+        "reconciliation cleans the orphan's plugin alongside its other components");
+      assert.equal(JSON.parse(fs.readFileSync(path.join(stateDir, "telemetry", "state.json"), "utf8")).enabled, retained,
+        "reconciliation disables the orphan's service after its last parent leaves");
+      assert.ok(current.permissions.allow.includes("ReviewFixtureExternalPermission"),
+        "configuration of a package RoboRepo never applied is preserved");
+    }
+    const applied = readApplied();
+    assert.ok(!applied.includes("orphan-dependency"), "the removed package leaves the applied record");
+    assert.ok(!applied.includes("orphan-external"), "a package RoboRepo never applied is never recorded");
+
+    // Failed service cleanup must keep its applied entry so the next reconcile can retry it.
+    ok(cli, "package", "enable", "gc-service-parent");
+    const serviceParentPath = path.join(workspace, "packages", "gc-service-parent", "package.config.json");
+    const serviceParent = JSON.parse(fs.readFileSync(serviceParentPath, "utf8"));
+    serviceParent.requires = [];
+    fs.writeFileSync(serviceParentPath, JSON.stringify(serviceParent));
+    const serviceStatePath = path.join(stateDir, "telemetry", "state.json");
+    const failedCleanup = spawnSync(process.execPath, ["--input-type=module", "-e", `
+      import fs from "node:fs";
+      const { reconcileEnabledPackages } = await import(${JSON.stringify(path.join(repoRoot, "scripts/cli/packages.mjs"))});
+      const write = fs.writeFileSync;
+      fs.writeFileSync = function (file, ...args) {
+        if (String(file) === ${JSON.stringify(serviceStatePath)}) {
+          throw Object.assign(new Error("fixture service write failure"), { code: "EACCES" });
+        }
+        return write.call(this, file, ...args);
+      };
+      try { await reconcileEnabledPackages(); }
+      finally { fs.writeFileSync = write; }
+    `], { env, cwd: repoRoot, encoding: "utf8" });
+    assert.notEqual(failedCleanup.status, 0, "a service write failure fails reconciliation");
+    assert.match(failedCleanup.stdout + failedCleanup.stderr, /fixture service write failure/);
+    assert.ok(readApplied().includes("gc-service"), "failed cleanup retains the package's retry record");
+    assert.equal(JSON.parse(fs.readFileSync(serviceStatePath, "utf8")).enabled, true);
+    ok(cli, "package", "reconcile");
+    assert.equal(JSON.parse(fs.readFileSync(serviceStatePath, "utf8")).enabled, false,
+      "a later successful reconciliation retries service cleanup");
+    assert.ok(!readApplied().includes("gc-service"), "successful cleanup removes the retry record");
+
+    // A plain disable drops the package from the applied record as well as removing it.
+    ok(cli, "package", "enable", "gc-edited");
+    assert.ok(readApplied().includes("gc-edited"), "enable records the package as applied");
+    ok(cli, "package", "disable", "gc-edited");
+    assert.ok(!readApplied().includes("gc-edited") && !allowed("ReviewFixtureEditedPermission"), "disable removes it and its record");
+
+    // A hand-edited registry that drops an applied root: reconcile removes the package.
+    ok(cli, "package", "enable", "gc-edited");
+    dropRoot("gc-edited");
+    ok(cli, "package", "reconcile");
+    assert.ok(!allowed("ReviewFixtureEditedPermission") && !readApplied().includes("gc-edited"),
+      "reconcile removes an applied package the registry no longer selects");
+
+    // Installed before the record existed: no applied entry, so reconcile leaves it alone even
+    // after it leaves the effective set.
+    ok(cli, "package", "enable", "gc-legacy");
+    fs.writeFileSync(appliedPath, JSON.stringify({ packages: readApplied().filter((id) => id !== "gc-legacy") }));
+    dropRoot("gc-legacy");
+    ok(cli, "package", "reconcile");
+    assert.ok(allowed("ReviewFixtureLegacyPermission"), "a package with no applied entry is never removed");
+
+    // An unreadable record reads as empty: reconcile removes nothing, even a package that was
+    // applied and has since left the effective set, and re-applying the effective set writes a
+    // readable record again.
+    ok(cli, "package", "enable", "gc-edited");
+    assert.ok(readApplied().includes("gc-edited"), "gc-edited is recorded before the record is corrupted");
+    dropRoot("gc-edited");
+    fs.writeFileSync(appliedPath, "not json");
+    ok(cli, "package", "reconcile");
+    assert.ok(allowed("ReviewFixtureEditedPermission"), "a corrupt record removes nothing, even an applied package that left the effective set");
+    const rewritten = readApplied();
+    assert.ok(rewritten.includes("status-parent") && !rewritten.includes("gc-legacy") && !rewritten.includes("gc-edited"),
+      "reconcile rewrites the record from the effective set");
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+console.log(`ok: package lifecycle contract (${packageIds.length} packages, a several-skill package, derived dependencies, and reconcile cleanup)`);

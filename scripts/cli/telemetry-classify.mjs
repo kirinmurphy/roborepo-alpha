@@ -7,8 +7,7 @@ import { privacyHash } from "./telemetry-schemas/hash.mjs";
 // test in isolation.
 //
 // Store this version alongside every classification result so historical data stays interpretable
-// if the rules change later (plan requirement: "store a rule/version identifier with the
-// classification").
+// if the rules change later.
 //
 // v2: adds the "read" category (file reads and searches through the shell), classifies each
 // `&&`/`;`/`||` segment instead of the whole string, and is applied to shell tools only. v1 matched
@@ -25,9 +24,8 @@ export const SHELL_TOOL_NAMES = new Set(["Bash", "run_shell_command"]);
 // inner command as "Bash".
 export const SHELL_RESULT_TOOL_NAMES = new Set(["Bash", "exec", "exec_command", "shell", "run_shell_command"]);
 
-// An event's operation counts only when it came from a shell tool. Events recorded before v2 can
-// carry an operation classified from non-shell input (e.g. patch text); an event with no tool name
-// is trusted as-is.
+// An event's operation counts only when it came from a shell tool; an event with no tool name is
+// trusted as-is.
 export function shellOperation(event) {
   const operation = event?.operation ?? null;
   const toolName = event?.tool?.name ?? null;

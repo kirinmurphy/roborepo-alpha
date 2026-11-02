@@ -1,8 +1,7 @@
 import { portalFillSlots as fill, portalTpl as tpl } from "/portal/shared/api.js";
 import { mountActionMenu, mountRepositoryRow, repositoryPageUrl } from "/portal/shared/repository-components.js";
-import { hrefWithRepositoryScope } from "/portal/shared/repository-scope.js";
-import { appendRepositoryDomains } from "./domains.js";
 import { matchedPlanIdentity, unmatchedPlanRow } from "./plan-rows.js";
+import { mountRepositoryShortcuts } from "./repository-shortcuts.js";
 import { worktreeCleanupNotice } from "./worktree-dialogs.js";
 import { isRunning } from "./worktree-details.js";
 import { buildRootSection } from "/portal/developer-runtime/repository-root-row.js";
@@ -34,8 +33,7 @@ export function unresolvedActivity(items) {
 }
 
 function repositoryCard(repository, actions) {
-  const node = fill(tpl("tpl-repository-card"), {
-  });
+  const node = tpl("tpl-repository-card");
   mountRepositoryRow(node, {
     name: homeRepositoryName(repository),
     href: repositoryPageUrl(repository),
@@ -50,8 +48,10 @@ function repositoryCard(repository, actions) {
     badge.classList.add("repository-state-badge", "is-mock");
     badge.title = "Mock repo used to demonstrate the Home view";
   }
+  // A repo with open work (a live worktree or a recently touched Active/Review plan) is not idle just
+  // because nothing is running in it, so it keeps the running look and carries no badge.
   const lifecycleState = repository.lifecycle?.state || "active";
-  if (lifecycleState !== "active") {
+  if (lifecycleState !== "active" && !(lifecycleState === "idle" && repository.inProgress)) {
     node.classList.add("is-not-running");
     const badge = node.querySelector("[data-slot=lifecycle-state]");
     badge.hidden = false;
@@ -60,7 +60,7 @@ function repositoryCard(repository, actions) {
     if (repository.lifecycle?.reason) badge.title = repository.lifecycle.reason;
   }
   node.querySelector("[data-slot=checkouts]").append(...cardRows(repository.domains, { ...actions, repositoryId: repository.repositoryId }));
-  appendRepositoryDomains(node.querySelector("[data-slot=domains]"), repository);
+  mountRepositoryShortcuts(node.querySelector("[data-slot=repository-shortcuts]"), repository);
   const notice = worktreeCleanupNotice(repository, { onEnable: actions.onEnableCleanup, onDismiss: actions.onDismissCleanup });
   if (notice) node.querySelector("[data-slot=cleanup-notice]").append(notice);
   return node;
@@ -109,7 +109,7 @@ function cardRows(domains, actions) {
 }
 
 function checkoutRow(checkout, actions, { identity = null, hookInstalled = false } = {}) {
-  return buildRootSection({
+  const row = buildRootSection({
     root: {
       rootId: checkout.rootId,
       isWorktree: checkout.isWorktree,
@@ -132,6 +132,9 @@ function checkoutRow(checkout, actions, { identity = null, hookInstalled = false
     onMountWorktreeMenu: (slot) => mountWorktreeMenu(slot, checkout, actions),
     identity,
   });
+  // Home's row glyphs match the repo header's shortcut icons; Runtime keeps the shared default.
+  row.querySelector(".repository-root-glyph")?.setAttribute("size", "lg");
+  return row;
 }
 
 // A worktree no plan claims keeps its actions in a ⋮ menu at the end of its row: Stop Server while
@@ -159,13 +162,8 @@ function noCheckoutRow() {
 function homeMenuItems(repository) {
   const checkouts = repository.domains.runtime.data?.checkouts || [];
   const knownCheckout = checkouts.length > 0;
-  // The page links open each page already filtered to this repo. A repo with no urlKey (a demo
-  // card) has nothing to filter by, so they are left out rather than opening an unfiltered page.
-  const filtered = (path) => hrefWithRepositoryScope(path, repository.urlKey);
+  // The page links (Plans, Agents, Tokens) sit beside this menu as icons; see repository-shortcuts.js.
   return [
-    { key: "plans", label: "All Plans", icon: "plans", href: filtered("/plans"), hidden: !repository.urlKey },
-    { key: "agents", label: "Agent Config", icon: "agents", href: filtered("/agents"), hidden: !repository.urlKey },
-    { key: "tokens", label: "Token Activity", icon: "tokens", href: filtered("/tokens"), hidden: !repository.urlKey },
     { key: "pin", label: repository.pinned ? "Unpin" : "Pin", icon: "pin" },
     knownCheckout
       ? { key: "hide", label: "Ignore Repo", icon: "eye-off" }

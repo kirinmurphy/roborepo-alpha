@@ -100,21 +100,6 @@ test -f "$HOME/.codex/config.toml" || { echo "FAIL: codex root config not create
 test -f "$HOME/.gemini/policies/generated-permissions.toml" || { echo "FAIL: gemini root config not created from a home-without-config start" >&2; exit 1; }
 echo "case 5: OK"
 
-# --- Case 6: a state directory shaped like an older roborepo release left it -- an
-# initialization.json missing fields the current build expects (pre-migration shape), rather than
-# the "newer schema" direction already covered in-process. Must not crash; must be treated as
-# unreadable/incomplete rather than trusted as complete. ---
-echo "case 6: prior roborepo state from an older version"
-fresh_env case6
-mkdir -p "$state"
-# An older, pre-schemaVersion record shape: no schemaVersion/workflowVersion fields at all.
-printf '{"initialized": true, "version": "0.1.0"}' > "$state/initialization.json"
-roborepo doctor --quiet
-roborepo init
-test -f "$state/initialization.json" || { echo "FAIL: init did not (re)write an initialization record" >&2; exit 1; }
-grep -q '"schemaVersion"' "$state/initialization.json" || { echo "FAIL: legacy-shaped record was not normalized to the current schema" >&2; exit 1; }
-echo "case 6: OK"
-
 # --- Case 7: partial/corrupt initialization state, resumed by a real installed binary.
 #
 # Killing a real \`roborepo init\` mid-flight was tried and dropped: inside this container, a

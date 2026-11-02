@@ -19,10 +19,11 @@ Use it when you want to:
 | Piece | Always available? | What it does |
 | --- | --- | --- |
 | Plans page | Yes | Local `/plans` portal view for discovering, filtering, rendering, and copying plan context |
-| Plan suite | Optional packages: `plan-suite` and `session-close` | Seven slash commands: six for the lifecycle steps, plus `/session-close` |
+| Plan suite | Optional packages: `plan-suite` and `session-close` | Eight slash commands: one-time setup, six for the lifecycle steps, plus `/session-close` |
 
 | Command | What you get |
 | --- | --- |
+| `/plan-suite-init` | Set up a repo for the suite once: the `docs/plans` folders and `plans-config.json` with your plan-name namespaces. `/plan-write` runs it for you when the config is missing |
 | `/plan-write` | Create a plan with its initial checklist, or revise an existing one, including bringing it up to date with the repository |
 | `/plan-promote` | Review and prepare a plan for development, then move it to `ready/` |
 | `/plan-execute` | Start or resume implementation in an isolated worktree, check it with a validator and fix what it finds, then move the plan to `review/`; or fix findings a review sent back |
@@ -96,7 +97,7 @@ Its message names the plan by its filename, for example
 `Submit plan plan-lifecycle-review-and-ship-workflow for review`, so `git log` reads without
 looking up ids. The suite commands' reports and questions name a plan by its title, with its id in
 parentheses once. A refused move changes nothing, running a move again after it succeeded commits nothing, and
-nothing is ever pushed.
+the base branch is never pushed.
 
 While a plan is `active` or in `review`, its worktree's copy is the plan: every progress note,
 finding, and approval is written there and reaches the base branch when you merge.
@@ -162,8 +163,9 @@ passes are recorded in the plan's `## Review` section. Then it runs the completi
 - the plan passes the Review requirements, apart from unconfirmed `## Not tested` entries.
 
 If the loop ended clean and the preflight passes, `/plan-execute` runs `roborepo plans submit`,
-which moves the plan to `review/`. That says the work is complete and checked, not that you
-accepted it. Otherwise the plan stays in `active/` with a `next_action` for the next run; an open
+which moves the plan to `review/`, then pushes the plan's feature branch so CI starts before you
+review. That says the work is complete and checked, not that you accepted it. If the push is
+refused, the plan still moves and the report gives you the command to push it yourself. Otherwise the plan stays in `active/` with a `next_action` for the next run; an open
 `escalate` finding is an unchecked task, so it holds the plan in `active/` until you answer it.
 
 The first run in a repository asks you to confirm where worktrees go. Later runs reuse that answer.
@@ -246,11 +248,15 @@ requirements. If implementation changed, it reviews the changes and runs the gat
 before renewing the Result. Older review records can be recovered from their recorded commits and
 verification; incomplete evidence requires only the missing review work.
 
-This approval recovery also works after landing while the plan remains in review. It records
-matching plan-only evidence commits in the worktree and primary checkout, keeping close integration
-checks intact. Later base changes do not require synchronizing the old feature branch just to
-record approval. A partly committed recovery resumes its missing write and preserves independent
-plan edits. Closure still requires its own passing test gate.
+This approval recovery also works after landing while the plan remains in review. It commits
+Result, Approval, and verified recovery provenance on primary only. The old worktree stays as it
+was. Both precursor documents must already be integrated and all other plan content must agree.
+Independent edits or a later implementation change refuse that exception. The human answer and
+complete review remain required; closure still runs its own test gate.
+
+Before merging, `roborepo plans merge-readiness <plan> --json` checks the committed review packet,
+clean worktree, exact implementation, and reviewed base. A failure names the repair; a pass names
+the assessed tips and grants no merge permission.
 
 `/plan-review` never merges your branch into the base branch. After approval, open and merge the
 pull request yourself. If base moves again before you merge, run `/plan-review` again.

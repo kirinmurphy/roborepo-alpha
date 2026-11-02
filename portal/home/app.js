@@ -163,7 +163,7 @@ async function refresh({ force = false } = {}) {
     setHomeSyncStatus(overview.sync?.state || "synced");
     scheduleSyncRefresh(overview.sync?.state);
     const version = JSON.stringify([overview, [...nextPlanActions]]);
-    const hasActiveControl = !force && (content.contains(document.activeElement) || content.querySelector("details[open], .menu-button-panel, [data-menu]:not([hidden])") || document.querySelector("dialog[open]"));
+    const hasActiveControl = !force && (content.contains(document.activeElement) || content.querySelector("details[open], .menu-button-panel, [data-menu]:not([hidden]), [data-hover-panel]:not([hidden])") || document.querySelector("dialog[open]"));
     if (version !== renderedVersion && !hasActiveControl) {
       const known = overview.repositories.length > 0;
       const autoDiscoveryEnabled = overview.autoDiscovery?.enabled === true;

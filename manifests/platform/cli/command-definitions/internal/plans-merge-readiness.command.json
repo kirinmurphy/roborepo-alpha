@@ -1,0 +1,18 @@
+{
+  "path": [
+    "plans",
+    "merge-readiness"
+  ],
+  "kind": "internal",
+  "title": "Check merge readiness",
+  "description": "Verify a committed review packet and clean worktree against the current base",
+  "usage": "roborepo plans merge-readiness <plan> [--base <branch>] [--json]",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/plans-command.mjs",
+    "export": "plansCommand",
+    "prependArgs": [
+      "merge-readiness"
+    ]
+  }
+}

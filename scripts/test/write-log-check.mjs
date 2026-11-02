@@ -17,7 +17,7 @@ const home = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-write-log-"));
 const state = path.join(home, ".roborepo");
 const logPath = path.join(state, "logs", "config-writes.jsonl");
 const target = path.join(home, ".claude", "settings.json");
-const env = (extra = {}) => ({ ...process.env, HOME: home, ROBOREPO_STATE_DIR: state, ROBOREPO_STATE_ROOT: "", ROBOREPO_WRITE_ACTOR: "", ...extra });
+const env = (extra = {}) => ({ ...process.env, HOME: home, ROBOREPO_STATE_ROOT: state, ROBOREPO_WRITE_ACTOR: "", ...extra });
 const entries = () => fs.readFileSync(logPath, "utf8").trimEnd().split("\n").map((line) => JSON.parse(line));
 
 function node(script, extraEnv = {}, args = []) {

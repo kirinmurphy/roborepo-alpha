@@ -113,7 +113,7 @@
     "PERSISTED STATE: existing installs have real state under ~/.roborepo. Simplest strategy: migrate-on-first-run in scripts/cli/roots.mjs (if the new dir is missing and the old exists, rename it). No parallel-path compat layer.",
     "NPM PACKAGE: renaming packageName orphans existing installs. Strategy: publish the new name, `npm deprecate` the old one pointing at it.",
     "GLOBAL BIN: after a package rename, old `roborepo` symlinks remain in user PATHs; scripts/install/uninstall-lib.sh must recognize both layouts during uninstall.",
-    "ENV VARS: users' shells and external tooling may export ROBOREPO_*. Keep ROBOREPO_STATE_DIR readable as a fallback for one release if zero-user-action migration matters.",
+    "ENV VARS: users' shells and external tooling may export ROBOREPO_*. Keep ROBOREPO_STATE_ROOT readable as a fallback for one release if zero-user-action migration matters.",
     "APPLIED HARNESS FILES: MANAGED_BY_ROBOREPO.md and rendered hook/permission files already live on user machines. Use manifests/platform/manifest.tsv cleanup rows (existing pattern) to remove old names on next apply.",
     "TELEMETRY: machine-local registries carry git:github.com/kirinmurphy/roborepo repo IDs. Repo IDs must NOT change (they track real repos).",
     "NOTE (Sep 2026): the .roborepo-managed ownership marker (now .builtin-managed), the generated policy filename (now generated-permissions.toml), the write-guard hook filename (now write-guard.mjs), and the XDG PID path (~/.local/state/cli) were de-branded in phase 1g — no longer part of any rename."

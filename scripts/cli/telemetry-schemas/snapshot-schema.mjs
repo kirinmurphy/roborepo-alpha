@@ -10,12 +10,12 @@ const ALLOWED_FIELDS = [
 ];
 
 // Content-addressed: the ID is a hash of the normalized fields, so two sessions with identical
-// effective configuration collapse to one stored snapshot. `created_at` and `harness`/`model`
-// (session-specific, not configuration-specific) are excluded from the v1 hash.
-// v2 includes provider coverage and ambient evidence, while still excluding model/creation time.
+// effective configuration collapse to one stored snapshot. Provider coverage and ambient evidence
+// are included; `created_at` and `harness`/`model` (session-specific, not configuration-specific)
+// are not.
 export function computeSnapshotId(snapshot) {
   const material = JSON.stringify({
-    ...(snapshot.schema === 2 ? { schema: 2, unavailable: snapshot.unavailable, ambient: snapshot.ambient, evaluability: snapshot.evaluability, revision_contract: snapshot.revision_contract } : {}),
+    schema: 2, unavailable: snapshot.unavailable, ambient: snapshot.ambient, evaluability: snapshot.evaluability, revision_contract: snapshot.revision_contract,
     app_version: snapshot.app_version ?? null,
     packages: [...(snapshot.packages || [])].sort(),
     rules: [...(snapshot.rules || [])].sort(),
@@ -30,7 +30,7 @@ export function computeSnapshotId(snapshot) {
 export function validateSnapshot(snapshot) {
   if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) throw new Error("snapshot must be an object");
   validateObjectKeys(snapshot, ALLOWED_FIELDS, "snapshot");
-  if (![1, SNAPSHOT_SCHEMA_VERSION].includes(snapshot.schema)) throw new Error(`unsupported snapshot schema version: ${snapshot.schema}`);
+  if (snapshot.schema !== SNAPSHOT_SCHEMA_VERSION) throw new Error(`unsupported snapshot schema version: ${snapshot.schema}`);
   if (typeof snapshot.snapshot_id !== "string" || !/^cfg_[a-f0-9]{24}$/.test(snapshot.snapshot_id)) {
     throw new Error(`invalid snapshot_id: ${snapshot.snapshot_id}`);
   }
@@ -54,12 +54,10 @@ export function validateSnapshot(snapshot) {
     throw new Error("snapshot feature_flags must be an object");
   }
   validateStringArray(snapshot.unavailable, "snapshot unavailable");
-  if (snapshot.schema === 2) {
-    if (snapshot.revision_contract !== 1) throw new Error("snapshot revision_contract must be 1");
-    if (!snapshot.evaluability || typeof snapshot.evaluability.packages !== "boolean" || typeof snapshot.evaluability.skills !== "boolean") throw new Error("snapshot evaluability is required");
-    if (!snapshot.ambient || typeof snapshot.ambient.evaluable !== "boolean" || !Array.isArray(snapshot.ambient.packages)) throw new Error("snapshot ambient evidence is required");
-    if (snapshot.ambient.evaluable && (typeof snapshot.ambient.hash !== "string" || !snapshot.ambient.harness)) throw new Error("evaluable ambient evidence requires hash and harness");
-  }
+  if (snapshot.revision_contract !== 1) throw new Error("snapshot revision_contract must be 1");
+  if (!snapshot.evaluability || typeof snapshot.evaluability.packages !== "boolean" || typeof snapshot.evaluability.skills !== "boolean") throw new Error("snapshot evaluability is required");
+  if (!snapshot.ambient || typeof snapshot.ambient.evaluable !== "boolean" || !Array.isArray(snapshot.ambient.packages)) throw new Error("snapshot ambient evidence is required");
+  if (snapshot.ambient.evaluable && (typeof snapshot.ambient.hash !== "string" || !snapshot.ambient.harness)) throw new Error("evaluable ambient evidence requires hash and harness");
   return snapshot;
 }
 

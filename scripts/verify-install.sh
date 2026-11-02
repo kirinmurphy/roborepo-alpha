@@ -107,12 +107,6 @@ doctor_args=(--installed)
 "${repo_root}/scripts/doctor.sh" "${doctor_args[@]}"
 check_local_config_repair_candidates
 
-if command -v uvx >/dev/null 2>&1; then
-  pass_msg "uvx available for jcodemunch MCP"
-else
-  echo "fail: uvx not found; jcodemunch MCP command cannot start"
-  failed=1
-fi
 
 if [[ "${failed}" -ne 0 ]]; then
   echo "verify failed (${passed} checks passed, see fail: lines above)" >&2

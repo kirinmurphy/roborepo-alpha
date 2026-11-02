@@ -59,7 +59,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => process.exi
 const env = {
   ...process.env,
   HOME: home,
-  ROBOREPO_STATE_DIR: path.join(home, ".roborepo"),
+  ROBOREPO_STATE_ROOT: path.join(home, ".roborepo"),
   PATH: `${path.join(home, "stub-bin")}:${process.env.PATH}`,
   ROBOREPO_PRESETS_ONBOARD: "skip",
   SKIP_MCP: "1",
@@ -92,7 +92,7 @@ function setUpHome() {
   fs.copyFileSync(path.join(repoRoot, "portal", "tokens", "mock-spool.jsonl"), path.join(spoolDir, "claude.jsonl"));
   // Repositories are found only through sources the user turned on: this checkout for Plans, and
   // auto-discovery for the Runtime demo apps.
-  const stateRoot = env.ROBOREPO_STATE_DIR;
+  const stateRoot = env.ROBOREPO_STATE_ROOT;
   addRepositorySource({ path: repoRoot, kind: "repository", stateRoot, homeDir: home });
   setRepositorySourceEnabled({ id: "auto-discovery", enabled: true, stateRoot, homeDir: home });
 }

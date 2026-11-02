@@ -1,16 +1,12 @@
-import { mcpServerOf } from "../../harnesses/transcript-parse.mjs";
 import { sessionKeyOf } from "./captures.mjs";
 import { sessionContext } from "./sessions.mjs";
 import { approxTokens } from "./results.mjs";
-import { LARGE_DOCUMENT_READ_CHARS, REPEATED_DOCUMENT_READ_COUNT, MIXED_CODE_LOOKUP_NATIVE_READS, DOC_EXTS, SOURCE_EXTS } from "./policy.mjs";
+import { LARGE_DOCUMENT_READ_CHARS, REPEATED_DOCUMENT_READ_COUNT, DOC_EXTS } from "./policy.mjs";
 export function readWarnings(events, sessionsById, ledger) {
   const warnings = [];
   const byDoc = new Map();
-  const bySession = new Map();
   for (const event of events) {
     const id = sessionKeyOf(event);
-    if (!bySession.has(id)) bySession.set(id, []);
-    bySession.get(id).push(event);
     const result = event.last_result;
     const fileHash = event.tool?.file_path_hash;
     const ext = event.tool?.file_ext;
@@ -48,26 +44,6 @@ export function readWarnings(events, sessionsById, ledger) {
       }));
     }
   }
-  for (const sessionEvents of bySession.values()) {
-    const repeatedDocs = warnings.filter((warning) => warning.type === "repeated_document_read" && sessionKeyOf(warning) === sessionKeyOf(sessionEvents[0])).length;
-    const jdocCalls = sessionEvents.filter((event) => mcpServerOf(event.last_result?.tool || event.tool?.name) === "jdocmunch").length;
-    if (repeatedDocs > 0 && jdocCalls === 0) {
-      warnings.push(readWarningRow("stale_doc_lookup", sessionEvents[0], sessionsById, {
-        read_count: repeatedDocs,
-        jdocmunch_calls: jdocCalls,
-        hint: "docs were read repeatedly with no doc-index lookups observed",
-      }));
-    }
-    const jcodeCalls = sessionEvents.filter((event) => mcpServerOf(event.last_result?.tool || event.tool?.name) === "jcodemunch").length;
-    const nativeSourceReads = sessionEvents.filter((event) => isNativeSourceRead(event)).length;
-    if (jcodeCalls > 0 && nativeSourceReads >= MIXED_CODE_LOOKUP_NATIVE_READS) {
-      warnings.push(readWarningRow("mixed_code_lookup", sessionEvents[0], sessionsById, {
-        read_count: nativeSourceReads,
-        jcodemunch_calls: jcodeCalls,
-        hint: "jcodemunch was used but many native source reads still occurred",
-      }));
-    }
-  }
   return warnings.filter(Boolean).sort((a, b) => (b.result_chars || 0) - (a.result_chars || 0));
 }
 
@@ -85,9 +61,3 @@ function readWarningRow(type, event, sessionsById, extra) {
   };
 }
 
-function isNativeSourceRead(event) {
-  const toolName = event.tool?.name || event.last_result?.tool;
-  if (toolName !== "Read" && toolName !== "Grep" && toolName !== "Glob" && toolName !== "Bash") return false;
-  if (SOURCE_EXTS.has(event.tool?.file_ext)) return true;
-  return toolName === "Bash" && (event.tool?.command_chars || 0) > 0 && (event.last_result?.chars || 0) > 0;
-}

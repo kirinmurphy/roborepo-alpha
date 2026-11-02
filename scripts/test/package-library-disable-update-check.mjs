@@ -41,7 +41,7 @@ const home = makeHome();
 const env = {
   ...process.env,
   HOME: home,
-  ROBOREPO_STATE_DIR: path.join(home, ".roborepo"),
+  ROBOREPO_STATE_ROOT: path.join(home, ".roborepo"),
   SKIP_MCP: "1",
 };
 

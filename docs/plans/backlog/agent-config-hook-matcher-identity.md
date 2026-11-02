@@ -42,8 +42,8 @@ every provider.
 
 | Step | Where | Identity used |
 | --- | --- | --- |
-| Install | `mergeHooksMap` in `scripts/harnesses/hooks-merge.mjs`, called by every provider's `hooks.merge` and by Claude's root-config render | The group's first handler command. A fragment group is skipped when that command already exists anywhere at the event, so its matcher is never compared or updated |
-| Removal | `unmergeHooksMap` in the same file | The group's first handler command, whatever the matcher |
+| Install | `mergeHooksMap` in `scripts/harnesses/hooks-merge.mjs`, called by every provider's `hooks.merge` and by Claude's root-config render | Each handler's command. A fragment handler is skipped when that command already exists anywhere at the event, so its group's matcher is never compared or updated. Later copies of the fragment's own commands are collapsed to the first |
+| Removal | `unmergeHooksMap` in the same file | Each handler's command, whatever the matcher; a group is dropped once it has no handlers left |
 | Readiness | `fragmentHooks` and `compareHookReadiness` in `scripts/harnesses/hook-readiness.mjs` | Event and command per handler |
 | Observed records | `codexHookRecord` in `scripts/harnesses/codex/hooks-read.mjs`; `hookRecordsFromFile` in `scripts/harnesses/root-config-hooks.mjs` for Claude | Neither keeps the matcher, although Codex's `hooks/list` returns it and Claude's file holds it on the group |
 
@@ -105,8 +105,8 @@ flowchart LR
 
 | Concern | Change |
 | --- | --- |
-| Merge | When a fragment group's first command already exists at the event, compare matchers. If they differ, set the existing group's matcher to the fragment's in place and count it as a change. The group keeps its index, so Codex's positional trust key is unchanged and only that hook's definition hash changes. New commands still prepend (Claude, Gemini) or append (Codex) as today |
-| Unmerge | Unchanged: identity stays the first handler command, so a hook is removed whatever its matcher |
+| Merge | When a fragment handler's command already exists at the event, compare its group's matcher with the fragment group's. If they differ, set the existing group's matcher to the fragment's in place and count it as a change. The group keeps its index, so Codex's positional trust key is unchanged and only that hook's definition hash changes. New commands still prepend (Claude, Gemini) or append (Codex) as today |
+| Unmerge | Unchanged: identity stays the handler command, so a hook is removed whatever its matcher |
 | `hooks.read` | Records gain `matcher`: Codex from `hooks/list`, Claude from the group in `settings.json`. Gemini keeps its `hooks.read` stub, which readiness skips. The `hooks.read` contract in `docs/internal/harness-provider-interface.md` records the field |
 | Readiness | `fragmentHooks` carries the matcher. A record with the same event and command but a different matcher yields a distinct state (see Open questions), which the portal notice, CLI hint, and doctor report with "reapply the package", or `roborepo bundle apply hooks` for core hooks |
 
@@ -152,6 +152,7 @@ flowchart LR
 | A user narrowed a RoboRepo hook's matcher by hand, and reapply widens it again | Decided in Open questions before implementation |
 | Updating a Codex hook's matcher makes Codex ask for review of that hook | Expected: the definition changed. Readiness already offers the review once per pending set |
 | Two fragment groups share a first command at one event with different matchers | No shipped fragment does; the merge test pins that the first such group's matcher wins |
+| A user's handler shares a group with a RoboRepo handler, so rewriting the group's matcher changes the user's handler too | Decided in Open questions before implementation, with a mixed-group case added to Validation |
 
 ## Open questions
 
@@ -165,3 +166,10 @@ flowchart LR
   ranked with `missing`, with its own notice copy; (B) reuse `missing`, since the remedy is the
   same. A tells the user something different is wrong; B adds no state to `READINESS_STATES` and
   the surfaces that rank it.
+- **What happens to a group that also holds a user's handler?** Merge matches by handler command, so
+  a RoboRepo handler can sit in a group with a user's, and a group's matcher applies to every
+  handler in it. Options: (A) leave a mixed group's matcher alone and report the mismatch; (B) move
+  the RoboRepo handler into its own group with the fragment's matcher, which on Codex shifts the
+  user's handlers after it and asks for review again; (C) rewrite the shared matcher anyway. A
+  keeps the user's hook as written and Codex trust intact; B fixes RoboRepo's hook at the cost of a
+  review.

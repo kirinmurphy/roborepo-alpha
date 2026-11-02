@@ -10,12 +10,6 @@ export function loadCommandDefinitions({ roots }) {
     .map((filePath) => JSON.parse(fs.readFileSync(filePath, "utf8")));
 }
 
-export function readRemovedCommands({ relPath }) {
-  if (!relPath) return {};
-  const filePath = path.join(repoRoot, relPath);
-  return fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, "utf8")) : {};
-}
-
 function definitionFiles({ dir }) {
   if (!fs.existsSync(dir)) return [];
   return fs.readdirSync(dir, { withFileTypes: true })

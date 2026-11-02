@@ -38,7 +38,6 @@ export function regression(operations) {
 
 function toolGroup(name, category) {
   const server = mcpServer(name);
-  if (server === "jcodemunch" || server === "jdocmunch") return server;
   if (server) return "mcp-other";
   if (["Read", "Grep", "Glob"].includes(name)) return "native-read";
   if (["Edit", "Write", "NotebookEdit"].includes(name)) return "edit";

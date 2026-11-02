@@ -135,7 +135,6 @@ function emitObservation(input, observed) {
 function stateRoot() {
   return (
     process.env.ROBOREPO_STATE_ROOT ||
-    process.env.ROBOREPO_STATE_DIR ||
     path.join(os.homedir(), ".roborepo")
   );
 }

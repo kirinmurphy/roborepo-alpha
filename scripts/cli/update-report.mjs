@@ -227,17 +227,14 @@ function isDirectorySafe(target) {
   }
 }
 
-// A managed entry is either a symlink into the shared cache (the normal case) or a real dir
-// carrying the marker (legacy/copied installs), so both shapes stay visible to the report.
+// A managed harness entry is a symlink into the shared cache.
 function isManagedSkillLink(skillDir) {
   try {
-    if (fs.lstatSync(skillDir).isSymbolicLink()) {
-      return path.resolve(path.dirname(skillDir), fs.readlinkSync(skillDir)).startsWith(stateSkillsDir);
-    }
+    return fs.lstatSync(skillDir).isSymbolicLink()
+      && path.resolve(path.dirname(skillDir), fs.readlinkSync(skillDir)).startsWith(stateSkillsDir);
   } catch {
     return false;
   }
-  return fs.existsSync(path.join(skillDir, MANAGED_MARKER));
 }
 
 function fileDigest(file) {

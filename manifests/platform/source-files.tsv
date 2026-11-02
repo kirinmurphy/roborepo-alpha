@@ -47,10 +47,6 @@ scripts/cli/skill-lib.mjs
 scripts/cli/skill-links.mjs
 scripts/cli/repo-script-runner.mjs
 scripts/cli/state-paths.mjs
-scripts/cli/skill-new-options.mjs
-scripts/cli/skill-new-readme.mjs
-scripts/cli/skill-new-templates.mjs
-scripts/cli/skill-new.mjs
 scripts/cli/slash-commands.mjs
 scripts/cli/zip-writer.mjs
 scripts/cli/main.mjs

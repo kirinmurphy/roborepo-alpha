@@ -77,7 +77,8 @@ matches nothing, and only active and review plans are joined at all.
 ## Plan authority
 
 A plan can have a copy in the primary checkout and another in a linked worktree. Exactly one copy is
-authoritative: the one the portal shows and every tool writes. Which copy it is follows from the
+authoritative: the one the portal shows and ordinary editing tools write, with the evidence-only
+landed recovery exception below. Which copy it is follows from the
 plan's lifecycle and its `worktree` field, never from which branch is ahead or behind.
 
 The primary checkout is the first `worktree` entry of `git worktree list --porcelain`. The primary
@@ -221,29 +222,10 @@ naming this convention exists to replace.
 
 ### When no project config exists
 
-Most repositories will not have this file, and the convention is weak without one — universal
-namespaces alone cannot describe a project's domains. Do not silently fall back to them, and do not
-invent unlisted prefixes.
-
-Instead, say the config is missing, then propose an initial vocabulary **derived from the
-repository itself**:
-
-- top-level source directories (`modules/`, `src/`, `packages/`) — these usually *are* the
-  domains;
-- CLI namespaces or command groups the project already exposes;
-- recurring prefixes across existing plan filenames, which reveal the vocabulary the team has
-  already been reaching for.
-
-Show the evidence behind each proposal ("`ui` because `ui/` holds five surfaces and six
-plans already start with it") so the user can judge it, then **ask them to refine before writing
-the file**. A namespace chosen badly gets copied into every future filename, so it is worth one
-round of discussion. Expect to merge overlapping proposals and rename to the project's own words.
-
-Write only the agreed set, and keep the file to values — `schemaVersion` and `namespaces`. These
-rules stay here in the skill, not in per-repository config.
-
-Until such a file exists, follow the repository's dominant existing convention and say which one
-you inferred.
+Universal namespaces alone cannot describe a project's domains, so do not fall back to them and do
+not invent unlisted prefixes. Run `/plan-suite-init`, which proposes a vocabulary from the
+repository, has the user refine it, and writes the agreed set. Keep the file to values —
+`schemaVersion` and `namespaces`; these rules stay here in the skill, not in per-repository config.
 
 Readiness requires: H1 title, Summary, Goals or desired outcome, Current state or Context, Proposed design or Implementation plan, Validation or acceptance criteria, frontmatter `id`, frontmatter `priority`, and non-empty `next_action`.
 
@@ -332,3 +314,17 @@ plan, and `/plan-review` adds to it and records the approval:
   including one a base merge brings in, makes it stale. `/plan-close` refuses a stale approval.
 - `reviewed_commit` in the frontmatter is unrelated: it records when the plan document was last
   checked against the repository, not what a human accepted.
+
+## Landed recovery evidence
+
+A parsed `### Post-merge recovery` subsection under `## Review` can make committed primary evidence
+authoritative after verified landing. Fields are Repository identity, Worktree, Branch, Assessed
+branch tip, Base ref, Base commit, Absorbing commit, Primary precursor blob, and Worktree precursor
+blob. Commit/blob ids are full ids; Base ref is a heads or remotes ref.
+
+Only Result, Approval, and this provenance subsection may differ from integrated precursor copies.
+The shared verifier checks repository/assignment identity, precursor integration, unchanged
+requirements and findings, complete review, explicit human approval, exact implementation, and
+historical base absorption. A later implementation change, conflict, or missing/detached assigned
+worktree invalidates the exception. Pending evidence is not durable approval. Portal priority
+writes still target the assigned worktree. See plan-review's resume reference for the procedure.

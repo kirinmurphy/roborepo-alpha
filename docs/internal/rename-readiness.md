@@ -55,7 +55,7 @@ These are real persisted identifiers; a rename must handle them deliberately (th
 5. `MANAGED_BY_ROBOREPO.md` — filename is content-addressed in `manifests/platform/manifest.tsv` (managed_copy rows) and referenced by presets; rename is a manifest+file rename in lockstep, plus a cleanup row for the old name.
 6. `X-Roborepo-Portal-Token` / `window.ROBOREPO_PORTAL` / `roborepo-theme` — internal (same-repo server+client), safe to rename atomically; no persisted data except localStorage key (cosmetic: users lose saved theme once).
 7. `roborepo-write-guard` hook name + `roborepo-permissions.toml` filename — referenced in harness config files already applied on user machines; rename requires regenerate + cleanup of old files (manifest.tsv cleanup rows handle this pattern already).
-8. Env vars `ROBOREPO_*` — test harnesses, installers, and user shells may export them. Rename manifest maps each family; keep `ROBOREPO_STATE_DIR` as a read fallback for one release if we want zero user action.
+8. Env vars `ROBOREPO_*` — test harnesses, installers, and user shells may export them. Rename manifest maps each family; keep `ROBOREPO_STATE_ROOT` as a read fallback for one release if we want zero user action.
 9. Telemetry persisted identity: `app_version` field name and `git:github.com/kirinmurphy/roborepo` repo IDs in machine-local registries — changing the field name orphans existing spool data; changing repo IDs is NOT desirable (they track real repos). Manifest marks these intentionally-unchanged or versioned.
 10. `github.com/kirinmurphy/roborepo` remote/URLs in test fixtures — external identity, rename only when the GitHub repo itself is renamed.
 

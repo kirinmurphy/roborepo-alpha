@@ -4,7 +4,7 @@ import path from "node:path";
 import { STATE_ROOT, isMainModule } from "./roots.mjs";
 
 // A state root in a temporary directory paired with a real HOME is an isolated scratch run (an
-// agent sandbox or a dev fixture that set ROBOREPO_STATE_DIR but not HOME). Letting it write the
+// agent sandbox or a dev fixture that set ROBOREPO_STATE_ROOT but not HOME). Letting it write the
 // user's harness files would mix scratch state into real config, and any path it embeds (a package
 // runtime script, for example) disappears when the temporary directory is cleaned up.
 
@@ -37,7 +37,7 @@ export function harnessWriteBlockReason(targetPath = null) {
   if (targetPath && !isInside(resolvedOrSelf(targetPath), resolvedOrSelf(home))) return null;
   return `refusing to write ${targetPath ?? "harness config"}: roborepo state is in a temporary directory `
     + `(${STATE_ROOT}) but HOME is ${home}. Point HOME at an isolated directory as well, or unset `
-    + "ROBOREPO_STATE_DIR / ROBOREPO_STATE_ROOT.";
+    + "ROBOREPO_STATE_ROOT.";
 }
 
 export function assertHarnessWriteAllowed(targetPath = null) {

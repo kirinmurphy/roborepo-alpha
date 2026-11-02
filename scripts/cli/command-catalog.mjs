@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { repoRoot, developmentMode } from "./paths.mjs";
-import { loadCommandDefinitions, readRemovedCommands } from "./command-definition-files.mjs";
+import { loadCommandDefinitions } from "./command-definition-files.mjs";
 import { composeCommandNodes } from "./command-tree-compose.mjs";
 import { listHarnessProviders } from "../harnesses/registry.mjs";
 
@@ -114,6 +114,5 @@ function composeCatalog(catalog) {
       definitions,
       executionPresets: catalog.executionPresets || {},
     }),
-    removed: readRemovedCommands({ relPath: catalog.removedPath }),
   };
 }

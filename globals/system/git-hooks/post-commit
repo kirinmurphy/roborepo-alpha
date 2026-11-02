@@ -1,0 +1,4 @@
+#!/bin/sh
+# Runs the repo's own hook of this name; see chain.sh.
+. "$(dirname "$0")/chain.sh"
+roborepo_chain_hook "$(basename "$0")" "$@"

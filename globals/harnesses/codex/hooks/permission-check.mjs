@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 
 // --- Real per-command ask on Codex, via a PreToolUse hook ---------------------------------------
 //
-// Codex's shell prefix rules (globals/codex/rules/default.rules) are binary — forbidden/allow only,
+// Codex's shell prefix rules (generated/codex/rules/default.rules) are binary — forbidden/allow only,
 // confirmed against the shipped Codex 0.140 wire schema (`strings` on the compiled binary): the
 // PreToolUseDecisionWire enum used by the OLDER approve/block mechanism is 2-valued, but the
 // CURRENT one — PreToolUsePermissionDecisionWire, the one hookSpecificOutput.permissionDecision
@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url'
 // npm install depends on: this file runs as a copy under the harness home, so walking back from its
 // own location only finds the manifest in a development checkout.
 const stateDir =
-  process.env.ROBOREPO_STATE_ROOT || process.env.ROBOREPO_STATE_DIR || path.join(os.homedir(), '.roborepo')
+  process.env.ROBOREPO_STATE_ROOT || path.join(os.homedir(), '.roborepo')
 
 function candidateRepoRoots() {
   const candidates = []
@@ -125,7 +125,9 @@ const input = readHookInput()
 if (!input) process.exit(0)
 const toolName = input.tool_name || input.toolName || input.tool || ''
 const toolInput = input.tool_input || input.toolInput || {}
-const command = typeof toolInput.command === 'string' ? toolInput.command : ''
+// exec_command sends the command as `cmd`; older shell tools send `command`.
+const rawCommand = toolInput.command ?? toolInput.cmd
+const command = typeof rawCommand === 'string' ? rawCommand : ''
 
 const SHELL_TOOLS = new Set(['exec_command', 'shell', 'local_shell', 'bash'])
 if (!SHELL_TOOLS.has(toolName) || !command) process.exit(0)
@@ -151,6 +153,10 @@ const commandTokens = command.trim().split(/\s+/)
 
 const rule = allCommandRules().find((r) => matchesPrefix(commandTokens, r.tokens))
 if (!rule) process.exit(0) // unclassified — fall through to approval_policy / other hooks
+// The prefix only describes the first simple command. An allow would approve whatever is chained,
+// piped, redirected, or substituted after it, so those fall through instead; deny and ask only
+// tighten, and stand.
+if (rule.bucket === 'allow' && /[;&|<>`\n]|\$\(/.test(command)) process.exit(0)
 
 process.stdout.write(JSON.stringify({
   hookSpecificOutput: {

@@ -4,7 +4,7 @@ const usage = { input: 100, output: 20, cache_read: 30, cache_creation: 10, tota
 const row = (session, extra = {}) => ({ schema: 3, harness: "claude", session_id: session, call_id: "call1", capture_id: `capture-${session}`, ts: "2026-09-01T00:00:00Z", tokens: usage, session: { model: "model-a" }, repo: { repository_id: "git:one", label: "same" }, ...extra });
 const original = row("one");
 const mirrored = { ...original, event: "PostToolUse", capture_id: "mirror" };
-const events = [original, mirrored, original, row("two", { harness: "codex" }), row("one", { harness: "codex" }), row("legacy", { schema: 2, call_id: null, capture_id: null })];
+const events = [original, mirrored, original, row("two", { harness: "codex" }), row("one", { harness: "codex" }), row("fallback", { call_id: null, capture_id: null })];
 const normalized = normalizeObservations(events);
 assert.equal(normalized.flows.length, 4);
 assert.equal(normalized.sessions.length, 4);
@@ -19,7 +19,7 @@ assert.equal(normalizeTokenUsage({ total: 2 }), null);
 assert.equal(normalizeTokenUsage({ ...usage, total: 200 }).total_override, true);
 assert.equal(normalizeObservations([original, { ...mirrored, tokens: { ...usage, total: 200 } }]).sessions[0].tokens, null);
 assert.equal(normalizeObservations([original, { ...mirrored, session: { model: "other" } }]).sessions[0].model, null);
-const snapshot = { schema: 1, snapshot_id: "snapshot", harness: "codex", packages: ["enabled"], skills: [], rules: [] };
+const snapshot = { schema: 2, snapshot_id: "snapshot", harness: "codex", packages: ["enabled"], skills: [], rules: [], evaluability: { packages: true, skills: true } };
 const observation = normalizeObservations([row("one", { config_snapshot_id: "snapshot" })]).sessions[0];
 assert.equal(evaluateCondition(observation, { dimension: "packages", value: "enabled" }, [snapshot]).state, "present");
 assert.equal(evaluateCondition(observation, { dimension: "packages", value: "disabled" }, [snapshot]).state, "absent");
@@ -45,5 +45,5 @@ const missingIdentity = normalizeObservations([row("missing", { harness: null, s
 assert.equal(missingIdentity.sessions.length, 0, "unidentified captures are not independent sessions");
 assert.equal(missingIdentity.unidentified_sessions, 1);
 assert.equal(missingIdentity.flows.length, 1);
-assert.equal(normalizeObservations([row("old", { schema: undefined })]).sessions[0].tokens, null, "unknown usage semantics stay unavailable");
+assert.equal(normalizeObservations([row("old", { schema: undefined }), row("v2", { schema: 2 })]).sessions.length, 0, "captures without the current schema are not observed");
 assert.equal(evaluateCondition(observation, { dimension: "revision", value: "future-revision" }, [snapshot]).state, "unknown");

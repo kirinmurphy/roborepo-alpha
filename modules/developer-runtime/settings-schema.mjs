@@ -1,5 +1,4 @@
 export const SETTINGS_VERSION = 2;
-export const LEGACY_SETTINGS_VERSION = 1;
 export const DEFAULT_PREFERENCES = { showNonHttp: false, historyRetentionDays: 14, worktreeStaleDays: 7 };
 
 const CONTROL_CHARS = /[\x00-\x1f\x7f]/;
@@ -50,13 +49,6 @@ export function validateSettings(settings) {
   validateComposeProjects(settings.composeProjects);
   validatePreferences(settings.preferences);
   return settings;
-}
-
-export function validateLegacySettings(settings) {
-  validateObjectKeys(settings, ["associations", "projects", "revision", "version"], "developer-runtime settings");
-  if (!Number.isInteger(settings.revision) || settings.revision < 1) throw new Error("settings revision must be a positive integer");
-  validateProjects(settings.projects);
-  validateAssociations(settings.associations);
 }
 
 export function resolveProjectAlias(settings, identity) {

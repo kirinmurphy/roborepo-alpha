@@ -641,6 +641,7 @@ Prose before the subsections.
     findings: { open: 1, total: 2 },
     result: null,
     approval: { decision: "approved", commit: "abcdef0123", confirmedBy: "human" },
+    recovery: null,
   });
   const fenced = parsePlanMarkdown("---\nid: rev12345\n---\n\n# F\n\n```md\n## Review\n### Approval\n- Decision: approved\n```\n", {});
   assert.deepEqual(fenced.review, { present: false, findings: { open: 0, total: 0 }, result: null, approval: null }, "a fenced example is not a review record");
@@ -658,7 +659,7 @@ function testRepositoryPlansProduceNoNamingFindings() {
     "agent-config-codex-cmux-hook-trust.md",
     "agent-config-permissions-global-audit.md",
     "agent-config-skills-vs-commands-policy.md",
-    "developer-runtime-remote-branch-status.md",
+    "forge-github-03-runtime-pr-ci-status.md",
     "git-exec-consolidation.md",
     "harness-claude-worktree-entry-and-provider-leaks.md",
     "harness-parity.md",

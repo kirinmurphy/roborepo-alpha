@@ -14,9 +14,16 @@ export function reviewFreshness({ primary, markdown, tip, base, workingPath = pr
   if (parsed.review.findings.open || parsed.notTested.unchecked) {
     return verdict("incomplete", "review findings or required manual checks remain open");
   }
+  const status = git(workingPath, ["status", "--porcelain=v1", "--untracked-files=all", "--", ".", ":(exclude)docs/plans"]);
   const dirty = git(workingPath, ["diff", "--name-only", "HEAD", "--", ".", ":(exclude)docs/plans"]);
   const untracked = git(workingPath, ["ls-files", "--others", "--exclude-standard", "--", ".", ":(exclude)docs/plans"]);
-  if (!dirty.ok || !untracked.ok) return verdict("unavailable", "working implementation changes could not be checked");
+  // Diff can silently list unreadable files as changed; status reports the access errors even
+  // when it exits zero. Require both views to be reliable before treating paths as edits.
+  if ([status, dirty, untracked].some((result) => !result.ok || result.stderr)) {
+    return verdict("unavailable", "Git could not reliably check working implementation changes", {
+      diagnostics: [status.stderr, dirty.stderr, untracked.stderr].filter(Boolean),
+    });
+  }
   const pending = [...new Set(`${dirty.stdout}\n${untracked.stdout}`.split("\n").filter(Boolean))];
   if (pending.length) return verdict("incomplete", "uncommitted implementation changes remain", { changedPaths: pending });
   for (const [name, commit] of [["reviewed implementation", result.commit], ["base", result.baseCommit]]) {

@@ -9,7 +9,6 @@ import { fileURLToPath } from "node:url";
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "docs-reference-"));
 const checker = fileURLToPath(new URL("./docs-reference-check.mjs", import.meta.url));
 try {
-  write("manifests/platform/cli/removed.json", JSON.stringify({ serve: { replacement: ["web"] }, verify: { replacement: ["doctor"] } }));
   write("docs/target.md", "# First\n\n## Repeat\n\n## Repeat\n\n## Step 1 — When they agree\n");
   write("docs/dated.md", "# Dated audit\n\nSnapshot date: 2026-09-13\n\n`scripts/old-file.mjs`\n");
   for (const [markdown, reason] of [
@@ -24,9 +23,7 @@ try {
     ["![image]\n\n[image]: docs/no-image.png", "missing link target: docs/no-image.png"],
     ["See [heading].\n\n[heading]: docs/target.md#absent", "missing anchor: docs/target.md#absent"],
     ["`scripts/no-file.mjs` is the current module.", "missing repository path: scripts/no-file.mjs"],
-    ["Run `roborepo serve` to open the portal.", "removed CLI command: roborepo serve"],
     ["`scripts/old.mjs` was removed; `scripts/no-file.mjs` is current.", "missing repository path: scripts/no-file.mjs"],
-    ["`roborepo serve` was removed; run `roborepo verify` now.", "removed CLI command: roborepo verify"],
     ["~~~md\n```sh\n~~~\n[missing](docs/after-fence.md)", "missing link target: docs/after-fence.md"],
   ]) {
     write("README.md", `# Fixture\n\n${markdown}\n`);
@@ -48,10 +45,7 @@ try {
     "`[example]` and [inline](docs/target.md) and [full][shortcut]",
     "[example]: docs/missing-example.md",
     "`scripts/<name>.mjs` is a placeholder.",
-    "`docs/.jdm-indexed/unknown` is generated output.",
     "`scripts/removed.mjs` no longer exists.",
-    "`roborepo serve` was replaced by `roborepo web`.",
-    "The retired `roborepo serve` command was replaced:",
     "```sh",
     "roborepo serve",
     "`scripts/in-example.mjs`",

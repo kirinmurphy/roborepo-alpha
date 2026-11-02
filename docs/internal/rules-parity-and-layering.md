@@ -14,7 +14,7 @@ Every managed harness should share the same global behavior defaults without han
 - Live Claude, Codex, and Gemini home rules are inline in `~/.claude/CLAUDE.md`,
   `~/.codex/AGENTS.md`, and `~/.gemini/GEMINI.md`, inside managed blocks. Their paths come from
   provider manifests; Gemini's live render has no tracked snapshot in `generated/`.
-- The three Chat-Time Output behaviors (skill visibility, session capture, impact awareness) are no longer base fragments. They ship as default-on rules packages under `globals/packages/<id>/rules.md` and merge into every managed harness's rules file when enabled, so they can be toggled per behavior. A package component marked `harness: "both"` is a legacy sentinel meaning *all* harnesses, not exactly two. See [config-control-panel.md](../user/reference/config-control-panel.md).
+- The three Chat-Time Output behaviors (skill visibility, session capture, impact awareness) are no longer base fragments. They ship as default-on rules packages under `globals/packages/<id>/rules.md` and merge into every managed harness's rules file when enabled, so they can be toggled per behavior. A rules resource with no `harness` merges into every rules-capable harness. See [config-control-panel.md](../user/reference/config-control-panel.md).
 - Harness-specific fragments hold differences that should reach one harness only.
 - Root harness config files are conditional defaults for providers with a baseline. Claude and
   Codex have tracked baselines; Gemini has no tracked root-config baseline yet.

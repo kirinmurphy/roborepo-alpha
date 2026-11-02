@@ -8,7 +8,7 @@
   "usage": "roborepo agent-run <cmd> [args...]",
   "execution": {
     "adapter": "module",
-    "module": "scripts/cli/index.mjs",
+    "module": "scripts/cli/run.mjs",
     "export": "agentRunCmd"
   }
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Pure-layer tests for usage-statusline: adapters, domain calculations, renderer fragments, the
 // snapshot store, the portal API view, and the shared conformance fixtures. No harness or CLI
-// process spawning — that lives in usage-statusline-check.mjs. Uses a temp ROBOREPO_STATE_DIR for
+// process spawning — that lives in usage-statusline-check.mjs. Uses a temp ROBOREPO_STATE_ROOT for
 // the snapshot-store cases so nothing touches real ~/.roborepo state.
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-usage-domain-"));
-process.env.ROBOREPO_STATE_DIR = stateDir;
+process.env.ROBOREPO_STATE_ROOT = stateDir;
 
 const pkg = path.join(repoRoot, "globals/packages/usage-statusline/scripts");
 const { adaptClaudeStatusPayload, adaptCodexRateLimitSnapshot } = await import(`${pkg}/usage-adapters.mjs`);

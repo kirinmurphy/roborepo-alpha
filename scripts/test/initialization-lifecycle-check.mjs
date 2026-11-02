@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 // Initialization state + first-run routing.
 //
-// The state-record assertions run in-process against a sandboxed ROBOREPO_STATE_DIR. The routing
+// The state-record assertions run in-process against a sandboxed ROBOREPO_STATE_ROOT. The routing
 // assertions call the pure decision function rather than spawning a PTY: the rule under test is
 // "which route does (argv, phase, tty) select", and a real terminal adds no coverage while making
 // the test unrunnable in CI.
@@ -18,7 +18,7 @@ const cli = path.join(repoRoot, "scripts/cli/main.mjs");
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-init-lifecycle-"));
 const stateDir = path.join(tmp, ".roborepo");
-process.env.ROBOREPO_STATE_DIR = stateDir;
+process.env.ROBOREPO_STATE_ROOT = stateDir;
 
 const { resolveFirstRunRoute } = await import("../cli/first-run-routing.mjs");
 const {
@@ -147,7 +147,7 @@ function testSchemaValidation() {
 function testStatePathIsSandboxed() {
   assert.ok(
     initializationStatePath.startsWith(stateDir),
-    `initialization state must honor ROBOREPO_STATE_DIR, got ${initializationStatePath}`,
+    `initialization state must honor ROBOREPO_STATE_ROOT, got ${initializationStatePath}`,
   );
   assert.equal(path.basename(initializationStatePath), "initialization.json");
 }
@@ -211,7 +211,7 @@ function testNewerRecordIsNeverOverwritten() {
 
   // Through the real CLI, including --force: "re-run initialization" never means "discard a newer
   // installation's state". Both must exit nonzero with an explanation, not a stack trace.
-  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_DIR: stateDir, ROBOREPO_PRESETS_ONBOARD: "skip" };
+  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_ROOT: stateDir, ROBOREPO_PRESETS_ONBOARD: "skip" };
   for (const args of [["init"], ["init", "--force"]]) {
     const result = spawnSync(process.execPath, [cli, ...args], { cwd: repoRoot, env, encoding: "utf8", input: "" });
     assert.equal(result.status, 1, `${args.join(" ")} must refuse a newer record`);
@@ -245,7 +245,7 @@ function testBrowserRedirectMessage() {
 // --- `roborepo library` and `roborepo package manage` must reach one implementation. Asserted
 // through the real CLI in a sandboxed HOME so this covers dispatch, not just catalog shape. ---
 function testAliasReachesSameImplementation() {
-  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_DIR: stateDir };
+  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_ROOT: stateDir };
   const run = (args) => spawnSync(process.execPath, [cli, ...args, "--help"], { cwd: repoRoot, env, encoding: "utf8" });
 
   const library = run(["library"]);
@@ -257,7 +257,7 @@ function testAliasReachesSameImplementation() {
 
 function testInitDryRunShowsConfigurationChoice() {
   resetState();
-  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_DIR: stateDir, ROBOREPO_PRESETS_ONBOARD: "skip" };
+  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_ROOT: stateDir, ROBOREPO_PRESETS_ONBOARD: "skip" };
   const result = spawnSync(process.execPath, [cli, "init", "--dry-run"], { cwd: repoRoot, env, encoding: "utf8", input: "" });
   assert.equal(result.status, 0, `init --dry-run failed:\n${result.stdout}${result.stderr}`);
   assert.match(result.stdout, /open browser setup/i, "init must make browser setup the first-run entrypoint");
@@ -460,7 +460,7 @@ function testInitResumesInterruptedConfigNotAlreadyInitialized() {
     })}\n`,
   );
 
-  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_DIR: stateDir, ROBOREPO_PRESETS_ONBOARD: "skip" };
+  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_ROOT: stateDir, ROBOREPO_PRESETS_ONBOARD: "skip" };
   const result = spawnSync(process.execPath, [cli, "init"], { cwd: repoRoot, env, encoding: "utf8", input: "" });
   assert.equal(result.status, 0, `init must resume, not fail:\n${result.stdout}${result.stderr}`);
   assert.doesNotMatch(result.stdout, /already initialized/i, "init must not report already initialized on a resumable record");
@@ -487,7 +487,7 @@ function testWebRefusesNewerSchemaThroughRealCli() {
   fs.mkdirSync(path.dirname(initializationStatePath), { recursive: true });
   fs.writeFileSync(initializationStatePath, `${JSON.stringify(newer)}\n`);
 
-  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_DIR: stateDir, ROBOREPO_PRESETS_ONBOARD: "skip" };
+  const env = { ...process.env, HOME: tmp, ROBOREPO_STATE_ROOT: stateDir, ROBOREPO_PRESETS_ONBOARD: "skip" };
   const result = spawnSync(process.execPath, [cli, "web", "--no-open", "--port", "0", "--allow-zero-port"], { cwd: repoRoot, env, encoding: "utf8", input: "" });
   assert.equal(result.status, 1, "web must refuse a newer-schema record");
   assert.match(result.stderr, /newer version of RoboRepo/i, "web must explain the refusal");

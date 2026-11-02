@@ -7,7 +7,7 @@ import path from "node:path";
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-root-config-write-policy-"));
 process.on("exit", () => fs.rmSync(tmp, { recursive: true, force: true }));
 process.env.HOME = tmp;
-process.env.ROBOREPO_STATE_DIR = path.join(tmp, ".roborepo");
+process.env.ROBOREPO_STATE_ROOT = path.join(tmp, ".roborepo");
 
 const { writeRootConfig } = await import("../cli/root-config-writes.mjs");
 const { renderClaudeSettings } = await import("../cli/permissions-render.mjs");

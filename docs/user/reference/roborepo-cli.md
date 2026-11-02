@@ -1,6 +1,6 @@
 # Using the `roborepo` CLI
 
-`roborepo` is the single front door for setup, packages, indexing, skills, telemetry, and
+`roborepo` is the single front door for setup, packages, skills, telemetry, and
 maintenance. Run it with no arguments for an interactive menu, or call a command directly:
 
 ```sh
@@ -68,8 +68,8 @@ From a development checkout, two more commands render generated files after you 
 
 | Command | What it does |
 | --- | --- |
-| `roborepo rules [--check]` | Renders generated Claude/Codex global instruction files, or verifies them with `--check`. |
-| `roborepo permissions [--check]` | Renders harness permission outputs from `manifests/inventory/agent-permissions.json`, or verifies them with `--check`. |
+| `roborepo config rules --check` | Verifies generated Claude/Codex global instruction files. |
+| `roborepo config permissions [--render\|--check]` | Applies permissions to live harness config; `--render` / `--check` render or verify the generated outputs from `manifests/inventory/agent-permissions.json` (development checkout). |
 
 ## Uninstall
 
@@ -86,15 +86,29 @@ RoboRepo configuration in place. See [Uninstall](../guides/install-workflows.md#
 | --- | --- |
 | `roborepo package list` | Lists packages grouped by category with live enabled/disabled status. |
 | `roborepo package inspect <id>` | Prints the full manifest for one package. |
-| `roborepo package enable <id>` | Enables a package and applies it immediately — permissions, hooks, rules, MCP, and commands install without a separate `roborepo update`. |
-| `roborepo package disable <id>` | Disables a package and removes its owned contributions immediately. |
-| `roborepo package reconcile` | Re-applies every enabled package and drops enabled-but-unknown stale entries. |
+| `roborepo package enable <id>` | Enables a package and applies it immediately — permissions, hooks, rules, MCP, and commands install without a separate `roborepo update`. Packages it requires turn on with it. Prints one checked result per package: `enabled`, `partial` (some pieces did not land; named), or `blocked` (applying stopped on an error; exits 1). |
+| `roborepo package disable <id> [--cascade]` | Disables a package and removes its owned contributions immediately, along with any package that was on only because it required it. See [Dependencies](#package-dependencies). |
+| `roborepo package reconcile` | Re-applies every enabled package, removes packages RoboRepo installed that are no longer enabled (for example a dependency no package requires any more), and drops stale entries for packages no longer in the catalog. Cleanup removes only packages RoboRepo recorded as installing, never one it did not install; like `package disable`, removing one takes out every entry its manifest lists. |
 | `roborepo package adopt-live [--dry-run]` | Detects externally installed package behavior and marks it enabled without reinstalling it. |
 | `roborepo package validate [id]` | Validates one package or the whole catalog against the manifest schema. |
 | `roborepo package dev create <id> [--kind=empty\|auto-skill\|skill-command\|standalone-command] [--description=...] [--default-enabled=true]` | Scaffolds a new package under `globals/packages/<id>/` (dev checkout) or `~/.roborepo/workspace/packages/<id>/` (package mode). Refuses to overwrite an existing package. |
 | `roborepo package dev add-skill <package-id> <skill-id> [--command] [--description=...]` | Adds a skill to an existing package: its `SKILL.md`, its resource entry (with a slash command under `--command`, which installs only for built-in packages), and an empty trigger fixture to fill. Refuses a skill ID or command another package already claims, and leaves the package unchanged if the result does not validate. |
 
 Most users only need `list`, `inspect`, `enable`, and `disable`.
+
+### Package dependencies
+
+A package can **require** other packages (they turn on with it) or **recommend** them (they are
+offered, never turned on for you). RoboRepo records only the packages you turned on; a required
+package stays on while any package you turned on still requires it, and turns off with the last
+one.
+
+| You run | What happens |
+| --- | --- |
+| `package enable <id>` | `<id>` and everything it requires turn on. In a terminal you are asked about each recommendation that is off; in a script they are only listed. |
+| `package disable <id>` for a package you turned on | It is turned off, unless another package you turned on requires it. Then it stays on and the result names that package. |
+| `package disable <id>` for a package that is on only because another requires it | Refused, naming the packages that keep it on. `--cascade` turns those off too, and it goes with them. |
+| `package enable` or `disable` on a dependency-only package | Refused: it has no switch of its own and follows the packages that require it. One exception: `disable` removes it when the registry records it as a selected package (an older registry, or a package that later became dependency-only). |
 
 ## Local Portal
 
@@ -127,22 +141,6 @@ Telemetry is local and opt-in. See [Telemetry](telemetry.md) for what is capture
 | `roborepo telemetry backup` | Snapshots telemetry data to `~/.roborepo/telemetry-backups/`. |
 | `roborepo telemetry purge --all [--backup]` | Deletes all telemetry data; `--backup` snapshots it first. |
 | `roborepo telemetry install` | Wires only the capture hooks, for measuring usage before adopting the rest of RoboRepo. |
-
-## Indexing
-
-Indexing commands are owned by packages, so enable the owning package first. If it is not enabled,
-RoboRepo prints which package to enable.
-
-| Command | Package | What it does |
-| --- | --- | --- |
-| `roborepo index code [path]` | `jcodemunch` | Indexes code in the current directory or `[path]`. |
-| `roborepo index code [path] --watch` | `jcodemunch` | Keeps the code index current while files change. |
-| `roborepo index docs [path]` | `jdocmunch` | Indexes documentation in the current directory or `[path]`. |
-
-```sh
-roborepo package enable jcodemunch
-roborepo index code --watch
-```
 
 ## Browser Evidence
 
@@ -208,7 +206,6 @@ appears in `roborepo maintenance stores` as `browser-evidence`.
 
 | Command | What it does |
 | --- | --- |
-| `roborepo skill new` | Scaffolds a package-owned skill or slash command and updates package config, generated outputs, commands, and README. |
 | `roborepo skill adopt <name>` | Moves an unmanaged native skill into shared RoboRepo source and refreshes the managed harness views. |
 | `roborepo skill export-to-project` | Copies shared skills into the current project and leaves a shareable zip bundle. |
 | `roborepo skill link-project` | Links a project's `.codex/skills` into existing `.claude/skills` folders. |
@@ -230,7 +227,7 @@ See [RoboRepo Skills Interface](roborepo-skills.md) for the managed/native bound
 
 | You pass | Registered as |
 | --- | --- |
-| `jcodemunch` or `jdocmunch` | A built-in preset |
+| A preset name from `manifests/inventory/mcp-presets.json` | That preset |
 | Any other name | A `uvx` package |
 | An HTTP URL | An HTTP server |
 
@@ -248,3 +245,22 @@ See [RoboRepo Skills Interface](roborepo-skills.md) for the managed/native bound
 
 > `roborepo dev …` exists only in a Git checkout of RoboRepo itself; the scripts it drives are not
 > published to npm, so an installed copy reports that it requires a development checkout.
+
+## Worktree preservation and recovery
+
+Use `git worktrees cleanup` to inspect committed landing and local preservation separately.
+The JSON rows retain their existing fields and include preservation state, remaining paths,
+assessed tips, evidence, snapshot/restore references, and individual removal outcomes.
+See [worktree states and cleanup](repositories.md#worktree-states-and-cleanup) for the safety rules.
+
+| Command | Behavior |
+| --- | --- |
+| `roborepo git worktrees archive-remove <branch-or-name> [--confirm --apply] [--json]` | Preview or explicitly snapshot and remove one worktree |
+| `roborepo git worktrees archives [--json]` | List local snapshots and legacy committed-tip backups |
+| `roborepo git worktrees restore <archive-id> --destination <new-path> [--apply] [--json]` | Preview or restore into a fresh detached worktree |
+| `roborepo plans merge-readiness <plan> [--base <branch>] [--json]` | Require committed fresh review/approval, a clean worktree, and current reviewed base |
+
+Stop writers before removal. Mutation failures return nonzero even when the snapshot was created;
+retain its recovery reference. Merge readiness is read-only: exit 0 means ready, 1 means refused,
+and 2 means usage error. It identifies assessed branch/base tips and repair instructions without
+authorizing a merge or observing remote pull-request protection.

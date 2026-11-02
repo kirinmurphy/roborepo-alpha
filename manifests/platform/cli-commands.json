@@ -50,7 +50,6 @@
     }
   },
   "commandDefinitionRoots": ["manifests/platform/cli/command-definitions"],
-  "removedPath": "manifests/platform/cli/removed.json",
   "repoScripts": {
     "skill sync-global": { "runtime": "bash", "path": "scripts/build/link-global-skills.sh" },
     "skill render-commands": { "runtime": "node", "path": "scripts/build/render-slash-commands.mjs", "requiresDevelopmentCheckout": true },

@@ -11,8 +11,7 @@
   "resources": [
     {
       "type": "rules",
-      "source": "rules.md",
-      "harness": "both"
+      "source": "rules.md"
     },
     {
       "type": "hooks",

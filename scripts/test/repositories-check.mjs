@@ -29,8 +29,6 @@ import {
   resolveRegistryAlias,
   associateResolved,
   removeDiscoveries,
-  importDeveloperRuntimeAliases,
-  canonicalizeDeveloperRuntimeIdentity,
   repositoryScopedFinding,
   globalFinding,
   isRepositoryScoped,
@@ -281,30 +279,6 @@ try {
   assert.equal(recordDiscoveryIfKnown(srcReg, "local:0123456789abcdef", { ...telemetry, source: "developer-runtime" }), true);
   assert.equal(srcReg.repositories["local:0123456789abcdef"], undefined, "an aliased identity consolidates onto its canonical record");
   assert.equal(srcReg.repositories[srcId].discoveries.length, 2);
-
-  // ---- Runtime alias import: idempotent, canonical mapping, skips non-repo targets ----
-  assert.equal(canonicalizeDeveloperRuntimeIdentity("git:github.com/kirinmurphy/roborepo").id, "git:github.com/kirinmurphy/roborepo");
-  assert.equal(canonicalizeDeveloperRuntimeIdentity("path:/tmp/robo").kind, "local");
-  assert.ok(!canonicalizeDeveloperRuntimeIdentity("path:/tmp/robo").id.includes("/tmp"), "path import must not leak path");
-  assert.equal(canonicalizeDeveloperRuntimeIdentity("process:/tmp:node"), null);
-  assert.equal(canonicalizeDeveloperRuntimeIdentity("builtin:portal"), null);
-
-  const migReg = defaultRegistry();
-  const lhSettings = {
-    aliases: {
-      "path:/tmp/robo": "git:github.com/kirinmurphy/roborepo",
-      "process:/x:node": "process:/y:node", // not a canonical target -> skipped
-    },
-  };
-  const first = importDeveloperRuntimeAliases(migReg, lhSettings);
-  assert.equal(first.changed, true);
-  assert.equal(first.imported.length, 1);
-  assert.equal(first.skipped.length, 1);
-  assert.equal(resolveRegistryAlias(migReg, "path:/tmp/robo"), "git:github.com/kirinmurphy/roborepo");
-  assert.ok(migReg.repositories["git:github.com/kirinmurphy/roborepo"], "alias target repository created");
-  const second = importDeveloperRuntimeAliases(migReg, lhSettings);
-  assert.equal(second.changed, false, "re-import is idempotent");
-  validateRegistry(migReg);
 
   // ---- Provider URL builder: recognized hosts only, never for local ids ----
   assert.equal(providerUrlForRepositoryId("git:github.com/kirinmurphy/roborepo"), "https://github.com/kirinmurphy/roborepo");

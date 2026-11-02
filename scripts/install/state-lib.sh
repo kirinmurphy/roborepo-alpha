@@ -8,7 +8,7 @@ cli_state_dirname() {
 }
 
 cli_state_dir() {
-  echo "${ROBOREPO_STATE_ROOT:-${ROBOREPO_STATE_DIR:-${HOME}/$(cli_state_dirname)}}"
+  echo "${ROBOREPO_STATE_ROOT:-${HOME}/$(cli_state_dirname)}"
 }
 
 cli_state_file() {

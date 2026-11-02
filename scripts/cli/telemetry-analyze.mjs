@@ -8,7 +8,7 @@ import { analyzeRows } from "./telemetry-analysis/rows.mjs";
 export { spikeCause } from "./telemetry-analysis/spikes.mjs";
 
 // cohortFilter scopes every panel. markerId selects a markers entry for compareMetric (tokens.total
-// by default); repositoryHashIndex resolves legacy repository evidence before either comparison.
+// by default).
 export function analyzeTelemetry(events, options = {}) {
   const { cohortFilter = null, markers = [] } = options;
   const normalizedFilter = cohortFilter ? normalizeCohortFilter(cohortFilter) : null;

@@ -178,3 +178,18 @@ Broad smoke after shared portal or package changes:
 ```sh
 npm test
 ```
+
+## Evidence-only landed recovery
+
+`landed-recovery.mjs` parses `### Post-merge recovery` under Review and verifies the narrow primary
+evidence exception. The authority scanner, authoritative Markdown reader, approval/review gates,
+and integration checks share that predicate. It checks committed evidence, repository and assigned
+worktree identity, precursor blobs already on base, unchanged requirements/findings/assignment,
+complete review and explicit approval, exact implementation, and the absorbing first-parent base
+commit. Temporary merge objects do not persist. Missing/detached worktrees remain unavailable.
+
+A qualifying record retains primary authority and reason `verified-landed-recovery`. Priority
+writes re-resolve current state and target the assigned worktree; evidence selection grants no
+general primary write authority. Base refs, including refs not checked out anywhere, participate
+in snapshot invalidation. `mergeReadiness` additionally requires a committed packet, clean index
+and filesystem, and a current reviewed base implementation before merging.

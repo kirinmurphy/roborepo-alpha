@@ -32,7 +32,7 @@ export function guardPortal(targetPid) {
 }
 
 // Starts `web --no-open --port 0 --allow-zero-port` with the given env (which must carry the
-// test's temp HOME / ROBOREPO_STATE_DIR) and resolves once it has bound a port.
+// test's temp HOME / ROBOREPO_STATE_ROOT) and resolves once it has bound a port.
 // Returns { port, stop }. `readyFile` must live in the test's temp dir.
 export async function startHermeticPortal({ env, readyFile, logFile, timeoutMs = 60_000 }) {
   const out = logFile ? fs.openSync(logFile, "a") : "ignore";

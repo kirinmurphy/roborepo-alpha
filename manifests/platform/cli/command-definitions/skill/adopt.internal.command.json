@@ -2,7 +2,7 @@
   "path": ["skill", "adopt"],
   "kind": "internal",
   "title": "Adopt skill",
-  "description": "Legacy package-development import entrypoint",
+  "description": "Bring a native, unmanaged harness skill under RoboRepo management",
   "advanced": true,
   "usage": "roborepo skill adopt <name>",
   "execution": {

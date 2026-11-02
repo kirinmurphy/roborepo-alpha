@@ -378,7 +378,6 @@ Run targeted checks.
     const env = {
       ...process.env,
       HOME: homeDir,
-      ROBOREPO_STATE_DIR: path.join(homeDir, ".roborepo"),
       ROBOREPO_STATE_ROOT: path.join(homeDir, ".roborepo"),
       SKIP_MCP: "1",
     };

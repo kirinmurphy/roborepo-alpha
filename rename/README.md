@@ -61,7 +61,7 @@ With no active users, most compat burden is gone. Remaining real-world steps if 
 4. **`.roborepo-managed` markers** in user harness dirs: `install-lib.sh` ownership checks
    should recognize the old marker while writing only the new one.
 5. **Env vars `ROBOREPO_*`**: rename maps the whole family in one rule. Users' shells may
-   export them; keep `ROBOREPO_STATE_DIR` readable as a fallback for one release if you ever
+   export them; keep `ROBOREPO_STATE_ROOT` readable as a fallback for one release if you ever
    have real users.
 6. **GitHub repo URLs / `roborepo.dev` schema domain**: external identities, claimed but
    never auto-replaced.

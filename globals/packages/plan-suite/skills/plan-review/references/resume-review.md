@@ -24,8 +24,8 @@ on base since the recorded base commit. Both comparisons exclude `docs/plans/`.
 
 Read Git status before choosing a resume path. Pending implementation edits prevent reusing the
 review for approval; do not commit or discard someone else's changes. Check approval durability
-in the required plan copies before returning an unchanged success. If a post-merge recovery
-committed only its worktree copy, finish its missing primary write as described below first.
+in the required plan copies before returning an unchanged success. For post-merge recovery, verify any existing committed primary evidence through the canonical
+approval reader before deciding a write is missing.
 Confirm the Result is committed before asking for approval. If a previous run wrote its own valid
 review evidence but failed to commit it, finish that plan-only commit first; independently edited
 plan content needs reconciliation rather than automatic staging.
@@ -96,22 +96,37 @@ existing fresh approval rather than replacing its commit just because a plan-onl
 
 For post-merge recovery while the plan remains in review:
 
-1. Confirm landing before editing. Confirm the primary plan and authoritative worktree plan have
-   matching bytes; if they differ, reconcile the plan evidence explicitly without overwriting
-   either copy's unrelated edits. Do not synchronize or change implementation to repair a record.
-2. Record the Result if needed, the explicit approval, and its evidence in the authoritative plan;
-   commit only that plan in the worktree.
-3. Apply the same evidence-only document to the primary plan after rechecking that the primary
-   still matches the pre-edit document. Commit only that primary plan on base. If it changed, stop
-   and report the discrepancy rather than overwriting it. These plan-only commits preserve the
-   reviewed implementation and let the close integration check recognize the new plan version.
-4. Run the canonical approval check; require `fresh`. Verify both commits contain only the selected
-   plan and the two working documents match. If either commit fails, report exactly which copy is
-   recorded and resume the missing write on the next run. Do not claim approval is durably recorded
-   on base until the primary commit succeeds.
+1. Confirm landing before editing. Resolve the assigned worktree and branch from Git; missing or
+   detached worktrees remain unavailable. Record the full current branch tip, base ref and commit,
+   absorbing commit, repository identity, and current primary/worktree plan blob ids. Both
+   precursor versions must already be integrated on base. Requirements, tasks, findings, identity,
+   and assignment must agree; refuse conflicting copies or approval records.
+2. Write Result if established by existing completed review evidence, explicit Approval with the
+   human answer, and `### Post-merge recovery` on primary only. Do not edit, synchronize, or commit
+   the old worktree. The recovery subsection uses exactly these fields:
 
-If a retry finds the approval already committed in the worktree but not in primary, verify the
-primary matches that worktree commit's parent version of the plan, then finish only step 3. Never
-copy over an independently changed primary plan. A missing or detached assigned worktree remains
-an unavailable approval check; report the repository's restore-worktree remedy instead of guessing
-its branch. This recovery records approval; it does not close, merge, push, or waive tests.
+   ```md
+   ### Post-merge recovery
+   - Repository identity: <canonical repository id>
+   - Worktree: <assigned Git administrative name>
+   - Branch: <assigned branch>
+   - Assessed branch tip: <full commit id>
+   - Base ref: refs/heads/<base>
+   - Base commit: <full pre-recovery base commit id>
+   - Absorbing commit: <full absorbing commit id>
+   - Primary precursor blob: <full pre-recovery primary plan blob id>
+   - Worktree precursor blob: <full pre-recovery worktree plan blob id>
+   ```
+
+3. Recheck Git status and the exact precursor documents immediately before committing only the
+   selected primary plan on base. Only Result, Approval, and the recovery subsection may change.
+   Pending evidence is never durable approval. Refuse independent edits rather than overwriting.
+4. Run `roborepo plans approval <plan> --json`; require fresh approval and complete fresh review.
+   The shared verifier derives identity, integrated precursors, exact implementation, and historical
+   absorption again from Git. Verify the primary commit changes only that plan and the old
+   worktree stayed unchanged. A later implementation change invalidates this exception.
+
+A retry reuses identical committed evidence rather than replacing provenance with newer tips.
+Existing manually aligned copies need no synthetic commit when byte-identical and verified
+landed. Missing, conflicting, or incomplete records require repair, never an inferred human
+answer. This recovery records evidence; it does not close, merge, push, or waive tests.

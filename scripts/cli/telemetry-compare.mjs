@@ -44,33 +44,12 @@ function dominantSession(captures) {
 
 // Resolve the eligible "before" and "after" session windows around a change marker's timestamp.
 // Sessions that span the marker (start before it, end after) are excluded from both cohorts unless
-// the caller explicitly opts into within-session comparison (not implemented here — plan explicitly
-// scopes that out: "unless the analysis explicitly supports within-session phase comparison").
+// the caller explicitly opts into within-session comparison (not implemented: within-session phase
+// comparison is out of scope).
 export function splitCohortsByMarker(captures, marker) {
-  if (marker.schema >= 2) {
-    const observations = normalizeObservations(captures).sessions.filter((item) => marker.scope === "all" || (marker.repository_id && item.repository_id === marker.repository_id));
-    const split = splitObservationBoundary(observations, marker);
-    return { before: canonicalFlowRows(normalizeObservations(split.before.flatMap((item) => item.rows))), after: canonicalFlowRows(normalizeObservations(split.after.flatMap((item) => item.rows))),
-      excluded: [...split.spanning.map((item) => ({ session_id: item.session_id, reason: "session spans the marker timestamp" })),
-        ...split.ambiguous.map((item) => ({ session_id: item.session_id, reason: "ambiguous_boundary" }))] };
-  }
-  // Legacy markers share the canonical boundary rule: effective_at ?? ts, with sessions touching
-  // the boundary excluded rather than assigned to a side.
-  const sessions = new Map();
-  for (const event of captures) {
-    const id = event.session_id || "unknown";
-    const ms = Date.parse(event.ts);
-    if (!Number.isFinite(ms)) continue;
-    if (!sessions.has(id)) sessions.set(id, { session_id: id, first: ms, last: ms, events: [] });
-    const s = sessions.get(id);
-    s.first = Math.min(s.first, ms);
-    s.last = Math.max(s.last, ms);
-    s.events.push(event);
-  }
-  const observations = [...sessions.values()].map((session) => ({ session_id: session.session_id, events: session.events,
-    first_seen: new Date(session.first).toISOString(), last_seen: new Date(session.last).toISOString(), rows: [] }));
+  const observations = normalizeObservations(captures).sessions.filter((item) => marker.scope === "all" || (marker.repository_id && item.repository_id === marker.repository_id));
   const split = splitObservationBoundary(observations, marker);
-  return { before: split.before.flatMap((item) => item.events), after: split.after.flatMap((item) => item.events),
+  return { before: canonicalFlowRows(normalizeObservations(split.before.flatMap((item) => item.rows))), after: canonicalFlowRows(normalizeObservations(split.after.flatMap((item) => item.rows))),
     excluded: [...split.spanning.map((item) => ({ session_id: item.session_id, reason: "session spans the marker timestamp" })),
       ...split.ambiguous.map((item) => ({ session_id: item.session_id, reason: "ambiguous_boundary" }))] };
 }
@@ -160,7 +139,7 @@ export function compareAcrossMarker(allCaptures, marker, metricId, {
 
   const dataQualityIssues = [];
   // An unknown scope matches no sessions; report that as an unfair comparison, not as thin data.
-  const scopeUnknown = marker.schema >= 2 && !marker.repository_id && marker.scope !== "all";
+  const scopeUnknown = !marker.repository_id && marker.scope !== "all";
   if (scopeUnknown) dataQualityIssues.push("marker scope is unknown, so no sessions can be compared fairly");
   else {
     if (beforeSessions < minimumSessionsPerCohort) dataQualityIssues.push(`before cohort has ${beforeSessions} sessions, below the minimum of ${minimumSessionsPerCohort}`);

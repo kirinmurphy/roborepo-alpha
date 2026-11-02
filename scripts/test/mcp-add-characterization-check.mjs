@@ -39,7 +39,7 @@ const appRoot = makeAppRoot();
 const cli = path.join(appRoot, "scripts", "cli", "main.mjs");
 
 function run(home, args) {
-  const env = { ...process.env, HOME: home, ROBOREPO_APP_ROOT: appRoot, ROBOREPO_MODE: "development", ROBOREPO_STATE_DIR: path.join(home, ".roborepo") };
+  const env = { ...process.env, HOME: home, ROBOREPO_APP_ROOT: appRoot, ROBOREPO_MODE: "development", ROBOREPO_STATE_ROOT: path.join(home, ".roborepo") };
   return spawnSync(process.execPath, [cli, "mcp", "add", ...args], { env, encoding: "utf8" });
 }
 

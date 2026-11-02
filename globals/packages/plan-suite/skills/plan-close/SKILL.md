@@ -286,8 +286,14 @@ After step 9, when the plan was moved to `completed/`, run the repository's cano
 cleanup command scoped to this plan with its apply flag. Scoped to the plan, it verifies the plan's
 recorded absorbing commit too. Report whether it removed the worktree and branch, whether its
 landing evidence was reused or scanned, which guard kept them, or why removal failed. Do not remove the worktree by hand or bypass
-a guard. Skip this step for an archived or refused plan, and in repositories without a canonical
-cleanup command.
+a guard. The shared assessment must prove committed and local work preserved; dirty automatic
+removal also verifies a recoverable snapshot and final change checks. Stop writers operationally;
+an external write after the final check can still be lost. Unique or unknown work stays in place.
+Report remaining paths and the explicit `roborepo git worktrees archive-remove <branch-or-name>`
+handoff, never archive it implicitly. Include snapshot references, restore commands, and separate
+checkout/branch outcomes. Cleanup failure never undoes durable closure. On an already-closed retry,
+reuse the same guarded path and existing recovery references. Skip this step for an archived or
+refused plan, and in repositories without a canonical cleanup command.
 
 ### 11. Hand off to dependent follow-up plans
 

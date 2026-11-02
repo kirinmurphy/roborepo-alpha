@@ -209,7 +209,7 @@ try {
   // by the port-free associationKey. This walks the same two-step the HTTP route performs, with the
   // state directory sandboxed so the check never touches the real ~/.roborepo.
   const routeRoot = path.join(tempRoot, "route");
-  process.env.ROBOREPO_STATE_DIR = routeRoot;
+  process.env.ROBOREPO_STATE_ROOT = routeRoot;
   const { buildDeveloperRuntimeSnapshot, defaultSettings } = await import("../../modules/developer-runtime/index.mjs");
   const { loadDeveloperRuntimeHistory } = await import("../cli/developer-runtime.mjs");
 

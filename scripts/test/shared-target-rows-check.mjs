@@ -11,23 +11,81 @@ import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { hostHarnessIsolationEnv } from "./portal-ui/host-harness-isolation.mjs";
+import { makeAppRoot, makeCliEnv } from "./app-root-fixture.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const cli = path.join(repoRoot, "scripts/cli/main.mjs");
 const rowsCli = path.join(repoRoot, "scripts/cli/shared-target-rows.mjs");
 const coreCodex = JSON.parse(fs.readFileSync(path.join(repoRoot, "generated/codex/hooks.json"), "utf8")).hooks;
-const coreScripts = fs.readdirSync(path.join(repoRoot, "globals/harnesses/codex/hooks"));
+// Every file the row installs, including ones in subdirectories (git/), as paths relative to hooks/.
+const coreHooksSource = path.join(repoRoot, "globals/harnesses/codex/hooks");
+const coreScripts = fs.readdirSync(coreHooksSource, { recursive: true, withFileTypes: true })
+  .filter((entry) => entry.isFile())
+  .map((entry) => path.relative(coreHooksSource, path.join(entry.parentPath, entry.name)));
+// The conflict cases edit top-level scripts.
+const topLevelScripts = coreScripts.filter((name) => !name.includes(path.sep));
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-shared-target-rows-"));
 try {
   standalonePermissionManifestDiscovery();
+  baseInstallShipsTheGitHooksItsConfigPointsAt();
   coreHooksInstallAfterPackageHooks();
+  updateShipsHooksNewToASelectedBundle();
+  removingBundlePreservesSharedRows();
   scriptCopiesFollowConflictPolicy();
   linksOutsideTheCheckoutAreNeverWrittenThrough();
   retiredScriptsDoNotOutliveTheirSource();
   console.log("shared-target-rows-check: ok");
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
+}
+
+// The base root configs point agent git at <home>/git-hooks. A base-only install must ship that
+// directory, or agent shells would run no git hooks at all: not the push backstop, and not the
+// repo's own hooks either.
+function baseInstallShipsTheGitHooksItsConfigPointsAt() {
+  const { home, env } = makeHome("base-only");
+  run(env, cli, "bundle", "apply", "base");
+  const source = path.join(repoRoot, "globals/system/git-hooks");
+  for (const harness of [".claude", ".codex"]) {
+    for (const name of fs.readdirSync(source)) {
+      const installed = path.join(home, harness, "git-hooks", name);
+      assert.ok(fs.existsSync(installed), `base installs ${harness}/git-hooks/${name}`);
+      assert.equal(fs.statSync(installed).mode & 0o111, fs.statSync(path.join(source, name)).mode & 0o111, `${harness}/git-hooks/${name} keeps its mode`);
+    }
+  }
+}
+
+function removingBundlePreservesSharedRows() {
+  const appRoot = makeAppRoot({ includeGenerated: true });
+  const { home } = makeHome("shared-bundle-rows");
+  const env = makeCliEnv({ appRoot, home });
+  const fixtureCli = path.join(appRoot, "scripts", "cli", "main.mjs");
+  const manifest = path.join(appRoot, "manifests", "platform", "presets.json");
+  const catalog = JSON.parse(fs.readFileSync(manifest, "utf8"));
+  catalog.bundles.push(
+    { id: "shared-left", label: "Shared left", rows: ["claude:hooks"] },
+    { id: "shared-right", label: "Shared right", rows: ["claude:hooks"] },
+    { id: "shared-parent", label: "Shared parent", rows: [], requires: ["shared-right"] },
+  );
+  fs.writeFileSync(manifest, JSON.stringify(catalog));
+  try {
+    run(env, fixtureCli, "bundle", "apply", "shared-left", "shared-parent");
+    const script = path.join(home, ".claude", "hooks", "write-guard.mjs");
+    assert.ok(fs.existsSync(script), "the shared row is installed");
+    run(env, fixtureCli, "bundle", "remove", "shared-left");
+    assert.ok(fs.existsSync(script), "a row remains installed through another effective bundle");
+    run(env, fixtureCli, "bundle", "remove", "shared-parent");
+    assert.equal(fs.existsSync(script), false, "the row is removed after its final effective owner leaves");
+
+    catalog.default = ["unknown-first", "unknown-second"];
+    fs.writeFileSync(manifest, JSON.stringify(catalog));
+    const invalid = spawnSync(process.execPath, [fixtureCli, "bundle", "status"], { env, encoding: "utf8" });
+    assert.notEqual(invalid.status, 0, "unknown default bundles invalidate the catalog");
+    for (const id of catalog.default) assert.match(invalid.stderr, new RegExp(`default: unknown bundle: ${id}`));
+  } finally {
+    fs.rmSync(appRoot, { recursive: true, force: true });
+  }
 }
 
 function coreHooksInstallAfterPackageHooks() {
@@ -53,6 +111,9 @@ function coreHooksInstallAfterPackageHooks() {
   }
   for (const command of commands(coreCodex)) assert.ok(after.has(command), `core hook installed: ${command}`);
   for (const script of coreScripts) assert.ok(fs.existsSync(path.join(home, ".codex", "hooks", script)), `core script copied: ${script}`);
+  for (const script of coreScripts.filter((name) => fs.statSync(path.join(coreHooksSource, name)).mode & 0o111)) {
+    assert.ok(fs.statSync(path.join(home, ".codex", "hooks", script)).mode & 0o111, `core script stays executable: ${script}`);
+  }
   assert.equal(fs.readdirSync(path.join(home, ".codex")).some((name) => name.startsWith("hooks_update_")), false,
     "no staged merge-review copy: the core hooks installed instead of colliding");
   assert.match(run(env, cli, "bundle", "check", "hooks"), /ok: hooks/);
@@ -69,25 +130,79 @@ function coreHooksInstallAfterPackageHooks() {
   const labelled = JSON.parse(fs.readFileSync(hooksPath, "utf8"));
   const labels = Object.values(labelled.hooks).flatMap((entries) => entries.flatMap((entry) => entry.hooks || []))
     .map((hook) => hook.statusMessage).filter(Boolean);
-  assert.deepEqual(labels.sort(), ["RoboRepo: command permissions", "RoboRepo: concise command output", "RoboRepo: unmanaged skills check"].sort(),
-    "reapplying upgrades the three native review labels on existing core hooks");
+  assert.deepEqual(labels.sort(), ["RoboRepo: command permissions", "RoboRepo: concise command output", "RoboRepo: protected branch push", "RoboRepo: unmanaged skills check"].sort(),
+    "reapplying upgrades the native review labels on existing core hooks");
   assert.deepEqual([...handlerPositions(hooksPath)], [...after], "labelling preserves every hook's command and position");
   run(env, cli, "bundle", "apply", "hooks");
   assert.deepEqual(JSON.parse(fs.readFileSync(hooksPath, "utf8")), labelled, "label reconciliation is idempotent");
 
-  run(env, cli, "bundle", "remove", "hooks");
+  // Enabling the telemetry package records no telemetry bundle, so nothing keeps hooks applied.
+  assert.doesNotMatch(run(env, cli, "bundle", "remove", "hooks"), /kept: hooks/);
   const removed = handlerPositions(hooksPath);
   assert.deepEqual([...removed], [...before], "removal leaves exactly the package hooks, at their positions");
   assert.ok(fs.existsSync(path.join(home, ".codex", "hooks", "package-script.mjs")), "package script survives removal");
   for (const script of coreScripts) assert.ok(!fs.existsSync(path.join(home, ".codex", "hooks", script)), `core script removed: ${script}`);
 }
 
+// `update` applies the selected bundles. A machine that selected hooks before a release added a
+// handler to an existing core group must get the new script and only the new handler: the group's
+// installed handlers keep their trust positions and are not added a second time.
+function updateShipsHooksNewToASelectedBundle() {
+  const { home, env } = makeHome("upgrade");
+  run(env, cli, "bundle", "apply", "--selected");
+  assert.ok(fs.existsSync(path.join(home, ".codex", "git-hooks", "pre-push")), "first install applies the defaults");
+  assert.ok(!fs.existsSync(path.join(home, ".codex", "hooks.json")), "first install selects no hooks yet");
+
+  run(env, cli, "bundle", "apply", "hooks");
+  const hooksPath = path.join(home, ".codex", "hooks.json");
+  const added = "protected-branch-push.mjs";
+  const userCommand = "node my-own-check.mjs";
+  // The install as an older release left it: the core group without the newer handler, and a
+  // handler of the user's own in that group.
+  const older = JSON.parse(fs.readFileSync(hooksPath, "utf8"));
+  for (const group of older.hooks.PreToolUse) {
+    if (group.hooks.some((hook) => hook.command.includes(added))) {
+      group.hooks = [...group.hooks.filter((hook) => !hook.command.includes(added)), { type: "command", command: userCommand }];
+    }
+  }
+  fs.writeFileSync(hooksPath, JSON.stringify(older));
+  for (const harness of [".claude", ".codex"]) fs.rmSync(path.join(home, harness, "hooks", added));
+  const before = handlerPositions(hooksPath);
+
+  run(env, cli, "bundle", "apply", "--selected");
+  for (const harness of [".claude", ".codex"]) {
+    assert.ok(fs.existsSync(path.join(home, harness, "hooks", added)), `update ships the new script to ${harness}`);
+  }
+  const after = handlerPositions(hooksPath);
+  for (const [command, position] of before) assert.equal(after.get(command), position, `kept its trust position: ${command}`);
+  const installed = commands(JSON.parse(fs.readFileSync(hooksPath, "utf8")).hooks);
+  assert.equal(installed.filter((command) => command.includes(added)).length, 1, "the new handler is installed once");
+  const claudeInstalled = commands(JSON.parse(fs.readFileSync(path.join(home, ".claude", "settings.json"), "utf8")).hooks);
+  assert.equal(claudeInstalled.filter((command) => command.includes(added)).length, 1, "the new handler is registered once for Claude");
+  assert.equal(installed.length, new Set(installed).size, "no handler is installed twice");
+
+  // An older merge re-added the whole grown group, so the core handlers it already had appear twice.
+  // The next update keeps each one's first copy, where its trust is, and drops the rest.
+  const duplicated = JSON.parse(fs.readFileSync(hooksPath, "utf8"));
+  const coreGroup = coreCodex.PreToolUse.find((group) => group.hooks.some((hook) => hook.command.includes(added)));
+  duplicated.hooks.PreToolUse.push(structuredClone(coreGroup));
+  fs.writeFileSync(hooksPath, JSON.stringify(duplicated));
+  run(env, cli, "bundle", "apply", "--selected");
+  const collapsed = commands(JSON.parse(fs.readFileSync(hooksPath, "utf8")).hooks);
+  assert.equal(collapsed.length, new Set(collapsed).size, "update removes repeated core handlers");
+  assert.deepEqual([...handlerPositions(hooksPath)], [...after], "every first copy keeps its trust position");
+
+  run(env, cli, "bundle", "remove", "hooks");
+  const left = fs.existsSync(hooksPath) ? commands(JSON.parse(fs.readFileSync(hooksPath, "utf8")).hooks) : [];
+  assert.deepEqual(left, [userCommand], "removal takes every core handler and leaves the user's, even in a shared group");
+}
+
 function scriptCopiesFollowConflictPolicy() {
   const { home, env } = makeHome("policy");
   const hooksDir = path.join(home, ".codex", "hooks");
   const row = ["managed_files", "codex", "globals/harnesses/codex/hooks", hooksDir];
-  const [first, second] = coreScripts;
-  const statePath = path.join(env.ROBOREPO_STATE_DIR, "config-state", "managed-files.json");
+  const [first, second] = topLevelScripts;
+  const statePath = path.join(env.ROBOREPO_STATE_ROOT, "config-state", "managed-files.json");
 
   // An older copy RoboRepo wrote and nobody edited is updated in place.
   fs.mkdirSync(hooksDir, { recursive: true });
@@ -124,7 +239,7 @@ function linksOutsideTheCheckoutAreNeverWrittenThrough() {
   const { home, env } = makeHome("links");
   const hooksDir = path.join(home, ".codex", "hooks");
   const row = ["managed_files", "codex", "globals/harnesses/codex/hooks", hooksDir];
-  const [script] = coreScripts;
+  const [script] = topLevelScripts;
   const external = path.join(tmp, "links-dotfiles", script);
   fs.mkdirSync(path.dirname(external), { recursive: true });
   fs.writeFileSync(external, "// my dotfiles copy\n");
@@ -171,7 +286,7 @@ function retiredScriptsDoNotOutliveTheirSource() {
 }
 
 function recordHashes(env, files) {
-  const statePath = path.join(env.ROBOREPO_STATE_DIR, "config-state", "managed-files.json");
+  const statePath = path.join(env.ROBOREPO_STATE_ROOT, "config-state", "managed-files.json");
   let current = {};
   try { current = JSON.parse(fs.readFileSync(statePath, "utf8")).files; } catch {}
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
@@ -182,7 +297,7 @@ function makeHome(name) {
   const home = path.join(tmp, name);
   fs.mkdirSync(path.join(home, ".claude"), { recursive: true });
   fs.mkdirSync(path.join(home, ".codex"), { recursive: true });
-  return { home, env: { ...process.env, HOME: home, ROBOREPO_STATE_DIR: path.join(home, ".roborepo"), ROBOREPO_ON_CONFLICT: "keep" } };
+  return { home, env: { ...process.env, HOME: home, ROBOREPO_STATE_ROOT: path.join(home, ".roborepo"), ROBOREPO_ON_CONFLICT: "keep" } };
 }
 
 function run(env, script, ...args) {
@@ -228,7 +343,7 @@ function standalonePermissionManifestDiscovery() {
   const cleanEnv = { ...env };
   delete cleanEnv.REPO_ROOT;
   delete cleanEnv.ROBOREPO_STATE_ROOT;
-  delete cleanEnv.ROBOREPO_STATE_DIR;
+  delete cleanEnv.ROBOREPO_STATE_ROOT;
   function decision(script, overrides) {
     const result = spawnSync(process.execPath, [script], { env: { ...cleanEnv, ...overrides }, input, encoding: "utf8" });
     assert.equal(result.status, 0, result.stderr);
@@ -237,7 +352,7 @@ function standalonePermissionManifestDiscovery() {
   assert.equal(decision(sourcePath, {}), "deny", "provider source finds its checkout manifest without install state");
   assert.equal(decision(installed, {}), "ask", "missing manifest retains conservative classification");
   assert.equal(decision(installed, { REPO_ROOT: repoRoot }), "deny", "explicit repository root works for standalone copy");
-  for (const variable of ["ROBOREPO_STATE_ROOT", "ROBOREPO_STATE_DIR"]) {
+  for (const variable of ["ROBOREPO_STATE_ROOT"]) {
     for (const [file, key] of [["app-root.json", "appRoot"], ["install-state.json", "repo"]]) {
       const state = path.join(home, variable, file.replace(".json", ""));
       fs.mkdirSync(state, { recursive: true });

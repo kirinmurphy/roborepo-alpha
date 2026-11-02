@@ -131,29 +131,6 @@ function Link-Item {
   }
 }
 
-function Remove-RepoLink {
-  param($HomePath)
-
-  $existing = Get-Item $HomePath -Force -ErrorAction SilentlyContinue
-  if ($null -eq $existing -or $existing.LinkType -ne "SymbolicLink") {
-    return
-  }
-
-  $target = [System.IO.Path]::GetFullPath($existing.Target)
-  $root = [System.IO.Path]::GetFullPath($repoRoot)
-  if (-not $target.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)) {
-    return
-  }
-
-  if ($DryRun) {
-    Write-Host "cleanup: $HomePath"
-    return
-  }
-
-  Remove-Item $HomePath -Force
-  Write-Host "cleanup: $HomePath"
-}
-
 function Write-AgentMergePrompt {
   param($Harness, $Mode, $RepoRel, $HomePath)
   $src = Join-Path $repoRoot $RepoRel
@@ -486,8 +463,13 @@ function Get-PresentManifestRows {
 
 # Materialize a shared skill into the machine-local cache at ~/.roborepo/skills/<name>, stamped
 # with a '.builtin-managed' marker file, then symlink each harness view to that cache entry.
-# Legacy managed symlinks are migrated to the cache-backed view. A real dir without the marker is
-# a native skill and is left untouched.
+# Legacy managed symlinks are migrated to the cache-backed view. A real harness skill dir without
+# the marker is a native skill and is left untouched.
+#
+# The marker rule protects HARNESS skill dirs only. The cache lives inside roborepo's own state
+# root, which nothing else writes and uninstall removes wholesale, so an unmarked cache entry is a
+# copy that lost its marker and is rebuilt from source. Skipping it instead would freeze that
+# skill at a stale version forever. install-lib.sh link_skill_item applies the same rule.
 function Copy-GlobalSkills {
   param($HomeDir, [string[]]$AllowedNames = @())
   $srcDir = Join-Path $repoRoot "globals\system\skills"
@@ -658,9 +640,6 @@ function Invoke-ManifestRows {
       }
       "rendered_rules" {
         # Render after the manifest loop for this harness.
-      }
-      "cleanup" {
-        Remove-RepoLink $row.HomePath
       }
     }
   }

@@ -72,7 +72,7 @@ export async function collectKnownWorktrees(registry, { stateRoot, settings, now
         ? await runGitProcess(worktree.path, ["rev-list", "--count", `${landing.base}..${worktree.branch}`])
         : { ok: false };
       return {
-        ...worktree, rootId, projectRoot: worktree.path, git, ...state, landing, running: runningRootIds.has(rootId),
+        ...worktree, rootId, projectRoot: worktree.path, git, ...state, landing, preservation: "unknown", remainingPaths: [], blockingPaths: [], running: runningRootIds.has(rootId),
         mergedInto: landing.landed ? shortBranchName(landing.base) : null,
         unmergedCommits: count.ok ? Number(count.stdout.trim()) : null, reason: guard?.reason || null,
       };

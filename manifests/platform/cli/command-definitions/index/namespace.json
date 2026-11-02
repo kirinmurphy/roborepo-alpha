@@ -1,7 +1,0 @@
-{
-  "path": ["index"],
-  "kind": "namespace",
-  "title": "Indexing",
-  "description": "Index code and documentation",
-  "order": 400
-}

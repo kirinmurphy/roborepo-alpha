@@ -57,8 +57,8 @@ function testCodexTranscript() {
   assert.equal(stats.tool_calls, 2);
   assert.equal(stats.tools.exec, 1);
   assert.equal(stats.mcp_calls, 1);
-  assert.equal(stats.mcp_servers.jcodemunch, 1);
-  assert.equal(stats.last_result.tool, "mcp__jcodemunch__get_context_bundle");
+  assert.equal(stats.mcp_servers["code-search"], 1);
+  assert.equal(stats.last_result.tool, "mcp__code-search__get_context_bundle");
   assert.equal(stats.details.codex_reasoning_output_tokens, 40);
   assert.equal(stats.details.codex_rate_limits[0].name, "primary");
   assert.equal(stats.details.codex_rate_limits[0].used_percent, 12.5);
@@ -84,13 +84,13 @@ function testAnalyzerWarnings() {
     baseEvent({ session_id: "doc-session", tool: tool("Read", ".md", "doc-hash"), chars: 12000 }),
     baseEvent({ session_id: "doc-session", tool: tool("Read", ".md", "doc-hash"), chars: 11000 }),
     baseEvent({ session_id: "doc-session", tool: tool("Read", ".md", "large-hash"), chars: 25000 }),
-    baseEvent({ session_id: "code-session", tool: tool("mcp__jcodemunch__get_context_bundle", null, null), chars: 2000 }),
+    baseEvent({ session_id: "code-session", tool: tool("mcp__code-search__get_context_bundle", null, null), chars: 2000 }),
     baseEvent({ session_id: "code-session", tool: tool("Read", ".js", "a"), chars: 1000 }),
     baseEvent({ session_id: "code-session", tool: tool("Read", ".js", "b"), chars: 1000 }),
     baseEvent({ session_id: "code-session", tool: tool("Read", ".ts", "c"), chars: 1000 }),
     baseEvent({ session_id: "code-session", tool: tool("Bash", null, null, 20), chars: 1000 }),
     {
-      schema: 2,
+      schema: 3,
       ts: "2026-01-01T00:00:09.000Z",
       harness: "codex",
       event: "PostToolUse",
@@ -103,8 +103,6 @@ function testAnalyzerWarnings() {
   const report = analyzeTelemetry(events);
   assert(report.read_warnings.some((warning) => warning.type === "repeated_document_read"));
   assert(report.read_warnings.some((warning) => warning.type === "large_document_read"));
-  assert(report.read_warnings.some((warning) => warning.type === "stale_doc_lookup"));
-  assert(report.read_warnings.some((warning) => warning.type === "mixed_code_lookup"));
   assert(report.data_quality_warnings.some((warning) => warning.type === "unsupported_usage_schema"));
   // All codex events above carry nonzero tokens but no details.codex_rate_limits.
   assert(report.data_quality_warnings.some((warning) => warning.type === "rate_limit_unavailable" && warning.harness === "codex"));
@@ -114,7 +112,7 @@ function testAnalyzerRateLimitPresent() {
   const events = [
     baseEvent({
       session_id: "b",
-      tool: tool("mcp__jcodemunch__get_context_bundle", null, null),
+      tool: tool("mcp__code-search__get_context_bundle", null, null),
       chars: 400,
       harness: "codex",
       details: { codex_rate_limits: [{ name: "weekly", used_percent: 60, window_minutes: 10080 }] },
@@ -130,7 +128,7 @@ function testAnalyzerIndexedSummaries() {
     baseEvent({ session_id: "a", tool: tool("Bash", null, null), chars: 40, ts: "2026-01-01T01:00:00.000Z", delta_tokens: 5, harness: "claude" }),
     baseEvent({
       session_id: "b",
-      tool: tool("mcp__jcodemunch__get_context_bundle", null, null),
+      tool: tool("mcp__code-search__get_context_bundle", null, null),
       chars: 400,
       ts: "2026-01-01T04:30:00.000Z",
       delta_tokens: 100,
@@ -139,7 +137,7 @@ function testAnalyzerIndexedSummaries() {
     }),
     baseEvent({
       session_id: "b",
-      tool: tool("mcp__jdocmunch__search_docs", null, null),
+      tool: tool("mcp__doc-search__search_docs", null, null),
       chars: 160,
       ts: "2026-01-01T08:00:00.000Z",
       delta_tokens: 30,
@@ -157,13 +155,13 @@ function testAnalyzerIndexedSummaries() {
   assert.deepEqual(
     report.top_tools.map((row) => [row.key, row.captures, row.tokens]),
     [
-      ["mcp__jcodemunch__get_context_bundle", 1, 100],
-      ["mcp__jdocmunch__search_docs", 1, 30],
+      ["mcp__code-search__get_context_bundle", 1, 100],
+      ["mcp__doc-search__search_docs", 1, 30],
       ["Read", 1, 20],
       ["Bash", 1, 5],
     ],
   );
-  assert.deepEqual(report.top_mcp.map((row) => [row.key, row.captures, row.tokens]), [["jcodemunch", 1, 100], ["jdocmunch", 1, 30]]);
+  assert.deepEqual(report.top_mcp.map((row) => [row.key, row.captures, row.tokens]), [["code-search", 1, 100], ["doc-search", 1, 30]]);
   assert.equal(report.timeline.at(-1).ts, "2026-01-01T08:00:00.000Z");
   assert.equal(report.usage_windows.as_of, "2026-01-01T08:00:00.000Z");
   assert.equal(report.usage_windows.five_hour, 130);
@@ -173,7 +171,7 @@ function testAnalyzerIndexedSummaries() {
 
 function baseEvent({ session_id, tool, chars, ts = "2026-01-01T00:00:00.000Z", delta_tokens = 10, harness = "codex", details = {} }) {
   return {
-    schema: 2,
+    schema: 3,
     ts,
     harness,
     event: "PostToolUse",

@@ -9,7 +9,6 @@ import {
   workspaceMcpServersPath,
   workspaceOverridesDir,
   workspacePackagesDir,
-  workspaceRoot,
   workspaceSkillsDir,
 } from "./paths.mjs";
 import { isMainModule } from "./roots.mjs";
@@ -138,27 +137,6 @@ export function applyWorkspaceAssets({ dryRun = false } = {}) {
   return applied;
 }
 
-export function importLegacyWorkspace(sourceRoot, { dryRun = false } = {}) {
-  const source = path.resolve(sourceRoot);
-  if (!fs.existsSync(source)) throw new Error(`import source not found: ${source}`);
-  initializeWorkspace({ dryRun });
-
-  const report = {
-    importedSkills: 0,
-    importedCommands: 0,
-    importedPackages: 0,
-    importedMcpServers: 0,
-    changedBuiltIns: [],
-  };
-
-  importSkillDirs(path.join(source, "globals", "agents", "skills"), report, dryRun);
-  importCommandFiles(path.join(source, "globals", "commands"), report, dryRun);
-  importPackageConfigs(path.join(source, "globals", "packages"), report, dryRun);
-  importMcpManifest(path.join(source, "manifests", "inventory", "mcp-servers.json"), report, dryRun);
-  printImportReport(report, dryRun);
-  return report;
-}
-
 function validateWorkspaceSkills() {
   for (const name of sourceSkillNames(workspaceSkillsDir)) {
     if (builtInSkillSource(name)) {
@@ -250,108 +228,17 @@ function writeManagedCommand(target, content, dryRun) {
   }
 }
 
-function importSkillDirs(srcDir, report, dryRun) {
-  for (const name of sourceSkillNames(srcDir)) {
-    const src = path.join(srcDir, name);
-    const builtIn = builtInSkillSource(name);
-    if (builtIn) {
-      if (!sameTree(src, builtIn)) report.changedBuiltIns.push(`skill:${name}`);
-      continue;
-    }
-    const dest = path.join(workspaceSkillsDir, name);
-    if (fs.existsSync(dest)) continue;
-    if (!dryRun) fs.cpSync(src, dest, { recursive: true, dereference: true });
-    report.importedSkills += 1;
-  }
-}
-
-function importCommandFiles(srcDir, report, dryRun) {
-  for (const file of markdownFiles(srcDir)) {
-    const name = path.basename(file);
-    const builtIns = providersWith("slash-commands", "commands").map(({ id }) => path.join(appRoot, "globals", id, "commands", name));
-    if (builtIns.some((candidate) => fs.existsSync(candidate))) {
-      if (!builtIns.some((candidate) => fs.existsSync(candidate) && sameFile(file, candidate))) {
-        report.changedBuiltIns.push(`command:${name}`);
-      }
-      continue;
-    }
-    const dest = path.join(workspaceCommandsDir, name);
-    if (fs.existsSync(dest)) continue;
-    if (!dryRun) fs.copyFileSync(file, dest);
-    report.importedCommands += 1;
-  }
-}
-
-function importPackageConfigs(srcDir, report, dryRun) {
-  const builtIn = new Map(readBuiltInPackages().map((pkg) => [pkg.id, pkg]));
-  for (const file of packageConfigFiles(srcDir)) {
-    const pkg = JSON.parse(fs.readFileSync(file, "utf8"));
-    validatePackage(pkg, file);
-    if (builtIn.has(pkg.id)) {
-      if (JSON.stringify(builtIn.get(pkg.id)) !== JSON.stringify(pkg)) report.changedBuiltIns.push(`package:${pkg.id}`);
-      continue;
-    }
-    const dest = path.join(workspacePackagesDir, pkg.id, "package.config.json");
-    if (fs.existsSync(dest)) continue;
-    if (!dryRun) {
-      fs.mkdirSync(path.dirname(dest), { recursive: true });
-      fs.writeFileSync(dest, `${JSON.stringify(pkg, null, 2)}\n`);
-    }
-    report.importedPackages += 1;
-  }
-}
-
-function importMcpManifest(file, report, dryRun) {
-  let data;
-  try {
-    data = JSON.parse(fs.readFileSync(file, "utf8"));
-  } catch {
-    return;
-  }
-  const builtIn = new Map(readBuiltInMcpServers().map((server) => [server.name, server]));
-  const existing = readWorkspaceMcpFile();
-  const servers = existing.servers || [];
-  for (const server of data.servers || []) {
-    validateMcpServer(server, file);
-    if (builtIn.has(server.name)) {
-      if (JSON.stringify(builtIn.get(server.name)) !== JSON.stringify(server)) report.changedBuiltIns.push(`mcp-server:${server.name}`);
-      continue;
-    }
-    if (!servers.some((item) => item.name === server.name)) servers.push(server);
-    report.importedMcpServers += 1;
-  }
-  if (!dryRun) fs.writeFileSync(workspaceMcpServersPath, `${JSON.stringify({ servers }, null, 2)}\n`);
-}
-
-function printImportReport(report, dryRun) {
-  const prefix = dryRun ? "would import" : "imported";
-  console.log(`${prefix}: ${report.importedSkills} skill(s), ${report.importedCommands} command(s), ${report.importedPackages} package(s), ${report.importedMcpServers} MCP server(s)`);
-  if (report.changedBuiltIns.length > 0) {
-    console.log(`changed built-ins left for review: ${report.changedBuiltIns.join(", ")}`);
-  }
-}
-
-function readWorkspaceMcpFile() {
-  try {
-    return JSON.parse(fs.readFileSync(workspaceMcpServersPath, "utf8"));
-  } catch {
-    return { servers: [] };
-  }
-}
-
 function readBuiltInPackages() {
-  return ["packages", "packages-archived"].flatMap((directory) => {
-    const packagesRoot = path.join(appRoot, "globals", directory);
-    try {
-      return fs.readdirSync(packagesRoot, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
-        .map((entry) => path.join(packagesRoot, entry.name, "package.config.json"))
-        .filter((file) => fs.existsSync(file))
-        .map((file) => JSON.parse(fs.readFileSync(file, "utf8")));
-    } catch {
-      return [];
-    }
-  });
+  const packagesRoot = path.join(appRoot, "globals", "packages");
+  try {
+    return fs.readdirSync(packagesRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+      .map((entry) => path.join(packagesRoot, entry.name, "package.config.json"))
+      .filter((file) => fs.existsSync(file))
+      .map((file) => JSON.parse(fs.readFileSync(file, "utf8")));
+  } catch {
+    return [];
+  }
 }
 
 function readBuiltInMcpServers() {
@@ -390,19 +277,17 @@ function validateMcpServer(server, file) {
 function builtInSkillSource(name) {
   const systemSkill = path.join(appRoot, "globals", "system", "skills", name);
   if (fs.existsSync(systemSkill)) return systemSkill;
+  const packagesRoot = path.join(appRoot, "globals", "packages");
   let entries;
-  for (const directory of ["packages", "packages-archived"]) {
-    const packagesRoot = path.join(appRoot, "globals", directory);
-    try {
-      entries = fs.readdirSync(packagesRoot, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const entry of entries) {
-      if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
-      const candidate = path.join(packagesRoot, entry.name, "skills", name);
-      if (fs.existsSync(candidate)) return candidate;
-    }
+  try {
+    entries = fs.readdirSync(packagesRoot, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+    const candidate = path.join(packagesRoot, entry.name, "skills", name);
+    if (fs.existsSync(candidate)) return candidate;
   }
   return null;
 }
@@ -424,10 +309,6 @@ function sourceSkillNames(srcDir) {
       return entry.name;
     })
     .sort();
-}
-
-function jsonFiles(dir) {
-  return filesByExt(dir, ".json");
 }
 
 function packageConfigFiles(dir) {
@@ -459,33 +340,6 @@ function filesByExt(dir, ext) {
     .filter((entry) => entry.isFile() && entry.name.endsWith(ext) && !entry.name.startsWith("."))
     .map((entry) => path.join(dir, entry.name))
     .sort();
-}
-
-function sameFile(a, b) {
-  try {
-    return fs.readFileSync(a, "utf8") === fs.readFileSync(b, "utf8");
-  } catch {
-    return false;
-  }
-}
-
-function sameTree(a, b) {
-  if (!fs.existsSync(a) || !fs.existsSync(b)) return false;
-  const aFiles = treeFiles(a);
-  const bFiles = treeFiles(b);
-  if (aFiles.length !== bFiles.length) return false;
-  return aFiles.every((file, index) => file === bFiles[index] && sameFile(path.join(a, file), path.join(b, file)));
-}
-
-function treeFiles(root, dir = root) {
-  const out = [];
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const abs = path.join(dir, entry.name);
-    const rel = path.relative(root, abs);
-    if (entry.isDirectory()) out.push(...treeFiles(root, abs));
-    else if (entry.isFile()) out.push(rel);
-  }
-  return out.sort();
 }
 
 function readlinkSafe(target) {

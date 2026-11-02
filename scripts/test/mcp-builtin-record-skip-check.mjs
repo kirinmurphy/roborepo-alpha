@@ -2,17 +2,18 @@
 // Enabling a built-in package's own MCP preset must NOT record a workspace MCP entry. The preset
 // already lives in the app's manifests/inventory/mcp-servers.json; recording it into the user
 // workspace would duplicate a built-in and trip assertMcpRecordAllowed in package mode (the guard
-// that stops USERS from shadowing a built-in). Regression guard for the crash where `enable
-// jcodemunch` / a portal package toggle threw mid-wiring and left the package `[partial]`.
+// that stops USERS from shadowing a built-in). Regression guard for the crash where enabling an MCP
+// package / a portal package toggle threw mid-wiring and left the package `[partial]`.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { makeAppRoot } from "./app-root-fixture.mjs";
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const cli = path.join(here, "..", "cli", "main.mjs");
+// The fixture-tool package is the built-in MCP package here: it ships only in this isolated app root.
+const appRoot = makeAppRoot({ prefix: "roborepo-mcp-builtin-app-", fixturePackages: true });
+const cli = path.join(appRoot, "scripts", "cli", "main.mjs");
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-mcp-builtin-"));
 try {
@@ -31,15 +32,16 @@ try {
     ...process.env,
     HOME: home,
     PATH: `${fakeBin}:${process.env.PATH}`,
+    ROBOREPO_APP_ROOT: appRoot,
     ROBOREPO_MODE: "package",
-    ROBOREPO_STATE_DIR: path.join(home, ".roborepo"),
+    ROBOREPO_STATE_ROOT: path.join(home, ".roborepo"),
   };
 
   spawnSync(process.execPath, [cli, "setup"], { env, encoding: "utf8" });
 
-  // The regression: this used to throw "MCP server 'jcodemunch' is built in; add a typed mcp-server
+  // The regression: this used to throw "MCP server '<preset>' is built in; add a typed mcp-server
   // replace override" after already writing the MCP, exiting non-zero and leaving partial state.
-  const result = spawnSync(process.execPath, [cli, "package", "enable", "jcodemunch"], { env, encoding: "utf8" });
+  const result = spawnSync(process.execPath, [cli, "package", "enable", "fixture-tool"], { env, encoding: "utf8" });
   assert.equal(
     result.status,
     0,
@@ -55,11 +57,12 @@ try {
   const workspaceMcp = path.join(home, ".roborepo", "workspace", "mcp", "servers.json");
   const record = JSON.parse(fs.readFileSync(workspaceMcp, "utf8"));
   assert.ok(
-    !record.servers.some((s) => s.name === "jcodemunch"),
+    !record.servers.some((s) => s.name === "fixture-tool"),
     "built-in preset must not be recorded into the workspace MCP file",
   );
 
   console.log("mcp-builtin-record-skip ok");
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
+  fs.rmSync(appRoot, { recursive: true, force: true });
 }

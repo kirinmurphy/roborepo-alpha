@@ -6,6 +6,7 @@
 // fork or a plan blob the base branch produced since then. Matching by content needs no path
 // tracking, so a copy still in active/ is integrated against a primary copy already in review/.
 import fs from "node:fs";
+import { parseFrontmatter } from "./index.mjs";
 import path from "node:path";
 import { blobId, checkOutsideEdits, producedBlobs } from "./plan-authority.mjs";
 import { git } from "./plan-git.mjs";
@@ -21,6 +22,7 @@ import { assignedWorktreeCopy } from "./worktree-copy.mjs";
 export function worktreeCopyIntegration(primary, record) {
   if (!record.plan.worktree) return { state: "no-worktree", worktree: null, copy: null, reason: null };
   const { authority, worktree, copy } = assignedWorktreeCopy(primary, record);
+  if (authority.reason === "verified-landed-recovery") return { state: "integrated", worktree, copy, reason: authority.reason };
   if (authority.source !== "worktree") return { state: "unavailable", worktree, copy: null, reason: authority.reason };
 
   const primaryBytes = fs.readFileSync(path.join(primary, record.plan.relativePath));
@@ -62,4 +64,17 @@ export function archiveCarry(primary, record) {
       ? `conflicting copies: the primary checkout's ${record.plan.relativePath} holds a version worktree ${record.plan.worktree} never had`
       : `conflicting copies could not be ruled out for worktree ${record.plan.worktree}`,
   };
+}
+
+// Identity-aware tree readers share the plan parser; text outside frontmatter never supplies an id.
+export async function planEntriesByIdentity(entries, readBlob) {
+  const byId = new Map();
+  for (const entry of entries.filter((entry) => /^docs\/plans\/[^/]+\/[^/]+\.md$/.test(entry.path))) {
+    const { frontmatter } = parseFrontmatter(await readBlob(entry.oid));
+    const id = frontmatter.id;
+    if (typeof id !== "string" || !id) continue;
+    if (byId.has(id)) throw new Error(`ambiguous plan identity: ${id}`);
+    byId.set(id, entry);
+  }
+  return byId;
 }

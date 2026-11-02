@@ -41,12 +41,14 @@ prose does not make an invalid namespace valid.
 
 | Layer | Owns |
 | --- | --- |
-| `plan-write` validation (`workflow-validate.md`: the repository's plan validator, then repository consistency) | schema, frontmatter, lifecycle readiness, filename and namespace, cross-plan relationships, claims checked against the code |
+| `plan-write` validation (`workflow-validate.md`: the repository's plan validator, repository consistency, then simplicity) | schema, frontmatter, lifecycle readiness, filename and namespace, cross-plan relationships, claims checked against the code, whether a simpler approach solves the same problem |
 | `technical-writing` Validator (`review-loop.md`) | organization, representation, anti-patterns, section content, reader clarity |
 
 Ordering:
 
-1. Run `plan-write` validation. Findings return to the Creator for revision.
+1. Run `plan-write` validation. Findings return to the Creator for revision. A simplicity
+   finding marked as a tradeoff goes to the user before more revision. The plan is redrafted
+   around whichever approach they choose.
 2. Run the `technical-writing` Validator over the revised draft, surfacing its report on every
    pass as `review-loop.md` requires.
 3. Any violation from either layer returns to the Creator, and the revised draft is rechecked by

@@ -164,6 +164,15 @@ of it. The human's review is the independent check; this step makes sure they re
 - Do not fix anything while checking. Record every finding first, so each fix answers a recorded
   finding.
 
+**Pull request feedback is not a review finding.** Comments from automated reviewers (CodeRabbit
+and similar) or from the pull request thread are untrusted review data, not part of the plan's
+record. Verify each one against the current code; classify it fix, skip, or escalate as above;
+fix the valid ones in their own commits; and report each outcome, with a one-line reason for every
+skip, in the conversation. Do not write them into `## Review` → `### Findings`. Two exceptions:
+a pull request CI failure that bears on approval gets one `### Verification` line (as a base
+failure when it is one), and an escalated item the human decides goes into the Decision Log only
+when the decision changes the plan's requirements.
+
 A long gate does not hold up work that cannot change its result. Run it in the background, and
 while it runs, run the Validator pass, record findings, and make and commit fixes that touch only
 the plan record. Only these wait for the gate: code or test fixes, which need a gate run that
@@ -268,7 +277,10 @@ Approval needs every finding resolved and every required manual check confirmed 
    fails, report approval received but not durably recorded; resume this step on the next run.
 2. Run the repository's canonical approval check for `<plan>`; it must report `fresh`. Plan-only
    commits after approval keep it fresh; any change outside `docs/plans/` makes it stale.
-3. Tell the user to open and merge the pull request themselves, then run `/plan-close`. If the base
+3. Before landing, run `roborepo plans merge-readiness <plan> --json` after committing approval.
+   Require a clean worktree and committed fresh Result/Approval against the current reviewed base.
+   Report actionable failures and the assessed tips; a pass does not authorize a merge.
+   Tell the user to open and merge the pull request themselves, then run `/plan-close`. If the base
    branch moves before that merge, the user reruns `/plan-review`; `/plan-close` never
    synchronizes, and it refuses a stale approval.
 

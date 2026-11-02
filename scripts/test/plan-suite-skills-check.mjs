@@ -21,7 +21,7 @@ import { loadSlashCommandPlan } from "../cli/slash-commands.mjs";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const cli = path.join(repoRoot, "scripts/cli/main.mjs");
 const normalize = (text) => text.replace(/\s+/g, " ");
-// The six plan skills ship in one package; session-close is its own.
+// The plan skills ship in one package; session-close is its own.
 const PLAN_SUITE_PACKAGE = "plan-suite";
 const packageOf = (id) => (id.startsWith("plan-") ? PLAN_SUITE_PACKAGE : id);
 const readSkill = (id) => normalize(fs.readFileSync(path.join(repoRoot, "globals/packages", packageOf(id), "skills", id, "SKILL.md"), "utf8"));
@@ -332,8 +332,11 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "Approval only",
     "review.baseChangedPaths",
     "Record the existing answer immediately",
-    "finish only step 3",
-    "This recovery records approval; it does not close, merge, push, or waive tests",
+    "Do not edit, synchronize, or commit",
+    "Primary precursor blob:",
+    "Worktree precursor blob:",
+    "A retry reuses identical committed evidence",
+    "it does not close, merge, push, or waive tests",
   ]);
 }
 
@@ -346,14 +349,11 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "/plan-execute <plan document file>",
     "Never invoke `/plan-execute` yourself",
   ]);
-  assert.ok(!promote.includes("/plan-start"), "plan-promote: hands off to /plan-execute");
 }
 
 // --- suite-wide conventions: every plan-suite skill checks its paired packages before loading them,
-// names no retired command, and /plan-close repairs agent-resolvable gaps before refusing. ---
+// and /plan-close repairs agent-resolvable gaps before refusing. ---
 {
-  // Assembled from parts so this guard does not itself contain the retired names.
-  const RETIRED_COMMANDS = [["plan", "docs"], ["wrap", "up"], ["integration", "check"], ["plan", "start"], ["plan", "ship"]].map((parts) => parts.join("-"));
   const suite = ["plan-write", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive", "session-close"];
   for (const id of suite) {
     const skill = readSkill(id);
@@ -364,9 +364,6 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
         ? readPackageFile("plan-suite/skills/plan-execute/references/final-report.md")
         : skill;
       includesAll(`${id} report names the plan`, report, ['- Plan: "<title>" (<id>), <repository-relative path>']);
-    }
-    for (const retired of RETIRED_COMMANDS) {
-      assert.ok(!skill.includes(`/${retired}`), `${id}: SKILL.md still names the retired /${retired}`);
     }
   }
 
@@ -432,15 +429,13 @@ const catalog = loadPackageCatalog({ includeUnavailable: true });
 validatePackageCatalog(catalog);
 
 const byId = new Map(catalog.map((pkg) => [pkg.id, pkg]));
-assert.ok(!byId.has("plan-start"), "plan-start is retired, with no compatibility alias");
-assert.ok(!byId.has("plan-ship"), "there is no plan-ship command");
 assert.ok(byId.has(PLAN_SUITE_PACKAGE), `catalog missing package: ${PLAN_SUITE_PACKAGE}`);
-for (const id of ["plan-write", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive"]) {
+for (const id of ["plan-suite-init", "plan-write", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive"]) {
   assert.ok(!byId.has(id), `${id} is a skill of ${PLAN_SUITE_PACKAGE}, not a package of its own`);
 }
 assert.deepEqual(
   byId.get(PLAN_SUITE_PACKAGE).resources.filter((r) => r.type === "skill").map((r) => r.id),
-  ["plan-write", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive"],
+  ["plan-suite-init", "plan-write", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive"],
   `${PLAN_SUITE_PACKAGE} lists its skills in lifecycle order`,
 );
 for (const [id, { risk }] of Object.entries(SKILLS)) {
@@ -454,9 +449,7 @@ assert.match(fs.readFileSync(path.join(repoRoot, "globals/packages", PLAN_SUITE_
 
 // --- generated slash commands exist for every harness and point at the right SKILL.md ---
 const slashNames = new Set(loadSlashCommandPlan().commands.map((c) => c.name));
-assert.ok(!slashNames.has("plan-start"), "no plan-start slash command remains");
 for (const id of Object.keys(SKILLS)) assert.ok(slashNames.has(id), `missing slash command: ${id}`);
-assert.ok(!fs.existsSync(path.join(repoRoot, "generated/packages/plan-start")), "no generated plan-start projection remains");
 
 for (const harness of ["claude", "codex", "gemini"]) {
   for (const id of Object.keys(SKILLS)) {

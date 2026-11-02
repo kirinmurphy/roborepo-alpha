@@ -5,6 +5,7 @@ import {
   resolveRegistryAlias,
 } from "../../modules/repositories/index.mjs";
 import { isFixtureRepository } from "../../modules/developer-runtime/snapshot.mjs";
+import { DEFAULT_WORKTREE_STALE_DAYS } from "../../modules/repositories/worktree-state.mjs";
 import {
   planChangedAt,
   plansByRepository,
@@ -29,6 +30,7 @@ export function composeHomeOverview({ registry, runtimeState, plansState, teleme
       telemetryState,
       telemetry: telemetryById[record.id] || null,
       fixtureTelemetry: fixtureTelemetryById[record.id] || null,
+      now,
     }));
   const hasActualRepository = allRepositories.some((repository) => !repository.fixture);
   const repositories = hasActualRepository
@@ -102,6 +104,7 @@ function repositoryOverview(record, context) {
     ...repositorySummary(record),
     fixture: isFixtureRepository(record.id),
     lifecycle,
+    inProgress: lifecycle.state !== "active" && hasWorkInProgress(runtime.data, plans.data, context.now),
     lastSeenAt: workspace?.lastSeenAt || lastSeenAtFor(record),
     domains: {
       runtime,
@@ -187,16 +190,32 @@ function unavailableEnvelope(message) {
   return { status: "unavailable", updatedAt: null, data: null, message };
 }
 
-// Pinned first, then running before idle/stale, and within each of those real repositories before
-// dev fixtures: pinned → active → active fixtures → idle → idle fixtures. Pins lead the whole list
-// (unlike Runtime, which pins within each group) since Home has no other way to keep an idle
-// favorite in view.
+// A repo with nothing running can still be mid-work: a CLI or library never runs a server, so
+// "idle" alone would bury it. It counts as in progress while it has a linked worktree Runtime does
+// not call stale or landed, or an Active or Review plan changed within the same window Runtime uses
+// to call a worktree stale. Work that has gone quiet that long falls back to idle.
+const IN_PROGRESS_WINDOW_MS = DEFAULT_WORKTREE_STALE_DAYS * 24 * 60 * 60 * 1000;
+
+function hasWorkInProgress(runtime, plans, now = new Date()) {
+  const openWorktree = (runtime?.checkouts || []).some((checkout) => checkout.isWorktree
+    && checkout.checkoutState === "present"
+    && ["running", "idle"].includes(checkout.worktreeState));
+  if (openWorktree) return true;
+  return (plans?.active || []).some((plan) => {
+    const age = now.getTime() - Date.parse(plan.changedAt || "");
+    return Number.isFinite(age) && age <= IN_PROGRESS_WINDOW_MS;
+  });
+}
+
+// Pinned first, then running, then in progress (nothing running, but open work), then idle/stale;
+// within each, real repositories before dev fixtures. Pins lead the whole list (unlike Runtime,
+// which pins within each group) since Home has no other way to keep an idle favorite in view.
 function sortRepositories(repositories) {
   const rank = { active: 0, idle: 1, stale: 2 };
   const group = (repository) => {
     if (repository.pinned) return 0;
-    const running = repository.lifecycle.state === "active";
-    return (running ? 1 : 3) + (repository.fixture ? 1 : 0);
+    const base = repository.lifecycle.state === "active" ? 1 : repository.inProgress ? 3 : 5;
+    return base + (repository.fixture ? 1 : 0);
   };
   return repositories.sort((a, b) => {
     const grouped = group(a) - group(b);

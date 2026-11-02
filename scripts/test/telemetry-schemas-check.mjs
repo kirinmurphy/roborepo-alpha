@@ -6,13 +6,13 @@ import { generateId, isValidId } from "../cli/telemetry-schemas/id.mjs";
 import { generateMarkerId, validateMarker } from "../cli/telemetry-schemas/marker-schema.mjs";
 import { computeSnapshotId, validateSnapshot, buildEffectiveSnapshot } from "../cli/telemetry-schemas/snapshot-schema.mjs";
 import { generateExperimentId, validateExperiment } from "../cli/telemetry-schemas/experiment-schema.mjs";
-import { testCaptureV3Compat } from "./telemetry-schemas/capture-checks.mjs";
+import { testCaptureV3Validation } from "./telemetry-schemas/capture-checks.mjs";
 
 testIdGenerator();
 testMarkerValidation();
 testSnapshotContentAddressing();
 testExperimentValidation();
-testCaptureV3Compat();
+testCaptureV3Validation();
 testPersistenceRoundTrip();
 testPrivacyHashIsPinned();
 testPrivacyHashHasOneImplementation();
@@ -29,14 +29,19 @@ function testIdGenerator() {
 }
 
 function testMarkerValidation() {
+  const ts = new Date().toISOString();
   const base = {
-    schema: 1,
+    schema: 2,
     marker_id: generateMarkerId(),
-    ts: new Date().toISOString(),
+    ts,
+    effective_at: ts,
+    scope: "all",
+    watching_kinds: ["spike"],
     type: "change",
     title: "Prevent full-suite debugging loops",
   };
   assert.deepEqual(validateMarker(base), base);
+  assert.throws(() => validateMarker({ ...base, schema: 1 }), /unsupported marker schema version/);
 
   assert.throws(() => validateMarker({ ...base, type: "bogus" }), /unknown marker type/);
   assert.throws(() => validateMarker({ ...base, title: "" }), /marker title is required/);
@@ -77,8 +82,7 @@ function testSnapshotContentAddressing() {
   };
   const snapshotA = buildEffectiveSnapshot(configSnapshot, { harness: "claude", model: "sonnet" });
   const snapshotB = buildEffectiveSnapshot(configSnapshot, { harness: "codex", model: "gpt" });
-  assert.notEqual(snapshotA.snapshot_id, snapshotB.snapshot_id, "v2 provider coverage must be part of snapshot identity");
-  assert.equal(computeSnapshotId({ ...snapshotA, schema: 1 }), computeSnapshotId({ ...snapshotB, schema: 1 }), "v1 identity remains stable");
+  assert.notEqual(snapshotA.snapshot_id, snapshotB.snapshot_id, "provider coverage must be part of snapshot identity");
   assert.equal(snapshotA.snapshot_id, buildEffectiveSnapshot(configSnapshot, { harness: "claude", model: "other" }).snapshot_id, "model alone does not change configuration identity");
   assert.ok(snapshotB.unavailable.includes("codex_config_toml_parsed"), "codex snapshots must flag the parsed-config.toml gap");
   assert.ok(!snapshotA.unavailable.includes("codex_config_toml_parsed"), "claude snapshots must not carry the codex-only gap");
@@ -91,6 +95,7 @@ function testSnapshotContentAddressing() {
 
   assert.equal(computeSnapshotId(snapshotA), snapshotA.snapshot_id, "computeSnapshotId must be stable/idempotent on an already-built snapshot");
   assert.throws(() => validateSnapshot({ ...snapshotA, schema: 99 }), /unsupported snapshot schema version/);
+  assert.throws(() => validateSnapshot({ ...snapshotA, schema: 1 }), /unsupported snapshot schema version/);
 }
 
 function testExperimentValidation() {

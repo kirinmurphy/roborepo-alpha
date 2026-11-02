@@ -8,7 +8,9 @@ import { hookRecordsFromFile } from "../harnesses/root-config-hooks.mjs";
 import { getHarnessProvider } from "../harnesses/registry.mjs";
 import { stateSkillsDir, telemetryDir } from "./state-paths.mjs";
 import { codexStatusLineIncludes, readHarnessConfig, packageRuntimeAssetDestination } from "./package-harness-config.mjs";
-import { effectiveEnabledIds, knownHarnessIds } from "./rules-render.mjs";
+import { knownHarnessIds } from "./rules-render.mjs";
+import { effectiveEnabledIds } from "./package-state.mjs";
+import { requiredClosure } from "./package-graph.mjs";
 
 const CLAUDE_SETTINGS = path.join(os.homedir(), ".claude", "settings.json");
 const CODEX_CONFIG = path.join(os.homedir(), ".codex", "config.toml");
@@ -48,13 +50,9 @@ function codexScalarMatches(configText, key, value) {
   return new RegExp(`^${key}\\s*=\\s*${value ? "true" : "false"}\\b`, "m").test(block[1]);
 }
 
-// "both" is a legacy sentinel meaning "every harness", from when there were exactly two. Every
-// other consumer already treats it that way (rules-render.mjs and context-cost.mjs match it against
-// any harness; packages.mjs maps it to renderHomeRules's all-harnesses form), so it must expand to
-// the full registry here too — expanding it to a literal pair silently skipped probing a
-// "both"-declared component's live state on any third harness.
+// A component without a harness applies to every registered harness.
 function targetHarnesses(component) {
-  if (component.harness === "both" || !component.harness) return knownHarnessIds();
+  if (!component.harness) return knownHarnessIds();
   return [component.harness];
 }
 
@@ -315,7 +313,7 @@ function probeSkill(component, desired, pkg) {
 function dependencyComponents(pkg, packageStatusById) {
   return (pkg.requires || []).map((id) => {
     const dep = packageStatusById.get(id);
-    const observed = dep?.desired === true;
+    const observed = dep?.desired === true && ["enabled", "configured"].includes(dep.status);
     return {
       type: "requires",
       id,
@@ -344,12 +342,13 @@ function packageStatus({ desired, components }) {
   return components.some((component) => component.state === "external") ? "external" : "disabled";
 }
 
-export function buildPackageLiveState(packages, { hookRecords = null } = {}) {
-  const enabledIds = new Set(effectiveEnabledIds(packages));
+// `effectiveIds` is for callers probing a subset of the catalog: the subset cannot see a selected
+// root outside it, so a dependency that root requires would read as not desired.
+export function buildPackageLiveState(packages, { hookRecords = null, effectiveIds = effectiveEnabledIds(packages) } = {}) {
+  const enabledIds = new Set(effectiveIds);
   const settings = readJson(CLAUDE_SETTINGS, {});
   const telemetryState = readJson(path.join(telemetryDir, "state.json"), null);
   const byId = new Map();
-  const out = [];
 
   for (const pkg of packages) {
     const baseDesired = enabledIds.has(pkg.id);
@@ -375,16 +374,15 @@ export function buildPackageLiveState(packages, { hookRecords = null } = {}) {
     const status = packageStatus({ desired, components });
     const summary = { desired, status, components };
     byId.set(pkg.id, summary);
-    out.push([pkg.id, summary]);
   }
 
-  for (const [id, summary] of out) {
+  for (const id of requiredClosure(packages, [...byId.keys()])) {
+    const summary = byId.get(id);
     const pkg = packages.find((entry) => entry.id === id);
     const deps = dependencyComponents(pkg, byId);
     if (deps.length === 0) continue;
     const components = [...summary.components, ...deps];
-    const ownComponents = (pkg.components || []).length > 0;
-    const desired = ownComponents ? summary.desired : deps.every((dep) => dep.observed);
+    const desired = summary.desired;
     byId.set(id, { desired, status: packageStatus({ desired, components }), components });
   }
 

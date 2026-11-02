@@ -15,7 +15,7 @@ import path from "node:path";
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-harness-pkg-roundtrip-"));
 process.on("exit", () => fs.rmSync(tmp, { recursive: true, force: true }));
 process.env.HOME = tmp;
-process.env.ROBOREPO_STATE_DIR = path.join(tmp, ".roborepo");
+process.env.ROBOREPO_STATE_ROOT = path.join(tmp, ".roborepo");
 
 const { mergeHarnessConfig, unmergeHarnessConfig } = await import("../cli/package-harness-config.mjs");
 

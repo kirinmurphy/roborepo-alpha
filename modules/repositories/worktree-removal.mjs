@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
+import { inventoryWorktree, listWorktreeSnapshots, readSnapshot } from "./worktree-snapshot.mjs";
 import { runGitProcess } from "./git-exec.mjs";
 
 export function removalLogPath(stateRoot) {
@@ -44,23 +45,36 @@ export async function archiveBranchTip(mainPath, branch, tip, { runGit = runGitP
   return result.ok ? { ok: true, ref } : { ok: false, reason: result.error || "could not archive branch" };
 }
 
-export async function removeWorktree(mainPath, worktree, { kind, stateRoot, tip, discardChanges = false, runGit = runGitProcess, fsApi = fs } = {}) {
-  let archiveRef = null;
-  if (kind === "confirmed") {
+export async function removeWorktree(mainPath, worktree, { kind, stateRoot, tip, discardChanges = false, snapshot = null, baseEvidence = null, runGit = runGitProcess, fsApi = fs } = {}) {
+  if (snapshot) {
+    try {
+      const { manifest } = await readSnapshot(mainPath, snapshot.ref);
+      const current = await inventoryWorktree(worktree.path);
+      if (manifest.tip !== tip || current.fingerprint !== manifest.fingerprint || current.tip !== tip) return { ok: false, reason: "snapshot no longer matches removal target", archiveRef: snapshot.ref };
+    } catch (error) { return { ok: false, reason: error.message, archiveRef: snapshot.ref || null }; }
+  }
+  let archiveRef = snapshot?.ref || null;
+  if (kind === "confirmed" && !snapshot) {
     const archived = await archiveBranchTip(mainPath, worktree.branch || worktree.name, tip, { runGit });
     if (!archived.ok) return { ok: false, reason: archived.reason };
     archiveRef = archived.ref;
   }
+  if (baseEvidence) {
+    const base = await runGit(mainPath, ["rev-parse", "--verify", `${baseEvidence.ref}^{commit}`]);
+    if (!base.ok || base.stdout.trim() !== baseEvidence.commit) return { ok: false, kept: true, reason: "base changed before removal", archiveRef };
+  }
   const args = ["worktree", "remove"];
-  if (kind === "confirmed" && discardChanges === true) args.push("--force");
+  if ((kind === "confirmed" && discardChanges === true) || snapshot?.ok) args.push("--force");
   args.push(worktree.path);
   const removed = await runGit(mainPath, args, { timeoutMs: 120000 });
   if (!removed.ok) return { ok: false, reason: removed.error || "worktree remove failed", archiveRef };
+  if (snapshot) appendRemoval(stateRoot, { at: new Date().toISOString(), outcome: "checkout-removed", path: worktree.path, branch: worktree.branch, snapshotRef: snapshot.ref, ok: true }, fsApi);
   let branchDeleted = false;
   if (worktree.branch) {
-    const branch = await runGit(mainPath, ["branch", "-D", worktree.branch], { timeoutMs: 10000 });
+    const branch = await retireBranch(mainPath, worktree.branch, tip, runGit);
     branchDeleted = branch.ok;
   }
+  if (snapshot) appendRemoval(stateRoot, { at: new Date().toISOString(), outcome: "branch-retired", path: worktree.path, branch: worktree.branch, snapshotRef: snapshot.ref, ok: branchDeleted || !worktree.branch }, fsApi);
   const entry = { at: new Date().toISOString(), kind, path: worktree.path, branch: worktree.branch, commit: tip, archiveRef, branchDeleted, discardedChanges: discardChanges === true };
   appendRemoval(stateRoot, entry, fsApi);
   return branchDeleted || !worktree.branch
@@ -69,14 +83,14 @@ export async function removeWorktree(mainPath, worktree, { kind, stateRoot, tip,
 }
 
 export async function removeLandedBranch(mainPath, branch, { stateRoot, tip, runGit = runGitProcess, fsApi = fs } = {}) {
-  const removed = await runGit(mainPath, ["branch", "-D", branch], { timeoutMs: 10000 });
+  const removed = await retireBranch(mainPath, branch, tip, runGit);
   if (!removed.ok) return { ok: false, reason: removed.error || "branch deletion failed" };
   const entry = { at: new Date().toISOString(), kind: "automatic", path: null, branch, commit: tip, archiveRef: null, branchDeleted: true };
   appendRemoval(stateRoot, entry, fsApi);
   return { ok: true, entry };
 }
 
-function appendRemoval(stateRoot, entry, fsApi) {
+export function appendRemoval(stateRoot, entry, fsApi = fs) {
   const file = removalLogPath(stateRoot);
   fsApi.mkdirSync(path.dirname(file), { recursive: true });
   fsApi.appendFileSync(file, `${JSON.stringify(entry)}\n`);
@@ -103,4 +117,38 @@ function staleLock(file, fsApi) {
   } catch (err) {
     return err?.code === "ESRCH";
   }
+}
+
+async function retireBranch(mainPath, branch, tip, runGit) {
+  const occupied = await runGit(mainPath, ["worktree", "list", "--porcelain"]);
+  if (!occupied.ok || occupied.stdout.split("\n").includes(`branch refs/heads/${branch}`)) return { ok: false, error: "branch is occupied or worktree inventory unavailable" };
+  return runGit(mainPath, ["update-ref", "-d", `refs/heads/${branch}`, tip], { timeoutMs: 10000 });
+}
+
+// A snapshot is also the durable checkpoint when removal succeeded but branch retirement did not.
+// Retrying never recreates capture or removes a new checkout that happens to use the old branch.
+export async function retryArchivedBranchRetirement(mainPath, selector, { apply = false, stateRoot, runGit = runGitProcess } = {}) {
+  const candidates = (await listWorktreeSnapshots(mainPath)).filter((entry) => entry.kind === "snapshot" && (entry.branch === selector || entry.worktree?.name === selector))
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  const snapshot = candidates[0];
+  if (!snapshot) return { action: "kept", eligible: false, reason: `worktree not found and no recovery snapshot: ${selector}` };
+  const row = { path: snapshot.worktree?.path || null, branch: snapshot.branch, name: snapshot.worktree?.name || null, snapshotRef: snapshot.ref, archiveRef: snapshot.ref,
+    restoreCommand: `roborepo git worktrees restore ${snapshot.id} --destination <new-path> --apply`, preservation: "remaining", state: "unknown", action: "kept", eligible: false,
+    outcomes: [{ step: "snapshot-created", ok: true, reused: true }] };
+  if (!row.path || fs.existsSync(row.path)) return { ...row, reason: "captured checkout still exists; inspect it before retrying" };
+  row.outcomes.push({ step: "checkout-removed", ok: true, reused: true });
+  const refs = await runGit(mainPath, ["worktree", "list", "--porcelain"]);
+  if (!refs.ok || (snapshot.branch && refs.stdout.split("\n").includes(`branch refs/heads/${snapshot.branch}`))) return { ...row, reason: "branch became occupied; retained with existing snapshot" };
+  const current = snapshot.branch ? await runGit(mainPath, ["rev-parse", "--verify", `refs/heads/${snapshot.branch}`]) : { ok: false };
+  if (current.ok && current.stdout.trim() !== snapshot.tip) return { ...row, reason: "branch moved; retained with existing snapshot" };
+  if (!current.ok && snapshot.branch) {
+    const exists = await runGit(mainPath, ["show-ref", "--verify", "--quiet", `refs/heads/${snapshot.branch}`]);
+    if (exists.code !== 1) return { ...row, reason: "branch state unavailable; retained with existing snapshot" };
+  }
+  row.eligible = true;
+  if (!apply) return { ...row, reason: null };
+  const retired = current.ok ? await retireBranch(mainPath, snapshot.branch, snapshot.tip, runGit) : { ok: true };
+  row.outcomes.push({ step: "branch-retired", ok: retired.ok, reused: !current.ok });
+  if (current.ok) appendRemoval(stateRoot, { at: new Date().toISOString(), outcome: "branch-retired", branch: snapshot.branch, snapshotRef: snapshot.ref, ok: retired.ok, retry: true });
+  return { ...row, action: retired.ok ? "removed" : "failed", reason: retired.ok ? null : "branch retirement failed; retained with existing snapshot" };
 }

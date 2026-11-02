@@ -120,7 +120,7 @@ Repo files are portable baselines. Active global files are local copies or exist
 
 Implication: runtime trust, hook approvals, local profiles, and machine-specific state stay out of repo source. If both sides exist, the installer merges the baseline into the local file rather than replacing it.
 
-Agent permission defaults are authored in `manifests/inventory/agent-permissions.json` and rendered by `roborepo permissions`.
+Agent permission defaults are authored in `manifests/inventory/agent-permissions.json` and rendered by `roborepo config permissions --render`.
 
 - `generated/codex/config.toml` receives generated session defaults such as `sandbox_mode`, `approval_policy`, and workspace network access.
 - `generated/codex/rules/default.rules` receives generated shell command prefix policy such as allowed local commands and denied Git remote commands.

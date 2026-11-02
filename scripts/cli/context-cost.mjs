@@ -102,7 +102,7 @@ function packageRulesComponents(pkg, harness, enabled, deps) {
   const components = [];
   for (const comp of pkg.components || []) {
     if (comp.type !== "rules") continue;
-    if (comp.harness !== "both" && comp.harness !== harness) continue;
+    if (comp.harness && comp.harness !== harness) continue;
     const content = deps.readFile(path.join(deps.repoRoot, comp.source));
     if (content === null) continue;
     components.push({

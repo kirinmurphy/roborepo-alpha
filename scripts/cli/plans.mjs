@@ -80,7 +80,8 @@ export function buildPlansPrompt({ action, keys, mode }) {
 }
 
 export function updatePlanPriority({ id, key, priority, expectedPriority, mtimeMs, repositoryId }) {
-  const snapshot = cachedSnapshot || buildPlanSnapshot({ stateRoot, packageState: planSuitePackageState() });
+  // Writes resolve current evidence/worktree authority rather than a cached recovery selection.
+  const snapshot = buildPlanSnapshot({ stateRoot, packageState: planSuitePackageState() });
   const result = updatePlanPriorityInDocs(snapshot, { id, key, priority, expectedPriority, mtimeMs, repositoryId });
   cachedSnapshot = null;
   return publicMutationResult(result);

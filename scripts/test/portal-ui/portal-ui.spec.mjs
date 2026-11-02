@@ -25,17 +25,17 @@ test.describe("Agents page", () => {
     await page.goto("/agents");
     const suite = page.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^Development Planning Lifecycle$/ }) });
     await expect(suite).toHaveCount(1);
-    await expect(suite.locator(".badge", { hasText: /^6 skills$/ })).toBeVisible();
+    await expect(suite.locator(".badge", { hasText: /^7 skills$/ })).toBeVisible();
 
     await suite.locator(".item-label").click();
     const modal = page.locator("dialog#config-modal");
     await expect(modal).toBeVisible();
     await expect(modal.locator("#modal-title")).toHaveText("Development Planning Lifecycle");
-    await expect(modal.locator(".package-contents-summary")).toHaveText("6 skills · 1 rules fragment");
-    await expect(modal.locator(".package-contents-label")).toHaveText(["/plan-write", "/plan-promote", "/plan-execute", "/plan-review", "/plan-close", "/plan-archive", "Rules"]);
+    await expect(modal.locator(".package-contents-summary")).toHaveText("7 skills · 1 rules fragment");
+    await expect(modal.locator(".package-contents-label")).toHaveText(["/plan-suite-init", "/plan-write", "/plan-promote", "/plan-execute", "/plan-review", "/plan-close", "/plan-archive", "Rules"]);
     // Every row shows its own cost: a skill's when-loaded size, the rules fragment's startup size.
     const chips = modal.locator(".package-contents-entry token-chip");
-    await expect(chips).toHaveCount(7);
+    await expect(chips).toHaveCount(8);
     for (const chip of await chips.all()) {
       await expect(chip).toBeVisible();
       expect(await chip.evaluate((el) => el.tokens)).toBeGreaterThan(0);
@@ -50,7 +50,7 @@ test.describe("Agents page", () => {
 
     await modal.locator("#modal-back").click();
     await expect(modal.locator("#modal-title")).toHaveText("Development Planning Lifecycle");
-    await expect(modal.locator(".package-contents-entry")).toHaveCount(7);
+    await expect(modal.locator(".package-contents-entry")).toHaveCount(8);
     await expect(modal.locator("#modal-back")).toBeHidden();
 
     await modal.locator(".package-contents-entry", { hasText: "Rules" }).click();
@@ -104,10 +104,216 @@ test.describe("Agents page", () => {
     expect(warningButtonGrid.row).toBe("1");
   });
 
+  test("required packages are a reference in the package's popup, not page rows; recommended ones are switchable rows", async ({ page }) => {
+    const snapshot = await (await page.request.get("/api/config")).json();
+    const byId = new Map(snapshot.packages.map((pkg) => [pkg.id, pkg]));
+    const planSuite = byId.get("plan-suite");
+    const sessionClose = byId.get("session-close");
+    const dependency = byId.get("technical-writing");
+    const companion = byId.get("tighten");
+    const chained = byId.get("code-style");
+    expect(planSuite && sessionClose && dependency && companion && chained, "fixture packages exist").toBeTruthy();
+    // The edges a dependency-only package would add: one dependency shared by two rows, a chain
+    // past it (session-close -> technical-writing -> code-style), and one recommendation that is off.
+    planSuite.requires = ["technical-writing"];
+    sessionClose.requires = ["technical-writing"];
+    dependency.requires = ["code-style"];
+    sessionClose.recommends = ["tighten"];
+    Object.assign(dependency, {
+      selectable: false, selection: "required", enabled: true,
+      presentation: { ...dependency.presentation, visibility: "dependency" },
+    });
+    Object.assign(companion, { enabled: false, selection: "off" });
+    snapshot.behaviorView = buildBehaviorView(snapshot);
+    await page.route("**/api/config", (route) => route.fulfill({ json: snapshot }));
+
+    await page.goto("/agents");
+    const section = page.locator("section.panel").filter({ has: page.getByRole("heading", { name: "Development Workflows" }) });
+    // The dependency-only package has no row anywhere on the page.
+    await expect(page.locator("config-item").filter({ has: page.getByText(dependency.label, { exact: true }) })).toHaveCount(0);
+    await expect(page.getByText("Required dependencies")).toHaveCount(0);
+
+    const recommendedRow = section.locator("[data-slot=recommended-group] config-item");
+    await expect(recommendedRow).toHaveCount(1);
+    await expect(recommendedRow.locator("[data-slot=relation]")).toHaveText(`recommended by ${sessionClose.label}`);
+    await expect(recommendedRow.locator("config-toggle")).toHaveCount(1);
+
+    // A package's popup lists what it requires; each name opens that package's source, and Back
+    // returns to the package that requires it.
+    const modal = page.locator("dialog#config-modal");
+    await section.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^\/session-close$/ }) }).locator(".item-label").click();
+    await expect(modal.locator("#modal-requires")).toBeVisible();
+    await expect(modal.locator(".modal-requires-item")).toHaveText([chained.label, dependency.label]);
+    await modal.locator(".modal-requires-item", { hasText: dependency.label }).click();
+    await expect(modal.locator("#modal-path")).toContainText("technical-writing/SKILL.md");
+    // A required package's popup keeps its own requirement, so each link of the chain is reachable.
+    await expect(modal.locator(".modal-requires-item")).toHaveText([chained.label]);
+    await modal.locator(".modal-requires-item").click();
+    await expect(modal.locator("#modal-path")).toContainText("code-style/SKILL.md");
+    await expect(modal.locator("#modal-requires")).toBeHidden();
+    await modal.locator("#modal-back").click();
+    await expect(modal.locator("#modal-path")).toContainText("technical-writing/SKILL.md");
+    await expect(modal.locator(".modal-requires-item")).toHaveText([chained.label]);
+    await modal.locator("#modal-back").click();
+    await expect(modal.locator("#modal-path")).toContainText("session-close/SKILL.md");
+    await expect(modal.locator(".modal-requires-item")).toHaveText([chained.label, dependency.label]);
+    await modal.locator("#modal-close").click();
+
+    // The contents view of a package with several skills lists them too.
+    await section.locator(".item-label", { hasText: /^Development Planning Lifecycle$/ }).click();
+    await expect(modal.locator(".modal-requires-item")).toHaveText([chained.label, dependency.label]);
+    await modal.locator("#modal-close").click();
+
+    // A multi-skill required target keeps Back through its contents and nested source views.
+    sessionClose.requires = ["plan-suite"];
+    snapshot.behaviorView = buildBehaviorView(snapshot);
+    await page.reload();
+    await section.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^\/session-close$/ }) }).locator(".item-label").click();
+    await modal.locator(".modal-requires-item", { hasText: planSuite.label }).click();
+    await expect(modal.locator("#modal-title")).toHaveText(planSuite.label);
+    await expect(modal.locator("#modal-back")).toBeVisible();
+    await modal.locator(".package-contents-entry", { hasText: "/plan-execute" }).click();
+    await expect(modal.locator("#modal-path")).toContainText("plan-execute/SKILL.md");
+    await modal.locator("#modal-back").click();
+    await expect(modal.locator("#modal-title")).toHaveText(planSuite.label);
+    await modal.locator(".modal-requires-item", { hasText: dependency.label }).click();
+    await expect(modal.locator("#modal-path")).toContainText("technical-writing/SKILL.md");
+    await modal.locator("#modal-back").click();
+    await expect(modal.locator("#modal-title")).toHaveText(planSuite.label);
+    await modal.locator("#modal-back").click();
+    await expect(modal.locator("#modal-path")).toContainText("session-close/SKILL.md");
+    await modal.locator("#modal-close").click();
+
+    // A required package with no source to open is listed as plain text, not a button.
+    const readOnly = snapshot.behaviorView.find((entry) => entry.categoryId === "skills-dev-lifecycle")
+      .items.find((item) => item.id === "session-close");
+    readOnly.requires = [{ id: "mcp-only", label: "MCP Only", active: true, inspect: null, contextCost: null, builtIn: true }];
+    await page.reload();
+    await section.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^\/session-close$/ }) }).locator(".item-label").click();
+    await expect(modal.locator("span.modal-requires-item")).toHaveText("MCP Only");
+    await expect(modal.locator("button.modal-requires-item")).toHaveCount(0);
+    await modal.locator("#modal-close").click();
+
+    // A package with no requirements shows no Requires line.
+    await page.locator(".item-label", { hasText: companion.label }).first().click();
+    await expect(modal.locator("#modal-requires")).toBeHidden();
+    await modal.locator("#modal-close").click();
+  });
+
+  test("a package with only requirements opens its dependency references", async ({ page }) => {
+    const snapshot = await (await page.request.get("/api/config")).json();
+    const parent = snapshot.packages.find((pkg) => pkg.id === "session-close");
+    const dependency = snapshot.packages.find((pkg) => pkg.id === "technical-writing");
+    Object.assign(parent, { requires: [dependency.id], resources: [], components: [], skillIds: [] });
+    Object.assign(dependency, { selectable: false, presentation: { ...dependency.presentation, visibility: "dependency" } });
+    snapshot.tools = snapshot.tools.filter((tool) => tool.packageId !== parent.id);
+    snapshot.behaviorView = buildBehaviorView(snapshot);
+    await page.route("**/api/config", (route) => route.fulfill({ json: snapshot }));
+    await page.goto("/agents");
+    const row = page.locator("[data-slot=items] config-item").filter({ has: page.getByText(parent.label, { exact: true }) });
+    await row.locator(".item-label").click();
+    const modal = page.locator("dialog#config-modal");
+    await expect(modal.locator("#modal-title")).toHaveText(parent.label);
+    await expect(modal.locator(".package-contents-entry")).toHaveCount(0);
+    await modal.locator(".modal-requires-item", { hasText: dependency.label }).click();
+    await expect(modal.locator("#modal-path")).toContainText("technical-writing/SKILL.md");
+    await modal.locator("#modal-back").click();
+    await expect(modal.locator("#modal-title")).toHaveText(parent.label);
+    await expect(modal.locator(".modal-requires-item")).toHaveText([dependency.label]);
+  });
+
+  test("a group switch counts only rows it can act on, and hides when none are left", async ({ page }) => {
+    const snapshot = await (await page.request.get("/api/config")).json();
+    const section = snapshot.behaviorView.find((entry) => entry.categoryId === "skills-dev-lifecycle");
+    expect(section?.items.length, "fixture needs the Development Workflows rows").toBeGreaterThanOrEqual(2);
+    section.bulkToggle = true;
+    const [first, ...rest] = section.items;
+    Object.assign(first, { active: true, selection: "selected" });
+    for (const item of rest) Object.assign(item, { active: true, selection: "required" });
+    await page.route("**/api/config", (route) => route.fulfill({ json: snapshot }));
+    await page.goto("/agents");
+    const panel = page.locator("section.panel").filter({ has: page.getByRole("heading", { name: section.category }) });
+    await expect(panel.locator("[data-slot=bulk-label]")).toHaveText("Deselect All");
+
+    // Every row on only through another selection: nothing for the switch to do.
+    Object.assign(first, { selection: "required" });
+    await page.reload();
+    await expect(panel.locator("[data-slot=bulk]")).toBeHidden();
+  });
+
+  test("enabling a package with recommendations asks which to enable too, and enables nothing by itself", async ({ page }) => {
+    const snapshot = await (await page.request.get("/api/config")).json();
+    const shown = snapshot.behaviorView.flatMap((section) => section.items || []);
+    const [target, second] = shown.filter((item) => item.toggle === "package" && !item.active && item.id !== "telemetry" && item.id !== "tighten");
+    expect(target && second, "fixture needs two disabled package rows").toBeTruthy();
+    await page.route("**/api/config", (route) => route.fulfill({ json: snapshot }));
+    const posts = [];
+    await page.route("**/api/config/packages", (route) => {
+      posts.push(route.request().postDataJSON());
+      const { id } = route.request().postDataJSON();
+      route.fulfill({ json: {
+        ok: true, message: `enabled: ${id}`, outcomes: [], changedPackageIds: [id], config: snapshot,
+        recommendations: id === "tighten" ? [] : [{ id: "tighten", label: "Tighten", description: "Harden code against project patterns." }],
+      } });
+    });
+
+    await page.goto("/agents");
+    const row = page.locator("[data-slot=items] config-item").filter({ has: page.locator(".item-label", { hasText: target.label }) }).first();
+    await row.getByRole("checkbox").dispatchEvent("click");
+    const dialog = page.locator("dialog#recommendations-modal");
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator(".recommendation-label")).toHaveText("Tighten");
+    await dialog.getByRole("button", { name: "Continue without" }).click();
+    await expect(dialog).not.toBeVisible();
+    expect(posts).toEqual([{ id: target.id, enabled: true }]);
+
+    // Enable selected turns on exactly the checked recommendations, each as its own toggle.
+    const secondRow = page.locator("[data-slot=items] config-item").filter({ has: page.locator(".item-label", { hasText: second.label }) }).first();
+    await secondRow.getByRole("checkbox").dispatchEvent("click");
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Enable selected" }).click();
+    await expect.poll(() => posts.length).toBe(3);
+    expect(posts.slice(1)).toEqual([{ id: second.id, enabled: true }, { id: "tighten", enabled: true }]);
+    await expect(dialog).not.toBeVisible();
+  });
+
+  test("selected recommendations finish their nested prompts in order", async ({ page }) => {
+    const snapshot = await (await page.request.get("/api/config")).json();
+    const rows = snapshot.behaviorView.flatMap((section) => section.items || [])
+      .filter((item) => item.toggle === "package" && !item.active && item.id !== "telemetry");
+    const [parent, first, second, firstChild, secondChild] = rows;
+    expect(secondChild, "fixture needs five disabled packages").toBeTruthy();
+    const offers = new Map([[parent.id, [first, second]], [first.id, [firstChild]], [second.id, [secondChild]]]);
+    const posts = [];
+    await page.route("**/api/config", (route) => route.fulfill({ json: snapshot }));
+    await page.route("**/api/config/packages", (route) => {
+      const change = route.request().postDataJSON();
+      posts.push(change);
+      route.fulfill({ json: {
+        ok: true, message: `enabled: ${change.id}`, outcomes: [], changedPackageIds: [change.id], config: snapshot,
+        recommendations: offers.get(change.id) || [],
+      } });
+    });
+    await page.goto("/agents");
+    const row = page.locator("[data-slot=items] config-item").filter({ has: page.locator(".item-label", { hasText: parent.label }) }).first();
+    await row.getByRole("checkbox").dispatchEvent("click");
+    const dialog = page.locator("dialog#recommendations-modal");
+    await expect(dialog.locator(".recommendation-label")).toHaveText([first.label, second.label]);
+    await dialog.getByRole("button", { name: "Enable selected" }).click();
+    await expect(dialog.locator(".recommendation-label")).toHaveText([firstChild.label]);
+    expect(posts.map((change) => change.id)).toEqual([parent.id, first.id]);
+    await dialog.getByRole("button", { name: "Continue without" }).click();
+    await expect(dialog.locator(".recommendation-label")).toHaveText([secondChild.label]);
+    expect(posts.map((change) => change.id)).toEqual([parent.id, first.id, second.id]);
+    await dialog.getByRole("button", { name: "Enable selected" }).click();
+    await expect.poll(() => posts.map((change) => change.id)).toEqual([parent.id, first.id, second.id, secondChild.id]);
+    await expect(dialog).not.toBeVisible();
+  });
+
   test("explains a package whose pieces were installed outside RoboRepo", async ({ page }) => {
     const snapshot = await (await page.request.get("/api/config")).json();
     const shown = new Set(snapshot.behaviorView.flatMap((section) => section.items || []).map((item) => item.id));
-    const pkg = snapshot.packages.find((entry) => !entry.enabled && !entry.archived && shown.has(entry.id));
+    const pkg = snapshot.packages.find((entry) => !entry.enabled && shown.has(entry.id));
     expect(pkg, "fixture needs a disabled package on the Agents page").toBeTruthy();
     // What the probes report when another tool configured this package's MCP server and status
     // line: two status line components (Claude and Codex) must read as one "status line".
@@ -836,6 +1042,40 @@ test.describe("hook readiness warning", () => {
 });
 
 test.describe("repository-first portal Home", () => {
+  for (const { label, ageHours, ahead = 3, warning = null } of [
+    { label: "today's local commits", ageHours: 1 },
+    { label: "the one-day boundary", ageHours: 24 },
+    { label: "older local commits", ageHours: 72, warning: "3d unpushed" },
+    { label: "missing local commit dates", ageHours: null },
+    { label: "a synchronized clone", ageHours: 72, ahead: 0 },
+  ]) {
+    test(`unpushed warning uses local commit age: ${label}`, async ({ page }) => {
+      const now = Date.parse("2026-10-31T16:00:00Z");
+      await page.clock.setFixedTime(new Date(now));
+      await patchRoboRepo(page, (repository) => {
+        repository.domains.plans = { status: "available", data: { active: [], recent: [], counts: {} } };
+        repository.domains.runtime = { status: "available", data: { checkouts: [{
+          rootId: "main", name: "main", isWorktree: false,
+          git: { branch: "main", ahead, behind: 0, upstream: "origin/main",
+            upstreamTipAt: now / 1000 - 39 * 7 * 24 * 60 * 60,
+            oldestUnpushedAt: ageHours === null ? null : now / 1000 - ageHours * 60 * 60,
+            provider: { ok: true } },
+        }] } };
+      });
+      await page.goto("/");
+      const card = roboRepoCard(page);
+      await expect(card).toBeVisible();
+      if (warning) {
+        await expect(card.getByText(`⚠ ${warning}`, { exact: true })).toBeVisible();
+        await expect(card.getByText(`⚠ ${warning}`, { exact: true })).toHaveAttribute(
+          "title", "3 commits not on origin/main — oldest unpushed commit is 3d old",
+        );
+      } else {
+        await expect(card.getByText(/\d+[hdw] unpushed/)).toHaveCount(0);
+      }
+    });
+  }
+
   test("worktree rows show their state; Stop Server and Delete Worktree live in row menus", async ({ page }) => {
     // Short enough that the card scrolls, so the open dropdown has a page to follow.
     await page.setViewportSize({ width: 1280, height: 420 });
@@ -847,6 +1087,13 @@ test.describe("repository-first portal Home", () => {
       removals.push(route.request().postDataJSON());
       await removalHeld;
       await route.fulfill({ json: removal });
+    });
+    const archives = [];
+    await page.route("**/api/repositories/*/worktrees/archive-remove", async (route) => {
+      const request = route.request().postDataJSON();
+      if (!request.apply) { await route.fulfill({ json: { eligible: true, action: "kept", preservation: "remaining", remainingPaths: ["notes/local.txt"], reason: "local layers not absorbed within assessed history" } }); return; }
+      archives.push(request);
+      await route.fulfill({ json: { action: "removed", snapshotRef: "refs/roborepo/worktree-archives/fixture", restoreCommand: "roborepo git worktrees restore fixture --destination <new-path> --apply" } });
     });
     const stops = [];
     await page.route("**/api/repositories/*/worktrees/stop-servers", async (route) => {
@@ -923,6 +1170,8 @@ test.describe("repository-first portal Home", () => {
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText("its local branch, feature/stale.");
     await expect(dialog).toContainText("It has 3 commits that were never merged. A backup is kept so you can bring them back.");
+    await expect(dialog).toContainText("Local preservation: remaining.");
+    await expect(dialog).toContainText("Remaining paths: notes/local.txt");
     // The archive ref and restore commands sit behind Details, out of the way until asked for.
     const restore = dialog.locator("[data-slot=restore]");
     await expect(restore).toBeHidden();
@@ -953,6 +1202,16 @@ test.describe("repository-first portal Home", () => {
     await dialog.getByRole("button", { name: "Delete worktree", exact: true }).click();
     await expect.poll(() => removals).toEqual([{ branch: "feature/guarded", discardChanges: true }]);
     await expect(dialog).toBeHidden();
+
+    await card.getByRole("button", { name: "Actions for feature/stale" }).click();
+    await card.getByRole("button", { name: "Delete Worktree" }).click();
+    await expect(dialog).toContainText("Stop editors and agents writing here first");
+    await dialog.getByRole("button", { name: "Archive and remove", exact: true }).click();
+    await expect.poll(() => archives).toEqual([{ branch: "feature/stale", confirm: true, apply: true }]);
+    await expect(dialog).toContainText("Worktree archived and removed.");
+    await expect(dialog).toContainText("roborepo git worktrees restore fixture");
+    await page.screenshot({ path: "/tmp/worktree-archive-recovery.png" });
+    await dialog.getByRole("button", { name: "Cancel" }).click();
 
     removal = { action: "kept", reason: "uncommitted or untracked changes", requiresDiscardConfirmation: true };
     let release;
@@ -1139,19 +1398,78 @@ test.describe("repository-first portal Home", () => {
     await expect(loose.getByRole("link", { name: ":5174" })).toBeVisible();
     await expect(loose.getByRole("button", { name: "Links" })).toBeVisible();
 
-    // No repository-wide plan counts row: backlog counts were noise on Home.
-    await expect(card).not.toContainText("backlog");
+    // No repository-wide plan counts row: the counts live in the Plans shortcut's hover panel.
+    await expect(card.locator(".repository-roots")).not.toContainText("backlog");
+    // Plans, Agents, and Tokens are icon links beside the ⋮ menu, in that order, each scoped to the repo.
+    const shortcuts = card.locator(".repository-shortcut-link");
+    await expect(shortcuts).toHaveCount(3);
+    for (const [index, path] of ["plans", "agents", "tokens"].entries()) {
+      await expect(shortcuts.nth(index)).toHaveAttribute("href", new RegExp(`^/${path}\\?repo=[a-z0-9-]+$`));
+    }
+    await expect(card.locator("[data-menu]").getByText(/All Plans|Agent Config|Token Activity/)).toHaveCount(0);
+
+    // Hovering Plans lists each stage holding plans, in workflow order, each linking to that tab.
+    await shortcuts.nth(0).hover();
+    const stages = card.locator(".shortcut-panel-stage");
+    await expect(stages).toHaveText(["4 active", "5 backlog"]);
+    await expect(stages.nth(1)).toHaveAttribute("href", /^\/plans\?lifecycle=backlog&repo=[a-z0-9-]+$/);
+    await expect(card.locator(".shortcut-panel-title")).toHaveText("Plans");
+
+    // Tokens carries a warning mark; its hover panel holds what the card's warning row used to.
+    const tokens = card.locator(".repository-shortcut.is-warning");
+    await expect(tokens.locator(".repository-shortcut-link portal-icon[name=warning]")).toHaveCount(1);
+    await tokens.locator(".repository-shortcut-link").hover();
+    // The panel's heading leads with the same warning mark.
+    await expect(tokens.locator(".domain-heading > portal-icon[name=warning]")).toBeVisible();
     const warningsHeading = card.getByRole("heading", { name: "Recent Token Warnings" });
     await expect(warningsHeading).toBeVisible();
-    await expect(warningsHeading).toHaveAttribute("title", /8 warnings from \d{2}\/\d{2} to \d{2}\/\d{2}/);
+    // The two gpt-5-codex loops fall under the threshold of three per kind and model, so they drop.
+    await expect(warningsHeading).toHaveAttribute("title", /6 warnings from \d{2}\/\d{2} to \d{2}\/\d{2}/);
+    await expect(card.locator(".domain-range")).toHaveText(/^\d{2}\/\d{2} - \d{2}\/\d{2}$/);
     await expect(card.getByRole("list", { name: "Token warnings" }).getByRole("listitem")).toHaveText([
-      "3 token spikes and 2 repeated tool loops in gpt-5-codex",
+      "3 token spikes in gpt-5-codex",
       "3 repeated tool loops in claude-opus-4-8",
     ]);
     // The warnings are this repository's, so the link opens Tokens scoped to it.
     await expect(card.getByRole("link", { name: "all activity", exact: true })).toHaveAttribute("href", /^\/tokens\?repo=[a-z0-9-]+$/);
-    await expect(card.locator(".home-domain-row.is-warning")).toHaveCount(1);
     await expect(card.locator(".status-dot")).toHaveCount(0);
+  });
+
+  test("token warnings stay quiet until one kind has happened three times on one model", async ({ page }) => {
+    await planFixture(page, (repository) => {
+      repository.domains.tokens.data = { warningCount: 6, warnings: [
+        ...Array.from({ length: 2 }, () => ({ kind: "spike", model: "gpt-5-codex", at: "2026-09-24T12:00:00.000Z" })),
+        ...Array.from({ length: 2 }, () => ({ kind: "spike", model: "claude-opus-4-8", at: "2026-09-26T12:00:00.000Z" })),
+        ...Array.from({ length: 2 }, () => ({ kind: "loop", model: "gpt-5-codex", at: "2026-09-28T12:00:00.000Z" })),
+      ] };
+      repository.domains.plans.data.counts = {};
+    });
+    await page.goto("/");
+    const card = roboRepoCard(page);
+    // No plan in any stage leaves Plans out, so Agents and Tokens are the only shortcuts.
+    await expect(card.locator(".repository-shortcut-link")).toHaveCount(2);
+    await expect(card.getByRole("link", { name: "All Plans", exact: true })).toHaveCount(0);
+    const tokens = card.locator(".repository-shortcut").nth(1);
+    await expect(tokens).not.toHaveClass(/is-warning/);
+    await expect(tokens.locator("portal-icon[name=warning]")).toHaveCount(0);
+    // Without warnings the icon is a plain link with no hover panel.
+    await tokens.hover();
+    await expect(card.locator("[data-hover-panel]")).toHaveCount(0);
+    await expect(tokens.locator("a")).toHaveAttribute("title", "Token Activity");
+  });
+
+  test("the Plans panel says \"in review\", and a repo with open work but nothing running is not badged idle", async ({ page }) => {
+    await planFixture(page, (repository) => {
+      repository.domains.plans.data.counts = { review: 2 };
+      repository.lifecycle = { state: "idle", reason: null };
+      repository.inProgress = true;
+    });
+    await page.goto("/");
+    const card = roboRepoCard(page);
+    await card.getByRole("link", { name: "All Plans", exact: true }).hover();
+    await expect(card.locator(".shortcut-panel-stage")).toHaveText(["2 in review"]);
+    await expect(card.locator("[data-slot=lifecycle-state]")).toBeHidden();
+    await expect(card).not.toHaveClass(/is-not-running/);
   });
 
   test("a long plan title is middle-truncated to 70 characters with the full title on hover", async ({ page }) => {
@@ -1247,6 +1565,8 @@ test.describe("repository-first portal Home", () => {
     await expect(close).toHaveText("Close");
     await expect(close).toHaveAttribute("title", "Merged — copy the /plan-close prompt");
     await expect(row.locator(".worktree-state-badge")).toBeHidden();
+    // Close is only offered for approved work, so the completion beside it would repeat "done".
+    await expect(row.locator(".plan-completion")).toHaveCount(0);
   });
 
   test("a merged worktree keeps its merged badge while its plan still needs review", async ({ page }) => {
@@ -1827,9 +2147,9 @@ test.describe("repository-first portal Home", () => {
     expect(manage.visible).toBe(true);
     await page.keyboard.press("Tab");
     // Repository names are plain text while the detail page is parked, so the first card control is
-    // the provider link (when the repository has one) or the actions menu.
+    // the provider link (when the repository has one) or the first page shortcut.
     const firstCardControl = await focusSummary(page);
-    expect(["GitHub", "Actions"]).toContain(firstCardControl.ariaLabel);
+    expect(["GitHub", "All Plans"]).toContain(firstCardControl.ariaLabel);
     expect(firstCardControl.visible).toBe(true);
     // Home's harness-banner request for /api/settings is never awaited here, so on a slow runner it
     // can still be in flight through the patched route when the test ends.
@@ -1837,15 +2157,17 @@ test.describe("repository-first portal Home", () => {
   });
 
   test("repo row exposes the configured Home actions", async ({ page }) => {
+    await planFixture(page);
     await page.goto("/");
-    await roboRepoCard(page).getByRole("button", { name: "Actions" }).click();
-    const menu = roboRepoCard(page).locator(".menu-panel");
-    await expect(menu.locator("> *")).toHaveText(["All Plans", "Agent Config", "Token Activity", "Pin", "Forget This Repo"]);
-    // The page links open each page already filtered to this repo.
+    const card = roboRepoCard(page);
+    // The page links sit beside the menu as icons, each opening its page filtered to this repo.
     for (const [name, path] of [["All Plans", "/plans"], ["Agent Config", "/agents"], ["Token Activity", "/tokens"]]) {
-      await expect(menu.getByRole("link", { name })).toHaveAttribute("href", new RegExp(`^${path}\\?repo=[a-z0-9-]+$`));
+      await expect(card.locator(".repository-shortcuts").getByRole("link", { name })).toHaveAttribute("href", new RegExp(`^${path}\\?repo=[a-z0-9-]+$`));
     }
-    await expect(menu.locator("portal-icon")).toHaveCount(5);
+    await card.getByRole("button", { name: "Actions", exact: true }).click();
+    const menu = card.locator(".card-head .menu-panel");
+    await expect(menu.locator("> *")).toHaveText(["Pin", "Ignore Repo"]);
+    await expect(menu.locator("portal-icon")).toHaveCount(2);
     await expect(page.locator("#home-content").getByRole("link", { name: "Agents", exact: true })).toHaveCount(0);
   });
 });

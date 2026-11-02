@@ -7,6 +7,9 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import childProcess from "node:child_process";
+import { syncBuiltinESMExports } from "node:module";
+import { reviewFreshness } from "../../modules/plan-suite/review-freshness.mjs";
 import { buildPlanSnapshot } from "../../modules/plan-suite/index.mjs";
 import { addRepositorySource } from "../cli/repository-sources.mjs";
 import { createPlanFixture, planDoc } from "./lib/plan-git-fixture.mjs";
@@ -243,6 +246,27 @@ try {
     fs.writeFileSync(path.join(flow.path, "src/app.txt"), "pending implementation\n");
     assert.equal(json(plans(root, "approval", "flow0001"), "uncommitted implementation").review.state, "incomplete");
     fs.writeFileSync(path.join(flow.path, "src/app.txt"), git(flow.path, "show", "HEAD:src/app.txt") + "\n");
+    // Git can list unreadable paths and exit successfully while reporting access errors on stderr.
+    const spawnSync = childProcess.spawnSync;
+    try {
+      for (const command of ["status", "diff", "ls-files"]) {
+        childProcess.spawnSync = (binary, args, options) => {
+          if (binary === "git" && args[2] === command) {
+            return { status: 0, stdout: "src/protected-fixture\n", stderr: "src/protected-fixture: Operation not permitted\n" };
+          }
+          return spawnSync(binary, args, options);
+        };
+        syncBuiltinESMExports();
+        const unreadable = reviewFreshness({ primary: root, markdown: reviewDoc, tip: pendingTip, base: reviewedBase, workingPath: flow.path });
+        assert.equal(unreadable.state, "unavailable", `${command} access errors do not establish changed files`);
+        assert.match(unreadable.reason, /could not reliably check/);
+        assert.match(unreadable.diagnostics.join("\n"), /Operation not permitted/);
+        assert.equal(unreadable.changedPaths, undefined, "inaccessible paths are not reported as edits");
+      }
+    } finally {
+      childProcess.spawnSync = spawnSync;
+      syncBuiltinESMExports();
+    }
     commit(flow.path, "Leave review pending", { [reviewPath]: reviewDoc.replace("- Status: complete", "- Status: pending") });
     assert.equal(json(plans(root, "approval", "flow0001"), "pending review result").review.state, "incomplete");
     commit(flow.path, "Reopen a review finding", { [reviewPath]: reviewDoc.replace("- [x] Review checks passed", "- [ ] Review checks passed") });

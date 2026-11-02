@@ -1,0 +1,19 @@
+{
+  "path": [
+    "git",
+    "worktrees",
+    "archive-remove"
+  ],
+  "kind": "command",
+  "title": "Archive and remove worktree",
+  "description": "Archive and remove worktree",
+  "usage": "roborepo git worktrees archive-remove <branch-or-name> [--confirm --apply] [--json]",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/worktree-cleanup.mjs",
+    "export": "worktreeArchiveCommand",
+    "prependArgs": [
+      "archive-remove"
+    ]
+  }
+}

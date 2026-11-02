@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { assignedWorktreeCopy } from "./worktree-copy.mjs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
@@ -611,8 +612,17 @@ export function updatePlanField(snapshot, { id, key, property, value, expectedVa
   const validate = FIELD_VALIDATORS[property];
   if (!validate) throw domainError("INVALID_CHANGE", `field not editable: ${property}`);
   if (!validate(value)) throw domainError("INVALID_CHANGE", `invalid ${property}`);
-  const record = resolvePlanForMutation(snapshot, { id, key, repositoryId });
+  let record = resolvePlanForMutation(snapshot, { id, key, repositoryId });
   assertExpectedState(record, { key, expectedField: property, expectedValue, mtimeMs });
+  if (record.plan.authority?.reason === "verified-landed-recovery") {
+    // Evidence selection never grants general write authority on primary.
+    const assigned = assignedWorktreeCopy(record.repository.root, record);
+    if (!assigned.copy || !assigned.worktree || assigned.authority.reason !== "verified-landed-recovery") throw domainError("STALE_PLAN", "Recovery evidence or the assigned worktree changed. Refresh before editing.");
+    const target = readPlanRecord(repositoryRecord(assigned.worktree.path), assigned.copy.absolutePath, { lifecycle: record.plan.lifecycle });
+    if (target.plan[property] !== record.plan[property]) throw domainError("STALE_PLAN", "The assigned worktree's value changed. Refresh before editing.");
+    target.plan = { ...target.plan, checkout: assigned.worktree.name, authority: { source: "worktree", worktree: assigned.worktree.name } };
+    record = target;
+  }
   if (!record.absolutePath) throw domainError("PLAN_NOT_FOUND", "plan file path unavailable");
   const repoRoot = record.repository.root;
   const realRepo = fs.realpathSync(repoRoot);

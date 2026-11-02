@@ -3,7 +3,6 @@ import { hasTokens, sessionKey, mcpServer } from "./telemetry-oracle-observation
 const LOOP_REPEAT_THRESHOLD = 8;
 const LARGE_DOCUMENT_READ_CHARS = 20_000;
 const REPEATED_DOCUMENT_READ_COUNT = 2;
-const MIXED_CODE_LOOKUP_NATIVE_READS = 4;
 const DOC_EXTS = new Set([".md", ".mdx", ".rst", ".txt"]);
 const SOURCE_EXTS = new Set([".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".json", ".css", ".scss", ".sh", ".py", ".rb", ".go", ".rs", ".java", ".kt", ".swift", ".php", ".cs", ".cpp", ".c", ".h", ".hpp", ".toml", ".yaml", ".yml"]);
 
@@ -67,12 +66,6 @@ export function readWarningSessions(operations) {
   const repeated = new Set();
   for (const row of byDocument.values()) if (row.count >= REPEATED_DOCUMENT_READ_COUNT && row.chars >= LARGE_DOCUMENT_READ_CHARS) {
     affected.add(row.key); repeated.add(row.key);
-  }
-  for (const [key, rows] of bySession) {
-    const jdoc = rows.filter((row) => mcpServer(row.last_result?.tool || row.tool?.name) === "jdocmunch").length;
-    if (repeated.has(key) && jdoc === 0) affected.add(key);
-    const jcode = rows.filter((row) => mcpServer(row.last_result?.tool || row.tool?.name) === "jcodemunch").length;
-    if (jcode > 0 && rows.filter(isNativeSourceRead).length >= MIXED_CODE_LOOKUP_NATIVE_READS) affected.add(key);
   }
   return affected;
 }

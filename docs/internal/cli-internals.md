@@ -13,10 +13,13 @@ thin composition root; commands are declared as JSON under
 | --- | --- |
 | `scripts/cli/skills.mjs` | `skill adopt`, `skill inspect`, `skill native`, `skill export-to-project`, `skill link-project` |
 | `scripts/cli/skill-inventory.mjs` | read-only skill inventory used by `skill inspect` and `/agents` source popups |
-| `scripts/cli/index.mjs` | `index code\|docs`, `index code --watch`, `run` |
+| `scripts/cli/run.mjs` | `run`, `agent-run` |
 | `scripts/cli/browser.mjs` + `scripts/cli/browser/` | `browser probe\|run`: package gate, provider contract and validation, Playwright and stub providers, evidence store, local-service lifecycle |
 | `scripts/cli/mcp.mjs` | `mcp add` (registration with every MCP-capable harness) |
 | `scripts/cli/presets.mjs` | `library` / `package manage` (one shared `packageLibrary` execution preset), `bundle status\|apply\|check\|remove` |
+| `scripts/cli/package-state.mjs` | the only reader and writer of `~/.roborepo/enabled-packages.json` (selected roots, the effective set, version-1 upgrade reads) and the machine-local `~/.roborepo/applied-packages.json` (packages RoboRepo installed, so reconcile can remove one that left the effective set) |
+| `scripts/cli/package-graph.mjs` | pure dependency-graph helpers (required closure, `requiredBy`, `recommendedBy`, `requires` cycles) shared by packages and install bundles |
+| `scripts/cli/bundle-selection.mjs` | install bundle roots and effective set over `presets.json` and `~/.roborepo/presets/state.json` |
 | `scripts/cli/initialize.mjs` | `init` — orchestrates setup, harness discovery, the Package Library handoff, and apply |
 | `scripts/cli/initialization-state.mjs` | reads/writes `<stateRoot>/initialization.json`; owns the missing / in-progress / complete distinction |
 | `scripts/cli/first-run-routing.mjs` | decides whether a bare `roborepo` enters `init`; pure function of (argv, phase, tty) |
@@ -32,47 +35,12 @@ and Windows (Git Bash).
 
 The lifecycle verbs dispatch to `scripts/install/main.sh`, `scripts/doctor.sh`, and
 `scripts/verify-install.sh`. Most maintainer-only scripts (`test-*.sh`) are intentionally not
-exposed through `roborepo`; `skill sync-global` and `rules` are, because shared-skill and
+exposed through `roborepo`; `skill sync-global` and `config rules` are, because shared-skill and
 generated-rule editing are documented maintainer workflows.
-
-## Package-Owned CLI Commands
-
-Some `roborepo` commands are package-owned. The command name is part of the stable CLI surface and
-needs a command definition, but the executable recipe lives on a package `cli-command` resource in
-`globals/packages/<package>/package.config.json` or an equivalent workspace package config:
-
-```json
-{
-  "type": "cli-command",
-  "name": "index code",
-  "commandOrUrl": "uvx",
-  "args": ["jcodemunch-mcp"],
-  "mode": "index"
-}
-```
-
-Use this pattern when the front-door command should stay stable but the implementation belongs to
-an enabled package. `roborepo index code`, `roborepo index code --watch`, and `roborepo index docs`
-follow it. Running one resolves the enabled package owner first; if no owning package is enabled,
-the CLI tells the user which package to enable.
-
-Lifecycle:
-
-- `roborepo package enable <package-id>` records command ownership in
-  `~/.roborepo/enabled-packages.json` for packages with `cli-command` or `rule` resources.
-- `roborepo package disable <package-id>` removes that ownership.
-- `roborepo doctor` validates command resource shape and duplicate ownership inside package
-  dependency closures; `roborepo doctor --installed` checks live install links too.
-- `roborepo maintenance repair` relinks moved install paths and preserves package command state,
-  because the command registry is path-independent runtime state.
-- `roborepo uninstall` removes `~/.roborepo/enabled-packages.json`, so no package command ownership
-  survives uninstall.
 
 ## Browser Commands
 
-`roborepo browser` is a core namespace rather than a package `cli-command`, because a package
-command can only wrap one external process and cannot register a namespace. The package still owns
-the feature: `scripts/cli/browser/gate.mjs` refuses both commands unless `feature-verification` is
+`roborepo browser` is a core namespace whose feature is still package-owned: `scripts/cli/browser/gate.mjs` refuses both commands unless `feature-verification` is
 effective (`effectiveEnabledIds`).
 
 `scripts/cli/browser.mjs` only orchestrates: gate, parse, prune evidence, start or reuse the local
@@ -113,6 +81,22 @@ have no user-facing verb: `roborepo update` re-applies them and `roborepo uninst
 The internal `roborepo bundle` verb exists only for `scripts/install/main.sh` and back-compat
 scripts, and is intentionally absent from the usage and menu.
 
+Bundles follow the same rule as packages: `selected[]` in `~/.roborepo/presets/state.json` holds
+the bundles that were chosen, and a bundle's `requires` in `presets.json` (`telemetry` requires
+`hooks`) is applied through it without being recorded. Apply, `bundle check`, and hook readiness
+act on the effective set. `bundle remove` of a bundle another selected bundle requires leaves it
+applied and says so; `bundle status` marks such a bundle `required by <bundle>`, and a failing
+`bundle check` names the missing rows. Every bundle listed in `selected[]` is read as a choice,
+whatever the file's `schemaVersion`; writes store `schemaVersion: 2`, which no reader branches on.
+
+The `telemetry` bundle is selected only by `bundle apply telemetry`. `roborepo telemetry install`
+and the Settings telemetry toggle record no bundle, because the telemetry package wires its own
+capture hooks; turning telemetry off drops a `telemetry` root that `bundle apply` recorded.
+
+A failing `claude mcp add` returns `ok: false` from the Claude MCP adapter instead of exiting.
+Package enable reports the package `blocked`; `roborepo mcp add` and `mcp apply` exit with the
+Claude CLI's status.
+
 ## Portal Startup
 
 `roborepo web [--detach] [--no-open] [--port <n>]` (default `4317`) runs the bootstrap above, then
@@ -136,9 +120,9 @@ Each `<harness>.jsonl` spool is capped at ~25 MB: when exceeded, the oldest reco
 the newest ~70% kept. Per-session token cursors live under `~/.roborepo/telemetry/collector/` and
 back the `delta_tokens` computation.
 
-MCP tool attribution resolves both the prefixed wire name (`mcp__<server>__<tool>`) and the bare
-tool names Codex sometimes logs (e.g. `search_symbols`), via a known-tool table in
-`telemetry-transcript.mjs` — without it, Codex MCP usage is undercounted.
+MCP tool attribution (`mcpServerOf()` in `scripts/harnesses/transcript-parse.mjs`) recognizes only
+the prefixed wire name (`mcp__<server>__<tool>`). A bare tool name with no prefix is attributed to
+the native group.
 
 For demos and dashboard development, `node scripts/cli/telemetry-seed-demo.mjs` writes synthetic
 sessions to a dedicated `spool/demo.jsonl`, picked up alongside real spools; rerun with `--clear` to
@@ -150,8 +134,29 @@ The capture record schema, markers, experiments, and API routes are documented i
 ## Tests
 
 `scripts/test/test-cli.sh` smoke-tests the subcommands against throwaway temp repos and touches no
-global state. It covers skill link-project/sync-global/inspect/prune/uninstall/conflict, `skill new`
+global state. It covers skill link-project/sync-global/inspect/prune/uninstall/conflict, `package dev`
 scaffolds, the native escape-hatch guide, the audit check, export/override/firewall/self-pollution
 guards, slash-command render checks, `package manage`/`bundle` onboarding/apply/remove/status,
 `telemetry` enable/status/report, `run`, `mcp add` dry-runs plus real Codex/Claude writes against a
 throwaway harness root, lifecycle/rules dispatch, and menu fallback.
+
+## Worktree snapshot transactions
+
+`worktree-cleanup.mjs` coordinates CLI and repository-page requests through shared repository
+modules. `worktree-preservation.mjs` inventories index/filesystem layers and uses temporary objects
+for bounded coherent absorption proofs; `worktree-snapshot.mjs` owns capture, discovery,
+verification, and restore. The hardened Git seam accepts binary stdin/stdout and explicit temporary
+object/index paths while stripping inherited repository variables. Hooks, filesystem monitors,
+replacement objects, and merge renormalization are disabled. Unsupported drivers and index
+features refuse capture or proof.
+
+Snapshots are version-1 commits under create-only `refs/roborepo/worktree-archives/<uuid>` refs.
+The root parents the captured tip and retains a JSON manifest plus index/tracked/untracked/ignored
+payload trees. Listing and restore read those refs without depending on state-root records.
+Restore creates a fresh detached worktree without checkout, materializes raw blobs, rebuilds the
+index, and compares inventories. It refuses path collisions and symlink ancestors.
+
+The repository cleanup lock covers final surveys and removal. Snapshot, checkout removal, and
+expected-old-value branch retirement have separate outcomes. A snapshot remains discoverable
+through failure or retry; a changed or occupied branch is retained. The lock cannot prevent an
+external writer after the final survey, so callers must stop writers operationally.

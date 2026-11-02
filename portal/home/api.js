@@ -31,3 +31,11 @@ export function enableWorktreeCleanup({ repositoryId, folder }) {
 export function dismissWorktreeCleanupNotice({ repositoryId }) {
   return portalPostJson(`/api/repositories/${encodeURIComponent(repositoryId)}/worktree-cleanup/dismiss`, {});
 }
+
+export function archiveWorktree({ repositoryId, branch }) {
+  return portalPostJson(`/api/repositories/${encodeURIComponent(repositoryId)}/worktrees/archive-remove`, { branch, confirm: true, apply: true });
+}
+
+export function previewWorktreeArchive({ repositoryId, branch }) {
+  return portalPostJson(`/api/repositories/${encodeURIComponent(repositoryId)}/worktrees/archive-remove`, { branch });
+}

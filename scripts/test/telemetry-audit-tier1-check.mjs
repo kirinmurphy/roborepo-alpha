@@ -32,21 +32,20 @@ assert.equal(unfair.confidence, "can't compare fairly");
 assert.ok(unfair.data_quality_issues.every((issue) => !/below the minimum/.test(issue)));
 console.log("telemetry audit tier 1: ledger order, supersede validation, fairness wording and dropped-finding counter passed");
 
-// Finding 8: legacy (schema 1) and canonical (schema 2) markers split an at-boundary session identically.
+// Finding 8: a marker splits an at-boundary session on effective_at, excluding the session that
+// touches the boundary.
 import { splitCohortsByMarker } from "../cli/telemetry-compare.mjs";
 const boundary = "2026-09-01T12:00:00.000Z";
 const at = (id, ts) => ({ ...event(1), session_id: id, capture_id: `c-${id}-${ts}`, call_id: `k-${id}-${ts}`, ts });
 const boundaryEvents = [at("early", "2026-09-01T11:00:00.000Z"), at("exact", boundary), at("late", "2026-09-01T13:00:00.000Z")];
 const shape = (split) => ({ before: split.before.map((row) => row.session_id), after: split.after.map((row) => row.session_id), excluded: split.excluded.map((row) => row.session_id) });
-const legacySplit = shape(splitCohortsByMarker(boundaryEvents, { schema: 1, ts: boundary, type: "change" }));
-const canonicalSplit = shape(splitCohortsByMarker(boundaryEvents, { schema: 2, ts: boundary, effective_at: boundary, scope: "all", type: "change" }));
-assert.deepEqual(legacySplit, canonicalSplit);
-assert.deepEqual(legacySplit.excluded, ["exact"]);
-assert.deepEqual(legacySplit.before, ["early"]);
-// Legacy markers honor effective_at, not the creation timestamp.
-const backdated = shape(splitCohortsByMarker(boundaryEvents, { schema: 1, ts: "2026-09-02T00:00:00.000Z", effective_at: boundary, type: "change" }));
-assert.deepEqual(backdated, legacySplit);
-console.log("telemetry audit tier 1: legacy and canonical boundary splits agree");
+const boundarySplit = shape(splitCohortsByMarker(boundaryEvents, { schema: 2, ts: boundary, effective_at: boundary, scope: "all", type: "change" }));
+assert.deepEqual(boundarySplit.excluded, ["exact"]);
+assert.deepEqual(boundarySplit.before, ["early"]);
+// Markers honor effective_at, not the creation timestamp.
+const backdated = shape(splitCohortsByMarker(boundaryEvents, { schema: 2, ts: "2026-09-02T00:00:00.000Z", effective_at: boundary, scope: "all", type: "change" }));
+assert.deepEqual(backdated, boundarySplit);
+console.log("telemetry audit tier 1: boundary splits honor effective_at");
 
 // Finding 15: change comparisons report sessions left out for unknown condition data.
 import { compareObservationBoundary } from "../cli/telemetry-boundaries.mjs";

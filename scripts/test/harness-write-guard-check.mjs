@@ -32,7 +32,7 @@ function blockReason(env, target = "") {
 }
 
 try {
-  const tempState = { HOME: realHome, ROBOREPO_STATE_DIR: path.join(scratch, "state") };
+  const tempState = { HOME: realHome, ROBOREPO_STATE_ROOT: path.join(scratch, "state") };
   assert.match(blockReason(tempState), /^refusing to write harness config/, "temporary state with a real HOME is blocked");
   assert.match(
     blockReason(tempState, path.join(realHome, ".claude", "settings.json")),
@@ -45,9 +45,9 @@ try {
     "a write outside HOME (a test fixture) is allowed",
   );
 
-  const isolated = { HOME: path.join(scratch, "home"), ROBOREPO_STATE_DIR: path.join(scratch, "home", ".roborepo") };
+  const isolated = { HOME: path.join(scratch, "home"), ROBOREPO_STATE_ROOT: path.join(scratch, "home", ".roborepo") };
   assert.equal(blockReason(isolated), "allowed", "temporary state with a temporary HOME is allowed");
-  assert.equal(blockReason({ HOME: realHome, ROBOREPO_STATE_DIR: "" }), "allowed", "the default state root is allowed");
+  assert.equal(blockReason({ HOME: realHome, ROBOREPO_STATE_ROOT: "" }), "allowed", "the default state root is allowed");
 
   const direct = run([guard], tempState);
   assert.equal(direct.status, 1, "the installer pre-check exits 1 when blocked");

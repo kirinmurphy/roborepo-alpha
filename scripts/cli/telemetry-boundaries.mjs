@@ -25,8 +25,7 @@ export function splitObservationBoundary(observations, marker) {
 }
 
 export function compareObservationBoundary(observations, marker, affectedIds, { condition = null, snapshots = [], policy = CONDITIONS_POLICY } = {}) {
-  // Legacy basename scope is not a canonical repository scope.
-  const scopeKnown = marker.schema >= 2 && (marker.repository_id || marker.scope === "all");
+  const scopeKnown = marker.repository_id || marker.scope === "all";
   const inScope = scopeKnown ? observations.filter((item) => !marker.repository_id || item.repository_id === marker.repository_id) : [];
   const scoped = condition ? inScope.filter((item) => evaluateCondition(item, condition, snapshots).state === "present") : inScope;
   // Unknown condition data is excluded, never treated as absence; say how much was left out.
@@ -60,7 +59,7 @@ export function ambientChanges(sessions, snapshots) {
       const session = group[i];
       const ids = [...new Set(session.rows.map((row) => row.config_snapshot_id))];
       const snapshot = ids.length === 1 ? index.get(ids[0]) : null;
-      const evidence = snapshot?.schema === 2 && snapshot.ambient?.harness === session.harness && snapshot.ambient?.evaluable ? snapshot.ambient : null;
+      const evidence = snapshot && snapshot.ambient?.harness === session.harness && snapshot.ambient?.evaluable ? snapshot.ambient : null;
       // Unknown evidence or same-time sessions break the transition chain.
       if (!evidence || !session.first_seen || group[i - 1]?.first_seen === session.first_seen || group[i + 1]?.first_seen === session.first_seen) { previous = null; continue; }
       if (previous && previous.hash !== evidence.hash) changes.push({ id: `ambient:${session.id}`, kind: "ambient-change", ts: session.first_seen,

@@ -17,7 +17,7 @@ const snapshot = buildEffectiveSnapshot({ packages: [{ id: "condition", enabled:
 const event = { schema: 3, harness: "claude", session_id: "s", capture_id: "cap_0000000000000001", call_id: "call", ts: "2026-09-01T00:00:00Z", config_snapshot_id: snapshot.snapshot_id, session: { model: "model" }, tokens: { input: 100, output: 10, total: 110 } };
 fs.writeFileSync(path.join(spool, "claude.jsonl"), JSON.stringify(event) + "\n");
 let output = "";
-const child = spawn(process.execPath, [path.join(root, "scripts/cli/main.mjs"), "web", "--no-open", "--port", "0", "--allow-zero-port"], { cwd: root, env: { ...process.env, HOME: tmp, ROBOREPO_STATE_DIR: state, PORTAL_READY_FILE: ready }, stdio: ["ignore", "pipe", "pipe"] });
+const child = spawn(process.execPath, [path.join(root, "scripts/cli/main.mjs"), "web", "--no-open", "--port", "0", "--allow-zero-port"], { cwd: root, env: { ...process.env, HOME: tmp, ROBOREPO_STATE_ROOT: state, PORTAL_READY_FILE: ready }, stdio: ["ignore", "pipe", "pipe"] });
 child.stdout.on("data", (part) => { output += part; }); child.stderr.on("data", (part) => { output += part; });
 try {
   const deadline = Date.now() + 60000;

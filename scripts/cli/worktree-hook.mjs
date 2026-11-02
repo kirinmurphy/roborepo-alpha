@@ -90,7 +90,7 @@ async function toplevel(cwd) {
 
 function hookInvocation(stateRoot, cli) {
   const log = path.join(stateRoot, "worktree-cleanup", "hook.log");
-  return `mkdir -p ${quote(path.dirname(log))}\ncurrent=$(git rev-parse --show-toplevel)\nnohup env ROBOREPO_STATE_DIR=${quote(stateRoot)} ${quote(process.execPath)} ${quote(cli)} git worktrees cleanup --apply --current "$current" >> ${quote(log)} 2>&1 </dev/null &`;
+  return `mkdir -p ${quote(path.dirname(log))}\ncurrent=$(git rev-parse --show-toplevel)\nnohup env ROBOREPO_STATE_ROOT=${quote(stateRoot)} ${quote(process.execPath)} ${quote(cli)} git worktrees cleanup --apply --current "$current" >> ${quote(log)} 2>&1 </dev/null &`;
 }
 
 function quote(value) {

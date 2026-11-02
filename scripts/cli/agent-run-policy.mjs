@@ -26,7 +26,8 @@
 // the whole argv, not just a fixed position, so `git -c x=y push --force` is caught too.
 const DESTRUCTIVE_GIT_FLAGS = new Set(["--force", "-f", "--force-with-lease", "--mirror", "--delete"]);
 
-// Denied outright regardless of the manifest: moving the working tree onto the trunk branch.
+// Denied outright regardless of the manifest: moving the working tree onto the trunk branch, or
+// pushing to it.
 const PROTECTED_BRANCHES = new Set(["main", "master"]);
 const BRANCH_MOVING = new Set(["checkout", "switch"]);
 
@@ -38,6 +39,7 @@ export const REFUSAL = {
   DENY_BUCKET: "denied",
   DESTRUCTIVE_GIT: "destructive-git",
   PROTECTED_BRANCH: "protected-branch",
+  UNRESOLVED_PUSH: "unresolved-push",
 };
 
 // Build {allow,ask,deny} token-prefix lists out of the same manifest that renders the harness
@@ -55,9 +57,10 @@ export function policyFromManifest(manifest) {
 
 /**
  * Decide whether `argv` may be executed.
+ * @param {(remote: string) => boolean} [options.pushMappingFor] whether remote.<remote>.push is set
  * @returns {{ok: true} | {ok: false, reason: string, message: string}}
  */
-export function checkAgentRun(argv, manifest) {
+export function checkAgentRun(argv, manifest, { pushMappingFor = () => false } = {}) {
   if (!Array.isArray(argv) || argv.length === 0) {
     return { ok: false, reason: REFUSAL.EMPTY, message: "usage: roborepo agent-run <cmd> [args...]" };
   }
@@ -97,6 +100,10 @@ export function checkAgentRun(argv, manifest) {
         }
       }
     }
+    if (sub === "push") {
+      const refusal = pushRefusal(argv.slice(2), pushMappingFor);
+      if (refusal) return refusal;
+    }
   }
 
   const bucket = classify(argv, policyFromManifest(manifest));
@@ -118,6 +125,71 @@ export function checkAgentRun(argv, manifest) {
     };
   }
   return { ok: true };
+}
+
+// git push options that take their value as the next argument.
+const PUSH_VALUE_OPTIONS = new Set(["--repo", "-o", "--push-option", "--receive-pack", "--exec"]);
+
+// A force push in a form the exact-flag check above does not see: `--force-with-lease=<ref>`, or a
+// short-option cluster such as `-uf`. Letters after `o` are -o's value, not options.
+function forcedPushOption(arg) {
+  if (arg.startsWith("--force-with-lease=")) return true;
+  const cluster = /^-([A-Za-z]+)$/.exec(arg)?.[1];
+  return Boolean(cluster) && cluster.split("o")[0].includes("f");
+}
+
+// A push is only allowed when every destination is named and none is protected. This function
+// sees argv, not the repository, so it cannot resolve where a bare `git push` or a `HEAD` refspec
+// lands; those are refused rather than guessed. `pushMappingFor(remote)` reports whether
+// remote.<remote>.push is configured, which redirects a source-only refspec.
+function pushRefusal(args, pushMappingFor) {
+  const positional = [];
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i] === "--all" || args[i] === "--branches") {
+      return unresolvedPush(`'${args[i]}' can include a protected branch`);
+    }
+    if (forcedPushOption(args[i])) return destructivePush(args[i]);
+    if (PUSH_VALUE_OPTIONS.has(args[i])) i += 1;
+    else if (!args[i].startsWith("-")) positional.push(args[i]);
+  }
+  const [remote, ...refspecs] = positional;
+  if (refspecs.length === 0) return unresolvedPush("a push with no refspec goes wherever the current branch is configured to go");
+  for (const spec of refspecs) {
+    if (spec.startsWith("+")) return destructivePush(spec);
+    // ':' pushes every branch that also exists on the remote, which can include a protected one.
+    if (spec === ":") return unresolvedPush("':' pushes every branch that also exists on the remote");
+    const colon = spec.indexOf(":");
+    if (colon === -1 && pushMappingFor(remote)) {
+      return unresolvedPush(`remote.${remote}.push is configured, so '${spec}' may not land on a branch of that name`);
+    }
+    let dst = colon === -1 || colon === spec.length - 1 ? spec.replace(/:$/, "") : spec.slice(colon + 1);
+    dst = dst.replace(/^refs\/heads\//, "");
+    if (dst === "HEAD" || dst === "@" || dst.includes("*")) return unresolvedPush(`'${spec}' does not name its destination branch`);
+    if (PROTECTED_BRANCHES.has(dst)) {
+      return {
+        ok: false,
+        reason: REFUSAL.PROTECTED_BRANCH,
+        message: `blocked: refusing to push to '${dst}'. Push a feature branch and open a pull request instead.`,
+      };
+    }
+  }
+  return null;
+}
+
+function destructivePush(arg) {
+  return {
+    ok: false,
+    reason: REFUSAL.DESTRUCTIVE_GIT,
+    message: `blocked: '${arg}' force-pushes, which rewrites published history. Run it directly if you truly intend it.`,
+  };
+}
+
+function unresolvedPush(detail) {
+  return {
+    ok: false,
+    reason: REFUSAL.UNRESOLVED_PUSH,
+    message: `blocked: ${detail}. Name the remote and destination branch, e.g. 'git push origin my-branch'.`,
+  };
 }
 
 function startsWith(argv, prefix) {

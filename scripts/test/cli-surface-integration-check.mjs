@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { isolateGitConfig } from "./lib/git-config.mjs";
 import { loadCommandCatalog, listCommandNodes } from "../cli/command-catalog.mjs";
 import { readConfigSnapshot } from "../cli/config.mjs";
 import { menuItems, menuTitle } from "../cli/interactive-menu-items.mjs";
@@ -12,6 +13,7 @@ import { repoRoot } from "../cli/paths.mjs";
 const cliPath = path.join(repoRoot, "scripts", "cli", "main.mjs");
 const catalog = loadCommandCatalog();
 const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-cli-surface-"));
+isolateGitConfig(workDir);
 const generatedPermissionFiles = [
   path.join(repoRoot, "generated", "claude", "settings.json"),
   path.join(repoRoot, "generated", "codex", "config.toml"),
@@ -25,16 +27,16 @@ try {
     ...process.env,
     HOME: path.join(workDir, "home"),
     GENERATED_HOME: generatedHomeForRepo(repoRoot),
-    ROBOREPO_STATE_DIR: path.join(workDir, "state"),
+    ROBOREPO_STATE_ROOT: path.join(workDir, "state"),
     SKIP_MCP: "1",
   };
   fs.mkdirSync(env.HOME, { recursive: true });
-  fs.mkdirSync(env.ROBOREPO_STATE_DIR, { recursive: true });
+  fs.mkdirSync(env.ROBOREPO_STATE_ROOT, { recursive: true });
   // This suite exercises the command surface and the root menu, not the first-run workflow. A bare
   // `roborepo` on an uninitialized install now routes to `init` (see cli/first-run-routing.mjs), so
   // the sandbox is seeded as already-initialized to reach the menu under test. First-run routing
   // itself is covered by scripts/test/initialization-lifecycle-check.mjs.
-  markInitialized(env.ROBOREPO_STATE_DIR);
+  markInitialized(env.ROBOREPO_STATE_ROOT);
 
   assertCli(["help"], { env, stdout: /Primary commands:/ });
 
@@ -44,15 +46,6 @@ try {
     if (node.kind === "namespace") {
       assertCli(tokens, { env, input: "\n", stdout: /Select a number \(or blank to cancel\):/ });
     }
-  }
-
-  for (const [removedPath, replacement] of Object.entries(catalog.removed || {})) {
-    const tokens = removedPath.split(" ");
-    assertCli(tokens, {
-      env,
-      status: 2,
-      stderr: new RegExp(escapeRegExp(replacement.message)),
-    });
   }
 
   assertInteractiveMenuRedraw({ env });

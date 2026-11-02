@@ -5,9 +5,6 @@ export function resolveCommand(catalog, args) {
   if (normalized.help) return resolveHelpPath(catalog, normalized.path);
   if (normalized.path.length === 0) return { kind: "root-menu", tokens: [] };
 
-  const replacement = replacementFor(catalog, normalized.path);
-  if (replacement) return { kind: "removed", tokens: normalized.path, replacement };
-
   const match = matchPath(catalog, normalized.path);
   if (!match) return invalid(catalog, normalized.path);
   if (match.node.kind === "namespace" && match.rest.length === 0) {
@@ -58,14 +55,6 @@ function resolveHelpPath(catalog, path) {
   const match = matchPath(catalog, path);
   if (!match || match.rest.length > 0) return invalid(catalog, path);
   return { kind: "help", node: match.node, tokens: match.tokens };
-}
-
-function replacementFor(catalog, args) {
-  for (let len = Math.min(args.length, 3); len > 0; len--) {
-    const key = args.slice(0, len).join(" ");
-    if (catalog.removed?.[key]) return catalog.removed[key];
-  }
-  return null;
 }
 
 function invalid(catalog, tokens) {

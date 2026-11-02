@@ -4,11 +4,13 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { isolateGitConfig } from "./lib/git-config.mjs";
 import { collectBranchSyncFacts } from "../../modules/repositories/branch-sync.mjs";
 import { defaultRunGit } from "../../modules/repositories/git-exec.mjs";
 import { refreshRemote, pushBranchToUpstream } from "../../modules/repositories/git-remote-operations.mjs";
 
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-branch-sync-"));
+isolateGitConfig(tempRoot);
 
 try {
   const { work, linked } = createFixture();

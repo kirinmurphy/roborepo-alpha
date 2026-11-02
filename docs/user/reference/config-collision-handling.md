@@ -78,7 +78,7 @@ state per harness: `not-installed`, `unwritten`, `in-sync`, or `drifted`. A drif
 from you: your settings are kept, and the next `roborepo update` only adds roborepo's own entries.
 The `/agents` page therefore shows no chip for it; it marks only an `unwritten` (untracked) file.
 
-**Isolated runs.** A roborepo command whose state directory (`ROBOREPO_STATE_DIR` or
+**Isolated runs.** A roborepo command whose state directory (`ROBOREPO_STATE_ROOT` or
 `ROBOREPO_STATE_ROOT`) is in a temporary directory while `HOME` is your real home refuses to write
 harness config. Such a run would otherwise write your real `settings.json` with paths into scratch
 state that disappear when it is cleaned up. Set `HOME` to an isolated directory as well when you

@@ -18,6 +18,11 @@
         "hooks": [
           {
             "type": "command",
+            "command": "node \"$HOME/.codex/hooks/protected-branch-push.mjs\"",
+            "statusMessage": "RoboRepo: protected branch push"
+          },
+          {
+            "type": "command",
             "command": "node \"$HOME/.codex/hooks/permission-check.mjs\"",
             "statusMessage": "RoboRepo: command permissions"
           },

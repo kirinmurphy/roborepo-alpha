@@ -19,7 +19,7 @@ const REFTABLE_HEAD_BRANCH = ".invalid";
 // name, and `assigned.copy` is null when that worktree has no readable copy of the plan.
 // Returns { source: "primary" | "worktree", reason }, where `reason` explains a fallback to the
 // primary copy that the plan should hear about, and is null otherwise.
-export function resolvePlanAuthority({ primary, assigned }) {
+export function resolvePlanAuthority({ primary, assigned, recovery = null }) {
   if (!isWorktreeBound(primary?.lifecycle) || !primary.worktree) return { source: "primary", reason: null };
   if (!assigned) return { source: "primary", reason: "worktree-missing" };
   const copy = assigned.copy;
@@ -30,6 +30,7 @@ export function resolvePlanAuthority({ primary, assigned }) {
   // first, and the worktree receives the rename at its next base synchronization.
   if (!isWorktreeBound(copy.lifecycle)) return { source: "primary", reason: "copy-not-active" };
   if (copy.worktree !== primary.worktree) return { source: "primary", reason: "copy-other-worktree" };
+  if (recovery?.ok) return { source: "primary", reason: "verified-landed-recovery" };
   return { source: "worktree", reason: null };
 }
 

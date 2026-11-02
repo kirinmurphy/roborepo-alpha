@@ -16,6 +16,7 @@ export function indexCaptures(captures, groupOf) {
   const index = {
     latestTs: captures[0]?.ts ?? new Date().toISOString(),
     latestCodexRateLimits: null,
+    latestCodexRateLimitsTs: null,
     timeline: [],
     topRepos: new Map(),
     topTools: new Map(),
@@ -24,7 +25,12 @@ export function indexCaptures(captures, groupOf) {
   };
   for (const event of captures) {
     if (event.ts > index.latestTs) index.latestTs = event.ts;
-    if (hasRateLimitsCapability(event.harness) && event.details?.codex_rate_limits) index.latestCodexRateLimits = event.details.codex_rate_limits;
+    // Captures arrive in canonical (content) order, not time order, so keep the newest by timestamp.
+    if (hasRateLimitsCapability(event.harness) && event.details?.codex_rate_limits
+      && (index.latestCodexRateLimitsTs == null || String(event.ts) >= index.latestCodexRateLimitsTs)) {
+      index.latestCodexRateLimits = event.details.codex_rate_limits;
+      index.latestCodexRateLimitsTs = String(event.ts);
+    }
     countTop(index.topRepos, event.repo?.label ?? "unknown", event.delta_tokens || 0);
     countTop(index.topTools, event.tool?.name ?? event.event ?? "unknown", event.delta_tokens || 0);
     if (event.tool?.is_mcp) countTop(index.topMcp, event.tool?.mcp_server ?? "unknown", event.delta_tokens || 0);

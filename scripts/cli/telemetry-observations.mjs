@@ -1,4 +1,4 @@
-// Pure observation boundary. Persisted v2/v3 tokens are cumulative session counters;
+// Pure observation boundary. Persisted tokens are cumulative session counters;
 // a tool hook's delta_tokens is never an attributable input/output usage record.
 import { createHash } from "node:crypto";
 import { repositoryRefForEvent } from "./telemetry-repository.mjs";
@@ -78,7 +78,7 @@ function observation(id, rows, unit, quality) {
 export function normalizeObservations(events) {
   const flows = new Map();
   const sessions = new Map();
-  for (const event of canonicalRows(events.filter((row) => row && (row.schema == null || row.schema === 2 || row.schema === 3) && (row.session_id || row.capture_id || row.tokens || row.tool)))) {
+  for (const event of canonicalRows(events.filter((row) => row && row.schema === 3 && (row.session_id || row.capture_id || row.tokens || row.tool)))) {
     const identity = observationIdentity(event);
     if (!flows.has(identity.id)) flows.set(identity.id, { rows: [], quality: identity.quality });
     flows.get(identity.id).rows.push(event);
@@ -102,12 +102,12 @@ export function evaluateCondition(observation, condition, snapshots = []) {
   if (scalar) present = observation[scalar] == null ? null : observation[scalar] === value;
   else {
     const snapshotIndex = snapshots instanceof Map ? snapshots : new Map(snapshots.map((snapshot) => [snapshot.snapshot_id, snapshot]));
-    // v1 packages/skills are captured globally. v1 rules/commands/hooks are incomplete
-    // placeholders, and a snapshot's harness is not proof of provider coverage.
+    // A snapshot's harness is not proof of provider coverage, so only its evaluable
+    // packages/skills dimensions count.
     const states = observation.rows.map((row) => {
       const snapshot = snapshotIndex.get(row.config_snapshot_id);
-      if (!snapshot || ![1, 2].includes(snapshot.schema) || !["packages", "skills"].includes(dimension)
-        || (snapshot.schema === 2 && snapshot.evaluability?.[dimension] !== true) || snapshot.unavailable?.includes(dimension) || !Array.isArray(snapshot[dimension])) return null;
+      if (!snapshot || snapshot.schema !== 2 || !["packages", "skills"].includes(dimension)
+        || snapshot.evaluability?.[dimension] !== true || snapshot.unavailable?.includes(dimension) || !Array.isArray(snapshot[dimension])) return null;
       return snapshot[dimension].includes(value);
     });
     if (states.length && states.every((state) => state != null && state === states[0])) present = states[0];

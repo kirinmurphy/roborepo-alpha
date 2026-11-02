@@ -106,7 +106,7 @@ Not built:
 
 - Is live refresh worth the watcher complexity given manual refresh already
   works for a single-user local portal?
-- Can both harnesses support static no-argument command help without
+- Can every supporting harness (Claude, Codex, Gemini) give static no-argument command help without
   hook-specific workarounds?
 
 ## Documentation impact

@@ -122,11 +122,6 @@ export {
 } from "./enrollment.mjs";
 
 export {
-  importDeveloperRuntimeAliases,
-  canonicalizeDeveloperRuntimeIdentity,
-} from "./migrate-developer-runtime.mjs";
-
-export {
   repositoryScopedFinding,
   globalFinding,
   isRepositoryScoped,

@@ -15,6 +15,8 @@ import { readinessSupported } from "../harnesses/hook-readiness.mjs";
 import { confirmYesNo, makePrompter, selectMenu, wizard } from "./skill-lib.mjs";
 import { pathExists, findSiblingArtifact, findSiblingArtifacts, copyTree, stageCandidate, backupOriginal, timestampedPath } from "./staging-lib.mjs";
 import { checkDrift, recordWrite } from "./root-config-state.mjs";
+import { BUNDLE_STATE_SCHEMA_VERSION, bundleSelectionStates, effectiveBundleIds, selectedBundleRoots } from "./bundle-selection.mjs";
+import { requiresCycles } from "./package-graph.mjs";
 import { SHARED_TARGET_KINDS, SharedTargetConflictAbort, applySharedTargetRow, removeSharedTargetRow, sharedTargetInstalled } from "./shared-target-rows.mjs";
 
 const PRESET_MANIFEST = path.join(repoRoot, "manifests", "platform", "presets.json");
@@ -103,13 +105,8 @@ async function printOnboardingHookReviewHint() {
 function markOnboarded() {
   const catalog = readPresetCatalog();
   const state = readPresetState();
-  const selected = withDependencies(new Set(state.selected ?? catalog.default));
-  writePresetState({
-    ...state,
-    selected: [...selected],
+  writePresetState(catalog, state, selectedBundleRoots(state, catalog.default), {
     onboardedAt: state.onboardedAt ?? new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    bundles: bundleStates(catalog, selected),
   });
 }
 
@@ -119,9 +116,9 @@ function markOnboarded() {
 async function applyItemToggle(section, item, enabled) {
   if (item.toggle === "package") return mutatePackage(item.id, enabled);
   if (section.category === "Token Optimization") {
-    // jcodemunch / jdocmunch / caveman / telemetry are all packages now (telemetry via a service
-    // component), so they route through the one generic package mutate.
-    if (["jcodemunch", "jdocmunch", "caveman", "telemetry"].includes(item.id)) return mutatePackage(item.id, enabled);
+    // caveman and telemetry are packages (telemetry via a service component), so they route through
+    // the one generic package mutate.
+    if (["caveman", "telemetry"].includes(item.id)) return mutatePackage(item.id, enabled);
     return { ok: false, message: `${item.label} is managed elsewhere (not toggleable here)` };
   }
   if (section.category === "Chat-Time Output") {
@@ -366,7 +363,7 @@ function printIntroWelcome() {
   console.log("Main commands");
   console.log("  roborepo web        manage your settings online");
   console.log("  roborepo package manage    choose which behaviors are enabled");
-  console.log("  roborepo package enable X   turn on a package (jcodemunch, telemetry, ...)");
+  console.log("  roborepo package enable X   turn on a package (caveman, telemetry, ...)");
   console.log("  roborepo update     re-apply config after pulling changes");
   console.log("");
   console.log("Run `roborepo --help` for all commands.");
@@ -400,95 +397,95 @@ async function maybeLaunchPortal() {
   }
 }
 
+// Applies the requested bundles and everything they require, then records the requested ones as
+// selected roots. A required bundle is applied but never recorded, so it leaves with its parent.
 export function presetsApply(args) {
-  rejectUnknownFlags(args, new Set(["--default", "--all"]));
+  rejectUnknownFlags(args, new Set(["--default", "--all", "--selected"]));
   assertHarnessWriteAllowed();
   const catalog = readPresetCatalog();
-  const requested = withDependencies(requestedBundles(args, catalog));
-  applySelection(requested, catalog, { reconcile: false });
+  const requested = [...requestedBundles(args, catalog)];
+  applySelection(new Set(effectiveBundleIds(catalog.bundles, requested)), catalog, { reconcile: false });
   const state = readPresetState();
-  const selected = withDependencies(new Set([...(state.selected ?? []), ...requested]));
-  writePresetState({
-    ...state,
-    selected: [...selected],
-    updatedAt: new Date().toISOString(),
-    bundles: bundleStates(catalog, selected),
-  });
+  writePresetState(catalog, state, [...new Set([...selectedBundleRoots(state), ...requested])]);
 }
 
 export function presetsStatus(args) {
   rejectUnknownFlags(args, new Set());
   const catalog = readPresetCatalog();
   const state = readPresetState();
-  const selected = new Set(state.selected ?? []);
-  const policy = readInstallPolicy();
+  const selection = bundleSelectionStates(catalog.bundles, selectedBundleRoots(state));
+  const rows = manifestRowsByKey();
   console.log(`onboarded: ${state.onboardedAt ? state.onboardedAt : "no"}`);
+  const marks = new Map(catalog.bundles.map((bundle) => {
+    const { state: mark, requiredBy } = selection.get(bundle.id);
+    return [bundle.id, mark === "required" ? `required by ${requiredBy.join(", ")}` : mark === "selected" ? "selected" : "unselected"];
+  }));
+  const width = Math.max(10, ...[...marks.values()].map((mark) => mark.length));
   for (const bundle of catalog.bundles) {
-    const applied = bundleApplied(bundle, manifestRowsByKey(), policy);
-    const mark = selected.has(bundle.id) ? "selected" : "unselected";
-    console.log(`${bundle.id.padEnd(12)} ${mark.padEnd(10)} ${applied ? "applied" : "missing"}  ${bundle.label}`);
+    const applied = missingBundleRows(bundle, rows).length === 0;
+    console.log(`${bundle.id.padEnd(12)} ${marks.get(bundle.id).padEnd(width)} ${applied ? "applied" : "missing"}  ${bundle.label}`);
   }
 }
 
+// Every effective bundle (selected, or required by one) must be fully applied; a failure names
+// the rows that are missing, so `roborepo doctor --installed` says what to repair.
 export function presetsCheck(args) {
   rejectUnknownFlags(args, new Set());
   const catalog = readPresetCatalog();
   const state = readPresetState();
-  const selected = new Set(state.selected ?? []);
   const rows = manifestRowsByKey();
-  const policy = readInstallPolicy();
   let failed = 0;
-  for (const bundle of catalog.bundles) {
-    if (!selected.has(bundle.id)) continue;
-    if (bundleApplied(bundle, rows, policy)) {
-      console.log(`ok: ${bundle.id}`);
+  const roots = selectedBundleRoots(state);
+  const selection = bundleSelectionStates(catalog.bundles, roots);
+  for (const id of effectiveBundleIds(catalog.bundles, roots)) {
+    const missing = missingBundleRows(catalog.byId.get(id), rows);
+    if (missing.length === 0) {
+      console.log(`ok: ${id}`);
     } else {
-      console.error(`fail: ${bundle.id} selected but not fully applied`);
+      const { state: mark, requiredBy } = selection.get(id);
+      const why = mark === "required" ? `required by ${requiredBy.join(", ")}` : "selected";
+      console.error(`fail: ${id} ${why} but not fully applied; missing: ${missing.join(", ")}`);
+      console.error(`  repair: roborepo bundle apply ${id}`);
       failed = 1;
     }
   }
   process.exit(failed);
 }
 
+// Removes the requested roots, then the rows of every bundle that left the effective set. A
+// requested bundle another selected bundle still requires stays applied, and says why.
 export function presetsRemove(args) {
   rejectUnknownFlags(args, new Set());
   const catalog = readPresetCatalog();
-  const requested = requestedBundles(args, catalog);
+  const requested = new Set(requestedBundles(args, catalog));
   const rows = manifestRowsByKey();
-  for (const id of requested) {
-    const bundle = catalog.byId.get(id);
-    removeBundle(bundle, rows);
-  }
   const state = readPresetState();
-  const selected = new Set(state.selected ?? []);
-  for (const id of requested) selected.delete(id);
-  writePresetState({
-    ...state,
-    selected: [...selected],
-    updatedAt: new Date().toISOString(),
-    bundles: bundleStates(catalog, selected),
-  });
+  const roots = selectedBundleRoots(state);
+  const nextRoots = roots.filter((id) => !requested.has(id));
+  const before = effectiveBundleIds(catalog.bundles, roots);
+  const after = new Set(effectiveBundleIds(catalog.bundles, nextRoots));
+  const retainedRows = new Set([...after].flatMap((id) => catalog.byId.get(id).rows));
+  const leaving = new Set([...before.filter((id) => !after.has(id)), ...[...requested].filter((id) => !after.has(id))]);
+  for (const id of [...leaving].reverse()) removeBundle(catalog.byId.get(id), rows, retainedRows);
+  const selection = bundleSelectionStates(catalog.bundles, nextRoots);
+  for (const id of requested) {
+    if (after.has(id)) console.log(`kept: ${id} stays applied; required by ${selection.get(id).requiredBy.join(", ")}`);
+  }
+  writePresetState(catalog, state, nextRoots);
 }
 
 // Telemetry is intentionally listed in BOTH catalogs: a hollow bundle here (rows: []) AND a real
-// service component in packages.json. The bundle entry's only job is bookkeeping in presetState +
-// letting `presetsApply(["telemetry"])` trigger withDependencies() → link the base `hooks` bundle
-// (belt-and-suspenders so capture-dense-bash.mjs in ~/.claude/hooks/ is reachable). On a full install
-// the base bundle already links those hooks, so this is redundant-but-harmless; the telemetry-only
-// install path (telemetryInstall) skips presetsApply deliberately. The real enable/disable lives in
-// telemetry.mjs setTelemetryEnabled. Safe to untangle into a single package-only path later.
-export function markTelemetrySelected(enabled) {
+// service component in packages.json. The bundle is selected only through `bundle apply telemetry`,
+// which also applies its required `hooks` bundle. Turning telemetry on from the package side
+// (`telemetry install`, the Settings toggle) records no bundle: the telemetry package wires its own
+// capture hooks, and recording the bundle would make `hooks` effective without applying it.
+// Turning telemetry off still drops a bundle root that `bundle apply` recorded.
+export function deselectTelemetryBundle() {
   const catalog = readPresetCatalog();
   const state = readPresetState();
-  const selected = new Set(state.selected ?? []);
-  if (enabled) selected.add("telemetry");
-  else selected.delete("telemetry");
-  writePresetState({
-    ...state,
-    selected: [...selected],
-    updatedAt: new Date().toISOString(),
-    bundles: bundleStates(catalog, selected),
-  });
+  const roots = selectedBundleRoots(state);
+  if (!roots.includes("telemetry")) return;
+  writePresetState(catalog, state, roots.filter((id) => id !== "telemetry"));
 }
 
 function isInstalledCore() {
@@ -508,8 +505,19 @@ function isBypassCommand(args) {
 
 function readPresetCatalog() {
   const raw = JSON.parse(fs.readFileSync(PRESET_MANIFEST, "utf8"));
-  const bundles = raw.bundles ?? [];
+  const bundles = (raw.bundles ?? []).map((bundle) => ({ ...bundle, requires: bundle.requires ?? [] }));
   const byId = new Map(bundles.map((bundle) => [bundle.id, bundle]));
+  const errors = [];
+  for (const bundle of bundles) {
+    for (const dep of bundle.requires) {
+      if (dep === bundle.id || !byId.has(dep)) errors.push(`bundle ${bundle.id}: unknown required bundle: ${dep}`);
+    }
+  }
+  for (const id of raw.default ?? []) {
+    if (!byId.has(id)) errors.push(`default: unknown bundle: ${id}`);
+  }
+  for (const cycle of requiresCycles(bundles)) errors.push(`bundle dependency cycle: ${cycle.join(" -> ")}`);
+  if (errors.length) throw new Error(`${PRESET_MANIFEST}: ${errors.join("; ")}`);
   return { default: raw.default ?? [], bundles, byId };
 }
 
@@ -521,26 +529,43 @@ function readPresetState() {
   }
 }
 
-function writePresetState(state) {
-  fs.mkdirSync(path.dirname(presetsStatePath), { recursive: true });
-  fs.writeFileSync(presetsStatePath, JSON.stringify(state, null, 2) + "\n");
-}
-
-function bundleStates(catalog, selected) {
-  const states = {};
+// Writes the selected roots (version 2) and a per-bundle summary of the effective set.
+function writePresetState(catalog, state, roots, extra = {}) {
+  const selection = bundleSelectionStates(catalog.bundles, roots);
+  const bundles = {};
   for (const bundle of catalog.bundles) {
-    states[bundle.id] = {
-      selected: selected.has(bundle.id),
+    const { state: mark, requiredBy } = selection.get(bundle.id);
+    bundles[bundle.id] = {
+      selected: mark === "selected",
+      ...(mark === "required" ? { requiredBy } : {}),
       rows: bundle.rows.length,
     };
   }
-  return states;
+  const next = {
+    ...state,
+    ...extra,
+    schemaVersion: BUNDLE_STATE_SCHEMA_VERSION,
+    selected: [...new Set(roots)],
+    updatedAt: new Date().toISOString(),
+    bundles,
+  };
+  fs.mkdirSync(path.dirname(presetsStatePath), { recursive: true });
+  fs.writeFileSync(presetsStatePath, JSON.stringify(next, null, 2) + "\n");
 }
 
 function requestedBundles(args, catalog) {
   const positional = args.filter((arg) => !arg.startsWith("--"));
   if (args.includes("--all") || positional.includes("all")) {
     return new Set(catalog.bundles.map((bundle) => bundle.id));
+  }
+  // Every bundle the user has chosen, plus the defaults: what `update` refreshes, so a file added
+  // to a selected bundle such as hooks reaches machines that already selected it.
+  if (args.includes("--selected")) {
+    if (positional.length) {
+      console.error(`--selected applies the recorded selection; it takes no bundle ids (got: ${positional.join(", ")})`);
+      process.exit(2);
+    }
+    return new Set([...catalog.default, ...selectedBundleRoots(readPresetState())].filter((id) => catalog.byId.has(id)));
   }
   if (args.includes("--default") || positional.includes("default") || positional.length === 0) {
     return new Set(catalog.default);
@@ -553,11 +578,6 @@ function requestedBundles(args, catalog) {
     }
     selected.add(id);
   }
-  return selected;
-}
-
-function withDependencies(selected) {
-  if (selected.has("telemetry")) selected.add("hooks");
   return selected;
 }
 
@@ -583,9 +603,10 @@ function applyBundle(bundle, rows, policy) {
   }
 }
 
-function removeBundle(bundle, rows) {
+function removeBundle(bundle, rows, retainedRows = new Set()) {
   const policy = readInstallPolicy();
   for (const key of bundle.rows) {
+    if (retainedRows.has(key)) continue;
     const row = rows.get(key);
     if (!row) continue;
     removeRow(row, policy);
@@ -594,7 +615,6 @@ function removeBundle(bundle, rows) {
 
 function applyRow(row, policy) {
   if (!harnessAvailable(row.harness)) return;
-  if (row.kind === "cleanup") return cleanupRow(row);
   if (row.kind === "rendered_rules") return renderRulesItem(row);
   if (row.kind === "managed_copy" || row.kind === "link") return copyItem(row, policy);
   if (row.kind === "root_config") return copyItem(row, policy);
@@ -616,15 +636,6 @@ function renderRulesItem(row) {
   renderHomeRules({ harness: row.harness });
 }
 
-function cleanupRow(row) {
-  const target = readlink(row.homeAbs);
-  if (target && resolvesInsideRepo(row.homeAbs)) {
-    fs.unlinkSync(row.homeAbs);
-    console.log(`cleanup: ${row.homeAbs}`);
-  }
-}
-
-
 // A root_config file is "builtin-authored" once install has written its hooks/markers in. Backing
 // such a file up as a "pre-install" original poisons the backup — a later uninstall would restore
 // roborepo hooks into a supposedly-clean file. Only ever back up a genuine pre-install file.
@@ -632,7 +643,7 @@ function cleanupRow(row) {
 function isBuiltInAuthored(file) {
   try {
     const text = fs.readFileSync(file, "utf8");
-    return /roborepo telemetry capture|write-guard|BEGIN GENERATED AGENT PERMISSIONS|MANAGED_BY_ROBOREPO|# Generated Harness Rules|BEGIN managed:builtin-code-style|BEGIN managed:managed-agents-import/.test(text);
+    return /roborepo telemetry capture|write-guard|BEGIN GENERATED AGENT PERMISSIONS|MANAGED_BY_ROBOREPO|# Generated Harness Rules|BEGIN managed:builtin-code-style/.test(text);
   } catch {
     return false;
   }
@@ -768,7 +779,7 @@ function restorePreInstallBackup(row) {
 }
 
 function removeRenderedRulesRow(row) {
-  // Unlink a legacy repo symlink if present (older installs).
+  // A symlink into the checkout is never user content.
   const link = readlink(row.homeAbs);
   if (link && resolvesInsideRepo(row.homeAbs)) {
     fs.unlinkSync(row.homeAbs);
@@ -779,11 +790,6 @@ function removeRenderedRulesRow(row) {
     return;
   }
   removeHomeRules({ harness: row.harness });
-
-  // Leave genuine user files. Remove only files we rendered.
-  if (!isBuiltInAuthored(row.homeAbs)) return;
-  fs.rmSync(row.homeAbs, { recursive: true, force: true });
-  console.log(`unlink: ${row.homeAbs}`);
   restorePreInstallBackup(row);
 }
 
@@ -836,7 +842,7 @@ function removeRow(row, policy) {
 async function printBundleHookReviewHint(args) {
   const catalog = readPresetCatalog();
   const rows = manifestRowsByKey();
-  const harnesses = [...withDependencies(requestedBundles(args, catalog))]
+  const harnesses = effectiveBundleIds(catalog.bundles, [...requestedBundles(args, catalog)])
     .flatMap((id) => catalog.byId.get(id)?.rows ?? [])
     .map((key) => rows.get(key))
     .filter((row) => row?.kind === "hook_fragment" && harnessAvailable(row.harness))
@@ -846,17 +852,19 @@ async function printBundleHookReviewHint(args) {
   await printHookReviewHint(harnesses);
 }
 
-function bundleApplied(bundle, rows, policy = readInstallPolicy()) {
-  return bundle.rows.every((key) => {
-    const row = rows.get(key);
-    if (!row || !harnessAvailable(row.harness)) return true;
-    if (row.kind === "managed_copy" || row.kind === "link" || row.kind === "root_config")
-      return fs.existsSync(row.homeAbs) && !readlink(row.homeAbs);
-    if (row.kind === "rendered_rules")
-      return fs.existsSync(row.homeAbs) && !readlink(row.homeAbs) && isRenderedRulesOutput(row.homeAbs);
-    if (SHARED_TARGET_KINDS.includes(row.kind)) return sharedTargetInstalled(row);
-    return true;
-  });
+// The bundle's row keys that are not in place, in manifest order; [] when fully applied.
+function missingBundleRows(bundle, rows) {
+  return bundle.rows.filter((key) => !rowApplied(rows.get(key)));
+}
+
+function rowApplied(row) {
+  if (!row || !harnessAvailable(row.harness)) return true;
+  if (row.kind === "managed_copy" || row.kind === "link" || row.kind === "root_config")
+    return fs.existsSync(row.homeAbs) && !readlink(row.homeAbs);
+  if (row.kind === "rendered_rules")
+    return fs.existsSync(row.homeAbs) && !readlink(row.homeAbs) && isRenderedRulesOutput(row.homeAbs);
+  if (SHARED_TARGET_KINDS.includes(row.kind)) return sharedTargetInstalled(row);
+  return true;
 }
 
 function readInstallPolicy() {

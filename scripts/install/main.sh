@@ -114,7 +114,6 @@ case "$(uname -s 2>/dev/null || echo unknown)" in
     fi
     # Shell snippets and global commands still need bash in checkout mode. In package mode npm owns
     # command exposure, so applying harness config must not mutate PATH or ~/.local/bin.
-    run_with_dry_args "${repo_root}/scripts/install/install-gitignore-globals.sh"
     if [[ $dry_run -eq 0 && "${package_mode}" != "1" ]]; then
       "${repo_root}/scripts/install/install-global-commands.sh"
       "${repo_root}/scripts/install/install-shell-snippets.sh"
@@ -162,9 +161,6 @@ else
   preflight_shell_setup
 fi
 
-# Harness-agnostic setup
-run_with_dry_args "${repo_root}/scripts/install/install-gitignore-globals.sh"
-
 # Shell and PATH setup (harness-agnostic, bash only)
 if [[ $dry_run -eq 0 && "${package_mode}" != "1" ]]; then
   "${repo_root}/scripts/install/install-global-commands.sh"
@@ -203,11 +199,13 @@ run_post_install_onboarding() {
     return 0
   fi
 
-  # Always land the minimal baseline first, so update can refresh rendered rules even when the
-  # machine has already been onboarded. The onboarding wizard itself does not re-apply defaults.
+  # Always land the minimal baseline, plus every bundle the user already selected, so update
+  # refreshes rendered rules and ships files new to those bundles even when the machine has already
+  # been onboarded. On a first install nothing is selected yet, so this is the default set. The
+  # onboarding wizard itself does not re-apply defaults.
   install_section "Base Configuration"
   node "${repo_root}/scripts/cli/main.mjs" package adopt-live
-  node "${repo_root}/scripts/cli/main.mjs" bundle apply --default
+  node "${repo_root}/scripts/cli/main.mjs" bundle apply --selected
   node "${repo_root}/scripts/cli/main.mjs" package reconcile
   if [[ "${#present_harness_rows[@]}" -gt 0 ]]; then
     for row in "${present_harness_rows[@]}"; do

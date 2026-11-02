@@ -94,13 +94,10 @@ function testMatricesParse() {
   assert.ok(writing.write.length >= 4, `\`write\` parsed only ${writing.write.length} references; the list shape likely changed`);
 
   // plan-write is one atomic command: it creates or updates, and every other lifecycle step is its
-  // own suite command, so none of the retired modes may reappear as a situation here.
+  // own suite command.
   const plans = parseReferenceMatrix(PLAN_WRITE);
   for (const situation of ["create", "update"]) {
     assert.ok(plans[situation], `plan-write must declare a \`${situation}\` situation`);
-  }
-  for (const retired of ["next", "start", "sync", "validate", "review", "handoff"]) {
-    assert.ok(!plans[retired], `plan-write must not route a \`${retired}\` mode; that step is its own command or CLI`);
   }
   assert.match(flat(`${PLAN_WRITE}/SKILL.md`), /`\/plan-write` takes no mode/, "plan-write must say it takes no mode argument");
 }

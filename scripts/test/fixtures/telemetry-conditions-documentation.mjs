@@ -2,8 +2,8 @@
 import { analyzeTelemetry } from "../../cli/telemetry-analyze.mjs";
 export function documentationScenario() {
   const snapshots = [
-    { schema: 1, snapshot_id: "configured", packages: ["focused-reads"], skills: ["section-lookup"] },
-    { schema: 1, snapshot_id: "baseline", packages: [], skills: [] },
+    { schema: 2, snapshot_id: "configured", packages: ["focused-reads"], skills: ["section-lookup"], evaluability: { packages: true, skills: true } },
+    { schema: 2, snapshot_id: "baseline", packages: [], skills: [], evaluability: { packages: true, skills: true } },
   ];
   const events = Array.from({ length: 26 }, (_, index) => {
     const cohort = index < 12 ? 0 : index < 24 ? 1 : 2;

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "fixture-docs",
+  "label": "Fixture Docs",
+  "description": "Test-only package with a second MCP server, used where a test needs two packages or a dependency target.",
+  "lifecycle": "optional",
+  "presentation": {
+    "category": "integrations",
+    "order": 901
+  },
+  "resources": [
+    { "type": "mcp", "preset": "fixture-docs" },
+    { "type": "rules", "source": "rules.md", "harness": "claude" }
+  ]
+}

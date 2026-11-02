@@ -69,7 +69,7 @@ Resolution order, highest precedence first (`scripts/cli/roots.mjs`):
 | Root | Override | Otherwise |
 | --- | --- | --- |
 | `appRoot` | `ROBOREPO_APP_ROOT` | Directory containing the running CLI |
-| `stateRoot` | `ROBOREPO_STATE_ROOT`, then `ROBOREPO_STATE_DIR` | `~/.roborepo` |
+| `stateRoot` | `ROBOREPO_STATE_ROOT` | `~/.roborepo` |
 | `workspaceRoot` | `ROBOREPO_WORKSPACE_ROOT`, then the `workspace use` pointer | `<stateRoot>/workspace` |
 
 Mode is detected by looking for `.git` or `local/skills` in `appRoot`. `ROBOREPO_MODE=package` or
@@ -124,7 +124,7 @@ workspace.json: ~/.roborepo/workspace/workspace.json
 ```
 
 Mode still controls what a command may write. `appRoot` is writable in a development checkout, so
-built-in source edits and `skill new` for a built-in skill require one; in package mode those are
+built-in source edits and `package dev` for a built-in package require one; in package mode those are
 refused. Personal workspace content is unaffected either way.
 
 This assumes `roborepo` resolves to an installed package. It can instead be a symlink into a
@@ -187,20 +187,8 @@ roborepo workspace validate                           # check for conflicts
 The pointer is stored in `<stateRoot>/workspace-root.json` and reused while `stateRoot` stays put.
 `ROBOREPO_WORKSPACE_ROOT` overrides it per shell without changing the recorded choice.
 
-To pull content out of an older checkout or pre-workspace layout:
-
-```sh
-roborepo workspace import <old-checkout> --dry-run
-roborepo workspace import <old-checkout>
-```
-
-Legacy import reads `globals/agents/skills`, `globals/commands`, `globals/packages`, and the MCP
-inventory from the old checkout, then prints what it copied. The first two paths describe the
-older source layout accepted by `scripts/cli/workspace-resources.mjs`.
-
 ```mermaid
 flowchart LR
-  OLD["old checkout"] -->|"workspace import<br/>copies content"| WS["workspaceRoot"]
   DIR["another directory"] -->|"workspace use<br/>selects"| WS
   PTR["stateRoot/<br/>workspace-root.json"] -->|"records which"| WS
 ```

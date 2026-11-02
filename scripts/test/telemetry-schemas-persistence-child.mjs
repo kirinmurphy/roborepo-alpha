@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Runs inside an isolated ROBOREPO_STATE_DIR set by the parent (telemetry-schemas-check.mjs).
+// Runs inside an isolated ROBOREPO_STATE_ROOT set by the parent (telemetry-schemas-check.mjs).
 // Not a standalone test entry point — do not add this to package.json/test-cli.sh directly.
 import assert from "node:assert/strict";
 import { generateMarkerId } from "../cli/telemetry-schemas/marker-schema.mjs";
@@ -10,10 +10,14 @@ import {
   writeExperiment, readExperiment,
 } from "../cli/telemetry-schemas/persistence.mjs";
 
+const markerTs = new Date().toISOString();
 const marker = {
-  schema: 1,
+  schema: 2,
   marker_id: generateMarkerId(),
-  ts: new Date().toISOString(),
+  ts: markerTs,
+  effective_at: markerTs,
+  scope: "all",
+  watching_kinds: [],
   type: "note",
   title: "phase 1 landed",
 };

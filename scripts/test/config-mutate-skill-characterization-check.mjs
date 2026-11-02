@@ -22,7 +22,7 @@ function makeHome() {
 }
 
 function run(appRoot, home, expr) {
-  const env = { ...process.env, ROBOREPO_MODE: "development", ROBOREPO_APP_ROOT: appRoot, HOME: home, ROBOREPO_STATE_DIR: path.join(home, ".roborepo"), SKIP_MCP: "1" };
+  const env = { ...process.env, ROBOREPO_MODE: "development", ROBOREPO_APP_ROOT: appRoot, HOME: home, ROBOREPO_STATE_ROOT: path.join(home, ".roborepo"), SKIP_MCP: "1" };
   const result = spawnSync(process.execPath, ["-e", expr], { env, encoding: "utf8" });
   assert.equal(result.status, 0, `expression should succeed: ${result.stderr}\n${result.stdout}`);
   return result;

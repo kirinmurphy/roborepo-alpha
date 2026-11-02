@@ -109,4 +109,26 @@ assert.equal(
   "...and it must still refuse to invoke itself, or the allowlist entry becomes a laundering path",
 );
 
+// The protected-branch hooks approve a push by reading the shell command, which agent-run's
+// no-shell spawn never shows them. So the live manifest must keep `git push` out of the allow
+// bucket, or agent-run would run any push, to any branch, unchecked.
+const { REFUSAL } = await import("../cli/agent-run-policy.mjs");
+for (const branch of ["feature/x", "release"]) {
+  assert.equal(checkAgentRun(["git", "push", "origin", branch], manifest).reason, REFUSAL.ASK_BUCKET, `agent-run refuses git push origin ${branch}`);
+}
+
+// gh reaches GitHub through its API, past both protected-branch hooks. Opening a PR and reading are
+// allowed; posting asks; merging, raw API calls, the token, and repository settings stay denied,
+// because only GitHub's own branch protection would see them.
+const gh = (...words) => checkAgentRun(["gh", ...words], manifest);
+for (const words of [["pr", "create", "--base", "main", "--head", "feat"], ["pr", "view", "12"], ["pr", "checks"], ["run", "view", "1"]]) {
+  assert.equal(gh(...words).ok, true, `gh ${words.join(" ")} is allowed`);
+}
+for (const words of [["pr", "comment", "12"], ["pr", "edit", "12"], ["issue", "create"]]) {
+  assert.equal(gh(...words).reason, REFUSAL.ASK_BUCKET, `gh ${words.join(" ")} asks`);
+}
+for (const words of [["pr", "merge", "12", "--admin"], ["api", "-X", "PATCH", "repos/o/r/git/refs/heads/main"], ["auth", "token"], ["repo", "edit", "--default-branch", "x"], ["workflow", "run", "deploy"]]) {
+  assert.equal(gh(...words).reason, REFUSAL.DENY_BUCKET, `gh ${words.join(" ")} is denied`);
+}
+
 console.log(`agent-run-coverage-check: ok (${topLevel.size} top-level commands, ${classified.size} classified)`);

@@ -1,8 +1,0 @@
-{
-  "path": ["rules"],
-  "kind": "internal",
-  "title": "Rules",
-  "description": "Legacy rules renderer entrypoint",
-  "usage": "roborepo rules [--check]",
-  "execution": { "adapter": "repoScript", "script": "rules" }
-}

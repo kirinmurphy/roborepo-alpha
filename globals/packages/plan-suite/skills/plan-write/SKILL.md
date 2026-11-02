@@ -15,6 +15,16 @@ Lifecycle moves belong to other suite commands, each committed in the primary ch
 `/plan-archive` to `archived/`. `/plan-write` writes a new plan's initial checklist; `/plan-promote`
 refines it. Prose quality and implementation correctness come from the paired skills below.
 
+## Prerequisite: Initialized Repository
+
+Before any create, revise, or sync work, check that `docs/plans/plans-config.json` exists and has a
+`namespaces` key; that key is what `/plan-suite-init` writes, so its presence means the repository
+is set up. File existence alone is not enough, because `/plan-execute` can create the file holding
+only `worktreeRoot`. If the key is missing, say so, run the `/plan-suite-init` workflow (its
+`SKILL.md` sits beside this skill's folder, at `../plan-suite-init/SKILL.md`), and continue here
+only after it reports the repository initialized. Do not write the config yourself. Lifecycle
+folders need no check: create `docs/plans/backlog/` when writing a new plan if it is missing.
+
 ## Paired Skills
 
 Load a paired skill only when its rules materially constrain the current work;
@@ -79,10 +89,10 @@ These conditions must hold before a new plan can be called created. The full rul
 `references/plan-schema.md`; these are the ones whose absence makes the artifact invalid.
 
 - **Resolve the plan identity before drafting body content.** Read `docs/plans/plans-config.json`
-  when it exists and choose the namespace from it; a project namespace wins over a universal one
-  whenever it is the more specific fit. Form `<namespace>-<slug>.md` from that namespace, and pair
-  it with a reader-facing H1 that names the outcome rather than restating the filename. When no
-  config exists, say so and propose a vocabulary from the repository instead of inventing a prefix.
+  and choose the namespace from it; a project namespace wins over a universal one whenever it is
+  the more specific fit. Form `<namespace>-<slug>.md` from that namespace, and pair it with a
+  reader-facing H1 that names the outcome rather than restating the filename. A missing config is
+  handled by the prerequisite above, never by inventing a prefix.
 - **Generate an opaque `id`** of 6-8 lowercase base36 characters. Never derive it from the title,
   filename, or slug; it survives every rename and lifecycle move.
 - **Frontmatter carries only** `id`, `priority`, `next_action`, `blocked_by`, `depends_on`,
@@ -97,6 +107,13 @@ These conditions must hold before a new plan can be called created. The full rul
   lifecycle, naming, and cross-plan relationships, and `workflow-validate.md` adds the repository
   consistency checks no command can make; the `technical-writing` Validator covers prose quality and
   every paired skill that applied. A clean report from one does not excuse the other.
+- **Challenge the design before delivering.** Validation includes the simplicity check in
+  `workflow-validate.md`, which asks whether the approach is engineered beyond the core problem and
+  whether a simpler one would solve it. Adopt a strictly simpler alternative directly. When the
+  simpler options have different outcomes or tradeoffs, stop and talk them through with the user:
+  name the core problem, compare the plan with each alternative (what it gains, what it loses,
+  effort, risk), and recommend one. Do not deliver until the user picks one. The same gate applies
+  to a substantive revision of scope or design.
 - **Creation ends in backlog.** If the user also asked to start the work, deliver the validated
   backlog plan and hand off to `/plan-promote`, which moves the same stable `id` into
   `docs/plans/ready/` for `/plan-execute` to start.
