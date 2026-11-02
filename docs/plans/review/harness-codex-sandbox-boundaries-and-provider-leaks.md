@@ -1,7 +1,7 @@
 ---
 id: 4zyo2woj
 priority: high
-next_action: Run /plan-review to review the post-approval changes and renew human approval, then rerun /plan-close with a passing completion gate. The branch landed; approval is stale and the aggregate gate timed out at portal startup although its focused retry passed.
+next_action: Finish verification against the landed source, request renewed exact-commit human approval, then run /plan-close. Plan records are reconciled; prior implementation approval remains historical.
 blocked_by: []
 depends_on: ["hr78g4sj"]
 related: ["8bjltk2n", "wjlt1zvf", "ia1q1z9", "permva27", "permissions-ui-revamp", "codex-cmux-hook-trust-review", "46qth5z8", "harness-capability-derived-resource-targeting", "7k3m9qd", "o9zwxuav"]
@@ -785,6 +785,67 @@ approval, or unrelated pending edit was changed by this diagnosis.
   establish trustworthy review freshness and request renewed exact-commit human approval before
   closing. No lifecycle change, approval, implementation edit, server shutdown or branch/worktree
   cleanup occurred in this recheck.
+
+
+
+#### Isolated verification completion — November 1, 2026
+
+- A terminal-launched, disconnected Docker assessment used exactly committed source
+  `e43657705647a77194c3aed0350321ded90a9bc0`, tree
+  `cd304a3cbf226b00c0ee68b88a7877592425f3b7`. The in-container tree assertion passed and its
+  final Git status was empty. Pending skill edits in the live primary checkout were excluded.
+- The canonical aggregate exited 1 at the deterministic group: 64 of 65 suites passed; its sole
+  failure was `docs-reference-check.mjs`, naming the stale archived-plan link already identified
+  above. Health passed 98 checks, the CLI suite passed 411 assertions with zero failures, and
+  installation collisions passed before that stop. The prior same-millisecond rediscovery failure
+  did not occur in this run; no correction to that unrelated production code is claimed.
+- All seven credential-focused commands exited 0: projection, live rendering, foreign-line
+  preservation, home-path rules, Gemini characterization, root-config write policy and hook
+  composition. Thirteen of fourteen focused commands passed; the same documentation-reference
+  command was the sole failure. Portal state, lifecycle manifest, plan-suite skills, lifecycle
+  transitions, health and whitespace commands also passed.
+- Every later aggregate phase was executed separately against the same source and exited 0:
+  packed installation, all four strict clean-machine suites, and portal UI (158 passed).
+  These separate successes do not replace or change the aggregate's exit 1.
+- The native runner exited 2 with explicit unavailable status: the Linux container has no Codex
+  executable. It certifies no new native platform or runtime. The accepted historical macOS
+  evidence and unverified tool/platform boundaries remain unchanged.
+- Reused the existing one-line archived-link repair from `90f2f326`, applying it to main in
+  `1de46fc9384b97e2e9b901fa7bfbdb99ee8f2021`. Documentation references and whitespace passed
+  after the repair; current-main health passed 97 checks and plan-suite skill checks passed.
+  A new pinned aggregate is prepared for that committed source. It must finish before a current
+  aggregate pass is recorded.
+- The normal-terminal gate before the isolated run stopped at a stale generated skill audit while
+  the primary checkout held unrelated edits to the plan-execution skill. Those edits and their
+  later commit `2b582e47` were preserved. No credential implementation change was made.
+- Post-merge recovery has an additional evidence-copy prerequisite: after excluding Result and
+  Approval, the worktree and primary plan differ in `next_action` and the earlier closure's
+  Verification section. The current recovery predicate rejects those differences; it also treats
+  replacing the worktree's older approval with a primary-only renewed approval as conflicting.
+  No recovery evidence or human approval is fabricated. The user has been asked whether to allow
+  explicit plan-record reconciliation as an exception to the skill's instruction to leave the
+  old worktree untouched. Implementation files and prior approvals remain unchanged pending
+  that decision and renewed exact-commit approval.
+
+
+
+#### Authorized plan-record reconciliation — November 2, 2026
+
+- The user explicitly authorized reconciliation with "please do it" after the explanation that
+  only the two plan documents would be updated and implementation approval would remain a
+  separate decision. This is a narrow exception to the post-merge skill instruction not to
+  edit or commit the old worktree; it authorizes no implementation change or merge.
+- Preserved the primary plan's requirements, decisions, historical approval, closure attempts
+  and verification evidence in both copies. Updated the next action to reflect the remaining
+  verification and renewed-approval steps. The old feature implementation remains
+  `f90412a258c6a1177ea33a6531581d53020f21db` outside plan documents.
+- Pre-reconciliation plan blobs: primary `3ea407f6a82dc4e05f3047af5d7ee2d9d7aee2bf`;
+  worktree `782bd991e0ae25f4dac082bbaed7ec32c706641f`. The earlier worktree document remains
+  recoverable from Git. No pending gate result or renewed approval is inferred by making
+  these records agree.
+- Local main advanced to `2b81656558b8274ed00286d001ee8e86ae587b2f`, including the separate
+  package-state merge, while this review continued. The prepared `1de46fc9` snapshot has no
+  recorded execution yet and does not establish verification of those newer changes.
 
 
 ### Approval

@@ -34,7 +34,7 @@ let caseId = 0;
 
 // Disposable machine state roborepo created — managed uninstall must remove all of it.
 const OWNED_STATE_ENTRIES = [
-  "command-overrides.json", "enabled-packages.json", "telemetry", "telemetry-backups", "backups",
+  "command-overrides.json", "enabled-packages.json", "applied-packages.json", "telemetry", "telemetry-backups", "backups",
   "presets", "rules", "config-state", "harnesses", "repositories", "usage", "capture", "portal",
   "skills", "package-runtime", "install-state.json", "app-root.json", "initialization.json",
   "experimental.json",
@@ -72,6 +72,7 @@ function fixture({ relocated = false } = {}) {
   // Disposable machine state that managed cleanup should remove.
   fs.mkdirSync(path.join(stateDir, "telemetry"), { recursive: true });
   fs.writeFileSync(path.join(stateDir, "enabled-packages.json"), "{}\n");
+  fs.writeFileSync(path.join(stateDir, "applied-packages.json"), "{}\n");
 
   if (relocated) {
     fs.writeFileSync(
@@ -115,6 +116,7 @@ function testNestedWorkspacePreservedByDefault() {
   assert.equal(fs.readFileSync(f.skill, "utf8"), "USER AUTHORED\n", "workspace bytes must survive");
   assert.ok(!fs.existsSync(path.join(f.stateDir, "telemetry")), "disposable state must be removed");
   assert.ok(!fs.existsSync(path.join(f.stateDir, "enabled-packages.json")), "package registry must be removed");
+  assert.ok(!fs.existsSync(path.join(f.stateDir, "applied-packages.json")), "applied package record must be removed");
   assert.match(result.stdout, /preserved/i, "result must tell the user the workspace was kept");
   assert.match(result.stdout, /Development checkout application files were not removed/, "dev checkout must not claim npm removal");
 }
@@ -242,6 +244,7 @@ function testNpmOwnedCliIsNotARemnant() {
   // --check-clean has an opinion about.
   fs.rmSync(path.join(f.stateDir, "telemetry"), { recursive: true, force: true });
   fs.rmSync(path.join(f.stateDir, "enabled-packages.json"), { force: true });
+  fs.rmSync(path.join(f.stateDir, "applied-packages.json"), { force: true });
 
   const binDir = path.join(f.home, ".local/bin");
   const cliEntry = path.join(binDir, "roborepo");

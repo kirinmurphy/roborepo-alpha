@@ -11,6 +11,7 @@ import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { hostHarnessIsolationEnv } from "./portal-ui/host-harness-isolation.mjs";
+import { makeAppRoot, makeCliEnv } from "./app-root-fixture.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const cli = path.join(repoRoot, "scripts/cli/main.mjs");
@@ -30,6 +31,7 @@ try {
   baseInstallShipsTheGitHooksItsConfigPointsAt();
   coreHooksInstallAfterPackageHooks();
   updateShipsHooksNewToASelectedBundle();
+  removingBundlePreservesSharedRows();
   scriptCopiesFollowConflictPolicy();
   linksOutsideTheCheckoutAreNeverWrittenThrough();
   retiredScriptsDoNotOutliveTheirSource();
@@ -51,6 +53,38 @@ function baseInstallShipsTheGitHooksItsConfigPointsAt() {
       assert.ok(fs.existsSync(installed), `base installs ${harness}/git-hooks/${name}`);
       assert.equal(fs.statSync(installed).mode & 0o111, fs.statSync(path.join(source, name)).mode & 0o111, `${harness}/git-hooks/${name} keeps its mode`);
     }
+  }
+}
+
+function removingBundlePreservesSharedRows() {
+  const appRoot = makeAppRoot({ includeGenerated: true });
+  const { home } = makeHome("shared-bundle-rows");
+  const env = makeCliEnv({ appRoot, home });
+  const fixtureCli = path.join(appRoot, "scripts", "cli", "main.mjs");
+  const manifest = path.join(appRoot, "manifests", "platform", "presets.json");
+  const catalog = JSON.parse(fs.readFileSync(manifest, "utf8"));
+  catalog.bundles.push(
+    { id: "shared-left", label: "Shared left", rows: ["claude:hooks"] },
+    { id: "shared-right", label: "Shared right", rows: ["claude:hooks"] },
+    { id: "shared-parent", label: "Shared parent", rows: [], requires: ["shared-right"] },
+  );
+  fs.writeFileSync(manifest, JSON.stringify(catalog));
+  try {
+    run(env, fixtureCli, "bundle", "apply", "shared-left", "shared-parent");
+    const script = path.join(home, ".claude", "hooks", "write-guard.mjs");
+    assert.ok(fs.existsSync(script), "the shared row is installed");
+    run(env, fixtureCli, "bundle", "remove", "shared-left");
+    assert.ok(fs.existsSync(script), "a row remains installed through another effective bundle");
+    run(env, fixtureCli, "bundle", "remove", "shared-parent");
+    assert.equal(fs.existsSync(script), false, "the row is removed after its final effective owner leaves");
+
+    catalog.default = ["unknown-first", "unknown-second"];
+    fs.writeFileSync(manifest, JSON.stringify(catalog));
+    const invalid = spawnSync(process.execPath, [fixtureCli, "bundle", "status"], { env, encoding: "utf8" });
+    assert.notEqual(invalid.status, 0, "unknown default bundles invalidate the catalog");
+    for (const id of catalog.default) assert.match(invalid.stderr, new RegExp(`default: unknown bundle: ${id}`));
+  } finally {
+    fs.rmSync(appRoot, { recursive: true, force: true });
   }
 }
 
@@ -102,7 +136,8 @@ function coreHooksInstallAfterPackageHooks() {
   run(env, cli, "bundle", "apply", "hooks");
   assert.deepEqual(JSON.parse(fs.readFileSync(hooksPath, "utf8")), labelled, "label reconciliation is idempotent");
 
-  run(env, cli, "bundle", "remove", "hooks");
+  // Enabling the telemetry package records no telemetry bundle, so nothing keeps hooks applied.
+  assert.doesNotMatch(run(env, cli, "bundle", "remove", "hooks"), /kept: hooks/);
   const removed = handlerPositions(hooksPath);
   assert.deepEqual([...removed], [...before], "removal leaves exactly the package hooks, at their positions");
   assert.ok(fs.existsSync(path.join(home, ".codex", "hooks", "package-script.mjs")), "package script survives removal");
