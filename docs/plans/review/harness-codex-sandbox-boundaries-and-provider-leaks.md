@@ -1,7 +1,7 @@
 ---
 id: 4zyo2woj
 priority: high
-next_action: Run /plan-close. Renewed human approval is recorded for 309055c861cc2894ea086aa0bbebd93c36836702; verify freshness and landing, then complete guarded closure and cleanup.
+next_action: Request renewed exact-commit approval after the subsequent clean main merge, then complete guarded closure. The previous explicit approval is preserved but now content-stale under the current rule.
 blocked_by: []
 depends_on: ["hr78g4sj"]
 related: ["8bjltk2n", "wjlt1zvf", "ia1q1z9", "permva27", "permissions-ui-revamp", "codex-cmux-hook-trust-review", "46qth5z8", "harness-capability-derived-resource-targeting", "7k3m9qd", "o9zwxuav"]
@@ -586,8 +586,8 @@ Git administrative worktree `credential-protection`; this document contains no m
 
 ### Result
 - Status: complete
-- Reviewed implementation commit: 2fef59384ec12cd008cb8ac2e6aa915895ce0dc0
-- Base commit: 9ea38f1dd274d9443decca3aadcca85d64e9f6df
+- Reviewed implementation commit: 6fe310e82f3d78f0cf1126a848d71a7c36ae8d43
+- Base commit: 9aa3b35737926ab12f0235fc17b5327a0ac43dac
 
 #### Re-review — October 30, 2026
 
@@ -883,6 +883,37 @@ approval, or unrelated pending edit was changed by this diagnosis.
 - Review is complete for the implementation named above. The old human approval remains
   historical and stale; request a new explicit approval of this implementation before closure.
   Authorizing document reconciliation did not grant implementation approval.
+
+
+#### Re-review after the subsequent base merge — November 2, 2026
+
+- The user's explicit "approved" answer for `309055c8` was committed immediately in feature
+  `39b6b5c2` and matching primary record `9aa3b357`. That human answer remains recorded in
+  Approval below. Afterwards Git records merge `6fe310e8` (parents `39b6b5c2`, `9aa3b357`)
+  and an origin update by push. This review issued neither that merge nor that push; their
+  initiating session is not established. No reset, revert or branch move was performed here.
+- The merge brings 406 non-plan paths onto the old feature history, so the canonical reader
+  correctly reports the earlier approval and Result stale under the current exact-commit rule.
+  No new approval is inferred from the identical credential code or the clean merge.
+- Executed assertions confirm the entire tracked tree of feature
+  `6fe310e82f3d78f0cf1126a848d71a7c36ae8d43` is byte-identical to main
+  `9aa3b35737926ab12f0235fc17b5327a0ac43dac`. All non-plan files still match passing gate
+  source `db992633` except the already checked backlog-audit link repair. The full-gate evidence
+  remains reused; the historical `e4365770` aggregate remains failed.
+- Fresh-context read-only Validator: clean for credential protection, zero fix findings and
+  zero escalations. It independently confirmed tree equality, the reused passing-gate source,
+  all acceptance areas, the five documentation owners, and unchanged native coverage limits.
+  No incoming credential behavior or uncovered credential-test requirement was identified.
+- Fresh projection (15 patterns, nine combinations), foreign-line, home-path and documentation
+  reference commands passed. Main-to-feature whitespace validation passed. The Validator also
+  recorded a base-only comparison diagnostic: old-approved-to-merged and old-approved-to-main
+  both report an EOF blank line at `scripts/cli/telemetry-analysis/read-warnings.mjs:63`.
+  That inherited diagnostic is outside credential protection; it is not a current feature/base
+  difference or a failed credential acceptance check.
+- Result above now covers the merged implementation. Keep the earlier approval below as
+  historical until the human explicitly approves the newly reviewed candidate. Keep this
+  feature branch unchanged during that decision and guarded closure so the review does not
+  become stale again. No additional human-only acceptance check or policy choice is open.
 
 
 ### Approval
