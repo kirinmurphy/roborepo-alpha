@@ -5,7 +5,7 @@ import path from "node:path";
 import net from "node:net";
 import { createHash } from "node:crypto";
 import { spawnSync, spawn } from "node:child_process";
-import { markTelemetrySelected } from "./presets.mjs";
+import { deselectTelemetryBundle } from "./presets.mjs";
 import { repoRoot, stateRoot, harnessHome, rootConfigActive } from "./paths.mjs";
 import { portalPidPathForPort, telemetryBackupDir, telemetryCollectorDir, telemetryDir, telemetrySpoolDir, telemetryMarkersPath, telemetryExperimentsDir, telemetrySnapshotsDir, repositoriesRegistryPath } from "./state-paths.mjs";
 import { conditionDemoEvidence } from "./telemetry-conditions-demo.mjs";
@@ -340,7 +340,6 @@ function telemetryInstall(args) {
   // Write state directly — no presetsApply, so operational hooks are not touched.
   ensureTelemetryDirs();
   writeTelemetryState({ enabled: true });
-  markTelemetrySelected(true);
   // Wire capture hooks into whichever registered providers are actually installed on this machine.
   for (const provider of listHarnessProviders()) {
     if (!provider.manifest.capabilities.includes("telemetry-capture")) continue;
@@ -417,7 +416,7 @@ async function telemetryDisable(args) {
 }
 
 // Programmatic capture-state toggle, shared by the CLI verbs and the config controls. Only flips the
-// service's own enabled flag/selection state — hook install/removal is a separate `hooks` component
+// service's own enabled flag (and, on disable, drops a recorded telemetry bundle) — hook install/removal is a separate `hooks` component
 // on the telemetry package, handled by the generic enable/disable switch in packages.mjs. Does not
 // start/stop the portal server — the dashboard toggle is about capture, not the server. Returns
 // { ok, message }.
@@ -425,7 +424,7 @@ export function setTelemetryEnabled(enabled) {
   try {
     ensureTelemetryDirs();
     writeTelemetryState({ enabled });
-    markTelemetrySelected(enabled);
+    if (!enabled) deselectTelemetryBundle();
     return { ok: true, message: `telemetry ${enabled ? "enabled" : "disabled"}` };
   } catch (err) {
     return { ok: false, message: String(err?.message || err) };
@@ -985,7 +984,7 @@ function telemetryPurge(args) {
     else console.log("backup:  nothing to back up (no telemetry data)");
   }
   fs.rmSync(telemetryDir, { recursive: true, force: true });
-  markTelemetrySelected(false);
+  deselectTelemetryBundle();
   console.log(`purged: ${telemetryDir}`);
 }
 

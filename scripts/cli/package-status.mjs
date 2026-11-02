@@ -1,5 +1,6 @@
 import { loadPackageCatalog, isPackageAvailable } from "./package-catalog.mjs";
 import { buildPackageLiveState } from "./package-probes.mjs";
+import { effectiveEnabledIds } from "./package-state.mjs";
 
 // One package's desired and live state, small enough for a skill to branch on. `enabled` is the
 // desired state; `status` is what the probes observed on disk (enabled, configured, partial,
@@ -10,7 +11,7 @@ export function packageStatusSummary(id, { catalog = loadPackageCatalog({ includ
   const pkg = catalog.find((item) => item.id === id);
   if (!pkg) return { id, available: false, enabled: false, status: "missing" };
   if (!isPackageAvailable(pkg)) return { id, available: false, enabled: false, status: "unavailable" };
-  const live = buildPackageLiveState(withRequiredPackages(pkg, catalog)).get(pkg.id);
+  const live = buildPackageLiveState(withRequiredPackages(pkg, catalog), { effectiveIds: effectiveEnabledIds(catalog) }).get(pkg.id);
   return { id, available: true, enabled: Boolean(live?.desired), status: live?.status || "disabled" };
 }
 

@@ -1,6 +1,8 @@
 {
   "ci": [
     "package-catalog-check.mjs",
+    "package-graph-check.mjs",
+    "config-dependency-sections-check.mjs",
     "package-lifecycle-check.mjs",
     "package-default-enabled-check.mjs",
     "initialization-lifecycle-check.mjs",

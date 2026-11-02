@@ -481,6 +481,31 @@ assert "bundle check: selected bundles verify" \
   bash -c "HOME='${presets_home}' ROBOREPO_STATE_ROOT='${presets_home}/.roborepo' node '${cli}' bundle check >/dev/null"
 assert "bundle remove: unlinks owned link bundle" \
   bash -c "HOME='${presets_home}' ROBOREPO_STATE_ROOT='${presets_home}/.roborepo' node '${cli}' bundle remove hooks >/dev/null && ! test -e '${presets_home}/.claude/hooks'"
+# Bundle selections record roots only: telemetry requires hooks (presets.json), so applying
+# telemetry applies hooks without recording it, and hooks leaves with telemetry unless selected.
+bundle_dep_home="${work}/bundle-dep-home"
+mkdir -p "${bundle_dep_home}/.claude" "${bundle_dep_home}/.codex"
+bundle_dep_env="HOME='${bundle_dep_home}' ROBOREPO_STATE_ROOT='${bundle_dep_home}/.roborepo'"
+bundle_dep_state="${bundle_dep_home}/.roborepo/presets/state.json"
+assert "bundle apply: telemetry applies its required hooks bundle without recording it" \
+  bash -c "${bundle_dep_env} node '${cli}' bundle apply base telemetry >/dev/null && test -e '${bundle_dep_home}/.claude/hooks' && node -e 'const s=JSON.parse(require(\"fs\").readFileSync(process.argv[1],\"utf8\"));process.exit(s.schemaVersion===2&&!s.selected.includes(\"hooks\")&&s.selected.includes(\"telemetry\")?0:1)' '${bundle_dep_state}'"
+assert "bundle status: marks a derived bundle as required by its parent" \
+  bash -c "${bundle_dep_env} node '${cli}' bundle status | grep -Eq '^hooks +required by telemetry +applied'"
+assert "bundle check: a missing required bundle names its rows" \
+  bash -c "mv '${bundle_dep_home}/.claude/hooks' '${bundle_dep_home}/.claude/hooks.moved' && out=\$(${bundle_dep_env} node '${cli}' bundle check 2>&1); status=\$?; mv '${bundle_dep_home}/.claude/hooks.moved' '${bundle_dep_home}/.claude/hooks'; test \$status -ne 0 && grep -q 'fail: hooks required by telemetry but not fully applied; missing: claude:hooks' <<<\"\$out\""
+assert "bundle remove: a required bundle stays applied and says why" \
+  bash -c "${bundle_dep_env} node '${cli}' bundle remove hooks | grep -q 'kept: hooks stays applied; required by telemetry' && test -e '${bundle_dep_home}/.claude/hooks'"
+assert "bundle remove: removing telemetry removes the hooks it required" \
+  bash -c "${bundle_dep_env} node '${cli}' bundle remove telemetry >/dev/null && ! test -e '${bundle_dep_home}/.claude/hooks'"
+assert "bundle remove: a directly selected required bundle survives its parent" \
+  bash -c "${bundle_dep_env} node '${cli}' bundle apply hooks telemetry >/dev/null && ${bundle_dep_env} node '${cli}' bundle remove telemetry >/dev/null && test -e '${bundle_dep_home}/.claude/hooks'"
+assert "bundle state: every listed bundle is a choice, so hooks survives removing telemetry" \
+  bash -c "printf '{\"selected\":[\"base\",\"hooks\",\"telemetry\"]}\n' > '${bundle_dep_state}' && ${bundle_dep_env} node '${cli}' bundle remove telemetry >/dev/null && test -e '${bundle_dep_home}/.claude/hooks' && ${bundle_dep_env} node '${cli}' bundle status | grep -Eq '^hooks +selected'"
+# Hook readiness expects Codex core hooks when the hooks bundle is effective, including when it is
+# only required by a selected bundle.
+core_hook_bundle_probe="import('${repo_root}/scripts/cli/core-hook-bundle.mjs').then((m) => console.log(JSON.stringify(m.coreHookBundle('codex'))))"
+assert "hook readiness: a hooks bundle required by a selected telemetry bundle counts as selected" \
+  bash -c "printf '{\"schemaVersion\":2,\"selected\":[\"telemetry\"]}\n' > '${bundle_dep_state}' && ${bundle_dep_env} node -e \"${core_hook_bundle_probe}\" | grep -qx '{\"id\":\"hooks\",\"selected\":true}'"
 mkdir -p "${presets_home}/.claude/hooks"
 printf 'local hook file\n' > "${presets_home}/.claude/hooks/local.txt"
 printf '{"hooks":[]}\n' > "${presets_home}/.codex/hooks.json"
@@ -488,6 +513,8 @@ assert "telemetry enable: creates local state dirs" \
   bash -c "HOME='${presets_home}' ROBOREPO_STATE_ROOT='${presets_home}/.roborepo' node '${cli}' telemetry enable >/dev/null && test -d '${presets_home}/.roborepo/telemetry/spool'"
 assert "telemetry enable: does not replace existing root hook directory" \
   bash -c "test -f '${presets_home}/.claude/hooks/local.txt' && ! compgen -G '${presets_home}/.claude/hooks_original_*' >/dev/null"
+assert "telemetry enable: records no telemetry bundle, so hooks are not required" \
+  bash -c "! grep -q '\"telemetry\"' <(node -e 'const s=JSON.parse(require(\"fs\").readFileSync(process.argv[1],\"utf8\"));console.log(JSON.stringify(s.selected??[]))' '${presets_home}/.roborepo/presets/state.json' 2>/dev/null || echo '[]')"
 # Telemetry declares hooks/codex, so `telemetry enable` wires capture hooks into this file
 # (rather than leaving it untouched, which leaked: hooks survived disable).
 assert "telemetry enable: wires capture hooks into existing Codex hooks config" \
@@ -1596,6 +1623,9 @@ assert "mcp: Claude permission grant writes the active settings, never the repo 
 
 assert "mcp: enabling a built-in MCP package does not record it into the workspace" \
   node "${repo_root}/scripts/test/mcp-builtin-record-skip-check.mjs"
+
+assert "mcp: a failing claude mcp add returns ok:false to package enable and exits only from mcp add" \
+  node "${repo_root}/scripts/test/mcp-claude-add-failure-check.mjs"
 
 assert "workspace: built-in conflicts require a typed replace override" \
   node "${repo_root}/scripts/test/workspace-resources-check.mjs"

@@ -2,8 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { repoRoot } from "./paths.mjs";
 import { isMainModule } from "./roots.mjs";
-import { enabledPackagesPath } from "./state-paths.mjs";
 import { recordConfigWrite } from "./write-log.mjs";
+import { effectiveEnabledIds, ensureEnabledPackagesRegistry } from "./package-state.mjs";
 import { loadPackageCatalog } from "./package-catalog.mjs";
 import { listHarnessProviders, getHarnessProvider } from "../harnesses/registry.mjs";
 import { resolveHarnessPath, hasHarnessPath } from "../harnesses/paths.mjs";
@@ -41,77 +41,6 @@ function homeRulesPath(harness) {
 // Marker that distinguishes roborepo render output from user-authored content.
 const RENDER_HEADER = "# Generated Harness Rules";
 const CODE_STYLE_BLOCK = "builtin-code-style";
-
-// --------------------------------------------------------------------------- registry
-
-// Returns { exists: boolean, packages: string[], disabled: string[] }. `packages` is the explicit-
-// enable list; `disabled` is the explicit-disable list (only meaningful for default-enabled
-// packages, since an explicit disable of a non-default package is just absence from `packages`).
-// `exists` distinguishes "no registry yet" (older installs; fall back to text scan in config.mjs) from
-// "registry exists but empty".
-export function readEnabledPackagesRegistry() {
-  try {
-    const data = JSON.parse(fs.readFileSync(enabledPackagesPath, "utf8"));
-    return {
-      exists: true,
-      packages: Array.isArray(data.packages) ? data.packages : [],
-      disabled: Array.isArray(data.disabled) ? data.disabled : [],
-    };
-  } catch {
-    return { exists: false, packages: [], disabled: [] };
-  }
-}
-
-function writeRegistry(ids, disabledIds, detail = null) {
-  fs.mkdirSync(path.dirname(enabledPackagesPath), { recursive: true });
-  fs.writeFileSync(enabledPackagesPath, JSON.stringify(
-    { packages: [...new Set(ids)], disabled: [...new Set(disabledIds)], updatedAt: new Date().toISOString() },
-    null, 2,
-  ) + "\n");
-  recordConfigWrite(enabledPackagesPath, detail);
-}
-
-// Add or remove a package ID from the enabled-packages registry, then return the updated list.
-// Explicit-disable precedence: enabling clears any prior explicit-disable; disabling clears any
-// prior explicit-enable and records an explicit-disable (load-bearing only for default-enabled
-// packages — see effectiveEnabledIds — but recorded unconditionally so a package that later
-// becomes default-enabled doesn't silently re-enable itself for someone who turned it off).
-export function setPackageEnabled(id, enabled) {
-  const { packages, disabled } = readEnabledPackagesRegistry();
-  const next = enabled
-    ? [...new Set([...packages, id])]
-    : packages.filter((x) => x !== id);
-  const nextDisabled = enabled
-    ? disabled.filter((x) => x !== id)
-    : [...new Set([...disabled, id])];
-  writeRegistry(next, nextDisabled, `${enabled ? "enable" : "disable"} ${id}`);
-  return next;
-}
-
-// Drop package IDs from both registry lists. Used for IDs the catalog no longer contains (a
-// retired or renamed package): an explicit disable of a package that does not exist protects
-// nothing, and parking the ID in `disabled` would keep it in the registry forever.
-export function forgetPackageIds(ids) {
-  const drop = new Set(ids);
-  if (drop.size === 0) return;
-  const { packages, disabled } = readEnabledPackagesRegistry();
-  writeRegistry(packages.filter((id) => !drop.has(id)), disabled.filter((id) => !drop.has(id)));
-}
-
-// Effective enabled-ID set for a catalog: explicit-enable OR (default-enabled AND NOT explicit-
-// disable). This is the "should this package's behavior be live" answer — use it anywhere that
-// needs to know what's actually active (rendering, probing, ownership/conflict checks,
-// reconciliation). Precedence: explicit-disable > explicit-enable > current defaults.
-export function effectiveEnabledIds(catalog, registry = readEnabledPackagesRegistry()) {
-  const explicit = new Set(registry.packages || []);
-  const explicitOff = new Set(registry.disabled || []);
-  const out = new Set();
-  for (const id of explicit) if (!explicitOff.has(id)) out.add(id);
-  for (const pkg of catalog) {
-    if (pkg.defaultEnabled && !explicitOff.has(pkg.id)) out.add(pkg.id);
-  }
-  return [...out];
-}
 
 // --------------------------------------------------------------------------- render
 
@@ -339,9 +268,8 @@ function removeManagedBlock(filePath, name, dryRun) {
 //     declare "rulesOverride" — e.g. Claude — is skipped entirely, no per-harness branch needed).
 // Skips harnesses whose home dir does not exist (harness not installed on this machine).
 export function renderHomeRules({ dryRun = false, harness: targetHarness } = {}) {
-  const registry = readEnabledPackagesRegistry();
-  if (!registry.exists && !dryRun) writeRegistry([], []);
-  const enabledIds = effectiveEnabledIds(loadPackageCatalog(), registry);
+  if (!dryRun) ensureEnabledPackagesRegistry();
+  const enabledIds = effectiveEnabledIds(loadPackageCatalog());
   const harnesses = targetHarness ? [targetHarness] : knownHarnessIds();
 
   for (const harness of harnesses) {

@@ -113,11 +113,22 @@ export function printConfigStatus(view) {
         console.log(`  ${check(item.active)} ${item.label}${badges}`);
         if (item.description) console.log(`      ${item.description}`);
         if (item.note) console.log(`      ${item.note}`);
+        if (item.requires?.length) console.log(`      requires: ${item.requires.map((ref) => ref.label).join(", ")}`);
         if (!item.active && item.hint) console.log(`      → ${item.hint}`);
       }
     }
+    printDependencies("Recommended dependencies", section.recommendedDependencies, check);
     if (section.footnote) console.log(`\n  * ${section.footnote}`);
   }
 
   console.log("");
+}
+
+// A section's recommended packages, each with the packages that recommend it.
+function printDependencies(title, items, check) {
+  if (!items?.length) return;
+  console.log(`\n  ${title}`);
+  for (const item of items) {
+    console.log(`    ${check(item.active)} ${item.label}  (${item.relationText})`);
+  }
 }

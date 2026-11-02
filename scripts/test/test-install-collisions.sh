@@ -654,6 +654,7 @@ test_uninstall_removes_runtime_state_and_backups() {
     "$home_dir/.cli-backups/20260621-174033"
   printf '{"behaviors":{"delete-files":"allow"},"commands":{}}\n' > "$home_dir/.roborepo/command-overrides.json"
   printf '{"packages":["caveman"]}\n' > "$home_dir/.roborepo/enabled-packages.json"
+  printf '{"packages":["caveman"]}\n' > "$home_dir/.roborepo/applied-packages.json"
   printf '{"enabled":true}\n' > "$home_dir/.roborepo/telemetry/state.json"
   printf 'event\n' > "$home_dir/.roborepo/telemetry/spool/claude.jsonl"
   printf '12345\n' > "$home_dir/.roborepo/portal/server-4317.pid"
@@ -663,6 +664,7 @@ test_uninstall_removes_runtime_state_and_backups() {
 
   assert_absent "$home_dir/.roborepo/command-overrides.json" "uninstall removes command override state"
   assert_absent "$home_dir/.roborepo/enabled-packages.json" "uninstall removes enabled packages state"
+  assert_absent "$home_dir/.roborepo/applied-packages.json" "uninstall removes applied packages state"
   assert_absent "$home_dir/.roborepo/telemetry" "uninstall removes telemetry data"
   assert_absent "$home_dir/.roborepo/telemetry-backups" "uninstall removes telemetry backups"
   assert_absent "$home_dir/.roborepo/portal" "uninstall removes portal PID files"

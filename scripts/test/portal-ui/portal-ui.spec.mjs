@@ -104,6 +104,212 @@ test.describe("Agents page", () => {
     expect(warningButtonGrid.row).toBe("1");
   });
 
+  test("required packages are a reference in the package's popup, not page rows; recommended ones are switchable rows", async ({ page }) => {
+    const snapshot = await (await page.request.get("/api/config")).json();
+    const byId = new Map(snapshot.packages.map((pkg) => [pkg.id, pkg]));
+    const planSuite = byId.get("plan-suite");
+    const sessionClose = byId.get("session-close");
+    const dependency = byId.get("technical-writing");
+    const companion = byId.get("tighten");
+    const chained = byId.get("code-style");
+    expect(planSuite && sessionClose && dependency && companion && chained, "fixture packages exist").toBeTruthy();
+    // The edges a dependency-only package would add: one dependency shared by two rows, a chain
+    // past it (session-close -> technical-writing -> code-style), and one recommendation that is off.
+    planSuite.requires = ["technical-writing"];
+    sessionClose.requires = ["technical-writing"];
+    dependency.requires = ["code-style"];
+    sessionClose.recommends = ["tighten"];
+    Object.assign(dependency, {
+      selectable: false, selection: "required", enabled: true,
+      presentation: { ...dependency.presentation, visibility: "dependency" },
+    });
+    Object.assign(companion, { enabled: false, selection: "off" });
+    snapshot.behaviorView = buildBehaviorView(snapshot);
+    await page.route("**/api/config", (route) => route.fulfill({ json: snapshot }));
+
+    await page.goto("/agents");
+    const section = page.locator("section.panel").filter({ has: page.getByRole("heading", { name: "Development Workflows" }) });
+    // The dependency-only package has no row anywhere on the page.
+    await expect(page.locator("config-item").filter({ has: page.getByText(dependency.label, { exact: true }) })).toHaveCount(0);
+    await expect(page.getByText("Required dependencies")).toHaveCount(0);
+
+    const recommendedRow = section.locator("[data-slot=recommended-group] config-item");
+    await expect(recommendedRow).toHaveCount(1);
+    await expect(recommendedRow.locator("[data-slot=relation]")).toHaveText(`recommended by ${sessionClose.label}`);
+    await expect(recommendedRow.locator("config-toggle")).toHaveCount(1);
+
+    // A package's popup lists what it requires; each name opens that package's source, and Back
+    // returns to the package that requires it.
+    const modal = page.locator("dialog#config-modal");
+    await section.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^\/session-close$/ }) }).locator(".item-label").click();
+    await expect(modal.locator("#modal-requires")).toBeVisible();
+    await expect(modal.locator(".modal-requires-item")).toHaveText([chained.label, dependency.label]);
+    await modal.locator(".modal-requires-item", { hasText: dependency.label }).click();
+    await expect(modal.locator("#modal-path")).toContainText("technical-writing/SKILL.md");
+    // A required package's popup keeps its own requirement, so each link of the chain is reachable.
+    await expect(modal.locator(".modal-requires-item")).toHaveText([chained.label]);
+    await modal.locator(".modal-requires-item").click();
+    await expect(modal.locator("#modal-path")).toContainText("code-style/SKILL.md");
+    await expect(modal.locator("#modal-requires")).toBeHidden();
+    await modal.locator("#modal-back").click();
+    await expect(modal.locator("#modal-path")).toContainText("technical-writing/SKILL.md");
+    await expect(modal.locator(".modal-requires-item")).toHaveText([chained.label]);
+    await modal.locator("#modal-back").click();
+    await expect(modal.locator("#modal-path")).toContainText("session-close/SKILL.md");
+    await expect(modal.locator(".modal-requires-item")).toHaveText([chained.label, dependency.label]);
+    await modal.locator("#modal-close").click();
+
+    // The contents view of a package with several skills lists them too.
+    await section.locator(".item-label", { hasText: /^Development Planning Lifecycle$/ }).click();
+    await expect(modal.locator(".modal-requires-item")).toHaveText([chained.label, dependency.label]);
+    await modal.locator("#modal-close").click();
+
+    // A multi-skill required target keeps Back through its contents and nested source views.
+    sessionClose.requires = ["plan-suite"];
+    snapshot.behaviorView = buildBehaviorView(snapshot);
+    await page.reload();
+    await section.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^\/session-close$/ }) }).locator(".item-label").click();
+    await modal.locator(".modal-requires-item", { hasText: planSuite.label }).click();
+    await expect(modal.locator("#modal-title")).toHaveText(planSuite.label);
+    await expect(modal.locator("#modal-back")).toBeVisible();
+    await modal.locator(".package-contents-entry", { hasText: "/plan-execute" }).click();
+    await expect(modal.locator("#modal-path")).toContainText("plan-execute/SKILL.md");
+    await modal.locator("#modal-back").click();
+    await expect(modal.locator("#modal-title")).toHaveText(planSuite.label);
+    await modal.locator(".modal-requires-item", { hasText: dependency.label }).click();
+    await expect(modal.locator("#modal-path")).toContainText("technical-writing/SKILL.md");
+    await modal.locator("#modal-back").click();
+    await expect(modal.locator("#modal-title")).toHaveText(planSuite.label);
+    await modal.locator("#modal-back").click();
+    await expect(modal.locator("#modal-path")).toContainText("session-close/SKILL.md");
+    await modal.locator("#modal-close").click();
+
+    // A required package with no source to open is listed as plain text, not a button.
+    const readOnly = snapshot.behaviorView.find((entry) => entry.categoryId === "skills-dev-lifecycle")
+      .items.find((item) => item.id === "session-close");
+    readOnly.requires = [{ id: "mcp-only", label: "MCP Only", active: true, inspect: null, contextCost: null, builtIn: true }];
+    await page.reload();
+    await section.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^\/session-close$/ }) }).locator(".item-label").click();
+    await expect(modal.locator("span.modal-requires-item")).toHaveText("MCP Only");
+    await expect(modal.locator("button.modal-requires-item")).toHaveCount(0);
+    await modal.locator("#modal-close").click();
+
+    // A package with no requirements shows no Requires line.
+    await page.locator(".item-label", { hasText: companion.label }).first().click();
+    await expect(modal.locator("#modal-requires")).toBeHidden();
+    await modal.locator("#modal-close").click();
+  });
+
+  test("a package with only requirements opens its dependency references", async ({ page }) => {
+    const snapshot = await (await page.request.get("/api/config")).json();
+    const parent = snapshot.packages.find((pkg) => pkg.id === "session-close");
+    const dependency = snapshot.packages.find((pkg) => pkg.id === "technical-writing");
+    Object.assign(parent, { requires: [dependency.id], resources: [], components: [], skillIds: [] });
+    Object.assign(dependency, { selectable: false, presentation: { ...dependency.presentation, visibility: "dependency" } });
+    snapshot.tools = snapshot.tools.filter((tool) => tool.packageId !== parent.id);
+    snapshot.behaviorView = buildBehaviorView(snapshot);
+    await page.route("**/api/config", (route) => route.fulfill({ json: snapshot }));
+    await page.goto("/agents");
+    const row = page.locator("[data-slot=items] config-item").filter({ has: page.getByText(parent.label, { exact: true }) });
+    await row.locator(".item-label").click();
+    const modal = page.locator("dialog#config-modal");
+    await expect(modal.locator("#modal-title")).toHaveText(parent.label);
+    await expect(modal.locator(".package-contents-entry")).toHaveCount(0);
+    await modal.locator(".modal-requires-item", { hasText: dependency.label }).click();
+    await expect(modal.locator("#modal-path")).toContainText("technical-writing/SKILL.md");
+    await modal.locator("#modal-back").click();
+    await expect(modal.locator("#modal-title")).toHaveText(parent.label);
+    await expect(modal.locator(".modal-requires-item")).toHaveText([dependency.label]);
+  });
+
+  test("a group switch counts only rows it can act on, and hides when none are left", async ({ page }) => {
+    const snapshot = await (await page.request.get("/api/config")).json();
+    const section = snapshot.behaviorView.find((entry) => entry.categoryId === "skills-dev-lifecycle");
+    expect(section?.items.length, "fixture needs the Development Workflows rows").toBeGreaterThanOrEqual(2);
+    section.bulkToggle = true;
+    const [first, ...rest] = section.items;
+    Object.assign(first, { active: true, selection: "selected" });
+    for (const item of rest) Object.assign(item, { active: true, selection: "required" });
+    await page.route("**/api/config", (route) => route.fulfill({ json: snapshot }));
+    await page.goto("/agents");
+    const panel = page.locator("section.panel").filter({ has: page.getByRole("heading", { name: section.category }) });
+    await expect(panel.locator("[data-slot=bulk-label]")).toHaveText("Deselect All");
+
+    // Every row on only through another selection: nothing for the switch to do.
+    Object.assign(first, { selection: "required" });
+    await page.reload();
+    await expect(panel.locator("[data-slot=bulk]")).toBeHidden();
+  });
+
+  test("enabling a package with recommendations asks which to enable too, and enables nothing by itself", async ({ page }) => {
+    const snapshot = await (await page.request.get("/api/config")).json();
+    const shown = snapshot.behaviorView.flatMap((section) => section.items || []);
+    const [target, second] = shown.filter((item) => item.toggle === "package" && !item.active && item.id !== "telemetry" && item.id !== "tighten");
+    expect(target && second, "fixture needs two disabled package rows").toBeTruthy();
+    await page.route("**/api/config", (route) => route.fulfill({ json: snapshot }));
+    const posts = [];
+    await page.route("**/api/config/packages", (route) => {
+      posts.push(route.request().postDataJSON());
+      const { id } = route.request().postDataJSON();
+      route.fulfill({ json: {
+        ok: true, message: `enabled: ${id}`, outcomes: [], changedPackageIds: [id], config: snapshot,
+        recommendations: id === "tighten" ? [] : [{ id: "tighten", label: "Tighten", description: "Harden code against project patterns." }],
+      } });
+    });
+
+    await page.goto("/agents");
+    const row = page.locator("[data-slot=items] config-item").filter({ has: page.locator(".item-label", { hasText: target.label }) }).first();
+    await row.getByRole("checkbox").dispatchEvent("click");
+    const dialog = page.locator("dialog#recommendations-modal");
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator(".recommendation-label")).toHaveText("Tighten");
+    await dialog.getByRole("button", { name: "Continue without" }).click();
+    await expect(dialog).not.toBeVisible();
+    expect(posts).toEqual([{ id: target.id, enabled: true }]);
+
+    // Enable selected turns on exactly the checked recommendations, each as its own toggle.
+    const secondRow = page.locator("[data-slot=items] config-item").filter({ has: page.locator(".item-label", { hasText: second.label }) }).first();
+    await secondRow.getByRole("checkbox").dispatchEvent("click");
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Enable selected" }).click();
+    await expect.poll(() => posts.length).toBe(3);
+    expect(posts.slice(1)).toEqual([{ id: second.id, enabled: true }, { id: "tighten", enabled: true }]);
+    await expect(dialog).not.toBeVisible();
+  });
+
+  test("selected recommendations finish their nested prompts in order", async ({ page }) => {
+    const snapshot = await (await page.request.get("/api/config")).json();
+    const rows = snapshot.behaviorView.flatMap((section) => section.items || [])
+      .filter((item) => item.toggle === "package" && !item.active && item.id !== "telemetry");
+    const [parent, first, second, firstChild, secondChild] = rows;
+    expect(secondChild, "fixture needs five disabled packages").toBeTruthy();
+    const offers = new Map([[parent.id, [first, second]], [first.id, [firstChild]], [second.id, [secondChild]]]);
+    const posts = [];
+    await page.route("**/api/config", (route) => route.fulfill({ json: snapshot }));
+    await page.route("**/api/config/packages", (route) => {
+      const change = route.request().postDataJSON();
+      posts.push(change);
+      route.fulfill({ json: {
+        ok: true, message: `enabled: ${change.id}`, outcomes: [], changedPackageIds: [change.id], config: snapshot,
+        recommendations: offers.get(change.id) || [],
+      } });
+    });
+    await page.goto("/agents");
+    const row = page.locator("[data-slot=items] config-item").filter({ has: page.locator(".item-label", { hasText: parent.label }) }).first();
+    await row.getByRole("checkbox").dispatchEvent("click");
+    const dialog = page.locator("dialog#recommendations-modal");
+    await expect(dialog.locator(".recommendation-label")).toHaveText([first.label, second.label]);
+    await dialog.getByRole("button", { name: "Enable selected" }).click();
+    await expect(dialog.locator(".recommendation-label")).toHaveText([firstChild.label]);
+    expect(posts.map((change) => change.id)).toEqual([parent.id, first.id]);
+    await dialog.getByRole("button", { name: "Continue without" }).click();
+    await expect(dialog.locator(".recommendation-label")).toHaveText([secondChild.label]);
+    expect(posts.map((change) => change.id)).toEqual([parent.id, first.id, second.id]);
+    await dialog.getByRole("button", { name: "Enable selected" }).click();
+    await expect.poll(() => posts.map((change) => change.id)).toEqual([parent.id, first.id, second.id, secondChild.id]);
+    await expect(dialog).not.toBeVisible();
+  });
+
   test("explains a package whose pieces were installed outside RoboRepo", async ({ page }) => {
     const snapshot = await (await page.request.get("/api/config")).json();
     const shown = new Set(snapshot.behaviorView.flatMap((section) => section.items || []).map((item) => item.id));
