@@ -1,7 +1,7 @@
 ---
 id: 4zyo2woj
 priority: high
-next_action: Finish verification against the landed source, request renewed exact-commit human approval, then run /plan-close. Plan records are reconciled; prior implementation approval remains historical.
+next_action: Request renewed exact-commit human approval of the completed credential review, then run /plan-close. Verification evidence is complete and plan records are reconciled.
 blocked_by: []
 depends_on: ["hr78g4sj"]
 related: ["8bjltk2n", "wjlt1zvf", "ia1q1z9", "permva27", "permissions-ui-revamp", "codex-cmux-hook-trust-review", "46qth5z8", "harness-capability-derived-resource-targeting", "7k3m9qd", "o9zwxuav"]
@@ -585,9 +585,9 @@ Git administrative worktree `credential-protection`; this document contains no m
   approval is requested separately for the exact reviewed commit below.
 
 ### Result
-- Status: pending
-- Reviewed implementation commit: f90412a258c6a1177ea33a6531581d53020f21db
-- Base commit: ac7c6bb207f3431b0e4c3a308c973adc9717424f
+- Status: complete
+- Reviewed implementation commit: 2fef59384ec12cd008cb8ac2e6aa915895ce0dc0
+- Base commit: 9ea38f1dd274d9443decca3aadcca85d64e9f6df
 
 #### Re-review — October 30, 2026
 
@@ -846,6 +846,43 @@ approval, or unrelated pending edit was changed by this diagnosis.
 - Local main advanced to `2b81656558b8274ed00286d001ee8e86ae587b2f`, including the separate
   package-state merge, while this review continued. The prepared `1de46fc9` snapshot has no
   recorded execution yet and does not establish verification of those newer changes.
+
+
+#### Final review evidence — November 2, 2026
+
+- The user-authorized reconciliation is committed in `2fef5938` on the feature branch and
+  `ca61a6a3` on main. Their plan blobs match. An executed Git comparison confirms that all
+  feature changes after `f90412a2` are confined to this plan document; implementation is unchanged.
+- Reused canonical full-gate evidence: `npm run check` passed at
+  `db9926333e4b2c7c2d5f01dd39e8ac05db299433` (67/67 suites, CLI 422 passed/0 failed, portal
+  UI 163 passed), as recorded in its merged, approved review. Executed `git diff --exit-code`
+  comparisons confirm every tracked file outside `docs/plans/` and the single repaired backlog
+  audit link is byte-identical between that tested source and assessed main `9ea38f1dd274d9443decca3aadcca85d64e9f6df`.
+  This is explicitly reused evidence, not a newly executed full gate in this chat. The older `e4365770` aggregate
+  remains failed; it is not relabeled. The prepared `1de46fc9` rerun is superseded by this
+  matching-source proof and need not be executed.
+- Closing the separate package plan in `0d9d763e` exposed one additional moved-document
+  reference. Repaired only its review-to-completed link in `9ea38f1dd274d9443decca3aadcca85d64e9f6df`.
+  Documentation references and whitespace passed after the repair. These prose-only changes
+  require the checks that read them, not another implementation suite.
+- Current plan differences passed documentation references, whitespace and canonical plan
+  validation (zero findings). The seven credential checks passed in the isolated `e4365770`
+  assessment; credential projection and enforcement sources remain unchanged. The independent
+  Validator's zero fix/zero escalation result is reused for unchanged credential implementation;
+  its one base documentation-link failure is now repaired and the reference check passes.
+- User-launched canonical metadata checks at pre-record main `0d9d763e` and the assessed feature tip
+  confirm main and feature working
+  files are clean, with exit 0 and no Git-status diagnostics. The landed command reports true
+  for feature `2fef59384ec12cd008cb8ac2e6aa915895ce0dc0`, absorbed by
+  `ca61a6a36955940ec863310015ae414492f8a7c2`; the branch carried its own work. Native-policy
+  restrictions in this chat were preserved; no protected file contents were read or printed.
+- No unresolved implementation finding, policy decision or required human-only test remains.
+  Fresh native execution is still unavailable here and in the Linux container; the previously
+  accepted desktop/product, browser/MCP/escalated and native Linux/Windows limits remain
+  unverified. Historical macOS evidence is not extended to a newer runtime.
+- Review is complete for the implementation named above. The old human approval remains
+  historical and stale; request a new explicit approval of this implementation before closure.
+  Authorizing document reconciliation did not grant implementation approval.
 
 
 ### Approval
