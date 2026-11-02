@@ -1,7 +1,7 @@
 ---
 id: 4zyo2woj
 priority: high
-next_action: Request renewed exact-commit human approval of the completed credential review, then run /plan-close. Verification evidence is complete and plan records are reconciled.
+next_action: Run /plan-close. Renewed human approval is recorded for 309055c861cc2894ea086aa0bbebd93c36836702; verify freshness and landing, then complete guarded closure and cleanup.
 blocked_by: []
 depends_on: ["hr78g4sj"]
 related: ["8bjltk2n", "wjlt1zvf", "ia1q1z9", "permva27", "permissions-ui-revamp", "codex-cmux-hook-trust-review", "46qth5z8", "harness-capability-derived-resource-targeting", "7k3m9qd", "o9zwxuav"]
@@ -887,11 +887,17 @@ approval, or unrelated pending edit was changed by this diagnosis.
 
 ### Approval
 - Decision: approved
-- Reviewed implementation commit: 81ae9e362000c1a48574b1aeceda4c2302b19570
+- Reviewed implementation commit: 309055c861cc2894ea086aa0bbebd93c36836702
 - Confirmed by: human
-- Evidence: October 27, 2026, the user selected "Approve this implementation" in response to
-  the exact-commit approval question for this plan, including the accepted coverage limits and
-  recorded base-branch skill-size failure. Review freshness was rechecked before recording.
+- Evidence: November 2, 2026, the user replied "approved" in this plan-review chat to the
+  explicit approval question naming "Keep local agent work within useful boundaries: Codex —
+  Part 2: Credential protection" (`4zyo2woj`) and commit
+  `309055c861cc2894ea086aa0bbebd93c36836702`, retaining the previously accepted native/tool
+  coverage limits and authorizing the renewed approval record followed by guarded closure.
+- Historical approval: on October 27, the user selected "Approve this implementation" for
+  `81ae9e362000c1a48574b1aeceda4c2302b19570`, including its accepted coverage limits and
+  recorded base-branch skill-size failure. Later implementation changes made that approval
+  stale; the explicit November 2 approval above supersedes it.
 
 ## Verification
 
