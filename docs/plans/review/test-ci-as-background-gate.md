@@ -264,6 +264,10 @@ design gives the reasons.
 - [x] `docs/internal/hooks-internals.md:337` says each agent hook does its own check before chaining; only `pre-push` checks anything, the rest only chain — fixed in review (a4fa3216)
 - [x] After main's 68f6aca1, the Decision Log still credited the branch with the `signalGroup` EPERM fix and the backlog-review link fix, both now on main too — noted as superseded in review
 - [x] Verification had no record of the 2b0ec6f7 and 956ef5c3 merges or their conflict resolution — recorded in review
+- [ ] `docs/internal/testing.md:56` and the plan's Proposed design say the pre-push check stays off the network; after b3e60ab1 it asks the push's own remote for its default branch when `<remote>/HEAD` is not recorded
+- [ ] `scripts/test/pre-push-check.sh:8` and `docs/internal/testing.md:20` give the usage as `<remote>`; the script now also reads `<url>` as `$2`
+- [ ] Proposed design says only a zero remote sha diffs from the merge base; since b3e60ab1 a remote tip this checkout lacks does too, and the Decision Log records neither that nor the remote-HEAD lookup
+- [ ] The plan quotes `retries: process.env.CI ? 1 : 0`; the config is now `process.env.CI === "true"`
 
 ### Verification
 - Validation pass 1 (fresh-context subagent): 1 fix finding, fixed above. Linux behavior confirmed by the Validator in `node:22-bookworm-slim`.
