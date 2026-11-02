@@ -1,7 +1,7 @@
 ---
 id: o9zwxuav
 priority: high
-next_action: Open and merge the pull request, then run /plan-close.
+next_action: ""
 blocked_by: []
 depends_on: ["bysyzl1e"]
 related: ["package-registry-live-state-reconciliation", "ejsc769o", "age4cm7r", "user-managed-packages-and-add-workflows"]
@@ -960,3 +960,39 @@ versioned state, verified mutation, and repair/adoption requirements. Existing l
 | [[jdsobwn]] | Unlanded, related | Agree state/provenance references before persisting source-qualified selections |
 | [[user-managed-packages-and-add-workflows]] | Unlanded, related | Reuses this registry and live probes |
 | [[74h2tlim]] | Unlanded, related | Consumes feature-owned schemas; no second package-state model |
+
+## Completion summary
+
+Package state now has one model: the registry records selected roots only, the effective set is
+derived through the required-dependency closure, and the existing probes report live state. A
+shared dependency stays on until its last requiring root is turned off. Packages can declare
+`recommends`, `selectable: false`, and `presentation.visibility`; enable and disable return a probed
+`enabled`, `partial`, or `blocked` outcome per package; reconcile removes packages RoboRepo
+installed once they leave the effective set, through a machine-local applied record. The Config
+page lists required packages in each source popup and recommended packages as switchable rows.
+Install bundles store roots only and derive telemetry → hooks from `presets.json`. Terminal
+onboarding recommendations are deferred to [[ejsc769o]] by user decision.
+
+## Verification
+
+- `npm run check` passed on `main` at 2b81656558b8274ed00286d001ee8e86ae587b2f (the landed merge
+  plus a later plan-only commit): check suites 67/67, `test-cli.sh` 422 passed, 0 failed, portal UI
+  163 passed, ending "CI checks passed". Main then gained ca61a6a3, which changes only another
+  plan's document.
+- Plan-named checks ran inside that gate: `package-graph-check.mjs`,
+  `config-dependency-sections-check.mjs`, and `package-lifecycle-check.mjs` (check groups),
+  `mcp-claude-add-failure-check.mjs` (via `test-cli.sh`), and the portal dependency specs.
+- Checked the plan against landed code: `package-graph.mjs`, `package-state.mjs`, and
+  `bundle-selection.mjs` exist; only `package-state.mjs` (and the `state-paths.mjs` path constant)
+  names `enabled-packages.json`; the registry functions moved out of `rules-render.mjs`;
+  `withDependencies` is gone and `presets.json` declares `telemetry` `requires: ["hooks"]`; the
+  remaining `process.exit` calls in `packages.mjs` are in the CLI entry's typed-error mapping and
+  argument parsing, not mid-apply.
+- Docs of record checked against landed code: `package-development.md`, `config-control-panel.md`,
+  `config-panel-internals.md`, `roborepo-cli.md` (enable outcomes, disable rules, reconcile cleanup),
+  and `cli-internals.md`.
+- `## Not tested`: no entries. Every `## Review` finding is checked off with its resolution.
+- `roborepo plans validate o9zwxuav`: 0 findings before closure.
+- `roborepo plans approval o9zwxuav`: fresh at db9926333e4b2c7c2d5f01dd39e8ac05db299433.
+- `roborepo plans landed o9zwxuav`: landed, newly scanned.
+- Absorbing commit: 68f6aca151a113ad052c998885cd4015c91320fe
