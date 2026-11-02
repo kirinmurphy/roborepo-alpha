@@ -5,7 +5,7 @@ set -euo pipefail
 # take seconds and catch the mistakes that turn main red; CI runs the full gate (scripts/test/ci.sh)
 # after the push. Reads git's pre-push lines on stdin: <local ref> <local sha> <remote ref> <remote sha>.
 #
-# Usage: scripts/test/pre-push-check.sh <remote> < refs
+# Usage: scripts/test/pre-push-check.sh <remote> [<url>] < refs
 
 remote="${1:-origin}"
 url="${2:-${remote}}"

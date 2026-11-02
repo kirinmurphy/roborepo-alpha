@@ -17,7 +17,7 @@ test command/suite. For package and user-content journeys, see
 | Layer | Command | Covers | Notes |
 | --- | --- | --- | --- |
 | Full CI parity gate | `npm run check` | `scripts/test/ci.sh`: everything below that CI runs, on both legs | CI runs it on every pull request and every push to main. Run it locally only for CI, workflow, or test-orchestration changes, a release, or on request. |
-| Pre-push check | `bash scripts/test/pre-push-check.sh <remote>` with git's ref lines on stdin | doctor, docs references, `git diff --check` over the pushed commits | Runs from the repository `pre-push` hook. Stays under 10 seconds. |
+| Pre-push check | `bash scripts/test/pre-push-check.sh <remote> [<url>]` with git's ref lines on stdin | doctor, docs references, `git diff --check` over the pushed commits | Runs from the repository `pre-push` hook. Stays under 10 seconds. |
 | Repo health | `bash scripts/doctor.sh --quiet` | generated-file drift, manifest data, links, script health | `roborepo doctor --installed` adds live installed-path checks. |
 | Main smoke suite | `npm test` | fast repository behavior and simulated package mode | Alias for `scripts/test/test-cli.sh --quiet`. |
 | Install/uninstall collisions | `bash scripts/test/test-install-collisions.sh` | conflict policy, managed-copy reclaim, uninstall cleanliness against real fixture homes | Not covered by `npm test`. The only layer that proves uninstall leaves no remnants. |
@@ -53,8 +53,10 @@ working while CI runs and read its result when it lands, rather than reproducing
 The pre-push check catches the mistakes that have turned main red: skill structure limits and
 generated-output drift (doctor), broken doc links, and whitespace errors or conflict markers in the
 pushed commits. Doctor and the docs check read the working tree, not the pushed commits, so a dirty
-tree can make them disagree with what is pushed; CI covers that gap. The check stays off the
-network (`ROBOREPO_SKIP_NODE_RELEASE_CHECK=1`) and does not run the plan validator: CI does not
+tree can make them disagree with what is pushed; CI covers that gap. The check skips doctor's Node
+release lookup (`ROBOREPO_SKIP_NODE_RELEASE_CHECK=1`) and makes no network calls beyond the push's
+own remote, which it asks for its default branch only when `<remote>/HEAD` is not recorded. It does
+not run the plan validator: CI does not
 validate plans, and the lifecycle transition commands already validate each plan they move.
 
 Install the hook once per clone. Linked worktrees share the clone's config, so one command covers
