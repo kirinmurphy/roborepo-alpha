@@ -267,10 +267,24 @@ human accepted it.
    `next_action`, and commit the plan in the worktree. A later `/plan-execute` resumes from there.
 4. **Complete:** from the primary checkout, run the repository's canonical submit transition
    command for `<plan>`. It reruns the preflight and commits the plan-only move from `active/` to
-   `review/` on the base branch. Do not push. Report that the plan awaits `/plan-review`.
+   `review/` on the base branch. Do not push the base branch. Then push the feature branch (below)
+   and report that the plan awaits `/plan-review`.
 
 Genuinely unverified manual checks stay under `## Not tested`; they do not block completion, and
 they are resolved before `/plan-close`.
+
+### Push the feature branch
+
+Work ready for review is pushed so CI runs the full gate before `/plan-review` starts. Push only
+after the submit transition succeeds, or after Review Findings commits its fixes:
+
+1. Re-read the worktree's branch and Git status. Push only the plan's feature branch, never the base
+   branch or any other protected branch; the start and submit commits on the base branch stay local.
+2. From the worktree, run `git push -u <remote> <branch>`, where `<remote>` is the branch's upstream
+   remote, or the repository's only remote when none is set. Never force-push.
+3. With no remote, or when the push is refused (a permission prompt declined, a hook, a rejected
+   non-fast-forward), do not retry, rebase, or work around it. The plan's lifecycle stands; report
+   the exact command under Needs you and whether the session's permissions or the remote refused it.
 
 ## Review Findings
 
@@ -290,7 +304,8 @@ A plan in `review/` returns here only to fix what review recorded.
    Leave it unchecked, record why in Open Questions, and tell the user it needs `/plan-review`,
    which decides on the scope change.
 5. Commit the fixes and the plan update in the worktree. The plan stays in `review/`; never run a
-   lifecycle transition in this mode. Report that `/plan-review` should run again.
+   lifecycle transition in this mode. Push the feature branch (see Push the feature branch), then
+   report that `/plan-review` should run again.
 
 ## Not Tested
 
@@ -348,7 +363,8 @@ trivial:
    - materially changes product scope or behavior;
    - changes a public API or persistent schema;
    - affects security, privacy, permissions, migration, or compatibility;
-   - pushes, merges, publishes, spends money, or affects an external system.
+   - pushes, merges, publishes, spends money, or affects an external system. The feature-branch
+     push in Push the feature branch is a fixed step of this skill, not a decision.
 7. A blocked decision becomes an Open Questions entry; see Blocker Policy.
 
 ### Decision Log
@@ -431,7 +447,8 @@ Completion does not authorize:
 - unrelated refactoring;
 - infinite retries around external blockers;
 - guessing through consequential product decisions;
-- pushing, merging, publishing, or deleting worktrees without explicit permission or repository policy;
+- pushing anything but the plan's feature branch at review handoff, or merging, publishing, or
+  deleting worktrees, without explicit permission or repository policy;
 - any commit on the base branch other than the start and submit transitions;
 - leaving completed implementation changes uncommitted in the target worktree.
 
