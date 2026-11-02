@@ -19,7 +19,7 @@ export default defineConfig({
   workers: 1,
   // One retry on CI; the list reporter marks a test that passes on retry as flaky, so it stays
   // visible in the log without failing the run.
-  retries: process.env.CI ? 1 : 0,
+  retries: process.env.CI === "true" ? 1 : 0,
   reporter: [["list"]],
   use: {
     baseURL: process.env.PORTAL_BASE_URL || "http://127.0.0.1:4317",

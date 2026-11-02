@@ -97,8 +97,9 @@ try {
     const exited = spawn("sleep", ["100"], { detached: true, stdio: "ignore" });
     await waitFor(async () => exited.pid !== undefined);
     process.kill(-exited.pid, "SIGKILL");
-    const unreaped = Date.now() + 200;
-    while (Date.now() < unreaped) {} // keeps the event loop from reaping the child
+    // Polls synchronously so the event loop cannot reap the child while the kill lands.
+    const deadline = Date.now() + 2000;
+    while (signalGroup(exited.pid, 0) && Date.now() < deadline) {}
     assert.equal(signalGroup(exited.pid, 0), false, "a group with only an unreaped exited member has nothing to signal");
   }
 

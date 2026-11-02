@@ -8,6 +8,7 @@ set -euo pipefail
 # Usage: scripts/test/pre-push-check.sh <remote> < refs
 
 remote="${1:-origin}"
+url="${2:-${remote}}"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${repo_root}"
 
@@ -20,29 +21,38 @@ is_zero() {
   [[ "$1" =~ ^0+$ ]]
 }
 
-# The commit a new branch is diffed from: its merge base with the remote's default branch.
+# The remote's default branch as a remote-tracking ref: the recorded refs/remotes/<remote>/HEAD, or
+# else the branch the remote itself advertises as HEAD, as the agent pre-push hook resolves it.
+remote_default_ref() {
+  local branch
+  if git symbolic-ref --quiet "refs/remotes/${remote}/HEAD" 2>/dev/null; then
+    return 0
+  fi
+  branch="$(git ls-remote --symref -- "${url}" HEAD 2>/dev/null \
+    | awk '$1 == "ref:" && $3 == "HEAD" { sub("^refs/heads/", "", $2); print $2; exit }')"
+  [[ -n "${branch}" ]] || return 1
+  echo "refs/remotes/${remote}/${branch}"
+}
+
+# The commit a branch is diffed from when the remote has no tip this checkout knows: its merge base
+# with the remote's default branch.
 new_branch_base() {
   local local_sha="$1" default
-  default="$(git symbolic-ref --quiet "refs/remotes/${remote}/HEAD" 2>/dev/null)" \
-    || default="refs/remotes/${remote}/main"
+  default="$(remote_default_ref)" || return 1
   git rev-parse --verify --quiet "${default}^{commit}" >/dev/null || return 1
   git merge-base "${default}" "${local_sha}"
 }
 
 # Whitespace errors and leftover conflict markers in the commits being pushed, per ref. A deletion
-# pushes no commits; a new branch is checked from where it left the default branch.
+# pushes no commits; a new branch, or one whose remote tip this checkout lacks, is checked from where
+# it left the default branch.
 while read -r local_ref local_sha remote_ref remote_sha; do
   [[ -n "${remote_ref:-}" ]] || continue
   is_zero "${local_sha}" && continue
-  if is_zero "${remote_sha}"; then
-    if ! base="$(new_branch_base "${local_sha}")"; then
-      echo "pre-push: skipped git diff --check for new ${remote_ref}: no ${remote}/HEAD or ${remote}/main to diff from" >&2
-      continue
-    fi
-  elif git cat-file -e "${remote_sha}^{commit}" 2>/dev/null; then
+  if ! is_zero "${remote_sha}" && git cat-file -e "${remote_sha}^{commit}" 2>/dev/null; then
     base="${remote_sha}"
-  else
-    echo "pre-push: skipped git diff --check for ${remote_ref}: ${remote} has commits this checkout does not" >&2
+  elif ! base="$(new_branch_base "${local_sha}")"; then
+    echo "pre-push: skipped git diff --check for ${remote_ref}: cannot find ${remote}'s default branch in this checkout to diff from" >&2
     continue
   fi
   # --no-pager: stderr is the terminal, so git would page, and a LESS without -F holds the push

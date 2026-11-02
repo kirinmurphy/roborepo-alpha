@@ -46,12 +46,13 @@ export async function patchHomeOverview(page, mutate) {
 }
 
 // A GET can land on a keep-alive socket the portal is closing as idle, which fails with ECONNRESET
-// before the server reads the request, so one retry on a fresh connection is safe.
+// (or "socket hang up") before the server reads the request, so one retry on a fresh connection is
+// safe.
 async function retryingReset(request) {
   try {
     return await request();
   } catch (error) {
-    if (!/ECONNRESET/.test(error?.message || "")) throw error;
+    if (!/ECONNRESET|socket hang up/.test(error?.message || "")) throw error;
     return request();
   }
 }
