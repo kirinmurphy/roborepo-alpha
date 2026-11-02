@@ -1,7 +1,7 @@
 ---
 id: 4zyo2woj
 priority: high
-next_action: Complete guarded plan closure. Human approval is fresh for 15e912c02f1c23205408aaa788c0f778f608c79c; verify landing, record completion, then run plan-scoped cleanup.
+next_action:
 blocked_by: []
 depends_on: ["hr78g4sj"]
 related: ["8bjltk2n", "wjlt1zvf", "ia1q1z9", "permva27", "permissions-ui-revamp", "codex-cmux-hook-trust-review", "46qth5z8", "harness-capability-derived-resource-targeting", "7k3m9qd", "o9zwxuav"]
@@ -930,7 +930,43 @@ approval, or unrelated pending edit was changed by this diagnosis.
   main merge made the latter content-stale. The explicit approval above covers the re-reviewed
   merged implementation and supersedes both earlier approval records.
 
+## Completion summary
+
+Codex permission rendering now projects the known credential paths as native read-and-write
+denials in both writable and read-only profiles, preserving public templates, workspace roots,
+foreign configuration and stable reapply. Unsupported intent and tool/runtime surfaces remain
+explicit. Native enforcement evidence remains scoped to the recorded macOS command boundary;
+the accepted desktop/tool/platform limitations are unverified, not passed.
+
 ## Verification
+
+Verification is complete with the evidence and accepted limitations recorded below.
+
+### Final closure verification — 2026-11-02
+
+- Approved commit: 15e912c02f1c23205408aaa788c0f778f608c79c
+- Absorbing commit: e96f65e7163546ba627132698b4e4f6e3281e140
+- Assessed base commit: e96f65e7163546ba627132698b4e4f6e3281e140
+- Canonical approval: fresh, with a complete fresh Result; the explicit human answer is
+  recorded above. Current branch landing was independently verified by the canonical command
+  (content-level evidence scanned).
+- Reused canonical `npm run check` pass at `db9926333e4b2c7c2d5f01dd39e8ac05db299433`:
+  67/67 suites, CLI 422 passed/0 failed, portal UI 163 passed. Executed source comparisons
+  confirm the current implementation matches that tested source; the sole non-plan difference
+  is the separately checked moved-document link. This is reused evidence, not a fresh full
+  aggregate run in this chat. The older `e4365770` aggregate remains failed historically.
+- Seven credential-focused commands passed in the isolated assessment. Fresh projection,
+  foreign-line, home-path, documentation-reference, whitespace and plan checks passed during
+  final review. The independent Validator reported zero fix and zero escalation findings.
+- All five docs of record were checked: config-control-panel, codex-hooks,
+  harness-provider-interface, config-panel-internals and testing. No required documentation
+  drift, open implementation finding or unconfirmed human-only test remains.
+- Fresh native enforcement is unavailable here; historical macOS evidence and the accepted
+  desktop/product, browser/MCP/escalated and native Linux/Windows limitations remain explicit.
+  This closure grants no broader credential-boundary certification.
+
+
+
 
 ### Closure attempt — October 27, 2026
 
