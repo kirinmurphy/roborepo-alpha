@@ -1,7 +1,7 @@
 ---
 id: ja44k85c
 priority: none
-next_action: Run /plan-review; push the branch so CI runs both legs, and confirm the Not tested entries
+next_action:
 blocked_by: []
 depends_on: []
 related: ["f0jwe76j", "developer-runtime-remote-branch-status"]
@@ -392,3 +392,40 @@ Earlier approval, stale since bd894ced and b3e60ab1 changed the implementation, 
   `roborepo_chain_hook`.
 - No user-facing doc changes. The rule and skill text ships to users, but it describes agent
   behavior, not a command or setting they use.
+
+## Completion summary
+
+Main now has a fast pre-push check (`scripts/test/pre-push-check.sh`, run by the tracked
+`scripts/git-hooks/pre-push` and installed in the primary checkout through `core.hooksPath`), the
+two recurring CI flakes are fixed (the browser-lifecycle `EPERM` crash, guarded by a regression
+assertion and a report guard, and the portal UI `ECONNRESET` retry plus one CI-only Playwright
+retry), and the validation-gates rule, test-harness, roborepo-development, and the plan-execute,
+plan-review, and plan-close skills now treat CI as the full gate. The two-week CI baseline
+comparison in Validation is a later measurement, not a closure requirement.
+
+## Verification
+
+### Final closure verification — 2026-11-02
+
+- Approved commit: 0063f93a3244e86c9abc6691cc1ddcf12e9589b3
+- Absorbing commit: 727cb5bb53c6e8189eab31789ddd3a0928fd91e5
+- Approval: `roborepo plans approval ja44k85c` -> fresh. Landing: `roborepo plans landed ja44k85c`
+  -> yes, newly scanned. The worktree's plan copy is byte-identical to the primary copy.
+- Gate evidence from CI, per the updated plan-close rule: PR 52's head 18456010 has the same tree
+  as 727cb5bb and passed `check (ubuntu-latest)`, `check (macos-latest)`, and
+  `windows-installer`. The push run for 727cb5bb itself was cancelled by the next push; CI for
+  main at b9b766af (which differs outside `docs/plans/` only by one link in
+  `docs/internal/backlog-review.md`) passed. Main's red run at 0d9d763e, before the merge, failed
+  only `docs-reference-check.mjs`, a plan-move link outside this plan.
+- Focused checks on main at b9b766af: `docs-reference-check.mjs`, `plan-suite-skills-check.mjs`,
+  `orphan-test-check.mjs`, `roborepo skill triggers --check`, and `bash scripts/doctor.sh --quiet`
+  pass; `bash scripts/test/pre-push-check.sh origin` passes in 2 s; `browser-lifecycle-check.mjs`
+  passes 5/5. `core.hooksPath` reads `local scripts/git-hooks`.
+- Claims checked against main: hook and script exist and are executable; the Playwright retry,
+  the `ECONNRESET` retry, the exported `signalGroup` with `EPERM` handling, its regression
+  assertion and report guard; CI-result wording in the rule and all five skill files.
+- Docs of record checked against the landed code: `docs/internal/testing.md` (pre-push check,
+  install command, when to run `npm run check`) and `docs/internal/hooks-internals.md` (repository
+  pre-push as the chain target).
+- Not verified here: a real `git push` from an agent shell (agent sessions cannot push; the user
+  confirmed the user-shell path), and the two-week post-merge CI comparison.
