@@ -1,7 +1,7 @@
 ---
 id: 4zyo2woj
 priority: high
-next_action: Human approval is recorded; open and merge the pull request, then run /plan-close. Rerun /plan-review if base implementation changes before landing.
+next_action: Finish verification against the landed source, request renewed exact-commit human approval, then run /plan-close. Plan records are reconciled; prior implementation approval remains historical.
 blocked_by: []
 depends_on: ["hr78g4sj"]
 related: ["8bjltk2n", "wjlt1zvf", "ia1q1z9", "permva27", "permissions-ui-revamp", "codex-cmux-hook-trust-review", "46qth5z8", "harness-capability-derived-resource-targeting", "7k3m9qd", "o9zwxuav"]
@@ -585,9 +585,268 @@ Git administrative worktree `credential-protection`; this document contains no m
   approval is requested separately for the exact reviewed commit below.
 
 ### Result
-- Status: complete
-- Reviewed implementation commit: 81ae9e362000c1a48574b1aeceda4c2302b19570
-- Base commit: 977d29f04ab25f5191f21c832cb98709be99efae
+- Status: pending
+- Reviewed implementation commit: f90412a258c6a1177ea33a6531581d53020f21db
+- Base commit: ac7c6bb207f3431b0e4c3a308c973adc9717424f
+
+#### Re-review — October 30, 2026
+
+- Resume path: changes since review, after landing. The prior complete review covered
+  `81ae9e362000c1a48574b1aeceda4c2302b19570` against base
+  `977d29f04ab25f5191f21c832cb98709be99efae`; its explicit approval below remains historical.
+  This pending result does not renew that approval.
+- The 28 changed paths since approval cover plan priority/lifecycle rules, dependency actions,
+  shared copy controls, tests, the plan-execute report reference, and the control-panel guidance
+  for absent Codex configuration. Credential rendering, generated Codex configuration, and native
+  enforcement fixtures are unchanged. The feature implementation is byte-identical outside
+  `docs/plans/` to squash `28932c1c85535759e8cf565ccdd096d6735e8946`.
+- The canonical `node scripts/cli/main.mjs plans landed 4zyo2woj --json` retry passed, revalidating
+  that squash as the absorbing commit at the exact feature/base tips above. Base synchronization
+  was not run on the already-landed branch. Its worktree and branch were not changed.
+- Fresh-context Validator: no actionable fix or escalate findings in the changed and directly
+  affected code. Checked acceptance criteria, observable tests, documentation of record, coverage
+  limits, flow/cohesion, data/state, and comments/abstractions. No review fix commits were needed.
+- Passed: `node scripts/test/codex-credential-projection-check.mjs` (15 patterns, nine combinations),
+  `node scripts/test/codex-permissions-foreign-lines-check.mjs`,
+  `node scripts/test/permission-rule-home-path-check.mjs`,
+  `node scripts/test/plans-portal-state-check.mjs`,
+  `node scripts/test/plan-lifecycle-manifest-check.mjs`, and
+  `node scripts/test/plan-suite-skills-check.mjs`. The Validator independently passed projection,
+  foreign lines, portal state, lifecycle manifest, skill checks, and documentation references.
+  Whitespace validation excluding the two inaccessible TLS fixtures passed; plan validation
+  reported zero findings.
+- `npm run check` did not pass: doctor passed 106 checks, then the CLI suite reported three
+  package add-skill assertion failures and failed temporary-fixture cleanup with `EPERM`.
+  These failures are not classified as base failures; their cause was not established. Later
+  aggregate components were not reached. No aggregate pass or waiver is inferred.
+- `node scripts/test/permissions-render-live-characterization-check.mjs`,
+  `node scripts/test/gemini-adapter-characterization-check.mjs`,
+  `node scripts/test/root-config-write-policy-check.mjs`,
+  `node scripts/test/hook-composition-check.mjs`, and
+  `node scripts/test/plan-lifecycle-transitions-check.mjs` exited nonzero while removing their
+  temporary fixtures (`EPERM`). Available isolated retries retained that failure; printed
+  assertion-success messages are not counted as passing commands. Test-created untracked
+  hook-composition files were removed without changing tracked implementation.
+- `npm run test:portal-ui` could not bind `127.0.0.1` (`listen EPERM`) and also failed temporary
+  cleanup. Its separately permitted retry failed with the same two errors; no browser assertions
+  ran in either attempt.
+- The canonical approval reader still reports stale approval (28 implementation paths since
+  the old approved commit). It also lists the inaccessible
+  `scripts/test/fixtures/runtime-tls/localhost-cert.pem` and
+  `scripts/test/fixtures/runtime-tls/localhost-key.pem` as pending implementation changes.
+  Git status reports denied access to those paths, so their working contents were not compared
+  or treated as verified clean. They were not read or changed. Status excluding those paths was
+  clean after test-file cleanup; the primary checkout retains unrelated pre-existing edits.
+- Correction after the user's October 30 follow-up: main already includes
+  `fb3a32b568b8fecaf7203e3adb23c6a8ea403093`, which removes both tracked PEM fixtures and
+  generates disposable TLS credentials in memory through `scripts/test/lib/local-test-tls.mjs`.
+  The assigned historical feature tip does not include that commit and still reads the old
+  fixtures. The PEM-specific obstacle above concerns that older worktree, not current main.
+  The same main commit also makes inaccessible-file checks report unavailable rather than
+  treating unreadable files as verified edits. Neither correction was incorporated into the
+  older worktree used for this review; its cleanup and localhost errors remain separate observed
+  failures. Current main's disposable TLS implementation has not been rerun in this review.
+- Native enforcement was not rerun: its unrestricted positive controls read synthetic paths
+  denied by this session's policy. Previously recorded macOS native-command evidence remains
+  historical evidence for unchanged files, not a fresh runtime certification. The three human-
+  accepted coverage limitations remain unchanged; no new manual acceptance task is inferred.
+- Approval is not requested while required verification and trustworthy freshness checking remain
+  unavailable. Resume with a passing `npm run check` and canonical approval-reader output from
+  an environment permitted to inspect the repository's synthetic test fixtures and clean up its
+  temporary directories. This record changes only the primary plan's Result; it does not alter
+  the landed worktree, recover approval, close the plan, or authorize cleanup.
+
+
+#### Merged implementation verification — October 30, 2026
+
+Checked current main at `0cf40deb9fd39f7113390b2c0ac3e1b776479a60`, following the user's request
+to review the landed work and mark only supported items complete. The original implementation
+checklist was already checked; these are newly verified results, not renewed approval.
+
+- [x] Confirm the original branch tip and absorbing squash remain valid historical landing
+  evidence: the tip is still `f90412a258c6a1177ea33a6531581d53020f21db`, and
+  `28932c1c85535759e8cf565ccdd096d6735e8946` remains on main's first-parent history.
+  Git assertions passed. The credential translator, shared permission renderer, projection/native
+  tests, and native coverage fixtures are unchanged from the squash and have no pending edits.
+- [x] Review the credential implementation present on main. The separate read-only Validator
+  reported no actionable findings after checking requirements, docs of record, resolved intent,
+  portable anchors, both profiles, foreign-config preservation, and the three convention rubrics.
+  Native runtime coverage remains historical, with the accepted tool/platform limits unchanged.
+- [x] Verify disposable TLS credentials without reading persistent secret files. Git asserts no
+  runtime TLS fixture files remain tracked. Executed in-memory assertions passed for distinct
+  generated keys, certificate signature, matching key, and current validity; the Validator also
+  passed localhost-subject and TLS-context assertions. This does not claim that the full HTTPS
+  discovery suite or its listeners ran successfully.
+- [x] Rerun focused current-main checks: credential projection (15 patterns, nine combinations),
+  foreign lines, home-path rules, and documentation references passed. The Validator independently
+  passed portal state, lifecycle manifest, plan-suite skills, whitespace, and duplicate-only Codex
+  hook reconciliation, including input preservation and stable reapply.
+- [x] Recheck repository health: doctor passed all 107 checks during `npm run check`.
+
+Remaining verification is explicit. `npm run check`, started on main `7c65c2e7`, exited nonzero at
+three package add-skill assertions and temporary cleanup (`EPERM`); the checkout advanced through
+an unrelated plan-organization/test-fixture commit while the gate ran. No passing aggregate for a
+single committed snapshot is claimed. Three unrelated pending implementation paths remain:
+`modules/repositories/worktree-preservation.mjs`, `scripts/test/slash-commands-characterization-check.mjs`,
+and `scripts/test/worktree-snapshot-check.mjs`. They were not changed or certified by this review.
+Live-render, Gemini-adapter, and root-config-write checks still exited nonzero during their own
+fixture cleanup. An independent empty-directory deletion control also returned `EPERM`.
+
+`npm run test:portal-ui` and its permitted retry both failed to bind `127.0.0.1` and clean their
+temporary directories; no browser assertions ran. The current canonical landed command also failed
+temporary-directory cleanup, so only the independently revalidated historical landing evidence
+above is counted as passed. The approval reader still resolves the historical worktree and reports
+stale approval plus unavailable working-file inspection. The plan validator reports zero blocking
+findings and one advisory outside-worktree evidence edit; this primary-only pending record is not
+an authority override. Complete review, renewed exact-commit human approval, closure, and worktree
+cleanup remain unchecked outcomes. No approval, waiver, or broader runtime coverage is inferred.
+
+
+#### Verification failure diagnosis — October 30, 2026
+
+The user requested resolution of verification before the next implementation-approval prompt.
+Isolated reproductions now establish the immediate causes of the three CLI assertion failures:
+
+- Both ownership-conflict cases restore their original package configuration and trigger contents,
+  then fail at `scripts/cli/packages.mjs:184` while removing the new skill directory. Executed
+  diagnostic assertions verified the restored bytes, `EPERM` at that operation, and the directory
+  left behind. The cleanup error replaces the ownership-validation message expected by the tests.
+- The empty-package conflict likewise fails at the same cleanup operation and leaves its skills
+  directory behind. This directly explains the third failing assertion. No speculative package
+  behavior change was made to hide incomplete rollback.
+- An independent, newly created empty directory owned by the current user with mode `0700` could
+  not be removed by either Node's `rmdirSync` or `/bin/rmdir`, including a permitted retry. Controls
+  under both the system temporary directory and the repository-family worktree root returned
+  `EPERM`. The particular policy/runtime layer responsible for denying removal is not established.
+- An independent TCP server on `127.0.0.1`, requesting an ephemeral port and no external connection,
+  also returned `EPERM` on its permitted retry. This reproduces the browser startup obstacle
+  without the browser runner.
+- Read-only discovery currently selects Codex CLI `0.166.0`; the discovered desktop executable is
+  `0.166.0-alpha.5.1`. The historical native coverage at `0.163.0-alpha.11.2` is not silently
+  extended to either newer runtime.
+- Existing remote CI evidence was sought read-only with `gh run list`; normal and permitted
+  attempts could not connect to `api.github.com`. No remote pass is claimed.
+
+The full gate remains unpassed. A verification environment must first permit ordinary temporary
+folder removal and loopback listeners while preserving credential-read restrictions. Then rerun
+`npm run check` and the remaining plan-relevant checks, resolve any actual failures, finish the
+post-merge review evidence, and request approval of the exact reviewed implementation. These
+control failures are execution prerequisites; neither passing diagnostics nor an already-merged
+branch substitutes for a passing gate. No credential denial, installed configuration, implementation
+approval, or unrelated pending edit was changed by this diagnosis.
+
+
+#### Closure readiness recheck — November 1, 2026
+
+- Scope correction: this review concerns credential protection (`4zyo2woj`), not the adjacent
+  package-state plan. Its implementation landed through PR 45 in squash
+  `28932c1c85535759e8cf565ccdd096d6735e8946`, which remains on main's first-parent history.
+  The feature tip remains `f90412a258c6a1177ea33a6531581d53020f21db`. The worktree plan blob
+  `782bd991e0ae25f4dac082bbaed7ec32c706641f` was produced on main, so its plan state is integrated.
+- Assessed current main: `8b6a52d271f85d4074268d20b93982734a6af869`. Independent read-only
+  Validator: zero fix findings, zero escalations, one unrelated base verification failure.
+  Credential translation, shared rendering, native runner, projection assertions and coverage
+  metadata are unchanged from the absorbing squash. Generated Codex configuration has only a
+  later Git-hook environment-table addition outside its credential block. No required human-only
+  test or unresolved policy decision remains; the accepted coverage limitations still apply.
+- The completed October 30 Docker assessment is now reconciled: at pinned main
+  `88d001728b4e8a81eef72e9df9a7e23e435fb5be`, all 14 focused checks passed. Installation
+  collisions, deterministic CI checks, packed installation, four strict clean-machine suites,
+  and the portal browser suite (151 passed) also passed as separately executed commands.
+  Its canonical aggregate still exited 1: repository rediscovery bumped revision twice for an
+  existing record created in the same millisecond. A deterministic control reproduced that
+  unrelated defect in `scripts/cli/repositories.mjs`; a standalone retry passed but did not
+  change the aggregate outcome. The current code retains the implicated `createdAt === now`
+  condition. No unrelated implementation correction or waiver is inferred.
+- Fresh current-main `npm run check` and its permitted host retry each exited 1 after health
+  passed all 97 checks. Both reported the three package add-skill rollback assertions and
+  `EPERM` while removing their test directories. The earlier controlled cleanup diagnosis
+  remains applicable; neither current attempt reached the later gate stages.
+- Fresh projection (15 patterns, nine combinations), foreign-line preservation and home-path
+  commands passed. The Validator independently passed projection, home paths, portal state and
+  lifecycle manifest checks. Live rendering, Gemini characterization, root-config write policy
+  and hook composition each exited 1 at temporary-directory removal (`EPERM`); they are not
+  counted as passed commands. Hook-composition's test-created files were removed, leaving Git
+  status clean. An empty fixture directory could not be removed and contains no files.
+- Base verification failure: documentation references point from
+  `docs/internal/backlog-review.md:139` to the archived plan's former backlog path. This is on
+  current main and outside credential protection. It is recorded separately from environment
+  failures and was not silently waived for closure.
+- Docker server discovery failed with permission denied at its Unix socket in both ordinary
+  and permitted host attempts. No container run or native positive control was attempted through
+  an alternate channel. Credential-read restrictions and installed configuration remain intact.
+- The canonical approval reader reports stale approval: the approved commit is still
+  `81ae9e362000c1a48574b1aeceda4c2302b19570`, with 28 non-plan changes to the current feature
+  tip. Review freshness also remains unavailable because the historical worktree still has
+  inaccessible tracked PEM fixtures; current main already uses disposable TLS credentials.
+  No protected fixture was read. Plan validation reports zero blocking findings and the existing
+  advisory for primary-only post-merge evidence.
+- Outcome: remains pending. Complete executable verification in a permitted environment, then
+  establish trustworthy review freshness and request renewed exact-commit human approval before
+  closing. No lifecycle change, approval, implementation edit, server shutdown or branch/worktree
+  cleanup occurred in this recheck.
+
+
+
+#### Isolated verification completion — November 1, 2026
+
+- A terminal-launched, disconnected Docker assessment used exactly committed source
+  `e43657705647a77194c3aed0350321ded90a9bc0`, tree
+  `cd304a3cbf226b00c0ee68b88a7877592425f3b7`. The in-container tree assertion passed and its
+  final Git status was empty. Pending skill edits in the live primary checkout were excluded.
+- The canonical aggregate exited 1 at the deterministic group: 64 of 65 suites passed; its sole
+  failure was `docs-reference-check.mjs`, naming the stale archived-plan link already identified
+  above. Health passed 98 checks, the CLI suite passed 411 assertions with zero failures, and
+  installation collisions passed before that stop. The prior same-millisecond rediscovery failure
+  did not occur in this run; no correction to that unrelated production code is claimed.
+- All seven credential-focused commands exited 0: projection, live rendering, foreign-line
+  preservation, home-path rules, Gemini characterization, root-config write policy and hook
+  composition. Thirteen of fourteen focused commands passed; the same documentation-reference
+  command was the sole failure. Portal state, lifecycle manifest, plan-suite skills, lifecycle
+  transitions, health and whitespace commands also passed.
+- Every later aggregate phase was executed separately against the same source and exited 0:
+  packed installation, all four strict clean-machine suites, and portal UI (158 passed).
+  These separate successes do not replace or change the aggregate's exit 1.
+- The native runner exited 2 with explicit unavailable status: the Linux container has no Codex
+  executable. It certifies no new native platform or runtime. The accepted historical macOS
+  evidence and unverified tool/platform boundaries remain unchanged.
+- Reused the existing one-line archived-link repair from `90f2f326`, applying it to main in
+  `1de46fc9384b97e2e9b901fa7bfbdb99ee8f2021`. Documentation references and whitespace passed
+  after the repair; current-main health passed 97 checks and plan-suite skill checks passed.
+  A new pinned aggregate is prepared for that committed source. It must finish before a current
+  aggregate pass is recorded.
+- The normal-terminal gate before the isolated run stopped at a stale generated skill audit while
+  the primary checkout held unrelated edits to the plan-execution skill. Those edits and their
+  later commit `2b582e47` were preserved. No credential implementation change was made.
+- Post-merge recovery has an additional evidence-copy prerequisite: after excluding Result and
+  Approval, the worktree and primary plan differ in `next_action` and the earlier closure's
+  Verification section. The current recovery predicate rejects those differences; it also treats
+  replacing the worktree's older approval with a primary-only renewed approval as conflicting.
+  No recovery evidence or human approval is fabricated. The user has been asked whether to allow
+  explicit plan-record reconciliation as an exception to the skill's instruction to leave the
+  old worktree untouched. Implementation files and prior approvals remain unchanged pending
+  that decision and renewed exact-commit approval.
+
+
+
+#### Authorized plan-record reconciliation — November 2, 2026
+
+- The user explicitly authorized reconciliation with "please do it" after the explanation that
+  only the two plan documents would be updated and implementation approval would remain a
+  separate decision. This is a narrow exception to the post-merge skill instruction not to
+  edit or commit the old worktree; it authorizes no implementation change or merge.
+- Preserved the primary plan's requirements, decisions, historical approval, closure attempts
+  and verification evidence in both copies. Updated the next action to reflect the remaining
+  verification and renewed-approval steps. The old feature implementation remains
+  `f90412a258c6a1177ea33a6531581d53020f21db` outside plan documents.
+- Pre-reconciliation plan blobs: primary `3ea407f6a82dc4e05f3047af5d7ee2d9d7aee2bf`;
+  worktree `782bd991e0ae25f4dac082bbaed7ec32c706641f`. The earlier worktree document remains
+  recoverable from Git. No pending gate result or renewed approval is inferred by making
+  these records agree.
+- Local main advanced to `2b81656558b8274ed00286d001ee8e86ae587b2f`, including the separate
+  package-state merge, while this review continued. The prepared `1de46fc9` snapshot has no
+  recorded execution yet and does not establish verification of those newer changes.
+
 
 ### Approval
 - Decision: approved
@@ -596,3 +855,76 @@ Git administrative worktree `credential-protection`; this document contains no m
 - Evidence: October 27, 2026, the user selected "Approve this implementation" in response to
   the exact-commit approval question for this plan, including the accepted coverage limits and
   recorded base-branch skill-size failure. Review freshness was rechecked before recording.
+
+## Verification
+
+### Closure attempt — October 27, 2026
+
+- Result: blocked; remains in review. No completion commit, server shutdown, or worktree cleanup.
+- Primary checkout: main at `6eba62ad78ad37d0e3a62230869281378919cc04`. The assigned worktree's
+  review document matched the primary document byte for byte before this attempt's evidence edits.
+- Plan validation: zero findings, zero blocking findings. No unchecked Not tested entries;
+  the previously accepted coverage limitations remain unverified and unchanged.
+- Seven focused checks passed: credential projection (15 patterns, nine intent/write combinations),
+  live rendering, foreign-line preservation, home paths, Gemini adapter, root-config write policy,
+  and hook composition. Whitespace validation passed.
+- Canonical `npm run check`: the sandboxed run failed with localhost `listen EPERM` restrictions.
+  The permitted host rerun passed doctor (106 checks), the main suite (464/464), installation
+  collisions, deterministic CI suites (61/61), packed installation, and all four strict
+  clean-machine suites. Windows installer parity was skipped because PowerShell is unavailable.
+  The aggregate exited 1 at portal UI startup: `error: timed out waiting for ready file`.
+  The runner waits 15 seconds for server readiness; the timeout's cause is unverified. No waiver
+  or aggregate pass is inferred from earlier successful components.
+- Focused `npm run test:portal-ui` host retry: passed 151/151. No code changes were needed.
+  This resolves verification of the UI assertions but does not change the aggregate exit status;
+  obtain a passing aggregate on the next review/close run or an explicit waiver of its failed
+  startup check. No unrelated startup behavior was changed during this credential-plan closure.
+- Native enforcement: the nested sandbox returned unavailable (`sandbox_apply: Operation not
+  permitted`). The permitted host launch passed with Codex `0.163.0-alpha.11.2` on macOS, fresh
+  synthetic configuration, and native sandbox commands/descendants: both profiles, 31 file cases
+  each, unrestricted controls, missing-denies mutation, public/template reads, write boundaries,
+  links, deep paths and newly created credential paths. No broader tool/platform claim is made.
+- Documentation impact: inspected all five named docs of record against credential projection,
+  profile rendering and coverage metadata; no unresolved required drift found. The control-panel
+  reference additionally documents that a missing Codex configuration skips profile rendering.
+- Approval: stale. Approved implementation `81ae9e362000c1a48574b1aeceda4c2302b19570` differs
+  from feature tip `f90412a258c6a1177ea33a6531581d53020f21db`. The canonical approval check
+  reports 28 changed paths outside plan documents. `/plan-review` must review the current result
+  and obtain renewed human approval; this attempt preserves the existing approval as historical evidence.
+- Landing: newly scanned by the canonical content-level check; the feature branch carried its own
+  work and is absorbed by the squash merge below. The first sandboxed scan was unavailable;
+  the permitted retry succeeded. Landing does not make the stale approval fresh.
+- Absorbing commit: 28932c1c85535759e8cf565ccdd096d6735e8946
+
+Changed paths reported by the approval check:
+
+```text
+docs/user/guides/plan/lifecycle/plan-suite.md
+docs/user/reference/config-control-panel.md
+docs/user/reference/plans-portal.md
+globals/packages/plan-suite/skills/plan-execute/SKILL.md
+globals/packages/plan-suite/skills/plan-execute/references/final-report.md
+manifests/platform/plan-lifecycle.json
+modules/plan-suite/transition-rules.mjs
+portal/plans/app.js
+portal/plans/elements/plan-card.js
+portal/plans/elements/plan-status.js
+portal/plans/lifecycle.js
+portal/plans/plan-actions.js
+portal/plans/plan-drawer-partial.html
+portal/plans/plan-drawer.css
+portal/plans/plan-drawer.js
+portal/plans/state.js
+portal/plans/templates.js
+portal/shared/base.css
+portal/shared/copy-button.js
+portal/shared/copy-menu.js
+portal/shared/widget-templates-partial.html
+scripts/test/plan-lifecycle-manifest-check.mjs
+scripts/test/plan-lifecycle-transitions-check.mjs
+scripts/test/plan-suite-skills-check.mjs
+scripts/test/plans-portal-state-check.mjs
+scripts/test/portal-ui/plans-status.spec.mjs
+scripts/test/portal-ui/portal-ui.spec.mjs
+scripts/test/portal-ui/repository-scope.spec.mjs
+```
