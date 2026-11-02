@@ -261,7 +261,7 @@ design gives the reasons.
 - [x] Validation-gates rule's no-CI fallback applied to every change, contradicting the prose-only and module rows; scoped to the rows that leave the full gate to CI (fc53001d)
 - [x] Plan `### Verification` lacked the pre-push timing, 20-run, and hook-wiring evidence — recorded
 - [x] test-harness step 4 still sent dependency, generated-type, and build changes to a local full run, contradicting the rule; aligned (a8b164d0)
-- [ ] `docs/internal/hooks-internals.md:337` says each agent hook does its own check before chaining; only `pre-push` checks anything, the rest only chain — reword (review)
+- [x] `docs/internal/hooks-internals.md:337` says each agent hook does its own check before chaining; only `pre-push` checks anything, the rest only chain — fixed in review (a4fa3216)
 
 ### Verification
 - Validation pass 1 (fresh-context subagent): 1 fix finding, fixed above. Linux behavior confirmed by the Validator in `node:22-bookworm-slim`.
@@ -275,6 +275,20 @@ design gives the reasons.
 - `node scripts/test/plan-suite-skills-check.mjs`, `bash scripts/doctor.sh --quiet` (generated rules in sync), and `roborepo skill triggers --check` pass.
 - `npm run check` passed at fc53001d on macOS: 65/65 check suites, package install, all four Docker clean-machine sandboxes, and 151/151 portal UI specs. A first run failed only because the new worktree had no `node_modules`; `npm ci` fixed it.
 - Base failure, fixed on the branch: `docs-reference-check.mjs` fails on main (stale link in `docs/internal/backlog-review.md`).
+- Review: main merged in at f3fe87f6 (no conflicts) and again at 118678b8 for main's 2b582e47 (plan-execute pushes the feature branch at review handoff; no conflicts).
+- Review: `npm run check` passed at f3fe87f6 on macOS (exit 0, 158/158 portal UI specs). The branch is not pushed, so no CI result exists; this is the one local gate run the fallback allows. Commits after it change only docs, skill text, and the plan record.
+- Review: at 118678b8, `node scripts/test/plan-suite-skills-check.mjs`, `bash scripts/test/pre-push-check.sh origin` (doctor 97 checks, docs references), and `roborepo skill triggers --check` pass.
+- Review Validator pass 1 (fresh-context subagent, merged result at f3fe87f6): 1 fix finding (hooks-internals wording), fixed above. It also timed the pre-push check at 4.1 s, re-drove the hook with git's stdin in a scratch clone, and ran `browser-lifecycle-check.mjs` 3/3.
+- Review Validator pass 2 (fresh-context subagent, delta f3fe87f6..118678b8): clean for this plan. It confirmed the hooks-internals wording against all 14 agent hooks, and that main's feature-branch push in plan-execute agrees with the rule, validation loop, plan-review, plan-close, and test-harness wording.
+- Base issue, outside this plan: `plan-execute/references/start-validation.md:74` says "It never pushes. Do not push from the skill either." without scoping it to the start transition, which now contradicts plan-execute's push at review handoff. The line is on main and this branch does not touch the file.
+
+### Result
+- Status: complete
+- Reviewed implementation commit: 118678b833513a04394f4cce1025f5d13b12cecd
+- Base commit: 2b582e47f9069159dc0b79b476a9de47ffb21071
+
+### Approval
+- Decision: requested
 
 ## Decision Log
 
