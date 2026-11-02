@@ -261,6 +261,7 @@ design gives the reasons.
 - [x] Validation-gates rule's no-CI fallback applied to every change, contradicting the prose-only and module rows; scoped to the rows that leave the full gate to CI (fc53001d)
 - [x] Plan `### Verification` lacked the pre-push timing, 20-run, and hook-wiring evidence — recorded
 - [x] test-harness step 4 still sent dependency, generated-type, and build changes to a local full run, contradicting the rule; aligned (a8b164d0)
+- [ ] `docs/internal/hooks-internals.md:337` says each agent hook does its own check before chaining; only `pre-push` checks anything, the rest only chain — reword (review)
 
 ### Verification
 - Validation pass 1 (fresh-context subagent): 1 fix finding, fixed above. Linux behavior confirmed by the Validator in `node:22-bookworm-slim`.
