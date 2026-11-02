@@ -283,12 +283,12 @@ design gives the reasons.
 - Base issue, outside this plan: `plan-execute/references/start-validation.md:74` says "It never pushes. Do not push from the skill either." without scoping it to the start transition, which now contradicts plan-execute's push at review handoff. The line is on main and this branch does not touch the file.
 
 ### Result
-- Status: pending
+- Status: complete
 - Reviewed implementation commit: 118678b833513a04394f4cce1025f5d13b12cecd
 - Base commit: 2b582e47f9069159dc0b79b476a9de47ffb21071
 
 ### Approval
-- Decision: not requested (blocked by the three open Not tested checks)
+- Decision: requested
 
 ## Decision Log
 
@@ -331,9 +331,15 @@ design gives the reasons.
 
 ## Not tested
 
-- [ ] A real `git push` runs the hook: from the user's terminal and from an agent shell, push a
+- [x] A real `git push` runs the hook: from the user's terminal and from an agent shell, push a
       throwaway branch with a broken doc link to a local bare clone and see it refused. This
       session's permissions deny `git push`; the hooks were driven directly with git's argv and stdin.
+      Confirmed by the user on 2026-11-02 from their terminal: in a scratch clone with
+      `core.hooksPath scripts/git-hooks`, pushing a commit adding `[x](does-not-exist.md)` to a bare
+      clone printed "pre-push: push refused. Failed: node scripts/test/docs-reference-check.mjs" and
+      git reported the push failed. An earlier real push of this branch ran doctor and the docs check
+      and passed. The agent-shell path still rests on driving `~/.claude/git-hooks/pre-push` directly,
+      since agent sessions cannot run `git push`.
 - [x] `npm run test:portal-ui` passes on both CI legs, with any retried test listed as flaky. Needs
       the branch pushed so CI runs it. Confirmed by the user on 2026-11-02 ("the remote CI passes");
       the CI run for 7cb08c65 passed `check (ubuntu-latest)` and `check (macos-latest)`, each with
