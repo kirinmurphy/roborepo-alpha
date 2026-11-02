@@ -262,6 +262,8 @@ design gives the reasons.
 - [x] Plan `### Verification` lacked the pre-push timing, 20-run, and hook-wiring evidence — recorded
 - [x] test-harness step 4 still sent dependency, generated-type, and build changes to a local full run, contradicting the rule; aligned (a8b164d0)
 - [x] `docs/internal/hooks-internals.md:337` says each agent hook does its own check before chaining; only `pre-push` checks anything, the rest only chain — fixed in review (a4fa3216)
+- [x] After main's 68f6aca1, the Decision Log still credited the branch with the `signalGroup` EPERM fix and the backlog-review link fix, both now on main too — noted as superseded in review
+- [x] Verification had no record of the 2b0ec6f7 and 956ef5c3 merges or their conflict resolution — recorded in review
 
 ### Verification
 - Validation pass 1 (fresh-context subagent): 1 fix finding, fixed above. Linux behavior confirmed by the Validator in `node:22-bookworm-slim`.
@@ -274,21 +276,24 @@ design gives the reasons.
 - Hook wiring, driven with git's argv and stdin in a scratch clone with `core.hooksPath scripts/git-hooks`: the agent hook (`~/.claude/git-hooks/pre-push`) and the repository hook each exit 1 on a branch adding a broken doc link (naming the docs reference check) and 0 on the branch without it; whitespace in pushed commits is refused for a new branch and an update; a deletion is skipped.
 - `node scripts/test/plan-suite-skills-check.mjs`, `bash scripts/doctor.sh --quiet` (generated rules in sync), and `roborepo skill triggers --check` pass.
 - `npm run check` passed at fc53001d on macOS: 65/65 check suites, package install, all four Docker clean-machine sandboxes, and 151/151 portal UI specs. A first run failed only because the new worktree had no `node_modules`; `npm ci` fixed it.
-- Base failure, fixed on the branch: `docs-reference-check.mjs` fails on main (stale link in `docs/internal/backlog-review.md`).
+- Base failure, fixed on the branch: `docs-reference-check.mjs` fails on main (stale link in `docs/internal/backlog-review.md`). Superseded: main's 68f6aca1 made the same link fix, so main passes and the branch no longer carries the change.
 - Review: main merged in at f3fe87f6 (no conflicts) and again at 118678b8 for main's 2b582e47 (plan-execute pushes the feature branch at review handoff; no conflicts).
 - Review: `npm run check` passed at f3fe87f6 on macOS (exit 0, 158/158 portal UI specs). The branch is not pushed, so no CI result exists; this is the one local gate run the fallback allows. Commits after it change only docs, skill text, and the plan record.
 - Review: at 118678b8, `node scripts/test/plan-suite-skills-check.mjs`, `bash scripts/test/pre-push-check.sh origin` (doctor 97 checks, docs references), and `roborepo skill triggers --check` pass.
 - Review Validator pass 1 (fresh-context subagent, merged result at f3fe87f6): 1 fix finding (hooks-internals wording), fixed above. It also timed the pre-push check at 4.1 s, re-drove the hook with git's stdin in a scratch clone, and ran `browser-lifecycle-check.mjs` 3/3.
 - Review Validator pass 2 (fresh-context subagent, delta f3fe87f6..118678b8): clean for this plan. It confirmed the hooks-internals wording against all 14 agent hooks, and that main's feature-branch push in plan-execute agrees with the rule, validation loop, plan-review, plan-close, and test-harness wording.
+- Review: CI passed for 7cb08c65 (`check (ubuntu-latest)`, `check (macos-latest)`, `windows-installer`), 158 portal UI specs per leg, none flaky.
+- Review: main merged in again at 2b0ec6f7 (main's 68f6aca1, the package desired-state PR, plus plan-record commits) and 956ef5c3 (main's 867ab2b8, plan record only). 68f6aca1 fixed the same macOS `EPERM` case in `scripts/cli/browser/local-service.mjs`, which conflicted with the branch; resolved by keeping main's version and comment and adding back `export` on `signalGroup`, which `browser-lifecycle-check.mjs` imports for its regression assertion. `browser-lifecycle-check.mjs` passed 5/5 after the resolution; the pre-push check and `plan-suite-skills-check.mjs` pass at 956ef5c3.
+- Review Validator pass 3 (fresh-context subagent, merges 2b0ec6f7 and 956ef5c3): no code findings; the resolution is minimal and the branch's net diff against main still covers every plan item. 3 plan-record fix findings, fixed above. Also ran `orphan-test-check.mjs`, docs references, skill triggers, and `browser-lifecycle-check.mjs` 3/3.
 - Base issue, outside this plan: `plan-execute/references/start-validation.md:74` says "It never pushes. Do not push from the skill either." without scoping it to the start transition, which now contradicts plan-execute's push at review handoff. The line is on main and this branch does not touch the file.
 
 ### Result
-- Status: complete
+- Status: pending (main merged in after the review at 118678b833513a04394f4cce1025f5d13b12cecd; full gate on the merged result running)
 - Reviewed implementation commit: 118678b833513a04394f4cce1025f5d13b12cecd
 - Base commit: 2b582e47f9069159dc0b79b476a9de47ffb21071
 
 ### Approval
-- Decision: requested
+- Decision: not requested (waiting on the full gate for the merged result)
 
 ## Decision Log
 
@@ -300,6 +305,9 @@ design gives the reasons.
   as "nothing left to signal"; a deterministic regression assertion fails without the fix. The
   check also asserts a report exists before parsing, so any future empty run prints its status and
   stderr. Alternative: only the reporting guard; rejected because the cause was found.
+  Superseded in part: main's 68f6aca1 landed the same `EPERM` handling independently. The branch now
+  adds only the `export` on `signalGroup`, the regression assertion that guards main's fix, and the
+  report guard.
 - **Portal UI `ECONNRESET`: retry once, not a server change.** All eight hits in the last 40 failed
   CI runs were GETs (seven `route.fetch` of `/api/home`, one `page.request.get` of
   `/api/repositories/sources`) that reused a keep-alive socket the portal was closing as idle. The
@@ -316,7 +324,8 @@ design gives the reasons.
   gate run when no CI result can exist. Keeping the boundary avoids changing the skill's contract.
 - **Base failure fixed on the branch.** `docs/internal/backlog-review.md` linked to the plan
   `q6lj4w96` at its old `backlog/` path after `8adee1aa` archived it, so the docs reference check
-  fails on main today; the pre-push check found it. The link now points at `archived/`.
+  failed on main at the time; the pre-push check found it. The link now points at `archived/`.
+  Superseded: main's 68f6aca1 made the identical fix, so the branch no longer differs from main here.
 - **`pre-push-check.sh` is exempt in the orphan-test check.** It is a hook runner, not a suite; the
   checks it runs have their own tests.
 - **Hook wiring proved by driving the hooks, not `git push`.** This session's permissions deny
