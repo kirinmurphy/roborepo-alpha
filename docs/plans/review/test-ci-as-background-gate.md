@@ -283,12 +283,12 @@ design gives the reasons.
 - Base issue, outside this plan: `plan-execute/references/start-validation.md:74` says "It never pushes. Do not push from the skill either." without scoping it to the start transition, which now contradicts plan-execute's push at review handoff. The line is on main and this branch does not touch the file.
 
 ### Result
-- Status: complete
+- Status: pending
 - Reviewed implementation commit: 118678b833513a04394f4cce1025f5d13b12cecd
 - Base commit: 2b582e47f9069159dc0b79b476a9de47ffb21071
 
 ### Approval
-- Decision: requested
+- Decision: not requested (blocked by the three open Not tested checks)
 
 ## Decision Log
 
