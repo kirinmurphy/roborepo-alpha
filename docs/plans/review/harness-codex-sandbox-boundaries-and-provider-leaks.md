@@ -1,7 +1,7 @@
 ---
 id: 4zyo2woj
 priority: high
-next_action: Run /plan-review to review the post-approval changes and renew human approval, then rerun /plan-close with a passing completion gate. The branch landed; approval is stale and the aggregate gate timed out at portal startup although its focused retry passed.
+next_action: Finish verification against the landed source, request renewed exact-commit human approval, then run /plan-close. Plan records are reconciled; prior implementation approval remains historical.
 blocked_by: []
 depends_on: ["hr78g4sj"]
 related: ["8bjltk2n", "wjlt1zvf", "ia1q1z9", "permva27", "permissions-ui-revamp", "codex-cmux-hook-trust-review", "46qth5z8", "harness-capability-derived-resource-targeting", "7k3m9qd", "o9zwxuav"]
@@ -826,6 +826,26 @@ approval, or unrelated pending edit was changed by this diagnosis.
   explicit plan-record reconciliation as an exception to the skill's instruction to leave the
   old worktree untouched. Implementation files and prior approvals remain unchanged pending
   that decision and renewed exact-commit approval.
+
+
+
+#### Authorized plan-record reconciliation — November 2, 2026
+
+- The user explicitly authorized reconciliation with "please do it" after the explanation that
+  only the two plan documents would be updated and implementation approval would remain a
+  separate decision. This is a narrow exception to the post-merge skill instruction not to
+  edit or commit the old worktree; it authorizes no implementation change or merge.
+- Preserved the primary plan's requirements, decisions, historical approval, closure attempts
+  and verification evidence in both copies. Updated the next action to reflect the remaining
+  verification and renewed-approval steps. The old feature implementation remains
+  `f90412a258c6a1177ea33a6531581d53020f21db` outside plan documents.
+- Pre-reconciliation plan blobs: primary `3ea407f6a82dc4e05f3047af5d7ee2d9d7aee2bf`;
+  worktree `782bd991e0ae25f4dac082bbaed7ec32c706641f`. The earlier worktree document remains
+  recoverable from Git. No pending gate result or renewed approval is inferred by making
+  these records agree.
+- Local main advanced to `2b81656558b8274ed00286d001ee8e86ae587b2f`, including the separate
+  package-state merge, while this review continued. The prepared `1de46fc9` snapshot has no
+  recorded execution yet and does not establish verification of those newer changes.
 
 
 ### Approval
