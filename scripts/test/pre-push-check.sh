@@ -45,7 +45,9 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     echo "pre-push: skipped git diff --check for ${remote_ref}: ${remote} has commits this checkout does not" >&2
     continue
   fi
-  if ! git diff --check "${base}" "${local_sha}" >&2; then
+  # --no-pager: stderr is the terminal, so git would page, and a LESS without -F holds the push
+  # at an empty pager until the user presses q.
+  if ! git --no-pager diff --check "${base}" "${local_sha}" >&2; then
     failed+=("git diff --check ${base:0:12}..${local_sha:0:12} (${remote_ref})")
   fi
 done
