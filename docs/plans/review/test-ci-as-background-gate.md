@@ -304,9 +304,15 @@ design gives the reasons.
 - Base commit: e96f65e7163546ba627132698b4e4f6e3281e140
 
 ### Approval
-- Decision: requested
+- Decision: approved
+- Reviewed implementation commit: 0063f93a3244e86c9abc6691cc1ddcf12e9589b3
+- Confirmed by: human
 
-Earlier approval, stale since bd894ced and b3e60ab1 changed the implementation: the user answered "Approve" on 2026-11-02 to the question "Do you approve this plan at commit
+The user answered "Approve" on 2026-11-02 to the question "Do you approve \"Keep Main Green and Let
+CI Run the Full Gate\" at commit 0063f93a?", after the re-review of the changes since 010c35f4,
+synchronized with main at e96f65e7.
+
+Earlier approval, stale since bd894ced and b3e60ab1 changed the implementation, stale since bd894ced and b3e60ab1 changed the implementation: the user answered "Approve" on 2026-11-02 to the question "Do you approve this plan at commit
 010c35f4?", after the review packet for that commit synchronized with main at 867ab2b8.
 
 ## Decision Log
