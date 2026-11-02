@@ -769,16 +769,16 @@ const DRIFT_RULES = [
           title: driftTitle(git, base, now),
         };
   },
-  // Work that exists only on this machine. Measured from the remote tip, since the question is how
-  // long the remote has been missing it, not when you last committed.
+  // Measure local work from its oldest unpushed commit. An inactive remote can have an old tip
+  // even when the clone and all local commits were created today.
   (git, now) => {
-    if (!git.ahead || !git.upstreamTipAt) return null;
-    const age = now - git.upstreamTipAt * 1000;
+    if (!git.ahead || !git.oldestUnpushedAt) return null;
+    const age = now - git.oldestUnpushedAt * 1000;
     if (age <= UNPUSHED_THRESHOLD_MS) return null;
     return {
       level: "warn",
       text: `${formatDuration(age)} unpushed`,
-      title: `${git.ahead} commit${git.ahead === 1 ? "" : "s"} not on ${git.upstream || "the remote"} — last shared commit was ${formatDuration(age)} ago`,
+      title: `${git.ahead} commit${git.ahead === 1 ? "" : "s"} not on ${git.upstream || "the remote"} — oldest unpushed commit is ${formatDuration(age)} old`,
     };
   },
 ];

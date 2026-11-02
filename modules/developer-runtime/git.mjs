@@ -76,9 +76,12 @@ async function readGitContext(projectRoot, options) {
     : null;
 
   // Every subprocess call here is independent, so pay for one round of latency rather than four.
-  const [dirty, upstreamTipAt, drift] = await Promise.all([
+  const [dirty, upstreamTipAt, oldestUnpushedAt, drift] = await Promise.all([
     readDirty(projectRoot, runGit, timeoutMs),
     upstream ? readCommitTime(projectRoot, upstream, runGit, timeoutMs) : Promise.resolve(null),
+    aheadBehind?.ahead > 0
+      ? readOldestUnpushedTime(projectRoot, upstream, runGit, timeoutMs)
+      : Promise.resolve(null),
     // Gated on upstream for the same reason ahead/behind is: a branch with no upstream is either in
     // a repo with no remote or one never pushed, and in both cases there is no shared baseline to
     // measure drift against. Comparing to a local main would answer a different question.
@@ -97,6 +100,8 @@ async function readGitContext(projectRoot, options) {
     // Unix seconds of the remote-tracking tip, i.e. the newest commit we know the remote had as of
     // the last fetch. Paired with fetchedAt so the UI can tell "in sync" from "haven't looked".
     upstreamTipAt,
+    // Unix seconds of the oldest commit absent from the upstream, independent of its tip's age.
+    oldestUnpushedAt,
     // How far this branch has drifted from the repository's base branch. Null on the base branch
     // itself and whenever the base could not be resolved — see resolveBaseBranch.
     baseBranch: drift?.baseBranch ?? null,
@@ -156,6 +161,15 @@ async function readBaseDrift(cwd, branch, runGit, timeoutMs) {
     behind: behind?.ok ? toCount(behind.stdout) : null,
     mergeBaseAt,
   };
+}
+
+async function readOldestUnpushedTime(cwd, upstream, runGit, timeoutMs) {
+  const result = await runGit(cwd, ["log", "--format=%ct", `${upstream}..HEAD`], { timeoutMs });
+  if (!result?.ok || !result.stdout.trim()) return null;
+  const times = result.stdout.trim().split(/\s+/).map(toCount);
+  if (times.some((time) => time === null)) return null;
+  // Committer clocks can move backwards, so traversal order does not determine the oldest date.
+  return times.reduce((oldest, time) => Math.min(oldest, time), Infinity);
 }
 
 // Committer date in Unix seconds for any rev. `%ct` rather than `%at` so the number tracks when the
@@ -242,6 +256,7 @@ function unavailable(reason) {
     behind: null,
     upstream: null,
     upstreamTipAt: null,
+    oldestUnpushedAt: null,
     baseBranch: null,
     baseBehind: null,
     baseMergeBaseAt: null,

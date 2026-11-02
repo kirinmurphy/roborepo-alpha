@@ -35,7 +35,7 @@ test.describe("Agents page", () => {
     await expect(modal.locator(".package-contents-label")).toHaveText(["/plan-suite-init", "/plan-write", "/plan-promote", "/plan-execute", "/plan-review", "/plan-close", "/plan-archive", "Rules"]);
     // Every row shows its own cost: a skill's when-loaded size, the rules fragment's startup size.
     const chips = modal.locator(".package-contents-entry token-chip");
-    await expect(chips).toHaveCount(7);
+    await expect(chips).toHaveCount(8);
     for (const chip of await chips.all()) {
       await expect(chip).toBeVisible();
       expect(await chip.evaluate((el) => el.tokens)).toBeGreaterThan(0);
@@ -50,7 +50,7 @@ test.describe("Agents page", () => {
 
     await modal.locator("#modal-back").click();
     await expect(modal.locator("#modal-title")).toHaveText("Development Planning Lifecycle");
-    await expect(modal.locator(".package-contents-entry")).toHaveCount(7);
+    await expect(modal.locator(".package-contents-entry")).toHaveCount(8);
     await expect(modal.locator("#modal-back")).toBeHidden();
 
     await modal.locator(".package-contents-entry", { hasText: "Rules" }).click();
@@ -1042,6 +1042,40 @@ test.describe("hook readiness warning", () => {
 });
 
 test.describe("repository-first portal Home", () => {
+  for (const { label, ageHours, ahead = 3, warning = null } of [
+    { label: "today's local commits", ageHours: 1 },
+    { label: "the one-day boundary", ageHours: 24 },
+    { label: "older local commits", ageHours: 72, warning: "3d unpushed" },
+    { label: "missing local commit dates", ageHours: null },
+    { label: "a synchronized clone", ageHours: 72, ahead: 0 },
+  ]) {
+    test(`unpushed warning uses local commit age: ${label}`, async ({ page }) => {
+      const now = Date.parse("2026-10-31T16:00:00Z");
+      await page.clock.setFixedTime(new Date(now));
+      await patchRoboRepo(page, (repository) => {
+        repository.domains.plans = { status: "available", data: { active: [], recent: [], counts: {} } };
+        repository.domains.runtime = { status: "available", data: { checkouts: [{
+          rootId: "main", name: "main", isWorktree: false,
+          git: { branch: "main", ahead, behind: 0, upstream: "origin/main",
+            upstreamTipAt: now / 1000 - 39 * 7 * 24 * 60 * 60,
+            oldestUnpushedAt: ageHours === null ? null : now / 1000 - ageHours * 60 * 60,
+            provider: { ok: true } },
+        }] } };
+      });
+      await page.goto("/");
+      const card = roboRepoCard(page);
+      await expect(card).toBeVisible();
+      if (warning) {
+        await expect(card.getByText(`⚠ ${warning}`, { exact: true })).toBeVisible();
+        await expect(card.getByText(`⚠ ${warning}`, { exact: true })).toHaveAttribute(
+          "title", "3 commits not on origin/main — oldest unpushed commit is 3d old",
+        );
+      } else {
+        await expect(card.getByText(/\d+[hdw] unpushed/)).toHaveCount(0);
+      }
+    });
+  }
+
   test("worktree rows show their state; Stop Server and Delete Worktree live in row menus", async ({ page }) => {
     // Short enough that the card scrolls, so the open dropdown has a page to follow.
     await page.setViewportSize({ width: 1280, height: 420 });
@@ -1364,20 +1398,78 @@ test.describe("repository-first portal Home", () => {
     await expect(loose.getByRole("link", { name: ":5174" })).toBeVisible();
     await expect(loose.getByRole("button", { name: "Links" })).toBeVisible();
 
-    // No repository-wide plan counts row: backlog counts were noise on Home.
-    await expect(card).not.toContainText("backlog");
+    // No repository-wide plan counts row: the counts live in the Plans shortcut's hover panel.
+    await expect(card.locator(".repository-roots")).not.toContainText("backlog");
+    // Plans, Agents, and Tokens are icon links beside the ⋮ menu, in that order, each scoped to the repo.
+    const shortcuts = card.locator(".repository-shortcut-link");
+    await expect(shortcuts).toHaveCount(3);
+    for (const [index, path] of ["plans", "agents", "tokens"].entries()) {
+      await expect(shortcuts.nth(index)).toHaveAttribute("href", new RegExp(`^/${path}\\?repo=[a-z0-9-]+$`));
+    }
+    await expect(card.locator("[data-menu]").getByText(/All Plans|Agent Config|Token Activity/)).toHaveCount(0);
+
+    // Hovering Plans lists each stage holding plans, in workflow order, each linking to that tab.
+    await shortcuts.nth(0).hover();
+    const stages = card.locator(".shortcut-panel-stage");
+    await expect(stages).toHaveText(["4 active", "5 backlog"]);
+    await expect(stages.nth(1)).toHaveAttribute("href", /^\/plans\?lifecycle=backlog&repo=[a-z0-9-]+$/);
+    await expect(card.locator(".shortcut-panel-title")).toHaveText("Plans");
+
+    // Tokens carries a warning mark; its hover panel holds what the card's warning row used to.
+    const tokens = card.locator(".repository-shortcut.is-warning");
+    await expect(tokens.locator(".repository-shortcut-link portal-icon[name=warning]")).toHaveCount(1);
+    await tokens.locator(".repository-shortcut-link").hover();
+    // The panel's heading leads with the same warning mark.
+    await expect(tokens.locator(".domain-heading > portal-icon[name=warning]")).toBeVisible();
     const warningsHeading = card.getByRole("heading", { name: "Recent Token Warnings" });
     await expect(warningsHeading).toBeVisible();
-    await expect(warningsHeading).toHaveAttribute("title", /8 warnings from \d{2}\/\d{2} to \d{2}\/\d{2}/);
+    // The two gpt-5-codex loops fall under the threshold of three per kind and model, so they drop.
+    await expect(warningsHeading).toHaveAttribute("title", /6 warnings from \d{2}\/\d{2} to \d{2}\/\d{2}/);
     await expect(card.locator(".domain-range")).toHaveText(/^\d{2}\/\d{2} - \d{2}\/\d{2}$/);
     await expect(card.getByRole("list", { name: "Token warnings" }).getByRole("listitem")).toHaveText([
-      "3 token spikes and 2 repeated tool loops in gpt-5-codex",
+      "3 token spikes in gpt-5-codex",
       "3 repeated tool loops in claude-opus-4-8",
     ]);
     // The warnings are this repository's, so the link opens Tokens scoped to it.
     await expect(card.getByRole("link", { name: "all activity", exact: true })).toHaveAttribute("href", /^\/tokens\?repo=[a-z0-9-]+$/);
-    await expect(card.locator(".home-domain-row.is-warning")).toHaveCount(1);
     await expect(card.locator(".status-dot")).toHaveCount(0);
+  });
+
+  test("token warnings stay quiet until one kind has happened three times on one model", async ({ page }) => {
+    await planFixture(page, (repository) => {
+      repository.domains.tokens.data = { warningCount: 6, warnings: [
+        ...Array.from({ length: 2 }, () => ({ kind: "spike", model: "gpt-5-codex", at: "2026-09-24T12:00:00.000Z" })),
+        ...Array.from({ length: 2 }, () => ({ kind: "spike", model: "claude-opus-4-8", at: "2026-09-26T12:00:00.000Z" })),
+        ...Array.from({ length: 2 }, () => ({ kind: "loop", model: "gpt-5-codex", at: "2026-09-28T12:00:00.000Z" })),
+      ] };
+      repository.domains.plans.data.counts = {};
+    });
+    await page.goto("/");
+    const card = roboRepoCard(page);
+    // No plan in any stage leaves Plans out, so Agents and Tokens are the only shortcuts.
+    await expect(card.locator(".repository-shortcut-link")).toHaveCount(2);
+    await expect(card.getByRole("link", { name: "All Plans", exact: true })).toHaveCount(0);
+    const tokens = card.locator(".repository-shortcut").nth(1);
+    await expect(tokens).not.toHaveClass(/is-warning/);
+    await expect(tokens.locator("portal-icon[name=warning]")).toHaveCount(0);
+    // Without warnings the icon is a plain link with no hover panel.
+    await tokens.hover();
+    await expect(card.locator("[data-hover-panel]")).toHaveCount(0);
+    await expect(tokens.locator("a")).toHaveAttribute("title", "Token Activity");
+  });
+
+  test("the Plans panel says \"in review\", and a repo with open work but nothing running is not badged idle", async ({ page }) => {
+    await planFixture(page, (repository) => {
+      repository.domains.plans.data.counts = { review: 2 };
+      repository.lifecycle = { state: "idle", reason: null };
+      repository.inProgress = true;
+    });
+    await page.goto("/");
+    const card = roboRepoCard(page);
+    await card.getByRole("link", { name: "All Plans", exact: true }).hover();
+    await expect(card.locator(".shortcut-panel-stage")).toHaveText(["2 in review"]);
+    await expect(card.locator("[data-slot=lifecycle-state]")).toBeHidden();
+    await expect(card).not.toHaveClass(/is-not-running/);
   });
 
   test("a long plan title is middle-truncated to 70 characters with the full title on hover", async ({ page }) => {
@@ -2055,9 +2147,9 @@ test.describe("repository-first portal Home", () => {
     expect(manage.visible).toBe(true);
     await page.keyboard.press("Tab");
     // Repository names are plain text while the detail page is parked, so the first card control is
-    // the provider link (when the repository has one) or the actions menu.
+    // the provider link (when the repository has one) or the first page shortcut.
     const firstCardControl = await focusSummary(page);
-    expect(["GitHub", "Actions"]).toContain(firstCardControl.ariaLabel);
+    expect(["GitHub", "All Plans"]).toContain(firstCardControl.ariaLabel);
     expect(firstCardControl.visible).toBe(true);
     // Home's harness-banner request for /api/settings is never awaited here, so on a slow runner it
     // can still be in flight through the patched route when the test ends.
@@ -2065,15 +2157,17 @@ test.describe("repository-first portal Home", () => {
   });
 
   test("repo row exposes the configured Home actions", async ({ page }) => {
+    await planFixture(page);
     await page.goto("/");
-    await roboRepoCard(page).getByRole("button", { name: "Actions" }).click();
-    const menu = roboRepoCard(page).locator(".menu-panel");
-    await expect(menu.locator("> *")).toHaveText(["All Plans", "Agent Config", "Token Activity", "Pin", "Forget This Repo"]);
-    // The page links open each page already filtered to this repo.
+    const card = roboRepoCard(page);
+    // The page links sit beside the menu as icons, each opening its page filtered to this repo.
     for (const [name, path] of [["All Plans", "/plans"], ["Agent Config", "/agents"], ["Token Activity", "/tokens"]]) {
-      await expect(menu.getByRole("link", { name })).toHaveAttribute("href", new RegExp(`^${path}\\?repo=[a-z0-9-]+$`));
+      await expect(card.locator(".repository-shortcuts").getByRole("link", { name })).toHaveAttribute("href", new RegExp(`^${path}\\?repo=[a-z0-9-]+$`));
     }
-    await expect(menu.locator("portal-icon")).toHaveCount(5);
+    await card.getByRole("button", { name: "Actions", exact: true }).click();
+    const menu = card.locator(".card-head .menu-panel");
+    await expect(menu.locator("> *")).toHaveText(["Pin", "Ignore Repo"]);
+    await expect(menu.locator("portal-icon")).toHaveCount(2);
     await expect(page.locator("#home-content").getByRole("link", { name: "Agents", exact: true })).toHaveCount(0);
   });
 });

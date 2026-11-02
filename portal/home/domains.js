@@ -1,39 +1,29 @@
 import { portalFillSlots as fill, portalTpl as tpl } from "/portal/shared/api.js";
-import { hrefWithRepositoryScope } from "/portal/shared/repository-scope.js";
 
-// Repository facts below the checkout and plan rows. Plans live in those rows now (plan-rows.js), so
-// only Token Warnings remains here. Its link opens Tokens scoped to this repository, since the
-// warnings it summarizes are this repository's.
-export function appendRepositoryDomains(host, repository) {
-  const tokens = repository.domains.tokens.data;
-  if (tokens?.warningCount > 0) {
-    const warnings = tokens.warnings || tokens.recent || [];
-    host.append(domainRow("Recent Token Warnings", warningSummary(tokens.warningCount, warnings), {
-      range: warningRange(warnings),
-      glyph: "warning",
-      warning: true,
-      href: hrefWithRepositoryScope("/tokens", repository.urlKey),
-      linkLabel: "all activity",
-      details: [tokenWarnings(warnings)],
-    }));
-  }
-  host.hidden = !host.childElementCount;
+// A single warning is noise, not a pattern, so a kind of warning is raised for a model only once it
+// has happened this many times there. Each line the panel shows ("3 token spikes in gpt-5-codex")
+// therefore counts at least this many.
+const NOTABLE_WARNING_COUNT = 3;
+
+// The warnings worth raising on Home: those whose kind has reached the threshold on their model.
+export function notableTokenWarnings(tokens) {
+  if (!(tokens?.warningCount > 0)) return [];
+  const warnings = tokens.warnings || tokens.recent || [];
+  const key = (warning) => `${warning.kind}\u0000${warning.model || ""}`;
+  const counts = new Map();
+  for (const warning of warnings) counts.set(key(warning), (counts.get(key(warning)) || 0) + 1);
+  return warnings.filter((warning) => counts.get(key(warning)) >= NOTABLE_WARNING_COUNT);
 }
 
-function domainRow(label, summary, { range = "", glyph, href, linkLabel, warning = false, details }) {
-  // The heading reads "<label> <range> <link>"; the count rides along as the label's tooltip.
-  const node = fill(tpl("tpl-domain-row"), { label, range });
-  node.querySelector("[data-slot=label]").title = summary;
-  node.querySelector("[data-slot=range]").hidden = !range;
-  const icon = node.querySelector("[data-slot=glyph]");
-  icon.setAttribute("name", glyph);
-  node.classList.toggle("is-warning", warning);
-  const link = node.querySelector("[data-slot=link]");
-  link.href = href;
-  link.textContent = linkLabel;
-  const slot = node.querySelector("[data-slot=details]");
-  slot.hidden = !details.length;
-  slot.append(...details);
+// The Tokens shortcut's hover panel: "Recent Token Warnings <range> <all activity>", the count as the
+// heading's tooltip, and one line per model. The link opens Tokens scoped to this repo, since the
+// warnings it summarizes are this repo's.
+export function tokenWarningsPanel(warnings, href) {
+  const node = fill(tpl("tpl-token-warnings-panel"), { label: "Recent Token Warnings", range: warningRange(warnings) });
+  node.querySelector("[data-slot=label]").title = warningSummary(warnings.length, warnings);
+  node.querySelector("[data-slot=range]").hidden = !node.querySelector("[data-slot=range]").textContent;
+  node.querySelector("[data-slot=link]").href = href;
+  node.querySelector("[data-slot=details]").append(tokenWarnings(warnings));
   return node;
 }
 

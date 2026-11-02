@@ -24,34 +24,6 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
   font-size: var(--text-2xs);
 }
 .home-mock-disclaimer[hidden] { display: none; }
-/* Home owns only the sections below the shared repository/checkouts component. They remain a
- * vertical list so Plans and Tokens read as additional repository facts, not peer columns. */
-.home-domain-rows {
-  display: grid;
-  gap: 0;
-  padding: 0 16px;
-  background: var(--raised);
-  border-top: 1px solid var(--line);
-  border-radius: 0 0 6px 6px;
-}
-.home-domain-rows[hidden] { display: none; }
-/* Same glyph column as the checkout rows above (.repository-root-head), so every repository fact
- * reads down one icon rail and all text, details included, starts at the second column. */
-.home-domain-row {
-  display: grid;
-  grid-template-columns: var(--checkout-glyph-width) minmax(0, 1fr);
-  column-gap: var(--checkout-glyph-gap);
-  align-items: start;
-  padding: 12px 0;
-}
-.home-domain-row + .home-domain-row { border-top: 1px solid var(--line); }
-/* Token warnings sit on the same --warn-bg tint as the shared harness-warning <portal-notice>,
- * bled to the card edges so the band reads as one elevated row, not an inset box. */
-.home-domain-row.is-warning { margin: 0 -16px; padding: 12px 16px; background: var(--warn-bg); }
-.home-domain-row.is-warning:last-child { border-radius: 0 0 6px 6px; }
-.domain-glyph { display: inline-flex; align-items: center; height: calc(var(--text-sm) * var(--line-height-normal)); color: var(--dim); }
-.home-domain-row.is-warning .domain-glyph { color: var(--warn); }
-.domain-body { display: grid; gap: 8px; min-width: 0; }
 .domain-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 14px; }
 .domain-heading h4 { margin: 0; color: var(--ink); font-size: var(--text-sm); font-weight: 600; }
 .domain-range { color: var(--dim); font-size: var(--text-xs); }
@@ -61,8 +33,6 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 .domain-link { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
 .domain-link:hover { color: var(--accent); }
 .domain-details { display: grid; gap: 2px; }
-.domain-details[hidden] { display: none; }
-.domain-note { margin: 0; color: var(--dim); font-size: var(--text-xs); }
 .plan-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: var(--text-xs); }
 /* A plan row's title takes the place of the branch label, so it reads at the row's size, not as a
  * footnote. Matched rows mount it in the shared checkout row; unmatched rows reuse that row's head. */
@@ -81,7 +51,9 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 .home-main .repository-root-head { align-items: start; }
 .home-main .repository-root-glyph { height: var(--checkout-control-height); align-items: center; }
 .home-main .repository-root-identity-line { min-height: var(--checkout-control-height); }
-.home-main .repository-card { --checkout-links-width: 16px; }
+/* Row glyphs (home, worktree, plan) match the header's shortcut icons (size="lg"), so the column
+ * they sit in widens to the same 26px. */
+.home-main .repository-card { --checkout-links-width: 16px; --checkout-glyph-width: 26px; }
 /* Raise open menus above neighboring cards while keeping them below the site header. */
 .home-main .repository-card.has-open-menu { z-index: 9; }
 /* Fixed worktree and Links panels also need to stay below the sticky site header. */
@@ -167,7 +139,7 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 }
 /* The panel's actions use the shared dropdown item (base.css), set off from the facts above them. */
 .worktree-details-actions { display: grid; border-top: 1px solid var(--popover-border); }
-/* Card footer, beside the token warnings it shares the raised band with. */
+/* Card footer: the last raised band of the card. */
 .worktree-cleanup-notice {
   display: flex;
   flex-wrap: wrap;
@@ -180,8 +152,6 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
   font-size: var(--text-sm);
   border-radius: 0 0 6px 6px;
 }
-/* The notice becomes the card's last band, so the domain rows above it lose their rounded foot. */
-.repository-card:has(.worktree-cleanup-notice) .home-domain-rows { border-radius: 0; }
 .worktree-cleanup-notice-text { flex: 1 1 auto; min-width: 0; }
 .worktree-remove-facts {
   display: grid;
@@ -213,3 +183,66 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 .worktree-remove-details > :not(summary) { margin-top: 8px; }
 .worktree-remove-restore { margin: 0; padding: 8px; overflow-x: auto; background: var(--raised); border: 1px solid var(--line); border-radius: 5px; font-size: var(--text-2xs); }
 .worktree-cleanup-foreign pre { margin: 6px 0 0; padding: 8px; overflow-x: auto; background: var(--raised); border: 1px solid var(--line); font-size: var(--text-2xs); }
+
+/* Plans, Agents, and Tokens icon links, left of the repo's ⋮ menu. */
+.repository-head-actions { display: inline-flex; align-items: center; gap: 10px; flex: none; }
+/* The ⋮ dots sit centered in a 22px trigger, so its blank sides would read as a wider gap than the
+ * one between icons; pulling it in keeps every glyph the same distance apart. */
+.repository-head-actions > [data-slot=repository-menu] { margin-left: -5px; }
+.repository-shortcuts { display: inline-flex; align-items: center; gap: 10px; }
+.repository-shortcuts:empty { display: none; }
+.repository-shortcut { position: relative; display: inline-flex; }
+.repository-shortcut-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--dim);
+  text-decoration: none;
+}
+.repository-shortcut-link:hover,
+.repository-shortcut-link:focus-visible,
+.repository-shortcut:has(> .repository-shortcut-panel:not([hidden])) .repository-shortcut-link {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  outline: none;
+}
+/* Warnings wrap the Tokens icon and its warning mark in the warning notice's tint and border. */
+.repository-shortcut.is-warning .repository-shortcut-link { padding: 3px 5px; background: var(--warn-bg); border-color: var(--warn-line); }
+/* Only the ⚠ takes the warning color; the coin stays the same as its neighbors. */
+.repository-shortcut.is-warning .repository-shortcut-link > portal-icon[name=warning] { color: var(--warn); }
+.repository-shortcut.is-warning .repository-shortcut-link:hover,
+.repository-shortcut.is-warning .repository-shortcut-link:focus-visible,
+.repository-shortcut.is-warning:has(> .repository-shortcut-panel:not([hidden])) .repository-shortcut-link {
+  background: color-mix(in srgb, var(--warn) 18%, var(--warn-bg));
+}
+/* Right-aligned under its icon, like the ⋮ menu's panel. The ::before strip bridges the gap so the
+ * pointer can travel from the icon into the panel without leaving the hover area. */
+.repository-shortcut-panel {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 200px;
+  max-width: min(560px, 90vw);
+  background: var(--popover-bg);
+  border: 1px solid var(--popover-border);
+  border-radius: var(--popover-radius);
+  box-shadow: var(--popover-shadow);
+}
+.repository-shortcut-panel::before { content: ""; position: absolute; inset: -8px 0 100% 0; }
+.repository-shortcut-panel[hidden] { display: none; }
+/* A label, not an option: body text on a tinted band so it does not read as one more row to pick. */
+.shortcut-panel-title { padding: 8px 12px; color: var(--ink); background: color-mix(in srgb, var(--ink) 6%, var(--popover-bg)); border-radius: var(--popover-radius) var(--popover-radius) 0 0; }
+.shortcut-panel-stages { display: grid; border-top: 1px solid var(--popover-border); }
+.shortcut-panel-stage { display: flex; gap: 6px; padding: 8px 12px; color: var(--ink); text-decoration: none; font-size: var(--text-sm); }
+.shortcut-panel-stage + .shortcut-panel-stage { border-top: 1px solid var(--popover-border); }
+.shortcut-panel-stage:hover,
+.shortcut-panel-stage:focus-visible { background: var(--popover-item-hover); outline: none; }
+.shortcut-panel-count { min-width: 2ch; font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; }
+.token-warnings-panel { display: grid; gap: 8px; width: max-content; min-width: min(400px, 85vw); max-width: 100%; padding: 12px 14px; }
+/* The heading's ⚠ sits on the text's center line rather than its baseline, beside the label it marks. */
+.token-warnings-panel .domain-heading { align-items: center; column-gap: 8px; }
+.token-warnings-glyph { color: var(--warn); margin-right: -2px; }

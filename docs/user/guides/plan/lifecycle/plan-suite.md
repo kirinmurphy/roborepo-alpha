@@ -97,7 +97,7 @@ Its message names the plan by its filename, for example
 `Submit plan plan-lifecycle-review-and-ship-workflow for review`, so `git log` reads without
 looking up ids. The suite commands' reports and questions name a plan by its title, with its id in
 parentheses once. A refused move changes nothing, running a move again after it succeeded commits nothing, and
-nothing is ever pushed.
+the base branch is never pushed.
 
 While a plan is `active` or in `review`, its worktree's copy is the plan: every progress note,
 finding, and approval is written there and reaches the base branch when you merge.
@@ -163,8 +163,9 @@ passes are recorded in the plan's `## Review` section. Then it runs the completi
 - the plan passes the Review requirements, apart from unconfirmed `## Not tested` entries.
 
 If the loop ended clean and the preflight passes, `/plan-execute` runs `roborepo plans submit`,
-which moves the plan to `review/`. That says the work is complete and checked, not that you
-accepted it. Otherwise the plan stays in `active/` with a `next_action` for the next run; an open
+which moves the plan to `review/`, then pushes the plan's feature branch so CI starts before you
+review. That says the work is complete and checked, not that you accepted it. If the push is
+refused, the plan still moves and the report gives you the command to push it yourself. Otherwise the plan stays in `active/` with a `next_action` for the next run; an open
 `escalate` finding is an unchecked task, so it holds the plan in `active/` until you answer it.
 
 The first run in a repository asks you to confirm where worktrees go. Later runs reuse that answer.
