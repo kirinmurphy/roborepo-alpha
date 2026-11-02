@@ -1,7 +1,7 @@
 ---
 id: 4zyo2woj
 priority: high
-next_action: Request renewed exact-commit approval after the subsequent clean main merge, then complete guarded closure. The previous explicit approval is preserved but now content-stale under the current rule.
+next_action: Complete guarded plan closure. Human approval is fresh for 15e912c02f1c23205408aaa788c0f778f608c79c; verify landing, record completion, then run plan-scoped cleanup.
 blocked_by: []
 depends_on: ["hr78g4sj"]
 related: ["8bjltk2n", "wjlt1zvf", "ia1q1z9", "permva27", "permissions-ui-revamp", "codex-cmux-hook-trust-review", "46qth5z8", "harness-capability-derived-resource-targeting", "7k3m9qd", "o9zwxuav"]
@@ -918,17 +918,17 @@ approval, or unrelated pending edit was changed by this diagnosis.
 
 ### Approval
 - Decision: approved
-- Reviewed implementation commit: 309055c861cc2894ea086aa0bbebd93c36836702
+- Reviewed implementation commit: 15e912c02f1c23205408aaa788c0f778f608c79c
 - Confirmed by: human
-- Evidence: November 2, 2026, the user replied "approved" in this plan-review chat to the
-  explicit approval question naming "Keep local agent work within useful boundaries: Codex —
-  Part 2: Credential protection" (`4zyo2woj`) and commit
-  `309055c861cc2894ea086aa0bbebd93c36836702`, retaining the previously accepted native/tool
-  coverage limits and authorizing the renewed approval record followed by guarded closure.
-- Historical approval: on October 27, the user selected "Approve this implementation" for
-  `81ae9e362000c1a48574b1aeceda4c2302b19570`, including its accepted coverage limits and
-  recorded base-branch skill-size failure. Later implementation changes made that approval
-  stale; the explicit November 2 approval above supersedes it.
+- Evidence: November 2, 2026, the user replied "approved" to the renewed exact-commit question
+  naming "Keep local agent work within useful boundaries: Codex — Part 2: Credential protection"
+  (`4zyo2woj`) at `15e912c02f1c23205408aaa788c0f778f608c79c`, retaining the accepted native/tool
+  coverage limits and authorizing fresh approval followed by guarded closure.
+- Historical approvals: the October 27 approval of
+  `81ae9e362000c1a48574b1aeceda4c2302b19570` and the earlier November 2 approval of
+  `309055c861cc2894ea086aa0bbebd93c36836702` remain recorded in the review history. The later
+  main merge made the latter content-stale. The explicit approval above covers the re-reviewed
+  merged implementation and supersedes both earlier approval records.
 
 ## Verification
 
