@@ -334,10 +334,14 @@ design gives the reasons.
 - [ ] A real `git push` runs the hook: from the user's terminal and from an agent shell, push a
       throwaway branch with a broken doc link to a local bare clone and see it refused. This
       session's permissions deny `git push`; the hooks were driven directly with git's argv and stdin.
-- [ ] `npm run test:portal-ui` passes on both CI legs, with any retried test listed as flaky. Needs
-      the branch pushed so CI runs it.
-- [ ] The hook is installed in the primary checkout (`git config core.hooksPath scripts/git-hooks`).
-      It changes the repository's persistent git config, so the user runs it after merge.
+- [x] `npm run test:portal-ui` passes on both CI legs, with any retried test listed as flaky. Needs
+      the branch pushed so CI runs it. Confirmed by the user on 2026-11-02 ("the remote CI passes");
+      the CI run for 7cb08c65 passed `check (ubuntu-latest)` and `check (macos-latest)`, each with
+      158 portal UI specs passed and none listed as flaky.
+- [x] The hook is installed in the primary checkout (`git config core.hooksPath scripts/git-hooks`).
+      It changes the repository's persistent git config, so the user runs it after merge. Already
+      set: `git config --show-scope --get-all core.hooksPath` reads `local scripts/git-hooks` from
+      the primary checkout's `.git/config` on 2026-11-02.
 
 ## Documentation impact
 
