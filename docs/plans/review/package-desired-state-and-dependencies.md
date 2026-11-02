@@ -1,7 +1,7 @@
 ---
 id: o9zwxuav
 priority: high
-next_action: The human approves the reviewed commit in /plan-review, then merges the pull request and runs /plan-close.
+next_action: Open and merge the pull request, then run /plan-close.
 blocked_by: []
 depends_on: ["bysyzl1e"]
 related: ["package-registry-live-state-reconciliation", "ejsc769o", "age4cm7r", "user-managed-packages-and-add-workflows"]
@@ -938,13 +938,13 @@ to choose them again. Verification and approval of the changed implementation re
 ### Approval
 
 - Decision: approved
-- Reviewed implementation commit: c22ca1829ac7bcc9e8a26ec3ff2082886a521742
+- Reviewed implementation commit: db9926333e4b2c7c2d5f01dd39e8ac05db299433
 - Confirmed by: human
 - Evidence: the user answered "Approve" to "Do you approve "Package Management: Part 02 - Track
   What You Turned On, What It Pulls In, and What Is Installed" at reviewed commit
-  c22ca1829ac7bcc9e8a26ec3ff2082886a521742 (base 9849eba1)?" in the /plan-review chat
-  (2026-10-31). Earlier history: the user approved 0fd97311 on 2026-10-29; later merges and review
-  fixes made that approval stale.
+  db9926333e4b2c7c2d5f01dd39e8ac05db299433 (your main merge, base 2b582e47)?" in the
+  /plan-review chat (2026-11-01). Earlier history: approvals of 0fd97311 (2026-10-29) and
+  c22ca182 (2026-10-31) went stale when main was merged afterward.
 
 ## Coordination and completed baseline
 
