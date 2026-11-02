@@ -329,3 +329,20 @@ partial pending sets, instead of choosing a generic core or package explanation.
 `scripts/test/core-hook-wiring-check.mjs` requires unique native names and matching descriptions
 for shipped core, active-package, and archived-package Codex hook fragments, and rejects orphaned
 descriptions. This check runs in the CI gate.
+
+## Agent git hooks and the repository pre-push hook
+
+Agent shells set `core.hooksPath` to RoboRepo's agent hooks (`~/.claude/git-hooks` or
+`~/.codex/git-hooks`, from `globals/system/git-hooks/`) in git's `command` config scope. An agent
+hook runs its own check, if it has one (only `pre-push` does), then calls `roborepo_chain_hook`
+(`globals/system/git-hooks/chain.sh`). The
+chain resolves the repository's own hooks directory from `core.hooksPath` in every scope except
+`command`, falling back to `<git-common-dir>/hooks`, and `exec`s that directory's hook of the same
+name, so the repository hook's exit status decides the operation.
+
+The agent `pre-push` refuses pushes to protected branches and force pushes, then pipes git's ref
+lines on stdin to the chain. In this repository the chained target is `scripts/git-hooks/pre-push`,
+once installed with `git config core.hooksPath scripts/git-hooks` (local scope, shared by every
+linked worktree). It runs `scripts/test/pre-push-check.sh`: doctor, the docs reference check, and
+`git diff --check` over each pushed ref's new commits. A push from the user's own terminal runs the
+same hook directly, without the agent checks. `docs/internal/testing.md` describes the check.

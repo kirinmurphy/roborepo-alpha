@@ -1,7 +1,7 @@
 ---
 id: 4zyo2woj
 priority: high
-next_action: Finish verification against the landed source, request renewed exact-commit human approval, then run /plan-close. Plan records are reconciled; prior implementation approval remains historical.
+next_action: Complete guarded plan closure. Human approval is fresh for 15e912c02f1c23205408aaa788c0f778f608c79c; verify landing, record completion, then run plan-scoped cleanup.
 blocked_by: []
 depends_on: ["hr78g4sj"]
 related: ["8bjltk2n", "wjlt1zvf", "ia1q1z9", "permva27", "permissions-ui-revamp", "codex-cmux-hook-trust-review", "46qth5z8", "harness-capability-derived-resource-targeting", "7k3m9qd", "o9zwxuav"]
@@ -585,9 +585,9 @@ Git administrative worktree `credential-protection`; this document contains no m
   approval is requested separately for the exact reviewed commit below.
 
 ### Result
-- Status: pending
-- Reviewed implementation commit: f90412a258c6a1177ea33a6531581d53020f21db
-- Base commit: ac7c6bb207f3431b0e4c3a308c973adc9717424f
+- Status: complete
+- Reviewed implementation commit: 6fe310e82f3d78f0cf1126a848d71a7c36ae8d43
+- Base commit: 9aa3b35737926ab12f0235fc17b5327a0ac43dac
 
 #### Re-review — October 30, 2026
 
@@ -848,13 +848,87 @@ approval, or unrelated pending edit was changed by this diagnosis.
   recorded execution yet and does not establish verification of those newer changes.
 
 
+#### Final review evidence — November 2, 2026
+
+- The user-authorized reconciliation is committed in `2fef5938` on the feature branch and
+  `ca61a6a3` on main. Their plan blobs match. An executed Git comparison confirms that all
+  feature changes after `f90412a2` are confined to this plan document; implementation is unchanged.
+- Reused canonical full-gate evidence: `npm run check` passed at
+  `db9926333e4b2c7c2d5f01dd39e8ac05db299433` (67/67 suites, CLI 422 passed/0 failed, portal
+  UI 163 passed), as recorded in its merged, approved review. Executed `git diff --exit-code`
+  comparisons confirm every tracked file outside `docs/plans/` and the single repaired backlog
+  audit link is byte-identical between that tested source and assessed main `9ea38f1dd274d9443decca3aadcca85d64e9f6df`.
+  This is explicitly reused evidence, not a newly executed full gate in this chat. The older `e4365770` aggregate
+  remains failed; it is not relabeled. The prepared `1de46fc9` rerun is superseded by this
+  matching-source proof and need not be executed.
+- Closing the separate package plan in `0d9d763e` exposed one additional moved-document
+  reference. Repaired only its review-to-completed link in `9ea38f1dd274d9443decca3aadcca85d64e9f6df`.
+  Documentation references and whitespace passed after the repair. These prose-only changes
+  require the checks that read them, not another implementation suite.
+- Current plan differences passed documentation references, whitespace and canonical plan
+  validation (zero findings). The seven credential checks passed in the isolated `e4365770`
+  assessment; credential projection and enforcement sources remain unchanged. The independent
+  Validator's zero fix/zero escalation result is reused for unchanged credential implementation;
+  its one base documentation-link failure is now repaired and the reference check passes.
+- User-launched canonical metadata checks at pre-record main `0d9d763e` and the assessed feature tip
+  confirm main and feature working
+  files are clean, with exit 0 and no Git-status diagnostics. The landed command reports true
+  for feature `2fef59384ec12cd008cb8ac2e6aa915895ce0dc0`, absorbed by
+  `ca61a6a36955940ec863310015ae414492f8a7c2`; the branch carried its own work. Native-policy
+  restrictions in this chat were preserved; no protected file contents were read or printed.
+- No unresolved implementation finding, policy decision or required human-only test remains.
+  Fresh native execution is still unavailable here and in the Linux container; the previously
+  accepted desktop/product, browser/MCP/escalated and native Linux/Windows limits remain
+  unverified. Historical macOS evidence is not extended to a newer runtime.
+- Review is complete for the implementation named above. The old human approval remains
+  historical and stale; request a new explicit approval of this implementation before closure.
+  Authorizing document reconciliation did not grant implementation approval.
+
+
+#### Re-review after the subsequent base merge — November 2, 2026
+
+- The user's explicit "approved" answer for `309055c8` was committed immediately in feature
+  `39b6b5c2` and matching primary record `9aa3b357`. That human answer remains recorded in
+  Approval below. Afterwards Git records merge `6fe310e8` (parents `39b6b5c2`, `9aa3b357`)
+  and an origin update by push. This review issued neither that merge nor that push; their
+  initiating session is not established. No reset, revert or branch move was performed here.
+- The merge brings 406 non-plan paths onto the old feature history, so the canonical reader
+  correctly reports the earlier approval and Result stale under the current exact-commit rule.
+  No new approval is inferred from the identical credential code or the clean merge.
+- Executed assertions confirm the entire tracked tree of feature
+  `6fe310e82f3d78f0cf1126a848d71a7c36ae8d43` is byte-identical to main
+  `9aa3b35737926ab12f0235fc17b5327a0ac43dac`. All non-plan files still match passing gate
+  source `db992633` except the already checked backlog-audit link repair. The full-gate evidence
+  remains reused; the historical `e4365770` aggregate remains failed.
+- Fresh-context read-only Validator: clean for credential protection, zero fix findings and
+  zero escalations. It independently confirmed tree equality, the reused passing-gate source,
+  all acceptance areas, the five documentation owners, and unchanged native coverage limits.
+  No incoming credential behavior or uncovered credential-test requirement was identified.
+- Fresh projection (15 patterns, nine combinations), foreign-line, home-path and documentation
+  reference commands passed. Main-to-feature whitespace validation passed. The Validator also
+  recorded a base-only comparison diagnostic: old-approved-to-merged and old-approved-to-main
+  both report an EOF blank line at `scripts/cli/telemetry-analysis/read-warnings.mjs:63`.
+  That inherited diagnostic is outside credential protection; it is not a current feature/base
+  difference or a failed credential acceptance check.
+- Result above now covers the merged implementation. Keep the earlier approval below as
+  historical until the human explicitly approves the newly reviewed candidate. Keep this
+  feature branch unchanged during that decision and guarded closure so the review does not
+  become stale again. No additional human-only acceptance check or policy choice is open.
+
+
 ### Approval
 - Decision: approved
-- Reviewed implementation commit: 81ae9e362000c1a48574b1aeceda4c2302b19570
+- Reviewed implementation commit: 15e912c02f1c23205408aaa788c0f778f608c79c
 - Confirmed by: human
-- Evidence: October 27, 2026, the user selected "Approve this implementation" in response to
-  the exact-commit approval question for this plan, including the accepted coverage limits and
-  recorded base-branch skill-size failure. Review freshness was rechecked before recording.
+- Evidence: November 2, 2026, the user replied "approved" to the renewed exact-commit question
+  naming "Keep local agent work within useful boundaries: Codex — Part 2: Credential protection"
+  (`4zyo2woj`) at `15e912c02f1c23205408aaa788c0f778f608c79c`, retaining the accepted native/tool
+  coverage limits and authorizing fresh approval followed by guarded closure.
+- Historical approvals: the October 27 approval of
+  `81ae9e362000c1a48574b1aeceda4c2302b19570` and the earlier November 2 approval of
+  `309055c861cc2894ea086aa0bbebd93c36836702` remain recorded in the review history. The later
+  main merge made the latter content-stale. The explicit approval above covers the re-reviewed
+  merged implementation and supersedes both earlier approval records.
 
 ## Verification
 

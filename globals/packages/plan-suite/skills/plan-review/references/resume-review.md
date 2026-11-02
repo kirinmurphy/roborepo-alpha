@@ -51,7 +51,7 @@ an explicit human pause or deferral still stops the workflow.
 | Fresh, durably recorded approval; no pending implementation edits, new findings, or required manual checks; unchanged base implementation | Report already approved with the approved commit; make no commit and ask no new approval question. |
 | Fresh complete review, approval missing, requested, or stale, unchanged base implementation | Approval only: show the reviewed commit, summarized evidence, and any recorded base failures; ask only for the missing human decision on this implementation. |
 | Same complete review, with an explicit human approval already available for that implementation | Record the existing answer immediately through step 6a; do not ask again. |
-| Changed implementation, changed requirements, or reopened findings | Review the changes and their effects on the acceptance criteria; run the affected checks, the completion gate, and a Validator pass before another complete Result. Preserve earlier review evidence as history. |
+| Changed implementation, changed requirements, or reopened findings | Review the changes and their effects on the acceptance criteria; run the affected checks, take the full gate from the CI result for the changed commit (the canonical completion gate locally, once, only when no CI result exists for it), and run a Validator pass before another complete Result. Preserve earlier review evidence as history. |
 | Base implementation changed before landing | Synchronize through step 2 and review the resulting changes; do not renew approval for implementation the human has not seen. |
 | Missing, invalid, or unavailable evidence | Resolve the missing evidence below; do not guess a reviewed commit or a human answer. |
 
