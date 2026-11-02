@@ -285,15 +285,16 @@ design gives the reasons.
 - Review: CI passed for 7cb08c65 (`check (ubuntu-latest)`, `check (macos-latest)`, `windows-installer`), 158 portal UI specs per leg, none flaky.
 - Review: main merged in again at 2b0ec6f7 (main's 68f6aca1, the package desired-state PR, plus plan-record commits) and 956ef5c3 (main's 867ab2b8, plan record only). 68f6aca1 fixed the same macOS `EPERM` case in `scripts/cli/browser/local-service.mjs`, which conflicted with the branch; resolved by keeping main's version and comment and adding back `export` on `signalGroup`, which `browser-lifecycle-check.mjs` imports for its regression assertion. `browser-lifecycle-check.mjs` passed 5/5 after the resolution; the pre-push check and `plan-suite-skills-check.mjs` pass at 956ef5c3.
 - Review Validator pass 3 (fresh-context subagent, merges 2b0ec6f7 and 956ef5c3): no code findings; the resolution is minimal and the branch's net diff against main still covers every plan item. 3 plan-record fix findings, fixed above. Also ran `orphan-test-check.mjs`, docs references, skill triggers, and `browser-lifecycle-check.mjs` 3/3.
+- Review: `npm run check` passed at 956ef5c3 on macOS after the latest merge (exit 0, 163/163 portal UI specs, none flaky). Later commits change only the plan record.
 - Base issue, outside this plan: `plan-execute/references/start-validation.md:74` says "It never pushes. Do not push from the skill either." without scoping it to the start transition, which now contradicts plan-execute's push at review handoff. The line is on main and this branch does not touch the file.
 
 ### Result
-- Status: pending (main merged in after the review at 118678b833513a04394f4cce1025f5d13b12cecd; full gate on the merged result running)
-- Reviewed implementation commit: 118678b833513a04394f4cce1025f5d13b12cecd
-- Base commit: 2b582e47f9069159dc0b79b476a9de47ffb21071
+- Status: complete
+- Reviewed implementation commit: 010c35f473f6fd988d0c074659b632271dee63fa
+- Base commit: 867ab2b840b1c784b77bd167bb837eff25d5f9bb
 
 ### Approval
-- Decision: not requested (waiting on the full gate for the merged result)
+- Decision: requested
 
 ## Decision Log
 
