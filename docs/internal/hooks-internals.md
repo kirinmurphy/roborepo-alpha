@@ -333,8 +333,9 @@ descriptions. This check runs in the CI gate.
 ## Agent git hooks and the repository pre-push hook
 
 Agent shells set `core.hooksPath` to RoboRepo's agent hooks (`~/.claude/git-hooks` or
-`~/.codex/git-hooks`, from `globals/system/git-hooks/`) in git's `command` config scope. Each agent
-hook does its own check, then calls `roborepo_chain_hook` (`globals/system/git-hooks/chain.sh`). The
+`~/.codex/git-hooks`, from `globals/system/git-hooks/`) in git's `command` config scope. An agent
+hook runs its own check, if it has one (only `pre-push` does), then calls `roborepo_chain_hook`
+(`globals/system/git-hooks/chain.sh`). The
 chain resolves the repository's own hooks directory from `core.hooksPath` in every scope except
 `command`, falling back to `<git-common-dir>/hooks`, and `exec`s that directory's hook of the same
 name, so the repository hook's exit status decides the operation.
