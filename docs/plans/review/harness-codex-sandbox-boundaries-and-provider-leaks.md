@@ -735,6 +735,58 @@ control failures are execution prerequisites; neither passing diagnostics nor an
 branch substitutes for a passing gate. No credential denial, installed configuration, implementation
 approval, or unrelated pending edit was changed by this diagnosis.
 
+
+#### Closure readiness recheck — November 1, 2026
+
+- Scope correction: this review concerns credential protection (`4zyo2woj`), not the adjacent
+  package-state plan. Its implementation landed through PR 45 in squash
+  `28932c1c85535759e8cf565ccdd096d6735e8946`, which remains on main's first-parent history.
+  The feature tip remains `f90412a258c6a1177ea33a6531581d53020f21db`. The worktree plan blob
+  `782bd991e0ae25f4dac082bbaed7ec32c706641f` was produced on main, so its plan state is integrated.
+- Assessed current main: `8b6a52d271f85d4074268d20b93982734a6af869`. Independent read-only
+  Validator: zero fix findings, zero escalations, one unrelated base verification failure.
+  Credential translation, shared rendering, native runner, projection assertions and coverage
+  metadata are unchanged from the absorbing squash. Generated Codex configuration has only a
+  later Git-hook environment-table addition outside its credential block. No required human-only
+  test or unresolved policy decision remains; the accepted coverage limitations still apply.
+- The completed October 30 Docker assessment is now reconciled: at pinned main
+  `88d001728b4e8a81eef72e9df9a7e23e435fb5be`, all 14 focused checks passed. Installation
+  collisions, deterministic CI checks, packed installation, four strict clean-machine suites,
+  and the portal browser suite (151 passed) also passed as separately executed commands.
+  Its canonical aggregate still exited 1: repository rediscovery bumped revision twice for an
+  existing record created in the same millisecond. A deterministic control reproduced that
+  unrelated defect in `scripts/cli/repositories.mjs`; a standalone retry passed but did not
+  change the aggregate outcome. The current code retains the implicated `createdAt === now`
+  condition. No unrelated implementation correction or waiver is inferred.
+- Fresh current-main `npm run check` and its permitted host retry each exited 1 after health
+  passed all 97 checks. Both reported the three package add-skill rollback assertions and
+  `EPERM` while removing their test directories. The earlier controlled cleanup diagnosis
+  remains applicable; neither current attempt reached the later gate stages.
+- Fresh projection (15 patterns, nine combinations), foreign-line preservation and home-path
+  commands passed. The Validator independently passed projection, home paths, portal state and
+  lifecycle manifest checks. Live rendering, Gemini characterization, root-config write policy
+  and hook composition each exited 1 at temporary-directory removal (`EPERM`); they are not
+  counted as passed commands. Hook-composition's test-created files were removed, leaving Git
+  status clean. An empty fixture directory could not be removed and contains no files.
+- Base verification failure: documentation references point from
+  `docs/internal/backlog-review.md:139` to the archived plan's former backlog path. This is on
+  current main and outside credential protection. It is recorded separately from environment
+  failures and was not silently waived for closure.
+- Docker server discovery failed with permission denied at its Unix socket in both ordinary
+  and permitted host attempts. No container run or native positive control was attempted through
+  an alternate channel. Credential-read restrictions and installed configuration remain intact.
+- The canonical approval reader reports stale approval: the approved commit is still
+  `81ae9e362000c1a48574b1aeceda4c2302b19570`, with 28 non-plan changes to the current feature
+  tip. Review freshness also remains unavailable because the historical worktree still has
+  inaccessible tracked PEM fixtures; current main already uses disposable TLS credentials.
+  No protected fixture was read. Plan validation reports zero blocking findings and the existing
+  advisory for primary-only post-merge evidence.
+- Outcome: remains pending. Complete executable verification in a permitted environment, then
+  establish trustworthy review freshness and request renewed exact-commit human approval before
+  closing. No lifecycle change, approval, implementation edit, server shutdown or branch/worktree
+  cleanup occurred in this recheck.
+
+
 ### Approval
 - Decision: approved
 - Reviewed implementation commit: 81ae9e362000c1a48574b1aeceda4c2302b19570
