@@ -1,11 +1,11 @@
 ---
 id: o9zwxuav
 priority: high
-next_action: Open and merge the pull request, then run /plan-close.
+next_action: The human approves the reviewed commit in /plan-review, then merges the pull request and runs /plan-close.
 blocked_by: []
 depends_on: ["bysyzl1e"]
 related: ["package-registry-live-state-reconciliation", "ejsc769o", "age4cm7r", "user-managed-packages-and-add-workflows"]
-reviewed_commit: c22ca1829ac7bcc9e8a26ec3ff2082886a521742
+reviewed_commit: db9926333e4b2c7c2d5f01dd39e8ac05db299433
 worktree: package-desired-state-and-dependencies
 ---
 
@@ -919,11 +919,21 @@ to choose them again. Verification and approval of the changed implementation re
   calls `uninstall.sh` and so stops this checkout's install processes. The rerun, with nothing
   else running, passed it. At e3e2bb69 the gate had the same single portal failure.
 
+- Re-review after the user's merge of main 2b582e47 (db992633, 2026-11-01): 26 incoming files
+  (Home portal, developer-runtime git, repo overview, plan-suite skill prose). None touch package
+  state, the graph, reconcile, catalog validation, the Config behavior view, `portal/config/`, or
+  this branch's docs of record. Main also fixed the base chip-count assertion
+  (`portal-ui.spec.mjs:38`, now 8). Validator pass (fresh-context subagent, read-only, git and file
+  reads only): clean. The branch's own patch is identical before and after the merge, there are
+  no conflict markers, and the edits to `portal-ui.spec.mjs` are in separate hunks.
+- `npm run check` passed at db992633 (67/67 suites, `test-cli.sh` 422/0, portal UI 163 passed),
+  with nothing else running from this checkout.
+
 ### Result
 
 - Status: complete
-- Reviewed implementation commit: c22ca1829ac7bcc9e8a26ec3ff2082886a521742
-- Base commit: 9849eba1a67f3e367c19492c6121d44c4eae2f19
+- Reviewed implementation commit: db9926333e4b2c7c2d5f01dd39e8ac05db299433
+- Base commit: 2b582e47f9069159dc0b79b476a9de47ffb21071
 
 ### Approval
 
