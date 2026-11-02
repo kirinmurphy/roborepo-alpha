@@ -21,7 +21,7 @@ import { loadSlashCommandPlan } from "../cli/slash-commands.mjs";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const cli = path.join(repoRoot, "scripts/cli/main.mjs");
 const normalize = (text) => text.replace(/\s+/g, " ");
-// The six plan skills ship in one package; session-close is its own.
+// The plan skills ship in one package; session-close is its own.
 const PLAN_SUITE_PACKAGE = "plan-suite";
 const packageOf = (id) => (id.startsWith("plan-") ? PLAN_SUITE_PACKAGE : id);
 const readSkill = (id) => normalize(fs.readFileSync(path.join(repoRoot, "globals/packages", packageOf(id), "skills", id, "SKILL.md"), "utf8"));
@@ -430,12 +430,12 @@ validatePackageCatalog(catalog);
 
 const byId = new Map(catalog.map((pkg) => [pkg.id, pkg]));
 assert.ok(byId.has(PLAN_SUITE_PACKAGE), `catalog missing package: ${PLAN_SUITE_PACKAGE}`);
-for (const id of ["plan-write", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive"]) {
+for (const id of ["plan-suite-init", "plan-write", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive"]) {
   assert.ok(!byId.has(id), `${id} is a skill of ${PLAN_SUITE_PACKAGE}, not a package of its own`);
 }
 assert.deepEqual(
   byId.get(PLAN_SUITE_PACKAGE).resources.filter((r) => r.type === "skill").map((r) => r.id),
-  ["plan-write", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive"],
+  ["plan-suite-init", "plan-write", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive"],
   `${PLAN_SUITE_PACKAGE} lists its skills in lifecycle order`,
 );
 for (const [id, { risk }] of Object.entries(SKILLS)) {

@@ -303,8 +303,30 @@ plan-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
+}
+/* Names the plan's repo, so cards stay identifiable when no repo filter is applied. */
+.repo-badge {
+  flex: 0 0 auto;
+  max-width: 40%;
+  padding: var(--pill-padding);
+  /* Mixing the text color into the card surface lifts the fill in dark mode and darkens it in
+   * light. Light mode takes a weaker mix so its dark text stays readable on the gray. */
+  --repo-badge-mix: 24%;
+  --repo-badge-ink: #fff;
+  background: color-mix(in srgb, var(--ink) var(--repo-badge-mix), var(--panel));
+  border-radius: 5px;
+  color: var(--repo-badge-ink);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+:root[data-theme="light"] .repo-badge {
+  --repo-badge-mix: 20%;
+  --repo-badge-ink: var(--ink);
 }
 .title-link {
   color: inherit;

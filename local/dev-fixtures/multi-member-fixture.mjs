@@ -13,7 +13,7 @@
 //   main          feature/checkout-redesign  app, API, "Storybook" page     13d behind main (2 commits); one copy action
 //   -wt-failing   failing-checkout           titled app answering 503       1 behind remote (danger)
 //   -wt-api       api-checkout               JSON API; an uncommitted file  6d+ since main
-//   -wt-main      main                       titled app                     6d unpushed; one copy action
+//   -wt-main      main                       titled app                     5d unpushed; one copy action
 //   -wt-docs      docs-refresh               titled app                     8d+ behind main (1 commit)
 //   -wt-detached  (detached at c2)           JSON API                       no warning; copy commit SHA
 //   -wt-local     local-experiment           titled app                     no warning: never pushed
@@ -32,7 +32,7 @@
 //   origin/main       c0 (20d) - c1 (13d) - c2 (8d) - c3 (6d)
 //   feature           c1 - f1 (12d) - f2 (2d)         = origin, merge-base c1   -> behind main (2 commits)
 //   docs-refresh      c2 - d1 (7d)                    = origin, merge-base c2   -> behind main (1 commit)
-//   main              c3 - m1 (5d) - m2 (3d)          origin at c3              -> unpushed since 6d
+//   main              c3 - m1 (5d) - m2 (3d)          origin at c3              -> unpushed since 5d
 //   api-checkout      c3 - a1 (5d)                    = origin, merge-base c3   -> since main, 6d
 //   failing           c3 - x1 (5d)                    origin one ahead (x2, 1d) -> behind remote
 //   local-experiment  c3 - l1 (4d)                    no origin, no upstream    -> nothing

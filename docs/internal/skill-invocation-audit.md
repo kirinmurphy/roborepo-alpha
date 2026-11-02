@@ -4,8 +4,8 @@
 
 ## Summary
 
-- Shared skills: 17
-- Package skill resources: 17
+- Shared skills: 18
+- Package skill resources: 18
 - Static findings: 5
 - Unknown manifest entries: none
 
@@ -31,6 +31,7 @@ Keep shared `SKILL.md` frontmatter portable; use package-backed checks before ad
 | `supabase-integration-testing` | auto | medium | false | none | Keep trigger narrow; add near-miss tests. |
 | `tighten` | auto | medium | true | names a paired skill in prose but declares no Paired Skills table | Keep trigger narrow; add near-miss tests. |
 | `telemetry-marker` | manual | low | true | none | Keep manual-only or command-gated. |
+| `plan-suite-init` | manual | medium | true | none | Keep manual-only or command-gated. |
 | `plan-write` | manual | medium | true | none | Keep manual-only or command-gated. |
 | `plan-promote` | manual | medium | true | side-effect keyword | Keep manual-only or command-gated. |
 | `plan-execute` | manual | high | true | none | Keep manual-only or command-gated. |

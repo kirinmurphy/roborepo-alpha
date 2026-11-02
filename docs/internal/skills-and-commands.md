@@ -66,6 +66,8 @@ Examples:
 - `plan-write`, `plan-promote`, `plan-execute`, `plan-review`, `plan-close`,
   `plan-archive`: the plan suite, one atomic lifecycle step each, behind the
   matching slash command. None takes a mode argument, and none invokes the next.
+  `plan-suite-init` is the one-time repo setup that `plan-write` runs first when
+  `plans-config.json` is missing or has no `namespaces` key.
   `plan-execute` ends in a validation loop (`references/validation-loop.md`): a
   fresh-context validator applies a rubric and classifies findings `fix`,
   `escalate`, or `base`, and the run fixes `fix` findings until a pass is clean.
@@ -105,6 +107,7 @@ Current generated examples:
 
 - `/case-study` -> `case-study`
 - `/frontend-design` -> `frontend-design`
+- `/plan-suite-init` -> `plan-suite-init`
 - `/plan-write` -> `plan-write`
 - `/plan-promote` -> `plan-promote`
 - `/plan-execute` -> `plan-execute`

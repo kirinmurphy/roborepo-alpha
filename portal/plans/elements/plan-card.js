@@ -50,6 +50,7 @@ class PlanCardElement extends HTMLElement {
     statusEl.merge = cardActions.mergeFor?.(record.key) || null;
     statusEl.record = record;
     node.querySelector("[data-slot=status-mount]").replaceWith(statusEl);
+    node.querySelector("[data-slot=repo-badge]").textContent = record.repository.name;
     node.querySelector("[data-slot=title-link]").textContent = plan.title;
     // Only title/description open the document; metadata and actions are separate siblings.
     const docDetails = node.querySelector(".doc-details");

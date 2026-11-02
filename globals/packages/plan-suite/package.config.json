@@ -2,13 +2,32 @@
   "schemaVersion": 1,
   "id": "plan-suite",
   "label": "Development Planning Lifecycle",
-  "description": "Six commands that carry a repository plan from first draft to merged work: write, promote, execute, review, close, and archive. Each step hands off to the next, so they turn on and off together.",
+  "description": "Seven commands that carry a repository plan from first draft to merged work: init, write, promote, execute, review, close, and archive. Each step hands off to the next, so they turn on and off together.",
   "lifecycle": "optional",
   "presentation": {
     "category": "skills-dev-lifecycle",
     "order": 10
   },
   "resources": [
+    {
+      "type": "skill",
+      "id": "plan-suite-init",
+      "source": "skills/plan-suite-init",
+      "invocation": "manual",
+      "risk": "medium",
+      "entrypoints": [
+        {
+          "type": "slash-command",
+          "name": "plan-suite-init",
+          "description": "Set up docs/plans folders and plans-config.json namespaces in a repo.",
+          "harnesses": [
+            "claude",
+            "codex",
+            "gemini"
+          ]
+        }
+      ]
+    },
     {
       "type": "skill",
       "id": "plan-write",

@@ -96,6 +96,42 @@ const service = createRepositoryOverviewService({
 
 const home = service.loadHome();
 assert.deepEqual(home.repositories.map((repository) => repository.repositoryId), [PINNED, ACTIVE, IDLE_RECENT, IDLE_OLD, STALE], "pinning outranks lifecycle and idle repositories sort by recency");
+// A repo with nothing running but open work sorts between running and idle repos, and work that has
+// gone quiet past Runtime's stale window does not count.
+{
+  const WORKTREE = "local:eeeeeeeeeeeeeeee";
+  const PLAN = "local:ffffffffffffffff";
+  const QUIET = "local:9999999999999999";
+  const progressRegistry = structuredClone(registry);
+  for (const [id, name] of [[WORKTREE, "Worktree Work"], [PLAN, "Plan Work"], [QUIET, "Quiet Work"]]) addRepository(id, name, "2026-09-01T10:00:00.000Z", progressRegistry);
+  const worktreeRoot = (state) => ({ rootId: `wt-${state}`, isWorktree: true, worktreeName: `wt-${state}`, worktreeState: state, checkoutState: "present", git: { branch: `feature/${state}` } });
+  const progressRuntime = structuredClone(runtime);
+  progressRuntime.repositories.push(
+    { repositoryId: WORKTREE, name: "Worktree Work", lifecycle: { state: "idle", reason: null }, lastSeenAt: "2026-09-01T10:00:00.000Z", roots: [worktreeRoot("idle")] },
+    { repositoryId: PLAN, name: "Plan Work", lifecycle: { state: "idle", reason: null }, lastSeenAt: "2026-09-01T10:00:00.000Z", roots: [] },
+    { repositoryId: QUIET, name: "Quiet Work", lifecycle: { state: "idle", reason: null }, lastSeenAt: "2026-09-29T10:00:00.000Z", roots: [worktreeRoot("stale"), worktreeRoot("landed")] },
+  );
+  const progressPlans = structuredClone(plans);
+  progressPlans.repositoryScans.push(
+    { repositoryId: PLAN, state: "scanned", planCount: 1, checkoutCount: 1 },
+    { repositoryId: QUIET, state: "scanned", planCount: 1, checkoutCount: 1 },
+  );
+  progressPlans.plans.push(
+    { repository: { repositoryId: PLAN }, plan: { id: "fresh", title: "Fresh plan", lifecycle: "review", gitLastChangedAt: "2026-09-27T12:00:00.000Z" } },
+    { repository: { repositoryId: QUIET }, plan: { id: "quiet", title: "Quiet plan", lifecycle: "active", gitLastChangedAt: "2026-09-01T12:00:00.000Z" } },
+  );
+  const progressHome = createRepositoryOverviewService({
+    loadRegistry: () => structuredClone(progressRegistry),
+    loadRuntime: () => structuredClone(progressRuntime),
+    loadPlans: () => structuredClone(progressPlans),
+    loadTelemetry: () => structuredClone(telemetry),
+    now: () => NOW,
+  }).loadHome();
+  const order = progressHome.repositories.map((repository) => repository.repositoryId);
+  assert.deepEqual(order, [PINNED, ACTIVE, PLAN, WORKTREE, QUIET, IDLE_RECENT, IDLE_OLD, STALE], "in-progress repos sort after running and before idle ones");
+  const inProgress = Object.fromEntries(progressHome.repositories.map((repository) => [repository.repositoryId, repository.inProgress]));
+  assert.deepEqual([inProgress[WORKTREE], inProgress[PLAN], inProgress[QUIET], inProgress[ACTIVE]], [true, true, false, false]);
+}
 assert.equal(home.unresolvedActivity.length, 1);
 assert.equal(home.unresolvedActivity[0].name, "Unresolved listener");
 assert.equal(home.repositories.some((repository) => repository.repositoryId === HIDDEN), false, "hidden repositories stay out of Home");
