@@ -294,7 +294,12 @@ design gives the reasons.
 - Base commit: 867ab2b840b1c784b77bd167bb837eff25d5f9bb
 
 ### Approval
-- Decision: requested
+- Decision: approved
+- Reviewed implementation commit: 010c35f473f6fd988d0c074659b632271dee63fa
+- Confirmed by: human
+
+The user answered "Approve" on 2026-11-02 to the question "Do you approve this plan at commit
+010c35f4?", after the review packet for that commit synchronized with main at 867ab2b8.
 
 ## Decision Log
 
