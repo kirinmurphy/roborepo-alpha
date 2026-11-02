@@ -5,7 +5,7 @@ next_action: Run /plan-review; push the branch so CI runs both legs, and confirm
 blocked_by: []
 depends_on: []
 related: ["f0jwe76j", "developer-runtime-remote-branch-status"]
-reviewed_commit: bd85fcaeb90c56c831973812a8039cc86b88b7d6
+reviewed_commit: 0063f93a3244e86c9abc6691cc1ddcf12e9589b3
 worktree: test-ci-as-background-gate
 ---
 
@@ -120,12 +120,13 @@ main-breaking mistakes:
 Measured on 2026-10-30 on a development checkout: doctor took 2.0 s and the docs reference check
 0.1 s.
 
-It sets `ROBOREPO_SKIP_NODE_RELEASE_CHECK=1` as `ci.sh` does, so the check stays off the network,
-and the whole script must stay under 10 seconds. A tracked `scripts/git-hooks/pre-push` reads the
+It sets `ROBOREPO_SKIP_NODE_RELEASE_CHECK=1` as `ci.sh` does, so doctor skips its Node release
+lookup; the only network call is to the push's own remote, for its default branch, when
+`<remote>/HEAD` is not recorded. The whole script must stay under 10 seconds. A tracked `scripts/git-hooks/pre-push` reads the
 `<local ref> <local sha> <remote ref> <remote sha>` lines git passes on stdin and calls the script.
 For each pushed ref, `git diff --check` covers `<remote sha>..<local sha>`; a new branch (zero
-remote sha) diffs from its merge base with the remote's default branch, and a deletion (zero local
-sha) is skipped. The doctor and docs checks read the working tree, not the pushed commits, so they
+remote sha), or a remote tip this checkout lacks, diffs from its merge base with the remote's
+default branch, and a deletion (zero local sha) is skipped. The doctor and docs checks read the working tree, not the pushed commits, so they
 run once per push; a dirty tree can make them disagree with what is pushed, which is an accepted
 limit of a fast check that CI covers.
 
@@ -153,7 +154,7 @@ reads `core.hooksPath` from every scope except the agent's `command`-scope overr
 - The portal UI helpers in `scripts/test/portal-ui/helpers.mjs` call `route.fetch()` against the
   real portal and fail with `ECONNRESET`. Find why the connection drops, then fix the cause, or
   retry that fetch once inside the helper.
-- Set `retries: process.env.CI ? 1 : 0` in `scripts/test/portal-ui/playwright.config.mjs`. The
+- Set `retries: process.env.CI === "true" ? 1 : 0` in `scripts/test/portal-ui/playwright.config.mjs`. The
   `list` reporter marks a test that passes on retry as flaky, so a flake stays visible in the log
   without failing the run.
 
@@ -192,7 +193,7 @@ Flakes first, so the CI results the later steps lean on are trustworthy.
       and stderr before parsing. Done when 20 consecutive runs pass.
 - [x] Find why `route.fetch()` in `scripts/test/portal-ui/helpers.mjs` (both route handlers) drops
       the connection, then fix the cause or retry that fetch once inside the helper.
-- [x] Set `retries: process.env.CI ? 1 : 0` in `scripts/test/portal-ui/playwright.config.mjs`.
+- [x] Set `retries: process.env.CI === "true" ? 1 : 0` in `scripts/test/portal-ui/playwright.config.mjs`.
 - [x] Add `scripts/test/pre-push-check.sh` (doctor, docs reference check, per-ref
       `git diff --check` as described in Proposed design) and an executable
       `scripts/git-hooks/pre-push` that calls it with git's stdin. Time it.
@@ -264,10 +265,10 @@ design gives the reasons.
 - [x] `docs/internal/hooks-internals.md:337` says each agent hook does its own check before chaining; only `pre-push` checks anything, the rest only chain — fixed in review (a4fa3216)
 - [x] After main's 68f6aca1, the Decision Log still credited the branch with the `signalGroup` EPERM fix and the backlog-review link fix, both now on main too — noted as superseded in review
 - [x] Verification had no record of the 2b0ec6f7 and 956ef5c3 merges or their conflict resolution — recorded in review
-- [ ] `docs/internal/testing.md:56` and the plan's Proposed design say the pre-push check stays off the network; after b3e60ab1 it asks the push's own remote for its default branch when `<remote>/HEAD` is not recorded
-- [ ] `scripts/test/pre-push-check.sh:8` and `docs/internal/testing.md:20` give the usage as `<remote>`; the script now also reads `<url>` as `$2`
-- [ ] Proposed design says only a zero remote sha diffs from the merge base; since b3e60ab1 a remote tip this checkout lacks does too, and the Decision Log records neither that nor the remote-HEAD lookup
-- [ ] The plan quotes `retries: process.env.CI ? 1 : 0`; the config is now `process.env.CI === "true"`
+- [x] `docs/internal/testing.md:56` and the plan's Proposed design say the pre-push check stays off the network; after b3e60ab1 it asks the push's own remote for its default branch when `<remote>/HEAD` is not recorded — fixed in review (0063f93a)
+- [x] `scripts/test/pre-push-check.sh:8` and `docs/internal/testing.md:20` give the usage as `<remote>`; the script now also reads `<url>` as `$2` — fixed in review (0063f93a)
+- [x] Proposed design says only a zero remote sha diffs from the merge base; since b3e60ab1 a remote tip this checkout lacks does too, and the Decision Log records neither that nor the remote-HEAD lookup — fixed in the plan record
+- [x] The plan quotes `retries: process.env.CI ? 1 : 0`; the config is now `process.env.CI === "true"` — fixed in the plan record
 
 ### Verification
 - Validation pass 1 (fresh-context subagent): 1 fix finding, fixed above. Linux behavior confirmed by the Validator in `node:22-bookworm-slim`.
@@ -290,19 +291,22 @@ design gives the reasons.
 - Review: main merged in again at 2b0ec6f7 (main's 68f6aca1, the package desired-state PR, plus plan-record commits) and 956ef5c3 (main's 867ab2b8, plan record only). 68f6aca1 fixed the same macOS `EPERM` case in `scripts/cli/browser/local-service.mjs`, which conflicted with the branch; resolved by keeping main's version and comment and adding back `export` on `signalGroup`, which `browser-lifecycle-check.mjs` imports for its regression assertion. `browser-lifecycle-check.mjs` passed 5/5 after the resolution; the pre-push check and `plan-suite-skills-check.mjs` pass at 956ef5c3.
 - Review Validator pass 3 (fresh-context subagent, merges 2b0ec6f7 and 956ef5c3): no code findings; the resolution is minimal and the branch's net diff against main still covers every plan item. 3 plan-record fix findings, fixed above. Also ran `orphan-test-check.mjs`, docs references, skill triggers, and `browser-lifecycle-check.mjs` 3/3.
 - Review: `npm run check` passed at 956ef5c3 on macOS after the latest merge (exit 0, 163/163 portal UI specs, none flaky). Later commits change only the plan record.
+- Re-review after approval at 010c35f4: bd894ced and b3e60ab1 changed `pre-push-check.sh`, `browser-lifecycle-check.mjs`, `portal-ui/helpers.mjs`, and `portal-ui/playwright.config.mjs`. `roborepo plans sync-base`: up to date with main at e96f65e7.
+- Review: CI passed for b3e60ab1 (`check (ubuntu-latest)`, `check (macos-latest)`, `windows-installer`): 423 roborepo tests, 67/67 check suites, 163 portal UI specs per leg.
+- Review: at b3e60ab1, `pre-push-check.sh` (2.4 s), `browser-lifecycle-check.mjs` 5/5, `plan-suite-skills-check.mjs`, and `orphan-test-check.mjs` pass.
+- Review Validator pass 4 (fresh-context subagent, delta 010c35f4..b3e60ab1): no code findings; 4 doc and plan-record fix findings, fixed above. It drove the hook with git's argv and stdin in a scratch clone over new-branch, update, unknown-tip, deletion, unreachable-URL, and two-ref pushes; confirmed `set -euo pipefail` cannot abort on the ls-remote fallback under bash 3.2; and confirmed the zombie-group assertion still exercises `EPERM` (50/50 probe runs) and fails if the handling is reverted.
+- Review: 0063f93a changes only the pre-push script's usage comment and `docs/internal/testing.md`; `bash -n` and `pre-push-check.sh` pass on it. The branch is not pushed, so CI has no result for it yet; its tested code is identical to b3e60ab1. Read-only re-check of that diff in this session: clean.
 - Base issue, outside this plan: `plan-execute/references/start-validation.md:74` says "It never pushes. Do not push from the skill either." without scoping it to the start transition, which now contradicts plan-execute's push at review handoff. The line is on main and this branch does not touch the file.
 
 ### Result
 - Status: complete
-- Reviewed implementation commit: 010c35f473f6fd988d0c074659b632271dee63fa
-- Base commit: 867ab2b840b1c784b77bd167bb837eff25d5f9bb
+- Reviewed implementation commit: 0063f93a3244e86c9abc6691cc1ddcf12e9589b3
+- Base commit: e96f65e7163546ba627132698b4e4f6e3281e140
 
 ### Approval
-- Decision: approved
-- Reviewed implementation commit: 010c35f473f6fd988d0c074659b632271dee63fa
-- Confirmed by: human
+- Decision: requested
 
-The user answered "Approve" on 2026-11-02 to the question "Do you approve this plan at commit
+Earlier approval, stale since bd894ced and b3e60ab1 changed the implementation: the user answered "Approve" on 2026-11-02 to the question "Do you approve this plan at commit
 010c35f4?", after the review packet for that commit synchronized with main at 867ab2b8.
 
 ## Decision Log
@@ -336,6 +340,12 @@ The user answered "Approve" on 2026-11-02 to the question "Do you approve this p
   `q6lj4w96` at its old `backlog/` path after `8adee1aa` archived it, so the docs reference check
   failed on main at the time; the pre-push check found it. The link now points at `archived/`.
   Superseded: main's 68f6aca1 made the identical fix, so the branch no longer differs from main here.
+- **Pre-push check falls back to the merge base instead of skipping.** When the remote's tip is
+  missing locally, or `<remote>/HEAD` is not recorded, the check diffs from the merge base with the
+  remote's default branch, asking the remote for that branch the way the agent pre-push hook does.
+  Alternative: skip the whitespace check for those refs, as the first version did; rejected because
+  a fetch-less clone would then never check whitespace. The cost is one `git ls-remote` to the push's
+  own remote on that fallback.
 - **`pre-push-check.sh` is exempt in the orphan-test check.** It is a hook runner, not a suite; the
   checks it runs have their own tests.
 - **Hook wiring proved by driving the hooks, not `git push`.** This session's permissions deny
