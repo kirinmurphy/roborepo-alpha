@@ -128,6 +128,14 @@ test("a plan's repo badge applies that repo's filter, and is inert once any repo
   const betaCard = page.locator("plan-card", { hasText: "Beta high plan" });
   const badge = betaCard.locator(".repo-badge");
   await expect(badge).toHaveAttribute("href", `/plans?repo=${BETA}`);
+  // Hovering the badge takes the hover away from the card's open-the-plan area around it.
+  const title = betaCard.locator(".title-link");
+  await betaCard.locator(".description-line").hover();
+  await expect(title).toHaveCSS("text-decoration-line", "underline");
+  await badge.hover();
+  await expect(title).toHaveCSS("text-decoration-line", "none");
+  await expect(badge).toHaveCSS("text-decoration-line", "none");
+  await expect(badge).toHaveCSS("cursor", "pointer");
   await badge.click();
   await expect(page).toHaveURL(new RegExp(`/plans\\?repo=${BETA}$`));
   await expect(selector(page)).toHaveAccessibleName(`Repo: ${BETA}`);

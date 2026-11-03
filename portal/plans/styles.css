@@ -260,12 +260,14 @@ plan-card {
 }
 /* The title/description opens the document. Its hover highlight spans both document columns,
  * while priority and actions keep their independent interaction states. */
-.plan-card:has(.doc-details:hover) :is(.doc-details, .status-document) {
+/* The repo badge is its own link (it applies the repo filter), so hovering it drops the card's
+ * open-the-document highlight. */
+.plan-card:has(.doc-details:hover):not(:has(a.repo-badge[href]:hover)) :is(.doc-details, .status-document) {
   background: color-mix(in srgb, var(--accent) 4%, var(--panel));
 }
 
 .plan-card
-  .doc-details:hover:not(:has(button:hover, option-dropdown:hover))
+  .doc-details:hover:not(:has(button:hover, option-dropdown:hover, a.repo-badge[href]:hover))
   .title-link {
   text-decoration: underline;
 }
@@ -324,20 +326,27 @@ plan-card {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-a.repo-badge[href] {
-  text-decoration: none;
-  cursor: pointer;
-}
-a.repo-badge[href]:hover,
-a.repo-badge[href]:focus-visible {
-  --repo-badge-mix: 36%;
-}
-a.repo-badge[aria-disabled="true"] {
-  cursor: default;
-}
 :root[data-theme="light"] .repo-badge {
   --repo-badge-mix: 20%;
   --repo-badge-ink: var(--ink);
+}
+/* As a filter link: no link underline or link color, and a stronger fill on hover. */
+a.repo-badge,
+a.repo-badge:hover {
+  color: var(--repo-badge-ink);
+  text-decoration: none;
+}
+a.repo-badge[href] {
+  cursor: pointer;
+}
+a.repo-badge[href]:is(:hover, :focus-visible) {
+  --repo-badge-mix: 42%;
+}
+:root[data-theme="light"] a.repo-badge[href]:is(:hover, :focus-visible) {
+  --repo-badge-mix: 34%;
+}
+a.repo-badge[aria-disabled="true"] {
+  cursor: default;
 }
 .title-link {
   color: inherit;
