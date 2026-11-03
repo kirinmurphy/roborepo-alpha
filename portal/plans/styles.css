@@ -324,6 +324,17 @@ plan-card {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+a.repo-badge[href] {
+  text-decoration: none;
+  cursor: pointer;
+}
+a.repo-badge[href]:hover,
+a.repo-badge[href]:focus-visible {
+  --repo-badge-mix: 36%;
+}
+a.repo-badge[aria-disabled="true"] {
+  cursor: default;
+}
 :root[data-theme="light"] .repo-badge {
   --repo-badge-mix: 20%;
   --repo-badge-ink: var(--ink);

@@ -123,6 +123,27 @@ test("the scope travels between Plans, Tokens, and Agents and drops for Runtime,
   await expect(selector(page)).toHaveCount(0);
 });
 
+test("a plan's repo badge applies that repo's filter, and is inert once any repo filter is set", async ({ page }) => {
+  await page.goto("/plans");
+  const betaCard = page.locator("plan-card", { hasText: "Beta high plan" });
+  const badge = betaCard.locator(".repo-badge");
+  await expect(badge).toHaveAttribute("href", `/plans?repo=${BETA}`);
+  await badge.click();
+  await expect(page).toHaveURL(new RegExp(`/plans\\?repo=${BETA}$`));
+  await expect(selector(page)).toHaveAccessibleName(`Repo: ${BETA}`);
+  await expect(page.getByText("Alpha high plan")).toHaveCount(0);
+  // The badge does not open the plan drawer.
+  await expect(page.locator("dialog#drawer[open]")).toHaveCount(0);
+
+  const scopedBadge = page.locator("plan-card", { hasText: "Beta high plan" }).locator(".repo-badge");
+  await expect(scopedBadge).toHaveAttribute("aria-disabled", "true");
+  await expect(scopedBadge).not.toHaveAttribute("href", /.*/);
+
+  await page.goBack();
+  expect(scopeParam(page)).toBe(null);
+  await expect(page.locator("plan-card", { hasText: "Alpha high plan" }).locator(".repo-badge")).toHaveAttribute("href", `/plans?repo=${ALPHA}`);
+});
+
 test("changing the scope keeps Plans filters, and back, forward, and deep links restore it", async ({ page }) => {
   await page.goto(`/plans?repo=${ALPHA}`);
   await expect(page.getByText("Alpha high plan")).toBeVisible();

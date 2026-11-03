@@ -7,6 +7,7 @@
 import { portalTpl as tpl, portalFillSlots as fill } from "/portal/shared/api.js";
 import { cardActionMenu, cardPrimaryAction } from "/portal/plans/templates.js";
 import { incompleteDependencies } from "/portal/plans/plan-actions.js";
+import { currentRepositoryScope, hrefWithRepositoryScope, setRepositoryScope } from "/portal/shared/repository-scope.js";
 
 // Card shows a shortened preview; full text (up to 500 chars) still lives in plan.excerpt
 // for copy-context/drawer use — only the on-card display is truncated further here.
@@ -50,7 +51,7 @@ class PlanCardElement extends HTMLElement {
     statusEl.merge = cardActions.mergeFor?.(record.key) || null;
     statusEl.record = record;
     node.querySelector("[data-slot=status-mount]").replaceWith(statusEl);
-    node.querySelector("[data-slot=repo-badge]").textContent = record.repository.name;
+    renderRepoBadge(node.querySelector("[data-slot=repo-badge]"), record.repository);
     node.querySelector("[data-slot=title-link]").textContent = plan.title;
     // Only title/description open the document; metadata and actions are separate siblings.
     const docDetails = node.querySelector(".doc-details");
@@ -73,6 +74,24 @@ class PlanCardElement extends HTMLElement {
 }
 
 customElements.define("plan-card", PlanCardElement);
+
+// The badge applies the page's repo filter, the same as choosing the repo in the selector. Once
+// any repo filter is set it stays inert, since following it could only reload the current view.
+function renderRepoBadge(badge, repository) {
+  badge.textContent = repository.name;
+  if (!repository.urlKey || currentRepositoryScope()) {
+    badge.setAttribute("aria-disabled", "true");
+    return;
+  }
+  badge.href = hrefWithRepositoryScope(location.href, repository.urlKey);
+  badge.title = `Show only ${repository.name} plans`;
+  badge.addEventListener("click", (event) => {
+    // Modified clicks open the filtered page in a new tab or window as usual.
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    setRepositoryScope(repository.urlKey);
+  });
+}
 
 function truncate(text, maxLength) {
   if (text.length <= maxLength) return text;

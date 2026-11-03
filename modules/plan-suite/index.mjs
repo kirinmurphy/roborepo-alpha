@@ -226,6 +226,8 @@ export function repositoryRecord(root, canonical = null) {
     id: stableKey(canonical?.repositoryId ?? root),
     repositoryId,
     name: canonical?.name ?? path.basename(root),
+    // The `?repo=` key, so a plan's repo badge can apply the Portal repo filter.
+    urlKey: canonical?.urlKey ?? null,
     root,
     providerUrl: providerUrlForRepositoryId(repositoryId),
     gitHead: git.head,
@@ -792,6 +794,7 @@ export function publicRepository(repo) {
     id: repo.id,
     repositoryId: repo.repositoryId ?? null,
     name: repo.name,
+    urlKey: repo.urlKey ?? null,
     root: repo.root,
     providerUrl: repo.providerUrl ?? null,
     gitHead: repo.gitHead,

@@ -25,7 +25,7 @@ export function buildPlanSnapshot({ stateRoot, packageState = null, registry = n
       continue;
     }
     try {
-      const scan = scanRepository(checkouts, { repositoryId: record.id, name: record.displayName });
+      const scan = scanRepository(checkouts, { repositoryId: record.id, name: record.displayName, urlKey: record.urlKey ?? null });
       repositories.push(scan.repository);
       plans.push(...scan.plans);
       errors.push(...scan.errors.map((error) => ({ repository: record.displayName, repositoryId: record.id, ...error })));
