@@ -167,8 +167,13 @@ test("changing the scope keeps Plans filters, and back, forward, and deep links 
   await page.locator("#filters-update").click();
   await expect(page.getByText("Alpha low plan")).toHaveCount(0);
 
+  // Choosing a repo from a scrolled page starts the scoped page at the top.
+  await page.setViewportSize({ width: 1200, height: 300 });
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
   await chooseScope(page, BETA);
   await expect(page).toHaveURL(new RegExp(`/plans\\?repo=${BETA}$`));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   await expect(page.getByText("Beta high plan")).toBeVisible();
   await expect(page.getByText("Beta low plan")).toHaveCount(0);
   await expect(page.getByText("Alpha high plan")).toHaveCount(0);

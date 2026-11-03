@@ -55,10 +55,12 @@ export function isRepositoryScopeUnavailable(error) {
 }
 
 // Changing the scope pushes a history entry instead of navigating, so in-memory page state (Plans
-// filters, say) survives; the page refetches from its change listener.
+// filters, say) survives; the page refetches from its change listener. The scoped page starts from
+// the top, as a new page would; back/forward skip this and keep the browser's scroll restoration.
 export function setRepositoryScope(scope) {
   if ((scope || null) === currentRepositoryScope()) return;
   history.pushState(null, "", hrefWithRepositoryScope(location.href, scope));
+  window.scrollTo(0, 0);
   notifyIfChanged();
 }
 

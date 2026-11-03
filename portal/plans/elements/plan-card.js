@@ -90,8 +90,6 @@ function renderRepoBadge(badge, repository) {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
     setRepositoryScope(repository.urlKey);
-    // The badge can be clicked far down the board; the filtered board starts from the top.
-    window.scrollTo(0, 0);
   });
 }
 
