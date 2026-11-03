@@ -1,6 +1,6 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import { withTemporaryStorage } from "./temporary-storage.mjs";
 import { inspectRawAttributes } from "./worktree-snapshot.mjs";
 import { GIT_MAX_BINARY_BUFFER, runGitProcess } from "./git-exec.mjs";
 
@@ -85,8 +85,7 @@ function lines(output) {
 }
 
 export async function inspectBranchLanding(cwd, branch, options = {}) {
-  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-landing-"));
-  try {
+  return withTemporaryStorage("landing", async (temporary) => {
     const execute = options.runGit || runGitProcess;
     const deadline = Date.now() + 30000;
     const config = await execute(cwd, ["config", "--null", "--list"]);
@@ -100,5 +99,5 @@ export async function inspectBranchLanding(cwd, branch, options = {}) {
       return execute(directory, args, { ...settings, timeoutMs: Math.min(GIT_TIMEOUT_MS, remaining), plumbing: { ...settings.plumbing, objectDirectory: path.join(temporary, "objects"), alternateObjects: path.join(objects.stdout.trim(), "objects") } });
     };
     return await inspectLanding(cwd, branch, { ...options, runGit });
-  } finally { fs.rmSync(temporary, { recursive: true, force: true }); }
+  });
 }

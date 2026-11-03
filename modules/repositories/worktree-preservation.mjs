@@ -1,16 +1,19 @@
 import fs from "node:fs";
 import { createHash } from "node:crypto";
 import { planEntriesByIdentity } from "../plan-suite/copy-integration.mjs";
-import os from "node:os";
 import path from "node:path";
+import { withTemporaryStorage } from "./temporary-storage.mjs";
 import { inspectBranchLanding, FIRST_PARENT_SCAN_LIMIT } from "./worktree-landed.mjs";
 import { GIT_MAX_BINARY_BUFFER, runGitProcess } from "./git-exec.mjs";
 import { inventoryWorktree, inspectRawAttributes, required, writeTree } from "./worktree-snapshot.mjs";
 
 // Every proof object is disposable. Neither preview nor a failed proof creates repository refs or
 // writes the user's index. Both staged and filesystem versions must be absorbed by ONE candidate.
-export async function assessWorktreePreservation(cwd, { branch, base = null, recorded = null, timeoutMs = 30000, runGit: executeGit = runGitProcess } = {}) {
-  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-preservation-"));
+export async function assessWorktreePreservation(cwd, options = {}) {
+  return withTemporaryStorage("preservation", (temporary) => inspectPreservation(cwd, temporary, options));
+}
+
+async function inspectPreservation(cwd, temporary, { branch, base = null, recorded = null, timeoutMs = 30000, runGit: executeGit = runGitProcess } = {}) {
   const deadline = Date.now() + timeoutMs;
   let landing = null;
   let inventory = null;
@@ -33,7 +36,7 @@ export async function assessWorktreePreservation(cwd, { branch, base = null, rec
     }
     const baseCommit = required(await git(["rev-parse", base])).trim();
     landing = await inspectBranchLanding(cwd, branch, { base, recorded, runGit });
-    const result = (state, reason, extra = {}) => ({ state, reason, landing, fingerprint: inventory.fingerprint, tip: inventory.tip, baseCommit, baseRef: base, remainingPaths, blockingPaths: [], ...extra });
+    const result = (state, reason, extra = {}) => ({ state, reason, landing, fingerprint: inventory.fingerprint, tip: inventory.tip, baseCommit, baseRef: base, remainingPaths, blockingPaths: [], cleanupWarnings: landing?.cleanupWarnings || [], ...extra });
     if (landing.tip && landing.tip !== inventory.tip) throw new Error("branch changed during assessment");
     const baseline = parseTree(required(await git(["ls-tree", "-r", "-z", inventory.tip], { maxBuffer: GIT_MAX_BINARY_BUFFER })));
     const objectFormat = required(await git(["rev-parse", "--show-object-format"])).trim();
@@ -98,8 +101,8 @@ export async function assessWorktreePreservation(cwd, { branch, base = null, rec
     }
     return result(conflicted ? "unknown" : "remaining", conflicted ? "local layer merge conflicted within assessed history" : "local layers not absorbed within assessed history", { hasLocalContent: true });
   } catch (error) {
-    return { state: "unknown", reason: error.message, landing, fingerprint: inventory?.fingerprint || null, hasLocalContent: null, remainingPaths, blockingPaths: [] };
-  } finally { fs.rmSync(temporary, { recursive: true, force: true }); }
+    return { state: "unknown", reason: error.message, landing, fingerprint: inventory?.fingerprint || null, hasLocalContent: null, remainingPaths, blockingPaths: [], cleanupWarnings: [...(landing?.cleanupWarnings || []), ...(error.cleanupWarnings || [])] };
+  }
 }
 
 function parseTree(output) {

@@ -54,7 +54,7 @@ export async function cleanupWorktrees({ cwd = process.cwd(), stateRoot = STATE_
       });
       if (!remove && preservation?.state !== "preserved") { guard.ok = false; guard.reason = preservation?.reason || "preservation unknown"; }
       if (archive && !preservation?.fingerprint) { guard.ok = false; guard.reason = preservation?.reason || "snapshot inventory unavailable"; }
-      const row = { preservation: preservation?.state || null, remainingPaths: preservation?.remainingPaths || [], blockingPaths: preservation?.blockingPaths || [], assessedTip: preservation?.tip || surveyTip, assessedBase: preservation?.baseCommit || null, evidenceCommit: preservation?.evidenceCommit || null, snapshotRef: null, restoreCommand: null, outcomes: [], path: worktree.path, name: worktree.name, branch: worktree.branch, state: landing.landed ? "landed" : landing.reason === "scan unavailable" ? "unknown" : "not landed", eligible: guard.ok, reason: landing.reason === "scan unavailable" ? "landed scan unavailable" : guard.reason, warning: guard.warning, landingEvidence: landing.landed ? (landing.reused ? "reused" : "scanned") : null, action: "kept" };
+      const row = { cleanupWarnings: preservation?.cleanupWarnings || landing.cleanupWarnings || [], preservation: preservation?.state || null, remainingPaths: preservation?.remainingPaths || [], blockingPaths: preservation?.blockingPaths || [], assessedTip: preservation?.tip || surveyTip, assessedBase: preservation?.baseCommit || null, evidenceCommit: preservation?.evidenceCommit || null, snapshotRef: null, restoreCommand: null, outcomes: [], path: worktree.path, name: worktree.name, branch: worktree.branch, state: landing.landed ? "landed" : landing.reason === "scan unavailable" ? "unknown" : "not landed", eligible: guard.ok, reason: landing.reason === "scan unavailable" ? "landed scan unavailable" : guard.reason, warning: guard.warning, landingEvidence: landing.landed ? (landing.reused ? "reused" : "scanned") : null, action: "kept" };
       if (apply && guard.ok) {
         let snapshot = null;
         if (archive || preservation?.hasLocalContent) {
@@ -140,7 +140,7 @@ async function cleanupDetachedBranches(mainPath, worktrees, { apply, stateRoot }
   for (const branch of refs.stdout.trim().split("\n").filter((name) => name && !occupied.has(name))) {
     const landing = await inspectBranchLanding(mainPath, branch);
     if (!landing.landed) continue;
-    const row = { path: null, name: null, branch, state: "landed", eligible: true, reason: null, action: "kept" };
+    const row = { cleanupWarnings: landing.cleanupWarnings || [], path: null, name: null, branch, state: "landed", eligible: true, reason: null, action: "kept" };
     if (apply) {
       const fresh = await runGitProcess(mainPath, ["rev-parse", `refs/heads/${branch}`]);
       if (!fresh.ok || fresh.stdout.trim() !== landing.tip || linkedWorktrees(path.join(mainPath, ".git")).some((item) => item.branch === branch)) {
