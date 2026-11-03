@@ -433,6 +433,33 @@ assert.equal(live.lifecycle.state, "active");
 // between "idle-one" and "stale-one" alphabetically.
 assert.equal(withPersisted.repositories[0].repositoryId, MENUGOATS);
 
+// Folder renames leave an absent clone in the registry. Hide that row only when a
+// checkout is confirmed present; keep the source records so a returning path reappears.
+const movedCheckouts = [
+  { rootId: "old-folder", kind: "primary", state: "absent", projectRoot: "/tmp/old-folder", git: null },
+  { rootId: "new-folder", kind: "clone", state: "present", projectRoot: "/tmp/new-folder", git: { branch: "main" } },
+  { rootId: "offline-clone", kind: "clone", state: "unreadable", projectRoot: "/tmp/offline-clone", git: null },
+  { rootId: "missing-worktree", kind: "worktree", state: "absent", projectRoot: "/tmp/missing-worktree", git: null },
+];
+function movedRepository(checkouts) {
+  return buildDeveloperRuntimeSnapshot({
+    discovery: { capabilities: { discovery: "supported" }, warnings: [], composeProjectGit: new Map(), instances: [] },
+    settings: defaultSettings(),
+    persistedRepositories: [{ repositoryId: IDLE, name: "moved", lifecycle: { state: "idle", reason: null }, checkouts }],
+  }).repositories[0];
+}
+const originalMovedCheckouts = structuredClone(movedCheckouts);
+assert.deepEqual(movedRepository(movedCheckouts).roots.map((root) => root.rootId).sort(),
+  ["missing-worktree", "new-folder", "offline-clone"], "hide the absent clone, preserving unreadable clones and worktree cleanup rows");
+assert.deepEqual(movedCheckouts, originalMovedCheckouts, "display filtering leaves persisted checkout observations intact");
+assert.equal(movedRepository([movedCheckouts[0]]).roots.length, 1, "keep the last missing checkout visible");
+assert.equal(movedRepository([movedCheckouts[0], movedCheckouts[2]]).roots.length, 2, "unreadable is not proof of a surviving checkout");
+assert.equal(movedRepository(movedCheckouts.map((checkout) => checkout.rootId === "old-folder"
+  ? { ...checkout, state: "present", git: { branch: "main" } } : checkout)).roots.length, 4,
+"a returning folder reappears alongside the other clone");
+assert.equal(movedRepository([movedCheckouts[0], { ...movedCheckouts[1], kind: "worktree", git: { branch: "feature", isWorktree: true } }]).roots.length,
+  1, "a confirmed-present worktree also keeps the repository visible without an absent main row");
+
 // A repository that IS running must never also appear from the persisted list. The caller filters
 // running ids, but a stack resolved on this scan can reach the registry a moment before the snapshot
 // is built, and one repository rendering as two cards is worse than one rendering a poll late.
