@@ -136,7 +136,13 @@ test("a plan's repo badge applies that repo's filter, and is inert once any repo
   await expect(title).toHaveCSS("text-decoration-line", "none");
   await expect(badge).toHaveCSS("text-decoration-line", "none");
   await expect(badge).toHaveCSS("cursor", "pointer");
+  // Filtering from a scrolled board starts the filtered board at the top.
+  await page.setViewportSize({ width: 1200, height: 300 });
+  await badge.scrollIntoViewIfNeeded();
+  await page.evaluate(() => window.scrollBy(0, 200));
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
   await badge.click();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   await expect(page).toHaveURL(new RegExp(`/plans\\?repo=${BETA}$`));
   await expect(selector(page)).toHaveAccessibleName(`Repo: ${BETA}`);
   await expect(page.getByText("Alpha high plan")).toHaveCount(0);
