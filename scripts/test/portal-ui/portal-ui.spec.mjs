@@ -1127,9 +1127,9 @@ test.describe("repository-first portal Home", () => {
     await expect(card.locator(".repository-state-badge")).toHaveText("idle");
     // No port says nothing runs; the row does not spell out "idle".
     await expect(cardRows(card).getByText("idle", { exact: true })).toHaveCount(0);
-    // Only a worktree no plan claims has a ⋮ cell; a plan's row keeps its actions in its dropdown.
-    await expect(planRowOf(card, "Idle Story").locator(".worktree-row-menu")).toBeHidden();
-    await expect(checkoutRow(card, "feature/stale").locator(".worktree-row-menu")).toBeVisible();
+    // Every worktree row keeps its actions in a worktree dropdown, whether or not a plan claims it.
+    await expect(planRowOf(card, "Idle Story").getByRole("button", { name: "Worktree details for Idle Story" })).toBeVisible();
+    await expect(checkoutRow(card, "feature/stale").getByRole("button", { name: "Worktree details for feature/stale" })).toBeVisible();
     await expect(checkoutRow(card, "feature/stale").getByText("stale", { exact: true })).toBeVisible();
     const merged = checkoutRow(card, "feature/landed").getByText("merged", { exact: true });
     await expect(merged).toBeVisible();
@@ -1145,7 +1145,7 @@ test.describe("repository-first portal Home", () => {
     await expect(checkoutRow(card, "feature/stale").locator(".git-drift")).toBeVisible();
     await expect(checkoutRow(card, "feature/landed").locator(".git-drift")).toBeHidden();
 
-    await card.getByRole("button", { name: "Actions for feature/running" }).click();
+    await card.getByRole("button", { name: "Worktree details for feature/running" }).click();
     await expect(card.getByRole("button", { name: "Stop Server" }).locator('portal-icon[name="stop"]')).toHaveCount(1);
     await expect(card.getByRole("button", { name: "Delete Worktree" }).locator('portal-icon[name="trash"]')).toHaveCount(1);
     // A successful stop re-reads the overview and rebuilds the card with every menu closed. Mark the
@@ -1156,14 +1156,14 @@ test.describe("repository-first portal Home", () => {
     await expect(page.locator(".repository-card[data-before-stop]")).toHaveCount(0);
 
     const dialog = page.getByRole("dialog", { name: "Delete worktree" });
-    await card.getByRole("button", { name: "Actions for feature/running" }).click();
+    await card.getByRole("button", { name: "Worktree details for feature/running" }).click();
     await card.getByRole("button", { name: "Delete Worktree" }).click();
     await expect(dialog).toContainText("Something is running in this worktree.");
     // A running worktree's deletion is not routine: the confirmation turns red.
     await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "danger");
     await dialog.getByRole("button", { name: "Cancel" }).click();
 
-    await card.getByRole("button", { name: "Actions for feature/stale" }).click();
+    await card.getByRole("button", { name: "Worktree details for feature/stale" }).click();
     await expect(card.getByRole("button", { name: "Stop Server" })).toHaveCount(0);
     await expect(card.getByRole("button", { name: "Delete Worktree" })).toHaveClass(/menu-item-danger/);
     await card.getByRole("button", { name: "Delete Worktree" }).click();
@@ -1182,14 +1182,14 @@ test.describe("repository-first portal Home", () => {
     await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "cta");
     await dialog.getByRole("button", { name: "Cancel" }).click();
     await expect(dialog).toBeHidden();
-    await card.getByRole("button", { name: "Actions for feature/landed" }).click();
+    await card.getByRole("button", { name: "Worktree details for feature/landed" }).click();
     await card.getByRole("button", { name: "Delete Worktree" }).click();
     await expect(dialog).toContainText("Its changes are already merged into main, so no committed work is lost.");
     await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "cta");
     await dialog.getByRole("button", { name: "Cancel" }).click();
     expect(removals).toEqual([]);
 
-    await card.getByRole("button", { name: "Actions for feature/guarded" }).click();
+    await card.getByRole("button", { name: "Worktree details for feature/guarded" }).click();
     await card.getByRole("button", { name: "Delete Worktree" }).click();
     await expect(dialog.getByRole("alert")).toContainText("These changes and files cannot be retrieved after deletion.");
     await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "danger");
@@ -1203,7 +1203,7 @@ test.describe("repository-first portal Home", () => {
     await expect.poll(() => removals).toEqual([{ branch: "feature/guarded", discardChanges: true }]);
     await expect(dialog).toBeHidden();
 
-    await card.getByRole("button", { name: "Actions for feature/stale" }).click();
+    await card.getByRole("button", { name: "Worktree details for feature/stale" }).click();
     await card.getByRole("button", { name: "Delete Worktree" }).click();
     await expect(dialog).toContainText("Stop editors and agents writing here first");
     await dialog.getByRole("button", { name: "Archive and remove", exact: true }).click();
@@ -1216,7 +1216,7 @@ test.describe("repository-first portal Home", () => {
     removal = { action: "kept", reason: "uncommitted or untracked changes", requiresDiscardConfirmation: true };
     let release;
     removalHeld = new Promise((resolve) => { release = resolve; });
-    await card.getByRole("button", { name: "Actions for feature/stale" }).click();
+    await card.getByRole("button", { name: "Worktree details for feature/stale" }).click();
     await card.getByRole("button", { name: "Delete Worktree" }).click();
     const confirm = dialog.locator("[data-slot=confirm]");
     await confirm.click();
@@ -1391,10 +1391,17 @@ test.describe("repository-first portal Home", () => {
       await expect(row.getByRole("button", { name: "Links" })).toHaveCount(0);
     }
 
-    // An unclaimed worktree is the same checkout row as before: branch label with its tooltip, copy
-    // control, port, and Links.
+    // An unclaimed worktree keeps its branch label with its tooltip, port, and Links; its copy control
+    // is the worktree dropdown, which copies the branch and path but has no plan file.
     await expect(loose.locator("[data-slot=root-info]")).toBeVisible();
-    await expect(loose.locator("[data-slot=root-copy] portal-copy-menu")).toHaveCount(1);
+    await expect(loose.locator("[data-slot=root-copy] portal-copy-menu")).toHaveCount(0);
+    await loose.getByRole("button", { name: "Worktree details for feature/loose" }).click();
+    const loosePanel = card.locator(".worktree-details");
+    for (const name of ["Copy branch name", "Copy worktree path", "Delete Worktree"]) {
+      await expect(loosePanel.getByRole("button", { name })).toBeVisible();
+    }
+    await expect(loosePanel.getByRole("button", { name: "Copy plan path" })).toHaveCount(0);
+    await page.keyboard.press("Escape");
     await expect(loose.getByRole("link", { name: ":5174" })).toBeVisible();
     await expect(loose.getByRole("button", { name: "Links" })).toBeVisible();
 
@@ -1580,35 +1587,6 @@ test.describe("repository-first portal Home", () => {
     await expect(row.locator(".worktree-state-badge")).toHaveText("merged");
   });
 
-  test("the copy dropdown confirms with green checks while keeping item labels", async ({ page }) => {
-    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
-    await page.clock.install();
-    await planFixture(page);
-    await page.goto("/");
-    const menu = checkoutRow(roboRepoCard(page), "feature/loose").locator("portal-copy-menu");
-    await menu.getByRole("button", { name: "Copy", exact: true }).click();
-    const item = menu.getByRole("button", { name: "Copy branch name", exact: true });
-    await expect(item.locator('portal-icon[name="copy"]')).toBeVisible();
-    await item.click();
-    const copied = menu.getByRole("button", { name: "Copied", exact: true });
-    await expect(copied).toHaveText("Copy branch name");
-    await expect(copied.locator('portal-icon[name="check"]')).toBeVisible();
-    expect(await copied.evaluate((node) => {
-      const probe = document.createElement("span");
-      probe.style.color = "var(--ok)";
-      node.append(probe);
-      const matches = getComputedStyle(node).color === getComputedStyle(probe).color;
-      probe.remove();
-      return matches;
-    })).toBe(true);
-    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("feature/loose");
-    await page.clock.fastForward(600);
-    await expect(menu.locator(".copy-menu-panel")).toHaveCount(0);
-    await expect(menu.getByRole("button", { name: "Copied", exact: true }).locator('portal-icon[name="check"]')).toBeVisible();
-    await page.clock.fastForward(5000);
-    await expect(menu.getByRole("button", { name: "Copy", exact: true }).locator('portal-icon[name="copy"]')).toBeVisible();
-  });
-
   test("the worktree details dropdown copies each value in place and lists only non-default facts", async ({ page }) => {
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
     await planFixture(page);
@@ -1717,7 +1695,7 @@ test.describe("repository-first portal Home", () => {
       await page.goto("/");
       const card = roboRepoCard(page);
       await expect(cardRows(card)).toHaveText([/main branch/, /feature\/a/, /feature\/b/, /feature\/loose/], { useInnerText: true });
-      await expect(checkoutRow(card, "feature/a").locator("[data-slot=root-copy] portal-copy-menu")).toHaveCount(1);
+      await expect(checkoutRow(card, "feature/a").getByRole("button", { name: "Worktree details for feature/a" })).toBeVisible();
       await expect(card).not.toContainText("Plans has not scanned this repository");
     }
   });

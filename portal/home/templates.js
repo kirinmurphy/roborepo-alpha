@@ -1,9 +1,9 @@
 import { portalFillSlots as fill, portalTpl as tpl } from "/portal/shared/api.js";
-import { mountActionMenu, mountRepositoryRow, repositoryPageUrl } from "/portal/shared/repository-components.js";
+import { mountRepositoryRow, repositoryPageUrl } from "/portal/shared/repository-components.js";
 import { matchedPlanIdentity, unmatchedPlanRow } from "./plan-rows.js";
 import { mountRepositoryShortcuts } from "./repository-shortcuts.js";
 import { worktreeCleanupNotice } from "./worktree-dialogs.js";
-import { isRunning } from "./worktree-details.js";
+import { worktreeDetailsButton } from "./worktree-details.js";
 import { buildRootSection } from "/portal/developer-runtime/repository-root-row.js";
 
 const MOCK_NAMES = {
@@ -129,7 +129,7 @@ function checkoutRow(checkout, actions, { identity = null, hookInstalled = false
     repository: { name: "Repo" },
     mode: "home",
     onMountLinks: actions.onMountLinks,
-    onMountWorktreeMenu: (slot) => mountWorktreeMenu(slot, checkout, actions),
+    onMountWorktreeDetails: (slot) => slot.append(unclaimedWorktreeDetails(checkout, actions)),
     identity,
   });
   // Home's row glyphs match the repo header's shortcut icons; Runtime keeps the shared default.
@@ -137,18 +137,13 @@ function checkoutRow(checkout, actions, { identity = null, hookInstalled = false
   return row;
 }
 
-// A worktree no plan claims keeps its actions in a ⋮ menu at the end of its row: Stop Server while
-// something runs in it, and Delete Worktree, which stops it as well.
-function mountWorktreeMenu(slot, checkout, actions) {
-  const name = checkout.git?.branch || checkout.worktreeName || "worktree";
+// A worktree no plan claims gets the same dropdown as a plan's worktree, minus the plan file.
+function unclaimedWorktreeDetails(checkout, actions) {
   const target = { repositoryId: actions.repositoryId, checkout };
-  const menu = mountActionMenu(slot, [
-    { key: "stop-servers", label: "Stop Server", icon: "stop", hidden: !isRunning(checkout) },
-    { key: "delete", label: "Delete Worktree", icon: "trash", danger: true },
-  ], {
-    ariaLabel: `Actions for ${name}`,
-    onToggle: () => actions.onToggleMenu(menu),
-    onSelect: (key) => (key === "delete" ? actions.onRemoveWorktree(target) : actions.onStopServers(target)),
+  return worktreeDetailsButton(null, checkout, {
+    mainCheckouts: [],
+    onStopServers: () => actions.onStopServers(target),
+    onDelete: () => actions.onRemoveWorktree(target),
   });
 }
 

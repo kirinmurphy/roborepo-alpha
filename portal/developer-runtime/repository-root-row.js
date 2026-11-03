@@ -58,7 +58,7 @@ function worktreeStateNote(root) {
 // from `root`, so the row behaves exactly like the checkout it is. Home names a worktree by the plan
 // it implements this way; the row stays agnostic about what the node holds. `identity.hideWorktreeBadge`
 // drops the lifecycle badge when the node already says the same thing.
-export function buildRootSection({ root, departed = [], repository, composeActions, instanceActions, mode = "runtime", onMountLinks, onMountWorktreeMenu, identity = null }) {
+export function buildRootSection({ root, departed = [], repository, composeActions, instanceActions, mode = "runtime", onMountLinks, onMountWorktreeDetails, identity = null }) {
   const section = createRepositoryCheckoutRow({ controls: mode !== "home" });
   // Lets a rebuild find "this same checkout's" row across renders (see reconcileSection in app.js)
   // to carry its open/closed state forward — rootId is stable across polls, DOM position is not.
@@ -88,21 +88,18 @@ export function buildRootSection({ root, departed = [], repository, composeActio
   if (identity) section.querySelector(".repository-root-identity-line").prepend(identity.node);
   else fillIdentity(section, root, composeGroups);
   mountCheckoutRow(section);
+  // Home gives an unclaimed worktree its worktree dropdown in place of the copy control: the dropdown
+  // copies the same values and also holds the worktree's actions. A plan's identity carries its own.
+  const worktreeDetails = mode === "home" && root?.isWorktree && !identity && onMountWorktreeDetails;
+  if (worktreeDetails) onMountWorktreeDetails(section.querySelector("[data-slot=root-copy]"), root);
   if (root?.git) {
     // Drift is a prompt to sync work in progress; once the branch has merged it no longer applies.
     // The checkout tooltip and the worktree dropdown still carry the Git facts.
     if (root.worktreeState !== "landed") applyGitDrift(section, root.git);
-    if (!identity) mountCopyDropdown(section, root);
+    if (!identity && !worktreeDetails) mountCopyDropdown(section, root);
   }
   fillPromotedLink(section, root);
   if (mode === "home") {
-    // A plan's row keeps its worktree actions in the worktree dropdown its identity carries, so only a
-    // worktree no plan claims takes the ⋮ cell.
-    if (root?.isWorktree && !identity && onMountWorktreeMenu) {
-      const menuSlot = section.querySelector("[data-slot=worktree-menu]");
-      menuSlot.hidden = false;
-      onMountWorktreeMenu(menuSlot, root);
-    }
     if (root?.primaryEntrypoint?.opaqueKey) onMountLinks?.(section.querySelector("[data-slot=root-links]"), root.primaryEntrypoint);
     section.querySelector("[data-slot=members]")?.remove();
     return section;

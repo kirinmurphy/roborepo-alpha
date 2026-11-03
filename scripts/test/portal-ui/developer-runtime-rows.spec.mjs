@@ -143,6 +143,34 @@ test.describe("Runtime checkout rows (developer-runtime-repository-row-layout)",
     await expect(worktree.locator("[data-slot=root-copy]").getByRole("button")).toHaveCount(1);
   });
 
+  test("the copy dropdown confirms with green checks while keeping item labels", async ({ page }) => {
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.clock.install();
+    await page.reload();
+    const menu = row(page, "demo-wt").locator("portal-copy-menu");
+    await menu.getByRole("button", { name: "Copy", exact: true }).click();
+    const item = menu.getByRole("button", { name: "Copy branch name", exact: true });
+    await expect(item.locator('portal-icon[name="copy"]')).toBeVisible();
+    await item.click();
+    const copied = menu.getByRole("button", { name: "Copied", exact: true });
+    await expect(copied).toHaveText("Copy branch name");
+    await expect(copied.locator('portal-icon[name="check"]')).toBeVisible();
+    expect(await copied.evaluate((node) => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--ok)";
+      node.append(probe);
+      const matches = getComputedStyle(node).color === getComputedStyle(probe).color;
+      probe.remove();
+      return matches;
+    })).toBe(true);
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(WORKTREE_BRANCH);
+    await page.clock.fastForward(600);
+    await expect(menu.locator(".copy-menu-panel")).toHaveCount(0);
+    await expect(menu.getByRole("button", { name: "Copied", exact: true }).locator('portal-icon[name="check"]')).toBeVisible();
+    await page.clock.fastForward(5000);
+    await expect(menu.getByRole("button", { name: "Copy", exact: true }).locator('portal-icon[name="copy"]')).toBeVisible();
+  });
+
   test("a Compose-only checkout promotes its web service", async ({ page }) => {
     await expect(row(page, "shop-main").getByRole("link", { name: ":8080", exact: true })).toBeVisible();
   });

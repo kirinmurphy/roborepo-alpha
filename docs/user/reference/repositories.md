@@ -176,8 +176,8 @@ Each card combines a compact view of several domains:
     otherwise **worktree not listed** (Git has it, Runtime does not list it), **worktree missing** (Git
     has no worktree by that name), **worktree ambiguous** (claimed twice, or more than one checkout
     carries the name), or **worktree status unknown** (Runtime is unavailable).
-  - Worktrees no plan claimed follow as ordinary checkout rows, each with a ⋮ menu holding
-    **Stop Server** (while something runs in it) and **Delete Worktree**.
+  - Worktrees no plan claimed follow as ordinary checkout rows: the branch label with its checkout
+    tooltip, then the same worktree dropdown a plan's row carries, without the plan file.
   - One unlabeled line closes the list with the repository's Active and Backlog counts and an
     **all plans** link, and says so when Plans coverage is partial. A repository with no active
     plans, or one Plans has not scanned, lists its worktrees as plain checkout rows with no plan
@@ -217,8 +217,8 @@ running, shows a warning and a red **Delete worktree** button. Uncommitted edits
 files also show a warning before confirmation and turn the button red: confirming discards them
 permanently. The backup preserves committed work only. Otherwise the button is green.
 **Details and how to restore** shows the branch, folder, archive ref, and the commands that bring it
-back. Confirming stops the worktree's servers and removes it. Both live in the worktree dropdown on a plan's row and in the ⋮ menu on any
-other worktree row; no row shows them inline. If new local changes appear after the page loaded,
+back. Confirming stops the worktree's servers and removes it. Both live in every worktree row's worktree dropdown; no row shows them
+inline. If new local changes appear after the page loaded,
 the first deletion request keeps the worktree and reveals the warning; a second confirmation is
 required to discard them. This warned Delete choice keeps its committed-tip backup semantics.
 Deletion refuses a locked worktree, a worktree with valuable ignored files or submodules, a server that does not stop, and the current or
