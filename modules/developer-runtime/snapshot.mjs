@@ -489,6 +489,7 @@ function buildRepositories({ projects, composeProjects, unmatchedInstances, repo
       root.remainingPaths = worktree.remainingPaths || [];
       root.blockingPaths = worktree.blockingPaths || [];
       root.worktreeRunning = worktree.running === true;
+      root.worktreeLastActivityAt = worktree.lastActivityAt || null;
       root.mergedInto = worktree.mergedInto || null;
       root.worktreeName = worktree.name;
       root.unmergedCommits = worktree.unmergedCommits;
