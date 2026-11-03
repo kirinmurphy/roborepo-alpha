@@ -1,5 +1,4 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { GIT_MAX_BINARY_BUFFER, runGitProcess } from "./git-exec.mjs";
@@ -261,23 +260,21 @@ function validatePaths(entries) {
   }
 }
 
-export async function inspectRawAttributes(git, paths, source = null, { absorption = false } = {}) {
+export async function inspectRawAttributes(git, paths, source = null, { absorption = false, indexFile = null } = {}) {
   if (!paths.length) return "";
-  const temporary = source ? fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-attributes-")) : null;
-  try {
-    // A temporary index gives check-attr the historical attributes on older Git versions too,
-    // without checking files out or changing the user's staged state. Split indexes must stay off
-    // so this read cannot create shared-index files in the repository.
-    const plumbing = temporary ? { indexFile: path.join(temporary, "index") } : null;
-    if (source) required(await git(["-c", "core.splitIndex=false", "-c", "core.sparseCheckout=false", "read-tree", source], { plumbing }));
-    const names = absorption ? ["filter", "merge"] : ["filter", "merge", "working-tree-encoding", "text", "eol"];
-    const attributes = required(await git(["check-attr", ...(source ? ["--cached"] : []), "-z", "--stdin", ...names], { input: `${paths.join("\0")}\0`, plumbing, maxBuffer: GIT_MAX_BINARY_BUFFER }));
-    const fields = attributes.split("\0");
-    for (let i = 0; i + 2 < fields.length; i += 3) {
-      const [file, attr, value] = fields.slice(i, i + 3);
-      const allowed = attr === "merge" ? ["unspecified", "unset", "set", "text", "binary", "union"] : ["unspecified", "unset"];
-      if (!allowed.includes(value)) throw new Error(`unsupported attribute ${attr}=${value}: ${file}`);
-    }
-    return attributes;
-  } finally { if (temporary) fs.rmSync(temporary, { recursive: true, force: true }); }
+  if (source && !indexFile) throw new Error("historical attribute inspection requires a disposable index");
+  // The caller owns this index inside its managed temporary storage. Historical attributes
+  // work on older Git versions without changing the user's staged state. Split indexes stay
+  // off so this read cannot create shared-index files in the repository.
+  const plumbing = source ? { indexFile } : null;
+  if (source) required(await git(["-c", "core.splitIndex=false", "-c", "core.sparseCheckout=false", "read-tree", source], { plumbing }));
+  const names = absorption ? ["filter", "merge"] : ["filter", "merge", "working-tree-encoding", "text", "eol"];
+  const attributes = required(await git(["check-attr", ...(source ? ["--cached"] : []), "-z", "--stdin", ...names], { input: `${paths.join("\0")}\0`, plumbing, maxBuffer: GIT_MAX_BINARY_BUFFER }));
+  const fields = attributes.split("\0");
+  for (let i = 0; i + 2 < fields.length; i += 3) {
+    const [file, attr, value] = fields.slice(i, i + 3);
+    const allowed = attr === "merge" ? ["unspecified", "unset", "set", "text", "binary", "union"] : ["unspecified", "unset"];
+    if (!allowed.includes(value)) throw new Error(`unsupported attribute ${attr}=${value}: ${file}`);
+  }
+  return attributes;
 }

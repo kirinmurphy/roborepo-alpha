@@ -128,6 +128,55 @@ import { collectKnownWorktrees } from "../cli/worktree-observations.mjs";
     assert.equal(preservation.cleanupWarnings.length, 1);
     await assert.rejects(inspectBranchLanding("unused", "feature", { runGit: async () => { throw original; } }), (error) => error === original);
   } finally { fs.rmdirSync = rmdir; console.warn = warn; }
+  // Reach historical attribute reads and the content merge, not just early Git failures.
+  const rm = fs.rmSync;
+  const unlink = fs.unlinkSync;
+  const indexes = [];
+  const historicalGit = async (_cwd, args, options = {}) => {
+    const output = (stdout) => ({ ok: true, code: 0, stdout });
+    if (args[0] === "config") return output("");
+    if (args[0] === "symbolic-ref") return output("main");
+    if (args[0] === "merge-base") return output("fork");
+    if (args[0] === "reflog") return output("tip\nfork");
+    if (args[0] === "rev-list") return output(args.includes("--reverse") ? "landed" : args.includes("--first-parent") ? "landed\nfork" : "tip");
+    if (args[0] === "ls-tree") return output("file.txt\0");
+    if (args.includes("read-tree")) {
+      indexes.push(options.plumbing.indexFile);
+      fs.writeFileSync(options.plumbing.indexFile, "temporary index");
+      return output("");
+    }
+    if (args[0] === "check-attr") return output("file.txt\0filter\0unspecified\0file.txt\0merge\0unspecified\0");
+    if (args[0] === "merge-tree") return output("tree");
+    if (args[0] === "rev-parse") return output(args.includes("--git-common-dir") ? os.tmpdir() : args[1].endsWith("^{tree}") ? "tree" : "tip");
+    throw new Error(`unexpected Git command: ${args.join(" ")}`);
+  };
+  fs.rmdirSync = denied;
+  fs.rmSync = denied;
+  console.warn = () => {};
+  try {
+    for (const recorded of [null, "landed"]) {
+      const landing = await inspectBranchLanding("unused", "feature", { recorded, runGit: historicalGit });
+      assert.equal(landing.landed, true, JSON.stringify(landing));
+      assert.equal(landing.reused, Boolean(recorded));
+      assert.equal(landing.cleanupWarnings.length, 1);
+      assert.ok(indexes.every((file) => !fs.existsSync(file)), "temporary indexes must be removed");
+    }
+    for (const command of ["ls-tree", "read-tree", "check-attr", "merge-tree", "landed^{tree}"]) {
+      const failed = await inspectBranchLanding("unused", "feature", { runGit: (cwd, args, options) =>
+        args.includes(command) ? { ok: false, code: 128, stdout: "", stderr: `${command} denied` } : historicalGit(cwd, args, options) });
+      assert.equal(failed.reason, "scan unavailable");
+      assert.equal(failed.error, `${command} denied`);
+    }
+    const unsupported = await inspectBranchLanding("unused", "feature", { runGit: (cwd, args, options) =>
+      args[0] === "check-attr" ? { ok: true, code: 0, stdout: "file.txt\0filter\0custom\0" } : historicalGit(cwd, args, options) });
+    assert.equal(unsupported.landed, false);
+    assert.match(unsupported.error, /unsupported attribute filter=custom/);
+    fs.unlinkSync = denied;
+    await assert.rejects(inspectBranchLanding("unused", "feature", { runGit: historicalGit }), /temporary cleanup failed/);
+  } finally {
+    fs.rmSync = rm; fs.rmdirSync = rmdir; fs.unlinkSync = unlink; console.warn = warn;
+    for (const file of indexes) if (fs.existsSync(file)) fs.unlinkSync(file);
+  }
   // Native disposable fixture: a successful return must mean either removal or verified shells.
   let native;
   const nativeResult = await withTemporaryStorage("preservation", async (directory) => {

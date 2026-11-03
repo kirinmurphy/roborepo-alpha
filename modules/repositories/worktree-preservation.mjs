@@ -80,7 +80,7 @@ async function inspectPreservation(cwd, temporary, { branch, base = null, record
       if (!reachedLanding) continue;
       const candidateTree = required(await git(["rev-parse", `${candidate}^{tree}`])).trim();
       const target = parseTree(required(await git(["ls-tree", "-r", "-z", candidate], { maxBuffer: GIT_MAX_BINARY_BUFFER })));
-      await inspectRawAttributes(git, target.map((entry) => entry.path), candidate);
+      await inspectRawAttributes(git, target.map((entry) => entry.path), candidate, { indexFile: path.join(temporary, "attributes-index") });
       const mapped = await mapPlanPaths(baseline, inventory.index, filesystem, target, git);
       const parentTree = await writeTree(mapped.baseline, git);
       const parent = await syntheticCommit(parentTree, inventory.tip, git);
