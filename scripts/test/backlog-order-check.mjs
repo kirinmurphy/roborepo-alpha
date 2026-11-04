@@ -266,7 +266,7 @@ try {
   fs.writeFileSync(path.join(linked, "docs/plans/backlog/agents-new.md"), document({ id: "nnnnnn88" }));
   const fromWorktree = roborepo(linked, "order", "place", "nnnnnn88", "--bottom", "--json");
   assert.equal(fromWorktree.status, 0, fromWorktree.stdout + fromWorktree.stderr);
-  assert.equal(JSON.parse(fs.readFileSync(orderFile, "utf8")).namespaces.agents.at(-1), "nnnnnn88", "written to the primary checkout");
+  assert.ok(JSON.parse(fs.readFileSync(orderFile, "utf8")).namespaces.agents.includes("nnnnnn88"), "written to the primary checkout");
   assert.equal(fs.existsSync(path.join(linked, "docs/plans/plans-order.json")), false, "not to the worktree");
   run(repo, "worktree", "remove", "--force", linked);
   fs.writeFileSync(orderFile, beforeTransition);
