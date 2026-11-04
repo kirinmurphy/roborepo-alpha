@@ -400,13 +400,13 @@ Autonomous decisions made during implementation, each clear, with its effects in
 
 ### Findings
 
-- [ ] A double click on Save sends two saves, the second 409s, and the page throws on a draft with no blocks.
-- [ ] A dirty draft is silently discarded when its namespace disappears.
-- [ ] Save and continue is re-enabled after a failed save that marked the draft stale.
-- [ ] A cancelled drag leaves its block armed for the next drop.
-- [ ] Missing tests: `start` naming and config gates; Filters narrowing Details and not Ordering; removed, renamed, and invalid config at Refresh.
-- [ ] Docs: the transition table omits the naming gate; `order place` flag behavior and `plans repair` wording are wrong; `plan-schema.md` and the addendum contradict the implementation; the Schema rollout risk omits the outside-edit finding; two backlog plans still describe priority.
-- [ ] Comments and leftovers: the registry comment misstates where preserved ids go; dead `reconcile` export, toast actions, drawer returns, `findPlanById`, and `STALE_PLAN`; stale comments and selector; fixtures still write `priority`.
+- [x] A double click on Save sends two saves, the second 409s, and the page throws on a draft with no blocks. — fixed (84bab74e)
+- [x] A dirty draft is silently discarded when its namespace disappears. — fixed (84bab74e)
+- [x] Save and continue is re-enabled after a failed save that marked the draft stale. — fixed (84bab74e)
+- [x] A cancelled drag leaves its block armed for the next drop. — fixed (84bab74e)
+- [x] Missing tests: `start` naming and config gates; Filters narrowing Details and not Ordering; removed, renamed, and invalid config at Refresh. — fixed (84bab74e)
+- [x] Docs: the transition table omits the naming gate; `order place` flag behavior and `plans repair` wording are wrong; `plan-schema.md` and the addendum contradict the implementation; the Schema rollout risk omits the outside-edit finding; two backlog plans still describe priority. — fixed (84bab74e)
+- [x] Comments and leftovers: the registry comment misstates where preserved ids go; dead `reconcile` export, toast actions, drawer returns, `findPlanById`, and `STALE_PLAN`; stale comments and selector; fixtures still write `priority`. — fixed (84bab74e)
 
 ### Verification
 
