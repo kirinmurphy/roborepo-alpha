@@ -413,11 +413,17 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - [x] `option-dropdown`'s `.loading` and `tpl-dropdown-spinner` are dead since priority's removal. — fixed (c96b1ede)
 - [x] No browser test for a failed Save through the guard, or Save and continue from the repo selector. — fixed (c96b1ede)
 - [x] A `## Not tested` entry could be checked hermetically; recorded as evidence instead. — fixed (c96b1ede)
+- [ ] Ordering's Needs prioritization count measures blocks, not plans.
+- [ ] A re-render during an in-flight Save re-enables Cancel and Save, so a discard can be confirmed for an order that still lands.
+- [ ] Details omits the reason for a broken dependency graph, which the UI contract shows in both modes.
+- [ ] `order place` reports a move the caller asked for as automatic, and its text output reads wrongly.
+- [ ] No browser assertion for the duplicate-id row or an unparseable order file locking Ordering.
 
 ### Verification
 
 - Validation pass 1 (fresh-context subagent): the 7 groups of `fix` findings above and no `escalate`. Its full portal UI run on that commit passed, 183 of 183. An earlier run's 3 failures took 4 to 17 minutes against a 30-second limit and passed when rerun.
 - Validation pass 2 (fresh-context subagent): the last 7 findings above, no `escalate`; its `node scripts/test/portal-ui/run.mjs` passed 189 of 189.
 - At c96b1ede one full portal UI run had 8 failures across Home, onboarding, and repo-scope specs. The next full run on the same commit passed 194 of 194, and the cause was not found.
+- Validation pass 3 (fresh-context subagent): the last 5 findings above, no `escalate`; its `node scripts/test/portal-ui/run.mjs` passed 194 of 194.
 - Installed output, on a temporary HOME and state root: `roborepo update`, enabling plan-suite, `roborepo update`, and `roborepo doctor --installed` all exited 0 (110 doctor checks), and the installed plan-write references carry `plans-order.json` and `order place` with no `priority:` line. `doctor` on this machine warns that installed skills are out of date until `roborepo update` runs after merge.
 - Base failure: `roborepo plans validate` exits 1 from blocking findings that are all in `docs/plans/completed/`, none from this change.

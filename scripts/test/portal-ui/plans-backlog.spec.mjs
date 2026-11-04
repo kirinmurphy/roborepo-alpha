@@ -402,6 +402,58 @@ test.describe("Backlog directory and ordering", () => {
     expect(errors).toEqual([]);
   });
 
+  test("Needs prioritization counts plans, not blocks, in both modes", async ({ page }) => {
+    setOrder([]);
+    await openNamespace(page);
+    const heading = page.locator(".backlog-section-title", { hasText: "Needs prioritization" });
+    await expect(heading).toHaveText("Needs prioritization (4)");
+    await page.getByRole("button", { name: "Ordering", exact: true }).click();
+    await expect(page.locator("backlog-block")).toHaveCount(3);
+    await expect(heading).toHaveText("Needs prioritization (4)");
+  });
+
+  test("a plan with a duplicate id is shown with its reason and no controls", async ({ page }) => {
+    const copies = ["docs/plans/backlog/alpha-twin-one.md", "docs/plans/backlog/alpha-twin-two.md"];
+    try {
+      for (const [index, file] of copies.entries()) write(file, document({ id: "twinplan", title: `Twin ${index}` }));
+      await openOrdering(page);
+      await expect(page.getByText("Duplicate id: twinplan")).toHaveCount(2);
+      await expect(page.locator("backlog-block", { hasText: "Twin" })).toHaveCount(0);
+    } finally {
+      for (const file of copies) fs.rmSync(path.join(repo, file), { force: true });
+    }
+  });
+
+  test("an unparseable order file locks Ordering and says why, and is left alone", async ({ page }) => {
+    fs.writeFileSync(orderFile, "{ nope");
+    await openOrdering(page);
+    await expect(page.getByText("docs/plans/plans-order.json cannot be read")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Move to bottom" })).toHaveCount(0);
+    await expect(page.locator("backlog-block").first()).toContainText("blocked");
+    expect(fs.readFileSync(orderFile, "utf8")).toBe("{ nope");
+  });
+
+  test("a re-render during a Save keeps both buttons held", async ({ page }) => {
+    let release;
+    const held = new Promise((resolve) => { release = resolve; });
+    await page.route("**/api/plans/order", async (route) => {
+      await held;
+      await route.continue();
+    });
+    await openOrdering(page);
+    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    const refreshed = page.waitForResponse(/\/api\/plans\/refresh/);
+    await page.locator("#refresh").click();
+    await refreshed;
+    await expect(page.locator("#refresh")).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Cancel", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+    release();
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
+    expect(savedOrder()).toEqual(["alphax03", "alphaa01", "alphab02"]);
+  });
+
   test("a failed Save through the guard stays put and says why", async ({ page }) => {
     await openOrdering(page);
     await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
@@ -510,7 +562,9 @@ test.describe("Backlog directory and ordering", () => {
     const file = "docs/plans/backlog/alpha-diagnostics.md";
     try {
       write(file, document({ id: "alphax03", title: "Diagnostics", deps: ["missing9"] }));
-      await openOrdering(page);
+      await openNamespace(page);
+      await expect(page.getByText("alphax03 depends on missing9, which does not exist.")).toBeVisible();
+      await page.getByRole("button", { name: "Ordering", exact: true }).click();
       await expect(page.getByText("alphax03 depends on missing9, which does not exist.")).toBeVisible();
       await expect(page.getByRole("button", { name: "Move to top" })).toHaveCount(0);
       await expect(page.locator("backlog-block", { hasText: "ALPHA · Storage" })).toContainText("blocked");

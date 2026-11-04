@@ -133,7 +133,7 @@ function plansOrderCommand(args) {
     bottom: "placed at the bottom",
     unprioritized: "left in Needs prioritization",
   };
-  console.log(`plan: ${record.plan.relativePath} (${record.plan.id}): ${descriptions[result.placed]} of ${record.plan.namespace}`);
+  console.log(`plan: ${record.plan.relativePath} (${record.plan.id}), namespace ${record.plan.namespace}: ${descriptions[result.placed]}`);
   if (result.ignoredPosition) console.log(`--${result.ignoredPosition} ignored: a plan connected to a ranked plan stays with its group.`);
   for (const move of result.moves) console.log(`automatic ${move.kind === "attached" ? "attachment" : "move"}: ${move.id} now at position ${move.to + 1}`);
   console.log(result.order.join(" "));

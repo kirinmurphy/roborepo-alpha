@@ -207,7 +207,7 @@ export function createBacklogController(deps) {
     const sections = [];
     if (pending.length) sections.push(sectionNode(`Needs prioritization (${pending.length})`, deps.cardGrid(pending, titled)));
     if (ordered.length) sections.push(sectionNode("Ordered", deps.cardGrid(ordered, titled)));
-    return [namespaceHeader(entry, view), ...(sections.length ? sections : [deps.emptyState()])];
+    return [namespaceHeader(entry, view), ...graphNotices(view), ...(sections.length ? sections : [deps.emptyState()])];
   }
 
   function renderOrdering(entry, view, plans) {
@@ -217,8 +217,7 @@ export function createBacklogController(deps) {
       Object.assign(node, { block, section, index, count, plans, locked, onOpen: deps.onOpen });
       return node;
     };
-    const nodes = [namespaceHeader(entry, view)];
-    for (const reason of view.reasons) nodes.push(fill(tpl("tpl-backlog-finding"), { message: reason, resolution: "Repair the dependency graph; ordering stays locked until then." }));
+    const nodes = [namespaceHeader(entry, view), ...graphNotices(view)];
     if (!view.writable) nodes.push(...entry.findings.filter((item) => item.severity === "blocking").map((item) => fill(tpl("tpl-backlog-finding"), { message: item.message, resolution: item.resolution })));
     const notice = moveNotice(view, plans);
     if (notice) nodes.push(notice);
@@ -227,7 +226,8 @@ export function createBacklogController(deps) {
       list.className = "backlog-order-list";
       list.append(...draft.needs.map((block, index) => blockNode(block, "needs", index, draft.needs.length)));
       for (const key of view.unrankable) list.append(unrankableRow(plans.get(key)));
-      nodes.push(sectionNode(`Needs prioritization (${draft.needs.length + view.unrankable.length})`, list));
+      const pendingPlans = draft.needs.flatMap((block) => block.keys).length + view.unrankable.length;
+      nodes.push(sectionNode(`Needs prioritization (${pendingPlans})`, list));
     }
     const orderedList = document.createElement("div");
     orderedList.className = "backlog-order-list";
@@ -381,10 +381,12 @@ export function createBacklogController(deps) {
       : saveError || "Unsaved changes";
     status.classList.toggle("is-error", Boolean(draft.stale || saveError));
     const save = node.querySelector("[data-slot=save]");
-    save.disabled = draft.stale;
+    // A Save already sent cannot be taken back, so Cancel waits for its outcome too, through any
+    // re-render that happens meanwhile.
+    save.disabled = draft.stale || Boolean(saving);
     const cancel = node.querySelector("[data-slot=cancel]");
+    cancel.disabled = Boolean(saving);
     save.addEventListener("click", () => {
-      // A Save already sent cannot be taken back, so Cancel waits for its outcome too.
       save.disabled = true;
       cancel.disabled = true;
       void saveDraft();
@@ -484,6 +486,14 @@ export function createBacklogController(deps) {
     confirmLeave,
     draftUrl: () => draftUrl,
   };
+}
+
+// Why a namespace's dependency graph needs repair, shown in both modes.
+function graphNotices(view) {
+  return view.reasons.map((reason) => fill(tpl("tpl-backlog-finding"), {
+    message: reason,
+    resolution: "Repair the dependency graph; ordering stays locked until then.",
+  }));
 }
 
 function isNamingFinding(item) {

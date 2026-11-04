@@ -208,7 +208,10 @@ export function placePlan({ root, records, record, position = null }) {
     return { order: effective.order, moves: [], placed: "unprioritized", written: false };
   }
   const proposal = proposeOrder(stored, groups, { type: "place", id: plan.id, position });
-  return { ...applyOrder({ ...proposal, context, namespace: plan.namespace }, revision), placed: position };
+  // The plan and its group moved because the caller asked; only what else moved is automatic.
+  const placed = groups.find((group) => group.ids.includes(plan.id)).ids;
+  const moves = proposal.moves.filter((move) => !placed.includes(move.id));
+  return { ...applyOrder({ ...proposal, context, namespace: plan.namespace }, revision), moves, placed: position };
 }
 
 function assertRevision(context, namespace, revision) {

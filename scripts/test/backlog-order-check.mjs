@@ -246,7 +246,12 @@ try {
   assert.equal(place("xxxxxx33").placed, "unprioritized", "an independent plan stays unprioritized");
   assert.equal(fs.existsSync(orderFile), false, "and nothing is written");
   assert.deepEqual(place("xxxxxx33", "--bottom").order, ["xxxxxx33"]);
-  assert.deepEqual(place("aaaaaa11", "--top").order, ["aaaaaa11", "bbbbbb22", "xxxxxx33"], "placing a plan brings its group");
+  const placedTop = place("aaaaaa11", "--top");
+  assert.deepEqual(placedTop.order, ["aaaaaa11", "bbbbbb22", "xxxxxx33"], "placing a plan brings its group");
+  assert.deepEqual(placedTop.moves, [], "a move the caller asked for is not reported as automatic");
+  const text = roborepo(repo, "order", "place", "aaaaaa11");
+  assert.match(text.stdout, /namespace agents: already ranked\n/);
+  assert.doesNotMatch(text.stdout, /automatic/);
   write("docs/plans/backlog/agents-c.md", document({ id: "cccccc77", deps: ["bbbbbb22"] }));
   const attached = place("cccccc77", "--bottom");
   assert.equal(attached.placed, "attached");
