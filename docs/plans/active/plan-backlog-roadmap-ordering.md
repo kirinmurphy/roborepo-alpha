@@ -413,11 +413,11 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - [x] `option-dropdown`'s `.loading` and `tpl-dropdown-spinner` are dead since priority's removal. — fixed (c96b1ede)
 - [x] No browser test for a failed Save through the guard, or Save and continue from the repo selector. — fixed (c96b1ede)
 - [x] A `## Not tested` entry could be checked hermetically; recorded as evidence instead. — fixed (c96b1ede)
-- [ ] Ordering's Needs prioritization count measures blocks, not plans.
-- [ ] A re-render during an in-flight Save re-enables Cancel and Save, so a discard can be confirmed for an order that still lands.
-- [ ] Details omits the reason for a broken dependency graph, which the UI contract shows in both modes.
-- [ ] `order place` reports a move the caller asked for as automatic, and its text output reads wrongly.
-- [ ] No browser assertion for the duplicate-id row or an unparseable order file locking Ordering.
+- [x] Ordering's Needs prioritization count measures blocks, not plans. — fixed (f9736bdc)
+- [x] A re-render during an in-flight Save re-enables Cancel and Save, so a discard can be confirmed for an order that still lands. — fixed (f9736bdc)
+- [x] Details omits the reason for a broken dependency graph, which the UI contract shows in both modes. — fixed (f9736bdc)
+- [x] `order place` reports a move the caller asked for as automatic, and its text output reads wrongly. — fixed (f9736bdc)
+- [x] No browser assertion for the duplicate-id row or an unparseable order file locking Ordering. — fixed (f9736bdc)
 
 ### Verification
 
