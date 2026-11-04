@@ -100,6 +100,40 @@ run_with_dry_args() {
   fi
 }
 
+# A clone's hooks path lives in its own Git config, so nothing a clone ships can turn on the repo's
+# pre-push check. A dev clone gets it here; a value already set is someone's choice and stays.
+enable_checkout_git_hooks() {
+  local hooks_path="scripts/git-hooks" current common_dir shadowed
+  [[ "${package_mode}" != "1" ]] || return 0
+  [[ -e "${repo_root}/.git" && -f "${repo_root}/${hooks_path}/pre-push" ]] || return 0
+  command -v git >/dev/null 2>&1 || return 0
+
+  # --local: agent shells inject their own core.hooksPath through the environment, and only the
+  # clone's own value counts here.
+  current="$(git -C "${repo_root}" config --local --get core.hooksPath 2>/dev/null || true)"
+  if [[ -n "${current}" ]]; then
+    echo "git hooks: keeping core.hooksPath=${current}"
+    return 0
+  fi
+  if [[ $dry_run -eq 1 ]]; then
+    echo "git hooks: would set core.hooksPath=${hooks_path} so pushes run the pre-push check"
+    return 0
+  fi
+  if ! git -C "${repo_root}" config --local core.hooksPath "${hooks_path}" 2>/dev/null; then
+    echo "warn: git hooks: could not set core.hooksPath; run: git config core.hooksPath ${hooks_path}" >&2
+    return 0
+  fi
+  echo "git hooks: set core.hooksPath=${hooks_path} so pushes run the pre-push check"
+
+  # Git reads one hooks directory, so anything already in the default one stops running.
+  common_dir="$(git -C "${repo_root}" rev-parse --git-common-dir 2>/dev/null || true)"
+  [[ "${common_dir}" == /* ]] || common_dir="${repo_root}/${common_dir}"
+  shadowed="$(find "${common_dir}/hooks" -mindepth 1 -maxdepth 1 -type f ! -name '*.sample' -exec basename {} \; 2>/dev/null | sort | tr '\n' ' ' || true)"
+  if [[ -n "${shadowed}" ]]; then
+    echo "warn: git hooks: these hooks in ${common_dir}/hooks no longer run; move them to ${hooks_path}: ${shadowed% }"
+  fi
+}
+
 # Windows: delegate to PowerShell installer, then continue for bash-specific steps
 case "$(uname -s 2>/dev/null || echo unknown)" in
   MINGW*|MSYS*|CYGWIN*)
@@ -118,6 +152,7 @@ case "$(uname -s 2>/dev/null || echo unknown)" in
       "${repo_root}/scripts/install/install-global-commands.sh"
       "${repo_root}/scripts/install/install-shell-snippets.sh"
     fi
+    enable_checkout_git_hooks
     exit 0
     ;;
 esac
@@ -166,6 +201,7 @@ if [[ $dry_run -eq 0 && "${package_mode}" != "1" ]]; then
   "${repo_root}/scripts/install/install-global-commands.sh"
   "${repo_root}/scripts/install/install-shell-snippets.sh"
 fi
+enable_checkout_git_hooks
 
 write_install_state "${on_conflict}"
 

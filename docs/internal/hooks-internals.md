@@ -342,7 +342,7 @@ name, so the repository hook's exit status decides the operation.
 
 The agent `pre-push` refuses pushes to protected branches and force pushes, then pipes git's ref
 lines on stdin to the chain. In this repository the chained target is `scripts/git-hooks/pre-push`,
-once installed with `git config core.hooksPath scripts/git-hooks` (local scope, shared by every
-linked worktree). It runs `scripts/test/pre-push-check.sh`: doctor, the docs reference check, and
+which the installer turns on with `git config core.hooksPath scripts/git-hooks` (local scope, shared
+by every linked worktree). It runs `scripts/test/pre-push-check.sh`: doctor, the docs reference check, and
 `git diff --check` over each pushed ref's new commits. A push from the user's own terminal runs the
 same hook directly, without the agent checks. `docs/internal/testing.md` describes the check.

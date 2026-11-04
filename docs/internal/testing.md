@@ -59,15 +59,20 @@ own remote, which it asks for its default branch only when `<remote>/HEAD` is no
 not run the plan validator: CI does not
 validate plans, and the lifecycle transition commands already validate each plan they move.
 
-Install the hook once per clone. Linked worktrees share the clone's config, so one command covers
-the primary checkout and every worktree:
+The hook is per clone. `./scripts/install/main.sh` turns it on in a dev clone by setting
+`core.hooksPath` to `scripts/git-hooks`, and `--dry-run` only reports that it would. It leaves a
+value that is already set alone, and does nothing in package mode. Linked worktrees share the
+clone's config, so this covers the primary checkout and every worktree. Git reads one hooks
+directory, so the installer names any hooks in `.git/hooks` that stop running.
+
+A clone that has not run the installer skips the check until this runs:
 
 ```sh
 git config core.hooksPath scripts/git-hooks
 ```
 
-A new clone skips the check until this runs. Agent pushes reach the hook through RoboRepo's agent
-`pre-push`, which chains to it (see `docs/internal/hooks-internals.md`).
+Agent pushes reach the hook through RoboRepo's agent `pre-push`, which chains to it (see
+`docs/internal/hooks-internals.md`).
 
 Portal UI specs retry once on CI (`retries` in `scripts/test/portal-ui/playwright.config.mjs`). The
 `list` reporter marks a test that passed on retry as flaky; that marker is the only signal of a new
