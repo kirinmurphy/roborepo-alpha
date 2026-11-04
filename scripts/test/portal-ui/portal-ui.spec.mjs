@@ -3,6 +3,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { test, expect } from "@playwright/test";
+import { backlogUrlFor } from "./helpers.mjs";
 import { codexHookGuidance } from "../../harnesses/codex/hook-guidance.mjs";
 import { buildBehaviorView } from "../../cli/config.mjs";
 
@@ -2172,7 +2173,7 @@ test.describe("shared plan drawer", () => {
     fs.mkdirSync(path.join(planRoot, ".git"));
     fs.mkdirSync(path.join(planRoot, "docs", "plans", "active"), { recursive: true });
     fs.writeFileSync(path.join(planRoot, "docs", "plans", "active", "drawer-fixture.md"), [
-      "---", "id: drawerfx", "priority: high", "next_action: Check the drawer", "---", "",
+      "---", "id: drawerfx", "next_action: Check the drawer", "---", "",
       "# Drawer fixture plan", "", "## Summary", "", "Body text for the drawer.", "",
       "## Tasks", "", "- [x] First task", "- [ ] Second task", "",
     ].join("\n"));
@@ -2262,7 +2263,6 @@ test.describe("shared plan drawer", () => {
     await expect(drawer.locator("#drawer-title")).toHaveText("Drawer fixture plan");
     await expect(drawer.locator("#drawer-tasks li")).toHaveCount(2);
     await expect(drawer.locator("plan-status option-dropdown")).toHaveCount(0);
-    await expect(drawer.getByText(`${record.plan.priority} priority`, { exact: true })).toHaveCount(0);
     await page.keyboard.press("Escape");
     await expect(drawer).not.toBeVisible();
   });
@@ -2291,7 +2291,7 @@ test.describe("Plans card commands", () => {
   test.use({ permissions: ["clipboard-read", "clipboard-write"] });
   let planRoot;
   const plan = (id, title, tasks) => [
-    "---", `id: ${id}`, "priority: high", "next_action: Do the next thing", "---", "",
+    "---", `id: ${id}`, "next_action: Do the next thing", "---", "",
     `# ${title}`, "", "## Summary", "", "Body.", "", "## Tasks", "", tasks, "",
   ].join("\n");
   test.beforeAll(() => {
@@ -2309,7 +2309,7 @@ test.describe("Plans card commands", () => {
   test.afterAll(() => fs.rmSync(planRoot, { recursive: true, force: true }));
   test.beforeEach(async ({ page }) => {
     await addRepositorySource(page, planRoot);
-    await page.route("**/api/plans", async (route) => {
+    await page.route(/\/api\/plans(\?|$)/, async (route) => {
       const data = await (await route.fetch()).json();
       data.planSuitePackage = { ...data.planSuitePackage, available: true, enabled: true };
       await route.fulfill({ json: data });
@@ -2327,8 +2327,8 @@ test.describe("Plans card commands", () => {
     ["Review", "Approved card plan", "Close", "plan-close", "review/card-approved.md"],
   ]) {
     test(`a ${tab.toLowerCase()} card's ${label} copies the /${command} prompt and moves nothing`, async ({ page }) => {
-      await page.goto("/plans");
-      await page.getByText(new RegExp(`^${tab} \\(`)).first().click();
+      await page.goto(tab === "Backlog" ? await backlogUrlFor(page, title) : "/plans");
+      if (tab !== "Backlog") await page.getByText(new RegExp(`^${tab} \\(`)).first().click();
       const card = page.locator("plan-card", { hasText: title });
       if (tab === "Active") {
         await expect(card.locator(".recommended-cta")).toHaveCount(0);
@@ -2352,11 +2352,6 @@ test.describe("Plans card commands", () => {
         const drawerPrompt = page.waitForRequest((request) => request.url().endsWith("/api/plans/prompt"));
         await drawerAction.click();
         expect((await drawerPrompt).postDataJSON().action).toBe(command);
-        const documentStatus = drawer.getByRole("group", { name: "Document status", exact: true });
-        await documentStatus.getByRole("button", { name: "high", exact: true }).click();
-        await documentStatus.getByRole("option", { name: "low", exact: true }).click();
-        await expect(documentStatus.getByRole("button", { name: "low", exact: true })).toBeVisible();
-        await expect(drawerAction).toBeVisible();
       }
     });
   }
@@ -2368,7 +2363,6 @@ test.describe("Plans card commands", () => {
     await page.screenshot({ path: testInfo.outputPath("plans-layout.png") });
     const documentStatus = card.getByRole("group", { name: "Document status", exact: true });
     await expect(documentStatus.getByLabel(/^Modified /)).toContainText("now");
-    await expect(documentStatus.getByRole("button", { name: "high", exact: true })).toHaveCount(0);
     const [detailsBox, modifiedBox, warningsBox] = await Promise.all([
       card.getByRole("button", { name: /Findings card plan/ }).first().boundingBox(),
       documentStatus.getByLabel(/^Modified /).boundingBox(),
@@ -2445,7 +2439,7 @@ test.describe("Plans card commands", () => {
 
   test("copy menus show compact labels and separate the document filename", async ({ page }, testInfo) => {
     for (const lifecycle of ["backlog", "ready", "active", "review"]) {
-      await page.goto(`/plans?lifecycle=${lifecycle}`);
+      await page.goto(lifecycle === "backlog" ? await backlogUrlFor(page, "Backlog card plan") : `/plans?lifecycle=${lifecycle}`);
       const card = page.locator("plan-card").first();
       await card.getByRole("button", { name: "Plan actions", exact: true }).click();
       const menu = card.getByRole("group", { name: "Copy options", exact: true });
@@ -2507,7 +2501,7 @@ test.describe("Plans card commands", () => {
   });
 
   test("a structurally complete backlog card shows Promote without positive document badges", async ({ page }) => {
-    await page.route("**/api/plans", async (route) => {
+    await page.route(/\/api\/plans(\?|$)/, async (route) => {
       const data = await (await route.fetch()).json();
       data.planSuitePackage = { ...data.planSuitePackage, available: true, enabled: true };
       const record = data.plans.find((record) => record.plan.title === "Backlog card plan");
@@ -2515,7 +2509,7 @@ test.describe("Plans card commands", () => {
       record.plan.readiness = "ready";
       await route.fulfill({ json: data });
     });
-    await page.goto("/plans?lifecycle=backlog");
+    await page.goto(await backlogUrlFor(page, "Backlog card plan"));
     const card = page.locator("plan-card", { hasText: "Backlog card plan" });
     await expect(card.getByRole("button", { name: "Promote", exact: true })).toBeVisible();
     await expect(card.getByRole("group", { name: "Document status", exact: true }).getByLabel(/^Modified /)).toContainText("now");

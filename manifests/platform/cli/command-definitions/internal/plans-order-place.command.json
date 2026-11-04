@@ -1,0 +1,13 @@
+{
+  "path": ["plans", "order", "place"],
+  "kind": "internal",
+  "title": "Place a plan",
+  "description": "Record a Backlog plan's position in its namespace order",
+  "usage": "roborepo plans order place <plan> [--top|--bottom] [--json]",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/plans-command.mjs",
+    "export": "plansCommand",
+    "prependArgs": ["order", "place"]
+  }
+}

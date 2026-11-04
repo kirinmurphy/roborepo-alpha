@@ -84,7 +84,7 @@ try {
   commit(wt.path, "Progress in the worktree", { [planPath]: `${read(path.join(wt.path, planPath))}\nWorktree progress.\n` });
   fs.mkdirSync(path.join(root, "docs/plans/review"), { recursive: true });
   git(root, "mv", "--", planPath, "docs/plans/review/test-sync.md");
-  const rewritten = `---\nid: sync0001\npriority: medium\nnext_action:\n---\n\n# Rewritten\n\n${"Entirely different text on base.\n".repeat(40)}`;
+  const rewritten = `---\nid: sync0001\nnext_action:\n---\n\n# Rewritten\n\n${"Entirely different text on base.\n".repeat(40)}`;
   fs.writeFileSync(path.join(root, "docs/plans/review/test-sync.md"), rewritten);
   git(root, "add", "--", "docs/plans/review/test-sync.md");
   git(root, "commit", "--quiet", "-m", "Move and rewrite the plan on base");

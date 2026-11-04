@@ -1,6 +1,5 @@
 ---
 id: jdsobwn
-priority: low
 next_action: Characterize current bundled/workspace catalog behavior and agree source-qualified provenance with desired-state and profile owners before adding source adapters.
 blocked_by: []
 depends_on: ["bysyzl1e"]

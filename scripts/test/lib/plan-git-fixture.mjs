@@ -79,7 +79,6 @@ export function createPlanFixture(prefix) {
 export function planDoc({ id, title = id, nextAction = "Implement the first task.", tasks = ["- [ ] Build the thing."], worktree = "", extra = "" }) {
   return `---
 id: ${id}
-priority: medium
 next_action: ${nextAction}
 blocked_by: []
 depends_on: []

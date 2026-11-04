@@ -1,6 +1,5 @@
 ---
 id: b2sgiejd
-priority: medium
 next_action: Run /plan-promote to refine the checklist once Bundle Skills That Only Work Together (bysyzl1e) lands.
 blocked_by: []
 depends_on: ["bysyzl1e"]

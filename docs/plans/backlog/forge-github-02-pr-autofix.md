@@ -1,6 +1,5 @@
 ---
 id: f0jwe76j
-priority: medium
 next_action: After GitHub Integration Part 01 (w7vls1yk) lands, confirm Claude desktop Auto-fix reads and resolves review threads as the bot, then verify the Codex and Gemini headless behaviors in Phase 1
 blocked_by: []
 depends_on: ["w7vls1yk"]

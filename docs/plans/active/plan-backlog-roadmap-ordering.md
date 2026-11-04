@@ -1,7 +1,6 @@
 ---
 id: rxv53v6z
-priority: none
-next_action: Run /plan-execute, starting with the shared namespace resolver and the pure order calculations; ask before creating the worktree.
+next_action: Run /plan-review for the human review of the implemented Backlog ordering.
 blocked_by: []
 depends_on: []
 related: ["plans-portal-live-refresh-and-static-preflight", "plan-lifecycle-suite-blockers-dependencies", "plan-unclassified-plan-recovery", "p3vbk03v"]
@@ -302,17 +301,17 @@ Do not introduce graph editors, separate roadmap pages, nested views, manual spl
 
 Priority removal comes last, so Backlog has its replacement before the old control disappears.
 
-- [ ] Export the namespace resolver from `naming.mjs` and add a computed `namespace` to plan records and `publicPlan`; report malformed config as an error; test overlapping prefixes and scan cost.
-- [ ] Make naming findings blocking, add them to the promote and start gates, and add a check over the real plan tree.
-- [ ] Add a plan-suite module with pure `deriveGroups` and `proposeOrder`, plus registry read and `applyOrder`; cover every addendum gallery case, using the real fork and chain shapes as fixtures.
-- [ ] Add the registry and revision to the plans snapshot, the Save route in `scripts/cli/portal-routes-plans.mjs`, and `roborepo plans order place` with its command definition under `manifests/platform/cli/command-definitions/internal/`.
-- [ ] Add the repo and namespace directory levels to Backlog only, with **No namespace** recovery, the no-config notice, and namespace-prefixed titles.
-- [ ] Add the shared draft/committed view model and flat Details cards in registry order, with Needs prioritization first.
-- [ ] Add Ordering: derived block containers, the exact right-side controls, native drag, keyboard paths, disabled states, the automatic-move notice, and Filters hidden.
-- [ ] Add sticky Save/Cancel, dirty state, the guard prompt with its three navigation seams, native exit protection, atomic Save, and stale-revision conflicts.
-- [ ] Integrate automatic placement and explicit deferral into `plan-write` with failure reporting.
-- [ ] Remove priority from all code, skills, tests, and fixtures, and sweep the line from every non-Completed/non-Archived plan including this one.
-- [ ] Update the documents listed under Documentation impact, correct the addendum per “Addendum corrections”, and retake `docs/images/plans.png`.
+- [x] Export the namespace resolver from `naming.mjs` and add a computed `namespace` to plan records and `publicPlan`; report malformed config as an error; test overlapping prefixes and scan cost.
+- [x] Make naming findings blocking, add them to the promote and start gates, and add a check over the real plan tree.
+- [x] Add a plan-suite module with pure `deriveGroups` and `proposeOrder`, plus registry read and `applyOrder`; cover every addendum gallery case, using the real fork and chain shapes as fixtures.
+- [x] Add the registry and revision to the plans snapshot, the Save route in `scripts/cli/portal-routes-plans.mjs`, and `roborepo plans order place` with its command definition under `manifests/platform/cli/command-definitions/internal/`.
+- [x] Add the repo and namespace directory levels to Backlog only, with **No namespace** recovery, the no-config notice, and namespace-prefixed titles.
+- [x] Add the shared draft/committed view model and flat Details cards in registry order, with Needs prioritization first.
+- [x] Add Ordering: derived block containers, the exact right-side controls, native drag, keyboard paths, disabled states, the automatic-move notice, and Filters hidden.
+- [x] Add sticky Save/Cancel, dirty state, the guard prompt with its three navigation seams, native exit protection, atomic Save, and stale-revision conflicts.
+- [x] Integrate automatic placement and explicit deferral into `plan-write` with failure reporting.
+- [x] Remove priority from all code, skills, tests, and fixtures, and sweep the line from every non-Completed/non-Archived plan including this one.
+- [x] Update the documents listed under Documentation impact, correct the addendum per “Addendum corrections”, and retake `docs/images/plans.png`.
 
 ## Validation
 
@@ -374,3 +373,25 @@ Run the checks for the tier as each task lands, then let CI run the full gate. E
 - **Edit races:** File watchers, another tab, or a separate skill may rewrite dependencies while Ordering is dirty. Detect and reconcile; never last-write-wins without feedback.
 - **Missing/malformed filename namespace:** Strict creation must reject it, but tolerant reads must not make the existing plan invisible or crash indexing.
 - **Schema rollout:** Remove legacy priority and update all live producers/consumers in one breaking change; otherwise current validators would report newly written plans as missing the field. Active plans' worktree copies keep an inert `priority:` line until their next base synchronization, which is harmless because no allowlist rejects it.
+
+## Decision Log
+
+Autonomous decisions made during implementation, each clear, with its effects inside this feature.
+
+- **A plan's namespace resolves against the primary checkout's vocabulary.** `buildPlanRecord` resolves it against the checkout it reads, and `repositoryPlanRecords` re-resolves it against the first checkout's. Alternative: trust each record. Chosen because the order the plan ranks in lives with the primary checkout, so an older or newer config in a worktree must not decide it.
+- **The promote and start gates also refuse an unreadable config.** Alternative: treat it as no vocabulary and let the plan through. Chosen because the plan says not to continue as if a broken vocabulary were current, and a gate that cannot judge a filename should not approve it.
+- **`DEPENDENCY_CYCLE` is blocking; the other relationship findings stay advisory.** Alternative: advisory like `DEPENDENCY_NOT_FOUND`. Chosen because the plan calls cycles validation errors and no order can be produced from one. Transition gates read document findings, so this affects `plans validate` only.
+- **A cycle or missing prerequisite locks the whole namespace's Ordering.** Alternative: lock only the affected block. Chosen because the addendum's E1 and E2 wireframes show unrelated rows blocked too.
+- **A repo with no config lists its Backlog plans as ordinary cards under No namespace.** Alternative: repair rows, as for a declared vocabulary. Chosen because that repo has nothing to repair, and rows would remove Promote and the other card actions.
+- **A registry entry for a Backlog plan with no namespace is preserved on write.** The plan's table prunes plans outside Backlog and preserves unknown ids, and does not name this case. Pruning would lose the plan's place when it is only awaiting a rename, which the plan says to reconcile after repair.
+- **Save refuses an order that drops a ranked plan.** Alternative: treat omission as un-ranking. Chosen because the design has no un-rank path, and a bug or a stale client must not silently demote plans.
+- **`--top` and `--bottom` are ignored, and reported, for a plan connected to a ranked plan.** Alternative: refuse. Chosen because `plan-write` may not know the plan is connected, and the plan makes attachment automatic.
+- **A plan that cannot be ranked stays in Needs prioritization with no controls and a reason.** The plan requires it be shown with its finding but does not say where.
+- **`roborepo plans validate` sets `process.exitCode` instead of calling `process.exit`.** Validation now exits 1 more often, and `exit()` truncated `--json` output past a pipe buffer, which reproduced while checking this repo's tree.
+- **`plans validate` gains a `repositoryFindings` array.** A broken config or registry belongs to no one plan. It is added to the existing summary counts, so the exit code covers it.
+- **`Move down` is the accessible name of both the Ordered and Needs prioritization controls,** as the plan specifies. The Needs one is internally `place-top`, so the two behaviors stay distinct in code.
+
+## Not tested
+
+- [ ] Installed skills pick up the plan-write changes. `roborepo update` and `roborepo doctor --installed` rewrite this machine's live harness config from a checkout, so run them once from the main checkout after this merges.
+- [ ] The Backlog on your own portal with real plans. The automated runs and the screenshot used a hermetic portal over a copy of this repo's plans, so your running portal has not been restarted on this code.

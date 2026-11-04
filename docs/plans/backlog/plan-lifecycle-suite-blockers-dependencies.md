@@ -1,6 +1,5 @@
 ---
 id: plan-lifecycle-suite-blockers-dependencies
-priority: low
 next_action: Extend the implemented atomic suite with a canonical blocker schema/list-mutation contract before adding portal management.
 blocked_by: []
 depends_on: []

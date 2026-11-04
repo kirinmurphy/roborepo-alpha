@@ -1,9 +1,10 @@
 // <plan-card> — set .record (plan record) and .actions (cardActions bag: onOpen, onCopyPath,
 // onCopyContext, onPlanAction, mergeFor, planSuiteEnabled, planSuitePackage,
 // skillModal, onEnablePackage, onError) as properties right after creation, then append to the
-// DOM. The title/description trigger onOpen; the status component owns its separate controls. The priority
-// control, modified time, warnings, actions, and work status live in <plan-status>, shared with the
-// detail drawer and stacked below the card's title and description in every lifecycle.
+// DOM. The title/description trigger onOpen; the status component owns its separate controls. The
+// modified time, warnings, actions, and work status live in <plan-status>, shared with the detail
+// drawer and stacked below the card's title and description in every lifecycle. An optional
+// actions.titleFor(record) replaces the displayed title; Backlog uses it for the namespace label.
 import { portalTpl as tpl, portalFillSlots as fill } from "/portal/shared/api.js";
 import { cardActionMenu, cardPrimaryAction } from "/portal/plans/templates.js";
 import { incompleteDependencies } from "/portal/plans/plan-actions.js";
@@ -52,7 +53,7 @@ class PlanCardElement extends HTMLElement {
     statusEl.record = record;
     node.querySelector("[data-slot=status-mount]").replaceWith(statusEl);
     renderRepoBadge(node.querySelector("[data-slot=repo-badge]"), record.repository);
-    node.querySelector("[data-slot=title-link]").textContent = plan.title;
+    node.querySelector("[data-slot=title-link]").textContent = cardActions.titleFor?.(record) ?? plan.title;
     // Only title/description open the document; metadata and actions are separate siblings.
     const docDetails = node.querySelector(".doc-details");
     docDetails.tabIndex = 0;

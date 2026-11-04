@@ -1,6 +1,5 @@
 ---
 id: developer-runtime-remote-branch-status
-priority: medium
 next_action: Decide the opt-in and TTL questions in Open Questions, then build the GitHub lookup in modules/forge/github.mjs, the host module GitHub Integration Part 01 introduces
 blocked_by: []
 depends_on: ["w7vls1yk"]

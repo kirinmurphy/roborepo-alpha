@@ -1,6 +1,5 @@
 ---
 id: nrvwti51
-priority: high
 next_action: Inspect the current /agents repository-filter placeholder, reusable global components, and Claude/Codex provider contracts; confirm no active plan duplicates this scope.
 blocked_by: []
 depends_on: []

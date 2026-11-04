@@ -3,10 +3,8 @@
 // owns filling and opening it, so the two pages cannot drift.
 //
 // The page supplies what only it knows: the plan list blockers resolve against, the plan-suite
-// package state, which plans' worktrees have merged, and how to surface copies/errors. Priority
-// edits are the page's call too — on Plans the drawer's <plan-status> dispatches `plan-change` into
-// the page's mutation orchestrator; a page without one passes `readonly` and the status renders as
-// plain chips.
+// package state, which plans' worktrees have merged, and how to surface copies/errors. A page with
+// no blockers popover passes `readonly` and the status's blocked badge renders as a static label.
 
 import { portalCopyText, portalWireBackdropClose } from "/portal/shared/api.js";
 import { createSkillDetailModal } from "/portal/shared/skill-detail-modal.js";

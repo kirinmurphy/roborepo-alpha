@@ -180,7 +180,7 @@ export function drawerContent(doc, drawerActions) {
     title: plan.title,
     path: `${doc.plan.repository.name} / ${plan.relativePath}`,
     html: doc.html,
-    // Priority, modified time, warnings, blockers, and completion render in the shared <plan-status> section
+    // Modified time, warnings, blockers, and completion render in the shared <plan-status> section
     // mounted alongside this metadata list. The next action is the agent's own pointer into the
     // plan, so it is shown here in the full document view and not on the card.
     meta: [

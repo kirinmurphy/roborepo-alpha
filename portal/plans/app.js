@@ -11,10 +11,19 @@ import * as api from "./api.js";
 import * as tmpl from "./templates.js";
 import { createRepositorySourcesDialog } from "/portal/shared/repository-sources-dialog.js";
 import { createPlanDrawer } from "./plan-drawer.js";
-import { lifecycleLabel, lifecycleTabs, setLifecycleModel, showsPriority } from "./lifecycle.js";
+import { lifecycleLabel, lifecycleTabs, setLifecycleModel } from "./lifecycle.js";
+import { createBacklogController } from "./backlog.js";
+import { NAMESPACE_PARAM, hrefWithNamespace } from "./backlog-model.js";
 import { createBlockersPopover } from "./blockers-popover.js";
 import { mountOverflowNav } from "/portal/shared/overflow-nav.js";
-import { clearRepositoryScope, currentRepositoryScope, isRepositoryScopeUnavailable, onRepositoryScopeChange } from "/portal/shared/repository-scope.js";
+import {
+  clearRepositoryScope,
+  currentRepositoryScope,
+  isRepositoryScopeUnavailable,
+  onRepositoryScopeChange,
+  setRepositoryScopeGuard,
+  syncRepositoryScopeFromUrl,
+} from "/portal/shared/repository-scope.js";
 import { onRepositoryScopeResolved, repositoryScopeUnavailableNotice } from "/portal/shared/repository-scope-selector.js";
 import {
   FILTER_IDS,
@@ -22,10 +31,7 @@ import {
   FILTER_OPTION_DEFS,
   filteredPlans,
   sortForLifecycle,
-  isVisible,
   mergedPlanBranches,
-  replaceRecord,
-  filteredListActionFor,
   resolveBlockers,
   optionCounts,
   optionLabel,
@@ -92,17 +98,33 @@ const planDrawer = createPlanDrawer({
   onError: showError,
 });
 const skillModal = planDrawer.skillModal;
-const outcomeToast = planDrawer.toast;
 const blockersPopover = createBlockersPopover(document.getElementById("blockers-popover"), {
   onOpenPlan: (key) => openPlan(key),
 });
+
+const backlog = createBacklogController({
+  getSnapshot: () => state.snapshot,
+  onRender: () => render(),
+  onSaved: () => api.refreshSnapshot().then(applySnapshot).catch(showLoadError),
+  onOpen: (key) => openPlan(key),
+  cardGrid: (plans, actions) => tmpl.cardGrid(plans, actions),
+  emptyState: () => tmpl.emptyState(),
+  copyRepairPrompt: (key) => copyPrompt("plan-write", [key], "repository-aware"),
+});
+setRepositoryScopeGuard({ isDirty: () => backlog.isDirty(), confirm: (proceed) => backlog.confirmLeave(proceed) });
 
 bindStaticControls();
 load();
 void refreshOverview();
 // The shared header selector (and back/forward) changes the scope without a reload; filters and
-// the lifecycle tab are page state and stay as they are.
-onRepositoryScopeChange(() => void load());
+// the lifecycle tab are page state and stay as they are. A namespace belongs to the repo it was
+// chosen in, so choosing another repo drops it; back/forward restores the pair together.
+onRepositoryScopeChange((_scope, { source }) => {
+  if (source === "push" && new URLSearchParams(location.search).has(NAMESPACE_PARAM)) {
+    history.replaceState(null, "", hrefWithNamespace(location.href, null));
+  }
+  void load();
+});
 // The empty state names the selected repository, which the selector learns after the snapshot.
 let scopedRepositoryName = null;
 onRepositoryScopeResolved(({ scope, repository }) => {
@@ -144,14 +166,19 @@ function bindStaticControls() {
   // Esc, Cancel, the X, and the backdrop all close the same way, and an unapplied draft goes with it.
   filtersDialogEl.addEventListener("close", discardFilterDraft);
   filterChipsEl.addEventListener("chip-remove", (event) => resetFilter(event.detail));
-  // One delegated listener each for cards (bubbles through groupsEl) and the drawer's mounted
-  // <plan-status> — both dispatch the same `plan-change` event, so both route through the same
-  // mutation orchestrator.
-  groupsEl.addEventListener("plan-change", (event) => handlePlanChange(event.detail));
-  document.getElementById("drawer-status-mount").addEventListener("plan-change", (event) => handlePlanChange(event.detail));
-  // Same delegation for the "blocked by N" badge — card and drawer both mount <plan-status>.
+  // One delegated listener each for the "blocked by N" badge — card and drawer both mount <plan-status>.
   groupsEl.addEventListener("blocked-click", (event) => openBlockersPopover(event.detail));
   document.getElementById("drawer-status-mount").addEventListener("blocked-click", (event) => openBlockersPopover(event.detail));
+  // Header links load another page, so an unsaved order is offered a save first. Modified clicks
+  // open a new tab or window and leave this page, and its draft, where they are.
+  document.addEventListener("click", (event) => {
+    const link = event.target.closest?.("a[href]");
+    if (!link || !backlog.isDirty() || link.target === "_blank" || new URL(link.href).origin !== location.origin) return;
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    event.stopPropagation();
+    backlog.confirmLeave(() => location.assign(link.href));
+  }, true);
 }
 
 function openBlockersPopover({ record, anchor }) {
@@ -277,7 +304,7 @@ async function refreshOverview() {
 }
 
 // Re-renders only when the merged set actually changed, so a sync poll does not rebuild the cards
-// (and reset an in-flight priority dropdown) for nothing.
+// for nothing.
 function applyMergedPlans(merged) {
   const signature = (map) => JSON.stringify([...map].sort(([a], [b]) => a.localeCompare(b)));
   if (signature(merged) === signature(state.mergedPlans)) return;
@@ -313,7 +340,6 @@ function setOptions(id, options) {
 // that match nothing. Never touches `.value`, so it's safe to call on every render() without
 // disturbing the user's current selection.
 function refreshFilterCounts(snapshot, filters = filtersDialogEl.open ? draftFilters() : state.filters) {
-  if (!showsPriority(state.selectedLifecycle)) filters = { ...filters, priority: "all" };
   for (const id of Object.keys(FILTER_OPTION_DEFS)) {
     const select = document.getElementById(id);
     const options = FILTER_OPTION_DEFS[id](snapshot);
@@ -346,8 +372,11 @@ function render() {
   onboardingEl.hidden = true;
   lifecycleBarEl.dataset.board = "true";
   renderWarnings(snapshot);
-  document.getElementById("priority").closest(".filter-row").hidden = !showsPriority(state.selectedLifecycle);
-  renderFilterChips(snapshot);
+  // Ordering shows the whole namespace: moving a row among hidden rows has no defined result.
+  const ordering = state.selectedLifecycle === "backlog" && backlog.isOrdering();
+  filtersToggleEl.hidden = ordering;
+  if (ordering) filterChipsEl.replaceChildren();
+  else renderFilterChips(snapshot);
   refreshFilterCounts(snapshot);
   const allMatchingCurrentFilters = filteredPlans(snapshot.plans, state.filters);
   renderLifecycleTabs(allMatchingCurrentFilters);
@@ -357,7 +386,7 @@ function render() {
   const visiblePlans = allMatchingCurrentFilters
     .filter((record) => record.plan.lifecycle === state.selectedLifecycle)
     .sort(sortForLifecycle(state.selectedLifecycle));
-  if (visiblePlans.length === 0) {
+  if (visiblePlans.length === 0 && !ordering) {
     groupsEl.replaceChildren(tmpl.emptyState());
     return;
   }
@@ -374,6 +403,10 @@ function render() {
     onEnablePackage: enablePackage,
     onError: showError,
   };
+  if (state.selectedLifecycle === "backlog") {
+    groupsEl.replaceChildren(...backlog.render(visiblePlans, cardActions));
+    return;
+  }
   groupsEl.replaceChildren(tmpl.cardGrid(visiblePlans, cardActions));
 }
 
@@ -397,140 +430,39 @@ function renderLifecycleTabs(plansMatchingOtherFilters) {
 }
 
 function selectLifecycle(life) {
-  state.selectedLifecycle = life;
-  history.pushState(null, "", urlForLifecycle(life));
-  render();
-}
-
-// Back/forward nav: re-read the tab from the URL (now restored by the browser) and repaint
-// without a full reload — pushState above is what makes this fire in the first place.
-window.addEventListener("popstate", () => {
-  state.selectedLifecycle = lifecycleFromSearchParams(new URLSearchParams(location.search));
-  render();
-});
-
-// mutations: property -> (record, value) => Promise<{change, record}>, each returning the shared
-// domain mutation result contract so handlePlanChange doesn't need to know which one ran. Lifecycle
-// is not here: the plan suite's commands move plans between lifecycle folders and commit the move.
-const mutations = {
-  priority: (record, value) =>
-    api.updatePlanPriority(record.plan.id, record.key, value, record.plan.priority, record.mtimeMs, record.repository.id),
-};
-
-// Plan keys currently mid-mutation. Guards against two overlapping handlePlanChange calls for the
-// same record (e.g. the card's and the drawer's mounted <plan-status> both showing the same plan)
-// racing the server with the same expected mtimeMs — the loser would otherwise surface a
-// confusing stale-conflict recovery for what looked like a single click.
-const pendingMutationKeys = new Set();
-
-// The one page-level mutation orchestrator, shared by card dropdowns, the drawer's mounted
-// <plan-status>, and the toast's Undo. Filesystem truth controls UI truth: the snapshot is only
-// updated after the server confirms success, and the full record it returns replaces the old one
-// outright rather than patching individual fields in place.
-async function handlePlanChange({ property, value, record }) {
-  if (pendingMutationKeys.has(record.key)) return null;
-  pendingMutationKeys.add(record.key);
-  // Captured once up front so the outcome this mutation reports (visibility, tab, filters) always
-  // describes the view the user was looking at when they triggered it — not whatever tab/filters
-  // are current by the time the server responds.
-  const viewAtRequestTime = { selectedLifecycle: state.selectedLifecycle, filters: { ...state.filters } };
-  const wasVisible = isVisible(record, viewAtRequestTime.selectedLifecycle, viewAtRequestTime.filters);
-  let result;
-  try {
-    result = await mutations[property](record, value);
-  } catch (err) {
-    if (err.code === "STALE_PLAN") {
-      await recoverFromStaleConflict(record);
-      return null;
-    }
-    // The mutating control (a dropdown inside <plan-status>) is stuck showing a loading state
-    // until it receives a fresh `record` property set — re-set the unchanged record so it clears
-    // loading and reverts to the last-known-good value instead of hanging. render() (called by
-    // refreshMountedStatus) rebuilds the warnings banner from snapshot data, so showError must run
-    // AFTER it or its message gets immediately overwritten.
-    refreshMountedStatus(record);
-    showError(err);
-    return null;
-  } finally {
-    pendingMutationKeys.delete(record.key);
-  }
-  state.snapshot.plans = replaceRecord(state.snapshot.plans, record.key, result.record);
-  const nowVisible = isVisible(result.record, viewAtRequestTime.selectedLifecycle, viewAtRequestTime.filters);
-  const previousKey = record.key;
-  render();
-  // The card grid's render() mounts fresh <plan-status> instances, but the drawer isn't part of
-  // that render pass — its mounted <plan-status> would otherwise sit stuck at loading:true
-  // (dropdown spinner) forever, since it never receives the new record. Re-set it only when the
-  // drawer is still open for this same plan.
-  if (planDrawer.isOpen && planDrawer.openKey === previousKey) {
-    const drawerStatus = planDrawer.statusElement;
-    if (drawerStatus) drawerStatus.record = result.record;
-  }
-  presentChangeOutcome({ result, wasVisible, nowVisible, view: viewAtRequestTime });
-  return result.record;
-}
-
-// Re-renders whichever mounted <plan-status> instance(s) still reference this record — the card
-// grid (full render()) or the open drawer — so a failed mutation's dropdown clears its loading
-// state even though nothing about the underlying record actually changed.
-function refreshMountedStatus(record) {
-  render();
-  if (!planDrawer.isOpen) return;
-  const drawerStatus = planDrawer.statusElement;
-  if (drawerStatus && drawerStatus.record?.key === record.key) drawerStatus.record = record;
-}
-
-async function recoverFromStaleConflict(record) {
-  try {
-    applySnapshot(await api.fetchSnapshot());
-  } catch (err) {
-    showError(err);
-    return;
-  }
-  const current = state.snapshot.plans.find((item) => item.plan.id && item.plan.id === record.plan.id) ||
-    state.snapshot.plans.find((item) => item.key === record.key);
-  if (planDrawer.isOpen && planDrawer.openKey === record.key) {
-    if (current) {
-      showError({ message: `This plan changed outside the portal, so the update wasn't applied. The page has been refreshed. Current lifecycle: ${current.plan.lifecycle}.` });
-      openPlan(current.key);
-    } else {
-      planDrawer.close();
-      showError({ message: "This plan was removed or renamed outside the portal." });
-    }
-  } else {
-    showError({ message: "This plan changed outside the portal, so the update wasn't applied. The page has been refreshed." });
-  }
-}
-
-// Decides whether to show the outcome toast after a successful mutation: only when the mutation
-// actually removed the record from view — an unrelated field change that keeps the record visible
-// needs no notification.
-function presentChangeOutcome({ result, wasVisible, nowVisible, view }) {
-  const { change, record } = result;
-  if (!(wasVisible && !nowVisible)) return;
-  // Use the tab/filters captured when the mutation started, not whatever is current now — the
-  // toast must describe the view the user was actually looking at when they triggered the change.
-  const filteredAction = filteredListActionFor(change, view);
-  outcomeToast.show({
-    message: `"${record.plan.title}" ${change.property} was set to ${change.newValue}.`,
-    actions: [
-      { label: "Undo", run: () => handlePlanChange({ property: change.property, value: change.previousValue, record }) },
-      { label: "View plan", run: () => openPlan(record.key) },
-      ...(filteredAction ? [{ label: filteredAction.label, run: () => applyFilteredListAction(filteredAction) }] : []),
-    ],
+  if (life === state.selectedLifecycle) return;
+  backlog.confirmLeave(() => {
+    state.selectedLifecycle = life;
+    // The namespace level is Backlog's alone; other tabs never carry it.
+    history.pushState(null, "", hrefWithNamespace(urlForLifecycle(life), null));
+    render();
   });
 }
 
-// The only filtered-list shortcut is priority's (see filteredListActionFor).
-function applyFilteredListAction(action) {
-  state.filters.priority = action.value;
-  document.getElementById("priority").value = action.value;
+// Back/forward nav: re-read the tab from the URL (now restored by the browser) and repaint
+// without a full reload — pushState above is what makes this fire in the first place. The browser
+// cannot be asked to wait, so a dirty draft puts its URL back and asks; only then is the move made.
+window.addEventListener("popstate", () => {
+  if (!backlog.isDirty()) {
+    syncFromUrl();
+    return;
+  }
+  const target = location.href;
+  history.pushState(null, "", backlog.draftUrl());
+  backlog.confirmLeave(() => {
+    history.pushState(null, "", target);
+    syncFromUrl();
+  });
+});
+
+function syncFromUrl() {
+  syncRepositoryScopeFromUrl();
+  state.selectedLifecycle = lifecycleFromSearchParams(new URLSearchParams(location.search));
   render();
 }
 
 function renderFilterChips(snapshot) {
-  const filters = showsPriority(state.selectedLifecycle) ? state.filters : { ...state.filters, priority: "all" };
-  const descriptors = tmpl.filterChipDescriptors(filters, FILTER_DEFAULTS, (id, value) =>
+  const descriptors = tmpl.filterChipDescriptors(state.filters, FILTER_DEFAULTS, (id, value) =>
     optionLabel(snapshot, id, value),
   );
   filterChipsEl.replaceChildren(...descriptors.map(tmpl.filterChip));

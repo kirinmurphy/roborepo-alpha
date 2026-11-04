@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { buildPlanSnapshot, planSnapshotFingerprint, updatePlanPriority } from "../../modules/plan-suite/index.mjs";
+import { buildPlanSnapshot, planSnapshotFingerprint } from "../../modules/plan-suite/index.mjs";
 import { recordRepositoryDiscovery } from "../cli/repositories.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -20,9 +20,9 @@ function git(cwd, ...args) {
   assert.equal(result.status, 0, result.stderr);
 }
 
-// The title sits well below the frontmatter so a title edit and a priority edit merge cleanly.
-function plan(id, { title = id, priority = "high", worktree = "" } = {}) {
-  return `---\nid: ${id}\npriority: ${priority}\nnext_action: Do it\nworktree: ${worktree}\n---\n\n## Notes\n\nKept apart.\n\n# ${title}\n`;
+// The title sits well below the frontmatter so a title edit and a next-action edit merge cleanly.
+function plan(id, { title = id, worktree = "" } = {}) {
+  return `---\nid: ${id}\nnext_action: Do it\nworktree: ${worktree}\n---\n\n## Notes\n\nKept apart.\n\n# ${title}\n`;
 }
 
 function write(file, content) {
@@ -129,7 +129,7 @@ try {
 
   // ---- Outside edits to the primary copy ----
   const primaryWorked = active("worked.md");
-  write(primaryWorked, read(primaryWorked).replace("priority: high", "priority: low"));
+  write(primaryWorked, read(primaryWorked).replace("next_action: Do it", "next_action: Do it differently"));
   ({ byId } = scan());
   assert.equal(byId.act222.plan.title, "Worked in the worktree", "the portal keeps showing the worktree copy");
   assert.deepEqual(findingOf(byId.act222, "PLAN_EDITED_OUTSIDE_WORKTREE")?.meta, { worktree: "feature-x", committed: false }, "an uncommitted primary edit is reported");
@@ -139,7 +139,7 @@ try {
   git(featureX, "merge", "-q", "--no-edit", "main");
   ({ byId } = scan());
   assert.deepEqual(codes(byId.act222), [], "merging main into the worktree clears it");
-  assert.match(read(inFeature("worked.md")), /priority: low[\s\S]*Worked in the worktree/);
+  assert.match(read(inFeature("worked.md")), /next_action: Do it differently[\s\S]*Worked in the worktree/);
 
   // ---- The fingerprint notices a merge that touches no plan file ----
   write(path.join(main, "README.md"), "readme\n");
@@ -148,16 +148,6 @@ try {
   const beforeMerge = planSnapshotFingerprint({ stateRoot });
   git(featureX, "merge", "-q", "--no-edit", "main");
   assert.notEqual(planSnapshotFingerprint({ stateRoot }), beforeMerge, "merging main into a worktree changes the fingerprint");
-
-  // ---- Writes follow authority ----
-  ({ snapshot, byId } = scan());
-  const primaryBefore = read(primaryWorked);
-  const changed = updatePlanPriority(snapshot, { id: "act222", key: byId.act222.key, priority: "medium", expectedPriority: "low", mtimeMs: byId.act222.mtimeMs });
-  assert.match(read(inFeature("worked.md")), /priority: medium/, "an active plan's priority is written to the worktree copy");
-  assert.equal(read(primaryWorked), primaryBefore, "the primary copy is byte-identical");
-  assert.deepEqual(changed.record.plan.authority, { source: "worktree", worktree: "feature-x" }, "the returned record still says where it was read from");
-  updatePlanPriority(snapshot, { id: "back333", key: byId.back333.key, priority: "low", expectedPriority: "high", mtimeMs: byId.back333.mtimeMs });
-  assert.match(read(path.join(main, "docs/plans/backlog/backlog.md")), /priority: low/, "a backlog plan's priority is written to the primary copy");
 
   // ---- /api/plans carries the authority object and no absolute path ----
   const portal = spawnSync(process.execPath, ["-e", "import('./scripts/cli/plans.mjs').then((m) => process.stdout.write(JSON.stringify(m.loadPlansSnapshot())))"], {

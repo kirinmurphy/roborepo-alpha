@@ -1,6 +1,5 @@
 ---
 id: w7vls1yk
-priority: high
 next_action: Create the bot account and classic token (Phase 2), then run the three checks that need them
 blocked_by: []
 depends_on: []

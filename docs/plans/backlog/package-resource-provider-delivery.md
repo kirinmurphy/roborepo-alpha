@@ -1,6 +1,5 @@
 ---
 id: 7k3m9qd
-priority: medium
 next_action: Characterize Claude/Codex output and agree the target-set/delivery-plan boundary before migrating consumers or implementing Antigravity delivery.
 blocked_by: []
 depends_on: []

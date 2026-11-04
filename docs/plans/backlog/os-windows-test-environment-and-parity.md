@@ -1,6 +1,5 @@
 ---
 id: l1mz96d9
-priority: medium
 next_action: Define the shared Windows runner/isolation/ledger contract with lifecycle and session consumers, then map current suites to explicit results.
 blocked_by: []
 depends_on: []

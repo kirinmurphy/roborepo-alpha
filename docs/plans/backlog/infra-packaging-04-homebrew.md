@@ -1,6 +1,5 @@
 ---
 id: qjsbhel5
-priority: low
 next_action: Agree an immutable release archive/checksum contract with the existing npm release tooling, then verify external tap state before designing the formula.
 blocked_by: []
 depends_on: ["1rajbd5o"]

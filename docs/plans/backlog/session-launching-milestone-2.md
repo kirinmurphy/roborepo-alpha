@@ -1,6 +1,5 @@
 ---
 id: plan-session-launching-milestone-2
-priority: low
 next_action: Review Milestone 1 runtime incidents and define the reconciliation and terminal-registry contracts
 blocked_by: []
 depends_on:

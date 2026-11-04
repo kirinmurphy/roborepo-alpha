@@ -135,8 +135,8 @@ The plan detail popup is one component on every page that shows it (Plans and Ho
 templates, and stylesheet link live in `portal/plans/plan-drawer-partial.html`, injected wherever a
 page places `{{PLAN_DRAWER}}`; `portal/plans/plan-drawer.js` (`createPlanDrawer`) fills and opens it.
 The page supplies the plan list blockers resolve against and the plan-suite package state. Plans
-handles the drawer's `plan-change` events with its mutation orchestrator; Home passes `readonly`,
-so `<plan-status>` renders priority as a chip and does not offer a mutation control.
+handles the status's `blocked-click` event with its blockers popover; Home passes `readonly`, so the
+blocked badge is a static label.
 
 ### Adding a Read API
 
@@ -218,7 +218,7 @@ hand-maintained. Each domain's table:
 | --- | --- | --- |
 | `portal-routes-config.mjs` | `configRoutes` | `/api/config`, `/api/config/source`, `/api/config/packages`, `/api/config/skills`, `/api/config/permissions` |
 | `portal-routes-settings.mjs` | `settingsRoutes` | `/api/settings` — path-free derived repository, harness, and telemetry setup state |
-| `portal-routes-plans.mjs` | `plansRoutes` | `/api/plans`, `/api/plans/document`, `/api/plans/prompt`, `/api/plans/priority`, `/api/plans/refresh` |
+| `portal-routes-plans.mjs` | `plansRoutes` | `/api/plans`, `/api/plans/document`, `/api/plans/prompt`, `/api/plans/order`, `/api/plans/refresh` |
 | `portal-routes-developer-runtime.mjs` | `developerRuntimeRoutes` | `/api/developer-runtime`, `/api/developer-runtime/refresh`, `/api/developer-runtime/history`, `/api/developer-runtime/metadata`, `/api/developer-runtime/links`, `/api/developer-runtime/association`, `/api/developer-runtime/project`, `/api/developer-runtime/alias`, `/api/developer-runtime/compose-project`, `/api/developer-runtime/repository-visibility`, `/api/developer-runtime/repository-pinned` |
 | `portal-routes-repositories.mjs` | `repositoriesRoutes` | `/api/home`, `/api/repositories`, `/api/repositories/sources` (GET/POST), `/api/repositories/sources/refresh` (POST), `/api/repositories/sources/:sourceId/enabled` (POST), `/api/repositories/sources/:sourceId/remove` (POST), `/api/repositories/:id`, `/api/repositories/:id/associations`, `/api/repositories/:urlKey/overview` — Home/detail use the stable browser key; management routes use encoded canonical ids. The `sources` routes are the only ones that carry configured source paths, and are listed before `:id` so `sources` is never read as a repository id |
 | `portal-routes-usage.mjs` | `usageRoutes` | `/api/usage`, `/api/usage/refresh` |

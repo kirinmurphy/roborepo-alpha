@@ -9,10 +9,12 @@
 //   out-of-date primary copy never stands in for the worktree's.
 // - From a linked worktree, or a directory Git does not manage, the copies in that checkout are
 //   validated as they are: a suite skill working inside a plan's worktree checks its own copy.
+import path from "node:path";
 import { resolveGitDir } from "../repositories/index.mjs";
+import { repositoryOrderFindings } from "./backlog-registry.mjs";
 import { mainAndLinkedCheckouts } from "./checkouts.mjs";
 import { buildRepositoryPlanSnapshot, selectRepositoryPlan, withRelationshipFindings } from "./index.mjs";
-import { scanCheckout, selectRecords } from "./plan-copies.mjs";
+import { repositoryPlanRecords, scanCheckout } from "./plan-copies.mjs";
 
 export function validateRepositoryPlans({ cwd = process.cwd(), selector = null } = {}) {
   const snapshot = buildRepositoryPlanSnapshot({ cwd });
@@ -21,16 +23,35 @@ export function validateRepositoryPlans({ cwd = process.cwd(), selector = null }
   const plans = selected.flatMap((record) => (authoritative
     ? (authoritative.get(record.plan.relativePath) || [record]).map(fromMainCheckout)
     : [{ ...summary(record), validated: { source: "checkout" } }]));
-  const findings = plans.flatMap((plan) => plan.findings);
+  // The config and the ordering registry belong to no one plan. Both live in the primary checkout.
+  const orderRoot = primaryRootOf(snapshot.root);
+  const repositoryFindings = repositoryOrderFindings(orderRoot, resolveGitDir(orderRoot) ? primaryCheckoutRecords(orderRoot) : snapshot.plans);
+  const findings = [...plans.flatMap((plan) => plan.findings), ...repositoryFindings];
   return {
     repository: { name: snapshot.repository.name, repositoryId: snapshot.repository.repositoryId },
     plans,
+    repositoryFindings,
     summary: {
       plans: plans.length,
       findings: findings.length,
       blocking: findings.filter((item) => item.severity === "blocking").length,
     },
   };
+}
+
+function primaryRootOf(root) {
+  const git = resolveGitDir(root);
+  return git?.isWorktree ? path.dirname(git.commonDir) : root;
+}
+
+// Every plan in a repository, from each plan's authoritative copy, the way the portal reads them.
+// `primary` is the main checkout's path.
+export function primaryCheckoutRecords(primary) {
+  const snapshot = buildRepositoryPlanSnapshot({ cwd: primary });
+  // One identity for every checkout, as the portal scan passes: without it each checkout is keyed by
+  // its own root, and a plan's links to plans in another checkout stop resolving.
+  const canonical = { repositoryId: snapshot.repository.repositoryId, name: snapshot.repository.name };
+  return repositoryPlanRecords(mainAndLinkedCheckouts(primary).map((checkout) => scanCheckout(checkout, canonical)));
 }
 
 // From the main checkout, the portal's records for the plans that checkout holds, keyed by the path
@@ -40,11 +61,7 @@ export function validateRepositoryPlans({ cwd = process.cwd(), selector = null }
 function authoritativeRecords(snapshot) {
   const git = resolveGitDir(snapshot.root);
   if (!git || git.isWorktree) return null;
-  // One identity for every checkout, as the portal scan passes: without it each checkout is keyed by
-  // its own root, and a plan's links to plans in another checkout stop resolving.
-  const canonical = { repositoryId: snapshot.repository.repositoryId, name: snapshot.repository.name };
-  const scans = mainAndLinkedCheckouts(snapshot.root).map((checkout) => scanCheckout(checkout, canonical));
-  const records = withRelationshipFindings(selectRecords(scans));
+  const records = withRelationshipFindings(primaryCheckoutRecords(snapshot.root));
   const byPrimaryPath = new Map();
   for (const record of records) {
     if (!record.plan.authority) continue;

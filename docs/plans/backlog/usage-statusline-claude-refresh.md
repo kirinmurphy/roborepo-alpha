@@ -1,6 +1,5 @@
 ---
 id: usage-statusline-claude-refresh
-priority: low
 next_action: Verify whether a supported native idle-refresh property exists and its minimum version before proposing any configuration key.
 blocked_by: []
 depends_on: []

@@ -105,27 +105,6 @@ dialog#skill-modal::backdrop {
 .onboarding-sublist [data-slot="details"] {
   font-size: var(--text-xs);
 }
-.priority-slot {
-  display: flex;
-  flex: 0 0 auto;
-}
-/* Distinct surface so the priority control reads as an actionable widget, not flat card text. */
-.priority-slot .dropdown-trigger {
-  font-size: var(--text-sm);
-  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
-  padding: 3px 9px;
-}
-.priority-slot .dropdown-chevron {
-  font-size: var(--text-2xs);
-  color: var(--ink);
-}
-/* Failed priority update (e.g. stale mtime conflict): the page-level warning banner is far above
- * the card grid, so put a visible marker on the control itself too — a native title tooltip
- * alone is too easy to miss. */
-.priority-slot option-dropdown.dropdown-error .dropdown-trigger {
-  border-color: var(--danger);
-  color: var(--danger);
-}
 .lifecycle-slot {
   display: flex;
   flex: 0 0 auto;

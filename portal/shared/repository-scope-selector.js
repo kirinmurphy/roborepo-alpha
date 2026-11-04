@@ -52,7 +52,11 @@ export function mountRepositoryScopeSelector(page, host = document.getElementByI
   let fresh = false;
   const dropdown = document.createElement("option-dropdown");
   dropdown.name = "Repo";
-  dropdown.onSelect = (value) => setRepositoryScope(value === ALL_REPOSITORIES ? null : value);
+  dropdown.onSelect = (value) => {
+    setRepositoryScope(value === ALL_REPOSITORIES ? null : value);
+    // A page can hold the change for unsaved work, so the selector shows the scope actually in force.
+    dropdown.value = currentRepositoryScope() ?? ALL_REPOSITORIES;
+  };
   const manageDialog = createRepositorySourcesDialog({ onChange: () => void loadRepositories() });
   dropdown.actions = [{ label: "Manage Repos", icon: "pencil", onSelect: () => manageDialog.open() }];
   host.replaceChildren(dropdown);

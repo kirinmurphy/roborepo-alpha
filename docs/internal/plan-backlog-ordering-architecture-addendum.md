@@ -1,6 +1,6 @@
 # Architecture addendum: namespace-scoped Backlog ordering
 
-**Status:** Proposed technical design companion to `plan-backlog-roadmap-ordering-v7.md`  
+**Status:** Technical design companion to `plan-backlog-roadmap-ordering.md`  
 **Scope:** Schema, persistence, dependency grouping, consistency rules, and a normative Backlog UI reference. The implementation plan remains the source of truth for overall feature goals.
 
 ## Purpose
@@ -15,9 +15,8 @@ The published `plan-write` schema currently establishes:
 - An opaque, immutable, repository-local `id` (normally 6–8 lowercase base36 characters).
 - `depends_on` as an array of plan IDs, supporting more than one prerequisite.
 - Approved project namespaces from `docs/plans/plans-config.json`, supplemented by plan-suite universal namespaces.
-- `priority: high|medium|low|none` in the current schema; removing this is part of the agreed breaking change.
 
-See the repository's `plan-write/SKILL.md` and `references/plan-schema.md`. This document proposes changes; it does not claim the implementation or validator has been updated.
+See the repository's `plan-write/SKILL.md` and `references/plan-schema.md`. `docs/user/reference/plans-portal.md` describes the behavior as implemented; this note records the design and the UI contract.
 
 ## Proposed storage layout
 
@@ -44,7 +43,7 @@ docs/plans/
 
 For example, if B and C each depend on A, the ranked registry can store `[A, B, C]` even while Ordering shows one movable `[A, B, C]` block. When A leaves Backlog, B and C become independent movable entries in that same B-before-C order. Their individual positions are **already saved**; no new prioritization prompt is required, and leaving a group is not a reason to clear a rank. A new sibling is inserted in a stable, deterministic order while respecting all actual prerequisite edges.
 
-New plans that depend only on *unprioritized* prerequisites remain unprioritized with their connected group. Manual Ordering-mode changes require explicit Save; automatic placement triggered by `plan-write` or dependency edits persists as part of that write operation, using revision checks to avoid overwriting an unsaved UI draft.
+New plans that depend only on *unprioritized* prerequisites remain unprioritized with their connected group. Manual Ordering-mode changes require explicit Save. Automatic placement persists through `roborepo plans order place`, using revision checks to avoid overwriting an unsaved UI draft; a hand edit to `depends_on` has no write path of its own, so it takes effect on the next read and persists at the next write.
 
 ### 1. Plan document: identity and hard dependencies
 
@@ -1053,20 +1052,15 @@ Ordered
 **Details — flat plan cards**
 
 ```text
-Needs prioritization (1)
-
+┌─────────────────────────────────────────────────────────┐
+│ AGENTS · Context storage (A)                            │
+│ Persist context for later reuse.                        │
+│ Backlog                                              0% │
+└─────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────┐
 │ AGENTS · Context indexing (B)                           │
 │ Index stored context for retrieval.                     │
-│ Backlog                                              0% │
-└─────────────────────────────────────────────────────────┘
-Ordered
-
-
-┌─────────────────────────────────────────────────────────┐
-│ AGENTS · Context storage (A)                            │
-│ Persist context for later reuse.                        │
 │ Backlog                                              0% │
 └─────────────────────────────────────────────────────────┘
 
@@ -1075,19 +1069,17 @@ Ordered
 │ Inspect agent errors.                                   │
 │ Backlog                                              0% │
 └─────────────────────────────────────────────────────────┘
-
 ```
 
 **Ordering — movable blocks / rows**
 
 ```text
-  B · Context indexing          [↓][⇣][⠿]  (unprioritized)
-  ─────────── Ranked ───────────
   A · Context storage    [⇡][↑][↓][⇣][⠿]
+  B · Context indexing    [⇡][↑][↓][⇣][⠿]
   X · Agent diagnostics    [⇡][↑][↓][⇣][⠿]
 ```
 
-**Rule:** Under the agreed policy, the newly detached B goes to Needs prioritization rather than inheriting a rank.
+**Rule:** A removed dependency keeps the rank. The plans stay at their positions as separate rows, and nothing moves to Needs prioritization: the data cannot tell a detached plan from one ranked on its own.
 
 #### E1 — Cycle — invalid
 
@@ -1179,7 +1171,7 @@ Ordered
 | New independent plan | Show first under Needs prioritization | Append to the ranked order by default |
 | New dependent plan | Auto-attach to ranked connected group when eligible | Require manual prioritization solely for adding dependency |
 | New dependency merges ranked groups | Propose, then automatically apply contiguous merge (Option A); surface changed positions | Persist a false dependency to force linear order |
-| Removed dependency detaches ranked member | Move detached plan to Needs prioritization per agreed policy | Leave a now-independent plan implicitly ranked |
+| Removed dependency detaches ranked member | Keep the plan at its current position | Move it to Needs prioritization |
 | Invalid graph or missing target | Show visible validation finding and recovery path | Show a trustworthy looking but invalid reorder/save |
 
 ### UI assertions per gallery case
@@ -1206,13 +1198,10 @@ Test both projections from **one normalized input** and one shared flattened ord
 | New plan depends on a ranked same-namespace block | Auto-attach to that block and persist the expanded order |
 | New plan depends on multiple ranked blocks | Option A: propose and automatically apply a merged contiguous block, reporting moved entries |
 | New dependency added to an already ranked plan | Reconcile groups and order automatically; report changed ranks |
-| Dependency removed, leaving a formerly grouped plan independent | Remove the detached plan from ranked order and put it in Needs prioritization, per agreed policy |
-| Plan leaves Backlog (including Active or Completed) | Remove its ID from Backlog order, recalculate groups using only direct remaining Backlog edges, retain relative order of ranked survivors and retain dependency facts in Markdown |
-| Plan returns to Backlog | Apply normal new-entry rules: attach through ranked dependencies or become unprioritized |
+| Dependency removed, leaving a formerly grouped plan independent | Keep every plan at its current position, as separate rows or smaller groups |
+| Plan leaves Backlog (including Active or Completed) | Ignore its ID on read and prune it at the next write, recalculate groups using only direct remaining Backlog edges, retain relative order of ranked survivors and retain dependency facts in Markdown |
 | Plan renamed | ID order unchanged; namespace reclassification requires validation and reconciliation |
 | Plan deleted or namespace invalid | Surface a finding and repair path; never silently discard a broken reference |
-
-If preserving independently placed rank after a later dependency removal becomes important, it would require additional placement provenance. That exception is not part of Option A.
 
 ## Calculation and persistence boundary
 
@@ -1265,4 +1254,4 @@ The save should check the repository snapshot or revision used to create the dra
 - **Enforcement reach:** determine which repositories run plan filename validation in build/CI, then apply the shared validator wherever plan-suite is used.
 - **Parsing performance:** measure filename-prefix resolution on representative repository indexes and ensure namespace vocabularies are loaded once per repository snapshot.
 
-This note is an architectural proposal with a visual Backlog UI contract, not a managed plan document. It intentionally has no plan frontmatter or lifecycle location and has not been run through the repository's plan validator.
+This note is a design record with a visual Backlog UI contract, not a managed plan document. It intentionally has no plan frontmatter or lifecycle location and has not been run through the repository's plan validator.

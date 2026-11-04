@@ -28,11 +28,20 @@ export async function removeRepositorySources(page) {
 
 // The Plans board only shows once plan-suite is enabled; the hermetic machine has no packages.
 export async function enablePlanBoard(page) {
-  await page.route("**/api/plans", async (route) => {
+  await page.route(/\/api\/plans(\/refresh)?(\?|$)/, async (route) => {
     const data = await (await retryingReset(() => route.fetch())).json();
     data.planSuitePackage = { ...data.planSuitePackage, available: true, enabled: true };
     await route.fulfill({ json: data });
   });
+}
+
+// The Backlog list holding a plan: Backlog is a repo and namespace directory, so its cards sit behind
+// a URL that names both. A repo with no plans-config.json lists everything under No namespace.
+export async function backlogUrlFor(page, planTitle) {
+  const { plans, backlog } = await (await retryingReset(() => page.request.get("/api/plans"))).json();
+  const record = plans.find((item) => item.plan.title === planTitle);
+  const entry = backlog.find((item) => item.repositoryId === record.repository.repositoryId);
+  return `/plans?lifecycle=backlog&repo=${entry.urlKey}&namespace=${record.plan.namespace || "_none"}`;
 }
 
 // Serves the real /api/home response passed through `mutate`, for both Home and the Plans page

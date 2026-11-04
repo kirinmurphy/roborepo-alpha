@@ -43,38 +43,53 @@ const DEFS = {
     message: "Missing frontmatter id.",
     resolution: "Add `id: <lowercase-slug>` to the frontmatter; keep it stable across moves.",
   },
-  MISSING_PRIORITY: {
-    kind: "schema",
-    severity: "advisory",
-    message: "Missing frontmatter priority.",
-    resolution: "Add `priority: high`, `medium`, `low`, or `none` to the frontmatter.",
-  },
-  INVALID_PRIORITY: {
-    kind: "schema",
-    severity: "advisory",
-    message: "Priority must be high, medium, low, or none.",
-    resolution: "Replace the `priority` value with one of the four allowed values.",
-  },
   // The three naming rules below are emitted by naming.mjs, which scopes them to non-terminal
-  // lifecycles. They stay advisory: a filename is safe to change while a plan is still being worked,
-  // but once it is completed or archived, inbound links outweigh the convention.
+  // lifecycles in a repository that declared namespaces. They block `plans validate` and the promote
+  // and start gates: a filename is safe to change while a plan is still being worked, but once it is
+  // completed or archived, inbound links outweigh the convention.
   INVALID_PLAN_FILENAME: {
     kind: "schema",
-    severity: "advisory",
+    severity: "blocking",
     message: ({ meta }) => `Filename is not \`<namespace>-<slug>.md\`: ${meta.filename}.`,
     resolution: "Rename the file to lowercase-hyphenated `<namespace>-<slug>.md`. The `id` never changes with it.",
   },
   UNKNOWN_PLAN_NAMESPACE: {
     kind: "schema",
-    severity: "advisory",
+    severity: "blocking",
     message: ({ meta }) => `Unknown plan namespace: ${meta.namespace}.`,
     resolution: "Use a universal namespace or one declared in `docs/plans/plans-config.json`, or add the namespace to that config first.",
   },
   FORBIDDEN_PLAN_FILENAME_SUFFIX: {
     kind: "schema",
-    severity: "advisory",
+    severity: "blocking",
     message: ({ meta }) => `Filename encodes a lifecycle, status, date, or version: -${meta.suffix}.`,
     resolution: "Drop the suffix. Lifecycle is the folder and status is frontmatter; filenames get linked to and these change.",
+  },
+  INVALID_PLANS_CONFIG: {
+    kind: "schema",
+    severity: "blocking",
+    message: ({ meta }) => `docs/plans/plans-config.json cannot be read: ${meta.error}.`,
+    resolution: "Fix the file so it is valid JSON with a `namespaces` object. No plan can resolve a namespace until then.",
+  },
+  // The ordering registry, docs/plans/plans-order.json. A write refuses an invalid registry rather
+  // than overwriting it; the other two entries are preserved until someone removes them.
+  INVALID_ORDER_REGISTRY: {
+    kind: "schema",
+    severity: "blocking",
+    message: ({ meta }) => `docs/plans/plans-order.json cannot be read: ${meta.error}.`,
+    resolution: "Fix the file so it holds `schemaVersion: 1` and a `namespaces` object of plan-id arrays. Every plan shows as unprioritized until then.",
+  },
+  ORDER_UNKNOWN_PLAN: {
+    kind: "relationship",
+    severity: "advisory",
+    message: ({ meta }) => `plans-order.json names an unknown plan in ${meta.namespace}: ${meta.id}.`,
+    resolution: "Remove the id from docs/plans/plans-order.json, or restore the plan it names.",
+  },
+  ORDER_UNAPPROVED_NAMESPACE: {
+    kind: "relationship",
+    severity: "advisory",
+    message: ({ meta }) => `plans-order.json has an order for a namespace that is not approved: ${meta.namespace}.`,
+    resolution: "Add the namespace back to docs/plans/plans-config.json, or remove its entry from docs/plans/plans-order.json.",
   },
 
   // --- structure ------------------------------------------------------------------------------
@@ -182,7 +197,7 @@ const DEFS = {
     kind: "parse",
     severity: "blocking",
     message: "Missing frontmatter.",
-    resolution: "Add a `---` frontmatter block at the very top of the file with at least `id` and `priority`.",
+    resolution: "Add a `---` frontmatter block at the very top of the file with at least `id` and `next_action`.",
   },
   UNCLOSED_FRONTMATTER: {
     kind: "parse",
@@ -207,15 +222,6 @@ const DEFS = {
     severity: "advisory",
     message: ({ meta }) => `${meta.key} must be an array.`,
     resolution: "Rewrite the value as a block list (`  - item` on following lines) or as `[]`.",
-  },
-  // Distinct from the schema-level INVALID_PRIORITY: this one is raised while reading frontmatter
-  // and names the offending value, where INVALID_PRIORITY states the contract during destination
-  // validation. Both can appear on the same document.
-  INVALID_PRIORITY_VALUE: {
-    kind: "parse",
-    severity: "advisory",
-    message: ({ meta }) => `Invalid priority: ${meta.value}.`,
-    resolution: "Use one of: `high`, `medium`, `low`, `none`.",
   },
   INVALID_ID: {
     kind: "parse",
@@ -276,6 +282,12 @@ const DEFS = {
     severity: "advisory",
     message: "Plan depends on itself.",
     resolution: "Remove the plan's own id from `depends_on`.",
+  },
+  DEPENDENCY_CYCLE: {
+    kind: "relationship",
+    severity: "blocking",
+    message: ({ meta }) => `Dependency cycle: ${meta.cycle.join(" -> ")}.`,
+    resolution: "Remove one `depends_on` entry so the prerequisites can run in some order.",
   },
   DEPENDENCY_NOT_FOUND: {
     kind: "relationship",

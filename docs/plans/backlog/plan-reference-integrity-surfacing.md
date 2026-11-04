@@ -1,6 +1,5 @@
 ---
 id: p3vbk03v
-priority: medium
 next_action: Add scoped advisory document-link validation to the existing plans validator, first characterizing current real-tree tests and transition stale-link coverage.
 blocked_by: []
 depends_on: []

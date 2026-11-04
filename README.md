@@ -182,7 +182,7 @@ The Plans portal surfaces:
 |                 |                                                       |
 | --------------- | ----------------------------------------------------- |
 | Structure       | deterministic validation                              |
-| Priority        | plan metadata                                         |
+| Backlog order   | a per-namespace order you save explicitly             |
 | Dependencies    | blockers and relationships                            |
 | Plan freshness  | reviewed commit / current HEAD                        |
 | Review outcome  | open findings and your recorded approval              |
@@ -196,7 +196,7 @@ flowchart LR
   Backlog & Ready & Active & Review -->|/plan-archive| Archived
 ```
 
-![The Plans page: lifecycle tabs and a plan card with priority, plan freshness, and workflow actions](docs/images/plans.png)
+![The Plans page: Backlog ordering within a namespace, with linked plans moving as one block](docs/images/plans.png)
 
 [Plan Suite walkthrough →](docs/user/guides/plan/lifecycle/plan-suite.md)\
 [Plans reference →](docs/user/reference/plans-portal.md)

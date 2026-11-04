@@ -8,6 +8,7 @@ import path from "node:path";
 import { test, expect } from "@playwright/test";
 import {
   addRepositorySource,
+  backlogUrlFor,
   enablePlanBoard,
   patchHomeOverview,
   planRowOf,
@@ -16,7 +17,7 @@ import {
 } from "./helpers.mjs";
 
 const plan = ({ id, title, nextAction, tasks, frontmatter = [] }) => [
-  "---", `id: ${id}`, "priority: high", `next_action: ${nextAction}`, ...frontmatter, "---", "",
+  "---", `id: ${id}`, `next_action: ${nextAction}`, ...frontmatter, "---", "",
   `# ${title}`, "", "## Summary", "", "Body.", "", "## Tasks", "", ...tasks, "",
 ].join("\n");
 
@@ -81,7 +82,6 @@ test.describe("Plans card status", () => {
     await expect(ring).toHaveAttribute("aria-valuenow", "50");
     await expect(card.locator(".plan-percent")).toHaveText("50%");
     await expect(card.locator("plan-status option-dropdown")).toHaveCount(0);
-    await expect(card.locator("plan-status .priority-slot")).toBeHidden();
     await expect(card).not.toContainText("never-reviewed");
     await expect(card).not.toContainText("Ship the ring step");
     await expect(card).not.toContainText("Next up");
@@ -97,28 +97,20 @@ test.describe("Plans card status", () => {
     await expect(card).not.toContainText("approved");
   });
 
-  test("priority filtering is hidden and ignored outside backlog and ready", async ({ page }) => {
-    await page.goto("/plans?lifecycle=backlog");
-    await page.locator("#filters-toggle").click();
-    await page.getByLabel("Priority", { exact: true }).selectOption("high");
-    await page.locator("#filters-update").click();
-    await expect(page.locator('filter-chip[filter-id="priority"]')).toBeVisible();
-    await page.getByRole("button", { name: /^Active \(/ }).click();
-    await expect(page.locator("plan-card", { hasText: "Ring status plan" })).toBeVisible();
-    await expect(page.locator('filter-chip[filter-id="priority"]')).toHaveCount(0);
-    await page.locator("#filters-toggle").click();
-    await expect(page.getByLabel("Priority", { exact: true })).toBeHidden();
-    await page.locator("#filters-cancel").click();
-    await page.getByRole("button", { name: /^Backlog \(/ }).click();
-    await expect(page.locator('filter-chip[filter-id="priority"]')).toBeVisible();
+  test("no lifecycle offers priority: no control, filter, or chip", async ({ page }) => {
+    for (const lifecycle of ["backlog", "active"]) {
+      await page.goto(`/plans?lifecycle=${lifecycle}`);
+      await page.locator("#filters-toggle").click();
+      await expect(page.getByLabel("Priority", { exact: true })).toHaveCount(0);
+      await page.locator("#filters-cancel").click();
+    }
+    await expect(page.locator("plan-status option-dropdown")).toHaveCount(0);
   });
 
   test("a finished task list shows the done badge in place of the ring", async ({ page }) => {
-    await page.goto("/plans?lifecycle=backlog");
+    await page.goto(await backlogUrlFor(page, "Done status plan"));
     const card = page.locator("plan-card", { hasText: "Done status plan" });
     await expect(card.locator(".plan-complete-badge")).toHaveText("done");
-    await expect(card.locator("plan-status option-dropdown")).toHaveCount(1);
-    await expect(card.locator("plan-status .priority-slot")).toBeVisible();
     await expect(card.getByRole("progressbar")).toHaveCount(0);
   });
 
@@ -144,7 +136,7 @@ test.describe("Plans card status", () => {
   // A blocker id that names a plan in the same repository is a link to that plan; an external
   // blocker names no plan, so it has nothing to open and stays plain text.
   test("the blocked-by badge lists each blocker, and a known blocker opens its plan", async ({ page }, testInfo) => {
-    await page.goto("/plans?lifecycle=backlog");
+    await page.goto(await backlogUrlFor(page, "Done status plan"));
     const card = page.locator("plan-card", { hasText: "Blocked status plan" });
     const blocked = card.getByRole("button", { name: "blocked by 2" });
     const warning = card.getByRole("group", { name: "Document status", exact: true }).getByText(/^\d+ warnings?$/);
@@ -163,7 +155,7 @@ test.describe("Plans card status", () => {
   });
 
   test("backlog dependencies replace Promote with linked IDs on cards and in the drawer", async ({ page }, testInfo) => {
-    await page.goto("/plans?lifecycle=backlog");
+    await page.goto(await backlogUrlFor(page, "Done status plan"));
     const card = page.locator("plan-card", { hasText: "Dependent status plan" });
     await expect(card).toContainText("depends on stblkr01, string01, missing1");
     await expect(card).not.toContainText("stcmp001");
@@ -193,7 +185,7 @@ test.describe("Plans card status", () => {
   });
 
   test("completed dependencies restore Promote on the card and in its popup", async ({ page }) => {
-    await page.goto("/plans?lifecycle=backlog");
+    await page.goto(await backlogUrlFor(page, "Done status plan"));
     const card = page.locator("plan-card", { hasText: "Satisfied dependency plan" });
     await expect(card).not.toContainText("depends on");
     await expect(card.getByRole("button", { name: "Promote", exact: true })).toBeVisible();
@@ -212,7 +204,7 @@ test.describe("Plans card status", () => {
 
   test("copying the drawer path shows a green check without adding confirmation text", async ({ page }) => {
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
-    await page.goto("/plans?lifecycle=backlog");
+    await page.goto(await backlogUrlFor(page, "Done status plan"));
     await page.locator("plan-card", { hasText: "Dependent status plan" }).getByText("Dependent status plan", { exact: true }).click();
     const copy = page.locator("#drawer-path-copy");
     await copy.getByRole("button", { name: "Copy path", exact: true }).click();

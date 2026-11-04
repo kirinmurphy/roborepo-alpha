@@ -1,6 +1,5 @@
 ---
 id: usage-statusline-codex-hook-parity
-priority: low
 next_action: Revalidate current upstream command-backed footer availability; retain the request as a draft unless separately authorized to file it.
 blocked_by: ["upstream: Codex has no footer-command hook (or equivalent extension point)"]
 depends_on: []

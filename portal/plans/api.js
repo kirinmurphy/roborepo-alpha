@@ -17,8 +17,9 @@ export function refreshSnapshot() {
   return portalPostJson(withRepositoryScope("/api/plans/refresh"), {});
 }
 
-export function updatePlanPriority(id, key, priority, expectedPriority, mtimeMs, repositoryId) {
-  return portalPostJson("/api/plans/priority", { id, key, priority, expectedPriority, mtimeMs, repositoryId });
+// One namespace's whole order. A draft opened from an older revision is refused with STALE_ORDER.
+export function saveBacklogOrder({ repositoryId, namespace, order, revision }) {
+  return portalPostJson("/api/plans/order", { repositoryId, namespace, order, revision });
 }
 
 export function fetchPlanDocument(key) {

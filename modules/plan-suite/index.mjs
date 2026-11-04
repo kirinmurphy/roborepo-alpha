@@ -1,5 +1,4 @@
 import fs from "node:fs";
-import { assignedWorktreeCopy } from "./worktree-copy.mjs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
@@ -9,12 +8,12 @@ import { validateForLifecycle } from "./lifecycle-policy.mjs";
 import { LIFECYCLE_MODEL } from "./lifecycle-manifest.mjs";
 import { reviewRecord } from "./review-record.mjs";
 import { classifyPlanId, isExternalBlocker } from "./plan-id.mjs";
-import { validatePlanNaming, readProjectNamespaces } from "./naming.mjs";
+import { validatePlanNaming, readProjectNamespaces, resolvePlanNamespace } from "./naming.mjs";
+import { findDependencyCycles } from "./backlog-order.mjs";
 import { renderMarkdown } from "../../scripts/cli/markdown-render.mjs";
 
 // The lifecycle folders a plan can live in, from manifests/platform/plan-lifecycle.json.
 export const LIFECYCLES = LIFECYCLE_MODEL.folders;
-export const PRIORITIES = new Set(["high", "medium", "low", "none"]);
 const MAX_DOC_BYTES = 1024 * 1024;
 const MAX_PLANS_PER_REPO = 500;
 
@@ -127,43 +126,12 @@ export function domainError(code, message, { resolution, details, findings, repa
 const DOMAIN_ERROR_STATUS = {
   INVALID_CHANGE: 400,
   STALE_PLAN: 409,
+  STALE_ORDER: 409,
   DESTINATION_EXISTS: 409,
   LIFECYCLE_REQUIREMENTS: 422,
   PLAN_NOT_FOUND: 404,
   MOVE_FAILED: 500,
 };
-
-// Two-stage resolution shared by every mutation: locate the record the client expects by `key`
-// first (the common case — nothing has moved), then re-resolve by stable `id` when the key no
-// longer exists, since a lifecycle move changes `key` but not `id`. Throws PLAN_NOT_FOUND only
-// when neither resolves.
-function resolvePlanForMutation(snapshot, { id, key, repositoryId }) {
-  const byKey = snapshot.plans.find((item) => item.key === key);
-  if (byKey) return byKey;
-  const byId = findPlanById(snapshot, id, repositoryId);
-  if (byId) return byId;
-  throw domainError("PLAN_NOT_FOUND", "This plan can no longer be found. Refresh and try again, or restore the file if it was deleted.");
-}
-
-// Validates the resolved record still matches what the client last saw. A key/lifecycle/path
-// mismatch while the stable id still resolves means the file moved since the client loaded it
-// (report where it is now); a straight mtime/field mismatch means it was edited in place.
-// `expectedField`/`expectedValue` is the generic form any mutated scalar property can use
-// (see updatePlanField); expectedLifecycle/expectedPriority stay as named params since
-// movePlanLifecycle and updatePlanPriority's public contracts already key off those exact names.
-function assertExpectedState(record, { key, expectedLifecycle, expectedPriority, expectedField, expectedValue, mtimeMs }) {
-  const mismatches = [];
-  if (key !== undefined && record.key !== key) mismatches.push(`moved to ${record.plan.relativePath}`);
-  if (expectedLifecycle !== undefined && record.plan.lifecycle !== expectedLifecycle) mismatches.push(`lifecycle is now ${record.plan.lifecycle}`);
-  if (expectedPriority !== undefined && record.plan.priority !== expectedPriority) mismatches.push(`priority is now ${record.plan.priority}`);
-  if (expectedField !== undefined && record.plan[expectedField] !== expectedValue) mismatches.push(`${expectedField} is now ${record.plan[expectedField]}`);
-  if (mtimeMs !== undefined && record.mtimeMs !== mtimeMs) mismatches.push("file changed on disk");
-  if (mismatches.length === 0) return;
-  throw domainError("STALE_PLAN", "This plan changed outside the portal, so the update wasn't applied.", {
-    resolution: "The page will refresh to show the current state.",
-    details: [...mismatches, `current lifecycle: ${record.plan.lifecycle}`, `current path: ${record.plan.relativePath}`],
-  });
-}
 
 export function readPlanDocument(snapshot, key) {
   const publicRecord = findPlanByKey(snapshot, key);
@@ -332,7 +300,9 @@ function buildPlanRecord(repository, absolutePath, relativePath, stat, projectNa
       relativePath,
       lifecycle,
       readiness: validation.ready ? "ready" : "draft",
-      priority: parsed.frontmatter.priority || "none",
+      // Derived from the filename and the repository's approved vocabulary, never stored; null sends
+      // a Backlog plan to No namespace for repair.
+      namespace: resolvePlanNamespace(path.basename(relativePath), projectNamespaces),
       nextAction: parsed.frontmatter.next_action || "",
       blockers: parsed.frontmatter.blocked_by || [],
       dependencies: parsed.frontmatter.depends_on || [],
@@ -514,9 +484,7 @@ export function parseInlineArray(value) {
 
 // Narrow scalar-only frontmatter writer: patches one `key: value` line in place, preserving key
 // order, blank lines, and the entire body byte-for-byte. Appends the key (at the end of the
-// frontmatter block) when it's missing entirely — a plan with no `priority:` line at all renders
-// the same "none" fallback in buildPlanRecord() as one with an empty value, so the writer must be
-// able to turn either into a real on-disk line. Does not support list fields (blocked_by etc).
+// frontmatter block) when it's missing entirely. Does not support list fields (blocked_by etc).
 export function writeFrontmatterField(markdown, key, value) {
   if (!markdown.startsWith("---\n")) throw new Error("missing frontmatter");
   const end = markdown.indexOf("\n---", 4);
@@ -562,92 +530,6 @@ export function lifecycleMoveDestination(realRepo, realFile, lifecycle) {
   return { filename, destination };
 }
 
-// Resolves the real (symlink-followed) path of a plan file expected to still be at
-// `absolutePath`. Translates a missing file into STALE_PLAN rather than leaking a raw ENOENT —
-// the file may have moved externally (the stable id could still resolve elsewhere on a rescan)
-// or been deleted; either way it's a stale-state conflict, not a generic filesystem error.
-function realpathOrStale(absolutePath) {
-  try {
-    return fs.realpathSync(absolutePath);
-  } catch (err) {
-    if (err?.code === "ENOENT") {
-      throw domainError("STALE_PLAN", "This plan changed outside the portal, so the update wasn't applied.", {
-        resolution: "The page will refresh to show the current state.",
-        details: ["the file is no longer at its last known location"],
-      });
-    }
-    throw err;
-  }
-}
-
-// Rebuilds and caches a full public plan record for a file already on disk at `absolutePath`,
-// reusing the same buildPlanRecord/readPlanRecord path the snapshot scanner uses, so mutation
-// results have the identical shape (and warnings/readiness/etc are freshly derived) as a record
-// that came from a normal scan. `lifecycle` is the stage the record was shown under, which for an
-// assigned worktree's copy comes from the primary copy rather than from this file's path.
-function rebuildPlanRecordAt(repository, absolutePath, lifecycle) {
-  const relativePath = relative(repository.root, absolutePath);
-  const stat = fs.statSync(absolutePath);
-  const namespaces = readProjectNamespaces(repository.root).namespaces;
-  const record = buildPlanRecord(repository, absolutePath, relativePath, stat, namespaces, lifecycle || lifecycleFromPath(relativePath));
-  planRecordCache.set(absolutePath, {
-    mtimeMs: stat.mtimeMs,
-    repositoryRoot: repository.root,
-    namespaceKey: namespaces.join(","),
-    record,
-  });
-  return publicPlan(record);
-}
-
-// Per-field validators for the generic scalar frontmatter mutation below. Only fields meant to be
-// human-edited via the portal belong here, not the
-// frontmatter keys reserved for authors and automated tooling (id and reviewed_commit are
-// never UI-edited; blocked_by/depends_on/related are arrays writeFrontmatterField can't touch).
-const FIELD_VALIDATORS = {
-  priority: (value) => PRIORITIES.has(value),
-};
-
-// Generic scalar frontmatter field mutation: validate the new value, confirm the record hasn't
-// gone stale, patch the one frontmatter line, and return the same { change, record } shape every
-// mutation in this module returns. Only fields listed in FIELD_VALIDATORS are accepted.
-export function updatePlanField(snapshot, { id, key, property, value, expectedValue, mtimeMs, repositoryId }) {
-  const validate = FIELD_VALIDATORS[property];
-  if (!validate) throw domainError("INVALID_CHANGE", `field not editable: ${property}`);
-  if (!validate(value)) throw domainError("INVALID_CHANGE", `invalid ${property}`);
-  let record = resolvePlanForMutation(snapshot, { id, key, repositoryId });
-  assertExpectedState(record, { key, expectedField: property, expectedValue, mtimeMs });
-  if (record.plan.authority?.reason === "verified-landed-recovery") {
-    // Evidence selection never grants general write authority on primary.
-    const assigned = assignedWorktreeCopy(record.repository.root, record);
-    if (!assigned.copy || !assigned.worktree || assigned.authority.reason !== "verified-landed-recovery") throw domainError("STALE_PLAN", "Recovery evidence or the assigned worktree changed. Refresh before editing.");
-    const target = readPlanRecord(repositoryRecord(assigned.worktree.path), assigned.copy.absolutePath, { lifecycle: record.plan.lifecycle });
-    if (target.plan[property] !== record.plan[property]) throw domainError("STALE_PLAN", "The assigned worktree's value changed. Refresh before editing.");
-    target.plan = { ...target.plan, checkout: assigned.worktree.name, authority: { source: "worktree", worktree: assigned.worktree.name } };
-    record = target;
-  }
-  if (!record.absolutePath) throw domainError("PLAN_NOT_FOUND", "plan file path unavailable");
-  const repoRoot = record.repository.root;
-  const realRepo = fs.realpathSync(repoRoot);
-  const realFile = realpathOrStale(record.absolutePath);
-  if (!inside(realRepo, realFile)) throw domainError("MOVE_FAILED", "plan file escaped repository boundary");
-  const markdown = fs.readFileSync(realFile, "utf8");
-  const updated = writeFrontmatterField(markdown, property, value);
-  fs.writeFileSync(realFile, updated);
-  planRecordCache.delete(record.absolutePath);
-  const rebuilt = rebuildPlanRecordAt(record.repository, realFile, record.plan.lifecycle);
-  // A frontmatter field edit leaves where the plan was read from, and which stage it is in, unchanged.
-  const primaryPath = record.plan.primaryRelativePath ? { primaryRelativePath: record.plan.primaryRelativePath } : {};
-  rebuilt.plan = { ...rebuilt.plan, ...primaryPath, checkout: record.plan.checkout ?? null, authority: record.plan.authority ?? null };
-  return {
-    change: { property, previousValue: record.plan[property], newValue: value },
-    record: rebuilt,
-  };
-}
-
-export function updatePlanPriority(snapshot, { id, key, priority, expectedPriority, mtimeMs, repositoryId }) {
-  return updatePlanField(snapshot, { id, key, property: "priority", value: priority, expectedValue: expectedPriority, mtimeMs, repositoryId });
-}
-
 function normalizeFrontmatter(frontmatter, findings) {
   for (const key of ["blocked_by", "depends_on", "related"]) {
     if (frontmatter[key] === undefined) frontmatter[key] = [];
@@ -655,9 +537,6 @@ function normalizeFrontmatter(frontmatter, findings) {
       findings.push(finding("NON_ARRAY_FIELD", { meta: { key } }));
       frontmatter[key] = [];
     }
-  }
-  if (frontmatter.priority && !PRIORITIES.has(frontmatter.priority)) {
-    findings.push(finding("INVALID_PRIORITY_VALUE", { meta: { value: frontmatter.priority } }));
   }
   if (frontmatter.id) {
     const idFormat = classifyPlanId(frontmatter.id);
@@ -682,7 +561,7 @@ function normalizeFrontmatter(frontmatter, findings) {
 // repository's declared namespaces. Both produce the same finding shape, so the two lists merge and
 // every downstream consumer (portal, API, repair prompt) sees one result.
 function validateParsedPlan(parsed, { lifecycle, filename = "", projectNamespaces = [] }) {
-  const { findings } = validateForLifecycle(parsed, { lifecycle, priorities: PRIORITIES, normalizeHeading });
+  const { findings } = validateForLifecycle(parsed, { lifecycle, normalizeHeading });
   const all = [...findings, ...validatePlanNaming({ filename, lifecycle, projectNamespaces })];
   return { ready: all.length === 0, findings: all, warnings: messagesOf(all) };
 }
@@ -693,7 +572,7 @@ function validateParsedPlan(parsed, { lifecycle, filename = "", projectNamespace
 export function lifecycleFindings(markdown, { lifecycle }) {
   const parsed = parsePlanMarkdown(markdown);
   const parseFailures = parsed.findings.filter((item) => item.severity === "blocking");
-  const { findings } = validateForLifecycle(parsed, { lifecycle, priorities: PRIORITIES, normalizeHeading });
+  const { findings } = validateForLifecycle(parsed, { lifecycle, normalizeHeading });
   return { parsed, findings: [...parseFailures, ...findings] };
 }
 
@@ -712,6 +591,15 @@ function relationshipFindings(plans) {
     if (matches.length < 2) continue;
     for (const record of matches) {
       addFinding(findings, record.key, finding("DUPLICATE_PLAN_ID", { meta: { id: record.plan.id } }));
+    }
+  }
+  // Plan ids repeat across repositories, so each repository's graph is checked on its own.
+  for (const repositoryId of new Set(plans.map((record) => record.repository.id))) {
+    const inRepository = plans.filter((record) => record.repository.id === repositoryId);
+    for (const cycle of findDependencyCycles(inRepository.map((record) => record.plan))) {
+      for (const record of inRepository.filter((item) => cycle.includes(item.plan.id))) {
+        addFinding(findings, record.key, finding("DEPENDENCY_CYCLE", { meta: { cycle } }));
+      }
     }
   }
   // Every id-bearing field is resolved the same way. Referential integrity is what actually catches
@@ -809,7 +697,6 @@ function portablePlanSummary(item) {
     `Path: ${item.plan.relativePath}`,
     `ID: ${item.plan.id || "(missing)"}`,
     `Lifecycle: ${item.plan.lifecycle}`,
-    `Priority: ${item.plan.priority}`,
     `Next action: ${item.plan.nextAction || "(none)"}`,
     `Warnings: ${item.plan.validation.warnings.slice(0, 5).join("; ") || "none"}`,
     `Excerpt: ${item.plan.excerpt || "(none)"}`,

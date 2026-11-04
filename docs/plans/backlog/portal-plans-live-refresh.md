@@ -1,6 +1,5 @@
 ---
 id: plans-portal-live-refresh-and-static-preflight
-priority: low
 next_action: Decide general file-change refresh independently from static command help, using current refresh APIs and the native invocation research.
 blocked_by: []
 depends_on: []

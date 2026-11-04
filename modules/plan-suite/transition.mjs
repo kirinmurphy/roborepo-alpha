@@ -16,6 +16,7 @@ import {
   selectRepositoryPlan,
 } from "./index.mjs";
 import { LIFECYCLE_MODEL } from "./lifecycle-manifest.mjs";
+import { namingGateFindings } from "./naming.mjs";
 import { buildRepairPrompt } from "./repair-prompt.mjs";
 import { currentBranch, dirtyPaths, findLinkedWorktree, git, gitOrThrow, linksToPath, primaryCheckout, topLevel } from "./plan-git.mjs";
 import { TRANSITION_RULES } from "./transition-rules.mjs";
@@ -27,6 +28,9 @@ const TOLERATED = { active: new Set(["UNCONFIRMED_NOT_TESTED"]), review: new Set
 // Archiving is explicit termination, not a claim that the plan is sound, so only the archived
 // destination's own rules gate it; the document-wide structure rules do not.
 const GATE_KINDS = { archived: new Set(["lifecycle"]) };
+// Moving a plan into implementation is the last cheap moment to fix its filename: inbound links and
+// worktree records accumulate from here on. Later transitions never revisit it.
+const NAMING_GATED_TRANSITIONS = new Set(["promote", "start"]);
 
 export async function transitionPlan(options) {
   const { cwd = process.cwd(), selector, transition: transitionId, base = "main" } = options;
@@ -75,7 +79,9 @@ export async function transitionPlan(options) {
     ? { content: current, evidence: {} }
     : await (rules.prepare ? rules.prepare({ primary, record, content: current, options, base, today: today() }) : { content: current });
   const content = prepared.content;
-  assertDestinationReady(record, transition.to, content);
+  assertDestinationReady(record, transition.to, content, NAMING_GATED_TRANSITIONS.has(transition.id)
+    ? namingGateFindings({ repositoryRoot: primary, filename: path.basename(fromPath), lifecycle: from })
+    : []);
 
   const committed = git(primary, ["show", `HEAD:${fromPath}`]);
   if (atDestination && committed.ok && committed.raw === content && dirty.length === 0) {
@@ -121,11 +127,14 @@ function result({ primary, cwd, base, transition, record, fromPath, toPath, comm
   };
 }
 
-function assertDestinationReady(record, lifecycle, content) {
+function assertDestinationReady(record, lifecycle, content, gateFindings) {
   const tolerated = TOLERATED[lifecycle] || new Set();
   const kinds = GATE_KINDS[lifecycle];
-  const findings = lifecycleFindings(content, { lifecycle }).findings
-    .filter((item) => !tolerated.has(item.code) && (!kinds || kinds.has(item.kind)));
+  const findings = [
+    ...lifecycleFindings(content, { lifecycle }).findings
+      .filter((item) => !tolerated.has(item.code) && (!kinds || kinds.has(item.kind))),
+    ...gateFindings,
+  ];
   if (!findings.length) return;
   throw domainError("LIFECYCLE_REQUIREMENTS", `"${record.plan.title}" does not meet the ${lifecycle} requirements, so it was not moved.`, {
     resolution: "Resolve the listed findings in the plan, then run the transition again.",

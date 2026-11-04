@@ -1,6 +1,5 @@
 ---
 id: rtkmc8kf
-priority: high
 next_action: Run /plan-promote to settle the call-to-action design, copy for each setup step, and how Home detects when each step is done
 blocked_by: []
 depends_on: []

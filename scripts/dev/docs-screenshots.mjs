@@ -211,7 +211,21 @@ const SHOTS = [
       await page.waitForTimeout(800);
     },
   },
-  { file: "plans.png", page: "/plans", from: "header.portal-header", fromEdge: "bottom", to: "article.plan-card >> nth=0" },
+  {
+    file: "plans.png",
+    page: "/plans",
+    from: "header.portal-header",
+    fromEdge: "bottom",
+    to: "backlog-block >> nth=1",
+    // Backlog's Ordering mode in a namespace whose plans depend on each other, so a linked block shows.
+    prepare: async () => {
+      await page.getByRole("button", { name: /^Backlog \(/ }).click();
+      await page.locator(".backlog-directory-row").first().click();
+      await page.locator(".backlog-directory-row", { hasText: "HARNESS" }).click();
+      await page.getByRole("button", { name: "Ordering", exact: true }).click();
+      await page.locator("backlog-block").first().waitFor();
+    },
+  },
   { file: "agents-config.png", page: "/agents", element: "section.panel:has(h2:text-is('Skills - Development Life Cycle'))" },
   { file: "harness-files.png", page: "/agents", element: "section.panel.wide >> nth=0" },
   { file: "tokens.png", page: "/tokens", from: "#tokensmeta", to: "div.finding >> nth=0" },

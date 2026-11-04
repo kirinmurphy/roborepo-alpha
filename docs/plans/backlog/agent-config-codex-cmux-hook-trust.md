@@ -1,6 +1,5 @@
 ---
 id: codex-cmux-hook-trust-review
-priority: low
 next_action: Audit Codex hook trust bypass behavior in cmux-launched sessions and decide whether roborepo should document, warn, or guard against it
 blocked_by: []
 depends_on: []

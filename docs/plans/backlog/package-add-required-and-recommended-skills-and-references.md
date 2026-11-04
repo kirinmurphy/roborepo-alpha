@@ -1,6 +1,5 @@
 ---
 id: ejsc769o
-priority: high
 next_action: After the desired-state contract lands, extract the current conventions-aware review rubric into implementation-review and declare required/recommended skill relationships.
 blocked_by: []
 depends_on:

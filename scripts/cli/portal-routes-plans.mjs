@@ -29,7 +29,7 @@ export const plansRoutes = defineRoutes([
     },
   },
   postJsonRoute("/api/plans/prompt", (handlers, body) => handlers.buildPlansPrompt(body)),
-  postJsonRoute("/api/plans/priority", (handlers, body) => handlers.updatePlanPriority(body), { domainError: true }),
+  postJsonRoute("/api/plans/order", (handlers, body) => handlers.saveBacklogOrder(body), { domainError: true }),
   {
     method: "POST",
     path: "/api/plans/refresh",

@@ -404,7 +404,6 @@ Recommended frontmatter:
 ```yaml
 ---
 id: stable-plan-id
-priority: high
 next_action: Implement the next concrete task
 blocked_by: []
 depends_on: []
@@ -432,7 +431,8 @@ Headings and checkboxes inside fenced code blocks are examples, not plan structu
 The Plans page supports:
 
 - search across title, ID, path, next action, blockers, repository name, and warnings
-- repository, lifecycle, priority, blocked, structure, plan freshness, and health filters
+- repository, lifecycle, blocked, structure, plan freshness, and health filters
+- Backlog as a directory of repos and namespaces, each namespace with its own explicit order
 - lifecycle tabs: Backlog, Ready, Active, and Review, with Completed, Archived, and Unclassified
   behind the ⋮ menu
 - document rendering with metadata, warnings, and task lists
@@ -481,8 +481,8 @@ A merged worktree shows a **merged** completion badge on its plan card and in th
 
 ## Current Limits
 
-- The portal offers priority edits only for backlog and ready plans. Starting or reopening a plan
-  clears its priority to `none`. All other plan edits happen in your editor or through the suite.
+- The portal writes one thing: a namespace's Backlog order, when you press **Save**. All other plan
+  edits happen in your editor or through the suite.
 - Manual refresh is the v1 update model.
 - No database, daemon, cloud sync, direct editor, automatic merge, or automatic LLM prioritization
   is included.

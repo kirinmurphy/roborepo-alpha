@@ -1985,7 +1985,7 @@ assert "markdown-render: heading ids, tables, mermaid fallback" \
 # Plan docs: scanning, frontmatter parsing, readiness validation, and the portal's pure
 # mutation-orchestration helpers. These have npm scripts of their own but were never reachable from
 # `npm test`, so a plans-domain regression could pass CI unnoticed.
-assert "plan-suite: scanning, frontmatter, priority edits" \
+assert "plan-suite: scanning and frontmatter" \
   node "${repo_root}/scripts/test/plan-suite-check.mjs"
 
 # The lifecycle manifest and every committed move between lifecycle folders.

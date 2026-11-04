@@ -1,6 +1,5 @@
 ---
 id: skill-reference-docs-and-conventions
-priority: low
 next_action: Compare remaining reference-organization and portal-guidance gaps against the completed compliance work and current review rubric before choosing a second extraction or a new local skill.
 blocked_by: []
 depends_on: []

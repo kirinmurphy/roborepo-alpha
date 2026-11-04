@@ -18,7 +18,9 @@ It reports, in the shape
   default that applies on its own. Where the check does run, the allowed prefixes are the universal
   namespaces plus the declared project ones. Findings are reported for `backlog`, `ready`, `active`,
   and `review` only — `completed` and `archived` hold names from before the convention and are left
-  alone.
+  alone. A naming finding is blocking: the validator exits 1 and `/plan-promote` and `/plan-execute`
+  refuse the plan until it is renamed or its namespace is declared. Never invent a prefix to pass;
+  offer the allowed choices or a change to `plans-config.json`.
 - Structure: title, summary, context/current state, implementation path, validation criteria.
   Headings and checkboxes inside fenced code blocks are examples, not structure.
 - Lifecycle: a ready, active, or review plan has a next action, design, and criteria; a completed

@@ -4,10 +4,8 @@ import { walkRepositoryRoots } from "../repositories/index.mjs";
 import { parseFrontmatter } from "./index.mjs";
 import { generatePlanId } from "./plan-id.mjs";
 
-// Scaffold text is deliberately generic and non-empty for `next_action` (required for ready
-// backlog/active plans) so a repaired file is immediately writable from the
-// portal's priority toggle, not just parseable.
-const SCAFFOLD_PRIORITY = "none";
+// Scaffold text is deliberately generic and non-empty for `next_action`, which every actionable
+// lifecycle requires, so a repaired file reads as a real plan and not only as parseable.
 const SCAFFOLD_NEXT_ACTION = "Fill in the next concrete task.";
 
 export function slugFromFilename(absolutePath) {
@@ -26,7 +24,6 @@ export function scaffoldFrontmatter() {
   return [
     "---",
     `id: ${id}`,
-    `priority: ${SCAFFOLD_PRIORITY}`,
     `next_action: ${SCAFFOLD_NEXT_ACTION}`,
     "blocked_by: []",
     "depends_on: []",

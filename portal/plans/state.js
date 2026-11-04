@@ -1,13 +1,12 @@
 // Filter state, matching, sorting, and facet counts — no DOM here. app.js owns wiring DOM events
 // to this module's functions; templates.js owns turning its output into markup.
-import { isLifecycle, showsPriority } from "./lifecycle.js";
+import { isLifecycle } from "./lifecycle.js";
 
 // `structure` (a plan's structural completeness) and `freshness` (whether the document was checked
 // against the code at `reviewed_commit`) are named so neither reads as the Ready or Review lifecycle,
 // or as a human's approval.
 export const FILTER_IDS = [
   "search",
-  "priority",
   "blocked",
   "structure",
   "freshness",
@@ -16,7 +15,6 @@ export const FILTER_IDS = [
 
 export const FILTER_DEFAULTS = {
   search: "",
-  priority: "all",
   blocked: "all",
   structure: "all",
   freshness: "all",
@@ -24,7 +22,6 @@ export const FILTER_DEFAULTS = {
 };
 
 export const FILTER_LABELS = {
-  priority: "priority",
   blocked: "blocked",
   structure: "structure",
   freshness: "freshness",
@@ -41,10 +38,6 @@ export const FRESHNESS_LABELS = {
 };
 
 export const FILTER_OPTION_DEFS = {
-  priority: () => [
-    ["all", "all priority"],
-    ...["high", "medium", "low", "none"].map((v) => [v, v]),
-  ],
   blocked: () => [
     ["all", "all blockers"],
     ["blocked", "blocked"],
@@ -69,8 +62,6 @@ export const FILTER_OPTION_DEFS = {
 // Shared by filteredPlans() (applies all fields) and optionCounts() (applies all fields except
 // the one being counted, for facet-style "N remaining if you pick this" counts).
 export const FIELD_MATCHERS = {
-  priority: (record, value) =>
-    value === "all" || !showsPriority(record.plan.lifecycle) || record.plan.priority === value,
   blocked: (record, value) => {
     if (value === "blocked") return record.plan.blockers.length > 0;
     if (value === "unblocked") return record.plan.blockers.length === 0;
@@ -129,7 +120,7 @@ export function filteredPlans(plans, filters) {
 // every OTHER active filter stayed as-is. Excludes `id` itself so picking an option doesn't
 // shrink its own count relative to the other options.
 export function optionCounts(id, values, plans, filters) {
-  const pool = plans.filter((record) => matchesFilters(record, filters, id) && (id !== "priority" || showsPriority(record.plan.lifecycle)));
+  const pool = plans.filter((record) => matchesFilters(record, filters, id));
   const counts = new Map();
   for (const value of values) {
     counts.set(
@@ -143,13 +134,11 @@ export function optionCounts(id, values, plans, filters) {
 }
 
 export function planSort(a, b) {
-  const priority = { high: 0, medium: 1, low: 2, none: 3 };
   const activeBlocked =
     (b.plan.lifecycle === "active" && b.plan.blockers.length ? 1 : 0) -
     (a.plan.lifecycle === "active" && a.plan.blockers.length ? 1 : 0);
   return (
     activeBlocked ||
-    (priority[a.plan.priority] ?? 3) - (priority[b.plan.priority] ?? 3) ||
     Date.parse(b.plan.modifiedAt) - Date.parse(a.plan.modifiedAt) ||
     a.plan.title.localeCompare(b.plan.title)
   );
@@ -168,7 +157,7 @@ export function completionRatio(plan) {
 }
 
 // Most complete first; 0% plans follow started work, then plans with no tracked tasks.
-// Ties fall through to planSort so priority, recency, and title still break them the usual way.
+// Ties fall through to planSort so recency and title still break them the usual way.
 export function activeCompletionSort(a, b) {
   const ratioA = completionRatio(a.plan);
   const ratioB = completionRatio(b.plan);
@@ -244,40 +233,9 @@ export function urlForLifecycle(lifecycle) {
   return `${location.pathname}?${params.toString()}`;
 }
 
-// --- mutation orchestration helpers ---------------------------------------------------------
-// Pure functions the app.js mutation orchestrator uses to decide what a successful priority change
-// should do to the visible list and which outcome surface (if any) to show.
-
-// A record is visible when it's on the currently selected lifecycle tab AND matches every active
-// filter. Used both before a mutation (to know if a toast/dialog needs to explain a disappearance)
-// and after (to know whether the mutated record is still on screen).
-export function isVisible(record, selectedLifecycle, filters) {
-  return record.plan.lifecycle === selectedLifecycle && matchesFilters(record, filters, null);
-}
-
-// Replaces the record at `oldKey` with `newRecord` in a plans array, returning a new array. The
-// server returns a whole rebuilt record (new mtime, revalidated fields), so the old one is swapped
-// out rather than patched field by field.
-export function replaceRecord(plans, oldKey, newRecord) {
-  return plans.map((record) => (record.key === oldKey ? newRecord : record));
-}
-
-// Determines whether the passive toast's "View {value} plans" filtered-list shortcut should
-// appear: only when the specific filter dimension that changed currently equals the *previous*
-// value (i.e. the mutation is what caused the plan to leave that filtered view). Returns a
-// descriptor the toast controller can render, or null when the shortcut doesn't apply.
-export function filteredListActionFor(change, state) {
-  if (change.property === "priority") {
-    if (state.filters.priority !== change.previousValue) return null;
-    return { type: "priority", value: change.newValue, label: `View ${change.newValue} priority plans` };
-  }
-  return null;
-}
-
 // --- blocker/blocking resolution -------------------------------------------------------------
-// Resolved live from the current snapshot on every call (not cached on the record) so a mutation
-// that only rebuilds one record (see updatePlanPriority) never leaves stale
-// blocker/blocking data behind — the next render always recomputes from state.snapshot.plans.
+// Resolved live from the current snapshot on every call, not cached on the record: the next render
+// always recomputes from state.snapshot.plans.
 // Plan ids are only unique within one repository (see modules/plan-suite/index.mjs's
 // relationshipWarnings), so matches are scoped to the same repository.id as the referencing plan.
 

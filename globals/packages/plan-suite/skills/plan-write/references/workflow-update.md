@@ -14,7 +14,8 @@ may cover both rubrics in one pass. Authority, lifecycle, and approval boundarie
    belongs to substantive revision and the owning lifecycle workflow.
 5. Add newly discovered required work.
 6. Update `next_action`.
-7. Update blockers and dependencies.
+7. Update blockers and dependencies. Adding a `depends_on` entry between same-namespace Backlog plans
+   regroups them on the next read; run `roborepo plans order place <plan>` to record it now.
 8. Leave the plan in its folder. Moving it is the job of the command that owns that transition;
    `/plan-execute` moves an active plan to review only when its completion preflight passes.
 9. Update `reviewed_commit` only after deliberate review against repository state.

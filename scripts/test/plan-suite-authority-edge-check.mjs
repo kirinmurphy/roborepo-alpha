@@ -21,7 +21,7 @@ function git(cwd, ...args) {
 }
 
 function plan(id, { title = id, worktree = "" } = {}) {
-  return `---\nid: ${id}\npriority: high\nnext_action: Do it\nworktree: ${worktree}\n---\n\n# ${title}\n`;
+  return `---\nid: ${id}\nnext_action: Do it\nworktree: ${worktree}\n---\n\n# ${title}\n`;
 }
 
 function write(file, content) {
