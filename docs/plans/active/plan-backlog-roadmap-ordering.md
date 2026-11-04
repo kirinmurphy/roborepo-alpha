@@ -418,7 +418,7 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - [x] Details omits the reason for a broken dependency graph, which the UI contract shows in both modes. — fixed (f9736bdc)
 - [x] `order place` reports a move the caller asked for as automatic, and its text output reads wrongly. — fixed (f9736bdc)
 - [x] No browser assertion for the duplicate-id row or an unparseable order file locking Ordering. — fixed (f9736bdc)
-- [ ] No test asserts `DEPENDENCY_CYCLE`, its blocking status, or the refusal of `order place` and Save on a broken graph.
+- [x] No test asserts `DEPENDENCY_CYCLE`, its blocking status, or the refusal of `order place` and Save on a broken graph. — fixed (ed84a58e)
 
 ### Verification
 
