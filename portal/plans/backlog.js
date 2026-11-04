@@ -100,6 +100,8 @@ export function createBacklogController(deps) {
       return;
     }
     if (mode !== "ordering") return;
+    // The draft stands until its Save settles: what the snapshot says meanwhile is older than the Save.
+    if (saving && draft) return;
     if (!draft || !isDraftDirty(draft)) {
       draft = createDraft(view);
       draftSource = { entry, view, plans: plansByKey() };
@@ -214,7 +216,7 @@ export function createBacklogController(deps) {
     const locked = view.locked || !view.writable;
     const blockNode = (block, section, index, count) => {
       const node = document.createElement("backlog-block");
-      Object.assign(node, { block, section, index, count, plans, locked, onOpen: deps.onOpen });
+      Object.assign(node, { block, section, index, count, plans, locked, held: Boolean(saving), onOpen: deps.onOpen });
       return node;
     };
     const nodes = [namespaceHeader(entry, view), ...graphNotices(view)];
@@ -403,11 +405,12 @@ export function createBacklogController(deps) {
   }
 
   async function submitDraft(entry) {
+    const order = orderedIds(draft);
     try {
       await api.saveBacklogOrder({
         repositoryId: entry.repositoryId,
         namespace: draft.namespace,
-        order: orderedIds(draft),
+        order,
         revision: draft.revision,
       });
     } catch (err) {
@@ -417,10 +420,15 @@ export function createBacklogController(deps) {
       deps.onRender();
       return false;
     }
-    draft = null;
+    // Saved, so nothing is unsaved any more, but the snapshot still holds the old order. The saved
+    // order stays on screen with its controls held until the new snapshot arrives; a draft opened from
+    // the old one could only fail its own Save.
+    draft = { ...draft, committedIds: order };
     saveError = null;
-    saving = null;
+    deps.onRender();
     await deps.onSaved();
+    saving = null;
+    deps.onRender();
     return true;
   }
 
@@ -468,6 +476,8 @@ export function createBacklogController(deps) {
       discardDialog.close();
       draft = null;
       saveError = null;
+      // Show the committed order now rather than leaving the discarded rows live until the refresh.
+      deps.onRender();
       void deps.onSaved();
     });
   }

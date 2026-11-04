@@ -433,6 +433,57 @@ test.describe("Backlog directory and ordering", () => {
     expect(fs.readFileSync(orderFile, "utf8")).toBe("{ nope");
   });
 
+  // Delays the snapshot refresh a Save or Discard ends with. Falls back so the plan board stays enabled.
+  async function holdRefresh(page) {
+    let release;
+    const held = new Promise((resolve) => { release = resolve; });
+    await page.route(/\/api\/plans\/refresh/, async (route) => {
+      await held;
+      await route.fallback();
+    });
+    return release;
+  }
+
+  test("after a Save lands, the saved order holds its controls until the new snapshot arrives", async ({ page }) => {
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await openOrdering(page);
+    const release = await holdRefresh(page);
+    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByText("Unsaved changes")).toHaveCount(0);
+    expect(savedOrder()).toEqual(["alphax03", "alphaa01", "alphab02"]);
+    await expect(orderedTitles(page)).toHaveText(["ALPHA · Diagnostics", "ALPHA · Storage", "ALPHA · Retrieval"]);
+    const moveDown = blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move down" });
+    await expect(moveDown).toBeDisabled();
+    await expect(blockFor(page, "ALPHA · Diagnostics").getByRole("img", { name: "Drag to move" })).toHaveAttribute("draggable", "false");
+    release();
+    await expect(moveDown).toBeEnabled();
+    await moveDown.click();
+    await expect(page.getByText("Unsaved changes")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
+    expect(errors).toEqual([]);
+  });
+
+  test("after a Discard, the committed order is live before the refresh returns", async ({ page }) => {
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await openOrdering(page);
+    const release = await holdRefresh(page);
+    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    await page.getByRole("button", { name: "Discard changes" }).click();
+    await expect(page.getByText("Unsaved changes")).toHaveCount(0);
+    await expect(orderedTitles(page).first()).toHaveText("ALPHA · Storage");
+    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await expect(orderedTitles(page).first()).toHaveText("ALPHA · Diagnostics");
+    release();
+    await expect(page.locator("#refresh")).toBeEnabled();
+    await expect(page.getByText("Unsaved changes")).toBeVisible();
+    await expect(orderedTitles(page).first()).toHaveText("ALPHA · Diagnostics");
+    expect(errors).toEqual([]);
+  });
+
   test("a re-render during a Save keeps both buttons held", async ({ page }) => {
     let release;
     const held = new Promise((resolve) => { release = resolve; });

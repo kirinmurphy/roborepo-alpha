@@ -1,6 +1,7 @@
 // <backlog-block> — one movable unit in Backlog's Ordering mode: a single plan row, or a container of
 // linked plans that moves as one. Set .block ({ ids, keys }), .section ("ordered" | "needs"), .index,
-// .count, .plans (key -> record), .locked, and .onOpen right after creation, then append to the DOM.
+// .count, .plans (key -> record), .locked, .held, and .onOpen right after creation, then append to the
+// DOM. Locked blocks show why they cannot move; held ones keep their controls, disabled, while a Save settles.
 //
 // It owns its controls and dispatches a bubbling `block-move` event with { section, index, action };
 // the page applies the move to its draft. Dragging starts here from the handle and is finished by the
@@ -62,7 +63,7 @@ class BacklogBlockElement extends HTMLElement {
     button.title = label;
     button.dataset.action = action;
     button.querySelector("portal-icon").setAttribute("name", icon);
-    button.disabled = !isActionEnabled(this.section, action, this.index, this.count);
+    button.disabled = this.held || !isActionEnabled(this.section, action, this.index, this.count);
     button.addEventListener("click", () => {
       this.dispatchEvent(new CustomEvent("block-move", {
         bubbles: true,
@@ -75,6 +76,7 @@ class BacklogBlockElement extends HTMLElement {
   // The move buttons are the keyboard path; dragging is a pointer-only shortcut to the same moves.
   renderHandle() {
     const handle = tpl("tpl-backlog-handle");
+    handle.draggable = !this.held;
     handle.addEventListener("dragstart", (event) => {
       event.dataTransfer.effectAllowed = "move";
       event.dataTransfer.setData("text/plain", this.block.ids[0]);
