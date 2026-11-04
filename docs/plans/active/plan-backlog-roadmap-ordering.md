@@ -1,6 +1,6 @@
 ---
 id: rxv53v6z
-next_action: Run /plan-execute to fix the two open validation findings under Review, then run one more validation pass and submit.
+next_action: Run the further validation pass the user approved past the cap, then submit if it reports no fix findings.
 blocked_by: []
 depends_on: []
 related: ["plans-portal-live-refresh-and-static-preflight", "plan-lifecycle-suite-blockers-dependencies", "plan-unclassified-plan-recovery", "p3vbk03v"]
@@ -419,8 +419,8 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - [x] `order place` reports a move the caller asked for as automatic, and its text output reads wrongly. — fixed (f9736bdc)
 - [x] No browser assertion for the duplicate-id row or an unparseable order file locking Ordering. — fixed (f9736bdc)
 - [x] No test asserts `DEPENDENCY_CYCLE`, its blocking status, or the refusal of `order place` and Save on a broken graph. — fixed (ed84a58e)
-- [ ] After Save's request succeeds or after Discard, `draft` is null until the refresh returns, but the old Ordering controls stay live: a Move click throws in `portal/plans/backlog.js`, and the bar still says "Unsaved changes". Fix: re-render or hold the controls for that window, and add a test that delays `/api/plans/refresh`.
-- [ ] `docs/user/reference/plans-portal.md`, the `order place` row, lists only two refusals. It also exits 1 for a plan outside Backlog, a missing or duplicate id, a broken dependency graph, and an unreadable config.
+- [x] After Save's request succeeds or after Discard, the old Ordering controls stay live with a null draft: a Move click throws and the bar still says "Unsaved changes". — fixed (b60f0062)
+- [x] `docs/user/reference/plans-portal.md`, the `order place` row, lists only two refusals. — fixed (b60f0062)
 
 ### Verification
 
