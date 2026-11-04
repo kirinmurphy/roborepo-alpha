@@ -26,7 +26,6 @@ try {
 
   fs.writeFileSync(path.join(repo, "docs", "plans", "backlog", "has-frontmatter.md"), `---
 id: has-frontmatter
-priority: high
 next_action: Already fine
 blocked_by: []
 depends_on: []

@@ -1571,7 +1571,7 @@ portal-menu-button {
   color: var(--ok);
 }
 
-/* Shared <option-dropdown> popover — the Plans priority and lifecycle pickers and the header's
+/* Shared <option-dropdown> popover — the header's
    repository selector. */
 option-dropdown {
   display: inline-block;

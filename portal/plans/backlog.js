@@ -41,6 +41,11 @@ export function createBacklogController(deps) {
   let drag = null;
   let saveError = null;
   let pendingFocus = null;
+  // The Save in flight, so a double click or a guard's Save joins it rather than sending a second.
+  let saving = null;
+  // What the draft was opened from. A stale draft keeps rendering from this, since its namespace or
+  // plans may no longer be in the snapshot.
+  let draftSource = null;
 
   bindDialogs();
   window.addEventListener("beforeunload", (event) => {
@@ -70,12 +75,14 @@ export function createBacklogController(deps) {
     return entry.namespaces.find((view) => view.namespace === namespace) || null;
   }
 
-  // Called with each new snapshot and on each render. A clean draft follows the server; a dirty one
-  // is never overwritten, and is flagged stale when the namespace it was opened from has changed.
+  // Runs on each render, which is how a new snapshot reaches it. A clean draft follows the server; a
+  // dirty one is never overwritten, and is flagged stale when the namespace it was opened from has
+  // changed or is gone, so the safeguards still stand until the user discards it.
   function reconcile() {
     const entry = selectedEntry();
+    const scope = currentRepositoryScope();
     const namespace = namespaceFromSearch(location.search);
-    const key = entry && namespace ? `${entry.repositoryId}\0${namespace}` : null;
+    const key = scope && namespace ? `${scope}\0${namespace}` : null;
     if (key !== selectionKey) {
       selectionKey = key;
       mode = "details";
@@ -84,19 +91,28 @@ export function createBacklogController(deps) {
     }
     const view = selectedNamespaceView();
     if (!view) {
+      if (isDirty()) {
+        draft = { ...draft, stale: true };
+        return;
+      }
       mode = "details";
       draft = null;
       return;
     }
     if (mode !== "ordering") return;
-    if (!draft || !isDraftDirty(draft)) draft = createDraft(view);
-    else if (draft.revision !== view.revision) draft = { ...draft, stale: true };
+    if (!draft || !isDraftDirty(draft)) {
+      draft = createDraft(view);
+      draftSource = { entry, view, plans: plansByKey() };
+    } else if (draft.revision !== view.revision) {
+      draft = { ...draft, stale: true };
+    }
   }
 
   // The nodes for the current Backlog level. `matching` is the plans the Filters popup leaves, in
   // this lifecycle only; Ordering ignores it and always shows the whole namespace.
   function render(matching, cardActions) {
     reconcile();
+    if (isDirty() && draft.stale) return renderOrdering(draftSource.entry, draftSource.view, draftSource.plans);
     const matchingKeys = new Set(matching.map((record) => record.key));
     const entry = selectedEntry();
     const namespace = namespaceFromSearch(location.search);
@@ -105,7 +121,7 @@ export function createBacklogController(deps) {
     if (namespace === NO_NAMESPACE && entry.noNamespace.length) return renderNoNamespace(entry, matchingKeys, cardActions);
     const view = selectedNamespaceView();
     if (!view) return renderNamespaces(entry, matchingKeys);
-    return mode === "ordering" ? renderOrdering(entry, view) : renderDetails(entry, view, matchingKeys, cardActions);
+    return mode === "ordering" ? renderOrdering(entry, view, plansByKey()) : renderDetails(entry, view, matchingKeys, cardActions);
   }
 
   function renderRepositories(matchingKeys) {
@@ -194,8 +210,7 @@ export function createBacklogController(deps) {
     return [namespaceHeader(entry, view), ...(sections.length ? sections : [deps.emptyState()])];
   }
 
-  function renderOrdering(entry, view) {
-    const plans = plansByKey();
+  function renderOrdering(entry, view, plans) {
     const locked = view.locked || !view.writable;
     const blockNode = (block, section, index, count) => {
       const node = document.createElement("backlog-block");
@@ -226,12 +241,18 @@ export function createBacklogController(deps) {
     container.className = "backlog-ordering";
     container.append(...nodes);
     container.addEventListener("block-move", (event) => {
+      if (saving) return;
       const { section, index, action } = event.detail;
       const block = (section === "needs" ? draft.needs : draft.ordered)[index];
       pendingFocus = { id: block.ids[0], action };
       updateDraft(moveBlock(draft, section, index, action));
     });
     container.addEventListener("block-drag", (event) => { drag = event.detail; });
+    // A cancelled drag ends with no drop, and must not leave its block armed for the next one.
+    container.addEventListener("block-drag-end", () => {
+      drag = null;
+      for (const node of container.querySelectorAll(".drop-before, .drop-after")) node.classList.remove("drop-before", "drop-after");
+    });
     queueMicrotask(restoreFocus);
     return [container];
   }
@@ -283,7 +304,7 @@ export function createBacklogController(deps) {
       if (!list.contains(event.relatedTarget)) clearMarker();
     });
     list.addEventListener("drop", (event) => {
-      if (!drag) return;
+      if (!drag || saving) return;
       event.preventDefault();
       const { section, index } = drag;
       const before = insertionIndex(event);
@@ -361,15 +382,24 @@ export function createBacklogController(deps) {
     status.classList.toggle("is-error", Boolean(draft.stale || saveError));
     const save = node.querySelector("[data-slot=save]");
     save.disabled = draft.stale;
-    save.addEventListener("click", () => void saveDraft());
+    save.addEventListener("click", () => {
+      save.disabled = true;
+      void saveDraft();
+    });
     node.querySelector("[data-slot=cancel]").addEventListener("click", () => discardDialog.showModal());
     return node;
   }
 
   // Resolves true once the order is saved and the page holds the new snapshot. A failure keeps the
   // draft, says why, and resolves false, so a navigation waiting on it never goes ahead.
-  async function saveDraft() {
+  function saveDraft() {
+    saving ??= submitDraft().finally(() => { saving = null; });
+    return saving;
+  }
+
+  async function submitDraft() {
     const entry = selectedEntry();
+    if (!entry) return false;
     try {
       await api.saveBacklogOrder({
         repositoryId: entry.repositoryId,
@@ -403,7 +433,7 @@ export function createBacklogController(deps) {
     save.onclick = async () => {
       save.disabled = true;
       const saved = await saveDraft();
-      save.disabled = false;
+      save.disabled = Boolean(draft?.stale);
       if (saved) {
         guardDialog.close();
         proceed();
@@ -437,7 +467,6 @@ export function createBacklogController(deps) {
       return isOrdering();
     },
     confirmLeave,
-    reconcile,
     draftUrl: () => draftUrl,
   };
 }

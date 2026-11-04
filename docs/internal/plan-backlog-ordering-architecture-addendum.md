@@ -111,9 +111,9 @@ Normalize and validate universal namespaces separately from repository namespace
 }
 ```
 
-Each array contains **individual stable plan IDs**, not filenames or group objects. Entries are ordered within a single namespace. The registry must not contain duplicate IDs, unknown plans, or plans belonging to other namespaces; lifecycle transitions reconcile membership.
+Each array contains **individual stable plan IDs**, not filenames or group objects. Entries are ordered within a single namespace. Reads tolerate whatever the file holds: an entry for a plan outside Backlog is ignored and pruned at the next write, and an unknown ID is excluded with a finding and preserved. Lifecycle transitions never touch the file.
 
-A Backlog plan not in the effective saved order is **Needs prioritization**, unless a dependency mutation is being reconciled to auto-attach it to an already-ranked group. That reconciliation must result in a real registry update; do not maintain a second hidden order.
+A Backlog plan not in the effective saved order is **Needs prioritization**, unless a dependency mutation is being reconciled to auto-attach it to an already-ranked group. The attachment is calculated on read and reaches the file at the next write; do not maintain a second hidden order.
 
 ## Derived grouping: Option A
 

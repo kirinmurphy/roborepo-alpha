@@ -372,7 +372,7 @@ Run the checks for the tier as each task lands, then let CI run the full gate. E
 - **Automated regrouping:** Automatic merges may change existing ranks and move unrelated plans. Use deterministic tie-breaks, surface resulting moves, and preserve revision safety. Do not add an approval workflow for automatic merges.
 - **Edit races:** File watchers, another tab, or a separate skill may rewrite dependencies while Ordering is dirty. Detect and reconcile; never last-write-wins without feedback.
 - **Missing/malformed filename namespace:** Strict creation must reject it, but tolerant reads must not make the existing plan invisible or crash indexing.
-- **Schema rollout:** Remove legacy priority and update all live producers/consumers in one breaking change; otherwise current validators would report newly written plans as missing the field. Active plans' worktree copies keep an inert `priority:` line until their next base synchronization, which is harmless because no allowlist rejects it.
+- **Schema rollout:** Remove legacy priority and update all live producers/consumers in one breaking change; otherwise current validators would report newly written plans as missing the field. Active plans' worktree copies keep an inert `priority:` line until their next base synchronization, because no allowlist rejects it. Until then the sweep's edit to an active plan's main copy, such as `git-worktree-permanent-cleanup`, shows the advisory **Edited outside worktree** finding, which that synchronization clears.
 
 ## Decision Log
 
@@ -383,9 +383,9 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - **`DEPENDENCY_CYCLE` is blocking; the other relationship findings stay advisory.** Alternative: advisory like `DEPENDENCY_NOT_FOUND`. Chosen because the plan calls cycles validation errors and no order can be produced from one. Transition gates read document findings, so this affects `plans validate` only.
 - **A cycle or missing prerequisite locks the whole namespace's Ordering.** Alternative: lock only the affected block. Chosen because the addendum's E1 and E2 wireframes show unrelated rows blocked too.
 - **A repo with no config lists its Backlog plans as ordinary cards under No namespace.** Alternative: repair rows, as for a declared vocabulary. Chosen because that repo has nothing to repair, and rows would remove Promote and the other card actions.
-- **A registry entry for a Backlog plan with no namespace is preserved on write.** The plan's table prunes plans outside Backlog and preserves unknown ids, and does not name this case. Pruning would lose the plan's place when it is only awaiting a rename, which the plan says to reconcile after repair.
+- **A registry entry for a Backlog plan with no namespace is preserved on write.** The plan's table prunes plans outside Backlog and preserves unknown ids, and does not name this case. It is kept after the ranked plans, so a rename brings it back ranked rather than losing the rank, which the plan says to reconcile after repair.
 - **Save refuses an order that drops a ranked plan.** Alternative: treat omission as un-ranking. Chosen because the design has no un-rank path, and a bug or a stale client must not silently demote plans.
-- **`--top` and `--bottom` are ignored, and reported, for a plan connected to a ranked plan.** Alternative: refuse. Chosen because `plan-write` may not know the plan is connected, and the plan makes attachment automatic.
+- **`--top` and `--bottom` are ignored, and reported, for a plan connected to a ranked plan but not yet stored.** A stored plan moves with its group, since that is an explicit move. Alternative: refuse. Chosen because `plan-write` may not know the plan is connected, and the plan makes attachment automatic.
 - **A plan that cannot be ranked stays in Needs prioritization with no controls and a reason.** The plan requires it be shown with its finding but does not say where.
 - **`roborepo plans validate` sets `process.exitCode` instead of calling `process.exit`.** Validation now exits 1 more often, and `exit()` truncated `--json` output past a pipe buffer, which reproduced while checking this repo's tree.
 - **`plans validate` gains a `repositoryFindings` array.** A broken config or registry belongs to no one plan. It is added to the existing summary counts, so the exit code covers it.
@@ -395,3 +395,20 @@ Autonomous decisions made during implementation, each clear, with its effects in
 
 - [ ] Installed skills pick up the plan-write changes. `roborepo update` and `roborepo doctor --installed` rewrite this machine's live harness config from a checkout, so run them once from the main checkout after this merges.
 - [ ] The Backlog on your own portal with real plans. The automated runs and the screenshot used a hermetic portal over a copy of this repo's plans, so your running portal has not been restarted on this code.
+
+## Review
+
+### Findings
+
+- [ ] A double click on Save sends two saves, the second 409s, and the page throws on a draft with no blocks.
+- [ ] A dirty draft is silently discarded when its namespace disappears.
+- [ ] Save and continue is re-enabled after a failed save that marked the draft stale.
+- [ ] A cancelled drag leaves its block armed for the next drop.
+- [ ] Missing tests: `start` naming and config gates; Filters narrowing Details and not Ordering; removed, renamed, and invalid config at Refresh.
+- [ ] Docs: the transition table omits the naming gate; `order place` flag behavior and `plans repair` wording are wrong; `plan-schema.md` and the addendum contradict the implementation; the Schema rollout risk omits the outside-edit finding; two backlog plans still describe priority.
+- [ ] Comments and leftovers: the registry comment misstates where preserved ids go; dead `reconcile` export, toast actions, drawer returns, `findPlanById`, and `STALE_PLAN`; stale comments and selector; fixtures still write `priority`.
+
+### Verification
+
+- Validation pass 1 (fresh-context subagent): the 7 groups of `fix` findings above and no `escalate`. Its full portal UI run on that commit passed, 183 of 183. An earlier run's 3 failures took 4 to 17 minutes against a 30-second limit and passed when rerun.
+- Base failure: `roborepo plans validate` exits 1 from blocking findings that are all in `docs/plans/completed/`, none from this change.

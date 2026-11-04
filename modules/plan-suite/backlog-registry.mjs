@@ -7,7 +7,8 @@
 //   Registry entry             Effective order            Next write
 //   Plan now outside Backlog   ignored                    pruned
 //   Unknown id                 excluded, with a finding   preserved
-//   Plan with no namespace     excluded                   preserved, so a repair keeps its place
+//   Plan with no namespace     excluded                   preserved after the rest, so a repair
+//                                                         brings it back ranked
 //   Namespace not approved     excluded, with a finding   preserved
 import crypto from "node:crypto";
 import fs from "node:fs";

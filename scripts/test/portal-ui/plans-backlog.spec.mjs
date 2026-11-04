@@ -113,6 +113,18 @@ test.describe("Backlog directory and ordering", () => {
     await expect(rows.first()).toContainText("1 plan");
   });
 
+  test("filters narrow Details, and Ordering shows the whole namespace regardless", async ({ page }) => {
+    await openNamespace(page);
+    await page.locator("#filters-toggle").click();
+    await page.locator("#search").fill("Retrieval");
+    await page.locator("#filters-update").click();
+    await expect(page.locator(".title-link")).toHaveText(["ALPHA · Retrieval"]);
+    await page.getByRole("button", { name: "Ordering", exact: true }).click();
+    await expect(orderedTitles(page)).toHaveText(["ALPHA · Storage", "ALPHA · Retrieval", "ALPHA · Diagnostics"]);
+    await expect(page.getByRole("button", { name: "ALPHA · Traces", exact: true })).toBeVisible();
+    await expect(page.locator("filter-chip")).toHaveCount(0);
+  });
+
   test("Details shows flat cards with a namespace prefix, Needs prioritization first", async ({ page }) => {
     await openNamespace(page);
     const headings = page.locator(".backlog-section-title");
@@ -306,23 +318,98 @@ test.describe("Backlog directory and ordering", () => {
     await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
   });
 
-  test("a config edit reaches an open page at Refresh, and a dirty draft cannot save across it", async ({ page }) => {
-    const config = path.join(repo, "docs/plans/plans-config.json");
-    const original = fs.readFileSync(config, "utf8");
-    try {
+  test.describe("config edits", () => {
+    let config;
+    let original;
+    const writeNamespaces = (namespaces) => fs.writeFileSync(config, JSON.stringify({ schemaVersion: 1, namespaces }));
+    test.beforeEach(() => {
+      config = path.join(repo, "docs/plans/plans-config.json");
+      original = fs.readFileSync(config, "utf8");
+    });
+    test.afterEach(() => fs.writeFileSync(config, original));
+
+    test("adding, removing, and renaming a namespace reach an open directory at Refresh", async ({ page }) => {
+      await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
+      const row = (text) => page.locator(".backlog-directory-row", { hasText: text });
+      await expect(row("No namespace")).toContainText("1 plan");
+
+      writeNamespaces({ alpha: "A", beta: "B", wrong: "W" });
+      await page.locator("#refresh").click();
+      await expect(row("WRONG")).toContainText("1 plan");
+      await expect(row("No namespace")).toHaveCount(0);
+
+      writeNamespaces({ alpha: "A", wrong: "W" });
+      await page.locator("#refresh").click();
+      await expect(row("BETA")).toHaveCount(0);
+      await expect(row("No namespace")).toContainText("1 plan");
+
+      writeNamespaces({ alpha: "A", gamma: "was beta", wrong: "W" });
+      await page.locator("#refresh").click();
+      await expect(row("GAMMA")).toHaveCount(0);
+      await expect(row("No namespace")).toContainText("1 plan");
+    });
+
+    test("an unreadable config is an error, and no plan disappears", async ({ page }) => {
+      await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
+      fs.writeFileSync(config, "{ nope");
+      await page.locator("#refresh").click();
+      await expect(page.getByText("docs/plans/plans-config.json cannot be read")).toBeVisible();
+      await expect(page.locator(".backlog-directory-row")).toHaveCount(1);
+      await expect(page.locator(".backlog-directory-row")).toContainText("6 plans");
+    });
+
+    test("a dirty draft cannot save across a conflicting config edit", async ({ page }) => {
       await openOrdering(page);
       await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
-      fs.writeFileSync(config, JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A", beta: "B", wrong: "W" } }));
+      writeNamespaces({ alpha: "A", beta: "B", wrong: "W" });
       await page.locator("#refresh").click();
       await expect(page.getByRole("group", { name: "Unsaved order" }).getByRole("status")).toContainText("changed elsewhere");
+      await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+    });
+
+    test("a dirty draft survives its namespace being removed, stale and still guarded", async ({ page }) => {
+      await openOrdering(page);
+      await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+      const held = fs.readFileSync(orderFile, "utf8");
+      writeNamespaces({ beta: "B" });
+      await page.locator("#refresh").click();
+      await expect(page.getByRole("group", { name: "Unsaved order" }).getByRole("status")).toContainText("changed elsewhere");
+      await expect(orderedTitles(page).first()).toHaveText("ALPHA · Diagnostics");
+      await page.getByRole("button", { name: /^Active \(/ }).click();
+      await expect(guardDialog(page)).toBeVisible();
+      await expect(guardDialog(page).getByRole("button", { name: "Save and continue" })).toBeDisabled();
+      await guardDialog(page).getByRole("button", { name: "Cancel" }).click();
       await page.getByRole("button", { name: "Cancel", exact: true }).click();
       await page.getByRole("button", { name: "Discard changes" }).click();
-      await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
-      await expect(page.locator(".backlog-directory-row", { hasText: "WRONG" })).toContainText("1 plan");
-      await expect(page.locator(".backlog-directory-row", { hasText: "No namespace" })).toHaveCount(0);
-    } finally {
-      fs.writeFileSync(config, original);
-    }
+      await expect(page.locator(".backlog-directory-row", { hasText: "No namespace" })).toBeVisible();
+      expect(fs.readFileSync(orderFile, "utf8")).toBe(held);
+    });
+  });
+
+  test("a double click on Save sends one save and leaves the page working", async ({ page }) => {
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await openOrdering(page);
+    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    let saves = 0;
+    page.on("request", (request) => { if (request.url().endsWith("/api/plans/order")) saves += 1; });
+    await page.getByRole("button", { name: "Save", exact: true }).dblclick();
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
+    expect(savedOrder()).toEqual(["alphax03", "alphaa01", "alphab02"]);
+    expect(saves).toBe(1);
+    await page.getByRole("button", { name: "Details", exact: true }).click();
+    await expect(page.locator(".title-link").first()).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
+  test("a cancelled drag does not leave its block armed", async ({ page }) => {
+    await openOrdering(page);
+    const before = await orderedTitles(page).allTextContents();
+    await blockFor(page, "ALPHA · Diagnostics").getByRole("img", { name: "Drag to move" }).dispatchEvent("dragstart", { dataTransfer: await page.evaluateHandle(() => new DataTransfer()) });
+    await blockFor(page, "ALPHA · Diagnostics").getByRole("img", { name: "Drag to move" }).dispatchEvent("dragend");
+    await page.locator('.backlog-order-list[data-drop-target="ordered"]').dispatchEvent("drop", { dataTransfer: await page.evaluateHandle(() => new DataTransfer()), clientY: 0 });
+    await expect(orderedTitles(page)).toHaveText(before);
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
   });
 
   test("No namespace lists the exact filename and how to repair it, with no ordering", async ({ page }) => {

@@ -97,16 +97,6 @@ export function findPlanByKey(snapshot, key) {
   return plan;
 }
 
-// Stable-identity lookup: plan `id` (frontmatter) survives a lifecycle move even though `key`
-// (hashed from repo root + relative path) does not. `id` uniqueness is only enforced within a
-// single repository (see relationshipFindings' `${repository.id}:${plan.id}` dedup key), so a
-// `repositoryId` is required to disambiguate when the same id could exist in two repos. An empty
-// id ("" — the buildPlanRecord fallback for plans with no frontmatter id) never matches.
-export function findPlanById(snapshot, id, repositoryId) {
-  if (!id) return null;
-  return snapshot.plans.find((item) => item.plan.id === id && (!repositoryId || item.repository.id === repositoryId)) || null;
-}
-
 // Builds a structured domain error every mutation throw site uses, so the CLI/route layer has one
 // shape to serialize instead of pattern-matching ad hoc `.code` properties.
 export function domainError(code, message, { resolution, details, findings, repair, status } = {}) {
@@ -125,7 +115,6 @@ export function domainError(code, message, { resolution, details, findings, repa
 
 const DOMAIN_ERROR_STATUS = {
   INVALID_CHANGE: 400,
-  STALE_PLAN: 409,
   STALE_ORDER: 409,
   DESTINATION_EXISTS: 409,
   LIFECYCLE_REQUIREMENTS: 422,

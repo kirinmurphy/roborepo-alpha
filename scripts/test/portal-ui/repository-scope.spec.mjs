@@ -25,10 +25,10 @@ test.beforeAll(() => {
     const repo = path.join(fixtureRoot, name);
     fs.mkdirSync(path.join(repo, ".git"), { recursive: true });
     fs.mkdirSync(path.join(repo, "docs", "plans", "active"), { recursive: true });
-    for (const priority of ["high", "low"]) {
-      fs.writeFileSync(path.join(repo, "docs", "plans", "active", `${priority}.md`), [
-        "---", `id: ${name}-${priority}`, `priority: ${priority}`, "next_action: Check the scope", "---", "",
-        `# ${title} ${priority} plan`, "", "## Summary", "", "Scope fixture.", "",
+    for (const level of ["high", "low"]) {
+      fs.writeFileSync(path.join(repo, "docs", "plans", "active", `${level}.md`), [
+        "---", `id: ${name}-${level}`, "next_action: Check the scope", "---", "",
+        `# ${title} ${level} plan`, "", "## Summary", "", "Scope fixture.", "",
       ].join("\n"));
     }
   }

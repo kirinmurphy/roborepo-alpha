@@ -280,6 +280,16 @@ try {
   assert.equal(promote.status, 1);
   assert.ok(JSON.parse(promote.stdout).error.findings.some((item) => item.code === "UNKNOWN_PLAN_NAMESPACE"), "promote refuses a bad prefix");
 
+  // Start applies the same gate, to a plan that reached Ready with a bad name.
+  write("docs/plans/ready/nosuch-ready.md", document({ id: "yyyyyy99" }));
+  run(repo, "add", "docs/plans/ready/nosuch-ready.md");
+  run(repo, "commit", "-qm", "misnamed ready plan");
+  const gateTree = path.join(root, "gate-tree");
+  run(repo, "worktree", "add", "-q", "-b", "feat/gate", gateTree);
+  const started = roborepo(repo, "start", "yyyyyy99", "--worktree", "gate-tree", "--json");
+  assert.equal(started.status, 1);
+  assert.ok(JSON.parse(started.stdout).error.findings.some((item) => item.code === "UNKNOWN_PLAN_NAMESPACE"), "start refuses a bad prefix");
+
   // A transition commits only the plan's paths and leaves the registry for the next write.
   write("docs/plans/backlog/agents-a.md", document({ id: "aaaaaa11" }));
   const promoted = roborepo(repo, "promote", "aaaaaa11", "--json");
@@ -309,6 +319,9 @@ try {
   assert.ok(JSON.parse(invalidConfigValidate.stdout).repositoryFindings.some((item) => item.code === "INVALID_PLANS_CONFIG"));
   const gated = roborepo(repo, "promote", "xxxxxx33", "--json");
   assert.equal(gated.status, 1, "promote refuses while the config cannot be read");
+  const gatedStart = roborepo(repo, "start", "aaaaaa11", "--worktree", "gate-tree", "--json");
+  assert.equal(gatedStart.status, 1, "start refuses while the config cannot be read");
+  assert.ok(JSON.parse(gatedStart.stdout).error.findings.some((item) => item.code === "INVALID_PLANS_CONFIG"));
 
   // No config at all: the convention is inert.
   fs.rmSync(path.join(repo, "docs/plans/plans-config.json"));

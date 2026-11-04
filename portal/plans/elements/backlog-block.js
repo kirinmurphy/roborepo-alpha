@@ -81,6 +81,9 @@ class BacklogBlockElement extends HTMLElement {
       event.dataTransfer.setDragImage(this, 12, 12);
       this.dispatchEvent(new CustomEvent("block-drag", { bubbles: true, detail: { section: this.section, index: this.index } }));
     });
+    handle.addEventListener("dragend", () => {
+      this.dispatchEvent(new CustomEvent("block-drag-end", { bubbles: true }));
+    });
     return handle;
   }
 }

@@ -15,12 +15,12 @@ Decide whether to add general plan-file live refresh and static no-argument work
 are independent optional enhancements to the completed Plans portal. The parent is already in
 completed; neither proposal is required to finish that historical work.
 
-Manual refresh, priority editing, and agent-routed help are the current baseline. Lifecycle changes
+Manual refresh, Backlog order saves, and agent-routed help are the current baseline. Lifecycle changes
 use atomic commands rather than the former generic portal mutation route.
 
 ## Current API and independent decisions
 
-`scripts/cli/portal-routes-plans.mjs` currently exposes refresh, prompt, document, and priority
+`scripts/cli/portal-routes-plans.mjs` currently exposes refresh, prompt, document, and order
 operations, not a generic lifecycle mutation endpoint. Lifecycle transitions use atomic commands.
 The page polls synchronization progress, but does not subscribe to general plan-file changes.
 
@@ -55,7 +55,7 @@ Shipped in `main` (from the parent plan):
 - Portable domain module — `modules/plan-suite/` (`index.mjs`, `repair.mjs`).
 - CLI adapter — `scripts/cli/plans.mjs`.
 - `plan-write` skill, in the `plan-suite` package — `globals/packages/plan-suite/skills/plan-write/`.
-- Priority updates use `POST /api/plans/priority`; lifecycle changes use the current atomic
+- Backlog order saves use `POST /api/plans/order`; lifecycle changes use the current atomic
   plan-suite commands. The earlier generic portal lifecycle-mutation route is retired.
 
 Not built:

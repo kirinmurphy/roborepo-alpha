@@ -302,8 +302,8 @@ move dialog. The plan suite's commands move plans, each through one `roborepo pl
 
 | Move | Transition | Run by | Refused unless |
 | --- | --- | --- | --- |
-| backlog → ready | `promote` | `/plan-promote` | the plan has no findings against the Ready requirements |
-| ready → active | `start` | `/plan-execute` | a linked worktree has the given name, and the plan meets the Active requirements |
+| backlog → ready | `promote` | `/plan-promote` | the plan has no findings against the Ready requirements, its filename passes the naming rules, and `plans-config.json` can be read |
+| ready → active | `start` | `/plan-execute` | a linked worktree has the given name, the plan meets the Active requirements, its filename passes the naming rules, and `plans-config.json` can be read |
 | active → review | `submit` | `/plan-execute` or `/plan-review` | the completion preflight passes |
 | review → active | `reopen` | `/plan-review` | (none beyond the common checks) |
 | review → completed | `close` | `/plan-close` | the worktree copy is integrated, the approval is fresh, the branch landed, and the plan has no findings against the Completed requirements |
@@ -407,8 +407,8 @@ it refuses or a post-commit check fails:
 | `roborepo plans approval <plan> [--base <branch>] [--json]` | Reports the recorded approval as `fresh`, `stale` (with the changed paths), `missing`, `not-approved`, `invalid`, or `unavailable` (the plan's worktree is gone or detached, so its branch cannot be resolved). The text output counts base changes since the review; `--json` lists them. Exits 1 unless fresh. |
 | `roborepo plans sync-base [--continue] [--base <branch>] [--json]` | From a plan's linked worktree, merges the base branch into its branch; does nothing when up to date. Pauses on conflicts and exits 1; `--continue` refuses while conflicts or markers remain, then commits the merge. Refuses a dirty worktree or a base behind its upstream. Never merges into the base branch. |
 | `roborepo plans stop-servers <plan> [--dry-run] [--json]` | Sends `SIGTERM` to the processes listening on a port from inside the plan's linked worktree, then reports each as `stopped`, `still-running`, `gone`, `changed` (PID reused), or `failed`. A plan without a worktree stops nothing. Exits 1 when a server survives or cannot be signalled. macOS only, like Runtime discovery. |
-| `roborepo plans order place <plan> [--top\|--bottom] [--json]` | Records a Backlog plan's position in its namespace's order. A plan connected to a ranked plan joins its group and any flag is ignored; `--top` or `--bottom` places any other plan, with its group; with neither, it stays in Needs prioritization and nothing is written. Lists automatic moves. Exits 1 when the plan has no approved namespace or the order file cannot be read. |
-| `roborepo plans repair <root> [--dry-run]` | Scaffolds frontmatter (a fresh opaque `id` and a placeholder `next_action`) for plan docs missing it in every repo under `<root>`, so the portal can read and edit them. `--dry-run` lists them without writing. Exits 1 when a repo cannot be read. |
+| `roborepo plans order place <plan> [--top\|--bottom] [--json]` | Records a Backlog plan's position in its namespace's order. A plan connected to a ranked plan but not yet in the file joins its group, and any flag is ignored. `--top` or `--bottom` otherwise moves the plan with its group. With neither, a plan that is not ranked stays in Needs prioritization and nothing is written. Lists automatic moves. Exits 1 when the plan has no approved namespace or the order file cannot be read. |
+| `roborepo plans repair <root> [--dry-run]` | Scaffolds frontmatter (a fresh opaque `id` and a placeholder `next_action`) for plan docs missing it in every repo under `<root>`, so the portal can read them. `--dry-run` lists them without writing. Exits 1 when a repo cannot be read. |
 | `roborepo package status <id> [--json]` | Prints one package's `available`, `enabled`, and live `status`, so a suite skill can tell a disabled helper skill from a drifted one. |
 
 ## Not Tested Entries
