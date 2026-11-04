@@ -1,12 +1,12 @@
 ---
 id: 9xzkn4vz
-priority: high
+priority: none
 next_action: Run /plan-execute to implement permanent deletion, the discard receipt, and the legacy recovery migration; ask before creating the worktree.
 blocked_by: []
 depends_on: []
 related: ["4xc0gjuw", "a7bslb00", "z3j2x3x1", "b2sgiejd", "l1mz96d9", "0jped168"]
 reviewed_commit: a774d0bed99bd4b0083f66a0001eacb782ff13da
-worktree:
+worktree: git-worktree-permanent-cleanup
 ---
 
 # Finish worktree cleanup without recovery copies
