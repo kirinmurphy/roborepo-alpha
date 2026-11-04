@@ -393,7 +393,6 @@ Autonomous decisions made during implementation, each clear, with its effects in
 
 ## Not tested
 
-- [ ] Installed skills pick up the plan-write changes. `roborepo update` and `roborepo doctor --installed` rewrite this machine's live harness config from a checkout, so run them once from the main checkout after this merges.
 - [ ] The Backlog on your own portal with real plans. The automated runs and the screenshot used a hermetic portal over a copy of this repo's plans, so your running portal has not been restarted on this code.
 
 ## Review
@@ -407,8 +406,17 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - [x] Missing tests: `start` naming and config gates; Filters narrowing Details and not Ordering; removed, renamed, and invalid config at Refresh. — fixed (84bab74e)
 - [x] Docs: the transition table omits the naming gate; `order place` flag behavior and `plans repair` wording are wrong; `plan-schema.md` and the addendum contradict the implementation; the Schema rollout risk omits the outside-edit finding; two backlog plans still describe priority. — fixed (84bab74e)
 - [x] Comments and leftovers: the registry comment misstates where preserved ids go; dead `reconcile` export, toast actions, drawer returns, `findPlanById`, and `STALE_PLAN`; stale comments and selector; fixtures still write `priority`. — fixed (84bab74e)
+- [ ] Breadcrumbs took the full-page link guard: Save and continue reloaded the page and dropped Filters.
+- [ ] Guard routing is misstated in `backlog.js` and `plans-portal-internals.md`.
+- [ ] Cancel in the action bar stays live during an in-flight Save, so a discard can be confirmed for an order that still lands.
+- [ ] The guard's Cancel stays live during an in-flight Save, and the page moves anyway when it resolves.
+- [ ] `option-dropdown`'s `.loading` and `tpl-dropdown-spinner` are dead since priority's removal.
+- [ ] No browser test for a failed Save through the guard, or Save and continue from the repo selector.
+- [ ] A `## Not tested` entry could be checked hermetically; recorded as evidence instead.
 
 ### Verification
 
 - Validation pass 1 (fresh-context subagent): the 7 groups of `fix` findings above and no `escalate`. Its full portal UI run on that commit passed, 183 of 183. An earlier run's 3 failures took 4 to 17 minutes against a 30-second limit and passed when rerun.
+- Validation pass 2 (fresh-context subagent): the findings below it, no `escalate`; `node scripts/test/portal-ui/run.mjs` passed 189 of 189.
+- Installed output, on a temporary HOME and state root: `roborepo update`, enabling plan-suite, `roborepo update`, and `roborepo doctor --installed` all exited 0 (110 doctor checks), and the installed plan-write references carry `plans-order.json` and `order place` with no `priority:` line. `doctor` on this machine warns that installed skills are out of date until `roborepo update` runs after merge.
 - Base failure: `roborepo plans validate` exits 1 from blocking findings that are all in `docs/plans/completed/`, none from this change.

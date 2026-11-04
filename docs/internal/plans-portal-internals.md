@@ -90,7 +90,8 @@ push channel.
 `portal/shared/repository-scope.js` has a `setRepositoryScopeGuard` seam so a page can hold a scope
 change. Back/forward cannot be cancelled, so with a dirty draft `app.js` pushes the draft's URL back
 and asks; `syncRepositoryScopeFromUrl` then applies the move. A capture-phase click listener covers
-header links, and `beforeunload` covers tab close and reload.
+links outside the board, the board's own links guard themselves, and `beforeunload` covers tab close
+and reload.
 
 Naming findings are blocking: `roborepo plans validate` exits 1, and the promote and start transitions
 add them through `namingGateFindings`, since severity alone does not gate a transition.

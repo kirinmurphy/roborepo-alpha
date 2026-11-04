@@ -402,6 +402,80 @@ test.describe("Backlog directory and ordering", () => {
     expect(errors).toEqual([]);
   });
 
+  test("a failed Save through the guard stays put and says why", async ({ page }) => {
+    await openOrdering(page);
+    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    setOrder(["alphax03", "alphaa01", "alphab02"]);
+    await page.getByRole("button", { name: /^Active \(/ }).click();
+    await guardDialog(page).getByRole("button", { name: "Save and continue" }).click();
+    await expect(guardDialog(page).getByRole("alert")).toContainText("changed since you opened Ordering");
+    await expect(guardDialog(page).getByRole("button", { name: "Save and continue" })).toBeDisabled();
+    await expect(page).toHaveURL(/lifecycle=backlog.*namespace=alpha/);
+    expect(savedOrder()).toEqual(["alphax03", "alphaa01", "alphab02"]);
+  });
+
+  test("Save and continue from the repo selector saves, then changes the repo", async ({ page }) => {
+    await openOrdering(page);
+    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await page.locator("#repository-scope option-dropdown").getByRole("button").first().click();
+    await page.getByRole("option", { name: "All repos" }).click();
+    await guardDialog(page).getByRole("button", { name: "Save and continue" }).click();
+    await expect(page).not.toHaveURL(/repo=|namespace=/);
+    expect(savedOrder()).toEqual(["alphax03", "alphaa01", "alphab02"]);
+    await expect(page.getByRole("link", { name: new RegExp(repoName) })).toBeVisible();
+  });
+
+  test("a breadcrumb leaves a dirty draft in place, keeping filters and the page", async ({ page }) => {
+    await openNamespace(page);
+    await page.locator("#filters-toggle").click();
+    await page.locator("#search").fill("Retrieval");
+    await page.locator("#filters-update").click();
+    await page.getByRole("button", { name: "Ordering", exact: true }).click();
+    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await page.evaluate(() => { window.samePage = true; });
+    await page.getByRole("navigation", { name: "Backlog location" }).getByRole("link", { name: repoName }).click();
+    await guardDialog(page).getByRole("button", { name: "Save and continue" }).click();
+    await expect(page).not.toHaveURL(/namespace=/);
+    await expect(page.locator("filter-chip")).toHaveCount(1);
+    expect(await page.evaluate(() => window.samePage)).toBe(true);
+  });
+
+  test("while a Save is in flight, neither Cancel can take it back", async ({ page }) => {
+    let release;
+    const held = new Promise((resolve) => { release = resolve; });
+    await page.route("**/api/plans/order", async (route) => {
+      await held;
+      await route.continue();
+    });
+    await openOrdering(page);
+    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Cancel", exact: true })).toBeDisabled();
+    await page.getByRole("button", { name: /^Active \(/ }).click();
+    await expect(guardDialog(page)).toBeHidden();
+    release();
+    await expect(page).toHaveURL(/lifecycle=active/);
+    expect(savedOrder()).toEqual(["alphax03", "alphaa01", "alphab02"]);
+  });
+
+  test("the guard's Cancel waits for its Save, which then decides the move", async ({ page }) => {
+    let release;
+    const held = new Promise((resolve) => { release = resolve; });
+    await page.route("**/api/plans/order", async (route) => {
+      await held;
+      await route.continue();
+    });
+    await openOrdering(page);
+    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await page.getByRole("button", { name: /^Active \(/ }).click();
+    await guardDialog(page).getByRole("button", { name: "Save and continue" }).click();
+    await expect(guardDialog(page).getByRole("button", { name: "Cancel" })).toBeDisabled();
+    await page.keyboard.press("Escape");
+    await expect(guardDialog(page)).toBeVisible();
+    release();
+    await expect(page).toHaveURL(/lifecycle=active/);
+  });
+
   test("a cancelled drag does not leave its block armed", async ({ page }) => {
     await openOrdering(page);
     const before = await orderedTitles(page).allTextContents();

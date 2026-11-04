@@ -169,11 +169,12 @@ function bindStaticControls() {
   // One delegated listener each for the "blocked by N" badge — card and drawer both mount <plan-status>.
   groupsEl.addEventListener("blocked-click", (event) => openBlockersPopover(event.detail));
   document.getElementById("drawer-status-mount").addEventListener("blocked-click", (event) => openBlockersPopover(event.detail));
-  // Header links load another page, so an unsaved order is offered a save first. Modified clicks
-  // open a new tab or window and leave this page, and its draft, where they are.
+  // Links outside the board, such as the header's, load another page, so an unsaved order is offered
+  // a save first. The board's own links navigate in place and guard themselves. Modified clicks open
+  // a new tab or window and leave this page, and its draft, where they are.
   document.addEventListener("click", (event) => {
     const link = event.target.closest?.("a[href]");
-    if (!link || !backlog.isDirty() || link.target === "_blank" || new URL(link.href).origin !== location.origin) return;
+    if (!link || groupsEl.contains(link) || !backlog.isDirty() || link.target === "_blank" || new URL(link.href).origin !== location.origin) return;
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
     event.stopPropagation();

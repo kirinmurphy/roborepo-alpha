@@ -3,8 +3,8 @@
 // tabs never reach this module.
 //
 // A draft is local until Save. Every way out of a dirty draft goes through confirmLeave: the mode
-// toggle, breadcrumbs, and directory rows directly, and the lifecycle tabs, repo selector, header
-// links, and back/forward through the seams app.js wires to it.
+// toggle and the repo breadcrumb directly, and the All repos breadcrumb, repo selector, lifecycle
+// tabs, links outside the board, and back/forward through the seams app.js wires to it.
 import { portalTpl as tpl, portalFillSlots as fill } from "/portal/shared/api.js";
 import {
   clearRepositoryScope,
@@ -382,24 +382,25 @@ export function createBacklogController(deps) {
     status.classList.toggle("is-error", Boolean(draft.stale || saveError));
     const save = node.querySelector("[data-slot=save]");
     save.disabled = draft.stale;
+    const cancel = node.querySelector("[data-slot=cancel]");
     save.addEventListener("click", () => {
+      // A Save already sent cannot be taken back, so Cancel waits for its outcome too.
       save.disabled = true;
+      cancel.disabled = true;
       void saveDraft();
     });
-    node.querySelector("[data-slot=cancel]").addEventListener("click", () => discardDialog.showModal());
+    cancel.addEventListener("click", () => discardDialog.showModal());
     return node;
   }
 
   // Resolves true once the order is saved and the page holds the new snapshot. A failure keeps the
   // draft, says why, and resolves false, so a navigation waiting on it never goes ahead.
   function saveDraft() {
-    saving ??= submitDraft().finally(() => { saving = null; });
+    saving ??= submitDraft(selectedEntry());
     return saving;
   }
 
-  async function submitDraft() {
-    const entry = selectedEntry();
-    if (!entry) return false;
+  async function submitDraft(entry) {
     try {
       await api.saveBacklogOrder({
         repositoryId: entry.repositoryId,
@@ -410,11 +411,13 @@ export function createBacklogController(deps) {
     } catch (err) {
       if (err.code === "STALE_ORDER") draft = { ...draft, stale: true };
       saveError = [err.message, err.resolution].filter(Boolean).join(" ");
+      saving = null;
       deps.onRender();
       return false;
     }
     draft = null;
     saveError = null;
+    saving = null;
     await deps.onSaved();
     return true;
   }
@@ -422,6 +425,10 @@ export function createBacklogController(deps) {
   // Runs `proceed` now when there is nothing to lose; otherwise asks first. Save and continue only
   // proceeds after a successful Save, and Cancel leaves the draft and the page as they are.
   function confirmLeave(proceed) {
+    if (saving) {
+      void saving.then(() => confirmLeave(proceed));
+      return;
+    }
     if (!isDirty()) {
       proceed();
       return;
@@ -430,10 +437,14 @@ export function createBacklogController(deps) {
     guardDialog.querySelector("[data-slot=error]").textContent = draft.stale ? "This namespace changed elsewhere, so this order can't be saved." : "";
     const save = guardDialog.querySelector("[data-slot=save]");
     save.disabled = draft.stale;
+    const cancel = guardDialog.querySelector("[data-slot=cancel]");
     save.onclick = async () => {
+      // A Save already sent is going to land, so the dialog stays until its outcome decides the move.
       save.disabled = true;
+      cancel.disabled = true;
       const saved = await saveDraft();
       save.disabled = Boolean(draft?.stale);
+      cancel.disabled = false;
       if (saved) {
         guardDialog.close();
         proceed();
@@ -446,6 +457,10 @@ export function createBacklogController(deps) {
 
   function bindDialogs() {
     guardDialog.querySelector("[data-slot=cancel]").addEventListener("click", () => guardDialog.close());
+    // Esc is the same as Cancel, so it waits for a Save in flight too.
+    guardDialog.addEventListener("cancel", (event) => {
+      if (saving) event.preventDefault();
+    });
     discardDialog.querySelector("[data-slot=keep]").addEventListener("click", () => discardDialog.close());
     discardDialog.querySelector("[data-slot=discard]").addEventListener("click", () => {
       discardDialog.close();

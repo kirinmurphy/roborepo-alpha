@@ -7,8 +7,7 @@
 //   .options   [[value, label]]  — required
 //   .value     string            — currently-selected value
 //   .onSelect  async (value) => {}
-//   .loading   boolean — disables the trigger, shows a spinner instead of the chevron, closes menu
-//   .disabled  boolean — disables the trigger without implying an in-flight write
+//   .disabled  boolean — disables the trigger
 //   .actions   [{ label, icon?, onSelect }] — optional rows below a divider, outside the listbox's
 //              choices, on their own panel color: picking one runs its own handler and leaves
 //              .value unchanged. `icon` is a portal-icon name shown before the label.
@@ -21,7 +20,7 @@ class OptionDropdownElement extends HTMLElement {
   connectedCallback() {
     // Template-cloned elements can receive property assignments before upgrade; those land as
     // own properties that shadow the class setters. Re-adopt them so the setters actually run.
-    for (const key of ["options", "value", "onSelect", "loading", "disabled", "actions", "fallbackLabel", "name"]) {
+    for (const key of ["options", "value", "onSelect", "disabled", "actions", "fallbackLabel", "name"]) {
       if (Object.prototype.hasOwnProperty.call(this, key)) {
         const v = this[key];
         delete this[key];
@@ -87,15 +86,6 @@ class OptionDropdownElement extends HTMLElement {
     if (this.isConnected) this.render();
   }
 
-  set loading(value) {
-    this._loading = Boolean(value);
-    if (this._loading) this.close();
-    if (this.isConnected) this.render();
-  }
-  get loading() {
-    return Boolean(this._loading);
-  }
-
   set disabled(value) {
     this._disabled = Boolean(value);
     if (this.isConnected) this.render();
@@ -111,7 +101,7 @@ class OptionDropdownElement extends HTMLElement {
   }
 
   open() {
-    if (this._loading || this._disabled || this.options.length + this.actions.length === 0) return;
+    if (this._disabled || this.options.length + this.actions.length === 0) return;
     this._open = true;
     this._highlighted = this.options.findIndex(([v]) => v === this._value);
     this.render();
@@ -158,16 +148,12 @@ class OptionDropdownElement extends HTMLElement {
 
   render() {
     const trigger = tpl("tpl-dropdown-trigger");
-    trigger.disabled = this._loading || this._disabled;
+    trigger.disabled = Boolean(this._disabled);
     trigger.setAttribute("aria-expanded", String(this._open));
     if (this._name) trigger.setAttribute("aria-label", `${this._name}: ${this.currentLabel()}`);
 
-    if (this._loading) {
-      trigger.append(tpl("tpl-dropdown-spinner"));
-    } else {
-      trigger.append(this.currentLabel());
-      trigger.append(tpl("tpl-dropdown-chevron"));
-    }
+    trigger.append(this.currentLabel());
+    trigger.append(tpl("tpl-dropdown-chevron"));
 
     trigger.addEventListener("click", () => {
       this._justToggled = true;
