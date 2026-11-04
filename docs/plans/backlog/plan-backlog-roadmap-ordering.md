@@ -29,7 +29,7 @@ The issues to solve:
 - A prioritization session may involve many edits, so immediate persistence is too easy to trigger accidentally.
 - Invalid namespace metadata must be rejected when authored but remain discoverable if it exists on disk.
 
-This is a **design and implementation plan**, not a claim that the local checkout, current code paths, or CI have been inspected. Option A automatic dependency regrouping is the selected first iteration; later confirmation is explicitly out of scope.
+This is a **design and implementation plan**, not a claim that the local checkout, current code paths, or CI have been inspected. Automatic dependency regrouping (Option A) is the chosen behavior. Do not implement or design a separate approval workflow for automatic regrouping.
 
 ## Goals
 
@@ -159,7 +159,7 @@ The draft encompasses **both** ranked order and moves from Needs prioritization.
 - Recompute group membership on any dependency edit, plan creation, lifecycle change, or repo snapshot refresh. Reconcile the registry deterministically and visibly, even if it reorders independent plans. Avoid silently overwriting an unsaved draft; use the stale-draft guard.
 - Keep dependency cycles, missing references, and invalid cross-namespace placements visible as findings; never auto-rank invalid relationships. Cross-namespace prerequisites may block execution but do not impose a rank across namespace boundaries.
 
-**Chosen branching policy — Option A:** `depends_on` may express joins and forks. **Only Ordering mode wraps connected plans into movable blocks; Details remains flat.** Linearize each dependency-connected set of remaining **same-namespace Backlog plans, connected by direct edges among those Backlog plans**, into one contiguous, movable display block, with a valid topological order within it. A display sequence such as `A → B → C` does **not** add a hard dependency from A to B when C independently depends on A and B. When new edges connect separately ranked groups, automatically regroup them, even when unrelated plans move down in priority. Show a concise explanation of automatic moves; do not add confirmation UI in this iteration. Never rewrite actual dependency edges to force a chain.
+**Chosen branching policy — Option A:** `depends_on` may express joins and forks. **Only Ordering mode wraps connected plans into movable blocks; Details remains flat.** Linearize each dependency-connected set of remaining **same-namespace Backlog plans, connected by direct edges among those Backlog plans**, into one contiguous, movable display block, with a valid topological order within it. A display sequence such as `A → B → C` does **not** add a hard dependency from A to B when C independently depends on A and B. When new edges connect separately ranked groups, automatically regroup them, even when unrelated plans move down in priority. Show a concise explanation of automatic moves; automatic dependency regrouping does not ask for approval. This is separate from Save/Cancel for manual Ordering edits. Never rewrite actual dependency edges to force a chain.
 
 ### Ordering registry
 
@@ -195,6 +195,18 @@ Reconcile references to deleted plans, moved lifecycle states, invalid namespace
 - Report unknown names consistently in the CLI/validator and portal. Strict create/build validation and tolerant read/display behavior are complementary, not contradictory.
 - Keep **Unclassified** (a lifecycle/folder condition) distinct from **No namespace** (metadata classification); do not change the Unclassified lifecycle UI.
 
+### Namespace-config changes and live reconciliation
+
+Treat `docs/plans/plans-config.json` as a **watched input** to each repository's Backlog index, not a namespace vocabulary loaded once for the lifetime of the process. Recompute the index on config creation/edit/removal, repository checkout or branch switch, and snapshot refresh. Prefer the portal's existing file observation/invalidation mechanism where present; ensure a fresh config revision is also checked on view load and **before Save**, so missed watcher events cannot persist stale classification. Changes are scoped to the affected repository.
+
+- **Namespace added:** reparse filenames with the new approved vocabulary, including longest-prefix collisions. Matching previously **No namespace** plans move into their approved namespace immediately. Show the namespace row only if it contains Backlog plans. Newly recognized plans are **Needs prioritization** unless they already have a valid saved rank or qualify for automatic dependency attachment.
+- **Namespace removed:** affected Backlog plans move to **No namespace** with actionable validation findings. Do not delete/rename plan files or silently discard their old registry entries; flag entries belonging to now-invalid namespaces for repair, exclude them from the effective ordered view, and preserve them until an intentional cleanup/migration.
+- **Namespace renamed:** treat as removal plus addition, not a silent filename migration. Existing files remain in **No namespace** until renamed to an approved prefix; preserve plan IDs and reconcile ordering after repair.
+- **Unreadable/malformed config:** report a configuration error; do not silently keep using a stale vocabulary as if it were current. Continue tolerant recovery/indexing where possible without inventing namespace matches.
+- **Unsaved ordering:** if a config change affects the selected namespace, plan membership, or effective order, mark any open Ordering draft stale. Prevent Save until the user refreshes/reconciles; reuse the existing unsaved-navigation safeguards.
+
+Use shared namespace parsing and validation in the portal, CLI, plan writers, and build enforcement. Test config changes while the Backlog screen is open, reload/branch-switch behavior, removed namespaces with saved order entries, and concurrent config edits while an Ordering draft is dirty. Do not modify presentation of non-Backlog lifecycle views.
+
 ### Remove the legacy priority field
 
 This is a **breaking cleanup**, not a deprecation:
@@ -207,13 +219,15 @@ This is a **breaking cleanup**, not a deprecation:
 
 ### `plan-write` integration
 
+**Dependency placement rule:** `depends_on` governs eligibility and automatic initial placement, not a separate H/M/L or numeric priority. Each ranked plan, including each member of a dependency group, still has its own stable ID in the saved order. For a fork `A → B` and `A → C`, save `[A, B, C]` (or another dependency-valid order); when A leaves Backlog, B and C split into independent rows **without losing their existing relative rank**. No extra `plan-write` placement prompt is needed for B or C once they attach to an already-ranked group.
+
 1. Resolve an approved namespace from the repository config before writing; validate the `<namespace>-<slug>.md` name and derive the parsed namespace from it. Do not store `namespace` in frontmatter.
 2. Create the plan with stable ID and valid metadata, **without** the legacy `priority` field after the schema change.
-3. If it has qualifying dependencies on a ranked same-namespace group, **auto-place** it into that group; no separate ranking prompt.
+3. If it has qualifying dependencies on a ranked same-namespace group, **auto-place** it into that group and persist its individual plan ID in the ordering registry; no separate ranking prompt. Preserve the existing relative priority of independent siblings and use a deterministic tie-break for new siblings.
 4. Otherwise, offer insertion into the namespace order or **Prioritize later**. A deferred independent plan remains at the top in Needs prioritization.
 5. For non-interactive creation, default an independent plan to unprioritized; a dependent plan still follows deterministic auto-attachment rules.
 6. Surface a registry write/validation failure explicitly; never claim automatic placement succeeded if it did not.
-7. If a new plan connects multiple ranked prerequisite groups, compute the Option A merged group and apply the deterministic proposed order atomically; surface the automatic changes. The plan inherits the group rank rather than entering Needs prioritization.
+7. If a new plan connects multiple ranked prerequisite groups, calculate the merged group and persist the deterministic order atomically; surface the automatic changes. Each member has an individual saved position; the new plan does not enter Needs prioritization merely because it has multiple prerequisites.
 
 ## Chosen policy: Option A dependency regrouping
 
@@ -221,15 +235,13 @@ Treat dependencies as a directed graph (the actual `depends_on` edges), but pres
 
 Example: existing ranked order `[A, X, Y, B]`, followed by a new plan C depending on both A and B. The new order is `[A, B, C, X, Y]`: regroup A, B, and C at the earliest existing member's position. A and B retain their actual independence; B is merely listed before C. X and Y retain their relative order. If existing positions allow `[B, A, C]` instead, preserve existing ranked order between independent prerequisites. Use a stable topological sort for the group's internal sequence, with existing saved priority and then stable plan ID as tie-breakers.
 
-**Design for future confirmation without building it now:**
+**Dependency ordering implementation:**
 
 1. `deriveGroups(plans, lifecycle)` — pure calculation of dependency-connected remaining Backlog groups; validate missing edges and cycles.
 2. `proposeOrder(currentOrder, groups, change)` — pure calculation returning `{order, moves, findings}` with a deterministic, valid rank. For an automatic merge, anchor at the earliest ranked member and preserve unaffected items' relative order. Never write inside this function.
 3. `applyOrder(proposal, expectedRevision)` — persist the proposed IDs atomically after validation. Automatic dependency changes use this step immediately (Option A); manual Ordering-mode changes remain draft-only until explicit **Save**.
 
 On external plan creation/dependency edits, recompute and apply Option A as part of the authoritative update flow. If an Ordering draft is dirty, do not overwrite it; flag a stale revision and require refresh/reconciliation. Any automatic reordering must be visible in the refreshed UI or operation result, not silently hidden. Dependency blocks are derived from individual plan IDs persisted in the existing registry; do not persist a second group hierarchy.
-
-**Possible later Option C:** insert a review/confirmation step between `proposeOrder` and `applyOrder` when existing priorities would change. Reuse the graph logic, registry, and UI block model. A future "keep existing order" choice would need additional exception state and is **not** part of this plan.
 
 Do not introduce graph editors, separate roadmap pages, nested views, manual splitting, or artificial dependency edges. Keep cycles and broken references as validation errors rather than attempting to generate a misleading order.
 
@@ -239,6 +251,7 @@ Do not introduce graph editors, separate roadmap pages, nested views, manual spl
 - [ ] Implement the selected Option A branching policy with pure group derivation, pure order proposal, and an atomic apply operation.
 - [ ] Introduce shared filename-based namespace resolution and validation; expose a computed `namespace` property on parsed plans, cache it in repository indexes, and test overlapping prefixes and performance.
 - [ ] Add tolerant indexing and a trailing **No namespace** recovery section in Backlog's repository namespace directory, while keeping strict build/create failures.
+- [ ] Observe and reconcile `plans-config.json` changes (add/remove/rename, invalid config, branch switches), invalidate namespace indexes, protect dirty ordering drafts, and test recovery and reload behavior.
 - [ ] Add repository → namespace → plans navigation **only** to Backlog and namespace-prefixed display titles; remove all footer-badge proposals.
 - [ ] Add a repository-local ordered-ID registry plus shared draft/committed view model for Details and Ordering; implement the addendum's paired UI wireframes (flat Details cards, Ordering-only containers).
 - [ ] Show Needs prioritization first; implement the exact right-side ordered and unprioritized movement controls, accessible drag/drop, and group boundaries.
@@ -258,6 +271,8 @@ Use repository-native checks and canonical plan validation discovered from the c
 | Repo scope | Only repos with Backlog plans show, with correct counts |
 | Namespace scope | Approved nonempty namespaces show; **No namespace** is last when needed |
 | Namespace derivation | Longest approved filename prefix resolves once per index; derived property powers filters/titles, no frontmatter duplication, and performance is verified |
+| Namespace config edits | Added/removed/renamed namespace refreshes open Backlog and cache; orphaned plans appear in No namespace; invalid registry references are flagged, not silently dropped |
+| Namespace config conflicts | Dirty Ordering drafts cannot save across a conflicting config revision; invalid/unreadable configs surface errors |
 | Invalid namespace | Creation/rename/build rejects bad filename prefixes, but Backlog displays affected plans with repair findings |
 | Titles | Display begins with an approved namespace prefix; authored H1 unchanged; no footer badge |
 | Unprioritized | Section appears first only when needed; moves into a draft Ordered list |
@@ -292,7 +307,7 @@ Use repository-native checks and canonical plan validation discovered from the c
 ## Risks and implementation checks
 
 - **Repo coverage:** Existing build validation may be RoboRepo-only. Audit each supported repository's initialization/CI before promising universal enforcement.
-- **Automated regrouping:** Option A intentionally may pull previously separated priorities together and move unrelated plans. Use deterministic tie-breaks, explain resulting moves, and preserve revision safety. Confirmation (Option C) is a future enhancement, not an initial requirement.
+- **Automated regrouping:** Automatic merges may change existing ranks and move unrelated plans. Use deterministic tie-breaks, surface resulting moves, and preserve revision safety. Do not add an approval workflow for automatic merges.
 - **Edit races:** File watchers, another tab, or a separate skill may rewrite dependencies while Ordering is dirty. Detect and reconcile; never last-write-wins without feedback.
 - **Missing/malformed filename namespace:** Strict creation must reject it, but tolerant reads must not make the existing plan invisible or crash indexing.
 - **Schema rollout:** Remove legacy priority and update all live producers/consumers in one breaking change; otherwise current validators may reject newly written plans.

@@ -1,6 +1,6 @@
 # Architecture addendum: namespace-scoped Backlog ordering
 
-**Status:** Proposed technical design companion to `plan-backlog-roadmap-ordering-v5.md`  
+**Status:** Proposed technical design companion to `plan-backlog-roadmap-ordering-v7.md`  
 **Scope:** Schema, persistence, dependency grouping, consistency rules, and a normative Backlog UI reference. The implementation plan remains the source of truth for overall feature goals.
 
 ## Purpose
@@ -37,6 +37,14 @@ docs/plans/
 ```
 
 `plans-order.json` is one file **per repository**. There is no central cross-repository priority ranking. Files outside approved namespaces remain readable for recovery, but cannot be placed in the namespace order until corrected.
+
+### Priority placement and individual rank retention
+
+`depends_on` supersedes manual **initial** placement when a new plan directly attaches to a ranked same-namespace Backlog group; `plan-write` should auto-attach the plan rather than ask for a position. This does **not** mean only groups have an order: the registry retains every ranked plan ID in its dependency-valid sequence.
+
+For example, if B and C each depend on A, the ranked registry can store `[A, B, C]` even while Ordering shows one movable `[A, B, C]` block. When A leaves Backlog, B and C become independent movable entries in that same B-before-C order. Their individual positions are **already saved**; no new prioritization prompt is required, and leaving a group is not a reason to clear a rank. A new sibling is inserted in a stable, deterministic order while respecting all actual prerequisite edges.
+
+New plans that depend only on *unprioritized* prerequisites remain unprioritized with their connected group. Manual Ordering-mode changes require explicit Save; automatic placement triggered by `plan-write` or dependency edits persists as part of that write operation, using revision checks to avoid overwriting an unsaved UI draft.
 
 ### 1. Plan document: identity and hard dependencies
 
@@ -75,6 +83,22 @@ A reader resolves the namespace using the **longest valid namespace prefix follo
 - Load the vocabulary once per repository snapshot and reuse a deterministic matcher. Filename matching is a cheap in-memory operation; unlike YAML/frontmatter parsing, it requires no additional file I/O. Add a focused correctness and performance regression test rather than relying on assumed speed.
 - An unknown, ambiguous, or malformed prefix yields `namespace: null` plus a validation finding, not a guessed namespace. Such plans appear in **No namespace** for repair.
 - The Backlog title prefix is **rendered** from the validated namespace, not added to the authored H1. Namespace is exposed to callers as a read-only derived value, not a second stored field.
+
+### 2a. Observing `plans-config.json` changes
+
+Namespace classification is a derived index keyed by **repository, approved namespace vocabulary revision, and plan filename**. The resolver must not cache a vocabulary indefinitely. Watch or invalidate on `docs/plans/plans-config.json` create/edit/delete, repository/branch switch, and plan snapshot refresh; verify the config revision on Backlog load and again before committing an Ordering draft. Use the existing repository observation mechanism when available; watcher notifications alone are not a correctness guarantee.
+
+| Event | Classification / UI | Ordering registry |
+| --- | --- | --- |
+| Add namespace | Reindex: matching files leave **No namespace** and appear under the new namespace if Backlog plans exist | Restore any still-valid stored positions; otherwise **Needs prioritization**, unless a ranked dependency anchors automatic placement |
+| Remove namespace | Reindex: affected plans move to **No namespace** with repair findings | Keep orphaned raw entries for diagnosis/recovery; exclude from effective order, never silently delete |
+| Rename namespace | Equivalent to removal + addition; no silent file renames | Reconcile on explicit filename repair, preserving stable plan IDs where valid |
+| Malformed/unreadable config | Display actionable config error; no fabricated namespace | Block invalid ordering writes; avoid silently using a stale vocabulary |
+| Config changed with dirty Ordering draft | Flag stale namespace snapshot and present refresh/reconciliation | Reject Save against old revision; do not overwrite newer configuration/order |
+
+Normalize and validate universal namespaces separately from repository namespaces. With overlapping prefixes, longest valid prefix wins. Config changes can split or merge derived Backlog dependency groups as files enter or leave an approved namespace; apply the existing dependency reconciliation policy only after reclassification. An empty namespace need not appear in the directory. None of these operations changes non-Backlog UI presentation.
+
+**Tests:** open Backlog while adding/removing/renaming a namespace; reclassify existing unknown filenames; overlapping prefix resolution; saved order from a deleted namespace; malformed configs; branch switching; dirty draft Save rejection after config changes; correct namespace counts and **No namespace** placement.
 
 ### 3. Repository-local priority registry
 
@@ -1212,7 +1236,7 @@ Keep three operations separate:
 2. `proposeOrder(savedOrder, groups, change)` returns `{ order, moves, findings }` without writing files.
 3. `applyOrder(proposal, expectedRevision)` revalidates and persists the proposed order.
 
-Option A auto-applies proposals after dependency edits. A future Option C can insert confirmation between proposal and application without rewriting grouping or persistence. The UI's **Ordering** mode uses the same operations against a local draft; the **Details** mode reads the flattened committed order without grouping; **Save** commits the whole namespace order, **Cancel** discards it, and leaving a dirty session triggers a confirmation prompt. The Save/Cancel bar stays visible on long lists.
+Automatic dependency changes calculate and apply the valid order without an approval dialog. Separate pure grouping, ordering, and persistence operations for determinism, testing, and atomic saves. The UI's **Ordering** mode uses the same operations against a local draft; the **Details** mode reads the flattened committed order without grouping; **Save** commits the whole namespace order, **Cancel** discards it, and leaving a dirty session triggers a confirmation prompt. The Save/Cancel bar stays visible on long lists.
 
 The save should check the repository snapshot or revision used to create the draft. If plans or dependencies changed meanwhile, do not overwrite the newer state silently; show a conflict and require refresh/reconciliation. When a command edits both a plan file and `plans-order.json`, validate both and commit as one coherent repository change where possible.
 
