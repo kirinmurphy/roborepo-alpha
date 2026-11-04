@@ -1,11 +1,11 @@
 ---
 id: rxv53v6z
 priority: none
-next_action: Inspect plan-suite and portal ownership boundaries, then implement Option A dependency regrouping, namespace-scoped Backlog ordering, and validation.
+next_action: Run /plan-execute, starting with the shared namespace resolver and the pure order calculations; ask before creating the worktree.
 blocked_by: []
 depends_on: []
-related: []
-reviewed_commit:
+related: ["plans-portal-live-refresh-and-static-preflight", "plan-lifecycle-suite-blockers-dependencies", "plan-unclassified-plan-recovery", "p3vbk03v"]
+reviewed_commit: 9a2ebc741199674f967b35235c32f2aa295ba3b6
 worktree:
 ---
 
@@ -17,23 +17,40 @@ Make Backlog useful for deciding what to build next. Navigate from repositories 
 
 ## Context
 
-`docs/plans/plans-config.json` declares project namespaces; the plan-suite also defines universal namespaces. The current plan schema includes stable opaque IDs, `depends_on`, and an H/M/L/none `priority` field. Lifecycle is derived from folders, not frontmatter. Plan filename validation currently depends on the presence of a repository namespace config; determine where existing enforcement runs before extending it to other repositories.
-
 The issues to solve:
 
 - Long titles do not consistently show their namespace at the beginning of the displayed label.
 - A global Backlog card feed is difficult to scan when many repositories and namespaces are involved.
 - H/M/L does not specify a concrete next-to-build order.
 - Part 1/2/3 work often has hard dependencies; remaining backlog phases should move together, but unrelated work may go ahead of them.
-- New or detached plans can disappear into an implicit backlog tail unless they remain visibly unprioritized.
+- New plans can disappear into an implicit backlog tail unless they remain visibly unprioritized.
 - A prioritization session may involve many edits, so immediate persistence is too easy to trigger accidentally.
 - Invalid namespace metadata must be rejected when authored but remain discoverable if it exists on disk.
 
-This is a **design and implementation plan**, not a claim that the local checkout, current code paths, or CI have been inspected. Automatic dependency regrouping (Option A) is the chosen behavior. Do not implement or design a separate approval workflow for automatic regrouping.
+Automatic dependency regrouping (Option A) is the chosen behavior. Do not implement or design a separate approval workflow for automatic regrouping.
+
+## Current state
+
+Checked against commit `9a2ebc74`.
+
+| Area | Current behavior | Touchpoints |
+| --- | --- | --- |
+| Namespaces | Longest-prefix matching exists but is private, and records carry no `namespace` field. Universal namespaces are a constant. | `modules/plan-suite/naming.mjs` (`matchNamespace`, `UNIVERSAL_NAMESPACES`), `readPlanRecord` and `publicPlan` in `modules/plan-suite/index.mjs` |
+| Naming enforcement | Naming findings are advisory, so `roborepo plans validate` exits 0. Transition gates leave them out, so no transition refuses them. A repo without `plans-config.json` gets no findings. Malformed config is silently treated as not configured. | `modules/plan-suite/findings.mjs`, `lifecycleFindings` in `index.mjs`, `assertDestinationReady` in `transition.mjs`, `naming.mjs` |
+| Naming in CI | `npm run check` tests a hard-coded filename list, not the real plan tree. Other repos have no enforcement. | `scripts/test/plan-suite-findings-check.mjs` |
+| Plan creation | No command or portal route creates or renames a plan. `plan-write` is a skill whose agent writes the file and then runs the validator. | `globals/packages/plan-suite/skills/plan-write/` |
+| Dependencies | `plan.dependencies` is parsed. Self-references and missing IDs are findings; cycles are not detected. | `modules/plan-suite/index.mjs`, `findings.mjs` |
+| Priority | Backlog and Ready show a priority dropdown and filter, and every lifecycle uses it as a sort key. Home shows it as a read-only chip. Start and reopen write `priority: none`, as does landed recovery. | `planSort` in `portal/plans/state.js`, `portal/plans/elements/plan-status.js`, `manifests/platform/plan-lifecycle.json` (`showsPriority`), `POST /api/plans/priority`, `transition-rules.mjs`, `landed-recovery.mjs`, `repair.mjs` |
+| Unknown frontmatter | No allowlist rejects extra keys, so a leftover `priority:` line is inert once the field's rules are gone. | `modules/plan-suite/lifecycle-policy.mjs` |
+| Repo scope | The shared `?repo=` selector pushes the URL and then notifies the page. It has no way to refuse a change. | `portal/shared/repository-scope.js`, `repository-scope-selector.js` |
+| Refresh | Home polls a cached snapshot that rebuilds when a fingerprint of every entry under `docs/plans` changes. The open Plans page refetches only on Refresh, after mutations, and while a sync runs; nothing pushes file changes to it. | `modules/plan-suite/snapshot-fingerprint.mjs`, `scripts/cli/plans.mjs` |
+| Lifecycle moves | Transitions commit only the plan's old and new paths. No transition returns a plan to Backlog. | `manifests/platform/plan-lifecycle.json`, `modules/plan-suite/transition.mjs` |
+
+Real data for fixtures: this repo has 49 Backlog plans across 14 namespaces, all with valid prefixes. Six dependency edges join two same-namespace Backlog plans, including the fork `forge-github-01` → `02`, `03`. Eight more point at another namespace or out of Backlog, and all resolve. Twenty-one live plans keep legacy slug IDs, so the registry must accept any valid plan ID, not only base36. Fifty non-terminal plan files carry a `priority` line.
 
 ## Goals
 
-- Change **Backlog only**. Preserve every other lifecycle state's behavior, sorting, filtering, navigation, and UI presentation.
+- Change **Backlog only**, apart from removing priority. Other lifecycle views lose their priority control, filter, chip, and sort key, and otherwise keep their behavior, sorting, filtering, navigation, and presentation.
 - Use one approved namespace per plan, taken from that repository's configured vocabulary plus permitted universal namespaces.
 - Display a short namespace prefix at the *start* of plan titles in Backlog; leave authored H1 titles intact.
 - Scope priority to one repository and namespace, never across repositories or namespaces.
@@ -50,7 +67,9 @@ This is a **design and implementation plan**, not a claim that the local checkou
 - No separate Roadmap page, hierarchy map, or extra grouping metadata.
 - No automatic rewriting of H1s, filename ordinals, or forced `Namespace Part ###` titles.
 - No footer namespace badge or special badge-click filter interaction.
-- No changes to **any** non-Backlog lifecycle state or its UI presentation, including Ready, Active, Review, Completed, Archived, and Unclassified. Shared schema/validator changes may affect stored metadata without changing those views.
+- No changes to **any** non-Backlog lifecycle state or its UI presentation, including Ready, Active, Review, Completed, Archived, and Unclassified, except that priority disappears: Ready loses its dropdown and filter, Home loses its chip, and every view drops the priority sort key so it falls through to recency and then title.
+- No general live refresh; that remains [[plans-portal-live-refresh-and-static-preflight]]'s decision.
+- No wiring of validation into other repositories' CI. `roborepo plans validate` is the check they can adopt.
 - No backward-compatibility layer for the old priority field in current lifecycle plans; breaking changes are acceptable. Historical Completed/Archived files may retain the unused field.
 
 ## Data contracts and ownership
@@ -62,6 +81,7 @@ This is a **design and implementation plan**, not a claim that the local checkou
 | Plan namespace | Derived from validated filename prefix (approved vocabulary) | Expose a read-only `namespace` property on parsed plan objects; unknown/malformed prefixes enter **No namespace** for recovery |
 | Hard prerequisites | Existing `depends_on` IDs | Preserve true edges even when multiple prerequisites or dependents exist; never manufacture dependencies to match display order |
 | Priority order | One repository-local ordered-ID registry, scoped by namespace | Explicit, stable order; no H/M/L and no independent Details sort |
+| Effective order | Pure calculation from the registry, current plans, and config | Computed on every read; the portal never writes on read |
 | Unprioritized | Backlog plan absent from the **effective** ranked order | Derived; no new frontmatter flag |
 | Dependency group | Direct dependency edges between same-namespace Backlog plans only | Option A: linearize each connected in-Backlog component into one contiguous movable block; never bridge through plans outside Backlog |
 | Draft ordering | Client-side edit session | Not persisted until explicit Save |
@@ -91,18 +111,23 @@ flowchart LR
 
 Counts measure **plans**, not collapsed groups. No empty-state congratulation such as “All backlog plans have been prioritized.” Use terse UI labels such as `Needs prioritization`, `Ordered`, `Details`, `Ordering`, and `Save`.
 
+The repo level uses the existing shared scope: **All repos** shows the repository directory, and choosing a row calls `setRepositoryScope`. The namespace level adds one Backlog-only URL parameter, so reload and back/forward keep the position. A repo with no `plans-config.json` shows one **No namespace** row with a config-level notice pointing to `/plan-suite-init`, and no per-file findings, because such a repo never adopted the naming convention.
+
+The existing Filters popup keeps working in Backlog: it narrows directory counts and Details cards. Ordering always shows the whole namespace and hides Filters, because moving a row among hidden rows has no defined result.
+
 Do not change other lifecycle tabs/views, even if they currently show plans across all repos or use existing filters. Backlog-only directory navigation must not leak into those views.
 
 ### Common list and displayed titles
 
-**Visual contract:** See `plan-backlog-ordering-architecture-addendum.md` → “UI reference: Backlog navigation and paired list projections” for the exact example screens, per-mode component boundaries, control layouts, and fork/join/split cases. This contract governs the UI implementation; no dependency group nesting appears in Details.
+**Visual contract:** See `docs/internal/plan-backlog-ordering-architecture-addendum.md` → “UI reference: Backlog navigation and paired list projections” for the exact example screens, per-mode component boundaries, control layouts, and fork/join/split cases. This contract governs the UI implementation; no dependency group nesting appears in Details. Where the addendum and this plan disagree, this plan wins; see “Addendum corrections” below.
 
-- Display `[PORTAL] Improve plan review` (namespace prefix first), optionally with a display-only rank number; do not rewrite the Markdown H1 or filename.
+- Display `PORTAL · Improve plan review` (namespace prefix first, matching the addendum's wireframes); do not rewrite the Markdown H1 or filename.
 - Display the **same flattened plan order** in Details and Ordering, but **show dependency grouping only in Ordering**.
 - In Details, render every plan as an independent, flat, un-nested rich card (even when its dependency-connected neighbors would form one Ordering block). Retain existing Backlog summaries, progress, and actions; no group headers, group outlines, rank controls, or drag handles.
 - In Ordering, show compact rows and derived contiguous dependency blocks with title, short purpose, dependency/blocking clue, and position. Group controls act on the whole block; do not add an independent ranking property.
-- The companion `plan-backlog-ordering-architecture-addendum.md` contains the **normative paired wireframes and dependency-pattern matrix**. Use these visuals to implement the UI without re-deciding grouping behavior.
-- Do **not** create a clickable footer namespace badge. Remove all corresponding references, tests, and tasks from this plan.
+- The addendum contains the **normative paired wireframes and dependency-pattern matrix**. Use these visuals to implement the UI without re-deciding grouping behavior.
+- Do **not** create a clickable footer namespace badge.
+- Build rows from `<template>` markup and fill helpers, the portal's convention. Ordering rows and blocks may be light-DOM custom elements under `portal/plans/elements/`, since each owns listeners and focus. The shipped package has no runtime dependencies, so drag uses native browser events and the move buttons are the keyboard path.
 
 ### Needs prioritization
 
@@ -139,7 +164,7 @@ Icon buttons need accessible names, tooltips, keyboard support, correct disabled
    > Your prioritization changes have not been saved.
 
    Actions: **Save and continue** (save, then finish the attempted navigation) or **Cancel** (stay in Ordering with the draft untouched). Do not navigate after failed Save. The same guard applies to leaving the Plans page.
-6. For tab close/reload or browser-level navigation, use the browser's supported unsaved-change mechanism; browsers may show their own wording rather than the custom sentence.
+6. For tab close/reload or browser-level navigation, use the browser's supported unsaved-change mechanism; browsers may show their own wording rather than the custom sentence. The custom prompt needs three seams that do not exist yet: a way for the page to refuse a change in `portal/shared/repository-scope.js`, interception of header links to other portal pages (full page loads), and a `popstate` handler that restores the URL, since back/forward cannot be cancelled.
 7. Detect stale drafts (another tab, filesystem change, dependency edit, or concurrent writer) by a revision/ETag check. Do not silently overwrite; show a conflict and require a refresh/reconciliation before saving.
 
 The draft encompasses **both** ranked order and moves from Needs prioritization. Only a successful Save commits them together.
@@ -150,20 +175,27 @@ The draft encompasses **both** ranked order and moves from Needs prioritization.
 - For a simple same-namespace chain `A → B → C`, group remaining Backlog phases as a movable unit; never require the entire chain to be worked without interruption.
 - When `A` moves out of Backlog, `[B → C]` remains grouped **if C directly depends on B**. An unrelated `X` can move ahead of `[B → C]`. When `B` leaves Backlog, `C` remains as one row.
 - **Confirmed group boundary:** only direct dependency edges between two same-namespace plans currently in Backlog connect rows into movable groups. Do not use shared out-of-Backlog ancestors to join plans. For a fork `A → B` and `A → C`, `[A, B, C]` forms a group while A is in Backlog. Once A leaves Backlog (including Active or Completed), B and C become separate ranked rows if there is no direct B↔C dependency. Preserve their relative rank and their real dependencies on A. They may still be blocked until A completes.
-- Splitting a group because a prerequisite leaves Backlog does **not** automatically make its previously ranked survivors unprioritized. Explicit dependency-edge removal follows the separate detachment rule below.
+- Splitting a group because a prerequisite leaves Backlog does **not** make its previously ranked survivors unprioritized.
 - Show dependency indicators for prerequisites outside Backlog; they still block work as appropriate. A ranked plan may be blocked by a phase in another lifecycle state.
 - A **new plan** with an explicit same-namespace dependency on an **already-ranked** plan or simple ranked chain automatically joins the ranked group at a valid position. Do not prompt for separate prioritization or put it in Needs prioritization.
 - A new plan dependent **only** on unprioritized plans joins their unprioritized group; it cannot inherit a rank that does not exist.
-- Adding a dependency to an existing prioritized Backlog plan moves that plan into the dependency's ranked group automatically (or into the unprioritized group if the prerequisite is unranked). Keep the plan's stable ID.
-- Removing the dependency that attached a plan to its ranked group makes it **unprioritized**; move a now-detached unranked descendant sequence with it, unless it is still connected to another ranked prerequisite. With multiple prerequisites, removing one edge does **not** detach a plan that still has another qualifying ranked dependency.
-- Recompute group membership on any dependency edit, plan creation, lifecycle change, or repo snapshot refresh. Reconcile the registry deterministically and visibly, even if it reorders independent plans. Avoid silently overwriting an unsaved draft; use the stale-draft guard.
+- Adding a dependency to an existing prioritized Backlog plan moves that plan into the dependency's ranked group automatically. Keep the plan's stable ID.
+- **One ranking rule for connected plans:** a connected group with at least one ranked member is ranked, anchored at its earliest ranked member, and any unranked members join it. A group with no ranked member stays in Needs prioritization. So a ranked plan that gains an unranked prerequisite keeps its rank and pulls the prerequisite in.
+- **Removing a dependency keeps the rank.** Plans separated by a removed edge stay at their current positions as separate rows or smaller groups, and nothing moves to Needs prioritization. The current data cannot tell a detached plan from one ranked on its own, and hand edits to `depends_on` have no write path that could record the difference.
+- Recompute group membership and the effective order on every read, so any dependency edit, plan creation, lifecycle change, or repo snapshot refresh is reflected deterministically and visibly, even if it reorders independent plans. Avoid silently overwriting an unsaved draft; use the stale-draft guard.
 - Keep dependency cycles, missing references, and invalid cross-namespace placements visible as findings; never auto-rank invalid relationships. Cross-namespace prerequisites may block execution but do not impose a rank across namespace boundaries.
 
 **Chosen branching policy — Option A:** `depends_on` may express joins and forks. **Only Ordering mode wraps connected plans into movable blocks; Details remains flat.** Linearize each dependency-connected set of remaining **same-namespace Backlog plans, connected by direct edges among those Backlog plans**, into one contiguous, movable display block, with a valid topological order within it. A display sequence such as `A → B → C` does **not** add a hard dependency from A to B when C independently depends on A and B. When new edges connect separately ranked groups, automatically regroup them, even when unrelated plans move down in priority. Show a concise explanation of automatic moves; automatic dependency regrouping does not ask for approval. This is separate from Save/Cancel for manual Ordering edits. Never rewrite actual dependency edges to force a chain.
 
 ### Ordering registry
 
-Prefer a repository-local `docs/plans/plans-order.json` keyed by namespace, storing stable plan IDs rather than filenames, titles, or a persisted group hierarchy. Confirm read/write ownership against the actual implementation.
+Use a repository-local `docs/plans/plans-order.json` keyed by namespace, storing stable plan IDs rather than filenames, titles, or a persisted group hierarchy. A missing file means every plan is unprioritized. `modules/plan-suite/` owns reading, calculating, and writing it; the portal route and CLI command are thin adapters. Writes use the temp-file-and-rename pattern already in `modules/repositories/registry.mjs`, in the primary checkout, and are left uncommitted like today's priority edits.
+
+| Who writes | When | What |
+| --- | --- | --- |
+| Portal **Save** | Explicit user action | That namespace's full effective order with the draft applied |
+| `roborepo plans order place <plan>` | `plan-write` creating a plan, or a user | The plan's position, plus that namespace's effective order |
+| Nothing else | Portal reads and lifecycle transitions never write it | Transitions keep committing only the plan's own paths |
 
 ```json
 {
@@ -175,18 +207,25 @@ Prefer a repository-local `docs/plans/plans-order.json` keyed by namespace, stor
 }
 ```
 
-Example IDs are illustrative. Keep a single ordered array per namespace; derive dependency blocks from edges. Automatic attachment/detachment must update the effective registry consistently and atomically, not create a second shadow priority system. A plan's absence from the **effective** ordered list (after dependency reconciliation) indicates unprioritized state.
+Example IDs are illustrative. Keep a single ordered array per namespace; derive dependency blocks from edges. Automatic attachment must not create a second shadow priority system. A plan's absence from the **effective** ordered list (after dependency reconciliation) indicates unprioritized state.
 
-Reconcile references to deleted plans, moved lifecycle states, invalid namespace plans, renames, and changed dependencies. Report conflicts or orphaned IDs instead of silently dropping them. Store changes in the repository that owns the plans, not a global portal order file. Do not rely on any backward-compatible migration of priority labels.
+| Registry entry | Effective order | Next write |
+| --- | --- | --- |
+| Plan now outside Backlog | Ignored, which keeps survivors' relative rank | Pruned without a finding; this is normal |
+| Unknown ID | Excluded, with a finding | Preserved until someone removes it |
+| Namespace no longer approved | Excluded, with a finding | Preserved; a write touches only its own namespace |
+| Plan with no `id`, or a duplicate | Cannot be ranked; shown with its finding | Not written |
+
+An unparseable registry is a finding: every plan shows as unprioritized and Save is refused rather than overwriting the file. Store changes in the repository that owns the plans, not a global portal order file. Do not rely on any backward-compatible migration of priority labels. Worktree-only Backlog plans rank like any other, and their position is still stored in the primary checkout.
 
 ### Namespace enforcement and recovery
 
 **Prevent creation of invalid names:**
 
-- Inspect all actual plan creation, rename, import, repair, and generation entry points (including `plan-write`, other plan-suite skills, CLI, portal, and CI). Route them through shared namespace validation derived from the repository's `plans-config.json` plus the documented universal namespaces.
+- Agents write plan files directly, so rejection happens at validation. Make `INVALID_PLAN_FILENAME`, `FORBIDDEN_PLAN_FILENAME_SUFFIX`, and `UNKNOWN_PLAN_NAMESPACE` blocking so `roborepo plans validate` exits 1, add them to the promote and start gates, and keep `plan-write`'s existing validator step as the creation check. Severity alone does not gate transitions, so the gates need their own check. All of this applies only where a repository has declared namespaces.
 - Reject filename prefixes outside the approved vocabulary; present the allowed choices and a path to update `plans-config.json` rather than silently using an invented prefix. Do not add, require, or cross-check a `namespace` frontmatter field; consumers use the derived parsed value.
 - Author reader-facing H1s normally, but render the approved namespace prefix in the Backlog UI. Prevent **display-title** labels from claiming an unapproved namespace; do not require authors to type a namespace twice in H1s.
-- Keep build checks that enforce naming. Audit whether they currently run only in RoboRepo or in every repository with plan-suite; make enforcement reusable across participating repos. Do not assert CI coverage until verified.
+- Add a check that validates this repository's real plan tree, since the current one reads a hard-coded list. It runs through `npm run check`. Other repositories get the same rule by running `roborepo plans validate`.
 
 **Recover invalid files without hiding them:**
 
@@ -195,17 +234,17 @@ Reconcile references to deleted plans, moved lifecycle states, invalid namespace
 - Report unknown names consistently in the CLI/validator and portal. Strict create/build validation and tolerant read/display behavior are complementary, not contradictory.
 - Keep **Unclassified** (a lifecycle/folder condition) distinct from **No namespace** (metadata classification); do not change the Unclassified lifecycle UI.
 
-### Namespace-config changes and live reconciliation
+### Namespace-config changes and reconciliation
 
-Treat `docs/plans/plans-config.json` as a **watched input** to each repository's Backlog index, not a namespace vocabulary loaded once for the lifetime of the process. Recompute the index on config creation/edit/removal, repository checkout or branch switch, and snapshot refresh. Prefer the portal's existing file observation/invalidation mechanism where present; ensure a fresh config revision is also checked on view load and **before Save**, so missed watcher events cannot persist stale classification. Changes are scoped to the affected repository.
+Treat `docs/plans/plans-config.json` as an input to each repository's Backlog index, not a namespace vocabulary loaded once for the lifetime of the process. The existing mtime-keyed config cache and snapshot fingerprint already cover config edits and branch switches on the server. An open page picks up the change on load, on **Refresh**, after mutations, and at **Save**, which rechecks the revision so a stale draft cannot persist; this plan adds no push channel. `readProjectNamespaces` must start reporting malformed config as an error rather than as "not configured". The revision is a content hash of the config, the registry, and each namespace plan's ID, filename, and `depends_on`. Changes are scoped to the affected repository.
 
-- **Namespace added:** reparse filenames with the new approved vocabulary, including longest-prefix collisions. Matching previously **No namespace** plans move into their approved namespace immediately. Show the namespace row only if it contains Backlog plans. Newly recognized plans are **Needs prioritization** unless they already have a valid saved rank or qualify for automatic dependency attachment.
+- **Namespace added:** reparse filenames with the new approved vocabulary, including longest-prefix collisions. Matching previously **No namespace** plans move into their approved namespace at the next load or Refresh. Show the namespace row only if it contains Backlog plans. Newly recognized plans are **Needs prioritization** unless they already have a valid saved rank or qualify for automatic dependency attachment.
 - **Namespace removed:** affected Backlog plans move to **No namespace** with actionable validation findings. Do not delete/rename plan files or silently discard their old registry entries; flag entries belonging to now-invalid namespaces for repair, exclude them from the effective ordered view, and preserve them until an intentional cleanup/migration.
 - **Namespace renamed:** treat as removal plus addition, not a silent filename migration. Existing files remain in **No namespace** until renamed to an approved prefix; preserve plan IDs and reconcile ordering after repair.
 - **Unreadable/malformed config:** report a configuration error; do not silently keep using a stale vocabulary as if it were current. Continue tolerant recovery/indexing where possible without inventing namespace matches.
 - **Unsaved ordering:** if a config change affects the selected namespace, plan membership, or effective order, mark any open Ordering draft stale. Prevent Save until the user refreshes/reconciles; reuse the existing unsaved-navigation safeguards.
 
-Use shared namespace parsing and validation in the portal, CLI, plan writers, and build enforcement. Test config changes while the Backlog screen is open, reload/branch-switch behavior, removed namespaces with saved order entries, and concurrent config edits while an Ordering draft is dirty. Do not modify presentation of non-Backlog lifecycle views.
+Use shared namespace parsing and validation in the portal, CLI, plan writers, and build enforcement. Test config changes followed by Refresh with the Backlog screen open, reload/branch-switch behavior, removed namespaces with saved order entries, and concurrent config edits while an Ordering draft is dirty. Do not modify presentation of non-Backlog lifecycle views.
 
 ### Remove the legacy priority field
 
@@ -213,7 +252,9 @@ This is a **breaking cleanup**, not a deprecation:
 
 - Delete H/M/L/none priority from the current plan schema and allowed frontmatter for Backlog, Ready, Active, and Review plans, and any other non-Completed/non-Archived managed plans.
 - Remove the frontmatter line from existing files in those states (including this plan once the new validator is active). Do not rewrite Completed or Archived documents merely to delete historical values; ignore those values when reading them.
-- Remove all current priority computation, sorting, badges, form fields, APIs/types, default values, validator rules, error messages, UI interactions, CLI flags/output, plan-suite skill instructions, references, templates, generated prompts, fixtures, tests, and documentation that assume the field still exists.
+- Remove all current priority computation, sorting, badges, form fields, APIs/types, default values, validator rules, error messages, UI interactions, CLI flags/output, plan-suite skill instructions, references, templates, generated prompts, fixtures, tests, and documentation that assume the field still exists. That includes `PRIORITIES`, `updatePlanPriority`, `POST /api/plans/priority`, the `MISSING_PRIORITY`, `INVALID_PRIORITY`, and `INVALID_PRIORITY_VALUE` findings, `showsPriority` in the manifest and its readers, the `Priority:` prompt line, `SCAFFOLD_PRIORITY`, and `scripts/cli/mock-home.mjs`.
+- Remove the `priority: none` writes in `transition-rules.mjs` and `landed-recovery.mjs`, because `writeFrontmatterField` would otherwise put the line back.
+- Delete `updatePlanField`: `updatePlanPriority` is its only caller.
 - Retain only the namespace-scoped ordered-ID priority system for Backlog. Do not create a secondary priority notion in other lifecycle views, and do not change their presentation.
 - Existing H/M/L values do **not** migrate into ranked positions. All independent Backlog plans without an explicit saved position begin in Needs prioritization; dependent plans may inherit placement **only** by the automatic dependency rules above.
 
@@ -223,8 +264,8 @@ This is a **breaking cleanup**, not a deprecation:
 
 1. Resolve an approved namespace from the repository config before writing; validate the `<namespace>-<slug>.md` name and derive the parsed namespace from it. Do not store `namespace` in frontmatter.
 2. Create the plan with stable ID and valid metadata, **without** the legacy `priority` field after the schema change.
-3. If it has qualifying dependencies on a ranked same-namespace group, **auto-place** it into that group and persist its individual plan ID in the ordering registry; no separate ranking prompt. Preserve the existing relative priority of independent siblings and use a deterministic tie-break for new siblings.
-4. Otherwise, offer insertion into the namespace order or **Prioritize later**. A deferred independent plan remains at the top in Needs prioritization.
+3. If it has qualifying dependencies on a ranked same-namespace group, **auto-place** it into that group and persist its individual plan ID by running `roborepo plans order place <plan>`; no separate ranking prompt. Preserve the existing relative priority of independent siblings and use a deterministic tie-break for new siblings.
+4. Otherwise, offer insertion at the top or bottom of the namespace order (`--top`, `--bottom`) or **Prioritize later**. A deferred independent plan remains at the top in Needs prioritization.
 5. For non-interactive creation, default an independent plan to unprioritized; a dependent plan still follows deterministic auto-attachment rules.
 6. Surface a registry write/validation failure explicitly; never claim automatic placement succeeded if it did not.
 7. If a new plan connects multiple ranked prerequisite groups, calculate the merged group and persist the deterministic order atomically; surface the automatic changes. Each member has an individual saved position; the new plan does not enter Needs prioritization merely because it has multiple prerequisites.
@@ -239,41 +280,57 @@ Example: existing ranked order `[A, X, Y, B]`, followed by a new plan C dependin
 
 1. `deriveGroups(plans, lifecycle)` — pure calculation of dependency-connected remaining Backlog groups; validate missing edges and cycles.
 2. `proposeOrder(currentOrder, groups, change)` — pure calculation returning `{order, moves, findings}` with a deterministic, valid rank. For an automatic merge, anchor at the earliest ranked member and preserve unaffected items' relative order. Never write inside this function.
-3. `applyOrder(proposal, expectedRevision)` — persist the proposed IDs atomically after validation. Automatic dependency changes use this step immediately (Option A); manual Ordering-mode changes remain draft-only until explicit **Save**.
+3. `applyOrder(proposal, expectedRevision)` — persist the proposed IDs atomically after validation. Portal **Save** and `roborepo plans order place` are its only callers; manual Ordering-mode changes remain draft-only until explicit **Save**.
 
-On external plan creation/dependency edits, recompute and apply Option A as part of the authoritative update flow. If an Ordering draft is dirty, do not overwrite it; flag a stale revision and require refresh/reconciliation. Any automatic reordering must be visible in the refreshed UI or operation result, not silently hidden. Dependency blocks are derived from individual plan IDs persisted in the existing registry; do not persist a second group hierarchy.
+Automatic regrouping needs no approval and takes effect on the next read, because the effective order is calculated from current inputs. It reaches the file at the next write: a hand edit to `depends_on` has no command to hook, and a portal read must not dirty a tracked file. If such a plan was never written to the registry and its only ranked prerequisite leaves Backlog first, it falls to Needs prioritization: visible, never lost. If an Ordering draft is dirty, do not overwrite it; flag a stale revision and require refresh/reconciliation. Show automatic moves by comparing the stored order with the effective order, as a concise notice in Ordering and in the command's output. Dependency blocks are derived from individual plan IDs persisted in the existing registry; do not persist a second group hierarchy.
 
-Do not introduce graph editors, separate roadmap pages, nested views, manual splitting, or artificial dependency edges. Keep cycles and broken references as validation errors rather than attempting to generate a misleading order.
+Do not introduce graph editors, separate roadmap pages, nested views, manual splitting, or artificial dependency edges. Keep cycles and broken references as validation errors rather than attempting to generate a misleading order. Put cycle detection in `deriveGroups` as an exported calculation so [[plan-lifecycle-suite-blockers-dependencies]] can reuse it.
+
+### Addendum corrections
+
+`docs/internal/plan-backlog-ordering-architecture-addendum.md` remains the UI contract, except:
+
+| Addendum text | Current rule |
+| --- | --- |
+| Header names `plan-backlog-roadmap-ordering-v7.md` | The plan is this file |
+| M2 wireframe, matrix row, and state table send a detached plan to Needs prioritization | The plan keeps its rank |
+| “Plan leaves Backlog: remove its ID from Backlog order” | Ignored on read, pruned at the next write |
+| “Plan returns to Backlog” row | Unreachable; no such transition exists |
+| “Automatic placement persists as part of that write operation” for dependency edits | Applies to `roborepo plans order place`; hand edits persist at the next write |
 
 ## Implementation checklist
 
-- [ ] Inspect the actual portal Backlog entry point, repo discovery, ordering/filtering, namespace config use, plan-suite writer, validator, and CI enforcement locations; check for overlapping plans.
-- [ ] Implement the selected Option A branching policy with pure group derivation, pure order proposal, and an atomic apply operation.
-- [ ] Introduce shared filename-based namespace resolution and validation; expose a computed `namespace` property on parsed plans, cache it in repository indexes, and test overlapping prefixes and performance.
-- [ ] Add tolerant indexing and a trailing **No namespace** recovery section in Backlog's repository namespace directory, while keeping strict build/create failures.
-- [ ] Observe and reconcile `plans-config.json` changes (add/remove/rename, invalid config, branch switches), invalidate namespace indexes, protect dirty ordering drafts, and test recovery and reload behavior.
-- [ ] Add repository → namespace → plans navigation **only** to Backlog and namespace-prefixed display titles; remove all footer-badge proposals.
-- [ ] Add a repository-local ordered-ID registry plus shared draft/committed view model for Details and Ordering; implement the addendum's paired UI wireframes (flat Details cards, Ordering-only containers).
-- [ ] Show Needs prioritization first; implement the exact right-side ordered and unprioritized movement controls, accessible drag/drop, and group boundaries.
-- [ ] Add sticky Save/Cancel, dirty-state tracking, guarded in-app navigation, native browser exit protection, atomic save, and stale-edit detection.
-- [ ] Implement automatic dependency attachment, detachment, and lifecycle-sensitive group derivation; group by direct in-Backlog edges only, split siblings when their shared prerequisite exits Backlog, preserve their rank, and retain real dependency constraints.
+Priority removal comes last, so Backlog has its replacement before the old control disappears.
+
+- [ ] Export the namespace resolver from `naming.mjs` and add a computed `namespace` to plan records and `publicPlan`; report malformed config as an error; test overlapping prefixes and scan cost.
+- [ ] Make naming findings blocking, add them to the promote and start gates, and add a check over the real plan tree.
+- [ ] Add a plan-suite module with pure `deriveGroups` and `proposeOrder`, plus registry read and `applyOrder`; cover every addendum gallery case, using the real fork and chain shapes as fixtures.
+- [ ] Add the registry and revision to the plans snapshot, the Save route in `scripts/cli/portal-routes-plans.mjs`, and `roborepo plans order place` with its command definition under `manifests/platform/cli/command-definitions/internal/`.
+- [ ] Add the repo and namespace directory levels to Backlog only, with **No namespace** recovery, the no-config notice, and namespace-prefixed titles.
+- [ ] Add the shared draft/committed view model and flat Details cards in registry order, with Needs prioritization first.
+- [ ] Add Ordering: derived block containers, the exact right-side controls, native drag, keyboard paths, disabled states, the automatic-move notice, and Filters hidden.
+- [ ] Add sticky Save/Cancel, dirty state, the guard prompt with its three navigation seams, native exit protection, atomic Save, and stale-revision conflicts.
 - [ ] Integrate automatic placement and explicit deferral into `plan-write` with failure reporting.
-- [ ] Remove legacy priority frontmatter from all non-Completed/non-Archived plans and delete all live logic and plan-suite skill/docs/tests/validator references to the old field.
-- [ ] Update reader-facing Backlog documentation and relevant schema/config guides; add visual regression/interaction checks against the architecture addendum wireframes and focused integration tests.
+- [ ] Remove priority from all code, skills, tests, and fixtures, and sweep the line from every non-Completed/non-Archived plan including this one.
+- [ ] Update the documents listed under Documentation impact, correct the addendum per “Addendum corrections”, and retake `docs/images/plans.png`.
 
 ## Validation
 
-Use repository-native checks and canonical plan validation discovered from the checkout; do not claim an unavailable validator ran. Validate changes with shared plan-suite tests and actual browser behavior as appropriate.
+Run the checks for the tier as each task lands, then let CI run the full gate. Existing suites that change: `plan-suite-check`, `plan-suite-findings-check`, `plan-suite-skills-check`, `plan-suite-repair-check`, `plan-suite-canonical-check`, `plan-suite-authority-scan-check`, `plan-authority-check`, `plan-landed-recovery-check`, `plan-lifecycle-manifest-check`, `plan-lifecycle-transitions-check`, `plans-portal-state-check`, and `cli-command-catalog-check`, each run as `node scripts/test/<name>.mjs`. Browser behavior runs through `npm run test:portal-ui`, using `plans-status.spec.mjs`, `repository-scope.spec.mjs`, and a new Backlog spec with role-based selectors. List any new `*-check.mjs` in `scripts/test/check-groups.json`, which `orphan-test-check` enforces. Skill changes also need `roborepo update` and `roborepo doctor`, since they change installed output.
 
 | Scenario | Acceptance criterion |
 | --- | --- |
-| Other lifecycle states | Every view other than Backlog behaves and looks unchanged |
+| Other lifecycle states | Every view other than Backlog behaves and looks unchanged, apart from the removed priority control, filter, chip, and sort key |
+| No config | A repo without `plans-config.json` shows one **No namespace** row with a `/plan-suite-init` notice and no per-file findings |
+| Filters | Filters narrow directory counts and Details; Ordering shows the whole namespace |
+| Read purity | Loading Backlog with a regrouping pending leaves `plans-order.json` unchanged and shows the move notice |
+| Lifecycle commits | A transition out of Backlog changes only the plan's paths; the next write prunes its registry entry |
 | Repo scope | Only repos with Backlog plans show, with correct counts |
 | Namespace scope | Approved nonempty namespaces show; **No namespace** is last when needed |
 | Namespace derivation | Longest approved filename prefix resolves once per index; derived property powers filters/titles, no frontmatter duplication, and performance is verified |
-| Namespace config edits | Added/removed/renamed namespace refreshes open Backlog and cache; orphaned plans appear in No namespace; invalid registry references are flagged, not silently dropped |
+| Namespace config edits | After Refresh, an added/removed/renamed namespace updates open Backlog and cache; orphaned plans appear in No namespace; invalid registry references are flagged, not silently dropped |
 | Namespace config conflicts | Dirty Ordering drafts cannot save across a conflicting config revision; invalid/unreadable configs surface errors |
-| Invalid namespace | Creation/rename/build rejects bad filename prefixes, but Backlog displays affected plans with repair findings |
+| Invalid namespace | `roborepo plans validate` exits 1 and promote/start refuse bad filename prefixes in a configured repo, but Backlog displays affected plans with repair findings |
 | Titles | Display begins with an approved namespace prefix; authored H1 unchanged; no footer badge |
 | Unprioritized | Section appears first only when needed; moves into a draft Ordered list |
 | Ranked controls | Right side: top, up, down, bottom, handle; invalid actions disabled |
@@ -291,7 +348,8 @@ Use repository-native checks and canonical plan validation discovered from the c
 | New dependent | Auto-ranks when attached to ranked same-namespace group; no manual placement required |
 | New independent | Unprioritized until explicitly placed |
 | Added dependency | Existing ranked plan automatically reattaches/reorders into dependency group |
-| Removed dependency | Detached plan/subchain becomes unprioritized unless another ranked dependency still anchors it |
+| Ranked plan gains unranked prerequisite | The plan keeps its rank and the prerequisite joins its group |
+| Removed dependency | Separated plans keep their positions as separate rows or smaller groups; nothing moves to Needs prioritization |
 | Multiple dependencies | Option A creates one contiguous block for connected remaining Backlog plans; true dependency edges remain unchanged; topological order is valid |
 | Auto regrouping | With `[A, X, Y, B]` and new `C` depending on `A` and `B`, propose and apply `[A, B, C, X, Y]`; affected movement is visible |
 | Separate concerns | Grouping and ordering calculation is pure; external changes apply automatically while user-initiated Ordering edits require Save |
@@ -299,16 +357,20 @@ Use repository-native checks and canonical plan validation discovered from the c
 
 ## Documentation impact
 
-- `globals/packages/plan-suite/skills/plan-write/SKILL.md` and `references/plan-schema.md`, `references/workflow-create.md`, `references/workflow-update.md`, `references/workflow-validate.md`, and any applicable prompt and validation rules: namespace enforcement, new dependency placement, removal of legacy priority, and updated schema.
-- Other plan-suite skills and templates that create/edit/move plans: remove priority references and ensure namespace consistency; do not change lifecycle semantics.
-- The portal's actual Backlog reader guide/document of record (locate in repository): navigation hierarchy, Needs prioritization, dependency groups, Save/Cancel, and No namespace recovery.
-- The plan-suite schema/config reference and CI guidance: name validation, the registry contract, and how strict writers coexist with tolerant readers.
+- `globals/packages/plan-suite/skills/plan-write/SKILL.md` and `references/plan-schema.md`, `references/workflow-create.md`, `references/workflow-update.md`, `references/workflow-validate.md`: namespace enforcement, new dependency placement, removal of legacy priority, and updated schema.
+- `docs/user/reference/plans-portal.md` (doc of record for the Plans portal): navigation hierarchy, Needs prioritization, dependency groups, Save/Cancel, No namespace recovery, the registry contract, and removal of the priority control, filter, and tables.
+- `docs/user/guides/plan/lifecycle/plan-suite.md`: the frontmatter example, the priority filter, and the priority-clearing note.
+- `docs/internal/plans-portal-internals.md` and `docs/internal/portal-architecture.md`: the Save route and order module replace `/api/plans/priority`.
+- `README.md` and `docs/images/plans.png`: the metadata table, caption, and screenshot.
+- `docs/internal/plan-backlog-ordering-architecture-addendum.md`: the corrections listed above.
 
 ## Risks and implementation checks
 
-- **Repo coverage:** Existing build validation may be RoboRepo-only. Audit each supported repository's initialization/CI before promising universal enforcement.
+- **Repo coverage:** CI enforcement covers this repository only. Other repositories are held to the rule when they run `roborepo plans validate` or a lifecycle transition.
+- **Blocking naming findings:** Configured repositories with non-conforming active names will start failing validation and promote/start. This repo has none today; other repositories' plans are unchecked and get the existing finding text as their repair path.
+- **Tracked registry on the primary checkout:** Uncommitted `plans-order.json` edits can collect on the base branch and conflict across branches, as priority edits already can. The next write recalculates from whatever the file holds.
+- **Parallel `portal/plans/` work:** [[plans-portal-live-refresh-and-static-preflight]] and the session-launching plans change the same files, so rebase rather than duplicate their seams.
 - **Automated regrouping:** Automatic merges may change existing ranks and move unrelated plans. Use deterministic tie-breaks, surface resulting moves, and preserve revision safety. Do not add an approval workflow for automatic merges.
 - **Edit races:** File watchers, another tab, or a separate skill may rewrite dependencies while Ordering is dirty. Detect and reconcile; never last-write-wins without feedback.
 - **Missing/malformed filename namespace:** Strict creation must reject it, but tolerant reads must not make the existing plan invisible or crash indexing.
-- **Schema rollout:** Remove legacy priority and update all live producers/consumers in one breaking change; otherwise current validators may reject newly written plans.
-- **Evidence limits:** This document uses the published skill/schema/config and the agreed requirements; repository implementation paths, tests, and build reach must still be verified locally.
+- **Schema rollout:** Remove legacy priority and update all live producers/consumers in one breaking change; otherwise current validators would report newly written plans as missing the field. Active plans' worktree copies keep an inert `priority:` line until their next base synchronization, which is harmless because no allowlist rejects it.
