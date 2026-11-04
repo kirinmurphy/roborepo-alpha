@@ -418,6 +418,7 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - [x] Details omits the reason for a broken dependency graph, which the UI contract shows in both modes. — fixed (f9736bdc)
 - [x] `order place` reports a move the caller asked for as automatic, and its text output reads wrongly. — fixed (f9736bdc)
 - [x] No browser assertion for the duplicate-id row or an unparseable order file locking Ordering. — fixed (f9736bdc)
+- [ ] No test asserts `DEPENDENCY_CYCLE`, its blocking status, or the refusal of `order place` and Save on a broken graph.
 
 ### Verification
 
@@ -425,5 +426,6 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - Validation pass 2 (fresh-context subagent): the last 7 findings above, no `escalate`; its `node scripts/test/portal-ui/run.mjs` passed 189 of 189.
 - At c96b1ede one full portal UI run had 8 failures across Home, onboarding, and repo-scope specs. The next full run on the same commit passed 194 of 194, and the cause was not found.
 - Validation pass 3 (fresh-context subagent): the last 5 findings above, no `escalate`; its `node scripts/test/portal-ui/run.mjs` passed 194 of 194.
+- Validation pass 4 (fresh-context subagent): the last finding above, no `escalate`; its `node scripts/test/portal-ui/run.mjs` passed 198 of 198.
 - Installed output, on a temporary HOME and state root: `roborepo update`, enabling plan-suite, `roborepo update`, and `roborepo doctor --installed` all exited 0 (110 doctor checks), and the installed plan-write references carry `plans-order.json` and `order place` with no `priority:` line. `doctor` on this machine warns that installed skills are out of date until `roborepo update` runs after merge.
 - Base failure: `roborepo plans validate` exits 1 from blocking findings that are all in `docs/plans/completed/`, none from this change.

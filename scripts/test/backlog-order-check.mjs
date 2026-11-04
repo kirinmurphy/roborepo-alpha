@@ -264,6 +264,32 @@ try {
   assert.equal(roborepo(repo, "order", "place", "aaaaaa11", "--top", "--bottom").status, 2);
   const beforeTransition = fs.readFileSync(orderFile, "utf8");
 
+  // A broken graph: the finding blocks validation, and every write to that namespace is refused.
+  const unbroken = fs.readFileSync(orderFile, "utf8");
+  write("docs/plans/backlog/agents-cycle-one.md", document({ id: "cycle111", deps: ["cycle222"] }));
+  write("docs/plans/backlog/agents-cycle-two.md", document({ id: "cycle222", deps: ["cycle111"] }));
+  const cycleReport = roborepo(repo, "validate", "cycle111", "--json");
+  assert.equal(cycleReport.status, 1, "a dependency cycle fails validation");
+  const cycleFinding = JSON.parse(cycleReport.stdout).plans[0].findings.find((item) => item.code === "DEPENDENCY_CYCLE");
+  assert.equal(cycleFinding.severity, "blocking");
+  assert.deepEqual(cycleFinding.meta.cycle, ["cycle111", "cycle222", "cycle111"]);
+  const assertLocked = async (label) => {
+    const refusedPlace = roborepo(repo, "order", "place", "xxxxxx33", "--top");
+    assert.equal(refusedPlace.status, 1, `${label}: order place is refused`);
+    assert.match(refusedPlace.stderr, /needs repair before/);
+    const lockedIndex = await indexed();
+    assert.equal(viewOf(lockedIndex, "agents").locked, true);
+    const lockedRecords = await records();
+    assert.throws(() => saveNamespaceOrder({ root: realRepo, records: lockedRecords, namespace: "agents", order: [], revision: viewOf(lockedIndex, "agents").revision }), /needs repair before/, `${label}: Save is refused`);
+    assert.equal(fs.readFileSync(orderFile, "utf8"), unbroken, `${label}: nothing is written`);
+  };
+  await assertLocked("a cycle");
+  fs.rmSync(path.join(repo, "docs/plans/backlog/agents-cycle-one.md"));
+  fs.rmSync(path.join(repo, "docs/plans/backlog/agents-cycle-two.md"));
+  write("docs/plans/backlog/agents-missing.md", document({ id: "miss1111", deps: ["nosuchid"] }));
+  await assertLocked("a missing prerequisite");
+  fs.rmSync(path.join(repo, "docs/plans/backlog/agents-missing.md"));
+
   // A plan that exists only in a linked worktree ranks like any other, and its place is stored in the
   // primary checkout, never in the worktree it was run from.
   const linked = path.join(root, "linked");
