@@ -1852,6 +1852,32 @@ touch "${stale_skill_home}/.roborepo/skills/plan-write/.builtin-managed"
 printf '\nstale line\n' >> "${stale_skill_home}/.roborepo/skills/plan-write/SKILL.md"
 assert "doctor: warns when an installed skill copy is out of date" \
   bash -c "HOME='${stale_skill_home}' ROBOREPO_SKIP_NODE_RELEASE_CHECK=1 bash '${repo_root}/scripts/doctor.sh' --quiet 2>&1 | grep -q 'warn: installed skills are out of date (plan-write) — run: roborepo update'"
+# The advice only helps from the checkout the install came from. Elsewhere doctor prints a note, and
+# a symlinked path to the same checkout is still that checkout.
+stale_skill_out="${work}/stale-skill-doctor.out"
+stale_skill_doctor() {
+  printf '{"repo":"%s"}\n' "$1" > "${stale_skill_home}/.roborepo/install-state.json"
+  env -u ROBOREPO_STATE_ROOT HOME="${stale_skill_home}" ROBOREPO_SKIP_NODE_RELEASE_CHECK=1 \
+    bash "${repo_root}/scripts/doctor.sh" --quiet > "${stale_skill_out}" 2>&1 || true
+}
+stale_skill_other_repo="$(mktemp -d "${work}/other-checkout.XXXXXX")"
+stale_skill_other_repo="$(cd "${stale_skill_other_repo}" && pwd -P)"
+stale_skill_doctor "${stale_skill_other_repo}"
+assert "doctor: from another checkout, notes the skill difference" \
+  grep -qF "hint: 1 skill in this checkout differs from its installed copy" "${stale_skill_out}"
+assert "doctor: the note names the checkout the install came from" \
+  grep -qF "(installed from ${stale_skill_other_repo}); expected until merged" "${stale_skill_out}"
+assert "doctor: from another checkout, does not advise an update that cannot clear it" \
+  bash -c "! grep -q 'installed skills are out of date' '${stale_skill_out}'"
+stale_skill_repo_link="${work}/checkout-link"
+ln -s "${repo_root}" "${stale_skill_repo_link}"
+stale_skill_doctor "${stale_skill_repo_link}"
+assert "doctor: a symlinked path to this checkout still gets the update warning" \
+  grep -q 'warn: installed skills are out of date (plan-write)' "${stale_skill_out}"
+stale_skill_doctor "${work}/no-such-checkout"
+assert "doctor: a recorded checkout that no longer exists keeps the update warning" \
+  grep -q 'warn: installed skills are out of date (plan-write)' "${stale_skill_out}"
+rm -f "${stale_skill_home}/.roborepo/install-state.json"
 assert "root-config-view: per-harness drift state covers every user-facing case" \
   node "${repo_root}/scripts/test/root-config-view-check.mjs"
 

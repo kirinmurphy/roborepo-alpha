@@ -8,6 +8,8 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${repo_root}/scripts/build/skill-lib.sh"  # provides list_source_skills (used below)
 # shellcheck source=scripts/lib/manifests-data.sh
 source "${repo_root}/scripts/lib/manifests-data.sh"  # provides source_files (required-file checklist)
+# shellcheck source=scripts/install/state-lib.sh
+source "${repo_root}/scripts/install/state-lib.sh"  # provides read_install_repo
 
 failed=0
 check_installed=0
@@ -510,7 +512,21 @@ for skill_src in "${repo_root}"/globals/packages/*/skills/*/SKILL.md "${repo_roo
   fi
 done
 if [[ "${#stale_skill_caches[@]}" -gt 0 ]]; then
-  echo "warn: installed skills are out of date (${stale_skill_caches[*]}) — run: roborepo update"
+  # roborepo update copies skills from the checkout the install came from, so from any other checkout
+  # (a feature branch's worktree, say) the advice cannot clear the difference until that work merges.
+  # A recorded path that no longer resolves says nothing about where this run stands, so it warns.
+  install_repo=""
+  if [[ "${package_mode}" -eq 0 ]]; then
+    install_repo="$(read_install_repo 2>/dev/null || true)"
+    [[ -z "${install_repo}" ]] || install_repo="$(cd "${install_repo}" 2>/dev/null && pwd -P || true)"
+  fi
+  if [[ -n "${install_repo}" && "${install_repo}" != "$(cd "${repo_root}" && pwd -P)" ]]; then
+    stale_summary="${#stale_skill_caches[@]} skills in this checkout differ from the installed copies"
+    [[ "${#stale_skill_caches[@]}" -eq 1 ]] && stale_summary="1 skill in this checkout differs from its installed copy"
+    hint "${stale_summary} (installed from ${install_repo}); expected until merged"
+  else
+    echo "warn: installed skills are out of date (${stale_skill_caches[*]}) — run: roborepo update"
+  fi
 else
   ok "installed skill copies match their source"
 fi
