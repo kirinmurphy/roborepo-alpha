@@ -141,10 +141,12 @@ test_checkout_pre_push_hook() {
   assert_file_contains "$out" "git hooks: would set core.hooksPath=scripts/git-hooks" "dry run reports the hook it would turn on"
 
   printf '#!/bin/sh\n' > "$clone/.git/hooks/post-merge"
+  ln -s "$clone/.git/hooks/post-merge" "$clone/.git/hooks/pre-commit"
   HOME="$home_dir" "$clone/scripts/install/main.sh" --on-conflict keep </dev/null >"$out" 2>&1 || fail "hook install exits 0" "$out"
   [[ "$(local_hooks_path "$clone")" == "scripts/git-hooks" ]] && pass "install turns on the pre-push hook in a dev clone" || fail "install turns on the pre-push hook in a dev clone" "$out"
   assert_file_contains "$out" "git hooks: set core.hooksPath=scripts/git-hooks" "install reports the hook it turned on"
-  assert_file_contains "$out" "no longer run.*post-merge" "install names a hook the new hooks path hides"
+  assert_file_contains "$out" "no longer run.*post-merge pre-commit" "install names the hooks the new hooks path hides, symlinks included"
+  [[ -x "$clone/scripts/git-hooks/pre-push" ]] && pass "the pre-push hook is executable" || fail "the pre-push hook is executable" "$out"
 
   HOME="$home_dir" "$clone/scripts/install/main.sh" --on-conflict keep </dev/null >"$out" 2>&1 || fail "hook reinstall exits 0" "$out"
   assert_file_contains "$out" "git hooks: keeping core.hooksPath=scripts/git-hooks" "a second install keeps the value it set"
@@ -155,6 +157,25 @@ test_checkout_pre_push_hook() {
   git -C "$clone" config --local core.hooksPath .custom-hooks
   HOME="$home_dir" "$clone/scripts/install/main.sh" --on-conflict keep </dev/null >"$out" 2>&1 || fail "hook install with an existing value exits 0" "$out"
   [[ "$(local_hooks_path "$clone")" == ".custom-hooks" ]] && pass "install preserves an existing core.hooksPath" || fail "install preserves an existing core.hooksPath" "$out"
+
+  # An empty value is set on purpose: Git then uses its default hooks directory.
+  home_dir="$(make_home)"
+  out="$home_dir/out"
+  clone="$(make_git_clone_fixture)"
+  git -C "$clone" config --local core.hooksPath ""
+  HOME="$home_dir" "$clone/scripts/install/main.sh" --on-conflict keep </dev/null >"$out" 2>&1 || fail "hook install with an empty value exits 0" "$out"
+  [[ -z "$(local_hooks_path "$clone")" ]] && pass "install preserves an empty core.hooksPath" || fail "install preserves an empty core.hooksPath" "$out"
+  assert_file_contains "$out" "git hooks: keeping core.hooksPath=" "install reports keeping an empty value"
+
+  home_dir="$(make_home)"
+  out="$home_dir/out"
+  clone="$(make_git_clone_fixture)"
+  printf '[core]\n\thooksPath = %s/shared-hooks\n' "$home_dir" > "$home_dir/.gitconfig"
+  printf '#!/bin/sh\n' > "$clone/.git/hooks/post-merge"
+  HOME="$home_dir" "$clone/scripts/install/main.sh" --on-conflict keep </dev/null >"$out" 2>&1 || fail "hook install with a global value exits 0" "$out"
+  [[ "$(local_hooks_path "$clone")" == "scripts/git-hooks" ]] && pass "a global core.hooksPath does not block the clone's setting" || fail "a global core.hooksPath does not block the clone's setting" "$out"
+  assert_file_contains "$out" "core.hooksPath \\($home_dir/shared-hooks\\) no longer applies" "install warns that a global hooks path stops applying"
+  assert_file_not_contains "$out" "no longer run" "a default-directory hook that a global hooks path already hid is not reported"
 
   home_dir="$(make_home)"
   out="$home_dir/out"

@@ -1874,6 +1874,15 @@ ln -s "${repo_root}" "${stale_skill_repo_link}"
 stale_skill_doctor "${stale_skill_repo_link}"
 assert "doctor: a symlinked path to this checkout still gets the update warning" \
   grep -q 'warn: installed skills are out of date (plan-write)' "${stale_skill_out}"
+# A skill this checkout shares with the install's checkout is really out of date: update clears it.
+stale_skill_shared_repo="$(mktemp -d "${work}/shared-checkout.XXXXXX")"
+mkdir -p "${stale_skill_shared_repo}/globals/packages/plan-suite/skills"
+cp -R "${repo_root}/globals/packages/plan-suite/skills/plan-write" "${stale_skill_shared_repo}/globals/packages/plan-suite/skills/plan-write"
+stale_skill_doctor "${stale_skill_shared_repo}"
+assert "doctor: from another checkout, a skill matching the install's checkout keeps the update warning" \
+  grep -q 'warn: installed skills are out of date (plan-write)' "${stale_skill_out}"
+assert "doctor: a skill matching the install's checkout is not called expected until merged" \
+  bash -c "! grep -q 'expected until merged' '${stale_skill_out}'"
 stale_skill_doctor "${work}/no-such-checkout"
 assert "doctor: a recorded checkout that no longer exists keeps the update warning" \
   grep -q 'warn: installed skills are out of date (plan-write)' "${stale_skill_out}"

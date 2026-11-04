@@ -501,6 +501,7 @@ done < <(source_files)
 # read the old text until the next update refreshes it. That is a warning, not a failure, and it
 # prints even under --quiet because only the user can act on it.
 stale_skill_caches=()
+stale_skill_dirs=()
 for skill_src in "${repo_root}"/globals/packages/*/skills/*/SKILL.md "${repo_root}"/globals/system/skills/roborepo-support/SKILL.md; do
   [[ -e "${skill_src}" ]] || continue
   skill_name="$(basename "$(dirname "${skill_src}")")"
@@ -509,23 +510,39 @@ for skill_src in "${repo_root}"/globals/packages/*/skills/*/SKILL.md "${repo_roo
   if [[ -e "${skill_cache}/.builtin-managed" ]] \
     && ! diff -rq -x '.builtin-managed' "$(dirname "${skill_src}")" "${skill_cache}" >/dev/null 2>&1; then
     stale_skill_caches+=("${skill_name}")
+    stale_skill_dirs+=("$(dirname "${skill_src#${repo_root}/}")")
   fi
 done
 if [[ "${#stale_skill_caches[@]}" -gt 0 ]]; then
-  # roborepo update copies skills from the checkout the install came from, so from any other checkout
-  # (a feature branch's worktree, say) the advice cannot clear the difference until that work merges.
-  # A recorded path that no longer resolves says nothing about where this run stands, so it warns.
+  # roborepo update copies skills from the checkout the install came from. From another checkout (a
+  # feature branch's worktree, say), a skill that differs from that checkout's copy cannot clear until
+  # the work merges, while one that matches it is really out of date. A recorded path that no longer
+  # resolves says nothing about where this run stands, so it warns.
   install_repo=""
   if [[ "${package_mode}" -eq 0 ]]; then
     install_repo="$(read_install_repo 2>/dev/null || true)"
     [[ -z "${install_repo}" ]] || install_repo="$(cd "${install_repo}" 2>/dev/null && pwd -P || true)"
   fi
+  outdated_skills=()
+  unmerged_skill_count=0
   if [[ -n "${install_repo}" && "${install_repo}" != "$(cd "${repo_root}" && pwd -P)" ]]; then
-    stale_summary="${#stale_skill_caches[@]} skills in this checkout differ from the installed copies"
-    [[ "${#stale_skill_caches[@]}" -eq 1 ]] && stale_summary="1 skill in this checkout differs from its installed copy"
-    hint "${stale_summary} (installed from ${install_repo}); expected until merged"
+    for skill_dir in "${stale_skill_dirs[@]}"; do
+      if diff -rq "${repo_root}/${skill_dir}" "${install_repo}/${skill_dir}" >/dev/null 2>&1; then
+        outdated_skills+=("$(basename "${skill_dir}")")
+      else
+        unmerged_skill_count=$((unmerged_skill_count + 1))
+      fi
+    done
   else
-    echo "warn: installed skills are out of date (${stale_skill_caches[*]}) — run: roborepo update"
+    outdated_skills=("${stale_skill_caches[@]}")
+  fi
+  if [[ "${#outdated_skills[@]}" -gt 0 ]]; then
+    echo "warn: installed skills are out of date (${outdated_skills[*]}) — run: roborepo update"
+  fi
+  if [[ "${unmerged_skill_count}" -gt 0 ]]; then
+    stale_summary="${unmerged_skill_count} skills in this checkout differ from the installed copies"
+    [[ "${unmerged_skill_count}" -eq 1 ]] && stale_summary="1 skill in this checkout differs from its installed copy"
+    hint "${stale_summary} (installed from ${install_repo}); expected until merged"
   fi
 else
   ok "installed skill copies match their source"

@@ -63,7 +63,8 @@ The hook is per clone. `./scripts/install/main.sh` turns it on in a dev clone by
 `core.hooksPath` to `scripts/git-hooks`, and `--dry-run` only reports that it would. It leaves a
 value that is already set alone, and does nothing in package mode. Linked worktrees share the
 clone's config, so this covers the primary checkout and every worktree. Git reads one hooks
-directory, so the installer names any hooks in `.git/hooks` that stop running.
+directory, so the installer warns about what stops running: the hooks in `.git/hooks`, or a
+`core.hooksPath` from global or system config.
 
 A clone that has not run the installer skips the check until this runs:
 

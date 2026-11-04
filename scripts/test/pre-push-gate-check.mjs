@@ -30,6 +30,8 @@ const env = {
 for (const key of Object.keys(env)) {
   if (/^GIT_CONFIG_(?:COUNT|PARAMETERS|KEY_\d+|VALUE_\d+)$/.test(key) || /^GIT_(?:DIR|WORK_TREE|INDEX_FILE|PAGER)$/.test(key)) delete env[key];
 }
+// ci.sh exports this too, and the doctor assertion below must see only the script's own value.
+delete env.ROBOREPO_SKIP_NODE_RELEASE_CHECK;
 fs.writeFileSync(env.GIT_CONFIG_GLOBAL, "");
 
 function git(cwd, ...args) {
@@ -150,10 +152,12 @@ assert.ok(unreachable.stderr.includes(`${SKIPPED} for refs/heads/topic`), `unrea
 const pagerRan = path.join(tmp, "pager-ran");
 const pager = path.join(tmp, "pager.sh");
 fs.writeFileSync(pager, `#!/bin/sh\necho opened >> "${pagerRan}"\ncat >/dev/null\n`, { mode: 0o755 });
-const pagerEnv = { ...env, LESS: "-R", PAGER: pager };
+const shellQuote = (value) => `'${value.replaceAll("'", "'\\''")}'`;
+// Git runs PAGER through a shell, so a temp path with a space needs quoting there too.
+const pagerEnv = { ...env, LESS: "-R", PAGER: shellQuote(pager) };
 
 function underTerminal(command) {
-  const args = process.platform === "darwin" ? ["-q", "/dev/null", "bash", "-c", command] : ["-qec", `bash -c '${command}'`, "/dev/null"];
+  const args = process.platform === "darwin" ? ["-q", "/dev/null", "bash", "-c", command] : ["-qec", `bash -c ${shellQuote(command)}`, "/dev/null"];
   return spawnSync("script", args, { cwd: work, env: pagerEnv, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 30_000 });
 }
 
@@ -168,7 +172,7 @@ if (spawnSync("script", ["-q", "/dev/null", "true"], { stdio: "ignore" }).error)
 
   const refs = path.join(tmp, "refs.txt");
   fs.writeFileSync(refs, `refs/heads/topic ${dirty} refs/heads/topic ${ZERO}\n`);
-  const check = underTerminal(`bash scripts/test/pre-push-check.sh origin ${remote} < ${refs}`);
+  const check = underTerminal(`bash scripts/test/pre-push-check.sh origin ${shellQuote(remote)} < ${shellQuote(refs)}`);
   assert.notEqual(check.signal, "SIGTERM", "the check finished under a terminal");
   assert.match(check.stdout, /push refused/, `the check reached its diff under the terminal: ${check.stdout}${check.stderr}`);
   assert.ok(!fs.existsSync(pagerRan), "the check does not open a pager");
