@@ -505,6 +505,11 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - [x] **Copy Repair Prompt**, the No namespace repair path, is only asserted visible in `scripts/test/portal-ui/plans-backlog.spec.mjs`. Click it, then assert the clipboard text names `/plan-write` and the plan's path, as the other Plans copy controls do. — fixed (fbab7591)
 - [x] The design's required test of reload and branch-switch behavior for config changes does not exist. Add a real-Git branch-switch case to `scripts/test/backlog-order-check.mjs` and a config-edit-then-reload case to `plans-backlog.spec.mjs`. An ad hoc run of 20 branch switches read the wrong vocabulary 0 times through `readProjectNamespaces`; it did not exercise the snapshot rebuild or the page. — fixed (fbab7591)
 - [x] The "Placing a new plan" table in `plan-write/references/workflow-create.md` has no row for a new plan that depends only on unranked plans in a non-interactive run. Widen the last row to "Is independent, or depends only on unranked plans, in a non-interactive run". — fixed (fbab7591)
+- [x] The drawer opened from Home shows `(Backlog)` with no position and an unstyled namespace badge, because Home passes no Backlog data and the badge rule lived in the Plans page's stylesheet. — fixed (6ed78b5a)
+- [x] Nothing tests that a `Waiting on` position counts blocks, not plans, or that it matches the number Ordering shows. — fixed (6ed78b5a)
+- [x] `plans-portal.md` still says Backlog cards show **depends on** with linked plan IDs. — fixed (6ed78b5a)
+- [x] The addendum's prose still says Backlog titles carry a namespace prefix and show `Requires:`. — fixed (6ed78b5a)
+- [x] The plan's "Schema bootstrap" note and "Namespace derivation" row are stale. — fixed (6ed78b5a)
 
 ### Verification
 
