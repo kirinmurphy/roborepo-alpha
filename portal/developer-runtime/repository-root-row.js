@@ -101,11 +101,12 @@ export function buildRootSection({ root, departed = [], repository, composeActio
   fillPromotedLink(section, root);
   if (mode === "home") {
     if (root?.primaryEntrypoint?.opaqueKey) onMountLinks?.(section.querySelector("[data-slot=root-links]"), root.primaryEntrypoint);
-    // Present on every row, filled or empty, so each row's port and Links end in the same column.
-    const worktreeCell = document.createElement("span");
-    worktreeCell.className = "checkout-worktree-cell";
-    section.querySelector(".repository-root-actions").append(worktreeCell);
-    if (worktreeDetails) onMountWorktreeDetails(worktreeCell, root);
+    if (worktreeDetails) {
+      const worktreeCell = document.createElement("span");
+      worktreeCell.className = "checkout-worktree-cell";
+      section.querySelector(".repository-root-actions").append(worktreeCell);
+      onMountWorktreeDetails(worktreeCell, root);
+    }
     section.querySelector("[data-slot=members]")?.remove();
     return section;
   }

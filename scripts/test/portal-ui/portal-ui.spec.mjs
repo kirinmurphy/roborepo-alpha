@@ -1550,9 +1550,9 @@ test.describe("repository-first portal Home", () => {
     // The worktree dropdown is the row's rightmost control: port, Links, then the dropdown.
     expect(wide[4].x + wide[4].width).toBeLessThanOrEqual(wide[5].x);
     expect(wide[5].x + wide[5].width).toBeLessThanOrEqual(wide[1].x);
-    // A main checkout has no dropdown but reserves its column, so its Links lines up with the plan's.
+    // A main checkout has no dropdown and reserves no space for one: its Links ends the row.
     const mainLinks = await checkoutRow(card, "main branch").getByRole("button", { name: "Links", exact: true }).boundingBox();
-    expect(mainLinks.x).toBeCloseTo(wide[5].x, 0);
+    expect(mainLinks.x + mainLinks.width).toBeCloseTo(wide[1].x + wide[1].width, 0);
     await page.screenshot({ path: testInfo.outputPath("plan-row-wide.png") });
     await page.setViewportSize({ width: 720, height: 800 });
     const narrow = await Promise.all([titleButton, toggle, progress, action, port, links, row].map((item) => item.boundingBox()));

@@ -58,8 +58,8 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 /* Fixed worktree and Links panels also need to stay below the sticky site header. */
 .home-main .menu-button-panel { z-index: 9; }
 .home-main .checkout-links-cell { margin-left: 0; }
-/* The rightmost column on Home. Sized to the worktree trigger, so a row without one (a main checkout)
- * reserves the same space and its port and Links line up with the worktree rows'. */
+/* The rightmost column on Home's worktree rows. A main checkout has no dropdown and no cell, so its
+ * port and Links sit flush with the row's right edge instead. */
 .checkout-worktree-cell { display: inline-flex; justify-content: flex-end; width: 62px; }
 .checkout-worktree-cell .menu-button-trigger { gap: 2px; }
 .home-main .checkout-links-cell .menu-button-trigger {
