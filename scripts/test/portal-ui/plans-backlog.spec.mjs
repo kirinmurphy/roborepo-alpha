@@ -205,11 +205,23 @@ test.describe("Backlog directory and ordering", () => {
     await expect(nextUp).toHaveCount(0);
   });
 
-  test("a Next up plan's namespace badge opens that namespace", async ({ page }) => {
-    await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
-    await page.getByRole("region", { name: "Next up" }).getByRole("link", { name: "alpha", exact: true }).click();
-    await expect(page).toHaveURL(/namespace=alpha/);
-    await expect(page.getByRole("button", { name: "Details", exact: true })).toHaveAttribute("aria-pressed", "true");
+  test("a Next up plan's namespace badge opens that namespace without opening the plan", async ({ page }) => {
+    const repoScreen = `/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`;
+    const badge = page.getByRole("region", { name: "Next up" }).getByRole("link", { name: "alpha", exact: true });
+    const expectNamespaceOpened = async () => {
+      await expect(page).toHaveURL(/namespace=alpha/);
+      await expect(page.getByRole("button", { name: "Details", exact: true })).toHaveAttribute("aria-pressed", "true");
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+    };
+
+    await page.goto(repoScreen);
+    await badge.click();
+    await expectNamespaceOpened();
+
+    await page.goto(repoScreen);
+    await badge.focus();
+    await page.keyboard.press("Enter");
+    await expectNamespaceOpened();
   });
 
   test("Next up keeps a plan waiting only on work underway, and shows what it waits on", async ({ page }) => {
@@ -229,6 +241,107 @@ test.describe("Backlog directory and ordering", () => {
     await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
     await expect(directoryRows(page).first()).toBeVisible();
     await expect(page.getByRole("region", { name: "Next up" })).toHaveCount(0);
+  });
+
+  test("ranking a plan and pressing Save puts it in Next up on returning to the repo screen", async ({ page }) => {
+    setOrder([]);
+    await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
+    const nextUp = page.getByRole("region", { name: "Next up" });
+    await expect(directoryRows(page).first()).toBeVisible();
+    await expect(nextUp).toHaveCount(0);
+
+    await directoryRows(page).first().click();
+    await page.getByRole("button", { name: "Ordering", exact: true }).click();
+    await blockFor(page, "Traces").getByRole("button", { name: "Move down" }).click();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
+    expect(savedOrder()).toEqual(["alphan04"]);
+    const saved = fs.readFileSync(orderFile, "utf8");
+
+    await page.getByRole("navigation", { name: "Backlog location" }).getByRole("link", { name: repoName }).click();
+    await expect(nextUp.locator("plan-card .title-link")).toHaveText(["Traces"]);
+    expect(fs.readFileSync(orderFile, "utf8")).toBe(saved);
+  });
+
+  test("Next up shows only on a selected repo's screen", async ({ page }) => {
+    const nextUp = page.getByRole("region", { name: "Next up" });
+    const bareOrder = path.join(bare, "docs/plans/plans-order.json");
+    // A ranked entry gives the no-config repo the one thing that could otherwise qualify it.
+    fs.writeFileSync(bareOrder, JSON.stringify({ schemaVersion: 1, namespaces: { anything: ["barepl08"] } }));
+    try {
+      await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
+      await expect(nextUp).toBeVisible();
+
+      await page.goto("/plans?lifecycle=backlog");
+      await expect(page.getByRole("link", { name: new RegExp(repoName) })).toBeVisible();
+      await expect(nextUp).toHaveCount(0);
+
+      await openNamespace(page);
+      await expect(page.locator(".title-link").first()).toBeVisible();
+      await expect(nextUp).toHaveCount(0);
+
+      await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, bareName)}`);
+      await expect(directoryRows(page)).toContainText("No namespace");
+      await expect(nextUp).toHaveCount(0);
+    } finally {
+      fs.rmSync(bareOrder, { force: true });
+    }
+  });
+
+  test("the drawer shows another namespace's position for a prerequisite, matching Ordering", async ({ page }) => {
+    setOrder(["alphax03", "alphaa01", "alphab02"]);
+    await openNamespace(page, "beta");
+    await page.locator("plan-card").getByText("Beta one", { exact: true }).click();
+    const drawer = page.getByRole("dialog");
+    await expect(page.locator("#drawer-title")).toHaveText("Beta one");
+    await expect(waitingOn(drawer)).toHaveText(/alpha\s+Storage\s+\(Backlog, position 2\)/);
+    await drawer.getByRole("button", { name: "Storage", exact: true }).click();
+    await expect(page.locator("#drawer-title")).toHaveText("Storage");
+  });
+
+  test("opening a Waiting on link keeps a dirty draft and its unsaved state", async ({ page }) => {
+    await openOrdering(page);
+    await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    const unsaved = page.getByRole("group", { name: "Unsaved order" });
+    await expect(unsaved).toBeVisible();
+
+    await waitingOn(blockFor(page, "Storage")).getByRole("button", { name: "Storage", exact: true }).click();
+    await expect(page.locator("#drawer-title")).toHaveText("Storage");
+    await expect(guardDialog(page)).toHaveCount(0);
+    await page.locator("#drawer-close").click();
+    await expect(page.locator("#drawer-title")).toBeHidden();
+
+    await expect(guardDialog(page)).toHaveCount(0);
+    await expect(orderedTitles(page)).toHaveText(["Diagnostics", "Storage", "Retrieval"]);
+    await expect(unsaved).toBeVisible();
+    expect(savedOrder()).toEqual(["alphaa01", "alphab02", "alphax03"]);
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
+    expect(savedOrder()).toEqual(["alphax03", "alphaa01", "alphab02"]);
+  });
+
+  test.describe("a Next up card with both badges and a long title at phone width", () => {
+    const LONG_TITLE = "Storage engine rewrite with a title long enough that it cannot share one line with two badges on a phone";
+    test.beforeEach(() => write("docs/plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: LONG_TITLE, deps: ["alphaw07"] })));
+    test.afterEach(() => write("docs/plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage" })));
+
+    for (const theme of ["dark", "light"]) {
+      test(`stays readable without sideways scroll in the ${theme} theme`, async ({ page }, testInfo) => {
+        await page.setViewportSize({ width: 390, height: 800 });
+        await page.addInitScript((value) => localStorage.setItem("portal-theme", value), theme);
+        await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
+        await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+        const card = page.getByRole("region", { name: "Next up" }).locator("plan-card").first();
+        await expect(card.getByRole("link", { name: "alpha", exact: true })).toBeVisible();
+        await page.screenshot({ path: testInfo.outputPath(`next-up-${theme}.png`), fullPage: true });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+        // An ellipsis would pass the overflow check above while hiding most of the title.
+        const fitsInFull = (node) => node.scrollWidth <= node.clientWidth;
+        expect(await card.getByText(LONG_TITLE, { exact: true }).evaluate(fitsInFull)).toBe(true);
+        const noNamespaceLabel = directoryRows(page).filter({ hasText: "No namespace" }).getByText("No namespace", { exact: true });
+        expect((await noNamespaceLabel.boundingBox()).height).toBeLessThan(30);
+      });
+    }
   });
 
   test("moves stay in the draft until Save, and focus follows the moved block", async ({ page }) => {

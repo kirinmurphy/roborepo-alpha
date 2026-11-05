@@ -591,6 +591,18 @@ a:is(.repo-badge, .namespace-badge)[aria-disabled="true"] {
 .backlog-directory-count,
 .backlog-directory-status { color: var(--dim); font-size: var(--text-sm); }
 .backlog-directory-chevron { transform: rotate(-90deg); color: var(--dim); }
+@media (max-width: 560px) {
+  /* The counts would squeeze the label until it broke mid-word, so they drop below it. */
+  .backlog-directory-row { grid-template-columns: auto auto minmax(0, 1fr) auto; row-gap: 2px; }
+  .backlog-directory-label { grid-column: 2 / 4; }
+  .backlog-directory-count { grid-column: 2; grid-row: 2; }
+  .backlog-directory-status { grid-column: 3; grid-row: 2; }
+  .backlog-directory-chevron { grid-column: 4; grid-row: 1 / span 2; }
+  /* Two badges leave a one-line title almost no room, so a Next up card gives it a line of its own. */
+  .card-header-row:has(.namespace-badge:not([hidden])) { flex-wrap: wrap; justify-content: flex-start; }
+  .card-header-row:has(.namespace-badge:not([hidden])) :is(.repo-badge, .namespace-badge) { flex: 0 1 auto; max-width: 100%; }
+  .card-header-row:has(.namespace-badge:not([hidden])) .title-link { flex-basis: 100%; overflow-wrap: anywhere; white-space: normal; }
+}
 .backlog-namespace-header {
   display: flex;
   flex-wrap: wrap;

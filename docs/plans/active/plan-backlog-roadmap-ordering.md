@@ -345,12 +345,12 @@ Added after reviewing Backlog on real repos. The behavior is built; the open tas
 - [x] Replace the title prefix with the namespace badge, shown only on Next up cards and in `Waiting on` lists.
 - [x] Update `plans-portal.md`, the addendum, and `plans-portal-internals.md`, and retake `docs/images/plans.png`.
 - [x] Make the `Waiting on` list a real list, and assert it and its badges by role in `plans-backlog.spec.mjs` instead of the `.plan-dependency` and `.namespace-badge` selectors.
-- [ ] Test that ranking a plan and pressing Save puts it in Next up on returning to the repo screen.
-- [ ] Test that Next up appears only on a selected repo's screen: not on All repos, not inside a namespace, and not for a repo with no config.
-- [ ] Test that clicking a Next up card's namespace badge opens the namespace without opening the plan's drawer.
-- [ ] Test that the drawer shows another namespace's position for a prerequisite.
-- [ ] Test that opening a `Waiting on` link during a dirty Ordering draft keeps the draft and its unsaved state.
-- [ ] Check a Next up card with both badges and a long title at phone width and in the light theme, and fix what fails. Add a horizontal-overflow assertion for phone width.
+- [x] Test that ranking a plan and pressing Save puts it in Next up on returning to the repo screen.
+- [x] Test that Next up appears only on a selected repo's screen: not on All repos, not inside a namespace, and not for a repo with no config.
+- [x] Test that clicking a Next up card's namespace badge opens the namespace without opening the plan's drawer.
+- [x] Test that the drawer shows another namespace's position for a prerequisite.
+- [x] Test that opening a `Waiting on` link during a dirty Ordering draft keeps the draft and its unsaved state.
+- [x] Check a Next up card with both badges and a long title at phone width and in the light theme, and fix what fails. Add a horizontal-overflow assertion for phone width.
 - [ ] Run the gates under "Before human review" on the final commit and record the results in `### Verification`.
 
 ## Validation
