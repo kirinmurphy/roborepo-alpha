@@ -897,6 +897,23 @@ test.describe("Backlog directory and ordering", () => {
     await expect(page.getByRole("button", { name: "Ordering", exact: true })).toHaveCount(0);
   });
 
+  test("No namespace keeps a long filename readable at phone width", async ({ page }) => {
+    const stem = "x".repeat(96);
+    const file = `docs/plans/backlog/${stem}.md`;
+    write(file, document({ id: "longname", title: "Long filename plan" }));
+    try {
+      await page.setViewportSize({ width: 390, height: 800 });
+      await openNamespace(page, "_none");
+      const filename = page.getByText(`${stem}.md`, { exact: true });
+      await expect(filename).toBeVisible();
+      // The row clips what overflows, so the page never scrolls and only the text's own edge shows it.
+      const rights = await page.getByText(stem).evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().right));
+      expect(Math.max(...rights)).toBeLessThanOrEqual(390);
+    } finally {
+      fs.rmSync(path.join(repo, file), { force: true });
+    }
+  });
+
   test("Copy Repair Prompt copies a /plan-write prompt naming the misfiled plan", async ({ page }) => {
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
     await openNamespace(page, "_none");

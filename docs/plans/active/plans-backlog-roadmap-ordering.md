@@ -219,8 +219,8 @@ Use a repository-local `docs/plans/plans-order.json` keyed by namespace, storing
 {
   "schemaVersion": 1,
   "namespaces": {
-    "plan": ["rxv53v6z", "a1b2c3d4"],
-    "portal": ["h3j4k5m6"]
+    "plans": ["rxv53v6z", "a1b2c3d4"],
+    "git": ["h3j4k5m6"]
   }
 }
 ```
@@ -431,7 +431,7 @@ Earlier validation passes predate the UI review, so they do not cover it. Run th
 - **Parallel `portal/plans/` work:** [[plans-portal-live-refresh-and-static-preflight]] and the session-launching plans change the same files, so rebase rather than duplicate their seams.
 - **Automated regrouping:** Automatic merges may change existing ranks and move unrelated plans. Use deterministic tie-breaks, surface resulting moves, and preserve revision safety. Do not add an approval workflow for automatic merges.
 - **Empty Next up:** A repo with nothing ranked shows no Next up, which is every repo today, so the section stays invisible until someone ranks plans.
-- **Long Next up:** One card per namespace could put 14 full cards above roborepo-alpha's namespace list once each namespace has a ranked plan. `## Not tested` asks the user to judge this with real ranks.
+- **Long Next up:** One card per namespace could put 12 full cards above roborepo-alpha's namespace list once each namespace has a ranked plan. `## Not tested` asks the user to judge this with real ranks.
 - **Edit races:** File watchers, another tab, or a separate skill may rewrite dependencies while Ordering is dirty. Detect and reconcile; never last-write-wins without feedback.
 - **Missing/malformed filename namespace:** Strict creation must reject it, but tolerant reads must not make the existing plan invisible or crash indexing.
 - **Schema rollout:** Remove legacy priority and update all live producers/consumers in one breaking change; otherwise current validators would report newly written plans as missing the field. Active plans' worktree copies keep an inert `priority:` line until their next base synchronization, because no allowlist rejects it. Until then the sweep's edit to an active plan's main copy, such as `git-worktree-permanent-cleanup`, shows the advisory **Edited outside worktree** finding, which that synchronization clears.
