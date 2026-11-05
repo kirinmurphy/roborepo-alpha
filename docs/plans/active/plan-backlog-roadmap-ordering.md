@@ -1,6 +1,6 @@
 ---
 id: rxv53v6z
-next_action: Run /plan-review for the human review.
+next_action: Finish the open UI review tasks, rerun validation, then run /plan-review.
 blocked_by: []
 depends_on: []
 related: ["plans-portal-live-refresh-and-static-preflight", "plan-lifecycle-suite-blockers-dependencies", "plan-unclassified-plan-recovery", "p3vbk03v"]
@@ -12,7 +12,7 @@ worktree: plan-backlog-roadmap-ordering
 
 ## Summary
 
-Make Backlog useful for deciding what to build next. Navigate from repositories to namespaces to one list of plans. **Details** and **Ordering** are two presentations of that list. Order is explicit within a repository/namespace, unprioritized plans appear first, and dependency-connected Backlog plans automatically form contiguous movable groups **in Ordering mode only** (Option A). Details shows individual flat cards in the same plan order. Manual Ordering edits stay local until the user saves them.
+Make Backlog useful for deciding what to build next. Navigate from repositories to namespaces to one list of plans. **Details** and **Ordering** are two presentations of that list. Order is explicit within a repository/namespace, unprioritized plans appear first, and dependency-connected Backlog plans automatically form contiguous movable groups **in Ordering mode only** (Option A). Details shows individual flat cards in the same plan order. Manual Ordering edits stay local until the user saves them. A repo's screen leads with **Next up**, each namespace's highest-ranked unblocked plan, and every Backlog plan lists the unfinished prerequisites it is waiting on, including those in other namespaces.
 
 ## Context
 
@@ -53,6 +53,8 @@ Real data for fixtures: this repo has 49 Backlog plans across 14 namespaces, all
 - Use one approved namespace per plan, taken from that repository's configured vocabulary plus permitted universal namespaces.
 - Show a plan's namespace as a badge where plans from several namespaces appear together (Next up cards and prerequisite lists); leave authored H1 titles intact.
 - Scope priority to one repository and namespace, never across repositories or namespaces.
+- Show what each Backlog plan is waiting on, including prerequisites in other namespaces.
+- Lead a repo's view with each namespace's highest-ranked unblocked plan.
 - Show unprioritized plans first and support simple placement without numeric fields.
 - Share one flattened plan sequence between Details and Ordering; derive group containers **only in Ordering** and use the same backing order state.
 - Group unfinished dependency sequences, including multiple prerequisites and dependents, into contiguous movable blocks without adding an initiative/epic/series field.
@@ -62,7 +64,7 @@ Real data for fixtures: this repo has 49 Backlog plans across 14 namespaces, all
 
 ## Non-goals
 
-- No global ordering across repositories or namespaces.
+- No global ordering across repositories or namespaces. Next up lists at most one plan per namespace and claims no order between them.
 - No separate Roadmap page, hierarchy map, or extra grouping metadata.
 - No automatic rewriting of H1s, filename ordinals, or forced `Namespace Part ###` titles.
 - No footer namespace badge or badge-click filter interaction. The only clickable namespace badge is on a Next up card, and it opens that namespace.
@@ -84,6 +86,7 @@ Real data for fixtures: this repo has 49 Backlog plans across 14 namespaces, all
 | Unprioritized | Backlog plan absent from the **effective** ranked order | Derived; no new frontmatter flag |
 | Dependency group | Direct dependency edges between same-namespace Backlog plans only | Option A: linearize each connected in-Backlog component into one contiguous movable block; never bridge through plans outside Backlog |
 | Draft ordering | Client-side edit session | Not persisted until explicit Save |
+| Next up | Pure calculation in the browser from the snapshot's order, lifecycles, and blockers | Never stored; never changes an order |
 
 **Namespace decision:** do **not** add `namespace` to plan frontmatter. Derive it from the longest approved `<namespace>-` filename prefix and expose it as a computed field on the parsed plan model. Cache that resolution per indexed plan and reuse the loaded namespace vocabulary per repository snapshot: the in-memory match is inexpensive and requires no additional I/O. Validate malformed/unknown prefixes at creation, rename, and build; retain invalid files in **No namespace** when reading. Add a correctness and performance regression test. Render the namespace badge from the derived namespace, not from manually typed H1 text. It is a display label, not a required H1 prefix.
 
@@ -104,7 +107,7 @@ flowchart LR
 | Scope | Visible content |
 | --- | --- |
 | No repo selected | Only repositories with Backlog plans; plan count and unprioritized count |
-| Repo selected, no namespace | Approved namespaces with Backlog plans, each with counts; **No namespace** last if invalid plans exist |
+| Repo selected, no namespace | **Next up** when any plan qualifies, then approved namespaces with Backlog plans, each with counts; **No namespace** last if invalid plans exist |
 | Repo and namespace selected | **Needs prioritization** at top when nonempty, then ordered list; Details/Ordering toggle |
 | Repo and **No namespace** selected | Files with missing, malformed, or unapproved filename prefixes, with errors and a repair path; no priority editing until repaired |
 
@@ -188,10 +191,21 @@ The draft encompasses **both** ranked order and moves from Needs prioritization.
 
 ### Prerequisites in other namespaces and Next up
 
-A repo's plans can form one chain across several namespaces, so a namespace's order alone does not say what can be built. Namespace ranks stay independent; these two additions make the chain visible and store nothing.
+Reviewing Backlog on real repos showed that a repo's plans can form one chain across several namespaces: all 8 of research_bots' Backlog plans do, across 4 namespaces. A namespace's order alone therefore does not say what can be built. Namespace ranks stay independent; these additions make the chain visible and store nothing.
 
 - **Waiting on:** every Backlog plan, in Details, Ordering, and the drawer, lists its unfinished prerequisites as `Waiting on N`, each with a namespace badge and a link on its title that opens it. A prerequisite in another namespace's Backlog shows `Backlog, position N` or `Backlog, not prioritized`; one in this namespace shows `Backlog`, since a draft may be moving it; one outside Backlog shows its lifecycle; a missing one shows `not found`. A completed prerequisite is left out.
-- **Next up:** a section above the namespace list on a selected repo's screen, showing the same cards as Details. Each namespace gets at most one card: its highest-ranked plan that has no blocker and whose unfinished prerequisites are all in Ready, Active, or Review. An unranked plan never appears, and with no qualifying plan the section is hidden. Filters narrow it. Namespaces stay in directory order, so it claims no order between them. The card's namespace badge opens that namespace, the same as its row in the list; nothing here changes an order.
+- **Next up:** a section above the namespace list on a selected repo's screen, showing the same cards as Details. Each namespace gets at most one card: its highest-ranked plan that has no blocker and whose unfinished prerequisites are all in Ready, Active, or Review. An unranked plan never appears, and with no qualifying plan the section is hidden. Filters narrow it. Namespaces stay in directory order, so it claims no order between them. The card's namespace badge opens that namespace, the same as its row in the list, without opening the plan; nothing here changes an order.
+- **Namespace label:** the `PORTAL · Title` prefix is gone. The namespace appears only where it tells the reader something:
+
+| Surface | How the namespace appears |
+| --- | --- |
+| Next up card | Badge beside the repo badge; a link to the namespace |
+| `Waiting on` list | Badge on every line, not a link; the plan's title is the link |
+| Details card and Ordering row | Not shown; the title is plain and the breadcrumb names the namespace |
+| Breadcrumb and namespace rows | Capitalized label, unchanged |
+| Any tab other than Backlog | Not shown |
+
+A `Waiting on` link opens the plan's drawer in place, so using one in Ordering leaves an unsaved draft untouched.
 
 ### Ordering registry
 
@@ -314,14 +328,30 @@ Priority removal comes last, so Backlog has its replacement before the old contr
 - [x] Make naming findings blocking, add them to the promote and start gates, and add a check over the real plan tree.
 - [x] Add a plan-suite module with pure `deriveGroups` and `proposeOrder`, plus registry read and `applyOrder`; cover every addendum gallery case, using the real fork and chain shapes as fixtures.
 - [x] Add the registry and revision to the plans snapshot, the Save route in `scripts/cli/portal-routes-plans.mjs`, and `roborepo plans order place` with its command definition under `manifests/platform/cli/command-definitions/internal/`.
-- [x] Add the repo and namespace directory levels to Backlog only, with **No namespace** recovery, the no-config notice, and namespace-prefixed titles.
+- [x] Add the repo and namespace directory levels to Backlog only, with **No namespace** recovery and the no-config notice.
 - [x] Add the shared draft/committed view model and flat Details cards in registry order, with Needs prioritization first.
 - [x] Add Ordering: derived block containers, the exact right-side controls, native drag, keyboard paths, disabled states, the automatic-move notice, and Filters hidden.
 - [x] Add sticky Save/Cancel, dirty state, the guard prompt with its three navigation seams, native exit protection, atomic Save, and stale-revision conflicts.
 - [x] Integrate automatic placement and explicit deferral into `plan-write` with failure reporting.
-- [x] Show each unfinished prerequisite's namespace and status with a link, and add the Next up section of ranked plans above the namespace list.
 - [x] Remove priority from all code, skills, tests, and fixtures, and sweep the line from every non-Completed/non-Archived plan including this one.
 - [x] Update the documents listed under Documentation impact, correct the addendum per “Addendum corrections”, and retake `docs/images/plans.png`.
+
+### UI review
+
+Added after reviewing Backlog on real repos. The behavior is built; the open tasks close its test gaps and repeat the validation that predates it.
+
+- [x] List each unfinished prerequisite as `Waiting on N` in Details, Ordering, and the drawer, with its namespace, status, and a link.
+- [x] Add Next up above the namespace list: full cards, ranked plans only, at most one per namespace, following Filters.
+- [x] Replace the title prefix with the namespace badge, shown only on Next up cards and in `Waiting on` lists.
+- [x] Update `plans-portal.md`, the addendum, and `plans-portal-internals.md`, and retake `docs/images/plans.png`.
+- [ ] Make the `Waiting on` list a real list, and assert it and its badges by role in `plans-backlog.spec.mjs` instead of the `.plan-dependency` and `.namespace-badge` selectors.
+- [ ] Test that ranking a plan and pressing Save puts it in Next up on returning to the repo screen.
+- [ ] Test that Next up appears only on a selected repo's screen: not on All repos, not inside a namespace, and not for a repo with no config.
+- [ ] Test that clicking a Next up card's namespace badge opens the namespace without opening the plan's drawer.
+- [ ] Test that the drawer shows another namespace's position for a prerequisite.
+- [ ] Test that opening a `Waiting on` link during a dirty Ordering draft keeps the draft and its unsaved state.
+- [ ] Check a Next up card with both badges and a long title at phone width and in the light theme, and fix what fails. Add a horizontal-overflow assertion for phone width.
+- [ ] Run the gates under "Before human review" on the final commit and record the results in `### Verification`.
 
 ## Validation
 
@@ -350,8 +380,14 @@ Run the checks for the tier as each task lands, then let CI run the full gate. E
 | Guarded exit | Mode/tab/route/repo/page navigation prompts Save and continue or Cancel when dirty |
 | Browser exit | Native supported unsaved-change protection is active |
 | Concurrent change | Stale draft cannot silently overwrite external dependency/order edits |
-| Cross-namespace prerequisite | Details, Ordering, and the drawer show its namespace and status with a link; a completed one is left out; only another namespace's Backlog shows a position |
-| Next up | Full cards above the namespace list, at most one per namespace, highest rank first, never an unranked plan and never one held up by a Backlog, missing, or archived prerequisite or a blocker; hidden when empty; follows Filters; its namespace badge opens that namespace |
+| Waiting on | Details, Ordering, and the drawer list each unfinished prerequisite with its namespace and a link; a completed one is left out; a missing one says `not found` with no link |
+| Prerequisite status | Another namespace's Backlog shows `Backlog, position N`, matching that namespace's Ordering number, or `Backlog, not prioritized`; the same namespace shows `Backlog`; outside Backlog shows the lifecycle |
+| Waiting on in a draft | A link opens the drawer in place; the draft, its moves, and the Save bar survive |
+| Next up selection | At most one plan per namespace, the highest ranked that qualifies; never an unranked plan, or one held up by a Backlog, missing, or archived prerequisite or a blocker; a plan waiting only on Ready, Active, or Review work qualifies |
+| Next up placement | Above the namespace list on a selected repo's screen only, as full cards with their usual actions; hidden when nothing qualifies; follows Filters |
+| Next up after Save | Ranking a plan and saving puts it in Next up on returning to the repo screen; nothing else writes `plans-order.json` |
+| Namespace badge | Matches the "How the namespace appears" table; a Next up badge opens the namespace without opening the drawer |
+| Narrow and light | At phone width no page scrolls sideways and a long title stays readable beside both badges; badges stay legible in the light theme |
 | Linear chain | Remaining phases move together; independent work may move ahead |
 | Fork/join group | Direct edges among same-namespace Backlog plans form movable blocks with topological order; dragging cannot violate actual dependency edges |
 | Completed/shared prerequisite | With A→B and A→C, moving A out of Backlog separates B and C (unless directly dependent), preserves ranked positions and their actual dependency on A |
@@ -366,10 +402,24 @@ Run the checks for the tier as each task lands, then let CI run the full gate. E
 | Separate concerns | Grouping and ordering calculation is pure; external changes apply automatically while user-initiated Ordering edits require Save |
 | Priority cleanup | No legacy priority UI/behavior/schema/skill/docs/field in current lifecycle files; historical files unchanged |
 
+### Before human review
+
+Earlier validation passes predate the UI review, so they do not cover it. Run these in order on the final commit; a failure returns the work to the checklist.
+
+| Gate | Command or evidence | Passes when |
+| --- | --- | --- |
+| Model rules | `node scripts/test/backlog-model-check.mjs` | It exits 0 |
+| Backlog in the browser | `node scripts/test/portal-ui/run.mjs plans-backlog plans-status` | Every test passes |
+| Full portal UI | `node scripts/test/portal-ui/run.mjs` | Every test passes, or each failure is classed with evidence in `### Verification` |
+| Docs | `node scripts/test/docs-reference-check.mjs` and `docs/images/plans.png` read against the page | The check passes and the image shows no title prefix |
+| Plan | `roborepo plans validate` for this plan | No finding except its unconfirmed `## Not tested` entries |
+| Fresh review | A fresh-context validation pass over everything since 4f2b701d, including this plan's prose | No open `fix` or `escalate` finding |
+| CI | The PR's checks after a push the user asks for | Green |
+
 ## Documentation impact
 
 - `globals/packages/plan-suite/skills/plan-write/SKILL.md` and `references/plan-schema.md`, `references/workflow-create.md`, `references/workflow-update.md`, `references/workflow-validate.md`: namespace enforcement, new dependency placement, removal of legacy priority, and updated schema.
-- `docs/user/reference/plans-portal.md` (doc of record for the Plans portal): navigation hierarchy, Needs prioritization, dependency groups, Save/Cancel, No namespace recovery, the registry contract, and removal of the priority control, filter, and tables.
+- `docs/user/reference/plans-portal.md` (doc of record for the Plans portal): navigation hierarchy, Next up, Waiting on, the namespace badge, Needs prioritization, dependency groups, Save/Cancel, No namespace recovery, the registry contract, and removal of the priority control, filter, and tables.
 - `docs/user/guides/plan/lifecycle/plan-suite.md`: the frontmatter example, the priority filter, and the priority-clearing note.
 - `docs/internal/plans-portal-internals.md` and `docs/internal/portal-architecture.md`: the Save route and order module replace `/api/plans/priority`.
 - `README.md` and `docs/images/plans.png`: the metadata table, caption, and screenshot.
@@ -382,6 +432,8 @@ Run the checks for the tier as each task lands, then let CI run the full gate. E
 - **Tracked registry on the primary checkout:** Uncommitted `plans-order.json` edits can collect on the base branch and conflict across branches, as priority edits already can. The next write recalculates from whatever the file holds.
 - **Parallel `portal/plans/` work:** [[plans-portal-live-refresh-and-static-preflight]] and the session-launching plans change the same files, so rebase rather than duplicate their seams.
 - **Automated regrouping:** Automatic merges may change existing ranks and move unrelated plans. Use deterministic tie-breaks, surface resulting moves, and preserve revision safety. Do not add an approval workflow for automatic merges.
+- **Empty Next up:** A repo with nothing ranked shows no Next up, which is every repo today, so the section stays invisible until someone ranks plans.
+- **Long Next up:** One card per namespace could put 14 full cards above roborepo-alpha's namespace list once each namespace has a ranked plan. `## Not tested` asks the user to judge this with real ranks.
 - **Edit races:** File watchers, another tab, or a separate skill may rewrite dependencies while Ordering is dirty. Detect and reconcile; never last-write-wins without feedback.
 - **Missing/malformed filename namespace:** Strict creation must reject it, but tolerant reads must not make the existing plan invisible or crash indexing.
 - **Schema rollout:** Remove legacy priority and update all live producers/consumers in one breaking change; otherwise current validators would report newly written plans as missing the field. Active plans' worktree copies keep an inert `priority:` line until their next base synchronization, because no allowlist rejects it. Until then the sweep's edit to an active plan's main copy, such as `git-worktree-permanent-cleanup`, shows the advisory **Edited outside worktree** finding, which that synchronization clears.
@@ -393,6 +445,7 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - **Plans that depend across namespaces stay ranked per namespace, with the link made visible (user decision).** In research_bots all 8 Backlog plans form one chain across 4 namespaces, and rows did not say where a prerequisite lives. The user chose prerequisite namespace, status, and links plus a read-only Next up list. Alternatives: a repo dependency map, which conflicts with the no-Roadmap non-goal, and one repo-wide order, which is a large rework and would turn research_bots into one 8-plan block with nothing to rank.
 - **Next up shows only ranked plans, as full cards above the namespace list (user decision).** The first version listed compact rows below the list and fell back to the alphabetically first plan in an unranked namespace, which read as a recommendation it could not back up. So a repo with nothing ranked shows no Next up, research_bots included.
 - **The namespace is a badge, not a title prefix (user decision).** It appears only where plans from several namespaces appear together: Next up cards and prerequisite lists. Details and Ordering rows show the plain title, because the breadcrumb already names the namespace. A Next up card's badge is a link that does what the namespace's row does. This replaces the `PORTAL · Title` label and narrows the non-goal against a clickable badge.
+- **A `Waiting on` position counts blocks, and every line carries a badge.** The position matches the number Ordering shows, not a count of plans. A same-namespace line keeps its badge so the list reads the same throughout. Alternative: drop it there. Both are clear and easy to change.
 - **Next up shows one plan per namespace, not every unblocked ranked plan.** Chosen because rank within a namespace is what makes one plan next, and a namespace's lower ranks are one click away.
 - **A ranked plan waiting only on work in Ready, Active, or Review counts for Next up.** Alternative: only plans with nothing unfinished. Chosen because that work is underway, and the card's Waiting on list says what it comes after.
 - **A plan's namespace resolves against the primary checkout's vocabulary.** `buildPlanRecord` resolves it against the checkout it reads, and `repositoryPlanRecords` re-resolves it against the first checkout's. Alternative: trust each record. Chosen because the order the plan ranks in lives with the primary checkout, so an older or newer config in a worktree must not decide it.
@@ -410,7 +463,9 @@ Autonomous decisions made during implementation, each clear, with its effects in
 
 ## Not tested
 
-- [ ] The Backlog on your own portal with real plans. The automated runs and the screenshot used a hermetic portal over a copy of this repo's plans, so your running portal has not been restarted on this code.
+- [ ] The Backlog on your own portal with real plans. You have viewed it on real repos through a portal running this worktree, but only you can confirm it works for your plans.
+- [ ] Next up with real ranks. Rank plans in research_bots and press Save, which writes `docs/plans/plans-order.json` in its primary checkout, then check the repo screen. So far it has been seen only with ranks simulated in the browser, because saving real ranks is your call.
+- [ ] Next up's length on a large repo. Once several roborepo-alpha namespaces have ranked plans, judge whether the cards above the namespace list help or push it too far down. A test cannot judge this.
 
 ## Review
 
@@ -469,3 +524,4 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - Portal UI failure on pass 10: `portal-ui.spec.mjs` "worktree rows show their state; Stop Server and Delete Worktree live in row menus" timed out clicking Delete Worktree, with the element unstable and then detached. It passed 5 of 5 alone, and the cause was not found. Classed `base` by its input: the test's lines are not in the diff, `portal/home` changes only by a comment, Home sets no repo-scope guard, and the remaining shared portal changes do not render its worktree rows. It was not run on `main`.
 - Installed output, on a temporary HOME and state root: `roborepo update`, enabling plan-suite, `roborepo update`, and `roborepo doctor --installed` all exited 0 (110 doctor checks), and the installed plan-write references carry `plans-order.json` and `order place` with no `priority:` line. `doctor` on this machine warns that installed skills are out of date until `roborepo update` runs after merge.
 - Base failure: `roborepo plans validate` exits 1 from blocking findings that are all in `docs/plans/completed/`, none from this change.
+- UI review at 79b64f8c (not a validation pass): `node scripts/test/backlog-model-check.mjs` passed, `node scripts/test/portal-ui/run.mjs plans-backlog plans-status` passed 57 of 57, and `node scripts/test/docs-reference-check.mjs` passed. The full portal UI suite and CI were not run on these commits, and no fresh-context pass has reviewed them. Next up's cards were seen on research_bots with ranks simulated in the browser, not saved.
