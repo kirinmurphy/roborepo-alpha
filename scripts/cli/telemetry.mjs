@@ -28,7 +28,7 @@ import { launchHookReview, loadHookReviewStatus } from "./hook-review-launch.mjs
 import { installCoreHooks } from "./hook-core-install.mjs";
 import { refreshHarnessesAndApply } from "./portal-harness-refresh.mjs";
 import { mutatePackage, setSkillInstalled, setBehaviorBucket, setCommandBucket } from "./config-mutate.mjs";
-import { loadPlansSnapshot, loadCachedPlansSnapshot, loadPlanDocument, buildPlansPrompt, saveBacklogOrder, refreshPlans } from "./plans.mjs";
+import { loadPlansSnapshot, loadCachedPlansSnapshot, loadPlanDocument, buildPlansPrompt, saveBacklogOrder, setBacklogNamespacePinned, archiveBacklogPlans, refreshPlans } from "./plans.mjs";
 import { loadRepositorySources, addRepositorySource, removeRepositorySource, setRepositorySourceEnabled, refreshRepositorySources, wipeRepositoryList, autoDiscoveryEnabled } from "./repository-sources.mjs";
 import {
   loadDeveloperRuntimeSnapshot,
@@ -842,6 +842,8 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     loadPlanDocument: (params) => loadPlanDocument(params),
     buildPlansPrompt: (params) => buildPlansPrompt(params),
     saveBacklogOrder: (params) => saveBacklogOrder(params),
+    setBacklogNamespacePinned: (params) => setBacklogNamespacePinned(params),
+    archiveBacklogPlans: (params) => archiveBacklogPlans(params),
     refreshPlans: (params) => refreshPlans(params),
     resolveRepositoryScope: (value, options) => resolveRepositoryScope(loadRegistry({ stateRoot }), value, options),
     loadDeveloperRuntime: () => loadDeveloperRuntimeSnapshot(),

@@ -110,6 +110,7 @@ const backlog = createBacklogController({
   cardGrid: (plans, actions) => tmpl.cardGrid(plans, actions),
   emptyState: () => tmpl.emptyState(),
   copyRepairPrompt: (key) => copyPrompt("plan-write", [key], "repository-aware"),
+  onError: showError,
 });
 setRepositoryScopeGuard({ isDirty: () => backlog.isDirty(), confirm: (proceed) => backlog.confirmLeave(proceed) });
 

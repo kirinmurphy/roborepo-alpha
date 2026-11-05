@@ -98,7 +98,11 @@ export function deriveGroups(plans, lifecycle = "backlog") {
 //   moves     how `order` differs from `savedOrder`, for the automatic-move notice
 //   findings  why `change` cannot stand; a caller must not persist a proposal that has any
 //
-// `change` is null, { type: "place", id, position: "top" | "bottom" }, or { type: "replace", order }.
+// `change` is null, { type: "place", id, position: "top" | "bottom" }, or
+// { type: "replace", order, unprioritized }. `unprioritized` names the ranked plans the caller means to
+// take out of the order; any other ranked plan missing from `order` is refused, so a bug or a stale
+// client cannot demote a plan by leaving it out. Part of a linked group cannot be taken out alone,
+// since the rest of the group would pull it straight back in.
 //
 // A connected group with any ranked member is ranked, anchored at its earliest ranked member, and
 // its other members join it there. A group with none stays unranked. A group containing a cycle has
@@ -115,7 +119,7 @@ export function proposeOrder(savedOrder, groups, change = null) {
     if (order.join("\0") !== requested.join("\0")) {
       findings.push({ code: "ORDER_SPLITS_DEPENDENCIES", message: "That order separates linked plans or puts a plan before its prerequisite." });
     }
-    const unranked = reconcile(stored, groupOf).filter((id) => !requested.includes(id));
+    const unranked = reconcile(stored, groupOf).filter((id) => !requested.includes(id) && !change.unprioritized?.includes(id));
     if (unranked.length) findings.push({ code: "ORDER_DROPS_PLANS", message: `That order leaves out ranked plans: ${unranked.join(", ")}.` });
   }
   return { order, moves: describeMoves(stored, order), findings };

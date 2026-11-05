@@ -320,7 +320,7 @@ dialog#drawer::backdrop {
 }
 .drawer-grid h3 {
   margin: 0 0 8px;
-  color: var(--dim);
+  color: var(--ink);
   font-size: var(--text-xs);
   text-transform: uppercase;
 }

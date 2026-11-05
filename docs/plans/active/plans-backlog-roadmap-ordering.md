@@ -64,7 +64,7 @@ Real data for fixtures: this repo has 49 Backlog plans across 14 namespaces, all
 
 ## Non-goals
 
-- No global ordering across repositories or namespaces. Next up lists at most one plan per namespace and claims no order between them.
+- No global ordering of plans across repositories or namespaces. Next up lists at most one plan per namespace. A pin lifts a whole namespace on the repo screen and in Next up; it ranks no plan against another namespace's.
 - No separate Roadmap page, hierarchy map, or extra grouping metadata.
 - No automatic rewriting of H1s, filename ordinals, or forced `Namespace Part ###` titles.
 - No footer namespace badge or badge-click filter interaction. The only clickable namespace badge is on a Next up card, and it opens that namespace.
@@ -104,8 +104,8 @@ flowchart LR
 
 | Scope | Visible content |
 | --- | --- |
-| No repo selected | Only repositories with Backlog plans; unblocked and unprioritized counts |
-| Repo selected, no namespace | **Next up** when any plan qualifies, then **View All Plans**: approved namespaces with Backlog plans, each with unblocked and unprioritized counts; **No namespace** last if invalid plans exist |
+| No repo selected | Only repositories with Backlog plans; ready, unprioritized, and total counts |
+| Repo selected, no namespace | **Next up** when any plan qualifies, then **All Plans**: approved namespaces with Backlog plans, pinned first, each with ready, unprioritized, and total counts; **No namespace** last if invalid plans exist |
 | Repo and namespace selected | **Needs prioritization** at top when nonempty, then ordered list; Details/Ordering toggle |
 | Repo and **No namespace** selected | Files with missing, malformed, or unapproved filename prefixes, with errors and a repair path; no priority editing until repaired |
 
@@ -133,10 +133,11 @@ Do not change other lifecycle tabs/views, even if they currently show plans acro
 
 - Show **Needs prioritization** **before** the ranked list, only when nonempty, with a count.
 - New independent plans default to unprioritized; do not append them to the end of the registry.
-- In Ordering mode, each unprioritized row or eligible dependency group has exactly three right-side controls, in this order:
+- In Ordering mode, each unprioritized row or eligible dependency group has exactly four right-side controls, in this order:
   1. **Move down** — insert at the *top* of Ordered.
   2. **Move to bottom** — insert at the bottom of Ordered.
-  3. **Drag handle** — drag to any valid position in Ordered.
+  3. **Archive** — retire the row or group, after a reason and a final yes. It commits at once, so it is disabled during a dirty draft.
+  4. **Drag handle** — drag to any valid position in Ordered.
 - Do not use a position dropdown, numeric field, or additional placement controls.
 - Placement updates the **draft** immediately (the item leaves Needs prioritization and appears in Ordered), but does not persist until **Save**.
 - Invalid drops are disabled or rejected with a concise reason. Moving a group moves all its remaining Backlog plans together.
@@ -149,7 +150,8 @@ Every Ordered row or derived dependency group places controls **on the right**, 
 2. **Move up**
 3. **Move down**
 4. **Move to bottom**
-5. **Drag handle** (furthest right)
+5. **Return to unprioritized**
+6. **Drag handle** (furthest right)
 
 Icon buttons need accessible names, tooltips, keyboard support, correct disabled states, and focus behavior. Move operations cannot invert actual prerequisites. For long lists, consider virtual rendering only if the existing portal already needs it; do not introduce it preemptively.
 
@@ -158,12 +160,12 @@ Icon buttons need accessible names, tooltips, keyboard support, correct disabled
 1. Opening Ordering copies the committed order into a draft; changes are not written on each move.
 2. The first change marks the draft **dirty**. Show a compact, always-visible **Save** and **Cancel** action bar (sticky while the list scrolls), plus an unsaved indicator.
 3. **Save** validates all moves against the latest namespace snapshot and writes the entire namespace order as one atomic operation. Only on success clear dirty state and update committed Details order.
-4. **Cancel** on the action bar discards the draft and restores the last committed order. Ask for confirmation before discarding edits.
+4. **Cancel** on the action bar discards the draft and restores the last committed order, with no confirmation.
 5. Before leaving Ordering via Details toggle, repo/namespace selection, lifecycle tab, page navigation, in-app back, or route change, display:
 
    > Your prioritization changes have not been saved.
 
-   Actions: **Save and continue** (save, then finish the attempted navigation) or **Cancel** (stay in Ordering with the draft untouched). Do not navigate after failed Save. The same guard applies to leaving the Plans page.
+   Actions, stacked in this order: **Save and Continue** (save, then finish the attempted navigation), **Discard Changes** (drop the draft and finish the navigation), and **Keep Editing** (stay in Ordering with the draft untouched). Do not navigate after failed Save. The same guard applies to leaving the Plans page.
 6. For tab close/reload or browser-level navigation, use the browser's supported unsaved-change mechanism; browsers may show their own wording rather than the custom sentence. The custom prompt needs three seams that do not exist yet: a way for the page to refuse a change in `portal/shared/repository-scope.js`, interception of header links to other portal pages (full page loads), and a `popstate` handler that restores the URL, since back/forward cannot be cancelled.
 7. Detect stale drafts (another tab, filesystem change, dependency edit, or concurrent writer) by a revision/ETag check. Do not silently overwrite; show a conflict and require a refresh/reconciliation before saving.
 
@@ -192,7 +194,7 @@ The draft encompasses **both** ranked order and moves from Needs prioritization.
 Reviewing Backlog on real repos showed that a repo's plans can form one chain across several namespaces: all 8 of research_bots' Backlog plans do, across 4 namespaces. A namespace's order alone therefore does not say what can be built. Namespace ranks stay independent; these additions make the chain visible and store nothing.
 
 - **Waiting on:** every Backlog plan, in Details, Ordering, and the drawer, lists its unfinished prerequisites as `Waiting on N`, each with a namespace badge and a link on its title that opens it. A prerequisite in another namespace's Backlog shows `Backlog, position N` or `Backlog, not prioritized`; one in this namespace shows `Backlog`, since a draft may be moving it; one outside Backlog shows its lifecycle; a missing one shows `not found`. A completed prerequisite is left out.
-- **Next up:** a section above the namespace list on a selected repo's screen, showing the same cards as Details. Each namespace gets at most one card: its highest-ranked plan that has no blocker and whose unfinished prerequisites are all in Ready, Active, or Review. An unranked plan never appears, and with no qualifying plan the section is hidden. Filters narrow it. Namespaces stay in directory order, so it claims no order between them. The card's namespace badge opens that namespace, the same as its row in the list, without opening the plan; nothing here changes an order.
+- **Next up:** a section above the namespace list on a selected repo's screen, showing the same cards as Details. Each namespace gets at most one card: its highest-ranked plan that has no blocker and whose unfinished prerequisites are all in Ready, Active, or Review. An unranked plan never appears, and with no qualifying plan the section is hidden. Filters narrow it. Namespaces stay in directory order, so pinned ones lead. The card's namespace badge opens that namespace, the same as its row in the list, without opening the plan; nothing here changes an order.
 - **Namespace label:** the `PORTAL · Title` prefix is gone. The namespace appears only where it tells the reader something:
 
 | Surface | How the namespace appears |
@@ -213,6 +215,7 @@ Use a repository-local `docs/plans/plans-order.json` keyed by namespace, storing
 | --- | --- | --- |
 | Portal **Save** | Explicit user action | That namespace's full effective order with the draft applied |
 | `roborepo plans order place <plan>` | `plan-write` creating a plan, or a user | The plan's position, plus that namespace's effective order |
+| Portal pin control | Explicit user action, with no Save | The `pinned` list, which sets the order between namespaces |
 | Nothing else | Portal reads and lifecycle transitions never write it | Transitions keep committing only the plan's own paths |
 
 ```json
@@ -233,6 +236,7 @@ Example IDs are illustrative. Keep a single ordered array per namespace; derive 
 | Unknown ID | Excluded, with a finding | Preserved until someone removes it |
 | Namespace no longer approved | Excluded, with a finding | Preserved; a write touches only its own namespace |
 | Plan with no `id`, or a duplicate | Cannot be ranked; shown with its finding | Not written |
+| Pin on a namespace no longer approved | Ignored, with no finding | Pruned |
 
 An unparseable registry is a finding: every plan shows as unprioritized and Save is refused rather than overwriting the file. Store changes in the repository that owns the plans, not a global portal order file. Do not rely on any backward-compatible migration of priority labels. Worktree-only Backlog plans rank like any other, and their position is still stored in the primary checkout.
 
@@ -351,6 +355,22 @@ Added after reviewing Backlog on real repos. The behavior is built; the open tas
 - [x] Test that opening a `Waiting on` link during a dirty Ordering draft keeps the draft and its unsaved state.
 - [x] Check a Next up card with both badges and a long title at phone width and in the light theme, and fix what fails. Add a horizontal-overflow assertion for phone width.
 - [x] Run the gates under "Before human review" on the final commit and record the results in `### Verification`.
+- [x] Pin namespaces from their rows, lifting them on the repo screen and in Next up, and store the pins in `plans-order.json`, pruning removed namespaces at the next write.
+- [x] Count a plan as unblocked, and match the Blockers filter, only when no prerequisite is unfinished.
+- [x] Rename `View All Plans` to `All Plans`, show section titles at full contrast across the portal, and bold directory count numbers.
+- [x] Show a Prioritize row's clock and modified age beside its title, and align its contents to the top.
+- [x] Shrink Next up's info icon, say "for each category below", and widen the gap above All Plans.
+- [x] Drop the caret from namespace rows and move the pin to the far right.
+- [x] Return a prioritized plan to Needs prioritization by a control or a drop zone below the list, on Save.
+- [x] Give the sustained-hover description a padded, bordered panel, and make it the default in every lifecycle.
+- [x] Let the repo breadcrumb switch repos on the repo's own screen, and show a plain link back once a namespace is selected.
+- [x] Make the no-namespaces notice a tight warning, name the skill, and explain namespaces below it.
+- [x] Enlarge the shared dropdown caret and narrow the breadcrumb separator.
+- [x] Add Discard Changes to the leave prompt, rename its Cancel to Keep Editing, stack its options with the save first, and drop the action bar Cancel's confirmation.
+- [x] Set the hover panel to the page background in both themes.
+- [x] Replace directory counts with ready, unprioritized, and total.
+- [x] Archive unprioritized plans from Prioritize, asking for a reason and then a final yes.
+- [x] Use the standard notice for the no-namespaces banner, with its explanation and default namespaces inside it.
 
 ## Validation
 
@@ -371,12 +391,14 @@ Run the checks for the tier as each task lands, then let CI run the full gate. E
 | Invalid namespace | `roborepo plans validate` exits 1 and promote/start refuse bad filename prefixes in a configured repo, but Backlog displays affected plans with repair findings |
 | Titles | Next up and prerequisite lists badge an approved namespace; Details and Ordering rows show the plain title; authored H1 unchanged; no footer badge |
 | Unprioritized | Section appears first only when needed; moves into a draft Ordered list |
-| Ranked controls | Right side: top, up, down, bottom, handle; invalid actions disabled |
-| Unranked controls | Right side: down-to-top, bottom, handle; no numeric/select placement |
+| Ranked controls | Right side: top, up, down, bottom, return, handle; invalid actions disabled |
+| Return to unprioritized | The control or the drop zone sends a whole block to the top of Needs prioritization; Save removes it from the file; an order that drops a plan without naming it is refused |
+| Unranked controls | Right side: down-to-top, bottom, archive, handle; no numeric/select placement |
+| Archive | Asks for a reason, then a final yes; commits only the plan's paths on the base branch; disabled during a dirty draft; a linked block goes whole; the route refuses a ranked plan |
 | Two modes | Same flattened plan order; Details is always flat/un-nested; Ordering alone displays derived dependency group containers and movement controls |
 | Explicit Save | Multiple moves persist in one atomic write only after Save succeeds |
-| Cancel | Discards uncommitted moves and restores persisted order |
-| Guarded exit | Mode/tab/route/repo/page navigation prompts Save and continue or Cancel when dirty |
+| Cancel | Discards uncommitted moves at once and restores persisted order |
+| Guarded exit | Mode/tab/route/repo/page navigation prompts Save and Continue, Discard Changes, or Keep Editing when dirty |
 | Browser exit | Native supported unsaved-change protection is active |
 | Concurrent change | Stale draft cannot silently overwrite external dependency/order edits |
 | Waiting on | Details, Ordering, and the drawer list each unfinished prerequisite with its namespace and a link; a completed one is left out; a missing one says `not found` with no link |
@@ -453,15 +475,26 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - **A cycle or missing prerequisite locks the whole namespace's Ordering.** Alternative: lock only the affected block. Chosen because the addendum's E1 and E2 wireframes show unrelated rows blocked too.
 - **A repo with no config lists its Backlog plans as ordinary cards under No namespace.** Alternative: repair rows, as for a declared vocabulary. Chosen because that repo has nothing to repair, and rows would remove Promote and the other card actions.
 - **A registry entry for a Backlog plan with no namespace is preserved on write.** The plan's table prunes plans outside Backlog and preserves unknown ids, and does not name this case. It is kept after the ranked plans, so a rename brings it back ranked rather than losing the rank, which the plan says to reconcile after repair.
-- **Save refuses an order that drops a ranked plan.** Alternative: treat omission as un-ranking. Chosen because the design has no un-rank path, and a bug or a stale client must not silently demote plans.
+- **Save refuses an order that drops a ranked plan unless it names that plan as unprioritized (user decision added the un-rank path).** Alternative: treat omission as un-ranking. Chosen because a bug or a stale client must not silently demote plans. A linked group returns whole, since the rest of a group would pull a lone member back in.
+- **Returning a plan has both a drop zone and a control.** The user asked for the zone and was open to an icon. Dragging is pointer-only and the move buttons are the keyboard path, so the zone alone would leave keyboard users no way to do it. This adds a control the "Ordered rows" list did not have.
+- **The repo breadcrumb is a dropdown only on the repo's own screen (user decision).** Inside a namespace it stays the link back to that screen. With one repo in Backlog it stays plain text, since there is nothing to switch to.
+- **The leave prompt's labels and order are the user's: Save and Continue, Discard Changes, Keep Editing, stacked.** Keep Editing replaces Cancel because the action bar's Cancel discards, so one word would have meant opposite things a click apart. A stale draft disables Save, so that dialog opens focused on Keep Editing rather than Discard Changes.
+- **The label in Next up's tip says "category"; the rest of the page still says namespace.** The user named this one string. Whether "category" should replace "namespace" across the UI is theirs to call.
 - **`--top` and `--bottom` are ignored, and reported, for a plan connected to a ranked plan but not yet stored.** A stored plan moves with its group, since that is an explicit move. Alternative: refuse. Chosen because `plan-write` may not know the plan is connected, and the plan makes attachment automatic.
 - **A plan that cannot be ranked stays in Needs prioritization with no controls and a reason.** The plan requires it be shown with its finding but does not say where.
 - **`roborepo plans validate` sets `process.exitCode` instead of calling `process.exit`.** Validation now exits 1 more often, and `exit()` truncated `--json` output past a pipe buffer, which reproduced while checking this repo's tree.
 - **`plans validate` gains a `repositoryFindings` array.** A broken config or registry belongs to no one plan. It is added to the existing summary counts, so the exit code covers it.
 - **This plan's file moved to `plans-backlog-roadmap-ordering.md`.** Merging `main` removed the `plan` namespace in favor of `plans`, so the old name failed the blocking naming check. Alternative: put `plan` back in `plans-config.json`, which undoes that restructure. The id, branch, and `worktree:` value keep their old form, since plan copies match by id and the worktree folder already exists.
 - **`Move down` is the accessible name of both the Ordered and Needs prioritization controls,** as the plan specifies. The Needs one is internally `place-top`, so the two behaviors stay distinct in code.
-- **Description preview, its size, and the hover overlay apply to Backlog only (user request scoped by this plan's goal).** Other lifecycles keep their 190-character cut and larger text, because the plan's goals say their presentation does not change. Alternative: every lifecycle, which is one class to remove.
-- **Directory rows drop `N total` (user decision).** Both repo and namespace rows show only unblocked and unprioritized counts, which are the actionable ones. A row whose plans are all ranked and blocked shows no count.
+- **The description preview and hover panel apply to every lifecycle (user decision), and the smaller text stays Backlog's.** The user asked for the panel as a default of the views, which narrows the goal that other lifecycles' presentation does not change.
+- **Directory rows show `N ready`, `N unprioritized`, and `N total` (user decision).** Ready means prioritized and unblocked, and total gives the namespace's or repo's full scope. A zero ready or unprioritized count still drops out. The word overlaps the Ready lifecycle tab; the user chose it knowing the tab's name is a separate question to revisit if it confuses.
+- **The portal can archive unprioritized plans directly (user decision).** This is its first lifecycle change and its first commit, which narrows "the portal never writes a plan file". It calls the same `transitionPlan` as the command, so the base-branch and uncommitted-edit refusals still apply, and the route refuses a ranked plan. The dialog requires a reason because the archive record exists to say why, and the skill forbids inventing one. Alternative: a fixed reason, which would leave the record empty.
+- **The final Archive button waits half a second before it can be clicked.** It can land under the cursor after Continue, so a double-click would otherwise answer both questions.
+- **A linked block archives whole, and the control waits for a clean draft.** Archiving part of a chain would strand the rest on an archived prerequisite, and any archive changes the namespace's revision, which would make an unsaved draft stale.
+- **The banner says default namespaces apply "once set up".** `approvedNamespaces` returns nothing until a repo declares its own, so saying every repo already has them would be false for the repo showing the banner.
+- **Pinned namespaces lead the repo screen and Next up, stored in `plans-order.json` (user decision).** Pins are listed first pinned first, so re-pinning is how to reorder them. Alternative: alphabetical among pins, which could not express that one focus comes before another. Details shows one namespace at a time, so a pin has nothing to reorder there.
+- **A stale pin is pruned at the next write, not when the config changes (user asked for pruning; timing follows the read-purity rule).** It stops applying as soon as the namespace leaves the config. A pin on an approved namespace with nothing in Backlog stays.
+- **Unblocked means no blocker and no unfinished prerequisite (user decision).** research_bots' lone `ingest` plan showed `1 unblocked` because the count accepted a prerequisite in Active. Directory counts and Backlog's Blockers filter now share this rule; other lifecycles' filter still reads `blocked_by` only. Next up keeps accepting work underway, as decided above.
 
 ## Not tested
 
@@ -546,3 +579,6 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - UI review validation pass 3 at 974f57c4 (fresh-context subagent, the last of the 3 passes the user approved for this gate): 2 `fix` findings, no `escalate`; `node scripts/test/portal-ui/run.mjs` passed 218 of 218. Both are fixed at e8999b57, and no further fresh-context pass has reviewed those fixes.
 - Before human review gates at 067d5900: `node scripts/test/backlog-model-check.mjs` passed; `node scripts/test/portal-ui/run.mjs plans-backlog plans-status` passed 66 of 66; `node scripts/test/portal-ui/run.mjs` passed 219 of 219; `node scripts/test/docs-reference-check.mjs` passed, and `docs/images/plans.png` shows no title prefix, read against the page; `roborepo plans validate` for this plan reports only its 3 unconfirmed `## Not tested` entries. Fresh review: no open `fix` or `escalate` finding, with pass 3's fixes not revalidated. CI not run: it waits for a push the user asks for.
 - After merging `main` at d5c763f7: `bash scripts/doctor.sh --quiet` passed 97 checks at 067d5900, `git diff --check origin/main...HEAD` was clean, and `node scripts/test/plan-tree-naming-check.mjs` passed 143 plans. `main` was fetched just before these gates and had nothing newer.
+- The stacked leave prompt, immediate Cancel, page-background hover panel, ready counts, archive control, and standard banner (uncommitted when run): `node scripts/test/portal-ui/run.mjs` passed 238 of 238; `backlog-model-check`, `backlog-order-check`, `repository-scope-check`, `plans-portal-state-check`, and `docs-reference-check` passed; `bash scripts/doctor.sh --quiet` passed 97 checks. No fresh-context pass has reviewed this work, and the "Before human review" gates need rerunning on the final commit.
+- The clock label, return to unprioritized, hover panel, repo breadcrumb, notice, and caret changes (uncommitted when run): `backlog-model-check`, `backlog-order-check`, `repository-scope-check`, and `docs-reference-check` passed; `bash scripts/doctor.sh --quiet` passed 97 checks; `node scripts/test/portal-ui/run.mjs plans-backlog plans-status repository-scope` passed 99 of 99, after a full portal UI run passed 236 of 236 before the notice, repo breadcrumb, separator, and caret edits. No fresh-context pass has reviewed this work, and the "Before human review" gates need rerunning on the final commit.
+- Pinning, the unblocked rule, and the styling (uncommitted when run): `backlog-model-check`, `backlog-order-check`, and `plans-portal-state-check` passed; `node scripts/test/portal-ui/run.mjs` passed 230 of 231. The failure, `portal-ui.spec.mjs` "global navigation keeps primary pages in the bar and the rest in the ⋮ menu", had the header intercept a click; it passed 3 of 3 alone, and the cause was not found. Filters and counts were read on research_bots through a portal running this worktree; its pinned state was simulated in the browser, so nothing was written there. No fresh-context pass has reviewed this work, and the "Before human review" gates need rerunning on the final commit.

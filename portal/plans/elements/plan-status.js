@@ -38,14 +38,8 @@ class PlanStatusElement extends HTMLElement {
     const plan = record.plan;
     const isBlocked = plan.blockers.length > 0;
 
-    const age = formatModifiedAge(plan.modifiedAt);
-    const node = fill(tpl("tpl-plan-status"), { meta: age });
-    const modified = node.querySelector("[data-slot=modified]");
-    const modifiedDate = new Date(plan.modifiedAt);
-    const knownDate = !Number.isNaN(modifiedDate.getTime());
-    modified.title = knownDate ? `Modified ${modifiedDate.toLocaleString()}` : "Modified time unknown";
-    modified.setAttribute("aria-label", knownDate ? `Modified ${age}${age === "now" ? "" : " ago"}` : "Modified time unknown");
-    if (knownDate) modified.dateTime = modifiedDate.toISOString();
+    const node = tpl("tpl-plan-status");
+    renderModifiedTime(node.querySelector("[data-slot=modified]"), plan.modifiedAt);
     node.querySelector("[data-slot=actions]").append(...(this.actionContent || []));
     const warnings = plan.validation.warnings.length;
     if (warnings) node.querySelector("[data-slot=warnings]").replaceWith(chip(`${warnings} warning${warnings === 1 ? "" : "s"}`, "warn"));
@@ -83,6 +77,17 @@ class PlanStatusElement extends HTMLElement {
 }
 
 customElements.define("plan-status", PlanStatusElement);
+
+// Fills a <time> holding a [data-slot=meta] span, the clock-and-age label a card and a Prioritize row share.
+export function renderModifiedTime(time, value) {
+  const age = formatModifiedAge(value);
+  time.querySelector("[data-slot=meta]").textContent = age;
+  const date = new Date(value);
+  const known = !Number.isNaN(date.getTime());
+  time.title = known ? `Modified ${date.toLocaleString()}` : "Modified time unknown";
+  time.setAttribute("aria-label", known ? `Modified ${age}${age === "now" ? "" : " ago"}` : "Modified time unknown");
+  if (known) time.dateTime = date.toISOString();
+}
 
 function formatModifiedAge(value) {
   const date = new Date(value);

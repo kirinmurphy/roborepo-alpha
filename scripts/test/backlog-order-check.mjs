@@ -9,7 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { deriveGroups, findDependencyCycles, proposeOrder } from "../../modules/plan-suite/backlog-order.mjs";
-import { buildBacklogIndex, placePlan, readOrderRegistry, saveNamespaceOrder } from "../../modules/plan-suite/backlog-registry.mjs";
+import { buildBacklogIndex, placePlan, readOrderRegistry, saveNamespaceOrder, setNamespacePinned } from "../../modules/plan-suite/backlog-registry.mjs";
 import { readProjectNamespaces, resolvePlanNamespace, validatePlanNaming } from "../../modules/plan-suite/naming.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -105,6 +105,11 @@ function orderOf(saved, plans, change = null) {
   assert.deepEqual(codes(["A", "N", "B", "X"]), ["ORDER_SPLITS_DEPENDENCIES"], "a split group is refused");
   assert.deepEqual(codes(["B", "A", "X"]), ["ORDER_SPLITS_DEPENDENCIES"], "an inverted prerequisite is refused");
   assert.deepEqual(codes(["A", "B"]), ["ORDER_DROPS_PLANS"], "a ranked plan cannot silently become unranked");
+  const returning = (order, unprioritized) => proposeOrder(["A", "B", "X"], groups, { type: "replace", order, unprioritized });
+  assert.deepEqual(returning(["A", "B"], ["X"]).findings, [], "a named plan may return to unprioritized");
+  assert.deepEqual(returning(["X"], ["A", "B"]).order, ["X"], "a whole group may return");
+  assert.deepEqual(returning(["A", "X"], ["B"]).findings.map((item) => item.code), ["ORDER_SPLITS_DEPENDENCIES"], "part of a group cannot return alone");
+  assert.deepEqual(returning(["A", "B"], ["N"]).findings.map((item) => item.code), ["ORDER_DROPS_PLANS"], "naming another plan does not excuse dropping this one");
   assert.deepEqual(codes(["A", "B", "X", "ghost"]), ["ORDER_UNKNOWN_PLANS"]);
   assert.deepEqual(codes(["A", "B", "X", "X"]), ["ORDER_REPEATS_PLANS"]);
 }
@@ -192,6 +197,18 @@ try {
   assert.deepEqual(viewOf(index, "agents").ordered.map((block) => block.ids), [["xxxxxx33"], ["aaaaaa11", "bbbbbb22"]]);
   assert.deepEqual(viewOf(index, "agents").needsPrioritization, []);
 
+  // Returning a plan takes it out of the file and back to Needs prioritization, and only when named.
+  const beforeReturn = viewOf(index, "agents").revision;
+  const beforeReturnRecords = await records();
+  assert.throws(() => saveNamespaceOrder({ root: realRepo, records: beforeReturnRecords, namespace: "agents", order: ["aaaaaa11", "bbbbbb22"], revision: beforeReturn }), { code: "INVALID_CHANGE" }, "an unnamed omission is still refused");
+  assert.throws(() => saveNamespaceOrder({ root: realRepo, records: beforeReturnRecords, namespace: "agents", order: ["aaaaaa11", "bbbbbb22"], unprioritized: "xxxxxx33", revision: beforeReturn }), { code: "INVALID_CHANGE" });
+  saveNamespaceOrder({ root: realRepo, records: await records(), namespace: "agents", order: ["aaaaaa11", "bbbbbb22"], unprioritized: ["xxxxxx33"], revision: beforeReturn });
+  assert.deepEqual(JSON.parse(fs.readFileSync(orderFile, "utf8")).namespaces.agents, ["aaaaaa11", "bbbbbb22"]);
+  index = await indexed();
+  assert.deepEqual(viewOf(index, "agents").needsPrioritization.map((block) => block.ids), [["xxxxxx33"]]);
+  saveNamespaceOrder({ root: realRepo, records: await records(), namespace: "agents", order: ["xxxxxx33", "aaaaaa11", "bbbbbb22"], revision: viewOf(index, "agents").revision });
+  index = await indexed();
+
   // A dependency edit changes the revision, regroups on read, and writes nothing.
   const before = fs.readFileSync(orderFile, "utf8");
   write("docs/plans/backlog/agents-x.md", document({ id: "xxxxxx33", deps: ["bbbbbb22"] }));
@@ -215,6 +232,38 @@ try {
     agents: ["aaaaaa11", "bbbbbb22", "xxxxxx33", "ghost123", "zzzzzz55"],
     removed: ["kept1234"],
   }, "pruned the active plan; preserved the unknown id, the unnamespaced plan, and the other namespace");
+
+  // Pins lift a namespace above alphabetical order, first pinned first, and leave every order alone.
+  const orderBeforePins = JSON.parse(fs.readFileSync(orderFile, "utf8")).namespaces;
+  setNamespacePinned({ root: realRepo, namespace: "other", pinned: true });
+  index = await indexed();
+  assert.deepEqual(index.namespaces.map((view) => [view.namespace, view.pinned]), [["other", true], ["agents", false]], "a pinned namespace comes first");
+  setNamespacePinned({ root: realRepo, namespace: "agents", pinned: true });
+  setNamespacePinned({ root: realRepo, namespace: "agents", pinned: true });
+  assert.deepEqual(JSON.parse(fs.readFileSync(orderFile, "utf8")).pinned, ["other", "agents"], "pinning twice records it once, in pin order");
+  assert.deepEqual((await indexed()).namespaces.map((view) => view.namespace), ["other", "agents"], "pin order beats alphabetical");
+  assert.deepEqual(JSON.parse(fs.readFileSync(orderFile, "utf8")).namespaces, orderBeforePins, "pinning changes no plan's order");
+  assert.throws(() => setNamespacePinned({ root: realRepo, namespace: "nonsense", pinned: true }), /not an approved namespace/);
+  // A Save keeps the pins.
+  index = await indexed();
+  saveNamespaceOrder({ root: realRepo, records: await records(), namespace: "agents", order: ["aaaaaa11", "bbbbbb22", "xxxxxx33"], revision: viewOf(index, "agents").revision });
+  assert.deepEqual(JSON.parse(fs.readFileSync(orderFile, "utf8")).pinned, ["other", "agents"], "a Save preserves pins");
+  // A pin on a namespace removed from the config is ignored on read and pruned at the next write.
+  const pinnedFile = JSON.parse(fs.readFileSync(orderFile, "utf8"));
+  fs.writeFileSync(orderFile, JSON.stringify({ ...pinnedFile, pinned: ["gone", "agents"] }));
+  const pinsRaw = fs.readFileSync(orderFile, "utf8");
+  index = await indexed();
+  assert.deepEqual(index.namespaces.map((view) => [view.namespace, view.pinned]), [["agents", true], ["other", false]], "a removed namespace's pin has no effect");
+  assert.equal(fs.readFileSync(orderFile, "utf8"), pinsRaw, "reading does not prune");
+  assert.equal(index.findings.some((item) => /gone/.test(item.message || "")), false, "a stale pin is not a finding");
+  saveNamespaceOrder({ root: realRepo, records: await records(), namespace: "agents", order: ["aaaaaa11", "bbbbbb22", "xxxxxx33"], revision: viewOf(index, "agents").revision });
+  assert.deepEqual(JSON.parse(fs.readFileSync(orderFile, "utf8")).pinned, ["agents"], "the next Save prunes it");
+  setNamespacePinned({ root: realRepo, namespace: "agents", pinned: false });
+  assert.equal("pinned" in JSON.parse(fs.readFileSync(orderFile, "utf8")), false, "with no pins the key is left out");
+  fs.writeFileSync(orderFile, JSON.stringify({ schemaVersion: 1, pinned: "agents", namespaces: {} }));
+  assert.equal(readOrderRegistry(realRepo).state, "invalid", "a malformed pin list is an invalid registry");
+  assert.throws(() => setNamespacePinned({ root: realRepo, namespace: "agents", pinned: true }), /was not overwritten/);
+  fs.writeFileSync(orderFile, `${JSON.stringify({ schemaVersion: 1, namespaces: orderBeforePins }, null, 2)}\n`);
 
   // An invalid order is refused and writes nothing.
   index = await indexed();
@@ -383,7 +432,7 @@ try {
   const orderBeforeLoop = fs.readFileSync(orderFile, "utf8");
   fs.rmSync(orderFile);
   fs.symlinkSync(orderFile, orderFile);
-  assert.deepEqual(readOrderRegistry(realRepo), { state: "invalid", namespaces: {}, raw: "", error: "ELOOP" });
+  assert.deepEqual(readOrderRegistry(realRepo), { state: "invalid", namespaces: {}, pinned: [], raw: "", error: "ELOOP" });
   fs.rmSync(orderFile);
   fs.writeFileSync(orderFile, orderBeforeLoop);
 

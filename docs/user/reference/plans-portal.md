@@ -134,8 +134,8 @@ flat list of cards across all selected repos.
 
 | You have selected | You see |
 | --- | --- |
-| **All repos** | Repos with Backlog plans, each with its unblocked and unprioritized plan counts |
-| A repo | **Next up**, then **View All Plans**: its namespaces with Backlog plans, each with unblocked and unprioritized counts; **No namespace** last, when any plan lands there |
+| **All repos** | Repos with Backlog plans, each with its ready, unprioritized, and total plan counts. A plan is ready when it is prioritized, has no blocker, and every prerequisite is completed |
+| A repo | **Next up**, then **All Plans**: its namespaces with Backlog plans, pinned ones first, each with the same counts; **No namespace** last, when any plan lands there |
 | A repo and namespace | **Details**: prioritized cards, under a banner counting plans that need prioritization. **Prioritize**: **Needs prioritization**, then **Prioritized** |
 | A repo and **No namespace** | Each file's exact name, its findings, and **Copy Repair Prompt** |
 
@@ -146,16 +146,16 @@ Filters narrow the directory counts and the Details cards. Prioritize always sho
 and hides Filters, because moving a row among hidden rows has no defined result.
 
 A plan's namespace is the longest approved `<namespace>-` prefix of its filename. It is derived on
-every read and never stored. Inside a namespace the breadcrumb names it and switches to another one, a Next up
+every read and never stored. On a repo's screen the breadcrumb's repo name switches to another repo with Backlog plans. Inside a namespace the breadcrumb names it and switches to another one, a Next up
 card shows it as a badge, and **Waiting on** does for a prerequisite in another namespace; the H1 is untouched. Approved means the keys of `docs/plans/plans-config.json` plus the universal
 namespaces. A repo with no config shows one **No namespace** row with its plans as ordinary cards and
-a notice pointing to `/plan-suite-init`, since it never adopted the convention. A malformed config is
+a warning pointing to the `/plan-suite-init` skill, since it never adopted the convention. A malformed config is
 reported as an error and every plan shows under **No namespace** until it is fixed.
 
 **Next up** shows the same cards as Details, at most one per namespace: its highest-ranked plan with no
 blocker and with every unfinished prerequisite already in Ready, Active, or Review. An unranked plan never
-appears, so a repo with nothing ranked shows no Next up. Namespaces stay in directory order, so it claims no
-order between them. Filters narrow it, and a card's namespace badge opens that namespace.
+appears, so a repo with nothing ranked shows no Next up. Namespaces stay in directory order, so pinned
+ones lead. Filters narrow it, and a card's namespace badge opens that namespace.
 
 **Waiting on** lists a Backlog plan's unfinished prerequisites in Details and the drawer, each with its lifecycle
 and a link that opens it. A prerequisite in another namespace also shows that namespace's badge. Outside the
@@ -174,15 +174,22 @@ Details:
   needs `A` and `C`, and `C` needs `A`, then `E` sits under `C`. A plan with several real prerequisites nests
   under the last to finish and names the others under **Also needs**.
 - **Prioritized** controls, right side, in order: **Move to top**, **Move up**, **Move down**, **Move to
-  bottom**, drag handle.
-- **Needs prioritization** controls: **Move down** (to the top of Prioritized), **Move to bottom**, drag
+  bottom**, **Return to unprioritized**, drag handle. Dropping a row on the **Return to unprioritized** zone
+  below the list does the same as the control: the row goes to the top of **Needs prioritization**, and Save
+  takes it out of the order.
+- **Needs prioritization** controls: **Move down** (to the top of Prioritized), **Move to bottom**, **Archive**, drag
   handle.
 - A namespace with a dependency cycle or a missing prerequisite shows why and locks its controls.
 
+**Archive** retires an unprioritized plan, or a whole linked block, without waiting for Save. It asks for
+a reason, then asks once more, and commits each move to the repo's base branch, leaving the push to
+you. The base branch must be checked out in the primary checkout. It stays disabled while a draft has
+unsaved changes.
+
 Moves stay in a draft. **Save** writes the namespace's whole order at once; **Cancel** discards the
-draft after asking. Leaving a dirty draft by any route (the mode toggle, a lifecycle tab, the repo
+draft at once. Leaving a dirty draft by any route (the mode toggle, a lifecycle tab, the repo
 selector, a header link, back or forward) first shows "Your prioritization changes have not been
-saved." with **Save and continue** or **Cancel**. Closing or reloading the tab raises the browser's
+saved." with **Save and Continue**, **Discard Changes**, or **Keep Editing**. Closing or reloading the tab raises the browser's
 own prompt. If the namespace changes underneath a draft (another tab, an edited `depends_on`, a
 config edit), **Refresh** or **Save** marks it stale: nothing is overwritten, and you discard it and
 start from the current order.
@@ -205,9 +212,19 @@ The order you see is calculated on every read, and a read never writes:
 | A plan leaves Backlog | Ignored; the others keep their relative order | Pruned at the next write |
 | The file names an unknown plan | Excluded, with a finding | Preserved |
 | The file has a namespace that is no longer approved | Excluded, with a finding | Preserved |
-| The file cannot be parsed | Every plan unprioritized, with a finding; Save refuses | Never overwritten |
+| A pin names a namespace no longer approved | Ignored | Pruned at the next write |
+| The file cannot be parsed | Every plan unprioritized, with a finding; Save and pinning refuse | Never overwritten |
 
 A plan with no `id`, or a duplicate one, stays in Needs prioritization with no controls.
+
+### Pinning a namespace
+
+The pin on a namespace's row lifts it above the others on the repo screen, and lifts its plan the same
+way in **Next up** and in the breadcrumb's namespace menu. Pinned namespaces appear in the order they
+were pinned, then the rest alphabetically. A pin takes effect at once, with no Save, and is stored as
+a `pinned` list in `plans-order.json`. It changes the order between namespaces only, so each
+namespace's own plans keep their order. A pin stays while its namespace has nothing in Backlog, so it
+still applies when the next plan arrives.
 
 ### Limits
 

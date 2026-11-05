@@ -2,10 +2,15 @@
 // The Backlog view model the browser runs: directory counts, the URL level, and draft moves.
 import assert from "node:assert/strict";
 import {
+  isUnblocked,
   NO_NAMESPACE,
   createDraft,
   dependencyTree,
+  dependentsOutside,
   dropBlock,
+  repositoryOptions,
+  returnBlock,
+  unprioritizedIds,
   hrefWithNamespace,
   isActionEnabled,
   isDraftDirty,
@@ -53,14 +58,15 @@ const directoryRecords = [
   directoryRecord("bad", "bad"),
 ];
 assert.deepEqual(repositoryDirectory([entry, empty], all, directoryRecords), [
-  { repositoryId: "r1", name: "one", urlKey: "one", planCount: 6, unblockedCount: 3, unprioritizedCount: 1 },
-], "only repos with Backlog plans, counting plans, unblocked plans, and unprioritized plans");
+  { repositoryId: "r1", name: "one", urlKey: "one", planCount: 6, readyCount: 1, unprioritizedCount: 1 },
+], "only repos with Backlog plans, counting plans, ready plans, and unprioritized plans");
 assert.deepEqual(repositoryDirectory([entry], new Set(["k-A"]), directoryRecords).map((row) => row.planCount), [1], "filters narrow the counts");
-assert.deepEqual(repositoryDirectory([entry], new Set(["k-B", "k-N"]), directoryRecords).map((row) => row.unblockedCount), [1], "filters narrow the unblocked count");
+assert.deepEqual(repositoryDirectory([entry], new Set(["k-B", "k-N"]), directoryRecords).map((row) => row.readyCount), [0], "a waiting plan and an unranked free one are not ready");
+assert.deepEqual(repositoryDirectory([entry], new Set(["k-A", "k-N"]), directoryRecords).map((row) => row.readyCount), [1], "filters narrow the ready count");
 assert.deepEqual(repositoryDirectory([entry], new Set(), directoryRecords), [], "a repo with no matching plan drops out");
 assert.deepEqual(namespaceDirectory(entry, all, directoryRecords), [
-  { namespace: "portal", planCount: 5, unblockedCount: 2, unprioritizedCount: 1 },
-  { namespace: NO_NAMESPACE, planCount: 1, unblockedCount: 1, unprioritizedCount: 0 },
+  { namespace: "portal", pinned: false, planCount: 5, readyCount: 1, unprioritizedCount: 1 },
+  { namespace: NO_NAMESPACE, planCount: 1, readyCount: 0, unprioritizedCount: 0 },
 ], "No namespace comes last");
 assert.deepEqual(namespaceDirectory(entry, new Set(["k-N"]), directoryRecords).map((row) => row.namespace), ["portal"], "No namespace shows only when plans land there");
 
@@ -80,6 +86,34 @@ assert.deepEqual(orderedIds(placedTop), ["N", "A", "B", "C", "X"]);
 assert.deepEqual(placedTop.needs, [], "the plan leaves Needs prioritization immediately");
 assert.equal(isDraftDirty(placedTop), true);
 assert.deepEqual(orderedIds(moveBlock(draft, "needs", 0, "bottom")), ["A", "B", "C", "X", "N"]);
+
+// Returning a block: to the top of the queue, by the control or the drop zone, whole, and undoable.
+const returned = returnBlock(draft, 0);
+assert.deepEqual(orderedIds(returned), ["X"]);
+assert.deepEqual(returned.needs[0].ids, ["A", "B", "C"], "it leads Needs prioritization");
+assert.deepEqual(moveBlock(draft, "ordered", 0, "return"), returned);
+assert.deepEqual(unprioritizedIds(returned), ["A", "B", "C"], "Save names what left the order");
+assert.equal(isDraftDirty(returned), true);
+assert.equal(isActionEnabled("ordered", "return", 0, 1), true, "a lone last block can still return");
+assert.equal(isActionEnabled("ordered", "return", 1, 2), true);
+assert.deepEqual(unprioritizedIds(moveBlock(draft, "needs", 0, "place-top")), [], "a newly placed plan is not returning");
+
+// What archiving a block would strand: unfinished plans outside it, in this repo, that still need it.
+const dependentRecord = (id, lifecycle, dependencies, repository = "r1") => ({ key: `k-${id}`, repository: { id: repository }, plan: { id, lifecycle, title: id, dependencies } });
+const dependentPool = [
+  dependentRecord("A", "backlog", []),
+  dependentRecord("B", "backlog", ["A"]),
+  dependentRecord("later", "active", ["B"]),
+  dependentRecord("done", "completed", ["A"]),
+  dependentRecord("gone", "archived", ["A"]),
+  dependentRecord("elsewhere", "backlog", ["A"], "r2"),
+];
+assert.deepEqual(dependentsOutside(block("A", "B"), dependentPool).map((record) => record.plan.id), ["later"]);
+
+// The repo breadcrumb's choices: sorted, names told apart, never the All repos entry.
+assert.deepEqual(repositoryOptions([{ urlKey: "b", name: "Beta" }, { urlKey: "a", name: "Alpha" }]), [["a", "Alpha"], ["b", "Beta"]]);
+assert.deepEqual(repositoryOptions([{ urlKey: "x", name: "Same" }, { urlKey: "y", name: "Same" }]).map(([, label]) => label), ["Same (x)", "Same (y)"]);
+assert.deepEqual(repositoryOptions(undefined), []);
 assert.deepEqual(draft.needs.length, 1, "the original draft is never mutated");
 
 // Disabled states.
@@ -122,6 +156,25 @@ assert.deepEqual(statusOf(["working"]), ["agents/working: Active"]);
 assert.deepEqual(statusOf(["done"]), []);
 assert.deepEqual(statusOf(["retired"]), ["agents/retired: Archived"]);
 assert.deepEqual(statusOf(["elsewhere"]), ["elsewhere: not found"], "another repo's plan with that id does not count");
+
+// A plan waiting on Active work is blocked, and still counts for Next up because that work is underway.
+const waiting = planRecord("waiting", "ingest", "backlog", ["working"]);
+const held = planRecord("held", "ingest", "backlog", ["ranked"]);
+const free = planRecord("free", "knowledge", "backlog");
+const unblockedRecords = [...records, waiting, held, free];
+const ingestView = (keys, pending = []) => ({ namespace: "ingest", ordered: keys.map((key) => ({ keys: [key] })), needsPrioritization: pending.map((key) => ({ keys: [key] })), unrankable: [] });
+assert.equal(isUnblocked(waiting, unblockedRecords), false, "a prerequisite in Active blocks");
+assert.equal(isUnblocked(free, unblockedRecords), true);
+assert.equal(isUnblocked(planRecord("after-done", "agents", "backlog", ["done"]), unblockedRecords), true, "a completed prerequisite does not block");
+assert.equal(namespaceDirectory({ namespaces: [ingestView([waiting.key])], noNamespace: [] }, new Set([waiting.key]), unblockedRecords)[0].readyCount, 0, "the lone waiting plan is not counted as ready");
+assert.deepEqual(nextUp({ namespaces: [ingestView([waiting.key])] }, unblockedRecords, new Set([waiting.key])).map((record) => record.key), [waiting.key], "work underway still leaves it next");
+assert.deepEqual(nextUp({ namespaces: [ingestView([held.key])] }, unblockedRecords, new Set([held.key])), [], "a prerequisite still in Backlog keeps it out of Next up");
+// Directory order carries through, so the namespaces the server pins first lead both lists.
+const knowledgeView = { ...ingestView([free.key]), namespace: "knowledge", pinned: true };
+const pinnedEntry = { namespaces: [knowledgeView, ingestView([waiting.key])], noNamespace: [] };
+const pinnedKeys = new Set([free.key, waiting.key]);
+assert.deepEqual(nextUp(pinnedEntry, unblockedRecords, pinnedKeys).map((record) => record.key), [free.key, waiting.key], "a pinned namespace leads Next up");
+assert.deepEqual(namespaceDirectory(pinnedEntry, pinnedKeys, unblockedRecords).map((row) => [row.namespace, row.pinned]), [["knowledge", true], ["ingest", false]], "and the namespace list");
 
 // The dependency tree: implied prerequisites collapse, and a plan with several real ones nests under
 // the last to finish and names the rest.

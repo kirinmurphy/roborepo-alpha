@@ -12,7 +12,9 @@ import {
   readPlanDocument,
   domainError,
 } from "../../modules/plan-suite/index.mjs";
-import { saveNamespaceOrder } from "../../modules/plan-suite/backlog-registry.mjs";
+import { saveNamespaceOrder, setNamespacePinned } from "../../modules/plan-suite/backlog-registry.mjs";
+import { primaryCheckout } from "../../modules/plan-suite/plan-git.mjs";
+import { transitionPlan } from "../../modules/plan-suite/transition.mjs";
 import { loadRegistry } from "../../modules/repositories/index.mjs";
 import { MOCK_FIRST_RUN_VIEWS_ENABLED, mockPlanDocument, mockPlansSnapshot } from "./mock-home.mjs";
 
@@ -48,6 +50,10 @@ export function scopeSnapshot(snapshot, repositoryId) {
     repositoryScans: scans.length ? scans : [{ repositoryId, state: "unavailable", planCount: 0, checkoutCount: 0 }],
     errors: (snapshot.errors || []).filter((error) => inScope(error.repositoryId)),
     backlog: (snapshot.backlog || []).filter((entry) => inScope(entry.repositoryId)),
+    // A scoped page still needs every repo its breadcrumb can jump to.
+    backlogRepositories: (snapshot.backlog || [])
+      .filter((entry) => entry.urlKey && (entry.namespaces.length || entry.noNamespace.length))
+      .map(({ urlKey, name }) => ({ urlKey, name })),
   };
 }
 
@@ -82,14 +88,53 @@ export function buildPlansPrompt({ action, keys, mode }) {
 }
 
 // A Backlog Save: one namespace's whole order, against the revision the draft was opened from.
-export function saveBacklogOrder({ repositoryId, namespace, order, revision }) {
+export function saveBacklogOrder({ repositoryId, namespace, order, unprioritized, revision }) {
   const snapshot = buildPlanSnapshot({ stateRoot, packageState: planSuitePackageState() });
   const repository = snapshot.repositories.find((item) => item.repositoryId === repositoryId);
   if (!repository) throw domainError("PLAN_NOT_FOUND", "This repo can no longer be found. Refresh and try again.");
   const records = snapshot.plans.filter((record) => record.repository.repositoryId === repositoryId);
-  const result = saveNamespaceOrder({ root: repository.root, records, namespace, order, revision });
+  const result = saveNamespaceOrder({ root: repository.root, records, namespace, order, unprioritized, revision });
   cachedSnapshot = null;
   return result;
+}
+
+// Lifts one namespace to the top of its repo's Backlog, or returns it to alphabetical order.
+export function setBacklogNamespacePinned({ repositoryId, namespace, pinned }) {
+  const snapshot = buildPlanSnapshot({ stateRoot, packageState: planSuitePackageState() });
+  const repository = snapshot.repositories.find((item) => item.repositoryId === repositoryId);
+  if (!repository) throw domainError("PLAN_NOT_FOUND", "This repo can no longer be found. Refresh and try again.");
+  const result = setNamespacePinned({ root: repository.root, namespace, pinned });
+  cachedSnapshot = null;
+  return result;
+}
+
+// Retires unprioritized Backlog plans through the same transition `roborepo plans archive` runs: one
+// commit per plan on the base branch, nothing pushed. A ranked plan is refused, so a page working from
+// an older snapshot cannot archive what has since been prioritized.
+export async function archiveBacklogPlans({ repositoryId, ids, reason }) {
+  if (!Array.isArray(ids) || !ids.length || !ids.every((id) => typeof id === "string")) throw domainError("INVALID_CHANGE", "ids must list the plans to archive.");
+  const snapshot = buildPlanSnapshot({ stateRoot, packageState: planSuitePackageState() });
+  const repository = snapshot.repositories.find((item) => item.repositoryId === repositoryId);
+  const entry = snapshot.backlog.find((item) => item.repositoryId === repositoryId);
+  if (!repository || !entry) throw domainError("PLAN_NOT_FOUND", "This repo can no longer be found. Refresh and try again.");
+  const unprioritized = new Set(entry.namespaces.flatMap((view) => view.needsPrioritization.flatMap((block) => block.ids)));
+  const refused = ids.filter((id) => !unprioritized.has(id));
+  if (refused.length) throw domainError("INVALID_CHANGE", `Only unprioritized Backlog plans can be archived here: ${refused.join(", ")}.`);
+  const primary = primaryCheckout(repository.root);
+  const archived = [];
+  try {
+    for (const id of ids) {
+      const result = await transitionPlan({ cwd: primary, transition: "archive", selector: id, reason });
+      if (result.verdict !== "APPROVED") throw domainError("INVALID_CHANGE", `${id} moved, but its post-commit checks failed.`);
+      archived.push(id);
+    }
+  } catch (err) {
+    if (archived.length) err.message = `${err.message} Already archived: ${archived.join(", ")}.`;
+    throw err;
+  } finally {
+    cachedSnapshot = null;
+  }
+  return { archived };
 }
 
 export function refreshPlans({ repositoryId = null } = {}) {

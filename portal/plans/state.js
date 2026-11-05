@@ -1,5 +1,6 @@
 // Filter state, matching, sorting, and facet counts — no DOM here. app.js owns wiring DOM events
 // to this module's functions; templates.js owns turning its output into markup.
+import { isUnblocked } from "./backlog-model.js";
 import { isLifecycle } from "./lifecycle.js";
 
 // `structure` (a plan's structural completeness) and `freshness` (whether the document was checked
@@ -58,14 +59,16 @@ export const FILTER_OPTION_DEFS = {
   ],
 };
 
-// Per-field predicates keyed by filter id, each taking the field's current filter value.
+// Per-field predicates keyed by filter id, each taking the field's current filter value and every
+// plan in the snapshot.
 // Shared by filteredPlans() (applies all fields) and optionCounts() (applies all fields except
 // the one being counted, for facet-style "N remaining if you pick this" counts).
 export const FIELD_MATCHERS = {
-  blocked: (record, value) => {
-    if (value === "blocked") return record.plan.blockers.length > 0;
-    if (value === "unblocked") return record.plan.blockers.length === 0;
-    return true;
+  blocked: (record, value, plans) => {
+    if (value === "all") return true;
+    // Backlog also counts unfinished prerequisites, as its directory counts do.
+    const unblocked = record.plan.lifecycle === "backlog" ? isUnblocked(record, plans) : record.plan.blockers.length === 0;
+    return value === "unblocked" ? unblocked : !unblocked;
   },
   structure: (record, value) =>
     value === "all" || record.plan.readiness === value,
@@ -102,17 +105,17 @@ export function optionLabel(snapshot, id, value) {
   return def ? def[1] : value;
 }
 
-export function matchesFilters(record, filters, excludeId) {
+export function matchesFilters(record, filters, excludeId, plans = []) {
   for (const id of FILTER_IDS) {
     if (id === excludeId) continue;
-    if (!FIELD_MATCHERS[id](record, filters[id])) return false;
+    if (!FIELD_MATCHERS[id](record, filters[id], plans)) return false;
   }
   return true;
 }
 
 export function filteredPlans(plans, filters) {
   return plans
-    .filter((record) => matchesFilters(record, filters, null))
+    .filter((record) => matchesFilters(record, filters, null, plans))
     .sort(planSort);
 }
 
@@ -120,14 +123,14 @@ export function filteredPlans(plans, filters) {
 // every OTHER active filter stayed as-is. Excludes `id` itself so picking an option doesn't
 // shrink its own count relative to the other options.
 export function optionCounts(id, values, plans, filters) {
-  const pool = plans.filter((record) => matchesFilters(record, filters, id));
+  const pool = plans.filter((record) => matchesFilters(record, filters, id, plans));
   const counts = new Map();
   for (const value of values) {
     counts.set(
       value,
       value === "all"
         ? pool.length
-        : pool.filter((record) => FIELD_MATCHERS[id](record, value)).length,
+        : pool.filter((record) => FIELD_MATCHERS[id](record, value, plans)).length,
     );
   }
   return counts;

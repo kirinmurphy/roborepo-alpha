@@ -131,6 +131,24 @@ function record({ key = "k1", lifecycle = "backlog", id = "plan-1", repositoryId
 // itself resolves (would throw at module load if state.js's exports changed shape).
 assert.equal(typeof matchesFilters, "function");
 
+// Backlog's Blockers filter also counts unfinished prerequisites; other lifecycles read blocked_by only.
+function testBlockersFilterCountsPrerequisitesInBacklogOnly() {
+  const filters = { ...FILTER_DEFAULTS, blocked: "unblocked" };
+  const working = record({ key: "w", id: "working", lifecycle: "active" });
+  const done = record({ key: "d", id: "done", lifecycle: "completed" });
+  const waiting = record({ key: "a", id: "waiting" });
+  waiting.plan.dependencies = ["working"];
+  const finished = record({ key: "f", id: "finished" });
+  finished.plan.dependencies = ["done"];
+  const activeWaiting = record({ key: "aw", id: "active-waiting", lifecycle: "active" });
+  activeWaiting.plan.dependencies = ["working"];
+  const plans = [working, done, waiting, finished, activeWaiting];
+  const keys = (value) => plans.filter((item) => matchesFilters(item, { ...filters, blocked: value }, null, plans)).map((item) => item.key);
+  assert.deepEqual(keys("blocked"), ["a"], "only the Backlog plan waiting on unfinished work is blocked");
+  assert.deepEqual(keys("unblocked"), ["w", "d", "f", "aw"]);
+}
+testBlockersFilterCountsPrerequisitesInBacklogOnly();
+
 function testResolveBlockersResolvesMatchingId() {
   const blocker = record({ key: "b", id: "plan-b" });
   const blocked = record({ key: "a", id: "plan-a", blockers: ["plan-b"] });

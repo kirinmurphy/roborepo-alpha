@@ -137,6 +137,11 @@ const ICONS = {
     viewBox: "0 0 16 16",
     body: `<path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d="M3 13.5h10M8 2v8M4.5 6.5 8 10l3.5-3.5" />`,
   },
+  // Return: an arrow turning back on itself, for sending a plan back where it came from.
+  return: {
+    viewBox: "0 0 16 16",
+    body: `<path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" d="M5.5 2.5 2.5 5.5l3 3M2.5 5.5h7a3.5 3.5 0 0 1 0 7H6" />`,
+  },
   grip: {
     viewBox: "0 0 16 16",
     body: `<g fill="currentColor"><circle cx="6" cy="3.5" r="1.2" /><circle cx="10" cy="3.5" r="1.2" /><circle cx="6" cy="8" r="1.2" /><circle cx="10" cy="8" r="1.2" /><circle cx="6" cy="12.5" r="1.2" /><circle cx="10" cy="12.5" r="1.2" /></g>`,

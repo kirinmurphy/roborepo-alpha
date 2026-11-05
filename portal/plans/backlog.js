@@ -15,10 +15,12 @@ import {
 import "/portal/shared/option-dropdown.js";
 import * as api from "./api.js";
 import { planDependencies } from "./templates.js";
+import { createArchiveDialog } from "./archive-dialog.js";
 import {
   NO_NAMESPACE,
   createDraft,
   dependencyTree,
+  dependentsOutside,
   dropBlock,
   hrefWithNamespace,
   isDraftDirty,
@@ -29,14 +31,16 @@ import {
   nextUp,
   orderedIds,
   repositoryDirectory,
+  repositoryOptions,
+  returnBlock,
+  unprioritizedIds,
 } from "./backlog-model.js";
 
 const GUARD_MESSAGE = "Your prioritization changes have not been saved.";
 
-// deps: { getSnapshot, onRender, onSaved, onOpen, cardGrid, emptyState, copyRepairPrompt }
+// deps: { getSnapshot, onRender, onSaved, onOpen, cardGrid, emptyState, copyRepairPrompt, onError }
 export function createBacklogController(deps) {
   const guardDialog = document.getElementById("ordering-guard");
-  const discardDialog = document.getElementById("ordering-discard");
   let mode = "details";
   let draft = null;
   let draftUrl = null;
@@ -53,6 +57,7 @@ export function createBacklogController(deps) {
   // plans may no longer be in the snapshot.
   let draftSource = null;
 
+  const archiveDialog = createArchiveDialog();
   bindDialogs();
   window.addEventListener("beforeunload", (event) => {
     if (!isDirty()) return;
@@ -148,8 +153,9 @@ export function createBacklogController(deps) {
     return [breadcrumb([{ label: "All repos" }]), directoryList(rows.map((row) => directoryRow({
       icon: "folder",
       label: row.name,
-      unblockedCount: row.unblockedCount,
+      readyCount: row.readyCount,
       unprioritizedCount: row.unprioritizedCount,
+      planCount: row.planCount,
       href: row.urlKey ? hrefWithNamespace(hrefWithRepositoryScope(location.href, row.urlKey), null) : null,
       onSelect: () => setRepositoryScope(row.urlKey),
     })))];
@@ -163,11 +169,12 @@ export function createBacklogController(deps) {
       breadcrumb(repositoryCrumbs(entry)),
       ...notices,
       ...nextUpSection(entry, matchingKeys, cardActions),
-      sectionNode("View All Plans", directoryList(rows.map((row) => directoryRow(row.namespace === NO_NAMESPACE
+      sectionNode("All Plans", directoryList(rows.map((row) => directoryRow(row.namespace === NO_NAMESPACE
         ? {
           icon: "warning",
           label: "No namespace",
-          unblockedCount: row.unblockedCount,
+          chevron: false,
+          planCount: row.planCount,
           status: entry.config.state === "declared" ? "Repair needed" : "",
           href: hrefWithNamespace(location.href, NO_NAMESPACE),
           onSelect: () => selectNamespace(NO_NAMESPACE),
@@ -175,12 +182,24 @@ export function createBacklogController(deps) {
         : {
           icon: "plans",
           label: row.namespace.toUpperCase(),
-          unblockedCount: row.unblockedCount,
+          chevron: false,
+          readyCount: row.readyCount,
           unprioritizedCount: row.unprioritizedCount,
+          planCount: row.planCount,
           href: hrefWithNamespace(location.href, row.namespace),
           onSelect: () => selectNamespace(row.namespace),
+          pin: { pinned: row.pinned, onToggle: () => togglePin(entry, row) },
         })))),
     ];
+  }
+
+  async function togglePin(entry, row) {
+    try {
+      await api.setNamespacePinned({ repositoryId: entry.repositoryId, namespace: row.namespace, pinned: !row.pinned });
+      await deps.onSaved();
+    } catch (err) {
+      deps.onError(err);
+    }
   }
 
   // The cards Details shows, plus a badge that goes to the plan's namespace. Nothing here changes an order.
@@ -255,7 +274,7 @@ export function createBacklogController(deps) {
     const namespaceAction = namespaceActionFor(entry);
     const blockNode = (block, section, index, count) => {
       const node = document.createElement("backlog-block");
-      Object.assign(node, { block, section, index, count, plans, locked, held: Boolean(saving), onOpen: deps.onOpen, namespaceAction });
+      Object.assign(node, { block, section, index, count, plans, locked, held: Boolean(saving), dirty: isDirty(), onOpen: deps.onOpen, namespaceAction });
       return node;
     };
     const nodes = [namespaceHeader(entry, view), ...graphNotices(view)];
@@ -277,7 +296,13 @@ export function createBacklogController(deps) {
     orderedList.append(...draft.ordered.map((block, index) => blockNode(block, "ordered", index, draft.ordered.length)));
     if (!draft.ordered.length) orderedList.append(tpl("tpl-backlog-drop-empty"));
     wireDropTarget(orderedList);
-    nodes.push(sectionNode("Prioritized", orderedList));
+    const prioritized = sectionNode("Prioritized", orderedList);
+    const returnZone = draft.ordered.length && !locked ? tpl("tpl-backlog-drop-return") : null;
+    if (returnZone) {
+      wireReturnZone(returnZone);
+      prioritized.append(returnZone);
+    }
+    nodes.push(prioritized);
     if (isDirty()) nodes.push(actionBar());
     const container = document.createElement("div");
     container.className = "backlog-ordering";
@@ -289,15 +314,26 @@ export function createBacklogController(deps) {
       pendingFocus = { id: block.ids[0], action };
       updateDraft(moveBlock(draft, section, index, action));
     });
+    container.addEventListener("block-archive", (event) => openArchive(entry, draft.needs[event.detail.index], plans));
     container.addEventListener("block-drag", (event) => { drag = event.detail; });
     // A cancelled drag ends with no drop, and must not leave its block armed for the next one.
     container.addEventListener("block-drag-end", () => {
       drag = null;
       for (const node of container.querySelectorAll(".drop-before, .drop-after")) node.classList.remove("drop-before", "drop-after");
       orderedList.classList.remove("is-drop-over");
+      returnZone?.classList.remove("is-drop-over");
     });
     queueMicrotask(restoreFocus);
     return [container];
+  }
+
+  function openArchive(entry, block, plans) {
+    archiveDialog.open({
+      titles: block.keys.map((key) => plans.get(key).plan.title),
+      dependents: dependentsOutside(block, deps.getSnapshot().plans).map((record) => record.plan.title),
+      // Refreshes even after a failure, since a linked block may have archived part of itself.
+      onConfirm: (reason) => api.archiveBacklogPlans({ repositoryId: entry.repositoryId, ids: block.ids, reason }).finally(deps.onSaved),
+    });
   }
 
   // Automatic regrouping needs no approval and reaches the file at the next write, so the only thing
@@ -358,6 +394,24 @@ export function createBacklogController(deps) {
       const before = insertionIndex(event);
       drag = null;
       updateDraft(dropBlock(draft, section, index, before));
+    });
+  }
+
+  // Only a block already in Prioritized has anywhere to return from.
+  function wireReturnZone(zone) {
+    zone.addEventListener("dragover", (event) => {
+      if (drag?.section !== "ordered") return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      zone.classList.add("is-drop-over");
+    });
+    zone.addEventListener("dragleave", () => zone.classList.remove("is-drop-over"));
+    zone.addEventListener("drop", (event) => {
+      if (drag?.section !== "ordered" || saving) return;
+      event.preventDefault();
+      const { index } = drag;
+      drag = null;
+      updateDraft(returnBlock(draft, index));
     });
   }
 
@@ -423,14 +477,15 @@ export function createBacklogController(deps) {
 
   function repositoryCrumbs(entry, linked = false) {
     const all = { label: "All repos", onSelect: clearRepositoryScope, href: hrefWithNamespace(hrefWithRepositoryScope(location.href, null), null) };
-    const repository = linked
-      ? { label: entry.name, onSelect: () => confirmLeave(() => selectNamespace(null)), href: hrefWithNamespace(location.href, null) }
-      : { label: entry.name };
-    return [all, repository];
+    if (linked) return [all, { label: entry.name, onSelect: () => confirmLeave(() => selectNamespace(null)), href: hrefWithNamespace(location.href, null) }];
+    const options = repositoryOptions(deps.getSnapshot().backlogRepositories);
+    if (options.length < 2) return [all, { label: entry.name }];
+    return [all, { options, value: entry.urlKey, name: "Repo", onChoose: (next) => { if (next !== entry.urlKey) setRepositoryScope(next); } }];
   }
 
   function namespaceCrumb(entry, namespace) {
     return {
+      name: "Namespace",
       options: namespaceOptions(entry),
       value: namespace,
       onChoose: (next) => {
@@ -457,7 +512,13 @@ export function createBacklogController(deps) {
       cancel.disabled = true;
       void saveDraft();
     });
-    cancel.addEventListener("click", () => discardDialog.showModal());
+    cancel.addEventListener("click", () => {
+      draft = null;
+      saveError = null;
+      // Show the committed order now rather than leaving the discarded rows live until the refresh.
+      deps.onRender();
+      void deps.onSaved();
+    });
     return node;
   }
 
@@ -475,6 +536,7 @@ export function createBacklogController(deps) {
         repositoryId: entry.repositoryId,
         namespace: draft.namespace,
         order,
+        unprioritized: unprioritizedIds(draft),
         revision: draft.revision,
       });
     } catch (err) {
@@ -499,8 +561,9 @@ export function createBacklogController(deps) {
     return true;
   }
 
-  // Runs `proceed` now when there is nothing to lose; otherwise asks first. Save and continue only
-  // proceeds after a successful Save, and Cancel leaves the draft and the page as they are.
+  // Runs `proceed` now when there is nothing to lose; otherwise asks first. Save and Continue only
+  // proceeds after a successful Save, Discard Changes proceeds without one, and Keep Editing leaves the draft
+  // and the page as they are.
   function confirmLeave(proceed) {
     if (saving) {
       void saving.then(() => confirmLeave(proceed));
@@ -514,14 +577,22 @@ export function createBacklogController(deps) {
     guardDialog.querySelector("[data-slot=error]").textContent = draft.stale ? "This namespace changed elsewhere, so this order can't be saved." : "";
     const save = guardDialog.querySelector("[data-slot=save]");
     save.disabled = draft.stale;
-    const cancel = guardDialog.querySelector("[data-slot=cancel]");
+    const stayOrDiscard = [guardDialog.querySelector("[data-slot=keep]"), guardDialog.querySelector("[data-slot=discard]")];
+    guardDialog.querySelector("[data-slot=discard]").onclick = () => {
+      guardDialog.close();
+      mode = "details";
+      draft = null;
+      saveError = null;
+      proceed();
+      deps.onRender();
+    };
     save.onclick = async () => {
       // A Save already sent is going to land, so the dialog stays until its outcome decides the move.
       save.disabled = true;
-      cancel.disabled = true;
+      for (const button of stayOrDiscard) button.disabled = true;
       const saved = await saveDraft();
       save.disabled = Boolean(draft?.stale);
-      cancel.disabled = false;
+      for (const button of stayOrDiscard) button.disabled = false;
       if (saved) {
         guardDialog.close();
         proceed();
@@ -530,22 +601,15 @@ export function createBacklogController(deps) {
       }
     };
     guardDialog.showModal();
+    // A stale draft disables Save, and the dialog must not then open with its focus on Discard Changes.
+    if (draft.stale) stayOrDiscard[0].focus();
   }
 
   function bindDialogs() {
-    guardDialog.querySelector("[data-slot=cancel]").addEventListener("click", () => guardDialog.close());
-    // Esc is the same as Cancel, so it waits for a Save in flight too.
+    guardDialog.querySelector("[data-slot=keep]").addEventListener("click", () => guardDialog.close());
+    // Esc is the same as Keep Editing, so it waits for a Save in flight too.
     guardDialog.addEventListener("cancel", (event) => {
       if (saving) event.preventDefault();
-    });
-    discardDialog.querySelector("[data-slot=keep]").addEventListener("click", () => discardDialog.close());
-    discardDialog.querySelector("[data-slot=discard]").addEventListener("click", () => {
-      discardDialog.close();
-      draft = null;
-      saveError = null;
-      // Show the committed order now rather than leaving the discarded rows live until the refresh.
-      deps.onRender();
-      void deps.onSaved();
     });
   }
 
@@ -587,15 +651,19 @@ function directoryList(rows) {
   return list;
 }
 
-function directoryRow({ icon, label, unblockedCount = 0, unprioritizedCount = 0, status = "", href, onSelect }) {
-  const node = fill(tpl("tpl-backlog-directory-row"), {
-    label,
-    counts: [
-      status,
-      unblockedCount && `${unblockedCount} unblocked`,
-      unprioritizedCount && `${unprioritizedCount} unprioritized`,
-    ].filter(Boolean).join(" · "),
-  });
+function directoryCounts(status, readyCount, unprioritizedCount, planCount) {
+  const count = (number, label) => number && fill(tpl("tpl-backlog-count"), { number: String(number), label });
+  const parts = [status, count(readyCount, "ready"), count(unprioritizedCount, "unprioritized"), count(planCount, "total")].filter(Boolean);
+  return parts.flatMap((part, index) => (index ? [" · ", part] : [part]));
+}
+
+function directoryRow({ icon, label, chevron = true, readyCount = 0, unprioritizedCount = 0, planCount = 0, status = "", href, onSelect, pin = null }) {
+  const node = fill(tpl("tpl-backlog-directory-row"), { label });
+  if (!chevron) {
+    node.querySelector(".backlog-directory-chevron").remove();
+    node.classList.add("has-no-chevron");
+  }
+  node.querySelector("[data-slot=counts]").append(...directoryCounts(status, readyCount, unprioritizedCount, planCount));
   node.querySelector("portal-icon[data-slot=icon]").setAttribute("name", icon);
   if (href) {
     node.href = href;
@@ -608,7 +676,23 @@ function directoryRow({ icon, label, unblockedCount = 0, unprioritizedCount = 0,
   } else {
     node.setAttribute("aria-disabled", "true");
   }
-  return node;
+  return pin ? pinnableRow(node, label, pin) : node;
+}
+
+// The pin sits beside the row's link rather than inside it, since a link cannot hold a button.
+function pinnableRow(row, label, { pinned, onToggle }) {
+  const item = tpl("tpl-backlog-directory-item");
+  const button = item.querySelector("[data-slot=pin]");
+  const action = `${pinned ? "Unpin" : "Pin"} ${label}`;
+  button.setAttribute("aria-label", action);
+  button.setAttribute("aria-pressed", String(pinned));
+  button.title = action;
+  button.addEventListener("click", () => {
+    button.disabled = true;
+    onToggle();
+  });
+  item.prepend(row);
+  return item;
 }
 
 function breadcrumb(crumbs) {
@@ -617,7 +701,7 @@ function breadcrumb(crumbs) {
     if (index) nav.append(fill(tpl("tpl-backlog-breadcrumb-separator"), {}));
     if (crumb.options) {
       const dropdown = document.createElement("option-dropdown");
-      Object.assign(dropdown, { options: crumb.options, value: crumb.value, onSelect: crumb.onChoose, name: "Namespace" });
+      Object.assign(dropdown, { options: crumb.options, value: crumb.value, onSelect: crumb.onChoose, name: crumb.name });
       nav.append(dropdown);
     } else if (crumb.onSelect) {
       const link = fill(tpl("tpl-backlog-breadcrumb-link"), { label: crumb.label });

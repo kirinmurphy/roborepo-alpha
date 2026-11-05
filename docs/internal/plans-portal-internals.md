@@ -24,9 +24,11 @@ The page uses:
   header, navigation, active-page state, updated-at text, theme toggle, and shared hidden-element
   behavior
 
-The portal never writes a plan file. Its one write is `POST /api/plans/order`, a namespace's Backlog
-order in `plans-order.json` (under `docs/plans/`) (see "Backlog ordering" below). Lifecycle changes are made by
-the plan suite's commands. Which
+The portal writes `plans-order.json` under `docs/plans/`: `POST /api/plans/order` saves a namespace's
+Backlog order and `POST /api/plans/namespace-pin` sets its pin (see "Backlog ordering" below). Its one
+lifecycle change is `POST /api/plans/archive`, which retires unprioritized Backlog plans through the same
+`transitionPlan` as `roborepo plans archive`, committing on the base branch. Every other lifecycle
+change is made by the plan suite's commands. Which
 repositories Plans reads is decided by the repository registry and its sources
 (`scripts/cli/repository-sources.mjs`), not by Plans.
 
@@ -155,6 +157,8 @@ All routes are served by the loopback-only portal server.
 | `/api/plans/document?key=<key>` | GET | one plan's Markdown, rendered HTML, metadata, tasks, and warnings |
 | `/api/plans/prompt` | POST | build repository-aware or portable prompt from server-issued plan keys |
 | `/api/plans/order` | POST | save one namespace's whole Backlog order, guarded by its revision |
+| `/api/plans/namespace-pin` | POST | pin or unpin one namespace in `plans-order.json` |
+| `/api/plans/archive` | POST | archive unprioritized Backlog plans with a reason; refuses ranked plans |
 | `/api/plans/refresh` | POST | rebuild the in-memory snapshot |
 
 POST routes require the same origin and per-server mutation token protections as other portal

@@ -6,15 +6,11 @@
 // drawer and stacked below the card's title and description in every lifecycle. Next up sets
 // actions.onSelectNamespace to add a namespace badge that links to the plan's namespace. Backlog sets
 // actions.namespaceAction (see dependencyList) so Waiting on badges link to theirs.
-import { portalTpl as tpl, portalFillSlots as fill } from "/portal/shared/api.js";
+import { portalTpl as tpl } from "/portal/shared/api.js";
 import { cardActionMenu, cardPrimaryAction, renderNamespaceBadge } from "/portal/plans/templates.js";
 import { incompleteDependencies } from "/portal/plans/plan-actions.js";
 import { currentRepositoryScope, hrefWithRepositoryScope, setRepositoryScope } from "/portal/shared/repository-scope.js";
-import { renderBacklogExcerpt } from "/portal/plans/elements/backlog-excerpt.js";
-
-// Card shows a shortened preview; full text (up to 500 chars) still lives in plan.excerpt
-// for copy-context/drawer use — only the on-card display is truncated further here.
-const EXCERPT_DISPLAY_LENGTH = 190;
+import { renderPlanExcerpt } from "/portal/plans/elements/plan-excerpt.js";
 
 class PlanCardElement extends HTMLElement {
   connectedCallback() {
@@ -42,9 +38,7 @@ class PlanCardElement extends HTMLElement {
     const cardActions = this._actions;
     const plan = record.plan;
 
-    const node = fill(tpl("tpl-plan-card"), {
-      description: truncate(plan.excerpt || "No description", EXCERPT_DISPLAY_LENGTH),
-    });
+    const node = tpl("tpl-plan-card");
     const statusEl = document.createElement("plan-status");
     const primary = cardPrimaryAction(record, cardActions);
     const menu = cardActionMenu(record, cardActions);
@@ -65,10 +59,8 @@ class PlanCardElement extends HTMLElement {
     const docDetails = node.querySelector(".doc-details");
     docDetails.tabIndex = 0;
     docDetails.setAttribute("role", "button");
-    if (plan.lifecycle === "backlog") {
-      node.classList.add("is-backlog");
-      renderBacklogExcerpt(node.querySelector("[data-slot=description]"), docDetails, plan.excerpt || "No description");
-    }
+    node.classList.toggle("is-backlog", plan.lifecycle === "backlog");
+    renderPlanExcerpt(node.querySelector("[data-slot=description]"), docDetails, plan.excerpt || "No description");
     // An inert repo badge counts too: it never opens the document, whatever its filter state.
     const isInteractiveTarget = (event) =>
       event.target.closest("button, portal-menu-button, a[href], .repo-badge, input, select");
@@ -104,9 +96,4 @@ function renderRepoBadge(badge, repository) {
     event.preventDefault();
     setRepositoryScope(repository.urlKey);
   });
-}
-
-function truncate(text, maxLength) {
-  if (text.length <= maxLength) return text;
-  return `${text.slice(0, maxLength).trimEnd()}…`;
 }

@@ -312,6 +312,8 @@ button:hover,
   cursor: pointer;
 }
 [data-btn="danger"]:hover {
+  color: var(--on-cta);
+  background: var(--cta-danger);
   filter: brightness(1.08);
 }
 [data-btn="text"] {
@@ -1603,7 +1605,9 @@ option-dropdown {
 }
 .dropdown-chevron {
   color: var(--dim);
-  font-size: var(--text-2xs);
+  /* Relative, so it stays readable beside any trigger text; line-height keeps the trigger's height. */
+  font-size: 1.5em;
+  line-height: 1;
 }
 .dropdown-menu {
   position: fixed;

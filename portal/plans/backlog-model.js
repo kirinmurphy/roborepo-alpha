@@ -4,6 +4,8 @@
 // A draft holds the server's blocks and only ever moves whole blocks, which is what keeps linked
 // plans contiguous and prerequisites ahead of their dependents.
 
+import { ALL_REPOSITORIES, repositoryScopeChoices } from "../shared/repository-scope-choices.js";
+
 export const NAMESPACE_PARAM = "namespace";
 // `_` cannot appear in a plan filename's namespace, so this never collides with a real one.
 export const NO_NAMESPACE = "_none";
@@ -102,6 +104,13 @@ export function dependencyTree(keys, records) {
   return [...rows.values()];
 }
 
+// The repos the repo breadcrumb can switch to: [value, label] pairs, with the selector's sorting and
+// its labels for two repos of one name.
+export function repositoryOptions(repositories) {
+  const choices = repositoryScopeChoices((repositories || []).map(({ urlKey, name }) => ({ urlKey, displayName: name })));
+  return choices.filter(([value]) => value !== ALL_REPOSITORIES);
+}
+
 // The levels the namespace breadcrumb can switch between: [value, label] pairs in directory order.
 export function namespaceOptions(entry) {
   const options = entry.namespaces.filter((view) => keysOfView(view).length).map((view) => [view.namespace, view.namespace.toUpperCase()]);
@@ -110,25 +119,43 @@ export function namespaceOptions(entry) {
 
 const IN_FLIGHT = new Set(["ready", "active", "review"]);
 
-// Nothing in Backlog holds this plan up: either nothing is unfinished, or everything unfinished is
-// already underway.
-function isUnblocked(record, allRecords) {
+// Buildable now: no blocker, and every prerequisite finished. Directory counts and the Blockers filter
+// read this, so they agree with the plan's own `Waiting on` list.
+export function isUnblocked(record, allRecords) {
+  return !record.plan.blockers.length && !openPrerequisites(record, allRecords).length;
+}
+
+// Nothing in Backlog holds this plan up: whatever is unfinished is already underway, so it can be
+// what a namespace does next even though it cannot start today.
+function canBeNext(record, allRecords) {
   return !record.plan.blockers.length && openPrerequisites(record, allRecords).every((item) => IN_FLIGHT.has(item.lifecycle));
 }
 
-function countUnblocked(keys, allRecords) {
+// Ready to build: already prioritized, with nothing holding it up.
+function countReady(keys, views, allRecords) {
   const records = new Map(allRecords.map((record) => [record.key, record]));
-  return keys.filter((key) => isUnblocked(records.get(key), allRecords)).length;
+  const ranked = new Set(views.flatMap((view) => view.ordered.flatMap((block) => block.keys)));
+  return keys.filter((key) => ranked.has(key) && isUnblocked(records.get(key), allRecords)).length;
 }
 
-// Each namespace's highest-ranked unblocked plan. Only a ranked plan qualifies, since an unranked one
-// has no claim to be next. Namespaces stay in directory order; this claims no order between them.
+// Each namespace's highest-ranked plan that can be next. Only a ranked plan qualifies, since an
+// unranked one has no claim to be next. Namespaces stay in directory order, so pinned ones lead.
 export function nextUp(entry, allRecords, matchingKeys) {
   const records = new Map(allRecords.map((record) => [record.key, record]));
   return entry.namespaces.flatMap((view) => {
-    const first = view.ordered.flatMap((block) => block.keys).find((key) => matchingKeys.has(key) && isUnblocked(records.get(key), allRecords));
+    const first = view.ordered.flatMap((block) => block.keys).find((key) => matchingKeys.has(key) && canBeNext(records.get(key), allRecords));
     return first ? [records.get(first)] : [];
   });
+}
+
+// The plans outside `block` still waiting on one of its plans, which archiving it would leave stranded.
+export function dependentsOutside(block, allRecords) {
+  const ids = new Set(block.ids);
+  const repository = allRecords.find((record) => record.key === block.keys[0])?.repository.id;
+  return allRecords.filter((record) => record.repository.id === repository
+    && !ids.has(record.plan.id)
+    && !["completed", "archived"].includes(record.plan.lifecycle)
+    && (record.plan.dependencies || []).some((id) => ids.has(id)));
 }
 
 // Repositories with Backlog plans among `matchingKeys`, the plans the Filters popup leaves.
@@ -142,7 +169,7 @@ export function repositoryDirectory(backlog, matchingKeys, allRecords) {
         name: entry.name,
         urlKey: entry.urlKey,
         planCount: keys.length,
-        unblockedCount: countUnblocked(keys, allRecords),
+        readyCount: countReady(keys, entry.namespaces, allRecords),
         unprioritizedCount: keys.filter((key) => pending.has(key)).length,
       };
     })
@@ -161,13 +188,14 @@ export function namespaceDirectory(entry, matchingKeys, allRecords) {
     const keys = keysOfView(view).filter((key) => matchingKeys.has(key));
     return {
       namespace: view.namespace,
+      pinned: Boolean(view.pinned),
       planCount: keys.length,
-      unblockedCount: countUnblocked(keys, allRecords),
+      readyCount: countReady(keys, [view], allRecords),
       unprioritizedCount: keys.filter((key) => pending.has(key)).length,
     };
   }).filter((row) => row.planCount > 0);
   const repair = entry.noNamespace.filter((key) => matchingKeys.has(key));
-  if (repair.length) rows.push({ namespace: NO_NAMESPACE, planCount: repair.length, unblockedCount: countUnblocked(repair, allRecords), unprioritizedCount: 0 });
+  if (repair.length) rows.push({ namespace: NO_NAMESPACE, planCount: repair.length, readyCount: 0, unprioritizedCount: 0 });
   return rows;
 }
 
@@ -186,6 +214,13 @@ export function orderedIds(draft) {
   return draft.ordered.flatMap((block) => block.ids);
 }
 
+// Ranked plans the draft has returned to Needs prioritization. Save names them, because the server
+// refuses an order that merely leaves a ranked plan out.
+export function unprioritizedIds(draft) {
+  const ordered = new Set(orderedIds(draft));
+  return draft.committedIds.filter((id) => !ordered.has(id));
+}
+
 // The draft has something to save: a changed order, or a plan placed out of Needs prioritization.
 export function isDraftDirty(draft) {
   return Boolean(draft) && orderedIds(draft).join("\0") !== draft.committedIds.join("\0");
@@ -193,11 +228,11 @@ export function isDraftDirty(draft) {
 
 // The actions each section's block offers, in the order their controls appear. "place-top" is the
 // Needs prioritization control labelled Move down: it moves the block down into Prioritized, at its top.
-export const ORDERED_ACTIONS = ["top", "up", "down", "bottom"];
+export const ORDERED_ACTIONS = ["top", "up", "down", "bottom", "return"];
 export const NEEDS_ACTIONS = ["place-top", "bottom"];
 
 export function isActionEnabled(section, action, index, count) {
-  if (section === "needs") return true;
+  if (section === "needs" || action === "return") return true;
   if (action === "top" || action === "up") return index > 0;
   return index < count - 1;
 }
@@ -208,8 +243,18 @@ export function moveBlock(draft, section, index, action) {
     const needs = draft.needs.filter((_, position) => position !== index);
     return { ...draft, needs, ordered: action === "place-top" ? [block, ...draft.ordered] : [...draft.ordered, block] };
   }
+  if (action === "return") return returnBlock(draft, index);
   const targets = { top: 0, up: index - 1, down: index + 1, bottom: draft.ordered.length - 1 };
   return { ...draft, ordered: withBlockAt(draft.ordered, index, targets[action]) };
+}
+
+// Back to the top of Needs prioritization, whether by the control or the drop zone below the list.
+export function returnBlock(draft, index) {
+  return {
+    ...draft,
+    needs: [draft.ordered[index], ...draft.needs],
+    ordered: draft.ordered.filter((_, position) => position !== index),
+  };
 }
 
 function withBlockAt(blocks, from, to) {

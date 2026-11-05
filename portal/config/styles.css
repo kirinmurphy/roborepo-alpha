@@ -391,7 +391,7 @@ main {
 }
 /* Permission groups: the user's own settings, then the shipped defaults behind a disclosure. */
 .perm-group-head {
-  color: var(--dim);
+  color: var(--ink);
   font-size: var(--text-2xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -643,6 +643,9 @@ main {
 .defaults-menu summary::after {
   content: " ▾";
   color: var(--dim);
+  /* Matches the shared .dropdown-chevron. */
+  font-size: 1.5em;
+  line-height: 1;
 }
 .defaults-menu[open] summary {
   border-color: var(--accent);
@@ -927,7 +930,7 @@ dialog#config-modal::backdrop {
 .dependency-head {
   font-size: var(--text-2xs);
   font-weight: 600;
-  color: var(--dim);
+  color: var(--ink);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin: 0 0 4px;

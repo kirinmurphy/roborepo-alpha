@@ -1,22 +1,25 @@
 // <backlog-block> — one movable unit in Backlog's Prioritize mode: a single plan row, or a container of
 // linked plans, drawn as a dependency tree, that moves as one. Set .block ({ ids, keys }), .section
-// ("ordered" | "needs"), .index, .count, .plans (key -> record), .locked, .held, .onOpen, and
+// ("ordered" | "needs"), .index, .count, .plans (key -> record), .locked, .held, .dirty, .onOpen, and
 // .namespaceAction (see dependencyList) right after creation, then append to the DOM. A locked block shows a badge in place of its controls; a held one keeps them, disabled, while a
 // Save settles.
 //
 // It owns its controls and dispatches a bubbling `block-move` event with { section, index, action };
-// the page applies the move to its draft. Dragging starts here from the handle and is finished by the
+// the page applies the move to its draft. An unprioritized block also offers `block-archive`, which
+// commits at once, so it waits until the draft has nothing unsaved that the change would make stale. Dragging starts here from the handle and is finished by the
 // list the block sits in, which knows where the other blocks are.
 import { portalTpl as tpl, portalFillSlots as fill } from "/portal/shared/api.js";
 import { ORDERED_ACTIONS, NEEDS_ACTIONS, dependencyTree, isActionEnabled } from "/portal/plans/backlog-model.js";
 import { dependencyList, planDependencies } from "/portal/plans/templates.js";
-import { renderBacklogExcerpt } from "/portal/plans/elements/backlog-excerpt.js";
+import { renderPlanExcerpt } from "/portal/plans/elements/plan-excerpt.js";
+import { renderModifiedTime } from "/portal/plans/elements/plan-status.js";
 
 const CONTROLS = {
   top: { label: "Move to top", icon: "arrow-to-top" },
   up: { label: "Move up", icon: "arrow-up" },
   down: { label: "Move down", icon: "arrow-down" },
   bottom: { label: "Move to bottom", icon: "arrow-to-bottom" },
+  return: { label: "Return to unprioritized", icon: "return" },
   // Named for its motion: the block moves down from this section into Prioritized, at its top.
   "place-top": { label: "Move down", icon: "arrow-down" },
 };
@@ -25,7 +28,6 @@ class BacklogBlockElement extends HTMLElement {
   connectedCallback() {
     this.dataset.blockId = this.block.ids[0];
     const node = tpl("tpl-backlog-row");
-    node.classList.toggle("is-linked", this.block.keys.length > 1);
     // A position in the list as drawn; the order is the arrangement itself, never an editable number.
     if (this.section === "ordered") fill(node, { position: String(this.index + 1) });
     const rows = dependencyTree(this.block.keys, this.plans).map((row) => this.renderTreeRow(row));
@@ -56,7 +58,8 @@ class BacklogBlockElement extends HTMLElement {
     node.querySelector("[data-slot=title]").textContent = plan.title;
     // The title stays the keyboard path; a click on the description opens the plan too.
     const doc = node.querySelector(".backlog-plan-doc");
-    renderBacklogExcerpt(node.querySelector("[data-slot=purpose]"), doc, plan.excerpt || "");
+    renderPlanExcerpt(node.querySelector("[data-slot=purpose]"), doc, plan.excerpt || "");
+    renderModifiedTime(node.querySelector("[data-slot=modified]"), plan.modifiedAt);
     doc.addEventListener("click", () => this.onOpen(record.key));
     if (alsoNeeds.length) {
       const items = alsoNeeds.map((key) => ({ key, label: this.plans.get(key).plan.title }));
@@ -76,7 +79,9 @@ class BacklogBlockElement extends HTMLElement {
       return controls;
     }
     const actions = this.section === "needs" ? NEEDS_ACTIONS : ORDERED_ACTIONS;
-    controls.append(...actions.map((action) => this.renderControl(action)), this.renderHandle());
+    controls.append(...actions.map((action) => this.renderControl(action)));
+    if (this.section === "needs") controls.append(this.renderArchive());
+    controls.append(this.renderHandle());
     return controls;
   }
 
@@ -93,6 +98,21 @@ class BacklogBlockElement extends HTMLElement {
         bubbles: true,
         detail: { section: this.section, index: this.index, action },
       }));
+    });
+    return button;
+  }
+
+  renderArchive() {
+    const button = tpl("tpl-backlog-control");
+    const label = this.block.ids.length === 1 ? "Archive plan" : "Archive linked plans";
+    const disabled = this.held || this.dirty;
+    button.classList.add("backlog-archive");
+    button.setAttribute("aria-label", label);
+    button.title = disabled ? "Save or cancel your order first" : label;
+    button.querySelector("portal-icon").setAttribute("name", "trash");
+    button.disabled = disabled;
+    button.addEventListener("click", () => {
+      this.dispatchEvent(new CustomEvent("block-archive", { bubbles: true, detail: { index: this.index } }));
     });
     return button;
   }

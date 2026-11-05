@@ -2,6 +2,7 @@
 // Prioritize, with order edits held in a draft until Save. The fixture repo has a two-plan chain, an
 // independent ranked plan, and an unprioritized plan in `alpha`, a plan in `beta`, and one file whose
 // prefix is not approved.
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -108,27 +109,26 @@ test.describe("Backlog directory and ordering", () => {
   test("repositories lead to namespaces, with No namespace last and counts of plans", async ({ page }) => {
     await page.goto("/plans?lifecycle=backlog");
     const repoRow = page.getByRole("link", { name: new RegExp(repoName) });
-    await expect(repoRow).toContainText("4 unblocked · 2 unprioritized");
+    await expect(repoRow).toContainText("2 ready · 2 unprioritized · 6 total");
     await expect(page.locator("plan-card")).toHaveCount(0);
     await repoRow.click();
 
     const rows = directoryRows(page);
     await expect(rows.nth(0)).toContainText("ALPHA");
-    await expect(rows.nth(0)).toContainText("3 unblocked · 1 unprioritized");
+    await expect(rows.nth(0)).toContainText("2 ready · 1 unprioritized · 4 total");
     await expect(rows.nth(1)).toContainText("BETA");
-    // A count of zero drops out, and what remains still sits flush against the chevron.
-    await expect(rows.nth(1).locator(".backlog-directory-counts")).toHaveText("1 unprioritized");
-    const gapToChevron = (row) => row.evaluate((node) =>
-      node.querySelector(".backlog-directory-chevron").getBoundingClientRect().left
-      - node.querySelector(".backlog-directory-counts").getBoundingClientRect().right);
-    expect(await gapToChevron(rows.nth(1))).toBe(await gapToChevron(rows.nth(0)));
+    // A count of zero drops out, and what remains still lines up at the right, pin or no pin.
+    await expect(rows.nth(1).locator(".backlog-directory-counts")).toHaveText("1 unprioritized · 1 total");
+    const countsRight = (row) => row.locator(".backlog-directory-counts").evaluate((node) => node.getBoundingClientRect().right);
+    expect(await countsRight(rows.nth(1))).toBe(await countsRight(rows.nth(0)));
     await expect(rows.nth(2)).toContainText("No namespace");
-    await expect(rows.nth(2)).toContainText("Repair needed · 1 unblocked");
+    await expect(rows.nth(2)).toContainText("Repair needed · 1 total");
+    expect(await countsRight(rows.nth(2))).toBe(await countsRight(rows.nth(0)));
     const label = rows.nth(0).locator(".backlog-directory-label");
     await expect(label).toHaveCSS("font-size", "14px");
     await expect(label).toHaveCSS("font-weight", "400");
     await expect(rows.nth(0).locator(".backlog-directory-counts")).toHaveCSS("font-size", "14px");
-    await expect(page.locator(".backlog-breadcrumb-separator")).toHaveText([">"]);
+    await expect(page.locator(".backlog-breadcrumb-separator")).toHaveText(["›"]);
 
     await rows.nth(0).click();
     await expect(page).toHaveURL(/namespace=alpha/);
@@ -145,7 +145,7 @@ test.describe("Backlog directory and ordering", () => {
     await page.getByRole("button", { name: "Update", exact: true }).click();
     const rows = directoryRows(page);
     await expect(rows).toHaveCount(1);
-    await expect(rows.first().locator(".backlog-directory-counts")).toHaveText("1 unblocked");
+    await expect(rows.first().locator(".backlog-directory-counts")).toHaveText("1 ready · 1 total");
   });
 
   test("filters narrow Details, and Prioritize shows the whole namespace regardless", async ({ page }) => {
@@ -372,9 +372,181 @@ test.describe("Backlog directory and ordering", () => {
     await nav.getByRole("button", { name: "Namespace: ALPHA" }).click();
     await nav.getByRole("option", { name: "BETA" }).click();
     await expect(guardDialog(page)).toBeVisible();
-    await guardDialog(page).getByRole("button", { name: "Cancel" }).click();
+    await guardDialog(page).getByRole("button", { name: "Keep Editing" }).click();
     await expect(page).toHaveURL(/namespace=alpha/);
     await expect(orderedTitles(page).first()).toHaveText("Diagnostics");
+  });
+
+  test("the repo breadcrumb switches repos only where the trail stops at the repo", async ({ page }) => {
+    await openNamespace(page);
+    const nav = page.getByRole("navigation", { name: "Backlog location" });
+    await expect(nav.getByRole("link", { name: repoName })).toBeVisible();
+    await expect(nav.getByRole("button", { name: /^Repo: / })).toHaveCount(0);
+
+    await nav.getByRole("link", { name: repoName }).click();
+    await nav.getByRole("button", { name: `Repo: ${repoName}` }).click();
+    await nav.getByRole("option", { name: bareName }).click();
+    await expect(page).toHaveURL(new RegExp(`repo=${await repoKey(page, bareName)}`));
+    await expect(nav.getByRole("button", { name: `Repo: ${bareName}` })).toBeVisible();
+  });
+
+  test("namespace rows end in the pin, with no caret, and Next up's tip says category", async ({ page }) => {
+    await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
+    const item = page.locator(".backlog-directory-item", { hasText: "ALPHA" });
+    await expect(item.locator(".backlog-directory-chevron")).toHaveCount(0);
+    await expect(item.locator(":scope > :last-child")).toHaveClass(/backlog-pin/);
+    const info = page.getByRole("region", { name: "Next up" }).getByRole("button", { name: /^Next up: / });
+    await expect(info).toHaveAttribute("aria-label", /for each category below/);
+    await expect(info).toHaveCSS("width", "16px");
+    const nextUpBottom = (await page.getByRole("region", { name: "Next up" }).boundingBox());
+    const allPlansTop = (await page.getByRole("heading", { name: "All Plans", exact: true }).boundingBox()).y;
+    expect(allPlansTop - (nextUpBottom.y + nextUpBottom.height)).toBeGreaterThanOrEqual(32);
+  });
+
+  test("Prioritize rows show the plan's age beside its title, aligned to the top", async ({ page }) => {
+    await openOrdering(page);
+    const row = blockFor(page, "Diagnostics");
+    const age = row.locator("time[data-slot=modified]");
+    await expect(age).toHaveText(/^(now|\d+ \w+)$/);
+    await expect(age).toHaveAttribute("aria-label", /^Modified /);
+    const title = await row.getByRole("button", { name: "Diagnostics", exact: true }).boundingBox();
+    expect((await age.boundingBox()).x).toBeGreaterThan(title.x + title.width);
+    await expect(row.locator(".backlog-block-body")).toHaveCSS("align-items", "start");
+  });
+
+  test("a prioritized plan returns to unprioritized by its control or the drop zone, on Save", async ({ page }) => {
+    await openOrdering(page);
+    const needs = page.locator(".backlog-section", { has: page.getByRole("heading", { name: "Needs prioritization", exact: true }) }).locator(".backlog-plan-title");
+    const zone = page.getByText("Return to unprioritized", { exact: true });
+    await expect(needs).toHaveText(["Traces"]);
+
+    await blockFor(page, "Diagnostics").getByRole("button", { name: "Return to unprioritized" }).click();
+    await expect(needs).toHaveText(["Diagnostics", "Traces"]);
+    await expect(orderedTitles(page)).toHaveText(["Storage", "Retrieval"]);
+    expect(savedOrder()).toEqual(["alphaa01", "alphab02", "alphax03"]);
+
+    // A linked group goes back whole, and the file changes only on Save.
+    await blockFor(page, "Storage").getByRole("img", { name: "Drag to move" }).dragTo(zone);
+    await expect(needs).toHaveText(["Storage", "Retrieval", "Diagnostics", "Traces"]);
+    await expect(zone).toHaveCount(0);
+    expect(savedOrder()).toEqual(["alphaa01", "alphab02", "alphax03"]);
+
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
+    expect(JSON.parse(fs.readFileSync(orderFile, "utf8")).namespaces.alpha).toBeUndefined();
+    await expect(page.getByText("4 new plans need prioritization")).toBeVisible();
+  });
+
+  test("the sustained-hover panel is the default in every lifecycle", async ({ page }) => {
+    write("docs/plans/active/alpha-long-active.md", [
+      "---", "id: alphaz11", "next_action: Do it", "depends_on: []", "---", "",
+      "# Long active plan", "", "## Summary", "", "word ".repeat(90).trim(), "",
+    ].join("\n"));
+    try {
+      await page.goto("/plans?lifecycle=active");
+      const card = page.locator("plan-card", { hasText: "Long active plan" });
+      const region = card.locator(".doc-details");
+      const description = card.getByText(/^word word/);
+      const before = await region.boundingBox();
+      const preview = await description.textContent();
+      expect(preview.endsWith("…")).toBe(true);
+      await description.hover();
+      await expect(region).toHaveClass(/is-excerpt-expanded/);
+      await expect(region).toHaveCSS("padding-top", "28px");
+      const fill = (node) => getComputedStyle(node).backgroundColor;
+      expect(await region.evaluate(fill)).toBe(await page.locator("#plans-header").evaluate(fill));
+      const panel = await region.boundingBox();
+      expect(panel.x).toBeLessThan(before.x);
+      expect(panel.height).toBeGreaterThan(before.height);
+      await page.mouse.move(0, 0);
+      await expect(region).not.toHaveClass(/is-excerpt-expanded/);
+    } finally {
+      fs.rmSync(path.join(repo, "docs/plans/active/alpha-long-active.md"));
+    }
+  });
+
+  test("archiving unprioritized plans asks twice, records the reason, and commits only their moves", async ({ page }) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "portal-ui-archive-"));
+    const git = (...args) => spawnSync("git", args, { cwd: root, encoding: "utf8" }).stdout;
+    const put = (relative, content) => {
+      fs.mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });
+      fs.writeFileSync(path.join(root, relative), content);
+    };
+    const moved = (name) => path.join(root, "docs/plans/archived", name);
+    try {
+      git("init", "-q", "-b", "main");
+      git("config", "user.name", "Portal Test");
+      git("config", "user.email", "portal@example.invalid");
+      put("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A", beta: "B" } }));
+      put("docs/plans/backlog/alpha-ranked.md", document({ id: "arkranked", title: "Ranked one" }));
+      put("docs/plans/backlog/alpha-free.md", document({ id: "arkfree01", title: "Free one" }));
+      put("docs/plans/backlog/alpha-root.md", document({ id: "arkroot01", title: "Chain root" }));
+      put("docs/plans/backlog/alpha-leaf.md", document({ id: "arkleaf01", title: "Chain leaf", deps: ["arkroot01"] }));
+      put("docs/plans/backlog/beta-after.md", document({ id: "arkafter1", title: "Waits elsewhere", deps: ["arkfree01"] }));
+      git("add", ".");
+      git("commit", "-q", "-m", "fixture");
+      put("docs/plans/plans-order.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: ["arkranked"] } }));
+      await addRepositorySource(page, root);
+
+      const { backlog } = await (await page.request.get("/api/plans")).json();
+      const entry = backlog.find((item) => item.name === path.basename(root));
+      await page.goto(`/plans?lifecycle=backlog&repo=${entry.urlKey}&namespace=alpha`);
+      await page.getByRole("button", { name: "Prioritize", exact: true }).click();
+
+      await expect(blockFor(page, "Ranked one").getByRole("button", { name: /^Archive/ })).toHaveCount(0);
+      await expect(blockFor(page, "Chain root").getByRole("button", { name: "Archive linked plans" })).toBeVisible();
+
+      // An unsaved draft would go stale, so the control waits.
+      await blockFor(page, "Chain root").getByRole("button", { name: "Move down" }).click();
+      await expect(blockFor(page, "Free one").getByRole("button", { name: "Archive plan" })).toBeDisabled();
+      await page.getByRole("button", { name: "Cancel", exact: true }).click();
+
+      const first = page.getByRole("dialog", { name: 'Archive "Free one"?' });
+      const second = page.getByRole("dialog", { name: "Are you sure?" });
+      await blockFor(page, "Free one").getByRole("button", { name: "Archive plan" }).click();
+      await expect(first.getByRole("button", { name: "Continue" })).toBeDisabled();
+      await first.getByRole("textbox").fill("Superseded by the ranked plan.");
+      await first.getByRole("button", { name: "Continue" }).click();
+      await expect(second).toContainText("commits the move");
+      await expect(second).toContainText("Still waiting on it: Waits elsewhere.");
+      await second.getByRole("button", { name: "Cancel" }).click();
+      await expect(second).toBeHidden();
+      expect(fs.existsSync(path.join(root, "docs/plans/backlog/alpha-free.md"))).toBe(true);
+
+      await blockFor(page, "Free one").getByRole("button", { name: "Archive plan" }).click();
+      await expect(first.getByRole("textbox")).toHaveValue("");
+      await first.getByRole("textbox").fill("Superseded by the ranked plan.");
+      await first.getByRole("button", { name: "Continue" }).dblclick();
+      // The final button can land under the cursor, so a double-click must not answer both questions.
+      await expect(second.getByRole("button", { name: "Archive Plan" })).toBeDisabled();
+      expect(fs.existsSync(path.join(root, "docs/plans/backlog/alpha-free.md"))).toBe(true);
+      await second.getByRole("button", { name: "Archive Plan" }).click();
+      await expect(second).toBeHidden();
+      await expect(blockFor(page, "Free one")).toHaveCount(0);
+      expect(fs.readFileSync(moved("alpha-free.md"), "utf8")).toContain("Superseded by the ranked plan.");
+      expect(git("show", "--no-renames", "--name-only", "--format=", "HEAD").trim().split("\n").sort()).toEqual(["docs/plans/archived/alpha-free.md", "docs/plans/backlog/alpha-free.md"]);
+      expect(git("status", "--porcelain").trim()).toBe("?? docs/plans/plans-order.json");
+
+      // A linked block goes together, one commit each.
+      await blockFor(page, "Chain root").getByRole("button", { name: "Archive linked plans" }).click();
+      const linked = page.getByRole("dialog", { name: "Archive these 2 linked plans?" });
+      await expect(linked.getByRole("listitem")).toHaveText(["Chain root", "Chain leaf"]);
+      await linked.getByRole("textbox").fill("Abandoned.");
+      await linked.getByRole("button", { name: "Continue" }).click();
+      await second.getByRole("button", { name: "Archive 2 Plans" }).click();
+      await expect(second).toBeHidden();
+      expect(fs.existsSync(moved("alpha-root.md")) && fs.existsSync(moved("alpha-leaf.md"))).toBe(true);
+
+      // The route itself refuses a ranked plan, whatever a page sends.
+      const refused = await page.evaluate(async (repositoryId) => {
+        const { portalPostJson } = await import("/portal/shared/api.js");
+        return portalPostJson("/api/plans/archive", { repositoryId, ids: ["arkranked"], reason: "No." }).catch((err) => err.message);
+      }, entry.repositoryId);
+      expect(refused).toContain("Only unprioritized Backlog plans");
+      expect(fs.existsSync(path.join(root, "docs/plans/backlog/alpha-ranked.md"))).toBe(true);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 
   test("Prioritize draws linked plans as one block with exact controls and hides Filters", async ({ page }) => {
@@ -385,11 +557,11 @@ test.describe("Backlog directory and ordering", () => {
     await expect(group).toContainText("Retrieval");
     await expect(group).not.toContainText("Waiting on");
     const names = (locator) => locator.locator("[aria-label]").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("aria-label")));
-    const ranked = ["Move to top", "Move up", "Move down", "Move to bottom", "Drag to move"];
+    const ranked = ["Move to top", "Move up", "Move down", "Move to bottom", "Return to unprioritized", "Drag to move"];
     await expect.poll(() => names(group.getByRole("group", { name: "Move" }))).toEqual(ranked);
     await expect(group.getByRole("group", { name: "Move" })).toHaveCount(1);
     await expect.poll(() => names(blockFor(page, "Diagnostics").getByRole("group", { name: "Move" }))).toEqual(ranked);
-    await expect.poll(() => names(blockFor(page, "Traces").getByRole("group", { name: "Move" }))).toEqual(["Move down", "Move to bottom", "Drag to move"]);
+    await expect.poll(() => names(blockFor(page, "Traces").getByRole("group", { name: "Move" }))).toEqual(["Move down", "Move to bottom", "Archive plan", "Drag to move"]);
     await expect(group.getByRole("button", { name: "Move up" })).toBeDisabled();
     await expect(blockFor(page, "Diagnostics").getByRole("button", { name: "Move to bottom" })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
@@ -406,6 +578,26 @@ test.describe("Backlog directory and ordering", () => {
     await expect(waitingOn(block)).toHaveText(/^\s*alpha\s+Storage\s+\(Backlog\)\s*$/);
     await block.getByRole("button", { name: "Storage", exact: true }).click();
     await expect(drawerHeading(page, "Storage")).toBeVisible();
+  });
+
+  test("a Waiting on namespace badge on a card opens that namespace, from Details and Next up", async ({ page }) => {
+    fs.writeFileSync(orderFile, JSON.stringify({ schemaVersion: 1, namespaces: { alpha: ["alphax03"], beta: ["betaon05"] } }));
+    const location = page.getByRole("navigation", { name: "Backlog location" });
+    await openNamespace(page, "beta");
+    await waitingOn(page.locator("plan-card")).getByRole("link", { name: "alpha", exact: true }).click();
+    await expect(location).toContainText("ALPHA");
+    expect(new URL(page.url()).searchParams.get("namespace")).toBe("alpha");
+
+    // Beta one is held up by Storage, which is unprioritized Backlog work, so make it wait on Active work to reach Next up.
+    write("docs/plans/backlog/beta-one.md", document({ id: "betaon05", title: "Beta one", deps: ["alphaw07"] }));
+    try {
+      await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
+      const nextUpCard = page.getByRole("region", { name: "Next up" }).locator("plan-card", { hasText: "Beta one" });
+      await waitingOn(nextUpCard).getByRole("link", { name: "alpha", exact: true }).click();
+      await expect(location).toContainText("ALPHA");
+    } finally {
+      write("docs/plans/backlog/beta-one.md", document({ id: "betaon05", title: "Beta one", deps: ["alphaa01"] }));
+    }
   });
 
   test("inside a namespace, its breadcrumb names it and only prerequisites carry a badge", async ({ page }) => {
@@ -425,10 +617,10 @@ test.describe("Backlog directory and ordering", () => {
   test("Next up leads the repo view with full cards of each namespace's first ranked, unblocked plan", async ({ page }) => {
     await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
     const nextUp = page.getByRole("region", { name: "Next up" });
-    const headings = page.getByRole("heading", { name: /^(Next up|View All Plans)$/ });
-    await expect(headings).toHaveText(["Next up", "View All Plans"]);
+    const headings = page.getByRole("heading", { name: /^(Next up|All Plans)$/ });
+    await expect(headings).toHaveText(["Next up", "All Plans"]);
     await nextUp.getByRole("button", { name: /^Next up: / }).hover();
-    await expect(page.getByRole("tooltip")).toContainText("next priority plan for each namespace");
+    await expect(page.getByRole("tooltip")).toContainText("next priority plan for each category below");
     await expect(nextUp.locator("plan-card .title-link")).toHaveText(["Storage"]);
     await expect(nextUp.locator("plan-card")).toContainText("Purpose of Storage.");
     await expect(nextUp.getByRole("button", { name: "Promote", exact: true })).toBeVisible();
@@ -443,6 +635,72 @@ test.describe("Backlog directory and ordering", () => {
     await page.getByRole("button", { name: "Update", exact: true }).click();
     await expect(directoryRows(page)).toHaveCount(1);
     await expect(nextUp).toHaveCount(0);
+  });
+
+  test("the Blockers filter and the ready count agree with Waiting on", async ({ page }) => {
+    await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
+    const row = (name) => directoryRows(page).filter({ hasText: name });
+    // Beta one waits on a Backlog plan and is not ranked, so beta has no ready plan.
+    await expect(row("BETA").locator(".backlog-directory-counts")).toHaveText("1 unprioritized · 1 total");
+    const chooseBlockers = async (value) => {
+      await page.getByRole("button", { name: "Filters", exact: true }).click();
+      await page.locator("#blocked").selectOption(value);
+      await page.getByRole("button", { name: "Update", exact: true }).click();
+    };
+    await chooseBlockers("unblocked");
+    await expect(row("BETA")).toHaveCount(0);
+    await expect(row("ALPHA")).toContainText("2 ready · 1 unprioritized · 3 total");
+    await chooseBlockers("blocked");
+    await expect(row("BETA")).toHaveCount(1);
+    await expect(row("ALPHA")).not.toContainText("ready");
+  });
+
+  test("a count's number is bold and at full contrast, and section titles match it", async ({ page }) => {
+    await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
+    const number = directoryRows(page).first().locator(".backlog-directory-counts strong").first();
+    await expect(number).toHaveCSS("font-weight", "700");
+    const inkOf = () => page.evaluate(() => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--ink)";
+      document.body.append(probe);
+      const { color } = getComputedStyle(probe);
+      probe.remove();
+      return color;
+    });
+    await expect(number).toHaveCSS("color", await inkOf());
+    await expect(page.getByRole("heading", { name: "All Plans", exact: true })).toHaveCSS("color", await inkOf());
+  });
+
+  test("pinning a namespace lifts it and its plan to the top, and survives a reload", async ({ page }) => {
+    write("docs/plans/backlog/beta-free.md", document({ id: "betafr09", title: "Beta free" }));
+    fs.writeFileSync(orderFile, `${JSON.stringify({ schemaVersion: 1, namespaces: { alpha: ["alphaa01", "alphab02", "alphax03"], beta: ["betafr09"] } }, null, 2)}\n`);
+    try {
+      await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
+      const labels = page.getByRole("group", { name: "Backlog directory" }).locator(".backlog-directory-label");
+      const nextUp = page.getByRole("region", { name: "Next up" }).locator("plan-card .title-link");
+      await expect(labels).toHaveText(["ALPHA", "BETA", "No namespace"]);
+      await expect(nextUp).toHaveText(["Storage", "Beta free"]);
+
+      await page.getByRole("button", { name: "Pin BETA", exact: true }).click();
+      await expect(labels).toHaveText(["BETA", "ALPHA", "No namespace"]);
+      await expect(nextUp).toHaveText(["Beta free", "Storage"]);
+      await expect(page.getByRole("button", { name: "Unpin BETA", exact: true })).toHaveAttribute("aria-pressed", "true");
+      await expect(page.getByRole("button", { name: /Pin No namespace/ })).toHaveCount(0);
+
+      await page.reload();
+      await expect(labels).toHaveText(["BETA", "ALPHA", "No namespace"]);
+      expect(JSON.parse(fs.readFileSync(orderFile, "utf8")).pinned).toEqual(["beta"]);
+
+      await directoryRows(page).first().click();
+      await expect(page).toHaveURL(/namespace=beta/);
+      await page.goBack();
+
+      await page.getByRole("button", { name: "Unpin BETA", exact: true }).click();
+      await expect(labels).toHaveText(["ALPHA", "BETA", "No namespace"]);
+      expect(JSON.parse(fs.readFileSync(orderFile, "utf8"))).not.toHaveProperty("pinned");
+    } finally {
+      fs.rmSync(path.join(repo, "docs/plans/backlog/beta-free.md"));
+    }
   });
 
   test("a Next up plan's namespace badge opens that namespace without opening the plan", async ({ page }) => {
@@ -566,16 +824,6 @@ test.describe("Backlog directory and ordering", () => {
     }
   });
 
-  test("a Waiting on namespace badge on a card opens that namespace, from Details", async ({ page }) => {
-    fs.writeFileSync(orderFile, JSON.stringify({ schemaVersion: 1, namespaces: { alpha: ["alphax03"], beta: ["betaon05"] } }));
-    const location = page.getByRole("navigation", { name: "Backlog location" });
-    await openNamespace(page, "beta");
-    await waitingOn(page.locator("plan-card")).getByRole("link", { name: "alpha", exact: true }).click();
-    await expect(location).toContainText("ALPHA");
-    expect(new URL(page.url()).searchParams.get("namespace")).toBe("alpha");
-  });
-
-
   test("a Waiting on namespace badge in Prioritize changes namespace, asking first over unsaved changes", async ({ page }) => {
     const file = "docs/plans/backlog/beta-two.md";
     const activeOnly = "docs/plans/active/gamma-running.md";
@@ -696,16 +944,43 @@ test.describe("Backlog directory and ordering", () => {
     await expect(page.getByRole("dialog", { name: GUARD })).toHaveCount(0);
   });
 
-  test("Cancel discards after confirming", async ({ page }) => {
+  test("Cancel discards at once, with no confirmation", async ({ page }) => {
     await openOrdering(page);
     const before = fs.readFileSync(orderFile, "utf8");
     await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
-    await page.getByRole("button", { name: "Keep editing" }).click();
-    await expect(orderedTitles(page).first()).toHaveText("Diagnostics");
-    await page.getByRole("button", { name: "Cancel", exact: true }).click();
-    await page.getByRole("button", { name: "Discard changes" }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(orderedTitles(page).first()).toHaveText("Storage");
+    await expect(page.getByText("Unsaved changes")).toHaveCount(0);
+    expect(fs.readFileSync(orderFile, "utf8")).toBe(before);
+  });
+
+  test("Discard Changes leaves a dirty draft without saving, and goes where the user was headed", async ({ page }) => {
+    await openOrdering(page);
+    const before = fs.readFileSync(orderFile, "utf8");
+    await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await page.getByRole("button", { name: /^Active \(/ }).click();
+    // Stacked, with the save first.
+    const choices = guardDialog(page).getByRole("button");
+    await expect(choices).toHaveText(["Save and Continue", "Discard Changes", "Keep Editing"]);
+    const boxes = await choices.evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect()).map(({ x, width, top }) => ({ x, width, top })));
+    expect(boxes[0].top).toBeLessThan(boxes[1].top);
+    expect(boxes[1].top).toBeLessThan(boxes[2].top);
+    expect(new Set(boxes.map(({ x, width }) => `${x}:${width}`)).size).toBe(1);
+    await guardDialog(page).getByRole("button", { name: "Discard Changes", exact: true }).click();
+    await expect(guardDialog(page)).toBeHidden();
+    await expect(page).toHaveURL(/lifecycle=active/);
+    expect(fs.readFileSync(orderFile, "utf8")).toBe(before);
+
+    // Coming back finds the committed order, in Details, with nothing left to guard.
+    await openNamespace(page);
+    await page.getByRole("button", { name: "Prioritize", exact: true }).click();
+    await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await page.getByRole("button", { name: "Details", exact: true }).click();
+    await guardDialog(page).getByRole("button", { name: "Discard Changes", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Details", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByText("Unsaved changes")).toHaveCount(0);
+    await expect(page.locator(".title-link").first()).toHaveText("Storage");
     expect(fs.readFileSync(orderFile, "utf8")).toBe(before);
   });
 
@@ -719,7 +994,7 @@ test.describe("Backlog directory and ordering", () => {
     expect(savedOrder()).toEqual(["alphaa01", "alphab02", "alphax03"]);
   });
 
-  test("leaving a dirty draft asks first: Cancel stays, Save and continue saves and goes", async ({ page }) => {
+  test("leaving a dirty draft asks first: Keep Editing stays, Save and Continue saves and goes", async ({ page }) => {
     await openOrdering(page);
     await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
     const makeDirtyAgain = async () => {
@@ -730,11 +1005,11 @@ test.describe("Backlog directory and ordering", () => {
     // Details toggle.
     await page.getByRole("button", { name: "Details", exact: true }).click();
     await expect(guardDialog(page)).toBeVisible();
-    await guardDialog(page).getByRole("button", { name: "Cancel" }).click();
+    await guardDialog(page).getByRole("button", { name: "Keep Editing" }).click();
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeVisible();
     expect(savedOrder()).toEqual(["alphaa01", "alphab02", "alphax03"]);
     await page.getByRole("button", { name: "Details", exact: true }).click();
-    await guardDialog(page).getByRole("button", { name: "Save and continue" }).click();
+    await guardDialog(page).getByRole("button", { name: "Save and Continue" }).click();
     await expect(guardDialog(page)).toBeHidden();
     await expect(page.getByRole("button", { name: "Details", exact: true })).toHaveAttribute("aria-pressed", "true");
     expect(savedOrder()).toEqual(["alphax03", "alphaa01", "alphab02"]);
@@ -743,24 +1018,24 @@ test.describe("Backlog directory and ordering", () => {
     await makeDirtyAgain();
     await page.getByRole("button", { name: /^Active \(/ }).click();
     await expect(guardDialog(page)).toBeVisible();
-    await guardDialog(page).getByRole("button", { name: "Cancel" }).click();
+    await guardDialog(page).getByRole("button", { name: "Keep Editing" }).click();
     await expect(page).toHaveURL(/lifecycle=backlog/);
 
     // Breadcrumb.
     await page.getByRole("navigation", { name: "Backlog location" }).getByRole("link", { name: "All repos" }).click();
     await expect(guardDialog(page)).toBeVisible();
-    await guardDialog(page).getByRole("button", { name: "Cancel" }).click();
+    await guardDialog(page).getByRole("button", { name: "Keep Editing" }).click();
     await expect(page).toHaveURL(/namespace=alpha/);
 
     // Header link to another portal page.
     await page.getByRole("navigation", { name: "Portal sections" }).getByRole("link", { name: "Repos" }).click();
     await expect(guardDialog(page)).toBeVisible();
-    await guardDialog(page).getByRole("button", { name: "Cancel" }).click();
+    await guardDialog(page).getByRole("button", { name: "Keep Editing" }).click();
     await expect(page).toHaveURL(/\/plans/);
 
     // Lifecycle tab again, this time saving: the save happens, then the move.
     await page.getByRole("button", { name: /^Active \(/ }).click();
-    await guardDialog(page).getByRole("button", { name: "Save and continue" }).click();
+    await guardDialog(page).getByRole("button", { name: "Save and Continue" }).click();
     await expect(page).toHaveURL(/lifecycle=active/);
     await expect(page).not.toHaveURL(/namespace=/);
     expect(savedOrder()).toEqual(["alphax03", "alphaa01", "alphab02", "alphan04"]);
@@ -774,10 +1049,10 @@ test.describe("Backlog directory and ordering", () => {
     await page.goBack();
     await expect(guardDialog(page)).toBeVisible();
     await expect(page).toHaveURL(/namespace=alpha/);
-    await guardDialog(page).getByRole("button", { name: "Cancel" }).click();
+    await guardDialog(page).getByRole("button", { name: "Keep Editing" }).click();
     await expect(orderedTitles(page).first()).toHaveText("Diagnostics");
     await page.goBack();
-    await guardDialog(page).getByRole("button", { name: "Save and continue" }).click();
+    await guardDialog(page).getByRole("button", { name: "Save and Continue" }).click();
     await expect(page).not.toHaveURL(/namespace=/);
     expect(savedOrder()).toEqual(["alphax03", "alphaa01", "alphab02"]);
   });
@@ -789,7 +1064,7 @@ test.describe("Backlog directory and ordering", () => {
     await selector.getByRole("button").first().click();
     await page.getByRole("option", { name: "All repos" }).click();
     await expect(guardDialog(page)).toBeVisible();
-    await guardDialog(page).getByRole("button", { name: "Cancel" }).click();
+    await guardDialog(page).getByRole("button", { name: "Keep Editing" }).click();
     await expect(page).toHaveURL(/namespace=alpha/);
     await expect(selector).toContainText(repoName);
   });
@@ -818,7 +1093,6 @@ test.describe("Backlog directory and ordering", () => {
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
     await expect(orderedTitles(page).first()).toHaveText("Diagnostics");
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
-    await page.getByRole("button", { name: "Discard changes" }).click();
     await expect(orderedTitles(page)).toHaveText(["Diagnostics", "Traces", "Storage", "Retrieval"]);
   });
 
@@ -854,11 +1128,11 @@ test.describe("Backlog directory and ordering", () => {
     test("adding, removing, and renaming a namespace reach an open directory at Refresh", async ({ page }) => {
       await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
       const row = (text) => directoryRows(page).filter({ hasText: text });
-      await expect(row("No namespace")).toContainText("1 unblocked");
+      await expect(row("No namespace")).toContainText("1 total");
 
       writeNamespaces({ alpha: "A", beta: "B", wrong: "W" });
       await page.getByRole("button", { name: "Refresh", exact: true }).click();
-      await expect(row("WRONG")).toContainText("1 unblocked");
+      await expect(row("WRONG")).toContainText("1 total");
       await expect(row("No namespace")).toHaveCount(0);
 
       writeNamespaces({ alpha: "A", wrong: "W" });
@@ -874,10 +1148,10 @@ test.describe("Backlog directory and ordering", () => {
 
     test("a config edit reaches a reloaded page with no Refresh", async ({ page }) => {
       await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
-      await expect(directoryRows(page).filter({ hasText: "No namespace" })).toContainText("1 unblocked");
+      await expect(directoryRows(page).filter({ hasText: "No namespace" })).toContainText("1 total");
       writeNamespaces({ alpha: "A", beta: "B", wrong: "W" });
       await page.reload();
-      await expect(directoryRows(page).filter({ hasText: "WRONG" })).toContainText("1 unblocked");
+      await expect(directoryRows(page).filter({ hasText: "WRONG" })).toContainText("1 total");
       await expect(directoryRows(page).filter({ hasText: "No namespace" })).toHaveCount(0);
     });
 
@@ -887,7 +1161,7 @@ test.describe("Backlog directory and ordering", () => {
       await page.getByRole("button", { name: "Refresh", exact: true }).click();
       await expect(page.getByText("docs/plans/plans-config.json cannot be read")).toBeVisible();
       await expect(directoryRows(page)).toHaveCount(1);
-      await expect(directoryRows(page)).toContainText("4 unblocked");
+      await expect(directoryRows(page)).toContainText("6 total");
     });
 
     test("a dirty draft cannot save across a conflicting config edit", async ({ page }) => {
@@ -909,10 +1183,10 @@ test.describe("Backlog directory and ordering", () => {
       await expect(orderedTitles(page).first()).toHaveText("Diagnostics");
       await page.getByRole("button", { name: /^Active \(/ }).click();
       await expect(guardDialog(page)).toBeVisible();
-      await expect(guardDialog(page).getByRole("button", { name: "Save and continue" })).toBeDisabled();
-      await guardDialog(page).getByRole("button", { name: "Cancel" }).click();
+      await expect(guardDialog(page).getByRole("button", { name: "Save and Continue" })).toBeDisabled();
+      await expect(guardDialog(page).getByRole("button", { name: "Keep Editing" })).toBeFocused();
+      await guardDialog(page).getByRole("button", { name: "Keep Editing" }).click();
       await page.getByRole("button", { name: "Cancel", exact: true }).click();
-      await page.getByRole("button", { name: "Discard changes" }).click();
       await expect(directoryRows(page).filter({ hasText: "No namespace" })).toBeVisible();
       expect(fs.readFileSync(orderFile, "utf8")).toBe(held);
     });
@@ -977,7 +1251,7 @@ test.describe("Backlog directory and ordering", () => {
     expect(fs.readFileSync(orderFile, "utf8")).toBe("{ nope");
   });
 
-  // Delays the snapshot refresh a Save or Discard ends with. Falls back so the plan board stays enabled.
+  // Delays the snapshot refresh a Save or Cancel ends with. Falls back so the plan board stays enabled.
   async function holdRefresh(page) {
     let release;
     const held = new Promise((resolve) => { release = resolve; });
@@ -1007,14 +1281,13 @@ test.describe("Backlog directory and ordering", () => {
     expect(errors).toEqual([]);
   });
 
-  test("after a Discard, the committed order is live before the refresh returns", async ({ page }) => {
+  test("after a Cancel, the committed order is live before the refresh returns", async ({ page }) => {
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
     await openOrdering(page);
     const release = await holdRefresh(page);
     await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
-    await page.getByRole("button", { name: "Discard changes" }).click();
     await expect(page.getByText("Unsaved changes")).toHaveCount(0);
     await expect(orderedTitles(page).first()).toHaveText("Storage");
     await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
@@ -1052,19 +1325,19 @@ test.describe("Backlog directory and ordering", () => {
     await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
     setOrder(["alphax03", "alphaa01", "alphab02"]);
     await page.getByRole("button", { name: /^Active \(/ }).click();
-    await guardDialog(page).getByRole("button", { name: "Save and continue" }).click();
+    await guardDialog(page).getByRole("button", { name: "Save and Continue" }).click();
     await expect(guardDialog(page).getByRole("alert")).toContainText("changed since you opened Prioritize");
-    await expect(guardDialog(page).getByRole("button", { name: "Save and continue" })).toBeDisabled();
+    await expect(guardDialog(page).getByRole("button", { name: "Save and Continue" })).toBeDisabled();
     await expect(page).toHaveURL(/lifecycle=backlog.*namespace=alpha/);
     expect(savedOrder()).toEqual(["alphax03", "alphaa01", "alphab02"]);
   });
 
-  test("Save and continue from the repo selector saves, then changes the repo", async ({ page }) => {
+  test("Save and Continue from the repo selector saves, then changes the repo", async ({ page }) => {
     await openOrdering(page);
     await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
     await page.locator("#repository-scope option-dropdown").getByRole("button").first().click();
     await page.getByRole("option", { name: "All repos" }).click();
-    await guardDialog(page).getByRole("button", { name: "Save and continue" }).click();
+    await guardDialog(page).getByRole("button", { name: "Save and Continue" }).click();
     await expect(page).not.toHaveURL(/repo=|namespace=/);
     expect(savedOrder()).toEqual(["alphax03", "alphaa01", "alphab02"]);
     await expect(page.getByRole("link", { name: new RegExp(repoName) })).toBeVisible();
@@ -1079,7 +1352,7 @@ test.describe("Backlog directory and ordering", () => {
     await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
     await page.evaluate(() => { window.samePage = true; });
     await page.getByRole("navigation", { name: "Backlog location" }).getByRole("link", { name: repoName }).click();
-    await guardDialog(page).getByRole("button", { name: "Save and continue" }).click();
+    await guardDialog(page).getByRole("button", { name: "Save and Continue" }).click();
     await expect(page).not.toHaveURL(/namespace=/);
     await expect(page.locator("filter-chip")).toHaveCount(1);
     expect(await page.evaluate(() => window.samePage)).toBe(true);
@@ -1131,8 +1404,8 @@ test.describe("Backlog directory and ordering", () => {
     await openOrdering(page);
     await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
     await page.getByRole("button", { name: /^Active \(/ }).click();
-    await guardDialog(page).getByRole("button", { name: "Save and continue" }).click();
-    await expect(guardDialog(page).getByRole("button", { name: "Cancel" })).toBeDisabled();
+    await guardDialog(page).getByRole("button", { name: "Save and Continue" }).click();
+    await expect(guardDialog(page).getByRole("button", { name: "Keep Editing" })).toBeDisabled();
     await page.keyboard.press("Escape");
     await expect(guardDialog(page)).toBeVisible();
     release();
@@ -1185,7 +1458,20 @@ test.describe("Backlog directory and ordering", () => {
 
   test("a repo with no config shows one No namespace row and a notice, no per-file findings", async ({ page }) => {
     await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, bareName)}`);
-    await expect(page.getByText("/plan-suite-init")).toBeVisible();
+    const notice = page.locator("portal-notice", { hasText: "/plan-suite-init" });
+    await expect(notice).toContainText("Run the /plan-suite-init skill to declare them.");
+    await expect(notice).toHaveClass(/notice-warning/);
+    await expect(notice).toContainText("Namespaces are the categories");
+    await expect(notice).toContainText("All repos have default namespaces available once set up, including cli, git, docs, and security.");
+    // The icon sits level with the first line of text, however many lines there are.
+    const firstLineCenter = await notice.locator("p").first().evaluate((node) => {
+      const range = globalThis.document.createRange();
+      range.selectNodeContents(node);
+      const line = range.getClientRects()[0];
+      return line.top + line.height / 2;
+    });
+    const icon = await notice.locator("svg").boundingBox();
+    expect(Math.abs(icon.y + icon.height / 2 - firstLineCenter)).toBeLessThanOrEqual(2);
     const row = directoryRows(page);
     await expect(row).toHaveCount(1);
     await expect(row).toContainText("No namespace");
