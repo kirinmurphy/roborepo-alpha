@@ -145,7 +145,7 @@ export function mockPlansSnapshot({ now = new Date().toISOString(), packageState
     backlog: MOCK_REPOSITORY_IDS.map((repositoryId) => ({
       repositoryId,
       name: repositories.get(repositoryId).name,
-      urlKey: null,
+      urlKey: repositories.get(repositoryId).urlKey,
       config: { state: "none" },
       registry: { state: "missing" },
       namespaces: [],
@@ -497,6 +497,7 @@ function mockRepositorySummaries() {
     return [repositoryId, {
       id: repositoryId,
       repositoryId,
+      urlKey: displayName,
       name: MOCK_DISPLAY_NAMES[repositoryId] || displayName,
       providerUrl: `https://github.com/example/${displayName}`,
       gitHead: "mock123",

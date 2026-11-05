@@ -102,7 +102,8 @@ function plansValidateCommand(args) {
 }
 
 // Records a Backlog plan's place in its namespace order. Without a position, a plan connected to a
-// ranked plan is written where the effective order puts it, and any other plan stays unprioritized.
+// ranked plan is written where the effective order puts it, and a plan that is not ranked stays
+// unprioritized.
 // Exit status: 0 when the result is recorded (staying unprioritized included), 1 when refused, 2 on
 // a usage error.
 function plansOrderCommand(args) {
