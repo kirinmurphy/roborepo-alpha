@@ -1547,6 +1547,12 @@ test.describe("repository-first portal Home", () => {
     const wide = await Promise.all([titleButton, toggle, progress, action, port, links, row].map((item) => item.boundingBox()));
     const centerY = (box) => box.y + box.height / 2;
     expect(Math.abs(centerY(wide[0]) - centerY(wide[3]))).toBeLessThan(2);
+    // The row's name stands 12px clear of what follows it, on plan and worktree rows alike.
+    expect(wide[2].x - (wide[0].x + wide[0].width)).toBeCloseTo(12, 0);
+    const looseRow = checkoutRow(card, "feature/loose");
+    const looseName = await looseRow.locator("[data-slot=root-info]").boundingBox();
+    const looseDrift = await looseRow.locator(".git-drift").boundingBox();
+    expect(looseDrift.x - (looseName.x + looseName.width)).toBeCloseTo(12, 0);
     // The worktree dropdown is the row's rightmost control: port, Links, then the dropdown.
     expect(wide[4].x + wide[4].width).toBeLessThanOrEqual(wide[5].x);
     expect(wide[5].x + wide[5].width).toBeLessThanOrEqual(wide[1].x);

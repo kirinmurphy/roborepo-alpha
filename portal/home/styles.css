@@ -36,7 +36,12 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 .plan-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: var(--text-xs); }
 /* A plan row's title takes the place of the branch label, so it reads at the row's size, not as a
  * footnote. Matched rows mount it in the shared checkout row; unmatched rows reuse that row's head. */
-.repository-root .plan-item { padding: 0; font-size: inherit; }
+.repository-root .plan-item { column-gap: 6px; padding: 0; font-size: inherit; }
+/* The row's name stands a little apart from whatever follows it: 12px with the line's 6px gap. The
+ * copy control's own margin gives way, so it stays where it was. */
+.home-main .plan-title,
+.home-main .repository-root-trigger { margin-right: 6px; }
+.home-main .repository-root-copy { margin-left: 0; }
 /* Keep the controls together when they wrap below the title. */
 .plan-item { flex-wrap: wrap; }
 .plan-controls { display: inline-flex; align-items: center; gap: 10px; flex: none; white-space: nowrap; }
