@@ -376,6 +376,11 @@ Added after reviewing Backlog on real repos. The behavior is built; the open tas
 - [x] Give every textarea one shared style with padding, put the archive dialog's actions in one row at the right, and raise the archive icon to line up with its row.
 - [x] Set every breadcrumb part to one size, brighten and space its separators, and underline a dropdown crumb on hover instead of turning it blue.
 - [x] Raise the dropdown caret 2px everywhere, and center the breadcrumb's letters with Details and Prioritize without moving the trail between levels.
+- [x] Set Details and Prioritize to the breadcrumb's size, and put the whole row on a band in the repo filter's color at every level.
+- [x] Center a Prioritize row's title, modified age, and archive icon, with even gaps, and match the gap between its sections to the repo screen's.
+- [x] Restore the info icon host's `inline-flex`, which lifts every info icon out of its line box, including Next up's.
+- [x] Give a Prioritize row's hover panel the card panel's text color and background, drop the row's own hover background, and make the drawer's copy button copy the plan's absolute path.
+- [x] Underline only a dropdown crumb's text on hover, square the breadcrumb row and hang it off the lifecycle row, and even the gaps around Next up.
 
 ## Validation
 

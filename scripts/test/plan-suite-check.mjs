@@ -166,6 +166,8 @@ Run targeted checks.
   assert.match(root.plan.validation.warnings.join("\n"), /unclassified/);
 
   const doc = readPlanDocument(snapshot, ready.key);
+  assert.ok(path.isAbsolute(doc.absolutePath), "the drawer's copy button gets the plan's absolute path");
+  assert.equal(doc.plan.absolutePath, undefined);
   assert.match(doc.html, /Ready Plan/);
   // The drawer renders through the shared markdown renderer (scripts/cli/markdown-render.mjs), not
   // the private mini-renderer it used to carry — so tables, mermaid diagrams, and task checkboxes

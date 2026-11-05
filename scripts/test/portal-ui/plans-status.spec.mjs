@@ -212,7 +212,7 @@ test.describe("Plans card status", () => {
     await expect(copy.getByRole("button", { name: "Copied", exact: true })).toBeVisible();
     await expect(copy.locator('portal-icon[name="check"]')).toBeVisible();
     await expect(copy).toHaveText("");
-    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("docs/plans/backlog/status-dependent.md");
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toMatch(/^\/.*\/docs\/plans\/backlog\/status-dependent\.md$/);
   });
 
   test("the drawer keeps the lifecycle and next action the card leaves out", async ({ page }) => {

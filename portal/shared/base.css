@@ -681,7 +681,6 @@ nav a.active {
   color: var(--ink);
   border-color: var(--line);
 }
-portal-info-icon,
 /* Icon size scale. These mirror ICON_SIZES in portal/shared/icon.js — <portal-icon size="sm"> and
  * a CSS-sized icon element like .info-icon must land on the same steps, so the numbers live in
  * both places by necessity but never diverge in value. Nothing should size an icon off-scale;
@@ -694,6 +693,9 @@ portal-info-icon,
   --icon-xxl: 40px;
   --icon-xxxl: 48px;
 }
+/* Inline-flex so the host holds only its icon. As a plain inline or block host it would wrap the icon
+ * in a line box, whose text baseline leaves the icon sitting low beside anything centered with it. */
+portal-info-icon,
 portal-icon {
   display: inline-flex;
   flex: 0 0 auto;

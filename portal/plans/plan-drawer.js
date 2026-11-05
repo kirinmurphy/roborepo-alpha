@@ -67,7 +67,7 @@ export function createPlanDrawer(deps) {
     });
     document.getElementById("drawer-title").textContent = content.title;
     document.getElementById("drawer-path").textContent = content.path;
-    document.getElementById("drawer-path-copy").copySource = () => doc.plan.plan.relativePath;
+    document.getElementById("drawer-path-copy").copySource = () => doc.absolutePath;
     const docEl = document.getElementById("drawer-doc");
     docEl.innerHTML = content.html;
     // Plan bodies routinely carry architecture diagrams; render them rather than showing the source.

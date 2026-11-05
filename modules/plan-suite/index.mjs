@@ -139,6 +139,8 @@ export function readPlanDocument(snapshot, key) {
   });
   return {
     plan: stripPrivatePath(publicRecord),
+    // Only for this one plan the reader opened, for its copy-path button. Snapshots leave it out.
+    absolutePath: publicRecord.absolutePath,
     markdown,
     // The shared renderer (scripts/cli/markdown-render.mjs -- also backing Config's skill popup and
     // the Telemetry guide) replaced a private mini-renderer here that had no tables, mermaid,

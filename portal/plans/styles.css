@@ -127,8 +127,8 @@ dialog:is(#filters-dialog, #ordering-guard, #ordering-archive)::backdrop {
 .backlog-archive-title { font-weight: 600; }
 .backlog-archive-reason { display: grid; gap: 6px; }
 .backlog-archive-reason[hidden] { display: none; }
-/* Centered in its line box it sits below the title's letters, which ride above the box's middle. */
-.backlog-archive { align-self: center; translate: 0 -3px; }
+/* The margin takes back the button's padding, so the icon sits the heading's gap from the age. */
+.backlog-archive { margin-left: -4px; }
 .backlog-archive:hover:not(:disabled) { color: var(--danger); }
 .filter-row {
   display: grid;
@@ -541,16 +541,20 @@ a:is(.repo-badge, .namespace-badge)[aria-disabled="true"] {
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  /* The height of the namespace level's mode toggle, so drilling down does not move the page. */
-  box-sizing: border-box;
-  min-height: 36px;
-  /* Lifts the text 1px, so its letters center with the larger Details and Prioritize labels. At every
-   * level, so the trail stays put whether or not the toggle shows. Padding, not a transform, because a
-   * transform would become the containing block for the dropdown's fixed menu. */
-  padding-bottom: 2px;
   color: var(--dim);
   font-size: var(--text-xs);
 }
+/* The band around the location row, in the repo filter's color. Every level gets the same one, so
+ * drilling down to where the mode toggle appears moves nothing. */
+.backlog-namespace-header,
+:not(.backlog-namespace-header) > .backlog-breadcrumb {
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 4px 6px 4px 14px;
+  background: var(--scope-bar-bg);
+}
+/* The band hangs straight off the lifecycle row's border, unless filter tags or warnings sit between. */
+main:has(#groups .backlog-breadcrumb):not(:has(> .filter-chips:not(:empty), > #warnings:not([hidden]))) { padding-top: 0; }
 /* Undo the bar-cell look `nav a` gives every link, its divider included. */
 .backlog-breadcrumb a,
 .backlog-breadcrumb a:not(:last-of-type) {
@@ -572,7 +576,8 @@ a:is(.repo-badge, .namespace-badge)[aria-disabled="true"] {
   font-size: inherit;
   font-weight: 600;
 }
-.backlog-breadcrumb .dropdown-trigger:hover { text-decoration: underline; }
+/* On the label, not the trigger, which would draw a second, detached underline under the caret. */
+.backlog-breadcrumb .dropdown-trigger:hover .dropdown-label { text-decoration: underline; }
 .backlog-directory {
   display: grid;
   gap: 0;
@@ -652,6 +657,7 @@ a:is(.repo-badge, .namespace-badge)[aria-disabled="true"] {
   border: none;
   background: var(--panel);
   color: var(--dim);
+  font-size: var(--text-xs);
   cursor: pointer;
 }
 .backlog-mode-toggle button:hover {
@@ -681,8 +687,10 @@ a:is(.repo-badge, .namespace-badge)[aria-disabled="true"] {
 .backlog-no-config .portal-banner-supporting { font-size: var(--text-2xs); }
 .backlog-section-header { display: flex; align-items: center; gap: 8px; }
 .backlog-section-header .info-icon { width: var(--icon-sm); height: var(--icon-sm); font-size: var(--text-3xs, 10px); }
-/* On a repo's screen, Next up and All Plans read as separate parts of the page. */
-.groups > .backlog-section + .backlog-section { margin-top: 14px; }
+/* The breadcrumb, Next up, and All Plans, like Needs prioritization and Prioritized, read as separate
+ * parts of the page. */
+.groups > * + .backlog-section,
+.backlog-ordering > .backlog-section + .backlog-section { margin-top: 14px; }
 .backlog-ordering { display: grid; gap: 18px; }
 .backlog-order-list { display: grid; gap: 8px; }
 .backlog-order-list[data-drop-target] { min-height: 3rem; }
@@ -773,8 +781,8 @@ backlog-block.drop-after { box-shadow: 0 3px 0 var(--accent); }
   cursor: pointer;
 }
 .backlog-plan-title:hover { text-decoration: underline; }
-/* The title and description open the plan. The margin cancels the padding, so the highlight has room
- * and the text starts where it would without it. */
+/* The title and description open the plan. The margin cancels the padding, so the text starts where
+ * it would without it and the expanded panel has room around the text. */
 .backlog-plan-doc {
   display: grid;
   gap: 2px;
@@ -784,10 +792,9 @@ backlog-block.drop-after { box-shadow: 0 3px 0 var(--accent); }
   border-radius: 6px;
   cursor: pointer;
 }
-/* The archive button sits inside but is its own target, so hovering it doesn't light up the plan. */
-.backlog-plan-doc:hover:not(:has(.backlog-archive:hover)) { background: color-mix(in srgb, var(--accent) 4%, var(--panel)); }
+/* The archive button sits inside but is its own target, so hovering it doesn't underline the title. */
 .backlog-plan-doc:hover:not(:has(.backlog-archive:hover)) .backlog-plan-title { text-decoration: underline; }
-.backlog-plan-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; min-width: 0; }
+.backlog-plan-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; min-width: 0; }
 .backlog-plan-heading .backlog-plan-title { min-width: 0; }
 .backlog-plan-age { display: inline-flex; flex: none; align-items: center; gap: 4px; font-size: var(--text-2xs); white-space: nowrap; }
 /* Set on any plan card's or row's title and description while a sustained hover shows more: a padded
@@ -810,8 +817,9 @@ backlog-block.drop-after { box-shadow: 0 3px 0 var(--accent); }
   margin-bottom: calc(-1 * var(--excerpt-pad) - var(--excerpt-growth));
   padding: calc(1rem + var(--excerpt-pad));
 }
-.backlog-plan-doc.is-excerpt-expanded,
-.backlog-plan-doc.is-excerpt-expanded:hover { background: var(--excerpt-panel); }
+.backlog-plan-doc.is-excerpt-expanded { background: var(--excerpt-panel); }
+/* The same text color as a card's panel, where the description is already full ink. */
+.backlog-plan-doc.is-excerpt-expanded .backlog-plan-purpose { color: var(--ink); }
 .backlog-plan-doc.is-excerpt-expanded {
   margin: calc(-4px - var(--excerpt-pad));
   margin-bottom: calc(-4px - var(--excerpt-pad) - var(--excerpt-growth));

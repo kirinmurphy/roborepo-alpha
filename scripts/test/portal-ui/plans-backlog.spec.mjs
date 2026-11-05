@@ -239,6 +239,8 @@ test.describe("Backlog directory and ordering", () => {
       range.selectNodeContents(node.firstChild);
       return [...range.getClientRects()].map(({ left, top, right }) => ({ left, top, right }));
     });
+    const panelColors = [];
+    const panelBackgrounds = [];
     const expectSeamless = async (region, description, next) => {
       const before = { lines: await previewLines(description), next: await next.boundingBox(), height: (await region.boundingBox()).height };
       const preview = await description.textContent();
@@ -249,6 +251,8 @@ test.describe("Backlog directory and ordering", () => {
       await description.hover();
       await expect(region).toHaveClass(/is-excerpt-expanded/);
       expect(Date.now() - hoverStart).toBeGreaterThan(900);
+      panelColors.push(await description.evaluate((node) => getComputedStyle(node).color));
+      panelBackgrounds.push(await region.evaluate((node) => getComputedStyle(node).backgroundColor));
 
       const longer = await description.textContent();
       expect(longer.startsWith(preview.slice(0, -1))).toBe(true);
@@ -275,6 +279,8 @@ test.describe("Backlog directory and ordering", () => {
       const rowDescription = row.locator(".backlog-plan-purpose");
       await expect(rowDescription).toHaveCSS("font-size", "15px");
       await expectSeamless(row.locator(".backlog-plan-doc"), rowDescription, blockFor(page, "Storage"));
+      expect(panelColors[1]).toBe(panelColors[0]);
+      expect(panelBackgrounds[1]).toBe(panelBackgrounds[0]);
 
       // The description is part of what opens the plan, not only the title.
       await rowDescription.click();
@@ -364,6 +370,17 @@ test.describe("Backlog directory and ordering", () => {
     expect(new Set(heights).size, `heights ${heights}`).toBe(1);
     expect(new Set(tops).size, `tops ${tops}`).toBe(1);
 
+    // The whole row sits on the repo filter's band, and the toggle reads at the breadcrumb's size.
+    const band = await page.locator(".repository-scope-bar").evaluate((node) => getComputedStyle(node).backgroundColor);
+    await expect(page.locator(".backlog-namespace-header")).toHaveCSS("background-color", band);
+    await expect(page.getByRole("button", { name: "Prioritize", exact: true })).toHaveCSS("font-size", await nav.evaluate((node) => getComputedStyle(node).fontSize));
+
+    // Square, and hung straight off the lifecycle row's border.
+    const header = page.locator(".backlog-namespace-header");
+    await expect(header).toHaveCSS("border-top-left-radius", "0px");
+    const barBox = await page.locator("#lifecycle-bar").boundingBox();
+    expect((await header.boundingBox()).y).toBeCloseTo(barBox.y + barBox.height, 0);
+
     // The middle of the capital letters, from the font's own metrics, is what the eye lines up.
     const capitalCenter = (locator) => locator.evaluate((node) => {
       const range = document.createRange();
@@ -396,10 +413,13 @@ test.describe("Backlog directory and ordering", () => {
     await expect(separator).toHaveCSS("color", ink);
 
     // A dropdown crumb's hover underlines it and leaves its color alone.
-    await expect(namespace).toHaveCSS("text-decoration-line", "none");
+    const namespaceLabel = namespace.locator(".dropdown-label");
+    await expect(namespaceLabel).toHaveCSS("text-decoration-line", "none");
     const color = await namespace.evaluate((node) => getComputedStyle(node).color);
     await namespace.hover();
-    await expect(namespace).toHaveCSS("text-decoration-line", "underline");
+    await expect(namespaceLabel).toHaveCSS("text-decoration-line", "underline");
+    // Only the label: an underline on the trigger would also run under the caret.
+    await expect(namespace).toHaveCSS("text-decoration-line", "none");
     await expect(namespace).toHaveCSS("color", color);
   });
 
@@ -446,9 +466,15 @@ test.describe("Backlog directory and ordering", () => {
     const info = page.getByRole("region", { name: "Next up" }).getByRole("button", { name: /^Next up: / });
     await expect(info).toHaveAttribute("aria-label", /for each category below/);
     await expect(info).toHaveCSS("width", "16px");
+    // The host holds only its icon, with no line box to leave the icon low beside the title.
+    const middle = (box) => box.y + box.height / 2;
+    const heading = page.getByRole("heading", { name: "Next up", exact: true });
+    expect(Math.abs(middle(await info.boundingBox()) - middle(await heading.boundingBox()))).toBeLessThan(0.5);
     const nextUpBottom = (await page.getByRole("region", { name: "Next up" }).boundingBox());
     const allPlansTop = (await page.getByRole("heading", { name: "All Plans", exact: true }).boundingBox()).y;
-    expect(allPlansTop - (nextUpBottom.y + nextUpBottom.height)).toBeGreaterThanOrEqual(32);
+    expect(allPlansTop - (nextUpBottom.y + nextUpBottom.height)).toBeCloseTo(32, 0);
+    const crumbs = await page.locator(".groups > .backlog-breadcrumb").boundingBox();
+    expect(nextUpBottom.y - (crumbs.y + crumbs.height)).toBeCloseTo(32, 0);
   });
 
   test("Prioritize rows show the plan's age beside its title, aligned to the top", async ({ page }) => {
@@ -460,6 +486,44 @@ test.describe("Backlog directory and ordering", () => {
     const title = await row.getByRole("button", { name: "Diagnostics", exact: true }).boundingBox();
     expect((await age.boundingBox()).x).toBeGreaterThan(title.x + title.width);
     await expect(row.locator(".backlog-block-body")).toHaveCSS("align-items", "start");
+  });
+
+  test("hovering a Prioritize row underlines its title and paints no background", async ({ page }) => {
+    await openOrdering(page);
+    const row = blockFor(page, "Diagnostics");
+    const title = row.getByRole("button", { name: "Diagnostics", exact: true });
+    await title.hover();
+    await expect(title).toHaveCSS("text-decoration-line", "underline");
+    await expect(row.locator(".backlog-plan-doc")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  });
+
+  test("an unprioritized row centers its title, age, and archive icon, evenly spaced", async ({ page }) => {
+    await openOrdering(page);
+    const row = blockFor(page, "Traces");
+    const textBox = (locator) => locator.evaluate((node) => {
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const { top, bottom, left, right } = range.getBoundingClientRect();
+      return { middle: (top + bottom) / 2, left, right };
+    });
+    const iconBox = async (locator) => {
+      const box = await locator.boundingBox();
+      return { middle: box.y + box.height / 2, left: box.x, right: box.x + box.width };
+    };
+    const title = await textBox(row.getByRole("button", { name: "Traces", exact: true }));
+    const clock = await iconBox(row.locator("time[data-slot=modified] portal-icon"));
+    const age = await textBox(row.locator("time[data-slot=modified] [data-slot=meta]"));
+    const trash = await iconBox(row.getByRole("button", { name: "Archive Traces", exact: true }).locator("portal-icon"));
+    for (const item of [clock, age, trash]) expect(Math.abs(item.middle - title.middle)).toBeLessThan(1);
+    expect(clock.left - title.right).toBeCloseTo(12, 0);
+    expect(trash.left - age.right).toBeCloseTo(12, 0);
+  });
+
+  test("Needs prioritization and Prioritized sit as far apart as Next up and All Plans", async ({ page }) => {
+    await openOrdering(page);
+    const needs = await page.locator(".backlog-section", { has: page.getByRole("heading", { name: "Needs prioritization", exact: true }) }).boundingBox();
+    const prioritizedTop = (await page.getByRole("heading", { name: "Prioritized", exact: true }).boundingBox()).y;
+    expect(prioritizedTop - (needs.y + needs.height)).toBeCloseTo(32, 0);
   });
 
   test("a prioritized plan returns to unprioritized by its control or the drop zone, on Save", async ({ page }) => {

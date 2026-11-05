@@ -152,7 +152,9 @@ class OptionDropdownElement extends HTMLElement {
     trigger.setAttribute("aria-expanded", String(this._open));
     if (this._name) trigger.setAttribute("aria-label", `${this._name}: ${this.currentLabel()}`);
 
-    trigger.append(this.currentLabel());
+    const label = tpl("tpl-dropdown-label");
+    label.textContent = this.currentLabel();
+    trigger.append(label);
     trigger.append(tpl("tpl-dropdown-chevron"));
 
     trigger.addEventListener("click", () => {
