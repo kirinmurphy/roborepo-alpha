@@ -1,7 +1,7 @@
 ---
 id: 9xzkn4vz
 priority: none
-next_action: Finish independent validation and rerun native deletion and browser checks in an environment permitting temporary-directory removal and localhost listeners.
+next_action: Rerun required native deletion, browser, and parity checks in an environment permitting directory removal and localhost listeners; then rerun /plan-execute for completion and submission.
 blocked_by: []
 depends_on: []
 related: ["4xc0gjuw", "a7bslb00", "z3j2x3x1", "b2sgiejd", "l1mz96d9", "0jped168"]
@@ -607,3 +607,9 @@ Decided during promotion, each reversible by refining this plan before implement
   captured payload bytes. The snapshot suite still stops later at synthetic empty-directory removal.
 - Syntax checks for all four changed JavaScript files, health (97 checks), docs references,
   and whitespace checks passed after these corrections.
+
+- Validation pass 2: no new findings at `bfbbd0a2` (fresh-context subagent). Prior findings
+  are resolved; native deletion and browser outcomes remain blocked rather than passed.
+- Completion preflight refuses submission only because the required-verification objective
+  remains unchecked; it confirms the assigned worktree, clean Git state, feature commits,
+  empty dependency blockers, and review-validator checks. The plan stays active and unpushed.
