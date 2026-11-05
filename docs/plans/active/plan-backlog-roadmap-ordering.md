@@ -428,6 +428,7 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - [x] No test asserts that the Save/Cancel bar stays visible while the list scrolls, which the design requires. Add one with a small viewport and a long list. — fixed (4d7b3225)
 - [x] The controller's `isOrdering()` runs `reconcile()`, which can change `mode` and `draft`, and `render()` in `portal/plans/app.js` relies on that to decide whether Filters is hidden. Reconcile explicitly in `render()` and keep the predicate pure. — fixed (4d7b3225)
 - [x] The header comment in `portal/plans/elements/backlog-block.js` says locked blocks show why they cannot move; they show a bare "blocked" badge, and the reason is in the notices above the list. — fixed (4d7b3225)
+- [x] The contract comment for `readProjectNamespaces` sat above `pathFreeReadError`, describing the wrong function. — fixed (072acc52)
 
 ### Verification
 
@@ -437,6 +438,7 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - Validation pass 3 (fresh-context subagent): the last 5 findings above, no `escalate`; its `node scripts/test/portal-ui/run.mjs` passed 194 of 194.
 - Validation pass 4 (fresh-context subagent): the last finding above, no `escalate`; its `node scripts/test/portal-ui/run.mjs` passed 198 of 198.
 - Validation pass 5 (fresh-context subagent): stopped at the five-pass cap with the 2 open findings above, no `escalate`; its `node scripts/test/portal-ui/run.mjs` passed 198 of 198.
-- Validation pass 6 at fa64c5cb (fresh-context subagent, a further pass the user approved past the cap): the last 7 findings above, no `escalate`; its `node scripts/test/portal-ui/run.mjs` passed 200 of 200. Findings rose from 2 to 7, so the run stopped with them open, as the user's condition for further passes required.
+- Validation pass 6 at fa64c5cb (fresh-context subagent, a further pass the user approved past the cap): the last 7 findings above, no `escalate`; its `node scripts/test/portal-ui/run.mjs` passed 200 of 200. Findings rose from 2 to 7, so the run stopped with them open, as the user's condition for further passes required. The user then chose to fix them and validate again.
+- Validation pass 7 at 6af0e6ca (fresh-context subagent): 1 `fix` finding, the last above, no `escalate`; its `node scripts/test/portal-ui/run.mjs` passed 201 of 201.
 - Installed output, on a temporary HOME and state root: `roborepo update`, enabling plan-suite, `roborepo update`, and `roborepo doctor --installed` all exited 0 (110 doctor checks), and the installed plan-write references carry `plans-order.json` and `order place` with no `priority:` line. `doctor` on this machine warns that installed skills are out of date until `roborepo update` runs after merge.
 - Base failure: `roborepo plans validate` exits 1 from blocking findings that are all in `docs/plans/completed/`, none from this change.
