@@ -44,13 +44,14 @@ export function openPrerequisites(record, allRecords, backlog = []) {
 }
 
 // A position is given only for another namespace's order, which an Ordering draft here cannot change.
-// A prerequisite in this namespace is on the same screen, and the draft may be moving it.
+// A prerequisite in this namespace is on the same screen, and the draft may be moving it. One in No
+// namespace has no order to be placed in, so it reads as not prioritized.
 function prerequisiteStatus(record, target, entry) {
   const { lifecycle, namespace } = target.plan;
   if (lifecycle !== "backlog") return lifecycle.charAt(0).toUpperCase() + lifecycle.slice(1);
-  const view = namespace === record.plan.namespace ? null : entry?.namespaces.find((item) => item.namespace === namespace);
-  if (!view) return "Backlog";
-  const position = view.ordered.findIndex((block) => block.keys.includes(target.key));
+  if (!entry || namespace === record.plan.namespace) return "Backlog";
+  const view = entry.namespaces.find((item) => item.namespace === namespace);
+  const position = view ? view.ordered.findIndex((block) => block.keys.includes(target.key)) : -1;
   return position === -1 ? "Backlog, not prioritized" : `Backlog, position ${position + 1}`;
 }
 

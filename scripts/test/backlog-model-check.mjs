@@ -107,6 +107,11 @@ const backlogEntries = [{ repositoryId: "r", namespaces: [strategyView] }];
 const statusOf = (dependencies) => openPrerequisites(planRecord("self", "agents", "backlog", dependencies), records, backlogEntries)
   .map((item) => `${item.namespace ? `${item.namespace}/` : ""}${item.label}: ${item.status}`);
 assert.deepEqual(statusOf(["ranked"]), ["strategy/ranked: Backlog, position 2"]);
+assert.deepEqual(
+  openPrerequisites(planRecord("self", "agents", "backlog", ["misfiled"]), [...records, planRecord("misfiled", null, "backlog")], backlogEntries).map((item) => item.status),
+  ["Backlog, not prioritized"],
+  "a prerequisite in No namespace is not in this namespace's list and has no order",
+);
 const linkedStrategyView = { ...strategyView, ordered: [block("sibling", "unranked"), block("ranked")] };
 assert.deepEqual(
   openPrerequisites(planRecord("self", "agents", "backlog", ["ranked"]), records, [{ repositoryId: "r", namespaces: [linkedStrategyView] }]).map((item) => item.status),

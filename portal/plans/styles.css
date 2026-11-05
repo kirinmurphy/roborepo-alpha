@@ -260,8 +260,8 @@ plan-card {
 }
 /* The title/description opens the document. Its hover highlight spans both document columns,
  * while the actions keep their independent interaction states. */
-/* The repo badge is its own link (it applies the repo filter), so hovering it drops the card's
- * open-the-document highlight. */
+/* A badge is its own link (the repo filter, or the namespace on a Next up card), so hovering it
+ * drops the card's open-the-document highlight. */
 .plan-card:has(.doc-details:hover):not(:has(a:is(.repo-badge, .namespace-badge)[href]:hover)) :is(.doc-details, .status-document) {
   background: color-mix(in srgb, var(--accent) 4%, var(--panel));
 }
@@ -308,7 +308,7 @@ plan-card {
   gap: 10px;
   min-width: 0;
 }
-/* As a filter link: no link underline or link color, and a stronger fill on hover. */
+/* As a link: no link underline or link color, and a stronger fill on hover. */
 a:is(.repo-badge, .namespace-badge),
 a:is(.repo-badge, .namespace-badge):hover {
   color: var(--repo-badge-ink);
@@ -658,12 +658,13 @@ backlog-block.drop-after { box-shadow: 0 3px 0 var(--accent); }
   color: var(--ink);
   font: inherit;
   font-weight: 600;
+  overflow-wrap: anywhere;
   text-align: left;
   cursor: pointer;
 }
 .backlog-plan-title:hover { text-decoration: underline; }
 .backlog-plan-purpose,
-.backlog-plan-clue { color: var(--dim); font-size: var(--text-sm); }
+.backlog-plan-clue { color: var(--dim); font-size: var(--text-sm); overflow-wrap: anywhere; }
 .backlog-plan-purpose:empty,
 .backlog-plan-clue:empty { display: none; }
 .backlog-controls { display: inline-flex; flex: none; align-items: center; gap: 2px; }

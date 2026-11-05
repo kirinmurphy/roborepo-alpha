@@ -13,6 +13,7 @@ import {
   setRepositoryScope,
 } from "/portal/shared/repository-scope.js";
 import * as api from "./api.js";
+import { planDependencies } from "./templates.js";
 import {
   NO_NAMESPACE,
   createDraft,
@@ -287,6 +288,9 @@ export function createBacklogController(deps) {
     const title = node.querySelector("[data-slot=title]");
     title.textContent = record.plan.title;
     title.addEventListener("click", () => deps.onOpen(record.key));
+    const { plans: allPlans, backlog } = deps.getSnapshot();
+    const waiting = planDependencies(record, allPlans, deps.onOpen, backlog);
+    if (waiting) node.append(waiting);
     return node;
   }
 

@@ -496,6 +496,9 @@ dialog#drawer::backdrop {
   font-size: var(--text-xs);
 }
 .plan-dependency-list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.plan-dependency { min-width: 0; overflow-wrap: anywhere; }
+/* Inline, the badge would ignore its max-width and a long namespace would widen the page. */
+.plan-dependency .namespace-badge { display: inline-block; max-width: 100%; vertical-align: bottom; }
 /* A prerequisite list is taller and wider than the button it replaces, so the row lets it wrap and
  * the menu button keeps its own height beside it. */
 .card-actions:has(.plan-dependencies) { flex-shrink: 1; align-items: flex-start; }

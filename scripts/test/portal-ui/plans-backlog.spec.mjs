@@ -15,6 +15,24 @@ const document = ({ id, title, deps = [] }) => [
 
 const GUARD = "Your prioritization changes have not been saved.";
 
+// WCAG contrast of an element's text on its own fill. A canvas turns the computed color-mix() value
+// into plain RGB, which is why this runs in the page.
+const contrastRatio = (node) => {
+  const context = Object.assign(document.createElement("canvas"), { width: 1, height: 1 }).getContext("2d");
+  const luminance = (cssColor) => {
+    context.fillStyle = cssColor;
+    context.fillRect(0, 0, 1, 1);
+    const channels = [...context.getImageData(0, 0, 1, 1).data].slice(0, 3).map((value) => {
+      const unit = value / 255;
+      return unit <= 0.03928 ? unit / 12.92 : ((unit + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+  };
+  const style = getComputedStyle(node);
+  const [low, high] = [luminance(style.color), luminance(style.backgroundColor)].sort((a, b) => a - b);
+  return (high + 0.05) / (low + 0.05);
+};
+
 test.describe("Backlog directory and ordering", () => {
   let repo;
   let bare;
@@ -81,6 +99,8 @@ test.describe("Backlog directory and ordering", () => {
   const directoryRows = (page) => page.getByRole("group", { name: "Backlog directory" }).getByRole("link");
   const blockFor = (page, title) => page.locator("backlog-block", { has: page.getByRole("button", { name: title, exact: true }) });
   const guardDialog = (page) => page.getByRole("dialog", { name: GUARD });
+  const drawerHeading = (page, title) => page.getByRole("dialog").getByRole("heading", { level: 2, name: title, exact: true });
+  const scrollsSideways = (page) => page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
   const waitingOn = (scope) => scope.getByRole("list", { name: /^Waiting on \d+$/ }).getByRole("listitem");
   // A prerequisite's badge is plain text, which has no role of its own, so it is found by its text.
   const prerequisiteBadge = (scope, namespace) => waitingOn(scope).getByText(namespace, { exact: true });
@@ -170,7 +190,7 @@ test.describe("Backlog directory and ordering", () => {
     const block = blockFor(page, "Beta one");
     await expect(waitingOn(block)).toHaveText(/alpha\s+Storage\s+\(Backlog, position 1\)/);
     await block.getByRole("button", { name: "Storage", exact: true }).click();
-    await expect(page.locator("#drawer-title")).toHaveText("Storage");
+    await expect(drawerHeading(page, "Storage")).toBeVisible();
   });
 
   test("inside a namespace, its breadcrumb names it and only prerequisites carry a badge", async ({ page }) => {
@@ -192,6 +212,7 @@ test.describe("Backlog directory and ordering", () => {
     await expect(headings).toHaveText(["Next up", "Namespaces"]);
     await expect(nextUp.locator("plan-card .title-link")).toHaveText(["Storage"]);
     await expect(nextUp.locator("plan-card")).toContainText("Purpose of Storage.");
+    await expect(nextUp.getByRole("button", { name: "Promote", exact: true })).toBeVisible();
     await expect(nextUp.getByRole("button", { name: /^Move/ })).toHaveCount(0);
 
     await page.getByRole("button", { name: "Filters", exact: true }).click();
@@ -295,10 +316,10 @@ test.describe("Backlog directory and ordering", () => {
       await openNamespace(page, "beta");
       await page.locator("plan-card").getByText("Beta one", { exact: true }).click();
       const drawer = page.getByRole("dialog");
-      await expect(page.locator("#drawer-title")).toHaveText("Beta one");
+      await expect(drawerHeading(page, "Beta one")).toBeVisible();
       await expect(waitingOn(drawer)).toHaveText(/alpha\s+Diagnostics\s+\(Backlog, position 2\)/);
       await drawer.getByRole("button", { name: "Diagnostics", exact: true }).click();
-      await expect(page.locator("#drawer-title")).toHaveText("Diagnostics");
+      await expect(drawerHeading(page, "Diagnostics")).toBeVisible();
 
       await openOrdering(page);
       await expect(blockFor(page, "Diagnostics").getByText("2", { exact: true })).toBeVisible();
@@ -313,10 +334,10 @@ test.describe("Backlog directory and ordering", () => {
     try {
       await page.goto("/");
       await page.getByRole("button", { name: "Blocked active", exact: true }).click();
-      const drawer = page.locator("dialog#drawer");
-      await expect(page.locator("#drawer-title")).toHaveText("Blocked active");
+      const drawer = page.getByRole("dialog");
+      await expect(drawerHeading(page, "Blocked active")).toBeVisible();
       await drawer.getByRole("button", { name: "Beta one" }).first().click();
-      await expect(page.locator("#drawer-title")).toHaveText("Beta one");
+      await expect(drawerHeading(page, "Beta one")).toBeVisible();
       await expect(waitingOn(drawer)).toHaveText(/alpha\s+Storage\s+\(Backlog, position 1\)/);
       const badge = prerequisiteBadge(drawer, "alpha");
       expect(await badge.evaluate((node) => getComputedStyle(node).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
@@ -332,10 +353,10 @@ test.describe("Backlog directory and ordering", () => {
     await expect(unsaved).toBeVisible();
 
     await waitingOn(blockFor(page, "Storage")).getByRole("button", { name: "Storage", exact: true }).click();
-    await expect(page.locator("#drawer-title")).toHaveText("Storage");
+    await expect(drawerHeading(page, "Storage")).toBeVisible();
     await expect(guardDialog(page)).toHaveCount(0);
-    await page.locator("#drawer-close").click();
-    await expect(page.locator("#drawer-title")).toBeHidden();
+    await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
 
     await expect(guardDialog(page)).toHaveCount(0);
     await expect(orderedTitles(page)).toHaveText(["Diagnostics", "Storage", "Retrieval"]);
@@ -344,6 +365,27 @@ test.describe("Backlog directory and ordering", () => {
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
     expect(savedOrder()).toEqual(["alphax03", "alphaa01", "alphab02"]);
+  });
+
+  test("a long unbroken title does not scroll Details, Ordering, or the drawer sideways at phone width", async ({ page }) => {
+    const unbroken = "x".repeat(89);
+    write("docs/plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: unbroken }));
+    try {
+      await page.setViewportSize({ width: 390, height: 800 });
+      await openNamespace(page);
+      await expect(page.getByRole("button", { name: unbroken, exact: true }).first()).toBeVisible();
+      expect(await scrollsSideways(page)).toBe(false);
+
+      await page.getByRole("button", { name: "Ordering", exact: true }).click();
+      await expect(page.locator("backlog-block").first()).toBeVisible();
+      expect(await scrollsSideways(page)).toBe(false);
+
+      await orderedTitles(page).first().click();
+      await expect(drawerHeading(page, unbroken)).toBeVisible();
+      expect(await scrollsSideways(page)).toBe(false);
+    } finally {
+      write("docs/plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage" }));
+    }
   });
 
   test.describe("a Next up card with both badges and a long title at phone width", () => {
@@ -360,7 +402,10 @@ test.describe("Backlog directory and ordering", () => {
         const card = page.getByRole("region", { name: "Next up" }).locator("plan-card").first();
         await expect(card.getByRole("link", { name: "alpha", exact: true })).toBeVisible();
         await page.screenshot({ path: testInfo.outputPath(`next-up-${theme}.png`), fullPage: true });
-        expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+        expect(await scrollsSideways(page)).toBe(false);
+        for (const badge of [card.getByRole("link", { name: "alpha", exact: true }), prerequisiteBadge(card, "alpha")]) {
+          expect(await badge.evaluate(contrastRatio)).toBeGreaterThanOrEqual(4.5);
+        }
         // An ellipsis would pass the overflow check above while hiding most of the title.
         const fitsInFull = (node) => node.scrollWidth <= node.clientWidth;
         expect(await card.getByText(LONG_TITLE, { exact: true }).evaluate(fitsInFull)).toBe(true);
@@ -652,10 +697,11 @@ test.describe("Backlog directory and ordering", () => {
   test("a plan with a duplicate id is shown with its reason and no controls", async ({ page }) => {
     const copies = ["docs/plans/backlog/alpha-twin-one.md", "docs/plans/backlog/alpha-twin-two.md"];
     try {
-      for (const [index, file] of copies.entries()) write(file, document({ id: "twinplan", title: `Twin ${index}` }));
+      for (const [index, file] of copies.entries()) write(file, document({ id: "twinplan", title: `Twin ${index}`, deps: ["alphax03"] }));
       await openOrdering(page);
       await expect(page.getByText("Duplicate id: twinplan")).toHaveCount(2);
       await expect(page.locator("backlog-block", { hasText: "Twin" })).toHaveCount(0);
+      await expect(page.getByRole("list", { name: "Waiting on 1" }).filter({ hasText: "Diagnostics" })).toHaveCount(2);
     } finally {
       for (const file of copies) fs.rmSync(path.join(repo, file), { force: true });
     }
