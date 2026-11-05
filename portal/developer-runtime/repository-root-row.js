@@ -57,7 +57,8 @@ function worktreeStateNote(root) {
 // and copy control at the start of the identity line. Git drift and the actions column still come
 // from `root`, so the row behaves exactly like the checkout it is. Home names a worktree by the plan
 // it implements this way; the row stays agnostic about what the node holds. `identity.hideWorktreeBadge`
-// drops the lifecycle badge when the node already says the same thing.
+// drops the lifecycle badge when the node already says the same thing. On Home, `onMountWorktreeDetails`
+// fills the actions column's last cell on every worktree row, claimed or not.
 export function buildRootSection({ root, departed = [], repository, composeActions, instanceActions, mode = "runtime", onMountLinks, onMountWorktreeDetails, identity = null }) {
   const section = createRepositoryCheckoutRow({ controls: mode !== "home" });
   // Lets a rebuild find "this same checkout's" row across renders (see reconcileSection in app.js)
@@ -88,10 +89,9 @@ export function buildRootSection({ root, departed = [], repository, composeActio
   if (identity) section.querySelector(".repository-root-identity-line").prepend(identity.node);
   else fillIdentity(section, root, composeGroups);
   mountCheckoutRow(section);
-  // Home gives an unclaimed worktree its worktree dropdown in place of the copy control: the dropdown
-  // copies the same values and also holds the worktree's actions. A plan's identity carries its own.
-  const worktreeDetails = mode === "home" && root?.isWorktree && !identity && onMountWorktreeDetails;
-  if (worktreeDetails) onMountWorktreeDetails(section.querySelector("[data-slot=root-copy]"), root);
+  // Home's worktree dropdown stands in for the copy control: it copies the same values and also holds
+  // the worktree's actions.
+  const worktreeDetails = mode === "home" && root?.isWorktree && onMountWorktreeDetails;
   if (root?.git) {
     // Drift is a prompt to sync work in progress; once the branch has merged it no longer applies.
     // The checkout tooltip and the worktree dropdown still carry the Git facts.
@@ -101,6 +101,11 @@ export function buildRootSection({ root, departed = [], repository, composeActio
   fillPromotedLink(section, root);
   if (mode === "home") {
     if (root?.primaryEntrypoint?.opaqueKey) onMountLinks?.(section.querySelector("[data-slot=root-links]"), root.primaryEntrypoint);
+    // Present on every row, filled or empty, so each row's port and Links end in the same column.
+    const worktreeCell = document.createElement("span");
+    worktreeCell.className = "checkout-worktree-cell";
+    section.querySelector(".repository-root-actions").append(worktreeCell);
+    if (worktreeDetails) onMountWorktreeDetails(worktreeCell, root);
     section.querySelector("[data-slot=members]")?.remove();
     return section;
   }

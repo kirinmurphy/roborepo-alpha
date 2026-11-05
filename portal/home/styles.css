@@ -41,7 +41,6 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 .plan-item { flex-wrap: wrap; }
 .plan-controls { display: inline-flex; align-items: center; gap: 10px; flex: none; white-space: nowrap; }
 .plan-controls:empty { display: none; }
-.plan-controls > portal-menu-button .menu-button-trigger { gap: 2px; }
 .home-main .plan-complete-badge { background: color-mix(in srgb, var(--chip-low-bg) 70%, #000); }
 .plan-identity { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
 .plan-next-action { display: inline-flex; align-items: center; gap: 4px; padding: 1px var(--space-sm); font-size: var(--text-2xs); white-space: nowrap; }
@@ -59,6 +58,10 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 /* Fixed worktree and Links panels also need to stay below the sticky site header. */
 .home-main .menu-button-panel { z-index: 9; }
 .home-main .checkout-links-cell { margin-left: 0; }
+/* The rightmost column on Home. Sized to the worktree trigger, so a row without one (a main checkout)
+ * reserves the same space and its port and Links line up with the worktree rows'. */
+.checkout-worktree-cell { display: inline-flex; justify-content: flex-end; width: 62px; }
+.checkout-worktree-cell .menu-button-trigger { gap: 2px; }
 .home-main .checkout-links-cell .menu-button-trigger {
   width: var(--checkout-links-width);
   height: var(--checkout-control-height);
@@ -84,7 +87,7 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
   font-size: var(--text-xs);
   white-space: nowrap;
 }
-/* The matched plan's worktree dropdown: full identity values with their own copy actions. */
+/* The worktree dropdown: full identity values with their own copy actions. */
 /* Wider than the shared panel's cap: the worktree path is middle-truncated to 50 characters. */
 .menu-button-panel:has(> .worktree-details) { max-width: min(560px, 90vw); }
 /* Three bands — identity, Git status, actions — each running to the panel's edges and divided by a

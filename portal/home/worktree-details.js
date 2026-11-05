@@ -8,9 +8,9 @@ const WORKTREE_PATH_MAX_LENGTH = 50;
 
 // Every worktree row's dropdown: the branch and path, each with its own copy action, the plan file
 // when a plan claims the worktree (`plan` is null otherwise), and the Git facts worth a glance. A
-// matched plan row has no other identity for the worktree; an unclaimed worktree row keeps its branch
-// label and checkout tooltip beside it. Stop Server and Delete Worktree sit at the foot of the panel,
-// so neither is ever the row's most prominent action.
+// matched plan row has no other identity for the worktree; an unclaimed worktree row also keeps its
+// branch label and checkout tooltip. Stop Server and Delete Worktree sit at the foot of the panel, so
+// neither is ever the row's most prominent action.
 export function worktreeDetailsButton(plan, checkout, { mainCheckouts = [], onStopServers = null, onDelete = null } = {}) {
   const button = document.createElement("portal-menu-button");
   button.setAttribute("icon", "tree");
