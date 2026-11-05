@@ -92,6 +92,7 @@ const onboarding = {
 // toast and the plan-write skill modal, so the page reuses those rather than creating its own.
 const planDrawer = createPlanDrawer({
   getPlans: () => state.snapshot.plans,
+  getBacklog: () => state.snapshot.backlog,
   getPlanSuitePackage: () => state.snapshot.planSuitePackage,
   mergeFor: (key) => state.mergedPlans.get(key) || null,
   onEnablePackage: enablePackage,
@@ -395,6 +396,7 @@ function render() {
   }
   const cardActions = {
     plans: snapshot.plans,
+    backlog: snapshot.backlog,
     onOpen: openPlan,
     onCopyPath: copyText,
     onCopyContext: (record) => copyText(repositoryContext(record)),

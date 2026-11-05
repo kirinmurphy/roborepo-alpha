@@ -182,6 +182,13 @@
         <portal-icon class="backlog-directory-chevron" name="chevron" size="sm" aria-hidden="true"></portal-icon>
       </a>
     </template>
+    <template id="tpl-backlog-next-up"><div class="backlog-directory" role="group" aria-label="Next up"></div></template>
+    <template id="tpl-backlog-next-up-row">
+      <div class="backlog-next-up-row">
+        <button type="button" class="backlog-plan-title" data-slot="title"></button>
+        <span class="backlog-plan-clue" data-slot="status"></span>
+      </div>
+    </template>
     <template id="tpl-backlog-no-config">
       <portal-notice class="portal-notice" variant="info" icon="info">
         <p>This repo has no plan namespaces yet. Run <code>/plan-suite-init</code> to declare them.</p>

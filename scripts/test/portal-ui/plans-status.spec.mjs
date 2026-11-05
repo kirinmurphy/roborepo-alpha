@@ -154,13 +154,14 @@ test.describe("Plans card status", () => {
     await expect(page.locator("dialog#drawer #drawer-title")).toHaveText("Blocker target plan");
   });
 
-  test("backlog dependencies replace Promote with linked IDs on cards and in the drawer", async ({ page }, testInfo) => {
+  test("backlog dependencies replace Promote with linked prerequisites on cards and in the drawer", async ({ page }, testInfo) => {
     await page.goto(await backlogUrlFor(page, "Done status plan"));
     const card = page.locator("plan-card", { hasText: "Dependent status plan" });
-    await expect(card).toContainText("depends on stblkr01, string01, missing1");
+    await expect(card).toContainText("Waiting on 3");
+    await expect(card).toContainText("missing1 (not found)");
     await expect(card).not.toContainText("stcmp001");
     const menuBox = await card.getByRole("button", { name: "Plan actions", exact: true }).boundingBox();
-    const dependencyBox = await card.getByRole("button", { name: "stblkr01", exact: true }).boundingBox();
+    const dependencyBox = await card.getByRole("button", { name: "Blocker target plan", exact: true }).boundingBox();
     expect(menuBox.x + menuBox.width).toBeLessThan(dependencyBox.x);
     await expect(card.getByRole("button", { name: "Promote", exact: true })).toHaveCount(0);
     await expect(card.getByRole("button", { name: "missing1", exact: true })).toHaveCount(0);
@@ -168,16 +169,16 @@ test.describe("Plans card status", () => {
     await expect(card.getByRole("group", { name: "Copy options" }).getByRole("button", { name: "Promote", exact: true })).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath("dependencies.png") });
     await card.getByRole("button", { name: "Plan actions", exact: true }).click();
-    await card.getByRole("button", { name: "stblkr01", exact: true }).click();
+    await card.getByRole("button", { name: "Blocker target plan", exact: true }).click();
     await expect(page.locator("#drawer-title")).toHaveText("Blocker target plan");
     await page.locator("#drawer-close").click();
-    await card.getByRole("button", { name: "string01", exact: true }).click();
+    await card.getByRole("button", { name: "Ring status plan", exact: true }).click();
     await expect(page.locator("#drawer-title")).toHaveText("Ring status plan");
     await page.locator("#drawer-close").click();
     await card.getByText("Dependent status plan", { exact: true }).click();
     const drawer = page.getByRole("dialog");
     const drawerMenuBox = await drawer.getByRole("button", { name: "Plan actions", exact: true }).boundingBox();
-    const drawerDependencyBox = await drawer.getByRole("button", { name: "stblkr01", exact: true }).boundingBox();
+    const drawerDependencyBox = await drawer.getByRole("button", { name: "Blocker target plan", exact: true }).boundingBox();
     expect(drawerMenuBox.x + drawerMenuBox.width).toBeLessThan(drawerDependencyBox.x);
     await expect(drawer.getByRole("button", { name: "Promote", exact: true })).toHaveCount(0);
     await drawer.getByRole("button", { name: "Plan actions", exact: true }).click();
@@ -187,7 +188,7 @@ test.describe("Plans card status", () => {
   test("completed dependencies restore Promote on the card and in its popup", async ({ page }) => {
     await page.goto(await backlogUrlFor(page, "Done status plan"));
     const card = page.locator("plan-card", { hasText: "Satisfied dependency plan" });
-    await expect(card).not.toContainText("depends on");
+    await expect(card).not.toContainText("Waiting on");
     await expect(card.getByRole("button", { name: "Promote", exact: true })).toBeVisible();
     await card.getByRole("button", { name: "Plan actions", exact: true }).click();
     await expect(card.getByRole("group", { name: "Copy options" }).getByRole("button", { name: "Promote", exact: true })).toBeVisible();

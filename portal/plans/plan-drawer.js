@@ -93,7 +93,7 @@ export function createPlanDrawer(deps) {
       ctaEl.hidden = true;
       ctaEl.onclick = null;
     }
-    const dependencies = tmpl.planDependencies(doc.plan, deps.getPlans(), open);
+    const dependencies = tmpl.planDependencies(doc.plan, deps.getPlans(), open, deps.getBacklog?.());
     const dependencyMount = document.getElementById("drawer-dependencies");
     dependencyMount.replaceChildren(...(dependencies ? [dependencies] : []));
     dependencyMount.hidden = !dependencies;

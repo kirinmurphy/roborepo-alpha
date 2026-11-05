@@ -186,6 +186,13 @@ The draft encompasses **both** ranked order and moves from Needs prioritization.
 
 **Chosen branching policy — Option A:** `depends_on` may express joins and forks. **Only Ordering mode wraps connected plans into movable blocks; Details remains flat.** Linearize each dependency-connected set of remaining **same-namespace Backlog plans, connected by direct edges among those Backlog plans**, into one contiguous, movable display block, with a valid topological order within it. A display sequence such as `A → B → C` does **not** add a hard dependency from A to B when C independently depends on A and B. When new edges connect separately ranked groups, automatically regroup them, even when unrelated plans move down in priority. Show a concise explanation of automatic moves; automatic dependency regrouping does not ask for approval. This is separate from Save/Cancel for manual Ordering edits. Never rewrite actual dependency edges to force a chain.
 
+### Prerequisites in other namespaces and Next up
+
+A repo's plans can form one chain across several namespaces, so a namespace's order alone does not say what can be built. Namespace ranks stay independent; these two additions make the chain visible and store nothing.
+
+- **Waiting on:** every Backlog plan, in Details, Ordering, and the drawer, lists its unfinished prerequisites as `Waiting on N`, each with its namespace-prefixed title and a link that opens it. A prerequisite in another namespace's Backlog shows `Backlog, position N` or `Backlog, not prioritized`; one in this namespace shows `Backlog`, since a draft may be moving it; one outside Backlog shows its lifecycle; a missing one shows `not found`. A completed prerequisite is left out.
+- **Next up:** a read-only section below the namespace list on a selected repo's screen. Each namespace gets at most one row: the first plan in its order, ranked plans before unranked, that has no blocker and whose unfinished prerequisites are all in Ready, Active, or Review. The row says `Nothing blocking` or `After <plan> (<lifecycle>)`, whether the plan is unprioritized, and `+N more` when other plans in that namespace also qualify. Filters narrow it. Namespaces stay in directory order, so it claims no order between them, and a row only opens its plan.
+
 ### Ordering registry
 
 Use a repository-local `docs/plans/plans-order.json` keyed by namespace, storing stable plan IDs rather than filenames, titles, or a persisted group hierarchy. A missing file means every plan is unprioritized. `modules/plan-suite/` owns reading, calculating, and writing it; the portal route and CLI command are thin adapters. Writes use the temp-file-and-rename pattern already in `modules/repositories/registry.mjs`, in the primary checkout, and are left uncommitted like today's priority edits.
@@ -296,6 +303,7 @@ Do not introduce graph editors, separate roadmap pages, nested views, manual spl
 | “Plan leaves Backlog: remove its ID from Backlog order” | Ignored on read, pruned at the next write |
 | “Plan returns to Backlog” row | Unreachable; no such transition exists |
 | “Automatic placement persists as part of that write operation” for dependency edits | Applies to `roborepo plans order place`; hand edits persist at the next write |
+| `Requires: Q` in the wireframes | `Waiting on N`, listing each unfinished prerequisite with its namespace and status |
 
 ## Implementation checklist
 
@@ -310,6 +318,7 @@ Priority removal comes last, so Backlog has its replacement before the old contr
 - [x] Add Ordering: derived block containers, the exact right-side controls, native drag, keyboard paths, disabled states, the automatic-move notice, and Filters hidden.
 - [x] Add sticky Save/Cancel, dirty state, the guard prompt with its three navigation seams, native exit protection, atomic Save, and stale-revision conflicts.
 - [x] Integrate automatic placement and explicit deferral into `plan-write` with failure reporting.
+- [x] Show each unfinished prerequisite's namespace and status with a link, and add the read-only Next up section.
 - [x] Remove priority from all code, skills, tests, and fixtures, and sweep the line from every non-Completed/non-Archived plan including this one.
 - [x] Update the documents listed under Documentation impact, correct the addendum per “Addendum corrections”, and retake `docs/images/plans.png`.
 
@@ -340,6 +349,8 @@ Run the checks for the tier as each task lands, then let CI run the full gate. E
 | Guarded exit | Mode/tab/route/repo/page navigation prompts Save and continue or Cancel when dirty |
 | Browser exit | Native supported unsaved-change protection is active |
 | Concurrent change | Stale draft cannot silently overwrite external dependency/order edits |
+| Cross-namespace prerequisite | Details, Ordering, and the drawer show its namespace and status with a link; a completed one is left out; only another namespace's Backlog shows a position |
+| Next up | At most one row per namespace, first by rank, never held up by a Backlog, missing, or archived prerequisite or a blocker; follows Filters; offers no way to change an order |
 | Linear chain | Remaining phases move together; independent work may move ahead |
 | Fork/join group | Direct edges among same-namespace Backlog plans form movable blocks with topological order; dragging cannot violate actual dependency edges |
 | Completed/shared prerequisite | With A→B and A→C, moving A out of Backlog separates B and C (unless directly dependent), preserves ranked positions and their actual dependency on A |
@@ -378,6 +389,9 @@ Run the checks for the tier as each task lands, then let CI run the full gate. E
 
 Autonomous decisions made during implementation, each clear, with its effects inside this feature.
 
+- **Plans that depend across namespaces stay ranked per namespace, with the link made visible (user decision).** In research_bots all 8 Backlog plans form one chain across 4 namespaces, and rows did not say where a prerequisite lives. The user chose prerequisite namespace, status, and links plus a read-only Next up list. Alternatives: a repo dependency map, which conflicts with the no-Roadmap non-goal, and one repo-wide order, which is a large rework and would turn research_bots into one 8-plan block with nothing to rank.
+- **Next up shows one plan per namespace, not every unblocked plan.** Alternative: list them all, as first proposed. Chosen because 39 of roborepo-alpha's 49 Backlog plans are unblocked, so a full list would not say what is next. `+N more` keeps the rest visible.
+- **A plan waiting only on work in Ready, Active, or Review counts for Next up.** Alternative: only plans with nothing unfinished. Chosen because research_bots would otherwise show nothing, when its next plan is the one waiting on the active plan.
 - **A plan's namespace resolves against the primary checkout's vocabulary.** `buildPlanRecord` resolves it against the checkout it reads, and `repositoryPlanRecords` re-resolves it against the first checkout's. Alternative: trust each record. Chosen because the order the plan ranks in lives with the primary checkout, so an older or newer config in a worktree must not decide it.
 - **The promote and start gates also refuse an unreadable config.** Alternative: treat it as no vocabulary and let the plan through. Chosen because the plan says not to continue as if a broken vocabulary were current, and a gate that cannot judge a filename should not approve it.
 - **`DEPENDENCY_CYCLE` is blocking; the other relationship findings stay advisory.** Alternative: advisory like `DEPENDENCY_NOT_FOUND`. Chosen because the plan calls cycles validation errors and no order can be produced from one. Transition gates read document findings, so this affects `plans validate` only.

@@ -73,7 +73,7 @@ no lifecycle mutation route or move dialog; every move goes through the transiti
 | `modules/plan-suite/naming.mjs` | `resolvePlanNamespace`: longest approved prefix. `plan.namespace` is computed in `buildPlanRecord`, then recomputed against the primary checkout's vocabulary in `repositoryPlanRecords` |
 | `modules/plan-suite/backlog-order.mjs` | Pure calculations: `findDependencyCycles`, `deriveGroups`, `proposeOrder` |
 | `modules/plan-suite/backlog-registry.mjs` | The registry file: `buildBacklogIndex` (the snapshot's `backlog` field), `saveNamespaceOrder`, `placePlan`, and the private `applyOrder` both of those end in |
-| `portal/plans/backlog-model.js` | Pure browser model: URL level, directory counts, draft moves on whole blocks |
+| `portal/plans/backlog-model.js` | Pure browser model: URL level, directory counts, prerequisite status, Next up, draft moves on whole blocks |
 | `portal/plans/backlog.js` | Directory and list rendering, the draft, Save, and the guard |
 
 The index is calculated from the plans, the config, and the registry on every read and never written,

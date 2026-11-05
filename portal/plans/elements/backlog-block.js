@@ -1,7 +1,7 @@
 // <backlog-block> — one movable unit in Backlog's Ordering mode: a single plan row, or a container of
 // linked plans that moves as one. Set .block ({ ids, keys }), .section ("ordered" | "needs"), .index,
-// .count, .plans (key -> record), .locked, .held, and .onOpen right after creation, then append to the
-// DOM. A locked block shows a badge in place of its controls; a held one keeps them, disabled, while a
+// .count, .plans (key -> record), .backlog (the snapshot's), .locked, .held, and .onOpen right after
+// creation, then append to the DOM. A locked block shows a badge in place of its controls; a held one keeps them, disabled, while a
 // Save settles.
 //
 // It owns its controls and dispatches a bubbling `block-move` event with { section, index, action };
@@ -9,6 +9,7 @@
 // list the block sits in, which knows where the other blocks are.
 import { portalTpl as tpl, portalFillSlots as fill } from "/portal/shared/api.js";
 import { ORDERED_ACTIONS, NEEDS_ACTIONS, displayTitle, isActionEnabled } from "/portal/plans/backlog-model.js";
+import { planDependencies } from "/portal/plans/templates.js";
 
 const CONTROLS = {
   top: { label: "Move to top", icon: "arrow-to-top" },
@@ -38,11 +39,13 @@ class BacklogBlockElement extends HTMLElement {
     const { plan } = record;
     const node = fill(tpl("tpl-backlog-plan"), {
       purpose: truncate(plan.excerpt || "", PURPOSE_LENGTH),
-      clue: planClue(record, this.plans),
+      clue: plan.blockers.length ? `blocked by ${plan.blockers.length}` : "",
     });
     const title = node.querySelector("[data-slot=title]");
     title.textContent = displayTitle(plan);
     title.addEventListener("click", () => this.onOpen(record.key));
+    const waiting = planDependencies(record, [...this.plans.values()], this.onOpen, this.backlog);
+    if (waiting) node.append(waiting);
     return node;
   }
 
@@ -92,20 +95,6 @@ class BacklogBlockElement extends HTMLElement {
 }
 
 customElements.define("backlog-block", BacklogBlockElement);
-
-// Real prerequisites only: adjacency in a block never implies one. A prerequisite outside Backlog
-// names its lifecycle, since it may still be blocking this plan.
-function planClue(record, plans) {
-  const clues = [];
-  const requires = (record.plan.dependencies || []).map((id) => {
-    const target = [...plans.values()].find((item) => item.plan.id === id);
-    if (!target) return id;
-    return target.plan.lifecycle === "backlog" ? target.plan.title : `${target.plan.title} (${target.plan.lifecycle})`;
-  });
-  if (requires.length) clues.push(`Requires: ${requires.join(", ")}`);
-  if (record.plan.blockers.length) clues.push(`blocked by ${record.plan.blockers.length}`);
-  return clues.join(" · ");
-}
 
 function truncate(text, maxLength) {
   return text.length <= maxLength ? text : `${text.slice(0, maxLength).trimEnd()}…`;

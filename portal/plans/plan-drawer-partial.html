@@ -180,7 +180,13 @@
       <span class="blockers-popover-item blockers-popover-item-unresolved" data-slot="title"></span>
     </template>
     <template id="tpl-plan-dependencies">
-      <span class="plan-dependencies">depends on <span data-slot="dependencies"></span></span>
+      <div class="plan-dependencies">
+        <span data-slot="heading"></span>
+        <div class="plan-dependency-list" data-slot="dependencies"></div>
+      </div>
+    </template>
+    <template id="tpl-plan-dependency">
+      <div class="plan-dependency"><span data-slot="label"></span> <span data-slot="status"></span></div>
     </template>
     <template id="tpl-menu-item">
       <button type="button" class="menu-button-item">

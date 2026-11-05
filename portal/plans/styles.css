@@ -591,6 +591,8 @@ a.repo-badge[aria-disabled="true"] {
 .backlog-directory-count,
 .backlog-directory-status { color: var(--dim); font-size: var(--text-sm); }
 .backlog-directory-chevron { transform: rotate(-90deg); color: var(--dim); }
+.backlog-next-up-row { display: grid; gap: 2px; min-width: 0; padding: 10px 12px; }
+.backlog-next-up-row + .backlog-next-up-row { border-top: 1px solid var(--line); }
 .backlog-namespace-header {
   display: flex;
   flex-wrap: wrap;

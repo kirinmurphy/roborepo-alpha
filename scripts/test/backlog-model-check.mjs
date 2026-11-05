@@ -12,6 +12,8 @@ import {
   moveBlock,
   namespaceDirectory,
   namespaceFromSearch,
+  nextUp,
+  openPrerequisites,
   orderedIds,
   repositoryDirectory,
 } from "../../portal/plans/backlog-model.js";
@@ -83,4 +85,67 @@ assert.deepEqual(orderedIds(dropBlock(draft, "ordered", 0, 2)), ["X", "A", "B", 
 assert.equal(isDraftDirty(dropBlock(draft, "ordered", 0, 1)), false, "dropping a block where it sits is no change");
 assert.deepEqual(orderedIds(dropBlock(draft, "needs", 0, 1)), ["A", "B", "C", "N", "X"]);
 
-console.log("backlog model: directory, URL level, and draft moves ok");
+// Prerequisites: scoped to the repo, completed ones gone, and a position only for another namespace.
+const repository = { id: "hash", repositoryId: "r" };
+const planRecord = (id, namespace, lifecycle, dependencies = [], blockers = []) => ({
+  key: `k-${id}`,
+  repository,
+  plan: { id, namespace, lifecycle, title: id, dependencies, blockers },
+});
+const records = [
+  planRecord("ranked", "strategy", "backlog"),
+  planRecord("sibling", "strategy", "backlog"),
+  planRecord("unranked", "strategy", "backlog"),
+  planRecord("local", "agents", "backlog"),
+  planRecord("working", "agents", "active"),
+  planRecord("done", "agents", "completed"),
+  planRecord("retired", "agents", "archived"),
+  { ...planRecord("elsewhere", "agents", "completed"), key: "k-other-repo", repository: { id: "other" } },
+];
+const strategyView = {
+  namespace: "strategy",
+  ordered: [block("sibling"), block("ranked")],
+  needsPrioritization: [block("unranked")],
+  unrankable: [],
+};
+const backlogEntries = [{ repositoryId: "r", namespaces: [strategyView] }];
+const statusOf = (dependencies) => openPrerequisites(planRecord("self", "agents", "backlog", dependencies), records, backlogEntries)
+  .map((item) => `${item.label}: ${item.status}`);
+assert.deepEqual(statusOf(["ranked"]), ["STRATEGY · ranked: Backlog, position 2"]);
+assert.deepEqual(statusOf(["unranked"]), ["STRATEGY · unranked: Backlog, not prioritized"]);
+assert.deepEqual(statusOf(["local"]), ["AGENTS · local: Backlog"]);
+assert.deepEqual(statusOf(["working"]), ["AGENTS · working: Active"]);
+assert.deepEqual(statusOf(["done"]), []);
+assert.deepEqual(statusOf(["retired"]), ["AGENTS · retired: Archived"]);
+assert.deepEqual(statusOf(["elsewhere"]), ["elsewhere: not found"], "another repo's plan with that id does not count");
+
+// Next up: one row per namespace, first by rank, never held up by Backlog, a blocker, or a missing or
+// archived prerequisite.
+const nextRecords = [
+  planRecord("heldByBacklog", "agents", "backlog", ["free"]),
+  planRecord("blocked", "agents", "backlog", [], ["upstream"]),
+  planRecord("afterWork", "agents", "backlog", ["working", "done"]),
+  planRecord("free", "agents", "backlog"),
+  planRecord("missing", "ingest", "backlog", ["nowhere"]),
+  planRecord("afterRetired", "ingest", "backlog", ["retired"]),
+  planRecord("unrankedFree", "strategy", "backlog"),
+  planRecord("working", "agents", "active"),
+  planRecord("done", "agents", "completed"),
+  planRecord("retired", "agents", "archived"),
+];
+const nextEntry = {
+  namespaces: [
+    { namespace: "agents", ordered: [block("heldByBacklog"), block("blocked"), block("afterWork"), block("free")], needsPrioritization: [], unrankable: [] },
+    { namespace: "ingest", ordered: [block("missing")], needsPrioritization: [block("afterRetired")], unrankable: [] },
+    { namespace: "strategy", ordered: [], needsPrioritization: [block("unrankedFree")], unrankable: [] },
+  ],
+};
+const allKeys = new Set(nextRecords.map((record) => record.key));
+const rows = nextUp(nextEntry, nextRecords, allKeys);
+assert.deepEqual(rows.map((row) => [row.label, row.prioritized, row.moreCount, row.waitingOn.map((item) => item.id)]), [
+  ["AGENTS · afterWork", true, 1, ["working"]],
+  ["STRATEGY · unrankedFree", false, 0, []],
+]);
+assert.deepEqual(nextUp(nextEntry, nextRecords, new Set(["k-free"])).map((row) => row.label), ["AGENTS · free"], "filters narrow the candidates");
+
+console.log("backlog model: directory, URL level, draft moves, prerequisites, and Next up ok");

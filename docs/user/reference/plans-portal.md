@@ -135,7 +135,7 @@ flat list of cards across all selected repos.
 | You have selected | You see |
 | --- | --- |
 | **All repos** | Repos with Backlog plans, each with its plan count and unprioritized count |
-| A repo | Its namespaces with Backlog plans, each with counts; **No namespace** last, when any plan lands there |
+| A repo | Its namespaces with Backlog plans, each with counts; **No namespace** last, when any plan lands there; then **Next up** |
 | A repo and namespace | **Needs prioritization** first when it has plans, then **Ordered**, as **Details** or **Ordering** |
 | A repo and **No namespace** | Each file's exact name, its findings, and **Copy Repair Prompt** |
 
@@ -149,6 +149,17 @@ the H1 is untouched. Approved means the keys of `docs/plans/plans-config.json` p
 namespaces. A repo with no config shows one **No namespace** row with its plans as ordinary cards and
 a notice pointing to `/plan-suite-init`, since it never adopted the convention. A malformed config is
 reported as an error and every plan shows under **No namespace** until it is fixed.
+
+**Next up** is read-only and shows at most one plan per namespace: the first in that namespace's
+order, ranked plans before unranked, with no blocker and with every unfinished prerequisite already in
+Ready, Active, or Review. Each row says `Nothing blocking` or `After <plan> (<lifecycle>)`, whether the
+plan is unprioritized, and `+N more` when other plans there also qualify. Namespaces stay in directory
+order, so it claims no order between them. Filters narrow it.
+
+**Waiting on** lists a Backlog plan's unfinished prerequisites in Details, Ordering, and the drawer, each
+with its namespace and a link that opens it. A prerequisite in another namespace's Backlog shows its
+position there or `not prioritized`, and one outside Backlog shows its lifecycle. Prerequisites never
+affect another namespace's order.
 
 **Details and Ordering** show the same plans in the same order. Details is always flat cards.
 Ordering shows compact rows and groups linked plans:

@@ -465,15 +465,25 @@ dialog#drawer::backdrop {
 .plan-complete-badge[hidden], .plan-merged-badge[hidden] { display: none; }
 
 .plan-dependencies {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
   color: var(--dim);
   font-size: var(--text-xs);
 }
+.plan-dependency-list { display: grid; gap: 2px; }
+/* A prerequisite list is taller and wider than the button it replaces, so the row lets it wrap and
+ * the menu button keeps its own height beside it. */
+.card-actions:has(.plan-dependencies) { flex-shrink: 1; align-items: flex-start; }
+.card-actions:has(.plan-dependencies) portal-menu-button { align-self: flex-start; }
+.card-actions:has(.plan-dependencies) .menu-button-trigger { height: auto; }
 .plan-dependencies button {
   padding: 0;
   border: 0;
   background: none;
   color: var(--accent);
   font: inherit;
+  text-align: left;
   text-decoration: underline;
   cursor: pointer;
 }

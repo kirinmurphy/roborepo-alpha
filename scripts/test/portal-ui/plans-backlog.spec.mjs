@@ -44,7 +44,7 @@ test.describe("Backlog directory and ordering", () => {
     write("docs/plans/backlog/alpha-retrieval.md", document({ id: "alphab02", title: "Retrieval", deps: ["alphaa01"] }));
     write("docs/plans/backlog/alpha-diagnostics.md", document({ id: "alphax03", title: "Diagnostics" }));
     write("docs/plans/backlog/alpha-traces.md", document({ id: "alphan04", title: "Traces" }));
-    write("docs/plans/backlog/beta-one.md", document({ id: "betaon05", title: "Beta one" }));
+    write("docs/plans/backlog/beta-one.md", document({ id: "betaon05", title: "Beta one", deps: ["alphaa01"] }));
     write("docs/plans/backlog/wrong-prefix.md", document({ id: "wrong006", title: "Misfiled plan" }));
     write("docs/plans/active/alpha-working.md", document({ id: "alphaw07", title: "Working plan" }));
     fs.mkdirSync(path.join(bare, "docs/plans/backlog"), { recursive: true });
@@ -76,7 +76,8 @@ test.describe("Backlog directory and ordering", () => {
     await expect(page.locator("backlog-block").first()).toBeVisible();
   }
   const orderedList = (page) => page.getByRole("group", { name: "Ordered plans" });
-  const orderedTitles = (page) => orderedList(page).getByRole("button", { name: /^ALPHA · / });
+  // A row's own title, not the prerequisite links beside it, which name plans the same way.
+  const orderedTitles = (page) => orderedList(page).getByRole("button", { name: /^ALPHA · / }).and(page.locator(".backlog-plan-title"));
   const directoryRows = (page) => page.getByRole("group", { name: "Backlog directory" }).getByRole("link");
   const blockFor = (page, title) => page.locator("backlog-block", { has: page.getByRole("button", { name: title, exact: true }) });
   const guardDialog = (page) => page.getByRole("dialog", { name: GUARD });
@@ -144,7 +145,8 @@ test.describe("Backlog directory and ordering", () => {
     const group = blockFor(page, "ALPHA · Storage");
     await expect(group).toContainText("2 linked plans");
     await expect(group).toContainText("ALPHA · Retrieval");
-    await expect(group).toContainText("Requires: Storage");
+    await expect(group).toContainText("Waiting on 1");
+    await expect(group).toContainText("ALPHA · Storage (Backlog)");
     const names = (locator) => locator.locator("[aria-label]").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("aria-label")));
     const ranked = ["Move to top", "Move up", "Move down", "Move to bottom", "Drag to move"];
     await expect.poll(() => names(group.getByRole("group", { name: "Move" }))).toEqual(ranked);
@@ -154,6 +156,50 @@ test.describe("Backlog directory and ordering", () => {
     await expect(group.getByRole("button", { name: "Move up" })).toBeDisabled();
     await expect(blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to bottom" })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
+  });
+
+  test("a prerequisite in another namespace shows its namespace and position, and opens", async ({ page }) => {
+    await openNamespace(page, "beta");
+    const card = page.locator("plan-card");
+    await expect(card).toContainText("Waiting on 1");
+    await expect(card).toContainText("ALPHA · Storage (Backlog, position 1)");
+    await page.getByRole("button", { name: "Ordering", exact: true }).click();
+    const block = blockFor(page, "BETA · Beta one");
+    await expect(block).toContainText("ALPHA · Storage (Backlog, position 1)");
+    await block.getByRole("button", { name: "ALPHA · Storage", exact: true }).click();
+    await expect(page.locator("#drawer-title")).toHaveText("Storage");
+  });
+
+  test("Next up lists each namespace's first unblocked plan, read-only and following Filters", async ({ page }) => {
+    await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
+    const nextUp = page.getByRole("group", { name: "Next up" });
+    await expect(page.getByRole("heading", { name: "Next up" })).toBeVisible();
+    await expect(nextUp.getByRole("button")).toHaveText(["ALPHA · Storage"]);
+    await expect(nextUp).toContainText("Nothing blocking · +2 more");
+    await expect(nextUp.getByRole("button", { name: /^Move/ })).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Filters", exact: true }).click();
+    await page.getByRole("searchbox").fill("Diagnostics");
+    await page.getByRole("button", { name: "Update", exact: true }).click();
+    await expect(nextUp.getByRole("button")).toHaveText(["ALPHA · Diagnostics"]);
+    await page.getByRole("button", { name: "Filters", exact: true }).click();
+    await page.getByRole("searchbox").fill("");
+    await page.getByRole("button", { name: "Update", exact: true }).click();
+
+    await nextUp.getByRole("button", { name: "ALPHA · Storage", exact: true }).click();
+    await expect(page.locator("#drawer-title")).toHaveText("Storage");
+  });
+
+  test("Next up names the work already underway that a plan comes after", async ({ page }) => {
+    write("docs/plans/backlog/beta-one.md", document({ id: "betaon05", title: "Beta one", deps: ["alphaw07"] }));
+    try {
+      await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
+      const nextUp = page.getByRole("group", { name: "Next up" });
+      await expect(nextUp.getByRole("button")).toHaveText(["ALPHA · Storage", "BETA · Beta one"]);
+      await expect(nextUp).toContainText("After ALPHA · Working plan (Active) · not prioritized");
+    } finally {
+      write("docs/plans/backlog/beta-one.md", document({ id: "betaon05", title: "Beta one", deps: ["alphaa01"] }));
+    }
   });
 
   test("moves stay in the draft until Save, and focus follows the moved block", async ({ page }) => {

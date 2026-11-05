@@ -23,6 +23,7 @@ import {
   moveBlock,
   namespaceDirectory,
   namespaceFromSearch,
+  nextUp,
   orderedIds,
   repositoryDirectory,
 } from "./backlog-model.js";
@@ -162,7 +163,23 @@ export function createBacklogController(deps) {
           href: hrefWithNamespace(location.href, row.namespace),
           onSelect: () => selectNamespace(row.namespace),
         }))),
+      ...nextUpSection(entry, matchingKeys),
     ];
+  }
+
+  // Read-only: each row opens the plan, and nothing here changes an order.
+  function nextUpSection(entry, matchingKeys) {
+    const rows = nextUp(entry, deps.getSnapshot().plans, matchingKeys);
+    if (!rows.length) return [];
+    const list = tpl("tpl-backlog-next-up");
+    list.append(...rows.map((row) => {
+      const node = fill(tpl("tpl-backlog-next-up-row"), { status: nextUpStatus(row) });
+      const title = node.querySelector("[data-slot=title]");
+      title.textContent = row.label;
+      title.addEventListener("click", () => deps.onOpen(row.key));
+      return node;
+    }));
+    return [sectionNode("Next up", list)];
   }
 
   function repositoryNotices(entry) {
@@ -215,7 +232,7 @@ export function createBacklogController(deps) {
     const locked = view.locked || !view.writable;
     const blockNode = (block, section, index, count) => {
       const node = document.createElement("backlog-block");
-      Object.assign(node, { block, section, index, count, plans, locked, held: Boolean(saving), onOpen: deps.onOpen });
+      Object.assign(node, { block, section, index, count, plans, backlog: deps.getSnapshot().backlog, locked, held: Boolean(saving), onOpen: deps.onOpen });
       return node;
     };
     const nodes = [namespaceHeader(entry, view), ...graphNotices(view)];
@@ -503,6 +520,15 @@ function graphNotices(view) {
     message: reason,
     resolution: "Repair the dependency graph; ordering stays locked until then.",
   }));
+}
+
+function nextUpStatus(row) {
+  const parts = [row.waitingOn.length
+    ? `After ${row.waitingOn.map((item) => `${item.label} (${item.status})`).join(", ")}`
+    : "Nothing blocking"];
+  if (!row.prioritized) parts.push("not prioritized");
+  if (row.moreCount) parts.push(`+${row.moreCount} more`);
+  return parts.join(" · ");
 }
 
 function isNamingFinding(item) {

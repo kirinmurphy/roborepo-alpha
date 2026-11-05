@@ -28,6 +28,62 @@ function pendingKeys(view) {
   return [...view.needsPrioritization.flatMap((block) => block.keys), ...view.unrankable];
 }
 
+// A plan's unfinished prerequisites in its own repo, each with its namespace and where it stands.
+// Only a completed plan satisfies a prerequisite. A missing one stays listed, with no plan to open.
+export function openPrerequisites(record, allRecords, backlog = []) {
+  const repositoryRecords = allRecords.filter((item) => item.repository.id === record.repository.id);
+  const entry = backlog.find((item) => item.repositoryId === record.repository.repositoryId);
+  return (record.plan.dependencies || []).flatMap((id) => {
+    const target = repositoryRecords.find((item) => item.plan.id === id);
+    if (!target) return [{ id, key: null, label: id, lifecycle: null, status: "not found" }];
+    if (target.plan.lifecycle === "completed") return [];
+    return [{
+      id,
+      key: target.key,
+      label: displayTitle(target.plan),
+      lifecycle: target.plan.lifecycle,
+      status: prerequisiteStatus(record, target, entry),
+    }];
+  });
+}
+
+// A position is given only for another namespace's order, which an Ordering draft here cannot change.
+// A prerequisite in this namespace is on the same screen, and the draft may be moving it.
+function prerequisiteStatus(record, target, entry) {
+  const { lifecycle, namespace } = target.plan;
+  if (lifecycle !== "backlog") return lifecycle.charAt(0).toUpperCase() + lifecycle.slice(1);
+  const view = namespace === record.plan.namespace ? null : entry?.namespaces.find((item) => item.namespace === namespace);
+  if (!view) return "Backlog";
+  const position = view.ordered.findIndex((block) => block.keys.includes(target.key));
+  return position === -1 ? "Backlog, not prioritized" : `Backlog, position ${position + 1}`;
+}
+
+const IN_FLIGHT = new Set(["ready", "active", "review"]);
+
+// The first plan in each namespace's order that nothing in Backlog holds up: either nothing is
+// unfinished, or everything unfinished is already underway. One row per namespace, because most of a
+// large repo's Backlog is often unblocked, and rank within a namespace is what makes one plan next.
+// Namespaces stay in directory order; this claims no order between them.
+export function nextUp(entry, allRecords, matchingKeys) {
+  const records = new Map(allRecords.map((record) => [record.key, record]));
+  return entry.namespaces.flatMap((view) => {
+    const ranked = new Set(view.ordered.flatMap((block) => block.keys));
+    const candidates = [...ranked, ...pendingKeys(view)]
+      .filter((key) => matchingKeys.has(key))
+      .map((key) => ({ record: records.get(key), waitingOn: openPrerequisites(records.get(key), allRecords) }))
+      .filter(({ record, waitingOn }) => !record.plan.blockers.length && waitingOn.every((item) => IN_FLIGHT.has(item.lifecycle)));
+    if (!candidates.length) return [];
+    const [{ record, waitingOn }] = candidates;
+    return [{
+      key: record.key,
+      label: displayTitle(record.plan),
+      waitingOn,
+      prioritized: ranked.has(record.key),
+      moreCount: candidates.length - 1,
+    }];
+  });
+}
+
 // Repositories with Backlog plans among `matchingKeys`, the plans the Filters popup leaves.
 export function repositoryDirectory(backlog, matchingKeys) {
   return backlog
