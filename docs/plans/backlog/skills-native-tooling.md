@@ -1,6 +1,5 @@
 ---
 id: native-skill-tooling-followups
-priority: low
 next_action: Extend existing doctor/native inventory output with metadata detail and add an adoption feature receipt; coordinate pin identity with package-source provenance.
 blocked_by: []
 depends_on: []

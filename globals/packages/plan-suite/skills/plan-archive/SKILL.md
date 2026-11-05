@@ -59,7 +59,10 @@ passing the reason. Do not compose the Git commands yourself. The command:
   it adds no frontmatter;
 - applies the copy table below, because abandoned work never merges, so Git never brings the
   worktree's plan copy to the base branch on its own;
-- commits only the plan's old and new paths on the base branch, and never pushes.
+- removes the plan's id from `depends_on` and `blocked_by` in every unfinished plan, except one bound
+  to a worktree, which it leaves and reports. It does not rewire chains: archiving B in A -> B -> C leaves
+  C with no link to A;
+- commits only the plan's old and new paths and those cleared plans on the base branch, and never pushes.
 
 | Copies | The command does |
 | --- | --- |
@@ -76,8 +79,8 @@ transition. Never merge two edited copies.
 - **Conflicting copies:** the user decides. Either merge the base branch into the worktree, or move
   the primary copy's edit into the worktree's copy and revert it in the primary checkout. Then run
   this command again.
-- **The plan's own path has uncommitted changes:** someone else is editing it; ask the user how to
-  handle them.
+- **The plan's own path, or a plan that depends on it, has uncommitted changes:** someone else is
+  editing it; ask the user how to handle them.
 - Never force the move, edit the other copy yourself to make the check pass, or reset a branch.
 
 ### 4. Leave the work in place
@@ -99,6 +102,8 @@ Archive result
 - Lifecycle change: <from> -> archived | none
 - Worktree copy: no-worktree | integrated | carried | unavailable | conflicting
 - Archive commit: <hash> | refused | already recorded
+- Dependencies cleared: <plans> | none
+- Dependencies left, worktree owns the copy: <plans> | none
 - Unmerged work left in place: <branch and worktree> | none
 ```
 

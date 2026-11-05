@@ -1,6 +1,5 @@
 ---
 id: 46qth5z8
-priority: high
 next_action: In a fresh Claude desktop session, confirm the app honors a PreToolUse deny for its own change_directory tool before writing the worktree-entry hook.
 blocked_by: []
 depends_on: []

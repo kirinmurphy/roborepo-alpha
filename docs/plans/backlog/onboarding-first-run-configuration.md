@@ -1,6 +1,5 @@
 ---
 id: v6lvuu2
-priority: low
 next_action: Build a shared staged onboarding draft on the existing init lifecycle and define setup-route handoff with Home guidance before changing live defaults.
 blocked_by: []
 depends_on: []

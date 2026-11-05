@@ -44,11 +44,11 @@ export const lifecyclePolicies = {
 
 // The single entry point. Returns findings for `lifecycle`, universal rules first, then that
 // destination's own. `ready` drives both the scanner's readiness chip and the move gate.
-export function validateForLifecycle(parsed, { lifecycle, priorities, normalizeHeading }) {
+export function validateForLifecycle(parsed, { lifecycle, normalizeHeading }) {
   const doc = describeDocument(parsed, { normalizeHeading });
   const policy = lifecyclePolicies[lifecycle];
   const findings = [
-    ...universalFindings(doc, { lifecycle, priorities }),
+    ...universalFindings(doc, { lifecycle }),
     ...(policy ? policy(doc) : []),
   ];
   return { ready: findings.length === 0, findings };
@@ -60,14 +60,10 @@ function missingSection(section) {
 
 // Applies to every destination: the frontmatter contract plus the sections that make a plan
 // document legible at all.
-function universalFindings(doc, { lifecycle, priorities }) {
+function universalFindings(doc, { lifecycle }) {
   const findings = [];
   if (!doc.title) findings.push(finding("MISSING_TITLE"));
   if (!doc.frontmatter.id) findings.push(finding("MISSING_ID"));
-  if (!doc.frontmatter.priority) findings.push(finding("MISSING_PRIORITY"));
-  if (doc.frontmatter.priority && !priorities.has(doc.frontmatter.priority)) {
-    findings.push(finding("INVALID_PRIORITY", { meta: { value: doc.frontmatter.priority } }));
-  }
   // A file outside any lifecycle folder is misplaced, but still gets every section check below —
   // the misplacement is one more finding, not a reason to stop describing the document.
   if (!lifecyclePolicies[lifecycle]) findings.push(finding("UNCLASSIFIED_LOCATION"));

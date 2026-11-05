@@ -1,4 +1,4 @@
-// <filter-chip filter-id="priority" label="priority" value="high"></filter-chip>
+// <filter-chip filter-id="blocked" label="blocked" value="blocked"></filter-chip>
 // Dispatches a bubbling "chip-remove" CustomEvent (detail: filterId) when its × is clicked.
 // Built from tpl-filter-chip (portal/plans/index.html) — this element is page-owned (only used
 // from /plans), so unlike skill-detail-modal it can rely on the host page's template.

@@ -1,6 +1,5 @@
 ---
 id: txhlglk
-priority: medium
 next_action: Run /plan-promote to validate and prepare the minimal plan-execute skill change
 blocked_by: []
 depends_on: []

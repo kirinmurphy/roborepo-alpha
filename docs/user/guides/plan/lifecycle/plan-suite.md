@@ -93,6 +93,7 @@ installs all six.
 Every move between lifecycle folders is one commit in the repository's main checkout, on the base
 branch, made by a `roborepo plans` command that the suite commands run. The commit contains only
 the plan's old and new paths, so other work in the main checkout, staged or not, stays where it is.
+Archiving also clears the plan from the prerequisites of unfinished plans, in the same commit.
 Its message names the plan by its filename, for example
 `Submit plan plan-lifecycle-review-and-ship-workflow for review`, so `git log` reads without
 looking up ids. The suite commands' reports and questions name a plan by its title, with its id in
@@ -405,7 +406,6 @@ Recommended frontmatter:
 ```yaml
 ---
 id: stable-plan-id
-priority: high
 next_action: Implement the next concrete task
 blocked_by: []
 depends_on: []
@@ -433,7 +433,8 @@ Headings and checkboxes inside fenced code blocks are examples, not plan structu
 The Plans page supports:
 
 - search across title, ID, path, next action, blockers, repository name, and warnings
-- repository, lifecycle, priority, blocked, structure, plan freshness, and health filters
+- repository, lifecycle, blocked, structure, plan freshness, and health filters
+- Backlog as a directory of repos and namespaces, each namespace with its own explicit order
 - lifecycle tabs: Backlog, Ready, Active, and Review, with Completed, Archived, and Unclassified
   behind the ⋮ menu
 - document rendering with metadata, warnings, and task lists
@@ -482,8 +483,8 @@ A merged worktree shows a **merged** completion badge on its plan card and in th
 
 ## Current Limits
 
-- The portal offers priority edits only for backlog and ready plans. Starting or reopening a plan
-  clears its priority to `none`. All other plan edits happen in your editor or through the suite.
+- The portal writes one thing: a namespace's Backlog order, when you press **Save**. All other plan
+  edits happen in your editor or through the suite.
 - Manual refresh is the v1 update model.
 - No database, daemon, cloud sync, direct editor, automatic merge, or automatic LLM prioritization
   is included.

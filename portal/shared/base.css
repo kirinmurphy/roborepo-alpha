@@ -239,17 +239,27 @@
 }
 input,
 select,
+textarea,
 button {
   font: inherit;
 }
 input,
-select {
+select,
+textarea {
   min-width: 0;
   color: var(--ink);
   background: var(--bg);
   border: 1px solid var(--line);
   border-radius: 5px;
   padding: var(--space-xs) var(--space-sm);
+}
+/* Every multi-line field: fills its form's width and grows only downward, with room around the text. */
+textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--space-sm);
+  resize: vertical;
 }
 /* The native caret sits flush against the border and ignores padding, so selects draw their own,
  * inset .5rem from the right edge, with room reserved for it beside the text. */
@@ -312,6 +322,8 @@ button:hover,
   cursor: pointer;
 }
 [data-btn="danger"]:hover {
+  color: var(--on-cta);
+  background: var(--cta-danger);
   filter: brightness(1.08);
 }
 [data-btn="text"] {
@@ -669,7 +681,6 @@ nav a.active {
   color: var(--ink);
   border-color: var(--line);
 }
-portal-info-icon,
 /* Icon size scale. These mirror ICON_SIZES in portal/shared/icon.js — <portal-icon size="sm"> and
  * a CSS-sized icon element like .info-icon must land on the same steps, so the numbers live in
  * both places by necessity but never diverge in value. Nothing should size an icon off-scale;
@@ -682,6 +693,9 @@ portal-info-icon,
   --icon-xxl: 40px;
   --icon-xxxl: 48px;
 }
+/* Inline-flex so the host holds only its icon. As a plain inline or block host it would wrap the icon
+ * in a line box, whose text baseline leaves the icon sitting low beside anything centered with it. */
+portal-info-icon,
 portal-icon {
   display: inline-flex;
   flex: 0 0 auto;
@@ -1571,7 +1585,7 @@ portal-menu-button {
   color: var(--ok);
 }
 
-/* Shared <option-dropdown> popover — the Plans priority and lifecycle pickers and the header's
+/* Shared <option-dropdown> popover — the header's
    repository selector. */
 option-dropdown {
   display: inline-block;
@@ -1603,7 +1617,11 @@ option-dropdown {
 }
 .dropdown-chevron {
   color: var(--dim);
-  font-size: var(--text-2xs);
+  /* Relative, so it stays readable beside any trigger text; line-height keeps the trigger's height. */
+  font-size: 1.5em;
+  line-height: 1;
+  /* The glyph sits low in its box; a translate raises it without moving the trigger's text. */
+  translate: 0 -2px;
 }
 .dropdown-menu {
   position: fixed;

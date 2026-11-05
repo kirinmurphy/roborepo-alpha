@@ -1,6 +1,5 @@
 ---
 id: skills-vs-commands-invocation-policy
-priority: low
 next_action: Reproduce supported native command listing and invocation, then choose presentation and repository/global precedence with the cross-package invocation workstream.
 blocked_by: []
 depends_on: []

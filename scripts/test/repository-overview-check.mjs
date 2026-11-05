@@ -177,6 +177,11 @@ const multiMock = firstRunMock.repositories.find((repository) => repository.repo
 assert.deepEqual(multiMock.domains.plans.data.active.map((plan) => plan.worktree), ["failing-checkout", "api-checkout"], "mock plans cover multiple worktrees");
 const mockPlans = mockPlansSnapshot();
 assert.equal(mockPlans.plans.length, 4, "the first-run Plans projection contains the mock plans");
+assert.deepEqual(
+  mockPlans.backlog.map((entry) => entry.urlKey),
+  mockHomeOverview().repositories.map((repository) => repository.urlKey),
+  "each demo Backlog entry opens under the urlKey the repo selector uses",
+);
 assert.equal(mockPlans.plans.find((record) => record.plan.id === "mock-api-surface").plan.worktree, "api-checkout");
 const mockRuntimeFirstRun = mockRuntimeSnapshot();
 assert.deepEqual(

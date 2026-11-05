@@ -1,6 +1,5 @@
 ---
 id: 9xzkn4vz
-priority: none
 next_action: Run /plan-execute to implement permanent deletion, the discard receipt, and the legacy recovery migration; ask before creating the worktree.
 blocked_by: []
 depends_on: []

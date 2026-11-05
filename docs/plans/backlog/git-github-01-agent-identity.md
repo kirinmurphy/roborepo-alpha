@@ -1,6 +1,5 @@
 ---
 id: w7vls1yk
-priority: high
 next_action: Create the bot account and classic token (Phase 2), then run the checks that need them, including the Codex sandbox checks
 blocked_by: []
 depends_on: []

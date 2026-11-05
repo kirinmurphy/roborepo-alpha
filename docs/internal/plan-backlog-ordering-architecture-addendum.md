@@ -1,6 +1,6 @@
 # Architecture addendum: namespace-scoped Backlog ordering
 
-**Status:** Proposed technical design companion to `plan-backlog-roadmap-ordering-v7.md`  
+**Status:** Technical design companion to `plans-backlog-roadmap-ordering.md`  
 **Scope:** Schema, persistence, dependency grouping, consistency rules, and a normative Backlog UI reference. The implementation plan remains the source of truth for overall feature goals.
 
 ## Purpose
@@ -15,9 +15,8 @@ The published `plan-write` schema currently establishes:
 - An opaque, immutable, repository-local `id` (normally 6–8 lowercase base36 characters).
 - `depends_on` as an array of plan IDs, supporting more than one prerequisite.
 - Approved project namespaces from `docs/plans/plans-config.json`, supplemented by plan-suite universal namespaces.
-- `priority: high|medium|low|none` in the current schema; removing this is part of the agreed breaking change.
 
-See the repository's `plan-write/SKILL.md` and `references/plan-schema.md`. This document proposes changes; it does not claim the implementation or validator has been updated.
+See the repository's `plan-write/SKILL.md` and `references/plan-schema.md`. `docs/user/reference/plans-portal.md` describes the behavior as implemented; this note records the design and the UI contract.
 
 ## Proposed storage layout
 
@@ -44,7 +43,7 @@ docs/plans/
 
 For example, if B and C each depend on A, the ranked registry can store `[A, B, C]` even while Ordering shows one movable `[A, B, C]` block. When A leaves Backlog, B and C become independent movable entries in that same B-before-C order. Their individual positions are **already saved**; no new prioritization prompt is required, and leaving a group is not a reason to clear a rank. A new sibling is inserted in a stable, deterministic order while respecting all actual prerequisite edges.
 
-New plans that depend only on *unprioritized* prerequisites remain unprioritized with their connected group. Manual Ordering-mode changes require explicit Save; automatic placement triggered by `plan-write` or dependency edits persists as part of that write operation, using revision checks to avoid overwriting an unsaved UI draft.
+New plans that depend only on *unprioritized* prerequisites remain unprioritized with their connected group. Manual Ordering-mode changes require explicit Save. Automatic placement persists through `roborepo plans order place`, using revision checks to avoid overwriting an unsaved UI draft; a hand edit to `depends_on` has no write path of its own, so it takes effect on the next read and persists at the next write.
 
 ### 1. Plan document: identity and hard dependencies
 
@@ -82,7 +81,7 @@ A reader resolves the namespace using the **longest valid namespace prefix follo
 - Resolve the prefix once per indexed filename, using the longest approved `<namespace>-` match; keep the parsed field in the indexed plan model so list rendering does not reparse it.
 - Load the vocabulary once per repository snapshot and reuse a deterministic matcher. Filename matching is a cheap in-memory operation; unlike YAML/frontmatter parsing, it requires no additional file I/O. Add a focused correctness and performance regression test rather than relying on assumed speed.
 - An unknown, ambiguous, or malformed prefix yields `namespace: null` plus a validation finding, not a guessed namespace. Such plans appear in **No namespace** for repair.
-- The Backlog title prefix is **rendered** from the validated namespace, not added to the authored H1. Namespace is exposed to callers as a read-only derived value, not a second stored field.
+- The Backlog namespace badge is **rendered** from the validated namespace, not added to the authored H1. Namespace is exposed to callers as a read-only derived value, not a second stored field.
 
 ### 2a. Observing `plans-config.json` changes
 
@@ -112,9 +111,9 @@ Normalize and validate universal namespaces separately from repository namespace
 }
 ```
 
-Each array contains **individual stable plan IDs**, not filenames or group objects. Entries are ordered within a single namespace. The registry must not contain duplicate IDs, unknown plans, or plans belonging to other namespaces; lifecycle transitions reconcile membership.
+Each array contains **individual stable plan IDs**, not filenames or group objects. Entries are ordered within a single namespace. Reads tolerate whatever the file holds: an entry for a plan outside Backlog is ignored and pruned at the next write, and an unknown ID is excluded with a finding and preserved. Lifecycle transitions never touch the file.
 
-A Backlog plan not in the effective saved order is **Needs prioritization**, unless a dependency mutation is being reconciled to auto-attach it to an already-ranked group. That reconciliation must result in a real registry update; do not maintain a second hidden order.
+A Backlog plan not in the effective saved order is **Needs prioritization**, unless a dependency mutation is being reconciled to auto-attach it to an already-ranked group. The attachment is calculated on read and reaches the file at the next write; do not maintain a second hidden order.
 
 ## Derived grouping: Option A
 
@@ -236,8 +235,8 @@ A joined dependency (`C` depends on `A` and `B`), an unrelated `X`, and an indep
 ```
 
 - Preserve existing rich Backlog card fields, actions, and progress presentation. The content lines are illustrative, not a mandate to invent new card properties.
-- Prefix each displayed Backlog title from its derived namespace; do not duplicate the prefix in the authored H1 or add a clickable namespace badge to the card footer.
-- Show actual `Requires:` information lightly when useful; it does **not** imply grouping or enforce adjacency visually.
+- Show the plain title; the breadcrumb names the namespace. Do not add a prefix to the authored H1 or a namespace badge to the card footer.
+- List unfinished prerequisites as `Waiting on N`, where the namespace appears as a badge; the list does **not** imply grouping or enforce adjacency visually.
 - After a successful ordering Save, Details uses the new order. A mode switch does not reset repo/namespace context or scroll unnecessarily.
 
 ### Ordering mode: derived dependency group containers
@@ -279,7 +278,7 @@ Control meanings (the visual arrows are shorthand; actual buttons use accessible
 
 The following **six T-cases are exhaustive for three distinct plans, up to renaming plan IDs, when we treat graphs as equivalent under renaming and retain the directed edges**: no edges, one edge, two-edge chain, two-edge fork, two-edge join, and all three acyclic edges. (In all cases `A → B` means B requires A.) The additional G/L/P/M/E-cases cover the important combinations and mutations for larger real projects. There are increasingly many graphs for larger numbers of plans, so this gallery is not a literal enumeration of every graph size. The *graph algorithm*, rather than hard-coded screen cases, must handle arbitrary valid acyclic inputs.
 
-Each example deliberately shows **real Details-mode card shapes**, not just a shorthand `A | B | C`: independent full cards with title, summary, actual prerequisites (where present), lifecycle and progress. **Ordering alone** renders contiguous draggable groups, with the agreed five controls on the right. The controls are schematic; they must be accessible buttons and drag interactions. Parent groups receive controls, not their child rows. Numeric rank fields are never shown. The prefix `AGENTS ·` is rendered from the filename-derived namespace, not written into the plan H1.
+Each example deliberately shows **real Details-mode card shapes**, not just a shorthand `A | B | C`: independent full cards with title, summary, actual prerequisites (where present), lifecycle and progress. **Ordering alone** renders contiguous draggable groups, with the agreed five controls on the right. The controls are schematic; they must be accessible buttons and drag interactions. Parent groups receive controls, not their child rows. Numeric rank fields are never shown. The `AGENTS ·` drawn in these examples stands for the filename-derived namespace; the portal shows the plain title.
 
 For compactness, these examples omit the page's repo/namespace breadcrumbs and Details/Ordering toggle; those are defined above and do not change between scenarios. All illustrative plans are Backlog unless an external prerequisite is explicitly mentioned. Where a plan was created/edited, views show the *resulting* projected state. The existing Details card component remains authoritative for its precise fields/actions; these layouts establish grouping and ordering rules, not a replacement card implementation.
 
@@ -897,7 +896,7 @@ For compactness, these examples omit the page's repo/namespace breadcrumbs and D
   X · Agent diagnostics    [⇡][↑][↓][⇣][⠿]
 ```
 
-**Rule:** Q is outside AGENTS. B still requires Q, but cross-namespace edges never join backlog units.
+**Rule:** Q is outside AGENTS. B still requires Q, but cross-namespace edges never join backlog units. The portal labels this `Waiting on 1` and lists Q with its namespace and status, in place of the `Requires:` text drawn in these wireframes. It also drops the `AGENTS · ` title prefix drawn throughout this document: rows show the plain title, and the namespace appears as a badge only on Next up cards and prerequisites.
 
 #### P1 — Unprioritized independent plan
 
@@ -1053,20 +1052,15 @@ Ordered
 **Details — flat plan cards**
 
 ```text
-Needs prioritization (1)
-
+┌─────────────────────────────────────────────────────────┐
+│ AGENTS · Context storage (A)                            │
+│ Persist context for later reuse.                        │
+│ Backlog                                              0% │
+└─────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────┐
 │ AGENTS · Context indexing (B)                           │
 │ Index stored context for retrieval.                     │
-│ Backlog                                              0% │
-└─────────────────────────────────────────────────────────┘
-Ordered
-
-
-┌─────────────────────────────────────────────────────────┐
-│ AGENTS · Context storage (A)                            │
-│ Persist context for later reuse.                        │
 │ Backlog                                              0% │
 └─────────────────────────────────────────────────────────┘
 
@@ -1075,19 +1069,17 @@ Ordered
 │ Inspect agent errors.                                   │
 │ Backlog                                              0% │
 └─────────────────────────────────────────────────────────┘
-
 ```
 
 **Ordering — movable blocks / rows**
 
 ```text
-  B · Context indexing          [↓][⇣][⠿]  (unprioritized)
-  ─────────── Ranked ───────────
   A · Context storage    [⇡][↑][↓][⇣][⠿]
+  B · Context indexing    [⇡][↑][↓][⇣][⠿]
   X · Agent diagnostics    [⇡][↑][↓][⇣][⠿]
 ```
 
-**Rule:** Under the agreed policy, the newly detached B goes to Needs prioritization rather than inheriting a rank.
+**Rule:** A removed dependency keeps the rank. The plans stay at their positions as separate rows, and nothing moves to Needs prioritization: the data cannot tell a detached plan from one ranked on its own.
 
 #### E1 — Cycle — invalid
 
@@ -1179,7 +1171,7 @@ Ordered
 | New independent plan | Show first under Needs prioritization | Append to the ranked order by default |
 | New dependent plan | Auto-attach to ranked connected group when eligible | Require manual prioritization solely for adding dependency |
 | New dependency merges ranked groups | Propose, then automatically apply contiguous merge (Option A); surface changed positions | Persist a false dependency to force linear order |
-| Removed dependency detaches ranked member | Move detached plan to Needs prioritization per agreed policy | Leave a now-independent plan implicitly ranked |
+| Removed dependency detaches ranked member | Keep the plan at its current position | Move it to Needs prioritization |
 | Invalid graph or missing target | Show visible validation finding and recovery path | Show a trustworthy looking but invalid reorder/save |
 
 ### UI assertions per gallery case
@@ -1206,13 +1198,10 @@ Test both projections from **one normalized input** and one shared flattened ord
 | New plan depends on a ranked same-namespace block | Auto-attach to that block and persist the expanded order |
 | New plan depends on multiple ranked blocks | Option A: propose and automatically apply a merged contiguous block, reporting moved entries |
 | New dependency added to an already ranked plan | Reconcile groups and order automatically; report changed ranks |
-| Dependency removed, leaving a formerly grouped plan independent | Remove the detached plan from ranked order and put it in Needs prioritization, per agreed policy |
-| Plan leaves Backlog (including Active or Completed) | Remove its ID from Backlog order, recalculate groups using only direct remaining Backlog edges, retain relative order of ranked survivors and retain dependency facts in Markdown |
-| Plan returns to Backlog | Apply normal new-entry rules: attach through ranked dependencies or become unprioritized |
+| Dependency removed, leaving a formerly grouped plan independent | Keep every plan at its current position, as separate rows or smaller groups |
+| Plan leaves Backlog (including Active or Completed) | Ignore its ID on read and prune it at the next write, recalculate groups using only direct remaining Backlog edges, retain relative order of ranked survivors and retain dependency facts in Markdown |
 | Plan renamed | ID order unchanged; namespace reclassification requires validation and reconciliation |
 | Plan deleted or namespace invalid | Surface a finding and repair path; never silently discard a broken reference |
-
-If preserving independently placed rank after a later dependency removal becomes important, it would require additional placement provenance. That exception is not part of Option A.
 
 ## Calculation and persistence boundary
 
@@ -1265,4 +1254,4 @@ The save should check the repository snapshot or revision used to create the dra
 - **Enforcement reach:** determine which repositories run plan filename validation in build/CI, then apply the shared validator wherever plan-suite is used.
 - **Parsing performance:** measure filename-prefix resolution on representative repository indexes and ensure namespace vocabularies are loaded once per repository snapshot.
 
-This note is an architectural proposal with a visual Backlog UI contract, not a managed plan document. It intentionally has no plan frontmatter or lifecycle location and has not been run through the repository's plan validator.
+This note is a design record with a visual Backlog UI contract, not a managed plan document. It intentionally has no plan frontmatter or lifecycle location and has not been run through the repository's plan validator.

@@ -28,7 +28,7 @@ export const TRANSITION_RULES = {
     // An active plan may be pointed at another worktree, for example when the first one was lost.
     reassigns: true,
     prepare: ({ content, options }) => ({
-      content: writeFrontmatterField(writeFrontmatterField(content, "worktree", options.worktree), "priority", "none"),
+      content: writeFrontmatterField(content, "worktree", options.worktree),
     }),
     bodyUnchanged: true,
     message: (name, { worktree }) => `Start plan ${name} in worktree ${worktree}`,
@@ -43,7 +43,6 @@ export const TRANSITION_RULES = {
     message: (name) => `Submit plan ${name} for review`,
   },
   reopen: {
-    prepare: ({ content }) => ({ content: writeFrontmatterField(content, "priority", "none") }),
     bodyUnchanged: true,
     message: (name) => `Reopen plan ${name} for implementation`,
   },
@@ -77,6 +76,7 @@ export const TRANSITION_RULES = {
     message: (name) => `Close plan ${name}`,
   },
   archive: {
+    clearsReferences: true,
     requires: ({ reason }) => (reason?.trim() ? null : "An archive reason is required (--reason <text>)."),
     prepare: ({ primary, record, content, options, today }) => {
       const carry = archiveCarry(primary, record);

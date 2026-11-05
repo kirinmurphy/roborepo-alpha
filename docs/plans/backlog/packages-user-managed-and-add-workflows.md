@@ -1,6 +1,5 @@
 ---
 id: user-managed-packages-and-add-workflows
-priority: low
 next_action: Characterize existing workspace catalog and typed skill/MCP primitives, then agree source/provenance and receipt boundaries before designing unified add flows.
 blocked_by: []
 depends_on: ["bysyzl1e"]

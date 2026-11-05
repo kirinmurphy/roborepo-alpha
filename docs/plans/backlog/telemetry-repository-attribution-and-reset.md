@@ -1,6 +1,5 @@
 ---
 id: nt33p9jn
-priority: medium
 next_action: Add failing fixtures for alias-aware telemetry scope and canonical labels, then inspect the existing purge/storage APIs before selecting reset semantics.
 blocked_by: []
 depends_on: []

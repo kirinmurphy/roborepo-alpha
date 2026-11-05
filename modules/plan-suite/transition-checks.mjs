@@ -6,7 +6,8 @@ import { parseFrontmatter } from "./index.mjs";
 import { dirtyPaths, git, topLevel, worktreeName } from "./plan-git.mjs";
 
 // `worktree` is { name, path } for the start transition, which also records the plan's worktree.
-export function validateTransition({ cwd, primary, base, id, fromPath, toPath, commit, worktree = null, bodyUnchanged = false }) {
+// `dependentPaths` are the other plans an archive edited, the only files besides the plan it may touch.
+export function validateTransition({ cwd, primary, base, id, fromPath, toPath, commit, worktree = null, bodyUnchanged = false, dependentPaths = [] }) {
   const checks = [];
   const check = (n, name, ok, observed, fix) => checks.push({ n, name, ok, observed, ...(ok ? {} : { fix }) });
   const moved = fromPath !== toPath;
@@ -37,7 +38,7 @@ export function validateTransition({ cwd, primary, base, id, fromPath, toPath, c
     // plus an add. Compare exact paths instead, so a move is the old path deleted and the new one added.
     const touched = git(primary, ["show", "--name-status", "--no-renames", "--format=", commit]).stdout.split("\n").filter(Boolean);
     const expected = moved ? [fromPath, toPath] : [toPath];
-    const planChanges = moved ? [`D\t${fromPath}`, `A\t${toPath}`] : [`M\t${toPath}`];
+    const planChanges = [...(moved ? [`D\t${fromPath}`, `A\t${toPath}`] : [`M\t${toPath}`]), ...dependentPaths.map((item) => `M\t${item}`)];
     const onlyPlan = touched.length === planChanges.length && planChanges.every((line) => touched.includes(line));
     const before = git(primary, ["show", `${commit}^:${fromPath}`]);
     const after = git(primary, ["show", `${commit}:${toPath}`]);
@@ -49,7 +50,7 @@ export function validateTransition({ cwd, primary, base, id, fromPath, toPath, c
     check(4, "transition commit touches only the plan", true, "already recorded; no commit made");
   }
 
-  const pending = dirtyPaths(primary, moved ? [fromPath, toPath] : [toPath]);
+  const pending = dirtyPaths(primary, [...(moved ? [fromPath, toPath] : [toPath]), ...dependentPaths]);
   check(5, "no plan-transition diff remains", pending.length === 0, pending.join("; ") || "(clean)",
     "commit or discard the remaining change to the plan in the primary checkout");
 

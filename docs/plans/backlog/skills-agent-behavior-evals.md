@@ -1,6 +1,5 @@
 ---
 id: 0jped168
-priority: medium
 next_action: "Phase 0 spike: run `claude -p` once against a hermetic agent home and capture a stream-json transcript for a Skill call, a command-wrapper Read, and a Bash call, confirming auth, permission flags, project instruction loading, and early stop."
 blocked_by: []
 depends_on: []

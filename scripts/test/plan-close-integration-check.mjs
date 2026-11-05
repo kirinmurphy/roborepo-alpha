@@ -87,7 +87,7 @@ function write(file, content) {
 // edits at the top and bottom of the plan mergeable.
 function started(name) {
   const primary = path.join(tempRoot, name, "main");
-  write(path.join(primary, PLAN), "---\nid: p1\npriority: low\nworktree: wt\n---\n\n# Plan\n\n- [ ] task\n\n\n\n\n## Notes\n");
+  write(path.join(primary, PLAN), "---\nid: p1\nworktree: wt\n---\n\n# Plan\n\n- [ ] task\n\n\n\n\n## Notes\n");
   git(path.dirname(primary), "init", "-q", "-b", "main", primary);
   git(primary, "add", ".");
   git(primary, "commit", "-qm", "start p1");

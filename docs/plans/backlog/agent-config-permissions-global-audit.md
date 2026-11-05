@@ -1,6 +1,5 @@
 ---
 id: permva27
-priority: medium
 next_action: Inventory the current global /agents permissions UI and provider projections, then compare them against supported Claude Code and Codex native permission and sandbox controls.
 blocked_by: []
 depends_on: []

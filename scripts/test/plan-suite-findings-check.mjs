@@ -16,7 +16,6 @@ import { validatePlanNaming, readProjectNamespaces, UNIVERSAL_NAMESPACES } from 
 // plans-portal-state-check.mjs drives the portal's pure helpers. Filesystem behavior (fresh-disk
 // reads, guarded moves) is covered by plan-suite-check.mjs instead.
 
-const PRIORITIES = new Set(["high", "medium", "low", "none"]);
 const normalizeHeading = (text) => text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
 testSynonymsAreNormalized();
@@ -100,7 +99,7 @@ function testGeneratedIdsAreShortFormat() {
 // Builds a plan document from parts so each test states only what it cares about. Defaults
 // produce a document that satisfies every universal rule.
 function doc({
-  frontmatter = "id: sample-plan\npriority: high\n",
+  frontmatter = "id: sample-plan\n",
   title = "# Sample Plan\n",
   sections = ["Summary", "Goals", "Context", "Proposed Design", "Validation"],
   extra = "",
@@ -110,7 +109,7 @@ function doc({
 }
 
 function validate(parsed, lifecycle) {
-  return validateForLifecycle(parsed, { lifecycle, priorities: PRIORITIES, normalizeHeading });
+  return validateForLifecycle(parsed, { lifecycle, normalizeHeading });
 }
 
 function codesFor(parsed, lifecycle) {
@@ -209,15 +208,15 @@ function testSortBySeverityPutsBlockingFirst() {
 
 // Backlog is the resting state for anything not started — proposed, draft, or blocked all belong.
 function testBacklogAcceptsDraftReadyAndBlocked() {
-  const ready = doc({ frontmatter: "id: p\npriority: high\nnext_action: Do the thing\n" });
+  const ready = doc({ frontmatter: "id: p\nnext_action: Do the thing\n" });
   assert.deepEqual(codesFor(ready, "backlog"), [], "a complete backlog plan reports nothing");
 
-  const blocked = doc({ frontmatter: "id: p\npriority: low\nnext_action: Wait\nblocked_by:\n  - other-plan\n" });
+  const blocked = doc({ frontmatter: "id: p\nnext_action: Wait\nblocked_by:\n  - other-plan\n" });
   assert.deepEqual(codesFor(blocked, "backlog"), [],
     "a blocked plan is still a valid backlog plan — blockers are not a readiness problem here");
 
-  const unstarted = doc({ frontmatter: "id: p\npriority: none\nnext_action: Decide scope\n" });
-  assert.deepEqual(codesFor(unstarted, "backlog"), [], "priority none is a valid backlog state");
+  const unstarted = doc({ frontmatter: "id: p\nnext_action: Decide scope\n" });
+  assert.deepEqual(codesFor(unstarted, "backlog"), [], "an unstarted plan is a valid backlog state");
 }
 
 function testBacklogRequiresNextAction() {
@@ -229,7 +228,7 @@ function testBacklogRequiresNextAction() {
 
 // Every problem is reported in one response, not one field at a time.
 function testActiveReportsEveryProblemTogether() {
-  const bare = doc({ frontmatter: "id: p\npriority: high\n", sections: ["Summary", "Goals", "Context"] });
+  const bare = doc({ frontmatter: "id: p\n", sections: ["Summary", "Goals", "Context"] });
   assert.deepEqual(codesFor(bare, "active"), [
     "MISSING_DESIGN",
     "MISSING_CRITERIA",
@@ -240,12 +239,12 @@ function testActiveReportsEveryProblemTogether() {
 }
 
 function testActiveAcceptsCompletePlan() {
-  const complete = doc({ frontmatter: "id: p\npriority: high\nnext_action: Build it\n" });
+  const complete = doc({ frontmatter: "id: p\nnext_action: Build it\n" });
   assert.deepEqual(codesFor(complete, "active"), [], "a plan with every section and a next action is active-ready");
 }
 
 function testActiveFlagsEmptyBlockerEntry() {
-  const parsed = doc({ frontmatter: "id: p\npriority: high\nnext_action: Go\nblocked_by:\n  - real-plan\n" });
+  const parsed = doc({ frontmatter: "id: p\nnext_action: Go\nblocked_by:\n  - real-plan\n" });
   parsed.frontmatter.blocked_by = ["real-plan", "  "];
   const blank = validate(parsed, "active").findings.find((item) => item.code === "EMPTY_BLOCKER_ENTRY");
   assert.ok(blank, "a whitespace-only blocker entry is reported");
@@ -256,7 +255,7 @@ function testActiveFlagsEmptyBlockerEntry() {
 
 function testCompletedReportsEveryProblemTogether() {
   const unfinished = doc({
-    frontmatter: "id: p\npriority: high\nnext_action: Still going\nblocked_by:\n  - other\n",
+    frontmatter: "id: p\nnext_action: Still going\nblocked_by:\n  - other\n",
     extra: "## Work\n\n- [ ] one\n- [ ] two\n- [x] three\n",
   });
   const codes = codesFor(unfinished, "completed");
@@ -267,7 +266,7 @@ function testCompletedReportsEveryProblemTogether() {
 
 function testCompletedAcceptsFinishedPlan() {
   const done = doc({
-    frontmatter: "id: p\npriority: high\n",
+    frontmatter: "id: p\n",
     extra: "## Verification\n\nRan the suite; all green.\n\n## Work\n\n- [x] one\n- [x] two\n",
   });
   assert.deepEqual(codesFor(done, "completed"), [],
@@ -276,11 +275,11 @@ function testCompletedAcceptsFinishedPlan() {
 
 // hasContent is what separates a real section from a heading someone added to silence a warning.
 function testCompletedRejectsBareVerificationHeading() {
-  const bare = doc({ frontmatter: "id: p\npriority: high\n", extra: "## Verification\n" });
+  const bare = doc({ frontmatter: "id: p\n", extra: "## Verification\n" });
   assert.ok(codesFor(bare, "completed").includes("MISSING_VERIFICATION"),
     "an empty Verification heading does not count as evidence");
 
-  const filled = doc({ frontmatter: "id: p\npriority: high\n", extra: "## Verification\n\nTests pass.\n" });
+  const filled = doc({ frontmatter: "id: p\n", extra: "## Verification\n\nTests pass.\n" });
   assert.ok(!codesFor(filled, "completed").includes("MISSING_VERIFICATION"),
     "a Verification section with content satisfies the requirement");
 }
@@ -290,7 +289,7 @@ function testCompletedRejectsBareVerificationHeading() {
 // Archived means terminated or retained for history — deliberately not a claim the work finished.
 function testArchivedDoesNotRequireCompletion() {
   const abandoned = doc({
-    frontmatter: "id: p\npriority: low\n",
+    frontmatter: "id: p\n",
     extra: "## Work\n\n- [ ] never done\n- [ ] also never done\n",
   });
   assert.deepEqual(codesFor(abandoned, "archived"), [],
@@ -308,7 +307,7 @@ function testUnclassifiedReportsMisplacementAndStillChecksSections() {
 
 function testUncheckedTaskCountMatchesRemaining() {
   const parsed = doc({
-    frontmatter: "id: p\npriority: high\n",
+    frontmatter: "id: p\n",
     extra: "## Verification\n\nDone.\n\n## Work\n\n- [ ] a\n- [ ] b\n- [ ] c\n- [x] d\n",
   });
   const found = validate(parsed, "completed").findings.find((item) => item.code === "UNCHECKED_REQUIRED_TASKS");
@@ -319,7 +318,7 @@ function testUncheckedTaskCountMatchesRemaining() {
 }
 
 function testFindingsAreDeterministic() {
-  const parsed = doc({ frontmatter: "id: p\npriority: high\nnext_action: Go\n", sections: ["Summary"] });
+  const parsed = doc({ frontmatter: "id: p\nnext_action: Go\n", sections: ["Summary"] });
   assert.deepEqual(validate(parsed, "active").findings, validate(parsed, "active").findings,
     "identical input produces deep-equal findings, so codes and metadata are stable across calls");
 }
@@ -375,7 +374,7 @@ function promptFor(parsed, { source = "active", destination = "completed" } = {}
 
 function blockedDoc() {
   return doc({
-    frontmatter: "id: my-plan\npriority: high\nnext_action: Still going\n",
+    frontmatter: "id: my-plan\nnext_action: Still going\n",
     sections: ["Summary", "Goals", "Context"],
     extra: "## Work\n\n- [ ] one\n- [ ] two\n",
   });
@@ -437,7 +436,7 @@ function testRepairPromptOrdersBlockingFirst() {
 }
 
 function testRepairPromptListsAcceptedHeadings() {
-  const prompt = promptFor(doc({ frontmatter: "id: my-plan\npriority: high\n", sections: ["Goals"] }),
+  const prompt = promptFor(doc({ frontmatter: "id: my-plan\n", sections: ["Goals"] }),
     { source: "backlog", destination: "active" });
   assert.ok(prompt.includes('Accepted headings: "summary", "purpose", "overview"'),
     "a missing section tells the agent every heading that would satisfy it, not just one example");
@@ -449,7 +448,7 @@ function testRepairPromptHandlesMissingPlanId() {
     plan: { id: "", title: "Untitled Plan", relativePath: "docs/plans/backlog/untitled.md" },
     sourceLifecycle: "backlog",
     destinationLifecycle: "active",
-    findings: validate(doc({ frontmatter: "priority: high\n" }), "active").findings,
+    findings: validate(doc({ frontmatter: "" }), "active").findings,
   });
   assert.ok(prompt.includes("Untitled Plan"), "falls back to the title when there is no id to name the plan by");
   assert.ok(prompt.includes("Add a stable, lowercase-slug plan ID"),
@@ -566,7 +565,7 @@ function testNamingFindingsCarryTheirFilename() {
   const [malformed] = validatePlanNaming({ filename: "singleword.md", lifecycle: "backlog", projectNamespaces: projectNamespaces() });
   assert.equal(malformed.meta.filename, "singleword.md", "the finding names the offending file");
   assert.equal(malformed.kind, "schema");
-  assert.equal(malformed.severity, "advisory", "naming never blocks a lifecycle move");
+  assert.equal(malformed.severity, "blocking", "a bad filename fails validation in a repository that declared namespaces");
 
   const [unknown] = validatePlanNaming({ filename: "nosuchdomain-slug.md", lifecycle: "backlog", projectNamespaces: projectNamespaces() });
   assert.equal(unknown.meta.namespace, "nosuchdomain", "the finding quotes the prefix it rejected");
@@ -585,7 +584,7 @@ function testNamingFindingsCarryTheirFilename() {
 // to the Active structure before any work exists; Review is still worked, so it applies the Active
 // rules unchanged, Not tested entries included.
 function testReadyAndReviewDestinationRules() {
-  const bare = parsePlanMarkdown("---\nid: abc123\npriority: low\n---\n\n# Bare\n\n## Summary\n\nx\n", {});
+  const bare = parsePlanMarkdown("---\nid: abc123\n---\n\n# Bare\n\n## Summary\n\nx\n", {});
   for (const lifecycle of ["ready", "active", "review"]) {
     const codes = codesFor(bare, lifecycle);
     for (const code of ["MISSING_NEXT_ACTION", "MISSING_IMPLEMENTATION_CONTEXT", "MISSING_SUCCESS_CRITERIA"]) {
@@ -593,7 +592,7 @@ function testReadyAndReviewDestinationRules() {
     }
   }
   const withNotTested = parsePlanMarkdown(
-    "---\nid: abc123\npriority: low\nnext_action: Go.\n---\n\n# P\n\n## Summary\n\nx\n\n## Goals\n\nx\n\n## Context\n\nx\n\n## Proposed design\n\nx\n\n## Validation\n\nx\n\n## Not tested\n\n- [ ] A manual check.\n", {});
+    "---\nid: abc123\nnext_action: Go.\n---\n\n# P\n\n## Summary\n\nx\n\n## Goals\n\nx\n\n## Context\n\nx\n\n## Proposed design\n\nx\n\n## Validation\n\nx\n\n## Not tested\n\n- [ ] A manual check.\n", {});
   assert.deepEqual(codesFor(withNotTested, "ready"), [], "Ready has nothing built yet, so Not tested entries are not its concern");
   assert.deepEqual(codesFor(withNotTested, "review"), ["UNCONFIRMED_NOT_TESTED"]);
   assert.deepEqual(codesFor(withNotTested, "review"), codesFor(withNotTested, "active"), "Review applies the Active rules");
@@ -651,9 +650,9 @@ Prose before the subsections.
 
 // Real filenames from this repository's plans, frozen as fixtures. The test guards naming.mjs
 // against false positives on names people actually write (hyphenated namespaces, ordinal series,
-// milestones). It must not scan the live plans folder: naming findings are advisory, and a live scan
-// turned one oddly named plan, committed straight to main, into a failing completion gate for every
-// branch. Add a filename here when it exposes a false positive.
+// milestones). plan-tree-naming-check.mjs is what scans the live plans folder; this one stays frozen
+// so a false positive in the rule is told apart from a badly named plan. Add a filename here when it
+// exposes a false positive.
 function testRepositoryPlansProduceNoNamingFindings() {
   const realPlanFilenames = Object.freeze([
     "agent-config-codex-cmux-hook-trust.md",

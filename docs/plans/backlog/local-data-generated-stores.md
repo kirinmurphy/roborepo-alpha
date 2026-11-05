@@ -1,6 +1,5 @@
 ---
 id: n8kw3rp2
-priority: medium
 next_action: Inventory collector/cache ownership and measure retained telemetry coverage using the existing retention registry before selecting history or cleanup policies.
 blocked_by: []
 depends_on: []

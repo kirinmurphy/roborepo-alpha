@@ -99,14 +99,14 @@ main {
 }
 /* Filters popup: a modal like the plan drawer's skill dialog, one column of labelled controls with
  * Cancel/Update along the bottom. */
-dialog#filters-dialog {
+dialog:is(#filters-dialog, #ordering-guard, #ordering-archive) {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 0;
   max-height: 85vh;
 }
-dialog#filters-dialog::backdrop {
+dialog:is(#filters-dialog, #ordering-guard, #ordering-archive)::backdrop {
   background: var(--backdrop);
 }
 .filters-dialog-body {
@@ -121,6 +121,15 @@ dialog#filters-dialog::backdrop {
   padding: 12px 16px;
   border-top: 1px solid var(--line);
 }
+#ordering-guard .filters-dialog-actions { flex-direction: column; }
+:is(#ordering-guard, #ordering-archive) .modal-body { display: grid; gap: 10px; padding: 16px; }
+:is(#ordering-guard, #ordering-archive) .modal-body p { margin: 0; }
+.backlog-archive-title { font-weight: 600; }
+.backlog-archive-reason { display: grid; gap: 6px; }
+.backlog-archive-reason[hidden] { display: none; }
+/* The margin takes back the button's padding, so the icon sits the heading's gap from the age. */
+.backlog-archive { margin-left: -4px; }
+.backlog-archive:hover:not(:disabled) { color: var(--danger); }
 .filter-row {
   display: grid;
   grid-template-columns: 110px 1fr;
@@ -224,7 +233,7 @@ dialog#filters-dialog::backdrop {
   font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--dim);
+  color: var(--ink);
   margin: 4px 0 8px;
 }
 .group summary {
@@ -259,15 +268,15 @@ plan-card {
   min-width: 0;
 }
 /* The title/description opens the document. Its hover highlight spans both document columns,
- * while priority and actions keep their independent interaction states. */
-/* The repo badge is its own link (it applies the repo filter), so hovering it drops the card's
- * open-the-document highlight. */
-.plan-card:has(.doc-details:hover):not(:has(a.repo-badge[href]:hover)) :is(.doc-details, .status-document) {
+ * while the actions keep their independent interaction states. */
+/* A badge is not part of opening the document, whether it links somewhere (the repo filter, or the
+ * namespace on a Next up card) or is inert, so hovering it drops the card's highlight. */
+.plan-card:has(.doc-details:hover):not(:has(a:is(.repo-badge, .namespace-badge):hover)) :is(.doc-details:not(.is-excerpt-expanded), .status-document) {
   background: color-mix(in srgb, var(--accent) 4%, var(--panel));
 }
 
 .plan-card
-  .doc-details:hover:not(:has(button:hover, option-dropdown:hover, a.repo-badge[href]:hover))
+  .doc-details:hover:not(:has(button:hover, a:is(.repo-badge, .namespace-badge):hover))
   .title-link {
   text-decoration: underline;
 }
@@ -308,44 +317,22 @@ plan-card {
   gap: 10px;
   min-width: 0;
 }
-/* Names the plan's repo, so cards stay identifiable when no repo filter is applied. */
-.repo-badge {
-  flex: 0 0 auto;
-  max-width: 40%;
-  padding: var(--pill-padding);
-  /* Mixing the text color into the card surface lifts the fill in dark mode and darkens it in
-   * light. Light mode takes a weaker mix so its dark text stays readable on the gray. */
-  --repo-badge-mix: 24%;
-  --repo-badge-ink: #fff;
-  background: color-mix(in srgb, var(--ink) var(--repo-badge-mix), var(--panel));
-  border-radius: 5px;
-  color: var(--repo-badge-ink);
-  font-size: var(--text-2xs);
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-:root[data-theme="light"] .repo-badge {
-  --repo-badge-mix: 20%;
-  --repo-badge-ink: var(--ink);
-}
-/* As a filter link: no link underline or link color, and a stronger fill on hover. */
-a.repo-badge,
-a.repo-badge:hover {
+/* As a link: no link underline or link color, and a stronger fill on hover. */
+a:is(.repo-badge, .namespace-badge),
+a:is(.repo-badge, .namespace-badge):hover {
   color: var(--repo-badge-ink);
   text-decoration: none;
 }
-a.repo-badge[href] {
+a:is(.repo-badge, .namespace-badge)[href] {
   cursor: pointer;
 }
-a.repo-badge[href]:is(:hover, :focus-visible) {
+a:is(.repo-badge, .namespace-badge)[href]:is(:hover, :focus-visible) {
   --repo-badge-mix: 42%;
 }
-:root[data-theme="light"] a.repo-badge[href]:is(:hover, :focus-visible) {
+:root[data-theme="light"] a:is(.repo-badge, .namespace-badge)[href]:is(:hover, :focus-visible) {
   --repo-badge-mix: 34%;
 }
-a.repo-badge[aria-disabled="true"] {
+a:is(.repo-badge, .namespace-badge)[aria-disabled="true"] {
   cursor: default;
 }
 .title-link {
@@ -547,3 +534,339 @@ a.repo-badge[aria-disabled="true"] {
     right: auto;
   }
 }
+
+/* Backlog: repo and namespace directories, then one list as Details or Prioritize. */
+.backlog-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  color: var(--dim);
+  font-size: var(--text-xs);
+}
+/* The band around the location row, in the repo filter's color. Every level gets the same one, so
+ * drilling down to where the mode toggle appears moves nothing. */
+.backlog-namespace-header,
+:not(.backlog-namespace-header) > .backlog-breadcrumb {
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 4px 6px 4px 14px;
+  background: var(--scope-bar-bg);
+}
+/* The band hangs straight off the lifecycle row's border, unless filter tags or warnings sit between. */
+main:has(#groups .backlog-breadcrumb):not(:has(> .filter-chips:not(:empty), > #warnings:not([hidden]))) { padding-top: 0; }
+/* Undo the bar-cell look `nav a` gives every link, its divider included. */
+.backlog-breadcrumb a,
+.backlog-breadcrumb a:not(:last-of-type) {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--dim);
+  font-size: inherit;
+  text-decoration: underline;
+}
+.backlog-breadcrumb a:hover { color: var(--ink); }
+.backlog-breadcrumb [aria-current="page"] { color: var(--ink); font-weight: 600; }
+.backlog-breadcrumb-separator { margin-inline: 6px; color: var(--ink); }
+/* Reads as the breadcrumb's current page; only its caret says it opens. */
+.backlog-breadcrumb .dropdown-trigger {
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: inherit;
+  font-weight: 600;
+}
+/* On the label, not the trigger, which would draw a second, detached underline under the caret. */
+.backlog-breadcrumb .dropdown-trigger:hover .dropdown-label { text-decoration: underline; }
+.backlog-directory {
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  overflow: hidden;
+}
+.backlog-directory-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.backlog-directory > * + * { border-top: 1px solid var(--line); }
+.backlog-directory-item { display: flex; align-items: stretch; }
+.backlog-directory-item:hover { background: color-mix(in srgb, var(--accent) 4%, var(--panel)); }
+.backlog-directory-item > .backlog-directory-row { flex: 1; min-width: 0; padding-right: 4px; }
+.backlog-directory-item > .backlog-directory-row[href]:hover { background: none; }
+.backlog-pin {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--dim);
+  cursor: pointer;
+}
+.backlog-pin:hover { color: var(--ink); }
+.backlog-pin:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.backlog-pin[aria-pressed="true"] { color: var(--accent); }
+.backlog-pin[aria-pressed="true"] path { fill: currentColor; }
+.backlog-directory-row[href]:hover { background: color-mix(in srgb, var(--accent) 4%, var(--panel)); }
+.backlog-directory-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.backlog-directory-label { font-size: var(--text-2xs); min-width: 0; overflow-wrap: anywhere; }
+.backlog-directory-counts { color: var(--dim); font-size: var(--text-2xs); text-align: right; }
+.backlog-count strong { color: var(--ink); font-weight: 700; }
+.backlog-directory-chevron { transform: rotate(-90deg); color: var(--dim); }
+/* No column for the missing chevron. */
+.backlog-directory-row.has-no-chevron { grid-template-columns: auto minmax(0, 1fr) auto; }
+/* A row with no pin (No namespace) stays lined up with the rows that have one. */
+.backlog-directory > .backlog-directory-row.has-no-chevron { padding-right: 40px; }
+@media (max-width: 560px) {
+  /* The counts would squeeze the label until it broke mid-word, so they drop below it. */
+  .backlog-directory-row { grid-template-columns: auto minmax(0, 1fr) auto; row-gap: 2px; }
+  .backlog-directory-counts { grid-column: 2; grid-row: 2; text-align: left; }
+  .backlog-directory-chevron { grid-column: 3; grid-row: 1 / span 2; }
+  /* The move controls would squeeze the plan text, so they take a line of their own. */
+  .backlog-block-body { grid-template-columns: auto minmax(0, 1fr); }
+  .backlog-position { grid-row: 1 / span 2; }
+  .backlog-block-body > .backlog-controls { grid-column: 2; justify-content: flex-end; padding: 0 8px 6px; }
+  /* Two badges leave a one-line title almost no room, so a Next up card gives it a line of its own. */
+  .card-header-row:has(.namespace-badge:not([hidden])) { flex-wrap: wrap; justify-content: flex-start; }
+  .card-header-row:has(.namespace-badge:not([hidden])) :is(.repo-badge, .namespace-badge) { flex: 0 1 auto; max-width: 100%; }
+  .card-header-row:has(.namespace-badge:not([hidden])) .title-link { flex-basis: 100%; overflow-wrap: anywhere; white-space: normal; }
+}
+.backlog-namespace-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.backlog-mode-toggle {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.backlog-mode-toggle button {
+  padding: 4px 12px;
+  border: none;
+  background: var(--panel);
+  color: var(--dim);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+.backlog-mode-toggle button:hover {
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+  color: var(--ink);
+}
+.backlog-mode-toggle button[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+  color: var(--ink);
+  font-weight: 600;
+}
+.backlog-mode-toggle button[aria-pressed="true"]:hover {
+  background: color-mix(in srgb, var(--accent) 20%, var(--panel));
+}
+.backlog-section { display: grid; gap: 8px; }
+.backlog-section-title {
+  margin: 0;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink);
+}
+/* The standard notice, except that its icon sits level with the first line of this longer text. */
+.portal-notice:has(> .backlog-no-config) > [data-notice-icon] { height: 1lh; align-items: center; margin-top: 0; }
+.backlog-no-config { display: grid; gap: 6px; }
+.backlog-no-config p { margin: 0; }
+.backlog-no-config .portal-banner-supporting { font-size: var(--text-2xs); }
+.backlog-section-header { display: flex; align-items: center; gap: 8px; }
+.backlog-section-header .info-icon { width: var(--icon-sm); height: var(--icon-sm); font-size: var(--text-3xs, 10px); }
+/* The breadcrumb, Next up, and All Plans, like Needs prioritization and Prioritized, read as separate
+ * parts of the page. */
+.groups > * + .backlog-section,
+.backlog-ordering > .backlog-section + .backlog-section { margin-top: 14px; }
+.backlog-ordering { display: grid; gap: 18px; }
+.backlog-order-list { display: grid; gap: 8px; }
+.backlog-order-list[data-drop-target] { min-height: 3rem; }
+.backlog-order-list.is-drop-over .backlog-drop-empty {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+  color: var(--ink);
+}
+.backlog-prioritize-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.backlog-drop-return.is-drop-over {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+  color: var(--ink);
+}
+.backlog-drop-empty {
+  margin: 0;
+  padding: 14px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--dim);
+  text-align: center;
+}
+backlog-block { display: block; min-width: 0; }
+backlog-block.drop-before { box-shadow: 0 -3px 0 var(--accent); }
+backlog-block.drop-after { box-shadow: 0 3px 0 var(--accent); }
+.backlog-block-body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+/* Fixed at two digits, and kept when empty, so plan text starts at the same place in every row. */
+.backlog-position {
+  display: flex;
+  align-self: stretch;
+  align-items: flex-start;
+  justify-content: center;
+  box-sizing: content-box;
+  width: 2ch;
+  /* The plan column's top padding, so the number sits on its first title's line. */
+  padding: 14px 8px 0;
+  border-right: 1px solid var(--line);
+  border-radius: 7px 0 0 7px;
+  background: color-mix(in srgb, var(--dim) 18%, var(--panel));
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.backlog-block-plans { display: grid; min-width: 0; padding: 10px 12px 10px 18px; }
+/* Linked plans are spaced by padding inside each row, not a gap between rows, so each row's guide
+ * still meets the next one. The guides' elbows follow it, to stay level with the row's title. */
+.backlog-tree-row { --backlog-row-top: 4px; display: flex; align-items: stretch; min-width: 0; }
+.backlog-tree-row + .backlog-tree-row { --backlog-row-top: 12px; }
+.backlog-tree-guide { --backlog-elbow-top: calc(var(--backlog-row-top) + 13px); position: relative; flex: none; width: 20px; }
+.backlog-tree-guide::before,
+.backlog-tree-guide::after { position: absolute; background: var(--dim); opacity: 0.6; }
+.backlog-tree-guide[data-line="pipe"]::before,
+.backlog-tree-guide[data-line="tee"]::before,
+.backlog-tree-guide[data-line="elbow"]::before { content: ""; left: 8px; top: 0; bottom: 0; width: 1px; }
+.backlog-tree-guide[data-line="elbow"]::before { bottom: auto; height: var(--backlog-elbow-top); }
+.backlog-tree-guide[data-line="tee"]::after,
+.backlog-tree-guide[data-line="elbow"]::after { content: ""; left: 8px; right: 4px; top: var(--backlog-elbow-top); height: 1px; }
+.backlog-plan { display: grid; flex: 1; gap: 2px; min-width: 0; padding: var(--backlog-row-top) 0 4px; }
+.backlog-plan > .plan-dependencies { margin-top: 6px; }
+.backlog-block-body > .backlog-controls { padding-top: 12px; padding-right: 8px; }
+.backlog-plan-title {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  text-align: left;
+  cursor: pointer;
+}
+.backlog-plan-title:hover { text-decoration: underline; }
+/* The title and description open the plan. The margin cancels the padding, so the text starts where
+ * it would without it and the expanded panel has room around the text. */
+.backlog-plan-doc {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  margin: -4px;
+  padding: 4px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+/* The archive button sits inside but is its own target, so hovering it doesn't underline the title. */
+.backlog-plan-doc:hover:not(:has(.backlog-archive:hover)) .backlog-plan-title { text-decoration: underline; }
+.backlog-plan-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; min-width: 0; }
+.backlog-plan-heading .backlog-plan-title { min-width: 0; }
+.backlog-plan-age { display: inline-flex; flex: none; align-items: center; gap: 4px; font-size: var(--text-2xs); white-space: nowrap; }
+/* Set on any plan card's or row's title and description while a sustained hover shows more: a padded
+ * panel of its own, lifted over what follows. Each padding is taken back as margin, so the text stays
+ * exactly where it was, and the ring draws the border without taking up any room. */
+.is-excerpt-expanded {
+  --excerpt-pad: 12px;
+  /* The page background: near black in dark mode and the deeper gray in light, so the panel stands
+   * apart from the card it grows out of in both. */
+  --excerpt-panel: var(--bg);
+  position: relative;
+  z-index: 3;
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 30%, var(--line)), 0 10px 22px rgb(0 0 0 / 28%);
+}
+.plan-card .doc-details.is-excerpt-expanded {
+  background: var(--excerpt-panel);
+  border-color: transparent;
+  margin: calc(-1 * var(--excerpt-pad));
+  margin-bottom: calc(-1 * var(--excerpt-pad) - var(--excerpt-growth));
+  padding: calc(1rem + var(--excerpt-pad));
+}
+.backlog-plan-doc.is-excerpt-expanded { background: var(--excerpt-panel); }
+/* The same text color as a card's panel, where the description is already full ink. */
+.backlog-plan-doc.is-excerpt-expanded .backlog-plan-purpose { color: var(--ink); }
+.backlog-plan-doc.is-excerpt-expanded {
+  margin: calc(-4px - var(--excerpt-pad));
+  margin-bottom: calc(-4px - var(--excerpt-pad) - var(--excerpt-growth));
+  padding: calc(4px + var(--excerpt-pad));
+}
+/* No width, so the ellipsis cannot push the preview's last word onto another line than it has once
+ * the text reads on. It sits in the padding when that word ends a line. */
+.plan-excerpt-ellipsis { display: inline-block; width: 0; }
+.plan-excerpt-more { animation: plan-excerpt-fade 140ms ease-out; }
+@keyframes plan-excerpt-fade { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .plan-excerpt-more { animation: none; }
+}
+.plan-card.is-backlog .description-line,
+.backlog-plan-purpose { font-size: var(--text-xs); }
+.backlog-plan-purpose { color: var(--dim); overflow-wrap: anywhere; }
+.backlog-plan-clue { color: var(--dim); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.backlog-plan-purpose:empty,
+.backlog-plan-clue:empty { display: none; }
+.backlog-controls { display: inline-flex; flex: none; align-items: center; gap: 2px; }
+.backlog-drag-handle {
+  display: inline-flex;
+  padding: 4px;
+  color: var(--dim);
+  cursor: grab;
+}
+.backlog-drag-handle:active { cursor: grabbing; }
+.backlog-action-bar {
+  position: sticky;
+  bottom: 12px;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 14%);
+}
+.backlog-action-status { flex: 1; min-width: 12rem; }
+.backlog-action-status.is-error,
+.backlog-dialog-error { color: var(--danger); }
+.backlog-dialog-error:empty { display: none; }
+.backlog-repair-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 12px 16px; justify-items: start; overflow-wrap: anywhere; }
+.backlog-repair-row > * { max-width: 100%; }
+.backlog-repair-row + .backlog-repair-row { border-top: 1px solid var(--line); }
+.backlog-repair-findings { margin: 0; padding-left: 18px; }
+.backlog-repair-resolution { color: var(--dim); }

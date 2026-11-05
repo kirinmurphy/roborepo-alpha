@@ -1,6 +1,5 @@
 ---
 id: 74h2tlim
-priority: low
 next_action: Agree source/provenance and portable-record ownership with package plans, decide telemetry inclusion, then implement the profile root inventory and migration contract.
 blocked_by: []
 depends_on: ["o9zwxuav", "user-managed-packages-and-add-workflows"]

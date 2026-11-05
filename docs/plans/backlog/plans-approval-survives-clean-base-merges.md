@@ -1,6 +1,5 @@
 ---
 id: d9ywaa8d
-priority: high
 next_action: Decide the open questions on merge readiness and conflicted merges, then add a failing fixture where a clean merge of base after approval reports stale today
 blocked_by: []
 depends_on: []

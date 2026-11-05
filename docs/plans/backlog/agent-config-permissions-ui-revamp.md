@@ -1,6 +1,5 @@
 ---
 id: permissions-ui-revamp
-priority: medium
 next_action: Complete the global permissions audit and reconcile hook support, provider metadata, and readiness before selecting fidelity UI or collapsing file-operation controls.
 blocked_by: []
 depends_on: [permva27]

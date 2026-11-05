@@ -1,6 +1,5 @@
 ---
 id: 1rajbd5o
-priority: low
 next_action: Compare existing local release safeguards with the remaining CI, provenance, exact-artifact verification, and stable-release acceptance requirements; verify registry/account state before changing release identity.
 blocked_by: []
 depends_on: []

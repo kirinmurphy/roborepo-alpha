@@ -1,6 +1,5 @@
 ---
 id: f0j4j8y2
-priority: high
 next_action: Scope canonical fingerprint source keys and minimal content normalization, then implement per-file fingerprints in the snapshot builder and schema bump
 blocked_by: []
 depends_on: []

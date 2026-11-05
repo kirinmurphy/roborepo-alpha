@@ -1,6 +1,5 @@
 ---
 id: plan-lifecycle-suite-blockers-dependencies
-priority: low
 next_action: Extend the implemented atomic suite with a canonical blocker schema/list-mutation contract before adding portal management.
 blocked_by: []
 depends_on: []
@@ -71,7 +70,7 @@ a new general-purpose YAML parser as an incidental dependency.
 | Schema | `blocked_by` is a simple array and blocking is derived from it | `globals/packages/plan-suite/skills/plan-write/references/plan-schema.md`, `references/lifecycle.md` |
 | Parsing | Only `blocked_by`, `depends_on`, and `related` are normalized as arrays | `modules/plan-suite/index.mjs` |
 | Domain record | `blocked_by` is exposed as `plan.blockers` | `modules/plan-suite/index.mjs` |
-| Mutations | Scalar priority and lifecycle moves are supported; list fields are not editable | `modules/plan-suite/index.mjs`, `scripts/cli/plans.mjs`, `scripts/cli/portal-routes-plans.mjs` |
+| Mutations | Lifecycle moves are supported; list fields are not editable | `modules/plan-suite/transition.mjs` |
 | Filtering | The portal treats `plan.blockers.length > 0` as blocked | `portal/plans/state.js` |
 | Display | A blocked badge opens a read-only popover of referenced plan IDs | `portal/plans/elements/plan-status.js`, `portal/plans/blockers-popover.js` |
 | Action recommendation | Recommended Plan Docs actions are suppressed when `plan.blockers` is non-empty | `portal/plans/templates.js` |
@@ -172,7 +171,6 @@ Extend the recommended schema with `blocked_reasons`:
 ```yaml
 ---
 id: example-plan
-priority: medium
 next_action: Resolve the open product decision
 blocked_by:
   - prerequisite-plan

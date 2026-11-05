@@ -4,7 +4,8 @@
 // returned (plan-authority.mjs).
 import { checkoutRootsFor, loadRegistry } from "../repositories/index.mjs";
 import { repositoryCheckouts } from "./checkouts.mjs";
-import { scanCheckout, selectRecords } from "./plan-copies.mjs";
+import { buildBacklogIndex } from "./backlog-registry.mjs";
+import { repositoryPlanRecords, scanCheckout } from "./plan-copies.mjs";
 import { publicPlan, publicRepository, withRelationshipFindings } from "./index.mjs";
 import { LIFECYCLE_MODEL, lifecycleProjection } from "./lifecycle-manifest.mjs";
 
@@ -13,6 +14,7 @@ export function buildPlanSnapshot({ stateRoot, packageState = null, registry = n
   const repositories = [];
   const repositoryScans = [];
   const plans = [];
+  const backlog = [];
   const errors = [];
   for (const record of plannableRepositories(known)) {
     // A repository with no recorded checkout (known only from agent sessions, say) has nothing for
@@ -28,6 +30,7 @@ export function buildPlanSnapshot({ stateRoot, packageState = null, registry = n
       const scan = scanRepository(checkouts, { repositoryId: record.id, name: record.displayName, urlKey: record.urlKey ?? null });
       repositories.push(scan.repository);
       plans.push(...scan.plans);
+      backlog.push({ repositoryId: record.id, name: record.displayName, urlKey: record.urlKey ?? null, ...scan.backlog });
       errors.push(...scan.errors.map((error) => ({ repository: record.displayName, repositoryId: record.id, ...error })));
       // Linked worktree names straight from Git's administrative files, running or not, so Home can
       // tell a plan's idle worktree from one that no longer exists.
@@ -44,6 +47,8 @@ export function buildPlanSnapshot({ stateRoot, packageState = null, registry = n
     repositoryScans,
     plans: withRelationshipFindings(plans).map(publicPlan),
     errors,
+    // One entry per scanned repository: its namespaces and each one's effective order (backlog-registry.mjs).
+    backlog,
     truncated: plans.some((plan) => plan.repository.truncated),
     planSuitePackage: packageState || { available: false, enabled: false, status: "missing" },
     // The portal reads states, tabs, and actions from here rather than keeping its own copy.
@@ -63,7 +68,8 @@ function scanRepository(checkouts, canonical) {
   const scanned = checkouts.map((checkout) => scanCheckout(checkout, canonical));
   // Repository-relative paths only: /api/plans never carries an absolute path.
   const errors = scanned.flatMap(({ checkout, scoped }) => scoped.errors.map((error) => ({ checkout: checkout.label, path: error.path, error: "could not be read" })));
-  return { repository: scanned[0].scoped, plans: selectRecords(scanned), errors };
+  const plans = repositoryPlanRecords(scanned);
+  return { repository: scanned[0].scoped, plans, errors, backlog: buildBacklogIndex(scanned[0].checkout.path, plans) };
 }
 
 // Filesystem and Git error messages embed absolute paths, so only the error code crosses over.

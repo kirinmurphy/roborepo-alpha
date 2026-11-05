@@ -1,6 +1,5 @@
 ---
 id: package-cli-test-guide
-priority: low
 next_action: Inventory existing hermetic package/portal tests and add the missing shipped CLI-to-portal persistence scenario; reuse the installed Playwright runner.
 blocked_by: []
 depends_on: []

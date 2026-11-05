@@ -1,6 +1,5 @@
 ---
 id: plan-unclassified-plan-recovery
-priority: low
 next_action: Characterize root-file handling in current atomic transitions and repair, then define the explicit confirmed recovery contract before building the warning UI.
 blocked_by: []
 depends_on: []
