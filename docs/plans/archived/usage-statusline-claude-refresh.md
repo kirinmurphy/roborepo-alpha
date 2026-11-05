@@ -1,7 +1,7 @@
 ---
 id: usage-statusline-claude-refresh
 priority: low
-next_action: Verify whether a supported native idle-refresh property exists and its minimum version before proposing any configuration key.
+next_action:
 blocked_by: []
 depends_on: []
 related: ["usage-statusline-enhancement-plan"]
@@ -76,3 +76,7 @@ The shipped statusLine fragment contains command and padding fields without an i
 This backlog sync did not verify a current supported native interval property. Establish the
 property, minimum version, and actual idle behavior first; if unsupported, retain this as an
 accepted limitation or upstream-dependent proposal rather than inventing a key.
+
+## Archived
+
+2026-11-05: Abandoned: not worth implementing; low value relative to other work.
