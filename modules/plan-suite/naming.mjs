@@ -55,9 +55,9 @@ export const PLANS_CONFIG_RELATIVE_PATH = "docs/plans/plans-config.json";
 // parses the config once rather than once per file.
 const configCache = new Map();
 
-// Filesystem error messages embed absolute paths, and these errors reach /api/plans, so only the code
+// Filesystem error messages embed absolute paths, and these errors reach the browser, so only the code
 // crosses over. A parse or shape error names no path and says what to repair, so its message stays.
-export function pathFreeReadError(err) {
+export function pathFreeFileError(err) {
   return String(err?.code || err?.message || err);
 }
 
@@ -89,7 +89,7 @@ export function readProjectNamespaces(repositoryRoot) {
     const names = Object.keys(data.namespaces || {}).filter((name) => name.trim());
     value = { configured: true, namespaces: names.map((name) => name.trim()) };
   } catch (err) {
-    value = { configured: true, namespaces: [], error: pathFreeReadError(err) };
+    value = { configured: true, namespaces: [], error: pathFreeFileError(err) };
   }
   configCache.set(file, { mtimeMs: stat.mtimeMs, value });
   return value;

@@ -43,7 +43,7 @@ place <plan>` is the only way this skill writes it, and it writes to the primary
 | --- | --- | --- |
 | Depends on a same-namespace Backlog plan that is already ranked | Run `roborepo plans order place <plan>`; ask nothing | It joins that group. Connecting several ranked groups merges them at the earliest member's position, and the command lists what moved |
 | Is independent, or depends only on unranked plans, and the user is present | Offer insertion at the top or bottom of the namespace, or **Prioritize later**. Run `order place <plan> --top` or `--bottom` for the first two; run nothing for the third | Placed, or left at the top of Needs prioritization |
-| Is independent, in a non-interactive run | Run nothing | It stays in Needs prioritization |
+| Is independent, or depends only on unranked plans, in a non-interactive run | Run nothing | It stays in Needs prioritization |
 
 Report the command's automatic moves. If it fails, say so and report the plan as unprioritized:
 never claim a placement that was not written. `depends_on` holds only true prerequisites; never add

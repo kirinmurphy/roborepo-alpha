@@ -224,6 +224,25 @@ try {
   assert.throws(() => saveNamespaceOrder({ root: realRepo, records: current, namespace: "agents", order: ["bbbbbb22", "aaaaaa11", "xxxxxx33"], revision: viewOf(index, "agents").revision }), /prerequisite/);
   assert.equal(fs.readFileSync(orderFile, "utf8"), held);
 
+  // A failed write reaches the browser, so it carries the code and never an absolute path, and it
+  // leaves neither a temp file nor a changed registry. Stubbed because a root user ignores file modes.
+  const realRename = fs.renameSync;
+  fs.renameSync = () => {
+    throw Object.assign(new Error(`EACCES: permission denied, rename '${orderFile}'`), { code: "EACCES" });
+  };
+  try {
+    assert.throws(() => saveNamespaceOrder({ root: realRepo, records: current, namespace: "agents", order: ["xxxxxx33", "aaaaaa11", "bbbbbb22"], revision: viewOf(index, "agents").revision }), (err) => {
+      assert.equal(err.code, "ORDER_WRITE_FAILED");
+      assert.equal(err.status, 500);
+      assert.equal(err.message, "docs/plans/plans-order.json could not be written (EACCES).");
+      return true;
+    });
+  } finally {
+    fs.renameSync = realRename;
+  }
+  assert.deepEqual(fs.readdirSync(path.dirname(orderFile)).filter((name) => name.includes("tmp")), [], "a failed write removes its temp file");
+  assert.equal(fs.readFileSync(orderFile, "utf8"), held, "a failed write leaves the registry as it was");
+
   // An unparseable registry reads as unprioritized and refuses every write.
   fs.writeFileSync(orderFile, "{ not json");
   index = await indexed();
@@ -374,6 +393,46 @@ try {
   assert.equal(index.config.state, "none");
   assert.equal(index.namespaces.length, 0);
   assert.deepEqual(validatePlanNaming({ filename: "whatever.md", lifecycle: "backlog", projectNamespaces: [] }), [], "no config, no per-file findings");
+
+  // A branch switch changes the config on disk: each read follows the checked-out vocabulary, and the
+  // uncommitted registry stays as it was.
+  const switching = path.join(root, "switching");
+  const writeSwitching = (relative, content) => {
+    fs.mkdirSync(path.dirname(path.join(switching, relative)), { recursive: true });
+    fs.writeFileSync(path.join(switching, relative), content);
+  };
+  fs.mkdirSync(switching);
+  run(switching, "init", "-q", "-b", "main");
+  run(switching, "config", "user.email", "t@example.com");
+  run(switching, "config", "user.name", "t");
+  writeSwitching("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { agents: "x" } }));
+  writeSwitching("docs/plans/backlog/agents-a.md", document({ id: "aaaaaa11" }));
+  writeSwitching("docs/plans/backlog/other-q.md", document({ id: "qqqqqq44" }));
+  run(switching, "add", ".");
+  run(switching, "commit", "-qm", "narrow config");
+  run(switching, "switch", "-qc", "wider");
+  writeSwitching("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { agents: "x", other: "y" } }));
+  run(switching, "add", ".");
+  run(switching, "commit", "-qm", "wider config");
+  const registryJson = JSON.stringify({ schemaVersion: 1, namespaces: { other: ["qqqqqq44"] } });
+  writeSwitching("docs/plans/plans-order.json", registryJson);
+  const realSwitching = fs.realpathSync(switching);
+  const indexAfterSwitch = async (branch) => {
+    run(switching, "switch", "-q", branch);
+    const { primaryCheckoutRecords } = await import("../../modules/plan-suite/repository-validation.mjs");
+    return buildBacklogIndex(realSwitching, primaryCheckoutRecords(realSwitching));
+  };
+  for (let round = 0; round < 5; round += 1) {
+    const narrow = await indexAfterSwitch("main");
+    assert.deepEqual(narrow.namespaces.map((view) => view.namespace), ["agents"], `round ${round}: main has one namespace`);
+    assert.equal(narrow.noNamespace.length, 1, `round ${round}: main has no namespace for the other plan`);
+    assert.ok(narrow.findings.some((item) => item.code === "ORDER_UNAPPROVED_NAMESPACE"), `round ${round}: main reports the saved order it cannot use`);
+    const wider = await indexAfterSwitch("wider");
+    assert.deepEqual(wider.namespaces.map((view) => view.namespace), ["agents", "other"], `round ${round}: the branch adds a namespace`);
+    assert.equal(wider.noNamespace.length, 0, `round ${round}: the branch places every plan`);
+    assert.deepEqual(viewOf(wider, "other").ordered.map((block) => block.ids), [["qqqqqq44"]], `round ${round}: the saved order applies again`);
+  }
+  assert.equal(fs.readFileSync(path.join(switching, "docs/plans/plans-order.json"), "utf8"), registryJson, "switching branches writes nothing to the registry");
 } finally {
   fs.rmSync(root, { recursive: true, force: true });
 }

@@ -16,7 +16,7 @@ import path from "node:path";
 import { blocksFromSequence, deriveGroups, proposeOrder, sequenceGroup } from "./backlog-order.mjs";
 import { finding } from "./findings.mjs";
 import { domainError } from "./index.mjs";
-import { PLANS_CONFIG_RELATIVE_PATH, approvedNamespaces, pathFreeReadError, readProjectNamespaces } from "./naming.mjs";
+import { PLANS_CONFIG_RELATIVE_PATH, approvedNamespaces, pathFreeFileError, readProjectNamespaces } from "./naming.mjs";
 
 export const PLANS_ORDER_RELATIVE_PATH = "docs/plans/plans-order.json";
 const SCHEMA_VERSION = 1;
@@ -29,12 +29,12 @@ export function readOrderRegistry(root) {
     raw = fs.readFileSync(path.join(root, PLANS_ORDER_RELATIVE_PATH), "utf8");
   } catch (err) {
     if (err?.code === "ENOENT") return { state: "missing", namespaces: {}, raw: "" };
-    return { state: "invalid", namespaces: {}, raw: "", error: pathFreeReadError(err) };
+    return { state: "invalid", namespaces: {}, raw: "", error: pathFreeFileError(err) };
   }
   try {
     return { state: "ok", namespaces: parseRegistry(raw), raw };
   } catch (err) {
-    return { state: "invalid", namespaces: {}, raw, error: pathFreeReadError(err) };
+    return { state: "invalid", namespaces: {}, raw, error: pathFreeFileError(err) };
   }
 }
 
@@ -253,7 +253,15 @@ function applyOrder({ order, moves, findings, context, namespace }, expectedRevi
   else delete namespaces[namespace];
   const file = path.join(context.root, PLANS_ORDER_RELATIVE_PATH);
   const temporary = path.join(path.dirname(file), `.plans-order.${process.pid}.tmp`);
-  fs.writeFileSync(temporary, `${JSON.stringify({ schemaVersion: SCHEMA_VERSION, namespaces }, null, 2)}\n`);
-  fs.renameSync(temporary, file);
+  try {
+    fs.writeFileSync(temporary, `${JSON.stringify({ schemaVersion: SCHEMA_VERSION, namespaces }, null, 2)}\n`);
+    fs.renameSync(temporary, file);
+  } catch (err) {
+    // A cleanup failure must not replace the error below, whose message is safe to show in the browser.
+    try { fs.rmSync(temporary, { force: true }); } catch { /* the write failure is what gets reported */ }
+    throw domainError("ORDER_WRITE_FAILED", `${PLANS_ORDER_RELATIVE_PATH} could not be written (${pathFreeFileError(err)}).`, {
+      resolution: "Check that the file and its folder are writable, then save again.",
+    });
+  }
   return { order, moves, written: true, revision: namespaceRevision(orderingContext(context.root, context.records), namespace) };
 }

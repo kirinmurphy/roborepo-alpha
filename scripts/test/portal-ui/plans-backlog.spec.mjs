@@ -351,6 +351,15 @@ test.describe("Backlog directory and ordering", () => {
       await expect(row("No namespace")).toContainText("1 plan");
     });
 
+    test("a config edit reaches a reloaded page with no Refresh", async ({ page }) => {
+      await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
+      await expect(directoryRows(page).filter({ hasText: "No namespace" })).toContainText("1 plan");
+      writeNamespaces({ alpha: "A", beta: "B", wrong: "W" });
+      await page.reload();
+      await expect(directoryRows(page).filter({ hasText: "WRONG" })).toContainText("1 plan");
+      await expect(directoryRows(page).filter({ hasText: "No namespace" })).toHaveCount(0);
+    });
+
     test("an unreadable config is an error, and no plan disappears", async ({ page }) => {
       await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
       fs.writeFileSync(config, "{ nope");
@@ -575,6 +584,24 @@ test.describe("Backlog directory and ordering", () => {
     expect(savedOrder()).toEqual(["alphax03", "alphaa01", "alphab02"]);
   });
 
+  test("a Save the filesystem refuses reports the code and no absolute path", async ({ page }) => {
+    test.skip(process.getuid?.() === 0, "root ignores the read-only folder");
+    const plansFolder = path.dirname(orderFile);
+    const held = fs.readFileSync(orderFile, "utf8");
+    await openOrdering(page);
+    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    fs.chmodSync(plansFolder, 0o555);
+    try {
+      await page.getByRole("button", { name: "Save", exact: true }).click();
+      const status = page.getByRole("group", { name: "Unsaved order" }).getByRole("status");
+      await expect(status).toContainText("docs/plans/plans-order.json could not be written (EACCES).");
+      await expect(status).not.toContainText(repo);
+      expect(fs.readFileSync(orderFile, "utf8")).toBe(held);
+    } finally {
+      fs.chmodSync(plansFolder, 0o755);
+    }
+  });
+
   test("the guard's Cancel waits for its Save, which then decides the move", async ({ page }) => {
     let release;
     const held = new Promise((resolve) => { release = resolve; });
@@ -607,8 +634,17 @@ test.describe("Backlog directory and ordering", () => {
     await openNamespace(page, "_none");
     await expect(page.getByText("wrong-prefix.md")).toBeVisible();
     await expect(page.getByText("Unknown plan namespace: wrong.")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Copy Repair Prompt" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Ordering", exact: true })).toHaveCount(0);
+  });
+
+  test("Copy Repair Prompt copies a /plan-write prompt naming the misfiled plan", async ({ page }) => {
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await openNamespace(page, "_none");
+    await page.getByRole("button", { name: "Copy Repair Prompt" }).click();
+    await expect(page.getByText("Copied the /plan-write prompt.")).toBeVisible();
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    expect(copied).toContain("/plan-write");
+    expect(copied).toContain("docs/plans/backlog/wrong-prefix.md");
   });
 
   test("a repo with no config shows one No namespace row and a notice, no per-file findings", async ({ page }) => {

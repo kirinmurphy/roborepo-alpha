@@ -116,6 +116,7 @@ export function domainError(code, message, { resolution, details, findings, repa
 const DOMAIN_ERROR_STATUS = {
   INVALID_CHANGE: 400,
   STALE_ORDER: 409,
+  ORDER_WRITE_FAILED: 500,
   DESTINATION_EXISTS: 409,
   LIFECYCLE_REQUIREMENTS: 422,
   PLAN_NOT_FOUND: 404,
