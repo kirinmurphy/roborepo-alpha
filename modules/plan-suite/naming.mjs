@@ -55,18 +55,18 @@ export const PLANS_CONFIG_RELATIVE_PATH = "docs/plans/plans-config.json";
 // parses the config once rather than once per file.
 const configCache = new Map();
 
-// Reads a repository's declared project namespaces. A repository without the file is not an error —
-// most repositories will not have one — so this reports `configured: false` and lets the caller
-// decide. An unreadable or malformed file is a different case: the repository did adopt the
-// convention, so it reports `error` and an empty vocabulary rather than passing for "not configured"
-// or keeping an older vocabulary. Scans stay tolerant; `plans validate` and the promote and start
-// gates surface the error.
 // Filesystem error messages embed absolute paths, and these errors reach /api/plans, so only the code
 // crosses over. A parse or shape error names no path and says what to repair, so its message stays.
 export function pathFreeReadError(err) {
   return String(err?.code || err?.message || err);
 }
 
+// Reads a repository's declared project namespaces. A repository without the file is not an error —
+// most repositories will not have one — so this reports `configured: false` and lets the caller
+// decide. An unreadable or malformed file is a different case: the repository did adopt the
+// convention, so it reports `error` and an empty vocabulary rather than passing for "not configured"
+// or keeping an older vocabulary. Scans stay tolerant; `plans validate` and the promote and start
+// gates surface the error.
 export function readProjectNamespaces(repositoryRoot) {
   const file = path.join(repositoryRoot, PLANS_CONFIG_RELATIVE_PATH);
   let stat;
