@@ -1,6 +1,6 @@
 ---
 id: rxv53v6z
-next_action: Run the further validation pass the user approved after fixing pass 6's findings, then submit if it reports no fix findings.
+next_action: The user decides whether to fix the 2 open validation findings under Review and validate again; then run /plan-execute to submit on a pass with no fix findings.
 blocked_by: []
 depends_on: []
 related: ["plans-portal-live-refresh-and-static-preflight", "plan-lifecycle-suite-blockers-dependencies", "plan-unclassified-plan-recovery", "p3vbk03v"]
@@ -429,6 +429,8 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - [x] The controller's `isOrdering()` runs `reconcile()`, which can change `mode` and `draft`, and `render()` in `portal/plans/app.js` relies on that to decide whether Filters is hidden. Reconcile explicitly in `render()` and keep the predicate pure. — fixed (4d7b3225)
 - [x] The header comment in `portal/plans/elements/backlog-block.js` says locked blocks show why they cannot move; they show a bare "blocked" badge, and the reason is in the notices above the list. — fixed (4d7b3225)
 - [x] The contract comment for `readProjectNamespaces` sat above `pathFreeReadError`, describing the wrong function. — fixed (072acc52)
+- [ ] The comment above `plansOrderCommand` in `scripts/cli/plans-command.mjs` says that without a position "any other plan stays unprioritized"; an independent plan already in the order stays ranked. Say "a plan that is not ranked stays unprioritized".
+- [ ] `scripts/cli/mock-home.mjs` gives every demo Backlog entry `urlKey: null`, so the demo board's Backlog tab can never open a repo. Give each entry the `urlKey` the mock registry uses for that repo. Traced, not run; it shows only with `MOCK_FIRST_RUN_VIEWS_ENABLED`, which is `false` in the code.
 
 ### Verification
 
@@ -440,5 +442,6 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - Validation pass 5 (fresh-context subagent): stopped at the five-pass cap with the 2 open findings above, no `escalate`; its `node scripts/test/portal-ui/run.mjs` passed 198 of 198.
 - Validation pass 6 at fa64c5cb (fresh-context subagent, a further pass the user approved past the cap): the last 7 findings above, no `escalate`; its `node scripts/test/portal-ui/run.mjs` passed 200 of 200. Findings rose from 2 to 7, so the run stopped with them open, as the user's condition for further passes required. The user then chose to fix them and validate again.
 - Validation pass 7 at 6af0e6ca (fresh-context subagent): 1 `fix` finding, the last above, no `escalate`; its `node scripts/test/portal-ui/run.mjs` passed 201 of 201.
+- Validation pass 8 at d8d006ef (fresh-context subagent): the last 2 findings above, no `escalate`; its `node scripts/test/portal-ui/run.mjs` passed 201 of 201. This was the last pass the user's limit allowed, so the run stopped with them open.
 - Installed output, on a temporary HOME and state root: `roborepo update`, enabling plan-suite, `roborepo update`, and `roborepo doctor --installed` all exited 0 (110 doctor checks), and the installed plan-write references carry `plans-order.json` and `order place` with no `priority:` line. `doctor` on this machine warns that installed skills are out of date until `roborepo update` runs after merge.
 - Base failure: `roborepo plans validate` exits 1 from blocking findings that are all in `docs/plans/completed/`, none from this change.
