@@ -3,8 +3,8 @@
 // skillModal, onEnablePackage, onError) as properties right after creation, then append to the
 // DOM. The title/description trigger onOpen; the status component owns its separate controls. The
 // modified time, warnings, actions, and work status live in <plan-status>, shared with the detail
-// drawer and stacked below the card's title and description in every lifecycle. Backlog sets
-// actions.showNamespace to add a namespace badge, and actions.onSelectNamespace to make it a link.
+// drawer and stacked below the card's title and description in every lifecycle. Next up sets
+// actions.onSelectNamespace to add a namespace badge that links to the plan's namespace.
 import { portalTpl as tpl, portalFillSlots as fill } from "/portal/shared/api.js";
 import { cardActionMenu, cardPrimaryAction } from "/portal/plans/templates.js";
 import { incompleteDependencies } from "/portal/plans/plan-actions.js";
@@ -55,7 +55,7 @@ class PlanCardElement extends HTMLElement {
     node.querySelector("[data-slot=status-mount]").replaceWith(statusEl);
     renderRepoBadge(node.querySelector("[data-slot=repo-badge]"), record.repository);
     node.querySelector("[data-slot=title-link]").textContent = plan.title;
-    if (cardActions.showNamespace) renderNamespaceBadge(node.querySelector("[data-slot=namespace-badge]"), plan.namespace, cardActions.onSelectNamespace);
+    if (cardActions.onSelectNamespace) renderNamespaceBadge(node.querySelector("[data-slot=namespace-badge]"), plan.namespace, cardActions.onSelectNamespace);
     // Only title/description open the document; metadata and actions are separate siblings.
     const docDetails = node.querySelector(".doc-details");
     docDetails.tabIndex = 0;
@@ -100,10 +100,6 @@ function renderNamespaceBadge(badge, namespace, onSelect) {
   if (!namespace) return;
   badge.hidden = false;
   badge.textContent = namespace;
-  if (!onSelect) {
-    badge.setAttribute("aria-disabled", "true");
-    return;
-  }
   badge.href = hrefWithNamespace(location.href, namespace);
   badge.title = `Open ${namespace}`;
   badge.addEventListener("click", (event) => {

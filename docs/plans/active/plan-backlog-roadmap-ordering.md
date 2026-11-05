@@ -51,7 +51,7 @@ Real data for fixtures: this repo has 49 Backlog plans across 14 namespaces, all
 
 - Change **Backlog only**, apart from removing priority. Other lifecycle views lose their priority control, filter, chip, and sort key, and otherwise keep their behavior, sorting, filtering, navigation, and presentation.
 - Use one approved namespace per plan, taken from that repository's configured vocabulary plus permitted universal namespaces.
-- Show the namespace as a badge beside the repo badge on Backlog plans; leave authored H1 titles intact.
+- Show a plan's namespace as a badge where plans from several namespaces appear together (Next up cards and prerequisite lists); leave authored H1 titles intact.
 - Scope priority to one repository and namespace, never across repositories or namespaces.
 - Show unprioritized plans first and support simple placement without numeric fields.
 - Share one flattened plan sequence between Details and Ordering; derive group containers **only in Ordering** and use the same backing order state.
@@ -120,7 +120,7 @@ Do not change other lifecycle tabs/views, even if they currently show plans acro
 
 **Visual contract:** See `docs/internal/plan-backlog-ordering-architecture-addendum.md` → “UI reference: Backlog navigation and paired list projections” for the exact example screens, per-mode component boundaries, control layouts, and fork/join/split cases. This contract governs the UI implementation; no dependency group nesting appears in Details. Where the addendum and this plan disagree, this plan wins; see “Addendum corrections” below.
 
-- Display the namespace as a badge beside the repo badge, followed by the plan's title; do not rewrite the Markdown H1 or filename.
+- Inside a namespace, Details and Ordering show the plain title, since the breadcrumb names the namespace; do not rewrite the Markdown H1 or filename.
 - Display the **same flattened plan order** in Details and Ordering, but **show dependency grouping only in Ordering**.
 - In Details, render every plan as an independent, flat, un-nested rich card (even when its dependency-connected neighbors would form one Ordering block). Retain existing Backlog summaries, progress, and actions; no group headers, group outlines, rank controls, or drag handles.
 - In Ordering, show compact rows and derived contiguous dependency blocks with title, short purpose, dependency/blocking clue, and position. Group controls act on the whole block; do not add an independent ranking property.
@@ -230,7 +230,7 @@ An unparseable registry is a finding: every plan shows as unprioritized and Save
 
 - Agents write plan files directly, so rejection happens at validation. Make `INVALID_PLAN_FILENAME`, `FORBIDDEN_PLAN_FILENAME_SUFFIX`, and `UNKNOWN_PLAN_NAMESPACE` blocking so `roborepo plans validate` exits 1, add them to the promote and start gates, and keep `plan-write`'s existing validator step as the creation check. Severity alone does not gate transitions, so the gates need their own check. All of this applies only where a repository has declared namespaces.
 - Reject filename prefixes outside the approved vocabulary; present the allowed choices and a path to update `plans-config.json` rather than silently using an invented prefix. Do not add, require, or cross-check a `namespace` frontmatter field; consumers use the derived parsed value.
-- Author reader-facing H1s normally, but render the approved namespace as a badge in the Backlog UI. Never badge an unapproved namespace; do not require authors to type a namespace twice in H1s.
+- Author reader-facing H1s normally, but show the approved namespace as a badge where the Backlog UI mixes namespaces. Never badge an unapproved namespace; do not require authors to type a namespace twice in H1s.
 - Add a check that validates this repository's real plan tree, since the current one reads a hard-coded list. It runs through `npm run check`. Other repositories get the same rule by running `roborepo plans validate`.
 
 **Recover invalid files without hiding them:**
@@ -303,7 +303,7 @@ Do not introduce graph editors, separate roadmap pages, nested views, manual spl
 | “Plan leaves Backlog: remove its ID from Backlog order” | Ignored on read, pruned at the next write |
 | “Plan returns to Backlog” row | Unreachable; no such transition exists |
 | “Automatic placement persists as part of that write operation” for dependency edits | Applies to `roborepo plans order place`; hand edits persist at the next write |
-| `AGENTS · ` title prefixes in the wireframes | A namespace badge beside the title |
+| `AGENTS · ` title prefixes in the wireframes | The plain title; the breadcrumb names the namespace |
 | `Requires: Q` in the wireframes | `Waiting on N`, listing each unfinished prerequisite with its namespace and status |
 
 ## Implementation checklist
@@ -340,7 +340,7 @@ Run the checks for the tier as each task lands, then let CI run the full gate. E
 | Namespace config edits | After Refresh, an added/removed/renamed namespace updates open Backlog and cache; orphaned plans appear in No namespace; invalid registry references are flagged, not silently dropped |
 | Namespace config conflicts | Dirty Ordering drafts cannot save across a conflicting config revision; invalid/unreadable configs surface errors |
 | Invalid namespace | `roborepo plans validate` exits 1 and promote/start refuse bad filename prefixes in a configured repo, but Backlog displays affected plans with repair findings |
-| Titles | An approved namespace shows as a badge; authored H1 unchanged; no footer badge |
+| Titles | Next up and prerequisite lists badge an approved namespace; Details and Ordering rows show the plain title; authored H1 unchanged; no footer badge |
 | Unprioritized | Section appears first only when needed; moves into a draft Ordered list |
 | Ranked controls | Right side: top, up, down, bottom, handle; invalid actions disabled |
 | Unranked controls | Right side: down-to-top, bottom, handle; no numeric/select placement |
@@ -392,7 +392,7 @@ Autonomous decisions made during implementation, each clear, with its effects in
 
 - **Plans that depend across namespaces stay ranked per namespace, with the link made visible (user decision).** In research_bots all 8 Backlog plans form one chain across 4 namespaces, and rows did not say where a prerequisite lives. The user chose prerequisite namespace, status, and links plus a read-only Next up list. Alternatives: a repo dependency map, which conflicts with the no-Roadmap non-goal, and one repo-wide order, which is a large rework and would turn research_bots into one 8-plan block with nothing to rank.
 - **Next up shows only ranked plans, as full cards above the namespace list (user decision).** The first version listed compact rows below the list and fell back to the alphabetically first plan in an unranked namespace, which read as a recommendation it could not back up. So a repo with nothing ranked shows no Next up, research_bots included.
-- **The namespace is a badge, not a title prefix (user decision).** It sits beside the repo badge everywhere in Backlog, including prerequisite lists and Ordering rows. Only a Next up card's badge is a link, and it does what the namespace's row does. This replaces the `PORTAL · Title` label and narrows the non-goal against a clickable badge.
+- **The namespace is a badge, not a title prefix (user decision).** It appears only where plans from several namespaces appear together: Next up cards and prerequisite lists. Details and Ordering rows show the plain title, because the breadcrumb already names the namespace. A Next up card's badge is a link that does what the namespace's row does. This replaces the `PORTAL · Title` label and narrows the non-goal against a clickable badge.
 - **Next up shows one plan per namespace, not every unblocked ranked plan.** Chosen because rank within a namespace is what makes one plan next, and a namespace's lower ranks are one click away.
 - **A ranked plan waiting only on work in Ready, Active, or Review counts for Next up.** Alternative: only plans with nothing unfinished. Chosen because that work is underway, and the card's Waiting on list says what it comes after.
 - **A plan's namespace resolves against the primary checkout's vocabulary.** `buildPlanRecord` resolves it against the checkout it reads, and `repositoryPlanRecords` re-resolves it against the first checkout's. Alternative: trust each record. Chosen because the order the plan ranks in lives with the primary checkout, so an older or newer config in a worktree must not decide it.

@@ -896,7 +896,7 @@ For compactness, these examples omit the page's repo/namespace breadcrumbs and D
   X · Agent diagnostics    [⇡][↑][↓][⇣][⠿]
 ```
 
-**Rule:** Q is outside AGENTS. B still requires Q, but cross-namespace edges never join backlog units. The portal labels this `Waiting on 1` and lists Q with its namespace and status, in place of the `Requires:` text drawn in these wireframes. It also shows the namespace as a badge rather than the `AGENTS · ` title prefix drawn throughout this document.
+**Rule:** Q is outside AGENTS. B still requires Q, but cross-namespace edges never join backlog units. The portal labels this `Waiting on 1` and lists Q with its namespace and status, in place of the `Requires:` text drawn in these wireframes. It also drops the `AGENTS · ` title prefix drawn throughout this document: rows show the plain title, and the namespace appears as a badge only on Next up cards and prerequisites.
 
 #### P1 — Unprioritized independent plan
 

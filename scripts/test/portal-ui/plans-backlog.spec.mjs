@@ -170,14 +170,16 @@ test.describe("Backlog directory and ordering", () => {
     await expect(page.locator("#drawer-title")).toHaveText("Storage");
   });
 
-  test("the namespace is a badge in both modes, not part of the title", async ({ page }) => {
+  test("inside a namespace, its breadcrumb names it and only prerequisites carry a badge", async ({ page }) => {
     await openNamespace(page);
+    await expect(page.getByRole("navigation", { name: "Backlog location" })).toContainText("ALPHA");
     const card = page.locator("plan-card", { hasText: "Diagnostics" });
     await expect(card.locator(".title-link")).toHaveText("Diagnostics");
-    await expect(card.locator(".namespace-badge")).toHaveText("alpha");
-    await expect(card.locator(".namespace-badge")).not.toHaveAttribute("href");
+    await expect(card.locator(".namespace-badge")).toBeHidden();
+    await expect(page.locator("plan-card", { hasText: "Retrieval" }).locator(".plan-dependency .namespace-badge")).toHaveText("alpha");
     await page.getByRole("button", { name: "Ordering", exact: true }).click();
-    await expect(blockFor(page, "Diagnostics").locator(".namespace-badge")).toHaveText("alpha");
+    await expect(blockFor(page, "Diagnostics").locator(".namespace-badge")).toHaveCount(0);
+    await expect(blockFor(page, "Storage").locator(".namespace-badge")).toHaveText(["alpha"]);
   });
 
   test("Next up leads the repo view with full cards of each namespace's first ranked, unblocked plan", async ({ page }) => {

@@ -170,7 +170,7 @@ export function createBacklogController(deps) {
   function nextUpSection(entry, matchingKeys, cardActions) {
     const records = nextUp(entry, deps.getSnapshot().plans, matchingKeys);
     if (!records.length) return [];
-    const section = sectionNode("Next up", deps.cardGrid(records, { ...cardActions, showNamespace: true, onSelectNamespace: selectNamespace }));
+    const section = sectionNode("Next up", deps.cardGrid(records, { ...cardActions, onSelectNamespace: selectNamespace }));
     section.setAttribute("aria-label", "Next up");
     return [section];
   }
@@ -214,10 +214,9 @@ export function createBacklogController(deps) {
     const cards = (keys) => keys.filter((key) => matchingKeys.has(key)).map((key) => plans.get(key));
     const pending = cards([...view.needsPrioritization.flatMap((block) => block.keys), ...view.unrankable]);
     const ordered = cards(view.ordered.flatMap((block) => block.keys));
-    const titled = { ...cardActions, showNamespace: true };
     const sections = [];
-    if (pending.length) sections.push(sectionNode(`Needs prioritization (${pending.length})`, deps.cardGrid(pending, titled)));
-    if (ordered.length) sections.push(sectionNode("Ordered", deps.cardGrid(ordered, titled)));
+    if (pending.length) sections.push(sectionNode(`Needs prioritization (${pending.length})`, deps.cardGrid(pending, cardActions)));
+    if (ordered.length) sections.push(sectionNode("Ordered", deps.cardGrid(ordered, cardActions)));
     return [namespaceHeader(entry, view), ...graphNotices(view), ...(sections.length ? sections : [deps.emptyState()])];
   }
 

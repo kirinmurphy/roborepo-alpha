@@ -43,8 +43,6 @@ class BacklogBlockElement extends HTMLElement {
     });
     const title = node.querySelector("[data-slot=title]");
     title.textContent = plan.title;
-    const badge = node.querySelector("[data-slot=namespace]");
-    badge.textContent = plan.namespace;
     title.addEventListener("click", () => this.onOpen(record.key));
     const waiting = planDependencies(record, [...this.plans.values()], this.onOpen, this.backlog);
     if (waiting) node.append(waiting);

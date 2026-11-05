@@ -308,7 +308,7 @@ plan-card {
   gap: 10px;
   min-width: 0;
 }
-/* Name the plan's repo and, in Backlog, its namespace, so cards stay identifiable out of context. */
+/* Name the plan's repo and, where plans from several namespaces appear together, its namespace. */
 :is(.repo-badge, .namespace-badge) {
   flex: 0 0 auto;
   max-width: 40%;
@@ -661,7 +661,6 @@ backlog-block.drop-after { box-shadow: 0 3px 0 var(--accent); }
 }
 .backlog-position:empty { display: none; }
 .backlog-plan { display: grid; gap: 2px; min-width: 0; }
-.backlog-plan-heading { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .backlog-plan-title {
   padding: 0;
   border: none;

@@ -144,7 +144,8 @@ Filters narrow the directory counts and the Details cards. Ordering always shows
 and hides Filters, because moving a row among hidden rows has no defined result.
 
 A plan's namespace is the longest approved `<namespace>-` prefix of its filename. It is derived on
-every read and never stored. Backlog shows it as a badge beside the repo badge; the H1 is untouched. Approved means the keys of `docs/plans/plans-config.json` plus the universal
+every read and never stored. Inside a namespace the breadcrumb names it, and Next up and **Waiting on** show it
+as a badge; the H1 is untouched. Approved means the keys of `docs/plans/plans-config.json` plus the universal
 namespaces. A repo with no config shows one **No namespace** row with its plans as ordinary cards and
 a notice pointing to `/plan-suite-init`, since it never adopted the convention. A malformed config is
 reported as an error and every plan shows under **No namespace** until it is fixed.
