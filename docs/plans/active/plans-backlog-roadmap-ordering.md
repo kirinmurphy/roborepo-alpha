@@ -457,6 +457,7 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - **A plan that cannot be ranked stays in Needs prioritization with no controls and a reason.** The plan requires it be shown with its finding but does not say where.
 - **`roborepo plans validate` sets `process.exitCode` instead of calling `process.exit`.** Validation now exits 1 more often, and `exit()` truncated `--json` output past a pipe buffer, which reproduced while checking this repo's tree.
 - **`plans validate` gains a `repositoryFindings` array.** A broken config or registry belongs to no one plan. It is added to the existing summary counts, so the exit code covers it.
+- **This plan's file moved to `plans-backlog-roadmap-ordering.md`.** Merging `main` removed the `plan` namespace in favor of `plans`, so the old name failed the blocking naming check. Alternative: put `plan` back in `plans-config.json`, which undoes that restructure. The id, branch, and `worktree:` value keep their old form, since plan copies match by id and the worktree folder already exists.
 - **`Move down` is the accessible name of both the Ordered and Needs prioritization controls,** as the plan specifies. The Needs one is internally `place-top`, so the two behaviors stay distinct in code.
 
 ## Not tested
@@ -510,6 +511,13 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - [x] `plans-portal.md` still says Backlog cards show **depends on** with linked plan IDs. — fixed (6ed78b5a)
 - [x] The addendum's prose still says Backlog titles carry a namespace prefix and show `Requires:`. — fixed (6ed78b5a)
 - [x] The plan's "Schema bootstrap" note and "Namespace derivation" row are stale. — fixed (6ed78b5a)
+- [x] Ordering scrolls sideways at phone width on a title with a long unbroken word. — fixed (2c9f548a)
+- [x] A prerequisite in No namespace reads `(Backlog)`, the wording for one in this namespace. — fixed (2c9f548a)
+- [x] A plan with a duplicate or missing id has no `Waiting on` list in Ordering. — fixed (2c9f548a)
+- [x] No test asserts a Next up card's usual actions. — fixed (2c9f548a)
+- [x] Nothing asserts that badges stay legible in the light theme. — fixed (2c9f548a)
+- [x] The added tests use `#drawer-title` and `#drawer-close` where roles exist. — fixed (2c9f548a)
+- [x] `### Verification` omits the UI review's validation passes, and two badge comments describe only the repo filter. — fixed (2c9f548a), with the Verification lines below
 
 ### Verification
 
@@ -528,3 +536,5 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - Installed output, on a temporary HOME and state root: `roborepo update`, enabling plan-suite, `roborepo update`, and `roborepo doctor --installed` all exited 0 (110 doctor checks), and the installed plan-write references carry `plans-order.json` and `order place` with no `priority:` line. `doctor` on this machine warns that installed skills are out of date until `roborepo update` runs after merge.
 - Base failure: `roborepo plans validate` exits 1 from blocking findings that are all in `docs/plans/completed/`, none from this change.
 - UI review at 79b64f8c (not a validation pass): `node scripts/test/backlog-model-check.mjs` passed, `node scripts/test/portal-ui/run.mjs plans-backlog plans-status` passed 57 of 57, and `node scripts/test/docs-reference-check.mjs` passed. The full portal UI suite and CI were not run on these commits, and no fresh-context pass has reviewed them. Next up's cards were seen on research_bots with ranks simulated in the browser, not saved.
+- UI review validation pass 1 at 1a11ebdf (fresh-context subagent): 5 `fix` findings, no `escalate`; `node scripts/test/portal-ui/run.mjs` passed 216 of 216.
+- UI review validation pass 2 at 2a0e83a9 (fresh-context subagent): 7 `fix` findings, no `escalate`; `node scripts/test/portal-ui/run.mjs` passed 217 of 217.
