@@ -1,6 +1,6 @@
 ---
 id: rxv53v6z
-next_action: Run one more validation pass, then submit if it reports no fix findings.
+next_action: The user decides how to handle the 4 open fix findings from validation pass 9 under Review; do not submit while any remain open.
 blocked_by: []
 depends_on: []
 related: ["plans-portal-live-refresh-and-static-preflight", "plan-lifecycle-suite-blockers-dependencies", "plan-unclassified-plan-recovery", "p3vbk03v"]
@@ -431,6 +431,10 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - [x] The contract comment for `readProjectNamespaces` sat above `pathFreeReadError`, describing the wrong function. — fixed (072acc52)
 - [x] The comment above `plansOrderCommand` in `scripts/cli/plans-command.mjs` says that without a position "any other plan stays unprioritized"; an independent plan already in the order stays ranked. Say "a plan that is not ranked stays unprioritized". — fixed (7d6b779e)
 - [x] `scripts/cli/mock-home.mjs` gives every demo Backlog entry `urlKey: null`, so the demo board's Backlog tab can never open a repo. Give each entry the `urlKey` the mock registry uses for that repo. Traced, not run; it shows only with `MOCK_FIRST_RUN_VIEWS_ENABLED`, which is `false` in the code. — fixed (7d6b779e)
+- [ ] A failed order write sends an absolute filesystem path to the browser: `applyOrder` in `modules/plan-suite/backlog-registry.mjs` lets the raw `EACCES` from its temp-file write and rename reach `sendDomainError` in `scripts/cli/portal-routes-plans.mjs`, which the Save bar and guard dialog would show. Throw a domain error carrying only `err.code`, as the read path does, remove the temp file on failure, and add a check. Reproduced at `saveNamespaceOrder`; the route and UI steps are traced, not run.
+- [ ] **Copy Repair Prompt**, the No namespace repair path, is only asserted visible in `scripts/test/portal-ui/plans-backlog.spec.mjs`. Click it, then assert the clipboard text names `/plan-write` and the plan's path, as the other Plans copy controls do.
+- [ ] The design's required test of reload and branch-switch behavior for config changes does not exist. Add a real-Git branch-switch case to `scripts/test/backlog-order-check.mjs` and a config-edit-then-reload case to `plans-backlog.spec.mjs`. An ad hoc run of 20 branch switches read the wrong vocabulary 0 times through `readProjectNamespaces`; it did not exercise the snapshot rebuild or the page.
+- [ ] The "Placing a new plan" table in `plan-write/references/workflow-create.md` has no row for a new plan that depends only on unranked plans in a non-interactive run. Widen the last row to "Is independent, or depends only on unranked plans, in a non-interactive run".
 
 ### Verification
 
@@ -443,5 +447,6 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - Validation pass 6 at fa64c5cb (fresh-context subagent, a further pass the user approved past the cap): the last 7 findings above, no `escalate`; its `node scripts/test/portal-ui/run.mjs` passed 200 of 200. Findings rose from 2 to 7, so the run stopped with them open, as the user's condition for further passes required. The user then chose to fix them and validate again.
 - Validation pass 7 at 6af0e6ca (fresh-context subagent): 1 `fix` finding, the last above, no `escalate`; its `node scripts/test/portal-ui/run.mjs` passed 201 of 201.
 - Validation pass 8 at d8d006ef (fresh-context subagent): the last 2 findings above, no `escalate`; its `node scripts/test/portal-ui/run.mjs` passed 201 of 201. This was the last pass the user's limit allowed, so the run stopped with them open.
+- Validation pass 9 at 1d698bbf (fresh-context subagent, the one further pass the user approved): the 4 open findings above, no `escalate`; its `node scripts/test/portal-ui/run.mjs` passed 201 of 201. The run stopped with them open and did not submit, as the user's condition for this pass required.
 - Installed output, on a temporary HOME and state root: `roborepo update`, enabling plan-suite, `roborepo update`, and `roborepo doctor --installed` all exited 0 (110 doctor checks), and the installed plan-write references carry `plans-order.json` and `order place` with no `priority:` line. `doctor` on this machine warns that installed skills are out of date until `roborepo update` runs after merge.
 - Base failure: `roborepo plans validate` exits 1 from blocking findings that are all in `docs/plans/completed/`, none from this change.
