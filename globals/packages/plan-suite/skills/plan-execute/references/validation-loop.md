@@ -43,14 +43,18 @@ disk, and record in the plan that the Validator ran in-session.
    `### Findings` in the worktree's copy of the plan, and each `base` result under
    `### Verification`.
 3. **Fix.** Fix every `fix` finding, rerun the checks it affects, commit, and check the finding off
-   with its commit: `- [x] Missing retry test — fixed (<short commit>)`. An `escalate` finding
-   stays unchecked and gets an Open Questions entry under the Decision Policy.
+   with its commit: `- [x] Missing retry test — fixed (<short commit>)`. Never ask the user whether
+   to fix a `fix` finding, however many passes have run. An `escalate` finding stays unchecked and
+   gets an Open Questions entry under the Decision Policy.
 4. **Repeat.** The next pass validates the revised work, not the previous report. A fix can
    introduce a new finding, which the next pass catches.
 5. **Stop** when a pass reports no `fix` findings. Open `escalate` findings do not restart the loop;
    they wait for the user's answers.
-6. **Cap at five passes.** If the fifth pass still reports `fix` findings, stop, leave them
-   unchecked, and report them. Do not submit.
+6. **Cap at eight passes.** The cap limits how many passes run, not how findings are handled: the
+   eighth pass's findings are recorded and fixed like any other pass's. The loop then ends without
+   another pass and the run continues to Implementation Completion. Record under `### Verification`
+   that the last pass's fixes were not revalidated, and name them in the final report; `/plan-review`
+   runs its own Validator over them.
 
 Show each pass's report in the run's output, a clean pass included.
 
@@ -121,6 +125,9 @@ Classify every finding by its consequence, not by the kind of change it needs:
 | `fix` | The right fix is clear, stays within the plan's requirements and acceptance criteria, and changes no public interface or contract the plan did not already specify. Code, tests, docs, and evidence alike | Fixed in the same session |
 | `escalate` | The fix chooses between real alternatives, changes requirements or acceptance criteria, changes a public interface or contract the plan did not specify, or lands outside the plan | Goes to the user as a decision |
 | `base` | A gate failure the base branch has too: the failing check also fails on the base branch, or its failing input exists there | Recorded as verification; not a finding, not a blocker |
+
+A real alternative has a compelling argument for choosing it. When one option clearly wins and the
+others exist only on paper, the fix is clear: class it `fix`, not `escalate`.
 
 A one-line wording fix and a one-line logic fix are both `fix` when the right answer is obvious.
 Size never decides the class.

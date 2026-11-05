@@ -149,11 +149,12 @@ finding gets one of three classes, by consequence rather than size:
 | Class | When | What happens |
 | --- | --- | --- |
 | `fix` | The right fix is clear and stays within the plan's requirements and specified contracts, code included | The same run fixes it and checks it off with its commit |
-| `escalate` | The fix chooses between real alternatives, changes requirements or an unspecified contract, or lands outside the plan | It becomes an open question in the run's final batch |
+| `escalate` | The fix chooses between real alternatives, each with a compelling argument for it, changes requirements or an unspecified contract, or lands outside the plan | It becomes an open question in the run's final batch |
 | `base` | The base branch fails the same check | It is recorded as verification, and blocks nothing |
 
-The loop repeats until a pass finds nothing to fix, for at most five passes. The findings and the
-passes are recorded in the plan's `## Review` section. Then it runs the completion preflight
+The run never asks before fixing a `fix` finding. The loop repeats until a pass finds nothing to
+fix, for at most eight passes. The cap limits passes only: the last pass's findings are fixed like
+any other's, and the run records that those fixes were not revalidated. The findings and the passes are recorded in the plan's `## Review` section. Then it runs the completion preflight
 (`roborepo plans preflight`), which checks that:
 
 - no task outside `## Not tested` is unchecked;
@@ -162,7 +163,7 @@ passes are recorded in the plan's `## Review` section. Then it runs the completi
 - the feature branch has at least one commit of its own;
 - the plan passes the Review requirements, apart from unconfirmed `## Not tested` entries.
 
-If the loop ended clean and the preflight passes, `/plan-execute` runs `roborepo plans submit`,
+If the loop has ended and the preflight passes, `/plan-execute` runs `roborepo plans submit`,
 which moves the plan to `review/`, then pushes the plan's feature branch so CI starts before you
 review. That says the work is complete and checked, not that you accepted it. If the push is
 refused, the plan still moves and the report gives you the command to push it yourself. Otherwise the plan stays in `active/` with a `next_action` for the next run; an open
