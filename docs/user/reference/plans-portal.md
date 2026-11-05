@@ -384,8 +384,9 @@ selection supplies evidence only.
 
 `roborepo plans merge-readiness <plan> --json` reports pre-merge readiness with repair instructions.
 After durable closure, cleanup uses the shared preservation assessment. Remaining or uncertain
-work keeps the checkout and offers explicit Archive and remove; closure stays committed even if
-cleanup fails. See [the recovery commands](repositories.md#worktree-states-and-cleanup).
+work keeps the checkout and offers a preview followed by **Discard all listed leftovers and
+remove** or **Keep worktree**. Discard creates no recovery copy; closure stays committed even if
+cleanup fails. See [the cleanup commands](repositories.md#worktree-states-and-cleanup).
 
 ## Worktree deletion and plan closure
 

@@ -133,7 +133,7 @@ export async function retryBranchRetirement(mainPath, selector, { apply = false,
   const dir = path.join(stateRoot, "worktree-cleanup", "transactions");
   let records = [];
   try { records = fs.readdirSync(dir).filter((name) => name.endsWith(".json")).map((name) => { try { return readTransaction(stateRoot, name.slice(0, -5)); } catch { return null; } }); } catch {}
-  const matches = records.filter((record) => record?.state === "checkout-removed" && Date.parse(record.createdAt) + 7 * 86400000 > Date.now() && (record.target.name === selector || record.target.branch === selector));
+  const matches = records.filter((record) => record?.state === "checkout-removed" && (record.target?.repositoryId === mainPath || record.target?.repositoryPath === mainPath) && Date.parse(record.createdAt) + 7 * 86400000 > Date.now() && (record.target.name === selector || record.target.branch === selector));
   const kept = (reason) => ({ action: "kept", eligible: false, reason });
   if (matches.length !== 1) return kept("no unambiguous pending branch retirement; reassessment required");
   const record = matches[0], target = record.target;

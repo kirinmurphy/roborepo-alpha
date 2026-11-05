@@ -513,7 +513,16 @@ Decided during promotion, each reversible by refining this plan before implement
 
 ### Findings
 
-Independent validation pending.
+- [x] Pending branch retirement collided across repos sharing a branch name — filter owning
+  repo before checking ambiguity; the regression failed before the fix and passed afterward.
+- [x] Artifact tests asserted classification only — added real squash-landed automatic removal,
+  no-recovery-ref, branch-retirement, and external-symlink-target assertions. Native removal is
+  still blocked by host permissions; this fixture reports failure rather than weakening checks.
+- [x] Legacy restore lacked captured disposable artifacts — added an unpruned capture and
+  byte-for-byte restoration regression; those assertions passed before a later host-blocked step.
+
+- [x] The Plans portal reference still offered Archive and remove after closure; corrected it to
+  exact-preview discard-all or keep, with no recovery copy.
 
 ### Verification
 
@@ -536,3 +545,65 @@ Independent validation pending.
 - Browser environment start attempted through the repository's test runner; no shareable URL
   became available because the host refused the localhost listener. No server was left running
   by that runner.
+
+### Takeover verification — 2026-11-05
+
+- Resumed the existing clean feature worktree at `30028eaf`; no branch/worktree was created
+  or switched. The user explicitly authorized taking over the mid-flight work.
+- Package manager confirmed code-style, javascript-typescript, test-harness, and
+  feature-verification enabled. React does not apply to this framework-less portal.
+- Plan validator: zero blocking findings; the two existing Not tested entries remain advisory.
+- Health check passed 97 checks; docs references, plan-suite skill contracts, command rendering
+  (12 commands), trigger fixtures (10), and whitespace checks passed. Installed global skill drift
+  remains a separate warning; no global configuration was changed.
+- Native lifecycle and snapshot checks were attempted normally and once with escalation. Both
+  executions still encounter EPERM removing temporary directories. Lifecycle stops at the candidate
+  comparison because the otherwise-identical cleanup warning contains a different temporary path;
+  snapshot stops at removal of its synthetic `directory-only` fixture.
+- Browser startup was attempted normally and once with escalation. Both refuse `127.0.0.1` binding
+  with EPERM before any browser assertion runs. No shareable server URL or screenshot is available.
+- Discard assertions for stale content/index/mode/tip/base, scope restrictions, raw large-file
+  inventory, intent-write refusal, and serialized logs execute successfully. The suite then stops
+  at the recreated-checkout fixture's directory rename with EPERM, so its overall result is blocked.
+- Legacy recovery assertions report success for reachable/squash proofs, layer protection, exact
+  approval, concurrent ref protection, and detached restore; final fixture cleanup fails with EPERM.
+- Retention assertions pass age/size bounds and 40 cross-process appends; final fixture cleanup
+  fails with EPERM. Plan-close integration reports its assertions passed before the same cleanup
+  restriction. Command catalog stops at fixture cleanup with EPERM.
+- Full local parity `npm run check` was attempted once because the implementation changes the
+  test-group registry. It passes doctor, then fails in test-cli with three package authoring rollback
+  assertions and an EPERM removing a temporary skill symlink. This is not a passing parity gate;
+  no claim is made that all three assertions share the EPERM cause.
+- No real checkout or legacy recovery ref was deleted for verification.
+- Artifact policy assertions and CLI surface integration assertions report success; each exits
+  nonzero during final fixture cleanup with EPERM. These are partial assertion results, not passing
+  suites.
+- Independent validation found the stale Archive and remove wording in the Plans portal reference;
+  corrected it and reran docs references and whitespace checks successfully.
+
+### Continued verification — 2026-11-05
+
+- Reconfirmed package activation and resumed the user-authorized existing worktree, including
+  the pending documentation correction and verification record. No new branch was created.
+- Reran lifecycle, snapshot, discard, legacy recovery, artifact, retention, plan-close,
+  command catalog, and CLI surface checks. Required native operations still hit EPERM;
+  partial successful assertions are not passing suites.
+- Snapshot verification still fails at synthetic directory removal with broader permissions.
+  Browser startup also fails to bind localhost both normally and with broader permissions.
+  No review submission or feature-branch push was attempted while required checks remain blocked.
+- Docs references, plan-suite skill contracts, health (97 checks), command rendering
+  (12 commands), trigger fixtures (10), and whitespace checks passed again.
+- Existing full-parity failure remains unresolved; it was not rerun because the implementation
+  and test orchestration have not changed since that recorded attempt.
+
+- Validation pass 1 (fresh-context subagent) reported the three findings above; all were fixed.
+- The shared-state retry regression failed before the code correction and passed afterward,
+  including checking that the other repo branch remains intact until its own retry. The discard
+  suite subsequently remains blocked at synthetic checkout rename.
+- The new artifact cleanup fixture proves eligibility and preservation, then Git reports
+  Operation not permitted deleting its synthetic checkout and administrative directory. Actual
+  deletion, branch retirement, and external-target postconditions remain unverified.
+- The new legacy disposable-artifact snapshot and restore assertions passed, including all
+  captured payload bytes. The snapshot suite still stops later at synthetic empty-directory removal.
+- Syntax checks for all four changed JavaScript files, health (97 checks), docs references,
+  and whitespace checks passed after these corrections.

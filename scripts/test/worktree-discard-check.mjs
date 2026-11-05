@@ -3,12 +3,13 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { isolateGitConfig } from "./lib/git-config.mjs";
 import { inventoryDiscard, previewWorktreeDiscard, applyWorktreeDiscard, readTransaction, saveTransaction } from "../../modules/repositories/worktree-discard.mjs";
 import { linkedWorktrees } from "../../modules/repositories/worktree-inventory.mjs";
 import { cleanupWorktrees } from "../cli/worktree-cleanup.mjs";
-import { appendRemoval, removalLogPath } from "../../modules/repositories/worktree-removal.mjs";
+import { appendRemoval, removalLogPath, retryBranchRetirement } from "../../modules/repositories/worktree-removal.mjs";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "worktree-discard-check-"));
 const restore = isolateGitConfig(root);
@@ -30,6 +31,19 @@ function fixture() {
 }
 async function preview(options) { const result = await previewWorktreeDiscard(options); assert.ok(result.receipt, result.reason); return result; }
 try {
+  const retryState = path.join(root, "shared-retry-state");
+  const retryRepos = [fixture(), fixture()];
+  for (const repo of retryRepos) {
+    git(repo.mainPath, "branch", "pending");
+    saveTransaction(retryState, { id: randomUUID(), state: "checkout-removed", createdAt: new Date().toISOString(), target: { repositoryId: repo.mainPath, path: path.join(repo.mainPath, "absent-checkout"), name: "pending", branch: "pending", tip: git(repo.mainPath, "rev-parse", "HEAD") } });
+  }
+  for (const repo of retryRepos) {
+    assert.equal(git(repo.mainPath, "branch", "--list", "pending"), "pending", "other repo's retirement leaves this branch intact");
+    const retry = await retryBranchRetirement(repo.mainPath, "pending", { stateRoot: retryState, apply: true });
+    assert.equal(retry.action, "removed", "another repo's matching branch cannot block a pending retirement");
+    assert.equal(git(repo.mainPath, "branch", "--list", "pending"), "");
+  }
+  console.log("worktree discard: shared-state branch retirement is isolated by repo");
   const f = fixture();
   fs.writeFileSync(path.join(f.work, "private-settings"), "synthetic private value");
   fs.writeFileSync(path.join(f.work, "new file\nname"), "new");

@@ -27,6 +27,23 @@ try {
   const main = path.join(root, "repo"); fs.mkdirSync(main);
   git(main, "init", "-qb", "main");
   write(main, "seed", "seed\n"); git(main, "add", "."); git(main, "commit", "-qm", "seed");
+  {
+    const legacy = path.join(root, "legacy-artifacts");
+    git(main, "worktree", "add", "-qb", "legacy-artifacts", legacy);
+    write(legacy, ".gitignore", ".venv/\n__pycache__/\n*.egg-info/\nbuild/\nnode_modules/\n");
+    write(legacy, "pyproject.toml", "[project]\nname = 'fixture'\n");
+    const artifacts = [".venv/pyvenv.cfg", "__pycache__/cached.pyc", "fixture.egg-info/PKG-INFO", "build/output", "node_modules/output"];
+    for (const file of artifacts) write(legacy, file, `legacy payload: ${file}\n`);
+    const snapshot = await createWorktreeSnapshot(legacy, { pruneDisposable: false });
+    assert.equal(snapshot.ok, true, snapshot.reason);
+    const { manifest } = await readSnapshot(main, snapshot.ref);
+    for (const file of artifacts) assert.ok(manifest.entries.some((entry) => entry.path === file), `${file} is captured`);
+    const destination = path.join(root, "legacy-artifacts-restored");
+    const restored = await restoreWorktreeSnapshot(main, snapshot.id, destination, { apply: true });
+    assert.equal(restored.ok, true, restored.reason);
+    for (const file of artifacts) assert.equal(fs.readFileSync(path.join(destination, file), "utf8"), `legacy payload: ${file}\n`, `${file} survives legacy verification and restore`);
+    console.log("worktree snapshots: legacy disposable artifact payloads restored and verified");
+  }
   const largeText = "x".repeat(GIT_MAX_BUFFER + 1024);
   const largeBlob = await runGitProcess(main, ["hash-object", "-w", "--stdin"], { input: largeText });
   assert.equal(largeBlob.ok, true);
