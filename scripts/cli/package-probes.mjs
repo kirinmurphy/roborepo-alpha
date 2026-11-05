@@ -7,7 +7,7 @@ import { compareHookReadiness, fragmentHooks } from "../harnesses/hook-readiness
 import { hookRecordsFromFile } from "../harnesses/root-config-hooks.mjs";
 import { getHarnessProvider } from "../harnesses/registry.mjs";
 import { stateSkillsDir, telemetryDir } from "./state-paths.mjs";
-import { codexStatusLineIncludes, readHarnessConfig, packageRuntimeAssetDestination } from "./package-harness-config.mjs";
+import { claudePluginDirDestination, claudePluginDirRegistered, codexStatusLineIncludes, readHarnessConfig, packageRuntimeAssetDestination } from "./package-harness-config.mjs";
 import { knownHarnessIds } from "./rules-render.mjs";
 import { effectiveEnabledIds } from "./package-state.mjs";
 import { requiredClosure } from "./package-graph.mjs";
@@ -229,6 +229,21 @@ function probePackageRuntimeAsset(component, desired, pkg) {
   });
 }
 
+function probeClaudePluginDir(component, desired, settings, pkg) {
+  const dest = claudePluginDirDestination(pkg, component);
+  const installed = fs.existsSync(path.join(dest, ".claude-plugin", "plugin.json"));
+  const registered = claudePluginDirRegistered(settings, pkg, component);
+  const observed = installed && registered;
+  return componentResult(component, {
+    desired,
+    observed,
+    owner: observed ? "roborepo" : null,
+    detail: observed
+      ? `Claude plugin folder registered: ${dest}`
+      : !installed ? `Claude plugin folder missing: ${dest}` : `Claude plugin folder not registered: ${dest}`,
+  });
+}
+
 function probeHarnessConfig(component, desired, settings, pkg) {
   const config = readHarnessConfig(component, pkg);
   if (component.harness === "claude") {
@@ -365,6 +380,7 @@ export function buildPackageLiveState(packages, { hookRecords = null, effectiveI
       else if (component.type === "mcp") components.push(probeMcp(component, componentDesired, settings));
       else if (component.type === "service") components.push(probeService(component, componentDesired, telemetryState));
       else if (component.type === "package-runtime-asset") components.push(probePackageRuntimeAsset(component, componentDesired, pkg));
+      else if (component.type === "claude-plugin-dir") components.push(probeClaudePluginDir(component, componentDesired, settings, pkg));
       else if (component.type === "harness-config") components.push(probeHarnessConfig(component, componentDesired, settings, pkg));
       else if (component.type === "skill") components.push(probeSkill(component, componentDesired, pkg));
       else components.push(componentResult(component, { desired: componentDesired, observed: false, detail: "unknown component type", blocked: componentDesired }));
