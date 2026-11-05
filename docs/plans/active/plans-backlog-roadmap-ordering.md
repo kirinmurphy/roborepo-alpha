@@ -1,6 +1,6 @@
 ---
 id: rxv53v6z
-next_action: Finish the open UI review tasks, rerun validation, then run /plan-review.
+next_action: Push when the user asks, confirm the PR's CI is green, then run /plan-review.
 blocked_by: []
 depends_on: []
 related: ["plans-portal-live-refresh-and-static-preflight", "plan-lifecycle-suite-blockers-dependencies", "plan-unclassified-plan-recovery", "p3vbk03v"]
@@ -349,7 +349,7 @@ Added after reviewing Backlog on real repos. The behavior is built; the open tas
 - [x] Test that the drawer shows another namespace's position for a prerequisite.
 - [x] Test that opening a `Waiting on` link during a dirty Ordering draft keeps the draft and its unsaved state.
 - [x] Check a Next up card with both badges and a long title at phone width and in the light theme, and fix what fails. Add a horizontal-overflow assertion for phone width.
-- [ ] Run the gates under "Before human review" on the final commit and record the results in `### Verification`.
+- [x] Run the gates under "Before human review" on the final commit and record the results in `### Verification`.
 
 ## Validation
 
@@ -540,3 +540,6 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - UI review at 79b64f8c (not a validation pass): `node scripts/test/backlog-model-check.mjs` passed, `node scripts/test/portal-ui/run.mjs plans-backlog plans-status` passed 57 of 57, and `node scripts/test/docs-reference-check.mjs` passed. The full portal UI suite and CI were not run on these commits, and no fresh-context pass has reviewed them. Next up's cards were seen on research_bots with ranks simulated in the browser, not saved.
 - UI review validation pass 1 at 1a11ebdf (fresh-context subagent): 5 `fix` findings, no `escalate`; `node scripts/test/portal-ui/run.mjs` passed 216 of 216.
 - UI review validation pass 2 at 2a0e83a9 (fresh-context subagent): 7 `fix` findings, no `escalate`; `node scripts/test/portal-ui/run.mjs` passed 217 of 217.
+- UI review validation pass 3 at 974f57c4 (fresh-context subagent, the last of the 3 passes the user approved for this gate): 2 `fix` findings, no `escalate`; `node scripts/test/portal-ui/run.mjs` passed 218 of 218. Both are fixed at e8999b57, and no further fresh-context pass has reviewed those fixes.
+- Before human review gates at 067d5900: `node scripts/test/backlog-model-check.mjs` passed; `node scripts/test/portal-ui/run.mjs plans-backlog plans-status` passed 66 of 66; `node scripts/test/portal-ui/run.mjs` passed 219 of 219; `node scripts/test/docs-reference-check.mjs` passed, and `docs/images/plans.png` shows no title prefix, read against the page; `roborepo plans validate` for this plan reports only its 3 unconfirmed `## Not tested` entries. Fresh review: no open `fix` or `escalate` finding, with pass 3's fixes not revalidated. CI not run: it waits for a push the user asks for.
+- After merging `main` at d5c763f7: `bash scripts/doctor.sh --quiet` passed 97 checks at 067d5900, `git diff --check origin/main...HEAD` was clean, and `node scripts/test/plan-tree-naming-check.mjs` passed 143 plans. `main` was fetched just before these gates and had nothing newer.
