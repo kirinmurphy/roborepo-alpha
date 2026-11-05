@@ -81,7 +81,7 @@ exists.
 > footer-command hook (or an equivalent capability), roborepo can render the exact same line there
 > using the Codex adapter and shared rules already in this package. Until then the `/api/usage`
 > portal endpoint reports Codex as `not-collected`. See
-> `docs/plans/backlog/usage-statusline-codex-parity.md`.
+> `docs/plans/archived/usage-statusline-codex-parity.md`.
 
 ## Portal data surface
 
