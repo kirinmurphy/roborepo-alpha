@@ -1,6 +1,6 @@
 ---
 id: rxv53v6z
-next_action: The user decides whether to fix the 7 open validation findings under Review and validate again; then run /plan-execute to submit on a pass with no fix findings.
+next_action: Run the further validation pass the user approved after fixing pass 6's findings, then submit if it reports no fix findings.
 blocked_by: []
 depends_on: []
 related: ["plans-portal-live-refresh-and-static-preflight", "plan-lifecycle-suite-blockers-dependencies", "plan-unclassified-plan-recovery", "p3vbk03v"]
@@ -421,13 +421,13 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - [x] No test asserts `DEPENDENCY_CYCLE`, its blocking status, or the refusal of `order place` and Save on a broken graph. — fixed (ed84a58e)
 - [x] After Save's request succeeds or after Discard, the old Ordering controls stay live with a null draft: a Move click throws and the bar still says "Unsaved changes". — fixed (b60f0062)
 - [x] `docs/user/reference/plans-portal.md`, the `order place` row, lists only two refusals. — fixed (b60f0062)
-- [ ] An unreadable order file or config puts an absolute filesystem path into `/api/plans`: `readRegistry` in `modules/plan-suite/backlog-registry.mjs` and `readProjectNamespaces` in `naming.mjs` pass the raw `err.message` through. Send only `err.code` for filesystem read errors, as `canonical-scan.mjs` requires; JSON parse messages can stay.
-- [ ] `plan-schema.md`'s filename rule says "the rest is frontmatter" of a list that includes order, while its Backlog section says order is never a frontmatter field.
-- [ ] `plans validate`'s `repositoryFindings`, and its exit 1 on a broken config or order file even for one healthy plan, are undocumented in `plans-portal.md` and `workflow-validate.md`.
-- [ ] `plans-backlog.spec.mjs` uses CSS, id, and class selectors where a role exists (`.backlog-directory-row`, `.backlog-section-title`, `#refresh`, `#filters-toggle`, `#search`, `#filters-update`); the Validation section asks for role-based selectors. Custom-element locators may stay where no role identifies them.
-- [ ] No test asserts that the Save/Cancel bar stays visible while the list scrolls, which the design requires. Add one with a small viewport and a long list.
-- [ ] The controller's `isOrdering()` runs `reconcile()`, which can change `mode` and `draft`, and `render()` in `portal/plans/app.js` relies on that to decide whether Filters is hidden. Reconcile explicitly in `render()` and keep the predicate pure.
-- [ ] The header comment in `portal/plans/elements/backlog-block.js` says locked blocks show why they cannot move; they show a bare "blocked" badge, and the reason is in the notices above the list.
+- [x] An unreadable order file or config puts an absolute filesystem path into `/api/plans`: `readRegistry` in `modules/plan-suite/backlog-registry.mjs` and `readProjectNamespaces` in `naming.mjs` pass the raw `err.message` through. Send only `err.code` for filesystem read errors, as `canonical-scan.mjs` requires; JSON parse messages can stay. — fixed (4d7b3225)
+- [x] `plan-schema.md`'s filename rule says "the rest is frontmatter" of a list that includes order, while its Backlog section says order is never a frontmatter field. — fixed (4d7b3225)
+- [x] `plans validate`'s `repositoryFindings`, and its exit 1 on a broken config or order file even for one healthy plan, are undocumented in `plans-portal.md` and `workflow-validate.md`. — fixed (4d7b3225)
+- [x] `plans-backlog.spec.mjs` uses CSS, id, and class selectors where a role exists (`.backlog-directory-row`, `.backlog-section-title`, `#refresh`, `#filters-toggle`, `#search`, `#filters-update`); the Validation section asks for role-based selectors. Custom-element locators may stay where no role identifies them. — fixed (4d7b3225)
+- [x] No test asserts that the Save/Cancel bar stays visible while the list scrolls, which the design requires. Add one with a small viewport and a long list. — fixed (4d7b3225)
+- [x] The controller's `isOrdering()` runs `reconcile()`, which can change `mode` and `draft`, and `render()` in `portal/plans/app.js` relies on that to decide whether Filters is hidden. Reconcile explicitly in `render()` and keep the predicate pure. — fixed (4d7b3225)
+- [x] The header comment in `portal/plans/elements/backlog-block.js` says locked blocks show why they cannot move; they show a bare "blocked" badge, and the reason is in the notices above the list. — fixed (4d7b3225)
 
 ### Verification
 
