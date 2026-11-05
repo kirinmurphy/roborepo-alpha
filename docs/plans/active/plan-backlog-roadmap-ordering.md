@@ -1,6 +1,6 @@
 ---
 id: rxv53v6z
-next_action: The user decides whether to fix the 2 open validation findings under Review and validate again; then run /plan-execute to submit on a pass with no fix findings.
+next_action: Run one more validation pass, then submit if it reports no fix findings.
 blocked_by: []
 depends_on: []
 related: ["plans-portal-live-refresh-and-static-preflight", "plan-lifecycle-suite-blockers-dependencies", "plan-unclassified-plan-recovery", "p3vbk03v"]
@@ -429,8 +429,8 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - [x] The controller's `isOrdering()` runs `reconcile()`, which can change `mode` and `draft`, and `render()` in `portal/plans/app.js` relies on that to decide whether Filters is hidden. Reconcile explicitly in `render()` and keep the predicate pure. — fixed (4d7b3225)
 - [x] The header comment in `portal/plans/elements/backlog-block.js` says locked blocks show why they cannot move; they show a bare "blocked" badge, and the reason is in the notices above the list. — fixed (4d7b3225)
 - [x] The contract comment for `readProjectNamespaces` sat above `pathFreeReadError`, describing the wrong function. — fixed (072acc52)
-- [ ] The comment above `plansOrderCommand` in `scripts/cli/plans-command.mjs` says that without a position "any other plan stays unprioritized"; an independent plan already in the order stays ranked. Say "a plan that is not ranked stays unprioritized".
-- [ ] `scripts/cli/mock-home.mjs` gives every demo Backlog entry `urlKey: null`, so the demo board's Backlog tab can never open a repo. Give each entry the `urlKey` the mock registry uses for that repo. Traced, not run; it shows only with `MOCK_FIRST_RUN_VIEWS_ENABLED`, which is `false` in the code.
+- [x] The comment above `plansOrderCommand` in `scripts/cli/plans-command.mjs` says that without a position "any other plan stays unprioritized"; an independent plan already in the order stays ranked. Say "a plan that is not ranked stays unprioritized". — fixed (7d6b779e)
+- [x] `scripts/cli/mock-home.mjs` gives every demo Backlog entry `urlKey: null`, so the demo board's Backlog tab can never open a repo. Give each entry the `urlKey` the mock registry uses for that repo. Traced, not run; it shows only with `MOCK_FIRST_RUN_VIEWS_ENABLED`, which is `false` in the code. — fixed (7d6b779e)
 
 ### Verification
 
