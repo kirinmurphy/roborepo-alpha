@@ -1392,8 +1392,8 @@ test.describe("repository-first portal Home", () => {
       await expect(row.getByRole("button", { name: "Links" })).toHaveCount(0);
     }
 
-    // An unclaimed worktree keeps its branch label with its tooltip, port, and Links; its copy control
-    // is the worktree dropdown, which copies the branch and path but has no plan file.
+    // An unclaimed worktree keeps its branch label with its tooltip, port, and Links; the worktree
+    // dropdown stands in for its copy control, copying the branch and path but no plan file.
     await expect(loose.locator("[data-slot=root-info]")).toBeVisible();
     await expect(loose.locator("[data-slot=root-copy] portal-copy-menu")).toHaveCount(0);
     await loose.getByRole("button", { name: "Worktree details for feature/loose" }).click();
@@ -1503,14 +1503,12 @@ test.describe("repository-first portal Home", () => {
     await page.route("**/api/plans/prompt", (route) => route.fulfill({ json: { prompt: `prompt for ${route.request().postDataJSON().action}` } }));
   }
 
-  test("a worktree plan row shows its next action beside the details toggle and copies its prompt", async ({ page }) => {
+  test("a worktree plan row shows its next action beside its completion and copies its prompt", async ({ page }) => {
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
     await planFixture(page);
     await routeNextAction(page, { lifecycle: "review" });
     await page.goto("/");
     const identity = roboRepoCard(page).locator(".plan-identity").filter({ hasText: "Plan A" });
-    // The worktree toggle follows the title, ahead of the completion; the action closes the line.
-    await expect(identity.getByRole("button", { name: "Worktree details for Plan A" })).toBeVisible();
     await expect(identity.getByRole("progressbar", { name: "Plan A completion" })).toBeVisible();
     const action = identity.getByRole("button", { name: "Review", exact: true });
     await expect(action).toHaveAttribute("title", "Copy the /plan-review prompt");
@@ -1550,13 +1548,25 @@ test.describe("repository-first portal Home", () => {
     const wide = await Promise.all([titleButton, toggle, progress, action, port, links, row].map((item) => item.boundingBox()));
     const centerY = (box) => box.y + box.height / 2;
     expect(Math.abs(centerY(wide[0]) - centerY(wide[3]))).toBeLessThan(2);
+    // The row's name stands 12px clear of what follows it, on plan and worktree rows alike.
+    expect(wide[2].x - (wide[0].x + wide[0].width)).toBeCloseTo(12, 0);
+    const looseRow = checkoutRow(card, "feature/loose");
+    const looseName = await looseRow.locator("[data-slot=root-info]").boundingBox();
+    const looseDrift = await looseRow.locator(".git-drift").boundingBox();
+    expect(looseDrift.x - (looseName.x + looseName.width)).toBeCloseTo(12, 0);
+    // The worktree dropdown is the row's rightmost control: port, Links, then the dropdown.
+    expect(wide[4].x + wide[4].width).toBeLessThanOrEqual(wide[5].x);
+    expect(wide[5].x + wide[5].width).toBeLessThanOrEqual(wide[1].x);
+    // A main checkout has no dropdown and reserves no space for one: its Links ends the row.
+    const mainLinks = await checkoutRow(card, "main branch").getByRole("button", { name: "Links", exact: true }).boundingBox();
+    expect(mainLinks.x + mainLinks.width).toBeCloseTo(wide[1].x + wide[1].width, 0);
     await page.screenshot({ path: testInfo.outputPath("plan-row-wide.png") });
     await page.setViewportSize({ width: 720, height: 800 });
     const narrow = await Promise.all([titleButton, toggle, progress, action, port, links, row].map((item) => item.boundingBox()));
     await page.screenshot({ path: testInfo.outputPath("plan-row-wrapped.png") });
-    expect(narrow[1].y).toBeGreaterThanOrEqual(narrow[0].y + narrow[0].height);
-    expect(Math.abs(centerY(narrow[1]) - centerY(narrow[2]))).toBeLessThan(2);
-    expect(Math.abs(centerY(narrow[1]) - centerY(narrow[3]))).toBeLessThan(2);
+    expect(narrow[2].y).toBeGreaterThanOrEqual(narrow[0].y + narrow[0].height);
+    expect(Math.abs(centerY(narrow[2]) - centerY(narrow[3]))).toBeLessThan(2);
+    expect(narrow[1].y - narrow[6].y).toBeCloseTo(wide[1].y - wide[6].y, 0);
     expect(narrow[4].y - narrow[6].y).toBeCloseTo(wide[4].y - wide[6].y, 0);
     expect(narrow[5].y - narrow[6].y).toBeCloseTo(wide[5].y - wide[6].y, 0);
     expect(narrow[0].height).toBe(wide[0].height);

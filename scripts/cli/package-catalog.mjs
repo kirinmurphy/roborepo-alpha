@@ -29,6 +29,7 @@ const RESOURCE_TYPES = new Set([
   "service",
   "harness-config",
   "package-runtime-asset",
+  "claude-plugin-dir",
 ]);
 const SKILL_INVOCATIONS = new Set(["auto", "manual"]);
 const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
@@ -349,6 +350,11 @@ function normalizeResource(resource, { pkgId, root, index }) {
     if (!fs.existsSync(path.join(root, next.source))) throw new Error(`${pkgId}:package-runtime-asset source missing: ${next.source}`);
     if (next.target !== undefined && !isSafeRelativeTarget(next.target)) {
       throw new Error(`${pkgId}:package-runtime-asset target must be a relative path`);
+    }
+  } else if (next.type === "claude-plugin-dir") {
+    next.source = validateInsideSource(root, next.source, `${pkgId}:claude-plugin-dir`);
+    if (!fs.existsSync(path.join(root, next.source, ".claude-plugin", "plugin.json"))) {
+      throw new Error(`${pkgId}:claude-plugin-dir source has no .claude-plugin/plugin.json: ${next.source}`);
     }
   } else if (next.type === "rules" || next.type === "hooks") {
     next.source = validateInsideSource(root, next.source, `${pkgId}:${next.type}`);

@@ -69,6 +69,30 @@ Weekly: 20% debt (90% used / 70% elapsed)
 Normal percentages are rendered **explicit white**, never left terminal-muted. `NO_COLOR` disables
 all ANSI and prints the exact same text.
 
+## Claude desktop app
+
+The desktop app has no status line to draw into, so the package installs a small Claude plugin
+(`claude/context-row/`) that draws one row above the prompt once context reaches 20%:
+
+```text
+Context 42%
+```
+
+The figure is yellow up to 30%, orange up to 40%, and red above that. The close button at the right
+of the row hides it until context reaches the next color, or until it comes back after dropping to a
+lower color (a compaction or a cleared session).
+
+The row is desktop-only, because the terminal already has this figure in its status line. It reads
+the same free usage figures, refreshed after each tool call, each turn, and each compaction, and stays
+blank until a session's first response. Sessions started after the package is enabled pick it up.
+
+The plugin is copied to `~/.roborepo/package-runtime/usage-statusline/context-row/` and named in
+`env.CLAUDE_CODE_PLUGIN_DIRS` in `~/.claude/settings.json`. To test it:
+
+```sh
+claude plugin test globals/packages/usage-statusline/claude/context-row
+```
+
 ## Codex
 
 Codex uses its **native** `tui.status_line` fields, **unchanged** by this package. Codex has no

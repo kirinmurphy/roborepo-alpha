@@ -1,0 +1,6 @@
+{
+  "name": "context-row",
+  "version": "0.1.0",
+  "description": "Shows context usage in a row above the prompt in the Claude desktop app once it reaches 20%.",
+  "types": "./types/index.d.ts"
+}

@@ -104,7 +104,8 @@ speculatively; the current approach is deliberate (see `validatePackageCatalog`)
 ## Resource types
 
 `RESOURCE_TYPES` (package-catalog.mjs): `skill`, `slash-command`, `rules`, `hooks`, `permissions`,
-`codex_tool_approvals`, `mcp`, `plugin`, `service`, `harness-config`, `package-runtime-asset`.
+`codex_tool_approvals`, `mcp`, `plugin`, `service`, `harness-config`, `package-runtime-asset`,
+`claude-plugin-dir`.
 No shipped package uses `mcp` or `codex_tool_approvals` today; the test-only fixture packages in
 `scripts/test/fixtures/packages/` cover them.
 
@@ -123,6 +124,7 @@ Validation depth differs by type — know this before assuming everything is che
 | `service` | Yes — non-empty `.id` | `setService(component.id, ...)` — expects `.id` |
 | `harness-config` | Yes — source exists inside package dir; target is a registered package-config-capable harness | package-managed live harness config merge/unmerge |
 | `package-runtime-asset` | Yes — source exists inside package dir, optional relative `.target` | copied to `~/.roborepo/package-runtime/<package-id>/` and referenced by harness config |
+| `claude-plugin-dir` | Yes — source folder inside package dir holds `.claude-plugin/plugin.json` | folder copied to `~/.roborepo/package-runtime/<package-id>/<folder>/` and added to `env.CLAUDE_CODE_PLUGIN_DIRS` in Claude settings; other entries in that list are preserved |
 
 All resource types get shape-level validation at `roborepo package validate` time, not
 just at enable-time. If you're extending one
