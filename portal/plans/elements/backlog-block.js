@@ -1,7 +1,8 @@
 // <backlog-block> — one movable unit in Backlog's Ordering mode: a single plan row, or a container of
 // linked plans that moves as one. Set .block ({ ids, keys }), .section ("ordered" | "needs"), .index,
 // .count, .plans (key -> record), .locked, .held, and .onOpen right after creation, then append to the
-// DOM. Locked blocks show why they cannot move; held ones keep their controls, disabled, while a Save settles.
+// DOM. A locked block shows a badge in place of its controls; a held one keeps them, disabled, while a
+// Save settles.
 //
 // It owns its controls and dispatches a bubbling `block-move` event with { section, index, action };
 // the page applies the move to its draft. Dragging starts here from the handle and is finished by the

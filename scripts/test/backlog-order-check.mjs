@@ -354,6 +354,20 @@ try {
   assert.equal(gatedStart.status, 1, "start refuses while the config cannot be read");
   assert.ok(JSON.parse(gatedStart.stdout).error.findings.some((item) => item.code === "INVALID_PLANS_CONFIG"));
 
+  // A read failure reaches /api/plans, so it carries its code and never the file's absolute path.
+  const configFile = path.join(repo, "docs/plans/plans-config.json");
+  fs.rmSync(configFile);
+  fs.mkdirSync(configFile);
+  assert.equal(readProjectNamespaces(realRepo).error, "EISDIR");
+  fs.rmdirSync(configFile);
+  write("docs/plans/plans-config.json", "{ nope");
+  const orderBeforeLoop = fs.readFileSync(orderFile, "utf8");
+  fs.rmSync(orderFile);
+  fs.symlinkSync(orderFile, orderFile);
+  assert.deepEqual(readOrderRegistry(realRepo), { state: "invalid", namespaces: {}, raw: "", error: "ELOOP" });
+  fs.rmSync(orderFile);
+  fs.writeFileSync(orderFile, orderBeforeLoop);
+
   // No config at all: the convention is inert.
   fs.rmSync(path.join(repo, "docs/plans/plans-config.json"));
   index = await indexed();

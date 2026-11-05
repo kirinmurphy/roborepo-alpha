@@ -373,7 +373,9 @@ function render() {
   onboardingEl.hidden = true;
   lifecycleBarEl.dataset.board = "true";
   renderWarnings(snapshot);
-  // Ordering shows the whole namespace: moving a row among hidden rows has no defined result.
+  // This snapshot can end Ordering or mark its draft stale, so that settles first. Ordering shows the
+  // whole namespace: moving a row among hidden rows has no defined result.
+  if (state.selectedLifecycle === "backlog") backlog.reconcile();
   const ordering = state.selectedLifecycle === "backlog" && backlog.isOrdering();
   filtersToggleEl.hidden = ordering;
   if (ordering) filterChipsEl.replaceChildren();

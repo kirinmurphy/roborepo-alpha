@@ -61,6 +61,12 @@ const configCache = new Map();
 // convention, so it reports `error` and an empty vocabulary rather than passing for "not configured"
 // or keeping an older vocabulary. Scans stay tolerant; `plans validate` and the promote and start
 // gates surface the error.
+// Filesystem error messages embed absolute paths, and these errors reach /api/plans, so only the code
+// crosses over. A parse or shape error names no path and says what to repair, so its message stays.
+export function pathFreeReadError(err) {
+  return String(err?.code || err?.message || err);
+}
+
 export function readProjectNamespaces(repositoryRoot) {
   const file = path.join(repositoryRoot, PLANS_CONFIG_RELATIVE_PATH);
   let stat;
@@ -83,7 +89,7 @@ export function readProjectNamespaces(repositoryRoot) {
     const names = Object.keys(data.namespaces || {}).filter((name) => name.trim());
     value = { configured: true, namespaces: names.map((name) => name.trim()) };
   } catch (err) {
-    value = { configured: true, namespaces: [], error: String(err?.message || err) };
+    value = { configured: true, namespaces: [], error: pathFreeReadError(err) };
   }
   configCache.set(file, { mtimeMs: stat.mtimeMs, value });
   return value;

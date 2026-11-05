@@ -29,6 +29,10 @@ It reports, in the shape
 - Not tested: unchecked `## Not tested` entries on an active, review, or completed plan.
 - Relationships: duplicate ids, and `depends_on`, `related`, and `blocked_by` entries that resolve
   to no plan.
+- Repository: problems with `docs/plans/plans-config.json` and `docs/plans/plans-order.json`, which
+  belong to no one plan, in the output's `repositoryFindings`. A file that cannot be read is
+  blocking, so the command exits 1 even when the plan itself is valid. Repair that file; the plan is
+  not the cause. Entries in the order file for an unknown plan or an unapproved namespace are advisory.
 
 The command exits 1 when a blocking finding remains.
 

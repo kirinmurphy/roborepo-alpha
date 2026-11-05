@@ -16,7 +16,7 @@ import path from "node:path";
 import { blocksFromSequence, deriveGroups, proposeOrder, sequenceGroup } from "./backlog-order.mjs";
 import { finding } from "./findings.mjs";
 import { domainError } from "./index.mjs";
-import { PLANS_CONFIG_RELATIVE_PATH, approvedNamespaces, readProjectNamespaces } from "./naming.mjs";
+import { PLANS_CONFIG_RELATIVE_PATH, approvedNamespaces, pathFreeReadError, readProjectNamespaces } from "./naming.mjs";
 
 export const PLANS_ORDER_RELATIVE_PATH = "docs/plans/plans-order.json";
 const SCHEMA_VERSION = 1;
@@ -29,12 +29,12 @@ export function readOrderRegistry(root) {
     raw = fs.readFileSync(path.join(root, PLANS_ORDER_RELATIVE_PATH), "utf8");
   } catch (err) {
     if (err?.code === "ENOENT") return { state: "missing", namespaces: {}, raw: "" };
-    return { state: "invalid", namespaces: {}, raw: "", error: String(err?.message || err) };
+    return { state: "invalid", namespaces: {}, raw: "", error: pathFreeReadError(err) };
   }
   try {
     return { state: "ok", namespaces: parseRegistry(raw), raw };
   } catch (err) {
-    return { state: "invalid", namespaces: {}, raw, error: String(err?.message || err) };
+    return { state: "invalid", namespaces: {}, raw, error: pathFreeReadError(err) };
   }
 }
 

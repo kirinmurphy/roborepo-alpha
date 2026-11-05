@@ -161,8 +161,8 @@ A plan filename is `<namespace>-<slug>.md`, lowercase and hyphenated.
 
 - Never suffix a filename with `-plan`. Everything under `docs/plans` is a plan.
 - Never encode lifecycle, order, dates, or status in a filename (`-todo`, `-followups`,
-  `-active`, `-v2`). Lifecycle is the folder; the rest is frontmatter. Filenames get linked to;
-  status changes.
+  `-active`, `-v2`). Lifecycle is the folder, Backlog order is `plans-order.json`, and the rest
+  is frontmatter. Filenames get linked to; status changes.
 - Keep the slug specific enough to disambiguate from siblings in the same namespace.
 - A milestone or suite series shares a prefix plus an ordinal: `<namespace>-<series>-<n>`.
 - The H1 is prose for a reader — normal capitalization and spacing, naming the outcome. It is not

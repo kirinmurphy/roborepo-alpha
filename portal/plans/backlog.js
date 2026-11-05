@@ -75,7 +75,7 @@ export function createBacklogController(deps) {
     return entry.namespaces.find((view) => view.namespace === namespace) || null;
   }
 
-  // Runs on each render, which is how a new snapshot reaches it. A clean draft follows the server; a
+  // The page runs this before each render, which is how a new snapshot reaches it. A clean draft follows the server; a
   // dirty one is never overwritten, and is flagged stale when the namespace it was opened from has
   // changed or is gone, so the safeguards still stand until the user discards it.
   function reconcile() {
@@ -113,7 +113,6 @@ export function createBacklogController(deps) {
   // The nodes for the current Backlog level. `matching` is the plans the Filters popup leaves, in
   // this lifecycle only; Ordering ignores it and always shows the whole namespace.
   function render(matching, cardActions) {
-    reconcile();
     if (isDirty() && draft.stale) return renderOrdering(draftSource.entry, draftSource.view, draftSource.plans);
     const matchingKeys = new Set(matching.map((record) => record.key));
     const entry = selectedEntry();
@@ -234,6 +233,8 @@ export function createBacklogController(deps) {
     const orderedList = document.createElement("div");
     orderedList.className = "backlog-order-list";
     orderedList.dataset.dropTarget = "ordered";
+    orderedList.setAttribute("role", "group");
+    orderedList.setAttribute("aria-label", "Ordered plans");
     orderedList.append(...draft.ordered.map((block, index) => blockNode(block, "ordered", index, draft.ordered.length)));
     if (!draft.ordered.length) orderedList.append(tpl("tpl-backlog-drop-empty"));
     wireDropTarget(orderedList);
@@ -487,12 +488,10 @@ export function createBacklogController(deps) {
   }
 
   return {
+    reconcile,
     render,
     isDirty,
-    isOrdering: () => {
-      reconcile();
-      return isOrdering();
-    },
+    isOrdering,
     confirmLeave,
     draftUrl: () => draftUrl,
   };
