@@ -490,7 +490,9 @@ dialog#drawer::backdrop {
 
 .plan-dependencies {
   display: grid;
-  gap: 2px;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 8px;
+  align-items: baseline;
   min-width: 0;
   color: var(--dim);
   font-size: var(--text-xs);
@@ -502,6 +504,9 @@ dialog#drawer::backdrop {
 /* A prerequisite list is taller and wider than the button it replaces, so the row lets it wrap and
  * the menu button keeps its own height beside it. */
 .card-actions:has(.plan-dependencies) { flex-shrink: 1; align-items: flex-start; }
+/* Lines the first prerequisite up with the menu button. Top-aligned rather than centered, so the
+ * button stays put however many prerequisites there are. */
+.card-actions .plan-dependencies { padding-top: 6px; }
 .card-actions:has(.plan-dependencies) portal-menu-button { align-self: flex-start; }
 .card-actions:has(.plan-dependencies) .menu-button-trigger { height: auto; }
 .plan-dependencies button {

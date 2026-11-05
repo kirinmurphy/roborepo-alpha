@@ -1,6 +1,6 @@
-// <backlog-block> — one movable unit in Backlog's Ordering mode: a single plan row, or a container of
-// linked plans that moves as one. Set .block ({ ids, keys }), .section ("ordered" | "needs"), .index,
-// .count, .plans (key -> record), .backlog (the snapshot's), .locked, .held, and .onOpen right after
+// <backlog-block> — one movable unit in Backlog's Prioritize mode: a single plan row, or a container of
+// linked plans, drawn as a dependency tree, that moves as one. Set .block ({ ids, keys }), .section
+// ("ordered" | "needs"), .index, .count, .plans (key -> record), .locked, .held, and .onOpen right after
 // creation, then append to the DOM. A locked block shows a badge in place of its controls; a held one keeps them, disabled, while a
 // Save settles.
 //
@@ -8,43 +8,63 @@
 // the page applies the move to its draft. Dragging starts here from the handle and is finished by the
 // list the block sits in, which knows where the other blocks are.
 import { portalTpl as tpl, portalFillSlots as fill } from "/portal/shared/api.js";
-import { ORDERED_ACTIONS, NEEDS_ACTIONS, isActionEnabled } from "/portal/plans/backlog-model.js";
-import { planDependencies } from "/portal/plans/templates.js";
+import { ORDERED_ACTIONS, NEEDS_ACTIONS, dependencyTree, isActionEnabled } from "/portal/plans/backlog-model.js";
+import { dependencyList, planDependencies } from "/portal/plans/templates.js";
+import { renderBacklogExcerpt } from "/portal/plans/elements/backlog-excerpt.js";
 
 const CONTROLS = {
   top: { label: "Move to top", icon: "arrow-to-top" },
   up: { label: "Move up", icon: "arrow-up" },
   down: { label: "Move down", icon: "arrow-down" },
   bottom: { label: "Move to bottom", icon: "arrow-to-bottom" },
-  // Named for its motion: the block moves down from this section into Ordered, at its top.
+  // Named for its motion: the block moves down from this section into Prioritized, at its top.
   "place-top": { label: "Move down", icon: "arrow-down" },
 };
-const PURPOSE_LENGTH = 110;
 
 class BacklogBlockElement extends HTMLElement {
   connectedCallback() {
     this.dataset.blockId = this.block.ids[0];
-    const linked = this.block.keys.length > 1;
-    const node = tpl(linked ? "tpl-backlog-group" : "tpl-backlog-row");
-    if (linked) fill(node, { count: `${this.block.keys.length} linked plans` });
+    const node = tpl("tpl-backlog-row");
+    node.classList.toggle("is-linked", this.block.keys.length > 1);
     // A position in the list as drawn; the order is the arrangement itself, never an editable number.
     if (this.section === "ordered") fill(node, { position: String(this.index + 1) });
-    const rows = this.block.keys.map((key) => this.renderPlan(this.plans.get(key)));
+    const rows = dependencyTree(this.block.keys, this.plans).map((row) => this.renderTreeRow(row));
     node.querySelector("[data-slot=plans]").replaceWith(...rows);
     node.querySelector("[data-slot=controls]").replaceWith(this.renderControls());
     this.replaceChildren(node);
   }
 
-  renderPlan(record) {
+  renderTreeRow({ key, parentKey, alsoNeeds, lines }) {
+    const row = tpl("tpl-backlog-tree-row");
+    const guides = lines.map((line) => {
+      const guide = tpl("tpl-backlog-tree-guide");
+      guide.dataset.line = line;
+      return guide;
+    });
+    const plan = this.renderPlan(this.plans.get(key), alsoNeeds);
+    // The guides are drawn lines, so the relationship is also stated for assistive tech.
+    if (parentKey) plan.querySelector("[data-slot=title]").setAttribute("aria-description", `Depends on ${this.plans.get(parentKey).plan.title}`);
+    row.append(...guides, plan);
+    return row;
+  }
+
+  renderPlan(record, alsoNeeds) {
     const { plan } = record;
     const node = fill(tpl("tpl-backlog-plan"), {
-      purpose: truncate(plan.excerpt || "", PURPOSE_LENGTH),
       clue: plan.blockers.length ? `blocked by ${plan.blockers.length}` : "",
     });
-    const title = node.querySelector("[data-slot=title]");
-    title.textContent = plan.title;
-    title.addEventListener("click", () => this.onOpen(record.key));
-    const waiting = planDependencies(record, [...this.plans.values()], this.onOpen, this.backlog);
+    node.querySelector("[data-slot=title]").textContent = plan.title;
+    // The title stays the keyboard path; a click on the description opens the plan too.
+    const doc = node.querySelector(".backlog-plan-doc");
+    renderBacklogExcerpt(node.querySelector("[data-slot=purpose]"), doc, plan.excerpt || "");
+    doc.addEventListener("click", () => this.onOpen(record.key));
+    if (alsoNeeds.length) {
+      const items = alsoNeeds.map((key) => ({ key, label: this.plans.get(key).plan.title }));
+      node.append(dependencyList("Also needs", items, this.onOpen));
+    }
+    // Anything else in this block is already drawn by the tree.
+    const drawnIds = new Set(this.block.ids);
+    const waiting = planDependencies(record, [...this.plans.values()], this.onOpen, drawnIds);
     if (waiting) node.append(waiting);
     return node;
   }
@@ -95,7 +115,3 @@ class BacklogBlockElement extends HTMLElement {
 }
 
 customElements.define("backlog-block", BacklogBlockElement);
-
-function truncate(text, maxLength) {
-  return text.length <= maxLength ? text : `${text.slice(0, maxLength).trimEnd()}…`;
-}

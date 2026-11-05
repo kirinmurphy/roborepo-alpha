@@ -36,7 +36,7 @@ not lifecycle stages, and neither is a human's approval.
 ## What The Portal Writes
 
 The portal writes one file: `plans-order.json` under `docs/plans/`, when you press **Save** in Backlog's
-Ordering mode. See [Backlog](#backlog). It never writes a plan file. The plan suite's commands move
+Prioritize mode. See [Backlog](#backlog). It never writes a plan file. The plan suite's commands move
 plans between lifecycle folders, each with one commit in the main checkout. Which repositories Plans
 reads is RoboRepo state, not a property of any repository.
 
@@ -134,18 +134,20 @@ flat list of cards across all selected repos.
 
 | You have selected | You see |
 | --- | --- |
-| **All repos** | Repos with Backlog plans, each with its plan count and unprioritized count |
-| A repo | **Next up**, then its namespaces with Backlog plans, each with counts; **No namespace** last, when any plan lands there |
-| A repo and namespace | **Needs prioritization** first when it has plans, then **Ordered**, as **Details** or **Ordering** |
+| **All repos** | Repos with Backlog plans, each with its unblocked, unprioritized, and total plan counts |
+| A repo | **Next up**, then **View All Plans**: its namespaces with Backlog plans, each with unblocked and unprioritized counts; **No namespace** last, when any plan lands there |
+| A repo and namespace | **Details**: prioritized cards, under a banner counting plans that need prioritization. **Prioritize**: **Needs prioritization**, then **Prioritized** |
 | A repo and **No namespace** | Each file's exact name, its findings, and **Copy Repair Prompt** |
 
 The namespace is the URL's `?namespace=` parameter, so reload and back/forward keep your place.
-Filters narrow the directory counts and the Details cards. Ordering always shows the whole namespace
+Backlog descriptions show 190 characters. Resting the pointer on a plan's title and description for a second reads on to twice that, over the page, without moving what follows.
+
+Filters narrow the directory counts and the Details cards. Prioritize always shows the whole namespace
 and hides Filters, because moving a row among hidden rows has no defined result.
 
 A plan's namespace is the longest approved `<namespace>-` prefix of its filename. It is derived on
-every read and never stored. Inside a namespace the breadcrumb names it, and Next up and **Waiting on** show it
-as a badge; the H1 is untouched. Approved means the keys of `docs/plans/plans-config.json` plus the universal
+every read and never stored. Inside a namespace the breadcrumb names it and switches to another one, a Next up
+card shows it as a badge, and **Waiting on** does for a prerequisite in another namespace; the H1 is untouched. Approved means the keys of `docs/plans/plans-config.json` plus the universal
 namespaces. A repo with no config shows one **No namespace** row with its plans as ordinary cards and
 a notice pointing to `/plan-suite-init`, since it never adopted the convention. A malformed config is
 reported as an error and every plan shows under **No namespace** until it is fixed.
@@ -155,21 +157,25 @@ blocker and with every unfinished prerequisite already in Ready, Active, or Revi
 appears, so a repo with nothing ranked shows no Next up. Namespaces stay in directory order, so it claims no
 order between them. Filters narrow it, and a card's namespace badge opens that namespace.
 
-**Waiting on** lists a Backlog plan's unfinished prerequisites in Details, Ordering, and the drawer, each
-with its namespace badge and a link that opens it. A prerequisite in another namespace's Backlog shows its
-position there or `not prioritized`, and one outside Backlog shows its lifecycle. Prerequisites never
-affect another namespace's order.
+**Waiting on** lists a Backlog plan's unfinished prerequisites in Details and the drawer, each with a link that
+opens it. A prerequisite in another namespace also shows that namespace's badge, and one outside Backlog shows
+its lifecycle. Prioritize lists only the prerequisites its tree does not draw. Prerequisites never affect another
+namespace's order.
 
-**Details and Ordering** show the same plans in the same order. Details is always flat cards.
-Ordering shows compact rows and groups linked plans:
+**Details and Prioritize** show prioritized plans in the same order. Details is always flat cards, and its banner's
+**Prioritize Now** opens Prioritize. A namespace with only new plans opens in Prioritize directly. Prioritize shows compact rows and groups linked plans, and Save returns to
+Details:
 
 - Plans connected by direct `depends_on` edges, both ends in this namespace's Backlog, form one block
   that moves as a unit. A join or fork is one block too; listing `B` before `C` claims nothing about
   `B` and `C`. A prerequisite in another lifecycle or namespace connects nothing, so once a shared
   prerequisite leaves Backlog its dependents become separate rows that keep their positions.
-- **Ordered** controls, right side, in order: **Move to top**, **Move up**, **Move down**, **Move to
+- A block is drawn as a tree. A link already implied through another prerequisite is dropped, so if `E`
+  needs `A` and `C`, and `C` needs `A`, then `E` sits under `C`. A plan with several real prerequisites nests
+  under the last to finish and names the others under **Also needs**.
+- **Prioritized** controls, right side, in order: **Move to top**, **Move up**, **Move down**, **Move to
   bottom**, drag handle.
-- **Needs prioritization** controls: **Move down** (to the top of Ordered), **Move to bottom**, drag
+- **Needs prioritization** controls: **Move down** (to the top of Prioritized), **Move to bottom**, drag
   handle.
 - A namespace with a dependency cycle or a missing prerequisite shows why and locks its controls.
 
@@ -194,7 +200,7 @@ The order you see is calculated on every read, and a read never writes:
 | Change | What you see | The file |
 | --- | --- | --- |
 | A new independent plan | Needs prioritization | Unchanged |
-| A plan connected to a ranked plan, by a new plan or a new `depends_on` | Its whole group is ranked at the earliest ranked member; Ordering says what moved | Written at the next Save or `order place` |
+| A plan connected to a ranked plan, by a new plan or a new `depends_on` | Its whole group is ranked at the earliest ranked member; Prioritize says what moved | Written at the next Save or `order place` |
 | A removed `depends_on` | The plans keep their positions | Unchanged |
 | A plan leaves Backlog | Ignored; the others keep their relative order | Pruned at the next write |
 | The file names an unknown plan | Excluded, with a finding | Preserved |

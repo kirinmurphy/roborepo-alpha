@@ -217,12 +217,12 @@ const SHOTS = [
     from: "header.portal-header",
     fromEdge: "bottom",
     to: "backlog-block >> nth=1",
-    // Backlog's Ordering mode in a namespace whose plans depend on each other, so a linked block shows.
+    // Backlog's Prioritize mode in a namespace whose plans depend on each other, so a linked block shows.
     prepare: async () => {
       await page.getByRole("button", { name: /^Backlog \(/ }).click();
       await page.locator(".backlog-directory-row").first().click();
       await page.locator(".backlog-directory-row", { hasText: "HARNESS" }).click();
-      await page.getByRole("button", { name: "Ordering", exact: true }).click();
+      await page.getByRole("button", { name: "Prioritize", exact: true }).click();
       await page.locator("backlog-block").first().waitFor();
     },
   },

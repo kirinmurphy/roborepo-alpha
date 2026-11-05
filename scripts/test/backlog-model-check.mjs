@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   NO_NAMESPACE,
   createDraft,
+  dependencyTree,
   dropBlock,
   hrefWithNamespace,
   isActionEnabled,
@@ -11,6 +12,7 @@ import {
   moveBlock,
   namespaceDirectory,
   namespaceFromSearch,
+  namespaceOptions,
   nextUp,
   openPrerequisites,
   orderedIds,
@@ -36,16 +38,31 @@ assert.equal(hrefWithNamespace("/plans?namespace=portal&repo=r", null), "/plans?
 const entry = { repositoryId: "r1", name: "one", urlKey: "one", namespaces: [view], noNamespace: ["bad"] };
 const empty = { repositoryId: "r2", name: "two", urlKey: "two", namespaces: [], noNamespace: [] };
 const all = new Set(["k-A", "k-B", "k-C", "k-X", "k-N", "bad"]);
-assert.deepEqual(repositoryDirectory([entry, empty], all), [
-  { repositoryId: "r1", name: "one", urlKey: "one", planCount: 6, unprioritizedCount: 1 },
-], "only repos with Backlog plans, counting plans and unprioritized plans");
-assert.deepEqual(repositoryDirectory([entry], new Set(["k-A"])).map((row) => row.planCount), [1], "filters narrow the counts");
-assert.deepEqual(repositoryDirectory([entry], new Set()), [], "a repo with no matching plan drops out");
-assert.deepEqual(namespaceDirectory(entry, all), [
-  { namespace: "portal", planCount: 5, unprioritizedCount: 1 },
-  { namespace: NO_NAMESPACE, planCount: 1, unprioritizedCount: 0 },
+// A waits on nothing, B and C wait on A, X has a blocker, N and the misfiled plan are free.
+const directoryRecord = (key, id, dependencies = [], blockers = []) => ({
+  key,
+  repository: { id: "r1", repositoryId: "r1" },
+  plan: { id, lifecycle: "backlog", title: id, dependencies, blockers },
+});
+const directoryRecords = [
+  directoryRecord("k-A", "A"),
+  directoryRecord("k-B", "B", ["A"]),
+  directoryRecord("k-C", "C", ["A"]),
+  directoryRecord("k-X", "X", [], [{ text: "waiting" }]),
+  directoryRecord("k-N", "N"),
+  directoryRecord("bad", "bad"),
+];
+assert.deepEqual(repositoryDirectory([entry, empty], all, directoryRecords), [
+  { repositoryId: "r1", name: "one", urlKey: "one", planCount: 6, unblockedCount: 3, unprioritizedCount: 1 },
+], "only repos with Backlog plans, counting plans, unblocked plans, and unprioritized plans");
+assert.deepEqual(repositoryDirectory([entry], new Set(["k-A"]), directoryRecords).map((row) => row.planCount), [1], "filters narrow the counts");
+assert.deepEqual(repositoryDirectory([entry], new Set(["k-B", "k-N"]), directoryRecords).map((row) => row.unblockedCount), [1], "filters narrow the unblocked count");
+assert.deepEqual(repositoryDirectory([entry], new Set(), directoryRecords), [], "a repo with no matching plan drops out");
+assert.deepEqual(namespaceDirectory(entry, all, directoryRecords), [
+  { namespace: "portal", planCount: 5, unblockedCount: 2, unprioritizedCount: 1 },
+  { namespace: NO_NAMESPACE, planCount: 1, unblockedCount: 1, unprioritizedCount: 0 },
 ], "No namespace comes last");
-assert.deepEqual(namespaceDirectory(entry, new Set(["k-N"])).map((row) => row.namespace), ["portal"], "No namespace shows only when plans land there");
+assert.deepEqual(namespaceDirectory(entry, new Set(["k-N"]), directoryRecords).map((row) => row.namespace), ["portal"], "No namespace shows only when plans land there");
 
 // Drafts start clean and only ever move whole blocks.
 const draft = createDraft(view);
@@ -97,33 +114,36 @@ const records = [
   planRecord("retired", "agents", "archived"),
   { ...planRecord("elsewhere", "agents", "completed"), key: "k-other-repo", repository: { id: "other" } },
 ];
-const strategyView = {
-  namespace: "strategy",
-  ordered: [block("sibling"), block("ranked")],
-  needsPrioritization: [block("unranked")],
-  unrankable: [],
-};
-const backlogEntries = [{ repositoryId: "r", namespaces: [strategyView] }];
-const statusOf = (dependencies) => openPrerequisites(planRecord("self", "agents", "backlog", dependencies), records, backlogEntries)
+const statusOf = (dependencies) => openPrerequisites(planRecord("self", "agents", "backlog", dependencies), records)
   .map((item) => `${item.namespace ? `${item.namespace}/` : ""}${item.label}: ${item.status}`);
-assert.deepEqual(statusOf(["ranked"]), ["strategy/ranked: Backlog, position 2"]);
-assert.deepEqual(
-  openPrerequisites(planRecord("self", "agents", "backlog", ["misfiled"]), [...records, planRecord("misfiled", null, "backlog")], backlogEntries).map((item) => item.status),
-  ["Backlog, not prioritized"],
-  "a prerequisite in No namespace is not in this namespace's list and has no order",
-);
-const linkedStrategyView = { ...strategyView, ordered: [block("sibling", "unranked"), block("ranked")] };
-assert.deepEqual(
-  openPrerequisites(planRecord("self", "agents", "backlog", ["ranked"]), records, [{ repositoryId: "r", namespaces: [linkedStrategyView] }]).map((item) => item.status),
-  ["Backlog, position 2"],
-  "a position counts blocks, as Ordering numbers them, not plans",
-);
-assert.deepEqual(statusOf(["unranked"]), ["strategy/unranked: Backlog, not prioritized"]);
-assert.deepEqual(statusOf(["local"]), ["agents/local: Backlog"]);
+assert.deepEqual(statusOf(["ranked"]), ["strategy/ranked: "], "a prerequisite still in Backlog needs no status");
+assert.deepEqual(statusOf(["local"]), ["agents/local: "]);
 assert.deepEqual(statusOf(["working"]), ["agents/working: Active"]);
 assert.deepEqual(statusOf(["done"]), []);
 assert.deepEqual(statusOf(["retired"]), ["agents/retired: Archived"]);
 assert.deepEqual(statusOf(["elsewhere"]), ["elsewhere: not found"], "another repo's plan with that id does not count");
+
+// The dependency tree: implied prerequisites collapse, and a plan with several real ones nests under
+// the last to finish and names the rest.
+const treeOf = (keys, dependencies) => {
+  const plans = new Map(keys.map((key) => [key, { plan: { id: key, dependencies: dependencies[key] || [] } }]));
+  return dependencyTree(keys, plans).map((row) => [row.key, row.parentKey, row.alsoNeeds.join(), row.lines.join(" ")]);
+};
+assert.deepEqual(treeOf(["A", "B"], { B: ["A"] }), [["A", null, "", ""], ["B", "A", "", "elbow"]], "a chain nests");
+assert.deepEqual(treeOf(["A"], {}), [["A", null, "", ""]], "a lone plan is a root");
+assert.deepEqual(treeOf(["A", "B", "C", "D", "E"], { C: ["A", "B"], D: ["A"], E: ["A", "C"] }), [
+  ["A", null, "", ""],
+  ["D", "A", "", "elbow"],
+  ["B", null, "", ""],
+  ["C", "B", "A", "elbow"],
+  ["E", "C", "", "blank elbow"],
+], "E's link to A is implied through C, C keeps both prerequisites, and each subtree stays together");
+assert.deepEqual(treeOf(["A", "B", "C", "D"], { B: ["A"], C: ["B"], D: ["A"] }).map((row) => row[3]), ["", "tee", "pipe elbow", "elbow"], "a guide continues past a child while a sibling is still to come");
+assert.deepEqual(treeOf(["A", "B", "C"], { B: ["A"], C: ["A"] }).map((row) => row[0]), ["A", "B", "C"], "siblings keep their saved order");
+assert.deepEqual(treeOf(["A", "C", "B"], { B: ["A"], C: ["A"] }).map((row) => row[0]), ["A", "C", "B"], "whichever order was saved");
+assert.deepEqual(treeOf(["A", "B", "P", "C", "U", "X"], { B: ["A"], C: ["A"], P: ["B"], U: ["C"], X: ["P", "U"] }).map((row) => row[0]), ["A", "B", "P", "C", "U", "X"], "a plan waits below all its prerequisites");
+assert.deepEqual(treeOf(["A", "B"], { A: ["B"], B: ["A"] }).map((row) => row[0]), ["A", "B"], "a cycle's plans stay visible");
+assert.deepEqual(namespaceOptions(entry), [["portal", "PORTAL"], [NO_NAMESPACE, "No namespace"]], "the breadcrumb offers each level the directory does");
 
 // Next up: each namespace's highest-ranked plan, never an unranked one, and never one held up by
 // Backlog, a blocker, or a missing or archived prerequisite.

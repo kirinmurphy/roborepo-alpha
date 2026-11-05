@@ -196,7 +196,7 @@ flowchart LR
   Backlog & Ready & Active & Review -->|/plan-archive| Archived
 ```
 
-![The Plans page: Backlog ordering within a namespace, with linked plans moving as one block](docs/images/plans.png)
+![The Plans page: Backlog prioritization within a namespace, with linked plans moving as one block](docs/images/plans.png)
 
 [Plan Suite walkthrough →](docs/user/guides/plan/lifecycle/plan-suite.md)\
 [Plans reference →](docs/user/reference/plans-portal.md)

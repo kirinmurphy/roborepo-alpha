@@ -1,5 +1,5 @@
 // Backlog's navigation and ordering controller: repositories, then namespaces, then one list shown as
-// Details or Ordering. It owns the Ordering draft and everything that protects it. Other lifecycle
+// Details or Prioritize. It owns the Prioritize draft and everything that protects it. Other lifecycle
 // tabs never reach this module.
 //
 // A draft is local until Save. Every way out of a dirty draft goes through confirmLeave: the mode
@@ -12,17 +12,20 @@ import {
   hrefWithRepositoryScope,
   setRepositoryScope,
 } from "/portal/shared/repository-scope.js";
+import "/portal/shared/option-dropdown.js";
 import * as api from "./api.js";
 import { planDependencies } from "./templates.js";
 import {
   NO_NAMESPACE,
   createDraft,
+  dependencyTree,
   dropBlock,
   hrefWithNamespace,
   isDraftDirty,
   moveBlock,
   namespaceDirectory,
   namespaceFromSearch,
+  namespaceOptions,
   nextUp,
   orderedIds,
   repositoryDirectory,
@@ -39,6 +42,8 @@ export function createBacklogController(deps) {
   let draftUrl = null;
   // The repo and namespace the mode and draft belong to; any other selection starts over in Details.
   let selectionKey = null;
+  // A newly selected namespace still owes its opening mode, which needs its view from the snapshot.
+  let openingModeOwed = false;
   let drag = null;
   let saveError = null;
   let pendingFocus = null;
@@ -89,6 +94,7 @@ export function createBacklogController(deps) {
       mode = "details";
       draft = null;
       saveError = null;
+      openingModeOwed = true;
     }
     const view = selectedNamespaceView();
     if (!view) {
@@ -99,6 +105,16 @@ export function createBacklogController(deps) {
       mode = "details";
       draft = null;
       return;
+    }
+    if (openingModeOwed) {
+      openingModeOwed = false;
+      // With nothing ordered yet, Details would be just the banner, so open where the work is. Only on
+      // arrival: the Details toggle still works from here.
+      if (!view.ordered.length && (view.needsPrioritization.length || view.unrankable.length)) {
+        mode = "ordering";
+        draft = null;
+        draftUrl = location.href;
+      }
     }
     if (mode !== "ordering") return;
     // The draft stands until its Save settles: what the snapshot says meanwhile is older than the Save.
@@ -112,7 +128,7 @@ export function createBacklogController(deps) {
   }
 
   // The nodes for the current Backlog level. `matching` is the plans the Filters popup leaves, in
-  // this lifecycle only; Ordering ignores it and always shows the whole namespace.
+  // this lifecycle only; Prioritize ignores it and always shows the whole namespace.
   function render(matching, cardActions) {
     if (isDirty() && draft.stale) return renderOrdering(draftSource.entry, draftSource.view, draftSource.plans);
     const matchingKeys = new Set(matching.map((record) => record.key));
@@ -127,12 +143,13 @@ export function createBacklogController(deps) {
   }
 
   function renderRepositories(matchingKeys) {
-    const rows = repositoryDirectory(deps.getSnapshot().backlog || [], matchingKeys);
+    const rows = repositoryDirectory(deps.getSnapshot().backlog || [], matchingKeys, deps.getSnapshot().plans);
     if (!rows.length) return [deps.emptyState()];
     return [breadcrumb([{ label: "All repos" }]), directoryList(rows.map((row) => directoryRow({
       icon: "folder",
       label: row.name,
       planCount: row.planCount,
+      unblockedCount: row.unblockedCount,
       unprioritizedCount: row.unprioritizedCount,
       href: row.urlKey ? hrefWithNamespace(hrefWithRepositoryScope(location.href, row.urlKey), null) : null,
       onSelect: () => setRepositoryScope(row.urlKey),
@@ -140,18 +157,18 @@ export function createBacklogController(deps) {
   }
 
   function renderNamespaces(entry, matchingKeys, cardActions) {
-    const rows = namespaceDirectory(entry, matchingKeys);
+    const rows = namespaceDirectory(entry, matchingKeys, deps.getSnapshot().plans);
     const notices = repositoryNotices(entry);
     if (!rows.length) return [...notices, deps.emptyState()];
     return [
       breadcrumb(repositoryCrumbs(entry)),
       ...notices,
       ...nextUpSection(entry, matchingKeys, cardActions),
-      sectionNode("Namespaces", directoryList(rows.map((row) => directoryRow(row.namespace === NO_NAMESPACE
+      sectionNode("View All Plans", directoryList(rows.map((row) => directoryRow(row.namespace === NO_NAMESPACE
         ? {
           icon: "warning",
           label: "No namespace",
-          planCount: row.planCount,
+          unblockedCount: row.unblockedCount,
           status: entry.config.state === "declared" ? "Repair needed" : "",
           href: hrefWithNamespace(location.href, NO_NAMESPACE),
           onSelect: () => selectNamespace(NO_NAMESPACE),
@@ -159,7 +176,7 @@ export function createBacklogController(deps) {
         : {
           icon: "plans",
           label: row.namespace.toUpperCase(),
-          planCount: row.planCount,
+          unblockedCount: row.unblockedCount,
           unprioritizedCount: row.unprioritizedCount,
           href: hrefWithNamespace(location.href, row.namespace),
           onSelect: () => selectNamespace(row.namespace),
@@ -173,6 +190,10 @@ export function createBacklogController(deps) {
     if (!records.length) return [];
     const section = sectionNode("Next up", deps.cardGrid(records, { ...cardActions, onSelectNamespace: selectNamespace }));
     section.setAttribute("aria-label", "Next up");
+    const title = section.querySelector(".backlog-section-title");
+    const header = tpl("tpl-backlog-next-up-header");
+    title.replaceWith(header);
+    header.prepend(title);
     return [section];
   }
 
@@ -186,7 +207,7 @@ export function createBacklogController(deps) {
   function renderNoNamespace(entry, matchingKeys, cardActions) {
     const plans = plansByKey();
     const records = entry.noNamespace.filter((key) => matchingKeys.has(key)).map((key) => plans.get(key));
-    const header = [breadcrumb([...repositoryCrumbs(entry, true), { label: "No namespace" }]), ...repositoryNotices(entry)];
+    const header = [breadcrumb([...repositoryCrumbs(entry, true), namespaceCrumb(entry, NO_NAMESPACE)]), ...repositoryNotices(entry)];
     if (!records.length) return [...header, deps.emptyState()];
     // A repo that never adopted the naming convention has nothing to repair, so its plans stay
     // ordinary cards with their usual actions. Only a declared vocabulary makes a filename wrong.
@@ -212,20 +233,29 @@ export function createBacklogController(deps) {
 
   function renderDetails(entry, view, matchingKeys, cardActions) {
     const plans = plansByKey();
-    const cards = (keys) => keys.filter((key) => matchingKeys.has(key)).map((key) => plans.get(key));
-    const pending = cards([...view.needsPrioritization.flatMap((block) => block.keys), ...view.unrankable]);
-    const ordered = cards(view.ordered.flatMap((block) => block.keys));
-    const sections = [];
-    if (pending.length) sections.push(sectionNode(`Needs prioritization (${pending.length})`, deps.cardGrid(pending, cardActions)));
-    if (ordered.length) sections.push(sectionNode("Ordered", deps.cardGrid(ordered, cardActions)));
-    return [namespaceHeader(entry, view), ...graphNotices(view), ...(sections.length ? sections : [deps.emptyState()])];
+    const pendingCount = [...view.needsPrioritization.flatMap((block) => block.keys), ...view.unrankable].filter((key) => matchingKeys.has(key)).length;
+    // The tree's order, so a card sits in the same place as its row in Prioritize.
+    const ordered = view.ordered
+      .flatMap((block) => dependencyTree(block.keys, plans).map((row) => row.key))
+      .filter((key) => matchingKeys.has(key))
+      .map((key) => plans.get(key));
+    const content = [];
+    if (pendingCount) content.push(prioritizeBanner(pendingCount));
+    if (ordered.length) content.push(deps.cardGrid(ordered, cardActions));
+    return [namespaceHeader(entry, view), ...graphNotices(view), ...(content.length ? content : [deps.emptyState()])];
+  }
+
+  function prioritizeBanner(count) {
+    const node = fill(tpl("tpl-backlog-prioritize-banner"), { text: `${count} new ${count === 1 ? "plan needs" : "plans need"} prioritization` });
+    node.querySelector("[data-slot=prioritize]").addEventListener("click", () => selectMode("ordering"));
+    return node;
   }
 
   function renderOrdering(entry, view, plans) {
     const locked = view.locked || !view.writable;
     const blockNode = (block, section, index, count) => {
       const node = document.createElement("backlog-block");
-      Object.assign(node, { block, section, index, count, plans, backlog: deps.getSnapshot().backlog, locked, held: Boolean(saving), onOpen: deps.onOpen });
+      Object.assign(node, { block, section, index, count, plans, locked, held: Boolean(saving), onOpen: deps.onOpen });
       return node;
     };
     const nodes = [namespaceHeader(entry, view), ...graphNotices(view)];
@@ -237,18 +267,17 @@ export function createBacklogController(deps) {
       list.className = "backlog-order-list";
       list.append(...draft.needs.map((block, index) => blockNode(block, "needs", index, draft.needs.length)));
       for (const key of view.unrankable) list.append(unrankableRow(plans.get(key)));
-      const pendingPlans = draft.needs.flatMap((block) => block.keys).length + view.unrankable.length;
-      nodes.push(sectionNode(`Needs prioritization (${pendingPlans})`, list));
+      nodes.push(sectionNode("Needs prioritization", list));
     }
     const orderedList = document.createElement("div");
     orderedList.className = "backlog-order-list";
     orderedList.dataset.dropTarget = "ordered";
     orderedList.setAttribute("role", "group");
-    orderedList.setAttribute("aria-label", "Ordered plans");
+    orderedList.setAttribute("aria-label", "Prioritized plans");
     orderedList.append(...draft.ordered.map((block, index) => blockNode(block, "ordered", index, draft.ordered.length)));
     if (!draft.ordered.length) orderedList.append(tpl("tpl-backlog-drop-empty"));
     wireDropTarget(orderedList);
-    nodes.push(sectionNode("Ordered", orderedList));
+    nodes.push(sectionNode("Prioritized", orderedList));
     if (isDirty()) nodes.push(actionBar());
     const container = document.createElement("div");
     container.className = "backlog-ordering";
@@ -265,6 +294,7 @@ export function createBacklogController(deps) {
     container.addEventListener("block-drag-end", () => {
       drag = null;
       for (const node of container.querySelectorAll(".drop-before, .drop-after")) node.classList.remove("drop-before", "drop-after");
+      orderedList.classList.remove("is-drop-over");
     });
     queueMicrotask(restoreFocus);
     return [container];
@@ -288,8 +318,7 @@ export function createBacklogController(deps) {
     const title = node.querySelector("[data-slot=title]");
     title.textContent = record.plan.title;
     title.addEventListener("click", () => deps.onOpen(record.key));
-    const { plans: allPlans, backlog } = deps.getSnapshot();
-    const waiting = planDependencies(record, allPlans, deps.onOpen, backlog);
+    const waiting = planDependencies(record, deps.getSnapshot().plans, deps.onOpen);
     if (waiting) node.append(waiting);
     return node;
   }
@@ -305,6 +334,7 @@ export function createBacklogController(deps) {
     };
     const clearMarker = () => {
       for (const node of list.querySelectorAll(".drop-before, .drop-after")) node.classList.remove("drop-before", "drop-after");
+      list.classList.remove("is-drop-over");
     };
     list.addEventListener("dragover", (event) => {
       if (!drag) return;
@@ -314,7 +344,9 @@ export function createBacklogController(deps) {
       const blocks = list.querySelectorAll(":scope > backlog-block");
       const index = insertionIndex(event);
       if (index < blocks.length) blocks[index].classList.add("drop-before");
-      else blocks[blocks.length - 1]?.classList.add("drop-after");
+      else if (blocks.length) blocks[blocks.length - 1].classList.add("drop-after");
+      // No row to mark a position against, so the empty list itself lights up.
+      else list.classList.add("is-drop-over");
     });
     list.addEventListener("dragleave", (event) => {
       if (!list.contains(event.relatedTarget)) clearMarker();
@@ -349,7 +381,7 @@ export function createBacklogController(deps) {
 
   function namespaceHeader(entry, view) {
     const node = tpl("tpl-backlog-namespace-header");
-    node.querySelector("[data-slot=breadcrumb]").replaceWith(breadcrumb([...repositoryCrumbs(entry, true), { label: view.namespace.toUpperCase() }]));
+    node.querySelector("[data-slot=breadcrumb]").replaceWith(breadcrumb([...repositoryCrumbs(entry, true), namespaceCrumb(entry, view.namespace)]));
     for (const button of node.querySelectorAll("[data-mode]")) {
       const selected = button.dataset.mode === mode;
       button.setAttribute("aria-pressed", String(selected));
@@ -387,6 +419,16 @@ export function createBacklogController(deps) {
       ? { label: entry.name, onSelect: () => confirmLeave(() => selectNamespace(null)), href: hrefWithNamespace(location.href, null) }
       : { label: entry.name };
     return [all, repository];
+  }
+
+  function namespaceCrumb(entry, namespace) {
+    return {
+      options: namespaceOptions(entry),
+      value: namespace,
+      onChoose: (next) => {
+        if (next !== namespace) confirmLeave(() => selectNamespace(next));
+      },
+    };
   }
 
   function actionBar() {
@@ -442,6 +484,9 @@ export function createBacklogController(deps) {
     deps.onRender();
     await deps.onSaved();
     saving = null;
+    // Prioritizing is finished, so the page returns to reading the list.
+    mode = "details";
+    draft = null;
     deps.onRender();
     return true;
   }
@@ -514,7 +559,7 @@ export function createBacklogController(deps) {
 function graphNotices(view) {
   return view.reasons.map((reason) => fill(tpl("tpl-backlog-finding"), {
     message: reason,
-    resolution: "Repair the dependency graph; ordering stays locked until then.",
+    resolution: "Repair the dependency graph; prioritizing stays locked until then.",
   }));
 }
 
@@ -534,11 +579,15 @@ function directoryList(rows) {
   return list;
 }
 
-function directoryRow({ icon, label, planCount, unprioritizedCount = 0, status = "", href, onSelect }) {
+function directoryRow({ icon, label, planCount, unblockedCount = 0, unprioritizedCount = 0, status = "", href, onSelect }) {
   const node = fill(tpl("tpl-backlog-directory-row"), {
     label,
-    count: `${planCount} ${planCount === 1 ? "plan" : "plans"}`,
-    unprioritized: status || (unprioritizedCount ? `${unprioritizedCount} unprioritized` : ""),
+    counts: [
+      status,
+      unblockedCount && `${unblockedCount} unblocked`,
+      unprioritizedCount && `${unprioritizedCount} unprioritized`,
+      planCount && `${planCount} total`,
+    ].filter(Boolean).join(" · "),
   });
   node.querySelector("portal-icon[data-slot=icon]").setAttribute("name", icon);
   if (href) {
@@ -559,7 +608,11 @@ function breadcrumb(crumbs) {
   const nav = tpl("tpl-backlog-breadcrumb");
   crumbs.forEach((crumb, index) => {
     if (index) nav.append(fill(tpl("tpl-backlog-breadcrumb-separator"), {}));
-    if (crumb.onSelect) {
+    if (crumb.options) {
+      const dropdown = document.createElement("option-dropdown");
+      Object.assign(dropdown, { options: crumb.options, value: crumb.value, onSelect: crumb.onChoose, name: "Namespace" });
+      nav.append(dropdown);
+    } else if (crumb.onSelect) {
       const link = fill(tpl("tpl-backlog-breadcrumb-link"), { label: crumb.label });
       link.href = crumb.href;
       link.addEventListener("click", (event) => {

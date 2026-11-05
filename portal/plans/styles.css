@@ -260,14 +260,14 @@ plan-card {
 }
 /* The title/description opens the document. Its hover highlight spans both document columns,
  * while the actions keep their independent interaction states. */
-/* A badge is its own link (the repo filter, or the namespace on a Next up card), so hovering it
- * drops the card's open-the-document highlight. */
-.plan-card:has(.doc-details:hover):not(:has(a:is(.repo-badge, .namespace-badge)[href]:hover)) :is(.doc-details, .status-document) {
+/* A badge is not part of opening the document, whether it links somewhere (the repo filter, or the
+ * namespace on a Next up card) or is inert, so hovering it drops the card's highlight. */
+.plan-card:has(.doc-details:hover):not(:has(a:is(.repo-badge, .namespace-badge):hover)) :is(.doc-details, .status-document) {
   background: color-mix(in srgb, var(--accent) 4%, var(--panel));
 }
 
 .plan-card
-  .doc-details:hover:not(:has(button:hover, a:is(.repo-badge, .namespace-badge)[href]:hover))
+  .doc-details:hover:not(:has(button:hover, a:is(.repo-badge, .namespace-badge):hover))
   .title-link {
   text-decoration: underline;
 }
@@ -526,12 +526,14 @@ a:is(.repo-badge, .namespace-badge)[aria-disabled="true"] {
   }
 }
 
-/* Backlog: repo and namespace directories, then one list as Details or Ordering. */
+/* Backlog: repo and namespace directories, then one list as Details or Prioritize. */
 .backlog-breadcrumb {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+  /* The height of the namespace level's mode toggle, so drilling down does not move the page. */
+  min-height: 36px;
   color: var(--dim);
 }
 /* Undo the bar-cell look `nav a` gives every link, its divider included. */
@@ -541,10 +543,21 @@ a:is(.repo-badge, .namespace-badge)[aria-disabled="true"] {
   border: none;
   background: none;
   color: var(--dim);
+  text-decoration: underline;
 }
-.backlog-breadcrumb a:hover { color: var(--ink); text-decoration: underline; }
+.backlog-breadcrumb a:hover { color: var(--ink); }
 .backlog-breadcrumb [aria-current="page"] { color: var(--ink); font-weight: 600; }
 .backlog-breadcrumb-separator { color: var(--line); }
+/* Reads as the breadcrumb's current page; only its caret says it opens. */
+.backlog-breadcrumb .dropdown-trigger {
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: inherit;
+  font-weight: 600;
+}
+.backlog-breadcrumb .dropdown-trigger:hover,
+.backlog-breadcrumb .dropdown-trigger:hover .dropdown-chevron { color: var(--accent); }
 .backlog-directory {
   display: grid;
   gap: 0;
@@ -555,7 +568,7 @@ a:is(.repo-badge, .namespace-badge)[aria-disabled="true"] {
 }
 .backlog-directory-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto minmax(7rem, auto) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
@@ -565,17 +578,19 @@ a:is(.repo-badge, .namespace-badge)[aria-disabled="true"] {
 .backlog-directory-row + .backlog-directory-row { border-top: 1px solid var(--line); }
 .backlog-directory-row[href]:hover { background: color-mix(in srgb, var(--accent) 4%, var(--panel)); }
 .backlog-directory-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.backlog-directory-label { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
-.backlog-directory-count,
-.backlog-directory-status { color: var(--dim); font-size: var(--text-sm); }
+.backlog-directory-label { font-size: var(--text-2xs); min-width: 0; overflow-wrap: anywhere; }
+.backlog-directory-counts { color: var(--dim); font-size: var(--text-2xs); text-align: right; }
 .backlog-directory-chevron { transform: rotate(-90deg); color: var(--dim); }
 @media (max-width: 560px) {
   /* The counts would squeeze the label until it broke mid-word, so they drop below it. */
-  .backlog-directory-row { grid-template-columns: auto auto minmax(0, 1fr) auto; row-gap: 2px; }
-  .backlog-directory-label { grid-column: 2 / 4; }
-  .backlog-directory-count { grid-column: 2; grid-row: 2; }
-  .backlog-directory-status { grid-column: 3; grid-row: 2; }
-  .backlog-directory-chevron { grid-column: 4; grid-row: 1 / span 2; }
+  .backlog-directory-row { grid-template-columns: auto minmax(0, 1fr) auto; row-gap: 2px; }
+  .backlog-directory-counts { grid-column: 2; grid-row: 2; text-align: left; }
+  .backlog-directory-chevron { grid-column: 3; grid-row: 1 / span 2; }
+  /* The move controls would squeeze the plan text, so they take a line of their own. */
+  .backlog-block-body { grid-template-columns: auto minmax(0, 1fr); }
+  .backlog-position { grid-row: 1 / span 2; }
+  .backlog-block-body > .backlog-controls,
+  .backlog-block-body.is-linked > .backlog-controls { grid-column: 2; justify-content: flex-end; padding: 0 8px 6px; }
   /* Two badges leave a one-line title almost no room, so a Next up card gives it a line of its own. */
   .card-header-row:has(.namespace-badge:not([hidden])) { flex-wrap: wrap; justify-content: flex-start; }
   .card-header-row:has(.namespace-badge:not([hidden])) :is(.repo-badge, .namespace-badge) { flex: 0 1 auto; max-width: 100%; }
@@ -601,10 +616,17 @@ a:is(.repo-badge, .namespace-badge)[aria-disabled="true"] {
   color: var(--dim);
   cursor: pointer;
 }
+.backlog-mode-toggle button:hover {
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+  color: var(--ink);
+}
 .backlog-mode-toggle button[aria-pressed="true"] {
   background: color-mix(in srgb, var(--accent) 14%, var(--panel));
   color: var(--ink);
   font-weight: 600;
+}
+.backlog-mode-toggle button[aria-pressed="true"]:hover {
+  background: color-mix(in srgb, var(--accent) 20%, var(--panel));
 }
 .backlog-section { display: grid; gap: 8px; }
 .backlog-section-title {
@@ -614,9 +636,26 @@ a:is(.repo-badge, .namespace-badge)[aria-disabled="true"] {
   letter-spacing: 0.08em;
   color: var(--dim);
 }
+.backlog-section-header { display: flex; align-items: center; gap: 8px; }
 .backlog-ordering { display: grid; gap: 18px; }
 .backlog-order-list { display: grid; gap: 8px; }
 .backlog-order-list[data-drop-target] { min-height: 3rem; }
+.backlog-order-list.is-drop-over .backlog-drop-empty {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+  color: var(--ink);
+}
+.backlog-prioritize-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
 .backlog-drop-empty {
   margin: 0;
   padding: 14px;
@@ -629,28 +668,46 @@ backlog-block { display: block; min-width: 0; }
 backlog-block.drop-before { box-shadow: 0 -3px 0 var(--accent); }
 backlog-block.drop-after { box-shadow: 0 3px 0 var(--accent); }
 .backlog-block-body {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
 }
-.backlog-block-group { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
-.backlog-group-head { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--dim); }
-.backlog-group-count { flex: 1; font-size: var(--text-sm); }
-.backlog-block-plans { display: grid; gap: 6px; min-width: 0; flex: 1; }
+/* Fixed at two digits, and kept when empty, so plan text starts at the same place in every row. */
 .backlog-position {
-  flex: none;
-  min-width: 1.5rem;
-  color: var(--dim);
+  display: flex;
+  align-self: stretch;
+  align-items: flex-start;
+  justify-content: center;
+  box-sizing: content-box;
+  width: 2ch;
+  /* The plan column's top padding, so the number sits on its first title's line. */
+  padding: 10px 8px 0;
+  border-right: 1px solid var(--line);
+  border-radius: 7px 0 0 7px;
+  background: color-mix(in srgb, var(--dim) 18%, var(--panel));
+  color: var(--ink);
   font-size: var(--text-sm);
-  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
-.backlog-position:empty { display: none; }
-.backlog-plan { display: grid; gap: 2px; min-width: 0; }
+.backlog-block-plans { display: grid; min-width: 0; padding: 6px 12px; }
+.backlog-tree-row { display: flex; align-items: stretch; min-width: 0; }
+/* No gap between rows, so each row's guide meets the next one. */
+.backlog-tree-guide { position: relative; flex: none; width: 20px; }
+.backlog-tree-guide::before,
+.backlog-tree-guide::after { position: absolute; background: var(--dim); opacity: 0.6; }
+.backlog-tree-guide[data-line="pipe"]::before,
+.backlog-tree-guide[data-line="tee"]::before,
+.backlog-tree-guide[data-line="elbow"]::before { content: ""; left: 8px; top: 0; bottom: 0; width: 1px; }
+.backlog-tree-guide[data-line="elbow"]::before { bottom: auto; height: 17px; }
+.backlog-tree-guide[data-line="tee"]::after,
+.backlog-tree-guide[data-line="elbow"]::after { content: ""; left: 8px; right: 4px; top: 17px; height: 1px; }
+.backlog-plan { display: grid; flex: 1; gap: 2px; min-width: 0; padding: 4px 0; }
+.backlog-block-body > .backlog-controls { padding-right: 8px; }
+.backlog-block-body.is-linked > .backlog-controls { align-self: start; padding-top: 8px; }
 .backlog-plan-title {
   padding: 0;
   border: none;
@@ -663,7 +720,38 @@ backlog-block.drop-after { box-shadow: 0 3px 0 var(--accent); }
   cursor: pointer;
 }
 .backlog-plan-title:hover { text-decoration: underline; }
-.backlog-plan-purpose,
+/* The title and description open the plan. The margin cancels the padding, so the highlight has room
+ * and the text starts where it would without it. */
+.backlog-plan-doc {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  margin: -4px;
+  padding: 4px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.backlog-plan-doc:hover { background: color-mix(in srgb, var(--accent) 4%, var(--panel)); }
+.backlog-plan-doc:hover .backlog-plan-title { text-decoration: underline; }
+/* Set on a card's or row's title and description while a sustained hover shows more. */
+.is-excerpt-expanded {
+  position: relative;
+  z-index: 3;
+  box-shadow: 0 1px 0 var(--line), 0 8px 18px rgb(0 0 0 / 22%);
+}
+.plan-card .doc-details.is-excerpt-expanded { margin-bottom: calc(-1 * var(--excerpt-growth)); }
+.backlog-plan-doc.is-excerpt-expanded { margin-bottom: calc(-4px - var(--excerpt-growth)); }
+/* No width, so the ellipsis cannot push the preview's last word onto another line than it has once
+ * the text reads on. It sits in the padding when that word ends a line. */
+.backlog-excerpt-ellipsis { display: inline-block; width: 0; }
+.backlog-excerpt-more { animation: backlog-excerpt-fade 140ms ease-out; }
+@keyframes backlog-excerpt-fade { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .backlog-excerpt-more { animation: none; }
+}
+.plan-card.is-backlog .description-line,
+.backlog-plan-purpose { font-size: var(--text-xs); }
+.backlog-plan-purpose { color: var(--dim); overflow-wrap: anywhere; }
 .backlog-plan-clue { color: var(--dim); font-size: var(--text-sm); overflow-wrap: anywhere; }
 .backlog-plan-purpose:empty,
 .backlog-plan-clue:empty { display: none; }

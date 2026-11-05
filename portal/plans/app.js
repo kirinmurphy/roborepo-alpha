@@ -92,7 +92,6 @@ const onboarding = {
 // toast and the plan-write skill modal, so the page reuses those rather than creating its own.
 const planDrawer = createPlanDrawer({
   getPlans: () => state.snapshot.plans,
-  getBacklog: () => state.snapshot.backlog,
   getPlanSuitePackage: () => state.snapshot.planSuitePackage,
   mergeFor: (key) => state.mergedPlans.get(key) || null,
   onEnablePackage: enablePackage,
@@ -374,7 +373,7 @@ function render() {
   onboardingEl.hidden = true;
   lifecycleBarEl.dataset.board = "true";
   renderWarnings(snapshot);
-  // This snapshot can end Ordering or mark its draft stale, so that settles first. Ordering shows the
+  // This snapshot can end Prioritize or mark its draft stale, so that settles first. Prioritize shows the
   // whole namespace: moving a row among hidden rows has no defined result.
   if (state.selectedLifecycle === "backlog") backlog.reconcile();
   const ordering = state.selectedLifecycle === "backlog" && backlog.isOrdering();
@@ -396,7 +395,6 @@ function render() {
   }
   const cardActions = {
     plans: snapshot.plans,
-    backlog: snapshot.backlog,
     onOpen: openPlan,
     onCopyPath: copyText,
     onCopyContext: (record) => copyText(repositoryContext(record)),

@@ -157,7 +157,7 @@ test.describe("Plans card status", () => {
   test("backlog dependencies replace Promote with linked prerequisites on cards and in the drawer", async ({ page }, testInfo) => {
     await page.goto(await backlogUrlFor(page, "Done status plan"));
     const card = page.locator("plan-card", { hasText: "Dependent status plan" });
-    await expect(card).toContainText("Waiting on 3");
+    await expect(card).toContainText("Waiting on:");
     await expect(card).toContainText("missing1 (not found)");
     await expect(card).not.toContainText("stcmp001");
     const menuBox = await card.getByRole("button", { name: "Plan actions", exact: true }).boundingBox();

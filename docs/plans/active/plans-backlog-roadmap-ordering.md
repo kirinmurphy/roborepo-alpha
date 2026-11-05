@@ -105,11 +105,11 @@ flowchart LR
 | Scope | Visible content |
 | --- | --- |
 | No repo selected | Only repositories with Backlog plans; plan count and unprioritized count |
-| Repo selected, no namespace | **Next up** when any plan qualifies, then approved namespaces with Backlog plans, each with counts; **No namespace** last if invalid plans exist |
+| Repo selected, no namespace | **Next up** when any plan qualifies, then **View All Plans**: approved namespaces with Backlog plans, each with unblocked and unprioritized counts; **No namespace** last if invalid plans exist |
 | Repo and namespace selected | **Needs prioritization** at top when nonempty, then ordered list; Details/Ordering toggle |
 | Repo and **No namespace** selected | Files with missing, malformed, or unapproved filename prefixes, with errors and a repair path; no priority editing until repaired |
 
-Counts measure **plans**, not collapsed groups. No empty-state congratulation such as “All backlog plans have been prioritized.” Use terse UI labels such as `Needs prioritization`, `Ordered`, `Details`, `Ordering`, and `Save`.
+Counts measure **plans**, not collapsed groups. No empty-state congratulation such as “All backlog plans have been prioritized.” Use terse UI labels such as `Needs prioritization`, `Prioritized`, `Details`, `Prioritize`, and `Save`. This plan's prose keeps the words Ordered and Ordering for those two labels; the UI, user docs, and code comments use the new ones, and code identifiers keep `ordering`.
 
 The repo level uses the existing shared scope: **All repos** shows the repository directory, and choosing a row calls `setRepositoryScope`. The namespace level adds one Backlog-only URL parameter, so reload and back/forward keep the position. A repo with no `plans-config.json` shows one **No namespace** row with a config-level notice pointing to `/plan-suite-init`, and no per-file findings, because such a repo never adopted the naming convention.
 
@@ -316,6 +316,7 @@ Do not introduce graph editors, separate roadmap pages, nested views, manual spl
 | “Plan returns to Backlog” row | Unreachable; no such transition exists |
 | “Automatic placement persists as part of that write operation” for dependency edits | Applies to `roborepo plans order place`; hand edits persist at the next write |
 | `AGENTS · ` title prefixes in the wireframes | The plain title; the breadcrumb names the namespace. The addendum's prose says this too; only its drawings keep the prefix |
+| `Ordered` and `Ordering` labels throughout | `Prioritized` and `Prioritize`. Only the labels changed |
 | `Requires: Q` in the wireframes | `Waiting on N`, listing each unfinished prerequisite with its namespace and status. The addendum's prose says this too; only its drawings keep `Requires:` |
 
 ## Implementation checklist
@@ -459,6 +460,8 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - **`plans validate` gains a `repositoryFindings` array.** A broken config or registry belongs to no one plan. It is added to the existing summary counts, so the exit code covers it.
 - **This plan's file moved to `plans-backlog-roadmap-ordering.md`.** Merging `main` removed the `plan` namespace in favor of `plans`, so the old name failed the blocking naming check. Alternative: put `plan` back in `plans-config.json`, which undoes that restructure. The id, branch, and `worktree:` value keep their old form, since plan copies match by id and the worktree folder already exists.
 - **`Move down` is the accessible name of both the Ordered and Needs prioritization controls,** as the plan specifies. The Needs one is internally `place-top`, so the two behaviors stay distinct in code.
+- **Description preview, its size, and the hover overlay apply to Backlog only (user request scoped by this plan's goal).** Other lifecycles keep their 190-character cut and larger text, because the plan's goals say their presentation does not change. Alternative: every lifecycle, which is one class to remove.
+- **Only namespace rows lost `N total`.** The request named namespace rows, so All repos rows keep it. A namespace whose plans are all ranked and blocked shows no count.
 
 ## Not tested
 

@@ -216,7 +216,7 @@ export function placePlan({ root, records, record, position = null }) {
 
 function assertRevision(context, namespace, revision) {
   if (revision === namespaceRevision(context, namespace)) return;
-  throw domainError("STALE_ORDER", "This namespace changed since you opened Ordering, so the order wasn't saved.", {
+  throw domainError("STALE_ORDER", "This namespace changed since you opened Prioritize, so the order wasn't saved.", {
     resolution: "Refresh to load the current order, then make your changes again.",
   });
 }

@@ -10,6 +10,7 @@ import { cardActionMenu, cardPrimaryAction } from "/portal/plans/templates.js";
 import { incompleteDependencies } from "/portal/plans/plan-actions.js";
 import { hrefWithNamespace } from "/portal/plans/backlog-model.js";
 import { currentRepositoryScope, hrefWithRepositoryScope, setRepositoryScope } from "/portal/shared/repository-scope.js";
+import { renderBacklogExcerpt } from "/portal/plans/elements/backlog-excerpt.js";
 
 // Card shows a shortened preview; full text (up to 500 chars) still lives in plan.excerpt
 // for copy-context/drawer use — only the on-card display is truncated further here.
@@ -60,8 +61,13 @@ class PlanCardElement extends HTMLElement {
     const docDetails = node.querySelector(".doc-details");
     docDetails.tabIndex = 0;
     docDetails.setAttribute("role", "button");
+    if (plan.lifecycle === "backlog") {
+      node.classList.add("is-backlog");
+      renderBacklogExcerpt(node.querySelector("[data-slot=description]"), docDetails, plan.excerpt || "No description");
+    }
+    // An inert repo badge counts too: it never opens the document, whatever its filter state.
     const isInteractiveTarget = (event) =>
-      event.target.closest("button, portal-menu-button, a[href], input, select");
+      event.target.closest("button, portal-menu-button, a[href], .repo-badge, input, select");
     docDetails.addEventListener("click", (event) => {
       if (isInteractiveTarget(event)) return;
       cardActions.onOpen(record.key);

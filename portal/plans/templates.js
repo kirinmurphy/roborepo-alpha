@@ -229,7 +229,7 @@ export function cardActionMenu(record, cardActions) {
 // prompt; nothing on the card moves a plan between lifecycle folders, since the suite commands own
 // those moves and commit them.
 export function cardPrimaryAction(record, cardActions) {
-  const dependencies = planDependencies(record, cardActions.plans || [], cardActions.onOpen, cardActions.backlog);
+  const dependencies = planDependencies(record, cardActions.plans || [], cardActions.onOpen);
   if (dependencies) return dependencies;
   const action = primaryPlanAction(record.plan, incompleteDependencies(record, cardActions.plans || []));
   if (!action) return null;
@@ -247,20 +247,25 @@ export function cardPrimaryAction(record, cardActions) {
 }
 
 // Resolve against all plans in the repository, including lifecycles hidden by the current tab.
-export function planDependencies(record, allPlans, onOpen, backlog = []) {
+// `drawnIds` are prerequisites the caller already shows some other way, such as in the same tree.
+export function planDependencies(record, allPlans, onOpen, drawnIds = new Set()) {
   if (record.plan.lifecycle !== "backlog") return null;
-  const prerequisites = openPrerequisites(record, allPlans, backlog);
-  if (!prerequisites.length) return null;
-  const heading = `Waiting on ${prerequisites.length}`;
-  const node = fill(tpl("tpl-plan-dependencies"), { heading });
+  const prerequisites = openPrerequisites(record, allPlans).filter((item) => !drawnIds.has(item.id));
+  return prerequisites.length ? dependencyList("Waiting on", prerequisites, onOpen, record.plan.namespace) : null;
+}
+
+// A labelled list of plans. A badge appears only for a plan outside `ownNamespace`.
+export function dependencyList(heading, items, onOpen, ownNamespace = null) {
+  const node = fill(tpl("tpl-plan-dependencies"), { heading: `${heading}:` });
   const list = node.querySelector("[data-slot=dependencies]");
   list.setAttribute("aria-label", heading);
-  list.append(...prerequisites.map((item) => {
-    const row = fill(tpl("tpl-plan-dependency"), { status: `(${item.status})` });
+  list.append(...items.map((item) => {
+    const row = fill(tpl("tpl-plan-dependency"), { status: item.status ? `(${item.status})` : "" });
     const label = row.querySelector("[data-slot=label]");
     const badge = row.querySelector("[data-slot=namespace]");
-    badge.textContent = item.namespace || "";
-    badge.hidden = !item.namespace;
+    const foreign = item.namespace && item.namespace !== ownNamespace;
+    badge.textContent = foreign ? item.namespace : "";
+    badge.hidden = !foreign;
     if (!item.key) {
       label.textContent = item.label;
       return row;

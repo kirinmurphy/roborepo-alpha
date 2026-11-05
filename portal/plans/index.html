@@ -59,7 +59,7 @@
         <button id="filters-update" type="button" data-btn="cta" disabled>Update</button>
       </div>
     </dialog>
-    <!-- Backlog Ordering: every way out of a dirty draft asks here first. -->
+    <!-- Backlog Prioritize: every way out of a dirty draft asks here first. -->
     <dialog id="ordering-guard" data-dialog-size="sm" aria-labelledby="ordering-guard-message">
       <div class="modal-body">
         <p id="ordering-guard-message" data-slot="message"></p>
@@ -168,9 +168,9 @@
         <div data-slot="status-mount"></div>
       </article>
     </template>
-    <!-- Backlog: directory levels, then one namespace list as Details or Ordering. -->
+    <!-- Backlog: directory levels, then one namespace list as Details or Prioritize. -->
     <template id="tpl-backlog-breadcrumb"><nav class="backlog-breadcrumb" aria-label="Backlog location"></nav></template>
-    <template id="tpl-backlog-breadcrumb-separator"><span class="backlog-breadcrumb-separator" aria-hidden="true">/</span></template>
+    <template id="tpl-backlog-breadcrumb-separator"><span class="backlog-breadcrumb-separator" aria-hidden="true">&gt;</span></template>
     <template id="tpl-backlog-breadcrumb-link"><a data-slot="label"></a></template>
     <template id="tpl-backlog-breadcrumb-current"><span aria-current="page" data-slot="label"></span></template>
     <template id="tpl-backlog-directory"><div class="backlog-directory" role="group" aria-label="Backlog directory"></div></template>
@@ -178,8 +178,7 @@
       <a class="backlog-directory-row">
         <portal-icon data-slot="icon" size="sm" aria-hidden="true"></portal-icon>
         <span class="backlog-directory-label" data-slot="label"></span>
-        <span class="backlog-directory-count" data-slot="count"></span>
-        <span class="backlog-directory-status" data-slot="unprioritized"></span>
+        <span class="backlog-directory-counts" data-slot="counts"></span>
         <portal-icon class="backlog-directory-chevron" name="chevron" size="sm" aria-hidden="true"></portal-icon>
       </a>
     </template>
@@ -212,12 +211,17 @@
         <span data-slot="breadcrumb"></span>
         <div class="backlog-mode-toggle" role="group" aria-label="Backlog view">
           <button type="button" data-mode="details">Details</button>
-          <button type="button" data-mode="ordering">Ordering</button>
+          <button type="button" data-mode="ordering">Prioritize</button>
         </div>
       </div>
     </template>
     <template id="tpl-backlog-section">
       <section class="backlog-section"><h3 class="backlog-section-title" data-slot="title"></h3></section>
+    </template>
+    <template id="tpl-backlog-next-up-header">
+      <div class="backlog-section-header">
+        <portal-info-icon data-tip="The next priority plan for each namespace: its highest-ranked plan that isn't held up by other work." aria-label="Next up: the next priority plan for each namespace, its highest-ranked plan that isn't held up by other work."></portal-info-icon>
+      </div>
     </template>
     <template id="tpl-backlog-row">
       <div class="backlog-block-body">
@@ -226,21 +230,20 @@
         <span data-slot="controls"></span>
       </div>
     </template>
-    <template id="tpl-backlog-group">
-      <div class="backlog-block-body backlog-block-group">
-        <div class="backlog-group-head">
-          <span class="backlog-position" data-slot="position"></span>
-          <portal-icon name="link" size="sm" aria-hidden="true"></portal-icon>
-          <span class="backlog-group-count" data-slot="count"></span>
-          <span data-slot="controls"></span>
-        </div>
-        <div class="backlog-block-plans"><span data-slot="plans"></span></div>
+    <template id="tpl-backlog-tree-row"><div class="backlog-tree-row"></div></template>
+    <template id="tpl-backlog-tree-guide"><span class="backlog-tree-guide" aria-hidden="true"></span></template>
+    <template id="tpl-backlog-prioritize-banner">
+      <div class="backlog-prioritize-banner">
+        <span data-slot="text"></span>
+        <button type="button" data-btn="cta" data-slot="prioritize">Prioritize Now</button>
       </div>
     </template>
     <template id="tpl-backlog-plan">
       <div class="backlog-plan">
-        <button type="button" class="backlog-plan-title" data-slot="title"></button>
-        <span class="backlog-plan-purpose" data-slot="purpose"></span>
+        <div class="backlog-plan-doc">
+          <button type="button" class="backlog-plan-title" data-slot="title"></button>
+          <span class="backlog-plan-purpose" data-slot="purpose"></span>
+        </div>
         <span class="backlog-plan-clue" data-slot="clue"></span>
       </div>
     </template>
@@ -268,6 +271,8 @@
     <script src="/portal/shared/close-button.js" type="module"></script>
     <script src="/portal/shared/copy-button.js" type="module"></script>
     <script src="/portal/shared/menu-button.js" type="module"></script>
+    <script src="/portal/shared/info-icon.js" type="module"></script>
+    <script src="/portal/shared/tooltip.js" type="module"></script>
     <script src="/portal/plans/elements/index.js" type="module"></script>
     <script src="/portal/shared/theme.js" type="module"></script>
     <script src="/portal/plans/app.js" type="module"></script>

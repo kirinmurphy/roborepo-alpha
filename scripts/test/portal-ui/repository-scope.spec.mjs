@@ -152,6 +152,16 @@ test("a plan's repo badge applies that repo's filter, and is inert once any repo
   const scopedBadge = page.locator("plan-card", { hasText: "Beta high plan" }).locator(".repo-badge");
   await expect(scopedBadge).toHaveAttribute("aria-disabled", "true");
   await expect(scopedBadge).not.toHaveAttribute("href", /.*/);
+  // Inert, it still takes the hover away from the card, shows no click affordance, and does nothing.
+  const scopedCard = page.locator("plan-card", { hasText: "Beta high plan" });
+  const scopedTitle = scopedCard.locator(".title-link");
+  await scopedCard.locator(".description-line").hover();
+  await expect(scopedTitle).toHaveCSS("text-decoration-line", "underline");
+  await scopedBadge.hover();
+  await expect(scopedTitle).toHaveCSS("text-decoration-line", "none");
+  await expect(scopedBadge).toHaveCSS("cursor", "default");
+  await scopedBadge.click();
+  await expect(page.locator("dialog#drawer[open]")).toHaveCount(0);
 
   await page.goBack();
   expect(scopeParam(page)).toBe(null);
