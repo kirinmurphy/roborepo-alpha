@@ -1,7 +1,7 @@
 ---
 id: usage-statusline-codex-hook-parity
 priority: low
-next_action: Revalidate current upstream command-backed footer availability; retain the request as a draft unless separately authorized to file it.
+next_action:
 blocked_by: ["upstream: Codex has no footer-command hook (or equivalent extension point)"]
 depends_on: []
 related: ["usage-statusline-enhancement-plan", "usage-statusline-claude-refresh"]
@@ -187,3 +187,7 @@ do not by themselves satisfy command-rendered pacing parity.
 - Reach command-rendered usage/pacing parity through a supported native extension point.
 - Keep native footer selections until a released, verified command contract exists.
 - Preserve the shared normalization/fixtures and avoid maintaining a patched native harness.
+
+## Archived
+
+2026-11-05: Abandoned: not worth implementing; low value relative to other work.
