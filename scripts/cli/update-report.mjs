@@ -402,6 +402,8 @@ function groupsChanged(groups, labels) {
 function notableLines(output) {
   return String(output || "").split(/\r?\n/).filter((line) => {
     return /^(warn|fail|error|needs action|conflict|abort):/i.test(line)
+      // A change to the clone's Git config happens once and is not otherwise in this report.
+      || /^git hooks: set /.test(line)
       // "maintenance" optional: this filters the output of whatever roborepo produced it, which
       // may be an older installed copy still printing the pre-namespace spelling.
       || /MERGE REVIEW REQUIRED|Run: roborepo (?:maintenance )?repair local-config/.test(line);
