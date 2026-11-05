@@ -27,6 +27,7 @@ import {
   updateSettings,
   validateSettings,
 } from "../../modules/developer-runtime/index.mjs";
+import { parseProcessStateRoots } from "../../modules/developer-runtime/process-state-root.mjs";
 import { collectIdleMainCheckouts, markDeveloperRuntimeRefreshFailed } from "../cli/developer-runtime.mjs";
 import { canonicalRepositoryId, rootId as computeRootId } from "../../modules/repositories/identity.mjs";
 
@@ -270,6 +271,53 @@ try {
     }),
   });
   assert.equal(secureDiscovery.instances[0].origin, "https://127.0.0.1:5173");
+
+  // A test portal and a real one started from the same checkout have the same page title and cwd.
+  // The test portal's lower PID lists it first, which used to give it the checkout's link and fold
+  // the real portal into its duplicate ports.
+  const realStateRoot = "/Users/dev/.roborepo";
+  const portalsListener = async (command, args) => {
+    if (args.includes("-iTCP")) return { stdout: ["p101", "cnode", "n127.0.0.1:60254", "p202", "cnode", "n127.0.0.1:4318"].join("\n") };
+    return { stdout: `n${appDir}\n` };
+  };
+  const portalsEnvironment = async (command, args) => {
+    assert.deepEqual([command, args[0]], ["ps", "ewww"]);
+    return { stdout: [
+      "  101 node main.mjs web --port 0 HOME=/private/tmp/scratch ROBOREPO_STATE_ROOT=/private/tmp/My Scratch/.roborepo SECRET_TOKEN=do-not-keep",
+      "  202 node main.mjs web --port 4318 HOME=/Users/dev SECRET_TOKEN=do-not-keep",
+    ].join("\n") };
+  };
+  const portalScan = (options) => discoverInstances({
+    platform: "darwin",
+    runCommand: portalsListener,
+    runStateRootCommand: portalsEnvironment,
+    ...noProviders,
+    probeHttp: async () => ({ http: true, status: 200, latencyMs: 1, protocol: "http", title: "roborepo :: repos" }),
+    ...options,
+  });
+
+  const unfiltered = await portalScan({});
+  assert.deepEqual(unfiltered.instances.map((instance) => instance.bind.port), [60254, 4318], "worktree cleanup's scan, with no state root, still counts a test server as running");
+
+  const filtered = await portalScan({ stateRoot: realStateRoot });
+  assert.deepEqual(filtered.instances.map((instance) => instance.bind.port), [4318], "a listener under another state root is not reported");
+  assert.equal(filtered.warnings.length, 1);
+  assert.match(filtered.warnings[0], /:60254 \(pid 101\)/, "and the user is told it exists");
+  assert.doesNotMatch(filtered.warnings[0], /My Scratch|do-not-keep/, "without echoing its environment");
+
+  const filteredSnapshot = buildDeveloperRuntimeSnapshot({ discovery: filtered, settings: loadSettings({ stateRoot: path.join(tempRoot, "portal-scan-state") }), now: new Date("2026-07-18T18:00:00.000Z") });
+  const [portalRepository] = filteredSnapshot.repositories;
+  assert.equal(portalRepository.roots[0].primaryEntrypoint.port, 4318, "the real portal keeps the checkout's link");
+  assert.deepEqual(portalRepository.duplicateGroups, [], "and is not reported as a duplicate of the test server");
+
+  const sameRoot = await portalScan({ stateRoot: "/tmp/My Scratch/.roborepo" });
+  assert.deepEqual(sameRoot.instances.map((instance) => instance.bind.port), [60254, 4318], "a hermetic portal still sees its own root's listeners, however /tmp is spelled, and processes with no variable");
+
+  assert.deepEqual([...parseProcessStateRoots("7 node ROBOREPO_STATE_ROOT=relative/root PATH=/bin\n8 node ROBOREPO_STATE_ROOT=/a/b\n").entries()], [[8, "/a/b"]], "a relative root cannot be compared, so it does not count");
+
+  const failedLookup = await portalScan({ stateRoot: realStateRoot, runStateRootCommand: async () => { throw new Error("ps timed out"); } });
+  assert.equal(failedLookup.instances.length, 2, "a failed lookup hides nothing");
+  assert.match(failedLookup.warnings[0], /state root lookup failed/, "and says the filter did not run");
 
   const unsupported = await discoverInstances({
     platform: "linux",

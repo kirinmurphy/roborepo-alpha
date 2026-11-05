@@ -48,7 +48,11 @@ const probe = `
     process: { pid: 999999, command: "node" },
     project: { identity: RUNNING, identityKind: "git", confidence: "high", projectRoot: runningRoot, evidence: "git-remote", git: null, repositoryId: RUNNING, rootId: rootId(runningRoot) },
   };
-  const discover = async () => ({ capabilities: { discovery: "supported" }, warnings: [], instances: [structuredClone(listener)], composeProjectGit: new Map() });
+  const scanStateRoots = new Set();
+  const discover = async (options) => {
+    scanStateRoots.add(options.stateRoot);
+    return { capabilities: { discovery: "supported" }, warnings: [], instances: [structuredClone(listener)], composeProjectGit: new Map() };
+  };
   const refresh = async () => {
     runtime.clearDeveloperRuntimeSnapshotCache();
     const snapshot = await runtime.refreshDeveloperRuntimeSnapshot({ discover, refreshGit: async () => {} });
@@ -63,7 +67,7 @@ const probe = `
   const devOn = await refresh();
   setDevFixturesEnabled({ stateRoot, enabled: false });
   const devStopped = await refresh();
-  process.stdout.write(JSON.stringify({ devOff, devOn, devStopped, ids: { REAL, RUNNING, IDLE } }));
+  process.stdout.write(JSON.stringify({ devOff, devOn, devStopped, ids: { REAL, RUNNING, IDLE }, scanStateRoots: [...scanStateRoots] }));
 `;
 
 try {
@@ -74,8 +78,9 @@ try {
     timeout: 60_000,
   });
   assert.equal(result.status, 0, result.stderr);
-  const { devOff, devOn, devStopped, ids } = JSON.parse(result.stdout);
+  const { devOff, devOn, devStopped, ids, scanStateRoots } = JSON.parse(result.stdout);
 
+  assert.deepEqual(scanStateRoots, [stateRoot], "the portal's scan names its own state root, which is what leaves test servers out");
   assert.deepEqual(devOff.repositories, [ids.REAL], "outside dev mode a running fixture stays off Runtime");
   assert.deepEqual(devOff.projects, [], "and its listener is not listed as a project");
   assert.deepEqual(devOn.repositories, [ids.REAL, ids.IDLE, ids.RUNNING].sort(), "dev mode shows the running fixture and the idle fixture checkout");
