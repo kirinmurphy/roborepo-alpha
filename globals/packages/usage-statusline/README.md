@@ -78,6 +78,10 @@ The desktop app has no status line to draw into, so the package installs a small
 Context 42%
 ```
 
+The figure is yellow up to 30%, orange up to 40%, and red above that. The close button at the right
+of the row hides it until context reaches the next color, or until it comes back after dropping to a
+lower color (a compaction or a cleared session).
+
 The row is desktop-only, because the terminal already has this figure in its status line. It reads
 the same free usage figures, refreshed after each tool call, each turn, and each compaction, and stays
 blank until a session's first response. Sessions started after the package is enabled pick it up.
