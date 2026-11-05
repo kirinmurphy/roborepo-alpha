@@ -117,6 +117,7 @@ export async function refreshDeveloperRuntimeSnapshot({
       const [discovery] = await Promise.all([
         !observing ? emptyDiscovery({ observing }) : discover({
           settings,
+          stateRoot,
           // Carrying the prior health records forward is what makes failure debouncing work: the
           // classifier is pure, so the consecutive-failure count has to travel with the snapshot.
           previousHealth: healthIndexFromSnapshot(previous),

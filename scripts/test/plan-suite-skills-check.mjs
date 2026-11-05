@@ -165,8 +165,9 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "The Validator only reports",
     "A finding is classed by consequence, not size",
     "which is recorded and never blocks",
-    "Never run the submit transition until a pass reports no `fix` findings",
-    "five-pass cap",
+    "Never run the submit transition until the loop has ended",
+    "without asking the user",
+    "eight-pass cap",
   ]);
   includesAll("validation-loop.md", readPackageFile("plan-suite/skills/plan-execute/references/validation-loop.md"), [
     "## The loop",
@@ -178,7 +179,9 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "| `escalate` |",
     "| `base` |",
     "Size never decides the class",
-    "Cap at five passes",
+    "Never ask the user whether to fix a `fix` finding",
+    "Cap at eight passes",
+    "the eighth pass's findings are recorded and fixed like any other pass's",
     "A silent pass is indistinguishable from a skipped one",
     "only `/plan-review` writes `### Approval`",
     ...CONVENTION_CHECK_PHRASES,
@@ -202,13 +205,14 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "it needs `/plan-review`",
   ]);
 
-  // Run mode: no check-ins, strict autonomy bar, queued questions batched at the end.
+  // Run mode: no check-ins, clear wins decided without asking, queued questions batched at the end.
   includesAll("plan-execute run mode", skill, [
     "Do not stop for milestone, phase, or slice check-ins",
     "Do not ask the user anything during implementation",
     "Never invoke the next command",
-    "Decide autonomously only when **all** of these hold",
-    "Reversibility alone is not enough",
+    "Decide autonomously when one option is clearly the best and no alternative has a compelling argument for it",
+    "two or more options each have a compelling argument",
+    "Reversibility alone does not settle it",
     "Always block, never decide",
     "## Decision Log",
     "## Open Questions",
@@ -293,6 +297,8 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "Commit the fix on its own, separate from the plan record",
     "fixed in review (<short commit>)",
     "run another Validator pass over the result",
+    "without asking the human",
+    "the eighth pass's findings are fixed like any other pass's",
   ]);
   includesAll("plan-review packet", review.slice(order[5], order[6]), [
     "each acceptance criterion with the code and test evidence",
