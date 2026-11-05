@@ -135,7 +135,7 @@ flat list of cards across all selected repos.
 | You have selected | You see |
 | --- | --- |
 | **All repos** | Repos with Backlog plans, each with its plan count and unprioritized count |
-| A repo | Its namespaces with Backlog plans, each with counts; **No namespace** last, when any plan lands there; then **Next up** |
+| A repo | **Next up**, then its namespaces with Backlog plans, each with counts; **No namespace** last, when any plan lands there |
 | A repo and namespace | **Needs prioritization** first when it has plans, then **Ordered**, as **Details** or **Ordering** |
 | A repo and **No namespace** | Each file's exact name, its findings, and **Copy Repair Prompt** |
 
@@ -144,20 +144,18 @@ Filters narrow the directory counts and the Details cards. Ordering always shows
 and hides Filters, because moving a row among hidden rows has no defined result.
 
 A plan's namespace is the longest approved `<namespace>-` prefix of its filename. It is derived on
-every read and never stored. Backlog shows it ahead of the title, as `PORTAL · Improve plan review`;
-the H1 is untouched. Approved means the keys of `docs/plans/plans-config.json` plus the universal
+every read and never stored. Backlog shows it as a badge beside the repo badge; the H1 is untouched. Approved means the keys of `docs/plans/plans-config.json` plus the universal
 namespaces. A repo with no config shows one **No namespace** row with its plans as ordinary cards and
 a notice pointing to `/plan-suite-init`, since it never adopted the convention. A malformed config is
 reported as an error and every plan shows under **No namespace** until it is fixed.
 
-**Next up** is read-only and shows at most one plan per namespace: the first in that namespace's
-order, ranked plans before unranked, with no blocker and with every unfinished prerequisite already in
-Ready, Active, or Review. Each row says `Nothing blocking` or `After <plan> (<lifecycle>)`, whether the
-plan is unprioritized, and `+N more` when other plans there also qualify. Namespaces stay in directory
-order, so it claims no order between them. Filters narrow it.
+**Next up** shows the same cards as Details, at most one per namespace: its highest-ranked plan with no
+blocker and with every unfinished prerequisite already in Ready, Active, or Review. An unranked plan never
+appears, so a repo with nothing ranked shows no Next up. Namespaces stay in directory order, so it claims no
+order between them. Filters narrow it, and a card's namespace badge opens that namespace.
 
 **Waiting on** lists a Backlog plan's unfinished prerequisites in Details, Ordering, and the drawer, each
-with its namespace and a link that opens it. A prerequisite in another namespace's Backlog shows its
+with its namespace badge and a link that opens it. A prerequisite in another namespace's Backlog shows its
 position there or `not prioritized`, and one outside Backlog shows its lifecycle. Prerequisites never
 affect another namespace's order.
 

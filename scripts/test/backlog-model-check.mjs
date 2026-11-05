@@ -4,7 +4,6 @@ import assert from "node:assert/strict";
 import {
   NO_NAMESPACE,
   createDraft,
-  displayTitle,
   dropBlock,
   hrefWithNamespace,
   isActionEnabled,
@@ -26,10 +25,6 @@ const view = {
   needsPrioritization: [block("N")],
   unrankable: [],
 };
-
-// Titles: the namespace label leads; the authored title is untouched.
-assert.equal(displayTitle({ namespace: "portal", title: "Improve review" }), "PORTAL · Improve review");
-assert.equal(displayTitle({ namespace: null, title: "Loose" }), "Loose");
 
 // URL level.
 assert.equal(namespaceFromSearch("?lifecycle=backlog&namespace=portal"), "portal");
@@ -110,17 +105,17 @@ const strategyView = {
 };
 const backlogEntries = [{ repositoryId: "r", namespaces: [strategyView] }];
 const statusOf = (dependencies) => openPrerequisites(planRecord("self", "agents", "backlog", dependencies), records, backlogEntries)
-  .map((item) => `${item.label}: ${item.status}`);
-assert.deepEqual(statusOf(["ranked"]), ["STRATEGY · ranked: Backlog, position 2"]);
-assert.deepEqual(statusOf(["unranked"]), ["STRATEGY · unranked: Backlog, not prioritized"]);
-assert.deepEqual(statusOf(["local"]), ["AGENTS · local: Backlog"]);
-assert.deepEqual(statusOf(["working"]), ["AGENTS · working: Active"]);
+  .map((item) => `${item.namespace ? `${item.namespace}/` : ""}${item.label}: ${item.status}`);
+assert.deepEqual(statusOf(["ranked"]), ["strategy/ranked: Backlog, position 2"]);
+assert.deepEqual(statusOf(["unranked"]), ["strategy/unranked: Backlog, not prioritized"]);
+assert.deepEqual(statusOf(["local"]), ["agents/local: Backlog"]);
+assert.deepEqual(statusOf(["working"]), ["agents/working: Active"]);
 assert.deepEqual(statusOf(["done"]), []);
-assert.deepEqual(statusOf(["retired"]), ["AGENTS · retired: Archived"]);
+assert.deepEqual(statusOf(["retired"]), ["agents/retired: Archived"]);
 assert.deepEqual(statusOf(["elsewhere"]), ["elsewhere: not found"], "another repo's plan with that id does not count");
 
-// Next up: one row per namespace, first by rank, never held up by Backlog, a blocker, or a missing or
-// archived prerequisite.
+// Next up: each namespace's highest-ranked plan, never an unranked one, and never one held up by
+// Backlog, a blocker, or a missing or archived prerequisite.
 const nextRecords = [
   planRecord("heldByBacklog", "agents", "backlog", ["free"]),
   planRecord("blocked", "agents", "backlog", [], ["upstream"]),
@@ -141,11 +136,8 @@ const nextEntry = {
   ],
 };
 const allKeys = new Set(nextRecords.map((record) => record.key));
-const rows = nextUp(nextEntry, nextRecords, allKeys);
-assert.deepEqual(rows.map((row) => [row.label, row.prioritized, row.moreCount, row.waitingOn.map((item) => item.id)]), [
-  ["AGENTS · afterWork", true, 1, ["working"]],
-  ["STRATEGY · unrankedFree", false, 0, []],
-]);
-assert.deepEqual(nextUp(nextEntry, nextRecords, new Set(["k-free"])).map((row) => row.label), ["AGENTS · free"], "filters narrow the candidates");
+assert.deepEqual(nextUp(nextEntry, nextRecords, allKeys).map((record) => record.plan.id), ["afterWork"]);
+assert.deepEqual(nextUp(nextEntry, nextRecords, new Set(["k-free"])).map((record) => record.plan.id), ["free"], "filters narrow the candidates");
+assert.deepEqual(nextUp(nextEntry, nextRecords, new Set(["k-unrankedFree"])), [], "an unranked plan is never next");
 
 console.log("backlog model: directory, URL level, draft moves, prerequisites, and Next up ok");

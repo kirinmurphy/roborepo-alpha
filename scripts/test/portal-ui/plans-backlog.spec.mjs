@@ -77,7 +77,7 @@ test.describe("Backlog directory and ordering", () => {
   }
   const orderedList = (page) => page.getByRole("group", { name: "Ordered plans" });
   // A row's own title, not the prerequisite links beside it, which name plans the same way.
-  const orderedTitles = (page) => orderedList(page).getByRole("button", { name: /^ALPHA · / }).and(page.locator(".backlog-plan-title"));
+  const orderedTitles = (page) => orderedList(page).locator(".backlog-plan-title");
   const directoryRows = (page) => page.getByRole("group", { name: "Backlog directory" }).getByRole("link");
   const blockFor = (page, title) => page.locator("backlog-block", { has: page.getByRole("button", { name: title, exact: true }) });
   const guardDialog = (page) => page.getByRole("dialog", { name: GUARD });
@@ -121,10 +121,10 @@ test.describe("Backlog directory and ordering", () => {
     await page.getByRole("button", { name: "Filters", exact: true }).click();
     await page.getByRole("searchbox").fill("Retrieval");
     await page.getByRole("button", { name: "Update", exact: true }).click();
-    await expect(page.locator(".title-link")).toHaveText(["ALPHA · Retrieval"]);
+    await expect(page.locator(".title-link")).toHaveText(["Retrieval"]);
     await page.getByRole("button", { name: "Ordering", exact: true }).click();
-    await expect(orderedTitles(page)).toHaveText(["ALPHA · Storage", "ALPHA · Retrieval", "ALPHA · Diagnostics"]);
-    await expect(page.getByRole("button", { name: "ALPHA · Traces", exact: true })).toBeVisible();
+    await expect(orderedTitles(page)).toHaveText(["Storage", "Retrieval", "Diagnostics"]);
+    await expect(page.getByRole("button", { name: "Traces", exact: true })).toBeVisible();
     await expect(page.locator("filter-chip")).toHaveCount(0);
   });
 
@@ -133,7 +133,7 @@ test.describe("Backlog directory and ordering", () => {
     const headings = page.getByRole("heading", { name: /^(Needs prioritization|Ordered)/ });
     await expect(headings.nth(0)).toHaveText("Needs prioritization (1)");
     await expect(headings.nth(1)).toHaveText("Ordered");
-    await expect(page.locator(".title-link")).toHaveText(["ALPHA · Traces", "ALPHA · Storage", "ALPHA · Retrieval", "ALPHA · Diagnostics"]);
+    await expect(page.locator(".title-link")).toHaveText(["Traces", "Storage", "Retrieval", "Diagnostics"]);
     await expect(page.locator("backlog-block")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Move up" })).toHaveCount(0);
     await expect(page.getByText("linked plans")).toHaveCount(0);
@@ -142,19 +142,19 @@ test.describe("Backlog directory and ordering", () => {
   test("Ordering draws linked plans as one block with exact controls and hides Filters", async ({ page }) => {
     await openOrdering(page);
     await expect(page.getByRole("button", { name: "Filters", exact: true })).toBeHidden();
-    const group = blockFor(page, "ALPHA · Storage");
+    const group = blockFor(page, "Storage");
     await expect(group).toContainText("2 linked plans");
-    await expect(group).toContainText("ALPHA · Retrieval");
+    await expect(group).toContainText("Retrieval");
     await expect(group).toContainText("Waiting on 1");
-    await expect(group).toContainText("ALPHA · Storage (Backlog)");
+    await expect(group.locator(".plan-dependency")).toHaveText(/alpha\s+Storage\s+\(Backlog\)/);
     const names = (locator) => locator.locator("[aria-label]").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("aria-label")));
     const ranked = ["Move to top", "Move up", "Move down", "Move to bottom", "Drag to move"];
     await expect.poll(() => names(group.getByRole("group", { name: "Move" }))).toEqual(ranked);
     await expect(group.getByRole("group", { name: "Move" })).toHaveCount(1);
-    await expect.poll(() => names(blockFor(page, "ALPHA · Diagnostics").getByRole("group", { name: "Move" }))).toEqual(ranked);
-    await expect.poll(() => names(blockFor(page, "ALPHA · Traces").getByRole("group", { name: "Move" }))).toEqual(["Move down", "Move to bottom", "Drag to move"]);
+    await expect.poll(() => names(blockFor(page, "Diagnostics").getByRole("group", { name: "Move" }))).toEqual(ranked);
+    await expect.poll(() => names(blockFor(page, "Traces").getByRole("group", { name: "Move" }))).toEqual(["Move down", "Move to bottom", "Drag to move"]);
     await expect(group.getByRole("button", { name: "Move up" })).toBeDisabled();
-    await expect(blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to bottom" })).toBeDisabled();
+    await expect(blockFor(page, "Diagnostics").getByRole("button", { name: "Move to bottom" })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
   });
 
@@ -162,94 +162,118 @@ test.describe("Backlog directory and ordering", () => {
     await openNamespace(page, "beta");
     const card = page.locator("plan-card");
     await expect(card).toContainText("Waiting on 1");
-    await expect(card).toContainText("ALPHA · Storage (Backlog, position 1)");
+    await expect(card.locator(".plan-dependency")).toHaveText(/alpha\s+Storage\s+\(Backlog, position 1\)/);
     await page.getByRole("button", { name: "Ordering", exact: true }).click();
-    const block = blockFor(page, "BETA · Beta one");
-    await expect(block).toContainText("ALPHA · Storage (Backlog, position 1)");
-    await block.getByRole("button", { name: "ALPHA · Storage", exact: true }).click();
+    const block = blockFor(page, "Beta one");
+    await expect(block.locator(".plan-dependency")).toHaveText(/alpha\s+Storage\s+\(Backlog, position 1\)/);
+    await block.getByRole("button", { name: "Storage", exact: true }).click();
     await expect(page.locator("#drawer-title")).toHaveText("Storage");
   });
 
-  test("Next up lists each namespace's first unblocked plan, read-only and following Filters", async ({ page }) => {
+  test("the namespace is a badge in both modes, not part of the title", async ({ page }) => {
+    await openNamespace(page);
+    const card = page.locator("plan-card", { hasText: "Diagnostics" });
+    await expect(card.locator(".title-link")).toHaveText("Diagnostics");
+    await expect(card.locator(".namespace-badge")).toHaveText("alpha");
+    await expect(card.locator(".namespace-badge")).not.toHaveAttribute("href");
+    await page.getByRole("button", { name: "Ordering", exact: true }).click();
+    await expect(blockFor(page, "Diagnostics").locator(".namespace-badge")).toHaveText("alpha");
+  });
+
+  test("Next up leads the repo view with full cards of each namespace's first ranked, unblocked plan", async ({ page }) => {
     await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
-    const nextUp = page.getByRole("group", { name: "Next up" });
-    await expect(page.getByRole("heading", { name: "Next up" })).toBeVisible();
-    await expect(nextUp.getByRole("button")).toHaveText(["ALPHA · Storage"]);
-    await expect(nextUp).toContainText("Nothing blocking · +2 more");
+    const nextUp = page.getByRole("region", { name: "Next up" });
+    const headings = page.getByRole("heading", { name: /^(Next up|Namespaces)$/ });
+    await expect(headings).toHaveText(["Next up", "Namespaces"]);
+    await expect(nextUp.locator("plan-card .title-link")).toHaveText(["Storage"]);
+    await expect(nextUp.locator("plan-card")).toContainText("Purpose of Storage.");
     await expect(nextUp.getByRole("button", { name: /^Move/ })).toHaveCount(0);
 
     await page.getByRole("button", { name: "Filters", exact: true }).click();
     await page.getByRole("searchbox").fill("Diagnostics");
     await page.getByRole("button", { name: "Update", exact: true }).click();
-    await expect(nextUp.getByRole("button")).toHaveText(["ALPHA · Diagnostics"]);
+    await expect(nextUp.locator("plan-card .title-link")).toHaveText(["Diagnostics"]);
     await page.getByRole("button", { name: "Filters", exact: true }).click();
-    await page.getByRole("searchbox").fill("");
+    await page.getByRole("searchbox").fill("Traces");
     await page.getByRole("button", { name: "Update", exact: true }).click();
-
-    await nextUp.getByRole("button", { name: "ALPHA · Storage", exact: true }).click();
-    await expect(page.locator("#drawer-title")).toHaveText("Storage");
+    await expect(directoryRows(page)).toHaveCount(1);
+    await expect(nextUp).toHaveCount(0);
   });
 
-  test("Next up names the work already underway that a plan comes after", async ({ page }) => {
-    write("docs/plans/backlog/beta-one.md", document({ id: "betaon05", title: "Beta one", deps: ["alphaw07"] }));
+  test("a Next up plan's namespace badge opens that namespace", async ({ page }) => {
+    await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
+    await page.getByRole("region", { name: "Next up" }).getByRole("link", { name: "alpha", exact: true }).click();
+    await expect(page).toHaveURL(/namespace=alpha/);
+    await expect(page.getByRole("button", { name: "Details", exact: true })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  test("Next up keeps a plan waiting only on work underway, and shows what it waits on", async ({ page }) => {
+    write("docs/plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage", deps: ["alphaw07"] }));
     try {
       await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
-      const nextUp = page.getByRole("group", { name: "Next up" });
-      await expect(nextUp.getByRole("button")).toHaveText(["ALPHA · Storage", "BETA · Beta one"]);
-      await expect(nextUp).toContainText("After ALPHA · Working plan (Active) · not prioritized");
+      const card = page.getByRole("region", { name: "Next up" }).locator("plan-card");
+      await expect(card.locator(".title-link")).toHaveText(["Storage"]);
+      await expect(card.locator(".plan-dependency")).toHaveText(/alpha\s+Working plan\s+\(Active\)/);
     } finally {
-      write("docs/plans/backlog/beta-one.md", document({ id: "betaon05", title: "Beta one", deps: ["alphaa01"] }));
+      write("docs/plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage" }));
     }
+  });
+
+  test("a repo with nothing ranked shows no Next up", async ({ page }) => {
+    setOrder([]);
+    await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
+    await expect(directoryRows(page).first()).toBeVisible();
+    await expect(page.getByRole("region", { name: "Next up" })).toHaveCount(0);
   });
 
   test("moves stay in the draft until Save, and focus follows the moved block", async ({ page }) => {
     await openOrdering(page);
     const before = fs.readFileSync(orderFile, "utf8");
-    await blockFor(page, "ALPHA · Traces").getByRole("button", { name: "Move down" }).click();
+    await blockFor(page, "Traces").getByRole("button", { name: "Move down" }).click();
     await expect(page.getByRole("heading", { name: /^Needs prioritization/ })).toHaveCount(0);
-    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move up" }).focus();
+    await blockFor(page, "Diagnostics").getByRole("button", { name: "Move up" }).focus();
     await page.keyboard.press("Enter");
-    await expect(blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move up" })).toBeFocused();
-    await expect(orderedTitles(page)).toHaveText(["ALPHA · Traces", "ALPHA · Diagnostics", "ALPHA · Storage", "ALPHA · Retrieval"]);
+    await expect(blockFor(page, "Diagnostics").getByRole("button", { name: "Move up" })).toBeFocused();
+    await expect(orderedTitles(page)).toHaveText(["Traces", "Diagnostics", "Storage", "Retrieval"]);
     expect(fs.readFileSync(orderFile, "utf8")).toBe(before);
 
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
     expect(savedOrder()).toEqual(["alphan04", "alphax03", "alphaa01", "alphab02"]);
     await page.getByRole("button", { name: "Details", exact: true }).click();
-    await expect(page.locator(".title-link")).toHaveText(["ALPHA · Traces", "ALPHA · Diagnostics", "ALPHA · Storage", "ALPHA · Retrieval"]);
+    await expect(page.locator(".title-link")).toHaveText(["Traces", "Diagnostics", "Storage", "Retrieval"]);
     await expect(page.getByRole("dialog", { name: GUARD })).toHaveCount(0);
   });
 
   test("Cancel discards after confirming", async ({ page }) => {
     await openOrdering(page);
     const before = fs.readFileSync(orderFile, "utf8");
-    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
     await page.getByRole("button", { name: "Keep editing" }).click();
-    await expect(orderedTitles(page).first()).toHaveText("ALPHA · Diagnostics");
+    await expect(orderedTitles(page).first()).toHaveText("Diagnostics");
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
     await page.getByRole("button", { name: "Discard changes" }).click();
-    await expect(orderedTitles(page).first()).toHaveText("ALPHA · Storage");
+    await expect(orderedTitles(page).first()).toHaveText("Storage");
     expect(fs.readFileSync(orderFile, "utf8")).toBe(before);
   });
 
   test("dragging a block moves it among the blocks, as a draft", async ({ page }) => {
     await openOrdering(page);
-    await blockFor(page, "ALPHA · Diagnostics").getByRole("img", { name: "Drag to move" }).dragTo(blockFor(page, "ALPHA · Storage"), { targetPosition: { x: 40, y: 2 } });
-    await expect(orderedTitles(page)).toHaveText(["ALPHA · Diagnostics", "ALPHA · Storage", "ALPHA · Retrieval"]);
-    await blockFor(page, "ALPHA · Traces").getByRole("img", { name: "Drag to move" }).dragTo(blockFor(page, "ALPHA · Diagnostics"), { targetPosition: { x: 40, y: 2 } });
-    await expect(orderedTitles(page).first()).toHaveText("ALPHA · Traces");
+    await blockFor(page, "Diagnostics").getByRole("img", { name: "Drag to move" }).dragTo(blockFor(page, "Storage"), { targetPosition: { x: 40, y: 2 } });
+    await expect(orderedTitles(page)).toHaveText(["Diagnostics", "Storage", "Retrieval"]);
+    await blockFor(page, "Traces").getByRole("img", { name: "Drag to move" }).dragTo(blockFor(page, "Diagnostics"), { targetPosition: { x: 40, y: 2 } });
+    await expect(orderedTitles(page).first()).toHaveText("Traces");
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeVisible();
     expect(savedOrder()).toEqual(["alphaa01", "alphab02", "alphax03"]);
   });
 
   test("leaving a dirty draft asks first: Cancel stays, Save and continue saves and goes", async ({ page }) => {
     await openOrdering(page);
-    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
     const makeDirtyAgain = async () => {
       await page.getByRole("button", { name: "Ordering", exact: true }).click();
-      await blockFor(page, "ALPHA · Traces").getByRole("button", { name: "Move to bottom" }).click();
+      await blockFor(page, "Traces").getByRole("button", { name: "Move to bottom" }).click();
     };
 
     // Details toggle.
@@ -295,12 +319,12 @@ test.describe("Backlog directory and ordering", () => {
     await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
     await directoryRows(page).first().click();
     await page.getByRole("button", { name: "Ordering", exact: true }).click();
-    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
     await page.goBack();
     await expect(guardDialog(page)).toBeVisible();
     await expect(page).toHaveURL(/namespace=alpha/);
     await guardDialog(page).getByRole("button", { name: "Cancel" }).click();
-    await expect(orderedTitles(page).first()).toHaveText("ALPHA · Diagnostics");
+    await expect(orderedTitles(page).first()).toHaveText("Diagnostics");
     await page.goBack();
     await guardDialog(page).getByRole("button", { name: "Save and continue" }).click();
     await expect(page).not.toHaveURL(/namespace=/);
@@ -309,7 +333,7 @@ test.describe("Backlog directory and ordering", () => {
 
   test("the repo selector holds its change while a draft is dirty", async ({ page }) => {
     await openOrdering(page);
-    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
     const selector = page.locator("#repository-scope option-dropdown");
     await selector.getByRole("button").first().click();
     await page.getByRole("option", { name: "All repos" }).click();
@@ -323,7 +347,7 @@ test.describe("Backlog directory and ordering", () => {
     const tab = await page.context().newPage();
     await enablePlanBoard(tab);
     await openOrdering(tab);
-    await blockFor(tab, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await blockFor(tab, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
     const prompted = new Promise((resolve) => {
       tab.once("dialog", async (dialog) => {
         resolve(dialog.type());
@@ -336,20 +360,20 @@ test.describe("Backlog directory and ordering", () => {
 
   test("a change elsewhere makes a dirty draft stale: nothing is overwritten", async ({ page }) => {
     await openOrdering(page);
-    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
     setOrder(["alphax03", "alphan04", "alphaa01", "alphab02"]);
     await page.getByRole("button", { name: "Refresh", exact: true }).click();
     await expect(page.getByRole("group", { name: "Unsaved order" }).getByRole("status")).toContainText("changed elsewhere");
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
-    await expect(orderedTitles(page).first()).toHaveText("ALPHA · Diagnostics");
+    await expect(orderedTitles(page).first()).toHaveText("Diagnostics");
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
     await page.getByRole("button", { name: "Discard changes" }).click();
-    await expect(orderedTitles(page)).toHaveText(["ALPHA · Diagnostics", "ALPHA · Traces", "ALPHA · Storage", "ALPHA · Retrieval"]);
+    await expect(orderedTitles(page)).toHaveText(["Diagnostics", "Traces", "Storage", "Retrieval"]);
   });
 
   test("a save the server refuses keeps the draft and says why", async ({ page }) => {
     await openOrdering(page);
-    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
     setOrder(["alphax03", "alphaa01", "alphab02"]);
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("group", { name: "Unsaved order" }).getByRole("status")).toContainText("changed elsewhere");
@@ -361,7 +385,7 @@ test.describe("Backlog directory and ordering", () => {
     const before = fs.readFileSync(orderFile, "utf8");
     await openOrdering(page);
     await expect(page.getByText("Moved to stay with linked plans: Retrieval.")).toBeVisible();
-    await expect(orderedTitles(page)).toHaveText(["ALPHA · Storage", "ALPHA · Retrieval", "ALPHA · Diagnostics"]);
+    await expect(orderedTitles(page)).toHaveText(["Storage", "Retrieval", "Diagnostics"]);
     expect(fs.readFileSync(orderFile, "utf8")).toBe(before);
     await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
   });
@@ -417,7 +441,7 @@ test.describe("Backlog directory and ordering", () => {
 
     test("a dirty draft cannot save across a conflicting config edit", async ({ page }) => {
       await openOrdering(page);
-      await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+      await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
       writeNamespaces({ alpha: "A", beta: "B", wrong: "W" });
       await page.getByRole("button", { name: "Refresh", exact: true }).click();
       await expect(page.getByRole("group", { name: "Unsaved order" }).getByRole("status")).toContainText("changed elsewhere");
@@ -426,12 +450,12 @@ test.describe("Backlog directory and ordering", () => {
 
     test("a dirty draft survives its namespace being removed, stale and still guarded", async ({ page }) => {
       await openOrdering(page);
-      await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+      await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
       const held = fs.readFileSync(orderFile, "utf8");
       writeNamespaces({ beta: "B" });
       await page.getByRole("button", { name: "Refresh", exact: true }).click();
       await expect(page.getByRole("group", { name: "Unsaved order" }).getByRole("status")).toContainText("changed elsewhere");
-      await expect(orderedTitles(page).first()).toHaveText("ALPHA · Diagnostics");
+      await expect(orderedTitles(page).first()).toHaveText("Diagnostics");
       await page.getByRole("button", { name: /^Active \(/ }).click();
       await expect(guardDialog(page)).toBeVisible();
       await expect(guardDialog(page).getByRole("button", { name: "Save and continue" })).toBeDisabled();
@@ -446,12 +470,12 @@ test.describe("Backlog directory and ordering", () => {
   test("the Save bar stays on screen while a long list scrolls", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 420 });
     await openOrdering(page);
-    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
     await page.evaluate(() => window.scrollTo(0, 0));
-    await expect(blockFor(page, "ALPHA · Retrieval")).not.toBeInViewport();
+    await expect(blockFor(page, "Retrieval")).not.toBeInViewport();
     const bar = page.getByRole("group", { name: "Unsaved order" });
     await expect(bar).toBeInViewport({ ratio: 1 });
-    await blockFor(page, "ALPHA · Retrieval").scrollIntoViewIfNeeded();
+    await blockFor(page, "Retrieval").scrollIntoViewIfNeeded();
     await expect(bar).toBeInViewport({ ratio: 1 });
   });
 
@@ -459,7 +483,7 @@ test.describe("Backlog directory and ordering", () => {
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
     await openOrdering(page);
-    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
     let saves = 0;
     page.on("request", (request) => { if (request.url().endsWith("/api/plans/order")) saves += 1; });
     await page.getByRole("button", { name: "Save", exact: true }).dblclick();
@@ -518,14 +542,14 @@ test.describe("Backlog directory and ordering", () => {
     page.on("pageerror", (error) => errors.push(error.message));
     await openOrdering(page);
     const release = await holdRefresh(page);
-    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByText("Unsaved changes")).toHaveCount(0);
     expect(savedOrder()).toEqual(["alphax03", "alphaa01", "alphab02"]);
-    await expect(orderedTitles(page)).toHaveText(["ALPHA · Diagnostics", "ALPHA · Storage", "ALPHA · Retrieval"]);
-    const moveDown = blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move down" });
+    await expect(orderedTitles(page)).toHaveText(["Diagnostics", "Storage", "Retrieval"]);
+    const moveDown = blockFor(page, "Diagnostics").getByRole("button", { name: "Move down" });
     await expect(moveDown).toBeDisabled();
-    await expect(blockFor(page, "ALPHA · Diagnostics").getByRole("img", { name: "Drag to move" })).toHaveAttribute("draggable", "false");
+    await expect(blockFor(page, "Diagnostics").getByRole("img", { name: "Drag to move" })).toHaveAttribute("draggable", "false");
     release();
     await expect(moveDown).toBeEnabled();
     await moveDown.click();
@@ -539,17 +563,17 @@ test.describe("Backlog directory and ordering", () => {
     page.on("pageerror", (error) => errors.push(error.message));
     await openOrdering(page);
     const release = await holdRefresh(page);
-    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
     await page.getByRole("button", { name: "Discard changes" }).click();
     await expect(page.getByText("Unsaved changes")).toHaveCount(0);
-    await expect(orderedTitles(page).first()).toHaveText("ALPHA · Storage");
-    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
-    await expect(orderedTitles(page).first()).toHaveText("ALPHA · Diagnostics");
+    await expect(orderedTitles(page).first()).toHaveText("Storage");
+    await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await expect(orderedTitles(page).first()).toHaveText("Diagnostics");
     release();
     await expect(page.getByRole("button", { name: "Refresh", exact: true })).toBeEnabled();
     await expect(page.getByText("Unsaved changes")).toBeVisible();
-    await expect(orderedTitles(page).first()).toHaveText("ALPHA · Diagnostics");
+    await expect(orderedTitles(page).first()).toHaveText("Diagnostics");
     expect(errors).toEqual([]);
   });
 
@@ -561,7 +585,7 @@ test.describe("Backlog directory and ordering", () => {
       await route.continue();
     });
     await openOrdering(page);
-    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
     await page.getByRole("button", { name: "Save", exact: true }).click();
     const refreshed = page.waitForResponse(/\/api\/plans\/refresh/);
     await page.getByRole("button", { name: "Refresh", exact: true }).click();
@@ -576,7 +600,7 @@ test.describe("Backlog directory and ordering", () => {
 
   test("a failed Save through the guard stays put and says why", async ({ page }) => {
     await openOrdering(page);
-    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
     setOrder(["alphax03", "alphaa01", "alphab02"]);
     await page.getByRole("button", { name: /^Active \(/ }).click();
     await guardDialog(page).getByRole("button", { name: "Save and continue" }).click();
@@ -588,7 +612,7 @@ test.describe("Backlog directory and ordering", () => {
 
   test("Save and continue from the repo selector saves, then changes the repo", async ({ page }) => {
     await openOrdering(page);
-    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
     await page.locator("#repository-scope option-dropdown").getByRole("button").first().click();
     await page.getByRole("option", { name: "All repos" }).click();
     await guardDialog(page).getByRole("button", { name: "Save and continue" }).click();
@@ -603,7 +627,7 @@ test.describe("Backlog directory and ordering", () => {
     await page.getByRole("searchbox").fill("Retrieval");
     await page.getByRole("button", { name: "Update", exact: true }).click();
     await page.getByRole("button", { name: "Ordering", exact: true }).click();
-    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
     await page.evaluate(() => { window.samePage = true; });
     await page.getByRole("navigation", { name: "Backlog location" }).getByRole("link", { name: repoName }).click();
     await guardDialog(page).getByRole("button", { name: "Save and continue" }).click();
@@ -620,7 +644,7 @@ test.describe("Backlog directory and ordering", () => {
       await route.continue();
     });
     await openOrdering(page);
-    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("button", { name: "Cancel", exact: true })).toBeDisabled();
     await page.getByRole("button", { name: /^Active \(/ }).click();
@@ -635,7 +659,7 @@ test.describe("Backlog directory and ordering", () => {
     const plansFolder = path.dirname(orderFile);
     const held = fs.readFileSync(orderFile, "utf8");
     await openOrdering(page);
-    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
     fs.chmodSync(plansFolder, 0o555);
     try {
       await page.getByRole("button", { name: "Save", exact: true }).click();
@@ -656,7 +680,7 @@ test.describe("Backlog directory and ordering", () => {
       await route.continue();
     });
     await openOrdering(page);
-    await blockFor(page, "ALPHA · Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
     await page.getByRole("button", { name: /^Active \(/ }).click();
     await guardDialog(page).getByRole("button", { name: "Save and continue" }).click();
     await expect(guardDialog(page).getByRole("button", { name: "Cancel" })).toBeDisabled();
@@ -669,8 +693,8 @@ test.describe("Backlog directory and ordering", () => {
   test("a cancelled drag does not leave its block armed", async ({ page }) => {
     await openOrdering(page);
     const before = await orderedTitles(page).allTextContents();
-    await blockFor(page, "ALPHA · Diagnostics").getByRole("img", { name: "Drag to move" }).dispatchEvent("dragstart", { dataTransfer: await page.evaluateHandle(() => new DataTransfer()) });
-    await blockFor(page, "ALPHA · Diagnostics").getByRole("img", { name: "Drag to move" }).dispatchEvent("dragend");
+    await blockFor(page, "Diagnostics").getByRole("img", { name: "Drag to move" }).dispatchEvent("dragstart", { dataTransfer: await page.evaluateHandle(() => new DataTransfer()) });
+    await blockFor(page, "Diagnostics").getByRole("img", { name: "Drag to move" }).dispatchEvent("dragend");
     await orderedList(page).dispatchEvent("drop", { dataTransfer: await page.evaluateHandle(() => new DataTransfer()), clientY: 0 });
     await expect(orderedTitles(page)).toHaveText(before);
     await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
@@ -714,15 +738,16 @@ test.describe("Backlog directory and ordering", () => {
       await page.getByRole("button", { name: "Ordering", exact: true }).click();
       await expect(page.getByText("alphax03 depends on missing9, which does not exist.")).toBeVisible();
       await expect(page.getByRole("button", { name: "Move to top" })).toHaveCount(0);
-      await expect(page.locator("backlog-block", { hasText: "ALPHA · Storage" })).toContainText("blocked");
+      await expect(page.locator("backlog-block", { hasText: "Storage" })).toContainText("blocked");
     } finally {
       write(file, document({ id: "alphax03", title: "Diagnostics" }));
     }
   });
 
-  test("other lifecycle tabs keep their flat cards, with no namespace prefix or ordering", async ({ page }) => {
+  test("other lifecycle tabs keep their flat cards, with no namespace badge or ordering", async ({ page }) => {
     await page.goto(`/plans?lifecycle=active&repo=${await repoKey(page, repoName)}`);
     await expect(page.locator(".title-link")).toHaveText(["Working plan"]);
+    await expect(page.locator(".namespace-badge:visible")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Ordering", exact: true })).toHaveCount(0);
     await expect(directoryRows(page)).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Filters", exact: true })).toBeVisible();

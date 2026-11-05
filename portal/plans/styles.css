@@ -262,12 +262,12 @@ plan-card {
  * while the actions keep their independent interaction states. */
 /* The repo badge is its own link (it applies the repo filter), so hovering it drops the card's
  * open-the-document highlight. */
-.plan-card:has(.doc-details:hover):not(:has(a.repo-badge[href]:hover)) :is(.doc-details, .status-document) {
+.plan-card:has(.doc-details:hover):not(:has(a:is(.repo-badge, .namespace-badge)[href]:hover)) :is(.doc-details, .status-document) {
   background: color-mix(in srgb, var(--accent) 4%, var(--panel));
 }
 
 .plan-card
-  .doc-details:hover:not(:has(button:hover, a.repo-badge[href]:hover))
+  .doc-details:hover:not(:has(button:hover, a:is(.repo-badge, .namespace-badge)[href]:hover))
   .title-link {
   text-decoration: underline;
 }
@@ -308,8 +308,8 @@ plan-card {
   gap: 10px;
   min-width: 0;
 }
-/* Names the plan's repo, so cards stay identifiable when no repo filter is applied. */
-.repo-badge {
+/* Name the plan's repo and, in Backlog, its namespace, so cards stay identifiable out of context. */
+:is(.repo-badge, .namespace-badge) {
   flex: 0 0 auto;
   max-width: 40%;
   padding: var(--pill-padding);
@@ -326,26 +326,26 @@ plan-card {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-:root[data-theme="light"] .repo-badge {
+:root[data-theme="light"] :is(.repo-badge, .namespace-badge) {
   --repo-badge-mix: 20%;
   --repo-badge-ink: var(--ink);
 }
 /* As a filter link: no link underline or link color, and a stronger fill on hover. */
-a.repo-badge,
-a.repo-badge:hover {
+a:is(.repo-badge, .namespace-badge),
+a:is(.repo-badge, .namespace-badge):hover {
   color: var(--repo-badge-ink);
   text-decoration: none;
 }
-a.repo-badge[href] {
+a:is(.repo-badge, .namespace-badge)[href] {
   cursor: pointer;
 }
-a.repo-badge[href]:is(:hover, :focus-visible) {
+a:is(.repo-badge, .namespace-badge)[href]:is(:hover, :focus-visible) {
   --repo-badge-mix: 42%;
 }
-:root[data-theme="light"] a.repo-badge[href]:is(:hover, :focus-visible) {
+:root[data-theme="light"] a:is(.repo-badge, .namespace-badge)[href]:is(:hover, :focus-visible) {
   --repo-badge-mix: 34%;
 }
-a.repo-badge[aria-disabled="true"] {
+a:is(.repo-badge, .namespace-badge)[aria-disabled="true"] {
   cursor: default;
 }
 .title-link {
@@ -591,8 +591,6 @@ a.repo-badge[aria-disabled="true"] {
 .backlog-directory-count,
 .backlog-directory-status { color: var(--dim); font-size: var(--text-sm); }
 .backlog-directory-chevron { transform: rotate(-90deg); color: var(--dim); }
-.backlog-next-up-row { display: grid; gap: 2px; min-width: 0; padding: 10px 12px; }
-.backlog-next-up-row + .backlog-next-up-row { border-top: 1px solid var(--line); }
 .backlog-namespace-header {
   display: flex;
   flex-wrap: wrap;
@@ -663,6 +661,7 @@ backlog-block.drop-after { box-shadow: 0 3px 0 var(--accent); }
 }
 .backlog-position:empty { display: none; }
 .backlog-plan { display: grid; gap: 2px; min-width: 0; }
+.backlog-plan-heading { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .backlog-plan-title {
   padding: 0;
   border: none;

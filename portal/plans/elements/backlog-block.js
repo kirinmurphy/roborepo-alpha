@@ -8,7 +8,7 @@
 // the page applies the move to its draft. Dragging starts here from the handle and is finished by the
 // list the block sits in, which knows where the other blocks are.
 import { portalTpl as tpl, portalFillSlots as fill } from "/portal/shared/api.js";
-import { ORDERED_ACTIONS, NEEDS_ACTIONS, displayTitle, isActionEnabled } from "/portal/plans/backlog-model.js";
+import { ORDERED_ACTIONS, NEEDS_ACTIONS, isActionEnabled } from "/portal/plans/backlog-model.js";
 import { planDependencies } from "/portal/plans/templates.js";
 
 const CONTROLS = {
@@ -42,7 +42,9 @@ class BacklogBlockElement extends HTMLElement {
       clue: plan.blockers.length ? `blocked by ${plan.blockers.length}` : "",
     });
     const title = node.querySelector("[data-slot=title]");
-    title.textContent = displayTitle(plan);
+    title.textContent = plan.title;
+    const badge = node.querySelector("[data-slot=namespace]");
+    badge.textContent = plan.namespace;
     title.addEventListener("click", () => this.onOpen(record.key));
     const waiting = planDependencies(record, [...this.plans.values()], this.onOpen, this.backlog);
     if (waiting) node.append(waiting);

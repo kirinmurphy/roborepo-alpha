@@ -160,6 +160,7 @@
         <div class="doc-details">
           <h3 class="card-header-row">
             <a class="repo-badge" data-slot="repo-badge"></a>
+            <a class="namespace-badge" data-slot="namespace-badge" hidden></a>
             <span class="title-link" data-slot="title-link"></span>
           </h3>
           <p class="description-line" data-slot="description"></p>
@@ -181,13 +182,6 @@
         <span class="backlog-directory-status" data-slot="unprioritized"></span>
         <portal-icon class="backlog-directory-chevron" name="chevron" size="sm" aria-hidden="true"></portal-icon>
       </a>
-    </template>
-    <template id="tpl-backlog-next-up"><div class="backlog-directory" role="group" aria-label="Next up"></div></template>
-    <template id="tpl-backlog-next-up-row">
-      <div class="backlog-next-up-row">
-        <button type="button" class="backlog-plan-title" data-slot="title"></button>
-        <span class="backlog-plan-clue" data-slot="status"></span>
-      </div>
     </template>
     <template id="tpl-backlog-no-config">
       <portal-notice class="portal-notice" variant="info" icon="info">
@@ -245,7 +239,10 @@
     </template>
     <template id="tpl-backlog-plan">
       <div class="backlog-plan">
-        <button type="button" class="backlog-plan-title" data-slot="title"></button>
+        <span class="backlog-plan-heading">
+          <span class="namespace-badge" data-slot="namespace"></span>
+          <button type="button" class="backlog-plan-title" data-slot="title"></button>
+        </span>
         <span class="backlog-plan-purpose" data-slot="purpose"></span>
         <span class="backlog-plan-clue" data-slot="clue"></span>
       </div>

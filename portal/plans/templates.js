@@ -255,6 +255,9 @@ export function planDependencies(record, allPlans, onOpen, backlog = []) {
   node.querySelector("[data-slot=dependencies]").append(...prerequisites.map((item) => {
     const row = fill(tpl("tpl-plan-dependency"), { status: `(${item.status})` });
     const label = row.querySelector("[data-slot=label]");
+    const badge = row.querySelector("[data-slot=namespace]");
+    badge.textContent = item.namespace || "";
+    badge.hidden = !item.namespace;
     if (!item.key) {
       label.textContent = item.label;
       return row;

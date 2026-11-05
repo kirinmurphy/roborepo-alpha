@@ -3,11 +3,12 @@
 // skillModal, onEnablePackage, onError) as properties right after creation, then append to the
 // DOM. The title/description trigger onOpen; the status component owns its separate controls. The
 // modified time, warnings, actions, and work status live in <plan-status>, shared with the detail
-// drawer and stacked below the card's title and description in every lifecycle. An optional
-// actions.titleFor(record) replaces the displayed title; Backlog uses it for the namespace label.
+// drawer and stacked below the card's title and description in every lifecycle. Backlog sets
+// actions.showNamespace to add a namespace badge, and actions.onSelectNamespace to make it a link.
 import { portalTpl as tpl, portalFillSlots as fill } from "/portal/shared/api.js";
 import { cardActionMenu, cardPrimaryAction } from "/portal/plans/templates.js";
 import { incompleteDependencies } from "/portal/plans/plan-actions.js";
+import { hrefWithNamespace } from "/portal/plans/backlog-model.js";
 import { currentRepositoryScope, hrefWithRepositoryScope, setRepositoryScope } from "/portal/shared/repository-scope.js";
 
 // Card shows a shortened preview; full text (up to 500 chars) still lives in plan.excerpt
@@ -53,7 +54,8 @@ class PlanCardElement extends HTMLElement {
     statusEl.record = record;
     node.querySelector("[data-slot=status-mount]").replaceWith(statusEl);
     renderRepoBadge(node.querySelector("[data-slot=repo-badge]"), record.repository);
-    node.querySelector("[data-slot=title-link]").textContent = cardActions.titleFor?.(record) ?? plan.title;
+    node.querySelector("[data-slot=title-link]").textContent = plan.title;
+    if (cardActions.showNamespace) renderNamespaceBadge(node.querySelector("[data-slot=namespace-badge]"), plan.namespace, cardActions.onSelectNamespace);
     // Only title/description open the document; metadata and actions are separate siblings.
     const docDetails = node.querySelector(".doc-details");
     docDetails.tabIndex = 0;
@@ -91,6 +93,23 @@ function renderRepoBadge(badge, repository) {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
     setRepositoryScope(repository.urlKey);
+  });
+}
+
+function renderNamespaceBadge(badge, namespace, onSelect) {
+  if (!namespace) return;
+  badge.hidden = false;
+  badge.textContent = namespace;
+  if (!onSelect) {
+    badge.setAttribute("aria-disabled", "true");
+    return;
+  }
+  badge.href = hrefWithNamespace(location.href, namespace);
+  badge.title = `Open ${namespace}`;
+  badge.addEventListener("click", (event) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    onSelect(namespace);
   });
 }
 

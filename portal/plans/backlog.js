@@ -16,7 +16,6 @@ import * as api from "./api.js";
 import {
   NO_NAMESPACE,
   createDraft,
-  displayTitle,
   dropBlock,
   hrefWithNamespace,
   isDraftDirty,
@@ -122,7 +121,7 @@ export function createBacklogController(deps) {
     if (!entry) return [deps.emptyState()];
     if (namespace === NO_NAMESPACE && entry.noNamespace.length) return renderNoNamespace(entry, matchingKeys, cardActions);
     const view = selectedNamespaceView();
-    if (!view) return renderNamespaces(entry, matchingKeys);
+    if (!view) return renderNamespaces(entry, matchingKeys, cardActions);
     return mode === "ordering" ? renderOrdering(entry, view, plansByKey()) : renderDetails(entry, view, matchingKeys, cardActions);
   }
 
@@ -139,14 +138,15 @@ export function createBacklogController(deps) {
     })))];
   }
 
-  function renderNamespaces(entry, matchingKeys) {
+  function renderNamespaces(entry, matchingKeys, cardActions) {
     const rows = namespaceDirectory(entry, matchingKeys);
     const notices = repositoryNotices(entry);
     if (!rows.length) return [...notices, deps.emptyState()];
     return [
       breadcrumb(repositoryCrumbs(entry)),
       ...notices,
-      directoryList(rows.map((row) => directoryRow(row.namespace === NO_NAMESPACE
+      ...nextUpSection(entry, matchingKeys, cardActions),
+      sectionNode("Namespaces", directoryList(rows.map((row) => directoryRow(row.namespace === NO_NAMESPACE
         ? {
           icon: "warning",
           label: "No namespace",
@@ -162,24 +162,17 @@ export function createBacklogController(deps) {
           unprioritizedCount: row.unprioritizedCount,
           href: hrefWithNamespace(location.href, row.namespace),
           onSelect: () => selectNamespace(row.namespace),
-        }))),
-      ...nextUpSection(entry, matchingKeys),
+        })))),
     ];
   }
 
-  // Read-only: each row opens the plan, and nothing here changes an order.
-  function nextUpSection(entry, matchingKeys) {
-    const rows = nextUp(entry, deps.getSnapshot().plans, matchingKeys);
-    if (!rows.length) return [];
-    const list = tpl("tpl-backlog-next-up");
-    list.append(...rows.map((row) => {
-      const node = fill(tpl("tpl-backlog-next-up-row"), { status: nextUpStatus(row) });
-      const title = node.querySelector("[data-slot=title]");
-      title.textContent = row.label;
-      title.addEventListener("click", () => deps.onOpen(row.key));
-      return node;
-    }));
-    return [sectionNode("Next up", list)];
+  // The cards Details shows, plus a badge that goes to the plan's namespace. Nothing here changes an order.
+  function nextUpSection(entry, matchingKeys, cardActions) {
+    const records = nextUp(entry, deps.getSnapshot().plans, matchingKeys);
+    if (!records.length) return [];
+    const section = sectionNode("Next up", deps.cardGrid(records, { ...cardActions, showNamespace: true, onSelectNamespace: selectNamespace }));
+    section.setAttribute("aria-label", "Next up");
+    return [section];
   }
 
   function repositoryNotices(entry) {
@@ -221,7 +214,7 @@ export function createBacklogController(deps) {
     const cards = (keys) => keys.filter((key) => matchingKeys.has(key)).map((key) => plans.get(key));
     const pending = cards([...view.needsPrioritization.flatMap((block) => block.keys), ...view.unrankable]);
     const ordered = cards(view.ordered.flatMap((block) => block.keys));
-    const titled = { ...cardActions, titleFor: (record) => displayTitle(record.plan) };
+    const titled = { ...cardActions, showNamespace: true };
     const sections = [];
     if (pending.length) sections.push(sectionNode(`Needs prioritization (${pending.length})`, deps.cardGrid(pending, titled)));
     if (ordered.length) sections.push(sectionNode("Ordered", deps.cardGrid(ordered, titled)));
@@ -293,7 +286,7 @@ export function createBacklogController(deps) {
     const reason = record.plan.id ? `Duplicate id: ${record.plan.id}` : "No id";
     const node = fill(tpl("tpl-backlog-repair"), { filename: reason });
     const title = node.querySelector("[data-slot=title]");
-    title.textContent = displayTitle(record.plan);
+    title.textContent = record.plan.title;
     title.addEventListener("click", () => deps.onOpen(record.key));
     return node;
   }
@@ -520,15 +513,6 @@ function graphNotices(view) {
     message: reason,
     resolution: "Repair the dependency graph; ordering stays locked until then.",
   }));
-}
-
-function nextUpStatus(row) {
-  const parts = [row.waitingOn.length
-    ? `After ${row.waitingOn.map((item) => `${item.label} (${item.status})`).join(", ")}`
-    : "Nothing blocking"];
-  if (!row.prioritized) parts.push("not prioritized");
-  if (row.moreCount) parts.push(`+${row.moreCount} more`);
-  return parts.join(" · ");
 }
 
 function isNamingFinding(item) {

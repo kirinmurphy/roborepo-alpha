@@ -19,11 +19,6 @@ export function hrefWithNamespace(href, namespace) {
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
-// The Backlog's title label: the derived namespace first, never written into the H1.
-export function displayTitle(plan) {
-  return plan.namespace ? `${plan.namespace.toUpperCase()} · ${plan.title}` : plan.title;
-}
-
 function pendingKeys(view) {
   return [...view.needsPrioritization.flatMap((block) => block.keys), ...view.unrankable];
 }
@@ -35,12 +30,13 @@ export function openPrerequisites(record, allRecords, backlog = []) {
   const entry = backlog.find((item) => item.repositoryId === record.repository.repositoryId);
   return (record.plan.dependencies || []).flatMap((id) => {
     const target = repositoryRecords.find((item) => item.plan.id === id);
-    if (!target) return [{ id, key: null, label: id, lifecycle: null, status: "not found" }];
+    if (!target) return [{ id, key: null, label: id, namespace: null, lifecycle: null, status: "not found" }];
     if (target.plan.lifecycle === "completed") return [];
     return [{
       id,
       key: target.key,
-      label: displayTitle(target.plan),
+      label: target.plan.title,
+      namespace: target.plan.namespace,
       lifecycle: target.plan.lifecycle,
       status: prerequisiteStatus(record, target, entry),
     }];
@@ -60,27 +56,18 @@ function prerequisiteStatus(record, target, entry) {
 
 const IN_FLIGHT = new Set(["ready", "active", "review"]);
 
-// The first plan in each namespace's order that nothing in Backlog holds up: either nothing is
-// unfinished, or everything unfinished is already underway. One row per namespace, because most of a
-// large repo's Backlog is often unblocked, and rank within a namespace is what makes one plan next.
-// Namespaces stay in directory order; this claims no order between them.
+// Each namespace's highest-ranked plan that nothing in Backlog holds up: either nothing is unfinished,
+// or everything unfinished is already underway. Only a ranked plan qualifies, since an unranked one has
+// no claim to be next. Namespaces stay in directory order; this claims no order between them.
 export function nextUp(entry, allRecords, matchingKeys) {
   const records = new Map(allRecords.map((record) => [record.key, record]));
   return entry.namespaces.flatMap((view) => {
-    const ranked = new Set(view.ordered.flatMap((block) => block.keys));
-    const candidates = [...ranked, ...pendingKeys(view)]
-      .filter((key) => matchingKeys.has(key))
-      .map((key) => ({ record: records.get(key), waitingOn: openPrerequisites(records.get(key), allRecords) }))
-      .filter(({ record, waitingOn }) => !record.plan.blockers.length && waitingOn.every((item) => IN_FLIGHT.has(item.lifecycle)));
-    if (!candidates.length) return [];
-    const [{ record, waitingOn }] = candidates;
-    return [{
-      key: record.key,
-      label: displayTitle(record.plan),
-      waitingOn,
-      prioritized: ranked.has(record.key),
-      moreCount: candidates.length - 1,
-    }];
+    const first = view.ordered.flatMap((block) => block.keys).find((key) => {
+      if (!matchingKeys.has(key)) return false;
+      const record = records.get(key);
+      return !record.plan.blockers.length && openPrerequisites(record, allRecords).every((item) => IN_FLIGHT.has(item.lifecycle));
+    });
+    return first ? [records.get(first)] : [];
   });
 }
 
