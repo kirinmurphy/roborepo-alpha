@@ -148,14 +148,13 @@ export function nextUp(entry, allRecords, matchingKeys) {
   });
 }
 
-// The plans outside `block` still waiting on one of its plans, which archiving it would leave stranded.
-export function dependentsOutside(block, allRecords) {
-  const ids = new Set(block.ids);
-  const repository = allRecords.find((record) => record.key === block.keys[0])?.repository.id;
-  return allRecords.filter((record) => record.repository.id === repository
-    && !ids.has(record.plan.id)
-    && !["completed", "archived"].includes(record.plan.lifecycle)
-    && (record.plan.dependencies || []).some((id) => ids.has(id)));
+// The unfinished plans in this repo that name `record` as a prerequisite, which archiving it releases.
+export function dependentsOf(record, allRecords) {
+  const { id } = record.plan;
+  return allRecords.filter((other) => other.repository.id === record.repository.id
+    && other.key !== record.key
+    && !["completed", "archived"].includes(other.plan.lifecycle)
+    && [...(other.plan.dependencies || []), ...(other.plan.blockers || [])].includes(id));
 }
 
 // Repositories with Backlog plans among `matchingKeys`, the plans the Filters popup leaves.

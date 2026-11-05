@@ -641,11 +641,15 @@ main {
   display: none;
 }
 .defaults-menu summary::after {
-  content: " ▾";
+  content: "▾";
   color: var(--dim);
-  /* Matches the shared .dropdown-chevron. */
+  /* Matches the shared .dropdown-chevron. Translate needs a box, which plain inline content lacks, and
+   * a box drops a leading space, so the gap is a margin. */
+  display: inline-block;
+  margin-left: 0.25em;
   font-size: 1.5em;
   line-height: 1;
+  translate: 0 -2px;
 }
 .defaults-menu[open] summary {
   border-color: var(--accent);

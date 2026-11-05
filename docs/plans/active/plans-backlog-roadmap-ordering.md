@@ -133,11 +133,11 @@ Do not change other lifecycle tabs/views, even if they currently show plans acro
 
 - Show **Needs prioritization** **before** the ranked list, only when nonempty, with a count.
 - New independent plans default to unprioritized; do not append them to the end of the registry.
-- In Ordering mode, each unprioritized row or eligible dependency group has exactly four right-side controls, in this order:
+- In Ordering mode, each unprioritized row or eligible dependency group has exactly three right-side controls, in this order:
   1. **Move down** — insert at the *top* of Ordered.
   2. **Move to bottom** — insert at the bottom of Ordered.
-  3. **Archive** — retire the row or group, after a reason and a final yes. It commits at once, so it is disabled during a dirty draft.
-  4. **Drag handle** — drag to any valid position in Ordered.
+  3. **Drag handle** — drag to any valid position in Ordered.
+- Each plan in Needs prioritization, including each member of a group, has its own **Archive** icon beside its modified time. It retires that plan alone, after a reason and a final yes. It commits at once, so it is disabled during a dirty draft. Hovering or clicking it neither opens the plan nor grows its description.
 - Do not use a position dropdown, numeric field, or additional placement controls.
 - Placement updates the **draft** immediately (the item leaves Needs prioritization and appears in Ordered), but does not persist until **Save**.
 - Invalid drops are disabled or rejected with a concise reason. Moving a group moves all its remaining Backlog plans together.
@@ -371,6 +371,11 @@ Added after reviewing Backlog on real repos. The behavior is built; the open tas
 - [x] Replace directory counts with ready, unprioritized, and total.
 - [x] Archive unprioritized plans from Prioritize, asking for a reason and then a final yes.
 - [x] Use the standard notice for the no-namespaces banner, with its explanation and default namespaces inside it.
+- [x] Move Archive from the block's controls to each unprioritized plan's heading, so one plan of a group can be retired alone, without opening the plan or its longer description.
+- [x] Clear an archived plan from unfinished plans' `depends_on` and `blocked_by` in the archive transition, so the portal and `/plan-archive` both get it.
+- [x] Give every textarea one shared style with padding, put the archive dialog's actions in one row at the right, and raise the archive icon to line up with its row.
+- [x] Set every breadcrumb part to one size, brighten and space its separators, and underline a dropdown crumb on hover instead of turning it blue.
+- [x] Raise the dropdown caret 2px everywhere, and center the breadcrumb's letters with Details and Prioritize without moving the trail between levels.
 
 ## Validation
 
@@ -393,8 +398,9 @@ Run the checks for the tier as each task lands, then let CI run the full gate. E
 | Unprioritized | Section appears first only when needed; moves into a draft Ordered list |
 | Ranked controls | Right side: top, up, down, bottom, return, handle; invalid actions disabled |
 | Return to unprioritized | The control or the drop zone sends a whole block to the top of Needs prioritization; Save removes it from the file; an order that drops a plan without naming it is refused |
-| Unranked controls | Right side: down-to-top, bottom, archive, handle; no numeric/select placement |
-| Archive | Asks for a reason, then a final yes; commits only the plan's paths on the base branch; disabled during a dirty draft; a linked block goes whole; the route refuses a ranked plan |
+| Unranked controls | Right side: down-to-top, bottom, handle; no numeric/select placement |
+| Archive | Per plan, beside its modified time; asks for a reason, then a final yes; commits the plan's paths and its cleared dependents on the base branch; disabled during a dirty draft; a group's other plans stay; the route refuses a ranked plan |
+| Archive clears dependencies | Through the portal or `roborepo plans archive`, the plan leaves unfinished plans' `depends_on` and `blocked_by`; a dirty dependent refuses the move; a worktree-bound dependent is left and reported |
 | Two modes | Same flattened plan order; Details is always flat/un-nested; Ordering alone displays derived dependency group containers and movement controls |
 | Explicit Save | Multiple moves persist in one atomic write only after Save succeeds |
 | Cancel | Discards uncommitted moves at once and restores persisted order |
@@ -490,7 +496,8 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - **Directory rows show `N ready`, `N unprioritized`, and `N total` (user decision).** Ready means prioritized and unblocked, and total gives the namespace's or repo's full scope. A zero ready or unprioritized count still drops out. The word overlaps the Ready lifecycle tab; the user chose it knowing the tab's name is a separate question to revisit if it confuses.
 - **The portal can archive unprioritized plans directly (user decision).** This is its first lifecycle change and its first commit, which narrows "the portal never writes a plan file". It calls the same `transitionPlan` as the command, so the base-branch and uncommitted-edit refusals still apply, and the route refuses a ranked plan. The dialog requires a reason because the archive record exists to say why, and the skill forbids inventing one. Alternative: a fixed reason, which would leave the record empty.
 - **The final Archive button waits half a second before it can be clicked.** It can land under the cursor after Continue, so a double-click would otherwise answer both questions.
-- **A linked block archives whole, and the control waits for a clean draft.** Archiving part of a chain would strand the rest on an archived prerequisite, and any archive changes the namespace's revision, which would make an unsaved draft stale.
+- **Each plan archives alone, and the control waits for a clean draft (user decision).** Often only one plan of a group should go, so the block-wide control moved to each plan. Any archive changes the namespace's revision, which would make an unsaved draft stale.
+- **Archiving clears dependents' references, in the transition (user decision).** So the portal and `/plan-archive` behave alike, and nothing keeps waiting on work that will never happen. `depends_on` and `blocked_by` are cleared; `related` stays, because an archived plan still resolves and is often the point of the link. The archived plan keeps its own lists as history. A chain is cut, not rewired, because a transitive link would invent a dependency no one wrote. A dirty dependent refuses the move, since committing the file would commit someone else's edit. A worktree-bound dependent is left and reported, because editing its base copy would read as a conflicting copy later.
 - **The banner says default namespaces apply "once set up".** `approvedNamespaces` returns nothing until a repo declares its own, so saying every repo already has them would be false for the repo showing the banner.
 - **Pinned namespaces lead the repo screen and Next up, stored in `plans-order.json` (user decision).** Pins are listed first pinned first, so re-pinning is how to reorder them. Alternative: alphabetical among pins, which could not express that one focus comes before another. Details shows one namespace at a time, so a pin has nothing to reorder there.
 - **A stale pin is pruned at the next write, not when the config changes (user asked for pruning; timing follows the read-purity rule).** It stops applying as soon as the namespace leaves the config. A pin on an approved namespace with nothing in Backlog stays.

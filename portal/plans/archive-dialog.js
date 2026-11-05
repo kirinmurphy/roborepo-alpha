@@ -1,4 +1,4 @@
-// Archiving unprioritized plans from Prioritize asks twice: first for the reason the archived plan
+// Archiving an unprioritized plan from Prioritize asks twice: first for the reason the archived plan
 // records, then for a final yes that says what will happen. A refusal keeps the dialog open with why.
 const FINAL_ANSWER_DELAY_MS = 500;
 import { portalWireBackdropClose } from "/portal/shared/api.js";
@@ -15,19 +15,20 @@ export function createArchiveDialog() {
   let answerTimer;
 
   const renderStep = () => {
-    const { titles, dependents } = target;
-    const naming = titles.length === 1 ? `"${titles[0]}"` : `these ${titles.length} linked plans`;
+    const { title, released, kept } = target;
+    const naming = `"${title}"`;
     const finalStep = step === "final";
     slot("title").textContent = finalStep ? "Are you sure?" : `Archive ${naming}?`;
-    slot("plans").hidden = titles.length === 1;
-    slot("plans").replaceChildren(...titles.map((title) => Object.assign(document.createElement("li"), { textContent: title })));
     slot("reason-field").hidden = finalStep;
     slot("consequence").hidden = !finalStep;
     slot("consequence").textContent = `This moves ${naming} to Archived and commits the move to the repo's base branch.`;
-    slot("dependents").hidden = !finalStep || !dependents.length;
-    slot("dependents").textContent = `Still waiting on ${titles.length === 1 ? "it" : "them"}: ${dependents.join(", ")}.`;
+    slot("dependents").hidden = !finalStep || !(released.length || kept.length);
+    slot("dependents").textContent = [
+      released.length ? `No longer depending on it: ${released.join(", ")}.` : "",
+      kept.length ? `Still naming it, because a worktree owns the copy: ${kept.join(", ")}.` : "",
+    ].filter(Boolean).join(" ");
     confirm.dataset.btn = finalStep ? "danger" : "cta";
-    confirm.textContent = finalStep ? (titles.length === 1 ? "Archive Plan" : `Archive ${titles.length} Plans`) : "Continue";
+    confirm.textContent = finalStep ? "Archive Plan" : "Continue";
     confirm.disabled = !finalStep && !reason.value.trim();
   };
 

@@ -6,7 +6,7 @@ import {
   NO_NAMESPACE,
   createDraft,
   dependencyTree,
-  dependentsOutside,
+  dependentsOf,
   dropBlock,
   repositoryOptions,
   returnBlock,
@@ -98,8 +98,8 @@ assert.equal(isActionEnabled("ordered", "return", 0, 1), true, "a lone last bloc
 assert.equal(isActionEnabled("ordered", "return", 1, 2), true);
 assert.deepEqual(unprioritizedIds(moveBlock(draft, "needs", 0, "place-top")), [], "a newly placed plan is not returning");
 
-// What archiving a block would strand: unfinished plans outside it, in this repo, that still need it.
-const dependentRecord = (id, lifecycle, dependencies, repository = "r1") => ({ key: `k-${id}`, repository: { id: repository }, plan: { id, lifecycle, title: id, dependencies } });
+// What archiving a plan releases: unfinished plans in this repo that name it, as a dependency or a blocker.
+const dependentRecord = (id, lifecycle, dependencies, repository = "r1", blockers = []) => ({ key: `k-${id}`, repository: { id: repository }, plan: { id, lifecycle, title: id, dependencies, blockers } });
 const dependentPool = [
   dependentRecord("A", "backlog", []),
   dependentRecord("B", "backlog", ["A"]),
@@ -107,8 +107,9 @@ const dependentPool = [
   dependentRecord("done", "completed", ["A"]),
   dependentRecord("gone", "archived", ["A"]),
   dependentRecord("elsewhere", "backlog", ["A"], "r2"),
+  dependentRecord("held", "ready", [], "r1", ["A"]),
 ];
-assert.deepEqual(dependentsOutside(block("A", "B"), dependentPool).map((record) => record.plan.id), ["later"]);
+assert.deepEqual(dependentsOf(dependentPool[0], dependentPool).map((record) => record.plan.id), ["B", "held"]);
 
 // The repo breadcrumb's choices: sorted, names told apart, never the All repos entry.
 assert.deepEqual(repositoryOptions([{ urlKey: "b", name: "Beta" }, { urlKey: "a", name: "Alpha" }]), [["a", "Alpha"], ["b", "Beta"]]);

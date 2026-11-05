@@ -163,6 +163,8 @@ async function plansTransitionCommand(transition, args) {
     console.log(`${transition}: ${lifecycle.from} -> ${lifecycle.to}, ${result.commit ? `committed ${result.commit.slice(0, 12)} on ${result.base}` : "already recorded"}`);
     if (result.fastForward) console.log(`fast-forward: ${result.fastForward.applied ? "applied" : result.fastForward.reason}`);
     if (result.worktreeCopy) console.log(`worktree copy: ${result.worktreeCopy}`);
+    for (const dependent of result.references?.cleared || []) console.log(`dependency cleared: ${dependent}`);
+    for (const dependent of result.references?.left || []) console.log(`dependency left in place, its worktree owns the copy: ${dependent}`);
     for (const link of result.staleLinks) console.log(`stale link to ${result.plan.from}: ${link}`);
     printFailedChecks(result.checks);
     console.log(result.verdict);

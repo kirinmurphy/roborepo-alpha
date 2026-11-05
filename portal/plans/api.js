@@ -26,9 +26,10 @@ export function setNamespacePinned({ repositoryId, namespace, pinned }) {
   return portalPostJson("/api/plans/namespace-pin", { repositoryId, namespace, pinned });
 }
 
-// Moves unprioritized Backlog plans to Archived, one commit each on the repo's base branch.
-export function archiveBacklogPlans({ repositoryId, ids, reason }) {
-  return portalPostJson("/api/plans/archive", { repositoryId, ids, reason });
+// Moves one unprioritized Backlog plan to Archived, in a commit on the repo's base branch that also
+// clears it from the plans depending on it.
+export function archiveBacklogPlan({ repositoryId, id, reason }) {
+  return portalPostJson("/api/plans/archive", { repositoryId, id, reason });
 }
 
 export function fetchPlanDocument(key) {

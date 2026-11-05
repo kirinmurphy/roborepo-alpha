@@ -26,7 +26,7 @@ The page uses:
 
 The portal writes `plans-order.json` under `docs/plans/`: `POST /api/plans/order` saves a namespace's
 Backlog order and `POST /api/plans/namespace-pin` sets its pin (see "Backlog ordering" below). Its one
-lifecycle change is `POST /api/plans/archive`, which retires unprioritized Backlog plans through the same
+lifecycle change is `POST /api/plans/archive`, which retires one unprioritized Backlog plan through the same
 `transitionPlan` as `roborepo plans archive`, committing on the base branch. Every other lifecycle
 change is made by the plan suite's commands. Which
 repositories Plans reads is decided by the repository registry and its sources
@@ -80,7 +80,7 @@ no lifecycle mutation route or move dialog; every move goes through the transiti
 
 The index is calculated from the plans, the config, and the registry on every read and never written,
 so a dependency edit regroups on the next load and reaches the file at the next write. A transition
-commits only the plan's own paths and never touches the registry; `applyOrder` is where a plan that
+commits only the plan's own paths (an archive adds the dependents it clears) and never touches the registry; `applyOrder` is where a plan that
 left Backlog is pruned. Registry reads and writes always use the primary checkout, including for a
 worktree-only plan.
 
@@ -136,11 +136,12 @@ It runs from the primary checkout on the base branch and:
    runs the completion preflight, `close` checks integration (`copy-integration.mjs`), approval
    freshness, and landing (`landing-gate.mjs` over `modules/repositories/worktree-landed.mjs`, which
    verifies the plan's recorded absorbing commit before scanning), `archive` applies the copy
-   carry and writes the reason;
+   carry and writes the reason, and declares `clearsReferences`, which removes the plan's id from the
+   `depends_on` and `blocked_by` of unfinished plans not bound to a worktree;
 4. validates the content it will commit against the destination (`ready` and `completed` tolerate no
    findings, `active` and `review` tolerate `UNCONFIRMED_NOT_TESTED`, `archived` checks only its
    own rules), refusing with the findings and a repair prompt;
-5. `git mv`, writes the content, commits with `--only` the old and new paths, and returns six
+5. `git mv`, writes the content, commits with `--only` the old and new paths plus any cleared dependents, and returns six
    post-commit checks from `transition-checks.mjs`.
 
 A plan already at the destination returns `alreadyRecorded` without rerunning the gates; for
@@ -158,7 +159,7 @@ All routes are served by the loopback-only portal server.
 | `/api/plans/prompt` | POST | build repository-aware or portable prompt from server-issued plan keys |
 | `/api/plans/order` | POST | save one namespace's whole Backlog order, guarded by its revision |
 | `/api/plans/namespace-pin` | POST | pin or unpin one namespace in `plans-order.json` |
-| `/api/plans/archive` | POST | archive unprioritized Backlog plans with a reason; refuses ranked plans |
+| `/api/plans/archive` | POST | archive one unprioritized Backlog plan with a reason; refuses a ranked plan |
 | `/api/plans/refresh` | POST | rebuild the in-memory snapshot |
 
 POST routes require the same origin and per-server mutation token protections as other portal

@@ -5,8 +5,9 @@
 // Save settles.
 //
 // It owns its controls and dispatches a bubbling `block-move` event with { section, index, action };
-// the page applies the move to its draft. An unprioritized block also offers `block-archive`, which
-// commits at once, so it waits until the draft has nothing unsaved that the change would make stale. Dragging starts here from the handle and is finished by the
+// the page applies the move to its draft. Each plan in an unprioritized block also offers its own
+// `block-archive` with { key }, which commits at once, so it waits until the draft has nothing unsaved
+// that the change would make stale. Dragging starts here from the handle and is finished by the
 // list the block sits in, which knows where the other blocks are.
 import { portalTpl as tpl, portalFillSlots as fill } from "/portal/shared/api.js";
 import { ORDERED_ACTIONS, NEEDS_ACTIONS, dependencyTree, isActionEnabled } from "/portal/plans/backlog-model.js";
@@ -59,8 +60,13 @@ class BacklogBlockElement extends HTMLElement {
     // The title stays the keyboard path; a click on the description opens the plan too.
     const doc = node.querySelector(".backlog-plan-doc");
     renderPlanExcerpt(node.querySelector("[data-slot=purpose]"), doc, plan.excerpt || "");
-    renderModifiedTime(node.querySelector("[data-slot=modified]"), plan.modifiedAt);
-    doc.addEventListener("click", () => this.onOpen(record.key));
+    const modified = node.querySelector("[data-slot=modified]");
+    renderModifiedTime(modified, plan.modifiedAt);
+    if (this.section === "needs" && !this.locked) modified.after(this.renderArchive(record));
+    doc.addEventListener("click", (event) => {
+      // Checked here instead of stopped at the button, so a click on it while disabled is covered too.
+      if (!event.target.closest(".backlog-archive")) this.onOpen(record.key);
+    });
     if (alsoNeeds.length) {
       const items = alsoNeeds.map((key) => ({ key, label: this.plans.get(key).plan.title }));
       node.append(dependencyList("Also needs", items, this.onOpen));
@@ -80,7 +86,6 @@ class BacklogBlockElement extends HTMLElement {
     }
     const actions = this.section === "needs" ? NEEDS_ACTIONS : ORDERED_ACTIONS;
     controls.append(...actions.map((action) => this.renderControl(action)));
-    if (this.section === "needs") controls.append(this.renderArchive());
     controls.append(this.renderHandle());
     return controls;
   }
@@ -102,17 +107,17 @@ class BacklogBlockElement extends HTMLElement {
     return button;
   }
 
-  renderArchive() {
+  renderArchive(record) {
     const button = tpl("tpl-backlog-control");
-    const label = this.block.ids.length === 1 ? "Archive plan" : "Archive linked plans";
     const disabled = this.held || this.dirty;
     button.classList.add("backlog-archive");
-    button.setAttribute("aria-label", label);
-    button.title = disabled ? "Save or cancel your order first" : label;
+    button.dataset.noExcerpt = "";
+    button.setAttribute("aria-label", `Archive ${record.plan.title}`);
+    button.title = disabled ? "Save or cancel your order first" : "Archive plan";
     button.querySelector("portal-icon").setAttribute("name", "trash");
     button.disabled = disabled;
     button.addEventListener("click", () => {
-      this.dispatchEvent(new CustomEvent("block-archive", { bubbles: true, detail: { index: this.index } }));
+      this.dispatchEvent(new CustomEvent("block-archive", { bubbles: true, detail: { key: record.key } }));
     });
     return button;
   }

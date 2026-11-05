@@ -496,6 +496,42 @@ export function writeFrontmatterField(markdown, key, value) {
   return `---\n${updated.join("\n")}${bodyAndClose}`;
 }
 
+// Drops one entry from a list field, keeping the field's form (flow or block), key order, and the body
+// byte-for-byte. A list left empty becomes `key: []`. Returns the input unchanged when the entry is absent.
+export function removeFrontmatterListEntry(markdown, key, entry) {
+  if (!markdown.startsWith("---\n")) return markdown;
+  const end = markdown.indexOf("\n---", 4);
+  if (end === -1) return markdown;
+  const lines = markdown.slice(4, end).split("\n");
+  const index = lines.findIndex((line) => line.startsWith(`${key}:`));
+  if (index === -1) return markdown;
+  const value = lines[index].slice(key.length + 1).trim();
+  const updated = /^\[.*\]$/.test(value)
+    ? withoutFlowEntry(lines, index, key, value, entry)
+    : withoutBlockEntry(lines, index, key, entry);
+  return updated ? `---\n${updated.join("\n")}${markdown.slice(end)}` : markdown;
+}
+
+function withoutFlowEntry(lines, index, key, value, entry) {
+  const entries = parseInlineArray(value);
+  const kept = entries.filter((item) => item !== entry);
+  if (kept.length === entries.length) return null;
+  // Quotes stay if the author used them; a comma always needs them.
+  const quoted = value.includes('"') || value.includes("'");
+  const items = kept.map((item) => (quoted || item.includes(",") ? JSON.stringify(item) : item));
+  return lines.with(index, `${key}: [${items.join(", ")}]`);
+}
+
+function withoutBlockEntry(lines, index, key, entry) {
+  let last = index;
+  while (/^\s+-\s+/.test(lines[last + 1] ?? "")) last += 1;
+  const items = lines.slice(index + 1, last + 1);
+  const kept = items.filter((line) => line.replace(/^\s+-\s+/, "").trim().replace(/^["']|["']$/g, "") !== entry);
+  if (kept.length === items.length) return null;
+  const head = kept.length ? lines[index] : `${key}: []`;
+  return [...lines.slice(0, index), head, ...kept, ...lines.slice(last + 1)];
+}
+
 // Pure path builder for a lifecycle move destination. Filename is preserved unchanged — lifecycle
 // moves never rename the file.
 function resolveDestinationPath(repositoryRoot, lifecycle, filename) {

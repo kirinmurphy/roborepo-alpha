@@ -181,10 +181,11 @@ Details:
   handle.
 - A namespace with a dependency cycle or a missing prerequisite shows why and locks its controls.
 
-**Archive** retires an unprioritized plan, or a whole linked block, without waiting for Save. It asks for
-a reason, then asks once more, and commits each move to the repo's base branch, leaving the push to
-you. The base branch must be checked out in the primary checkout. It stays disabled while a draft has
-unsaved changes.
+**Archive**, the trash icon beside each unprioritized plan's modified time, retires that one plan without
+waiting for Save, even when it sits in a linked block. It asks for a reason, then asks once more, and
+commits the move to the repo's base branch, leaving the push to you. The base branch must be checked out
+in the primary checkout. It stays disabled while a draft has unsaved changes. Plans that depended on the
+archived plan stop depending on it, as described under the `archive` transition.
 
 Moves stay in a draft. **Save** writes the namespace's whole order at once; **Cancel** discards the
 draft at once. Leaving a dirty draft by any route (the mode toggle, a lifecycle tab, the repo
@@ -345,7 +346,13 @@ move dialog. The plan suite's commands move plans, each through one `roborepo pl
 Every transition runs in the main checkout on the base branch, refuses when the plan's own path has
 uncommitted changes it did not make, commits only the plan's old and new paths, and approves the
 result only after six checks read fresh from Git. Other work in the main checkout is never
-committed. A refusal changes nothing; repeating a move that already happened commits nothing. The
+committed.
+
+`archive` also removes the plan from the `depends_on` and `blocked_by` lists of unfinished plans, in the
+same commit, so nothing keeps waiting on it. It does not rewire a chain: archiving B in A → B → C leaves C
+with no link to A. It refuses when one of those plans has uncommitted changes, and leaves a plan bound to a
+worktree alone, reporting it, because that worktree owns the plan's copy. `related` entries stay, as do the
+archived plan's own lists and those of completed and archived plans, which are history. A refusal changes nothing; repeating a move that already happened commits nothing. The
 page can still show validation findings for a plan that needs repair.
 
 ## Git Metadata
@@ -423,7 +430,7 @@ When enabled:
 
 Suite skills run these commands rather than re-deriving the rules they implement. Every
 lifecycle transition (`promote`, `start`, `submit`, `reopen`, `close`, `archive`) runs from the
-primary checkout, commits only the plan's paths on the base branch, never pushes, and exits 1 when
+primary checkout, commits only the plan's paths (for `archive`, also the dependents it clears) on the base branch, never pushes, and exits 1 when
 it refuses or a post-commit check fails:
 
 | Command | What it does |
@@ -434,7 +441,7 @@ it refuses or a post-commit check fails:
 | `roborepo plans submit <plan> [--base <branch>] [--json]` | Runs the completion preflight and, when it passes, moves an active plan to `review/`. |
 | `roborepo plans reopen <plan> [--base <branch>] [--json]` | Moves a review plan back to `active/` after a requirements change. |
 | `roborepo plans close <plan> [--base <branch>] [--json]` | Checks that the worktree copy is integrated, the approval is fresh, and the branch landed (including squash and rebase merges), then moves a review plan with its closing edits to `completed/`. |
-| `roborepo plans archive <plan> --reason <text> [--base <branch>] [--json]` | Records the reason under `## Archived`, clears `next_action`, carries an unintegrated worktree copy once, refuses conflicting copies, and moves the plan to `archived/`. Never removes a worktree or branch. |
+| `roborepo plans archive <plan> --reason <text> [--base <branch>] [--json]` | Records the reason under `## Archived`, clears `next_action`, carries an unintegrated worktree copy once, refuses conflicting copies, clears the plan from unfinished plans' `depends_on` and `blocked_by`, and moves the plan to `archived/`. Never removes a worktree or branch. |
 | `roborepo plans preflight <plan> [--base <branch>] [--json]` | Reports whether implementation is complete: no task outside `## Not tested` open, no blockers, a clean worktree, a branch with its own commits, and no Review findings apart from Not tested. Exits 1 when a check fails. |
 | `roborepo plans landed <plan> [--base <branch>] [--json]` | Reports whether the plan's branch landed on the base branch, including squash and rebase merges, and the commit that absorbed it. Verifies an absorbing commit recorded in the plan's `## Verification` (`- Absorbing commit: <full commit id>`) before scanning base history, and says whether it reused that evidence. Read-only. Exits 1 unless landed. |
 | `roborepo plans approval <plan> [--base <branch>] [--json]` | Reports the recorded approval as `fresh`, `stale` (with the changed paths), `missing`, `not-approved`, `invalid`, or `unavailable` (the plan's worktree is gone or detached, so its branch cannot be resolved). The text output counts base changes since the review; `--json` lists them. Exits 1 unless fresh. |

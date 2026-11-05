@@ -76,6 +76,7 @@ export const TRANSITION_RULES = {
     message: (name) => `Close plan ${name}`,
   },
   archive: {
+    clearsReferences: true,
     requires: ({ reason }) => (reason?.trim() ? null : "An archive reason is required (--reason <text>)."),
     prepare: ({ primary, record, content, options, today }) => {
       const carry = archiveCarry(primary, record);

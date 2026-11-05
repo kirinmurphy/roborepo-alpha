@@ -108,33 +108,24 @@ export function setBacklogNamespacePinned({ repositoryId, namespace, pinned }) {
   return result;
 }
 
-// Retires unprioritized Backlog plans through the same transition `roborepo plans archive` runs: one
-// commit per plan on the base branch, nothing pushed. A ranked plan is refused, so a page working from
-// an older snapshot cannot archive what has since been prioritized.
-export async function archiveBacklogPlans({ repositoryId, ids, reason }) {
-  if (!Array.isArray(ids) || !ids.length || !ids.every((id) => typeof id === "string")) throw domainError("INVALID_CHANGE", "ids must list the plans to archive.");
+// Retires one unprioritized Backlog plan through the same transition `roborepo plans archive` runs: a
+// commit on the base branch, nothing pushed. A ranked plan is refused, so a page working from an older
+// snapshot cannot archive what has since been prioritized.
+export async function archiveBacklogPlan({ repositoryId, id, reason }) {
+  if (typeof id !== "string" || !id) throw domainError("INVALID_CHANGE", "id must name the plan to archive.");
   const snapshot = buildPlanSnapshot({ stateRoot, packageState: planSuitePackageState() });
   const repository = snapshot.repositories.find((item) => item.repositoryId === repositoryId);
   const entry = snapshot.backlog.find((item) => item.repositoryId === repositoryId);
   if (!repository || !entry) throw domainError("PLAN_NOT_FOUND", "This repo can no longer be found. Refresh and try again.");
   const unprioritized = new Set(entry.namespaces.flatMap((view) => view.needsPrioritization.flatMap((block) => block.ids)));
-  const refused = ids.filter((id) => !unprioritized.has(id));
-  if (refused.length) throw domainError("INVALID_CHANGE", `Only unprioritized Backlog plans can be archived here: ${refused.join(", ")}.`);
-  const primary = primaryCheckout(repository.root);
-  const archived = [];
+  if (!unprioritized.has(id)) throw domainError("INVALID_CHANGE", `Only unprioritized Backlog plans can be archived here: ${id}.`);
   try {
-    for (const id of ids) {
-      const result = await transitionPlan({ cwd: primary, transition: "archive", selector: id, reason });
-      if (result.verdict !== "APPROVED") throw domainError("INVALID_CHANGE", `${id} moved, but its post-commit checks failed.`);
-      archived.push(id);
-    }
-  } catch (err) {
-    if (archived.length) err.message = `${err.message} Already archived: ${archived.join(", ")}.`;
-    throw err;
+    const result = await transitionPlan({ cwd: primaryCheckout(repository.root), transition: "archive", selector: id, reason });
+    if (result.verdict !== "APPROVED") throw domainError("INVALID_CHANGE", `${id} moved, but its post-commit checks failed.`);
+    return { archived: id, references: result.references };
   } finally {
     cachedSnapshot = null;
   }
-  return { archived };
 }
 
 export function refreshPlans({ repositoryId = null } = {}) {

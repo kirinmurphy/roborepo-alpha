@@ -239,17 +239,27 @@
 }
 input,
 select,
+textarea,
 button {
   font: inherit;
 }
 input,
-select {
+select,
+textarea {
   min-width: 0;
   color: var(--ink);
   background: var(--bg);
   border: 1px solid var(--line);
   border-radius: 5px;
   padding: var(--space-xs) var(--space-sm);
+}
+/* Every multi-line field: fills its form's width and grows only downward, with room around the text. */
+textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--space-sm);
+  resize: vertical;
 }
 /* The native caret sits flush against the border and ignores padding, so selects draw their own,
  * inset .5rem from the right edge, with room reserved for it beside the text. */
@@ -1608,6 +1618,8 @@ option-dropdown {
   /* Relative, so it stays readable beside any trigger text; line-height keeps the trigger's height. */
   font-size: 1.5em;
   line-height: 1;
+  /* The glyph sits low in its box; a translate raises it without moving the trigger's text. */
+  translate: 0 -2px;
 }
 .dropdown-menu {
   position: fixed;

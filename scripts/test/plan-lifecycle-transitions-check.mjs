@@ -443,6 +443,58 @@ try {
     assert.ok(exists(root, "docs/plans/active/test-conflict.md"));
   }
 
+  // ── archive clears the plan from what depends on it, in both list forms, in its own commit ────
+  {
+    const linkedDoc = (id, relations) => `---\nid: ${id}\nnext_action: Decide.\n${relations}\n---\n\n# Plan ${id}\n\n## Summary\n\nBody stays exactly as written.\n`;
+    const backlog = (name) => `docs/plans/backlog/test-${name}.md`;
+    commit(root, "Seed linked plans", {
+      [backlog("arch-root")]: linkedDoc("archroot", "depends_on: []\nblocked_by: []\nrelated: []"),
+      [backlog("arch-flow")]: linkedDoc("archflow", 'depends_on: [archroot, flow0001]\nblocked_by: ["external: vendor, inc"]\nrelated: [archroot]'),
+      [backlog("arch-list")]: linkedDoc("archlist", "depends_on:\n  - archroot\nblocked_by:\n  - 'archroot'\n  - external: a vendor\nrelated: []"),
+      [backlog("arch-busy")]: linkedDoc("archbusy", "depends_on: []\nblocked_by: []\nrelated: []"),
+      [backlog("arch-leaf")]: linkedDoc("archleaf", "depends_on: [archbusy]\nblocked_by: []\nrelated: []"),
+    });
+
+    const archived = approved(plans(root, "archive", "archroot", "--reason", "Abandoned."), "archive a prerequisite");
+    assert.deepEqual([...archived.references.cleared].sort(), [backlog("arch-flow"), backlog("arch-list")], "every dependent is cleared");
+    assert.deepEqual(archived.references.left, []);
+    const flow = read(path.join(root, backlog("arch-flow")));
+    assert.match(flow, /^depends_on: \[flow0001\]$/m, "the other prerequisite stays");
+    assert.match(flow, /^blocked_by: \["external: vendor, inc"\]$/m, "a list without the plan is untouched");
+    assert.match(flow, /^related: \[archroot\]$/m, "related is not a dependency, and the archived plan still resolves");
+    const list = read(path.join(root, backlog("arch-list")));
+    assert.match(list, /^depends_on: \[\]$/m, "a block list left empty becomes an empty list");
+    assert.match(list, /^blocked_by:\n {2}- external: a vendor$/m, "a quoted block entry is removed and the rest kept");
+    assert.match(list, /Body stays exactly as written\.\n$/);
+    assert.deepEqual(git(root, "show", "--no-renames", "--name-only", "--format=", "HEAD").split("\n").filter(Boolean).sort(),
+      ["docs/plans/archived/test-arch-root.md", backlog("arch-flow"), backlog("arch-list"), backlog("arch-root")].sort(), "the move and the clearing land in one commit");
+
+    // Archiving the dependent leaves its prerequisite with nothing to clean up.
+    const busyBefore = read(path.join(root, backlog("arch-busy")));
+    const dependent = approved(plans(root, "archive", "archleaf", "--reason", "Abandoned."), "archive a dependent");
+    assert.deepEqual(dependent.references, { cleared: [], left: [] });
+    assert.equal(read(path.join(root, backlog("arch-busy"))), busyBefore, "the prerequisite never named its dependent");
+
+    // A dependent with someone's uncommitted edit refuses the whole move rather than committing that edit.
+    commit(root, "Seed a dirty dependent", {
+      [backlog("arch-dirty")]: linkedDoc("archdirt", "depends_on: [archbusy]\nblocked_by: []\nrelated: []"),
+    });
+    fs.appendFileSync(path.join(root, backlog("arch-dirty")), "\nSomeone else's edit.\n");
+    const before = head(root);
+    refused(root, plans(root, "archive", "archbusy", "--reason", "Abandoned."), "archive with a dirty dependent", /uncommitted changes/);
+    assert.equal(head(root), before, "a refused archive commits nothing");
+    assert.ok(exists(root, backlog("arch-busy")));
+    fs.writeFileSync(path.join(root, backlog("arch-dirty")), git(root, "show", `HEAD:${backlog("arch-dirty")}`));
+
+    // A dependent bound to a worktree keeps its reference, and the result names it; the clean one clears.
+    commit(root, "Bind a dependent", {
+      [backlog("arch-dirty")]: linkedDoc("archdirt", "depends_on: [archbusy]\nblocked_by: []\nrelated: []\nworktree: arch-bound"),
+    });
+    const kept = approved(plans(root, "archive", "archbusy", "--reason", "Abandoned."), "archive with a bound dependent");
+    assert.deepEqual(kept.references, { cleared: [], left: [backlog("arch-dirty")] });
+    assert.match(read(path.join(root, backlog("arch-dirty"))), /^depends_on: \[archbusy\]$/m);
+  }
+
   console.log("plan lifecycle transitions: ok");
 } finally {
   fx.cleanup();

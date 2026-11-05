@@ -74,7 +74,6 @@
     <dialog id="ordering-archive" data-dialog-size="sm" aria-labelledby="ordering-archive-title">
       <div class="modal-body">
         <p id="ordering-archive-title" class="backlog-archive-title" data-slot="title"></p>
-        <ul class="backlog-archive-plans" data-slot="plans" hidden></ul>
         <label class="backlog-archive-reason" data-slot="reason-field">Why is this being archived?
           <textarea data-slot="reason" rows="2"></textarea>
         </label>
@@ -83,8 +82,8 @@
         <p class="backlog-dialog-error" data-slot="error" role="alert"></p>
       </div>
       <div class="filters-dialog-actions">
-        <button type="button" data-btn="cta" data-slot="confirm">Continue</button>
         <button type="button" data-btn="secondary" data-slot="cancel">Cancel</button>
+        <button type="button" data-btn="cta" data-slot="confirm">Continue</button>
       </div>
     </dialog>
     <div id="blockers-popover" class="blockers-popover" hidden role="menu">

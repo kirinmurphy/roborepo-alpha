@@ -20,7 +20,7 @@ import {
   NO_NAMESPACE,
   createDraft,
   dependencyTree,
-  dependentsOutside,
+  dependentsOf,
   dropBlock,
   hrefWithNamespace,
   isDraftDirty,
@@ -314,7 +314,7 @@ export function createBacklogController(deps) {
       pendingFocus = { id: block.ids[0], action };
       updateDraft(moveBlock(draft, section, index, action));
     });
-    container.addEventListener("block-archive", (event) => openArchive(entry, draft.needs[event.detail.index], plans));
+    container.addEventListener("block-archive", (event) => openArchive(entry, plans.get(event.detail.key)));
     container.addEventListener("block-drag", (event) => { drag = event.detail; });
     // A cancelled drag ends with no drop, and must not leave its block armed for the next one.
     container.addEventListener("block-drag-end", () => {
@@ -327,12 +327,17 @@ export function createBacklogController(deps) {
     return [container];
   }
 
-  function openArchive(entry, block, plans) {
+  function openArchive(entry, record) {
+    const dependents = dependentsOf(record, deps.getSnapshot().plans);
+    const titles = (bound) => dependents.filter((item) => Boolean(item.plan.worktree) === bound).map((item) => item.plan.title);
     archiveDialog.open({
-      titles: block.keys.map((key) => plans.get(key).plan.title),
-      dependents: dependentsOutside(block, deps.getSnapshot().plans).map((record) => record.plan.title),
-      // Refreshes even after a failure, since a linked block may have archived part of itself.
-      onConfirm: (reason) => api.archiveBacklogPlans({ repositoryId: entry.repositoryId, ids: block.ids, reason }).finally(deps.onSaved),
+      title: record.plan.title,
+      released: titles(false),
+      kept: titles(true),
+      onConfirm: async (reason) => {
+        await api.archiveBacklogPlan({ repositoryId: entry.repositoryId, id: record.plan.id, reason });
+        deps.onSaved();
+      },
     });
   }
 

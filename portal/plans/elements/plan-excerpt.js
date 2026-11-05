@@ -4,7 +4,8 @@ const PREVIEW_LENGTH = 190;
 const EXPANDED_LENGTH = PREVIEW_LENGTH * 2;
 const EXPAND_DELAY_MS = 1000;
 
-// `region` is the element that holds the description, grows over the page, and takes the hover.
+// `region` is the element that holds the description, grows over the page, and takes the hover. A
+// control inside it marked `data-no-excerpt` is its own target, so hovering one shows no more text.
 export function renderPlanExcerpt(description, region, excerpt) {
   const preview = cutAtWord(excerpt, PREVIEW_LENGTH);
   if (preview.length === excerpt.length) {
@@ -17,8 +18,9 @@ export function renderPlanExcerpt(description, region, excerpt) {
   const more = span("plan-excerpt-more", `${longer.slice(preview.length)}${longer.length < excerpt.length ? "…" : ""}`);
   description.replaceChildren(head, ellipsis);
 
-  let timer;
+  let timer = null;
   const expand = () => {
+    timer = null;
     // Unrounded, or a card of fractional height would nudge what follows by half a pixel.
     const height = region.getBoundingClientRect().height;
     description.replaceChildren(head, more);
@@ -29,15 +31,16 @@ export function renderPlanExcerpt(description, region, excerpt) {
   };
   const collapse = () => {
     clearTimeout(timer);
+    timer = null;
     description.replaceChildren(head, ellipsis);
     region.classList.remove("is-excerpt-expanded");
     region.style.removeProperty("--excerpt-growth");
   };
-  region.addEventListener("pointerenter", (event) => {
+  region.addEventListener("pointerover", (event) => {
     // A touch has no hover to sustain; the drawer shows the description in full.
     if (event.pointerType === "touch") return;
-    clearTimeout(timer);
-    timer = setTimeout(expand, EXPAND_DELAY_MS);
+    if (event.target.closest("[data-no-excerpt]")) collapse();
+    else if (timer === null && !region.classList.contains("is-excerpt-expanded")) timer = setTimeout(expand, EXPAND_DELAY_MS);
   });
   region.addEventListener("pointerleave", collapse);
   region.addEventListener("click", collapse);

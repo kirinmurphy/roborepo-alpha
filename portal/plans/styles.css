@@ -121,14 +121,14 @@ dialog:is(#filters-dialog, #ordering-guard, #ordering-archive)::backdrop {
   padding: 12px 16px;
   border-top: 1px solid var(--line);
 }
-:is(#ordering-guard, #ordering-archive) .filters-dialog-actions { flex-direction: column; }
+#ordering-guard .filters-dialog-actions { flex-direction: column; }
 :is(#ordering-guard, #ordering-archive) .modal-body { display: grid; gap: 10px; padding: 16px; }
 :is(#ordering-guard, #ordering-archive) .modal-body p { margin: 0; }
 .backlog-archive-title { font-weight: 600; }
-.backlog-archive-plans { margin: 0; padding-left: 18px; }
 .backlog-archive-reason { display: grid; gap: 6px; }
 .backlog-archive-reason[hidden] { display: none; }
-.backlog-archive-reason textarea { width: 100%; box-sizing: border-box; font: inherit; resize: vertical; }
+/* Centered in its line box it sits below the title's letters, which ride above the box's middle. */
+.backlog-archive { align-self: center; translate: 0 -3px; }
 .backlog-archive:hover:not(:disabled) { color: var(--danger); }
 .filter-row {
   display: grid;
@@ -542,8 +542,14 @@ a:is(.repo-badge, .namespace-badge)[aria-disabled="true"] {
   align-items: center;
   gap: 4px;
   /* The height of the namespace level's mode toggle, so drilling down does not move the page. */
+  box-sizing: border-box;
   min-height: 36px;
+  /* Lifts the text 1px, so its letters center with the larger Details and Prioritize labels. At every
+   * level, so the trail stays put whether or not the toggle shows. Padding, not a transform, because a
+   * transform would become the containing block for the dropdown's fixed menu. */
+  padding-bottom: 2px;
   color: var(--dim);
+  font-size: var(--text-xs);
 }
 /* Undo the bar-cell look `nav a` gives every link, its divider included. */
 .backlog-breadcrumb a,
@@ -552,11 +558,12 @@ a:is(.repo-badge, .namespace-badge)[aria-disabled="true"] {
   border: none;
   background: none;
   color: var(--dim);
+  font-size: inherit;
   text-decoration: underline;
 }
 .backlog-breadcrumb a:hover { color: var(--ink); }
 .backlog-breadcrumb [aria-current="page"] { color: var(--ink); font-weight: 600; }
-.backlog-breadcrumb-separator { color: var(--line); }
+.backlog-breadcrumb-separator { margin-inline: 6px; color: var(--ink); }
 /* Reads as the breadcrumb's current page; only its caret says it opens. */
 .backlog-breadcrumb .dropdown-trigger {
   padding: 0;
@@ -565,8 +572,7 @@ a:is(.repo-badge, .namespace-badge)[aria-disabled="true"] {
   font-size: inherit;
   font-weight: 600;
 }
-.backlog-breadcrumb .dropdown-trigger:hover,
-.backlog-breadcrumb .dropdown-trigger:hover .dropdown-chevron { color: var(--accent); }
+.backlog-breadcrumb .dropdown-trigger:hover { text-decoration: underline; }
 .backlog-directory {
   display: grid;
   gap: 0;
@@ -778,8 +784,9 @@ backlog-block.drop-after { box-shadow: 0 3px 0 var(--accent); }
   border-radius: 6px;
   cursor: pointer;
 }
-.backlog-plan-doc:hover { background: color-mix(in srgb, var(--accent) 4%, var(--panel)); }
-.backlog-plan-doc:hover .backlog-plan-title { text-decoration: underline; }
+/* The archive button sits inside but is its own target, so hovering it doesn't light up the plan. */
+.backlog-plan-doc:hover:not(:has(.backlog-archive:hover)) { background: color-mix(in srgb, var(--accent) 4%, var(--panel)); }
+.backlog-plan-doc:hover:not(:has(.backlog-archive:hover)) .backlog-plan-title { text-decoration: underline; }
 .backlog-plan-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; min-width: 0; }
 .backlog-plan-heading .backlog-plan-title { min-width: 0; }
 .backlog-plan-age { display: inline-flex; flex: none; align-items: center; gap: 4px; font-size: var(--text-2xs); white-space: nowrap; }

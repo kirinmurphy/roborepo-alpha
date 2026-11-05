@@ -9,9 +9,9 @@ import path from "node:path";
 import { test, expect } from "@playwright/test";
 import { addRepositorySource, enablePlanBoard, removeRepositorySources } from "./helpers.mjs";
 
-const document = ({ id, title, deps = [] }) => [
+const document = ({ id, title, deps = [], summary = `Purpose of ${title}.` }) => [
   "---", `id: ${id}`, "next_action: Do it", `depends_on: [${deps.join(", ")}]`, "---", "",
-  `# ${title}`, "", "## Summary", "", `Purpose of ${title}.`, "",
+  `# ${title}`, "", "## Summary", "", summary, "",
 ].join("\n");
 
 const GUARD = "Your prioritization changes have not been saved.";
@@ -343,16 +343,64 @@ test.describe("Backlog directory and ordering", () => {
   test("the breadcrumb underlines its links and keeps one height at every level", async ({ page }) => {
     const nav = page.getByRole("navigation", { name: "Backlog location" });
     const rowHeight = () => nav.evaluate((node) => (node.closest(".backlog-namespace-header") || node).getBoundingClientRect().height);
+    // Where the first crumb's text sits: the trail must not move when the mode toggle appears.
+    const crumbTop = () => nav.evaluate((node) => {
+      const range = document.createRange();
+      range.selectNodeContents(node.firstElementChild);
+      return range.getBoundingClientRect().top;
+    });
     await page.goto("/plans?lifecycle=backlog");
     const heights = [await rowHeight()];
+    const tops = [await crumbTop()];
     await page.getByRole("link", { name: new RegExp(repoName) }).click();
     await expect(nav.getByRole("link", { name: "All repos" })).toHaveCSS("text-decoration-line", "underline");
     heights.push(await rowHeight());
+    tops.push(await crumbTop());
     await directoryRows(page).first().click();
     await expect(nav.getByRole("link", { name: repoName })).toHaveCSS("text-decoration-line", "underline");
     await expect(page.getByRole("button", { name: "Prioritize", exact: true })).toBeVisible();
     heights.push(await rowHeight());
+    tops.push(await crumbTop());
     expect(new Set(heights).size, `heights ${heights}`).toBe(1);
+    expect(new Set(tops).size, `tops ${tops}`).toBe(1);
+
+    // The middle of the capital letters, from the font's own metrics, is what the eye lines up.
+    const capitalCenter = (locator) => locator.evaluate((node) => {
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const box = range.getBoundingClientRect();
+      const style = getComputedStyle(node);
+      const context = document.createElement("canvas").getContext("2d");
+      context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+      const metrics = context.measureText("H");
+      return box.top + metrics.fontBoundingBoxAscent - metrics.actualBoundingBoxAscent / 2;
+    });
+    const offset = await capitalCenter(nav.getByRole("link", { name: repoName })) - await capitalCenter(page.getByRole("button", { name: "Prioritize", exact: true }));
+    expect(Math.abs(offset), `offset ${offset}`).toBeLessThan(0.5);
+    await expect(nav.locator(".dropdown-chevron")).toHaveCSS("translate", "0px -2px");
+
+    // Every part reads at one size, with its carets easy to see and room around each.
+    const link = nav.getByRole("link", { name: repoName });
+    const namespace = nav.locator(".dropdown-trigger");
+    const size = await link.evaluate((node) => getComputedStyle(node).fontSize);
+    await expect(namespace).toHaveCSS("font-size", size);
+    const separator = nav.locator(".backlog-breadcrumb-separator").first();
+    await expect(separator).toHaveCSS("font-size", size);
+    await expect(separator).toHaveCSS("margin-left", "6px");
+    const ink = await page.evaluate(() => {
+      const probe = document.body.appendChild(Object.assign(document.createElement("span"), { style: "color: var(--ink)" }));
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    });
+    await expect(separator).toHaveCSS("color", ink);
+
+    // A dropdown crumb's hover underlines it and leaves its color alone.
+    await expect(namespace).toHaveCSS("text-decoration-line", "none");
+    const color = await namespace.evaluate((node) => getComputedStyle(node).color);
+    await namespace.hover();
+    await expect(namespace).toHaveCSS("text-decoration-line", "underline");
+    await expect(namespace).toHaveCSS("color", color);
   });
 
   test("the namespace breadcrumb switches namespaces, and guards a dirty draft", async ({ page }) => {
@@ -465,7 +513,7 @@ test.describe("Backlog directory and ordering", () => {
     }
   });
 
-  test("archiving unprioritized plans asks twice, records the reason, and commits only their moves", async ({ page }) => {
+  test("archiving an unprioritized plan asks twice, records the reason, and clears what depended on it", async ({ page }) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "portal-ui-archive-"));
     const git = (...args) => spawnSync("git", args, { cwd: root, encoding: "utf8" }).stdout;
     const put = (relative, content) => {
@@ -480,6 +528,7 @@ test.describe("Backlog directory and ordering", () => {
       put("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A", beta: "B" } }));
       put("docs/plans/backlog/alpha-ranked.md", document({ id: "arkranked", title: "Ranked one" }));
       put("docs/plans/backlog/alpha-free.md", document({ id: "arkfree01", title: "Free one" }));
+      put("docs/plans/backlog/alpha-long.md", document({ id: "arklong01", title: "Long one", summary: "A description long enough to need the sustained hover. ".repeat(10) }));
       put("docs/plans/backlog/alpha-root.md", document({ id: "arkroot01", title: "Chain root" }));
       put("docs/plans/backlog/alpha-leaf.md", document({ id: "arkleaf01", title: "Chain leaf", deps: ["arkroot01"] }));
       put("docs/plans/backlog/beta-after.md", document({ id: "arkafter1", title: "Waits elsewhere", deps: ["arkfree01"] }));
@@ -493,27 +542,58 @@ test.describe("Backlog directory and ordering", () => {
       await page.goto(`/plans?lifecycle=backlog&repo=${entry.urlKey}&namespace=alpha`);
       await page.getByRole("button", { name: "Prioritize", exact: true }).click();
 
+      const archive = (title) => page.getByRole("button", { name: `Archive ${title}`, exact: true });
       await expect(blockFor(page, "Ranked one").getByRole("button", { name: /^Archive/ })).toHaveCount(0);
-      await expect(blockFor(page, "Chain root").getByRole("button", { name: "Archive linked plans" })).toBeVisible();
+      // A linked block offers one control per plan, and none among its moves.
+      await expect(blockFor(page, "Chain root").getByRole("button", { name: /^Archive/ })).toHaveCount(2);
+      await expect(blockFor(page, "Chain root").getByRole("group", { name: "Move" }).getByRole("button", { name: /^Archive/ })).toHaveCount(0);
 
       // An unsaved draft would go stale, so the control waits.
       await blockFor(page, "Chain root").getByRole("button", { name: "Move down" }).click();
-      await expect(blockFor(page, "Free one").getByRole("button", { name: "Archive plan" })).toBeDisabled();
+      await expect(archive("Free one")).toBeDisabled();
+      // Disabled, the button still shows no longer text and opens nothing.
+      const disabledRow = page.locator(".backlog-plan-doc", { has: archive("Long one") });
+      const box = await archive("Long one").boundingBox();
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.waitForTimeout(1200);
+      await expect(disabledRow).not.toHaveClass(/is-excerpt-expanded/);
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      await expect(page.locator("#drawer")).not.toHaveAttribute("open");
+      await page.mouse.move(0, 0);
       await page.getByRole("button", { name: "Cancel", exact: true }).click();
+
+      // The button lives inside the row's opening area, and is not part of it: no drawer, no longer text.
+      const row = page.locator(".backlog-plan-doc", { has: archive("Long one") });
+      await archive("Long one").hover();
+      await page.waitForTimeout(1200);
+      await expect(row).not.toHaveClass(/is-excerpt-expanded/);
+      await archive("Long one").click();
+      await expect(page.getByRole("dialog", { name: 'Archive "Long one"?' })).toBeVisible();
+      await expect(page.locator("#drawer")).not.toHaveAttribute("open");
+      await page.getByRole("dialog", { name: 'Archive "Long one"?' }).getByRole("button", { name: "Cancel" }).click();
+      await row.locator("[data-slot=purpose]").hover();
+      await expect(row).toHaveClass(/is-excerpt-expanded/, { timeout: 3000 });
+      await page.mouse.move(0, 0);
 
       const first = page.getByRole("dialog", { name: 'Archive "Free one"?' });
       const second = page.getByRole("dialog", { name: "Are you sure?" });
-      await blockFor(page, "Free one").getByRole("button", { name: "Archive plan" }).click();
+      await archive("Free one").click();
       await expect(first.getByRole("button", { name: "Continue" })).toBeDisabled();
+      // Actions sit in one row at the right, Cancel first, and the field has room around its text.
+      const cancelBox = await first.getByRole("button", { name: "Cancel" }).boundingBox();
+      const continueBox = await first.getByRole("button", { name: "Continue" }).boundingBox();
+      expect(cancelBox.y).toBe(continueBox.y);
+      expect(cancelBox.x).toBeLessThan(continueBox.x);
+      expect(await first.getByRole("textbox").evaluate((node) => parseFloat(getComputedStyle(node).paddingLeft))).toBeGreaterThanOrEqual(8);
       await first.getByRole("textbox").fill("Superseded by the ranked plan.");
       await first.getByRole("button", { name: "Continue" }).click();
       await expect(second).toContainText("commits the move");
-      await expect(second).toContainText("Still waiting on it: Waits elsewhere.");
+      await expect(second).toContainText("No longer depending on it: Waits elsewhere.");
       await second.getByRole("button", { name: "Cancel" }).click();
       await expect(second).toBeHidden();
       expect(fs.existsSync(path.join(root, "docs/plans/backlog/alpha-free.md"))).toBe(true);
 
-      await blockFor(page, "Free one").getByRole("button", { name: "Archive plan" }).click();
+      await archive("Free one").click();
       await expect(first.getByRole("textbox")).toHaveValue("");
       await first.getByRole("textbox").fill("Superseded by the ranked plan.");
       await first.getByRole("button", { name: "Continue" }).dblclick();
@@ -524,23 +604,26 @@ test.describe("Backlog directory and ordering", () => {
       await expect(second).toBeHidden();
       await expect(blockFor(page, "Free one")).toHaveCount(0);
       expect(fs.readFileSync(moved("alpha-free.md"), "utf8")).toContain("Superseded by the ranked plan.");
-      expect(git("show", "--no-renames", "--name-only", "--format=", "HEAD").trim().split("\n").sort()).toEqual(["docs/plans/archived/alpha-free.md", "docs/plans/backlog/alpha-free.md"]);
+      expect(git("show", "--no-renames", "--name-only", "--format=", "HEAD").trim().split("\n").sort()).toEqual(["docs/plans/archived/alpha-free.md", "docs/plans/backlog/alpha-free.md", "docs/plans/backlog/beta-after.md"]);
+      expect(fs.readFileSync(path.join(root, "docs/plans/backlog/beta-after.md"), "utf8")).toMatch(/^depends_on: \[\]$/m);
       expect(git("status", "--porcelain").trim()).toBe("?? docs/plans/plans-order.json");
 
-      // A linked block goes together, one commit each.
-      await blockFor(page, "Chain root").getByRole("button", { name: "Archive linked plans" }).click();
-      const linked = page.getByRole("dialog", { name: "Archive these 2 linked plans?" });
-      await expect(linked.getByRole("listitem")).toHaveText(["Chain root", "Chain leaf"]);
+      // One plan of a linked block goes alone; the survivor stops depending on it and stays.
+      await archive("Chain root").click();
+      const linked = page.getByRole("dialog", { name: 'Archive "Chain root"?' });
       await linked.getByRole("textbox").fill("Abandoned.");
       await linked.getByRole("button", { name: "Continue" }).click();
-      await second.getByRole("button", { name: "Archive 2 Plans" }).click();
+      await expect(second).toContainText("No longer depending on it: Chain leaf.");
+      await second.getByRole("button", { name: "Archive Plan" }).click();
       await expect(second).toBeHidden();
-      expect(fs.existsSync(moved("alpha-root.md")) && fs.existsSync(moved("alpha-leaf.md"))).toBe(true);
+      expect(fs.existsSync(moved("alpha-root.md"))).toBe(true);
+      await expect(archive("Chain leaf")).toBeEnabled();
+      expect(fs.readFileSync(path.join(root, "docs/plans/backlog/alpha-leaf.md"), "utf8")).toMatch(/^depends_on: \[\]$/m);
 
       // The route itself refuses a ranked plan, whatever a page sends.
       const refused = await page.evaluate(async (repositoryId) => {
         const { portalPostJson } = await import("/portal/shared/api.js");
-        return portalPostJson("/api/plans/archive", { repositoryId, ids: ["arkranked"], reason: "No." }).catch((err) => err.message);
+        return portalPostJson("/api/plans/archive", { repositoryId, id: "arkranked", reason: "No." }).catch((err) => err.message);
       }, entry.repositoryId);
       expect(refused).toContain("Only unprioritized Backlog plans");
       expect(fs.existsSync(path.join(root, "docs/plans/backlog/alpha-ranked.md"))).toBe(true);
@@ -561,7 +644,7 @@ test.describe("Backlog directory and ordering", () => {
     await expect.poll(() => names(group.getByRole("group", { name: "Move" }))).toEqual(ranked);
     await expect(group.getByRole("group", { name: "Move" })).toHaveCount(1);
     await expect.poll(() => names(blockFor(page, "Diagnostics").getByRole("group", { name: "Move" }))).toEqual(ranked);
-    await expect.poll(() => names(blockFor(page, "Traces").getByRole("group", { name: "Move" }))).toEqual(["Move down", "Move to bottom", "Archive plan", "Drag to move"]);
+    await expect.poll(() => names(blockFor(page, "Traces").getByRole("group", { name: "Move" }))).toEqual(["Move down", "Move to bottom", "Drag to move"]);
     await expect(group.getByRole("button", { name: "Move up" })).toBeDisabled();
     await expect(blockFor(page, "Diagnostics").getByRole("button", { name: "Move to bottom" })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);

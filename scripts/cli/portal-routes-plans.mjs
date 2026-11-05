@@ -31,7 +31,7 @@ export const plansRoutes = defineRoutes([
   postJsonRoute("/api/plans/prompt", (handlers, body) => handlers.buildPlansPrompt(body)),
   postJsonRoute("/api/plans/order", (handlers, body) => handlers.saveBacklogOrder(body), { domainError: true }),
   postJsonRoute("/api/plans/namespace-pin", (handlers, body) => handlers.setBacklogNamespacePinned(body), { domainError: true }),
-  postJsonRoute("/api/plans/archive", (handlers, body) => handlers.archiveBacklogPlans(body), { domainError: true }),
+  postJsonRoute("/api/plans/archive", (handlers, body) => handlers.archiveBacklogPlan(body), { domainError: true }),
   {
     method: "POST",
     path: "/api/plans/refresh",
