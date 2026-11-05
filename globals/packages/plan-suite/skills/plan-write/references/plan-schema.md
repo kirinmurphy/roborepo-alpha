@@ -183,7 +183,7 @@ These apply to most software projects and need no per-repository declaration:
 | `git` | Git operations, branch and worktree models, merge and history behavior |
 | `infra` | Build, release, packaging, distribution, dependency and environment management |
 | `os` | Operating-system-specific behavior: path semantics, platform detection, per-OS support |
-| `test` | Test harness, fixtures, coverage, CI verification strategy |
+| `testing` | Test harness, fixtures, coverage, flaky tests, CI failures, CI verification strategy |
 | `docs` | Documentation systems, reference material, authoring conventions |
 | `security` | Trust boundaries, permissions, secrets handling, supply-chain concerns |
 | `perf` | Work whose primary goal is efficiency: latency, memory, cost |
@@ -215,6 +215,10 @@ the plan findable among its siblings.
 
 Prefer the universal namespace only when the work genuinely is generic — cross-cutting Git
 mechanics, platform path handling, or build tooling that no project namespace describes better.
+
+Choose by what the plan changes, not what it mentions or how it is verified. A plan that fixes a
+flaky test's setup is `testing` even when the test covers `ui`; a plan that evaluates how a feature
+behaves belongs to that feature, not to `testing`.
 
 If none of the available namespaces fits, propose adding one to the project config rather than
 inventing an unlisted prefix — an unlisted prefix is how the vocabulary decays into the ad-hoc

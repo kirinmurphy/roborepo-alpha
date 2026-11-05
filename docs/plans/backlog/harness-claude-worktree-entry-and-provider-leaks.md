@@ -95,7 +95,7 @@ manifests and their readers use `app`.
 | --- | --- |
 | `4zyo2woj` (`backlog/harness-codex-sandbox-boundaries-and-provider-leaks.md`) | The Codex series owns its companion work. Part 1 (`hr78g4sj`) moves Codex sources to `globals/harnesses/codex/hooks/`; Part 2 owns credential protection. Part 1 may declare a Codex worktree folder once this plan adds `agentWorktreeDirs` |
 | `wjlt1zvf` (`review/harness-hook-readiness-provider-adapters.md`) | Changes Codex hook merge order and `hook-composition-check.mjs`. No shared files with this plan; its own leak table is not repeated here |
-| `7k3m9qd` (`backlog/package-resource-provider-delivery.md`) | Owns the per-harness branches in `scripts/cli/packages.mjs` |
+| `7k3m9qd` (`backlog/packages-resource-provider-delivery.md`) | Owns the per-harness branches in `scripts/cli/packages.mjs` |
 | `harness-capability-derived-resource-targeting` | Changes how `hooks` resources name their harnesses; no shared files |
 | `backlog/telemetry-repository-attribution-and-reset.md` | Owns telemetry repository aliases and canonical labels, the telemetry half of the sidebar report |
 

@@ -25,7 +25,7 @@ import { LIFECYCLE_MODEL } from "./lifecycle-manifest.mjs";
 
 // Namespaces that apply to most software projects and need no per-repository declaration.
 export const UNIVERSAL_NAMESPACES = Object.freeze([
-  "cli", "git", "infra", "os", "test", "docs", "security", "perf",
+  "cli", "git", "infra", "os", "testing", "docs", "security", "perf",
 ]);
 
 // Lifecycles whose filenames are still governed by the convention: every stage a plan can still
@@ -130,11 +130,11 @@ export function validatePlanNaming({ filename, lifecycle, projectNamespaces = []
   return findings;
 }
 
-// Namespaces may themselves contain hyphens — `usage-statusline` and `plan-lifecycle` are both
-// declared in this repository — so the prefix cannot be read as "everything before the first
-// hyphen". Match the longest declared namespace the stem actually starts with, and require a
-// hyphen after it so `plan` never claims `plan-lifecycle-foo.md` out from under the more specific
-// namespace, and `perf` never matches `performance-budget.md`.
+// Namespaces may themselves contain hyphens — `agent-config` and `local-data` are both declared in
+// this repository — so the prefix cannot be read as "everything before the first hyphen". Match the
+// longest declared namespace the stem actually starts with, and require a hyphen after it so a
+// shorter namespace never claims a file out from under a longer one that starts with it, and `perf`
+// never matches `performance-budget.md`.
 function matchNamespace(stem, allowed) {
   return [...allowed]
     .sort((a, b) => b.length - a.length)
