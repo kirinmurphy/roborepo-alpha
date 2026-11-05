@@ -43,7 +43,7 @@ Keep the file to values. The naming rules live in `/plan-write`, not in per-repo
 ### 3. Namespaces
 
 A plan filename is `<namespace>-<slug>.md`. The universal namespaces (`cli`, `git`, `infra`, `os`,
-`test`, `docs`, `security`, `perf`) need no declaration; the config holds only the project's own
+`testing`, `docs`, `security`, `perf`) need no declaration; the config holds only the project's own
 domain vocabulary, as `"<namespace>": "<one line on what it covers>"`.
 
 Propose an initial set derived from the repository:
