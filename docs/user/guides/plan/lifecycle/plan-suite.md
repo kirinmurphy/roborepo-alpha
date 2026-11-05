@@ -192,7 +192,7 @@ A new review runs these steps:
 4. runs one validator pass over the merged result, with the same classes as `/plan-execute`, and
    records its findings in the plan's `## Review` section;
 5. fixes every `fix` finding in the same chat, code included, each in its own commit, and checks
-   again until a pass finds nothing to fix. A fixed finding reads
+   again until a pass finds nothing to fix, for at most eight passes. A fixed finding reads
    `- [x] … — fixed in review (<short commit>)`;
 6. records the Result as complete once findings and required manual checks are resolved, or pending
    while they remain open, then shows you a review packet: each acceptance criterion with its evidence, what changed, the

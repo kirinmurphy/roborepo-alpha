@@ -7,7 +7,7 @@ description: Use for the human review of a finished repository plan, resuming a 
 
 Bring one finished plan to its human review, and record whether the human accepts it.
 
-`/plan-execute` moved the plan here after its Validation Loop came back clean; that says the work
+`/plan-execute` moved the plan here after its Validation Loop ended; that says the work
 was checked, not that a human accepted it. This command rechecks the work against the current base,
 fixes what it can in the same session, and puts the result in front of the human. The human's
 explicit approval is the only thing that clears a plan for its merge: a deterministic gate cannot
@@ -26,7 +26,7 @@ Before ending a response, apply the first matching outcome:
 | --- | --- |
 | Human explicitly pauses, defers, cancels, or requests a separate session | Honor that choice and report the remaining work without pressing for another decision. |
 | Approval already fresh and durable, or plan already closed | Report that terminal result; do not ask again. |
-| A refusal, unavailable prerequisite, or the five-pass limit | Explain the blocker and prompt for the repair, prerequisite, or supported handoff needed to resume. Do not bypass the gate or retry indefinitely. |
+| A refusal or unavailable prerequisite | Explain the blocker and prompt for the repair, prerequisite, or supported handoff needed to resume. Do not bypass the gate or retry indefinitely. |
 | Authorized work the agent can perform | Continue working; a checklist or pending report is not a stopping point. |
 | Permission, a design decision, missing input, or a required human test | Ask a concrete question naming the action or decision that unblocks review; continue independent work while waiting. |
 | Review complete; explicit approval still needed | Present the evidence and ask for approval of the exact reviewed commit through step 6. |
@@ -141,8 +141,9 @@ Judge the work from the plan, the code, and the checks, not from the implementat
 of it. The human's review is the independent check; this step makes sure they review a clean result.
 
 - Read the plan's requirements, acceptance criteria, `## Documentation impact`, Decision Log, Open
-  Questions, and the `## Review` record the Validation Loop left. A plan without a clean validation
-  record was submitted without one; say so in the record.
+  Questions, and the `## Review` record the Validation Loop left. A plan whose record shows neither
+  a clean pass nor a loop that reached its cap was submitted without validation; say so in the
+  record.
 - Read the repository's CI result for the reviewed commit, from its forge when available. Run the
   canonical completion gate locally, once, only when no CI result exists for that commit; a CI run
   still in progress is waited for, not reproduced locally. Run the
@@ -163,7 +164,7 @@ of it. The human's review is the independent check; this step makes sure they re
   narration that was already there is not a finding, and length alone is never a finding.
 - Classify every finding by consequence, not size: **fix** when the right fix is clear and stays
   within the plan's requirements and specified contracts, code included; **escalate** when it
-  chooses between real alternatives, changes requirements or a contract the plan did not specify,
+  chooses between real alternatives, each with a compelling argument for it, changes requirements or a contract the plan did not specify,
   or lands outside the plan.
 - Do not fix anything while checking. Record every finding first, so each fix answers a recorded
   finding.
@@ -218,8 +219,8 @@ than replacing it with an implied new approval.
 
 ### 5. Fix what has a clear fix
 
-Fix every finding classed **fix** in this session, code included. A separate session for a fix
-whose answer is obvious costs a round and a full re-review and buys nothing; what independence
+Fix every finding classed **fix** in this session, code included, without asking the human. A separate
+session for a fix whose answer is obvious costs a round and a full re-review and buys nothing; what independence
 protects is the human's decision, and escalated findings still go to them.
 
 For each finding fixed here:
@@ -232,8 +233,10 @@ For each finding fixed here:
 3. Check the finding off with its commit: `- [x] Missing retry test — fixed in review (<short commit>)`.
 
 After code fixes, run another Validator pass over the result, as in step 3. Stop when a pass reports
-no **fix** findings, or after five passes, leaving the rest open and reporting them. Commit the
-updated plan in the worktree.
+no **fix** findings, or after eight passes. The cap limits passes only: the eighth pass's findings are
+fixed like any other pass's, then the review continues without another pass. Record under
+`### Verification` that those fixes were not revalidated, and name them in the review packet. Commit
+the updated plan in the worktree.
 
 ### 6. Present the review and ask for approval
 
@@ -330,7 +333,7 @@ Review result
 - Base synchronization: up-to-date | merged <commit> | conflicts resolved <commit> | refused (<reason>) | not rerun (<resume reason>)
 - Tests: <command> -> pass|fail | reused at <commit> | not rerun (already approved|already closed)
 - Base failures: <checks that fail on the base branch too, or "none">
-- Validator passes: <count>, clean | stopped at the cap with <count> open | reused at <commit> | not rerun (<resume reason>)
+- Validator passes: <count>, clean | reached the cap, last fixes not revalidated | reused at <commit> | not rerun (<resume reason>)
 - Findings: <open count> open, <count> fixed in review (<commits>), <count> escalated
 - Not tested entries open: <count>
 - Review result: complete at <commit> | pending | stale | missing

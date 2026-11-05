@@ -297,6 +297,8 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "Commit the fix on its own, separate from the plan record",
     "fixed in review (<short commit>)",
     "run another Validator pass over the result",
+    "without asking the human",
+    "the eighth pass's findings are fixed like any other pass's",
   ]);
   includesAll("plan-review packet", review.slice(order[5], order[6]), [
     "each acceptance criterion with the code and test evidence",
