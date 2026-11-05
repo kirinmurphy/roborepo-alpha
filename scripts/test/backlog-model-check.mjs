@@ -116,8 +116,8 @@ const records = [
 ];
 const statusOf = (dependencies) => openPrerequisites(planRecord("self", "agents", "backlog", dependencies), records)
   .map((item) => `${item.namespace ? `${item.namespace}/` : ""}${item.label}: ${item.status}`);
-assert.deepEqual(statusOf(["ranked"]), ["strategy/ranked: "], "a prerequisite still in Backlog needs no status");
-assert.deepEqual(statusOf(["local"]), ["agents/local: "]);
+assert.deepEqual(statusOf(["ranked"]), ["strategy/ranked: Backlog"], "a prerequisite still in Backlog names it too");
+assert.deepEqual(statusOf(["local"]), ["agents/local: Backlog"]);
 assert.deepEqual(statusOf(["working"]), ["agents/working: Active"]);
 assert.deepEqual(statusOf(["done"]), []);
 assert.deepEqual(statusOf(["retired"]), ["agents/retired: Archived"]);

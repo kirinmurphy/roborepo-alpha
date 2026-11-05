@@ -24,8 +24,8 @@ function pendingKeys(view) {
 }
 
 // A plan's unfinished prerequisites in its own repo, each with its namespace. Only a completed plan
-// satisfies a prerequisite. A missing one stays listed, with no plan to open. Status is empty for a
-// plan still in Backlog, the expected case, and names anything else.
+// satisfies a prerequisite. A missing one stays listed, with no plan to open. Status names the
+// lifecycle in every case, Backlog included, so a list mixing Backlog and Active plans reads evenly.
 export function openPrerequisites(record, allRecords) {
   const repositoryRecords = allRecords.filter((item) => item.repository.id === record.repository.id);
   return (record.plan.dependencies || []).flatMap((id) => {
@@ -38,7 +38,7 @@ export function openPrerequisites(record, allRecords) {
       label: target.plan.title,
       namespace: target.plan.namespace,
       lifecycle: target.plan.lifecycle,
-      status: target.plan.lifecycle === "backlog" ? "" : target.plan.lifecycle.charAt(0).toUpperCase() + target.plan.lifecycle.slice(1),
+      status: target.plan.lifecycle.charAt(0).toUpperCase() + target.plan.lifecycle.slice(1),
     }];
   });
 }

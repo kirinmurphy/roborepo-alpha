@@ -1,7 +1,7 @@
 // <backlog-block> — one movable unit in Backlog's Prioritize mode: a single plan row, or a container of
 // linked plans, drawn as a dependency tree, that moves as one. Set .block ({ ids, keys }), .section
-// ("ordered" | "needs"), .index, .count, .plans (key -> record), .locked, .held, and .onOpen right after
-// creation, then append to the DOM. A locked block shows a badge in place of its controls; a held one keeps them, disabled, while a
+// ("ordered" | "needs"), .index, .count, .plans (key -> record), .locked, .held, .onOpen, and
+// .namespaceAction (see dependencyList) right after creation, then append to the DOM. A locked block shows a badge in place of its controls; a held one keeps them, disabled, while a
 // Save settles.
 //
 // It owns its controls and dispatches a bubbling `block-move` event with { section, index, action };
@@ -64,7 +64,7 @@ class BacklogBlockElement extends HTMLElement {
     }
     // Anything else in this block is already drawn by the tree.
     const drawnIds = new Set(this.block.ids);
-    const waiting = planDependencies(record, [...this.plans.values()], this.onOpen, drawnIds);
+    const waiting = planDependencies(record, [...this.plans.values()], this.onOpen, { drawnIds, namespaceAction: this.namespaceAction });
     if (waiting) node.append(waiting);
     return node;
   }

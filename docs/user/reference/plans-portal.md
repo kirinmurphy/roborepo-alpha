@@ -157,10 +157,10 @@ blocker and with every unfinished prerequisite already in Ready, Active, or Revi
 appears, so a repo with nothing ranked shows no Next up. Namespaces stay in directory order, so it claims no
 order between them. Filters narrow it, and a card's namespace badge opens that namespace.
 
-**Waiting on** lists a Backlog plan's unfinished prerequisites in Details and the drawer, each with a link that
-opens it. A prerequisite in another namespace also shows that namespace's badge, and one outside Backlog shows
-its lifecycle. Prioritize lists only the prerequisites its tree does not draw. Prerequisites never affect another
-namespace's order.
+**Waiting on** lists a Backlog plan's unfinished prerequisites in Details and the drawer, each with its lifecycle
+and a link that opens it. A prerequisite in another namespace also shows that namespace's badge. Outside the
+drawer, the badge opens that namespace, as the namespace filter does, when the namespace has plans in Backlog.
+Prioritize lists only the prerequisites its tree does not draw. Prerequisites never affect another namespace's order.
 
 **Details and Prioritize** show prioritized plans in the same order. Details is always flat cards, and its banner's
 **Prioritize Now** opens Prioritize. A namespace with only new plans opens in Prioritize directly. Prioritize shows compact rows and groups linked plans, and Save returns to

@@ -187,7 +187,7 @@ export function createBacklogController(deps) {
   function nextUpSection(entry, matchingKeys, cardActions) {
     const records = nextUp(entry, deps.getSnapshot().plans, matchingKeys);
     if (!records.length) return [];
-    const section = sectionNode("Next up", deps.cardGrid(records, { ...cardActions, onSelectNamespace: selectNamespace }));
+    const section = sectionNode("Next up", deps.cardGrid(records, { ...cardActions, onSelectNamespace: selectNamespace, namespaceAction: namespaceActionFor(entry) }));
     section.setAttribute("aria-label", "Next up");
     const title = section.querySelector(".backlog-section-title");
     const header = tpl("tpl-backlog-next-up-header");
@@ -240,7 +240,7 @@ export function createBacklogController(deps) {
       .map((key) => plans.get(key));
     const content = [];
     if (pendingCount) content.push(prioritizeBanner(pendingCount));
-    if (ordered.length) content.push(deps.cardGrid(ordered, cardActions));
+    if (ordered.length) content.push(deps.cardGrid(ordered, { ...cardActions, namespaceAction: namespaceActionFor(entry) }));
     return [namespaceHeader(entry, view), ...graphNotices(view), ...(content.length ? content : [deps.emptyState()])];
   }
 
@@ -252,9 +252,10 @@ export function createBacklogController(deps) {
 
   function renderOrdering(entry, view, plans) {
     const locked = view.locked || !view.writable;
+    const namespaceAction = namespaceActionFor(entry);
     const blockNode = (block, section, index, count) => {
       const node = document.createElement("backlog-block");
-      Object.assign(node, { block, section, index, count, plans, locked, held: Boolean(saving), onOpen: deps.onOpen });
+      Object.assign(node, { block, section, index, count, plans, locked, held: Boolean(saving), onOpen: deps.onOpen, namespaceAction });
       return node;
     };
     const nodes = [namespaceHeader(entry, view), ...graphNotices(view)];
@@ -265,7 +266,7 @@ export function createBacklogController(deps) {
       const list = document.createElement("div");
       list.className = "backlog-order-list";
       list.append(...draft.needs.map((block, index) => blockNode(block, "needs", index, draft.needs.length)));
-      for (const key of view.unrankable) list.append(unrankableRow(plans.get(key)));
+      for (const key of view.unrankable) list.append(unrankableRow(plans.get(key), namespaceAction));
       nodes.push(sectionNode("Needs prioritization", list));
     }
     const orderedList = document.createElement("div");
@@ -311,13 +312,13 @@ export function createBacklogController(deps) {
     return fill(tpl("tpl-backlog-move-notice"), { text: parts.join(" ") });
   }
 
-  function unrankableRow(record) {
+  function unrankableRow(record, namespaceAction) {
     const reason = record.plan.id ? `Duplicate id: ${record.plan.id}` : "No id";
     const node = fill(tpl("tpl-backlog-repair"), { filename: reason });
     const title = node.querySelector("[data-slot=title]");
     title.textContent = record.plan.title;
     title.addEventListener("click", () => deps.onOpen(record.key));
-    const waiting = planDependencies(record, deps.getSnapshot().plans, deps.onOpen);
+    const waiting = planDependencies(record, deps.getSnapshot().plans, deps.onOpen, { namespaceAction });
     if (waiting) node.append(waiting);
     return node;
   }
@@ -410,6 +411,14 @@ export function createBacklogController(deps) {
     history.pushState(null, "", hrefWithNamespace(location.href, namespace));
     window.scrollTo(0, 0);
     deps.onRender();
+  }
+
+  // A Waiting on badge does what the namespace filter does: it asks before leaving unsaved changes,
+  // and it only leads to a namespace the filter offers. A prerequisite's namespace may have no plans
+  // in Backlog, and so no screen to open.
+  function namespaceActionFor(entry) {
+    const offered = new Set(namespaceOptions(entry).map(([value]) => value));
+    return (namespace) => (offered.has(namespace) ? (next) => confirmLeave(() => selectNamespace(next)) : null);
   }
 
   function repositoryCrumbs(entry, linked = false) {

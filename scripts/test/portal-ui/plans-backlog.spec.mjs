@@ -102,7 +102,7 @@ test.describe("Backlog directory and ordering", () => {
   const drawerHeading = (page, title) => page.getByRole("dialog").getByRole("heading", { level: 2, name: title, exact: true });
   const scrollsSideways = (page) => page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
   const waitingOn = (scope) => scope.getByRole("list", { name: "Waiting on", exact: true }).getByRole("listitem");
-  // A prerequisite's badge is plain text, which has no role of its own, so it is found by its text.
+  // A prerequisite's badge is a link on Backlog's lists, but plain text with no role in the drawer, so it is found by its text.
   const prerequisiteBadge = (scope, namespace) => waitingOn(scope).getByText(namespace, { exact: true });
 
   test("repositories lead to namespaces, with No namespace last and counts of plans", async ({ page }) => {
@@ -400,10 +400,10 @@ test.describe("Backlog directory and ordering", () => {
     await openNamespace(page, "beta");
     const card = page.locator("plan-card");
     await expect(card).toContainText("Waiting on:");
-    await expect(waitingOn(card)).toHaveText(/^\s*alpha\s+Storage\s*$/);
+    await expect(waitingOn(card)).toHaveText(/^\s*alpha\s+Storage\s+\(Backlog\)\s*$/);
     await page.getByRole("button", { name: "Prioritize", exact: true }).click();
     const block = blockFor(page, "Beta one");
-    await expect(waitingOn(block)).toHaveText(/^\s*alpha\s+Storage\s*$/);
+    await expect(waitingOn(block)).toHaveText(/^\s*alpha\s+Storage\s+\(Backlog\)\s*$/);
     await block.getByRole("button", { name: "Storage", exact: true }).click();
     await expect(drawerHeading(page, "Storage")).toBeVisible();
   });
@@ -537,7 +537,7 @@ test.describe("Backlog directory and ordering", () => {
       await page.locator("plan-card").getByText("Beta one", { exact: true }).click();
       const drawer = page.getByRole("dialog");
       await expect(drawerHeading(page, "Beta one")).toBeVisible();
-      await expect(waitingOn(drawer)).toHaveText(/^\s*alpha\s+Diagnostics\s*$/);
+      await expect(waitingOn(drawer)).toHaveText(/^\s*alpha\s+Diagnostics\s+\(Backlog\)\s*$/);
       await drawer.getByRole("button", { name: "Diagnostics", exact: true }).click();
       await expect(drawerHeading(page, "Diagnostics")).toBeVisible();
 
@@ -558,11 +558,50 @@ test.describe("Backlog directory and ordering", () => {
       await expect(drawerHeading(page, "Blocked active")).toBeVisible();
       await drawer.getByRole("button", { name: "Beta one" }).first().click();
       await expect(drawerHeading(page, "Beta one")).toBeVisible();
-      await expect(waitingOn(drawer)).toHaveText(/^\s*alpha\s+Storage\s*$/);
+      await expect(waitingOn(drawer)).toHaveText(/^\s*alpha\s+Storage\s+\(Backlog\)\s*$/);
       const badge = prerequisiteBadge(drawer, "alpha");
       expect(await badge.evaluate((node) => getComputedStyle(node).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
     } finally {
       fs.rmSync(path.join(repo, file), { force: true });
+    }
+  });
+
+  test("a Waiting on namespace badge on a card opens that namespace, from Details", async ({ page }) => {
+    fs.writeFileSync(orderFile, JSON.stringify({ schemaVersion: 1, namespaces: { alpha: ["alphax03"], beta: ["betaon05"] } }));
+    const location = page.getByRole("navigation", { name: "Backlog location" });
+    await openNamespace(page, "beta");
+    await waitingOn(page.locator("plan-card")).getByRole("link", { name: "alpha", exact: true }).click();
+    await expect(location).toContainText("ALPHA");
+    expect(new URL(page.url()).searchParams.get("namespace")).toBe("alpha");
+  });
+
+
+  test("a Waiting on namespace badge in Prioritize changes namespace, asking first over unsaved changes", async ({ page }) => {
+    const file = "docs/plans/backlog/beta-two.md";
+    const activeOnly = "docs/plans/active/gamma-running.md";
+    try {
+      write("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A", beta: "B", gamma: "G" } }));
+      write(activeOnly, document({ id: "gammar11", title: "Running elsewhere" }));
+      write(file, document({ id: "betatw10", title: "Beta two", deps: ["alphaa01", "gammar11"] }));
+      await openNamespace(page, "beta");
+      await page.getByRole("button", { name: "Prioritize", exact: true }).click();
+      const list = waitingOn(blockFor(page, "Beta two"));
+      await expect(list).toHaveText([/alpha\s+Storage\s+\(Backlog\)/, /gamma\s+Running elsewhere\s+\(Active\)/]);
+      // No plan of gamma's is in Backlog, so the namespace filter has no such screen to offer.
+      await expect(list.getByRole("link", { name: "gamma", exact: true })).toHaveCount(0);
+      await expect(list.getByText("gamma", { exact: true })).toBeVisible();
+      const badge = list.getByRole("link", { name: "alpha", exact: true });
+      await expect(badge).toHaveAttribute("href", /namespace=alpha/);
+
+      await blockFor(page, "Beta two").getByRole("button", { name: "Move down" }).first().click();
+      await badge.click();
+      await expect(guardDialog(page)).toBeVisible();
+      await guardDialog(page).getByRole("button", { name: /save and continue/i }).click();
+      await expect(page.getByRole("navigation", { name: "Backlog location" })).toContainText("ALPHA");
+      expect(new URL(page.url()).searchParams.get("namespace")).toBe("alpha");
+    } finally {
+      write("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A", beta: "B" } }));
+      for (const item of [file, activeOnly]) fs.rmSync(path.join(repo, item), { force: true });
     }
   });
 

@@ -684,7 +684,7 @@ backlog-block.drop-after { box-shadow: 0 3px 0 var(--accent); }
   box-sizing: content-box;
   width: 2ch;
   /* The plan column's top padding, so the number sits on its first title's line. */
-  padding: 10px 8px 0;
+  padding: 14px 8px 0;
   border-right: 1px solid var(--line);
   border-radius: 7px 0 0 7px;
   background: color-mix(in srgb, var(--dim) 18%, var(--panel));
@@ -693,21 +693,24 @@ backlog-block.drop-after { box-shadow: 0 3px 0 var(--accent); }
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-.backlog-block-plans { display: grid; min-width: 0; padding: 6px 12px; }
-.backlog-tree-row { display: flex; align-items: stretch; min-width: 0; }
-/* No gap between rows, so each row's guide meets the next one. */
-.backlog-tree-guide { position: relative; flex: none; width: 20px; }
+.backlog-block-plans { display: grid; min-width: 0; padding: 10px 12px 10px 18px; }
+/* Linked plans are spaced by padding inside each row, not a gap between rows, so each row's guide
+ * still meets the next one. The guides' elbows follow it, to stay level with the row's title. */
+.backlog-tree-row { --backlog-row-top: 4px; display: flex; align-items: stretch; min-width: 0; }
+.backlog-tree-row + .backlog-tree-row { --backlog-row-top: 12px; }
+.backlog-tree-guide { --backlog-elbow-top: calc(var(--backlog-row-top) + 13px); position: relative; flex: none; width: 20px; }
 .backlog-tree-guide::before,
 .backlog-tree-guide::after { position: absolute; background: var(--dim); opacity: 0.6; }
 .backlog-tree-guide[data-line="pipe"]::before,
 .backlog-tree-guide[data-line="tee"]::before,
 .backlog-tree-guide[data-line="elbow"]::before { content: ""; left: 8px; top: 0; bottom: 0; width: 1px; }
-.backlog-tree-guide[data-line="elbow"]::before { bottom: auto; height: 17px; }
+.backlog-tree-guide[data-line="elbow"]::before { bottom: auto; height: var(--backlog-elbow-top); }
 .backlog-tree-guide[data-line="tee"]::after,
-.backlog-tree-guide[data-line="elbow"]::after { content: ""; left: 8px; right: 4px; top: 17px; height: 1px; }
-.backlog-plan { display: grid; flex: 1; gap: 2px; min-width: 0; padding: 4px 0; }
+.backlog-tree-guide[data-line="elbow"]::after { content: ""; left: 8px; right: 4px; top: var(--backlog-elbow-top); height: 1px; }
+.backlog-plan { display: grid; flex: 1; gap: 2px; min-width: 0; padding: var(--backlog-row-top) 0 4px; }
+.backlog-plan > .plan-dependencies { margin-top: 6px; }
 .backlog-block-body > .backlog-controls { padding-right: 8px; }
-.backlog-block-body.is-linked > .backlog-controls { align-self: start; padding-top: 8px; }
+.backlog-block-body.is-linked > .backlog-controls { align-self: start; padding-top: 12px; }
 .backlog-plan-title {
   padding: 0;
   border: none;
