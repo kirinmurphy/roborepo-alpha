@@ -1,7 +1,7 @@
 ---
 id: 9xzkn4vz
 priority: none
-next_action: Rerun required native deletion, browser, and parity checks in an environment permitting directory removal and localhost listeners; then rerun /plan-execute for completion and submission.
+next_action: Run npm run check in the external terminal and provide its result; then resume /plan-execute for completion and submission.
 blocked_by: []
 depends_on: []
 related: ["4xc0gjuw", "a7bslb00", "z3j2x3x1", "b2sgiejd", "l1mz96d9", "0jped168"]
@@ -495,19 +495,21 @@ Decided during promotion, each reversible by refining this plan before implement
 
 ## Open Questions
 
-- Required native verification is blocked by host permissions: even escalated commands receive
-  EPERM for removing temporary directories and binding localhost. Docker socket access is also
-  denied. This blocks the final verification task and submission for review, not implementation.
-  Resume the exact checks below in a permitted environment. No real worktree or legacy recovery
-  ref was removed to test this feature.
+- Full parity verification remains unresolved: the earlier `npm run check` failed in this
+  restricted session. The user has now confirmed all nine targeted native suites and all
+  16 worktree browser tests pass in the external terminal. Run the full parity gate there;
+  its result still blocks the final verification objective and submission for review.
 
 ## Not tested
 
-- [ ] Native checkout deletion, full preservation/restore/retry fixtures, and recreated-checkout
-      refusal need a host allowing temporary-directory removal/rename. Worktree lifecycle and
-      snapshot suites could not finish under EPERM restrictions.
-- [ ] Browser dialog interaction and visual layout need localhost listeners. Both normal and
-      escalated `npm run test:portal-ui -- --grep worktree` failed to bind 127.0.0.1.
+None remaining from targeted verification. The user supplied successful external-terminal
+results for the native and browser checks below; full parity remains an open verification task.
+
+## Decision Log
+
+- Removed the two host-blocked Not tested entries after the user supplied successful native
+  suite output and the browser runner's `16 passed (13.1s)` result on 2026-11-05. This is
+  user-provided execution evidence, not an agent rerun or a screenshot-based visual review.
 
 ## Review
 
@@ -613,3 +615,15 @@ Decided during promotion, each reversible by refining this plan before implement
 - Completion preflight refuses submission only because the required-verification objective
   remains unchecked; it confirms the assigned worktree, clean Git state, feature commits,
   empty dependency blockers, and review-validator checks. The plan stays active and unpushed.
+
+### External-terminal verification supplied by the user — 2026-11-05
+
+- All nine native suites completed successfully: worktree-artifacts, worktree-discard,
+  worktree-lifecycle, worktree-snapshot, worktree-legacy-recovery, retention-policy,
+  plan-close-integration, cli-command-catalog, and cli-surface-integration.
+- The native output includes actual automatic checkout/branch removal, isolated retry,
+  recreated-checkout refusal, legacy artifact restore, and concurrent log assertions.
+- `npm run test:portal-ui -- --grep worktree`: 16 passed in 13.1 seconds. The temporary
+  portal started successfully; the reported ephemeral URL is not a persistent demo link.
+- These external results supersede the earlier targeted EPERM failures. The full
+  `npm run check` result remains pending; the plan stays active until it is resolved.
