@@ -518,6 +518,8 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - [x] Nothing asserts that badges stay legible in the light theme. — fixed (2c9f548a)
 - [x] The added tests use `#drawer-title` and `#drawer-close` where roles exist. — fixed (2c9f548a)
 - [x] `### Verification` omits the UI review's validation passes, and two badge comments describe only the repo filter. — fixed (2c9f548a), with the Verification lines below
+- [x] On the No namespace screen at phone width, a long filename with no hyphens is clipped with no way to scroll. — fixed (e8999b57)
+- [x] The "Long Next up" risk still counts 14 namespaces; `main`'s restructure leaves 12. — fixed (e8999b57)
 
 ### Verification
 
