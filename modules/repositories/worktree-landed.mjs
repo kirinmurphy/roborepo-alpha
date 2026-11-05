@@ -14,28 +14,37 @@ const GIT_TIMEOUT_MS = 10000;
 // result to trust: when it is still a first-parent base commit after the fork and still absorbs the
 // branch's current tip, that one merge check replaces the scan (`reused: true`). Otherwise the full
 // scan runs as if nothing had been recorded.
-async function inspectLanding(cwd, branch, temporary, { base = null, recorded = null, scanLimit = FIRST_PARENT_SCAN_LIMIT, runGit = runGitProcess } = {}) {
+async function inspectLanding(cwd, branch, temporary, { base = null, recorded = null, scanLimit = FIRST_PARENT_SCAN_LIMIT, runGit = runGitProcess, commit = null } = {}) {
   const git = (args, options = {}) => runGit(cwd, args, { timeoutMs: GIT_TIMEOUT_MS, ...options });
-  const baseRef = base || await defaultBase(git);
+  const baseRef = base || await defaultLandingBase(git);
   if (!baseRef) return verdict("base unavailable");
-  const tipResult = await git(["rev-parse", `refs/heads/${branch}`]);
+  const tipResult = await git(["rev-parse", "--verify", `${commit || `refs/heads/${branch}`}^{commit}`]);
   if (!tipResult.ok) return verdict("branch unavailable", { base: baseRef });
   const tip = tipResult.stdout.trim();
   const forkResult = await git(["merge-base", baseRef, tip]);
   if (!forkResult.ok) return verdict("fork unavailable", { base: baseRef, tip });
   const fork = forkResult.stdout.trim();
 
-  const reflog = await git(["reflog", "show", "--format=%H", `refs/heads/${branch}`], { maxBuffer: GIT_MAX_BINARY_BUFFER });
-  const reflogEntries = reflog.ok ? lines(reflog.stdout) : [];
-  // Without a reflog, a merged branch's original start cannot be reconstructed reliably. A
-  // conservative empty own-work range keeps it available for manual review.
-  const start = reflogEntries.at(-1) || tip;
-  const ownCommitsResult = await git(["rev-list", `${start}..${tip}`], { maxBuffer: GIT_MAX_BINARY_BUFFER });
-  const baseCommitsResult = await git(["rev-list", "--first-parent", baseRef], { maxBuffer: GIT_MAX_BINARY_BUFFER });
-  if (!ownCommitsResult.ok || !baseCommitsResult.ok) return verdict("history unavailable", { base: baseRef, tip, fork });
-  const baseFirstParent = new Set(lines(baseCommitsResult.stdout));
-  const ownWork = lines(ownCommitsResult.stdout).some((commit) => !baseFirstParent.has(commit));
-  if (!ownWork) return verdict("no own work", { base: baseRef, tip, fork, start });
+  // Recovery refs have no reliable creation reflog. Reachability proves their committed data
+  // directly; otherwise use the actual merge base for the same absorption scan as live branches.
+  let start = fork;
+  let ownWork = true;
+  if (commit) {
+    const reachable = await git(["merge-base", "--is-ancestor", tip, baseRef]);
+    if (reachable.ok) return verdict("landed", { landed: true, absorbingCommit: tip, reused: false, base: baseRef, tip, fork, start, ownWork, proof: "reachable" });
+    if (reachable.code !== 1) return verdict("history unavailable", { base: baseRef, tip, fork });
+  } else {
+    const reflog = await git(["reflog", "show", "--format=%H", `refs/heads/${branch}`], { maxBuffer: GIT_MAX_BINARY_BUFFER });
+    const reflogEntries = reflog.ok ? lines(reflog.stdout) : [];
+    // Without a reflog a live branch's original start cannot be reconstructed reliably.
+    start = reflogEntries.at(-1) || tip;
+    const ownCommitsResult = await git(["rev-list", `${start}..${tip}`], { maxBuffer: GIT_MAX_BINARY_BUFFER });
+    const baseCommitsResult = await git(["rev-list", "--first-parent", baseRef], { maxBuffer: GIT_MAX_BINARY_BUFFER });
+    if (!ownCommitsResult.ok || !baseCommitsResult.ok) return verdict("history unavailable", { base: baseRef, tip, fork });
+    const baseFirstParent = new Set(lines(baseCommitsResult.stdout));
+    ownWork = lines(ownCommitsResult.stdout).some((candidate) => !baseFirstParent.has(candidate));
+    if (!ownWork) return verdict("no own work", { base: baseRef, tip, fork, start });
+  }
 
   const candidatesResult = await git(["rev-list", "--first-parent", "--reverse", `${fork}..${baseRef}`], { maxBuffer: GIT_MAX_BINARY_BUFFER });
   if (!candidatesResult.ok) return verdict("history unavailable", { base: baseRef, tip, fork, start, ownWork });
@@ -72,7 +81,7 @@ async function inspectLanding(cwd, branch, temporary, { base = null, recorded = 
   return verdict("not absorbed", { base: baseRef, tip, fork, start, ownWork });
 }
 
-async function defaultBase(git) {
+export async function defaultLandingBase(git) {
   const remote = await git(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"]);
   if (remote.ok && remote.stdout.trim()) return remote.stdout.trim();
   for (const name of ["main", "master"]) {
@@ -90,6 +99,15 @@ function lines(output) {
 }
 
 export async function inspectBranchLanding(cwd, branch, options = {}) {
+  return inspectWithTemporaryObjects(cwd, branch, options);
+}
+
+export async function inspectCommitLanding(cwd, commit, options = {}) {
+  if (!/^[a-f0-9]{40,64}$/.test(commit)) return verdict("invalid commit identity");
+  return inspectWithTemporaryObjects(cwd, null, { ...options, commit });
+}
+
+async function inspectWithTemporaryObjects(cwd, branch, options) {
   return withTemporaryStorage("landing", async (temporary) => {
     const execute = options.runGit || runGitProcess;
     const deadline = Date.now() + 30000;

@@ -117,6 +117,22 @@ for (const [name, args] of [["validate", ["age4cm7r", "--json"]], ["start", ["ag
 }
 assert.doesNotMatch(rootHelp, /plans validate|plans start|plans stop-servers/, "internal plans commands stay out of root help");
 
+const worktrees = catalog.nodes.git.children.worktrees;
+const worktreeHelp = renderHelp(catalog, worktrees, ["git", "worktrees"]);
+assert.match(worktreeHelp, /discard/);
+assert.match(worktreeHelp, /legacy-recovery/);
+assert.doesNotMatch(worktreeHelp, /archive-remove/);
+assert.equal(worktrees.children["archive-remove"], undefined);
+for (const [name, args] of [
+  ["discard", ["feature/example", "--scope", "all", "--json"]],
+  ["discard", ["feature/example", "--receipt", "reviewed-receipt", "--apply"]],
+  ["legacy-recovery", ["--discard", "refs/roborepo/abandoned/example", "--approve", "reviewed-digest", "--apply"]],
+]) {
+  const resolved = resolveCommand(catalog, ["git", "worktrees", name, ...args]);
+  assert.equal(resolved.kind, "command");
+  assert.deepEqual(resolved.args, args);
+}
+
 const namespaceWithDefaultExecution = resolveCommand(catalog, ["config", "rules", "--check"]);
 assert.equal(namespaceWithDefaultExecution.kind, "command");
 assert.deepEqual(namespaceWithDefaultExecution.tokens, ["config", "rules"]);

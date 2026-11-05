@@ -1,16 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { GIT_MAX_BINARY_BUFFER, runGitProcess } from "./git-exec.mjs";
+import { discoverWorktreeArtifacts } from "./worktree-artifacts.mjs";
 
 export const SNAPSHOT_PREFIX = "refs/roborepo/worktree-archives/";
-export const DISPOSABLE_IGNORED = ["node_modules", "test-results"];
 const MODES = new Set(["100644", "100755", "120000"]);
-const ZERO = "0".repeat(40);
 
-// Raw inventories deliberately bypass add/checkout, filters, and the user's index. Preview callers
-// use an external object store; capture alone publishes objects in the common repository.
-export async function inventoryWorktree(cwd, { git = (args, options) => runGitProcess(cwd, args, options) } = {}) {
+// Raw preservation inventories bypass add/checkout, filters, and the user's index.
+export async function inventoryWorktree(cwd, { git = (args, options) => runGitProcess(cwd, args, options), pruneDisposable = true } = {}) {
   const read = async (args) => required(await git(args, args[0] === "ls-files" ? { maxBuffer: GIT_MAX_BINARY_BUFFER } : {}));
   const config = await read(["config", "--null", "--list"]);
   for (const record of config.split("\0")) {
@@ -38,6 +36,7 @@ export async function inventoryWorktree(cwd, { git = (args, options) => runGitPr
   const tracked = new Set(index.map((entry) => entry.path));
   const untracked = new Set((await read(["ls-files", "--others", "--exclude-standard", "-z"])).split("\0").filter(Boolean));
   const ignored = new Set((await read(["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"])).split("\0").filter(Boolean));
+  const disposable = new Set(pruneDisposable ? (await discoverWorktreeArtifacts(cwd, { git })).disposable.map((entry) => entry.path) : []);
   const entries = [];
   const walk = (relative) => {
     if (relative === ".git") return;
@@ -46,7 +45,7 @@ export async function inventoryWorktree(cwd, { git = (args, options) => runGitPr
     const stat = fs.lstatSync(absolute);
     const isTracked = tracked.has(relative);
     const isIgnored = !isTracked && !untracked.has(relative) && [...ignored].some((item) => relative === item.replace(/\/$/, "") || relative.startsWith(item.endsWith("/") ? item : `${item}/`));
-    if (isIgnored && DISPOSABLE_IGNORED.some((dir) => relative === dir || relative.startsWith(`${dir}/`))) return;
+    if (disposable.has(relative)) return;
     if (stat.isDirectory()) {
       if (fs.existsSync(path.join(absolute, ".git"))) throw new Error(`nested repository: ${relative}`);
       const children = fs.readdirSync(absolute).sort();
@@ -65,53 +64,6 @@ export async function inventoryWorktree(cwd, { git = (args, options) => runGitPr
   const attributes = await inspectRawAttributes(git, paths);
   const identity = { tip, worktree, branch: branch.ok ? branch.stdout.trim() : null, config, attributes, index, entries: entries.map(({ bytes, ...entry }) => entry) };
   return { ...identity, entries, fingerprint: checksum(Buffer.from(JSON.stringify(identity))) };
-}
-
-export async function createWorktreeSnapshot(cwd, { expectedFingerprint = null } = {}) {
-  try {
-    const inventory = await inventoryWorktree(cwd);
-    if (expectedFingerprint && expectedFingerprint !== inventory.fingerprint) throw new Error("worktree changed before snapshot");
-    const git = (args, options = {}) => runGitProcess(cwd, args, { timeoutMs: 10000, ...options });
-    const existing = required(await git(["for-each-ref", "--format=%(refname)", SNAPSHOT_PREFIX], { maxBuffer: GIT_MAX_BINARY_BUFFER }));
-    for (const ref of existing.trim().split("\n").filter(Boolean)) {
-      let manifest;
-      try {
-        manifest = JSON.parse(required(await git(["show", `${ref}:manifest.json`], { maxBuffer: GIT_MAX_BINARY_BUFFER })));
-        if (manifest?.fingerprint !== inventory.fingerprint) continue;
-        ({ manifest } = await readSnapshot(cwd, ref));
-      } catch { continue; }
-      return { ok: true, id: manifest.id, ref, fingerprint: inventory.fingerprint, reused: true, restoreCommand: `roborepo git worktrees restore ${manifest.id} --destination <new-path> --apply` };
-    }
-    const index = [];
-    for (const entry of inventory.index) {
-      const bytes = required(await git(["cat-file", "blob", entry.oid], { binary: true, maxBuffer: GIT_MAX_BINARY_BUFFER }));
-      index.push({ ...entry, checksum: checksum(bytes) });
-    }
-    const payload = [];
-    for (const entry of inventory.entries) {
-      if (!entry.bytes) { payload.push(entry); continue; }
-      const oid = required(await git(["hash-object", "-w", "--stdin"], { input: entry.bytes })).trim();
-      const { bytes, ...metadata } = entry;
-      payload.push({ ...metadata, oid });
-    }
-    const id = randomUUID();
-    const manifest = { version: 1, id, createdAt: new Date().toISOString(), tip: inventory.tip, worktree: inventory.worktree, branch: inventory.branch, fingerprint: inventory.fingerprint, index, entries: payload };
-    const layers = [];
-    for (const layer of ["index", "tracked", "untracked", "ignored"]) {
-      const entries = layer === "index" ? manifest.index : payload.filter((entry) => entry.layer === layer && entry.mode !== "directory");
-      layers.push({ path: layer, mode: "040000", type: "tree", oid: await writeTree(entries, git) });
-    }
-    const manifestOid = required(await git(["hash-object", "-w", "--stdin"], { input: JSON.stringify(manifest) })).trim();
-    const tree = await writeTree([{ path: "manifest.json", mode: "100644", oid: manifestOid }, ...layers], git);
-    const commit = required(await git(["-c", "user.name=RoboRepo", "-c", "user.email=archive@roborepo.local", "commit-tree", tree, "-p", inventory.tip], { input: "Recoverable worktree snapshot\n" })).trim();
-    await readSnapshot(cwd, commit);
-    const fresh = await inventoryWorktree(cwd);
-    if (fresh.fingerprint !== inventory.fingerprint) throw new Error("worktree changed during snapshot");
-    const format = required(await git(["rev-parse", "--show-object-format"])).trim();
-    const ref = `${SNAPSHOT_PREFIX}${id}`;
-    required(await git(["update-ref", ref, commit, format === "sha256" ? "0".repeat(64) : ZERO]));
-    return { ok: true, id, ref, commit, fingerprint: inventory.fingerprint, restoreCommand: `roborepo git worktrees restore ${id} --destination <new-path> --apply` };
-  } catch (error) { return { ok: false, reason: error.message }; }
 }
 
 export async function listWorktreeSnapshots(cwd) {
@@ -163,7 +115,7 @@ export async function restoreWorktreeSnapshot(cwd, id, destination, { apply = fa
     required(await git(["read-tree", "--empty"]));
     const input = manifest.index.map((entry) => `${entry.mode} ${entry.oid}\t${entry.path}\0`).join("");
     required(await git(["update-index", "-z", "--index-info"], { input }));
-    const restored = await inventoryWorktree(target);
+    const restored = await inventoryWorktree(target, { pruneDisposable: false });
     if (JSON.stringify(restored.index) !== JSON.stringify(manifest.index.map(({ checksum, ...entry }) => entry))) throw new Error("restored index verification failed");
     const comparable = (entries) => entries.map(({ bytes, oid, layer, ...entry }) => entry).sort((a, b) => a.path.localeCompare(b.path));
     if (JSON.stringify(comparable(restored.entries)) !== JSON.stringify(comparable(manifest.entries))) throw new Error("restored filesystem verification failed");

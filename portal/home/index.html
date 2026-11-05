@@ -159,28 +159,31 @@
         <div class="modal-body">
           <p class="worktree-remove-lead" data-slot="lead"></p>
           <p class="worktree-remove-status" data-slot="status"></p>
-          <p class="worktree-dialog-help">Archive and remove preserves staged, unstaged, untracked, and valuable ignored files in a verified local snapshot. Installed node_modules and test-results are excluded. Stop editors and agents writing here first: a write after the final check may be lost. Archives stay in this repo until explicitly deleted; they are not an off-machine backup.</p>
-          <pre class="worktree-remove-restore" data-slot="snapshot-result" hidden></pre>
-          <p class="worktree-remove-warning" data-slot="dirty" role="alert" hidden>This worktree still has uncommitted or untracked changes. These changes and files cannot be retrieved after deletion. The backup only preserves committed work.</p>
+          <p class="worktree-remove-warning" role="alert">Deletion is permanent. No recovery copy is created. Unmerged commits and local changes listed below will be discarded.</p>
+          <p class="worktree-dialog-help">Remote branches and PRs are untouched. Stop editors and agents writing here first: a write after the final check may be lost.</p>
           <p class="worktree-remove-warning" data-slot="plan" hidden></p>
-          <p class="worktree-remove-warning" data-slot="running" hidden>Something is running in this worktree. It is stopped before the folder is deleted.</p>
+          <p class="worktree-remove-warning" data-slot="running" hidden></p>
+          <p class="worktree-remove-warning" data-slot="warnings" hidden></p>
+          <section class="worktree-remove-inventory" aria-label="Deletion inventory">
+            <h3>Unmerged commits</h3><pre data-slot="commits"></pre>
+            <h3>Tracked changes</h3><pre data-slot="tracked"></pre>
+            <h3>Untracked files</h3><pre data-slot="untracked"></pre>
+            <h3>Ignored files</h3><pre data-slot="ignored"></pre>
+            <h3>Generated artifacts</h3><pre data-slot="disposable"></pre>
+          </section>
           <details class="worktree-remove-details">
-            <summary>Details and how to restore</summary>
+            <summary>Worktree details</summary>
             <dl class="worktree-remove-facts">
               <dt>Branch</dt><dd data-slot="branch"></dd>
               <dt>Folder</dt><dd data-slot="folder"></dd>
-              <dt>Backup</dt><dd data-slot="archive"></dd>
             </dl>
-            <p class="worktree-dialog-help">To bring it back, run:</p>
-            <pre class="worktree-remove-restore" data-slot="restore"></pre>
-            <p class="worktree-dialog-help">Copies of the branch on GitHub or any other remote are not touched.</p>
           </details>
           <div class="item-err" data-slot="error" hidden></div>
         </div>
         <div class="modal-actions">
           <button type="button" data-btn="secondary" data-close>Cancel</button>
-          <button type="button" data-btn="secondary" data-slot="archive-confirm">Archive and remove</button>
-          <button type="button" data-btn="cta" data-slot="confirm">Delete worktree</button>
+          <button type="button" data-btn="secondary" data-slot="refresh" hidden>Refresh preview</button>
+          <button type="button" data-btn="danger" data-slot="confirm" disabled>Delete worktree</button>
         </div>
       </form>
     </dialog>

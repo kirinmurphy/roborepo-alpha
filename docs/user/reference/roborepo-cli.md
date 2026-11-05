@@ -249,18 +249,24 @@ See [RoboRepo Skills Interface](roborepo-skills.md) for the managed/native bound
 ## Worktree preservation and recovery
 
 Use `git worktrees cleanup` to inspect committed landing and local preservation separately.
-The JSON rows retain their existing fields and include preservation state, remaining paths,
-assessed tips, evidence, snapshot/restore references, and individual removal outcomes.
+JSON rows include remaining paths, assessed tips, evidence, individual removal outcomes, and
+`legacyRecoveryPending`. New removals are permanent and create no recovery refs.
 See [worktree states and cleanup](repositories.md#worktree-states-and-cleanup) for the safety rules.
 
 | Command | Behavior |
 | --- | --- |
-| `roborepo git worktrees archive-remove <branch-or-name> [--confirm --apply] [--json]` | Preview or explicitly snapshot and remove one worktree |
-| `roborepo git worktrees archives [--json]` | List local snapshots and legacy committed-tip backups |
-| `roborepo git worktrees restore <archive-id> --destination <new-path> [--apply] [--json]` | Preview or restore into a fresh detached worktree |
+| `roborepo git worktrees cleanup --remove <branch-or-name> --confirm --apply [--json]` | Remove only proven-preserved work, or retry recorded branch retirement |
+| `roborepo git worktrees discard <branch-or-name> --scope leftovers\|all [--base <branch>] [--json]` | Preview complete loss and issue a one-use receipt |
+| `roborepo git worktrees discard --plan <id> [--base <branch>] [--json]` | Preview local leftovers; committed work must be landed |
+| `roborepo git worktrees discard <branch-or-name> --receipt <receipt> --apply [--json]` | Apply the reviewed receipt; also accepts `--plan <id>` instead of the selector |
+| `roborepo git worktrees legacy-recovery [--discard <ref>]... [--json]` | Inventory legacy refs and propose resolutions |
+| `roborepo git worktrees legacy-recovery [--discard <ref>]... --approve <digest> --apply [--json]` | Apply the exact reviewed migration inventory |
+| `roborepo git worktrees archives [--json]` | List existing snapshots and committed-tip backups |
+| `roborepo git worktrees restore <archive-id-or-abandoned-ref> --destination <new-path> [--apply] [--json]` | Preview or restore into a fresh detached worktree |
 | `roborepo plans merge-readiness <plan> [--base <branch>] [--json]` | Require committed fresh review/approval, a clean worktree, and current reviewed base |
 
-Stop writers before removal. Mutation failures return nonzero even when the snapshot was created;
-retain its recovery reference. Merge readiness is read-only: exit 0 means ready, 1 means refused,
-and 2 means usage error. It identifies assessed branch/base tips and repair instructions without
-authorizing a merge or observing remote pull-request protection.
+Stop writers before removal. Discard previews exit 0 only with a receipt; apply exits 0 only for
+`action: "removed"`. Stale receipts require another preview and confirmation. Partial removal
+reports a guarded retry command. The removed `archive-remove` command has no alias.
+Merge readiness is read-only: exit 0 means ready, 1 means refused, and 2 means usage error.
+It identifies assessed branch/base tips without authorizing a merge or checking remote protection.

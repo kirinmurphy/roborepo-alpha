@@ -187,6 +187,8 @@ of it part of the portable profile.
 | Telemetry experiments | `telemetry/experiments/` | one file per id | 5MB total |
 | Dense bash capture | `capture/<harness>/dense-bash.jsonl` | append-only JSONL | 30 days, 10MB |
 | Browser evidence | `browser/evidence/` | one file per screenshot, video, or trace | 14 days, 250MB |
+| Worktree removal log | `worktree-cleanup/removals.jsonl` | append/compact JSONL | 30 days, 2 MiB |
+| Worktree transactions | `worktree-cleanup/transactions/` | one file per removal | 7 days, 5 MiB |
 | Usage snapshots | `usage/latest/<harness>.json` | overwritten per harness | self-bounding |
 
 Each store trims itself on write; nothing runs on a schedule. Browser evidence is trimmed when a

@@ -140,23 +140,35 @@ guards, slash-command render checks, `package manage`/`bundle` onboarding/apply/
 `telemetry` enable/status/report, `run`, `mcp add` dry-runs plus real Codex/Claude writes against a
 throwaway harness root, lifecycle/rules dispatch, and menu fallback.
 
-## Worktree snapshot transactions
+## Worktree cleanup transactions
 
-`worktree-cleanup.mjs` coordinates CLI and repository-page requests through shared repository
-modules. `worktree-preservation.mjs` inventories index/filesystem layers and uses temporary objects
-for bounded coherent absorption proofs; `worktree-snapshot.mjs` owns capture, discovery,
-verification, and restore. The hardened Git seam accepts binary stdin/stdout and explicit temporary
-object/index paths while stripping inherited repository variables. Hooks, filesystem monitors,
-replacement objects, and merge renormalization are disabled. Unsupported drivers and index
-features refuse capture or proof.
+CLI and portal adapters in `worktree-cleanup.mjs` call shared repository policy. The ownership is:
 
-Snapshots are version-1 commits under create-only `refs/roborepo/worktree-archives/<uuid>` refs.
-The root parents the captured tip and retains a JSON manifest plus index/tracked/untracked/ignored
-payload trees. Listing and restore read those refs without depending on state-root records.
-Restore creates a fresh detached worktree without checkout, materializes raw blobs, rebuilds the
-index, and compares inventories. It refuses path collisions and symlink ancestors.
+| Module | Responsibility |
+| --- | --- |
+| `worktree-artifacts.mjs` | Shared ignored-artifact discovery and shape rules |
+| `worktree-preservation.mjs` | Coherent index/filesystem absorption proofs using temporary objects |
+| `worktree-discard.mjs` | Raw loss inventory, receipts, rechecks, and transaction storage |
+| `worktree-removal.mjs` | Cleanup locks, intent-before-mutation, checkout removal, branch retirement, bounded log |
+| `worktree-legacy-recovery.mjs` | Exact-object migration inventory, approved deletion, backup restoration |
+| `worktree-snapshot.mjs` | Preservation inventory and legacy snapshot listing, reading, verification, restore |
 
-The repository cleanup lock covers final surveys and removal. Snapshot, checkout removal, and
-expected-old-value branch retirement have separate outcomes. A snapshot remains discoverable
-through failure or retry; a changed or occupied branch is retained. The lock cannot prevent an
-external writer after the final survey, so callers must stop writers operationally.
+A receipt is a transaction in `previewed` state, with a 24-hour expiry. Applying checks repo,
+checkout identity, scope, tip, base and content under the repo cleanup lock, stops selected servers,
+and checks again. `leftovers` reproves committed landing. A matching receipt or a fresh preservation
+fingerprint authorizes forced checkout removal. The record moves through `applying` and
+`checkout-removed`; intent must be written before mutation. Expected-tip branch retirement has its
+own outcome. A successful operation deletes the transaction. Retry never uses the removal log as
+authority and refuses moved branches, occupied branches, and recreated checkouts.
+
+Transactions contain no file bytes or Git refs. Per-path digest detail over 2 MiB compacts to group
+digests. The file set is bounded to seven days and 5 MiB; pruning a receipt fails closed. Removal-log
+append and compaction share a state-root lock with a bounded wait, preventing concurrent repos from
+losing records during rename. The log keeps 30 days and 2 MiB. A lock cannot prevent editor writes
+after the final check; callers must stop writers operationally.
+
+Legacy snapshots are version-1 commits under `refs/roborepo/worktree-archives/<uuid>`, with a tip
+parent and manifest plus index/tracked/untracked/ignored payload trees. Production no longer writes
+them. Restore materializes raw blobs into a fresh detached checkout, rebuilds the index, and verifies
+every captured entry without disposable pruning. Migration proves each layer independently of the
+snapshot parent and deletes only exact object identities covered by the approved inventory digest.

@@ -386,3 +386,12 @@ selection supplies evidence only.
 After durable closure, cleanup uses the shared preservation assessment. Remaining or uncertain
 work keeps the checkout and offers explicit Archive and remove; closure stays committed even if
 cleanup fails. See [the recovery commands](repositories.md#worktree-states-and-cleanup).
+
+## Worktree deletion and plan closure
+
+Home's **Delete worktree** action previews the complete loss before a permanent deletion. It lists
+unmerged commits and tracked, untracked, ignored, and disposable content, warns about active plans,
+and creates no recovery copy. Changes after preview require a refresh and renewed confirmation.
+Deleting a worktree does not close its plan. Conversely, `/plan-close` commits durable completion
+before cleanup; unresolved local work can keep the checkout while the plan remains completed.
+See [worktree cleanup and discard](repositories.md#worktree-states-and-cleanup) for the shared rules.

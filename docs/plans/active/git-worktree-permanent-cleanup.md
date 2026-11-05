@@ -1,7 +1,7 @@
 ---
 id: 9xzkn4vz
 priority: none
-next_action: Run /plan-execute to implement permanent deletion, the discard receipt, and the legacy recovery migration; ask before creating the worktree.
+next_action: Finish independent validation and rerun native deletion and browser checks in an environment permitting temporary-directory removal and localhost listeners.
 blocked_by: []
 depends_on: []
 related: ["4xc0gjuw", "a7bslb00", "z3j2x3x1", "b2sgiejd", "l1mz96d9", "0jped168"]
@@ -341,32 +341,32 @@ Module ownership: `modules/repositories/worktree-artifacts.mjs` holds the dispos
 records. `worktree-snapshot.mjs` keeps inventory, listing, reading, and restore, and loses capture.
 `scripts/cli/worktree-cleanup.mjs` and the portal routes stay thin adapters.
 
-- [ ] Inventory consumers of `archive-remove`, `createWorktreeSnapshot`, `archiveBranchTip`,
+- [x] Inventory consumers of `archive-remove`, `createWorktreeSnapshot`, `archiveBranchTip`,
       `retryArchivedBranchRetirement`, `verifiedSnapshot`, and `discardChanges` before changing them.
-- [ ] Add the disposable policy with `-z` discovery. Use it in `worktree-guards.mjs` and the
+- [x] Add the disposable policy with `-z` discovery. Use it in `worktree-guards.mjs` and the
       preservation inventory; retain tracked-descendant visibility and nested-repository detection.
-- [ ] Add the consent inventory, and the receipt and transaction records, with cross-process
+- [x] Add the consent inventory, and the receipt and transaction records, with cross-process
       locking, one-use consumption, expiry, and evidence-write failure handling.
-- [ ] Remove backup and snapshot creation from `removeWorktree` and `cleanupWorktrees`. Replace
+- [x] Remove backup and snapshot creation from `removeWorktree` and `cleanupWorktrees`. Replace
       `verifiedSnapshot` with explicit preservation evidence or a validated receipt, and gate
       `--force` on them. Narrow `cleanup --remove`, and add the record-based retry.
-- [ ] Add the `discard` command definition and adapter, remove the `archive-remove` definition and
+- [x] Add the `discard` command definition and adapter, remove the `archive-remove` definition and
       `worktreeArchiveCommand` branch, and wire `scripts/cli/telemetry.mjs` handlers and
       `scripts/cli/portal-routes-repositories.mjs` to the contract above.
-- [ ] Simplify `portal/home/worktree-dialogs.js`, `portal/home/index.html`, `portal/home/api.js`, and
+- [x] Simplify `portal/home/worktree-dialogs.js`, `portal/home/index.html`, `portal/home/api.js`, and
       related styles; replace backup promises with complete loss warnings and stale-preview
       handling. Preserve existing stop-server and active-plan behavior.
-- [ ] Stop `scripts/cli/worktree-observations.mjs` reporting recognized artifacts as blocking
+- [x] Stop `scripts/cli/worktree-observations.mjs` reporting recognized artifacts as blocking
       reasons, and stop the dialog parsing reason text to detect a dirty checkout.
-- [ ] Update `globals/packages/plan-suite/skills/plan-close/SKILL.md` step 10 to close durably,
+- [x] Update `globals/packages/plan-suite/skills/plan-close/SKILL.md` step 10 to close durably,
       clean quietly, and request exact-set discard only for unresolved work.
-- [ ] Extract the layer-absorption step of `worktree-preservation.mjs` and a commit-based landing
+- [x] Extract the layer-absorption step of `worktree-preservation.mjs` and a commit-based landing
       entry in `worktree-landed.mjs`, so proofs accept a legacy ref and manifest. Add
       `legacy-recovery`, extend `restore`, and disable disposable pruning in its verification.
       Move the snapshot writer into a test fixture helper under `scripts/test/`.
-- [ ] Register both stores, add the shared log lock and compaction to `appendRemoval`, and prune
+- [x] Register both stores, add the shared log lock and compaction to `appendRemoval`, and prune
       transaction records through the file-set measurement.
-- [ ] Update the documentation below and focused regression tests; run the validation below.
+- [ ] Complete required verification after host restrictions are lifted; documentation and focused regression tests are implemented.
 
 ## Validation
 
@@ -474,3 +474,65 @@ Decided during promotion, each reversible by refining this plan before implement
 | `build/` needs a project file beside it | It has no marker of its own; an unrecognized one costs a single confirmation, not lost work |
 | Consent inventory separate from `inventoryWorktree` | Reuse would break Delete wherever LFS or `autocrlf` is configured |
 | Migration is CLI-only, with pending state derived from refs | The plan adds no archive UI, and refs are already the source of truth |
+
+
+## Execution decisions
+
+- User decision: take over the existing uncommitted implementation in the recorded worktree.
+  No new branch or worktree was created.
+- Shared artifact discovery changes Home's guard result through its existing consumer; no duplicate
+  observation-specific artifact policy was added.
+- Plan-scoped apply requires a leftovers receipt even if a caller supplies a broader receipt.
+  This preserves the contract that plan closure cannot authorize loss of committed work.
+- Receipt file identities use dictionary keys without prototypes and keep index metadata separate
+  from path keys, so arbitrary filenames cannot hide content changes.
+- Legacy migration binds the selected base commit into approval and rechecks it before deleting
+  a preserved ref. A ref's unchanged object is insufficient if the preservation base has moved.
+- The existing completed-plan cleanup path now resolves recorded branch retirement even when its
+  checkout is already absent; closure is not repeated.
+- Procedural delegation was not used: the skill's prescribed Sonnet worker is not available in this
+  environment. Independent validation uses the session model, as the skill requires.
+
+## Open Questions
+
+- Required native verification is blocked by host permissions: even escalated commands receive
+  EPERM for removing temporary directories and binding localhost. Docker socket access is also
+  denied. This blocks the final verification task and submission for review, not implementation.
+  Resume the exact checks below in a permitted environment. No real worktree or legacy recovery
+  ref was removed to test this feature.
+
+## Not tested
+
+- [ ] Native checkout deletion, full preservation/restore/retry fixtures, and recreated-checkout
+      refusal need a host allowing temporary-directory removal/rename. Worktree lifecycle and
+      snapshot suites could not finish under EPERM restrictions.
+- [ ] Browser dialog interaction and visual layout need localhost listeners. Both normal and
+      escalated `npm run test:portal-ui -- --grep worktree` failed to bind 127.0.0.1.
+
+## Review
+
+### Findings
+
+Independent validation pending.
+
+### Verification
+
+- Plan document validator: no findings before implementation.
+- `bash scripts/doctor.sh --quiet`: passed 97 checks; installed skill drift reported separately.
+- `node scripts/test/docs-reference-check.mjs`: passed.
+- `node scripts/test/plan-suite-skills-check.mjs`: passed.
+- `bin/roborepo skill render-commands --check`: passed, 12 commands, no generated changes.
+- `bin/roborepo skill triggers --check`: passed, 10 trigger fixtures.
+- `git diff --check`: passed.
+- `node scripts/test/worktree-artifacts-check.mjs`: artifact assertions passed; exit failed during
+  temporary fixture cleanup with EPERM, including an escalated attempt.
+- `node scripts/test/retention-policy-check.mjs`: all retention assertions passed, including age,
+  byte pressure, and 40 cross-process appends; exit failed only during fixture cleanup with EPERM.
+- `node scripts/test/cli-command-catalog-check.mjs`: blocked at fixture cleanup with EPERM.
+- `node scripts/test/plan-close-integration-check.mjs`: blocked at fixture cleanup with EPERM.
+- `node scripts/test/worktree-lifecycle-check.mjs`: stopped at a candidate comparison that included
+  differing temporary-cleanup warning paths under the host's directory-removal restriction.
+- `node scripts/test/worktree-snapshot-check.mjs`: blocked removing a synthetic empty directory.
+- Browser environment start attempted through the repository's test runner; no shareable URL
+  became available because the host refused the localhost listener. No server was left running
+  by that runner.

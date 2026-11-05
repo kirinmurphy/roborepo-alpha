@@ -1,0 +1,16 @@
+{
+  "path": [
+    "git",
+    "worktrees",
+    "discard"
+  ],
+  "kind": "command",
+  "title": "Permanently discard worktree",
+  "description": "Permanently discard worktree",
+  "usage": "roborepo git worktrees discard <branch-or-name> --scope leftovers|all [--base <branch>] [--json] | --plan <id> [--base <branch>] [--json] | <branch-or-name> --receipt <id> --apply [--json]",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/worktree-cleanup.mjs",
+    "export": "worktreeDiscardCommand"
+  }
+}

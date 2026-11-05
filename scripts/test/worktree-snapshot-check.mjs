@@ -1,15 +1,18 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import { createWorktreeSnapshot } from "./helpers/worktree-snapshot-fixture.mjs";
 import { isolateGitConfig } from "./lib/git-config.mjs";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { GIT_MAX_BUFFER, GIT_MAX_BINARY_BUFFER, runGitProcessSync, runGitProcess } from "../../modules/repositories/git-exec.mjs";
-import { removeWorktree, retryArchivedBranchRetirement } from "../../modules/repositories/worktree-removal.mjs";
-import { createWorktreeSnapshot, restoreWorktreeSnapshot, listWorktreeSnapshots, inventoryWorktree, readSnapshot } from "../../modules/repositories/worktree-snapshot.mjs";
+import { removeWorktree, retryBranchRetirement } from "../../modules/repositories/worktree-removal.mjs";
+import { restoreWorktreeSnapshot, listWorktreeSnapshots, inventoryWorktree, readSnapshot } from "../../modules/repositories/worktree-snapshot.mjs";
 import { recordRepositoryDiscovery } from "../cli/repositories.mjs";
-import { archiveRepositoryWorktree, cleanupWorktrees } from "../cli/worktree-cleanup.mjs";
+import { previewRepositoryWorktree, removeRepositoryWorktree, cleanupWorktrees } from "../cli/worktree-cleanup.mjs";
+import { previewWorktreeDiscard, readTransaction } from "../../modules/repositories/worktree-discard.mjs";
+import { linkedWorktrees } from "../../modules/repositories/worktree-inventory.mjs";
 import { assessWorktreePreservation } from "../../modules/repositories/worktree-preservation.mjs";
 
 const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-snapshot-test-")));
@@ -190,7 +193,7 @@ try {
       let surveys = 0;
       const rows = await cleanupWorktrees({ cwd: repo, apply: true, stateRoot: path.join(root, `${shape}-state`), discover: async () => {
         if (++surveys === 2) {
-          if (shape === "concurrent-file") write(checkout, "code", "new unsnapshotted work\n");
+          if (shape === "concurrent-file") write(checkout, "code", "new local work\n");
           if (shape === "concurrent-index") {
             const content = path.join(root, "unique-index-content"); fs.writeFileSync(content, "unique staged work\n");
             const blob = git(checkout, "hash-object", "-w", content);
@@ -209,16 +212,13 @@ try {
       assert.equal(surveys, 2, `${shape}: mutation occurs in the final survey`);
       assert.equal(rows[0].action, "kept", `${shape}: ${JSON.stringify(rows)}`);
       assert.equal(fs.existsSync(checkout), true, `${shape}: concurrent changes must retain checkout`);
-      assert.ok(rows[0].snapshotRef, `${shape}: verified snapshot remains discoverable`);
+      assert.deepEqual(await listWorktreeSnapshots(repo), [], `${shape}: no recovery ref is created`);
     }
     if (["redundant", "directory-only"].includes(shape)) {
       const rows = await cleanupWorktrees({ cwd: repo, apply: true, stateRoot: path.join(root, `${shape}-cleanup-state`), discover: async () => ({ instances: [] }) });
       assert.equal(rows[0].action, "removed", JSON.stringify(rows));
-      assert.ok(rows[0].snapshotRef, "automatic dirty cleanup creates a verified snapshot");
+      assert.deepEqual(await listWorktreeSnapshots(repo), [], "automatic cleanup creates no recovery refs");
       assert.equal(fs.existsSync(checkout), false);
-      const after = await restoreWorktreeSnapshot(repo, rows[0].snapshotRef, path.join(root, `${shape}-automatic-restored`), { apply: true });
-      assert.equal(after.ok, true, after.reason);
-      if (shape === "directory-only") assert.equal(fs.statSync(path.join(after.destination, "generated/packages/__char_test_pkg__/claude")).isDirectory(), true);
     }
   }
   {
@@ -233,48 +233,50 @@ try {
     const repositoryId = "git:github.com/example/archive";
     recordRepositoryDiscovery({ repositoryId, kind: "git", displayName: "archive", source: "developer-runtime", evidence: "git-remote", confidence: "high", localRoot: "main", localRootKind: "clone", localRootPath: repo, stateRoot });
     const discover = async () => ({ instances: [] });
-    const [cliPreview] = await cleanupWorktrees({ cwd: repo, stateRoot, archive: true, remove: "feature", confirm: true, discover });
-    const portalPreview = await archiveRepositoryWorktree({ repositoryId, branch: "feature", stateRoot, discover });
-    assert.deepEqual(portalPreview, cliPreview, "CLI and portal share archive assessment");
-    const fingerprint = (await inventoryWorktree(checkout)).fingerprint;
+    const [cliPreview] = await cleanupWorktrees({ cwd: repo, stateRoot, remove: "feature", confirm: true, discover });
+    assert.equal(cliPreview.eligible, false, "cleanup cannot authorize unmerged work");
+    assert.match(cliPreview.reason, /discard/);
+    const portalPreview = await previewRepositoryWorktree({ repositoryId, branch: "feature", stateRoot, discover });
+    assert.equal(portalPreview.action, "preview");
+    assert.ok(portalPreview.receipt);
+    assert.ok(portalPreview.groups.untracked.some((entry) => entry.path === "untracked"));
     write(checkout, "untracked", "concurrent edit\n");
-    assert.equal((await createWorktreeSnapshot(checkout, { expectedFingerprint: fingerprint })).ok, false);
     let stops = 0;
     const stop = async () => { stops++; return { ok: true, servers: [] }; };
+    const stale = await removeRepositoryWorktree({ repositoryId, branch: "feature", stateRoot, receipt: portalPreview.receipt, stop });
+    assert.equal(stale.action, "kept");
+    assert.equal(stops, 0, "stale consent stops no servers");
     git(checkout, "config", "filter.evil.clean", "false");
-    const refused = await archiveRepositoryWorktree({ repositoryId, branch: "feature", stateRoot, discover, stop, apply: true, confirm: true });
-    assert.equal(refused.action, "kept"); assert.equal(stops, 0, "failed snapshot eligibility stops no servers");
-    assert.equal(fs.existsSync(checkout), true);
-    git(checkout, "config", "--remove-section", "filter.evil");
-    const removed = await archiveRepositoryWorktree({ repositoryId, branch: "feature", stateRoot, discover, stop, apply: true, confirm: true });
+    const filtered = await previewRepositoryWorktree({ repositoryId, branch: "feature", stateRoot, discover });
+    assert.ok(filtered.receipt, "configured filters do not prevent raw consent inventory");
+    const removed = await removeRepositoryWorktree({ repositoryId, branch: "feature", stateRoot, receipt: filtered.receipt, stop });
     assert.equal(removed.action, "removed", JSON.stringify(removed));
     assert.equal(stops, 1);
-    fs.rmSync(stateRoot, { recursive: true, force: true });
-    git(repo, "gc", "--prune=now");
-    assert.equal((await listWorktreeSnapshots(repo)).some((entry) => entry.ref === removed.snapshotRef), true);
-    const restored = await restoreWorktreeSnapshot(repo, removed.snapshotRef, path.join(root, "explicit-restored"), { apply: true });
-    assert.equal(restored.ok, true, restored.reason);
-    assert.equal(git(restored.destination, "show", ":code"), "staged");
-    assert.equal(fs.readFileSync(path.join(restored.destination, "code"), "utf8"), "unstaged\n");
-    assert.equal(fs.readFileSync(path.join(restored.destination, "untracked"), "utf8"), "concurrent edit\n");
+    assert.equal(fs.existsSync(checkout), false);
+    assert.deepEqual(await listWorktreeSnapshots(repo), [], "explicit discard creates no recovery refs");
   }
+
   for (const outcome of ["retry", "moved", "occupied", "remove-failure"]) {
     const repo = path.join(root, `partial-${outcome}`); fs.mkdirSync(repo);
     git(repo, "init", "-qb", "main"); write(repo, "seed", "seed\n"); git(repo, "add", "."); git(repo, "commit", "-qm", "seed");
     const checkout = path.join(root, `partial-${outcome}-work`); git(repo, "worktree", "add", "-qb", "feature", checkout);
     write(checkout, "pending", "untracked bytes\n");
     const tip = git(checkout, "rev-parse", "HEAD");
-    const snapshot = await createWorktreeSnapshot(checkout); assert.equal(snapshot.ok, true, snapshot.reason);
     const before = git(checkout, "status", "--porcelain");
     const stateRoot = path.join(root, `partial-${outcome}-state`);
+    const worktree = linkedWorktrees(path.join(repo, ".git")).find((item) => item.branch === "feature");
+    const preview = await previewWorktreeDiscard({ mainPath: repo, repositoryId: repo, worktree, stateRoot, scope: "all" });
+    assert.ok(preview.receipt, JSON.stringify(preview));
+    const transaction = readTransaction(stateRoot, preview.receipt);
+    const authority = { scope: "all", digest: transaction.digest };
     const failStep = outcome === "remove-failure" ? "worktree" : "update-ref";
     const runGit = (cwd, args, options) => args[0] === failStep
       ? Promise.resolve({ ok: false, code: 1, stdout: "", error: "injected removal/retirement failure" }) : runGitProcess(cwd, args, options);
-    const result = await removeWorktree(repo, { path: checkout, branch: "feature", name: path.basename(checkout) }, { kind: "confirmed", stateRoot, tip, snapshot, runGit });
+    const result = await removeWorktree(repo, worktree, { kind: "confirmed", stateRoot, tip, transaction, authority, runGit });
     assert.equal(result.ok, false);
     if (outcome === "remove-failure") {
       assert.equal(fs.existsSync(checkout), true); assert.equal(git(checkout, "status", "--porcelain"), before);
-      assert.equal((await createWorktreeSnapshot(checkout)).ref, snapshot.ref, "retry reuses the verified capture");
+      assert.equal(readTransaction(stateRoot, preview.receipt).state, "applying", "ambiguous mutation cannot replay a receipt");
       continue;
     }
     assert.equal(fs.existsSync(checkout), false); assert.equal(git(repo, "rev-parse", "feature"), tip);
@@ -286,19 +288,18 @@ try {
       const live = path.join(root, "new-occupied-checkout");
       git(repo, "worktree", "add", live, "feature");
       write(live, "new-work", "new local bytes\n");
-      const preview = await cleanupWorktrees({ cwd: repo, stateRoot, archive: true, remove: "feature", confirm: true, discover: async () => ({ instances: [] }) });
-      assert.equal(preview[0].path, live, "a live checkout takes precedence over old archive retirement");
+      const preview = await cleanupWorktrees({ cwd: repo, stateRoot, remove: "feature", confirm: true, discover: async () => ({ instances: [] }) });
+      assert.equal(preview[0].path, live, "a live checkout takes precedence over old transaction retirement");
       assert.ok(preview[0].remainingPaths.includes("new-work"), JSON.stringify(preview));
       // Keep this fixture occupied so the mutation path exercises its normal lock guard.
       git(repo, "worktree", "lock", live);
     }
-    assert.equal((await listWorktreeSnapshots(repo))[0].kind, "snapshot", JSON.stringify(await listWorktreeSnapshots(repo)));
-    const rows = await cleanupWorktrees({ cwd: repo, stateRoot, archive: true, remove: "feature", confirm: true, apply: true, discover: async () => ({ instances: [] }) });
+    assert.deepEqual(await listWorktreeSnapshots(repo), [], "partial cleanup creates no recovery refs");
+    const rows = await cleanupWorktrees({ cwd: repo, stateRoot, remove: "feature", confirm: true, apply: true, discover: async () => ({ instances: [] }) });
     assert.equal(rows[0].action, outcome === "retry" ? "removed" : "kept", JSON.stringify(rows));
-    if (outcome !== "occupied") assert.equal(rows[0].snapshotRef, snapshot.ref);
     if (outcome === "retry") {
-      const again = await retryArchivedBranchRetirement(repo, "feature", { stateRoot, apply: true });
-      assert.equal(again.action, "removed", "a completed retry is idempotent");
+      const again = await retryBranchRetirement(repo, "feature", { stateRoot, apply: true });
+      assert.equal(again.action, "kept", "completed retry records carry no further deletion authority");
     } else assert.equal(git(repo, "show-ref", "--verify", "--quiet", "refs/heads/feature"), "");
   }
   {
@@ -350,4 +351,4 @@ try {
     assert.equal(git(checkout, "count-objects", "-v"), objects, "raw identity checks publish no objects");
   }
   console.log("worktree snapshots: raw binary/staged/unstaged/ignored/symlink/mode round trip, preview nonmutation, refusal checks passed");
-} finally { restoreGitConfig(); fs.rmSync(root, { recursive: true, force: true }); }
+} finally { restoreGitConfig(); try { fs.rmSync(root, { recursive: true, force: true }); } catch (error) { console.error(`Fixture cleanup failed: ${error.message}`); process.exitCode = 1; } }
