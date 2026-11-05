@@ -81,6 +81,9 @@ test.describe("Backlog directory and ordering", () => {
   const directoryRows = (page) => page.getByRole("group", { name: "Backlog directory" }).getByRole("link");
   const blockFor = (page, title) => page.locator("backlog-block", { has: page.getByRole("button", { name: title, exact: true }) });
   const guardDialog = (page) => page.getByRole("dialog", { name: GUARD });
+  const waitingOn = (scope) => scope.getByRole("list", { name: /^Waiting on \d+$/ }).getByRole("listitem");
+  // A prerequisite's badge is plain text, which has no role of its own, so it is found by its text.
+  const prerequisiteBadge = (scope, namespace) => waitingOn(scope).getByText(namespace, { exact: true });
 
   test("repositories lead to namespaces, with No namespace last and counts of plans", async ({ page }) => {
     await page.goto("/plans?lifecycle=backlog");
@@ -128,7 +131,7 @@ test.describe("Backlog directory and ordering", () => {
     await expect(page.locator("filter-chip")).toHaveCount(0);
   });
 
-  test("Details shows flat cards with a namespace prefix, Needs prioritization first", async ({ page }) => {
+  test("Details shows flat cards with plain titles, Needs prioritization first", async ({ page }) => {
     await openNamespace(page);
     const headings = page.getByRole("heading", { name: /^(Needs prioritization|Ordered)/ });
     await expect(headings.nth(0)).toHaveText("Needs prioritization (1)");
@@ -146,7 +149,7 @@ test.describe("Backlog directory and ordering", () => {
     await expect(group).toContainText("2 linked plans");
     await expect(group).toContainText("Retrieval");
     await expect(group).toContainText("Waiting on 1");
-    await expect(group.locator(".plan-dependency")).toHaveText(/alpha\s+Storage\s+\(Backlog\)/);
+    await expect(waitingOn(group)).toHaveText(/alpha\s+Storage\s+\(Backlog\)/);
     const names = (locator) => locator.locator("[aria-label]").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("aria-label")));
     const ranked = ["Move to top", "Move up", "Move down", "Move to bottom", "Drag to move"];
     await expect.poll(() => names(group.getByRole("group", { name: "Move" }))).toEqual(ranked);
@@ -162,10 +165,10 @@ test.describe("Backlog directory and ordering", () => {
     await openNamespace(page, "beta");
     const card = page.locator("plan-card");
     await expect(card).toContainText("Waiting on 1");
-    await expect(card.locator(".plan-dependency")).toHaveText(/alpha\s+Storage\s+\(Backlog, position 1\)/);
+    await expect(waitingOn(card)).toHaveText(/alpha\s+Storage\s+\(Backlog, position 1\)/);
     await page.getByRole("button", { name: "Ordering", exact: true }).click();
     const block = blockFor(page, "Beta one");
-    await expect(block.locator(".plan-dependency")).toHaveText(/alpha\s+Storage\s+\(Backlog, position 1\)/);
+    await expect(waitingOn(block)).toHaveText(/alpha\s+Storage\s+\(Backlog, position 1\)/);
     await block.getByRole("button", { name: "Storage", exact: true }).click();
     await expect(page.locator("#drawer-title")).toHaveText("Storage");
   });
@@ -175,11 +178,11 @@ test.describe("Backlog directory and ordering", () => {
     await expect(page.getByRole("navigation", { name: "Backlog location" })).toContainText("ALPHA");
     const card = page.locator("plan-card", { hasText: "Diagnostics" });
     await expect(card.locator(".title-link")).toHaveText("Diagnostics");
-    await expect(card.locator(".namespace-badge")).toBeHidden();
-    await expect(page.locator("plan-card", { hasText: "Retrieval" }).locator(".plan-dependency .namespace-badge")).toHaveText("alpha");
+    await expect(card.getByRole("link", { name: "alpha", exact: true })).toHaveCount(0);
+    await expect(prerequisiteBadge(page.locator("plan-card", { hasText: "Retrieval" }), "alpha")).toBeVisible();
     await page.getByRole("button", { name: "Ordering", exact: true }).click();
-    await expect(blockFor(page, "Diagnostics").locator(".namespace-badge")).toHaveCount(0);
-    await expect(blockFor(page, "Storage").locator(".namespace-badge")).toHaveText(["alpha"]);
+    await expect(blockFor(page, "Diagnostics").getByText("alpha", { exact: true })).toHaveCount(0);
+    await expect(prerequisiteBadge(blockFor(page, "Storage"), "alpha")).toHaveCount(1);
   });
 
   test("Next up leads the repo view with full cards of each namespace's first ranked, unblocked plan", async ({ page }) => {
@@ -215,7 +218,7 @@ test.describe("Backlog directory and ordering", () => {
       await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
       const card = page.getByRole("region", { name: "Next up" }).locator("plan-card");
       await expect(card.locator(".title-link")).toHaveText(["Storage"]);
-      await expect(card.locator(".plan-dependency")).toHaveText(/alpha\s+Working plan\s+\(Active\)/);
+      await expect(waitingOn(card)).toHaveText(/alpha\s+Working plan\s+\(Active\)/);
     } finally {
       write("docs/plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage" }));
     }
@@ -749,7 +752,7 @@ test.describe("Backlog directory and ordering", () => {
   test("other lifecycle tabs keep their flat cards, with no namespace badge or ordering", async ({ page }) => {
     await page.goto(`/plans?lifecycle=active&repo=${await repoKey(page, repoName)}`);
     await expect(page.locator(".title-link")).toHaveText(["Working plan"]);
-    await expect(page.locator(".namespace-badge:visible")).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "alpha", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Ordering", exact: true })).toHaveCount(0);
     await expect(directoryRows(page)).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Filters", exact: true })).toBeVisible();

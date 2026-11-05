@@ -182,11 +182,11 @@
     <template id="tpl-plan-dependencies">
       <div class="plan-dependencies">
         <span data-slot="heading"></span>
-        <div class="plan-dependency-list" data-slot="dependencies"></div>
+        <ul class="plan-dependency-list" role="list" data-slot="dependencies"></ul>
       </div>
     </template>
     <template id="tpl-plan-dependency">
-      <div class="plan-dependency"><span class="namespace-badge" data-slot="namespace"></span> <span data-slot="label"></span> <span data-slot="status"></span></div>
+      <li class="plan-dependency"><span class="namespace-badge" data-slot="namespace"></span> <span data-slot="label"></span> <span data-slot="status"></span></li>
     </template>
     <template id="tpl-menu-item">
       <button type="button" class="menu-button-item">

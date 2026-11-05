@@ -251,8 +251,11 @@ export function planDependencies(record, allPlans, onOpen, backlog = []) {
   if (record.plan.lifecycle !== "backlog") return null;
   const prerequisites = openPrerequisites(record, allPlans, backlog);
   if (!prerequisites.length) return null;
-  const node = fill(tpl("tpl-plan-dependencies"), { heading: `Waiting on ${prerequisites.length}` });
-  node.querySelector("[data-slot=dependencies]").append(...prerequisites.map((item) => {
+  const heading = `Waiting on ${prerequisites.length}`;
+  const node = fill(tpl("tpl-plan-dependencies"), { heading });
+  const list = node.querySelector("[data-slot=dependencies]");
+  list.setAttribute("aria-label", heading);
+  list.append(...prerequisites.map((item) => {
     const row = fill(tpl("tpl-plan-dependency"), { status: `(${item.status})` });
     const label = row.querySelector("[data-slot=label]");
     const badge = row.querySelector("[data-slot=namespace]");

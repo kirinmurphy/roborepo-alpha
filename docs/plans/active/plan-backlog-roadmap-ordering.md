@@ -344,7 +344,7 @@ Added after reviewing Backlog on real repos. The behavior is built; the open tas
 - [x] Add Next up above the namespace list: full cards, ranked plans only, at most one per namespace, following Filters.
 - [x] Replace the title prefix with the namespace badge, shown only on Next up cards and in `Waiting on` lists.
 - [x] Update `plans-portal.md`, the addendum, and `plans-portal-internals.md`, and retake `docs/images/plans.png`.
-- [ ] Make the `Waiting on` list a real list, and assert it and its badges by role in `plans-backlog.spec.mjs` instead of the `.plan-dependency` and `.namespace-badge` selectors.
+- [x] Make the `Waiting on` list a real list, and assert it and its badges by role in `plans-backlog.spec.mjs` instead of the `.plan-dependency` and `.namespace-badge` selectors.
 - [ ] Test that ranking a plan and pressing Save puts it in Next up on returning to the repo screen.
 - [ ] Test that Next up appears only on a selected repo's screen: not on All repos, not inside a namespace, and not for a repo with no config.
 - [ ] Test that clicking a Next up card's namespace badge opens the namespace without opening the plan's drawer.
