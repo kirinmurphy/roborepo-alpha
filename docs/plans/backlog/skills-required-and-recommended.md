@@ -10,7 +10,7 @@ reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 worktree:
 ---
 
-# Package Management: Part 03 - Declare Which Skills Need or Suggest Each Other
+# Declare Which Skills Need or Suggest Each Other
 
 ## Summary
 
