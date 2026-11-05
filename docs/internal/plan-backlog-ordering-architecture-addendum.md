@@ -1,6 +1,6 @@
 # Architecture addendum: namespace-scoped Backlog ordering
 
-**Status:** Technical design companion to `plan-backlog-roadmap-ordering.md`  
+**Status:** Technical design companion to `plans-backlog-roadmap-ordering.md`  
 **Scope:** Schema, persistence, dependency grouping, consistency rules, and a normative Backlog UI reference. The implementation plan remains the source of truth for overall feature goals.
 
 ## Purpose
