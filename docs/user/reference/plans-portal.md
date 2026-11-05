@@ -376,10 +376,10 @@ When enabled:
   | active | Continue, Review, Archive |
   | review | Review, Fix findings, Close, Archive |
 
-- backlog cards with unfinished `depends_on` entries show the Copy menu followed by **depends on** and linked
-  plan IDs instead of Promote; their card and popup menus omit Promote. IDs resolve within the
-  same repository, and missing dependencies remain plain text. Dependencies in the `completed`
-  lifecycle are omitted; when all dependencies are completed, Promote returns to the card and
+- backlog cards with unfinished `depends_on` entries show the Copy menu followed by **Waiting on**
+  and that list instead of Promote; their card and popup menus omit Promote. IDs resolve within the
+  same repo, each prerequisite's title links to it, and a missing one shows its ID and `not found`
+  with no link. Dependencies in the `completed` lifecycle are omitted; when all dependencies are completed, Promote returns to the card and
   popup menus. The frontmatter retains the dependency history. Other backlog cards lead with
   Promote, and ready cards lead with Start. Unblocked review plans lead with Close
   when approved, or Review otherwise. Active plans keep their commands in the Copy menu until

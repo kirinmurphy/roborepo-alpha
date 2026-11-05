@@ -289,14 +289,40 @@ test.describe("Backlog directory and ordering", () => {
   });
 
   test("the drawer shows another namespace's position for a prerequisite, matching Ordering", async ({ page }) => {
-    setOrder(["alphax03", "alphaa01", "alphab02"]);
-    await openNamespace(page, "beta");
-    await page.locator("plan-card").getByText("Beta one", { exact: true }).click();
-    const drawer = page.getByRole("dialog");
-    await expect(page.locator("#drawer-title")).toHaveText("Beta one");
-    await expect(waitingOn(drawer)).toHaveText(/alpha\s+Storage\s+\(Backlog, position 2\)/);
-    await drawer.getByRole("button", { name: "Storage", exact: true }).click();
-    await expect(page.locator("#drawer-title")).toHaveText("Storage");
+    // Diagnostics follows the two-plan Storage block, so it is the second block but the third plan.
+    write("docs/plans/backlog/beta-one.md", document({ id: "betaon05", title: "Beta one", deps: ["alphax03"] }));
+    try {
+      await openNamespace(page, "beta");
+      await page.locator("plan-card").getByText("Beta one", { exact: true }).click();
+      const drawer = page.getByRole("dialog");
+      await expect(page.locator("#drawer-title")).toHaveText("Beta one");
+      await expect(waitingOn(drawer)).toHaveText(/alpha\s+Diagnostics\s+\(Backlog, position 2\)/);
+      await drawer.getByRole("button", { name: "Diagnostics", exact: true }).click();
+      await expect(page.locator("#drawer-title")).toHaveText("Diagnostics");
+
+      await openOrdering(page);
+      await expect(blockFor(page, "Diagnostics").getByText("2", { exact: true })).toBeVisible();
+    } finally {
+      write("docs/plans/backlog/beta-one.md", document({ id: "betaon05", title: "Beta one", deps: ["alphaa01"] }));
+    }
+  });
+
+  test("Home's drawer shows a prerequisite's position and a styled namespace badge", async ({ page }) => {
+    const file = "docs/plans/active/alpha-blocked.md";
+    write(file, document({ id: "alphabk9", title: "Blocked active" }).replace("depends_on: []", "blocked_by: [betaon05]\ndepends_on: []"));
+    try {
+      await page.goto("/");
+      await page.getByRole("button", { name: "Blocked active", exact: true }).click();
+      const drawer = page.locator("dialog#drawer");
+      await expect(page.locator("#drawer-title")).toHaveText("Blocked active");
+      await drawer.getByRole("button", { name: "Beta one" }).first().click();
+      await expect(page.locator("#drawer-title")).toHaveText("Beta one");
+      await expect(waitingOn(drawer)).toHaveText(/alpha\s+Storage\s+\(Backlog, position 1\)/);
+      const badge = prerequisiteBadge(drawer, "alpha");
+      expect(await badge.evaluate((node) => getComputedStyle(node).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
+    } finally {
+      fs.rmSync(path.join(repo, file), { force: true });
+    }
   });
 
   test("opening a Waiting on link keeps a dirty draft and its unsaved state", async ({ page }) => {

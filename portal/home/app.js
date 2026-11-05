@@ -38,6 +38,7 @@ let nextPlanActions = new Map();
 // The same plan detail drawer the Plans page opens, read-only here: the blocked badge is static.
 const planDrawer = createPlanDrawer({
   getPlans: () => plansSnapshot?.plans || [],
+  getBacklog: () => plansSnapshot?.backlog || [],
   getPlanSuitePackage: () => plansSnapshot?.planSuitePackage || {},
   mergeFor: (key) => mergedPlans.get(key) || null,
   onEnablePackage: () => { location.href = "/plans"; },

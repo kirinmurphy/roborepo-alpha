@@ -90,8 +90,6 @@ Real data for fixtures: this repo has 49 Backlog plans across 14 namespaces, all
 
 **Namespace decision:** do **not** add `namespace` to plan frontmatter. Derive it from the longest approved `<namespace>-` filename prefix and expose it as a computed field on the parsed plan model. Cache that resolution per indexed plan and reuse the loaded namespace vocabulary per repository snapshot: the in-memory match is inexpensive and requires no additional I/O. Validate malformed/unknown prefixes at creation, rename, and build; retain invalid files in **No namespace** when reading. Add a correctness and performance regression test. Render the namespace badge from the derived namespace, not from manually typed H1 text. It is a display label, not a required H1 prefix.
 
-**Schema bootstrap:** This plan retains `priority: none` in its own frontmatter solely because the *currently published* `plan-write` schema requires it. Remove that line from this plan, and from every other non-Completed/non-Archived managed plan, when the breaking schema change lands. This is not a requested compatibility mode.
-
 ## Proposed design
 
 ### Backlog navigation
@@ -317,8 +315,8 @@ Do not introduce graph editors, separate roadmap pages, nested views, manual spl
 | “Plan leaves Backlog: remove its ID from Backlog order” | Ignored on read, pruned at the next write |
 | “Plan returns to Backlog” row | Unreachable; no such transition exists |
 | “Automatic placement persists as part of that write operation” for dependency edits | Applies to `roborepo plans order place`; hand edits persist at the next write |
-| `AGENTS · ` title prefixes in the wireframes | The plain title; the breadcrumb names the namespace |
-| `Requires: Q` in the wireframes | `Waiting on N`, listing each unfinished prerequisite with its namespace and status |
+| `AGENTS · ` title prefixes in the wireframes | The plain title; the breadcrumb names the namespace. The addendum's prose says this too; only its drawings keep the prefix |
+| `Requires: Q` in the wireframes | `Waiting on N`, listing each unfinished prerequisite with its namespace and status. The addendum's prose says this too; only its drawings keep `Requires:` |
 
 ## Implementation checklist
 
@@ -366,7 +364,7 @@ Run the checks for the tier as each task lands, then let CI run the full gate. E
 | Lifecycle commits | A transition out of Backlog changes only the plan's paths; the next write prunes its registry entry |
 | Repo scope | Only repos with Backlog plans show, with correct counts |
 | Namespace scope | Approved nonempty namespaces show; **No namespace** is last when needed |
-| Namespace derivation | Longest approved filename prefix resolves once per index; derived property powers filters/titles, no frontmatter duplication, and performance is verified |
+| Namespace derivation | Longest approved filename prefix resolves once per index; derived property powers the directory and the namespace badge, no frontmatter duplication, and performance is verified |
 | Namespace config edits | After Refresh, an added/removed/renamed namespace updates open Backlog and cache; orphaned plans appear in No namespace; invalid registry references are flagged, not silently dropped |
 | Namespace config conflicts | Dirty Ordering drafts cannot save across a conflicting config revision; invalid/unreadable configs surface errors |
 | Invalid namespace | `roborepo plans validate` exits 1 and promote/start refuse bad filename prefixes in a configured repo, but Backlog displays affected plans with repair findings |

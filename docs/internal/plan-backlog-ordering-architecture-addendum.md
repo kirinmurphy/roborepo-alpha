@@ -81,7 +81,7 @@ A reader resolves the namespace using the **longest valid namespace prefix follo
 - Resolve the prefix once per indexed filename, using the longest approved `<namespace>-` match; keep the parsed field in the indexed plan model so list rendering does not reparse it.
 - Load the vocabulary once per repository snapshot and reuse a deterministic matcher. Filename matching is a cheap in-memory operation; unlike YAML/frontmatter parsing, it requires no additional file I/O. Add a focused correctness and performance regression test rather than relying on assumed speed.
 - An unknown, ambiguous, or malformed prefix yields `namespace: null` plus a validation finding, not a guessed namespace. Such plans appear in **No namespace** for repair.
-- The Backlog title prefix is **rendered** from the validated namespace, not added to the authored H1. Namespace is exposed to callers as a read-only derived value, not a second stored field.
+- The Backlog namespace badge is **rendered** from the validated namespace, not added to the authored H1. Namespace is exposed to callers as a read-only derived value, not a second stored field.
 
 ### 2a. Observing `plans-config.json` changes
 
@@ -235,8 +235,8 @@ A joined dependency (`C` depends on `A` and `B`), an unrelated `X`, and an indep
 ```
 
 - Preserve existing rich Backlog card fields, actions, and progress presentation. The content lines are illustrative, not a mandate to invent new card properties.
-- Prefix each displayed Backlog title from its derived namespace; do not duplicate the prefix in the authored H1 or add a clickable namespace badge to the card footer.
-- Show actual `Requires:` information lightly when useful; it does **not** imply grouping or enforce adjacency visually.
+- Show the plain title; the breadcrumb names the namespace. Do not add a prefix to the authored H1 or a namespace badge to the card footer.
+- List unfinished prerequisites as `Waiting on N`, where the namespace appears as a badge; the list does **not** imply grouping or enforce adjacency visually.
 - After a successful ordering Save, Details uses the new order. A mode switch does not reset repo/namespace context or scroll unnecessarily.
 
 ### Ordering mode: derived dependency group containers
@@ -278,7 +278,7 @@ Control meanings (the visual arrows are shorthand; actual buttons use accessible
 
 The following **six T-cases are exhaustive for three distinct plans, up to renaming plan IDs, when we treat graphs as equivalent under renaming and retain the directed edges**: no edges, one edge, two-edge chain, two-edge fork, two-edge join, and all three acyclic edges. (In all cases `A → B` means B requires A.) The additional G/L/P/M/E-cases cover the important combinations and mutations for larger real projects. There are increasingly many graphs for larger numbers of plans, so this gallery is not a literal enumeration of every graph size. The *graph algorithm*, rather than hard-coded screen cases, must handle arbitrary valid acyclic inputs.
 
-Each example deliberately shows **real Details-mode card shapes**, not just a shorthand `A | B | C`: independent full cards with title, summary, actual prerequisites (where present), lifecycle and progress. **Ordering alone** renders contiguous draggable groups, with the agreed five controls on the right. The controls are schematic; they must be accessible buttons and drag interactions. Parent groups receive controls, not their child rows. Numeric rank fields are never shown. The prefix `AGENTS ·` is rendered from the filename-derived namespace, not written into the plan H1.
+Each example deliberately shows **real Details-mode card shapes**, not just a shorthand `A | B | C`: independent full cards with title, summary, actual prerequisites (where present), lifecycle and progress. **Ordering alone** renders contiguous draggable groups, with the agreed five controls on the right. The controls are schematic; they must be accessible buttons and drag interactions. Parent groups receive controls, not their child rows. Numeric rank fields are never shown. The `AGENTS ·` drawn in these examples stands for the filename-derived namespace; the portal shows the plain title.
 
 For compactness, these examples omit the page's repo/namespace breadcrumbs and Details/Ordering toggle; those are defined above and do not change between scenarios. All illustrative plans are Backlog unless an external prerequisite is explicitly mentioned. Where a plan was created/edited, views show the *resulting* projected state. The existing Details card component remains authoritative for its precise fields/actions; these layouts establish grouping and ordering rules, not a replacement card implementation.
 

@@ -107,6 +107,12 @@ const backlogEntries = [{ repositoryId: "r", namespaces: [strategyView] }];
 const statusOf = (dependencies) => openPrerequisites(planRecord("self", "agents", "backlog", dependencies), records, backlogEntries)
   .map((item) => `${item.namespace ? `${item.namespace}/` : ""}${item.label}: ${item.status}`);
 assert.deepEqual(statusOf(["ranked"]), ["strategy/ranked: Backlog, position 2"]);
+const linkedStrategyView = { ...strategyView, ordered: [block("sibling", "unranked"), block("ranked")] };
+assert.deepEqual(
+  openPrerequisites(planRecord("self", "agents", "backlog", ["ranked"]), records, [{ repositoryId: "r", namespaces: [linkedStrategyView] }]).map((item) => item.status),
+  ["Backlog, position 2"],
+  "a position counts blocks, as Ordering numbers them, not plans",
+);
 assert.deepEqual(statusOf(["unranked"]), ["strategy/unranked: Backlog, not prioritized"]);
 assert.deepEqual(statusOf(["local"]), ["agents/local: Backlog"]);
 assert.deepEqual(statusOf(["working"]), ["agents/working: Active"]);
