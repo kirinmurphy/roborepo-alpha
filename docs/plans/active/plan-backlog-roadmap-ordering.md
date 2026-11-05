@@ -1,6 +1,6 @@
 ---
 id: rxv53v6z
-next_action: The user decides how to handle the 4 open fix findings from validation pass 9 under Review; do not submit while any remain open.
+next_action: Run the one further validation pass the user approved; submit only if it reports no fix findings, otherwise stop and report them.
 blocked_by: []
 depends_on: []
 related: ["plans-portal-live-refresh-and-static-preflight", "plan-lifecycle-suite-blockers-dependencies", "plan-unclassified-plan-recovery", "p3vbk03v"]
@@ -431,10 +431,10 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - [x] The contract comment for `readProjectNamespaces` sat above `pathFreeReadError`, describing the wrong function. — fixed (072acc52)
 - [x] The comment above `plansOrderCommand` in `scripts/cli/plans-command.mjs` says that without a position "any other plan stays unprioritized"; an independent plan already in the order stays ranked. Say "a plan that is not ranked stays unprioritized". — fixed (7d6b779e)
 - [x] `scripts/cli/mock-home.mjs` gives every demo Backlog entry `urlKey: null`, so the demo board's Backlog tab can never open a repo. Give each entry the `urlKey` the mock registry uses for that repo. Traced, not run; it shows only with `MOCK_FIRST_RUN_VIEWS_ENABLED`, which is `false` in the code. — fixed (7d6b779e)
-- [ ] A failed order write sends an absolute filesystem path to the browser: `applyOrder` in `modules/plan-suite/backlog-registry.mjs` lets the raw `EACCES` from its temp-file write and rename reach `sendDomainError` in `scripts/cli/portal-routes-plans.mjs`, which the Save bar and guard dialog would show. Throw a domain error carrying only `err.code`, as the read path does, remove the temp file on failure, and add a check. Reproduced at `saveNamespaceOrder`; the route and UI steps are traced, not run.
-- [ ] **Copy Repair Prompt**, the No namespace repair path, is only asserted visible in `scripts/test/portal-ui/plans-backlog.spec.mjs`. Click it, then assert the clipboard text names `/plan-write` and the plan's path, as the other Plans copy controls do.
-- [ ] The design's required test of reload and branch-switch behavior for config changes does not exist. Add a real-Git branch-switch case to `scripts/test/backlog-order-check.mjs` and a config-edit-then-reload case to `plans-backlog.spec.mjs`. An ad hoc run of 20 branch switches read the wrong vocabulary 0 times through `readProjectNamespaces`; it did not exercise the snapshot rebuild or the page.
-- [ ] The "Placing a new plan" table in `plan-write/references/workflow-create.md` has no row for a new plan that depends only on unranked plans in a non-interactive run. Widen the last row to "Is independent, or depends only on unranked plans, in a non-interactive run".
+- [x] A failed order write sends an absolute filesystem path to the browser: `applyOrder` in `modules/plan-suite/backlog-registry.mjs` lets the raw `EACCES` from its temp-file write and rename reach `sendDomainError` in `scripts/cli/portal-routes-plans.mjs`, which the Save bar and guard dialog would show. Throw a domain error carrying only `err.code`, as the read path does, remove the temp file on failure, and add a check. Reproduced at `saveNamespaceOrder`; the route and UI steps are traced, not run. — fixed (fbab7591)
+- [x] **Copy Repair Prompt**, the No namespace repair path, is only asserted visible in `scripts/test/portal-ui/plans-backlog.spec.mjs`. Click it, then assert the clipboard text names `/plan-write` and the plan's path, as the other Plans copy controls do. — fixed (fbab7591)
+- [x] The design's required test of reload and branch-switch behavior for config changes does not exist. Add a real-Git branch-switch case to `scripts/test/backlog-order-check.mjs` and a config-edit-then-reload case to `plans-backlog.spec.mjs`. An ad hoc run of 20 branch switches read the wrong vocabulary 0 times through `readProjectNamespaces`; it did not exercise the snapshot rebuild or the page. — fixed (fbab7591)
+- [x] The "Placing a new plan" table in `plan-write/references/workflow-create.md` has no row for a new plan that depends only on unranked plans in a non-interactive run. Widen the last row to "Is independent, or depends only on unranked plans, in a non-interactive run". — fixed (fbab7591)
 
 ### Verification
 
