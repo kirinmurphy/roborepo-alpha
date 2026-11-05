@@ -148,7 +148,6 @@ export function createBacklogController(deps) {
     return [breadcrumb([{ label: "All repos" }]), directoryList(rows.map((row) => directoryRow({
       icon: "folder",
       label: row.name,
-      planCount: row.planCount,
       unblockedCount: row.unblockedCount,
       unprioritizedCount: row.unprioritizedCount,
       href: row.urlKey ? hrefWithNamespace(hrefWithRepositoryScope(location.href, row.urlKey), null) : null,
@@ -579,14 +578,13 @@ function directoryList(rows) {
   return list;
 }
 
-function directoryRow({ icon, label, planCount, unblockedCount = 0, unprioritizedCount = 0, status = "", href, onSelect }) {
+function directoryRow({ icon, label, unblockedCount = 0, unprioritizedCount = 0, status = "", href, onSelect }) {
   const node = fill(tpl("tpl-backlog-directory-row"), {
     label,
     counts: [
       status,
       unblockedCount && `${unblockedCount} unblocked`,
       unprioritizedCount && `${unprioritizedCount} unprioritized`,
-      planCount && `${planCount} total`,
     ].filter(Boolean).join(" · "),
   });
   node.querySelector("portal-icon[data-slot=icon]").setAttribute("name", icon);

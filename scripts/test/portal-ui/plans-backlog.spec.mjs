@@ -108,7 +108,7 @@ test.describe("Backlog directory and ordering", () => {
   test("repositories lead to namespaces, with No namespace last and counts of plans", async ({ page }) => {
     await page.goto("/plans?lifecycle=backlog");
     const repoRow = page.getByRole("link", { name: new RegExp(repoName) });
-    await expect(repoRow).toContainText("4 unblocked · 2 unprioritized · 6 total");
+    await expect(repoRow).toContainText("4 unblocked · 2 unprioritized");
     await expect(page.locator("plan-card")).toHaveCount(0);
     await repoRow.click();
 

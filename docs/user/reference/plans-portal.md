@@ -134,7 +134,7 @@ flat list of cards across all selected repos.
 
 | You have selected | You see |
 | --- | --- |
-| **All repos** | Repos with Backlog plans, each with its unblocked, unprioritized, and total plan counts |
+| **All repos** | Repos with Backlog plans, each with its unblocked and unprioritized plan counts |
 | A repo | **Next up**, then **View All Plans**: its namespaces with Backlog plans, each with unblocked and unprioritized counts; **No namespace** last, when any plan lands there |
 | A repo and namespace | **Details**: prioritized cards, under a banner counting plans that need prioritization. **Prioritize**: **Needs prioritization**, then **Prioritized** |
 | A repo and **No namespace** | Each file's exact name, its findings, and **Copy Repair Prompt** |

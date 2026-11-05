@@ -104,7 +104,7 @@ flowchart LR
 
 | Scope | Visible content |
 | --- | --- |
-| No repo selected | Only repositories with Backlog plans; plan count and unprioritized count |
+| No repo selected | Only repositories with Backlog plans; unblocked and unprioritized counts |
 | Repo selected, no namespace | **Next up** when any plan qualifies, then **View All Plans**: approved namespaces with Backlog plans, each with unblocked and unprioritized counts; **No namespace** last if invalid plans exist |
 | Repo and namespace selected | **Needs prioritization** at top when nonempty, then ordered list; Details/Ordering toggle |
 | Repo and **No namespace** selected | Files with missing, malformed, or unapproved filename prefixes, with errors and a repair path; no priority editing until repaired |
@@ -461,7 +461,7 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - **This plan's file moved to `plans-backlog-roadmap-ordering.md`.** Merging `main` removed the `plan` namespace in favor of `plans`, so the old name failed the blocking naming check. Alternative: put `plan` back in `plans-config.json`, which undoes that restructure. The id, branch, and `worktree:` value keep their old form, since plan copies match by id and the worktree folder already exists.
 - **`Move down` is the accessible name of both the Ordered and Needs prioritization controls,** as the plan specifies. The Needs one is internally `place-top`, so the two behaviors stay distinct in code.
 - **Description preview, its size, and the hover overlay apply to Backlog only (user request scoped by this plan's goal).** Other lifecycles keep their 190-character cut and larger text, because the plan's goals say their presentation does not change. Alternative: every lifecycle, which is one class to remove.
-- **Only namespace rows lost `N total`.** The request named namespace rows, so All repos rows keep it. A namespace whose plans are all ranked and blocked shows no count.
+- **Directory rows drop `N total` (user decision).** Both repo and namespace rows show only unblocked and unprioritized counts, which are the actionable ones. A row whose plans are all ranked and blocked shows no count.
 
 ## Not tested
 
