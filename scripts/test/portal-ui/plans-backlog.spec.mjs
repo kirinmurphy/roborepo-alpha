@@ -696,6 +696,61 @@ test.describe("Backlog directory and ordering", () => {
     }
   });
 
+  test("archiving works on a repo whose base branch is not main, and waits for the new snapshot", async ({ page }) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "portal-ui-trunk-"));
+    const git = (...args) => spawnSync("git", args, { cwd: root, encoding: "utf8" }).stdout;
+    const put = (relative, content) => {
+      fs.mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });
+      fs.writeFileSync(path.join(root, relative), content);
+    };
+    try {
+      git("init", "-q", "-b", "trunk");
+      git("config", "user.name", "Portal Test");
+      git("config", "user.email", "portal@example.invalid");
+      put("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A" } }));
+      put("docs/plans/backlog/alpha-free.md", document({ id: "trkfree01", title: "Free one" }));
+      put("docs/plans/backlog/alpha-next.md", document({ id: "trknext01", title: "Next one" }));
+      git("add", ".");
+      git("commit", "-q", "-m", "fixture");
+      git("update-ref", "refs/remotes/origin/trunk", "HEAD");
+      git("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/trunk");
+      await addRepositorySource(page, root);
+
+      const { backlog } = await (await page.request.get("/api/plans")).json();
+      const entry = backlog.find((item) => item.name === path.basename(root));
+      await page.goto(`/plans?lifecycle=backlog&repo=${entry.urlKey}&namespace=alpha`);
+      const archiveThrough = async (title) => {
+        await page.getByRole("button", { name: `Archive ${title}`, exact: true }).click();
+        const first = page.getByRole("dialog", { name: `Archive "${title}"?` });
+        await first.getByRole("textbox").fill("Superseded.");
+        await first.getByRole("button", { name: "Continue" }).click();
+        const second = page.getByRole("dialog", { name: "Are you sure?" });
+        await expect(second.getByRole("button", { name: "Archive Plan" })).toBeEnabled();
+        await second.getByRole("button", { name: "Archive Plan" }).click();
+        return second;
+      };
+
+      const release = await holdRefresh(page);
+      const dialog = await archiveThrough("Free one");
+      await expect.poll(() => fs.existsSync(path.join(root, "docs/plans/archived/alpha-free.md"))).toBe(true);
+      await expect(dialog).toBeVisible();
+      release();
+      await expect(dialog).toBeHidden();
+      await expect(blockFor(page, "Free one")).toHaveCount(0);
+      expect(git("rev-parse", "--abbrev-ref", "HEAD").trim()).toBe("trunk");
+      expect(git("log", "-1", "--format=%s", "trunk").trim()).not.toBe("fixture");
+
+      // The base branch check itself still stands: another branch checked out refuses the move.
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+      git("switch", "-qc", "feature");
+      const refused = await archiveThrough("Next one");
+      await expect(refused.getByText(/on feature, not trunk/)).toBeVisible();
+      expect(fs.existsSync(path.join(root, "docs/plans/backlog/alpha-next.md"))).toBe(true);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("Prioritize draws linked plans as one block with exact controls and hides Filters", async ({ page }) => {
     await openOrdering(page);
     await expect(page.getByRole("button", { name: "Filters", exact: true })).toBeHidden();
@@ -1426,6 +1481,42 @@ test.describe("Backlog directory and ordering", () => {
     await expect(page.getByRole("button", { name: "Details", exact: true })).toHaveAttribute("aria-pressed", "true");
     await expect(page.locator(".title-link")).toHaveText(["Diagnostics", "Storage", "Retrieval"]);
     expect(errors).toEqual([]);
+  });
+
+  test("a Save whose refresh fails keeps the saved order on screen and says the page is out of date", async ({ page }) => {
+    await openOrdering(page);
+    const failing = /\/api\/plans\/refresh/;
+    await page.route(failing, (route) => route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "refresh broke" }) }));
+    await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByText("Your order was saved.")).toBeVisible();
+    await expect(page.getByText(/may be out of date/)).toBeVisible();
+    expect(savedOrder()).toEqual(["alphax03", "alphaa01", "alphab02"]);
+    await expect(page.getByText("Unsaved changes")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Prioritize", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(orderedTitles(page)).toHaveText(["Diagnostics", "Storage", "Retrieval"]);
+    await expect(blockFor(page, "Diagnostics").getByRole("button", { name: "Move down" })).toBeDisabled();
+
+    await page.unroute(failing);
+    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Details", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator(".title-link")).toHaveText(["Diagnostics", "Storage", "Retrieval"]);
+    await expect(page.getByText(/may be out of date/)).toHaveCount(0);
+  });
+
+  test("a failed pin says why and leaves the button ready to retry", async ({ page }) => {
+    await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
+    const pin = page.getByRole("button", { name: "Pin ALPHA", exact: true });
+    await page.route("**/api/plans/namespace-pin", (route) => route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "pin broke" }) }));
+    await pin.click();
+    await expect(page.getByText(/pin broke/)).toBeVisible();
+    await expect(pin).toBeEnabled();
+    expect(JSON.parse(fs.readFileSync(orderFile, "utf8"))).not.toHaveProperty("pinned");
+
+    await page.unroute("**/api/plans/namespace-pin");
+    await pin.click();
+    await expect(page.getByRole("button", { name: "Unpin ALPHA", exact: true })).toBeVisible();
+    expect(JSON.parse(fs.readFileSync(orderFile, "utf8")).pinned).toEqual(["alpha"]);
   });
 
   test("after a Cancel, the committed order is live before the refresh returns", async ({ page }) => {

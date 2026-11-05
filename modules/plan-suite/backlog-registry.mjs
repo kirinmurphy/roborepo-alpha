@@ -43,6 +43,12 @@ export function readOrderRegistry(root) {
   }
 }
 
+// One namespace's saved ids. A config may declare a namespace named like an Object.prototype property
+// (`constructor`), so only the file's own entries count.
+function storedOrder(registry, namespace) {
+  return Object.hasOwn(registry.namespaces, namespace) ? registry.namespaces[namespace] : [];
+}
+
 function parseRegistry(raw) {
   const data = JSON.parse(raw);
   if (data?.schemaVersion !== SCHEMA_VERSION) throw new Error(`schemaVersion must be ${SCHEMA_VERSION}`);
@@ -83,15 +89,16 @@ function readConfigBytes(root) {
   }
 }
 
-// Any edit that could change what a Save means: the config, the registry, or a namespace plan's id,
-// filename, or depends_on. An open draft carries this; a Save against any other value is refused.
+// Any edit that could change what a Save in this namespace means: the config, its saved order, or one
+// of its plans' id, filename, or depends_on. An open draft carries this; a Save against any other value
+// is refused. Pins and other namespaces' orders stay out, since a Save re-reads and keeps them.
 function namespaceRevision(context, namespace) {
   const members = context.plans
     .filter((plan) => plan.lifecycle === "backlog" && plan.namespace === namespace)
     .map((plan) => [plan.id, path.basename(plan.relativePath), [...(plan.dependencies || [])].sort()])
     .sort((a, b) => a[1].localeCompare(b[1]));
   return crypto.createHash("sha256")
-    .update(JSON.stringify([context.configRaw, context.registry.raw, members]))
+    .update(JSON.stringify([context.configRaw, storedOrder(context.registry, namespace), members]))
     .digest("hex")
     .slice(0, 16);
 }
@@ -149,7 +156,7 @@ function keyForPlan(context, plan) {
 
 function namespaceOrdering(context, namespace) {
   const groups = context.derived.groups.filter((group) => group.namespace === namespace);
-  const stored = context.registry.state === "ok" ? context.registry.namespaces[namespace] || [] : [];
+  const stored = storedOrder(context.registry, namespace);
   const proposal = proposeOrder(stored, groups);
   const inNamespace = new Set(groups.flatMap((group) => group.ids));
   const cycles = context.derived.cycles.filter((cycle) => inNamespace.has(cycle[0]));
@@ -282,7 +289,7 @@ function applyOrder({ order, moves, findings, context, namespace }, expectedRevi
   if (findings.length) throw domainError("INVALID_CHANGE", findings[0].message, { details: findings.map((item) => item.message) });
   const fresh = orderingContext(context.root, context.records);
   assertRevision(fresh, namespace, expectedRevision);
-  const preserved = (fresh.registry.namespaces[namespace] || []).filter((id) => {
+  const preserved = storedOrder(fresh.registry, namespace).filter((id) => {
     if (order.includes(id)) return false;
     const plan = fresh.plans.find((item) => item.id === id);
     return !plan || (plan.lifecycle === "backlog" && !plan.namespace);

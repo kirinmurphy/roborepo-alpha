@@ -13,7 +13,7 @@ import {
   domainError,
 } from "../../modules/plan-suite/index.mjs";
 import { saveNamespaceOrder, setNamespacePinned } from "../../modules/plan-suite/backlog-registry.mjs";
-import { primaryCheckout } from "../../modules/plan-suite/plan-git.mjs";
+import { primaryCheckout, repositoryBaseBranch } from "../../modules/plan-suite/plan-git.mjs";
 import { transitionPlan } from "../../modules/plan-suite/transition.mjs";
 import { loadRegistry } from "../../modules/repositories/index.mjs";
 import { MOCK_FIRST_RUN_VIEWS_ENABLED, mockPlanDocument, mockPlansSnapshot } from "./mock-home.mjs";
@@ -119,8 +119,15 @@ export async function archiveBacklogPlan({ repositoryId, id, reason }) {
   if (!repository || !entry) throw domainError("PLAN_NOT_FOUND", "This repo can no longer be found. Refresh and try again.");
   const unprioritized = new Set(entry.namespaces.flatMap((view) => view.needsPrioritization.flatMap((block) => block.ids)));
   if (!unprioritized.has(id)) throw domainError("INVALID_CHANGE", `Only unprioritized Backlog plans can be archived here: ${id}.`);
+  const primary = primaryCheckout(repository.root);
+  const base = repositoryBaseBranch(primary);
+  if (!base) {
+    throw domainError("INVALID_CHANGE", "This repo's base branch can't be determined, so nothing was archived.", {
+      resolution: "Run `git remote set-head origin --auto`, or archive it with `roborepo plans archive <plan> --reason <text> --base <branch>`.",
+    });
+  }
   try {
-    const result = await transitionPlan({ cwd: primaryCheckout(repository.root), transition: "archive", selector: id, reason });
+    const result = await transitionPlan({ cwd: primary, transition: "archive", selector: id, reason, base });
     if (result.verdict !== "APPROVED") throw domainError("INVALID_CHANGE", `${id} moved, but its post-commit checks failed.`);
     return { archived: id, references: result.references };
   } finally {

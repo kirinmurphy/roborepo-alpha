@@ -84,8 +84,9 @@ commits only the plan's own paths (an archive adds the dependents it clears) and
 left Backlog is pruned. Registry reads and writes always use the primary checkout, including for a
 worktree-only plan.
 
-A draft carries the namespace's revision: a hash of the config bytes, the registry bytes, and each
-namespace plan's id, filename, and `depends_on`. A Save against any other revision is `STALE_ORDER`
+A draft carries the namespace's revision: a hash of the config bytes, the namespace's saved order, and
+each namespace plan's id, filename, and `depends_on`. Pins and other namespaces' orders are left out,
+since a Save re-reads the file and keeps them. A Save against any other revision is `STALE_ORDER`
 (409). The open page learns of changes on load, **Refresh**, after mutations, and at Save; there is no
 push channel.
 

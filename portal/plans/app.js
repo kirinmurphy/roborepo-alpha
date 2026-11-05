@@ -76,6 +76,9 @@ let loadSequence = 0;
 let repositorySyncPending = false;
 let repositorySyncState = "synced";
 let repositoryAutoDiscoveryEnabled = false;
+// Why the last reload after a change failed. Renders clear the warnings area, so this is kept here and
+// shown until a snapshot arrives; otherwise the page would present its old plans as current.
+let staleReason = null;
 
 // Plans no longer owns which repositories exist: the header count and the onboarding states open the
 // shared Manage repositories dialog, and any change there re-reads the Plans snapshot.
@@ -105,7 +108,7 @@ const blockersPopover = createBlockersPopover(document.getElementById("blockers-
 const backlog = createBacklogController({
   getSnapshot: () => state.snapshot,
   onRender: () => render(),
-  onSaved: () => api.refreshSnapshot().then(applySnapshot).catch(showLoadError),
+  onSaved: reloadAfterChange,
   onOpen: (key) => openPlan(key),
   cardGrid: (plans, actions) => tmpl.cardGrid(plans, actions),
   emptyState: () => tmpl.emptyState(),
@@ -248,8 +251,28 @@ function showScopeUnavailable() {
   groupsEl.replaceChildren(repositoryScopeUnavailableNotice());
 }
 
+// Resolves whether the page now holds the new snapshot. The change has already landed, so this never
+// rejects: no caller may report the change itself as failed.
+async function reloadAfterChange() {
+  let snapshot;
+  try {
+    snapshot = await api.refreshSnapshot();
+  } catch (err) {
+    if (isRepositoryScopeUnavailable(err)) {
+      showScopeUnavailable();
+    } else {
+      staleReason = String(err?.message || err);
+      render();
+    }
+    return false;
+  }
+  applySnapshot(snapshot);
+  return true;
+}
+
 function applySnapshot(snapshot) {
   state.snapshot = snapshot;
+  staleReason = null;
   setLifecycleModel(snapshot.lifecycle);
   // The URL's tab could only be checked once the lifecycle model arrived.
   state.selectedLifecycle = lifecycleFromSearchParams(new URLSearchParams(location.search));
@@ -492,6 +515,7 @@ function renderWarnings(snapshot) {
   const warnings = [
     ...(snapshot.errors || []).map((err) => `${err.repository || "scan"}${err.checkout ? ` (${err.checkout})` : ""}: ${err.path ? `${err.path} ` : ""}${err.error}`),
     ...(snapshot.truncated ? ["Some repos have more plan documents than the scanner reads; the rest are not shown."] : []),
+    ...(staleReason ? [`The latest plans could not be loaded (${staleReason}), so this page may be out of date. Press Refresh to try again.`] : []),
   ];
   warningsEl.hidden = warnings.length === 0;
   warningsEl.replaceChildren(...warnings.map(tmpl.warningLine));

@@ -170,6 +170,10 @@ assert.equal(isUnblocked(planRecord("after-done", "agents", "backlog", ["done"])
 assert.equal(namespaceDirectory({ namespaces: [ingestView([waiting.key])], noNamespace: [] }, new Set([waiting.key]), unblockedRecords)[0].readyCount, 0, "the lone waiting plan is not counted as ready");
 assert.deepEqual(nextUp({ namespaces: [ingestView([waiting.key])] }, unblockedRecords, new Set([waiting.key])).map((record) => record.key), [waiting.key], "work underway still leaves it next");
 assert.deepEqual(nextUp({ namespaces: [ingestView([held.key])] }, unblockedRecords, new Set([held.key])), [], "a prerequisite still in Backlog keeps it out of Next up");
+// A plan that depends on itself stays orderable, but its own entry keeps it from ever counting as ready.
+const selfDependent = planRecord("selfish", "ingest", "backlog", ["selfish"]);
+assert.equal(isUnblocked(selfDependent, [selfDependent]), false, "a self-reference never counts as unblocked");
+assert.deepEqual(nextUp({ namespaces: [ingestView([selfDependent.key])] }, [selfDependent], new Set([selfDependent.key])), [], "and is never next");
 // Directory order carries through, so the namespaces the server pins first lead both lists.
 const knowledgeView = { ...ingestView([free.key]), namespace: "knowledge", pinned: true };
 const pinnedEntry = { namespaces: [knowledgeView, ingestView([waiting.key])], noNamespace: [] };

@@ -39,6 +39,8 @@ import {
 const GUARD_MESSAGE = "Your prioritization changes have not been saved.";
 
 // deps: { getSnapshot, onRender, onSaved, onOpen, cardGrid, emptyState, copyRepairPrompt, onError }
+// onSaved reloads the snapshot after a change has landed and resolves whether that worked. It never
+// rejects, because a failed reload does not mean the change failed; the page keeps saying so meanwhile.
 export function createBacklogController(deps) {
   const guardDialog = document.getElementById("ordering-guard");
   let mode = "details";
@@ -73,6 +75,12 @@ export function createBacklogController(deps) {
     return mode === "ordering";
   }
 
+  // A sent Save, or a saved order the page has not been able to reload yet. Either way a move made now
+  // would start from an order the server has already replaced.
+  function isHeld() {
+    return Boolean(saving || draft?.heldFor);
+  }
+
   function selectedEntry() {
     const scope = currentRepositoryScope();
     const backlog = deps.getSnapshot().backlog || [];
@@ -100,6 +108,12 @@ export function createBacklogController(deps) {
       draft = null;
       saveError = null;
       openingModeOwed = true;
+    }
+    if (draft?.heldFor) {
+      // Only a newer snapshot releases a saved order that could not be reloaded.
+      if (deps.getSnapshot() === draft.heldFor) return;
+      mode = "details";
+      draft = null;
     }
     const view = selectedNamespaceView();
     if (!view) {
@@ -274,12 +288,12 @@ export function createBacklogController(deps) {
     const namespaceAction = namespaceActionFor(entry);
     const blockNode = (block, section, index, count) => {
       const node = document.createElement("backlog-block");
-      Object.assign(node, { block, section, index, count, plans, locked, held: Boolean(saving), dirty: isDirty(), onOpen: deps.onOpen, namespaceAction });
+      Object.assign(node, { block, section, index, count, plans, locked, held: isHeld(), dirty: isDirty(), onOpen: deps.onOpen, namespaceAction });
       return node;
     };
     const nodes = [namespaceHeader(entry, view), ...graphNotices(view)];
     if (!view.writable) nodes.push(...entry.findings.filter((item) => item.severity === "blocking").map((item) => fill(tpl("tpl-backlog-finding"), { message: item.message, resolution: item.resolution })));
-    const notice = moveNotice(view, plans);
+    const notice = draft.heldFor ? savedNotice() : moveNotice(view, plans);
     if (notice) nodes.push(notice);
     if (draft.needs.length || view.unrankable.length) {
       const list = document.createElement("div");
@@ -308,7 +322,7 @@ export function createBacklogController(deps) {
     container.className = "backlog-ordering";
     container.append(...nodes);
     container.addEventListener("block-move", (event) => {
-      if (saving) return;
+      if (isHeld()) return;
       const { section, index, action } = event.detail;
       const block = (section === "needs" ? draft.needs : draft.ordered)[index];
       pendingFocus = { id: block.ids[0], action };
@@ -336,7 +350,8 @@ export function createBacklogController(deps) {
       kept: titles(true),
       onConfirm: async (reason) => {
         await api.archiveBacklogPlan({ repositoryId: entry.repositoryId, id: record.plan.id, reason });
-        deps.onSaved();
+        // The dialog stays up until then, so the archived plan's controls are never offered again.
+        await deps.onSaved();
       },
     });
   }
@@ -351,6 +366,10 @@ export function createBacklogController(deps) {
     if (attached.length) parts.push(`Joined a ranked group: ${attached.join(", ")}.`);
     if (moved.length) parts.push(`Moved to stay with linked plans: ${moved.join(", ")}.`);
     return fill(tpl("tpl-backlog-move-notice"), { text: parts.join(" ") });
+  }
+
+  function savedNotice() {
+    return fill(tpl("tpl-backlog-move-notice"), { text: "Your order was saved. You can change it again once the page loads the latest plans." });
   }
 
   function unrankableRow(record, namespaceAction) {
@@ -393,7 +412,7 @@ export function createBacklogController(deps) {
       if (!list.contains(event.relatedTarget)) clearMarker();
     });
     list.addEventListener("drop", (event) => {
-      if (!drag || saving) return;
+      if (!drag || isHeld()) return;
       event.preventDefault();
       const { section, index } = drag;
       const before = insertionIndex(event);
@@ -412,7 +431,7 @@ export function createBacklogController(deps) {
     });
     zone.addEventListener("dragleave", () => zone.classList.remove("is-drop-over"));
     zone.addEventListener("drop", (event) => {
-      if (drag?.section !== "ordered" || saving) return;
+      if (drag?.section !== "ordered" || isHeld()) return;
       event.preventDefault();
       const { index } = drag;
       drag = null;
@@ -527,8 +546,8 @@ export function createBacklogController(deps) {
     return node;
   }
 
-  // Resolves true once the order is saved and the page holds the new snapshot. A failure keeps the
-  // draft, says why, and resolves false, so a navigation waiting on it never goes ahead.
+  // Resolves true once the order is saved. A failed Save keeps the draft, says why, and resolves false,
+  // so a navigation waiting on it never goes ahead.
   function saveDraft() {
     saving ??= submitDraft(selectedEntry());
     return saving;
@@ -557,8 +576,14 @@ export function createBacklogController(deps) {
     draft = { ...draft, committedIds: order };
     saveError = null;
     deps.onRender();
-    await deps.onSaved();
+    const reloaded = await deps.onSaved();
     saving = null;
+    if (!reloaded) {
+      // Details would show the old order as if it were current, so the saved one stays on screen, held.
+      draft = { ...draft, heldFor: deps.getSnapshot() };
+      deps.onRender();
+      return true;
+    }
     // Prioritizing is finished, so the page returns to reading the list.
     mode = "details";
     draft = null;
@@ -692,9 +717,11 @@ function pinnableRow(row, label, { pinned, onToggle }) {
   button.setAttribute("aria-label", action);
   button.setAttribute("aria-pressed", String(pinned));
   button.title = action;
-  button.addEventListener("click", () => {
+  button.addEventListener("click", async () => {
     button.disabled = true;
-    onToggle();
+    await onToggle();
+    // A success has already replaced this row; after a failure this button is the way to retry.
+    button.disabled = false;
   });
   item.prepend(row);
   return item;

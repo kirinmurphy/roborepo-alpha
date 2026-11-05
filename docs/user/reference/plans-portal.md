@@ -183,8 +183,8 @@ Details:
 
 **Archive**, the trash icon beside each unprioritized plan's modified time, retires that one plan without
 waiting for Save, even when it sits in a linked block. It asks for a reason, then asks once more, and
-commits the move to the repo's base branch, leaving the push to you. The base branch must be checked out
-in the primary checkout. It stays disabled while a draft has unsaved changes. Plans that depended on the
+commits the move to the repo's base branch, leaving the push to you. The base branch is the remote's
+default, or else `main` or `master`, and it must be checked out in the primary checkout. It stays disabled while a draft has unsaved changes. Plans that depended on the
 archived plan stop depending on it, as described under the `archive` transition.
 
 Moves stay in a draft. **Save** writes the namespace's whole order at once; **Cancel** discards the

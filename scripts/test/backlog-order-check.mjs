@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { deriveGroups, findDependencyCycles, proposeOrder } from "../../modules/plan-suite/backlog-order.mjs";
 import { buildBacklogIndex, placePlan, readOrderRegistry, saveNamespaceOrder, setNamespacePinned } from "../../modules/plan-suite/backlog-registry.mjs";
 import { readProjectNamespaces, resolvePlanNamespace, validatePlanNaming } from "../../modules/plan-suite/naming.mjs";
+import { repositoryBaseBranch } from "../../modules/plan-suite/plan-git.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const NS = "agents";
@@ -57,6 +58,16 @@ function orderOf(saved, plans, change = null) {
   assert.deepEqual(groupsOf(chain), [["B", "C"]], "the linear remainder stays together");
   assert.deepEqual(groupsOf([plan("B", ["A"]), plan("A", [], { lifecycle: "completed" }), plan("C", ["B"], {})]), [["B", "C"]]);
   assert.deepEqual(deriveGroups(fork).missing, [], "a prerequisite outside Backlog is not missing");
+}
+
+// ---- A self-reference: invalid, with its own finding, but no reason to lock the namespace ----
+{
+  const derived = deriveGroups([plan("A", ["A"]), plan("B", ["A"])]);
+  assert.deepEqual(derived.groups.map((group) => group.ids), [["A", "B"]], "the self-edge adds nothing to the group");
+  assert.deepEqual(derived.groups[0].edges, [["A", "B"]]);
+  assert.deepEqual(derived.cycles, [], "a self-reference is not reported as a cycle");
+  assert.deepEqual(derived.missing, [], "and is not reported as missing");
+  assert.deepEqual(orderOf(["A", "B"], [plan("A", ["A"]), plan("B", ["A"])]), ["A", "B"], "so its namespace stays orderable");
 }
 
 // ---- L3: a cross-namespace edge never merges orders ----
@@ -482,6 +493,81 @@ try {
     assert.deepEqual(viewOf(wider, "other").ordered.map((block) => block.ids), [["qqqqqq44"]], `round ${round}: the saved order applies again`);
   }
   assert.equal(fs.readFileSync(path.join(switching, "docs/plans/plans-order.json"), "utf8"), registryJson, "switching branches writes nothing to the registry");
+
+  // A namespace may be named like an Object.prototype property, and a registry that has no entry for
+  // it must read as empty, not as the inherited property.
+  const inherited = path.join(root, "inherited");
+  fs.mkdirSync(path.join(inherited, "docs/plans/backlog"), { recursive: true });
+  run(inherited, "init", "-q", "-b", "main");
+  const writeInherited = (relative, content) => fs.writeFileSync(path.join(inherited, relative), content);
+  writeInherited("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { constructor: "x", other: "y" } }));
+  writeInherited("docs/plans/backlog/constructor-one.md", document({ id: "cccccc11" }));
+  writeInherited("docs/plans/backlog/other-one.md", document({ id: "oooooo22" }));
+  writeInherited("docs/plans/plans-order.json", JSON.stringify({ schemaVersion: 1, namespaces: { other: ["oooooo22"] } }));
+  const realInherited = fs.realpathSync(inherited);
+  const inheritedRecords = async () => {
+    const { primaryCheckoutRecords } = await import("../../modules/plan-suite/repository-validation.mjs");
+    return primaryCheckoutRecords(realInherited);
+  };
+  const inheritedIndex = buildBacklogIndex(realInherited, await inheritedRecords());
+  const constructorView = viewOf(inheritedIndex, "constructor");
+  assert.deepEqual(constructorView.ordered, [], "an inherited property is not a saved order");
+  assert.deepEqual(constructorView.needsPrioritization.map((block) => block.ids), [["cccccc11"]]);
+  const placedInherited = saveNamespaceOrder({ root: realInherited, records: await inheritedRecords(), namespace: "constructor", order: ["cccccc11"], revision: constructorView.revision });
+  assert.deepEqual(placedInherited.order, ["cccccc11"], "Save writes a namespace with no entry yet");
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(inherited, "docs/plans/plans-order.json"), "utf8")).namespaces, { other: ["oooooo22"], constructor: ["cccccc11"] });
+
+  // The base branch comes from the repo, never from what happens to be checked out.
+  const based = path.join(root, "based");
+  fs.mkdirSync(based);
+  run(based, "init", "-q", "-b", "trunk");
+  run(based, "config", "user.email", "t@example.com");
+  run(based, "config", "user.name", "t");
+  run(based, "commit", "-q", "--allow-empty", "-m", "seed");
+  assert.equal(repositoryBaseBranch(based), null, "no remote default and no main or master says nothing");
+  run(based, "update-ref", "refs/remotes/origin/trunk", "HEAD");
+  run(based, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/trunk");
+  run(based, "switch", "-qc", "feature");
+  assert.equal(repositoryBaseBranch(based), "trunk", "the remote's default, even from another branch");
+  run(based, "branch", "main");
+  assert.equal(repositoryBaseBranch(based), "trunk", "the remote's default beats a local main");
+  run(based, "symbolic-ref", "--delete", "refs/remotes/origin/HEAD");
+  assert.equal(repositoryBaseBranch(based), "main", "without one, a local main");
+  run(based, "branch", "-m", "main", "master");
+  assert.equal(repositoryBaseBranch(based), "master", "or a local master");
+
+  // A draft goes stale only for what can change its own namespace's Save, and a Save keeps the rest.
+  const scoped = path.join(root, "scoped");
+  fs.mkdirSync(path.join(scoped, "docs/plans/backlog"), { recursive: true });
+  run(scoped, "init", "-q", "-b", "main");
+  const writeScoped = (relative, content) => fs.writeFileSync(path.join(scoped, relative), content);
+  writeScoped("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { one: "x", two: "y" } }));
+  writeScoped("docs/plans/backlog/one-a.md", document({ id: "onea1111" }));
+  writeScoped("docs/plans/backlog/one-b.md", document({ id: "oneb2222" }));
+  writeScoped("docs/plans/backlog/two-a.md", document({ id: "twoa3333" }));
+  writeScoped("docs/plans/backlog/two-b.md", document({ id: "twob4444" }));
+  writeScoped("docs/plans/plans-order.json", JSON.stringify({ schemaVersion: 1, namespaces: { one: ["onea1111", "oneb2222"], two: ["twoa3333"] } }));
+  const realScoped = fs.realpathSync(scoped);
+  const scopedRecords = async () => {
+    const { primaryCheckoutRecords } = await import("../../modules/plan-suite/repository-validation.mjs");
+    return primaryCheckoutRecords(realScoped);
+  };
+  const scopedView = async (namespace) => viewOf(buildBacklogIndex(realScoped, await scopedRecords()), namespace);
+  const scopedFile = () => JSON.parse(fs.readFileSync(path.join(scoped, "docs/plans/plans-order.json"), "utf8"));
+  const draftRevision = (await scopedView("one")).revision;
+  setNamespacePinned({ root: realScoped, namespace: "two", pinned: true });
+  assert.equal((await scopedView("one")).revision, draftRevision, "pinning another namespace leaves this draft's revision alone");
+  saveNamespaceOrder({ root: realScoped, records: await scopedRecords(), namespace: "two", order: ["twob4444", "twoa3333"], revision: (await scopedView("two")).revision });
+  assert.equal((await scopedView("one")).revision, draftRevision, "saving another namespace leaves this draft's revision alone");
+  saveNamespaceOrder({ root: realScoped, records: await scopedRecords(), namespace: "one", order: ["oneb2222", "onea1111"], revision: draftRevision });
+  assert.deepEqual(scopedFile(), { schemaVersion: 1, pinned: ["two"], namespaces: { one: ["oneb2222", "onea1111"], two: ["twob4444", "twoa3333"] } }, "the Save keeps the other namespace's order and pin");
+  assert.throws(() => saveNamespaceOrder({ root: realScoped, records: [], namespace: "one", order: [], revision: draftRevision }), { code: "STALE_ORDER" }, "a change to this namespace's own order still goes stale");
+  const beforeConfig = (await scopedView("one")).revision;
+  writeScoped("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { one: "x", two: "y", three: "z" } }));
+  assert.notEqual((await scopedView("one")).revision, beforeConfig, "a config edit still goes stale");
+  const beforeDependency = (await scopedView("one")).revision;
+  writeScoped("docs/plans/backlog/one-a.md", document({ id: "onea1111", deps: ["oneb2222"] }));
+  assert.notEqual((await scopedView("one")).revision, beforeDependency, "a dependency edit in this namespace still goes stale");
 } finally {
   fs.rmSync(root, { recursive: true, force: true });
 }
