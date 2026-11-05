@@ -1,6 +1,6 @@
 ---
 id: rxv53v6z
-next_action: Run the one further validation pass the user approved; submit only if it reports no fix findings, otherwise stop and report them.
+next_action: Run /plan-review for the human review.
 blocked_by: []
 depends_on: []
 related: ["plans-portal-live-refresh-and-static-preflight", "plan-lifecycle-suite-blockers-dependencies", "plan-unclassified-plan-recovery", "p3vbk03v"]
@@ -448,5 +448,7 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - Validation pass 7 at 6af0e6ca (fresh-context subagent): 1 `fix` finding, the last above, no `escalate`; its `node scripts/test/portal-ui/run.mjs` passed 201 of 201.
 - Validation pass 8 at d8d006ef (fresh-context subagent): the last 2 findings above, no `escalate`; its `node scripts/test/portal-ui/run.mjs` passed 201 of 201. This was the last pass the user's limit allowed, so the run stopped with them open.
 - Validation pass 9 at 1d698bbf (fresh-context subagent, the one further pass the user approved): the 4 open findings above, no `escalate`; its `node scripts/test/portal-ui/run.mjs` passed 201 of 201. The run stopped with them open and did not submit, as the user's condition for this pass required.
+- Validation: no `fix` or `escalate` findings on pass 10 at 4f2b701d (fresh-context subagent, a further pass the user approved after fixing pass 9's findings). `node scripts/test/backlog-order-check.mjs` passed; `node scripts/test/portal-ui/run.mjs` passed 203 of 204.
+- Portal UI failure on pass 10: `portal-ui.spec.mjs` "worktree rows show their state; Stop Server and Delete Worktree live in row menus" timed out clicking Delete Worktree, with the element unstable and then detached. It passed 5 of 5 alone, and the cause was not found. Classed `base` by its input: the test's lines are not in the diff, `portal/home` changes only by a comment, Home sets no repo-scope guard, and the remaining shared portal changes do not render its worktree rows. It was not run on `main`.
 - Installed output, on a temporary HOME and state root: `roborepo update`, enabling plan-suite, `roborepo update`, and `roborepo doctor --installed` all exited 0 (110 doctor checks), and the installed plan-write references carry `plans-order.json` and `order place` with no `priority:` line. `doctor` on this machine warns that installed skills are out of date until `roborepo update` runs after merge.
 - Base failure: `roborepo plans validate` exits 1 from blocking findings that are all in `docs/plans/completed/`, none from this change.
