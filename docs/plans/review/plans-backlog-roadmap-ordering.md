@@ -598,6 +598,11 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - [x] `docs/internal/plans-portal-internals.md` says a plan at the destination always returns `alreadyRecorded`, and its step list omits the staged outcome. — fixed (a579c8dd)
 - [x] An untracked plan already in its destination folder gets the not-committed message, though no move ran and nothing is staged: `modules/plan-suite/transition.mjs`. Reproduced with `plans promote` on a throwaway fixture. — fixed (822bbb32)
 - [x] The archive dialog now shows every refusal's resolution, so portal users read guidance written for agents, such as "Ask the user before switching branches": `portal/plans/archive-dialog.js`, `scripts/cli/plans.mjs`. Reproduced at `archiveBacklogPlan`; the dialog is traced, not run. — fixed (eb9d206b)
+- [ ] Retrying after a failed undo says to commit the staged move, the opposite of the first error's warning: `UNCOMMITTED_MOVE_RESOLUTION` in `modules/plan-suite/transition.mjs`. Reproduced by injecting failures.
+- [ ] The failed-undo branch of `undoUnstagedMove` has no test, and step 5 of `plans-portal-internals.md` omits it.
+- [ ] Rolling back a write or staging failure overrides the user's decision to explain the staged state, with no new decision recorded. — escalated to the human
+- [ ] This record stops at d8813c34: nothing here covers the undo, the archive hold, the banner wording, or their tests, and `next_action` names the old commit.
+- [ ] `plans-backlog.spec.mjs` uses `#ordering-archive` where `getByRole("dialog")` works.
 
 ### Verification
 
@@ -639,10 +644,14 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - Post-merge Validator pass 7 at d2ea0106 (fresh-context subagent): clean, no `fix` or `escalate`. `node scripts/test/portal-ui/run.mjs plans-backlog plans-status` at that commit passed 94 of 94, and the intermittent breadcrumb test failed again at 365b814c between these runs.
 - The user's manual confirmation predates the archive failure fixes, which only change failure paths; those are covered by `plans-backlog.spec.mjs` and `plan-lifecycle-transitions-check.mjs`.
 - CI on d8813c34 (PR 59): `check (ubuntu-latest)`, `check (macos-latest)`, and `windows-installer` passed.
+- CI on b6eb206a (PR 59): `check (ubuntu-latest)`, `check (macos-latest)`, and `windows-installer` passed. CI on base at da88e4f3 passed.
+- At b6eb206a: `backlog-model-check`, `backlog-order-check`, `plan-lifecycle-transitions-check`, `docs-reference-check`, and `plan-tree-naming-check` passed; `node scripts/test/portal-ui/run.mjs plans-backlog plans-status` passed 96 of 96; `roborepo plans validate rxv53v6z` reported 0 findings.
+- Review of the changes since d8813c34, Validator pass 1 at b6eb206a (fresh-context subagent): the last 5 findings above, 4 `fix` and 1 `escalate`. It also reported 2 the user set aside on 2026-11-06 as not tied to this plan: a `git mv` that fails partway in `transitionPlan` is not undone, on a line older than this work, and two tests skip their read-only refusals as root. The merge of `main` at e3658b0b touches only Codex hook and permission files, and its remerge diff is empty.
+- `roborepo plans sync-base` refused on an untracked `transcripts/` folder that is not this review's. `main` at da88e4f3 is already an ancestor of the branch, so there was nothing to merge.
 
 ### Result
 
-- Status: complete
+- Status: pending
 - Reviewed implementation commit: d8813c348ae7f0fe01f9a26beef6ece0a8049998
 - Base commit: 4722f4fbb1556d95797b663dad0876b6b26f5669
 
