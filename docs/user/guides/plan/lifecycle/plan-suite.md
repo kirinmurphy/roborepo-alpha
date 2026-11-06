@@ -284,7 +284,9 @@ accepts only a plan in `review/`. In order, it:
    integration, approval, and landing and commits the move to `completed/`;
 8. after that commit succeeds, stops the dev servers still running in its worktree and lists them;
 9. runs the repository's worktree cleanup command for the closed plan, removing the worktree and
-   local branch when removal succeeds, or reporting why a guard kept them or removal failed.
+   local branch without a recovery copy when preservation is proven. Unresolved leftovers receive
+   one complete discard preview and a **Discard all listed leftovers and remove** or **Keep worktree**
+   choice. Approval of the PR does not authorize discarding later edits.
 
 Landing is scanned once. The first check walks the base branch's history for the commit that
 absorbed the branch; after that, `roborepo plans landed`, `roborepo plans close`, and the plan's
@@ -300,6 +302,11 @@ Step 8 stops only processes listening on a port whose working directory is insid
 linked worktree. It never touches the main checkout, agent sessions, shells, or editors, and it
 sends `SIGTERM` only: a server that ignores it is reported, not killed. You can run the same step
 yourself with `roborepo plans stop-servers <plan>`; add `--dry-run` to list without stopping.
+
+Cleanup failure leaves closure durable. An already-completed retry resumes cleanup without another
+closure commit. Changed previews require renewed consent; legacy recovery pending notices lead to
+`roborepo git worktrees legacy-recovery` for a separate review. See
+[worktree cleanup](../../../reference/repositories.md#worktree-states-and-cleanup) for receipts and retry rules.
 
 ## `/plan-archive`
 

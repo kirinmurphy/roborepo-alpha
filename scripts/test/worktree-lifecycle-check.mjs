@@ -14,13 +14,14 @@ import { assessWorktreePreservation } from "../../modules/repositories/worktree-
 import { runGitProcess } from "../../modules/repositories/git-exec.mjs";
 import { linkedWorktrees } from "../../modules/repositories/worktree-inventory.mjs";
 import { deriveWorktreeState, resolveWorktreeStaleDays } from "../../modules/repositories/worktree-state.mjs";
-import { cleanupWorktrees, removeRepositoryWorktree, stopRepositoryWorktreeServers, worktreeCleanupCommand } from "../cli/worktree-cleanup.mjs";
+import { cleanupWorktrees, previewRepositoryWorktree, removeRepositoryWorktree, stopRepositoryWorktreeServers, worktreeCleanupCommand } from "../cli/worktree-cleanup.mjs";
 import { activeWorktreeNames, proposedWorktreeFolder } from "../cli/worktree-policy.mjs";
 import { dismissWorktreeCleanupNotice, enableWorktreeCleanup } from "../cli/worktree-cleanup-optin.mjs";
 import { recordRepositoryDiscovery } from "../cli/repositories.mjs";
 import { loadRegistry } from "../../modules/repositories/registry.mjs";
 import { rootId } from "../../modules/repositories/identity.mjs";
-import { removeWorktree, archiveBranchTip, archiveRefName, removalLogPath, withCleanupLock } from "../../modules/repositories/worktree-removal.mjs";
+import { removeWorktree, removalLogPath } from "../../modules/repositories/worktree-removal.mjs";
+import { withCleanupLock } from "../../modules/repositories/worktree-cleanup-lock.mjs";
 import { checkWorktreeRemoval } from "../../modules/repositories/worktree-guards.mjs";
 import { inspectWorktreeHook, manageWorktreeHook } from "../cli/worktree-hook.mjs";
 import { collectKnownWorktrees } from "../cli/worktree-observations.mjs";
@@ -97,7 +98,7 @@ import { collectKnownWorktrees } from "../cli/worktree-observations.mjs";
   });
   assert.equal(removal.ok, false);
   assert.equal(removal.entry, undefined);
-  assert.match(removal.reason, /worktree removal denied/);
+  assert.match(removal.reason, /preservation proof or validated receipt required/);
   const outside = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-cleanup-outside-"));
   fixtures.push(outside);
   fs.writeFileSync(path.join(outside, "keep"), "untouched");
@@ -425,26 +426,14 @@ try {
   {
     const { main, worktree } = repository("confirmed");
     const stateRoot = path.join(root, "confirmed-state");
-    const tip = git(worktree, "rev-parse", "HEAD");
     commit(worktree, "feature.txt", "unmerged\n");
     const branchTip = git(worktree, "rev-parse", "HEAD");
-    let rows = await cleanupWorktrees({ cwd: main, stateRoot, remove: "feature", confirm: true, apply: true, discover: async () => ({ instances: [] }) });
-    assert.equal(rows[0].action, "removed", rows[0].reason);
-    const archive = `refs/roborepo/abandoned/feature-${branchTip.slice(0, 7)}`;
-    assert.equal(rows[0].archiveRef ?? archive, archive);
-    assert.equal(git(main, "rev-parse", archive), branchTip);
-    git(main, "branch", "feature", archive);
-    assert.equal(git(main, "rev-parse", "feature"), branchTip, "archive ref restores the original tip");
-    assert.notEqual(tip, branchTip);
-    // The tip's short SHA ends each archive ref: the same name archives again at a new tip, a
-    // repeat of the same tip is a no-op, and archiving `feature` never blocks `feature/sub`.
-    assert.equal(archiveRefName("feature", branchTip), archive);
-    assert.deepEqual(await archiveBranchTip(main, "feature", branchTip), { ok: true, ref: archive });
-    const again = await archiveBranchTip(main, "feature", tip);
-    assert.equal(again.ok, true, again.reason);
-    assert.notEqual(again.ref, archive);
-    const nested = await archiveBranchTip(main, "feature/sub", tip);
-    assert.equal(nested.ok, true, nested.reason);
+    const rows = await cleanupWorktrees({ cwd: main, stateRoot, remove: "feature", confirm: true, apply: true, discover: async () => ({ instances: [] }) });
+    assert.equal(rows[0].action, "kept", rows[0].reason);
+    assert.match(rows[0].reason, /discard/);
+    assert.equal(fs.existsSync(worktree), true, "clean unmerged work requires a loss preview");
+    assert.equal(git(main, "rev-parse", "feature"), branchTip);
+    assert.equal(git(main, "for-each-ref", "--format=%(refname)", "refs/roborepo/abandoned", "refs/roborepo/worktree-archives"), "", "refused cleanup creates no recovery refs");
   }
   {
     // A value-taking option must get a value, not the next flag.
@@ -507,11 +496,11 @@ try {
     fs.writeFileSync(path.join(worktree, "dirty.txt"), "dirty\n");
     assert.equal((await checkWorktreeRemoval(base)).reason, "uncommitted or untracked changes");
     assert.equal((await checkWorktreeRemoval({ ...base, kind: "confirmed" })).reason, "uncommitted or untracked changes");
-    assert.equal((await checkWorktreeRemoval({ ...base, discardChanges: true })).reason, "uncommitted or untracked changes", "automatic cleanup cannot discard local changes");
-    assert.equal((await checkWorktreeRemoval({ ...base, kind: "confirmed", discardChanges: true })).ok, true);
+    assert.equal((await checkWorktreeRemoval({ ...base, consent: true })).reason, "uncommitted or untracked changes", "automatic cleanup cannot discard local changes");
+    assert.equal((await checkWorktreeRemoval({ ...base, kind: "confirmed", consent: true })).ok, true);
     fs.writeFileSync(path.join(worktree, ".gitignore"), "valuable.txt\n");
     fs.writeFileSync(path.join(worktree, "valuable.txt"), "valuable ignored content\n");
-    assert.equal((await checkWorktreeRemoval({ ...base, kind: "confirmed", discardChanges: true })).reason, "valuable ignored path: valuable.txt", "discard consent does not bypass ignored-file guards");
+    assert.equal((await checkWorktreeRemoval({ ...base, kind: "confirmed", consent: true })).ok, true, "validated consent covers reviewed ignored files");
     fs.rmSync(path.join(worktree, "valuable.txt"));
     fs.rmSync(path.join(worktree, ".gitignore"));
     fs.rmSync(path.join(worktree, "dirty.txt"));
@@ -875,14 +864,16 @@ try {
     const discover = async () => ({ instances: [] });
     fs.writeFileSync(path.join(worktree, "stray.txt"), "stray\n");
     let result = await removeRepositoryWorktree({ repositoryId, branch: "feature", stateRoot, stop: stop(true), discover });
-    assert.equal(result.reason, "uncommitted or untracked changes");
-    assert.deepEqual(stops, [], "a deletion the guards refuse stops nothing");
+    assert.match(result.reason, /receipt required/);
+    assert.deepEqual(stops, [], "a deletion without a receipt stops nothing");
     fs.rmSync(path.join(worktree, "stray.txt"));
-    result = await removeRepositoryWorktree({ repositoryId, branch: "feature", stateRoot, stop: stop(false), discover });
-    assert.match(result.reason, /did not stop \(pid 102\)/);
+    const preview = await previewRepositoryWorktree({ repositoryId, branch: "feature", stateRoot, discover });
+    assert.equal(preview.eligible, true, preview.reason);
+    result = await removeRepositoryWorktree({ repositoryId, branch: "feature", receipt: preview.receipt, stateRoot, stop: stop(false) });
+    assert.match(result.reason, /did not stop/);
     assert.equal(fs.existsSync(worktree), true, "a server that keeps running keeps its worktree");
     assert.deepEqual(await stopRepositoryWorktreeServers({ repositoryId, branch: "feature", stateRoot, stop: stop(true) }), { action: "stopped", stopped: 1, reason: null });
-    result = await removeRepositoryWorktree({ repositoryId, branch: "feature", stateRoot, stop: stop(true), discover });
+    result = await removeRepositoryWorktree({ repositoryId, branch: "feature", receipt: preview.receipt, stateRoot, stop: stop(true) });
     assert.equal(result.action, "removed", result.reason);
     assert.equal(fs.existsSync(worktree), false);
     assert.equal(stops.length, 3);
@@ -906,18 +897,27 @@ try {
       assert.equal(dispatchRoutes([repositoriesRoutes], req, res, `/api/repositories/${encodeURIComponent(repositoryId)}/worktrees/remove`, "", handlers), true);
     });
     const refused = await removeThroughRoute({ branch: "feature" });
-    assert.equal(refused.requiresDiscardConfirmation, true, "dirty deletion requires explicit loss confirmation");
+    assert.equal(refused.action, "kept");
+    assert.match(refused.reason, /receipt required/, "dirty deletion requires a loss preview receipt");
     assert.equal(fs.readFileSync(path.join(worktree, "work.txt"), "utf8"), "uncommitted work\n");
-    const invalidConsent = await removeThroughRoute({ branch: "feature", discardChanges: "true" });
-    assert.equal(invalidConsent.requiresDiscardConfirmation, true, "only an explicit boolean enables discarding changes");
-    const removed = await removeThroughRoute({ branch: "feature", discardChanges: true });
+    for (const discardChanges of ["true", true]) {
+      const invalidConsent = await removeThroughRoute({ branch: "feature", discardChanges });
+      assert.equal(invalidConsent.action, "kept", "old boolean consent cannot authorize removal");
+      assert.match(invalidConsent.reason, /receipt required/);
+    }
+    const preview = await previewRepositoryWorktree(options);
+    assert.equal(preview.eligible, true, preview.reason);
+    assert.equal(preview.target.path, undefined, "portal preview omits the private checkout path");
+    assert.ok(preview.groups.tracked.some((entry) => entry.path === "work.txt"));
+    assert.ok(preview.groups.untracked.some((entry) => entry.path === "stray.txt"));
+    const removed = await removeThroughRoute({ branch: "feature", receipt: preview.receipt });
     assert.equal(removed.action, "removed", removed.reason);
     assert.equal(fs.existsSync(worktree), false);
-    assert.equal(git(main, "rev-parse", removed.archiveRef), tip, "committed work is still recoverable");
-    assert.equal(git(main, "show", `${removed.archiveRef}:work.txt`), "committed work");
+    assert.equal(git(main, "for-each-ref", "--format=%(refname)", "refs/roborepo/abandoned", "refs/roborepo/worktree-archives"), "", "explicit deletion creates no recovery refs");
   }
   console.log("worktree lifecycle: inventory and landing ok");
 } finally {
   restoreGitConfig();
-  fs.rmSync(root, { recursive: true, force: true });
+  try { fs.rmSync(root, { recursive: true, force: true }); }
+  catch (error) { console.error(`Fixture cleanup failed: ${error.message}`); process.exitCode = 1; }
 }

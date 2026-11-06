@@ -2,12 +2,17 @@
 // The shared retention engine: policy validation, append-log measurement (including the cheap gate
 // that avoids a full read), file-set measurement, and the registry's bounded-store guarantee.
 //
-// The engine only measures. Every assertion here is about the verdict it returns, never about a
-// file it wrote, because writing stays with each store — see modules/retention/policy.mjs.
+// Measurement stays pure; store-specific checks below also exercise cleanup writers and bounds.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { spawn } from "node:child_process";
+import { pathToFileURL } from "node:url";
+import { randomUUID } from "node:crypto";
+import { withCleanupLock } from "../../modules/repositories/worktree-cleanup-lock.mjs";
+import { appendRemoval, removalLogPath } from "../../modules/repositories/worktree-removal.mjs";
+import { saveTransaction, readTransaction } from "../../modules/repositories/worktree-transactions.mjs";
 import {
   FILE_SET_SHAPE,
   LOG_SHAPE,
@@ -187,9 +192,93 @@ try {
   // the first append on a user's machine.
   for (const store of stores) normalizePolicy(store.policy);
 
+  const cleanupRoot = path.join(tempRoot, "cleanup-state");
+  const logFile = removalLogPath(cleanupRoot);
+  fs.mkdirSync(path.dirname(logFile), { recursive: true });
+  fs.writeFileSync(logFile, `${JSON.stringify({ at: new Date(Date.now() - 40 * DAY).toISOString(), tag: "expired" })}\n`);
+  await appendRemoval(cleanupRoot, { at: new Date().toISOString(), tag: "fresh" });
+  assert.equal(fs.readFileSync(logFile, "utf8").includes("expired"), false, "cleanup log applies age bounds even below other stores' floors");
+  // Seed pressure first, then launch independent processes: append and compaction share a lock.
+  fs.writeFileSync(logFile, Array.from({ length: 2300 }, () => JSON.stringify({ at: new Date().toISOString(), padding: "x".repeat(1000) })).join("\n") + "\n");
+  const moduleUrl = pathToFileURL(path.resolve("modules/repositories/worktree-removal.mjs")).href;
+  await Promise.all(Array.from({ length: 8 }, (_, writer) => new Promise((resolve, reject) => {
+    const source = `import { appendRemoval } from ${JSON.stringify(moduleUrl)}; for (let n = 0; n < 5; n++) await appendRemoval(${JSON.stringify(cleanupRoot)}, { at: new Date().toISOString(), writer: ${writer}, n });`;
+    const child = spawn(process.execPath, ["--input-type=module", "-e", source], { stdio: ["ignore", "ignore", "pipe"] });
+    let stderr = ""; child.stderr.on("data", (data) => { stderr += data; });
+    child.on("error", reject); child.on("exit", (code) => code === 0 ? resolve() : reject(new Error(stderr)));
+  })));
+  const records = fs.readFileSync(logFile, "utf8").trim().split("\n").map(JSON.parse);
+  assert.equal(records.filter((entry) => Number.isInteger(entry.writer)).length, 40, "compaction retains every concurrent fresh record");
+  assert.ok(fs.statSync(logFile).size <= 2 * 1024 * 1024);
+  const transactionRoot = path.join(cleanupRoot, "worktree-cleanup", "transactions");
+  const stale = { id: randomUUID(), createdAt: new Date().toISOString(), state: "previewed" };
+  await saveTransaction(cleanupRoot, stale);
+  const staleFile = path.join(transactionRoot, `${stale.id}.json`);
+  const old = new Date(Date.now() - 8 * DAY); fs.utimesSync(staleFile, old, old);
+  for (let i = 0; i < 6; i++) await saveTransaction(cleanupRoot, { id: randomUUID(), state: "previewed", padding: "x".repeat(1024 * 1024) });
+  assert.throws(() => readTransaction(cleanupRoot, stale.id), /ENOENT/, "pruned receipt has no authority");
+  assert.ok(fs.readdirSync(transactionRoot).reduce((sum, name) => sum + fs.statSync(path.join(transactionRoot, name)).size, 0) <= 5 * 1024 * 1024);
+  const concurrentRoot = path.join(tempRoot, "concurrent-transactions");
+  const pending = { id: randomUUID(), state: "previewed" };
+  await saveTransaction(concurrentRoot, pending);
+  const pendingFile = path.join(concurrentRoot, "worktree-cleanup", "transactions", `${pending.id}.json`);
+  fs.utimesSync(pendingFile, old, old);
+  let refresh;
+  const interleavedFs = Object.create(fs);
+  interleavedFs.rmSync = (file, options) => {
+    if (file === pendingFile) {
+      refresh = Promise.resolve(saveTransaction(concurrentRoot, { ...pending, state: "applying" }));
+    }
+    return fs.rmSync(file, options);
+  };
+  await saveTransaction(concurrentRoot, { id: randomUUID(), state: "previewed" }, interleavedFs);
+  assert.ok(refresh, "a second writer attempts to refresh the pruned record");
+  await refresh;
+  assert.equal(readTransaction(concurrentRoot, pending.id).state, "applying", "pruning cannot unlink a concurrent replacement");
+  const lockRoot = path.join(tempRoot, "stale-lock");
+  const lockDir = path.join(lockRoot, "worktree-cleanup");
+  const lockFile = path.join(lockDir, "global.lock");
+  fs.mkdirSync(lockDir, { recursive: true });
+  fs.writeFileSync(lockFile, "2147483647\n");
+  let contender;
+  let contendersEntered = 0;
+  const takeoverFs = Object.create(fs);
+  takeoverFs.rmSync = (file, options) => {
+    if (file === lockFile && !contender) {
+      contender = withCleanupLock(lockRoot, () => { contendersEntered++; });
+    }
+    return fs.rmSync(file, options);
+  };
+  await withCleanupLock(lockRoot, () => { contendersEntered++; }, { fsApi: takeoverFs });
+  assert.ok(contender, "the contender arrived during stale-lock reclamation");
+  assert.equal((await contender).locked, true);
+  assert.equal(contendersEntered, 1, "only one contender may reclaim a stale lock");
+
+  fs.writeFileSync(lockFile, "2147483647\n");
+  let reads = 0;
+  let successor;
+  let releaseSuccessor;
+  const successorHeld = new Promise((resolve) => { releaseSuccessor = resolve; });
+  const replacementFs = Object.create(fs);
+  replacementFs.readFileSync = (file, options) => {
+    const contents = fs.readFileSync(file, options);
+    if (++reads === 2) {
+      fs.rmSync(lockFile);
+      successor = withCleanupLock(lockRoot, () => successorHeld);
+    }
+    return contents;
+  };
+  const staleOwner = await withCleanupLock(lockRoot, () => "overlap", { fsApi: replacementFs });
+  releaseSuccessor();
+  assert.ok(successor, "a normal caller replaced the lock during stale inspection");
+  assert.equal((await successor).locked, false);
+  assert.equal(staleOwner.locked, true, "recovery cannot unlink the replacement lock");
+  console.log("ok: cleanup retention bounds, concurrent append and transaction refresh");
+
   console.log(`ok: retention policy engine (${stores.length} stores registered)`);
 } finally {
-  fs.rmSync(tempRoot, { recursive: true, force: true });
+  try { fs.rmSync(tempRoot, { recursive: true, force: true }); }
+  catch (error) { console.error(`Fixture cleanup failed: ${error.message}`); process.exitCode = 1; }
 }
 
 function record(at, tag) {

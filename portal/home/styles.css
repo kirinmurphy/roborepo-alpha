@@ -189,7 +189,9 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 .worktree-remove-details { min-width: 0; }
 .worktree-remove-details > summary { color: var(--dim); font-size: var(--text-sm); cursor: pointer; }
 .worktree-remove-details > :not(summary) { margin-top: 8px; }
-.worktree-remove-restore { margin: 0; padding: 8px; overflow-x: auto; background: var(--raised); border: 1px solid var(--line); border-radius: 5px; font-size: var(--text-2xs); }
+.worktree-remove-inventory h3 { margin: 8px 0 4px; font-size: var(--text-sm); }
+.worktree-remove-inventory pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--text-xs); }
+#worktree-remove-dialog [data-slot=error], #worktree-remove-dialog [data-slot=warnings] { white-space: pre-wrap; }
 .worktree-cleanup-foreign pre { margin: 6px 0 0; padding: 8px; overflow-x: auto; background: var(--raised); border: 1px solid var(--line); font-size: var(--text-2xs); }
 
 /* Plans, Agents, and Tokens icon links, left of the repo's ⋮ menu. */

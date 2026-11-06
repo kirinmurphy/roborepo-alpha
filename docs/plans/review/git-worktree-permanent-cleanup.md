@@ -1,6 +1,6 @@
 ---
 id: 9xzkn4vz
-next_action: Run /plan-execute to implement permanent deletion, the discard receipt, and the legacy recovery migration; ask before creating the worktree.
+next_action: Run /plan-review on the submitted implementation.
 blocked_by: []
 depends_on: []
 related: ["4xc0gjuw", "a7bslb00", "z3j2x3x1", "b2sgiejd", "l1mz96d9", "0jped168"]
@@ -340,32 +340,33 @@ Module ownership: `modules/repositories/worktree-artifacts.mjs` holds the dispos
 records. `worktree-snapshot.mjs` keeps inventory, listing, reading, and restore, and loses capture.
 `scripts/cli/worktree-cleanup.mjs` and the portal routes stay thin adapters.
 
-- [ ] Inventory consumers of `archive-remove`, `createWorktreeSnapshot`, `archiveBranchTip`,
+- [x] Inventory consumers of `archive-remove`, `createWorktreeSnapshot`, `archiveBranchTip`,
       `retryArchivedBranchRetirement`, `verifiedSnapshot`, and `discardChanges` before changing them.
-- [ ] Add the disposable policy with `-z` discovery. Use it in `worktree-guards.mjs` and the
+- [x] Add the disposable policy with `-z` discovery. Use it in `worktree-guards.mjs` and the
       preservation inventory; retain tracked-descendant visibility and nested-repository detection.
-- [ ] Add the consent inventory, and the receipt and transaction records, with cross-process
+- [x] Add the consent inventory, and the receipt and transaction records, with cross-process
       locking, one-use consumption, expiry, and evidence-write failure handling.
-- [ ] Remove backup and snapshot creation from `removeWorktree` and `cleanupWorktrees`. Replace
+- [x] Remove backup and snapshot creation from `removeWorktree` and `cleanupWorktrees`. Replace
       `verifiedSnapshot` with explicit preservation evidence or a validated receipt, and gate
       `--force` on them. Narrow `cleanup --remove`, and add the record-based retry.
-- [ ] Add the `discard` command definition and adapter, remove the `archive-remove` definition and
+- [x] Add the `discard` command definition and adapter, remove the `archive-remove` definition and
       `worktreeArchiveCommand` branch, and wire `scripts/cli/telemetry.mjs` handlers and
       `scripts/cli/portal-routes-repositories.mjs` to the contract above.
-- [ ] Simplify `portal/home/worktree-dialogs.js`, `portal/home/index.html`, `portal/home/api.js`, and
+- [x] Simplify `portal/home/worktree-dialogs.js`, `portal/home/index.html`, `portal/home/api.js`, and
       related styles; replace backup promises with complete loss warnings and stale-preview
       handling. Preserve existing stop-server and active-plan behavior.
-- [ ] Stop `scripts/cli/worktree-observations.mjs` reporting recognized artifacts as blocking
+- [x] Stop `scripts/cli/worktree-observations.mjs` reporting recognized artifacts as blocking
       reasons, and stop the dialog parsing reason text to detect a dirty checkout.
-- [ ] Update `globals/packages/plan-suite/skills/plan-close/SKILL.md` step 10 to close durably,
+- [x] Update `globals/packages/plan-suite/skills/plan-close/SKILL.md` step 10 to close durably,
       clean quietly, and request exact-set discard only for unresolved work.
-- [ ] Extract the layer-absorption step of `worktree-preservation.mjs` and a commit-based landing
+- [x] Extract the layer-absorption step of `worktree-preservation.mjs` and a commit-based landing
       entry in `worktree-landed.mjs`, so proofs accept a legacy ref and manifest. Add
       `legacy-recovery`, extend `restore`, and disable disposable pruning in its verification.
       Move the snapshot writer into a test fixture helper under `scripts/test/`.
-- [ ] Register both stores, add the shared log lock and compaction to `appendRemoval`, and prune
+- [x] Register both stores, add the shared log lock and compaction to `appendRemoval`, and prune
       transaction records through the file-set measurement.
-- [ ] Update the documentation below and focused regression tests; run the validation below.
+- [x] Complete required verification in the external terminal: nine native suites, focused
+      browser tests, and the full regression gate passed.
 
 ## Validation
 
@@ -473,3 +474,192 @@ Decided during promotion, each reversible by refining this plan before implement
 | `build/` needs a project file beside it | It has no marker of its own; an unrecognized one costs a single confirmation, not lost work |
 | Consent inventory separate from `inventoryWorktree` | Reuse would break Delete wherever LFS or `autocrlf` is configured |
 | Migration is CLI-only, with pending state derived from refs | The plan adds no archive UI, and refs are already the source of truth |
+
+
+## Execution decisions
+
+- User decision: take over the existing uncommitted implementation in the recorded worktree.
+  No new branch or worktree was created.
+- Shared artifact discovery changes Home's guard result through its existing consumer; no duplicate
+  observation-specific artifact policy was added.
+- Plan-scoped apply requires a leftovers receipt even if a caller supplies a broader receipt.
+  This preserves the contract that plan closure cannot authorize loss of committed work.
+- Receipt file identities use dictionary keys without prototypes and keep index metadata separate
+  from path keys, so arbitrary filenames cannot hide content changes.
+- Legacy migration binds the selected base commit into approval and rechecks it before deleting
+  a preserved ref. A ref's unchanged object is insufficient if the preservation base has moved.
+- The existing completed-plan cleanup path now resolves recorded branch retirement even when its
+  checkout is already absent; closure is not repeated.
+- Procedural delegation was not used: the skill's prescribed Sonnet worker is not available in this
+  environment. Independent validation uses the session model, as the skill requires.
+
+## Open Questions
+
+None. The external terminal completed the full regression gate after the targeted checks passed.
+
+## Not tested
+
+None. The user supplied successful external-terminal results for the native, browser, and full
+regression checks below.
+
+## Decision Log
+
+- Removed the two host-blocked Not tested entries after the user supplied successful native
+  suite output and the browser runner's `16 passed (13.1s)` result on 2026-11-05. This is
+  user-provided execution evidence, not an agent rerun or a screenshot-based visual review.
+
+## Review
+
+### Findings
+
+- [x] Check every ref in an occupied checkout’s symbolic branch chain — fixed in review (0e579737).
+- [x] Keep a replacement lock created after its prior owner exits — fixed in review (6b6ee7e5).
+- [x] Fall back to primary HEAD when the implicit Delete base is unusable — fixed in review (4d198da2).
+- [x] Serialize contenders reclaiming a stale cleanup lock — fixed in review (98b29b86).
+- [x] Protect checkouts using the selected symbolic branch — fixed in review (f863ed8d).
+- [x] Count and label commits with an empty subject in Delete previews — fixed in review (576db77e).
+- [x] Serialize transaction updates, pruning, log append, and maintenance resets — fixed in review (86211a41).
+- [x] Enable Delete with a custom primary branch or detached primary HEAD — fixed in review (d8be2cca).
+- [x] Require a new discard preview when the active-plan warning changes — fixed in review (fdc8b459).
+- [x] Retire the selected ref without following it to another branch — fixed in review (0dad1284).
+- [x] Report pending legacy recovery even when cleanup has no candidates — fixed in review (7e812077).
+- [x] Require an independent branch to prove landing before issuing a leftovers receipt — fixed in review (a2045fe1).
+- [x] Pending branch retirement collided across repos sharing a branch name — filter owning
+  repo before checking ambiguity; the regression failed before the fix and passed afterward.
+- [x] Artifact tests asserted classification only — added real squash-landed automatic removal,
+  no-recovery-ref, branch-retirement, and external-symlink-target assertions. Native removal is
+  still blocked by host permissions; this fixture reports failure rather than weakening checks.
+- [x] Legacy restore lacked captured disposable artifacts — added an unpruned capture and
+  byte-for-byte restoration regression; those assertions passed before a later host-blocked step.
+
+- [x] The Plans portal reference still offered Archive and remove after closure; corrected it to
+  exact-preview discard-all or keep, with no recovery copy.
+
+### Verification
+
+- Plan document validator: no findings before implementation.
+- `bash scripts/doctor.sh --quiet`: passed 97 checks; installed skill drift reported separately.
+- `node scripts/test/docs-reference-check.mjs`: passed.
+- `node scripts/test/plan-suite-skills-check.mjs`: passed.
+- `bin/roborepo skill render-commands --check`: passed, 12 commands, no generated changes.
+- `bin/roborepo skill triggers --check`: passed, 10 trigger fixtures.
+- `git diff --check`: passed.
+- `node scripts/test/worktree-artifacts-check.mjs`: artifact assertions passed; exit failed during
+  temporary fixture cleanup with EPERM, including an escalated attempt.
+- `node scripts/test/retention-policy-check.mjs`: all retention assertions passed, including age,
+  byte pressure, and 40 cross-process appends; exit failed only during fixture cleanup with EPERM.
+- `node scripts/test/cli-command-catalog-check.mjs`: blocked at fixture cleanup with EPERM.
+- `node scripts/test/plan-close-integration-check.mjs`: blocked at fixture cleanup with EPERM.
+- `node scripts/test/worktree-lifecycle-check.mjs`: stopped at a candidate comparison that included
+  differing temporary-cleanup warning paths under the host's directory-removal restriction.
+- `node scripts/test/worktree-snapshot-check.mjs`: blocked removing a synthetic empty directory.
+- Browser environment start attempted through the repository's test runner; no shareable URL
+  became available because the host refused the localhost listener. No server was left running
+  by that runner.
+
+### Takeover verification — 2026-11-05
+
+- Resumed the existing clean feature worktree at `30028eaf`; no branch/worktree was created
+  or switched. The user explicitly authorized taking over the mid-flight work.
+- Package manager confirmed code-style, javascript-typescript, test-harness, and
+  feature-verification enabled. React does not apply to this framework-less portal.
+- Plan validator: zero blocking findings; the two existing Not tested entries remain advisory.
+- Health check passed 97 checks; docs references, plan-suite skill contracts, command rendering
+  (12 commands), trigger fixtures (10), and whitespace checks passed. Installed global skill drift
+  remains a separate warning; no global configuration was changed.
+- Native lifecycle and snapshot checks were attempted normally and once with escalation. Both
+  executions still encounter EPERM removing temporary directories. Lifecycle stops at the candidate
+  comparison because the otherwise-identical cleanup warning contains a different temporary path;
+  snapshot stops at removal of its synthetic `directory-only` fixture.
+- Browser startup was attempted normally and once with escalation. Both refuse `127.0.0.1` binding
+  with EPERM before any browser assertion runs. No shareable server URL or screenshot is available.
+- Discard assertions for stale content/index/mode/tip/base, scope restrictions, raw large-file
+  inventory, intent-write refusal, and serialized logs execute successfully. The suite then stops
+  at the recreated-checkout fixture's directory rename with EPERM, so its overall result is blocked.
+- Legacy recovery assertions report success for reachable/squash proofs, layer protection, exact
+  approval, concurrent ref protection, and detached restore; final fixture cleanup fails with EPERM.
+- Retention assertions pass age/size bounds and 40 cross-process appends; final fixture cleanup
+  fails with EPERM. Plan-close integration reports its assertions passed before the same cleanup
+  restriction. Command catalog stops at fixture cleanup with EPERM.
+- Full local parity `npm run check` was attempted once because the implementation changes the
+  test-group registry. It passes doctor, then fails in test-cli with three package authoring rollback
+  assertions and an EPERM removing a temporary skill symlink. This is not a passing parity gate;
+  no claim is made that all three assertions share the EPERM cause.
+- No real checkout or legacy recovery ref was deleted for verification.
+- Artifact policy assertions and CLI surface integration assertions report success; each exits
+  nonzero during final fixture cleanup with EPERM. These are partial assertion results, not passing
+  suites.
+- Independent validation found the stale Archive and remove wording in the Plans portal reference;
+  corrected it and reran docs references and whitespace checks successfully.
+
+### Continued verification — 2026-11-05
+
+- Reconfirmed package activation and resumed the user-authorized existing worktree, including
+  the pending documentation correction and verification record. No new branch was created.
+- Reran lifecycle, snapshot, discard, legacy recovery, artifact, retention, plan-close,
+  command catalog, and CLI surface checks. Required native operations still hit EPERM;
+  partial successful assertions are not passing suites.
+- Snapshot verification still fails at synthetic directory removal with broader permissions.
+  Browser startup also fails to bind localhost both normally and with broader permissions.
+  No review submission or feature-branch push was attempted while required checks remain blocked.
+- Docs references, plan-suite skill contracts, health (97 checks), command rendering
+  (12 commands), trigger fixtures (10), and whitespace checks passed again.
+- Existing full-parity failure remains unresolved; it was not rerun because the implementation
+  and test orchestration have not changed since that recorded attempt.
+
+- Validation pass 1 (fresh-context subagent) reported the three findings above; all were fixed.
+- The shared-state retry regression failed before the code correction and passed afterward,
+  including checking that the other repo branch remains intact until its own retry. The discard
+  suite subsequently remains blocked at synthetic checkout rename.
+- The new artifact cleanup fixture proves eligibility and preservation, then Git reports
+  Operation not permitted deleting its synthetic checkout and administrative directory. Actual
+  deletion, branch retirement, and external-target postconditions remain unverified.
+- The new legacy disposable-artifact snapshot and restore assertions passed, including all
+  captured payload bytes. The snapshot suite still stops later at synthetic empty-directory removal.
+- Syntax checks for all four changed JavaScript files, health (97 checks), docs references,
+  and whitespace checks passed after these corrections.
+
+- Validation pass 2: no new findings at `bfbbd0a2` (fresh-context subagent). Prior findings
+  are resolved; native deletion and browser outcomes remain blocked rather than passed.
+- Completion preflight refuses submission only because the required-verification objective
+  remains unchecked; it confirms the assigned worktree, clean Git state, feature commits,
+  empty dependency blockers, and review-validator checks. The plan stays active and unpushed.
+
+### External-terminal verification supplied by the user — 2026-11-05
+
+- All nine native suites completed successfully: worktree-artifacts, worktree-discard,
+  worktree-lifecycle, worktree-snapshot, worktree-legacy-recovery, retention-policy,
+  plan-close-integration, cli-command-catalog, and cli-surface-integration.
+- The native output includes actual automatic checkout/branch removal, isolated retry,
+  recreated-checkout refusal, legacy artifact restore, and concurrent log assertions.
+- `npm run test:portal-ui -- --grep worktree`: 16 passed in 13.1 seconds. The temporary
+  portal started successfully; the reported ephemeral URL is not a persistent demo link.
+- These external results supersede the earlier targeted EPERM failures.
+
+### Full regression verification supplied by the user — 2026-11-06
+
+- `env -u ROBOREPO_ASSUME_INTERACTIVE npm run check </dev/null` completed in the external
+  terminal. The supplied output ends with `165 passed (2.0m)` and `CI checks passed`.
+- The run resolves the remaining verification objective. The last independent validation pass
+  found no new issues, and only plan evidence has changed since that pass.
+
+### Human review verification — 2026-11-06
+
+- Synchronized local `main` at `da88e4f38c535afa61afe212a0e56698d369b076` into the feature worktree at `7f9e7fdd70235f5693385b20d429eac2f54276f6` without conflicts.
+- `bash scripts/doctor.sh --quiet` passed 97 checks. Docs references, plan-suite skill checks, command rendering, trigger fixtures, and `git diff --check main...HEAD` passed.
+- Base failure: `env -u ROBOREPO_ASSUME_INTERACTIVE npm run check </dev/null` reached `test-cli.sh`, where three package authoring rollback checks failed before temporary symlink removal was refused. `bash scripts/test/test-cli.sh --quiet </dev/null` on the synchronized base reproduced all three failures and the removal refusal. The full gate did not reach later suites.
+- `npm run test:portal-ui -- --grep worktree` could not start its local listener on either attempt. No browser assertion ran on the synchronized commit.
+
+- Validator passes 1–4 reproduced preview, branch-retirement, migration-reporting, and retention issues. Every listed review fix has a focused regression.
+- Discard regressions exercised before native worktree removal was refused. Retention assertions passed for bounds, 40 cross-process appends, concurrent transaction refresh, and stale-lock recovery. Both suites returned nonzero. Legacy recovery assertions completed before fixture removal was refused.
+- Validator pass 5 reproduced the intermediate-alias and replacement-lock scenarios against `6b6ee7e5` and found no further issues in those fixes.
+- The full gate on `6b6ee7e5` repeated the synchronized base’s three CLI failures and stopped before the worktree and browser suites. Earlier external-terminal results cover the pre-review implementation only.
+- The feature branch incorporated `main` at `4013387f86c7fc77c299881ce593318aaee2d337` in merge `e271cc64`.
+- CI reported that the snapshot suite imported `readTransaction` from its former module. Commit `8664a017` updates the import, and a targeted Validator pass found no other stale consumers. The snapshot suite loaded and verified restored legacy payloads before local permissions blocked synthetic directory removal.
+- The full local gate at `8664a017` passed all 97 doctor checks and hit the same three CLI failures and temporary symlink removal refusal as `test-cli.sh --quiet` on `4013387f`. CI verification of the fixed implementation is pending.
+
+### Result
+
+- Status: pending
+- Reviewed implementation commit: 8664a0170dbf9d822d5949f138843f100e133787
+- Base commit: 4013387f86c7fc77c299881ce593318aaee2d337

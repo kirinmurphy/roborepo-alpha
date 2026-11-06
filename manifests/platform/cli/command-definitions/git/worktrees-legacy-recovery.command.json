@@ -1,0 +1,16 @@
+{
+  "path": [
+    "git",
+    "worktrees",
+    "legacy-recovery"
+  ],
+  "kind": "command",
+  "title": "Review legacy worktree recovery data",
+  "description": "Review legacy worktree recovery data",
+  "usage": "roborepo git worktrees legacy-recovery [--discard <ref>]... [--approve <digest> --apply] [--json]",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/worktree-cleanup.mjs",
+    "export": "worktreeLegacyRecoveryCommand"
+  }
+}

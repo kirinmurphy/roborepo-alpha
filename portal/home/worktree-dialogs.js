@@ -2,116 +2,121 @@ import { portalFillSlots as fill, portalTpl as tpl, portalWireBackdropClose } fr
 import * as api from "./api.js";
 import { isRunning } from "./worktree-details.js";
 
-// Home's Delete Worktree confirmation. One dialog serves every row: `open` fills it for a worktree,
-// and confirming stops its servers and removes it through the same guards as
-// `roborepo git worktrees cleanup --remove`. A refused removal keeps the dialog open with the reason.
+// A receipt binds the destructive confirmation to the inventory the user sees here.
 export function createWorktreeRemoveDialog({ onRemoved }) {
   const dialog = document.getElementById("worktree-remove-dialog");
   const slot = (name) => dialog.querySelector(`[data-slot=${name}]`);
+  const confirm = slot("confirm");
+  const refresh = slot("refresh");
+  const confirmLabel = [...confirm.childNodes];
+  const refreshLabel = [...refresh.childNodes];
   let target = null;
   wireClose(dialog);
-  const confirm = slot("confirm");
-  const archiveConfirm = slot("archive-confirm");
-  archiveConfirm.addEventListener("click", () => run(dialog, archiveConfirm, "Archiving…", async () => {
-    const result = await api.archiveWorktree(target);
-    const recovery = slot("snapshot-result");
-    if (result.snapshotRef) {
-      recovery.hidden = false;
-      recovery.textContent = `${result.snapshotRef}\n${result.restoreCommand}`;
+
+  const isCurrent = (openingTarget) => dialog.open && target === openingTarget;
+
+  async function preview(openingTarget) {
+    openingTarget.receipt = null;
+    confirm.disabled = true;
+    refresh.hidden = true;
+    slot("status").textContent = "Checking everything this deletion would remove…";
+    let result;
+    try {
+      result = await api.previewWorktreeRemoval(openingTarget);
+    } catch (error) {
+      if (isCurrent(openingTarget)) refresh.hidden = false;
+      throw error;
     }
-    if (result.action !== "removed") throw new Error(result.reason || "The worktree was kept.");
-    confirm.hidden = true;
-    archiveConfirm.hidden = true;
-    slot("status").textContent = "Worktree archived and removed. Its archived changes have not been submitted or merged.";
-    slot("dirty").hidden = true;
-    onRemoved();
-  }));
-  confirm.addEventListener("click", () => run(dialog, confirm, "Deleting…", async () => {
-    const result = await api.removeWorktree(target);
-    if (result.requiresDiscardConfirmation) {
-      target.discardChanges = true;
-      slot("dirty").hidden = false;
-      confirm.dataset.btn = "danger";
-      slot("status").textContent = "Only committed work can be restored from the backup.";
-      return;
+    if (!isCurrent(openingTarget)) return;
+    openingTarget.receipt = result.eligible ? result.receipt : null;
+    const commits = result.commits;
+    slot("status").textContent = commits?.landed
+      ? "Its committed work is already merged."
+      : Number.isInteger(commits?.unmerged)
+        ? `${commits.unmerged} unmerged commit${commits.unmerged === 1 ? "" : "s"} will be discarded.`
+        : "Committed work may be lost.";
+    slot("commits").textContent = commits?.subjects?.length ? commits.subjects.join("\n") : "No unmerged commit subjects listed.";
+    for (const group of ["tracked", "untracked", "ignored", "disposable"]) {
+      slot(group).textContent = result.groups?.[group]?.map((entry) => [
+        entry.path, entry.change, Number.isInteger(entry.files) ? `${entry.files} files` : null,
+        Number.isInteger(entry.bytes) ? `${entry.bytes} bytes` : null,
+      ].filter(Boolean).join(" — ")).join("\n") || "None";
     }
-    if (result.action !== "removed") throw new Error(result.reason || "The worktree was kept.");
-    dialog.close();
-    onRemoved();
-  }));
+    slot("warnings").textContent = (result.warnings || []).join("\n");
+    slot("warnings").hidden = !result.warnings?.length;
+    slot("running").hidden = !result.servers?.length;
+    if (result.servers?.length) {
+      slot("running").hidden = false;
+      slot("running").textContent = `Running servers will be stopped before deletion: ${result.servers.map((server) => `pid ${server.pid}${server.ports?.length ? ` (ports ${server.ports.join(", ")})` : ""}`).join("; ")}.`;
+    }
+    const blockers = (result.blockers || []).map((entry) => typeof entry === "string" ? entry : [entry.path, entry.reason].filter(Boolean).join(": "));
+    showError(dialog, blockers.join("\n") || (!openingTarget.receipt ? result.reason || "The worktree cannot be deleted. Refresh the preview after resolving its blockers." : null));
+    confirm.disabled = !openingTarget.receipt;
+    refresh.hidden = Boolean(openingTarget.receipt);
+  }
+
+  refresh.addEventListener("click", async () => {
+    const openingTarget = target;
+    await run(dialog, refresh, "Checking…", () => preview(openingTarget), () => isCurrent(openingTarget));
+    if (isCurrent(openingTarget)) confirm.disabled = !openingTarget.receipt;
+  });
+  confirm.addEventListener("click", async () => {
+    const openingTarget = target;
+    if (!openingTarget?.receipt) return;
+    await run(dialog, confirm, "Deleting…", async () => {
+      const request = { ...openingTarget };
+      openingTarget.receipt = null;
+      const result = await api.removeWorktree(request);
+      if (result.action !== "removed") {
+        if (!isCurrent(openingTarget)) return;
+        const differences = result.differences || {};
+        const detail = Object.entries(differences).map(([kind, paths]) => `${kind}: ${Array.isArray(paths) ? paths.join(", ") : String(paths)}`).join("\n");
+        throw new Error([result.reason || "The worktree was kept.", detail, result.retryCommand, "Refresh the preview and review the current state before confirming again."].filter(Boolean).join("\n"));
+      }
+      if (isCurrent(openingTarget)) dialog.close();
+      onRemoved();
+    }, () => isCurrent(openingTarget));
+    if (isCurrent(openingTarget)) {
+      refresh.hidden = false;
+      confirm.disabled = !openingTarget.receipt;
+    }
+  });
   return {
     open({ repositoryId, checkout, plan = null }) {
       const branch = checkout.git?.branch || null;
-      // A detached worktree has no branch; the cleanup command finds it, and archives its HEAD, by
-      // Git's administrative name instead.
       const selector = branch || checkout.worktreeName;
       if (!repositoryId || !selector) return;
-      const dirty = checkout.git?.dirty === true || checkout.worktreeReason === "uncommitted or untracked changes";
-      target = { repositoryId, branch: selector, discardChanges: dirty };
-      confirm.hidden = false;
-      archiveConfirm.hidden = false;
-      archiveConfirm.disabled = true;
-      slot("snapshot-result").hidden = true;
-      const openingTarget = target;
-      api.previewWorktreeArchive(target).then((preview) => {
-        if (target !== openingTarget) return;
-        slot("status").textContent = [
-          removalStatus(checkout),
-          `Local preservation: ${preview?.preservation || "unknown"}.`,
-          preview?.remainingPaths?.length ? `Remaining paths: ${preview.remainingPaths.join(", ")}` : "",
-          preview?.reason || "",
-        ].filter(Boolean).join(" ");
-        archiveConfirm.hidden = !preview?.eligible;
-        archiveConfirm.disabled = false;
-        if (!preview?.eligible) {
-          slot("snapshot-result").hidden = false;
-          slot("snapshot-result").textContent = `Archive unavailable: ${preview?.reason || "assessment unavailable"}`;
-        }
-      }).catch((error) => {
-        if (target !== openingTarget) return;
-        archiveConfirm.hidden = true;
-        slot("snapshot-result").hidden = false;
-        slot("snapshot-result").textContent = `Archive unavailable: ${error.message}`;
-      });
-      slot("dirty").hidden = !dirty;
-      // The ref ends in the tip's short SHA (archiveRefName in worktree-removal.mjs).
-      const archive = `refs/roborepo/abandoned/${selector}-${checkout.git?.shortHead || "<commit>"}`;
-      const folder = checkout.projectRoot || "<folder>";
-      const running = isRunning(checkout);
+      target = { repositoryId, branch: selector, receipt: null };
+      for (const button of dialog.querySelectorAll("button")) button.disabled = false;
+      confirm.replaceChildren(...confirmLabel);
+      refresh.replaceChildren(...refreshLabel);
+      confirm.removeAttribute("aria-busy");
+      refresh.removeAttribute("aria-busy");
+      confirm.disabled = true;
+      refresh.hidden = true;
       fill(dialog, {
         lead: branch
-          ? `This deletes the worktree's folder on this computer and its local branch, ${branch}.`
-          : `This deletes the worktree's folder on this computer. It is not on a branch (detached at ${checkout.git?.shortHead || "an unknown commit"}).`,
-        status: [removalStatus(checkout), checkout.worktreePreservation ? `Local preservation: ${checkout.worktreePreservation}.` : "", checkout.remainingPaths?.length ? `Remaining paths: ${checkout.remainingPaths.join(", ")}` : ""].filter(Boolean).join(" "),
+          ? `This permanently deletes the worktree's folder on this computer and its local branch, ${branch}.`
+          : `This permanently deletes the worktree's folder on this computer. It is not on a branch (detached at ${checkout.git?.shortHead || "an unknown commit"}).`,
         branch: branch || "none (detached)",
-        folder,
-        archive,
-        restore: branch ? `git branch ${branch} ${archive}\ngit worktree add ${folder} ${branch}` : `git worktree add ${folder} ${archive}`,
+        folder: checkout.projectRoot || "<folder>",
       });
+      for (const name of ["commits", "tracked", "untracked", "ignored", "disposable"]) slot(name).textContent = "Checking…";
+      slot("warnings").hidden = true;
       slot("plan").hidden = !plan;
       slot("plan").textContent = plan ? `The active plan "${plan.title}" is still using this worktree. Deleting it can lose work the plan still needs, and the plan stays active without it. The plan's progress recorded in this worktree will no longer be shown in Plans.` : "";
-      slot("running").hidden = !running;
-      // Local edits, an active plan, or a running server need the destructive confirmation.
-      confirm.dataset.btn = dirty || plan || running ? "danger" : "cta";
+      slot("running").hidden = !isRunning(checkout);
+      slot("running").textContent = "Something is running in this worktree. It is stopped before the folder is deleted.";
       dialog.querySelector(".worktree-remove-details").open = false;
       showError(dialog, null);
       dialog.showModal();
+      const openingTarget = target;
+      preview(openingTarget).catch((error) => {
+        if (!isCurrent(openingTarget)) return;
+        showError(dialog, error.message);
+      });
     },
   };
-}
-
-// What deleting would cost, in one sentence. Every removal archives the tip, so even unmerged work
-// can be brought back; the sentence says so rather than leaving a commit count to interpret.
-function removalStatus(checkout) {
-  if (checkout.worktreeState === "landed") return `Its changes are already merged into ${checkout.mergedInto || "the main branch"}, so no committed work is lost.`;
-  const count = checkout.unmergedCommits;
-  if (count === 0) return "It has no commits that aren't already on the main branch, so no committed work is lost.";
-  if (Number.isInteger(count)) {
-    return count === 1
-      ? "It has 1 commit that was never merged. A backup is kept so you can bring it back."
-      : `It has ${count} commits that were never merged. A backup is kept so you can bring them back.`;
-  }
-  return "A backup of its latest commit is kept so you can bring it back.";
 }
 
 // The card-footer notice's dialog: confirm the folder automatic removal may act in, then install the
@@ -183,7 +188,7 @@ function wireClose(dialog) {
 
 // Disables the dialog's buttons while a request runs, and shows its failure in the dialog. The button
 // that started it shows a spinner and a busy label, since removing a worktree can take seconds.
-async function run(dialog, busyButton, busyLabel, action) {
+async function run(dialog, busyButton, busyLabel, action, isCurrent = () => true) {
   const buttons = [...dialog.querySelectorAll("button")];
   for (const button of buttons) button.disabled = true;
   const label = [...busyButton.childNodes];
@@ -196,12 +201,14 @@ async function run(dialog, busyButton, busyLabel, action) {
   try {
     await action();
   } catch (error) {
-    showError(dialog, error.message || String(error));
+    if (isCurrent()) showError(dialog, error.message || String(error));
   } finally {
-    // The action may have relabeled the button (the cleanup dialog's "Done"); keep that label.
-    if (busyButton.firstChild === spinner) busyButton.replaceChildren(...label);
-    busyButton.removeAttribute("aria-busy");
-    for (const button of buttons) button.disabled = false;
+    if (isCurrent()) {
+      // The action may have relabeled the button (the cleanup dialog's "Done"); keep that label.
+      if (busyButton.firstChild === spinner) busyButton.replaceChildren(...label);
+      busyButton.removeAttribute("aria-busy");
+      for (const button of buttons) button.disabled = false;
+    }
   }
 }
 

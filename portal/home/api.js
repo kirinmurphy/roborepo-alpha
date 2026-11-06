@@ -16,8 +16,8 @@ export function forgetRepository(payload) {
   return portalPostJson("/api/developer-runtime/repository-forget", payload);
 }
 
-export function removeWorktree({ repositoryId, branch, discardChanges = false }) {
-  return portalPostJson(`/api/repositories/${encodeURIComponent(repositoryId)}/worktrees/remove`, { branch, ...(discardChanges ? { discardChanges: true } : {}) });
+export function removeWorktree({ repositoryId, branch, receipt }) {
+  return portalPostJson(`/api/repositories/${encodeURIComponent(repositoryId)}/worktrees/remove`, { branch, receipt });
 }
 
 export function stopWorktreeServers({ repositoryId, branch }) {
@@ -32,10 +32,6 @@ export function dismissWorktreeCleanupNotice({ repositoryId }) {
   return portalPostJson(`/api/repositories/${encodeURIComponent(repositoryId)}/worktree-cleanup/dismiss`, {});
 }
 
-export function archiveWorktree({ repositoryId, branch }) {
-  return portalPostJson(`/api/repositories/${encodeURIComponent(repositoryId)}/worktrees/archive-remove`, { branch, confirm: true, apply: true });
-}
-
-export function previewWorktreeArchive({ repositoryId, branch }) {
-  return portalPostJson(`/api/repositories/${encodeURIComponent(repositoryId)}/worktrees/archive-remove`, { branch });
+export function previewWorktreeRemoval({ repositoryId, branch }) {
+  return portalPostJson(`/api/repositories/${encodeURIComponent(repositoryId)}/worktrees/remove-preview`, { branch });
 }

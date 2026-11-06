@@ -47,12 +47,12 @@ closure commit. The assigned worktree may already be gone; that is normal after 
 If the completed document is uncommitted or edited, report the discrepancy without overwriting it
 or claiming that closure is durable.
 
-For an already closed plan, inspect whether its named linked worktree still exists. If absent,
-report cleanup already done and continue to the follow-up handoff in step 11. If present, resume
-only steps 9 and 10 with the canonical plan-scoped commands and their current guards. Do not repeat
-a completed cleanup action or remove
-a branch by hand. Report any guard that keeps the worktree without undoing the closed result,
-then continue to step 11.
+For an already closed plan, inspect whether its named linked worktree still exists. If present,
+resume only steps 9 and 10 with the canonical plan-scoped commands and their current guards. If
+absent, run the plan-scoped cleanup command to resolve any recorded pending branch retirement;
+report cleanup already done only when no branch cleanup remains. Do not repeat a completed
+cleanup action or remove a branch by hand. Report any guard that keeps the worktree or branch
+without undoing the closed result, then continue to step 11.
 
 For a plan still in `review/`, resume verification of the remaining requirements. Reuse matching
 landing evidence as described in step 7; a previous refusal does not grant approval or make a
@@ -287,18 +287,47 @@ Skip this step for an archived or refused plan.
 
 ### 10. Remove the closed worktree
 
-After step 9, when the plan was moved to `completed/`, run the repository's canonical worktree
-cleanup command scoped to this plan with its apply flag. Scoped to the plan, it verifies the plan's
-recorded absorbing commit too. Report whether it removed the worktree and branch, whether its
-landing evidence was reused or scanned, which guard kept them, or why removal failed. Do not remove the worktree by hand or bypass
-a guard. The shared assessment must prove committed and local work preserved; dirty automatic
-removal also verifies a recoverable snapshot and final change checks. Stop writers operationally;
-an external write after the final check can still be lost. Unique or unknown work stays in place.
-Report remaining paths and the explicit `roborepo git worktrees archive-remove <branch-or-name>`
-handoff, never archive it implicitly. Include snapshot references, restore commands, and separate
-checkout/branch outcomes. Cleanup failure never undoes durable closure. On an already-closed retry,
-reuse the same guarded path and existing recovery references. Skip this step for an archived or
-refused plan, and in repositories without a canonical cleanup command.
+If step 9 reports a server as `still-running` or `failed`, keep the worktree and ask the user to
+stop the server before retrying cleanup. Do not force removal while the server may still write.
+Once the servers have stopped and the plan is in `completed/`, run the repository's canonical
+worktree cleanup command scoped to this plan with its apply flag:
+
+```sh
+roborepo git worktrees cleanup --plan <id> --apply --json
+```
+
+The shared backend rechecks landing, local preservation, and removal guards. Proven-preserved
+work and recognized ignored generated directories are removed permanently, without a backup or
+snapshot. Report routine success briefly; omit archive choices and per-artifact chatter. Cleanup
+failure never undoes durable closure. Report checkout and branch outcomes separately on failure.
+Do not remove the worktree by hand or bypass a guard. Stop writers operationally; a write after
+the final check can still be lost.
+
+If unique or uncertain local work remains, obtain a grouped preview:
+
+```sh
+roborepo git worktrees discard --plan <id> --json
+```
+
+Show every listed leftover and any blockers, then offer **Discard all listed leftovers and remove**
+or **Keep worktree**. Say that no backup will be created. Apply only after the user explicitly
+chooses discard, using the returned receipt:
+
+```sh
+roborepo git worktrees discard --plan <id> --receipt <receipt> --apply --json
+```
+
+Plan consent is `leftovers` only: it cannot authorize unmerged commits. PR approval or invoking
+`/plan-close` never authorizes discarding later edits. If state changed or the receipt expired,
+show a fresh preview and obtain renewed consent; never silently refresh approval. A blocker keeps
+the checkout and names what needs attention.
+
+On an already-closed retry, resume pending cleanup without another closure commit. If the checkout
+was removed but branch retirement failed, use the backend's `cleanup --remove <name> --confirm
+--apply` retry command; it refuses a recreated checkout or moved/occupied branch. Relay one
+`legacyRecoveryPending` notice when present and name `roborepo git worktrees legacy-recovery`;
+never migrate old recovery data implicitly. Skip this step for an archived or refused plan, and
+in repositories without a canonical cleanup command.
 
 ### 11. Hand off to dependent follow-up plans
 

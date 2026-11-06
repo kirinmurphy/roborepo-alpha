@@ -1,19 +1,22 @@
 import path from "node:path";
 import { assessWorktreePreservation } from "../../modules/repositories/worktree-preservation.mjs";
-import { createWorktreeSnapshot, inventoryWorktree, listWorktreeSnapshots, restoreWorktreeSnapshot } from "../../modules/repositories/worktree-snapshot.mjs";
+import { inventoryWorktree, listWorktreeSnapshots, restoreWorktreeSnapshot } from "../../modules/repositories/worktree-snapshot.mjs";
 import { discoverInstances } from "../../modules/developer-runtime/discovery.mjs";
 import { stopCheckoutServers } from "../../modules/developer-runtime/stop.mjs";
 import { findProjectRoot, mainCheckoutPath, resolveGitDir } from "../../modules/repositories/identity.mjs";
 import { linkedWorktrees } from "../../modules/repositories/worktree-inventory.mjs";
 import { inspectBranchLanding } from "../../modules/repositories/worktree-landed.mjs";
 import { checkWorktreeRemoval } from "../../modules/repositories/worktree-guards.mjs";
-import { appendRemoval, removeLandedBranch, removeWorktree, retryArchivedBranchRetirement, withCleanupLock } from "../../modules/repositories/worktree-removal.mjs";
+import { removeLandedBranch, removeWorktree, retryBranchRetirement } from "../../modules/repositories/worktree-removal.mjs";
+import { withCleanupLock } from "../../modules/repositories/worktree-cleanup-lock.mjs";
 import { runGitProcess } from "../../modules/repositories/git-exec.mjs";
 import { checkoutRootsFor, loadRegistry } from "../../modules/repositories/registry.mjs";
 import { activeWorktreeNames, findPlanAbsorbingCommit, findPlanWorktree, repositoryRecordFor, worktreeFolder } from "./worktree-policy.mjs";
+import { previewWorktreeDiscard, applyWorktreeDiscard } from "../../modules/repositories/worktree-discard.mjs";
+import { legacyRecovery, restoreLegacyBackup, legacyRecoveryCount } from "../../modules/repositories/worktree-legacy-recovery.mjs";
 import { STATE_ROOT } from "./paths.mjs";
 
-export async function cleanupWorktrees({ cwd = process.cwd(), stateRoot = STATE_ROOT, apply = false, plan = null, base = "main", remove = null, confirm = false, discardChanges = false, archive = false, currentPath = cwd, discover = discoverInstances } = {}) {
+export async function cleanupWorktrees({ cwd = process.cwd(), stateRoot = STATE_ROOT, apply = false, plan = null, base = "main", remove = null, confirm = false, currentPath = cwd, discover = discoverInstances } = {}) {
   const mainPath = mainCheckout(cwd);
   if (!mainPath) throw new Error("a non-bare Git checkout is required");
   const gitDir = path.join(mainPath, ".git");
@@ -26,11 +29,10 @@ export async function cleanupWorktrees({ cwd = process.cwd(), stateRoot = STATE_
   if (plan && !scopedName) throw new Error(`plan not found or has no worktree: ${plan}`);
   const worktrees = linkedWorktrees(gitDir);
   const selectedBranch = remove;
-  if (archive && !remove) throw new Error("archive requires one selected worktree");
+  const retrySelector = remove || scopedName;
   if (remove && !confirm) throw new Error("confirmed removal requires --confirm");
-  if (selectedBranch && !worktrees.some((item) => !item.prunable && (item.branch === selectedBranch || item.name === selectedBranch))) {
-    if (!archive) throw new Error(`worktree not found: ${selectedBranch}`);
-    const retry = async () => [await retryArchivedBranchRetirement(mainPath, selectedBranch, { apply, stateRoot })];
+  if (retrySelector && !worktrees.some((item) => !item.prunable && (item.branch === retrySelector || item.name === retrySelector))) {
+    const retry = async () => [{ ...await retryBranchRetirement(mainPath, retrySelector, { apply, stateRoot }), legacyRecoveryPending: await legacyRecoveryCount(mainPath) }];
     if (!apply) return retry();
     const locked = await withCleanupLock(stateRoot, retry, { repositoryPath: mainPath });
     return locked.locked ? [{ action: "kept", reason: "cleanup already running" }] : locked.result;
@@ -45,27 +47,16 @@ export async function cleanupWorktrees({ cwd = process.cwd(), stateRoot = STATE_
       const kind = remove ? "confirmed" : "automatic";
       const surveyTip = await worktreeTip(mainPath, worktree);
       let preservation = null;
-      if (!remove || archive) preservation = await assessWorktreePreservation(worktree.path, { branch: worktree.branch, base: landingBase, recorded });
+      preservation = await assessWorktreePreservation(worktree.path, { branch: worktree.branch, base: landingBase, recorded });
       const landing = preservation?.landing || (worktree.branch ? await inspectBranchLanding(mainPath, worktree.branch, { base: landingBase, recorded }) : { landed: false, reason: "detached" });
       const guard = await checkWorktreeRemoval({
         worktree, kind, landed: landing.landed, worktreeRoot, mainPath, currentPath,
-        activePlan: activePlans.has(worktree.name), running: running.has(worktree.path), discardChanges,
-        verifiedSnapshot: Boolean(archive && preservation?.fingerprint) || preservation?.state === "preserved",
+        activePlan: activePlans.has(worktree.name), running: running.has(worktree.path),
+        preservationEvidence: preservation?.state === "preserved",
       });
-      if (!remove && preservation?.state !== "preserved") { guard.ok = false; guard.reason = preservation?.reason || "preservation unknown"; }
-      if (archive && !preservation?.fingerprint) { guard.ok = false; guard.reason = preservation?.reason || "snapshot inventory unavailable"; }
-      const row = { cleanupWarnings: preservation?.cleanupWarnings || landing.cleanupWarnings || [], preservation: preservation?.state || null, remainingPaths: preservation?.remainingPaths || [], blockingPaths: preservation?.blockingPaths || [], assessedTip: preservation?.tip || surveyTip, assessedBase: preservation?.baseCommit || null, evidenceCommit: preservation?.evidenceCommit || null, snapshotRef: null, restoreCommand: null, outcomes: [], path: worktree.path, name: worktree.name, branch: worktree.branch, state: landing.landed ? "landed" : landing.reason === "scan unavailable" ? "unknown" : "not landed", eligible: guard.ok, reason: landing.reason === "scan unavailable" ? "landed scan unavailable" : guard.reason, warning: guard.warning, landingEvidence: landing.landed ? (landing.reused ? "reused" : "scanned") : null, action: "kept" };
+      if (preservation?.state !== "preserved") { guard.ok = false; guard.reason = `${preservation?.reason || "preservation unknown"}; use roborepo git worktrees discard for explicit loss preview`; }
+      const row = { cleanupWarnings: preservation?.cleanupWarnings || landing.cleanupWarnings || [], preservation: preservation?.state || null, remainingPaths: preservation?.remainingPaths || [], blockingPaths: preservation?.blockingPaths || [], assessedTip: preservation?.tip || surveyTip, assessedBase: preservation?.baseCommit || null, evidenceCommit: preservation?.evidenceCommit || null, outcomes: [], path: worktree.path, name: worktree.name, branch: worktree.branch, state: landing.landed ? "landed" : landing.reason === "scan unavailable" ? "unknown" : "not landed", eligible: guard.ok, reason: landing.reason === "scan unavailable" ? "landed scan unavailable" : guard.reason, warning: guard.warning, landingEvidence: landing.landed ? (landing.reused ? "reused" : "scanned") : null, action: "kept" };
       if (apply && guard.ok) {
-        let snapshot = null;
-        if (archive || preservation?.hasLocalContent) {
-          snapshot = await createWorktreeSnapshot(worktree.path, { expectedFingerprint: preservation.fingerprint });
-          if (!snapshot.ok) { row.outcomes.push({ step: "snapshot-created", ok: false, reason: snapshot.reason }); row.eligible = false; row.reason = snapshot.reason; rows.push(row); continue; }
-          row.archiveRef = snapshot.ref;
-          row.snapshotRef = snapshot.ref;
-          appendRemoval(stateRoot, { at: new Date().toISOString(), kind: archive ? "archive" : "automatic", outcome: "snapshot-created", path: worktree.path, branch: worktree.branch, snapshotRef: snapshot.ref });
-          row.outcomes.push({ step: "snapshot-created", ok: true, ref: snapshot.ref });
-          row.restoreCommand = snapshot.restoreCommand;
-        }
         if (preservation?.fingerprint) {
           const current = await inventoryWorktree(worktree.path).catch(() => null);
           const baseState = preservation.baseCommit ? await runGitProcess(mainPath, ["rev-parse", preservation.baseRef]) : null;
@@ -81,29 +72,28 @@ export async function cleanupWorktrees({ cwd = process.cwd(), stateRoot = STATE_
         } else {
           const rechecked = await checkWorktreeRemoval({
             worktree: fresh, kind, landed: landing.landed, worktreeRoot, mainPath, currentPath,
-            activePlan: activeWorktreeNames(mainPath).has(fresh.name), running: (await runningPaths(discover)).has(fresh.path), discardChanges,
-            verifiedSnapshot: Boolean(snapshot?.ok),
+            activePlan: activeWorktreeNames(mainPath).has(fresh.name), running: (await runningPaths(discover)).has(fresh.path),
+            preservationEvidence: preservation?.state === "preserved",
           });
           if (!rechecked.ok) { row.reason = rechecked.reason; row.eligible = false; }
           else {
-            if (snapshot) {
-              const last = await inventoryWorktree(fresh.path).catch(() => null);
-              if (last?.fingerprint !== snapshot.fingerprint) { row.reason = "state changed before removal"; row.eligible = false; rows.push(row); continue; }
-            }
             const baseEvidence = preservation?.baseCommit ? { ref: preservation.baseRef, commit: preservation.baseCommit } : null;
-            const result = await removeWorktree(mainPath, fresh, { kind, stateRoot, tip: freshTip, discardChanges, snapshot, baseEvidence });
-            row.outcomes.push({ step: "checkout-removed", ok: Boolean(result.entry) }, { step: "branch-retired", ok: Boolean(result.entry?.branchDeleted) });
+            const result = await removeWorktree(mainPath, fresh, { kind, stateRoot, tip: freshTip, baseEvidence, authority: { scope: "proof", fingerprint: preservation.fingerprint, evidenceCommit: preservation.evidenceCommit } });
+            row.outcomes.push(...(result.outcomes || []));
+            if (result.entry?.branchDeleted === false) row.retryCommand = `roborepo git worktrees cleanup --remove ${fresh.name} --confirm --apply`;
             row.action = result.ok ? "removed" : result.kept ? "kept" : "failed";
             if (result.kept) row.eligible = false;
             row.reason = result.reason || null;
-            row.archiveRef = result.entry?.archiveRef || result.archiveRef || null;
+
           }
         }
       }
       rows.push(row);
     }
     if (!selectedBranch && !scopedName) rows.push(...await cleanupDetachedBranches(mainPath, worktrees, { apply, stateRoot }));
-    return rows;
+    const pending = await legacyRecoveryCount(mainPath);
+    if (!rows.length && pending) return [{ legacyRecoveryPending: pending }];
+    return rows.map((row) => ({ ...row, legacyRecoveryPending: pending }));
   };
   if (!apply && !selectedBranch) return action();
   const lock = await withCleanupLock(stateRoot, action, { repositoryPath: mainPath });
@@ -173,31 +163,29 @@ export async function worktreeCleanupCommand(args) {
   // A dry run keeps everything; name the rows `--apply` would remove so they read differently from
   // rows a guard blocked.
   else for (const row of rows) {
+    if (!row.action) continue;
     const action = row.action === "kept" && row.eligible ? "eligible" : row.action;
     console.log(`${row.branch || row.name || "worktree"}: ${action} (${row.state || "unknown"})${row.reason ? ` — ${row.reason}` : ""}`);
   }
+  if (!options.json && rows[0]?.legacyRecoveryPending) console.log(`Legacy recovery pending: ${rows[0].legacyRecoveryPending}; run roborepo git worktrees legacy-recovery`);
   if (options.apply && ((options.remove && rows.some((row) => row.action !== "removed")) || rows.some((row) => row.action === "failed"))) process.exitCode = 1;
   return rows;
 }
 
-// Home's Delete Worktree: confirmed removal of one worktree, through the same guards as the command.
-// Deleting stops the worktree's dev servers first, but only once every other guard has passed, so a
-// deletion refused by another safety guard never stops anything. Dirty deletion requires
-// explicit consent to discard local changes; the archive preserves committed work only.
-export async function removeRepositoryWorktree({ repositoryId, branch, discardChanges = false, stateRoot = STATE_ROOT, stop = stopCheckoutServers, discover = discoverInstances }) {
+// Portal and CLI use the same assessment and one-use authority.
+export async function previewRepositoryWorktree({ repositoryId, branch, stateRoot = STATE_ROOT, discover = discoverInstances }) {
   const { main, worktree } = repositoryWorktree(repositoryId, branch, stateRoot);
-  const options = { cwd: main, stateRoot, remove: branch, confirm: true, discardChanges: discardChanges === true };
-  const [preview] = await cleanupWorktrees({ ...options, discover: async () => ({ instances: [] }) });
-  if (!preview?.eligible) {
-    if (preview?.reason === "uncommitted or untracked changes") return { ...preview, requiresDiscardConfirmation: true };
-    return preview || { action: "kept", reason: "worktree unavailable" };
-  }
-  const stopped = await stop(worktree.path);
-  if (!stopped.ok) return { action: "kept", reason: serversStillRunning(stopped) };
-  const rows = await cleanupWorktrees({ ...options, apply: true, discover });
-  const result = rows[0] || { action: "kept", reason: "worktree unavailable" };
-  if (result.reason === "uncommitted or untracked changes") return { ...result, requiresDiscardConfirmation: true };
+  const found = await discover();
+  if (!Array.isArray(found?.instances)) return { action: "kept", eligible: false, reason: "server discovery unavailable" };
+  const servers = found.instances.filter((item) => item.project?.projectRoot === worktree.path).map((item) => ({ pid: item.pid, ports: item.ports || [] }));
+  const result = await previewWorktreeDiscard({ mainPath: main, repositoryId, worktree, stateRoot, servers, activePlans: () => activeWorktreeNames(main) });
+  if (result.target) { const { path: privatePath, repositoryPath, ...target } = result.target; result.target = target; }
   return result;
+}
+
+export async function removeRepositoryWorktree({ repositoryId, branch, receipt, stateRoot = STATE_ROOT, stop = stopCheckoutServers }) {
+  const { main, worktree } = repositoryWorktree(repositoryId, branch, stateRoot);
+  return applyWorktreeDiscard({ mainPath: main, repositoryId, worktree, receipt, stateRoot, stop, activePlans: () => activeWorktreeNames(main) });
 }
 
 // Home's Stop Server: SIGTERM the dev servers listening from one worktree, as /plan-close does.
@@ -249,36 +237,69 @@ export async function worktreeArchiveCommand(args) {
     result = await listWorktreeSnapshots(process.cwd());
   } else if (action === "restore") {
     if (positional.length !== 1 || !options.destination) throw new Error("restore requires an archive id and --destination");
-    result = await restoreWorktreeSnapshot(process.cwd(), positional[0], options.destination, options);
-  } else if (action === "archive-remove") {
-    if (positional.length !== 1) throw new Error("archive-remove requires a branch or worktree name");
-    if (options.apply && !options.confirm) throw new Error("archive-remove --apply requires --confirm; stop writers before confirming");
-    result = await cleanupWorktrees({ remove: positional[0], archive: true, confirm: true, apply: options.apply });
+    result = await (positional[0].startsWith("refs/roborepo/abandoned/") ? restoreLegacyBackup : restoreWorktreeSnapshot)(process.cwd(), positional[0], options.destination, options);
   } else throw new Error(`unknown archive action: ${action}`);
   console.log(JSON.stringify(result, null, 2));
   if (options.apply && (Array.isArray(result) ? result.some((row) => row.action !== "removed") : !result.ok)) process.exitCode = 1;
   return result;
 }
 
-export async function assessRepositoryWorktree({ repositoryId, branch, stateRoot = STATE_ROOT }) {
-  const { worktree } = repositoryWorktree(repositoryId, branch, stateRoot);
-  return assessWorktreePreservation(worktree.path, { branch: worktree.branch });
+export async function worktreeDiscardCommand(args) {
+  const options = parseDiscardArgs(args);
+  const main = mainCheckout(process.cwd());
+  if (!main) throw new Error("a non-bare Git checkout is required");
+  const selector = options.plan ? findPlanWorktree(main, options.plan, { completed: true }) : options.selector;
+  if (!selector) throw new Error("a worktree selector or --plan is required");
+  if (options.plan && options.scope === "all") throw new Error("--plan cannot authorize all scope");
+  if (!options.apply && !options.plan && !options.scope) throw new Error("preview requires --scope leftovers|all");
+  if (options.apply && !options.receipt) throw new Error("--apply requires --receipt");
+  if (options.receipt && !options.apply) throw new Error("--receipt requires --apply");
+  if (options.apply && (options.scope || options.base)) throw new Error("apply uses the receipt's scope and base");
+  const worktree = linkedWorktrees(path.join(main, ".git")).find((item) => item.branch === selector || item.name === selector);
+  if (!worktree) throw new Error(`worktree not found: ${selector}`);
+  const common = { mainPath: main, repositoryId: main, worktree, stateRoot: STATE_ROOT, currentPath: process.cwd(), activePlans: () => activeWorktreeNames(main) };
+  if (!options.apply) {
+    const found = await discoverInstances();
+    if (!Array.isArray(found?.instances)) throw new Error("server discovery unavailable");
+    common.servers = found.instances.filter((item) => item.project?.projectRoot === worktree.path).map((item) => ({ pid: item.pid, ports: item.ports || [] }));
+  }
+  const result = options.apply
+    ? await applyWorktreeDiscard({ ...common, receipt: options.receipt, requiredScope: options.plan ? "leftovers" : null, stop: stopCheckoutServers })
+    : await previewWorktreeDiscard({ ...common, scope: options.plan ? "leftovers" : options.scope, base: options.base || (options.plan ? "refs/heads/main" : null) });
+  console.log(JSON.stringify(result, null, 2));
+  if (options.apply ? result.action !== "removed" : !result.receipt) process.exitCode = 1;
+  return result;
 }
 
-export async function listRepositoryWorktreeArchives({ repositoryId, stateRoot = STATE_ROOT }) {
-  return listWorktreeSnapshots(repositoryMainCheckout(repositoryId, stateRoot));
+function parseDiscardArgs(args) {
+  const options = {};
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (["--scope", "--base", "--plan", "--receipt"].includes(arg)) {
+      const value = args[++i];
+      if (!value || value.startsWith("--")) throw new Error(`${arg} requires a value`);
+      options[arg.slice(2)] = value;
+    } else if (["--apply", "--json"].includes(arg)) options[arg.slice(2)] = true;
+    else if (arg.startsWith("--") || options.selector) throw new Error(`unknown discard argument: ${arg}`);
+    else options.selector = arg;
+  }
+  if (options.plan && options.selector) throw new Error("choose a selector or --plan");
+  return options;
 }
 
-export async function archiveRepositoryWorktree({ repositoryId, branch, confirm = false, apply = false, stateRoot = STATE_ROOT, stop = stopCheckoutServers, discover = discoverInstances }) {
-  const main = repositoryMainCheckout(repositoryId, stateRoot);
-  const worktree = linkedWorktrees(path.join(main, ".git")).find((item) => item.branch === branch || item.name === branch);
-  if (apply && !confirm) throw new Error("Archive and remove requires explicit confirmation; stop writers before confirming");
-  const options = { cwd: main, stateRoot, remove: branch, archive: true, confirm: true };
-  const [preview] = await cleanupWorktrees({ ...options, discover: async () => ({ instances: [] }) });
-  if (!apply || !preview?.eligible) return preview;
-  if (!worktree) return (await cleanupWorktrees({ ...options, apply: true, discover }))[0];
-  const stopped = await stop(worktree.path);
-  if (!stopped.ok) return { ...preview, eligible: false, reason: serversStillRunning(stopped) };
-  const [result] = await cleanupWorktrees({ ...options, apply: true, discover });
+export async function worktreeLegacyRecoveryCommand(args) {
+  const options = { discard: [] };
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (["--discard", "--approve"].includes(arg)) {
+      const value = args[++i];
+      if (!value || value.startsWith("--")) throw new Error(`${arg} requires a value`);
+      if (arg === "--discard") options.discard.push(value); else options.approve = value;
+    } else if (["--apply", "--json"].includes(arg)) options[arg.slice(2)] = true;
+    else throw new Error(`unknown legacy-recovery argument: ${arg}`);
+  }
+  const result = await legacyRecovery(process.cwd(), options);
+  console.log(JSON.stringify(result, null, 2));
+  if (!result.ok) process.exitCode = 1;
   return result;
 }

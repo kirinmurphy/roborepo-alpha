@@ -187,10 +187,16 @@ of it part of the portable profile.
 | Telemetry experiments | `telemetry/experiments/` | one file per id | 5MB total |
 | Dense bash capture | `capture/<harness>/dense-bash.jsonl` | append-only JSONL | 30 days, 10MB |
 | Browser evidence | `browser/evidence/` | one file per screenshot, video, or trace | 14 days, 250MB |
+| Worktree removal log | `worktree-cleanup/removals.jsonl` | append/compact JSONL | 30 days, 2 MiB |
+| Worktree transactions | `worktree-cleanup/transactions/` | one file per removal | 7 days, 5 MiB |
 | Usage snapshots | `usage/latest/<harness>.json` | overwritten per harness | self-bounding |
 
 Each store trims itself on write; nothing runs on a schedule. Browser evidence is trimmed when a
 `roborepo browser run` starts, so a run never removes the files it is about to report.
+
+Worktree transactions hold temporary authority for a confirmed discard or a pending branch
+retirement retry. Clearing that store invalidates pending receipts and requires a fresh
+assessment before retiring a branch left behind by a partial removal.
 
 Durable user intent — the repository registry, command overrides, enabled packages — is not listed
 here. It never expires and is not observability data.

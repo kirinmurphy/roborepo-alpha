@@ -1089,12 +1089,17 @@ test.describe("repository-first portal Home", () => {
       await removalHeld;
       await route.fulfill({ json: removal });
     });
-    const archives = [];
-    await page.route("**/api/repositories/*/worktrees/archive-remove", async (route) => {
-      const request = route.request().postDataJSON();
-      if (!request.apply) { await route.fulfill({ json: { eligible: true, action: "kept", preservation: "remaining", remainingPaths: ["notes/local.txt"], reason: "local layers not absorbed within assessed history" } }); return; }
-      archives.push(request);
-      await route.fulfill({ json: { action: "removed", snapshotRef: "refs/roborepo/worktree-archives/fixture", restoreCommand: "roborepo git worktrees restore fixture --destination <new-path> --apply" } });
+    const previews = [];
+    await page.route("**/api/repositories/*/worktrees/remove-preview", async (route) => {
+      const { branch } = route.request().postDataJSON();
+      const receipt = `receipt-${previews.length}`;
+      previews.push({ branch, receipt });
+      await route.fulfill({ json: {
+        action: "preview", eligible: true, receipt,
+        commits: { landed: branch === "feature/landed", unmerged: branch === "feature/landed" ? 0 : 3, subjects: branch === "feature/landed" ? [] : ["Add local behavior", "Fix local behavior", "Keep local notes"] },
+        groups: { tracked: [{ path: "src/edited.js", change: "modified" }], untracked: [{ path: "notes/local.txt", bytes: 12 }], ignored: [{ path: "local-config.txt", bytes: 20 }], disposable: [{ path: ".venv", files: 42, bytes: 12000 }] },
+        warnings: [], blockers: [], servers: branch === "feature/running" ? [{ pid: 123, ports: [3000] }] : [],
+      } });
     });
     const stops = [];
     await page.route("**/api/repositories/*/worktrees/stop-servers", async (route) => {
@@ -1159,7 +1164,7 @@ test.describe("repository-first portal Home", () => {
     const dialog = page.getByRole("dialog", { name: "Delete worktree" });
     await card.getByRole("button", { name: "Worktree details for feature/running" }).click();
     await card.getByRole("button", { name: "Delete Worktree" }).click();
-    await expect(dialog).toContainText("Something is running in this worktree.");
+    await expect(dialog).toContainText("Running servers will be stopped before deletion: pid 123 (ports 3000).");
     // A running worktree's deletion is not routine: the confirmation turns red.
     await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "danger");
     await dialog.getByRole("button", { name: "Cancel" }).click();
@@ -1170,29 +1175,25 @@ test.describe("repository-first portal Home", () => {
     await card.getByRole("button", { name: "Delete Worktree" }).click();
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText("its local branch, feature/stale.");
-    await expect(dialog).toContainText("It has 3 commits that were never merged. A backup is kept so you can bring them back.");
-    await expect(dialog).toContainText("Local preservation: remaining.");
-    await expect(dialog).toContainText("Remaining paths: notes/local.txt");
-    // The archive ref and restore commands sit behind Details, out of the way until asked for.
-    const restore = dialog.locator("[data-slot=restore]");
-    await expect(restore).toBeHidden();
-    await dialog.getByText("Details and how to restore").click();
-    await expect(restore).toHaveText("git branch feature/stale refs/roborepo/abandoned/feature/stale-abc1234\ngit worktree add <folder> feature/stale");
+    await expect(dialog).toContainText("3 unmerged commits will be discarded.");
+    await expect(dialog).toContainText("No recovery copy is created.");
+    await expect(dialog).toContainText("Remote branches and PRs are untouched.");
+    for (const value of ["src/edited.js", "notes/local.txt", "local-config.txt", ".venv", "Keep local notes"]) await expect(dialog).toContainText(value);
+    await expect(dialog.getByRole("button", { name: "Archive and remove" })).toHaveCount(0);
     await expect(dialog.getByText("Something is running in this worktree.")).toBeHidden();
-    // A stale worktree is routine cleanup: the confirmation stays green.
-    await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "cta");
+    await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "danger");
     await dialog.getByRole("button", { name: "Cancel" }).click();
     await expect(dialog).toBeHidden();
     await card.getByRole("button", { name: "Worktree details for feature/landed" }).click();
     await card.getByRole("button", { name: "Delete Worktree" }).click();
-    await expect(dialog).toContainText("Its changes are already merged into main, so no committed work is lost.");
-    await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "cta");
+    await expect(dialog).toContainText("Its committed work is already merged.");
+    await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "danger");
     await dialog.getByRole("button", { name: "Cancel" }).click();
     expect(removals).toEqual([]);
 
     await card.getByRole("button", { name: "Worktree details for feature/guarded" }).click();
     await card.getByRole("button", { name: "Delete Worktree" }).click();
-    await expect(dialog.getByRole("alert")).toContainText("These changes and files cannot be retrieved after deletion.");
+    await expect(dialog.getByRole("alert")).toContainText("Deletion is permanent.");
     await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "danger");
     await expect(dialog).not.toContainText("nothing is lost");
     const deleteBounds = await dialog.getByRole("button", { name: "Delete worktree", exact: true }).boundingBox();
@@ -1201,20 +1202,10 @@ test.describe("repository-first portal Home", () => {
     expect(deleteBounds.y + deleteBounds.height).toBeLessThanOrEqual(420);
     await page.screenshot({ path: "/tmp/worktree-dirty-delete-warning.png" });
     await dialog.getByRole("button", { name: "Delete worktree", exact: true }).click();
-    await expect.poll(() => removals).toEqual([{ branch: "feature/guarded", discardChanges: true }]);
+    await expect.poll(() => removals).toEqual([{ branch: "feature/guarded", receipt: previews.at(-1).receipt }]);
     await expect(dialog).toBeHidden();
 
-    await card.getByRole("button", { name: "Worktree details for feature/stale" }).click();
-    await card.getByRole("button", { name: "Delete Worktree" }).click();
-    await expect(dialog).toContainText("Stop editors and agents writing here first");
-    await dialog.getByRole("button", { name: "Archive and remove", exact: true }).click();
-    await expect.poll(() => archives).toEqual([{ branch: "feature/stale", confirm: true, apply: true }]);
-    await expect(dialog).toContainText("Worktree archived and removed.");
-    await expect(dialog).toContainText("roborepo git worktrees restore fixture");
-    await page.screenshot({ path: "/tmp/worktree-archive-recovery.png" });
-    await dialog.getByRole("button", { name: "Cancel" }).click();
-
-    removal = { action: "kept", reason: "uncommitted or untracked changes", requiresDiscardConfirmation: true };
+    removal = { action: "kept", reason: "State changed after preview", differences: { added: ["new-note.txt"] } };
     let release;
     removalHeld = new Promise((resolve) => { release = resolve; });
     await card.getByRole("button", { name: "Worktree details for feature/stale" }).click();
@@ -1229,16 +1220,19 @@ test.describe("repository-first portal Home", () => {
     await expect(dialog.getByRole("button", { name: "Cancel" })).toBeDisabled();
     release();
     removalHeld = null;
-    await expect(dialog.getByRole("alert")).toContainText("uncommitted or untracked changes");
-    await expect(dialog.locator("[data-slot=error]")).toBeHidden();
-    await expect(confirm).toHaveAttribute("data-btn", "danger");
-    await expect(confirm).toBeEnabled();
+    await expect(dialog.locator("[data-slot=error]")).toContainText("State changed after preview");
+    await expect(dialog.locator("[data-slot=error]")).toContainText("new-note.txt");
+    await expect(confirm).toBeDisabled();
     await expect(confirm).toHaveText("Delete worktree");
-    expect(removals.at(-1)).toEqual({ branch: "feature/stale" });
+    const staleReceipt = removals.at(-1).receipt;
+    expect(removals.at(-1)).toEqual({ branch: "feature/stale", receipt: previews.at(-1).receipt });
+    await dialog.getByRole("button", { name: "Refresh preview" }).click();
+    await expect(confirm).toBeEnabled();
+    expect(previews.at(-1).receipt).not.toBe(staleReceipt);
     removal = { action: "removed" };
     await confirm.click();
     await expect(dialog).toBeHidden();
-    expect(removals.at(-1)).toEqual({ branch: "feature/stale", discardChanges: true });
+    expect(removals.at(-1)).toEqual({ branch: "feature/stale", receipt: previews.at(-1).receipt });
 
     removal = { action: "removed" };
     // The plan's dropdown: one status line, then the same drift warning the row shows.
@@ -1280,16 +1274,84 @@ test.describe("repository-first portal Home", () => {
     await expect(dialog).toContainText("The plan's progress recorded in this worktree will no longer be shown in Plans.");
     await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "danger");
     // Details start folded each time the dialog opens.
-    await expect(dialog.locator("[data-slot=restore]")).toBeHidden();
+    await expect(dialog.locator(".worktree-remove-details")).not.toHaveAttribute("open");
     await dialog.getByRole("button", { name: "Delete worktree" }).click();
     await expect(dialog).toBeHidden();
-    expect(removals).toEqual([
-      { branch: "feature/guarded", discardChanges: true },
-      { branch: "feature/stale" },
-      { branch: "feature/stale", discardChanges: true },
-      { branch: "feature/idle", discardChanges: true },
-    ]);
+    expect(removals.map(({ branch }) => branch)).toEqual(["feature/guarded", "feature/stale", "feature/stale", "feature/idle"]);
+    expect(removals.every((request) => typeof request.receipt === "string" && !Object.hasOwn(request, "discardChanges"))).toBe(true);
     // The deletion's follow-up refresh may still be in flight through the patched route.
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+  });
+
+  test("worktree deletion waits for a complete preview and refreshes blocked detached targets", async ({ page }) => {
+    let release;
+    const held = new Promise((resolve) => { release = resolve; });
+    let releaseRemoval;
+    const heldRemoval = new Promise((resolve) => { releaseRemoval = resolve; });
+    const previews = [];
+    const removals = [];
+    await page.route("**/api/repositories/*/worktrees/remove-preview", async (route) => {
+      previews.push(route.request().postDataJSON());
+      if (previews.length === 1) {
+        await held;
+        await route.fulfill({ json: { action: "preview", eligible: false, blockers: [{ path: "nested-repo", reason: "nested repo" }] } });
+      } else if (previews.length === 2) {
+        await route.fulfill({ status: 503, json: { error: "Preview temporarily unavailable" } });
+      } else await route.fulfill({ json: {
+        action: "preview", eligible: true, receipt: `detached-receipt-${previews.length}`, commits: { landed: false, unmerged: 1, subjects: ["Detached local work"] },
+        groups: { tracked: [], untracked: [], ignored: [], disposable: [] }, blockers: [], warnings: [],
+      } });
+    });
+    await page.route("**/api/repositories/*/worktrees/remove", async (route) => {
+      removals.push(route.request().postDataJSON());
+      if (removals.length === 1) await heldRemoval;
+      await route.fulfill({ json: { action: "removed" } });
+    });
+    await patchRoboRepo(page, (repository) => {
+      repository.domains.plans = { status: "available", data: { active: [], recent: [], counts: {} } };
+      repository.domains.runtime = { status: "available", data: { checkouts: [{
+        rootId: "detached-tree", name: "detached-tree", worktreeName: "detached-tree", isWorktree: true,
+        projectRoot: "/private/test/detached-tree", git: { detached: true, shortHead: "123abcd", provider: { ok: true } },
+      }] } };
+    });
+    await page.goto("/");
+    const card = roboRepoCard(page);
+    await card.getByRole("button", { name: /Worktree details/ }).click();
+    await card.getByRole("button", { name: "Delete Worktree" }).click();
+    const dialog = page.getByRole("dialog", { name: "Delete worktree" });
+    const confirm = dialog.getByRole("button", { name: "Delete worktree", exact: true });
+    await expect(confirm).toBeDisabled();
+    await expect(dialog).toContainText("Checking everything");
+    release();
+    await expect(dialog.locator("[data-slot=error]")).toContainText("nested-repo: nested repo");
+    await expect(confirm).toBeDisabled();
+    expect(removals).toEqual([]);
+    await dialog.getByRole("button", { name: "Refresh preview" }).click();
+    await expect(dialog).toContainText("Preview temporarily unavailable");
+    await expect(confirm).toBeDisabled();
+    await expect(dialog.getByRole("button", { name: "Refresh preview" })).toBeEnabled();
+    await dialog.getByRole("button", { name: "Refresh preview" }).click();
+    await expect(confirm).toBeEnabled();
+    await expect(dialog).toContainText("Detached local work");
+    await confirm.click();
+    await expect.poll(() => removals.length).toBe(1);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await card.getByRole("button", { name: /Worktree details/ }).click();
+    await card.getByRole("button", { name: "Delete Worktree" }).click();
+    await expect(confirm).toBeEnabled();
+    const homeRefresh = page.waitForRequest((request) => new URL(request.url()).pathname === "/api/home");
+    releaseRemoval();
+    await homeRefresh;
+    await expect(dialog).toBeVisible();
+    await expect(confirm).toBeEnabled();
+    await confirm.click();
+    await expect(dialog).toBeHidden();
+    expect(previews).toEqual(Array.from({ length: 4 }, () => ({ branch: "detached-tree" })));
+    expect(removals).toEqual([
+      { branch: "detached-tree", receipt: "detached-receipt-3" },
+      { branch: "detached-tree", receipt: "detached-receipt-4" },
+    ]);
     await page.unrouteAll({ behavior: "ignoreErrors" });
   });
 

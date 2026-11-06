@@ -236,9 +236,9 @@ Subcommands, grouped by category:
 - `harness list|inspect|detected|enable|disable|refresh|withdraw` — harness provider discovery and
   management. `disable` only stops RoboRepo managing a harness; `withdraw` actively unmerges what
   RoboRepo already wrote into its live config.
-- `git inventory|remote-sync-check` and `git worktrees cleanup|archives|archive-remove|restore|hook
-  install|hook uninstall` — repo inventory plus guarded worktree retirement. Worktrees are archived
-  before removal so local work can be restored.
+- `git inventory|remote-sync-check` and `git worktrees cleanup|discard|legacy-recovery|archives|restore|hook
+  install|hook uninstall` — repo inventory plus guarded worktree retirement. Recovery copies remain
+  only in legacy recovery refs; new removals are permanent and require preservation proof or a receipt.
 - `plans ...` (`kind: "internal"`, `cli/plans-command.mjs`) — the lifecycle backend the plan-suite
   skills and the Plans portal call (`start`, `submit`, `approval`, `close`, `archive`, ...).
 - `browser probe|run` — Playwright-backed evidence capture for local apps; needs the

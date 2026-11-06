@@ -24,6 +24,18 @@ const MB = 1024 * 1024;
 export function retentionStores(stateRoot) {
   return [
     {
+      id: "worktree-removal-log", label: "Worktree removals", shape: LOG_SHAPE,
+      target: path.join(stateRoot, "worktree-cleanup", "removals.jsonl"),
+      policy: { maxAgeDays: 30, maxBytes: 2 * MB, floorBytes: 0, keepFraction: null },
+      description: "Permanent worktree removal outcomes; never removal authority.",
+    },
+    {
+      id: "worktree-cleanup-transactions", label: "Worktree cleanup transactions", shape: FILE_SET_SHAPE,
+      target: path.join(stateRoot, "worktree-cleanup", "transactions"),
+      policy: { maxAgeDays: 7, maxBytes: 5 * MB, floorBytes: 0, keepFraction: null },
+      description: "One-use discard receipts and pending branch retirement records.",
+    },
+    {
       id: "developer-runtime-history",
       label: "Runtime history",
       shape: LOG_SHAPE,
