@@ -597,7 +597,7 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - [x] After `MOVE_NOT_COMMITTED` the archive dialog keeps **Archive Plan** live, and a second click replaces the guidance with a refusal naming a raw id: `portal/plans/archive-dialog.js`. The route is reproduced; the dialog is traced, not run. — fixed (a579c8dd)
 - [x] `docs/internal/plans-portal-internals.md` says a plan at the destination always returns `alreadyRecorded`, and its step list omits the staged outcome. — fixed (a579c8dd)
 - [x] An untracked plan already in its destination folder gets the not-committed message, though no move ran and nothing is staged: `modules/plan-suite/transition.mjs`. Reproduced with `plans promote` on a throwaway fixture. — fixed (822bbb32)
-- [ ] The archive dialog now shows every refusal's resolution, so portal users read guidance written for agents, such as "Ask the user before switching branches": `portal/plans/archive-dialog.js`, `scripts/cli/plans.mjs`. Reproduced at `archiveBacklogPlan`; the dialog is traced, not run.
+- [x] The archive dialog now shows every refusal's resolution, so portal users read guidance written for agents, such as "Ask the user before switching branches": `portal/plans/archive-dialog.js`, `scripts/cli/plans.mjs`. Reproduced at `archiveBacklogPlan`; the dialog is traced, not run. — fixed (eb9d206b)
 
 ### Verification
 
