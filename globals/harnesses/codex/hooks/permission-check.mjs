@@ -1,24 +1,12 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
+import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-// --- Real per-command ask on Codex, via a PreToolUse hook ---------------------------------------
-//
-// Codex's shell prefix rules (generated/codex/rules/default.rules) are binary — forbidden/allow only,
-// confirmed against the shipped Codex 0.140 wire schema (`strings` on the compiled binary): the
-// PreToolUseDecisionWire enum used by the OLDER approve/block mechanism is 2-valued, but the
-// CURRENT one — PreToolUsePermissionDecisionWire, the one hookSpecificOutput.permissionDecision
-// actually serializes to — has THREE values: allow, deny, ask. Codex hooks can genuinely prompt
-// per-command, the same as Claude; `prefix_rule` alone just can't express it. This hook is the
-// missing piece: it re-implements the manifest's command matching at runtime and emits a real
-// permissionDecision for any command that matches a deny/ask/allow-bucketed behavior or arbitrary
-// command, closing the gap `renderCodexRules` leaves (which must omit a rule entirely for "ask").
-//
-// Unmatched commands: no hookSpecificOutput is emitted, so the tool call falls through unchanged
-// to whatever `approval_policy` and any other PreToolUse hook decide — this hook only tightens
-// (or clarifies) the classified subset, mirroring the "hooks only tighten" convention already
-// documented in minimize-bash-output.mjs.
+// Native prefix rules own command approval requests; PreToolUse cannot return "ask".
+// The approval event may approve only a verified generic push. Routine allows must not
+// approve unrelated filesystem/network escalations, and personal ask overrides must still prompt.
 
 // The state root resolves the way the CLI's own does. The app root the CLI records there is what an
 // npm install depends on: this file runs as a copy under the harness home, so walking back from its
@@ -107,7 +95,7 @@ function allCommandRules() {
   const rules = []
   for (const b of resolveBehaviors()) {
     if (b.kind !== 'commands') continue
-    for (const tokens of b.commands ?? []) rules.push({ tokens, bucket: b.bucket })
+    for (const tokens of b.commands ?? []) rules.push({ tokens, bucket: b.bucket, behaviorId: b.id })
   }
   for (const c of resolveArbitraryCommands()) rules.push({ tokens: c.tokens, bucket: c.bucket })
   return rules.sort((a, z) => z.tokens.length - a.tokens.length)
@@ -121,25 +109,43 @@ function matchesPrefix(commandTokens, ruleTokens) {
   return ruleTokens.every((t, i) => commandTokens[i] === t)
 }
 
+function verifiedPushDecision(input) {
+  const hook = path.join(path.dirname(fileURLToPath(import.meta.url)), 'protected-branch-push.mjs')
+  const result = spawnSync(process.execPath, [hook], {
+    input: JSON.stringify(input), encoding: 'utf8', timeout: 10000,
+  })
+  if (result.status !== 0) return null
+  try {
+    const output = JSON.parse(result.stdout).hookSpecificOutput
+    return ['allow', 'deny'].includes(output?.permissionDecision)
+      && typeof output.permissionDecisionReason === 'string' ? output : null
+  } catch {
+    return null
+  }
+}
+
 const input = readHookInput()
 if (!input) process.exit(0)
 const toolName = input.tool_name || input.toolName || input.tool || ''
 const toolInput = input.tool_input || input.toolInput || {}
-// exec_command sends the command as `cmd`; older shell tools send `command`.
+// Desktop shell calls arrive as Bash/command; exec_command uses cmd.
 const rawCommand = toolInput.command ?? toolInput.cmd
 const command = typeof rawCommand === 'string' ? rawCommand : ''
 
-const SHELL_TOOLS = new Set(['exec_command', 'shell', 'local_shell', 'bash'])
+const SHELL_TOOLS = new Set(['Bash', 'exec_command', 'shell', 'local_shell', 'bash'])
 if (!SHELL_TOOLS.has(toolName) || !command) process.exit(0)
 
+const approvalRequest = input.hook_event_name === 'PermissionRequest'
+
+function respond(decision, reason) {
+  const output = approvalRequest
+    ? { hookEventName: 'PermissionRequest', decision: { behavior: decision, ...(decision === 'deny' ? { message: reason } : {}) } }
+    : { hookEventName: 'PreToolUse', permissionDecision: decision, permissionDecisionReason: reason }
+  process.stdout.write(JSON.stringify({ hookSpecificOutput: output }))
+}
+
 if (!permissionManifestFound) {
-  process.stdout.write(JSON.stringify({
-    hookSpecificOutput: {
-      hookEventName: 'PreToolUse',
-      permissionDecision: 'ask',
-      permissionDecisionReason: `roborepo permissions: manifest not found at ${manifestPath}`,
-    },
-  }))
+  respond('deny', `roborepo permissions: manifest not found at ${manifestPath}, so this command cannot be checked.`)
   process.exit(0)
 }
 
@@ -151,17 +157,32 @@ if (!permissionManifestFound) {
 // confidently classify," matching the same conservative stance minimize-bash-output.mjs documents.
 const commandTokens = command.trim().split(/\s+/)
 
-const rule = allCommandRules().find((r) => matchesPrefix(commandTokens, r.tokens))
-if (!rule) process.exit(0) // unclassified — fall through to approval_policy / other hooks
-// The prefix only describes the first simple command. An allow would approve whatever is chained,
-// piped, redirected, or substituted after it, so those fall through instead; deny and ask only
-// tighten, and stand.
+const matches = allCommandRules().filter((r) => matchesPrefix(commandTokens, r.tokens))
+// Native rules use the most restrictive matching decision, not the longest prefix.
+const rule = matches.find((r) => r.bucket === 'deny')
+  || matches.find((r) => r.bucket === 'ask') || matches[0]
+if (!rule) process.exit(0)
 if (rule.bucket === 'allow' && /[;&|<>`\n]|\$\(/.test(command)) process.exit(0)
 
-process.stdout.write(JSON.stringify({
-  hookSpecificOutput: {
-    hookEventName: 'PreToolUse',
-    permissionDecision: rule.bucket,
-    permissionDecisionReason: `roborepo permissions: "${rule.tokens.join(' ')}" is ${rule.bucket}`,
-  },
-}))
+const genericPush = (r) => r.behaviorId === 'push-code'
+  && r.tokens.length === 2 && r.tokens[0] === 'git' && r.tokens[1] === 'push'
+if (rule.bucket === 'ask' && genericPush(rule)) {
+  // Do not let the generic push exception swallow an explicit personal ask for the same or a matching prefix.
+  const otherAsk = matches.some((r) => r.bucket === 'ask' && !genericPush(r))
+  const output = verifiedPushDecision(input)
+  // Quoting, expansion, or chaining can hide a personal rule from whitespace matching.
+  // Only literal argv words may receive this exception; native rules handle the rest.
+  const singleCommand = /^[A-Za-z0-9_./:@%+=-]+(?:[ \t]+[A-Za-z0-9_./:@%+=-]+)*$/.test(command.trim())
+  if (output?.permissionDecision === 'deny' || (output && !otherAsk && singleCommand)) {
+    respond(output.permissionDecision, output.permissionDecisionReason)
+    process.exit(0)
+  }
+  if (!output) {
+    respond('deny', 'roborepo permissions: the push guard could not verify this command.')
+    process.exit(0)
+  }
+}
+
+// Defer confirmations to native prompt rules. An allow here cannot grant a pending escalation.
+if (rule.bucket === 'ask' || (approvalRequest && rule.bucket === 'allow')) process.exit(0)
+respond(rule.bucket, `roborepo permissions: "${rule.tokens.join(' ')}" is ${rule.bucket}`)
