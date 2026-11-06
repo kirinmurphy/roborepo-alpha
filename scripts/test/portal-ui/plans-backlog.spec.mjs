@@ -649,6 +649,16 @@ test.describe("Backlog directory and ordering", () => {
       expect(noGit.text).not.toContain(path.basename(root));
       expectUnchanged();
 
+      // A refusal's advice to the agent running the command stays out of the dialog's text.
+      git("checkout", "-q", "-b", "feature");
+      const offBase = await archive();
+      git("checkout", "-q", "main");
+      git("branch", "-q", "-D", "feature");
+      expect(offBase.status).toBe(400);
+      expect(offBase.text).toContain("is on feature, not main");
+      expect(offBase.text).not.toContain("Ask the user");
+      expectUnchanged();
+
       // A bare repo has no checkout to commit from.
       git("config", "core.bare", "true");
       const bare = await archive();

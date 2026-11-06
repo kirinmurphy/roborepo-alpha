@@ -155,7 +155,11 @@ function gitCheckoutForArchive(root) {
 
 function browserSafeArchiveError(err) {
   if (err?.code === "MOVE_NOT_COMMITTED") return domainError(err.code, err.message, { resolution: err.resolution });
-  if (err?.code !== "MOVE_FAILED" && !err?.syscall) return err;
+  if (err?.code !== "MOVE_FAILED" && !err?.syscall) {
+    // A transition's refusals advise the agent running the command, which the dialog's reader is not.
+    delete err.resolution;
+    return err;
+  }
   const detail = err.syscall ? pathFreeFileError(err) : err.message;
   return domainError("MOVE_FAILED", `This plan could not be archived: ${detail}`, {
     resolution: "Run `git status` in the repo, resolve what it shows, then try again.",
