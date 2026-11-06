@@ -535,6 +535,36 @@ try {
       assert.equal(fs.readFileSync(path.join(root, backlog("arch-dirty")), "utf8"), dependentBefore, `the dependent still names the plan after a ${failure} failure`);
     }
 
+    // When the undo fails too, the staged rename lacks the move's edits, so neither the error nor a retry
+    // may lead with committing it.
+    let moves = 0;
+    childProcess.spawnSync = (binary, args, options) => {
+      if (args[2] === "add") return { status: 1, stdout: "", stderr: "injected add failure" };
+      if (args[2] === "mv" && ++moves === 2) return { status: 1, stdout: "", stderr: "injected undo failure" };
+      return realSpawnSync(binary, args, options);
+    };
+    syncBuiltinESMExports();
+    try {
+      await assert.rejects(transitionPlan({ cwd: root, selector: "archbusy", transition: "archive", reason: "Abandoned." }), (err) => {
+        assert.equal(err.code, "MOVE_NOT_COMMITTED");
+        assert.match(err.message, /moved to docs\/plans\/archived\/test-arch-busy\.md, but its edits were not saved/);
+        assert.match(err.resolution, /Committing the staged move would leave its edits out/);
+        return true;
+      });
+    } finally {
+      childProcess.spawnSync = realSpawnSync;
+      syncBuiltinESMExports();
+    }
+    assert.equal(head(root), before, "a failed undo commits nothing");
+    assert.match(git(root, "status", "--porcelain"), /^R {2}docs\/plans\/backlog\/test-arch-busy\.md -> docs\/plans\/archived\/test-arch-busy\.md$/m, "the failed undo leaves the rename staged");
+    assert.equal(fs.readFileSync(path.join(root, "docs/plans/archived/test-arch-busy.md"), "utf8"), planBefore, "the staged rename has none of the move's edits");
+    const retriedUndo = refused(root, plans(root, "archive", "archbusy", "--reason", "Abandoned."), "retrying after a failed undo", /was not committed/);
+    assert.equal(retriedUndo.code, "MOVE_NOT_COMMITTED");
+    assert.match(retriedUndo.resolution, /restore those files to undo the move, then run this again\. Commit the staged move only if `git diff --cached` shows its edits/);
+    assert.equal(head(root), before, "a retry after a failed undo commits nothing");
+    git(root, "reset", "--quiet", "--hard");
+    assert.equal(git(root, "status", "--porcelain"), statusBefore, "the failed undo restores cleanly");
+
     // A commit that fails after the rename says the plan moved, and keeps git's reason for this reader.
     // A signing program that fails stops the commit; a hook could be bypassed by an inherited core.hooksPath.
     git(root, "config", "commit.gpgsign", "true");

@@ -144,12 +144,15 @@ It runs from the primary checkout on the base branch and:
    own rules), refusing with the findings and a repair prompt;
 5. `git mv`, writes the content, commits with `--only` the old and new paths plus any cleared dependents, and returns six
    post-commit checks from `transition-checks.mjs`. If the edits can't be written or staged, the
-   rename and edits are undone and the move fails. If the commit itself fails, the whole move stays
-   staged and raises `MOVE_NOT_COMMITTED`, which names the new path and how to finish or undo it.
+   rename and edits are undone and the move fails. If that undo fails too, it raises
+   `MOVE_NOT_COMMITTED` and warns that committing the staged rename would leave the edits out. If the
+   commit itself fails, the whole move stays staged and raises `MOVE_NOT_COMMITTED`, which names the
+   new path and how to finish or undo it.
 
 A plan already at the destination returns `alreadyRecorded` without rerunning the gates; for
 `promote` and `close` it commits the command's pending edits to the plan, if any. If the plan's move
-was never committed, the transition refuses with `MOVE_NOT_COMMITTED` instead. Git access for these
+was never committed, the transition refuses with `MOVE_NOT_COMMITTED` instead, and advises undoing
+the move first, since it can't tell which failure left it staged. Git access for these
 modules is in `plan-git.mjs`.
 
 ## API

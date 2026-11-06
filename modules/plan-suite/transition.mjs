@@ -34,6 +34,9 @@ const GATE_KINDS = { archived: new Set(["lifecycle"]) };
 // worktree records accumulate from here on. Later transitions never revisit it.
 const NAMING_GATED_TRANSITIONS = new Set(["promote", "start"]);
 const UNCOMMITTED_MOVE_RESOLUTION = "Run `git status` in the repo. Fix what stopped the commit and commit the staged move, or restore those files to undo it.";
+// A retry can't tell a failed commit from a failed undo, whose staged rename lacks the move's edits,
+// so committing can't be its first advice.
+const RETRIED_MOVE_RESOLUTION = "Run `git status` in the repo and restore those files to undo the move, then run this again. Commit the staged move only if `git diff --cached` shows its edits.";
 
 export async function transitionPlan(options) {
   const { cwd = process.cwd(), selector, transition: transitionId, base = "main" } = options;
@@ -64,7 +67,7 @@ export async function transitionPlan(options) {
   // An earlier run's commit failed after its rename, so the plan only reads as being here. Recording it
   // as done would be false, and committing here would land only half of that move.
   if (atDestination && !git(primary, ["cat-file", "-e", `HEAD:${fromPath}`]).ok) {
-    throw domainError("MOVE_NOT_COMMITTED", `The plan's move to ${fromPath} was not committed.`, { resolution: UNCOMMITTED_MOVE_RESOLUTION });
+    throw domainError("MOVE_NOT_COMMITTED", `The plan's move to ${fromPath} was not committed.`, { resolution: RETRIED_MOVE_RESOLUTION });
   }
   if (atDestination && !rules.carriesEdits && !rules.reassigns) {
     return result({ primary, cwd, base, transition, record, fromPath, toPath: fromPath, commit: null, options, target, rules, evidence: {} });

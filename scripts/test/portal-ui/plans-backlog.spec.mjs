@@ -1658,7 +1658,7 @@ test.describe("Backlog directory and ordering", () => {
       await page.route(failing, (route) => route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "refresh broke" }) }));
       const archive = page.getByRole("button", { name: "Archive Traces", exact: true });
       await archive.click();
-      const dialog = page.locator("#ordering-archive");
+      const dialog = page.getByRole("dialog");
       await dialog.getByRole("textbox").fill("Superseded.");
       await dialog.getByRole("button", { name: "Continue", exact: true }).click();
       await expect(dialog.getByRole("button", { name: "Archive Plan", exact: true })).toBeEnabled();
